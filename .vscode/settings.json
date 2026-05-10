@@ -1,3 +1,3 @@
 {
-  "go.buildTags": "goexperiment.jsonv2"
+	"go.buildTags": "goexperiment.jsonv2"
 }
