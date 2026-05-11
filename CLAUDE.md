@@ -24,12 +24,25 @@ schema/
 ├── decode/validation/                                  ← typed validation error structs (one per rule)
 ├── thirdparty/                                         ← non-annotated external type — exercises encoding/json fallback
 ├── thirdparty2/                                        ← annotated external type — exercises static analyzer pickup of cross-pkg generated decoder
-└── bench/                                              ← 4-way mega benchmark subpackage (required for easyjson bootstrap)
+└── bench/                                              ← separate Go module (own go.mod) — all benchmarks live here
 ```
 
-`bench/` is its own package because easyjson's codegen bootstrap compiles a
-non-test build, which can't see types in `_test.go` files. The bench package
-has `types.go` (ggen- + easyjson-annotated Node) + both codegens side by side.
+`bench/` is its own **separate Go module** (`bench/go.mod` with
+`replace github.com/sirkostya009/ggen => ../`). Two reasons:
+
+1. easyjson's codegen bootstrap compiles a non-test build, which can't
+   see types in `_test.go` files. The bench module has `types.go`
+   (ggen- + easyjson-annotated Node) + both codegens side by side.
+2. The reference codecs (`sonic`, `easyjson`) and their large
+   transitive dep set (bytedance/gopkg, cloudwego/base64x,
+   klauspost/cpuid, golang/asm, …) stay out of the root module's
+   `go.mod`. End users `go get`ing `github.com/sirkostya009/ggen`
+   pull only the minimal deps (uuid + `golang.org/x/tools`) and
+   never see the benchmark world.
+
+The root module's tests cover correctness; the bench module holds
+**all** benchmarks (Mega payload + reader paths + residency +
+slow-stream). The root has no `Benchmark*` funcs.
 
 ## Architecture — decode path
 
@@ -778,9 +791,17 @@ On the tiny complex payload (~440 bytes): Unmarshal ~415 ns, 2 allocs,
    the generation pass.
 4. **Stream pool only pools the `*Stream` wrapper**, not its buffer. The
    buffer is fresh-allocated per `Init` and retained by aliases after return.
-5. **Benchmarks live in a subpackage (`bench/`).** Required by easyjson's
-   codegen bootstrap — it compiles a non-test build that can't see types
-   in `_test.go` files. Small duplication of the `Node` type; acceptable.
+5. **Benchmarks live in a separate module (`bench/` with its own
+   `go.mod`).** Two reasons. (a) easyjson's codegen bootstrap compiles
+   a non-test build that can't see types in `_test.go` files, so the
+   bench module has `types.go` with the annotated `Node`. (b) Keeping
+   sonic / easyjson and their large transitive dep set (bytedance/gopkg,
+   cloudwego/base64x, klauspost/cpuid, golang/asm, …) in a separate
+   module means `go get github.com/sirkostya009/ggen` pulls only the
+   minimal runtime deps (uuid + `golang.org/x/tools`). The bench module
+   uses `replace github.com/sirkostya009/ggen => ../` for local
+   development. Small duplication of the `Node` type across modules;
+   acceptable.
 6. **Custom validators / mods are codegen-time function injection.** Tags
    like `ggen:"@EvenOnly"` and `mod:"@Squash"` are resolved via
    `packages.Load` at parse time — the generator looks up the named
@@ -802,11 +823,11 @@ On the tiny complex payload (~440 bytes): Unmarshal ~415 ns, 2 allocs,
 - `read_test.go` — basic Read tests + unknown-key error & ignoreunknown opt-in.
 - `scan_decode_test.go` — bytes-path + stream-path correctness (including
   chunked-reader + tiny-hint-forces-grow).
-- `decode_test.go` — complex & simple unmarshal benchmarks
-  (jsonv2, sonic, sonic.ConfigFastest, ggen).
-- `encode_test.go` — marshal benchmarks.
-- `payloads_test.go` — `complexPayload`, `simplePayload`, `megaPayload`
-  (1 MiB generated Node tree, fixed seed 1).
+- `payloads_test.go` — `complexPayload` + `complexValue` (used by
+  roundtrip / stdcompat tests) and `megaPayload` / `megaValue`
+  (1 MiB generated Node tree, fixed seed 1; used by `stdcompat_test.go`
+  to exercise cross-compat at scale). No benchmark functions live in
+  the root module — all benchmarks moved to `bench/`.
 - `stdcompat_test.go` — exhaustive cross-compat: for every annotated
   struct, ggen-marshal → jsonv2-unmarshal AND jsonv2-marshal → ggen-unmarshal;
   results re-marshaled via jsonv2 and compared as parsed `any` (map order
@@ -838,14 +859,18 @@ On the tiny complex payload (~440 bytes): Unmarshal ~415 ns, 2 allocs,
   while held values are alive — the only honest way to track down
   what's keeping memory live.
 
-Running tests: `GOEXPERIMENT=jsonv2 go test ./...`.
+Running tests: `GOEXPERIMENT=jsonv2 go test ./...` for the root module;
+`(cd bench && GOEXPERIMENT=jsonv2 go test ./...)` for benchmarks
+(separate module, not reached by root's `./...`).
 
 ## How to regenerate
 
 ```sh
 GOEXPERIMENT=jsonv2 go build -o /tmp/ggen .
 /tmp/ggen .           # regen schema_gen_test.go
-/tmp/ggen ./bench     # regen bench/bench_gen.go
+/tmp/ggen ./bench     # regen bench/bench_gen.go (the binary still walks
+                      # the bench dir even though it is a separate module —
+                      # ggen reads source files, not module boundaries)
 # easyjson for bench:
 easyjson bench/types.go
 ```

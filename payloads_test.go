@@ -1,14 +1,8 @@
-// Caveat: under GOEXPERIMENT=jsonv2 the classic encoding/json is reimplemented
-// on top of v2's internals, so v1 would not reflect real "pre-jsonv2 stdlib"
-// performance — hence only v2 is benchmarked here.
-
 package main
 
 import (
-	"fmt"
 	"math/rand"
 
-	"github.com/sirkostya009/ggen/decode"
 	"github.com/sirkostya009/ggen/encode"
 )
 
@@ -42,73 +36,6 @@ var complexValue = SomePayloadRequestStruct{
 	Role:     "admin",
 	Age:      30,
 	Quota:    5,
-}
-
-// validateComplex mirrors the checks Read performs inline, using the same
-// hand-rolled helpers the generated code uses (no regex/url.Parse tax).
-func validateComplex(v *SomePayloadRequestStruct) error {
-	if len(v.Field1) > 0 {
-		if n := len(v.Field1); n < 2 || n > 23 {
-			return fmt.Errorf("field1 length out of range")
-		}
-	}
-	if n := len(v.Slice); n < 1 || n > 10 {
-		return fmt.Errorf("array length out of range")
-	}
-	if v.Address == (Address{}) {
-		return fmt.Errorf("address required")
-	}
-	if len(v.Address.Street) < 1 || len(v.Address.Street) > 200 {
-		return fmt.Errorf("street length")
-	}
-	if len(v.Address.City) == 0 {
-		return fmt.Errorf("city empty")
-	}
-	if len(v.Address.ZipCode) != 5 {
-		return fmt.Errorf("zipCode len")
-	}
-	if len(v.Contacts) > 5 {
-		return fmt.Errorf("contacts too many")
-	}
-	if v.Email != "" && !decode.IsEmail(v.Email) {
-		return fmt.Errorf("bad email")
-	}
-	if v.Website != "" && !decode.IsURL(v.Website) {
-		return fmt.Errorf("bad url")
-	}
-	switch v.Role {
-	case "", "admin", "user", "guest":
-	default:
-		return fmt.Errorf("bad role")
-	}
-	if v.Age < 0 || v.Age > 150 {
-		return fmt.Errorf("age out of range")
-	}
-	if v.Quota != 0 && v.Quota <= 0 {
-		return fmt.Errorf("quota not positive")
-	}
-	return nil
-}
-
-// --- simple payload: AnotherStruct ------------------------------------------
-
-// AnotherStruct has no nested structs and no regex validators, so decode
-// overhead dominates and the reflection-based paths show their best numbers.
-var simplePayload = []byte(`{"title":"hi","score":7.5,"active":true,"kind":2}`)
-
-func validateSimple(v *AnotherStruct) error {
-	if len(v.Title) < 1 || len(v.Title) > 100 {
-		return fmt.Errorf("title length")
-	}
-	if v.Score < 0 || v.Score > 10 {
-		return fmt.Errorf("score range")
-	}
-	switch v.Kind {
-	case 1, 2, 3:
-	default:
-		return fmt.Errorf("bad kind")
-	}
-	return nil
 }
 
 // --- mega payload: deep Node tree ≈ 1 MB ------------------------------------

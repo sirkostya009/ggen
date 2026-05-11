@@ -4,16 +4,16 @@ package main
 
 import (
 	"bytes"
-	jsonv2 "encoding/json/v2"
 	"io"
 	"testing"
 
-	sonicdecoder "github.com/bytedance/sonic/decoder"
 	"github.com/sirkostya009/ggen/decode"
 )
 
 // chunkReader delivers payload one byte at a time (or maxChunk at a time).
-// Stress-tests Stream.Ensure's "need more bytes" retry loop.
+// Stress-tests Stream.ReadMore's per-call grow path: every byte forces a
+// fresh Read, and the parser makes progress byte-by-byte without ever
+// looping inside ReadMore.
 type chunkReader struct {
 	data []byte
 	pos  int
@@ -99,17 +99,6 @@ func TestReadSlice_roundtrip(t *testing.T) {
 	}
 }
 
-func BenchmarkGenerated_UnmarshalSlice(b *testing.B) {
-	arr := []byte(`[{"street":"A","city":"X","zipCode":"00001"},{"street":"B","city":"Y","zipCode":"00002"},{"street":"C","city":"Z","zipCode":"00003"}]`)
-	b.ReportAllocs()
-	b.SetBytes(int64(len(arr)))
-	for b.Loop() {
-		if _, err := decode.UnmarshalSlice[Address](arr); err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
 func TestUnmarshalStream_roundtrip(t *testing.T) {
 	got, _, err := decode.UnmarshalStream[SomePayloadRequestStruct](
 		bytes.NewReader(complexPayload), make([]byte, 0, len(complexPayload)))
@@ -159,40 +148,3 @@ func TestUnmarshalStream_tinyInitial(t *testing.T) {
 	}
 }
 
-func BenchmarkGenerated_UnmarshalStream(b *testing.B) {
-	b.ReportAllocs()
-	b.SetBytes(int64(len(complexPayload)))
-	var r bytes.Reader
-	for b.Loop() {
-		r.Reset(complexPayload)
-		if _, _, err := decode.UnmarshalStream[SomePayloadRequestStruct](&r, make([]byte, 0, len(complexPayload))); err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-func BenchmarkJSONv2_UnmarshalRead(b *testing.B) {
-	b.ReportAllocs()
-	b.SetBytes(int64(len(complexPayload)))
-	var r bytes.Reader
-	for b.Loop() {
-		r.Reset(complexPayload)
-		var v SomePayloadRequestStruct
-		if err := jsonv2.UnmarshalRead(&r, &v); err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-func BenchmarkSonic_StreamDecode(b *testing.B) {
-	b.ReportAllocs()
-	b.SetBytes(int64(len(complexPayload)))
-	var r bytes.Reader
-	for b.Loop() {
-		r.Reset(complexPayload)
-		var v SomePayloadRequestStruct
-		if err := sonicdecoder.NewStreamDecoder(&r).Decode(&v); err != nil {
-			b.Fatal(err)
-		}
-	}
-}

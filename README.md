@@ -9,8 +9,11 @@ presizing which is also possible using the generated `JSONSize` method.
 
 ## benchmarks
 
-`go test -bench=BenchmarkMega -run=^$ -benchtime=5s ./bench/` over a
-~5.6 MiB deep tree with full validation. See [mega_test.go](./bench/mega_test.go).
+`cd bench && go test -bench=BenchmarkMega -run=^$ -benchtime=5s .` over a
+~5.6 MiB deep tree with full validation. `bench/` is its own Go module
+to keep the reference codecs (easyjson, sonic) and their deps out of the
+root `go.mod` — installs of `ggen` pull only the minimal runtime tree.
+See [mega_test.go](./bench/mega_test.go).
 
 ```
 goos: linux
