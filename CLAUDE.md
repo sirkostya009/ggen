@@ -845,9 +845,19 @@ On the tiny complex payload (~440 bytes): Unmarshal ~415 ns, 2 allocs,
   override), `./...` walk + dot/underscore-dir skip, and per-flag
   effects on generated output (`-marshal`, `-unmarshal`, `-pkg`,
   `-novalidate`, `-ignoreunknown`, `-htmlescape`, name filter).
-- `bench/mega_test.go` — 4-way mega benchmark (jsonv2, sonic, easyjson, ggen).
-  Also includes `BenchmarkMega_ggen_ReadAllUnmarshal` — `io.ReadAll` then
-  bytes-path decode, the cheapest "I have an io.Reader" pattern.
+- `bench/mega_test.go` — 4-way mega benchmarks (jsonv2 / sonic /
+  easyjson / ggen) collapsed into three table-driven benches:
+  `BenchmarkMega_Unmarshal`, `BenchmarkMega_Marshal`, and
+  `BenchmarkMega_Reader` (the Reader bench includes
+  `ggen_ReadAllUnmarshal` — `io.ReadAll` then bytes-path decode, the
+  cheapest "I have an io.Reader" pattern). Inner loop runs under
+  `b.RunParallel`, so `-cpu=1` runs serial and `-cpu=N` runs N-way
+  parallel — same code path. Stateful codecs (Reader, Stream buf)
+  get per-goroutine state via a `setup` closure in the `runBench`
+  helper. Each sub-bench wraps `runtime.ReadMemStats` and reports
+  `heap_KB` (live heap at StopTimer), `total_KB` (alloc delta over
+  the timed region), `gc` (NumGC delta), and `gc/Mop` (GC count per
+  million ops) on top of the standard `ns/op` + `B/op` + `allocs/op`.
 - `bench/slowstream_test.go` — slow-reader benchmarks (`slowReader` with
   geometric-decay delays). Compares stream / readall / fail-fast on
   invalid payload. Useful for measuring streaming's actual win
