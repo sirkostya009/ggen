@@ -215,7 +215,7 @@ func (HookedStruct) DecodeStreamFrom(_s *scan.Stream, i int) (HookedStruct, int,
 		return result, i + 1, nil
 	}
 	for {
-		key, j, err := _s.String(i)
+		key, j, err := _s.KeyView(i)
 		if err != nil {
 			return result, 0, err
 		}
@@ -651,7 +651,7 @@ func (RichTypes) DecodeStreamFrom(_s *scan.Stream, i int) (RichTypes, int, error
 		return result, i + 1, nil
 	}
 	for {
-		key, j, err := _s.String(i)
+		key, j, err := _s.KeyView(i)
 		if err != nil {
 			return result, 0, err
 		}
@@ -1144,7 +1144,7 @@ func (richSubset) DecodeStreamFrom(_s *scan.Stream, i int) (richSubset, int, err
 		return result, i + 1, nil
 	}
 	for {
-		key, j, err := _s.String(i)
+		key, j, err := _s.KeyView(i)
 		if err != nil {
 			return result, 0, err
 		}
@@ -1506,7 +1506,7 @@ func (base32Wrap) DecodeStreamFrom(_s *scan.Stream, i int) (base32Wrap, int, err
 		return result, i + 1, nil
 	}
 	for {
-		key, j, err := _s.String(i)
+		key, j, err := _s.KeyView(i)
 		if err != nil {
 			return result, 0, err
 		}

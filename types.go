@@ -118,7 +118,7 @@ type StructInfo struct {
 	NoSort        bool   // opt out of codegen-time struct-field sort by JSON name
 	UseNumber     bool   // decode JSON numbers into `any` fields as json.Number instead of float64
 	HTMLEscape    bool   // HTML-safe escape <, >, & in emitted strings (default: literal, matches jsonv2)
-	Test          bool   // declared in a *_test.go file — route output to *_gen_test.go
+	Test          bool   // declared in a *_test.go file — route output to *_ggen_test.go
 
 	// IsAlias marks a top-level named type that aliases a primitive or
 	// (with type info) a struct, e.g. `type HtmlString string`,

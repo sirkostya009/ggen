@@ -79,7 +79,7 @@ type structSet struct {
 	order       []string
 	annotations map[string]annotationFlags
 	// fromTest is the set of struct names declared in a *_test.go file. Used
-	// to route generated methods into *_gen_test.go so they don't bundle with
+	// to route generated methods into *_ggen_test.go so they don't bundle with
 	// library builds. Absence means non-test.
 	fromTest map[string]struct{}
 	pkgName  string
@@ -102,7 +102,7 @@ type structSet struct {
 	structFile map[string]*ast.File
 	// structBuildTag maps struct name → canonical //go:build expression of
 	// its source file (or "" for unconstrained). Generation buckets structs
-	// by this so a tagged struct ends up in its own _gen.go file with the
+	// by this so a tagged struct ends up in its own _ggen.go file with the
 	// matching constraint header.
 	structBuildTag map[string]string
 }
@@ -186,7 +186,7 @@ func loadDirWithTypes(dir string) (*structSet, error) {
 		filename := best.Fset.Position(af.Pos()).Filename
 		// Skip generated files and our own output to keep the same
 		// behavior as the AST loader.
-		if strings.HasSuffix(filename, "_gen.go") || strings.HasSuffix(filename, "_gen_test.go") {
+		if strings.HasSuffix(filename, "_ggen.go") || strings.HasSuffix(filename, "_ggen_test.go") {
 			continue
 		}
 		isTest := strings.HasSuffix(filename, "_test.go")
@@ -458,7 +458,7 @@ func eligibleFiles(dir string) ([]string, error) {
 			continue
 		}
 		// Skip generator output (both library and test flavours).
-		if strings.HasSuffix(name, "_gen.go") || strings.HasSuffix(name, "_gen_test.go") {
+		if strings.HasSuffix(name, "_ggen.go") || strings.HasSuffix(name, "_ggen_test.go") {
 			continue
 		}
 		files = append(files, filepath.Join(dir, name))

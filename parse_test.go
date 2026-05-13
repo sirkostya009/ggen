@@ -286,10 +286,10 @@ func TestParsePackage_skipsGenFiles(t *testing.T) {
 //ggen:generate
 type A struct { X int `+"`"+`json:"x"`+"`"+` }
 `)
-	writeFile(t, dir, "a_gen.go", `package p
+	writeFile(t, dir, "a_ggen.go", `package p
 // this should be ignored - contains bogus syntax we do not parse
 func broken {`)
-	writeFile(t, dir, "a_gen_test.go", `package p
+	writeFile(t, dir, "a_ggen_test.go", `package p
 // also ignored
 func also broken {`)
 
@@ -404,12 +404,12 @@ type Msg struct {
 		t.Fatal(err)
 	}
 
-	outFile := strings.TrimSuffix(goFile, ".go") + "_gen.go"
+	outFile := strings.TrimSuffix(goFile, ".go") + "_ggen.go"
 	if err := os.WriteFile(outFile, code, 0644); err != nil {
 		t.Fatal(err)
 	}
 
-	want := filepath.Join(sub, "msg_gen.go")
+	want := filepath.Join(sub, "msg_ggen.go")
 	if outFile != want {
 		t.Errorf("output path = %q, want %q", outFile, want)
 	}

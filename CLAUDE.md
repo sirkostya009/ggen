@@ -15,7 +15,7 @@ schema/
 ├── introspect.go                                       ← go/types-driven interface detection (TextAppender, TextMarshaler, …)
 ├── parse_test.go, tags_test.go                         ← CLI tests
 ├── shared_test.go                                      ← shared demo structs (Address, Node, …) used across feature tests
-├── schema_gen_test.go                                  ← generated decoders for the test structs
+├── schema_ggen_test.go                                  ← generated decoders for the test structs
 ├── *_test.go                                           ← feature + roundtrip + compat + fuzz tests
 ├── fuzz_test.go                                        ← FuzzScanNoPanic / FuzzRoundtrip / FuzzCompat
 ├── decode/                                             ← runtime: Decoder interface + top-level generics
@@ -492,14 +492,14 @@ Generator reads `//go:build <expr>` from each source file individually
 and BUCKETS annotated structs by their constraint. Each (tag, isTest)
 bucket emits its own gen file with the matching header — so a struct
 in `tagged.go` (behind `//go:build foo`) never lands in the
-unconstrained `<dir>_gen.go` (which would compile-break unconstrained
+unconstrained `<dir>_ggen.go` (which would compile-break unconstrained
 builds with "undefined: Tagged"). Old-style `// +build` lines are also
 honored; multi-term expressions are canonicalized via
 `go/build/constraint.Parse` so equivalent forms bucket together.
 
-Filenames: untagged buckets keep the legacy `<dir>_gen.go` /
-`<dir>_gen_test.go` naming; tagged buckets become
-`<dir>_<slug>_gen.go` where the slug collapses non-alnum runs into
+Filenames: untagged buckets keep the legacy `<dir>_ggen.go` /
+`<dir>_ggen_test.go` naming; tagged buckets become
+`<dir>_<slug>_ggen.go` where the slug collapses non-alnum runs into
 single underscores (`goexperiment.jsonv2` → `goexperiment_jsonv2`,
 `foo && bar` → `foo_bar`). Cross-bucket struct references in the same
 package still route through the direct DecodeFrom — `generatedTypes`
@@ -508,16 +508,16 @@ through codegen.
 
 ### Output file naming
 
-- Package mode (untagged bucket): `<dir-basename>_gen.go` for non-test
-  annotations, `<dir-basename>_gen_test.go` for test-only. If both
+- Package mode (untagged bucket): `<dir-basename>_ggen.go` for non-test
+  annotations, `<dir-basename>_ggen_test.go` for test-only. If both
   exist, emits both.
-- Package mode (tagged bucket): `<dir-basename>_<tag-slug>_gen.go`
-  (or `_gen_test.go`); each (tag, isTest) bucket emits its own file.
-- Single-file mode: `<basename>_gen.go` or `<basename>_gen_test.go`.
+- Package mode (tagged bucket): `<dir-basename>_<tag-slug>_ggen.go`
+  (or `_ggen_test.go`); each (tag, isTest) bucket emits its own file.
+- Single-file mode: `<basename>_ggen.go` or `<basename>_ggen_test.go`.
   The source file's `//go:build` line, if any, is preserved in the
   generated header.
 - `_test.go` sources allowed — the generator treats them as first-class
-  inputs. Test-only struct annotations route output to `_gen_test.go` so
+  inputs. Test-only struct annotations route output to `_ggen_test.go` so
   the generated methods don't bundle with library builds.
 
 ## Generated methods (per annotated struct T)
@@ -857,7 +857,7 @@ On the tiny complex payload (~440 bytes): Unmarshal ~415 ns, 2 allocs,
 
 - `shared_test.go` — shared annotated structs (Address, Node, …) used
   across the feature tests.
-- `schema_gen_test.go` — generated methods for the test structs. Test-only.
+- `schema_ggen_test.go` — generated methods for the test structs. Test-only.
 - `read_test.go` — basic Read tests + unknown-key error & ignoreunknown opt-in.
 - `scan_decode_test.go` — bytes-path + stream-path correctness (including
   chunked-reader + tiny-hint-forces-grow).
@@ -923,8 +923,8 @@ Running tests: `GOEXPERIMENT=jsonv2 go test ./...` for the root module;
 
 ```sh
 GOEXPERIMENT=jsonv2 go build -o /tmp/ggen .
-/tmp/ggen .           # regen schema_gen_test.go
-/tmp/ggen ./bench     # regen bench/bench_gen.go (the binary still walks
+/tmp/ggen .           # regen schema_ggen_test.go
+/tmp/ggen ./bench     # regen bench/bench_ggen.go (the binary still walks
                       # the bench dir even though it is a separate module —
                       # ggen reads source files, not module boundaries)
 # easyjson for bench:
@@ -944,7 +944,7 @@ their generated code.
 - **Pointer-arithmetic decoder / `unsafe.Add` byte loads** to eliminate
   bounds checks. Conversion of all four hot inliners (SkipWS,
   ScanInt64, ScanUint64, ScanString) plus all spot accesses brought
-  bounds checks in `bench_gen.go` from 59 → 18 (byte path: 0). Result:
+  bounds checks in `bench_ggen.go` from 59 → 18 (byte path: 0). Result:
   Unmarshal **regressed by ~10%** normalized vs reference libs. Why:
   modern AMD64 branch prediction makes never-taken bounds checks
   effectively free (~1 cycle, predicted), while `unsafe.Add` defeats

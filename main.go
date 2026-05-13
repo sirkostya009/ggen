@@ -12,7 +12,10 @@ import (
 	"strings"
 )
 
-const genSuffix = "_gen.go"
+const (
+	genSuffix     = "_ggen.go"
+	genTestSuffix = "_ggen_test.go"
+)
 
 var cliFlags annotationFlags
 
@@ -254,9 +257,9 @@ func bucketKeys(m map[bucketKey][]StructInfo) []bucketKey {
 }
 
 // packageFileName builds the output filename for one bucket. Untagged
-// buckets keep the legacy `<dir>_gen.go` / `<dir>_gen_test.go` naming;
-// tagged buckets get `<dir>_<slug>_gen.go` so multiple //go:build groups
-// in the same package each end up in their own file.
+// buckets get `<dir>_ggen.go` / `<dir>_ggen_test.go`; tagged buckets
+// get `<dir>_<slug>_ggen.go` so multiple //go:build groups in the same
+// package each end up in their own file.
 func packageFileName(dir, tag string, testFile bool) string {
 	base := filepath.Base(filepath.Clean(dir))
 	if base == "." || base == "/" || base == "" {
@@ -267,7 +270,7 @@ func packageFileName(dir, tag string, testFile bool) string {
 	}
 	suffix := genSuffix
 	if testFile {
-		suffix = "_gen_test.go"
+		suffix = genTestSuffix
 	}
 	if tag == "" {
 		return base + suffix
@@ -317,9 +320,9 @@ func generateSingleFile(file string, wanted []string, outFlag, pkgFlag string) e
 
 	out := outFlag
 	if out == "" {
-		// Source foo_test.go → foo_gen_test.go; otherwise foo.go → foo_gen.go.
-		if strings.HasSuffix(file, "_test.go") {
-			out = strings.TrimSuffix(file, "_test.go") + "_gen_test.go"
+		// Source foo_test.go → foo_ggen_test.go; otherwise foo.go → foo_ggen.go.
+		if before, ok := strings.CutSuffix(file, "_test.go"); ok {
+			out = before + genTestSuffix
 		} else {
 			out = strings.TrimSuffix(file, ".go") + genSuffix
 		}

@@ -101,8 +101,8 @@ func TestCLI(t *testing.T) {
 		if out, err := runCLI(t, bin, dir, "msg.go"); err != nil {
 			t.Fatalf("ggen msg.go: %v\n%s", err, out)
 		}
-		mustHaveFile(t, filepath.Join(dir, "msg_gen.go"))
-		mustNotHaveFile(t, filepath.Join(dir, "msg_gen_test.go"))
+		mustHaveFile(t, filepath.Join(dir, "msg_ggen.go"))
+		mustNotHaveFile(t, filepath.Join(dir, "msg_ggen_test.go"))
 	})
 
 	t.Run("SingleFile_Test_OutputName", func(t *testing.T) {
@@ -112,8 +112,8 @@ func TestCLI(t *testing.T) {
 		if out, err := runCLI(t, bin, dir, "msg_test.go"); err != nil {
 			t.Fatalf("ggen msg_test.go: %v\n%s", err, out)
 		}
-		mustHaveFile(t, filepath.Join(dir, "msg_gen_test.go"))
-		mustNotHaveFile(t, filepath.Join(dir, "msg_gen.go"))
+		mustHaveFile(t, filepath.Join(dir, "msg_ggen_test.go"))
+		mustNotHaveFile(t, filepath.Join(dir, "msg_ggen.go"))
 	})
 
 	t.Run("SingleFile_OutputOverride", func(t *testing.T) {
@@ -125,7 +125,7 @@ func TestCLI(t *testing.T) {
 			t.Fatalf("ggen -o: %v\n%s", err, out)
 		}
 		mustHaveFile(t, target)
-		mustNotHaveFile(t, filepath.Join(dir, "msg_gen.go"))
+		mustNotHaveFile(t, filepath.Join(dir, "msg_ggen.go"))
 	})
 
 	t.Run("Directory_NonTest_OutputName", func(t *testing.T) {
@@ -136,8 +136,8 @@ func TestCLI(t *testing.T) {
 		if out, err := runCLI(t, bin, dir, "."); err != nil {
 			t.Fatalf("ggen .: %v\n%s", err, out)
 		}
-		mustHaveFile(t, filepath.Join(dir, "fixture_gen.go"))
-		mustNotHaveFile(t, filepath.Join(dir, "fixture_gen_test.go"))
+		mustHaveFile(t, filepath.Join(dir, "fixture_ggen.go"))
+		mustNotHaveFile(t, filepath.Join(dir, "fixture_ggen_test.go"))
 	})
 
 	t.Run("Directory_Test_OutputName", func(t *testing.T) {
@@ -148,8 +148,8 @@ func TestCLI(t *testing.T) {
 		if out, err := runCLI(t, bin, dir, "."); err != nil {
 			t.Fatalf("ggen .: %v\n%s", err, out)
 		}
-		mustHaveFile(t, filepath.Join(dir, "fixture_gen_test.go"))
-		mustNotHaveFile(t, filepath.Join(dir, "fixture_gen.go"))
+		mustHaveFile(t, filepath.Join(dir, "fixture_ggen_test.go"))
+		mustNotHaveFile(t, filepath.Join(dir, "fixture_ggen.go"))
 	})
 
 	t.Run("Directory_Mixed_BothFiles", func(t *testing.T) {
@@ -163,27 +163,27 @@ func TestCLI(t *testing.T) {
 		if out, err := runCLI(t, bin, dir, "."); err != nil {
 			t.Fatalf("ggen .: %v\n%s", err, out)
 		}
-		mustHaveFile(t, filepath.Join(dir, "fixture_gen.go"))
-		mustHaveFile(t, filepath.Join(dir, "fixture_gen_test.go"))
+		mustHaveFile(t, filepath.Join(dir, "fixture_ggen.go"))
+		mustHaveFile(t, filepath.Join(dir, "fixture_ggen_test.go"))
 
 		// Content routing: Msg (declared in msg.go) belongs to the library
 		// build; MsgT (declared in msg_test.go) belongs to the test build.
 		// They must land in their respective _gen files and not bleed across
 		// — otherwise a `go test` build would pull duplicate methods or
 		// `go build` would import test-only types.
-		nonTest := mustReadOutput(t, filepath.Join(dir, "fixture_gen.go"))
-		test := mustReadOutput(t, filepath.Join(dir, "fixture_gen_test.go"))
+		nonTest := mustReadOutput(t, filepath.Join(dir, "fixture_ggen.go"))
+		test := mustReadOutput(t, filepath.Join(dir, "fixture_ggen_test.go"))
 		if !strings.Contains(nonTest, "Msg) DecodeFrom") {
-			t.Errorf("Msg missing from fixture_gen.go:\n%s", nonTest)
+			t.Errorf("Msg missing from fixture_ggen.go:\n%s", nonTest)
 		}
 		if strings.Contains(nonTest, "MsgT) DecodeFrom") {
-			t.Errorf("MsgT leaked into fixture_gen.go:\n%s", nonTest)
+			t.Errorf("MsgT leaked into fixture_ggen.go:\n%s", nonTest)
 		}
 		if !strings.Contains(test, "MsgT) DecodeFrom") {
-			t.Errorf("MsgT missing from fixture_gen_test.go:\n%s", test)
+			t.Errorf("MsgT missing from fixture_ggen_test.go:\n%s", test)
 		}
 		if strings.Contains(test, "Msg) DecodeFrom") {
-			t.Errorf("Msg leaked into fixture_gen_test.go:\n%s", test)
+			t.Errorf("Msg leaked into fixture_ggen_test.go:\n%s", test)
 		}
 	})
 
@@ -198,8 +198,8 @@ type Msg struct{ Text string }
 		if out, err := runCLI(t, bin, dir, "."); err != nil {
 			t.Fatalf("ggen .: %v\n%s", err, out)
 		}
-		mustNotHaveFile(t, filepath.Join(dir, "fixture_gen.go"))
-		mustNotHaveFile(t, filepath.Join(dir, "fixture_gen_test.go"))
+		mustNotHaveFile(t, filepath.Join(dir, "fixture_ggen.go"))
+		mustNotHaveFile(t, filepath.Join(dir, "fixture_ggen_test.go"))
 	})
 
 	t.Run("Directory_BuildTag_BucketsIntoSeparateFiles", func(t *testing.T) {
@@ -207,7 +207,7 @@ type Msg struct{ Text string }
 		// Two files in the same package: one untagged, one behind
 		// `//go:build foo`. The tagged struct must NOT pollute the
 		// untagged gen file (would compile-break builds without `foo`),
-		// so the generator emits a separate `<dir>_foo_gen.go` carrying
+		// so the generator emits a separate `<dir>_foo_ggen.go` carrying
 		// the matching //go:build header.
 		base := t.TempDir()
 		dir := filepath.Join(base, "fixture")
@@ -231,8 +231,8 @@ type Tagged struct {
 			t.Fatalf("ggen .: %v\n%s", err, out)
 		}
 
-		// Untagged bucket → fixture_gen.go, Plain inside, no //go:build header.
-		plain := filepath.Join(dir, "fixture_gen.go")
+		// Untagged bucket → fixture_ggen.go, Plain inside, no //go:build header.
+		plain := filepath.Join(dir, "fixture_ggen.go")
 		mustHaveFile(t, plain)
 		plainBody := mustReadOutput(t, plain)
 		if strings.HasPrefix(plainBody, "//go:build") {
@@ -245,8 +245,8 @@ type Tagged struct {
 			t.Errorf("Tagged leaked into untagged file (would compile-break without `foo`):\n%s", plainBody)
 		}
 
-		// Tagged bucket → fixture_foo_gen.go, Tagged inside, with the header.
-		tagged := filepath.Join(dir, "fixture_foo_gen.go")
+		// Tagged bucket → fixture_foo_ggen.go, Tagged inside, with the header.
+		tagged := filepath.Join(dir, "fixture_foo_ggen.go")
 		mustHaveFile(t, tagged)
 		taggedBody := mustReadOutput(t, tagged)
 		if !strings.HasPrefix(taggedBody, "//go:build foo\n") {
@@ -280,7 +280,7 @@ type Tagged struct {
 			t.Fatalf("ggen .: %v\n%s", err, out)
 		}
 		// Slug collapses ` && ` into a single underscore.
-		path := filepath.Join(dir, "fixture_foo_bar_gen.go")
+		path := filepath.Join(dir, "fixture_foo_bar_ggen.go")
 		mustHaveFile(t, path)
 		body := mustReadOutput(t, path)
 		if !strings.HasPrefix(body, "//go:build foo && bar\n") {
@@ -319,8 +319,8 @@ type Tagged struct {
 		if out, err := runCLI(t, bin, base, "./..."); err != nil {
 			t.Fatalf("ggen ./...: %v\n%s", err, out)
 		}
-		mustHaveFile(t, filepath.Join(a, "a_gen.go"))
-		mustHaveFile(t, filepath.Join(b, "b_gen.go"))
+		mustHaveFile(t, filepath.Join(a, "a_ggen.go"))
+		mustHaveFile(t, filepath.Join(b, "b_ggen.go"))
 	})
 
 	t.Run("WalkSkipsDotAndUnderscoreDirs", func(t *testing.T) {
@@ -336,9 +336,9 @@ type Tagged struct {
 		if out, err := runCLI(t, bin, base, "./..."); err != nil {
 			t.Fatalf("ggen ./...: %v\n%s", err, out)
 		}
-		mustHaveFile(t, filepath.Join(visible, "visible_gen.go"))
-		mustNotHaveFile(t, filepath.Join(hidden, ".hidden_gen.go"))
-		mustNotHaveFile(t, filepath.Join(skipped, "_skipped_gen.go"))
+		mustHaveFile(t, filepath.Join(visible, "visible_ggen.go"))
+		mustNotHaveFile(t, filepath.Join(hidden, ".hidden_ggen.go"))
+		mustNotHaveFile(t, filepath.Join(skipped, "_skipped_ggen.go"))
 	})
 
 	// --- flag plumbing into generated output ---
@@ -350,7 +350,7 @@ type Tagged struct {
 		if out, err := runCLI(t, bin, dir, "-pkg", "renamed", "msg.go"); err != nil {
 			t.Fatalf("ggen -pkg: %v\n%s", err, out)
 		}
-		body := mustReadOutput(t, filepath.Join(dir, "msg_gen.go"))
+		body := mustReadOutput(t, filepath.Join(dir, "msg_ggen.go"))
 		if !strings.Contains(body, "package renamed") {
 			t.Fatalf("expected 'package renamed' in output, got:\n%s", body)
 		}
@@ -363,7 +363,7 @@ type Tagged struct {
 		if out, err := runCLI(t, bin, dir, "-marshal", "msg.go"); err != nil {
 			t.Fatalf("ggen -marshal: %v\n%s", err, out)
 		}
-		body := mustReadOutput(t, filepath.Join(dir, "msg_gen.go"))
+		body := mustReadOutput(t, filepath.Join(dir, "msg_ggen.go"))
 		if !strings.Contains(body, "MarshalJSON()") {
 			t.Fatalf("expected MarshalJSON method in output, got:\n%s", body)
 		}
@@ -376,7 +376,7 @@ type Tagged struct {
 		if out, err := runCLI(t, bin, dir, "-unmarshal", "msg.go"); err != nil {
 			t.Fatalf("ggen -unmarshal: %v\n%s", err, out)
 		}
-		body := mustReadOutput(t, filepath.Join(dir, "msg_gen.go"))
+		body := mustReadOutput(t, filepath.Join(dir, "msg_ggen.go"))
 		if !strings.Contains(body, "UnmarshalJSON(") {
 			t.Fatalf("expected UnmarshalJSON method in output, got:\n%s", body)
 		}
@@ -397,7 +397,7 @@ type Validated struct {
 		if out, err := runCLI(t, bin, dir, "msg.go"); err != nil {
 			t.Fatalf("ggen default: %v\n%s", err, out)
 		}
-		body := mustReadOutput(t, filepath.Join(dir, "msg_gen.go"))
+		body := mustReadOutput(t, filepath.Join(dir, "msg_ggen.go"))
 		if !strings.Contains(body, "MinLenError") || !strings.Contains(body, "RequiredError") {
 			t.Fatalf("expected MinLenError + RequiredError in default output, got:\n%s", body)
 		}
@@ -405,7 +405,7 @@ type Validated struct {
 		if out, err := runCLI(t, bin, dir, "-novalidate", "msg.go"); err != nil {
 			t.Fatalf("ggen -novalidate: %v\n%s", err, out)
 		}
-		body = mustReadOutput(t, filepath.Join(dir, "msg_gen.go"))
+		body = mustReadOutput(t, filepath.Join(dir, "msg_ggen.go"))
 		if strings.Contains(body, "MinLenError") || strings.Contains(body, "RequiredError") {
 			t.Fatalf("expected no validation errors with -novalidate, got:\n%s", body)
 		}
@@ -423,7 +423,7 @@ type Validated struct {
 		if out, err := runCLI(t, bin, dir, "msg.go"); err != nil {
 			t.Fatalf("ggen default: %v\n%s", err, out)
 		}
-		body := mustReadOutput(t, filepath.Join(dir, "msg_gen.go"))
+		body := mustReadOutput(t, filepath.Join(dir, "msg_ggen.go"))
 		if !strings.Contains(body, "AppendStringNoHTML") {
 			t.Fatalf("expected AppendStringNoHTML by default, got:\n%s", body)
 		}
@@ -432,7 +432,7 @@ type Validated struct {
 		if out, err := runCLI(t, bin, dir, "-htmlescape", "msg.go"); err != nil {
 			t.Fatalf("ggen -htmlescape: %v\n%s", err, out)
 		}
-		body = mustReadOutput(t, filepath.Join(dir, "msg_gen.go"))
+		body = mustReadOutput(t, filepath.Join(dir, "msg_ggen.go"))
 		if strings.Contains(body, "AppendStringNoHTML") {
 			t.Fatalf("expected AppendString (not -NoHTML) with -htmlescape, got:\n%s", body)
 		}
@@ -449,7 +449,7 @@ type Validated struct {
 		if out, err := runCLI(t, bin, dir, "msg.go"); err != nil {
 			t.Fatalf("ggen default: %v\n%s", err, out)
 		}
-		body := mustReadOutput(t, filepath.Join(dir, "msg_gen.go"))
+		body := mustReadOutput(t, filepath.Join(dir, "msg_ggen.go"))
 		if !strings.Contains(body, "UnknownKeyError") {
 			t.Fatalf("expected UnknownKeyError in default output, got:\n%s", body)
 		}
@@ -457,7 +457,7 @@ type Validated struct {
 		if out, err := runCLI(t, bin, dir, "-ignoreunknown", "msg.go"); err != nil {
 			t.Fatalf("ggen -ignoreunknown: %v\n%s", err, out)
 		}
-		body = mustReadOutput(t, filepath.Join(dir, "msg_gen.go"))
+		body = mustReadOutput(t, filepath.Join(dir, "msg_ggen.go"))
 		if strings.Contains(body, "UnknownKeyError") {
 			t.Fatalf("expected UnknownKeyError to be elided with -ignoreunknown, got:\n%s", body)
 		}
@@ -483,7 +483,7 @@ type Skipped struct {
 		if out, err := runCLI(t, bin, dir, "msg.go", "Wanted"); err != nil {
 			t.Fatalf("ggen msg.go Wanted: %v\n%s", err, out)
 		}
-		body := mustReadOutput(t, filepath.Join(dir, "msg_gen.go"))
+		body := mustReadOutput(t, filepath.Join(dir, "msg_ggen.go"))
 		if !strings.Contains(body, "Wanted) DecodeFrom") {
 			t.Fatalf("expected DecodeFrom for Wanted, got:\n%s", body)
 		}
@@ -550,7 +550,7 @@ type Msg struct {
 		if out, err := runCLI(t, bin, base, "./consumer"); err != nil {
 			t.Fatalf("ggen ./consumer: %v\n%s", err, out)
 		}
-		body := mustReadOutput(t, filepath.Join(base, "consumer", "consumer_gen.go"))
+		body := mustReadOutput(t, filepath.Join(base, "consumer", "consumer_ggen.go"))
 
 		// Each generated method must dispatch through the static text path
 		// for the Tag field specifically (field-bound match — proves the
@@ -608,7 +608,7 @@ type Msg struct {
 		if out, err := runCLI(t, bin, base, "./consumer"); err != nil {
 			t.Fatalf("ggen ./consumer: %v\n%s", err, out)
 		}
-		body := mustReadOutput(t, filepath.Join(base, "consumer", "consumer_gen.go"))
+		body := mustReadOutput(t, filepath.Join(base, "consumer", "consumer_ggen.go"))
 
 		// Tagged has MarshalText (value receiver) + UnmarshalText (pointer
 		// receiver). No AppendText — encode side picks TextMarshaler branch.
@@ -662,7 +662,7 @@ type Msg struct {
 		if out, err := runCLI(t, bin, base, "./consumer"); err != nil {
 			t.Fatalf("ggen ./consumer: %v\n%s", err, out)
 		}
-		body := mustReadOutput(t, filepath.Join(consumerDir, "consumer_gen.go"))
+		body := mustReadOutput(t, filepath.Join(consumerDir, "consumer_ggen.go"))
 
 		if got := strings.Count(body, "result.Tag.UnmarshalText("); got != 2 {
 			t.Errorf("expected 2 result.Tag.UnmarshalText calls under go.work, got %d:\n%s", got, body)
@@ -705,7 +705,7 @@ type Msg struct {
 		if out, err := runCLI(t, bin, consumerDir, "."); err != nil {
 			t.Fatalf("ggen .: %v\n%s", err, out)
 		}
-		body := mustReadOutput(t, filepath.Join(consumerDir, "consumer_gen.go"))
+		body := mustReadOutput(t, filepath.Join(consumerDir, "consumer_ggen.go"))
 		// Without type info, the generator can't resolve interfaces — every
 		// generated method falls back to encoding/json against result.Tag /
 		// s.Tag specifically. Field-bound match confirms the json fallback
@@ -757,7 +757,7 @@ func EvenOnly(n int) error {
 		if out, err := runCLI(t, bin, base, "./customfunc"); err != nil {
 			t.Fatalf("ggen ./customfunc: %v\n%s", err, out)
 		}
-		body := mustReadOutput(t, filepath.Join(dir, "customfunc_gen.go"))
+		body := mustReadOutput(t, filepath.Join(dir, "customfunc_ggen.go"))
 		if !strings.Contains(body, "if err := EvenOnly(result.N); err != nil") {
 			t.Errorf("expected direct EvenOnly call, got:\n%s", body)
 		}
@@ -791,7 +791,7 @@ func Squash(s string) string { return strings.ReplaceAll(s, " ", "") }
 		if out, err := runCLI(t, bin, base, "./puremod"); err != nil {
 			t.Fatalf("ggen ./puremod: %v\n%s", err, out)
 		}
-		body := mustReadOutput(t, filepath.Join(dir, "puremod_gen.go"))
+		body := mustReadOutput(t, filepath.Join(dir, "puremod_ggen.go"))
 		if !strings.Contains(body, "result.S = Squash(result.S)") {
 			t.Errorf("expected pure mod assignment, got:\n%s", body)
 		}
@@ -827,7 +827,7 @@ func Reject(s string) (string, error) {
 		if out, err := runCLI(t, bin, base, "./fallible"); err != nil {
 			t.Fatalf("ggen ./fallible: %v\n%s", err, out)
 		}
-		body := mustReadOutput(t, filepath.Join(dir, "fallible_gen.go"))
+		body := mustReadOutput(t, filepath.Join(dir, "fallible_ggen.go"))
 		if !strings.Contains(body, "if _v, _err := Reject(result.S); _err != nil") {
 			t.Errorf("expected fallible mod with err-prop branch, got:\n%s", body)
 		}
@@ -872,7 +872,7 @@ type Msg struct {
 		if out, err := runCLI(t, bin, consumerDir, "."); err != nil {
 			t.Fatalf("ggen .: %v\n%s", err, out)
 		}
-		body := mustReadOutput(t, filepath.Join(consumerDir, "consumer_gen.go"))
+		body := mustReadOutput(t, filepath.Join(consumerDir, "consumer_ggen.go"))
 		if !strings.Contains(body, "if err := ext.Validate(result.S); err != nil") {
 			t.Errorf("expected qualified ext.Validate call, got:\n%s", body)
 		}
@@ -922,7 +922,7 @@ type Msg struct {
 		if out, err := runCLI(t, bin, consumerDir, "."); err != nil {
 			t.Fatalf("ggen .: %v\n%s", err, out)
 		}
-		body := mustReadOutput(t, filepath.Join(consumerDir, "consumer_gen.go"))
+		body := mustReadOutput(t, filepath.Join(consumerDir, "consumer_ggen.go"))
 		if !strings.Contains(body, "if err := crunchy.Validate(result.S); err != nil") {
 			t.Errorf("expected qualified crunchy.Validate call, got:\n%s", body)
 		}
@@ -1010,7 +1010,7 @@ type Count int
 		if out, err := runCLI(t, bin, dir, "msg.go"); err != nil {
 			t.Fatalf("ggen msg.go: %v\n%s", err, out)
 		}
-		body := mustReadOutput(t, filepath.Join(dir, "msg_gen.go"))
+		body := mustReadOutput(t, filepath.Join(dir, "msg_ggen.go"))
 		if !strings.Contains(body, "(HtmlString) DecodeFrom") {
 			t.Errorf("HtmlString.DecodeFrom missing:\n%s", body)
 		}
@@ -1044,7 +1044,7 @@ type Tuple [3]int
 		if out, err := runCLI(t, bin, dir, "msg.go"); err != nil {
 			t.Fatalf("ggen msg.go: %v\n%s", err, out)
 		}
-		body := mustReadOutput(t, filepath.Join(dir, "msg_gen.go"))
+		body := mustReadOutput(t, filepath.Join(dir, "msg_ggen.go"))
 		for _, want := range []string{
 			") DecodeFrom(data []byte, i int) (Tags",
 			"s Tags) AppendJSON",

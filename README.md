@@ -145,18 +145,18 @@ ggen path/to/file.go  # one file; optional struct-name filter as trailing args
 ```
 
 The generated file lives next to your sources. Output naming follows the
-input: a package gets `<dir>_gen.go` (and `<dir>_gen_test.go` if any
+input: a package gets `<dir>_ggen.go` (and `<dir>_ggen_test.go` if any
 annotated struct was declared in a `_test.go` file); a single file gets
-`<base>_gen.go`. The `-o` flag overrides the path for single-file or
+`<base>_ggen.go`. The `-o` flag overrides the path for single-file or
 single-package mode.
 
 If a source file has a `//go:build` constraint, ggen carries that
 constraint into a separate output file: a struct in `tagged.go`
-guarded by `//go:build foo` ends up in `<dir>_foo_gen.go` with the same
+guarded by `//go:build foo` ends up in `<dir>_foo_ggen.go` with the same
 `//go:build foo` header, so unconstrained builds aren't broken by an
 "undefined: Tagged" reference. Multi-term constraints (e.g.
 `//go:build foo && bar`) get a slugified filename
-(`<dir>_foo_bar_gen.go`) and the original expression preserved verbatim
+(`<dir>_foo_bar_ggen.go`) and the original expression preserved verbatim
 in the header.
 
 You can of course use ggen along wuth `go generate` — one `//go:generate`
