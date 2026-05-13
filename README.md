@@ -504,19 +504,23 @@ Round-trips through ggen are fine on both sides; piping the output
 through stdlib `encoding/json` reshapes the value back to the
 struct-dump form.
 
-Another decode-side divergence worth flagging: **maps aren't merged**.
-Stdlib's map decode is additive — if the destination map already has
-entries, decoded keys are layered on top and prior entries survive.
-ggen wipes the destination via `clear()` before decoding so the result
-reflects only the incoming JSON - callers can provide their own map buffer.
+Another decode-side divergence worth flagging: **ggen has no
+decode-into mode**. Stdlib's `Unmarshal(data, &dst)` merges JSON into
+the existing `dst` — pre-existing map entries survive, slice contents
+extend, nested struct fields keep prior state unless overwritten by
+JSON. ggen's `T.DecodeFrom` (and the wrappers around it) ignores its
+receiver and returns a fresh `T` — there's no shape of call that asks
+ggen to layer JSON over a caller-supplied value.
 
-| destination state | incoming  | stdlib map               | ggen map             |
-| ----------------- | --------- | ------------------------ | -------------------- |
-| nil               | `{}`      | nil                      | empty non-nil map    |
-| nil               | `{"a":1}` | `{"a":1}`                | `{"a":1}`            |
-| `{"x":9}`         | `{}`      | `{"x":9}` (preserved)    | empty (cleared)      |
-| `{"x":9}`         | `{"a":1}` | `{"x":9,"a":1}` (merged) | `{"a":1}` (replaced) |
-| any               | `null`    | nil                      | nil                  |
+The map case is the easiest to observe:
+
+| destination | incoming  | stdlib                   | ggen              |
+| ----------- | --------- | ------------------------ | ----------------- |
+| nil         | `{}`      | nil                      | empty non-nil map |
+| nil         | `{"a":1}` | `{"a":1}`                | `{"a":1}`         |
+| `{"x":9}`   | `{}`      | `{"x":9}` (preserved)    | empty (fresh)     |
+| `{"x":9}`   | `{"a":1}` | `{"x":9,"a":1}` (merged) | `{"a":1}`         |
+| any         | `null`    | nil                      | nil               |
 
 ## streaming
 

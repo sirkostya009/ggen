@@ -354,7 +354,9 @@ func BenchmarkRetention(b *testing.B) {
 				if err := pprof.Lookup("heap").WriteTo(f, 0); err != nil {
 					b.Fatal(err)
 				}
-				f.Close()
+				if err := f.Close(); err != nil {
+					b.Fatal(err)
+				}
 			}
 
 			runtime.KeepAlive(sinks)

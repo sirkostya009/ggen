@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# pre-commit: run golangci-lint --fix on the root module + bench.
+# Enable for this repo with:
+#   git config core.hooksPath .githooks
+
+set -euo pipefail
+
+if ! command -v golangci-lint >/dev/null 2>&1; then
+	echo "pre-commit: golangci-lint not installed; skipping" >&2
+	exit 0
+fi
+
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+
+GOEXPERIMENT=${GOEXPERIMENT:-jsonv2}
+export GOEXPERIMENT
+
+# Snapshot the staging area BEFORE running lint. Only files that were
+# already staged get re-staged after --fix; otherwise unrelated worktree
+# changes would silently slip into the commit.
+mapfile -t staged < <(git diff --cached --name-only --diff-filter=ACM | grep -E '\.go$' || true)
+
+run() {
+	local dir=$1
+	echo "pre-commit: golangci-lint run --fix in $dir"
+	(cd "$dir" && golangci-lint run --fix ./...)
+}
+
+run .
+if [ -f bench/go.mod ]; then
+	run bench
+fi
+
+if [ ${#staged[@]} -gt 0 ]; then
+	# Re-stage only previously-staged files that --fix rewrote.
+	restage=()
+	for f in "${staged[@]}"; do
+		if ! git diff --quiet -- "$f"; then
+			restage+=("$f")
+		fi
+	done
+	if [ ${#restage[@]} -gt 0 ]; then
+		echo "pre-commit: re-staging files modified by --fix:"
+		printf '  %s\n' "${restage[@]}"
+		git add -- "${restage[@]}"
+	fi
+fi

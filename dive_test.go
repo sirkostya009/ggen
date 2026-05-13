@@ -36,7 +36,6 @@ func EvenOnly(n int) error {
 	return nil
 }
 
-
 func TestDive_valid(t *testing.T) {
 	input := `{"tags":["go","rust"],"title":"héllo","scores":[10,50,100]}`
 	got, err := decode.Unmarshal[DiveStruct]([]byte(input))

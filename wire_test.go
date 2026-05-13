@@ -370,15 +370,10 @@ func TestEmptyArrayDecode_NonNil(t *testing.T) {
 }
 
 // TestStdlibVsGgen_MapReplaceDivergence: ggen's documented divergence
-// from stdlib — pre-populated maps are merged by stdlib but replaced
-// by ggen. Test simulates the divergence by decoding the same input
-// via both paths and checking that stdlib's destination retains the
-// pre-existing entry while ggen's freshly-decoded value does not.
-//
-// Note: ggen's Unmarshal[T] takes no destination — it always returns
-// a fresh value. The contrast is between "stdlib's decode-into mode
-// merges with prior state" and "ggen's decode-fresh mode reflects
-// only the incoming JSON." Same input, different output shape.
+// from stdlib. Stdlib `Unmarshal(data, &dst)` merges into `dst` —
+// pre-existing map keys survive. ggen's `Node.DecodeFrom` ignores the
+// receiver entirely and returns a fresh value, so the same call shape
+// (`ggGot, _, err = ggGot.DecodeFrom(in, 0)`) wipes the pre-pop state.
 func TestStdlibVsGgen_MapReplaceDivergence(t *testing.T) {
 	in := []byte(`{"id":1,"name":"n","props":{"new":"v"},"score":0,"active":false}`)
 
@@ -397,17 +392,17 @@ func TestStdlibVsGgen_MapReplaceDivergence(t *testing.T) {
 		t.Skipf("stdlib didn't decode 'new' key as expected (got %v) — divergence test premise has shifted", stdGot.Props)
 	}
 
-	// ggen: start from the SAME pre-populated value, then decode. Since
-	// decode.Unmarshal[T] returns a fresh value, the reassignment
-	// discards whatever the destination held before. Caller's pre-pop
-	// state is wiped, not merged.
+	// ggen: same pre-populated value, decoded via Node's own method.
+	// DecodeFrom ignores the receiver — `var result Node` inside —
+	// so the pre-pop state is dropped on reassignment regardless of
+	// whether the caller used decode.Unmarshal or Node.DecodeFrom.
 	ggGot := Node{ID: 1, Name: "n", Props: map[string]string{"old": "kept"}}
-	ggGot, err := decode.Unmarshal[Node](in)
+	ggGot, _, err := ggGot.DecodeFrom(in, 0)
 	if err != nil {
 		t.Fatalf("ggen: %v", err)
 	}
 	if _, ok := ggGot.Props["old"]; ok {
-		t.Errorf("ggen should NOT have 'old' key (replace semantics), got %v", ggGot.Props)
+		t.Errorf("ggen should NOT have 'old' key (receiver-ignored), got %v", ggGot.Props)
 	}
 	if ggGot.Props["new"] != "v" {
 		t.Errorf("ggen should have 'new' key, got %v", ggGot.Props)
