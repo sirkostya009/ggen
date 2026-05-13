@@ -147,4 +147,3 @@ func TestUnmarshalStream_tinyInitial(t *testing.T) {
 		t.Errorf("nested string alias corrupted: %q", got.Address.Street)
 	}
 }
-

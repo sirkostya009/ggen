@@ -103,7 +103,7 @@ type WideStruct struct {
 //
 //ggen:generate
 type PtrSliceStruct struct {
-	Items    []*Address    `json:"items"`
-	Tuple    [3]*Address   `json:"tuple"`
-	Nodes    []*Node       `json:"nodes"`
+	Items []*Address  `json:"items"`
+	Tuple [3]*Address `json:"tuple"`
+	Nodes []*Node     `json:"nodes"`
 }

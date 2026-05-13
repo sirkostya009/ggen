@@ -2402,9 +2402,9 @@ const defaultPreallocCap = 4
 //
 // Precedence:
 //  1. `hintlen=N`:
-//       N >  0 → that many entries
-//       N == 0 → user opt-out, force zero (overrides len/minlen)
-//       N <  0 → sentinel "unset" — fall through
+//     N >  0 → that many entries
+//     N == 0 → user opt-out, force zero (overrides len/minlen)
+//     N <  0 → sentinel "unset" — fall through
 //  2. `len=N`    — exact count, no waste
 //  3. `minlen=N` — floor; growth still works above
 //

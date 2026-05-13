@@ -231,4 +231,3 @@ func TestRead_notObject(t *testing.T) {
 		t.Fatal("expected not-object error")
 	}
 }
-

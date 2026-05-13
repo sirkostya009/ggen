@@ -113,11 +113,11 @@ type structSet struct {
 // dynamic-probe cascade in cross-package paths.
 func loadStructs(filenames []string) (*structSet, error) {
 	set := &structSet{
-		structs:     map[string]*ast.StructType{},
-		aliases:     map[string]*ast.TypeSpec{},
-		annotations: map[string]annotationFlags{},
-		fromTest:    map[string]struct{}{},
-		fieldExpr:   map[string]ast.Expr{},
+		structs:        map[string]*ast.StructType{},
+		aliases:        map[string]*ast.TypeSpec{},
+		annotations:    map[string]annotationFlags{},
+		fromTest:       map[string]struct{}{},
+		fieldExpr:      map[string]ast.Expr{},
 		structFile:     map[string]*ast.File{},
 		structBuildTag: map[string]string{},
 	}
@@ -169,18 +169,18 @@ func loadDirWithTypes(dir string) (*structSet, error) {
 		return nil, fmt.Errorf("no usable package loaded for %s", dir)
 	}
 	set := &structSet{
-		structs:     map[string]*ast.StructType{},
-		aliases:     map[string]*ast.TypeSpec{},
-		annotations: map[string]annotationFlags{},
-		fromTest:    map[string]struct{}{},
-		fieldExpr:   map[string]ast.Expr{},
+		structs:        map[string]*ast.StructType{},
+		aliases:        map[string]*ast.TypeSpec{},
+		annotations:    map[string]annotationFlags{},
+		fromTest:       map[string]struct{}{},
+		fieldExpr:      map[string]ast.Expr{},
 		structFile:     map[string]*ast.File{},
 		structBuildTag: map[string]string{},
-		pkgName:     best.Name,
-		fileSet:     best.Fset,
-		typesInfo:   best.TypesInfo,
-		typesPkg:    best.Types,
-		stdIfaces:   findStdInterfaces(pkgs),
+		pkgName:        best.Name,
+		fileSet:        best.Fset,
+		typesInfo:      best.TypesInfo,
+		typesPkg:       best.Types,
+		stdIfaces:      findStdInterfaces(pkgs),
 	}
 	for _, af := range best.Syntax {
 		filename := best.Fset.Position(af.Pos()).Filename

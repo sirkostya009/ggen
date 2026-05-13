@@ -21,7 +21,6 @@ import (
 // API responses tend to nest at depth-1.
 //
 //ggen:generate
-//
 //easyjson:json
 type Addr struct {
 	Street string `json:"street"`
@@ -37,7 +36,6 @@ type Addr struct {
 // supported by jsonv2/sonic/easyjson for apples-to-apples comparison.
 //
 //ggen:generate
-//
 //easyjson:json
 type Node struct {
 	ID        int64             `json:"id" ggen:"required,gte=0"`

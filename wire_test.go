@@ -602,4 +602,3 @@ func TestWideStruct_BitmaskSeenFlags(t *testing.T) {
 		t.Fatal("expected DuplicateKeyError on repeated key, got nil")
 	}
 }
-
