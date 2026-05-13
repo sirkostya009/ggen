@@ -1130,4 +1130,175 @@ type Msg struct {
 			t.Fatalf("expected usage text, got: %s", out)
 		}
 	})
+
+	// --- rule applicability / value-shape rejection ---
+	//
+	// Every validation and mod rule that's coupled to a specific kind
+	// (string rules, numeric rules, len-rules, …) plus every numeric
+	// value parameter (`len=abc`, `gt=abc`, …) must be rejected at
+	// parse time with a clear diagnostic — silently emitting broken
+	// generated Go is the worst UX.
+	t.Run("InvalidRuleApplication", func(t *testing.T) {
+		t.Parallel()
+		type bad struct {
+			name     string // subtest name
+			fieldGo  string // Go field declaration (e.g. `N int`)
+			tag      string // full struct-tag content (everything between backticks)
+			wantDiag string // substring expected somewhere in stderr+stdout
+		}
+		// Every entry produces a single-file fixture under a fresh
+		// temp dir and runs ggen against it; the CLI must exit
+		// non-zero and the diagnostic must contain `wantDiag`. Cases
+		// are grouped by rule for grep-ability.
+		cases := []bad{
+			// ----- string-only rules on non-strings -----
+			{"ascii_on_int", "N int", `json:"n" ggen:"ascii"`, `rule "ascii" cannot be applied to int`},
+			{"email_on_int", "N int", `json:"n" ggen:"email"`, `rule "email" cannot be applied to int`},
+			{"url_on_bool", "B bool", `json:"b" ggen:"url"`, `rule "url" cannot be applied to bool`},
+			{"printable_on_float", "F float64", `json:"f" ggen:"printable"`, `rule "printable" cannot be applied to float64`},
+			{"alphanum_on_int", "N int", `json:"n" ggen:"alphanum"`, `rule "alphanum" cannot be applied to int`},
+			{"numericrule_on_int", "N int", `json:"n" ggen:"numeric"`, `rule "numeric" cannot be applied to int`},
+			{"lower_on_int", "N int", `json:"n" ggen:"lower"`, `rule "lower" cannot be applied to int`},
+			{"upper_on_int", "N int", `json:"n" ggen:"upper"`, `rule "upper" cannot be applied to int`},
+			{"hexadecimal_on_int", "N int", `json:"n" ggen:"hexadecimal"`, `rule "hexadecimal" cannot be applied to int`},
+			{"starts_on_int", "N int", `json:"n" ggen:"starts=foo"`, `rule "starts" cannot be applied to int`},
+			{"ends_on_int", "N int", `json:"n" ggen:"ends=foo"`, `rule "ends" cannot be applied to int`},
+			{"contains_on_int", "N int", `json:"n" ggen:"contains=foo"`, `rule "contains" cannot be applied to int`},
+			{"runes_on_int", "N int", `json:"n" ggen:"runes=3"`, `rule "runes" cannot be applied to int`},
+			{"minrunes_on_int", "N int", `json:"n" ggen:"minrunes=3"`, `rule "minrunes" cannot be applied to int`},
+			{"maxrunes_on_int", "N int", `json:"n" ggen:"maxrunes=3"`, `rule "maxrunes" cannot be applied to int`},
+			{"runes_on_bytes", "B []byte", `json:"b" ggen:"runes=3"`, `rule "runes" cannot be applied to []byte`},
+			{"ascii_on_bytes", "B []byte", `json:"b" ggen:"ascii"`, `rule "ascii" cannot be applied to []byte`},
+			{"starts_empty", "S string", `json:"s" ggen:"starts="`, `requires a non-empty value`},
+			{"ends_empty", "S string", `json:"s" ggen:"ends="`, `requires a non-empty value`},
+			{"contains_empty", "S string", `json:"s" ggen:"contains="`, `requires a non-empty value`},
+
+			// ----- numeric-only rules on non-numerics -----
+			{"gt_on_string", "S string", `json:"s" ggen:"gt=1"`, `rule "gt" cannot be applied to string`},
+			{"gte_on_string", "S string", `json:"s" ggen:"gte=1"`, `rule "gte" cannot be applied to string`},
+			{"lt_on_string", "S string", `json:"s" ggen:"lt=1"`, `rule "lt" cannot be applied to string`},
+			{"lte_on_string", "S string", `json:"s" ggen:"lte=1"`, `rule "lte" cannot be applied to string`},
+			{"gt_on_bool", "B bool", `json:"b" ggen:"gt=0"`, `rule "gt" cannot be applied to bool`},
+			{"gt_on_slice", "X []int", `json:"x" ggen:"gt=0"`, `rule "gt" cannot be applied to []int`},
+			{"gt_bad_value", "N int", `json:"n" ggen:"gt=abc"`, `value is not a valid number`},
+			{"gte_bad_value", "N int", `json:"n" ggen:"gte=abc"`, `value is not a valid number`},
+			{"lt_bad_value", "N int", `json:"n" ggen:"lt=abc"`, `value is not a valid number`},
+			{"lte_bad_value", "N int", `json:"n" ggen:"lte=abc"`, `value is not a valid number`},
+			{"gt_missing_value", "N int", `json:"n" ggen:"gt"`, `requires a numeric value`},
+
+			// ----- multiple: integers only -----
+			{"multiple_on_string", "S string", `json:"s" ggen:"multiple=2"`, `rule "multiple" cannot be applied to string`},
+			{"multiple_on_float", "F float64", `json:"f" ggen:"multiple=2"`, `rule "multiple" cannot be applied to float64`},
+			{"multiple_on_bool", "B bool", `json:"b" ggen:"multiple=2"`, `rule "multiple" cannot be applied to bool`},
+			{"multiple_bad_value", "N int", `json:"n" ggen:"multiple=abc"`, `value is not a valid integer`},
+			{"multiple_missing", "N int", `json:"n" ggen:"multiple"`, `requires an integer value`},
+
+			// ----- len/minlen/maxlen/notempty on non-len-able kinds -----
+			{"len_on_int", "N int", `json:"n" ggen:"len=5"`, `rule "len" cannot be applied to int`},
+			{"len_on_bool", "B bool", `json:"b" ggen:"len=1"`, `rule "len" cannot be applied to bool`},
+			{"len_on_float", "F float64", `json:"f" ggen:"len=1"`, `rule "len" cannot be applied to float64`},
+			{"minlen_on_int", "N int", `json:"n" ggen:"minlen=1"`, `rule "minlen" cannot be applied to int`},
+			{"maxlen_on_int", "N int", `json:"n" ggen:"maxlen=1"`, `rule "maxlen" cannot be applied to int`},
+			{"notempty_on_int", "N int", `json:"n" ggen:"notempty"`, `rule "notempty" cannot be applied to int`},
+			{"notempty_on_bool", "B bool", `json:"b" ggen:"notempty"`, `rule "notempty" cannot be applied to bool`},
+			{"len_bad_value", "S string", `json:"s" ggen:"len=abc"`, `value is not a valid integer`},
+			{"minlen_bad_value", "S string", `json:"s" ggen:"minlen=abc"`, `value is not a valid integer`},
+			{"maxlen_bad_value", "S string", `json:"s" ggen:"maxlen=abc"`, `value is not a valid integer`},
+			{"len_missing_value", "S string", `json:"s" ggen:"len"`, `requires an integer value`},
+			{"len_float_value", "S string", `json:"s" ggen:"len=1.5"`, `value is not a valid integer`},
+			{"runes_bad_value", "S string", `json:"s" ggen:"runes=abc"`, `value is not a valid integer`},
+			{"minrunes_bad_value", "S string", `json:"s" ggen:"minrunes=abc"`, `value is not a valid integer`},
+
+			// ----- eq / neq scope: not bool, not slice, not float-with-text -----
+			{"eq_on_slice", "X []int", `json:"x" ggen:"eq=1"`, `rule "eq" cannot be applied to []int`},
+			{"neq_on_slice", "X []int", `json:"x" ggen:"neq=1"`, `rule "neq" cannot be applied to []int`},
+			{"eq_on_bool", "B bool", `json:"b" ggen:"eq=true"`, `rule "eq" cannot be applied to bool`},
+			{"neq_on_bool", "B bool", `json:"b" ggen:"neq=true"`, `rule "neq" cannot be applied to bool`},
+			{"eq_int_bad_value", "N int", `json:"n" ggen:"eq=abc"`, `value is not a valid number`},
+			{"neq_int_bad_value", "N int", `json:"n" ggen:"neq=abc"`, `value is not a valid number`},
+
+			// ----- oneof: must be string/numeric, non-empty, numeric parts numeric -----
+			{"oneof_on_bool", "B bool", `json:"b" ggen:"oneof=true|false"`, `rule "oneof" cannot be applied to bool`},
+			{"oneof_on_slice", "X []int", `json:"x" ggen:"oneof=1|2"`, `rule "oneof" cannot be applied to []int`},
+			{"oneof_empty", "S string", `json:"s" ggen:"oneof"`, `oneof` + "` requires a "}, // matches "rule `oneof` requires a `|`-separated…"
+			{"oneof_numeric_bad_part", "N int", `json:"n" ggen:"oneof=1|two|3"`, `part "two" is not a valid number`},
+
+			// ----- hintlen restricted to slice/map -----
+			{"hintlen_on_int", "N int", `json:"n" ggen:"hintlen=10"`, "`hintlen` is only valid on slice/map fields"},
+			{"hintlen_on_string", "S string", `json:"s" ggen:"hintlen=10"`, "`hintlen` is only valid on slice/map fields"},
+			{"hintlen_on_bool", "B bool", `json:"b" ggen:"hintlen=10"`, "`hintlen` is only valid on slice/map fields"},
+			{"hintlen_on_array", "X [3]int", `json:"x" ggen:"hintlen=10"`, "`hintlen` is only valid on slice/map fields"},
+			{"hintlen_zero_on_int", "N int", `json:"n" ggen:"hintlen=0"`, "`hintlen` is only valid on slice/map fields"},
+			{"hintlen_negative", "X []int", `json:"x" ggen:"hintlen=-1"`, "hintlen=-1 must be ≥ 0"},
+			{"hintlen_non_numeric", "X []int", `json:"x" ggen:"hintlen=abc"`, `hintlen="abc" is not a valid integer`},
+
+			// ----- dive: only on slice/array/map -----
+			{"dive_on_string", "S string", `json:"s" ggen:"dive:minlen=1"`, "`dive:` tag prefix is only valid on slice/array/map fields"},
+			{"dive_on_int", "N int", `json:"n" ggen:"dive:gte=0"`, "`dive:` tag prefix is only valid on slice/array/map fields"},
+			{"dive_mod_on_int", "N int", `json:"n" mod:"dive:trim"`, "`dive:` tag prefix is only valid on slice/array/map fields"},
+
+			// ----- keys: only on maps -----
+			{"keys_on_string", "S string", `json:"s" ggen:"keys:minlen=1"`, "`keys:` tag prefix is only valid on map[string]V fields"},
+			{"keys_on_slice", "X []int", `json:"x" ggen:"keys:minlen=1"`, "`keys:` tag prefix is only valid on map[string]V fields"},
+			{"keys_mod_on_string", "S string", `json:"s" mod:"keys:trim"`, "`keys:` tag prefix is only valid on map[string]V fields"},
+			// keys: rules themselves are typed against KindString — verify
+			// a non-string-applicable rule still gets rejected even though
+			// the parent IS a map.
+			{"keys_numeric_rule", "M map[string]int", `json:"m" ggen:"keys:gt=1"`, `rule "gt" cannot be applied to string`},
+
+			// ----- dive: element kind mismatch -----
+			// []int element is int — string rules invalid on the element.
+			{"dive_ascii_on_int_elem", "X []int", `json:"x" ggen:"dive:ascii"`, `rule "ascii" cannot be applied to int`},
+			{"dive_email_on_int_elem", "X []int", `json:"x" ggen:"dive:email"`, `rule "email" cannot be applied to int`},
+			{"dive_len_on_int_elem", "X []int", `json:"x" ggen:"dive:len=3"`, `rule "len" cannot be applied to int`},
+			// map[string]int value is int.
+			{"dive_ascii_on_int_mapval", "M map[string]int", `json:"m" ggen:"dive:ascii"`, `rule "ascii" cannot be applied to int`},
+			// []string element is string — numeric rules invalid.
+			{"dive_gt_on_string_elem", "X []string", `json:"x" ggen:"dive:gt=1"`, `rule "gt" cannot be applied to string`},
+
+			// ----- mods: string mods on numerics, numeric mods on strings -----
+			{"trim_on_int", "N int", `json:"n" mod:"trim"`, `mod "trim" cannot be applied to int`},
+			{"lower_mod_on_int", "N int", `json:"n" mod:"lower"`, `mod "lower" cannot be applied to int`},
+			{"upper_mod_on_int", "N int", `json:"n" mod:"upper"`, `mod "upper" cannot be applied to int`},
+			{"trimleft_on_int", "N int", `json:"n" mod:"trimleft=foo"`, `mod "trimleft" cannot be applied to int`},
+			{"trimright_on_int", "N int", `json:"n" mod:"trimright=foo"`, `mod "trimright" cannot be applied to int`},
+			{"replace_on_int", "N int", `json:"n" mod:"replace=a|b"`, `mod "replace" cannot be applied to int`},
+			{"clamp_on_string", "S string", `json:"s" mod:"clamp=0|10"`, `mod "clamp" cannot be applied to string`},
+			{"clamp_on_bool", "B bool", `json:"b" mod:"clamp=0|10"`, `mod "clamp" cannot be applied to bool`},
+			{"clamp_on_slice", "X []int", `json:"x" mod:"clamp=0|10"`, `mod "clamp" cannot be applied to []int`},
+
+			// ----- mods: parameter-shape rejection -----
+			{"trimleft_empty", "S string", `json:"s" mod:"trimleft="`, "mod `trimleft` requires a non-empty value"},
+			{"trimright_empty", "S string", `json:"s" mod:"trimright="`, "mod `trimright` requires a non-empty value"},
+			{"replace_missing_pipe", "S string", `json:"s" mod:"replace=foo"`, "requires `old|new` form"},
+			{"replace_empty_old", "S string", `json:"s" mod:"replace=|new"`, "requires `old|new` form"},
+			{"clamp_missing_pipe", "N int", `json:"n" mod:"clamp=10"`, "requires `lo|hi` form"},
+			{"clamp_both_empty", "N int", `json:"n" mod:"clamp=|"`, "requires at least one of lo or hi"},
+			{"clamp_bad_lo", "N int", `json:"n" mod:"clamp=abc|10"`, "lo \"abc\" is not a valid number"},
+			{"clamp_bad_hi", "N int", `json:"n" mod:"clamp=0|abc"`, "hi \"abc\" is not a valid number"},
+		}
+
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				t.Parallel()
+				dir := t.TempDir()
+				src := `package fixture
+
+//ggen:generate
+type Msg struct {
+	` + tc.fieldGo + " `" + tc.tag + "`" + `
+}
+`
+				writeFixture(t, filepath.Join(dir, "msg.go"), src)
+				out, err := runCLI(t, bin, dir, "msg.go")
+				if err == nil {
+					t.Fatalf("expected ggen to reject %s, got success:\n%s", tc.name, out)
+				}
+				if !strings.Contains(out, tc.wantDiag) {
+					t.Errorf("diagnostic missing for %s\nwant substring: %q\ngot:\n%s",
+						tc.name, tc.wantDiag, out)
+				}
+			})
+		}
+	})
 }

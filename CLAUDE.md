@@ -314,6 +314,36 @@ per-struct; CLI flags apply to all.
       file imports). Zero alloc, no registry, type-checked.
       Note: mods break zero-copy for the modified field (force a new string).
 
+### Rule applicability (parse-time)
+
+`applicability.go` rejects mismatched validation/mod rules at parse
+time so the user gets a clear diagnostic instead of a downstream Go
+compile error in the generated file. The matrix lives in
+`checkOneValRule` / `checkOneModRule`:
+
+- String-only validators (`email`, `url`, `ascii`, `printable`,
+  `alphanum`, `numeric`, `lower`, `upper`, `hexadecimal`, `starts`,
+  `ends`, `contains`, `runes`, `minrunes`, `maxrunes`) — KindString only.
+- Numeric validators (`gt`, `gte`, `lt`, `lte`) — any numeric kind.
+- `multiple` — integer kinds only (modulo `%` doesn't compile on floats).
+- `eq`/`neq`/`oneof` — string or numeric.
+- `len`/`minlen`/`maxlen`/`notempty` — any len-able kind
+  (string/slice/array/map/[]byte).
+- String mods (`trim`, `lower`, `upper`, `trimleft`, `trimright`,
+  `replace`) — KindString.
+- `clamp` — numeric.
+- `hintlen` — slice/map only.
+- `dive:` only on slice/array/map/[]byte; `keys:` only on maps.
+- KindStruct fields are SKIPPED — they may be primitive aliases or
+  carry custom marshalers we can't type-check at parse time.
+- Custom `@Func` rules are skipped by applicability; `resolveCustomRules`
+  has already validated signature against the field's exact go/types type.
+- Numeric/integer value parameters (`gt=abc`, `len=1.5`, `minlen=`)
+  are rejected with their own diagnostics — same parse-time path.
+
+Cases covered exhaustively in `TestCLI/InvalidRuleApplication` —
+add a table entry there when a new rule lands.
+
 ### Top-level type aliases
 
 Annotated named types (`//ggen:generate type T <underlying>`) get the

@@ -888,6 +888,9 @@ func (s *structSet) extractFieldFromTypes(field *types.Var, tag string) (FieldIn
 	}
 
 	fi.Iface = inspectType(field.Type(), s.stdIfaces)
+	if err := checkRuleApplicability(fi); err != nil {
+		return fi, err
+	}
 	return fi, nil
 }
 
@@ -1065,6 +1068,9 @@ func extractField(goName string, field *ast.Field) (FieldInfo, error) {
 	// `[]byte` / `[]uint8` were already classified as KindBytes by
 	// resolveKind — leave that alone so marshalling goes through the
 	// base64/hex/array format path rather than a generic slice writer.
+	// (array peel block below populates fi.ElemKind for slices/arrays;
+	// applicability check at the end of this function uses the final
+	// kind data.)
 	if arr, ok := innerExpr.(*ast.ArrayType); ok && fi.Kind != KindBytes {
 		// `[]*T` / `[N]*T`: unwrap the star so ElemType is the pointee.
 		// Decoders allocate a backing slab of T and take interior pointers.
@@ -1098,6 +1104,9 @@ func extractField(goName string, field *ast.Field) (FieldInfo, error) {
 		}
 	}
 
+	if err := checkRuleApplicability(fi); err != nil {
+		return fi, err
+	}
 	return fi, nil
 }
 
