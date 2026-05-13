@@ -2807,19 +2807,19 @@ func renderMap(f FieldInfo, ref, posVar string) string {
 	b.WriteString("if k >= len(data) || data[k] != '{' { return result, 0, scan.ErrBadObject }\n")
 	b.WriteString("k++\n")
 	b.WriteString(inlineSkipWS("k"))
-	// Replace semantics: pre-populated destination is wiped
-	// before decoding so the result reflects only the incoming
-	// JSON (no merge with prior contents). `clear()` preserves
-	// the caller's bucket pool; nil gets a fresh map.
+	// Empty `{}` → non-nil empty (stdlib parity); else fresh make()
+	// with optional sizing hint. The surrounding DecodeFrom's
+	// `var result T` builds fresh, so ref is always nil here — no
+	// reuse branch to emit.
 	fmt.Fprintf(&b, "if k < len(data) && data[k] == '}' {\n")
-	fmt.Fprintf(&b, "if %s == nil { %s = %s{} } else { clear(%s) }\n", ref, ref, f.GoType, ref)
-	fmt.Fprintf(&b, "} else if %s == nil {\n", ref)
+	fmt.Fprintf(&b, "%s = %s{}\n", ref, f.GoType)
+	fmt.Fprintf(&b, "} else {\n")
 	if cap := mapPreallocCap(f); cap > 0 {
 		fmt.Fprintf(&b, "%s = make(%s, %d)\n", ref, f.GoType, cap)
 	} else {
 		fmt.Fprintf(&b, "%s = make(%s)\n", ref, f.GoType)
 	}
-	fmt.Fprintf(&b, "} else {\nclear(%s)\n}\n", ref)
+	fmt.Fprintf(&b, "}\n")
 	b.WriteString("for k < len(data) && data[k] != '}' {\n")
 	b.WriteString("var _mk string\n")
 	b.WriteString(inlineScanString("k", "_mk", "k"))
@@ -3823,37 +3823,21 @@ func emitByteSliceRead(f FieldInfo, dst, posVar string, depth int) string {
 		}
 	} else {
 		sCap, slCap := preallocCap(f)
-		// Replace semantics for slices (matches stdlib + ggen's map
-		// handling). Three cases at the top level:
-		//   `[]`         → `dst = []T{}` (empty non-nil, cap=0)
-		//   non-empty, dst != nil → `dst = dst[:0]` (reuse caller's
-		//     backing, preserving cap)
-		//   non-empty, dst == nil → fresh `make(...)` with prealloc
-		// At nested levels (depth > 0) the dst is a `var evN []T`
-		// declared fresh each outer iteration — always nil — so the
-		// `[:0]` reuse branch is dead and we elide it.
-		// `null` is handled earlier (leaves dst nil). Slab declared
-		// outside the branch so the loop body sees it; only assigned
-		// in the nil-destination arm (caller-supplied slices don't
-		// carry a slab anyway).
+		// Empty `[]` → non-nil empty slice (stdlib parity); non-empty
+		// → fresh make() with prealloc. `null` is consumed earlier and
+		// leaves dst nil. `dst` is always zero (the surrounding
+		// DecodeFrom's `var result T` builds fresh) so there is no
+		// reuse branch to emit. Slab declared outside the branch so
+		// the loop body below sees it.
 		if f.ElemPointer {
 			fmt.Fprintf(&b, "var %s []%s\n", slabVar, f.ElemType)
 		}
 		fmt.Fprintf(&b, "if %s < len(data) && data[%s] == ']' {\n", kvar, kvar)
 		fmt.Fprintf(&b, "%s = %s{}\n", dst, f.GoType)
-		if depth == 0 {
-			fmt.Fprintf(&b, "} else if %s != nil {\n", dst)
-			fmt.Fprintf(&b, "%s = %s[:0]\n", dst, dst)
-			if f.ElemPointer {
-				fmt.Fprintf(&b, "%s = make([]%s, 0, %d)\n", slabVar, f.ElemType, slCap)
-			}
-		}
 		fmt.Fprintf(&b, "} else {\n")
 		if sCap > 0 {
 			fmt.Fprintf(&b, "%s = make(%s, 0, %d)\n", dst, f.GoType, sCap)
 		} else {
-			// Heavy non-pointer element: empty literal avoids the
-			// prealloc waste; first append allocates backing.
 			fmt.Fprintf(&b, "%s = %s{}\n", dst, f.GoType)
 		}
 		if f.ElemPointer {
@@ -4144,16 +4128,16 @@ func renderStreamMap(f FieldInfo, ref, posVar string) string {
 	b.WriteString("k, err = _s.SkipSpace(k)\n")
 	b.WriteString("if err != nil { return result, 0, err }\n")
 	b.WriteString("if k >= len(_s.Bytes()) { if err = _s.ReadMore(); err != nil { return result, 0, err } }\n")
-	// Replace semantics — see renderMap.
+	// Empty `{}` → non-nil empty; else fresh make(). See renderMap.
 	fmt.Fprintf(&b, "if _s.Bytes()[k] == '}' {\n")
-	fmt.Fprintf(&b, "if %s == nil { %s = %s{} } else { clear(%s) }\n", ref, ref, f.GoType, ref)
-	fmt.Fprintf(&b, "} else if %s == nil {\n", ref)
+	fmt.Fprintf(&b, "%s = %s{}\n", ref, f.GoType)
+	fmt.Fprintf(&b, "} else {\n")
 	if cap := mapPreallocCap(f); cap > 0 {
 		fmt.Fprintf(&b, "%s = make(%s, %d)\n", ref, f.GoType, cap)
 	} else {
 		fmt.Fprintf(&b, "%s = make(%s)\n", ref, f.GoType)
 	}
-	fmt.Fprintf(&b, "} else {\nclear(%s)\n}\n", ref)
+	fmt.Fprintf(&b, "}\n")
 	b.WriteString("for _s.Bytes()[k] != '}' {\n")
 	b.WriteString("_mk, _k2, err := _s.String(k)\n")
 	b.WriteString("if err != nil { return result, 0, err }\n")
@@ -4772,19 +4756,13 @@ func emitStreamSliceRead(f FieldInfo, dst, posVar string, depth int) string {
 		}
 	} else {
 		sCap, slCap := preallocCap(f)
-		// Replace semantics — see emitByteSliceRead.
+		// Empty `[]` → non-nil empty (stdlib parity); else fresh make()
+		// with prealloc. See emitByteSliceRead for the same shape.
 		if f.ElemPointer {
 			fmt.Fprintf(&b, "var %s []%s\n", slabVar, f.ElemType)
 		}
 		fmt.Fprintf(&b, "if _s.Bytes()[%s] == ']' {\n", kvar)
 		fmt.Fprintf(&b, "%s = %s{}\n", dst, f.GoType)
-		if depth == 0 {
-			fmt.Fprintf(&b, "} else if %s != nil {\n", dst)
-			fmt.Fprintf(&b, "%s = %s[:0]\n", dst, dst)
-			if f.ElemPointer {
-				fmt.Fprintf(&b, "%s = make([]%s, 0, %d)\n", slabVar, f.ElemType, slCap)
-			}
-		}
 		fmt.Fprintf(&b, "} else {\n")
 		if sCap > 0 {
 			fmt.Fprintf(&b, "%s = make(%s, 0, %d)\n", dst, f.GoType, sCap)

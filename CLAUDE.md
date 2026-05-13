@@ -937,7 +937,35 @@ their generated code.
 
 ## Backlog (ideas worth pursuing, not yet scheduled)
 
-(empty)
+- **Decode-into-receiver mode** — switch `DecodeFrom` from its current
+  "return a fresh `T`" shape to "merge JSON into the receiver and
+  return it" (or expose a sibling `DecodeInto(dst *T, data, i)` method).
+  Today the generated body declares `var result T` and ignores the
+  receiver — so the slice/map field handlers can assume `result.X` is
+  always nil and emit `result.X = make(...)` unconditionally. Brief
+  "reuse the caller's backing" branches (`if dst != nil { dst =
+  dst[:0] }` for slices, `clear(dst)` for maps) shipped briefly and
+  were ripped out as dead code on 2026-05-13, see the
+  `c90794b` → `<follow-up>` commit pair; the test that supposedly
+  exercised them (`TestStdlibVsGgen_MapReplaceDivergence`) was bogus
+  — both `decode.Unmarshal[Node]` and `Node.DecodeFrom` always build
+  fresh, so the reuse branches were unreachable from any user
+  codepath. If/when a decode-into-receiver mode lands, those reuse
+  branches become live and the divergence test becomes meaningful.
+  Surface options when revisiting:
+    1. `result := receiver` at top of DecodeFrom — receiver state
+       flows in, fields decoded by JSON overwrite it. Stdlib-merge
+       semantics. Breaking for existing `var zero T; zero.DecodeFrom`
+       callers because zero-value receivers no longer guarantee fresh
+       output.
+    2. New `DecodeInto(dst *T, data []byte, i int) (int, error)` —
+       coexists with `DecodeFrom`. Codegen forks the field handlers
+       to drive `dst.X` instead of `result.X` and the reuse branches
+       come back. Heavier generator change.
+    3. Opt-in `//ggen:generate decodeinto` annotation — emits the
+       sibling method only for structs that want it. Lowest blast
+       radius.
+  Pick when there's a concrete consumer asking for the merge shape.
 
 ## Tried and rejected (don't re-attempt without new evidence)
 

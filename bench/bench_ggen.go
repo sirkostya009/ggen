@@ -528,9 +528,6 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 						var _slab0 []Addr
 						if k0 < len(data) && data[k0] == ']' {
 							result.Refs = []*Addr{}
-						} else if result.Refs != nil {
-							result.Refs = result.Refs[:0]
-							_slab0 = make([]Addr, 0, 4)
 						} else {
 							result.Refs = make([]*Addr, 0, 4)
 							_slab0 = make([]Addr, 0, 4)
@@ -604,8 +601,6 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 						}
 						if k0 < len(data) && data[k0] == ']' {
 							result.Tags = []string{}
-						} else if result.Tags != nil {
-							result.Tags = result.Tags[:0]
 						} else {
 							result.Tags = make([]string, 0, 4)
 						}
@@ -702,15 +697,9 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 							k++
 						}
 						if k < len(data) && data[k] == '}' {
-							if result.Props == nil {
-								result.Props = map[string]string{}
-							} else {
-								clear(result.Props)
-							}
-						} else if result.Props == nil {
-							result.Props = make(map[string]string)
+							result.Props = map[string]string{}
 						} else {
-							clear(result.Props)
+							result.Props = make(map[string]string)
 						}
 						for k < len(data) && data[k] != '}' {
 							var _mk string
@@ -901,8 +890,6 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 						}
 						if k0 < len(data) && data[k0] == ']' {
 							result.Matrix = [][]int{}
-						} else if result.Matrix != nil {
-							result.Matrix = result.Matrix[:0]
 						} else {
 							result.Matrix = make([][]int, 0, 4)
 						}
@@ -1046,8 +1033,6 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 						}
 						if k0 < len(data) && data[k0] == ']' {
 							result.Children = []Node{}
-						} else if result.Children != nil {
-							result.Children = result.Children[:0]
 						} else {
 							result.Children = []Node{}
 						}
@@ -1339,9 +1324,6 @@ func (Node) DecodeStreamFrom(_s *scan.Stream, i int) (Node, int, error) {
 						var _slab0 []Addr
 						if _s.Bytes()[k0] == ']' {
 							result.Refs = []*Addr{}
-						} else if result.Refs != nil {
-							result.Refs = result.Refs[:0]
-							_slab0 = make([]Addr, 0, 4)
 						} else {
 							result.Refs = make([]*Addr, 0, 4)
 							_slab0 = make([]Addr, 0, 4)
@@ -1464,8 +1446,6 @@ func (Node) DecodeStreamFrom(_s *scan.Stream, i int) (Node, int, error) {
 						}
 						if _s.Bytes()[k0] == ']' {
 							result.Tags = []string{}
-						} else if result.Tags != nil {
-							result.Tags = result.Tags[:0]
 						} else {
 							result.Tags = make([]string, 0, 4)
 						}
@@ -1571,15 +1551,9 @@ func (Node) DecodeStreamFrom(_s *scan.Stream, i int) (Node, int, error) {
 							}
 						}
 						if _s.Bytes()[k] == '}' {
-							if result.Props == nil {
-								result.Props = map[string]string{}
-							} else {
-								clear(result.Props)
-							}
-						} else if result.Props == nil {
-							result.Props = make(map[string]string)
+							result.Props = map[string]string{}
 						} else {
-							clear(result.Props)
+							result.Props = make(map[string]string)
 						}
 						for _s.Bytes()[k] != '}' {
 							_mk, _k2, err := _s.String(k)
@@ -1771,8 +1745,6 @@ func (Node) DecodeStreamFrom(_s *scan.Stream, i int) (Node, int, error) {
 						}
 						if _s.Bytes()[k0] == ']' {
 							result.Matrix = [][]int{}
-						} else if result.Matrix != nil {
-							result.Matrix = result.Matrix[:0]
 						} else {
 							result.Matrix = make([][]int, 0, 4)
 						}
@@ -1966,8 +1938,6 @@ func (Node) DecodeStreamFrom(_s *scan.Stream, i int) (Node, int, error) {
 						}
 						if _s.Bytes()[k0] == ']' {
 							result.Children = []Node{}
-						} else if result.Children != nil {
-							result.Children = result.Children[:0]
 						} else {
 							result.Children = []Node{}
 						}
@@ -2547,8 +2517,6 @@ func (Validated) DecodeFrom(data []byte, i int) (Validated, int, error) {
 						}
 						if k0 < len(data) && data[k0] == ']' {
 							result.Tags = []string{}
-						} else if result.Tags != nil {
-							result.Tags = result.Tags[:0]
 						} else {
 							result.Tags = make([]string, 0, 4)
 						}
@@ -2829,8 +2797,6 @@ func (Validated) DecodeStreamFrom(_s *scan.Stream, i int) (Validated, int, error
 						}
 						if _s.Bytes()[k0] == ']' {
 							result.Tags = []string{}
-						} else if result.Tags != nil {
-							result.Tags = result.Tags[:0]
 						} else {
 							result.Tags = make([]string, 0, 4)
 						}

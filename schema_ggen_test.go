@@ -1235,8 +1235,6 @@ func (AliasTags) DecodeFrom(data []byte, i int) (AliasTags, int, error) {
 			}
 			if k0 < len(data) && data[k0] == ']' {
 				result = AliasTags{}
-			} else if result != nil {
-				result = result[:0]
 			} else {
 				result = AliasTags{}
 			}
@@ -1333,8 +1331,6 @@ func (AliasTags) DecodeStreamFrom(_s *scan.Stream, i int) (AliasTags, int, error
 			}
 			if _s.Bytes()[k0] == ']' {
 				result = AliasTags{}
-			} else if result != nil {
-				result = result[:0]
 			} else {
 				result = AliasTags{}
 			}
@@ -1431,15 +1427,9 @@ func (AliasLookup) DecodeFrom(data []byte, i int) (AliasLookup, int, error) {
 				k++
 			}
 			if k < len(data) && data[k] == '}' {
-				if result == nil {
-					result = AliasLookup{}
-				} else {
-					clear(result)
-				}
-			} else if result == nil {
-				result = make(AliasLookup)
+				result = AliasLookup{}
 			} else {
-				clear(result)
+				result = make(AliasLookup)
 			}
 			for k < len(data) && data[k] != '}' {
 				var _mk string
@@ -1568,15 +1558,9 @@ func (AliasLookup) DecodeStreamFrom(_s *scan.Stream, i int) (AliasLookup, int, e
 				}
 			}
 			if _s.Bytes()[k] == '}' {
-				if result == nil {
-					result = AliasLookup{}
-				} else {
-					clear(result)
-				}
-			} else if result == nil {
-				result = make(AliasLookup)
+				result = AliasLookup{}
 			} else {
-				clear(result)
+				result = make(AliasLookup)
 			}
 			for _s.Bytes()[k] != '}' {
 				_mk, _k2, err := _s.String(k)
@@ -2987,8 +2971,6 @@ func (DiveStruct) DecodeFrom(data []byte, i int) (DiveStruct, int, error) {
 						}
 						if k0 < len(data) && data[k0] == ']' {
 							result.Tags = []string{}
-						} else if result.Tags != nil {
-							result.Tags = result.Tags[:0]
 						} else {
 							result.Tags = make([]string, 0, 1)
 						}
@@ -3148,8 +3130,6 @@ func (DiveStruct) DecodeFrom(data []byte, i int) (DiveStruct, int, error) {
 						}
 						if k0 < len(data) && data[k0] == ']' {
 							result.Scores = []int{}
-						} else if result.Scores != nil {
-							result.Scores = result.Scores[:0]
 						} else {
 							result.Scores = make([]int, 0, 4)
 						}
@@ -3327,8 +3307,6 @@ func (DiveStruct) DecodeStreamFrom(_s *scan.Stream, i int) (DiveStruct, int, err
 						}
 						if _s.Bytes()[k0] == ']' {
 							result.Tags = []string{}
-						} else if result.Tags != nil {
-							result.Tags = result.Tags[:0]
 						} else {
 							result.Tags = make([]string, 0, 1)
 						}
@@ -3461,8 +3439,6 @@ func (DiveStruct) DecodeStreamFrom(_s *scan.Stream, i int) (DiveStruct, int, err
 						}
 						if _s.Bytes()[k0] == ']' {
 							result.Scores = []int{}
-						} else if result.Scores != nil {
-							result.Scores = result.Scores[:0]
 						} else {
 							result.Scores = make([]int, 0, 4)
 						}
@@ -3732,8 +3708,6 @@ func (CustomDiveStruct) DecodeFrom(data []byte, i int) (CustomDiveStruct, int, e
 						}
 						if k0 < len(data) && data[k0] == ']' {
 							result.Tags = []string{}
-						} else if result.Tags != nil {
-							result.Tags = result.Tags[:0]
 						} else {
 							result.Tags = make([]string, 0, 4)
 						}
@@ -3807,8 +3781,6 @@ func (CustomDiveStruct) DecodeFrom(data []byte, i int) (CustomDiveStruct, int, e
 						}
 						if k0 < len(data) && data[k0] == ']' {
 							result.Trim = []string{}
-						} else if result.Trim != nil {
-							result.Trim = result.Trim[:0]
 						} else {
 							result.Trim = make([]string, 0, 4)
 						}
@@ -3883,15 +3855,9 @@ func (CustomDiveStruct) DecodeFrom(data []byte, i int) (CustomDiveStruct, int, e
 							k++
 						}
 						if k < len(data) && data[k] == '}' {
-							if result.Mixed == nil {
-								result.Mixed = map[string]int{}
-							} else {
-								clear(result.Mixed)
-							}
-						} else if result.Mixed == nil {
-							result.Mixed = make(map[string]int)
+							result.Mixed = map[string]int{}
 						} else {
-							clear(result.Mixed)
+							result.Mixed = make(map[string]int)
 						}
 						for k < len(data) && data[k] != '}' {
 							var _mk string
@@ -4000,15 +3966,9 @@ func (CustomDiveStruct) DecodeFrom(data []byte, i int) (CustomDiveStruct, int, e
 							k++
 						}
 						if k < len(data) && data[k] == '}' {
-							if result.Lookup == nil {
-								result.Lookup = map[string]int{}
-							} else {
-								clear(result.Lookup)
-							}
-						} else if result.Lookup == nil {
-							result.Lookup = make(map[string]int)
+							result.Lookup = map[string]int{}
 						} else {
-							clear(result.Lookup)
+							result.Lookup = make(map[string]int)
 						}
 						for k < len(data) && data[k] != '}' {
 							var _mk string
@@ -4257,8 +4217,6 @@ func (CustomDiveStruct) DecodeStreamFrom(_s *scan.Stream, i int) (CustomDiveStru
 						}
 						if _s.Bytes()[k0] == ']' {
 							result.Tags = []string{}
-						} else if result.Tags != nil {
-							result.Tags = result.Tags[:0]
 						} else {
 							result.Tags = make([]string, 0, 4)
 						}
@@ -4342,8 +4300,6 @@ func (CustomDiveStruct) DecodeStreamFrom(_s *scan.Stream, i int) (CustomDiveStru
 						}
 						if _s.Bytes()[k0] == ']' {
 							result.Trim = []string{}
-						} else if result.Trim != nil {
-							result.Trim = result.Trim[:0]
 						} else {
 							result.Trim = make([]string, 0, 4)
 						}
@@ -4427,15 +4383,9 @@ func (CustomDiveStruct) DecodeStreamFrom(_s *scan.Stream, i int) (CustomDiveStru
 							}
 						}
 						if _s.Bytes()[k] == '}' {
-							if result.Mixed == nil {
-								result.Mixed = map[string]int{}
-							} else {
-								clear(result.Mixed)
-							}
-						} else if result.Mixed == nil {
-							result.Mixed = make(map[string]int)
+							result.Mixed = map[string]int{}
 						} else {
-							clear(result.Mixed)
+							result.Mixed = make(map[string]int)
 						}
 						for _s.Bytes()[k] != '}' {
 							_mk, _k2, err := _s.String(k)
@@ -4535,15 +4485,9 @@ func (CustomDiveStruct) DecodeStreamFrom(_s *scan.Stream, i int) (CustomDiveStru
 							}
 						}
 						if _s.Bytes()[k] == '}' {
-							if result.Lookup == nil {
-								result.Lookup = map[string]int{}
-							} else {
-								clear(result.Lookup)
-							}
-						} else if result.Lookup == nil {
-							result.Lookup = make(map[string]int)
+							result.Lookup = map[string]int{}
 						} else {
-							clear(result.Lookup)
+							result.Lookup = make(map[string]int)
 						}
 						for _s.Bytes()[k] != '}' {
 							_mk, _k2, err := _s.String(k)
@@ -6413,8 +6357,6 @@ func (ExtraStruct) DecodeFrom(data []byte, i int) (ExtraStruct, int, error) {
 						}
 						if k0 < len(data) && data[k0] == ']' {
 							result.Triple = [][][]string{}
-						} else if result.Triple != nil {
-							result.Triple = result.Triple[:0]
 						} else {
 							result.Triple = make([][][]string, 0, 4)
 						}
@@ -6579,15 +6521,9 @@ func (ExtraStruct) DecodeFrom(data []byte, i int) (ExtraStruct, int, error) {
 							k++
 						}
 						if k < len(data) && data[k] == '}' {
-							if result.KeyedMap == nil {
-								result.KeyedMap = map[string]int{}
-							} else {
-								clear(result.KeyedMap)
-							}
-						} else if result.KeyedMap == nil {
-							result.KeyedMap = make(map[string]int)
+							result.KeyedMap = map[string]int{}
 						} else {
-							clear(result.KeyedMap)
+							result.KeyedMap = make(map[string]int)
 						}
 						for k < len(data) && data[k] != '}' {
 							var _mk string
@@ -6705,8 +6641,6 @@ func (ExtraStruct) DecodeFrom(data []byte, i int) (ExtraStruct, int, error) {
 						}
 						if k0 < len(data) && data[k0] == ']' {
 							result.HintedTags = []string{}
-						} else if result.HintedTags != nil {
-							result.HintedTags = result.HintedTags[:0]
 						} else {
 							result.HintedTags = make([]string, 0, 4)
 						}
@@ -6780,8 +6714,6 @@ func (ExtraStruct) DecodeFrom(data []byte, i int) (ExtraStruct, int, error) {
 						}
 						if k0 < len(data) && data[k0] == ']' {
 							result.NestedInts = [][]int{}
-						} else if result.NestedInts != nil {
-							result.NestedInts = result.NestedInts[:0]
 						} else {
 							result.NestedInts = make([][]int, 0, 4)
 						}
@@ -7044,8 +6976,6 @@ func (ExtraStruct) DecodeStreamFrom(_s *scan.Stream, i int) (ExtraStruct, int, e
 						}
 						if _s.Bytes()[k0] == ']' {
 							result.Triple = [][][]string{}
-						} else if result.Triple != nil {
-							result.Triple = result.Triple[:0]
 						} else {
 							result.Triple = make([][][]string, 0, 4)
 						}
@@ -7275,15 +7205,9 @@ func (ExtraStruct) DecodeStreamFrom(_s *scan.Stream, i int) (ExtraStruct, int, e
 							}
 						}
 						if _s.Bytes()[k] == '}' {
-							if result.KeyedMap == nil {
-								result.KeyedMap = map[string]int{}
-							} else {
-								clear(result.KeyedMap)
-							}
-						} else if result.KeyedMap == nil {
-							result.KeyedMap = make(map[string]int)
+							result.KeyedMap = map[string]int{}
 						} else {
-							clear(result.KeyedMap)
+							result.KeyedMap = make(map[string]int)
 						}
 						for _s.Bytes()[k] != '}' {
 							_mk, _k2, err := _s.String(k)
@@ -7393,8 +7317,6 @@ func (ExtraStruct) DecodeStreamFrom(_s *scan.Stream, i int) (ExtraStruct, int, e
 						}
 						if _s.Bytes()[k0] == ']' {
 							result.HintedTags = []string{}
-						} else if result.HintedTags != nil {
-							result.HintedTags = result.HintedTags[:0]
 						} else {
 							result.HintedTags = make([]string, 0, 4)
 						}
@@ -7478,8 +7400,6 @@ func (ExtraStruct) DecodeStreamFrom(_s *scan.Stream, i int) (ExtraStruct, int, e
 						}
 						if _s.Bytes()[k0] == ']' {
 							result.NestedInts = [][]int{}
-						} else if result.NestedInts != nil {
-							result.NestedInts = result.NestedInts[:0]
 						} else {
 							result.NestedInts = make([][]int, 0, 4)
 						}
@@ -8212,8 +8132,6 @@ func (TupleStruct) DecodeFrom(data []byte, i int) (TupleStruct, int, error) {
 						}
 						if k0 < len(data) && data[k0] == ']' {
 							result.Segments = [][2]int{}
-						} else if result.Segments != nil {
-							result.Segments = result.Segments[:0]
 						} else {
 							result.Segments = [][2]int{}
 						}
@@ -8695,8 +8613,6 @@ func (TupleStruct) DecodeStreamFrom(_s *scan.Stream, i int) (TupleStruct, int, e
 						}
 						if _s.Bytes()[k0] == ']' {
 							result.Segments = [][2]int{}
-						} else if result.Segments != nil {
-							result.Segments = result.Segments[:0]
 						} else {
 							result.Segments = [][2]int{}
 						}
@@ -10604,15 +10520,9 @@ func (MapStruct) DecodeFrom(data []byte, i int) (MapStruct, int, error) {
 							k++
 						}
 						if k < len(data) && data[k] == '}' {
-							if result.Counts == nil {
-								result.Counts = map[string]int{}
-							} else {
-								clear(result.Counts)
-							}
-						} else if result.Counts == nil {
-							result.Counts = make(map[string]int)
+							result.Counts = map[string]int{}
 						} else {
-							clear(result.Counts)
+							result.Counts = make(map[string]int)
 						}
 						for k < len(data) && data[k] != '}' {
 							var _mk string
@@ -10719,15 +10629,9 @@ func (MapStruct) DecodeFrom(data []byte, i int) (MapStruct, int, error) {
 							k++
 						}
 						if k < len(data) && data[k] == '}' {
-							if result.Labels == nil {
-								result.Labels = map[string]string{}
-							} else {
-								clear(result.Labels)
-							}
-						} else if result.Labels == nil {
-							result.Labels = make(map[string]string)
+							result.Labels = map[string]string{}
 						} else {
-							clear(result.Labels)
+							result.Labels = make(map[string]string)
 						}
 						for k < len(data) && data[k] != '}' {
 							var _mk string
@@ -10836,15 +10740,9 @@ func (MapStruct) DecodeFrom(data []byte, i int) (MapStruct, int, error) {
 							k++
 						}
 						if k < len(data) && data[k] == '}' {
-							if result.Addresses == nil {
-								result.Addresses = map[string]Address{}
-							} else {
-								clear(result.Addresses)
-							}
-						} else if result.Addresses == nil {
-							result.Addresses = make(map[string]Address)
+							result.Addresses = map[string]Address{}
 						} else {
-							clear(result.Addresses)
+							result.Addresses = make(map[string]Address)
 						}
 						for k < len(data) && data[k] != '}' {
 							var _mk string
@@ -11025,15 +10923,9 @@ func (MapStruct) DecodeStreamFrom(_s *scan.Stream, i int) (MapStruct, int, error
 							}
 						}
 						if _s.Bytes()[k] == '}' {
-							if result.Counts == nil {
-								result.Counts = map[string]int{}
-							} else {
-								clear(result.Counts)
-							}
-						} else if result.Counts == nil {
-							result.Counts = make(map[string]int)
+							result.Counts = map[string]int{}
 						} else {
-							clear(result.Counts)
+							result.Counts = make(map[string]int)
 						}
 						for _s.Bytes()[k] != '}' {
 							_mk, _k2, err := _s.String(k)
@@ -11131,15 +11023,9 @@ func (MapStruct) DecodeStreamFrom(_s *scan.Stream, i int) (MapStruct, int, error
 							}
 						}
 						if _s.Bytes()[k] == '}' {
-							if result.Labels == nil {
-								result.Labels = map[string]string{}
-							} else {
-								clear(result.Labels)
-							}
-						} else if result.Labels == nil {
-							result.Labels = make(map[string]string)
+							result.Labels = map[string]string{}
 						} else {
-							clear(result.Labels)
+							result.Labels = make(map[string]string)
 						}
 						for _s.Bytes()[k] != '}' {
 							_mk, _k2, err := _s.String(k)
@@ -11240,15 +11126,9 @@ func (MapStruct) DecodeStreamFrom(_s *scan.Stream, i int) (MapStruct, int, error
 							}
 						}
 						if _s.Bytes()[k] == '}' {
-							if result.Addresses == nil {
-								result.Addresses = map[string]Address{}
-							} else {
-								clear(result.Addresses)
-							}
-						} else if result.Addresses == nil {
-							result.Addresses = make(map[string]Address)
+							result.Addresses = map[string]Address{}
 						} else {
-							clear(result.Addresses)
+							result.Addresses = make(map[string]Address)
 						}
 						for _s.Bytes()[k] != '}' {
 							_mk, _k2, err := _s.String(k)
@@ -11515,15 +11395,9 @@ func (MapDiveStruct) DecodeFrom(data []byte, i int) (MapDiveStruct, int, error) 
 							k++
 						}
 						if k < len(data) && data[k] == '}' {
-							if result.Names == nil {
-								result.Names = map[string]string{}
-							} else {
-								clear(result.Names)
-							}
-						} else if result.Names == nil {
-							result.Names = make(map[string]string)
+							result.Names = map[string]string{}
 						} else {
-							clear(result.Names)
+							result.Names = make(map[string]string)
 						}
 						for k < len(data) && data[k] != '}' {
 							var _mk string
@@ -11636,15 +11510,9 @@ func (MapDiveStruct) DecodeFrom(data []byte, i int) (MapDiveStruct, int, error) 
 							k++
 						}
 						if k < len(data) && data[k] == '}' {
-							if result.Counts == nil {
-								result.Counts = map[string]int{}
-							} else {
-								clear(result.Counts)
-							}
-						} else if result.Counts == nil {
-							result.Counts = make(map[string]int)
+							result.Counts = map[string]int{}
 						} else {
-							clear(result.Counts)
+							result.Counts = make(map[string]int)
 						}
 						for k < len(data) && data[k] != '}' {
 							var _mk string
@@ -11758,15 +11626,9 @@ func (MapDiveStruct) DecodeFrom(data []byte, i int) (MapDiveStruct, int, error) 
 							k++
 						}
 						if k < len(data) && data[k] == '}' {
-							if result.Clamped == nil {
-								result.Clamped = map[string]int{}
-							} else {
-								clear(result.Clamped)
-							}
-						} else if result.Clamped == nil {
-							result.Clamped = make(map[string]int)
+							result.Clamped = map[string]int{}
 						} else {
-							clear(result.Clamped)
+							result.Clamped = make(map[string]int)
 						}
 						for k < len(data) && data[k] != '}' {
 							var _mk string
@@ -11972,15 +11834,9 @@ func (MapDiveStruct) DecodeStreamFrom(_s *scan.Stream, i int) (MapDiveStruct, in
 							}
 						}
 						if _s.Bytes()[k] == '}' {
-							if result.Names == nil {
-								result.Names = map[string]string{}
-							} else {
-								clear(result.Names)
-							}
-						} else if result.Names == nil {
-							result.Names = make(map[string]string)
+							result.Names = map[string]string{}
 						} else {
-							clear(result.Names)
+							result.Names = make(map[string]string)
 						}
 						for _s.Bytes()[k] != '}' {
 							_mk, _k2, err := _s.String(k)
@@ -12085,15 +11941,9 @@ func (MapDiveStruct) DecodeStreamFrom(_s *scan.Stream, i int) (MapDiveStruct, in
 							}
 						}
 						if _s.Bytes()[k] == '}' {
-							if result.Counts == nil {
-								result.Counts = map[string]int{}
-							} else {
-								clear(result.Counts)
-							}
-						} else if result.Counts == nil {
-							result.Counts = make(map[string]int)
+							result.Counts = map[string]int{}
 						} else {
-							clear(result.Counts)
+							result.Counts = make(map[string]int)
 						}
 						for _s.Bytes()[k] != '}' {
 							_mk, _k2, err := _s.String(k)
@@ -12198,15 +12048,9 @@ func (MapDiveStruct) DecodeStreamFrom(_s *scan.Stream, i int) (MapDiveStruct, in
 							}
 						}
 						if _s.Bytes()[k] == '}' {
-							if result.Clamped == nil {
-								result.Clamped = map[string]int{}
-							} else {
-								clear(result.Clamped)
-							}
-						} else if result.Clamped == nil {
-							result.Clamped = make(map[string]int)
+							result.Clamped = map[string]int{}
 						} else {
-							clear(result.Clamped)
+							result.Clamped = make(map[string]int)
 						}
 						for _s.Bytes()[k] != '}' {
 							_mk, _k2, err := _s.String(k)
@@ -12880,8 +12724,6 @@ func (ModStruct) DecodeFrom(data []byte, i int) (ModStruct, int, error) {
 						}
 						if k0 < len(data) && data[k0] == ']' {
 							result.Tags = []string{}
-						} else if result.Tags != nil {
-							result.Tags = result.Tags[:0]
 						} else {
 							result.Tags = make([]string, 0, 4)
 						}
@@ -13105,8 +12947,6 @@ func (ModStruct) DecodeStreamFrom(_s *scan.Stream, i int) (ModStruct, int, error
 						}
 						if _s.Bytes()[k0] == ']' {
 							result.Tags = []string{}
-						} else if result.Tags != nil {
-							result.Tags = result.Tags[:0]
 						} else {
 							result.Tags = make([]string, 0, 4)
 						}
@@ -14794,15 +14634,9 @@ func (OmitStruct) DecodeFrom(data []byte, i int) (OmitStruct, int, error) {
 							k++
 						}
 						if k < len(data) && data[k] == '}' {
-							if result.Meta == nil {
-								result.Meta = map[string]string{}
-							} else {
-								clear(result.Meta)
-							}
-						} else if result.Meta == nil {
-							result.Meta = make(map[string]string)
+							result.Meta = map[string]string{}
 						} else {
-							clear(result.Meta)
+							result.Meta = make(map[string]string)
 						}
 						for k < len(data) && data[k] != '}' {
 							var _mk string
@@ -14935,8 +14769,6 @@ func (OmitStruct) DecodeFrom(data []byte, i int) (OmitStruct, int, error) {
 						}
 						if k0 < len(data) && data[k0] == ']' {
 							result.Tags = []string{}
-						} else if result.Tags != nil {
-							result.Tags = result.Tags[:0]
 						} else {
 							result.Tags = make([]string, 0, 4)
 						}
@@ -15049,8 +14881,6 @@ func (OmitStruct) DecodeFrom(data []byte, i int) (OmitStruct, int, error) {
 						}
 						if k0 < len(data) && data[k0] == ']' {
 							result.Extra = []string{}
-						} else if result.Extra != nil {
-							result.Extra = result.Extra[:0]
 						} else {
 							result.Extra = make([]string, 0, 4)
 						}
@@ -15135,15 +14965,9 @@ func (OmitStruct) DecodeFrom(data []byte, i int) (OmitStruct, int, error) {
 							k++
 						}
 						if k < len(data) && data[k] == '}' {
-							if result.Labels == nil {
-								result.Labels = map[string]string{}
-							} else {
-								clear(result.Labels)
-							}
-						} else if result.Labels == nil {
-							result.Labels = make(map[string]string)
+							result.Labels = map[string]string{}
 						} else {
-							clear(result.Labels)
+							result.Labels = make(map[string]string)
 						}
 						for k < len(data) && data[k] != '}' {
 							var _mk string
@@ -15363,15 +15187,9 @@ func (OmitStruct) DecodeStreamFrom(_s *scan.Stream, i int) (OmitStruct, int, err
 							}
 						}
 						if _s.Bytes()[k] == '}' {
-							if result.Meta == nil {
-								result.Meta = map[string]string{}
-							} else {
-								clear(result.Meta)
-							}
-						} else if result.Meta == nil {
-							result.Meta = make(map[string]string)
+							result.Meta = map[string]string{}
 						} else {
-							clear(result.Meta)
+							result.Meta = make(map[string]string)
 						}
 						for _s.Bytes()[k] != '}' {
 							_mk, _k2, err := _s.String(k)
@@ -15479,8 +15297,6 @@ func (OmitStruct) DecodeStreamFrom(_s *scan.Stream, i int) (OmitStruct, int, err
 						}
 						if _s.Bytes()[k0] == ']' {
 							result.Tags = []string{}
-						} else if result.Tags != nil {
-							result.Tags = result.Tags[:0]
 						} else {
 							result.Tags = make([]string, 0, 4)
 						}
@@ -15583,8 +15399,6 @@ func (OmitStruct) DecodeStreamFrom(_s *scan.Stream, i int) (OmitStruct, int, err
 						}
 						if _s.Bytes()[k0] == ']' {
 							result.Extra = []string{}
-						} else if result.Extra != nil {
-							result.Extra = result.Extra[:0]
 						} else {
 							result.Extra = make([]string, 0, 4)
 						}
@@ -15678,15 +15492,9 @@ func (OmitStruct) DecodeStreamFrom(_s *scan.Stream, i int) (OmitStruct, int, err
 							}
 						}
 						if _s.Bytes()[k] == '}' {
-							if result.Labels == nil {
-								result.Labels = map[string]string{}
-							} else {
-								clear(result.Labels)
-							}
-						} else if result.Labels == nil {
-							result.Labels = make(map[string]string)
+							result.Labels = map[string]string{}
 						} else {
-							clear(result.Labels)
+							result.Labels = make(map[string]string)
 						}
 						for _s.Bytes()[k] != '}' {
 							_mk, _k2, err := _s.String(k)
@@ -17416,8 +17224,6 @@ func (SomePayloadRequestStruct) DecodeFrom(data []byte, i int) (SomePayloadReque
 						}
 						if k0 < len(data) && data[k0] == ']' {
 							result.Slice = []int{}
-						} else if result.Slice != nil {
-							result.Slice = result.Slice[:0]
 						} else {
 							result.Slice = make([]int, 0, 1)
 						}
@@ -17683,8 +17489,6 @@ func (SomePayloadRequestStruct) DecodeFrom(data []byte, i int) (SomePayloadReque
 						}
 						if k0 < len(data) && data[k0] == ']' {
 							result.Contacts = []Address{}
-						} else if result.Contacts != nil {
-							result.Contacts = result.Contacts[:0]
 						} else {
 							result.Contacts = []Address{}
 						}
@@ -17899,8 +17703,6 @@ func (SomePayloadRequestStruct) DecodeStreamFrom(_s *scan.Stream, i int) (SomePa
 						}
 						if _s.Bytes()[k0] == ']' {
 							result.Slice = []int{}
-						} else if result.Slice != nil {
-							result.Slice = result.Slice[:0]
 						} else {
 							result.Slice = make([]int, 0, 1)
 						}
@@ -18082,8 +17884,6 @@ func (SomePayloadRequestStruct) DecodeStreamFrom(_s *scan.Stream, i int) (SomePa
 						}
 						if _s.Bytes()[k0] == ']' {
 							result.Contacts = []Address{}
-						} else if result.Contacts != nil {
-							result.Contacts = result.Contacts[:0]
 						} else {
 							result.Contacts = []Address{}
 						}
@@ -18787,8 +18587,6 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 						}
 						if k0 < len(data) && data[k0] == ']' {
 							result.Tags = []string{}
-						} else if result.Tags != nil {
-							result.Tags = result.Tags[:0]
 						} else {
 							result.Tags = make([]string, 0, 4)
 						}
@@ -18863,15 +18661,9 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 							k++
 						}
 						if k < len(data) && data[k] == '}' {
-							if result.Props == nil {
-								result.Props = map[string]string{}
-							} else {
-								clear(result.Props)
-							}
-						} else if result.Props == nil {
-							result.Props = make(map[string]string)
+							result.Props = map[string]string{}
 						} else {
-							clear(result.Props)
+							result.Props = make(map[string]string)
 						}
 						for k < len(data) && data[k] != '}' {
 							var _mk string
@@ -19005,8 +18797,6 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 						}
 						if k0 < len(data) && data[k0] == ']' {
 							result.Children = []Node{}
-						} else if result.Children != nil {
-							result.Children = result.Children[:0]
 						} else {
 							result.Children = []Node{}
 						}
@@ -19188,8 +18978,6 @@ func (Node) DecodeStreamFrom(_s *scan.Stream, i int) (Node, int, error) {
 						}
 						if _s.Bytes()[k0] == ']' {
 							result.Tags = []string{}
-						} else if result.Tags != nil {
-							result.Tags = result.Tags[:0]
 						} else {
 							result.Tags = make([]string, 0, 4)
 						}
@@ -19273,15 +19061,9 @@ func (Node) DecodeStreamFrom(_s *scan.Stream, i int) (Node, int, error) {
 							}
 						}
 						if _s.Bytes()[k] == '}' {
-							if result.Props == nil {
-								result.Props = map[string]string{}
-							} else {
-								clear(result.Props)
-							}
-						} else if result.Props == nil {
-							result.Props = make(map[string]string)
+							result.Props = map[string]string{}
 						} else {
-							clear(result.Props)
+							result.Props = make(map[string]string)
 						}
 						for _s.Bytes()[k] != '}' {
 							_mk, _k2, err := _s.String(k)
@@ -19408,8 +19190,6 @@ func (Node) DecodeStreamFrom(_s *scan.Stream, i int) (Node, int, error) {
 						}
 						if _s.Bytes()[k0] == ']' {
 							result.Children = []Node{}
-						} else if result.Children != nil {
-							result.Children = result.Children[:0]
 						} else {
 							result.Children = []Node{}
 						}
@@ -22060,9 +21840,6 @@ func (PtrSliceStruct) DecodeFrom(data []byte, i int) (PtrSliceStruct, int, error
 						var _slab0 []Address
 						if k0 < len(data) && data[k0] == ']' {
 							result.Items = []*Address{}
-						} else if result.Items != nil {
-							result.Items = result.Items[:0]
-							_slab0 = make([]Address, 0, 4)
 						} else {
 							result.Items = make([]*Address, 0, 4)
 							_slab0 = make([]Address, 0, 4)
@@ -22134,9 +21911,6 @@ func (PtrSliceStruct) DecodeFrom(data []byte, i int) (PtrSliceStruct, int, error
 						var _slab0 []Node
 						if k0 < len(data) && data[k0] == ']' {
 							result.Nodes = []*Node{}
-						} else if result.Nodes != nil {
-							result.Nodes = result.Nodes[:0]
-							_slab0 = make([]Node, 0, 4)
 						} else {
 							result.Nodes = make([]*Node, 0, 4)
 							_slab0 = make([]Node, 0, 4)
@@ -22376,9 +22150,6 @@ func (PtrSliceStruct) DecodeStreamFrom(_s *scan.Stream, i int) (PtrSliceStruct, 
 						var _slab0 []Address
 						if _s.Bytes()[k0] == ']' {
 							result.Items = []*Address{}
-						} else if result.Items != nil {
-							result.Items = result.Items[:0]
-							_slab0 = make([]Address, 0, 4)
 						} else {
 							result.Items = make([]*Address, 0, 4)
 							_slab0 = make([]Address, 0, 4)
@@ -22499,9 +22270,6 @@ func (PtrSliceStruct) DecodeStreamFrom(_s *scan.Stream, i int) (PtrSliceStruct, 
 						var _slab0 []Node
 						if _s.Bytes()[k0] == ']' {
 							result.Nodes = []*Node{}
-						} else if result.Nodes != nil {
-							result.Nodes = result.Nodes[:0]
-							_slab0 = make([]Node, 0, 4)
 						} else {
 							result.Nodes = make([]*Node, 0, 4)
 							_slab0 = make([]Node, 0, 4)
