@@ -205,7 +205,7 @@ func (External2) DecodeStreamFrom(_s *scan.Stream, i int) (External2, int, error
 		return result, i + 1, nil
 	}
 	for {
-		key, j, err := _s.String(i)
+		key, j, err := _s.KeyView(i)
 		if err != nil {
 			return result, 0, err
 		}
