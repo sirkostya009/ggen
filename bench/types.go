@@ -63,11 +63,11 @@ type Node struct {
 //
 //ggen:generate
 type Validated struct {
-	Email string `json:"email" ggen:"required,email"`
-	Name  string `json:"name"  ggen:"required,minlen=1,maxlen=64"`
-	Age   int    `json:"age"   ggen:"gte=0,lte=150"`
+	Email string   `json:"email" ggen:"required,email"`
+	Name  string   `json:"name"  ggen:"required,minlen=1,maxlen=64"`
+	Age   int      `json:"age"   ggen:"gte=0,lte=150"`
 	Tags  []string `json:"tags" ggen:"dive:notempty,minlen=1,maxlen=32"`
-	Bio   string `json:"bio"   ggen:"maxlen=4096"`
+	Bio   string   `json:"bio"   ggen:"maxlen=4096"`
 }
 
 var (

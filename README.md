@@ -64,42 +64,54 @@ first 20 reads), 52 ms → 1.2 ms per-Read delay (geometric decay — each
 read shaves 75% off the remaining gap, so the floor is hit in 5 reads) yields:
 
 ```
-BenchmarkSlowStream_stdjson-32              	      10	 143567848 ns/op	   0.25 MB/s	  112436 B/op	    1537 allocs/op
-BenchmarkSlowStream_easyjson-32             	      10	 158548200 ns/op	   0.23 MB/s	  187620 B/op	    1542 allocs/op
-BenchmarkSlowStream_ggen-32                 	      10	 142360955 ns/op	   0.25 MB/s	  111598 B/op	    2371 allocs/op
-BenchmarkSlowStream_ggen_ReadAll-32         	      10	 158715128 ns/op	   0.23 MB/s	  176529 B/op	     925 allocs/op
-BenchmarkSlowStream_ggen_invalid-32         	      10	  66880813 ns/op	   0.04 MB/s	    3206 B/op	       7 allocs/op
-BenchmarkSlowStream_ggen_invalid_ReadAll-32 	      10	  78565138 ns/op	   0.04 MB/s	    7337 B/op	       9 allocs/op
+BenchmarkSlowStream_Valid/stdjson           14   159159109 ns/op   0.23 MB/s    238176 B/op   1609 allocs/op
+BenchmarkSlowStream_Valid/easyjson          14   159270135 ns/op   0.23 MB/s    190034 B/op   1542 allocs/op
+BenchmarkSlowStream_Valid/ggen_stream       16   142259752 ns/op   0.25 MB/s    114190 B/op   2371 allocs/op
+BenchmarkSlowStream_Valid/ggen_readall      14   159453326 ns/op   0.23 MB/s    179470 B/op    925 allocs/op
+BenchmarkSlowStream_Invalid/ggen_stream     36    66721387 ns/op   0.04 MB/s      3290 B/op      7 allocs/op
+BenchmarkSlowStream_Invalid/ggen_readall    30    78549246 ns/op   0.04 MB/s      7442 B/op      9 allocs/op
+BenchmarkSlowStream_Invalid/jsonv2          28    82549880 ns/op   0.04 MB/s     16858 B/op     25 allocs/op
 ```
 
-`ggen_invalid` benchmarks test fail-fast feature of streaming parser
-that also validates all parsed inputs before continuing parsing. Compared
-with a read first, parse after approach it allows you to cut quite some
-compute time and allocs. Useful if you expect a moderate to high percentage
-of invalid paylods incoming.
+`Invalid` benchmarks exercise the fail-fast advantage. `ggen` validation
+works with streams just fine and rejects invalid payloads — parser bails after
+reading just enough bytes to scan it. `ReadAll` variants pay the full read
+latency before validation can begin; `jsonv2` is the baseline (no validation,
+reads the full body). ~12 ms gap between `ggen_stream` and `ggen_readall` —
+on bigger payloads or slower networks it grows linearly.
+
+On multi-core runs the slowstream would scale near-linearly as concurrent slow
+connections overlap their sleeps.
 
 See [slowstream_test.go](./bench/slowstream_test.go).
 
 ### memory residency
 
-Throughput is of course important, but overall memory utilized at the end
-is one metric that isn't captured by `go bench` even behind a flag for some
-reason. A separate suite excercising this metric alone, after firing GC two
-times to ensure no garbage is retained apart from parsed data bytes. This metric
-will become quite important for users expecting giga sized paylods and busy traffic
-and/or users of machines with smaller RAM amount, which some might at least thoughtful
-of if not useful in this day and age. See [residency_test.go](./bench/residency_test.go)
+`B/op` and `gc/op` measure churn, what about the memory each decoded value
+actually retains over its lifetime? That's the residency metric — how much
+heap your server holds when it keeps N parsed responses alive.
+
+`BenchmarkRetention` decodes the payload, holds every decoded value alive
+in a per-goroutine sink, runs `runtime.GC()` twice to settle, then reads
+`HeapInuse` delta. Run with `-benchtime=1000x` for comparable per-codec
+numbers. `retain_KB/op` is the per-item memory cost; `retain×payload` is
+that cost as a multiple of the input JSON size.
 
 ```
-stdjson              1000 items → 78.31 MiB retained (80.2 KiB/item, 2.29x payload)
-easyjson             1000 items → 73.12 MiB retained (74.9 KiB/item, 2.13x payload)
-ggen_stream          1000 items → 85.48 MiB retained (87.5 KiB/item, 2.50x payload)
-ggen_bytes           1000 items → 64.74 MiB retained (66.3 KiB/item, 1.89x payload)
-ggen_readall         1000 items → 104.27 MiB retained (106.8 KiB/item, 3.04x payload)
-ggen_stream_bounded  1000 items → 77.46 MiB retained (79.3 KiB/item, 2.26x payload)
+BenchmarkRetention/stdjson         1000   295265 ns/op   121.65 MB/s    80.13 retain_KB/op    78.25 retain_MiB   2.284 retain×payload
+BenchmarkRetention/easyjson        1000   309443 ns/op   116.08 MB/s    81.28 retain_KB/op    79.38 retain_MiB   2.317 retain×payload
+BenchmarkRetention/ggen_stream     1000   230184 ns/op   156.05 MB/s    92.56 retain_KB/op    90.39 retain_MiB   2.639 retain×payload
+BenchmarkRetention/ggen_bytes      1000   202243 ns/op   177.61 MB/s    78.12 retain_KB/op    76.29 retain_MiB   2.227 retain×payload
+BenchmarkRetention/ggen_readall    1000   178238 ns/op   201.53 MB/s   107.7  retain_KB/op   105.2  retain_MiB   3.071 retain×payload
 ```
 
-`ggen_bytes` being lowest on memory usage can be explained by zero-copy of the buf.
+`ggen_bytes` is lowest because zero-copy string aliasing means each decoded
+`*Node` carries `(ptr, len)` headers into the original input buffer instead
+of cloning every string onto the heap. `ggen_stream` retains slightly more
+than `ggen_bytes` because Stream copies strings (can't safely alias a
+growing buffer). `ggen_readall` is highest — each iter `io.ReadAll`s a
+fresh `[]byte` that the aliased decoded value keeps alive, so per-item
+cost = payload + decoded headers.
 
 ## usage
 

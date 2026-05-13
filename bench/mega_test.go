@@ -11,7 +11,12 @@ import (
 	"bytes"
 	jsonv2 "encoding/json/v2"
 	"io"
+	"os"
 	"runtime"
+	"runtime/pprof"
+	"slices"
+	"strings"
+	"sync"
 	"testing"
 
 	"github.com/bytedance/sonic"
@@ -19,6 +24,96 @@ import (
 	"github.com/sirkostya009/ggen/decode"
 	"github.com/sirkostya009/ggen/encode"
 )
+
+// memProfileSample is one entry in a flattened MemProfile snapshot —
+// alloc counters attributed to the top non-runtime stack frame.
+type memProfileSample struct {
+	allocObjects int64
+	allocBytes   int64
+}
+
+// snapshotMemProfile drains runtime.MemProfile and aggregates records
+// by their top non-runtime stack frame, returning a map keyed by symbol
+// name. Caller diffs two snapshots to get per-region deltas.
+//
+// Requires runtime.MemProfileRate=1 (or low) before the bench region —
+// the default 512 KB sample rate misses small per-iter allocations.
+// inuseZero=true includes records for allocations that have already
+// been freed, so we capture the full cumulative count (alloc - free).
+func snapshotMemProfile() map[string]memProfileSample {
+	records := make([]runtime.MemProfileRecord, 4096)
+	for {
+		n, ok := runtime.MemProfile(records, true)
+		if ok {
+			records = records[:n]
+			break
+		}
+		records = make([]runtime.MemProfileRecord, n+128)
+	}
+	agg := make(map[string]memProfileSample)
+	for _, r := range records {
+		var site string
+		for _, pc := range r.Stack() {
+			fn := runtime.FuncForPC(pc)
+			if fn == nil {
+				continue
+			}
+			name := fn.Name()
+			if strings.HasPrefix(name, "runtime.") {
+				continue
+			}
+			site = name
+			break
+		}
+		if site == "" {
+			continue
+		}
+		s := agg[site]
+		s.allocObjects += r.AllocObjects
+		s.allocBytes += r.AllocBytes
+		agg[site] = s
+	}
+	return agg
+}
+
+// reportTopAllocs diffs two MemProfile snapshots and reports the top-N
+// sites as inline bench metrics — each site contributes one
+// `<name>/op` column, landing in the bench output table next to ns/op
+// / gc/op / etc. Skips when b.N is small (testing.B's warm-up runN(1)
+// is noise).
+func reportTopAllocs(b *testing.B, pre, post map[string]memProfileSample, top int) {
+	b.Helper()
+	if b.N < 100 {
+		return
+	}
+	type diff struct {
+		site         string
+		allocObjects int64
+	}
+	var diffs []diff
+	for site, postS := range post {
+		preS := pre[site]
+		dObjs := postS.allocObjects - preS.allocObjects
+		if dObjs <= 0 {
+			continue
+		}
+		diffs = append(diffs, diff{site, dObjs})
+	}
+	// Descending — biggest contributors first; truncate to top-N.
+	slices.SortFunc(diffs, func(a, b diff) int {
+		return int(b.allocObjects - a.allocObjects)
+	})
+	if len(diffs) > top {
+		diffs = diffs[:top]
+	}
+	for _, d := range diffs {
+		name := d.site
+		if i := strings.LastIndex(name, "/"); i >= 0 {
+			name = name[i+1:]
+		}
+		b.ReportMetric(float64(d.allocObjects)/float64(b.N), name+"/op")
+	}
+}
 
 func reportGC(b *testing.B, pre, post runtime.MemStats) {
 	b.Helper()
@@ -103,6 +198,155 @@ func BenchmarkMega_Marshal(b *testing.B) {
 					}
 				},
 			)
+		})
+	}
+}
+
+// BenchmarkRetention measures retained heap per held output across
+// codecs. Each goroutine accumulates decoded *Node into a local sink,
+// then sinks are merged after RunParallel so every produced value
+// survives until the post-loop GC pair. HeapInuse delta over the
+// timed region divided by total iters gives retain_KB/op — the
+// "what does my server's heap look like with one held response"
+// number. retain_MiB is the total live-set across all iters.
+//
+// HeapInuse is process-global; works under RunParallel just like
+// serial. For stable comparable numbers across codecs use a fixed
+// iter count: `-benchtime=1000x`. Default `-benchtime=1s` picks
+// different b.N per codec, but per-item retention is roughly
+// constant so cross-codec comparison still reads cleanly.
+//
+// Uses slowPayload (~36 KiB) rather than MegaPayload to keep total
+// retained memory tractable at high iter counts.
+func BenchmarkRetention(b *testing.B) {
+	var retentionCodecs = []struct {
+		name string
+		fn   func(*[]byte) *Node // buf is per-goroutine, reused across iters
+	}{
+		{"stdjson", func(_ *[]byte) *Node {
+			n := new(Node)
+			if err := jsonv2.UnmarshalRead(bytes.NewReader(slowPayload), n); err != nil {
+				b.Fatal(err)
+			}
+			return n
+		}},
+		{"easyjson", func(_ *[]byte) *Node {
+			n := new(Node)
+			if err := easyjson.UnmarshalFromReader(bytes.NewReader(slowPayload), n); err != nil {
+				b.Fatal(err)
+			}
+			return n
+		}},
+		{"ggen_stream", func(buf *[]byte) *Node {
+			var n Node
+			var err error
+			n, *buf, err = decode.UnmarshalStream[Node](bytes.NewReader(slowPayload), (*buf)[:0])
+			if err != nil {
+				b.Fatal(err)
+			}
+			return &n
+		}},
+		{"ggen_bytes", func(_ *[]byte) *Node {
+			n, err := decode.Unmarshal[Node](slowPayload)
+			if err != nil {
+				b.Fatal(err)
+			}
+			return &n
+		}},
+		{"ggen_readall", func(_ *[]byte) *Node {
+			data, err := io.ReadAll(bytes.NewReader(slowPayload))
+			if err != nil {
+				b.Fatal(err)
+			}
+			n, err := decode.Unmarshal[Node](data)
+			if err != nil {
+				b.Fatal(err)
+			}
+			return &n
+		}},
+	}
+
+	for _, c := range retentionCodecs {
+		b.Run(c.name, func(b *testing.B) {
+			b.SetBytes(int64(len(slowPayload)))
+			b.ReportAllocs()
+
+			var mu sync.Mutex
+			var sinks [][]*Node // every goroutine's accumulator, merged post-run
+
+			// Top-allocs breakdown is opt-in: setting MemProfileRate=1
+			// captures every allocation but makes the bench ~40× slower.
+			// Enable with GGEN_BENCH_TOPALLOCS=1.
+			topAllocs := os.Getenv("GGEN_BENCH_TOPALLOCS") != ""
+			if topAllocs {
+				prevRate := runtime.MemProfileRate
+				runtime.MemProfileRate = 1
+				defer func() { runtime.MemProfileRate = prevRate }()
+			}
+
+			runtime.GC()
+			runtime.GC()
+			var pre runtime.MemStats
+			runtime.ReadMemStats(&pre)
+			var preProf map[string]memProfileSample
+			if topAllocs {
+				preProf = snapshotMemProfile()
+			}
+
+			b.ResetTimer()
+			b.RunParallel(func(pb *testing.PB) {
+				local := make([]*Node, 0, 64)
+				buf := make([]byte, 0, len(slowPayload))
+				for pb.Next() {
+					local = append(local, c.fn(&buf))
+				}
+				mu.Lock()
+				sinks = append(sinks, local)
+				mu.Unlock()
+			})
+			b.StopTimer()
+
+			runtime.GC()
+			runtime.GC()
+			var post runtime.MemStats
+			runtime.ReadMemStats(&post)
+			var postProf map[string]memProfileSample
+			if topAllocs {
+				postProf = snapshotMemProfile()
+			}
+
+			delta := int64(post.HeapInuse) - int64(pre.HeapInuse)
+			if b.N > 0 {
+				b.ReportMetric(float64(delta)/float64(b.N)/1024, "retain_KB/op")
+			}
+			b.ReportMetric(float64(delta)/(1024*1024), "retain_MiB")
+			b.ReportMetric(float64(delta)/float64(b.N)/float64(len(slowPayload)), "retain×payload")
+
+			// Top-5 alloc sites under the bench line — saves having to
+			// `go tool pprof` to figure out where the bytes came from.
+			// Run with `GGEN_BENCH_TOPALLOCS=1 go test -v` to enable
+			// (b.Logf only surfaces under verbose mode).
+			if topAllocs {
+				reportTopAllocs(b, preProf, postProf, 5)
+			}
+
+			// Dump inuse_space pprof while sinks are still live so we can
+			// see exactly where retained bytes come from per codec. Set
+			// GGEN_RESIDENCY_PROFILE=<dir>; the file is named after the
+			// sub-bench (jsonv2/sonic/easyjson/ggen_*). View with:
+			//   go tool pprof -inuse_space <dir>/<codec>.pprof
+			if dir := os.Getenv("GGEN_RESIDENCY_PROFILE"); dir != "" {
+				f, err := os.Create(dir + "/" + c.name + ".pprof")
+				if err != nil {
+					b.Fatal(err)
+				}
+				if err := pprof.Lookup("heap").WriteTo(f, 0); err != nil {
+					b.Fatal(err)
+				}
+				f.Close()
+			}
+
+			runtime.KeepAlive(sinks)
 		})
 	}
 }

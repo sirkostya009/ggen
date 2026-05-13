@@ -98,145 +98,120 @@ func (s *slowReader) Read(p []byte) (int, error) {
 	return n, nil
 }
 
-// BenchmarkSlowStream_* — the same payload through an io.Reader that
-// simulates a slow-warming connection. Run with a longer benchtime, e.g.
-// `go test -bench=BenchmarkSlowStream -benchtime=10s ./bench/`.
+// slowState carries per-goroutine reader + decode buffer. Each parallel
+// worker gets its own slowReader so the time.Sleep stays per-goroutine
+// (under -cpu=N, N concurrent slow connections in parallel) and the
+// Stream alias buffer doesn't race across workers.
+type slowState struct {
+	r   *slowReader
+	buf []byte
+}
 
-func BenchmarkSlowStream_stdjson(b *testing.B) {
-	b.ReportAllocs()
-	b.SetBytes(int64(len(slowPayload)))
-	r := newSlowReader(slowPayload)
-	dec := jsontext.NewDecoder(r)
-	for b.Loop() {
-		dec.Reset(r)
-		r.reset()
-		var v Node
-		if err := jsonv2.UnmarshalDecode(dec, &v); err != nil {
-			b.Fatal(err)
-		}
+// BenchmarkSlowStream_Valid — same payload through a slow-warming reader.
+// Run with a longer benchtime, e.g.
+// `go test -bench=BenchmarkSlowStream -benchtime=10s -cpu=1 .`.
+func BenchmarkSlowStream_Valid(b *testing.B) {
+	var slowValidCodecs = []struct {
+		name string
+		fn   func(*slowState) error
+	}{
+		{"stdjson", func(s *slowState) error {
+			s.r.reset()
+			var v Node
+			return jsonv2.UnmarshalDecode(jsontext.NewDecoder(s.r), &v)
+		}},
+		{"easyjson", func(s *slowState) error {
+			s.r.reset()
+			var v Node
+			return easyjson.UnmarshalFromReader(s.r, &v)
+		}},
+		{"ggen_stream", func(s *slowState) error {
+			s.r.reset()
+			var err error
+			_, s.buf, err = decode.UnmarshalStream[Node](s.r, s.buf[:0])
+			return err
+		}},
+		{"ggen_readall", func(s *slowState) error {
+			s.r.reset()
+			data, err := io.ReadAll(s.r)
+			if err != nil {
+				return err
+			}
+			_, err = decode.Unmarshal[Node](data)
+			return err
+		}},
+	}
+
+	for _, c := range slowValidCodecs {
+		b.Run(c.name, func(b *testing.B) {
+			runBench(b, int64(len(slowPayload)),
+				func() slowState {
+					return slowState{
+						r:   newSlowReader(slowPayload),
+						buf: make([]byte, 0, len(slowPayload)),
+					}
+				},
+				func(s *slowState) {
+					if err := c.fn(s); err != nil {
+						b.Fatal(err)
+					}
+				},
+			)
+		})
 	}
 }
 
-func BenchmarkSlowStream_easyjson(b *testing.B) {
-	b.ReportAllocs()
-	b.SetBytes(int64(len(slowPayload)))
-	r := newSlowReader(slowPayload)
-	for b.Loop() {
-		r.reset()
-		var v Node
-		if err := easyjson.UnmarshalFromReader(r, &v); err != nil {
-			b.Fatal(err)
-		}
+func BenchmarkSlowStream_Invalid(b *testing.B) {
+	// Streaming's theoretical advantage is being able to reject
+	// invalid payloads without draining io.Reader. jsonv2 doesn't
+	// have this but is streaming so its also present for a baseline comparison.
+	var slowInvalidCodecs = []struct {
+		name    string
+		fn      func(*slowState) error
+		wantErr bool
+	}{
+		{"ggen_stream", func(s *slowState) error {
+			s.r.reset()
+			var err error
+			_, s.buf, err = decode.UnmarshalStream[Validated](s.r, s.buf[:0])
+			return err
+		}, true},
+		{"ggen_readall", func(s *slowState) error {
+			s.r.reset()
+			data, err := io.ReadAll(s.r)
+			if err != nil {
+				return err
+			}
+			_, err = decode.Unmarshal[Validated](data)
+			return err
+		}, true},
+		{"jsonv2", func(s *slowState) error {
+			s.r.reset()
+			var v Validated
+			return jsonv2.UnmarshalDecode(jsontext.NewDecoder(s.r), &v)
+		}, false},
 	}
-}
 
-func BenchmarkSlowStream_ggen(b *testing.B) {
-	b.ReportAllocs()
-	b.SetBytes(int64(len(slowPayload)))
-	r := newSlowReader(slowPayload)
-	buf := make([]byte, 0, len(slowPayload))
-	for b.Loop() {
-		r.reset()
-		var err error
-		if _, buf, err = decode.UnmarshalStream[Node](r, buf[:0]); err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-// BenchmarkSlowStream_ggen_Bounded constrains the parse buffer to
-// 4 KiB while the payload is ~36 KiB. Exercises the window-shift
-// path inside Ensure: as the buffer fills, the in-flight string's
-// prefix is dropped and the parser slides over the remaining input.
-// `buf[:0:4096]` resets length to 0 and CAPS capacity at 4 KiB —
-// any grow attempt allocates a fresh backing, but if the shift
-// works as designed the parser stays within the original 4 KiB.
-func BenchmarkSlowStream_ggen_Bounded(b *testing.B) {
-	b.ReportAllocs()
-	b.SetBytes(int64(len(slowPayload)))
-	r := newSlowReader(slowPayload)
-	buf := make([]byte, 0, 8192) // headroom in case of grow
-	for b.Loop() {
-		r.reset()
-		if _, _, err := decode.UnmarshalStream[Node](r, buf[:0:4096]); err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-// BenchmarkSlowStream_ggen_ReadAll — io.ReadAll then bytes-path
-// Unmarshal. No I/O / parse overlap; pays the full read latency
-// before parsing starts.
-func BenchmarkSlowStream_ggen_ReadAll(b *testing.B) {
-	b.ReportAllocs()
-	b.SetBytes(int64(len(slowPayload)))
-	r := newSlowReader(slowPayload)
-	for b.Loop() {
-		r.reset()
-		data, err := io.ReadAll(r)
-		if err != nil {
-			b.Fatal(err)
-		}
-		if _, err := decode.Unmarshal[Node](data); err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-// --- fail-fast: invalid payload, validation triggers early ---
-//
-// Here streaming has its theoretical advantage: ggen's per-field
-// validation rejects on the first invalid field (Email is alphabetically
-// first, after Age and Bio). With fail-fast streaming, the parser
-// returns an error after reading just enough of the payload to scan
-// the bad field — no need to wait for the rest. ReadAll variants pay
-// the full read latency before validation can even begin.
-
-func BenchmarkSlowStream_ggen_invalid(b *testing.B) {
-	b.ReportAllocs()
-	b.SetBytes(int64(len(InvalidPayload)))
-	r := newSlowReader(InvalidPayload)
-	buf := make([]byte, 0, len(InvalidPayload))
-	for b.Loop() {
-		r.reset()
-		var err error
-		_, buf, err = decode.UnmarshalStream[Validated](r, buf[:0])
-		if err == nil {
-			b.Fatal("expected validation error")
-		}
-	}
-}
-
-func BenchmarkSlowStream_ggen_invalid_ReadAll(b *testing.B) {
-	b.ReportAllocs()
-	b.SetBytes(int64(len(InvalidPayload)))
-	r := newSlowReader(InvalidPayload)
-	for b.Loop() {
-		r.reset()
-		data, err := io.ReadAll(r)
-		if err != nil {
-			b.Fatal(err)
-		}
-		if _, err := decode.Unmarshal[Validated](data); err == nil {
-			b.Fatal("expected validation error")
-		}
-	}
-}
-
-// jsonv2 baseline — no application-level validation, just reads
-// and decodes. Shows the cost of "read everything, no fail-fast".
-func BenchmarkSlowStream_jsonv2_invalid(b *testing.B) {
-	b.ReportAllocs()
-	b.SetBytes(int64(len(InvalidPayload)))
-	r := newSlowReader(InvalidPayload)
-	dec := jsontext.NewDecoder(r)
-	for b.Loop() {
-		dec.Reset(r)
-		r.reset()
-		var v Validated
-		if err := jsonv2.UnmarshalDecode(dec, &v); err != nil {
-			b.Fatal(err)
-		}
+	for _, c := range slowInvalidCodecs {
+		b.Run(c.name, func(b *testing.B) {
+			runBench(b, int64(len(InvalidPayload)),
+				func() slowState {
+					return slowState{
+						r:   newSlowReader(InvalidPayload),
+						buf: make([]byte, 0, len(InvalidPayload)),
+					}
+				},
+				func(s *slowState) {
+					err := c.fn(s)
+					if c.wantErr && err == nil {
+						b.Fatal("expected validation error")
+					}
+					if !c.wantErr && err != nil {
+						b.Fatal(err)
+					}
+				},
+			)
+		})
 	}
 }
 

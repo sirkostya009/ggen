@@ -41,7 +41,7 @@ schema/
    never see the benchmark world.
 
 The root module's tests cover correctness; the bench module holds
-**all** benchmarks (Mega payload + reader paths + residency +
+**all** benchmarks (Mega payload + reader paths + retention +
 slow-stream). The root has no `Benchmark*` funcs.
 
 ## Architecture — decode path
@@ -742,9 +742,9 @@ io.Reader" pattern is `ReadAllUnmarshal` — only 1.4 ms slower than
 direct bytes decode and the same alloc count.
 
 **Where streaming actually pays off:** fail-fast on validation
-errors. `BenchmarkSlowStream_ggen_invalid` rejects a malformed
+errors. `BenchmarkSlowStream_Invalid/ggen_stream` rejects a malformed
 payload after reading just enough bytes to decode the bad field
-(~67 ms), vs `BenchmarkSlowStream_ggen_invalid_ReadAll` which has
+(~67 ms), vs `BenchmarkSlowStream_Invalid/ggen_readall` which has
 to consume the whole body first (~78 ms). That ~11 ms gap is real;
 on bigger payloads or slower readers it grows linearly.
 
@@ -856,18 +856,26 @@ On the tiny complex payload (~440 bytes): Unmarshal ~415 ns, 2 allocs,
   get per-goroutine state via a `setup` closure in the `runBench`
   helper. Each sub-bench wraps `runtime.ReadMemStats` and reports
   `heap_KB` (live heap at StopTimer), `total_KB` (alloc delta over
-  the timed region), `gc` (NumGC delta), and `gc/Mop` (GC count per
-  million ops) on top of the standard `ns/op` + `B/op` + `allocs/op`.
+  the timed region), `gc` (NumGC delta), and `gc/op` (per-iter GC
+  rate) on top of the standard `ns/op` + `B/op` + `allocs/op`.
 - `bench/slowstream_test.go` — slow-reader benchmarks (`slowReader` with
-  geometric-decay delays). Compares stream / readall / fail-fast on
-  invalid payload. Useful for measuring streaming's actual win
-  (fail-fast on validation error saves the rest of the read).
-- `bench/residency_test.go` — `TestResidency` measures retained heap
-  per decoded item across stdjson / easyjson / ggen-bytes / ggen-stream.
-  Uses `runtime.MemStats.HeapInuse` after `runtime.GC() × 2`. Set
-  `GGEN_RESIDENCY_PROFILE=<dir>` to dump per-codec inuse_space pprofs
-  while held values are alive — the only honest way to track down
-  what's keeping memory live.
+  geometric-decay delays). Two table-driven benches:
+  `BenchmarkSlowStream_Valid` (stdjson, easyjson, ggen_stream,
+  ggen_readall on a valid payload) and `BenchmarkSlowStream_Invalid`
+  (ggen_stream, ggen_readall, jsonv2-baseline on a payload that fails
+  ggen validation early). Same runBench harness as mega, so `-cpu=N`
+  scales near-linearly (concurrent slow connections overlap their
+  sleeps — useful for "N slow clients hitting one parser" sims).
+  The Invalid group is where streaming pays off: fail-fast bails as
+  soon as the bad field is seen, ReadAll has to drain the body first.
+- `BenchmarkRetention` in `bench/mega_test.go` — folded the old
+  `TestResidency` into a parallel-safe bench. Each goroutine holds
+  its produced `*Node` values in a local sink; sinks merge after
+  `b.RunParallel`; GC × 2; snapshot `runtime.MemStats.HeapInuse`
+  delta divided by `b.N` gives `retain_KB/op`. `HeapInuse` is
+  process-global so the technique works in parallel. Best run with
+  a fixed iter count (`-benchtime=1000x`) for comparable per-codec
+  numbers.
 
 Running tests: `GOEXPERIMENT=jsonv2 go test ./...` for the root module;
 `(cd bench && GOEXPERIMENT=jsonv2 go test ./...)` for benchmarks
