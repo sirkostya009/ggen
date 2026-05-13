@@ -690,7 +690,45 @@ func (s *T) UnmarshalJSON(data []byte) error                     // wraps decode
     pointers keep the orphan backing alive — semantically correct,
     uses ~2× slab memory in the worst case but avoids the per-element
     alloc storm. Null elements skip the slab entirely (nil pointer).
-25. **Bitmask seen-flag tracking for wide structs.** Per-field `bool`
+25. **`preallocCap` returns `(slice, slab int)`** — single switch over
+    `f.ElemKind` decides BOTH the slice cap (`make([]E, 0, slice)`)
+    and the slab cap (`make([]T, 0, slab)` for `[]*T`). Defaults
+    when no explicit hintlen/len/minlen:
+      - `[]*T` (pointer-elem struct/array/slice/map): both default to
+        `defaultPreallocCap`. Slice slot is 8 B, slab slot is sizeof(T)
+        — slab default avoids the orphan-trail growth chain.
+      - `[][]T` (slice of slice) / `[]map[K]V` (slice of map): slice
+        cap defaults to `defaultPreallocCap`, slab=0. Element slot is
+        bounded (24 B slice header or 8 B map handle); over-cap waste
+        is small, no slab needed.
+      - `[]T` (struct value-stored) / `[][N]T` (slice of fixed array):
+        both 0. Element size could be anything — prealloc × element-
+        size would explode retained heap on big structs.
+      - primitive (`[]int`, `[]string`, etc): slice = `defaultPreallocCap`
+        clamped by maxlen if smaller; slab=0.
+    Empty `[]` always emits `result.X = []T{}` (stdlib parity — `null`
+    → nil, `[]` → empty non-nil); slice/slab prealloc only in the
+    non-empty arm.
+26. **Stream key dispatch via `Stream.KeyView`.** Object-field switch
+    keys are read once, matched against constant strings, then
+    discarded. The old codegen used `_s.String(i)` which allocates a
+    fresh heap string for each key — wasted ~200 throwaway allocs per
+    decoded value, inflating mheap span retention. `KeyView` is a
+    sibling method that aliases via `unsafe.String(unsafe.SliceData
+    (s.buf[start:]), end-start)` on the happy path (no escapes); the
+    alias stays valid even if buf grows because GC pins the old
+    backing. Falls back to `stringSlow` for escape sequences. Key
+    strings never escape the dispatch frame, so safety holds.
+27. **`peelSliceField` initializes `HintLen=-1`.** Nested slice
+    recursion (`[][]T`, `[N][]T`) builds an inner `FieldInfo` that
+    used to inherit Go's zero-value `HintLen=0`, which `preallocCap`
+    reads as "user opt-out, no prealloc". So every nested row started
+    at cap=0 and walked the 1 → 2 → 4 → 8 growth chain. Fix: peel
+    sets `HintLen=-1` ("unset") so the inner level falls through to
+    kind-based defaults. Single biggest alloc cut in the residency
+    investigation — Matrix `[][]int` inner rows dropped 494k → 274k
+    allocs/1000 iters.
+28. **Bitmask seen-flag tracking for wide structs.** Per-field `bool`
     locals fit in registers for narrow structs (≤32 fields, default
     threshold). Above that, `var _seen uint64` (or `[N]uint64` for >64
     fields) replaces the bool fan-out — same set/check ops (1-2 cycles
@@ -1059,6 +1097,33 @@ their generated code.
   "bytes.NewReader over Marshal output" version is a one-liner the user
   can write themselves; no need to bake it in.
 
+- **SIMD / AVX2 vectorization for hot scanning loops.** Sonic's
+  decoder hits 235 MB/s on Mega Unmarshal vs ggen's 251 MB/s in part
+  because bytedance hand-wrote AMD64 assembly that uses AVX2 for
+  string-quote scanning, whitespace skipping, and number parsing.
+  ggen currently does these byte-at-a-time in `scan/scan.go` and
+  `scan/stream.go`. Candidates worth probing:
+    - `bytes.IndexByte` (already SIMD-accelerated by Go runtime — we
+      use it for the string-closing-quote scan; verify it's vectorizing
+      on amd64).
+    - inline AVX2-accelerated WS skip via `golang.org/x/sys/cpu` to
+      detect support + Plan9 assembly stub.
+    - number parsing: probably not worth — `strconv.ParseInt` /
+      `strconv.ParseFloat` are already heavily tuned, and ggen's
+      hand-rolled inline int scan beats the function call for the
+      common case.
+  Real shape of the win unclear: sonic's vector win is bundled with
+  JIT and asm dispatch — pure SIMD-on-Go (no JIT) might claw back
+  10-15% on string-heavy payloads at the cost of:
+    - per-arch (amd64 / arm64) source duplication
+    - `go vet`-incompatible asm files
+    - Plan9 syntax maintenance burden
+    - lost portability (ggen currently runs on any GOARCH)
+  Try only if a target workload shows the byte-scan loop as the
+  dominant cost in CPU profile, AND the codegen complexity is
+  acceptable. Don't speculatively add asm files "to keep up with
+  sonic"; the gap is small and ggen's portability is a feature.
+
 Fuzz tests live in `fuzz_test.go` — three targets over `Node`:
 `FuzzScanNoPanic` (panic safety on random bytes), `FuzzRoundtrip` (encode
 → decode is a fixed point after one round), `FuzzCompat` (when both ggen
@@ -1076,3 +1141,35 @@ accept/reject drifts the compat target deliberately ignores: top-level
 - **Behaviour**
 - **Usage**
 - And so on...
+
+## README.md authoring rules
+
+**NEVER spill technical / implementation details into README.md.**
+
+README is the user-facing front door: what ggen is, what it does for
+the user, how to use it, what the numbers mean. CLAUDE.md is where
+implementation details to save times for agents lives.
+
+Specifically — do NOT add to README:
+
+- runtime / harness mechanism: `runtime.GC()` cycles, `HeapInuse`
+  snapshots, `b.RunParallel`, `MemProfileRate`, sink merge patterns,
+  goroutine-local state, `b.ResetTimer` placement, etc.
+- internal codegen details: `unsafe.String` aliasing semantics,
+  slab cap heuristics, `KeyView` vs `String`, `preallocCap`
+  return shape, peelSliceField specifics, etc.
+- pprof / profiler internals: stack-walking, sample-rate
+  trade-offs, top-N attribution mechanics.
+
+DO put in README:
+
+- what each benchmark measures (one sentence)
+- how to read each column / metric
+- when the user would care about that number
+- the bench output table + an interpretive paragraph if needed
+- caveats that affect the user's choice (e.g. "strings alias the
+  input, don't mutate after decode")
+
+If you find yourself writing the word "internally", "implementation",
+"under the hood", or naming a private function / runtime API in
+README — stop. That paragraph belongs in CLAUDE.md or a code comment.

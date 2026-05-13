@@ -2394,23 +2394,24 @@ func renderAppendMap(f FieldInfo, ref string) string {
 // growth chain that leaves orphan backings inflating retained heap.
 const defaultPreallocCap = 4
 
-// mapPreallocCap returns a map preallocation size from the user's
-// sizing hints. Precedence:
-//  1. explicit `ggen:"hintlen=N"`:
+// userPreallocHint extracts an explicit user-provided sizing hint
+// from the hintlen / len / minlen ladder. Returns -1 when no hint
+// is set, so callers can distinguish "user said 0" (opt-out via
+// hintlen=0) from "user said nothing" (fall through to caller's
+// kind-based default).
+//
+// Precedence:
+//  1. `hintlen=N`:
 //       N >  0 → that many entries
-//       N == 0 → user opt-out, force zero prealloc (overrides len/minlen/default)
+//       N == 0 → user opt-out, force zero (overrides len/minlen)
 //       N <  0 → sentinel "unset" — fall through
-//  2. `len=N`    — exact count, no waste possible
-//  3. `minlen=N` — floor; allocate to the floor, growth still works above
-//  4. otherwise — 0 (let the runtime pick a small default at first insert)
+//  2. `len=N`    — exact count, no waste
+//  3. `minlen=N` — floor; growth still works above
 //
-// Maps are NOT given a constant default the way slices are because
-// the per-bucket overhead is bigger and pre-sizing a small empty map
-// just retains buckets that may never get used.
-//
-// `maxlen` is intentionally NOT used as a sizing hint — see
-// "tried and rejected" in CLAUDE.md.
-func mapPreallocCap(f FieldInfo) int {
+// `maxlen` is intentionally NOT used — see "tried and rejected"
+// in CLAUDE.md. Pre-sizing to the worst-case bound retains
+// over-allocated capacity per held value (~100 KB/item on Mega).
+func userPreallocHint(f FieldInfo) int {
 	if f.HintLen >= 0 {
 		return f.HintLen
 	}
@@ -2423,33 +2424,74 @@ func mapPreallocCap(f FieldInfo) int {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			return n
 		}
+	}
+	return -1
+}
+
+// mapPreallocCap returns the cap for `make(map[K]V, cap)` from the
+// user's sizing hints. Returns 0 when no hint is set — maps don't
+// get a kind-based default because Go's `makemap` lazy-allocates
+// for hints < 8 (so small defaults are wasted) and the per-bucket
+// over-allocation cost is too high to justify a higher default for
+// the typical "small or empty map" case. Users with predictable
+// sizes can opt in via `ggen:"hintlen=N"`.
+func mapPreallocCap(f FieldInfo) int {
+	if n := userPreallocHint(f); n >= 0 {
+		return n
 	}
 	return 0
 }
 
-// preallocCap picks an initial capacity for a slice field. Same
-// hintlen / len / minlen precedence as mapPreallocCap, but for slices
-// of primitive elements we fall back to defaultPreallocCap when no
-// hint is present (clamped by maxlen if the user gave a small one).
-// Slices of heavy elements (struct / slice / map / array) start at 0
-// — over-cap × element-size explodes retained heap.
-func preallocCap(f FieldInfo) int {
-	if f.HintLen >= 0 {
-		return f.HintLen
-	}
-	if v, ok := f.HasRule("len"); ok {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			return n
-		}
-	}
-	if v, ok := f.HasRule("minlen"); ok {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			return n
-		}
+// preallocCap returns the initial capacities for a slice field's
+// two backing allocations:
+//   - slice: cap for `make([]E, 0, slice)` — the field's own slice.
+//     Returns 0 to mean "do not emit a make() prealloc". The empty-
+//     array branch always emits `[]E{}` regardless (stdlib parity).
+//   - slab: cap for `make([]T, 0, slab)` when `f.ElemPointer` is
+//     set — the contiguous backing storage for `[]*T` element
+//     pointers. Caller ignores when ElemPointer is false.
+//
+// Precedence — explicit hints win and apply to both caps equally:
+//  1. `hintlen=N` (N >= 0)
+//  2. `len=N`
+//  3. `minlen=N`
+//
+// With no explicit hint, the kind drives the default:
+//   - pointer-element (`[]*T`): both default to defaultPreallocCap.
+//     Slice slot waste is 8 B/slot (trivial); slab default avoids
+//     the orphan-trail growth chain (0→1→2→4→8 leaves prior backings
+//     alive via held `*T` pointers).
+//   - heavy non-pointer (struct/slice/map/array): both 0. Over-cap
+//     × element-size would explode retained heap.
+//   - primitive: slice = defaultPreallocCap (clamped by maxlen if
+//     smaller); slab = 0 (unused — primitives have no slab).
+//
+// `maxlen` is intentionally NOT used as a generous prealloc hint —
+// it's an upper bound, not an expected size, and treating it as one
+// was the residency villain. See "tried and rejected" in CLAUDE.md.
+func preallocCap(f FieldInfo) (slice, slab int) {
+	if n := userPreallocHint(f); n >= 0 {
+		return n, n
 	}
 	switch f.ElemKind {
-	case KindStruct, KindSlice, KindMap, KindArray:
-		return 0
+	case KindSlice, KindMap:
+		// Element is a slice header (24 B) or map handle (8 B) — both
+		// bounded slot sizes. Safe to prealloc: over-cap waste per
+		// unused slot is small (cap=4 → ≤96 B waste), and starting
+		// from cap=0 forces the 0→1→2→4→8 grow chain whose orphan
+		// trail dwarfs the over-cap waste.
+		return defaultPreallocCap, 0
+	case KindStruct, KindArray:
+		if f.ElemPointer {
+			// `[]*T` — slice slot is 8 B, slab slot is sizeof(T).
+			// Slab default avoids the orphan-trail growth chain
+			// (held `*T` pointers anchor into prior backings).
+			return defaultPreallocCap, defaultPreallocCap
+		}
+		// `[]T` value-stored — sizeof(T) could be anything. Prealloc
+		// × element-size would explode retained heap on big structs.
+		// Start nil, grow via append.
+		return 0, 0
 	}
 	def := defaultPreallocCap
 	if v, ok := f.HasRule("maxlen"); ok {
@@ -2457,7 +2499,7 @@ func preallocCap(f FieldInfo) int {
 			def = n
 		}
 	}
-	return def
+	return def, 0
 }
 
 // inlineSkipWS emits an inline whitespace-skipping loop that mutates posVar
@@ -2765,14 +2807,19 @@ func renderMap(f FieldInfo, ref, posVar string) string {
 	b.WriteString("if k >= len(data) || data[k] != '{' { return result, 0, scan.ErrBadObject }\n")
 	b.WriteString("k++\n")
 	b.WriteString(inlineSkipWS("k"))
-	// Skip the alloc on `{}` — leaving the field nil matches the slice
-	// path's "stay nil when empty" behavior and saves a make for empty
-	// payloads.
+	// Replace semantics: pre-populated destination is wiped
+	// before decoding so the result reflects only the incoming
+	// JSON (no merge with prior contents). `clear()` preserves
+	// the caller's bucket pool; nil gets a fresh map.
+	fmt.Fprintf(&b, "if k < len(data) && data[k] == '}' {\n")
+	fmt.Fprintf(&b, "if %s == nil { %s = %s{} } else { clear(%s) }\n", ref, ref, f.GoType, ref)
+	fmt.Fprintf(&b, "} else if %s == nil {\n", ref)
 	if cap := mapPreallocCap(f); cap > 0 {
-		fmt.Fprintf(&b, "if k < len(data) && data[k] != '}' && %s == nil { %s = make(%s, %d) }\n", ref, ref, f.GoType, cap)
+		fmt.Fprintf(&b, "%s = make(%s, %d)\n", ref, f.GoType, cap)
 	} else {
-		fmt.Fprintf(&b, "if k < len(data) && data[k] != '}' && %s == nil { %s = make(%s) }\n", ref, ref, f.GoType)
+		fmt.Fprintf(&b, "%s = make(%s)\n", ref, f.GoType)
 	}
+	fmt.Fprintf(&b, "} else {\nclear(%s)\n}\n", ref)
 	b.WriteString("for k < len(data) && data[k] != '}' {\n")
 	b.WriteString("var _mk string\n")
 	b.WriteString(inlineScanString("k", "_mk", "k"))
@@ -3689,6 +3736,11 @@ func peelSliceField(f FieldInfo) FieldInfo {
 		MultiErr:   f.MultiErr,
 		NoValidate: f.NoValidate,
 		AllowDups:  f.AllowDups,
+		// HintLen=-1 means "unset" — preallocCap then falls through to
+		// len/minlen/kind-based default. Without this the zero-value 0
+		// reads as "user opt-out (no prealloc)" and the inner slice gets
+		// cap=0, forcing the 1→2→4→8 growth chain on every nested row.
+		HintLen: -1,
 	}
 	if innerKind == KindArray {
 		inner.ElemArrayLen = innerLen
@@ -3770,23 +3822,44 @@ func emitByteSliceRead(f FieldInfo, dst, posVar string, depth int) string {
 			fmt.Fprintf(&b, "var %s [%d]%s\n", slabVar, arrayN, f.ElemType)
 		}
 	} else {
-		initCap := preallocCap(f)
-		if initCap > 0 {
-			fmt.Fprintf(&b, "if %s < len(data) && data[%s] != ']' { %s = make(%s, 0, %d) }\n",
-				kvar, kvar, dst, f.GoType, initCap)
-		}
+		sCap, slCap := preallocCap(f)
+		// Replace semantics for slices (matches stdlib + ggen's map
+		// handling). Three cases at the top level:
+		//   `[]`         → `dst = []T{}` (empty non-nil, cap=0)
+		//   non-empty, dst != nil → `dst = dst[:0]` (reuse caller's
+		//     backing, preserving cap)
+		//   non-empty, dst == nil → fresh `make(...)` with prealloc
+		// At nested levels (depth > 0) the dst is a `var evN []T`
+		// declared fresh each outer iteration — always nil — so the
+		// `[:0]` reuse branch is dead and we elide it.
+		// `null` is handled earlier (leaves dst nil). Slab declared
+		// outside the branch so the loop body sees it; only assigned
+		// in the nil-destination arm (caller-supplied slices don't
+		// carry a slab anyway).
 		if f.ElemPointer {
-			// Pre-sized slab backs all the *T pointers we'll append to dst.
-			// Append-grow is correct (orphan backings stay alive via held
-			// pointers) but pre-sizing avoids the orphan churn for the
-			// common case where len ≤ initCap. When initCap is 0 the slab
-			// starts nil and grows on first element.
-			if initCap > 0 {
-				fmt.Fprintf(&b, "%s := make([]%s, 0, %d)\n", slabVar, f.ElemType, initCap)
-			} else {
-				fmt.Fprintf(&b, "var %s []%s\n", slabVar, f.ElemType)
+			fmt.Fprintf(&b, "var %s []%s\n", slabVar, f.ElemType)
+		}
+		fmt.Fprintf(&b, "if %s < len(data) && data[%s] == ']' {\n", kvar, kvar)
+		fmt.Fprintf(&b, "%s = %s{}\n", dst, f.GoType)
+		if depth == 0 {
+			fmt.Fprintf(&b, "} else if %s != nil {\n", dst)
+			fmt.Fprintf(&b, "%s = %s[:0]\n", dst, dst)
+			if f.ElemPointer {
+				fmt.Fprintf(&b, "%s = make([]%s, 0, %d)\n", slabVar, f.ElemType, slCap)
 			}
 		}
+		fmt.Fprintf(&b, "} else {\n")
+		if sCap > 0 {
+			fmt.Fprintf(&b, "%s = make(%s, 0, %d)\n", dst, f.GoType, sCap)
+		} else {
+			// Heavy non-pointer element: empty literal avoids the
+			// prealloc waste; first append allocates backing.
+			fmt.Fprintf(&b, "%s = %s{}\n", dst, f.GoType)
+		}
+		if f.ElemPointer {
+			fmt.Fprintf(&b, "%s = make([]%s, 0, %d)\n", slabVar, f.ElemType, slCap)
+		}
+		fmt.Fprintf(&b, "}\n")
 	}
 	fmt.Fprintf(&b, "for %s < len(data) && data[%s] != ']' {\n", kvar, kvar)
 	if isArray {
@@ -3947,7 +4020,7 @@ func renderStreamDecodeStruct(s StructInfo) string {
 	b.WriteString(renderPostLoop(s))
 	b.WriteString("return result, i + 1, nil\n}\n")
 	b.WriteString("for {\n")
-	b.WriteString("key, j, err := _s.String(i)\n")
+	b.WriteString("key, j, err := _s.KeyView(i)\n")
 	b.WriteString("if err != nil { return result, 0, err }\n")
 	b.WriteString("j, err = _s.SkipSpace(j)\n")
 	b.WriteString("if err != nil { return result, 0, err }\n")
@@ -4071,13 +4144,16 @@ func renderStreamMap(f FieldInfo, ref, posVar string) string {
 	b.WriteString("k, err = _s.SkipSpace(k)\n")
 	b.WriteString("if err != nil { return result, 0, err }\n")
 	b.WriteString("if k >= len(_s.Bytes()) { if err = _s.ReadMore(); err != nil { return result, 0, err } }\n")
-	// Skip the alloc on `{}` — keeps the field nil for empty payloads,
-	// matches the slice path.
+	// Replace semantics — see renderMap.
+	fmt.Fprintf(&b, "if _s.Bytes()[k] == '}' {\n")
+	fmt.Fprintf(&b, "if %s == nil { %s = %s{} } else { clear(%s) }\n", ref, ref, f.GoType, ref)
+	fmt.Fprintf(&b, "} else if %s == nil {\n", ref)
 	if cap := mapPreallocCap(f); cap > 0 {
-		fmt.Fprintf(&b, "if _s.Bytes()[k] != '}' && %s == nil { %s = make(%s, %d) }\n", ref, ref, f.GoType, cap)
+		fmt.Fprintf(&b, "%s = make(%s, %d)\n", ref, f.GoType, cap)
 	} else {
-		fmt.Fprintf(&b, "if _s.Bytes()[k] != '}' && %s == nil { %s = make(%s) }\n", ref, ref, f.GoType)
+		fmt.Fprintf(&b, "%s = make(%s)\n", ref, f.GoType)
 	}
+	fmt.Fprintf(&b, "} else {\nclear(%s)\n}\n", ref)
 	b.WriteString("for _s.Bytes()[k] != '}' {\n")
 	b.WriteString("_mk, _k2, err := _s.String(k)\n")
 	b.WriteString("if err != nil { return result, 0, err }\n")
@@ -4695,18 +4771,30 @@ func emitStreamSliceRead(f FieldInfo, dst, posVar string, depth int) string {
 			fmt.Fprintf(&b, "var %s [%d]%s\n", slabVar, arrayN, f.ElemType)
 		}
 	} else {
-		initCap := preallocCap(f)
-		if initCap > 0 {
-			fmt.Fprintf(&b, "if _s.Bytes()[%s] != ']' { %s = make(%s, 0, %d) }\n",
-				kvar, dst, f.GoType, initCap)
-		}
+		sCap, slCap := preallocCap(f)
+		// Replace semantics — see emitByteSliceRead.
 		if f.ElemPointer {
-			if initCap > 0 {
-				fmt.Fprintf(&b, "%s := make([]%s, 0, %d)\n", slabVar, f.ElemType, initCap)
-			} else {
-				fmt.Fprintf(&b, "var %s []%s\n", slabVar, f.ElemType)
+			fmt.Fprintf(&b, "var %s []%s\n", slabVar, f.ElemType)
+		}
+		fmt.Fprintf(&b, "if _s.Bytes()[%s] == ']' {\n", kvar)
+		fmt.Fprintf(&b, "%s = %s{}\n", dst, f.GoType)
+		if depth == 0 {
+			fmt.Fprintf(&b, "} else if %s != nil {\n", dst)
+			fmt.Fprintf(&b, "%s = %s[:0]\n", dst, dst)
+			if f.ElemPointer {
+				fmt.Fprintf(&b, "%s = make([]%s, 0, %d)\n", slabVar, f.ElemType, slCap)
 			}
 		}
+		fmt.Fprintf(&b, "} else {\n")
+		if sCap > 0 {
+			fmt.Fprintf(&b, "%s = make(%s, 0, %d)\n", dst, f.GoType, sCap)
+		} else {
+			fmt.Fprintf(&b, "%s = %s{}\n", dst, f.GoType)
+		}
+		if f.ElemPointer {
+			fmt.Fprintf(&b, "%s = make([]%s, 0, %d)\n", slabVar, f.ElemType, slCap)
+		}
+		fmt.Fprintf(&b, "}\n")
 	}
 	fmt.Fprintf(&b, "for _s.Bytes()[%s] != ']' {\n", kvar)
 	if isArray {

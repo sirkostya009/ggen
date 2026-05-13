@@ -174,6 +174,61 @@ func (s *Stream) String(i int) (string, int, error) {
 	}
 }
 
+// KeyView reads a JSON string and returns it as an alias into the
+// Stream's buffer — zero-copy, zero-allocation on the happy path.
+// The returned string remains valid even after subsequent ReadMore
+// grows the buf, because Go's GC keeps the underlying backing alive
+// as long as any string aliases into it.
+//
+// USE ONLY for short-lived dispatch where the string never escapes
+// the call frame — e.g. object-key matching in `switch len(key)` /
+// `if key == "X"` chains. For values that go into the decoded struct,
+// use [Stream.String] (which copies).
+//
+// On escape sequences in the key, falls back to the copy path
+// (stringSlow) — aliasing only works when the source bytes ARE the
+// final string bytes.
+func (s *Stream) KeyView(i int) (string, int, error) {
+	if i >= len(s.buf) {
+		if err := s.ReadMore(); err != nil {
+			return "", 0, err
+		}
+	}
+	if s.buf[i] != '"' {
+		return "", 0, ErrExpectString
+	}
+	start := i + 1
+	j := start
+	for {
+		rel := bytes.IndexByte(s.buf[j:], '"')
+		if rel < 0 {
+			if bsRel := bytes.IndexByte(s.buf[j:], '\\'); bsRel >= 0 {
+				return s.stringSlow(start, j+bsRel)
+			}
+			for k := j; k < len(s.buf); k++ {
+				if s.buf[k] < 0x20 {
+					return "", 0, ErrBadString
+				}
+			}
+			j = len(s.buf)
+			if err := s.ReadMore(); err != nil {
+				return "", 0, ErrUnterminated
+			}
+			continue
+		}
+		end := j + rel
+		if bsRel := bytes.IndexByte(s.buf[j:end], '\\'); bsRel >= 0 {
+			return s.stringSlow(start, j+bsRel)
+		}
+		for k := j; k < end; k++ {
+			if s.buf[k] < 0x20 {
+				return "", 0, ErrBadString
+			}
+		}
+		return unsafe.String(unsafe.SliceData(s.buf[start:]), end-start), end + 1, nil
+	}
+}
+
 // stringSlow handles escape sequences. Builds a fresh buffer — not zero-copy.
 func (s *Stream) stringSlow(start, j int) (string, int, error) {
 	buf := make([]byte, 0, 32)

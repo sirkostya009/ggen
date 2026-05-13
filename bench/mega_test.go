@@ -152,8 +152,8 @@ func BenchmarkMega_Unmarshal(b *testing.B) {
 		name string
 		fn   func([]byte) error
 	}{
-		{"jsonv2", func(p []byte) error { var v Node; return jsonv2.Unmarshal(p, &v) }},
-		{"sonic", func(p []byte) error { var v Node; return sonic.Unmarshal(p, &v) }},
+		{"jsonv2", func(p []byte) error { var v NodePlain; return jsonv2.Unmarshal(p, &v) }},
+		{"sonic", func(p []byte) error { var v NodePlain; return sonic.Unmarshal(p, &v) }},
 		{"easyjson", func(p []byte) error { var v Node; return v.UnmarshalJSON(p) }},
 		{"ggen", func(p []byte) error { _, err := decode.Unmarshal[Node](p); return err }},
 	}
@@ -177,8 +177,8 @@ func BenchmarkMega_Marshal(b *testing.B) {
 		name string
 		fn   func() ([]byte, error)
 	}{
-		{"jsonv2", func() ([]byte, error) { return jsonv2.Marshal(MegaValue) }},
-		{"sonic", func() ([]byte, error) { return sonic.Marshal(MegaValue) }},
+		{"jsonv2", func() ([]byte, error) { return jsonv2.Marshal(MegaValuePlain) }},
+		{"sonic", func() ([]byte, error) { return sonic.Marshal(MegaValuePlain) }},
 		{"easyjson", func() ([]byte, error) { return MegaValue.MarshalJSON() }},
 		{"ggen", func() ([]byte, error) { return encode.Marshal(MegaValue) }},
 	}
@@ -221,23 +221,34 @@ func BenchmarkMega_Marshal(b *testing.B) {
 func BenchmarkRetention(b *testing.B) {
 	var retentionCodecs = []struct {
 		name string
-		fn   func(*[]byte) *Node // buf is per-goroutine, reused across iters
+		// returns the decoded value (as any so stdjson can return a
+		// fresh NodePlain whose nested types don't trip easyjson's
+		// json.Unmarshaler hooks). Sink holds it alive for the
+		// HeapInuse measurement regardless of concrete type.
+		fn func(*[]byte) any
 	}{
-		{"stdjson", func(_ *[]byte) *Node {
-			n := new(Node)
+		{"stdjson", func(_ *[]byte) any {
+			n := new(NodePlain)
 			if err := jsonv2.UnmarshalRead(bytes.NewReader(slowPayload), n); err != nil {
 				b.Fatal(err)
 			}
 			return n
 		}},
-		{"easyjson", func(_ *[]byte) *Node {
+		{"sonic", func(_ *[]byte) any {
+			n := new(NodePlain)
+			if err := sonic.Unmarshal(slowPayload, n); err != nil {
+				b.Fatal(err)
+			}
+			return n
+		}},
+		{"easyjson", func(_ *[]byte) any {
 			n := new(Node)
 			if err := easyjson.UnmarshalFromReader(bytes.NewReader(slowPayload), n); err != nil {
 				b.Fatal(err)
 			}
 			return n
 		}},
-		{"ggen_stream", func(buf *[]byte) *Node {
+		{"ggen_stream", func(buf *[]byte) any {
 			var n Node
 			var err error
 			n, *buf, err = decode.UnmarshalStream[Node](bytes.NewReader(slowPayload), (*buf)[:0])
@@ -246,14 +257,14 @@ func BenchmarkRetention(b *testing.B) {
 			}
 			return &n
 		}},
-		{"ggen_bytes", func(_ *[]byte) *Node {
+		{"ggen_bytes", func(_ *[]byte) any {
 			n, err := decode.Unmarshal[Node](slowPayload)
 			if err != nil {
 				b.Fatal(err)
 			}
 			return &n
 		}},
-		{"ggen_readall", func(_ *[]byte) *Node {
+		{"ggen_readall", func(_ *[]byte) any {
 			data, err := io.ReadAll(bytes.NewReader(slowPayload))
 			if err != nil {
 				b.Fatal(err)
@@ -272,7 +283,7 @@ func BenchmarkRetention(b *testing.B) {
 			b.ReportAllocs()
 
 			var mu sync.Mutex
-			var sinks [][]*Node // every goroutine's accumulator, merged post-run
+			var sinks [][]any // every goroutine's accumulator, merged post-run
 
 			// Top-allocs breakdown is opt-in: setting MemProfileRate=1
 			// captures every allocation but makes the bench ~40× slower.
@@ -295,7 +306,7 @@ func BenchmarkRetention(b *testing.B) {
 
 			b.ResetTimer()
 			b.RunParallel(func(pb *testing.PB) {
-				local := make([]*Node, 0, 64)
+				local := make([]any, 0, 64)
 				buf := make([]byte, 0, len(slowPayload))
 				for pb.Next() {
 					local = append(local, c.fn(&buf))
@@ -363,12 +374,12 @@ func BenchmarkMega_Reader(b *testing.B) {
 	}{
 		{"jsonv2", func(s *readerState) error {
 			s.r.Reset(MegaPayload)
-			var v Node
+			var v NodePlain
 			return jsonv2.UnmarshalRead(&s.r, &v)
 		}},
 		{"sonic", func(s *readerState) error {
 			s.r.Reset(MegaPayload)
-			var v Node
+			var v NodePlain
 			return sonic.ConfigDefault.NewDecoder(&s.r).Decode(&v)
 		}},
 		{"easyjson", func(s *readerState) error {

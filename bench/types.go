@@ -57,6 +57,77 @@ type Node struct {
 	Raw       json.RawMessage   `json:"raw"`
 }
 
+// AddrPlain is a defined type over Addr — strips easyjson's methods
+// (`type T U` drops all methods of U). Used by NodePlain so the
+// reflection-based decoder doesn't fall back to easyjson via the
+// `json.Unmarshaler` interface hook on `*Addr`.
+type AddrPlain Addr
+
+// NodePlain mirrors Node's fields but defines its own self-referential
+// shape (`Children []NodePlain`, `Refs []*AddrPlain`, `Parent *AddrPlain`)
+// so nested decoding never crosses back into a type that has easyjson's
+// generated UnmarshalJSON / MarshalJSON. Used under the "stdjson" /
+// "jsonv2" rows so those rows actually measure stdlib's reflection
+// path, not easyjson via the `json.Marshaler` / `Unmarshaler` interface
+// hooks easyjson generates on Node.
+type NodePlain struct {
+	ID        int64             `json:"id"`
+	Name      string            `json:"name"`
+	Score     float64           `json:"score"`
+	Active    bool              `json:"active"`
+	Tags      []string          `json:"tags"`
+	Props     map[string]string `json:"props"`
+	Children  []NodePlain       `json:"children"`
+	Coords    [2]float64        `json:"coords"`
+	Refs      []*AddrPlain      `json:"refs"`
+	Matrix    [][]int           `json:"matrix"`
+	Parent    *AddrPlain        `json:"parent,omitzero"`
+	CreatedAt time.Time         `json:"createdAt"`
+	Blob      []byte            `json:"blob"`
+	Extra     any               `json:"extra"`
+	Raw       json.RawMessage   `json:"raw"`
+}
+
+// nodeToPlain deep-converts a Node tree into NodePlain so marshal
+// benches can hand jsonv2 / sonic a value whose generated methods
+// are stripped. One-shot at init; not on the hot path.
+func nodeToPlain(n Node) NodePlain {
+	p := NodePlain{
+		ID:        n.ID,
+		Name:      n.Name,
+		Score:     n.Score,
+		Active:    n.Active,
+		Tags:      n.Tags,
+		Props:     n.Props,
+		Coords:    n.Coords,
+		Matrix:    n.Matrix,
+		CreatedAt: n.CreatedAt,
+		Blob:      n.Blob,
+		Extra:     n.Extra,
+		Raw:       n.Raw,
+	}
+	if n.Parent != nil {
+		ap := AddrPlain(*n.Parent)
+		p.Parent = &ap
+	}
+	if n.Refs != nil {
+		p.Refs = make([]*AddrPlain, len(n.Refs))
+		for i, r := range n.Refs {
+			if r != nil {
+				ap := AddrPlain(*r)
+				p.Refs[i] = &ap
+			}
+		}
+	}
+	if n.Children != nil {
+		p.Children = make([]NodePlain, len(n.Children))
+		for i, c := range n.Children {
+			p.Children[i] = nodeToPlain(c)
+		}
+	}
+	return p
+}
+
 // Validated exercises ggen's per-field validation rules. Designed for
 // fail-fast streaming benchmarks: the alphabetically-first JSON field
 // (Email after sort) is the one we corrupt to force early rejection.
@@ -71,8 +142,9 @@ type Validated struct {
 }
 
 var (
-	MegaValue   Node
-	MegaPayload []byte
+	MegaValue      Node
+	MegaValuePlain NodePlain // converted copy for stdjson/jsonv2/sonic marshal rows
+	MegaPayload    []byte
 
 	// ValidPayload + InvalidPayload — short JSON bodies for fail-fast
 	// streaming benchmarks. Both about the same size; the invalid one
@@ -86,6 +158,7 @@ var (
 func init() {
 	r := rand.New(rand.NewSource(1))
 	MegaValue = buildNode(r, 6, []int{5, 4, 3, 3, 3, 3, 0})
+	MegaValuePlain = nodeToPlain(MegaValue)
 	var err error
 	MegaPayload, err = encode.Marshal(MegaValue)
 	if err != nil {

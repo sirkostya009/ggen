@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/mailru/easyjson"
 	"github.com/sirkostya009/ggen/decode"
 	"github.com/sirkostya009/ggen/encode"
@@ -117,8 +118,13 @@ func BenchmarkSlowStream_Valid(b *testing.B) {
 	}{
 		{"stdjson", func(s *slowState) error {
 			s.r.reset()
-			var v Node
+			var v NodePlain
 			return jsonv2.UnmarshalDecode(jsontext.NewDecoder(s.r), &v)
+		}},
+		{"sonic", func(s *slowState) error {
+			s.r.reset()
+			var v NodePlain
+			return sonic.ConfigDefault.NewDecoder(s.r).Decode(&v)
 		}},
 		{"easyjson", func(s *slowState) error {
 			s.r.reset()
@@ -189,6 +195,11 @@ func BenchmarkSlowStream_Invalid(b *testing.B) {
 			s.r.reset()
 			var v Validated
 			return jsonv2.UnmarshalDecode(jsontext.NewDecoder(s.r), &v)
+		}, false},
+		{"sonic", func(s *slowState) error {
+			s.r.reset()
+			var v Validated
+			return sonic.ConfigDefault.NewDecoder(s.r).Decode(&v)
 		}, false},
 	}
 

@@ -9,7 +9,7 @@ presizing which is also possible using the generated `JSONSize` method.
 
 ## benchmarks
 
-`cd bench && go test -bench=BenchmarkMega -run=^$ -benchtime=5s -cpu=1 .`
+`cd bench && go test -bench=BenchmarkMega -run=^$ -benchtime=500x -cpu=1 .`
 over a ~5.6 MiB deep tree with full validation.
 See [mega_test.go](./bench/mega_test.go).
 
@@ -25,19 +25,19 @@ goos: linux
 goarch: amd64
 pkg: github.com/sirkostya009/ggen/bench
 cpu: AMD RYZEN AI MAX+ 395 w/ Radeon 8060S
-BenchmarkMega_Unmarshal/jsonv2         100   52968708 ns/op   110.72 MB/s    59 gc   0.5900 gc/op   68016 heap_KB   1658216 total_KB   16980131 B/op   245859 allocs/op
-BenchmarkMega_Unmarshal/sonic          126   47389942 ns/op   123.75 MB/s    85 gc   0.6746 gc/op   50742 heap_KB   2811072 total_KB   22845538 B/op   245860 allocs/op
-BenchmarkMega_Unmarshal/easyjson       152   38945520 ns/op   150.59 MB/s    77 gc   0.5066 gc/op   73393 heap_KB   2520418 total_KB   16979657 B/op   245856 allocs/op
-BenchmarkMega_Unmarshal/ggen           243   24888839 ns/op   235.63 MB/s   111 gc   0.4568 gc/op   64754 heap_KB   3634998 total_KB   15317850 B/op   153013 allocs/op
-BenchmarkMega_Marshal/jsonv2           164   36752591 ns/op   159.57 MB/s   112 gc   0.6829 gc/op   64315 heap_KB   4128171 total_KB   25775894 B/op     7619 allocs/op
-BenchmarkMega_Marshal/sonic            247   22954984 ns/op   255.48 MB/s    82 gc   0.3320 gc/op   63736 heap_KB   2891568 total_KB   11987714 B/op     7595 allocs/op
-BenchmarkMega_Marshal/easyjson         386   15592291 ns/op   376.12 MB/s    76 gc   0.1969 gc/op   58055 heap_KB   2305536 total_KB    6116240 B/op     7586 allocs/op
-BenchmarkMega_Marshal/ggen             414   13921884 ns/op   421.25 MB/s   144 gc   0.3478 gc/op   57776 heap_KB   4819937 total_KB   11921776 B/op     2185 allocs/op
-BenchmarkMega_Reader/jsonv2            100   58179095 ns/op   100.80 MB/s    92 gc   0.9200 gc/op   76727 heap_KB   3296612 total_KB   33757310 B/op   245877 allocs/op
-BenchmarkMega_Reader/sonic             100   52364858 ns/op   112.00 MB/s   102 gc   1.020  gc/op   76140 heap_KB   4007800 total_KB   41039870 B/op   245883 allocs/op
-BenchmarkMega_Reader/easyjson          148   40345023 ns/op   145.36 MB/s   148 gc   1.000  gc/op   49354 heap_KB   4555706 total_KB   31520557 B/op   245887 allocs/op
-BenchmarkMega_Reader/ggen_stream       165   35890694 ns/op   163.40 MB/s    80 gc   0.4848 gc/op   70622 heap_KB   3100560 total_KB   19242261 B/op   383571 allocs/op
-BenchmarkMega_Reader/ggen_readall      228   26634740 ns/op   220.19 MB/s   202 gc   0.8860 gc/op   60401 heap_KB   6648164 total_KB   29858419 B/op   153042 allocs/op
+BenchmarkMega_Unmarshal/jsonv2         500   52662320 ns/op   111.36 MB/s   309 gc   0.6180 gc/op   68632 heap_KB    8641128 total_KB   17697030 B/op   316830 allocs/op
+BenchmarkMega_Unmarshal/sonic          500   24985770 ns/op   234.72 MB/s   256 gc   0.5120 gc/op   64782 heap_KB   10151379 total_KB   20790024 B/op   137771 allocs/op
+BenchmarkMega_Unmarshal/easyjson       500   39286730 ns/op   149.28 MB/s   251 gc   0.5020 gc/op   55695 heap_KB    8291199 total_KB   16980374 B/op   245856 allocs/op
+BenchmarkMega_Unmarshal/ggen           500   23376103 ns/op   250.88 MB/s   201 gc   0.4020 gc/op   72381 heap_KB    7037938 total_KB   14413697 B/op   101927 allocs/op
+BenchmarkMega_Marshal/jsonv2           500   22991583 ns/op   254.94 MB/s    84 gc   0.1680 gc/op   59851 heap_KB    2918348 total_KB    5976775 B/op     7407 allocs/op
+BenchmarkMega_Marshal/sonic            500   19442392 ns/op   301.64 MB/s   491 gc   0.9820 gc/op   55672 heap_KB   16416600 total_KB   33621197 B/op     5112 allocs/op
+BenchmarkMega_Marshal/easyjson         500   16449044 ns/op   356.53 MB/s    99 gc   0.1980 gc/op   59966 heap_KB    2986452 total_KB    6116253 B/op     7586 allocs/op
+BenchmarkMega_Marshal/ggen             500   14346641 ns/op   408.78 MB/s   165 gc   0.3300 gc/op   47465 heap_KB    5821180 total_KB   11921776 B/op     2185 allocs/op
+BenchmarkMega_Reader/jsonv2            500   53413537 ns/op   109.80 MB/s   326 gc   0.6520 gc/op   52906 heap_KB    8641136 total_KB   17697045 B/op   316830 allocs/op
+BenchmarkMega_Reader/sonic             500   28270170 ns/op   207.45 MB/s   489 gc   0.9780 gc/op   58889 heap_KB   19034887 total_KB   38983448 B/op   137793 allocs/op
+BenchmarkMega_Reader/easyjson          500   40322120 ns/op   145.44 MB/s   499 gc   0.9980 gc/op   49577 heap_KB   15391237 total_KB   31521253 B/op   245887 allocs/op
+BenchmarkMega_Reader/ggen_stream       500   32611826 ns/op   179.83 MB/s   203 gc   0.4060 gc/op   88408 heap_KB    8731813 total_KB   17882753 B/op   268385 allocs/op
+BenchmarkMega_Reader/ggen_readall      500   24680078 ns/op   237.63 MB/s   473 gc   0.9460 gc/op   70078 heap_KB   14137818 total_KB   28954250 B/op   101956 allocs/op
 ```
 
 Fast numbers are explained by ggen's zero-copy strategy for strings and
@@ -64,13 +64,15 @@ first 20 reads), 52 ms → 1.2 ms per-Read delay (geometric decay — each
 read shaves 75% off the remaining gap, so the floor is hit in 5 reads) yields:
 
 ```
-BenchmarkSlowStream_Valid/stdjson           14   159159109 ns/op   0.23 MB/s    238176 B/op   1609 allocs/op
-BenchmarkSlowStream_Valid/easyjson          14   159270135 ns/op   0.23 MB/s    190034 B/op   1542 allocs/op
-BenchmarkSlowStream_Valid/ggen_stream       16   142259752 ns/op   0.25 MB/s    114190 B/op   2371 allocs/op
-BenchmarkSlowStream_Valid/ggen_readall      14   159453326 ns/op   0.23 MB/s    179470 B/op    925 allocs/op
-BenchmarkSlowStream_Invalid/ggen_stream     36    66721387 ns/op   0.04 MB/s      3290 B/op      7 allocs/op
-BenchmarkSlowStream_Invalid/ggen_readall    30    78549246 ns/op   0.04 MB/s      7442 B/op      9 allocs/op
-BenchmarkSlowStream_Invalid/jsonv2          28    82549880 ns/op   0.04 MB/s     16858 B/op     25 allocs/op
+BenchmarkSlowStream_Valid/stdjson          100  164753533 ns/op   0.22 MB/s   119037 B/op   1995 allocs/op
+BenchmarkSlowStream_Valid/sonic            100  141603145 ns/op   0.25 MB/s   126977 B/op    830 allocs/op
+BenchmarkSlowStream_Valid/easyjson         100  158278628 ns/op   0.23 MB/s   187486 B/op   1542 allocs/op
+BenchmarkSlowStream_Valid/ggen_stream      100  141261564 ns/op   0.25 MB/s   104053 B/op   1654 allocs/op
+BenchmarkSlowStream_Valid/ggen_readall     100  157971044 ns/op   0.23 MB/s   171509 B/op    623 allocs/op
+BenchmarkSlowStream_Invalid/ggen_stream    100   66388640 ns/op   0.04 MB/s     3218 B/op      4 allocs/op
+BenchmarkSlowStream_Invalid/ggen_readall   100   77730957 ns/op   0.04 MB/s     7362 B/op      9 allocs/op
+BenchmarkSlowStream_Invalid/jsonv2         100   82124208 ns/op   0.04 MB/s    16770 B/op     25 allocs/op
+BenchmarkSlowStream_Invalid/sonic          100   66320363 ns/op   0.04 MB/s     3421 B/op      6 allocs/op
 ```
 
 `Invalid` benchmarks exercise the fail-fast advantage. `ggen` validation
@@ -87,31 +89,25 @@ See [slowstream_test.go](./bench/slowstream_test.go).
 
 ### memory residency
 
-`B/op` and `gc/op` measure churn, what about the memory each decoded value
-actually retains over its lifetime? That's the residency metric — how much
-heap your server holds when it keeps N parsed responses alive.
+Another kind of benchmarking that Go's default bench tool doesn't easily
+expose is memory retained _after_ all parsing is done, per element.
 
-`BenchmarkRetention` decodes the payload, holds every decoded value alive
-in a per-goroutine sink, runs `runtime.GC()` twice to settle, then reads
-`HeapInuse` delta. Run with `-benchtime=1000x` for comparable per-codec
-numbers. `retain_KB/op` is the per-item memory cost; `retain×payload` is
-that cost as a multiple of the input JSON size.
+`BenchmarkRetention` evaluates memory utilized by Node structs after all
+parsing and garbage collection has settled - a slightly unrealistic
+picture but its a showcase of how byte-aliasing can help curb memory usage
+avoiding expensive copying of strings and raw bytes all the time.
 
 ```
-BenchmarkRetention/stdjson         1000   295265 ns/op   121.65 MB/s    80.13 retain_KB/op    78.25 retain_MiB   2.284 retain×payload
-BenchmarkRetention/easyjson        1000   309443 ns/op   116.08 MB/s    81.28 retain_KB/op    79.38 retain_MiB   2.317 retain×payload
-BenchmarkRetention/ggen_stream     1000   230184 ns/op   156.05 MB/s    92.56 retain_KB/op    90.39 retain_MiB   2.639 retain×payload
-BenchmarkRetention/ggen_bytes      1000   202243 ns/op   177.61 MB/s    78.12 retain_KB/op    76.29 retain_MiB   2.227 retain×payload
-BenchmarkRetention/ggen_readall    1000   178238 ns/op   201.53 MB/s   107.7  retain_KB/op   105.2  retain_MiB   3.071 retain×payload
+BenchmarkRetention/stdjson         100   5516776 ns/op    6.51 MB/s   694.0 abi.Type.Pointers/op    22.04 maps.newTable/op    39.05 maps.newarray/op   127.0 reflect.unsafe_New/op    93.84 retain_KB/op    9.164 retain_MiB    2.675 retain×payload   695.3 v2.makeString/op   102471 B/op   1913 allocs/op
+BenchmarkRetention/sonic           100   2485804 ns/op   14.45 MB/s   270.0 sonic.decode/op    17.01 maps.NewEmptyMap/op    22.05 maps.newTable/op    39.06 maps.newarray/op   121.5 retain_KB/op   11.87 retain_MiB    3.464 retain×payload   431.0 rt.GrowSlice/op   126905 B/op   829 allocs/op
+BenchmarkRetention/easyjson        100   4355139 ns/op    8.25 MB/s   455.0 easyjsonDecode/op    19.00 jlexer.Interface/op   726.0 jlexer.consume/op    22.04 maps.newTable/op    39.05 maps.newarray/op    91.84 retain_KB/op    8.969 retain_MiB    2.618 retain×payload   187506 B/op   1543 allocs/op
+BenchmarkRetention/ggen_stream     100   8698085 ns/op    4.13 MB/s   372.0 Node.DecodeStreamFrom/op    22.04 maps.newTable/op    39.05 maps.newarray/op    95.52 retain_KB/op    9.328 retain_MiB    2.723 retain×payload   121.0 Stream.Bytes/op   813.0 Stream.String/op
+BenchmarkRetention/ggen_bytes      100   2141999 ns/op   16.77 MB/s   482.0 Node.DecodeFrom/op    17.01 maps.NewEmptyMap/op    22.04 maps.newTable/op    39.05 maps.newarray/op    76.72 retain_KB/op    7.492 retain_MiB    2.187 retain×payload    15.00 scan.Any/op
+BenchmarkRetention/ggen_readall    100   2237747 ns/op   16.05 MB/s   482.0 Node.DecodeFrom/op    15.00 io.ReadAll/op    17.01 maps.NewEmptyMap/op    22.04 maps.newTable/op    39.05 maps.newarray/op   117.6 retain_KB/op   11.48 retain_MiB    3.353 retain×payload
 ```
 
-`ggen_bytes` is lowest because zero-copy string aliasing means each decoded
-`*Node` carries `(ptr, len)` headers into the original input buffer instead
-of cloning every string onto the heap. `ggen_stream` retains slightly more
-than `ggen_bytes` because Stream copies strings (can't safely alias a
-growing buffer). `ggen_readall` is highest — each iter `io.ReadAll`s a
-fresh `[]byte` that the aliased decoded value keeps alive, so per-item
-cost = payload + decoded headers.
+Run with `GGEN_BENCH_TOPALLOCS=1` env var to surface the top-5
+allocation sites for each benchmark.
 
 ## usage
 
@@ -507,6 +503,20 @@ Web services want URL-as-string, database drivers want null-or-value.
 Round-trips through ggen are fine on both sides; piping the output
 through stdlib `encoding/json` reshapes the value back to the
 struct-dump form.
+
+Another decode-side divergence worth flagging: **maps aren't merged**.
+Stdlib's map decode is additive — if the destination map already has
+entries, decoded keys are layered on top and prior entries survive.
+ggen wipes the destination via `clear()` before decoding so the result
+reflects only the incoming JSON - callers can provide their own map buffer.
+
+| destination state | incoming  | stdlib map               | ggen map             |
+| ----------------- | --------- | ------------------------ | -------------------- |
+| nil               | `{}`      | nil                      | empty non-nil map    |
+| nil               | `{"a":1}` | `{"a":1}`                | `{"a":1}`            |
+| `{"x":9}`         | `{}`      | `{"x":9}` (preserved)    | empty (cleared)      |
+| `{"x":9}`         | `{"a":1}` | `{"x":9,"a":1}` (merged) | `{"a":1}` (replaced) |
+| any               | `null`    | nil                      | nil                  |
 
 ## streaming
 

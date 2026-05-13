@@ -11,6 +11,7 @@ package main
 // type, so we observe the exact wire shape ggen produced.
 
 import (
+	"bytes"
 	"encoding/base32"
 	"encoding/base64"
 	"encoding/hex"
@@ -120,7 +121,7 @@ func TestFormat_HexParseable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("hex.DecodeString(%q): %v", s, err)
 	}
-	if !bytesEqual(decoded, want) {
+	if !bytes.Equal(decoded, want) {
 		t.Errorf("decoded = %x, want %x", decoded, want)
 	}
 }
@@ -167,7 +168,7 @@ func TestFormat_Base32Parseable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("base32 decode of %q: %v", s, err)
 	}
-	if !bytesEqual(decoded, want) {
+	if !bytes.Equal(decoded, want) {
 		t.Errorf("decoded = %x, want %x", decoded, want)
 	}
 }
@@ -331,6 +332,90 @@ func TestNilMap_MarshalsAsNull(t *testing.T) {
 	got2 := objectKeys(t, out2)
 	if string(got2["props"]) != "{}" {
 		t.Errorf("empty non-nil map → %s, want {}", got2["props"])
+	}
+}
+
+// TestEmptyArrayDecode_NonNil: stdlib parity for the empty-container
+// branch — `[]` always decodes to a non-nil empty slice (primitive,
+// struct-value, and pointer-element variants). `{}` does the same for
+// maps. Symmetric to the `null` → nil behavior in
+// TestNullDecode_LeavesContainerNil.
+func TestEmptyArrayDecode_NonNil(t *testing.T) {
+	in := []byte(`{"id":1,"name":"n","tags":[],"children":[],"props":{},"score":0,"active":false}`)
+	got, err := decode.Unmarshal[Node](in)
+	if err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if got.Tags == nil || len(got.Tags) != 0 {
+		t.Errorf("Tags = %v (nil=%v len=%d), want non-nil empty", got.Tags, got.Tags == nil, len(got.Tags))
+	}
+	if got.Children == nil || len(got.Children) != 0 {
+		t.Errorf("Children = %v (nil=%v len=%d), want non-nil empty", got.Children, got.Children == nil, len(got.Children))
+	}
+	if got.Props == nil || len(got.Props) != 0 {
+		t.Errorf("Props = %v (nil=%v len=%d), want non-nil empty", got.Props, got.Props == nil, len(got.Props))
+	}
+
+	// Pointer-element slices (slab path) also produce empty non-nil.
+	ptr, err := decode.Unmarshal[PtrSliceStruct]([]byte(`{"items":[],"tuple":[null,null,null],"nodes":[]}`))
+	if err != nil {
+		t.Fatalf("unmarshal PtrSliceStruct: %v", err)
+	}
+	if ptr.Items == nil || len(ptr.Items) != 0 {
+		t.Errorf("Items = %v (nil=%v len=%d), want non-nil empty", ptr.Items, ptr.Items == nil, len(ptr.Items))
+	}
+	if ptr.Nodes == nil || len(ptr.Nodes) != 0 {
+		t.Errorf("Nodes = %v (nil=%v len=%d), want non-nil empty", ptr.Nodes, ptr.Nodes == nil, len(ptr.Nodes))
+	}
+}
+
+// TestStdlibVsGgen_MapReplaceDivergence: ggen's documented divergence
+// from stdlib — pre-populated maps are merged by stdlib but replaced
+// by ggen. Test simulates the divergence by decoding the same input
+// via both paths and checking that stdlib's destination retains the
+// pre-existing entry while ggen's freshly-decoded value does not.
+//
+// Note: ggen's Unmarshal[T] takes no destination — it always returns
+// a fresh value. The contrast is between "stdlib's decode-into mode
+// merges with prior state" and "ggen's decode-fresh mode reflects
+// only the incoming JSON." Same input, different output shape.
+func TestStdlibVsGgen_MapReplaceDivergence(t *testing.T) {
+	in := []byte(`{"id":1,"name":"n","props":{"new":"v"},"score":0,"active":false}`)
+
+	// stdlib: decode INTO a pre-populated value — Props gets merged
+	// (additive semantic). Verify the baseline before contrasting
+	// with ggen; if a future Go release ever changes this, the test
+	// premise no longer holds and we skip rather than falsely fail.
+	stdGot := Node{ID: 1, Name: "n", Props: map[string]string{"old": "kept"}}
+	if err := jsonv2.Unmarshal(in, &stdGot); err != nil {
+		t.Fatalf("jsonv2: %v", err)
+	}
+	if _, ok := stdGot.Props["old"]; !ok {
+		t.Skipf("stdlib no longer preserves pre-populated keys (now %v) — divergence test premise has shifted", stdGot.Props)
+	}
+	if stdGot.Props["new"] != "v" {
+		t.Skipf("stdlib didn't decode 'new' key as expected (got %v) — divergence test premise has shifted", stdGot.Props)
+	}
+
+	// ggen: start from the SAME pre-populated value, then decode. Since
+	// decode.Unmarshal[T] returns a fresh value, the reassignment
+	// discards whatever the destination held before. Caller's pre-pop
+	// state is wiped, not merged.
+	ggGot := Node{ID: 1, Name: "n", Props: map[string]string{"old": "kept"}}
+	ggGot, err := decode.Unmarshal[Node](in)
+	if err != nil {
+		t.Fatalf("ggen: %v", err)
+	}
+	if _, ok := ggGot.Props["old"]; ok {
+		t.Errorf("ggen should NOT have 'old' key (replace semantics), got %v", ggGot.Props)
+	}
+	if ggGot.Props["new"] != "v" {
+		t.Errorf("ggen should have 'new' key, got %v", ggGot.Props)
+	}
+
+	// The whole point: same input → different observable results.
+	if len(stdGot.Props) == len(ggGot.Props) {
+		t.Errorf("expected divergence: stdlib map %v vs ggen map %v", stdGot.Props, ggGot.Props)
 	}
 }
 
@@ -523,15 +608,3 @@ func TestWideStruct_BitmaskSeenFlags(t *testing.T) {
 	}
 }
 
-// bytesEqual avoids importing bytes in this file (kept tight on imports).
-func bytesEqual(a, b []byte) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
-}
