@@ -47,14 +47,27 @@ func main() {
 	}
 	flag.Parse()
 
-	args := flag.Args()
-	if len(args) < 1 {
+	// Standard `flag` stops at the first non-flag argument, so
+	// `ggen in.go -o out.go` would treat `-o out.go` as struct-name
+	// filters. Re-parse around each positional to let flags appear in
+	// any order — mirrors `go test`'s behaviour on the same surface.
+	var positional []string
+	for args := flag.Args(); len(args) > 0; args = flag.Args() {
+		positional = append(positional, args[0])
+		// flag.CommandLine's default ErrorHandling is ExitOnError, so a
+		// malformed flag here exits before this returns.
+		_ = flag.CommandLine.Parse(args[1:])
+	}
+	if len(positional) < 1 {
 		flag.Usage()
 		os.Exit(2)
 	}
-	target := args[0]
+	target := positional[0]
 
-	if root, ok := walkTarget(target); ok {
+	if root, ok := strings.CutSuffix(target, "/..."); ok {
+		if outFlag != "" {
+			log.Fatal("-o cannot be used with ./... (walk visits multiple directories; each writes its own output)")
+		}
 		if err := walkAndGenerate(root); err != nil {
 			log.Fatal(err)
 		}
@@ -73,7 +86,7 @@ func main() {
 		return
 	}
 
-	if err := generateSingleFile(target, args[1:], outFlag, pkgFlag); err != nil {
+	if err := generateSingleFile(target, positional[1:], outFlag, pkgFlag); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -117,17 +130,6 @@ func applyCLIFlags(structs []StructInfo) {
 			structs[i].Fields[j].HTMLEscape = structs[i].HTMLEscape
 		}
 	}
-}
-
-func walkTarget(arg string) (string, bool) {
-	switch arg {
-	case "...", "./...":
-		return ".", true
-	}
-	if before, ok := strings.CutSuffix(arg, "/..."); ok {
-		return before, true
-	}
-	return "", false
 }
 
 func walkAndGenerate(root string) error {

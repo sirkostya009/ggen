@@ -334,27 +334,6 @@ type A struct { X int `+"`"+`json:"x"`+"`"+` }
 	}
 }
 
-func TestWalkTarget(t *testing.T) {
-	cases := []struct {
-		in       string
-		wantRoot string
-		wantOk   bool
-	}{
-		{"./...", ".", true},
-		{"...", ".", true},
-		{"foo/...", "foo", true},
-		{"foo/bar/...", "foo/bar", true},
-		{"./foo", "", false},
-		{"file.go", "", false},
-	}
-	for _, tc := range cases {
-		r, ok := walkTarget(tc.in)
-		if r != tc.wantRoot || ok != tc.wantOk {
-			t.Errorf("walkTarget(%q) = (%q, %v), want (%q, %v)", tc.in, r, ok, tc.wantRoot, tc.wantOk)
-		}
-	}
-}
-
 func TestShouldSkipDir(t *testing.T) {
 	skip := []string{".git", "_build", "vendor", "testdata", "node_modules"}
 	for _, n := range skip {

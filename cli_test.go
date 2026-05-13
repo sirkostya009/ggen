@@ -128,6 +128,109 @@ func TestCLI(t *testing.T) {
 		mustNotHaveFile(t, filepath.Join(dir, "msg_ggen.go"))
 	})
 
+	t.Run("InterspersedFlags_FlagAfterPositional", func(t *testing.T) {
+		t.Parallel()
+		// Stdlib `flag.Parse` stops at the first non-flag arg, so the
+		// naive `ggen in.go -o out.go` form treats `-o out.go` as
+		// struct-name filters. The interspersing loop in main() re-parses
+		// around each positional so both orders work — match `go test`'s
+		// behaviour.
+		dir := t.TempDir()
+		writeFixture(t, filepath.Join(dir, "msg.go"), minimalStruct)
+		target := filepath.Join(dir, "after.go")
+		if out, err := runCLI(t, bin, dir, "msg.go", "-o", target); err != nil {
+			t.Fatalf("ggen msg.go -o ...: %v\n%s", err, out)
+		}
+		mustHaveFile(t, target)
+		mustNotHaveFile(t, filepath.Join(dir, "msg_ggen.go"))
+	})
+
+	t.Run("InterspersedFlags_FlagBetweenPositionals", func(t *testing.T) {
+		t.Parallel()
+		// Two positionals (file + name filter) with a flag wedged between
+		// them. Both positionals must reach generateSingleFile in order;
+		// the flag must still take effect.
+		dir := t.TempDir()
+		writeFixture(t, filepath.Join(dir, "msg.go"), `package fixture
+
+//ggen:generate
+type Wanted struct {
+	A string `+"`"+`json:"a"`+"`"+`
+}
+
+//ggen:generate
+type Skipped struct {
+	B string `+"`"+`json:"b"`+"`"+`
+}
+`)
+		target := filepath.Join(dir, "between.go")
+		if out, err := runCLI(t, bin, dir, "msg.go", "-o", target, "Wanted"); err != nil {
+			t.Fatalf("ggen msg.go -o ... Wanted: %v\n%s", err, out)
+		}
+		mustHaveFile(t, target)
+		body := mustReadOutput(t, target)
+		if !strings.Contains(body, "Wanted) DecodeFrom") {
+			t.Errorf("expected Wanted, got:\n%s", body)
+		}
+		if strings.Contains(body, "Skipped) DecodeFrom") {
+			t.Errorf("Skipped leaked despite name filter:\n%s", body)
+		}
+	})
+
+	t.Run("InterspersedFlags_BoolFlagAfterPositional", func(t *testing.T) {
+		t.Parallel()
+		// Bool flags follow the same path. Pin -marshal AFTER the file
+		// arg to make sure the interspersing loop also picks up valueless
+		// flags (not just `-o <value>`).
+		dir := t.TempDir()
+		writeFixture(t, filepath.Join(dir, "msg.go"), minimalStruct)
+		if out, err := runCLI(t, bin, dir, "msg.go", "-marshal"); err != nil {
+			t.Fatalf("ggen msg.go -marshal: %v\n%s", err, out)
+		}
+		body := mustReadOutput(t, filepath.Join(dir, "msg_ggen.go"))
+		if !strings.Contains(body, "MarshalJSON()") {
+			t.Errorf("-marshal didn't take effect when placed after positional:\n%s", body)
+		}
+	})
+
+	t.Run("SingleFile_OnlyEmitsRequestedFileStructs", func(t *testing.T) {
+		t.Parallel()
+		// Single-file mode must restrict output to types declared in the
+		// passed file, even when the directory IS a real Go module and
+		// packages.Load returns the whole package's syntax tree. Without
+		// this filter, `ggen one.go` inside a populated module dumps every
+		// annotated type across all sibling files into one_ggen.go.
+		base := t.TempDir()
+		writeFixture(t, filepath.Join(base, "go.mod"), `module sfscope
+
+go 1.26
+`)
+		writeFixture(t, filepath.Join(base, "one.go"), `package sfscope
+
+//ggen:generate
+type SoloA struct {
+	A string `+"`"+`json:"a"`+"`"+`
+}
+`)
+		writeFixture(t, filepath.Join(base, "two.go"), `package sfscope
+
+//ggen:generate
+type SoloB struct {
+	B string `+"`"+`json:"b"`+"`"+`
+}
+`)
+		if out, err := runCLI(t, bin, base, "one.go"); err != nil {
+			t.Fatalf("ggen one.go: %v\n%s", err, out)
+		}
+		body := mustReadOutput(t, filepath.Join(base, "one_ggen.go"))
+		if !strings.Contains(body, "SoloA) DecodeFrom") {
+			t.Errorf("expected SoloA in one_ggen.go, got:\n%s", body)
+		}
+		if strings.Contains(body, "SoloB) DecodeFrom") {
+			t.Errorf("SoloB leaked into one_ggen.go from sibling two.go:\n%s", body)
+		}
+	})
+
 	t.Run("Directory_NonTest_OutputName", func(t *testing.T) {
 		t.Parallel()
 		base := t.TempDir()
@@ -321,6 +424,71 @@ type Tagged struct {
 		}
 		mustHaveFile(t, filepath.Join(a, "a_ggen.go"))
 		mustHaveFile(t, filepath.Join(b, "b_ggen.go"))
+	})
+
+	t.Run("Dot_DoesNotRecurseIntoSubpackages", func(t *testing.T) {
+		t.Parallel()
+		// `.` is single-package mode — only the directly named dir is
+		// processed. Subdirectories MUST NOT be touched, even when they
+		// contain annotated structs. This is the canonical
+		// `.` vs `./...` divergence and the easiest place for the dispatch
+		// in walkTarget to regress silently.
+		base := t.TempDir()
+		writeFixture(t, filepath.Join(base, "top.go"),
+			strings.ReplaceAll(minimalStruct, "fixture", "root"))
+		sub := filepath.Join(base, "sub")
+		writeFixture(t, filepath.Join(sub, "msg.go"),
+			strings.ReplaceAll(strings.ReplaceAll(minimalStruct, "fixture", "sub"), "Msg", "SubMsg"))
+		if out, err := runCLI(t, bin, base, "."); err != nil {
+			t.Fatalf("ggen .: %v\n%s", err, out)
+		}
+		// Top-level processed; subdir untouched.
+		mustHaveFile(t, filepath.Join(base, filepath.Base(base)+"_ggen.go"))
+		mustNotHaveFile(t, filepath.Join(sub, "sub_ggen.go"))
+	})
+
+	t.Run("Walk_PathSlashEllipsis", func(t *testing.T) {
+		t.Parallel()
+		// `path/...` (relative path without leading `./`) is a third
+		// accepted walk form — walkTarget strips `/...` and walks from
+		// the prefix. Confirms the suffix-strip branch, distinct from
+		// the literal `./...` / `...` switch above.
+		base := t.TempDir()
+		root := filepath.Join(base, "pkg")
+		leaf := filepath.Join(root, "leaf")
+		writeFixture(t, filepath.Join(root, "top.go"),
+			strings.ReplaceAll(minimalStruct, "fixture", "pkg"))
+		writeFixture(t, filepath.Join(leaf, "msg.go"),
+			strings.ReplaceAll(strings.ReplaceAll(minimalStruct, "fixture", "leaf"), "Msg", "Leaf"))
+		// Sibling dir that must NOT get processed — proves the prefix
+		// scoping isn't ignored.
+		sibling := filepath.Join(base, "other")
+		writeFixture(t, filepath.Join(sibling, "msg.go"),
+			strings.ReplaceAll(strings.ReplaceAll(minimalStruct, "fixture", "other"), "Msg", "Other"))
+		if out, err := runCLI(t, bin, base, "pkg/..."); err != nil {
+			t.Fatalf("ggen pkg/...: %v\n%s", err, out)
+		}
+		mustHaveFile(t, filepath.Join(root, "pkg_ggen.go"))
+		mustHaveFile(t, filepath.Join(leaf, "leaf_ggen.go"))
+		mustNotHaveFile(t, filepath.Join(sibling, "other_ggen.go"))
+	})
+
+	t.Run("Walk_RejectsOutputOverride", func(t *testing.T) {
+		t.Parallel()
+		// `-o` writes one file; walk mode writes one per package. The
+		// combination has no sensible meaning, so reject it up front
+		// instead of silently dropping the flag.
+		base := t.TempDir()
+		a := filepath.Join(base, "a")
+		writeFixture(t, filepath.Join(a, "msg.go"),
+			strings.ReplaceAll(minimalStruct, "fixture", "a"))
+		out, err := runCLI(t, bin, base, "-o", filepath.Join(base, "out.go"), "./...")
+		if err == nil {
+			t.Fatalf("expected non-zero exit with -o + ./..., got:\n%s", out)
+		}
+		if !strings.Contains(out, "-o cannot be used with ./...") {
+			t.Fatalf("expected '-o cannot be used with ./...' diagnostic, got: %s", out)
+		}
 	})
 
 	t.Run("WalkSkipsDotAndUnderscoreDirs", func(t *testing.T) {

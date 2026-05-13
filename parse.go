@@ -387,11 +387,34 @@ func parseFile(filename string, wanted []string) ([]StructInfo, string, error) {
 			return nil, "", err
 		}
 	}
+	// loadDirWithTypes loads the whole package — single-file mode must
+	// only emit code for types declared in `filename`, not every annotated
+	// type across the package. Filter via structFile (populated by
+	// walkStructDecls with the *ast.File each type was declared in).
+	absFile, _ := filepath.Abs(filename)
+	inFile := func(name string) bool {
+		af, ok := set.structFile[name]
+		if !ok {
+			return false
+		}
+		declFile := set.fileSet.Position(af.Pos()).Filename
+		if declFile == filename {
+			return true
+		}
+		if absDecl, err := filepath.Abs(declFile); err == nil && absDecl == absFile {
+			return true
+		}
+		return false
+	}
 	if len(wanted) == 0 {
-		wanted = set.annotatedList()
+		for _, n := range set.order {
+			if _, ok := set.annotations[n]; ok && inFile(n) {
+				wanted = append(wanted, n)
+			}
+		}
 		if len(wanted) == 0 {
 			for _, n := range set.order {
-				if ast.IsExported(n) {
+				if ast.IsExported(n) && inFile(n) {
 					wanted = append(wanted, n)
 				}
 			}
