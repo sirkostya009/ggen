@@ -101,19 +101,43 @@ type Unrelated struct {
 	}
 }
 
-func TestParseFile_defaultAllExported(t *testing.T) {
+// parseFile in single-file mode requires either a //ggen:generate
+// annotation OR an explicit struct-name filter. Calling with neither
+// must surface a helpful diagnostic instead of silently emitting code
+// for every exported struct (the old behaviour was a footgun: scratch
+// files with a stale ggen: tag would unintentionally trip the
+// applicability check on an unrelated struct).
+func TestParseFile_noAnnotationNoFilter_Errors(t *testing.T) {
 	src := `package test
 type A struct { X int ` + "`" + `json:"x"` + "`" + ` }
 type B struct { Y int ` + "`" + `json:"y"` + "`" + ` }
-type unexported struct { Z int ` + "`" + `json:"z"` + "`" + ` }
 `
 	file := writeGoFile(t, src)
-	structs, _, err := parseFile(file, nil)
+	_, _, err := parseFile(file, nil)
+	if err == nil {
+		t.Fatal("expected error when no annotation and no name filter")
+	}
+	for _, want := range []string{"//ggen:generate", filepath.Base(file)} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q missing substring %q", err.Error(), want)
+		}
+	}
+}
+
+// Explicit name filter still works without any //ggen:generate
+// annotation — opt-in via positional args remains the escape hatch.
+func TestParseFile_explicitNamesOverrideMissingAnnotation(t *testing.T) {
+	src := `package test
+type A struct { X int ` + "`" + `json:"x"` + "`" + ` }
+type B struct { Y int ` + "`" + `json:"y"` + "`" + ` }
+`
+	file := writeGoFile(t, src)
+	structs, _, err := parseFile(file, []string{"A"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(structs) != 2 {
-		t.Fatalf("got %d structs, want 2", len(structs))
+	if len(structs) != 1 || structs[0].Name != "A" {
+		t.Fatalf("expected only A, got: %+v", structs)
 	}
 }
 

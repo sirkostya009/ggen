@@ -413,11 +413,17 @@ func parseFile(filename string, wanted []string) ([]StructInfo, string, error) {
 			}
 		}
 		if len(wanted) == 0 {
-			for _, n := range set.order {
-				if ast.IsExported(n) && inFile(n) {
-					wanted = append(wanted, n)
-				}
-			}
+			// No explicit name filter AND no annotated struct in this
+			// file. Earlier ggen versions silently fell back to "every
+			// exported struct in the file" — that surprised users whose
+			// scratch files happened to contain a struct with a stale
+			// `ggen:` tag, since the applicability check would then
+			// reject the unintended type. Be loud + helpful instead.
+			return nil, set.pkgName, fmt.Errorf(
+				"%s: no //ggen:generate-annotated struct found in file; "+
+					"add `//ggen:generate` above the struct(s) you want generated, "+
+					"or pass struct names explicitly: `ggen %s Name1 Name2 ...`",
+				filename, filepath.Base(filename))
 		}
 	}
 	structs, err := set.resolve(wanted)

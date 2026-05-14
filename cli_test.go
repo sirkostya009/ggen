@@ -193,6 +193,54 @@ type Skipped struct {
 		}
 	})
 
+	t.Run("SingleFile_NoAnnotation_ErrorsWithHint", func(t *testing.T) {
+		t.Parallel()
+		// File without `//ggen:generate` and no positional name filter
+		// must error out (not fall back to "all exported structs"). The
+		// diagnostic must mention how to fix it.
+		dir := t.TempDir()
+		writeFixture(t, filepath.Join(dir, "msg.go"), `package fixture
+
+type Msg struct {
+	Text string `+"`"+`json:"text"`+"`"+`
+}
+`)
+		out, err := runCLI(t, bin, dir, "msg.go")
+		if err == nil {
+			t.Fatalf("expected non-zero exit when file lacks annotation, got:\n%s", out)
+		}
+		for _, want := range []string{
+			"no //ggen:generate-annotated struct",
+			"msg.go",
+		} {
+			if !strings.Contains(out, want) {
+				t.Errorf("diagnostic missing %q, got:\n%s", want, out)
+			}
+		}
+		mustNotHaveFile(t, filepath.Join(dir, "msg_ggen.go"))
+	})
+
+	t.Run("SingleFile_ExplicitNameOverridesMissingAnnotation", func(t *testing.T) {
+		t.Parallel()
+		// When the user names a struct explicitly, ggen processes it even
+		// though there's no `//ggen:generate` directive. Positional names
+		// are the escape hatch for the no-annotation case.
+		dir := t.TempDir()
+		writeFixture(t, filepath.Join(dir, "msg.go"), `package fixture
+
+type Msg struct {
+	Text string `+"`"+`json:"text"`+"`"+`
+}
+`)
+		if out, err := runCLI(t, bin, dir, "msg.go", "Msg"); err != nil {
+			t.Fatalf("ggen msg.go Msg: %v\n%s", err, out)
+		}
+		body := mustReadOutput(t, filepath.Join(dir, "msg_ggen.go"))
+		if !strings.Contains(body, "Msg) DecodeFrom") {
+			t.Errorf("expected Msg.DecodeFrom, got:\n%s", body)
+		}
+	})
+
 	t.Run("SingleFile_OnlyEmitsRequestedFileStructs", func(t *testing.T) {
 		t.Parallel()
 		// Single-file mode must restrict output to types declared in the
