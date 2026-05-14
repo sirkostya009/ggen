@@ -18,8 +18,8 @@ mapfile -t staged < <(git diff --cached --name-only --diff-filter=ACM | grep -E 
 
 run() {
 	local dir=$1
-	echo "pre-commit: golangci-lint run --fix in $dir"
-	(cd "$dir" && golangci-lint run --fix ./...)
+	printf "\e[1;2m$ \e[22;1mgolangci-lint \e[22mrun --fix \e[93m$dir\e[0m\n"
+	(cd "$dir" && golangci-lint run --fix)
 }
 
 run .
