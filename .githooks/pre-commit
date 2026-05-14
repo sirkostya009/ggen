@@ -5,11 +5,6 @@
 
 set -euo pipefail
 
-if ! command -v golangci-lint >/dev/null 2>&1; then
-	echo "pre-commit: golangci-lint not installed; skipping" >&2
-	exit 0
-fi
-
 root=$(git rev-parse --show-toplevel)
 cd "$root"
 
