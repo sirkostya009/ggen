@@ -1,10 +1,10 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io/fs"
-	"log"
 	"maps"
 	"os"
 	"path/filepath"
@@ -17,12 +17,18 @@ const (
 	genTestSuffix = "_ggen_test.go"
 )
 
-var cliFlags annotationFlags
+var (
+	cliFlags annotationFlags
+	cliLog   Logger
+)
 
 func main() {
 	var (
 		outFlag string
 		pkgFlag string
+		v       bool
+		vv      bool
+		vvv     bool
 	)
 	flag.StringVar(&outFlag, "o", "", "output file (single-file or single-dir mode only)")
 	flag.StringVar(&pkgFlag, "pkg", "", "override package name")
@@ -35,6 +41,9 @@ func main() {
 	flag.BoolVar(&cliFlags.nosortkeys, "nosortkeys", false, "emit struct fields in declaration order (default: sorted by JSON name at codegen time)")
 	flag.BoolVar(&cliFlags.usenumber, "usenumber", false, "decode JSON numbers into `any` fields as json.Number instead of float64 (mirrors json.Decoder.UseNumber)")
 	flag.BoolVar(&cliFlags.htmlescape, "htmlescape", false, "HTML-safe escape <, >, & in emitted strings (default: literal, matches stdlib jsonv2)")
+	flag.BoolVar(&v, "v", false, "verbose: info-level progress (wrote <file>)")
+	flag.BoolVar(&vv, "vv", false, "more verbose: per-package / per-struct debug")
+	flag.BoolVar(&vvv, "vvv", false, "trace-level diagnostics")
 	flag.Usage = func() {
 		fmt.Fprintln(os.Stderr, "usage:")
 		fmt.Fprintln(os.Stderr, "  ggen ./...                    walk, process every package with //ggen:generate-annotated structs")
@@ -58,6 +67,22 @@ func main() {
 		// malformed flag here exits before this returns.
 		_ = flag.CommandLine.Parse(args[1:])
 	}
+	// Logger init must run AFTER the interspersing loop so flags placed
+	// after positionals (e.g. `ggen msg.go -vv`) still take effect.
+	// Highest-set verbosity wins; -vvv overrides -vv overrides -v.
+	// Pretty vs concise impl is decided by env (CI / agent / non-TTY →
+	// concise).
+	level := LevelQuiet
+	switch {
+	case vvv:
+		level = LevelTrace
+	case vv:
+		level = LevelDebug
+	case v:
+		level = LevelInfo
+	}
+	cliLog = NewLogger(level)
+
 	if len(positional) < 1 {
 		flag.Usage()
 		os.Exit(2)
@@ -66,28 +91,32 @@ func main() {
 
 	if root, ok := strings.CutSuffix(target, "/..."); ok {
 		if outFlag != "" {
-			log.Fatal("-o cannot be used with ./... (walk visits multiple directories; each writes its own output)")
+			cliLog.Fatal(errors.New("-o cannot be used with ./... (walk visits multiple directories; each writes its own output)"))
 		}
+		// Walk mode collects errors across packages instead of bailing
+		// on the first: a single bad rule in pkg/a shouldn't hide
+		// problems in pkg/b. Filesystem-walk errors are fatal — we
+		// can't recover from a permissions failure mid-walk.
 		if err := walkAndGenerate(root); err != nil {
-			log.Fatal(err)
+			cliLog.Fatal(err)
 		}
-		return
-	}
-
-	info, err := os.Stat(target)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	if info.IsDir() {
+	} else if info, err := os.Stat(target); err != nil {
+		cliLog.Fatal(err)
+	} else if info.IsDir() {
 		if err := generateDir(target, outFlag, pkgFlag); err != nil {
-			log.Fatal(err)
+			cliLog.Error(err)
 		}
-		return
+	} else if err := generateSingleFile(target, positional[1:], outFlag, pkgFlag); err != nil {
+		cliLog.Error(err)
 	}
 
-	if err := generateSingleFile(target, positional[1:], outFlag, pkgFlag); err != nil {
-		log.Fatal(err)
+	// Drain any errors collected during the run, then exit non-zero
+	// if any were seen. Errors stay queued until here so they print as
+	// a single batch — easier to scan than interleaved with `wrote …`
+	// info lines from successful packages.
+	cliLog.Flush()
+	if cliLog.HasErrors() {
+		os.Exit(1)
 	}
 }
 
@@ -143,8 +172,11 @@ func walkAndGenerate(root string) error {
 		if path != root && shouldSkipDir(d.Name()) {
 			return fs.SkipDir
 		}
+		// generateDir errors are queued via cliLog.Error and the walk
+		// continues; main() flushes + exits non-zero at the end. Only
+		// genuine WalkDir errors (permissions, IO) bubble up to halt.
 		if err := generateDir(path, "", ""); err != nil {
-			return fmt.Errorf("in %s: %w", path, err)
+			cliLog.Error(fmt.Errorf("in %s: %w", path, err))
 		}
 		return nil
 	})
@@ -162,13 +194,16 @@ func shouldSkipDir(name string) bool {
 }
 
 func generateDir(dir, outFlag, pkgFlag string) error {
+	cliLog.Debug("parsing package %s", dir)
 	structs, pkgName, err := parsePackage(dir)
 	if err != nil {
 		return err
 	}
 	if len(structs) == 0 {
+		cliLog.Trace("no annotated structs in %s; skipping", dir)
 		return nil
 	}
+	cliLog.Debug("package %s: %d annotated structs", pkgName, len(structs))
 	applyCLIFlags(structs)
 
 	outPkg := pkgFlag
@@ -217,7 +252,7 @@ func generateDir(dir, outFlag, pkgFlag string) error {
 		if err := os.WriteFile(out, src, 0644); err != nil {
 			return err
 		}
-		fmt.Println("wrote", out)
+		cliLog.Info("wrote %s", out)
 	}
 	return nil
 }
@@ -332,6 +367,6 @@ func generateSingleFile(file string, wanted []string, outFlag, pkgFlag string) e
 	if err := os.WriteFile(out, src, 0644); err != nil {
 		return err
 	}
-	fmt.Println("wrote", out)
+	cliLog.Info("wrote %s", out)
 	return nil
 }

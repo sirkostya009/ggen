@@ -22,7 +22,7 @@ func TestParseFile(t *testing.T) {
 
 type Foo struct {
 	Name    string  ` + "`" + `json:"name" ggen:"required,minlen=1"` + "`" + `
-	Age     int     ` + "`" + `json:"age" ggen:"min=0,max=150"` + "`" + `
+	Age     int     ` + "`" + `json:"age" ggen:"gte=0,lte=150"` + "`" + `
 	Ignored string  ` + "`" + `json:"-"` + "`" + `
 	Items   []string ` + "`" + `json:"items"` + "`" + `
 }

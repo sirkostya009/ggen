@@ -143,17 +143,39 @@ func TestCheckOneValRule_KindMatrix(t *testing.T) {
 	}
 }
 
-// TestCheckOneValRule_UnknownRuleTolerated locks the forward-compat
-// contract: rule names the validator doesn't know about pass through
-// silently so callers can roll out new rules without coordinated
-// codegen updates.
-func TestCheckOneValRule_UnknownRuleTolerated(t *testing.T) {
+// TestCheckOneValRule_UnknownRuleRejected pins the new behavior:
+// unrecognised rule names are flagged loudly, not silently no-op'd.
+// A user typing `ggen:"b"` should get told `b` isn't a real rule —
+// the alternative (silent acceptance) hides the typo until the
+// generated code runs without the expected validation.
+//
+// Custom `@FuncName` rules are excluded — those resolve later in
+// resolveCustomRules and have no static kind contract to check.
+func TestCheckOneValRule_UnknownRuleRejected(t *testing.T) {
 	t.Parallel()
 	for _, ke := range allKindEntries {
 		err := checkOneValRule(ValidationRule{Name: "futureRule", Value: "x"},
 			"ggen", ke.kind, ke.name, "field f")
+		if err == nil {
+			t.Errorf("unknown rule on kind=%s should error, got nil", ke.name)
+			continue
+		}
+		if !strings.Contains(err.Error(), "is not a known validation rule") {
+			t.Errorf("unknown-rule diagnostic missing on kind=%s: %v", ke.name, err)
+		}
+	}
+}
+
+// TestCheckOneValRule_CustomAtPrefixTolerated pins the @ escape:
+// `@FuncName` references survive the unknown-rule check and reach
+// resolveCustomRules unimpeded.
+func TestCheckOneValRule_CustomAtPrefixTolerated(t *testing.T) {
+	t.Parallel()
+	for _, ke := range allKindEntries {
+		err := checkOneValRule(ValidationRule{Name: "@MyCheck"},
+			"ggen", ke.kind, ke.name, "field f")
 		if err != nil {
-			t.Errorf("unknown rule on kind=%s should pass, got: %v", ke.name, err)
+			t.Errorf("@FuncName on kind=%s should pass, got: %v", ke.name, err)
 		}
 	}
 }
@@ -284,15 +306,31 @@ func TestCheckOneModRule_KindMatrix(t *testing.T) {
 	}
 }
 
-// TestCheckOneModRule_UnknownModTolerated mirrors the validator's
-// forward-compat contract.
-func TestCheckOneModRule_UnknownModTolerated(t *testing.T) {
+// TestCheckOneModRule_UnknownModRejected mirrors the validator
+// side: unrecognised mod names error out with a typo-catching
+// diagnostic. `@FuncName` mods (custom-resolved later) are exempt.
+func TestCheckOneModRule_UnknownModRejected(t *testing.T) {
 	t.Parallel()
 	for _, ke := range allKindEntries {
 		err := checkOneModRule(ModRule{Name: "futureMod", Value: "x"},
 			"mod", ke.kind, ke.name, "field f")
+		if err == nil {
+			t.Errorf("unknown mod on kind=%s should error, got nil", ke.name)
+			continue
+		}
+		if !strings.Contains(err.Error(), "is not a known mod") {
+			t.Errorf("unknown-mod diagnostic missing on kind=%s: %v", ke.name, err)
+		}
+	}
+}
+
+func TestCheckOneModRule_CustomAtPrefixTolerated(t *testing.T) {
+	t.Parallel()
+	for _, ke := range allKindEntries {
+		err := checkOneModRule(ModRule{Name: "@MyMod"},
+			"mod", ke.kind, ke.name, "field f")
 		if err != nil {
-			t.Errorf("unknown mod on kind=%s should pass, got: %v", ke.name, err)
+			t.Errorf("@FuncName on kind=%s should pass, got: %v", ke.name, err)
 		}
 	}
 }
@@ -328,7 +366,7 @@ func TestCheckOneModRule_ValueShape(t *testing.T) {
 		{"clamp_good", ModRule{Name: "clamp", Value: "0|10"}, KindInt, ""},
 		{"clamp_lo_only", ModRule{Name: "clamp", Value: "0|"}, KindInt, ""},
 		{"clamp_hi_only", ModRule{Name: "clamp", Value: "|10"}, KindInt, ""},
-		{"clamp_no_pipe", ModRule{Name: "clamp", Value: "10"}, KindInt, "requires `lo|hi` form"},
+		{"clamp_no_pipe", ModRule{Name: "clamp", Value: "10"}, KindInt, "is missing the `lo|hi` separator"},
 		{"clamp_both_empty", ModRule{Name: "clamp", Value: "|"}, KindInt, "requires at least one of lo or hi"},
 		{"clamp_bad_lo", ModRule{Name: "clamp", Value: "abc|10"}, KindInt, `lo "abc" is not a valid number`},
 		{"clamp_bad_hi", ModRule{Name: "clamp", Value: "0|abc"}, KindInt, `hi "abc" is not a valid number`},
@@ -581,7 +619,7 @@ func TestCheckRuleApplicability_Structural(t *testing.T) {
 				KeyValidation: []ValidationRule{{Name: "gt", Value: "1"}},
 				HintLen:       -1,
 			},
-			`rule "gt" cannot be applied to string`,
+			"`gt` is inapplicable to string",
 		},
 
 		// dive: only on containers.
@@ -629,7 +667,7 @@ func TestCheckRuleApplicability_Structural(t *testing.T) {
 				ElemValidation: []ValidationRule{{Name: "ascii"}},
 				HintLen:        -1,
 			},
-			`rule "ascii" cannot be applied to int`,
+			"`ascii` is inapplicable to int",
 		},
 		{
 			"dive_on_slice_int_with_gt_ok",
@@ -738,7 +776,7 @@ func TestCheckRuleApplicability_Structural(t *testing.T) {
 				Validation: []ValidationRule{{Name: "ascii"}},
 				HintLen:    -1,
 			},
-			`rule "ascii" cannot be applied to *int`,
+			"`ascii` is inapplicable to *int",
 		},
 		{
 			"pointer_string_email_ok",
@@ -772,12 +810,19 @@ func TestCheckRuleApplicability_Structural(t *testing.T) {
 }
 
 // TestCheckRuleApplicability_FieldNameInDiagnostic locks the
-// user-facing convention: every reject must name the JSON field so
-// users can grep their source for the bad tag.
+// user-facing convention: every reject must reference the Go field
+// name so users can jump-to-definition / grep their source for the
+// declared identifier (not the JSON wire name, which may shadow other
+// identifiers or be `-` for ignored fields).
 func TestCheckRuleApplicability_FieldNameInDiagnostic(t *testing.T) {
 	t.Parallel()
+	// Message format: "<Struct>.<Field>: `<rule>` is inapplicable to
+	// <type>" — Go-qualified path, no `field` prefix, no `ggen rule`
+	// tag-source noise. With StructName="Box" + GoName="Score" the
+	// header reads `Box.Score: ...` for fast jump-to-definition in
+	// editors and grep-pability in CI logs.
 	fi := FieldInfo{
-		GoName: "Score", GoType: "int", JSONName: "score", Kind: KindInt,
+		StructName: "Box", GoName: "Score", GoType: "int", JSONName: "score", Kind: KindInt,
 		Validation: []ValidationRule{{Name: "ascii"}},
 		HintLen:    -1,
 	}
@@ -785,10 +830,16 @@ func TestCheckRuleApplicability_FieldNameInDiagnostic(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	if !strings.Contains(err.Error(), "field score") {
-		t.Errorf("error %q must contain 'field score'", err.Error())
+	if !strings.Contains(err.Error(), "Box.Score") {
+		t.Errorf("error %q must contain `Box.Score` (Struct.Field qualified path)", err.Error())
 	}
-	if !strings.Contains(err.Error(), `"ascii"`) {
-		t.Errorf("error %q must contain rule name", err.Error())
+	if strings.Contains(err.Error(), "field Score") || strings.Contains(err.Error(), "field score") {
+		t.Errorf("error %q must NOT use the old `field <name>` shape", err.Error())
+	}
+	if !strings.Contains(err.Error(), "`ascii`") {
+		t.Errorf("error %q must contain the rule name in backticks", err.Error())
+	}
+	if strings.Contains(err.Error(), "cannot be applied") || strings.Contains(err.Error(), "rule \"ascii\"") {
+		t.Errorf("error %q should use new `is inapplicable to` form", err.Error())
 	}
 }

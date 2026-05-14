@@ -54,29 +54,29 @@ func resolveCustomFunc(ref string, fieldType types.Type, file *ast.File, pkg *ty
 	if pkgPart == "" {
 		// Same package.
 		if pkg == nil {
-			return customFunc{}, fmt.Errorf("@%s: no package context (run ggen with a Go module so type info is available)", ref)
+			return customFunc{}, fmt.Errorf("no package context (run ggen with a Go module so type info is available)")
 		}
 		obj := pkg.Scope().Lookup(funcPart)
 		if obj == nil {
-			return customFunc{}, fmt.Errorf("@%s: %s not found in package %s", ref, funcPart, pkg.Name())
+			return customFunc{}, fmt.Errorf("func %s not found in package %s", funcPart, pkg.Name())
 		}
 		f, ok := obj.(*types.Func)
 		if !ok {
-			return customFunc{}, fmt.Errorf("@%s: %s is not a function (got %T)", ref, funcPart, obj)
+			return customFunc{}, fmt.Errorf("%s is not a function (got %T)", funcPart, obj)
 		}
 		fn = f
 	} else {
 		target, importPath, err := lookupCrossPkg(pkgPart, file, pkg)
 		if err != nil {
-			return customFunc{}, fmt.Errorf("@%s: %w", ref, err)
+			return customFunc{}, fmt.Errorf("%w", err)
 		}
 		obj := target.Scope().Lookup(funcPart)
 		if obj == nil {
-			return customFunc{}, fmt.Errorf("@%s: %s not found in package %s", ref, funcPart, target.Path())
+			return customFunc{}, fmt.Errorf("func %s not found in package %s", funcPart, target.Path())
 		}
 		f, ok := obj.(*types.Func)
 		if !ok {
-			return customFunc{}, fmt.Errorf("@%s: %s is not a function (got %T)", ref, funcPart, obj)
+			return customFunc{}, fmt.Errorf("%s is not a function (got %T)", funcPart, obj)
 		}
 		fn = f
 		pkgImp = importPath
@@ -85,17 +85,40 @@ func resolveCustomFunc(ref string, fieldType types.Type, file *ast.File, pkg *ty
 
 	sig, ok := fn.Type().(*types.Signature)
 	if !ok {
-		return customFunc{}, fmt.Errorf("@%s: not a function signature", ref)
+		return customFunc{}, fmt.Errorf("not a function signature")
 	}
 	if sig.Recv() != nil {
-		return customFunc{}, fmt.Errorf("@%s: must be a top-level function, not a method", ref)
+		return customFunc{}, fmt.Errorf("must be a top-level function, not a method")
 	}
 	if sig.Params().Len() != 1 {
-		return customFunc{}, fmt.Errorf("@%s: must take exactly one parameter (the field value)", ref)
+		return customFunc{}, fmt.Errorf("must take exactly one parameter (the field value)")
 	}
 	paramType := sig.Params().At(0).Type()
-	if !types.Identical(paramType, fieldType) {
-		return customFunc{}, fmt.Errorf("@%s: param type %s does not match field type %s", ref, paramType, fieldType)
+	// Accept generic params (`func[T constraint](T) error`) when the
+	// field type satisfies the type-param's constraint. The generated
+	// code calls Func(field) and Go inferences T = fieldType at the
+	// call site, so as long as fieldType is in the constraint's type
+	// set the call type-checks.
+	paramTypeParam, paramIsGeneric := paramType.(*types.TypeParam)
+	if paramIsGeneric {
+		if !satisfiesConstraint(fieldType, paramTypeParam) {
+			return customFunc{}, fmt.Errorf("field type %s does not satisfy constraint %s on param T", fieldType, paramTypeParam.Constraint())
+		}
+	} else if !types.Identical(paramType, fieldType) {
+		return customFunc{}, fmt.Errorf("param type %s does not match field type %s", paramType, fieldType)
+	}
+
+	// resultMatchesField reports whether r either equals fieldType
+	// directly OR is the same type parameter as the input (so the
+	// instantiation aligns: `func[T](T) T` returns fieldType).
+	resultMatchesField := func(r types.Type) bool {
+		if types.Identical(r, fieldType) {
+			return true
+		}
+		if rtp, ok := r.(*types.TypeParam); ok && paramIsGeneric {
+			return rtp == paramTypeParam
+		}
+		return false
 	}
 
 	results := sig.Results()
@@ -107,29 +130,43 @@ func resolveCustomFunc(ref string, fieldType types.Type, file *ast.File, pkg *ty
 	if isMod {
 		switch results.Len() {
 		case 1:
-			if !types.Identical(results.At(0).Type(), fieldType) {
-				return customFunc{}, fmt.Errorf("@%s: mod result type %s does not match field type %s", ref, results.At(0).Type(), fieldType)
+			if !resultMatchesField(results.At(0).Type()) {
+				return customFunc{}, fmt.Errorf("mod result type %s does not match field type %s", results.At(0).Type(), fieldType)
 			}
 		case 2:
-			if !types.Identical(results.At(0).Type(), fieldType) {
-				return customFunc{}, fmt.Errorf("@%s: fallible mod first result %s does not match field type %s", ref, results.At(0).Type(), fieldType)
+			if !resultMatchesField(results.At(0).Type()) {
+				return customFunc{}, fmt.Errorf("fallible mod first result %s does not match field type %s", results.At(0).Type(), fieldType)
 			}
 			if !isErrorType(results.At(1).Type()) {
-				return customFunc{}, fmt.Errorf("@%s: fallible mod second result must be error, got %s", ref, results.At(1).Type())
+				return customFunc{}, fmt.Errorf("fallible mod second result must be error, got %s", results.At(1).Type())
 			}
 			out.Fallible = true
 		default:
-			return customFunc{}, fmt.Errorf("@%s: mod must return T or (T, error), got %d results", ref, results.Len())
+			return customFunc{}, fmt.Errorf("mod must return T or (T, error), got %d results", results.Len())
 		}
 	} else {
 		if results.Len() != 1 {
-			return customFunc{}, fmt.Errorf("@%s: validator must return error, got %d results", ref, results.Len())
+			return customFunc{}, fmt.Errorf("validator must return error, got %d results", results.Len())
 		}
 		if !isErrorType(results.At(0).Type()) {
-			return customFunc{}, fmt.Errorf("@%s: validator must return error, got %s", ref, results.At(0).Type())
+			return customFunc{}, fmt.Errorf("validator must return error, got %s", results.At(0).Type())
 		}
 	}
 	return out, nil
+}
+
+// satisfiesConstraint reports whether t is permitted as an
+// instantiation of the type parameter tp. Uses types.Satisfies which
+// performs the Go-spec type-set membership check (1.21+); for older
+// Go versions or constraints expressed as plain method-set
+// interfaces, falls back to types.Implements against the underlying
+// interface.
+func satisfiesConstraint(t types.Type, tp *types.TypeParam) bool {
+	constraint := tp.Constraint()
+	if iface, ok := constraint.Underlying().(*types.Interface); ok {
+		return types.Satisfies(t, iface)
+	}
+	return false
 }
 
 // lookupCrossPkg resolves an alias or package name written before the `.`
@@ -275,7 +312,10 @@ func resolveValidationRules(rules []ValidationRule, fieldType types.Type, file *
 		ref := rules[i].Name[1:]
 		cf, err := resolveCustomFunc(ref, fieldType, file, pkg, false)
 		if err != nil {
-			return err
+			// Wrap into a richError with CodeSpan = the original
+			// `@ref` token, so the pretty renderer's caret lands on
+			// the offending tag text, not on the field declaration.
+			return &richError{Msg: err.Error(), CodeSpan: "@" + ref}
 		}
 		rules[i].Custom = true
 		rules[i].PkgImport = cf.PkgImport
@@ -293,7 +333,7 @@ func resolveModRules(rules []ModRule, fieldType types.Type, file *ast.File, pkg 
 		ref := rules[i].Name[1:]
 		cf, err := resolveCustomFunc(ref, fieldType, file, pkg, true)
 		if err != nil {
-			return err
+			return &richError{Msg: err.Error(), CodeSpan: "@" + ref}
 		}
 		rules[i].Custom = true
 		rules[i].PkgImport = cf.PkgImport

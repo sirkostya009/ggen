@@ -72,6 +72,7 @@ type ModRule struct {
 
 type FieldInfo struct {
 	GoName          string
+	StructName      string // owning struct's Go name; used in error diagnostics
 	JSONName        string
 	GoType          string // full Go type as string, e.g. "string", "[]int", "*Address"
 	Kind            TypeKind

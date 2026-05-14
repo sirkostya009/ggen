@@ -177,6 +177,89 @@ type Skipped struct {
 		}
 	})
 
+	t.Run("Verbosity_QuietSuppressesInfo", func(t *testing.T) {
+		t.Parallel()
+		// Default level is LevelQuiet — `wrote <file>` info lines must
+		// be suppressed. Only errors should reach stderr at this level.
+		dir := t.TempDir()
+		writeFixture(t, filepath.Join(dir, "msg.go"), minimalStruct)
+		out, err := runCLI(t, bin, dir, "msg.go")
+		if err != nil {
+			t.Fatalf("ggen msg.go: %v\n%s", err, out)
+		}
+		if strings.Contains(out, "wrote") {
+			t.Errorf("default level (-v not set) must suppress 'wrote' info lines, got:\n%s", out)
+		}
+		mustHaveFile(t, filepath.Join(dir, "msg_ggen.go"))
+	})
+
+	t.Run("Verbosity_VShowsInfo", func(t *testing.T) {
+		t.Parallel()
+		// -v lifts the floor to LevelInfo so `wrote <file>` lines appear.
+		dir := t.TempDir()
+		writeFixture(t, filepath.Join(dir, "msg.go"), minimalStruct)
+		out, err := runCLI(t, bin, dir, "-v", "msg.go")
+		if err != nil {
+			t.Fatalf("ggen -v msg.go: %v\n%s", err, out)
+		}
+		if !strings.Contains(out, "wrote") {
+			t.Errorf("-v must surface 'wrote' info lines, got:\n%s", out)
+		}
+	})
+
+	t.Run("Verbosity_VVShowsDebug", func(t *testing.T) {
+		t.Parallel()
+		// -vv lifts to LevelDebug. The dir-mode `parsing <pkg>` debug
+		// line is the most stable marker.
+		base := t.TempDir()
+		writeFixture(t, filepath.Join(base, "msg.go"),
+			strings.ReplaceAll(minimalStruct, "fixture", "vv"))
+		out, err := runCLI(t, bin, base, "-vv", ".")
+		if err != nil {
+			t.Fatalf("ggen -vv .: %v\n%s", err, out)
+		}
+		if !strings.Contains(out, "dbg:") {
+			t.Errorf("-vv must surface dbg: lines, got:\n%s", out)
+		}
+		if !strings.Contains(out, "wrote") {
+			t.Errorf("-vv must also surface info (debug ≥ info), got:\n%s", out)
+		}
+	})
+
+	t.Run("Verbosity_VVVShowsTrace", func(t *testing.T) {
+		t.Parallel()
+		// -vvv lifts to LevelTrace. Use a dir with no annotations so
+		// the `no annotated structs in X; skipping` trace line fires.
+		base := t.TempDir()
+		sub := filepath.Join(base, "empty")
+		writeFixture(t, filepath.Join(sub, "msg.go"), `package empty
+
+type Bare struct {}
+`)
+		out, err := runCLI(t, bin, base, "-vvv", "./...")
+		if err != nil {
+			t.Fatalf("ggen -vvv ./...: %v\n%s", err, out)
+		}
+		if !strings.Contains(out, "trc:") {
+			t.Errorf("-vvv must surface trc: lines, got:\n%s", out)
+		}
+	})
+
+	t.Run("Verbosity_PositionedFlagAfterTarget", func(t *testing.T) {
+		t.Parallel()
+		// The interspersing loop must also handle verbosity flags placed
+		// after a positional, since users will type `ggen msg.go -v`.
+		dir := t.TempDir()
+		writeFixture(t, filepath.Join(dir, "msg.go"), minimalStruct)
+		out, err := runCLI(t, bin, dir, "msg.go", "-v")
+		if err != nil {
+			t.Fatalf("ggen msg.go -v: %v\n%s", err, out)
+		}
+		if !strings.Contains(out, "wrote") {
+			t.Errorf("-v after positional must still take effect, got:\n%s", out)
+		}
+	})
+
 	t.Run("InterspersedFlags_BoolFlagAfterPositional", func(t *testing.T) {
 		t.Parallel()
 		// Bool flags follow the same path. Pin -marshal AFTER the file
@@ -519,6 +602,144 @@ type Tagged struct {
 		mustHaveFile(t, filepath.Join(root, "pkg_ggen.go"))
 		mustHaveFile(t, filepath.Join(leaf, "leaf_ggen.go"))
 		mustNotHaveFile(t, filepath.Join(sibling, "other_ggen.go"))
+	})
+
+	t.Run("SingleFile_GathersErrorsAcrossStructs", func(t *testing.T) {
+		t.Parallel()
+		// One file, two structs, both with broken applicability rules
+		// (ascii on int / email on int). One invocation must surface
+		// BOTH diagnostics, not just the first — parse-time errors are
+		// accumulated via errors.Join and the logger unwraps the batch.
+		dir := t.TempDir()
+		writeFixture(t, filepath.Join(dir, "multi.go"), `package fixture
+
+//ggen:generate
+type Test1 struct {
+	A int `+"`"+`json:"a" ggen:"ascii"`+"`"+`
+}
+
+//ggen:generate
+type Test2 struct {
+	B int `+"`"+`json:"b" ggen:"email"`+"`"+`
+}
+`)
+		out, err := runCLI(t, bin, dir, "multi.go", "Test1", "Test2")
+		if err == nil {
+			t.Fatalf("expected non-zero exit, got:\n%s", out)
+		}
+		if !strings.Contains(out, "`ascii`") {
+			t.Errorf("ascii diagnostic missing, got:\n%s", out)
+		}
+		if !strings.Contains(out, "`email`") {
+			t.Errorf("email diagnostic missing, got:\n%s", out)
+		}
+	})
+
+	t.Run("SingleFile_GathersErrorsAcrossFields", func(t *testing.T) {
+		t.Parallel()
+		// One struct with multiple bad fields. Each field's
+		// applicability error must surface — extractStruct accumulates
+		// per-field errors via errors.Join.
+		dir := t.TempDir()
+		writeFixture(t, filepath.Join(dir, "multi.go"), `package fixture
+
+//ggen:generate
+type Multi struct {
+	A int `+"`"+`json:"a" ggen:"ascii"`+"`"+`
+	B int `+"`"+`json:"b" ggen:"email"`+"`"+`
+	C string `+"`"+`json:"c" ggen:"gt=0"`+"`"+`
+}
+`)
+		out, err := runCLI(t, bin, dir, "multi.go")
+		if err == nil {
+			t.Fatalf("expected non-zero exit, got:\n%s", out)
+		}
+		for _, want := range []string{"`ascii`", "`email`", "`gt`"} {
+			if !strings.Contains(out, want) {
+				t.Errorf("missing diagnostic %s, got:\n%s", want, out)
+			}
+		}
+	})
+
+	t.Run("SingleFile_GathersValAndModErrorsOnSameField", func(t *testing.T) {
+		t.Parallel()
+		// One field with BOTH a bad val rule AND a bad mod must surface
+		// both diagnostics — checkRuleApplicability accumulates errors
+		// across the val-phase + mod-phase + keys/dive/hintlen phases
+		// rather than short-circuiting on the first failure.
+		dir := t.TempDir()
+		writeFixture(t, filepath.Join(dir, "multi.go"), `package fixture
+
+//ggen:generate
+type Bad struct {
+	A int `+"`"+`json:"a" ggen:"ascii" mod:"trim"`+"`"+`
+}
+`)
+		out, err := runCLI(t, bin, dir, "multi.go")
+		if err == nil {
+			t.Fatalf("expected non-zero exit, got:\n%s", out)
+		}
+		// ascii (val) and trim (mod) must BOTH appear, and each must
+		// carry its own position prefix (attachPosition walks the tree
+		// instead of stamping the first richError only).
+		for _, want := range []string{"`ascii`", "`trim`"} {
+			if !strings.Contains(out, want) {
+				t.Errorf("missing diagnostic for %s, got:\n%s", want, out)
+			}
+		}
+		// Two distinct position prefixes on the SAME line+column —
+		// proves both sub-errors got positions, not just the first.
+		if strings.Count(out, "multi.go:") < 2 {
+			t.Errorf("expected ≥2 position prefixes (val + mod), got:\n%s", out)
+		}
+	})
+
+	t.Run("Walk_GathersErrorsAcrossPackages", func(t *testing.T) {
+		t.Parallel()
+		// Walk mode must NOT bail on the first failing package — every
+		// package's errors get queued and flushed at exit, so users see
+		// the full problem list in one run. Three subdirs, two with bad
+		// applicability rules, one clean. After the run: both errors
+		// must surface, the clean dir's `wrote` line must still appear,
+		// and the exit code must be non-zero.
+		base := t.TempDir()
+		writeFixture(t, filepath.Join(base, "a", "msg.go"), `package a
+
+//ggen:generate
+type A struct {
+	N int `+"`"+`json:"n" ggen:"ascii"`+"`"+`
+}
+`)
+		writeFixture(t, filepath.Join(base, "b", "msg.go"), `package b
+
+//ggen:generate
+type B struct {
+	N int `+"`"+`json:"n" ggen:"email"`+"`"+`
+}
+`)
+		writeFixture(t, filepath.Join(base, "c", "msg.go"), `package c
+
+//ggen:generate
+type C struct {
+	S string `+"`"+`json:"s"`+"`"+`
+}
+`)
+		out, err := runCLI(t, bin, base, "-v", "./...")
+		if err == nil {
+			t.Fatalf("walk with broken packages must exit non-zero, got:\n%s", out)
+		}
+		// Both errored packages must appear in the final batch.
+		if !strings.Contains(out, "`ascii`") {
+			t.Errorf("package a's ascii error missing, got:\n%s", out)
+		}
+		if !strings.Contains(out, "`email`") {
+			t.Errorf("package b's email error missing, got:\n%s", out)
+		}
+		// The clean package must still get its wrote line — proves the
+		// walk continued past the broken ones.
+		if !strings.Contains(out, "wrote") || !strings.Contains(out, "c_ggen.go") {
+			t.Errorf("clean package c should still emit `wrote ./c/c_ggen.go`, got:\n%s", out)
+		}
 	})
 
 	t.Run("Walk_RejectsOutputOverride", func(t *testing.T) {
@@ -1368,34 +1589,34 @@ type Msg struct {
 		// are grouped by rule for grep-ability.
 		cases := []bad{
 			// ----- string-only rules on non-strings -----
-			{"ascii_on_int", "N int", `json:"n" ggen:"ascii"`, `rule "ascii" cannot be applied to int`},
-			{"email_on_int", "N int", `json:"n" ggen:"email"`, `rule "email" cannot be applied to int`},
-			{"url_on_bool", "B bool", `json:"b" ggen:"url"`, `rule "url" cannot be applied to bool`},
-			{"printable_on_float", "F float64", `json:"f" ggen:"printable"`, `rule "printable" cannot be applied to float64`},
-			{"alphanum_on_int", "N int", `json:"n" ggen:"alphanum"`, `rule "alphanum" cannot be applied to int`},
-			{"numericrule_on_int", "N int", `json:"n" ggen:"numeric"`, `rule "numeric" cannot be applied to int`},
-			{"lower_on_int", "N int", `json:"n" ggen:"lower"`, `rule "lower" cannot be applied to int`},
-			{"upper_on_int", "N int", `json:"n" ggen:"upper"`, `rule "upper" cannot be applied to int`},
-			{"hexadecimal_on_int", "N int", `json:"n" ggen:"hexadecimal"`, `rule "hexadecimal" cannot be applied to int`},
-			{"starts_on_int", "N int", `json:"n" ggen:"starts=foo"`, `rule "starts" cannot be applied to int`},
-			{"ends_on_int", "N int", `json:"n" ggen:"ends=foo"`, `rule "ends" cannot be applied to int`},
-			{"contains_on_int", "N int", `json:"n" ggen:"contains=foo"`, `rule "contains" cannot be applied to int`},
-			{"runes_on_int", "N int", `json:"n" ggen:"runes=3"`, `rule "runes" cannot be applied to int`},
-			{"minrunes_on_int", "N int", `json:"n" ggen:"minrunes=3"`, `rule "minrunes" cannot be applied to int`},
-			{"maxrunes_on_int", "N int", `json:"n" ggen:"maxrunes=3"`, `rule "maxrunes" cannot be applied to int`},
-			{"runes_on_bytes", "B []byte", `json:"b" ggen:"runes=3"`, `rule "runes" cannot be applied to []byte`},
-			{"ascii_on_bytes", "B []byte", `json:"b" ggen:"ascii"`, `rule "ascii" cannot be applied to []byte`},
+			{"ascii_on_int", "N int", `json:"n" ggen:"ascii"`, "`ascii` is inapplicable to int"},
+			{"email_on_int", "N int", `json:"n" ggen:"email"`, "`email` is inapplicable to int"},
+			{"url_on_bool", "B bool", `json:"b" ggen:"url"`, "`url` is inapplicable to bool"},
+			{"printable_on_float", "F float64", `json:"f" ggen:"printable"`, "`printable` is inapplicable to float64"},
+			{"alphanum_on_int", "N int", `json:"n" ggen:"alphanum"`, "`alphanum` is inapplicable to int"},
+			{"numericrule_on_int", "N int", `json:"n" ggen:"numeric"`, "`numeric` is inapplicable to int"},
+			{"lower_on_int", "N int", `json:"n" ggen:"lower"`, "`lower` is inapplicable to int"},
+			{"upper_on_int", "N int", `json:"n" ggen:"upper"`, "`upper` is inapplicable to int"},
+			{"hexadecimal_on_int", "N int", `json:"n" ggen:"hexadecimal"`, "`hexadecimal` is inapplicable to int"},
+			{"starts_on_int", "N int", `json:"n" ggen:"starts=foo"`, "`starts` is inapplicable to int"},
+			{"ends_on_int", "N int", `json:"n" ggen:"ends=foo"`, "`ends` is inapplicable to int"},
+			{"contains_on_int", "N int", `json:"n" ggen:"contains=foo"`, "`contains` is inapplicable to int"},
+			{"runes_on_int", "N int", `json:"n" ggen:"runes=3"`, "`runes` is inapplicable to int"},
+			{"minrunes_on_int", "N int", `json:"n" ggen:"minrunes=3"`, "`minrunes` is inapplicable to int"},
+			{"maxrunes_on_int", "N int", `json:"n" ggen:"maxrunes=3"`, "`maxrunes` is inapplicable to int"},
+			{"runes_on_bytes", "B []byte", `json:"b" ggen:"runes=3"`, "`runes` is inapplicable to []byte"},
+			{"ascii_on_bytes", "B []byte", `json:"b" ggen:"ascii"`, "`ascii` is inapplicable to []byte"},
 			{"starts_empty", "S string", `json:"s" ggen:"starts="`, `requires a non-empty value`},
 			{"ends_empty", "S string", `json:"s" ggen:"ends="`, `requires a non-empty value`},
 			{"contains_empty", "S string", `json:"s" ggen:"contains="`, `requires a non-empty value`},
 
 			// ----- numeric-only rules on non-numerics -----
-			{"gt_on_string", "S string", `json:"s" ggen:"gt=1"`, `rule "gt" cannot be applied to string`},
-			{"gte_on_string", "S string", `json:"s" ggen:"gte=1"`, `rule "gte" cannot be applied to string`},
-			{"lt_on_string", "S string", `json:"s" ggen:"lt=1"`, `rule "lt" cannot be applied to string`},
-			{"lte_on_string", "S string", `json:"s" ggen:"lte=1"`, `rule "lte" cannot be applied to string`},
-			{"gt_on_bool", "B bool", `json:"b" ggen:"gt=0"`, `rule "gt" cannot be applied to bool`},
-			{"gt_on_slice", "X []int", `json:"x" ggen:"gt=0"`, `rule "gt" cannot be applied to []int`},
+			{"gt_on_string", "S string", `json:"s" ggen:"gt=1"`, "`gt` is inapplicable to string"},
+			{"gte_on_string", "S string", `json:"s" ggen:"gte=1"`, "`gte` is inapplicable to string"},
+			{"lt_on_string", "S string", `json:"s" ggen:"lt=1"`, "`lt` is inapplicable to string"},
+			{"lte_on_string", "S string", `json:"s" ggen:"lte=1"`, "`lte` is inapplicable to string"},
+			{"gt_on_bool", "B bool", `json:"b" ggen:"gt=0"`, "`gt` is inapplicable to bool"},
+			{"gt_on_slice", "X []int", `json:"x" ggen:"gt=0"`, "`gt` is inapplicable to []int"},
 			{"gt_bad_value", "N int", `json:"n" ggen:"gt=abc"`, `value is not a valid number`},
 			{"gte_bad_value", "N int", `json:"n" ggen:"gte=abc"`, `value is not a valid number`},
 			{"lt_bad_value", "N int", `json:"n" ggen:"lt=abc"`, `value is not a valid number`},
@@ -1403,20 +1624,20 @@ type Msg struct {
 			{"gt_missing_value", "N int", `json:"n" ggen:"gt"`, `requires a numeric value`},
 
 			// ----- multiple: integers only -----
-			{"multiple_on_string", "S string", `json:"s" ggen:"multiple=2"`, `rule "multiple" cannot be applied to string`},
-			{"multiple_on_float", "F float64", `json:"f" ggen:"multiple=2"`, `rule "multiple" cannot be applied to float64`},
-			{"multiple_on_bool", "B bool", `json:"b" ggen:"multiple=2"`, `rule "multiple" cannot be applied to bool`},
+			{"multiple_on_string", "S string", `json:"s" ggen:"multiple=2"`, "`multiple` is inapplicable to string"},
+			{"multiple_on_float", "F float64", `json:"f" ggen:"multiple=2"`, "`multiple` is inapplicable to float64"},
+			{"multiple_on_bool", "B bool", `json:"b" ggen:"multiple=2"`, "`multiple` is inapplicable to bool"},
 			{"multiple_bad_value", "N int", `json:"n" ggen:"multiple=abc"`, `value is not a valid integer`},
 			{"multiple_missing", "N int", `json:"n" ggen:"multiple"`, `requires an integer value`},
 
 			// ----- len/minlen/maxlen/notempty on non-len-able kinds -----
-			{"len_on_int", "N int", `json:"n" ggen:"len=5"`, `rule "len" cannot be applied to int`},
-			{"len_on_bool", "B bool", `json:"b" ggen:"len=1"`, `rule "len" cannot be applied to bool`},
-			{"len_on_float", "F float64", `json:"f" ggen:"len=1"`, `rule "len" cannot be applied to float64`},
-			{"minlen_on_int", "N int", `json:"n" ggen:"minlen=1"`, `rule "minlen" cannot be applied to int`},
-			{"maxlen_on_int", "N int", `json:"n" ggen:"maxlen=1"`, `rule "maxlen" cannot be applied to int`},
-			{"notempty_on_int", "N int", `json:"n" ggen:"notempty"`, `rule "notempty" cannot be applied to int`},
-			{"notempty_on_bool", "B bool", `json:"b" ggen:"notempty"`, `rule "notempty" cannot be applied to bool`},
+			{"len_on_int", "N int", `json:"n" ggen:"len=5"`, "`len` is inapplicable to int"},
+			{"len_on_bool", "B bool", `json:"b" ggen:"len=1"`, "`len` is inapplicable to bool"},
+			{"len_on_float", "F float64", `json:"f" ggen:"len=1"`, "`len` is inapplicable to float64"},
+			{"minlen_on_int", "N int", `json:"n" ggen:"minlen=1"`, "`minlen` is inapplicable to int"},
+			{"maxlen_on_int", "N int", `json:"n" ggen:"maxlen=1"`, "`maxlen` is inapplicable to int"},
+			{"notempty_on_int", "N int", `json:"n" ggen:"notempty"`, "`notempty` is inapplicable to int"},
+			{"notempty_on_bool", "B bool", `json:"b" ggen:"notempty"`, "`notempty` is inapplicable to bool"},
 			{"len_bad_value", "S string", `json:"s" ggen:"len=abc"`, `value is not a valid integer`},
 			{"minlen_bad_value", "S string", `json:"s" ggen:"minlen=abc"`, `value is not a valid integer`},
 			{"maxlen_bad_value", "S string", `json:"s" ggen:"maxlen=abc"`, `value is not a valid integer`},
@@ -1426,16 +1647,16 @@ type Msg struct {
 			{"minrunes_bad_value", "S string", `json:"s" ggen:"minrunes=abc"`, `value is not a valid integer`},
 
 			// ----- eq / neq scope: not bool, not slice, not float-with-text -----
-			{"eq_on_slice", "X []int", `json:"x" ggen:"eq=1"`, `rule "eq" cannot be applied to []int`},
-			{"neq_on_slice", "X []int", `json:"x" ggen:"neq=1"`, `rule "neq" cannot be applied to []int`},
-			{"eq_on_bool", "B bool", `json:"b" ggen:"eq=true"`, `rule "eq" cannot be applied to bool`},
-			{"neq_on_bool", "B bool", `json:"b" ggen:"neq=true"`, `rule "neq" cannot be applied to bool`},
+			{"eq_on_slice", "X []int", `json:"x" ggen:"eq=1"`, "`eq` is inapplicable to []int"},
+			{"neq_on_slice", "X []int", `json:"x" ggen:"neq=1"`, "`neq` is inapplicable to []int"},
+			{"eq_on_bool", "B bool", `json:"b" ggen:"eq=true"`, "`eq` is inapplicable to bool"},
+			{"neq_on_bool", "B bool", `json:"b" ggen:"neq=true"`, "`neq` is inapplicable to bool"},
 			{"eq_int_bad_value", "N int", `json:"n" ggen:"eq=abc"`, `value is not a valid number`},
 			{"neq_int_bad_value", "N int", `json:"n" ggen:"neq=abc"`, `value is not a valid number`},
 
 			// ----- oneof: must be string/numeric, non-empty, numeric parts numeric -----
-			{"oneof_on_bool", "B bool", `json:"b" ggen:"oneof=true|false"`, `rule "oneof" cannot be applied to bool`},
-			{"oneof_on_slice", "X []int", `json:"x" ggen:"oneof=1|2"`, `rule "oneof" cannot be applied to []int`},
+			{"oneof_on_bool", "B bool", `json:"b" ggen:"oneof=true|false"`, "`oneof` is inapplicable to bool"},
+			{"oneof_on_slice", "X []int", `json:"x" ggen:"oneof=1|2"`, "`oneof` is inapplicable to []int"},
 			{"oneof_empty", "S string", `json:"s" ggen:"oneof"`, `oneof` + "` requires a "}, // matches "rule `oneof` requires a `|`-separated…"
 			{"oneof_numeric_bad_part", "N int", `json:"n" ggen:"oneof=1|two|3"`, `part "two" is not a valid number`},
 
@@ -1460,35 +1681,35 @@ type Msg struct {
 			// keys: rules themselves are typed against KindString — verify
 			// a non-string-applicable rule still gets rejected even though
 			// the parent IS a map.
-			{"keys_numeric_rule", "M map[string]int", `json:"m" ggen:"keys:gt=1"`, `rule "gt" cannot be applied to string`},
+			{"keys_numeric_rule", "M map[string]int", `json:"m" ggen:"keys:gt=1"`, "`gt` is inapplicable to string"},
 
 			// ----- dive: element kind mismatch -----
 			// []int element is int — string rules invalid on the element.
-			{"dive_ascii_on_int_elem", "X []int", `json:"x" ggen:"dive:ascii"`, `rule "ascii" cannot be applied to int`},
-			{"dive_email_on_int_elem", "X []int", `json:"x" ggen:"dive:email"`, `rule "email" cannot be applied to int`},
-			{"dive_len_on_int_elem", "X []int", `json:"x" ggen:"dive:len=3"`, `rule "len" cannot be applied to int`},
+			{"dive_ascii_on_int_elem", "X []int", `json:"x" ggen:"dive:ascii"`, "`ascii` is inapplicable to int"},
+			{"dive_email_on_int_elem", "X []int", `json:"x" ggen:"dive:email"`, "`email` is inapplicable to int"},
+			{"dive_len_on_int_elem", "X []int", `json:"x" ggen:"dive:len=3"`, "`len` is inapplicable to int"},
 			// map[string]int value is int.
-			{"dive_ascii_on_int_mapval", "M map[string]int", `json:"m" ggen:"dive:ascii"`, `rule "ascii" cannot be applied to int`},
+			{"dive_ascii_on_int_mapval", "M map[string]int", `json:"m" ggen:"dive:ascii"`, "`ascii` is inapplicable to int"},
 			// []string element is string — numeric rules invalid.
-			{"dive_gt_on_string_elem", "X []string", `json:"x" ggen:"dive:gt=1"`, `rule "gt" cannot be applied to string`},
+			{"dive_gt_on_string_elem", "X []string", `json:"x" ggen:"dive:gt=1"`, "`gt` is inapplicable to string"},
 
 			// ----- mods: string mods on numerics, numeric mods on strings -----
-			{"trim_on_int", "N int", `json:"n" mod:"trim"`, `mod "trim" cannot be applied to int`},
-			{"lower_mod_on_int", "N int", `json:"n" mod:"lower"`, `mod "lower" cannot be applied to int`},
-			{"upper_mod_on_int", "N int", `json:"n" mod:"upper"`, `mod "upper" cannot be applied to int`},
-			{"trimleft_on_int", "N int", `json:"n" mod:"trimleft=foo"`, `mod "trimleft" cannot be applied to int`},
-			{"trimright_on_int", "N int", `json:"n" mod:"trimright=foo"`, `mod "trimright" cannot be applied to int`},
-			{"replace_on_int", "N int", `json:"n" mod:"replace=a|b"`, `mod "replace" cannot be applied to int`},
-			{"clamp_on_string", "S string", `json:"s" mod:"clamp=0|10"`, `mod "clamp" cannot be applied to string`},
-			{"clamp_on_bool", "B bool", `json:"b" mod:"clamp=0|10"`, `mod "clamp" cannot be applied to bool`},
-			{"clamp_on_slice", "X []int", `json:"x" mod:"clamp=0|10"`, `mod "clamp" cannot be applied to []int`},
+			{"trim_on_int", "N int", `json:"n" mod:"trim"`, "`trim` is inapplicable to int"},
+			{"lower_mod_on_int", "N int", `json:"n" mod:"lower"`, "`lower` is inapplicable to int"},
+			{"upper_mod_on_int", "N int", `json:"n" mod:"upper"`, "`upper` is inapplicable to int"},
+			{"trimleft_on_int", "N int", `json:"n" mod:"trimleft=foo"`, "`trimleft` is inapplicable to int"},
+			{"trimright_on_int", "N int", `json:"n" mod:"trimright=foo"`, "`trimright` is inapplicable to int"},
+			{"replace_on_int", "N int", `json:"n" mod:"replace=a|b"`, "`replace` is inapplicable to int"},
+			{"clamp_on_string", "S string", `json:"s" mod:"clamp=0|10"`, "`clamp` is inapplicable to string"},
+			{"clamp_on_bool", "B bool", `json:"b" mod:"clamp=0|10"`, "`clamp` is inapplicable to bool"},
+			{"clamp_on_slice", "X []int", `json:"x" mod:"clamp=0|10"`, "`clamp` is inapplicable to []int"},
 
 			// ----- mods: parameter-shape rejection -----
-			{"trimleft_empty", "S string", `json:"s" mod:"trimleft="`, "mod `trimleft` requires a non-empty value"},
-			{"trimright_empty", "S string", `json:"s" mod:"trimright="`, "mod `trimright` requires a non-empty value"},
+			{"trimleft_empty", "S string", `json:"s" mod:"trimleft="`, "`trimleft` requires a non-empty value"},
+			{"trimright_empty", "S string", `json:"s" mod:"trimright="`, "`trimright` requires a non-empty value"},
 			{"replace_missing_pipe", "S string", `json:"s" mod:"replace=foo"`, "requires `old|new` form"},
 			{"replace_empty_old", "S string", `json:"s" mod:"replace=|new"`, "requires `old|new` form"},
-			{"clamp_missing_pipe", "N int", `json:"n" mod:"clamp=10"`, "requires `lo|hi` form"},
+			{"clamp_missing_pipe", "N int", `json:"n" mod:"clamp=10"`, "is missing the `lo|hi` separator"},
 			{"clamp_both_empty", "N int", `json:"n" mod:"clamp=|"`, "requires at least one of lo or hi"},
 			{"clamp_bad_lo", "N int", `json:"n" mod:"clamp=abc|10"`, "lo \"abc\" is not a valid number"},
 			{"clamp_bad_hi", "N int", `json:"n" mod:"clamp=0|abc"`, "hi \"abc\" is not a valid number"},

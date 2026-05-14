@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/build/constraint"
@@ -340,6 +341,7 @@ func (s *structSet) resolve(wanted []string) ([]StructInfo, error) {
 	}
 
 	var result []StructInfo
+	var errs []error
 	for _, name := range generated {
 		var info StructInfo
 		var err error
@@ -349,7 +351,12 @@ func (s *structSet) resolve(wanted []string) ([]StructInfo, error) {
 			info, err = s.extractStruct(name, s.structs[name])
 		}
 		if err != nil {
-			return nil, err
+			// Gather rather than bail — one struct's broken tag
+			// shouldn't hide problems in the next struct in the same
+			// file / package. errors.Join wraps the batch; the logger
+			// unwraps + renders each one separately.
+			errs = append(errs, err)
+			continue
 		}
 		if flags, ok := s.annotations[name]; ok {
 			info.Marshal = flags.marshal
@@ -365,6 +372,9 @@ func (s *structSet) resolve(wanted []string) ([]StructInfo, error) {
 		_, info.Test = s.fromTest[name]
 		info.BuildTag = s.structBuildTag[name]
 		result = append(result, info)
+	}
+	if len(errs) > 0 {
+		return result, errors.Join(errs...)
 	}
 	return result, nil
 }
@@ -419,15 +429,27 @@ func parseFile(filename string, wanted []string) ([]StructInfo, string, error) {
 			// scratch files happened to contain a struct with a stale
 			// `ggen:` tag, since the applicability check would then
 			// reject the unintended type. Be loud + helpful instead.
-			return nil, set.pkgName, fmt.Errorf(
-				"%s: no //ggen:generate-annotated struct found in file; "+
-					"add `//ggen:generate` above the struct(s) you want generated, "+
-					"or pass struct names explicitly: `ggen %s Name1 Name2 ...`",
-				filename, filepath.Base(filename))
+			//
+			// Returned as a richError so the pretty logger renders the
+			// Note: line with the explicit-name escape hatch. No source
+			// position — this is a file-level error, not tied to any
+			// particular line.
+			return nil, set.pkgName, &richError{
+				Msg:      fmt.Sprintf("%s: no //ggen:generate-annotated struct found in file", relPath(filename)),
+				BotHint:  "missing //ggen:generate directive",
+				UserHint: fmt.Sprintf("Add `//ggen:generate` above each struct you want generated, or pass struct names explicitly: `ggen %s Name1 Name2 ...`.", filepath.Base(filename)),
+			}
 		}
 	}
 	structs, err := set.resolve(wanted)
 	if err != nil {
+		// Position-carrying errors already include the filename in their
+		// `file:line:col:` prefix; double-prefixing would render as
+		// `temp.go: temp.go:5:2: msg`. Pass them through untouched and
+		// only prefix bare errors that lack source location info.
+		if _, ok := errors.AsType[*richError](err); ok {
+			return nil, "", err
+		}
 		return nil, "", fmt.Errorf("%s: %w", filename, err)
 	}
 	return structs, set.pkgName, nil
@@ -699,7 +721,7 @@ func (s *structSet) extractAliasFromTypes(name string, t types.Type, rhs ast.Exp
 				if !fv.Exported() {
 					continue
 				}
-				fi, err := s.extractFieldFromTypes(fv, structType.Tag(i))
+				fi, err := s.extractFieldFromTypes(name, fv, structType.Tag(i))
 				if err != nil {
 					return info, fmt.Errorf("type %s: field %s: %w", name, fv.Name(), err)
 				}
@@ -816,8 +838,8 @@ func isSupportedAliasPrimitive(k TypeKind) bool {
 // type-driven path mirrors extractField's AST-driven logic but works
 // without reference to the original *ast.Field, which we don't have
 // for foreign-package types.
-func (s *structSet) extractFieldFromTypes(field *types.Var, tag string) (FieldInfo, error) {
-	fi := FieldInfo{GoName: field.Name()}
+func (s *structSet) extractFieldFromTypes(structName string, field *types.Var, tag string) (FieldInfo, error) {
+	fi := FieldInfo{GoName: field.Name(), StructName: structName}
 	qualifier := types.RelativeTo(s.typesPkg)
 	fi.GoType = types.TypeString(field.Type(), qualifier)
 
@@ -918,9 +940,69 @@ func (s *structSet) extractFieldFromTypes(field *types.Var, tag string) (FieldIn
 
 	fi.Iface = inspectType(field.Type(), s.stdIfaces)
 	if err := checkRuleApplicability(fi); err != nil {
-		return fi, err
+		return fi, attachPosition(err, s.fileSet.Position(field.Pos()))
 	}
 	return fi, nil
+}
+
+// attachPosition stamps a source position onto every *richError in
+// the error tree so each surfaced diagnostic carries file:line:col.
+// errors.Join'd batches from applicability.go contain multiple
+// independent richErrors — applying the position only to the first
+// (errors.AsType returns the first match) would leave subsequent
+// sub-errors position-less. setPosOnAll walks the tree recursively
+// to fix every one.
+//
+// When err contains no richError at all, a thin wrapper carries the
+// position and message.
+func attachPosition(err error, pos token.Position) error {
+	if setPosOnAll(err, pos) {
+		return err
+	}
+	return &richError{Pos: pos, Msg: err.Error(), Err: err}
+}
+
+// setPosOnAll walks an error tree and fills in any unset Pos on every
+// *richError encountered. Returns true if at least one richError was
+// touched (or already present), false when the tree carries none.
+//
+// When stamping Pos, the Column is refined from the field-declaration
+// column (what token.Position carries) to the column of the CodeSpan
+// inside the source line — so both pretty and concise renderers point
+// users at the offending token rather than at the field name. This
+// requires reading the source line once per error tree branch; result
+// is cached in readSourceLine.
+func setPosOnAll(err error, pos token.Position) bool {
+	if err == nil {
+		return false
+	}
+	found := false
+	if re, ok := err.(*richError); ok {
+		if !re.Pos.IsValid() {
+			refined := pos
+			if re.CodeSpan != "" {
+				if line, ok := readSourceLine(pos.Filename, pos.Line); ok {
+					refined.Column = effectiveCol(line, pos.Column, re.CodeSpan)
+				}
+			}
+			re.Pos = refined
+		}
+		found = true
+	}
+	if u, ok := err.(interface{ Unwrap() []error }); ok {
+		for _, sub := range u.Unwrap() {
+			if setPosOnAll(sub, pos) {
+				found = true
+			}
+		}
+		return found
+	}
+	if u, ok := err.(interface{ Unwrap() error }); ok {
+		if setPosOnAll(u.Unwrap(), pos) {
+			found = true
+		}
+	}
+	return found
 }
 
 func referencedStructName(expr ast.Expr, all map[string]*ast.StructType) string {
@@ -939,12 +1021,14 @@ func referencedStructName(expr ast.Expr, all map[string]*ast.StructType) string 
 
 func (s *structSet) extractStruct(name string, st *ast.StructType) (StructInfo, error) {
 	info := StructInfo{Name: name}
+	var errs []error
 	for _, field := range st.Fields.List {
 		if len(field.Names) == 0 {
 			// Embedded field: promote its fields into the parent.
 			sub, err := s.extractEmbedded(name, field)
 			if err != nil {
-				return info, err
+				errs = append(errs, err)
+				continue
 			}
 			info.Fields = append(info.Fields, sub...)
 			continue
@@ -953,9 +1037,10 @@ func (s *structSet) extractStruct(name string, st *ast.StructType) (StructInfo, 
 			if !ident.IsExported() {
 				continue
 			}
-			fi, err := extractField(ident.Name, field)
+			fi, err := extractField(name, ident.Name, field)
 			if err != nil {
-				return info, fmt.Errorf("field %s.%s: %w", name, ident.Name, err)
+				errs = append(errs, attachPosition(err, s.fileSet.Position(field.Pos())))
+				continue
 			}
 			if fi.Ignored {
 				continue
@@ -973,14 +1058,30 @@ func (s *structSet) extractStruct(name string, st *ast.StructType) (StructInfo, 
 					}
 				}
 			}
-			// Resolve any `@Func` references in validation/mod tags. Errors
-			// here surface as field-level parse errors so the user sees the
-			// exact tag site that's broken.
+			// Resolve any `@Func` references in validation/mod tags.
+			// resolveCustomRules returns *richError with CodeSpan
+			// already set to the `@ref` token so the pretty renderer
+			// can point its caret at the offending tag substring.
+			// We prepend the Struct.Field qualifier to the existing
+			// Msg (instead of wrapping into a fresh richError) so
+			// CodeSpan / BotHint / UserHint survive.
 			if err := s.resolveCustomRules(name, &fi, fieldType); err != nil {
-				return info, fmt.Errorf("field %s.%s: %w", name, ident.Name, err)
+				if re, ok := errors.AsType[*richError](err); ok {
+					re.Msg = fmt.Sprintf("%s.%s: %s", name, ident.Name, re.Msg)
+					errs = append(errs, attachPosition(err, s.fileSet.Position(field.Pos())))
+				} else {
+					wrapped := &richError{
+						Msg: fmt.Sprintf("%s.%s: %s", name, ident.Name, err.Error()),
+					}
+					errs = append(errs, attachPosition(wrapped, s.fileSet.Position(field.Pos())))
+				}
+				continue
 			}
 			info.Fields = append(info.Fields, fi)
 		}
+	}
+	if len(errs) > 0 {
+		return info, errors.Join(errs...)
 	}
 	return info, nil
 }
@@ -1015,8 +1116,8 @@ func (s *structSet) extractEmbedded(parent string, field *ast.Field) ([]FieldInf
 	return sub.Fields, nil
 }
 
-func extractField(goName string, field *ast.Field) (FieldInfo, error) {
-	fi := FieldInfo{GoName: goName}
+func extractField(structName, goName string, field *ast.Field) (FieldInfo, error) {
+	fi := FieldInfo{GoName: goName, StructName: structName}
 
 	if field.Tag != nil {
 		tag := reflect.StructTag(strings.Trim(field.Tag.Value, "`"))
