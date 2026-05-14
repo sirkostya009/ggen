@@ -3,11 +3,12 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"go/format"
 	"slices"
 	"strconv"
 	"strings"
 	"text/template"
+
+	"golang.org/x/tools/imports"
 )
 
 func generate(pkg string, structs []StructInfo) ([]byte, error) {
@@ -79,7 +80,7 @@ func generate(pkg string, structs []StructInfo) ([]byte, error) {
 	if err := tmpl.Execute(&buf, data); err != nil {
 		return nil, fmt.Errorf("executing template: %w", err)
 	}
-	src, err := format.Source(buf.Bytes())
+	src, err := imports.Process("", buf.Bytes(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("formatting generated code: %w\n\nraw output:\n%s", err, buf.String())
 	}
@@ -128,168 +129,13 @@ func buildTemplateData(pkg string, structs []StructInfo) templateData {
 	if len(structs) > 0 {
 		tag = structs[0].BuildTag
 	}
-	d := templateData{Package: pkg, BuildTag: tag, Structs: structs, OneOfDecls: oneofRegistry.decls}
-	imports := []string{
-		"github.com/sirkostya009/ggen/encode",
-		"github.com/sirkostya009/ggen/scan",
+	return templateData{
+		Package:    pkg,
+		BuildTag:   tag,
+		Structs:    structs,
+		OneOfDecls: oneofRegistry.decls,
+		Imports:    slices.Compact(slices.Concat(customFuncImports(structs), customTypeImports(structs), aliasUnderlyingImports(structs))),
 	}
-	if usesUnsafe(structs) {
-		imports = append(imports, "unsafe")
-	}
-	if usesDecodePackage(structs) {
-		imports = append(imports, "github.com/sirkostya009/ggen/decode")
-	}
-	if usesFmt(structs) {
-		imports = append(imports, "fmt")
-	}
-	if usesRuneValidators(structs) {
-		imports = append(imports, "unicode/utf8")
-	}
-	if usesStrconv(structs) {
-		imports = append(imports, "strconv")
-	}
-	if usesValidators(structs) {
-		imports = append(imports, "github.com/sirkostya009/ggen/decode/validation")
-	}
-	if usesStringsPackage(structs) {
-		imports = append(imports, "strings")
-	}
-	if usesJSONFallback(structs) {
-		imports = append(imports, "encoding/json")
-	}
-	imports = append(imports, customTypeImports(structs)...)
-	imports = append(imports, customFuncImports(structs)...)
-	imports = append(imports, aliasUnderlyingImports(structs)...)
-	slices.Sort(imports)
-	d.Imports = imports
-	return d
-}
-
-// usesDecodePackage reports whether generated code references the
-// decode package. Triggers: opted-in UnmarshalJSON hook (calls
-// decode.Unmarshal) and predicate-style string validators
-// (decode.IsEmail, decode.IsURL, ...). Custom `@Func` rules emit a
-// direct call into the user's package — no decode pkg involvement.
-func usesDecodePackage(structs []StructInfo) bool {
-	for _, s := range structs {
-		if s.Unmarshal {
-			return true
-		}
-		for _, f := range s.Fields {
-			if rulesUseDecode(f.Validation) ||
-				rulesUseDecode(f.ElemValidation) ||
-				rulesUseDecode(f.KeyValidation) {
-				return true
-			}
-			for _, inner := range f.InnerValidation {
-				if rulesUseDecode(inner) {
-					return true
-				}
-			}
-		}
-	}
-	return false
-}
-
-// rulesUseDecode reports whether any rule in the list emits a decode.X
-// reference (predicate funcs only — custom `@Func` rules call directly
-// into user code, never via the decode package).
-func rulesUseDecode(rules []ValidationRule) bool {
-	for _, v := range rules {
-		switch v.Name {
-		case "email", "url", "ascii", "printable", "alphanum",
-			"numeric", "lower", "upper", "hexadecimal":
-			return true
-		}
-	}
-	return false
-}
-
-func usesRuneValidators(structs []StructInfo) bool {
-	for _, s := range structs {
-		for _, f := range s.Fields {
-			if rulesUseRunes(f.Validation) || rulesUseRunes(f.ElemValidation) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// usesJSONFallback reports whether any field will actually emit a
-// `json.Marshal` / `json.Unmarshal` call in the generated code. A
-// cross-package struct field that satisfies one of the fast-path
-// interfaces (DecodeFrom, AppendJSON, MarshalJSON / UnmarshalJSON, the
-// text-marshaler family) routes through the matching method instead —
-// none of those reference `encoding/json` from the gen file. Only the
-// resolved-but-unmatched and unresolved (AST-only) branches actually
-// reach for stdlib json.
-func usesJSONFallback(structs []StructInfo) bool {
-	for _, s := range structs {
-		for _, f := range s.Fields {
-			if f.Kind == KindStruct {
-				t := f.GoType
-				if f.Pointer && f.PointeeType != "" {
-					t = f.PointeeType
-				}
-				if !isGenerated(t) && fieldUsesJSONFallback(f) {
-					return true
-				}
-			}
-			if f.Kind == KindSlice && f.ElemKind == KindStruct && !isGenerated(f.ElemType) && fieldUsesJSONFallback(f) {
-				return true
-			}
-			if f.Inline && (f.ElemType == "any" || f.ElemType == "interface{}") {
-				return true
-			}
-			// Note: bare `any` fields used to import encoding/json, but encode
-			// now goes through encode.AppendAny and decode through scan.Any —
-			// neither references the json package from generated code.
-		}
-	}
-	return false
-}
-
-// fieldUsesJSONFallback mirrors the dispatch ladder in
-// renderCrossPkgStructDecode / renderCrossPkgStructAppend: a field needs
-// the encoding/json import only when at least one direction (decode or
-// encode) ends up in the default branch that actually calls
-// `json.Marshal` / `json.Unmarshal`. Unresolved (AST-only) types always
-// fall through to that branch.
-func fieldUsesJSONFallback(f FieldInfo) bool {
-	if !f.Iface.Resolved {
-		return true
-	}
-	decodeViaJSON := !f.Iface.ByteDecoder && !f.Iface.JSONUnmarshaler && !f.Iface.TextUnmarshaler
-	encodeViaJSON := !f.Iface.AppendJSON && !f.Iface.JSONMarshaler && !f.Iface.TextAppender && !f.Iface.TextMarshaler
-	return decodeViaJSON || encodeViaJSON
-}
-
-// usesValidators reports whether any generated struct needs the validation package
-// imported (any validation rule, required field, or the default duplicate-key
-// guard all emit *validation.Error).
-func usesValidators(structs []StructInfo) bool {
-	for _, s := range structs {
-		if s.IsAlias {
-			// Alias codegen has no JSON-object dispatch, so the dup-key
-			// and unknown-key guards aren't emitted; v1 also has no place
-			// to attach validation rules to an alias. Validation pkg
-			// stays out of an alias-only pass.
-			continue
-		}
-		if !s.AllowDups {
-			return true // duplicate-key guard emits validation.Error
-		}
-		if !s.IgnoreUnknown && !s.HasInline() {
-			return true // default unknown-key path emits validation.Error
-		}
-		for _, f := range s.Fields {
-			if f.IsRequired() || len(f.Validation) > 0 || len(f.ElemValidation) > 0 {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 // customFuncImports collects the import paths needed for cross-package
@@ -338,7 +184,7 @@ func customFuncImports(structs []StructInfo) []string {
 // customTypeImports returns the extra stdlib imports required by any field
 // whose kind is one of the native types we recognize (time.Time, net.IP, etc.).
 func customTypeImports(structs []StructInfo) []string {
-	need := map[string]struct{}{}
+	need := make(map[string]struct{}, len(structs))
 	for _, s := range structs {
 		for _, f := range s.Fields {
 			switch f.Kind {
@@ -377,55 +223,6 @@ func customTypeImports(structs []StructInfo) []string {
 		out = append(out, k)
 	}
 	return out
-}
-
-// usesFmt reports whether the generated file references fmt. The
-// scanner uses sentinel errors from the scan package, so fmt is only
-// pulled in by net.IP error paths (net.ParseIP returns nil rather than
-// an error, so we wrap with fmt.Errorf).
-func usesFmt(structs []StructInfo) bool {
-	for _, s := range structs {
-		for _, f := range s.Fields {
-			if f.Kind == KindNetIP {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func usesStringsPackage(structs []StructInfo) bool {
-	for _, s := range structs {
-		for _, f := range s.Fields {
-			if rulesUseStrings(f.Validation) || rulesUseStrings(f.ElemValidation) {
-				return true
-			}
-			if len(f.Mods) > 0 || len(f.ElemMods) > 0 {
-				return true // all mods call strings.*
-			}
-		}
-	}
-	return false
-}
-
-func rulesUseStrings(rules []ValidationRule) bool {
-	for _, v := range rules {
-		switch v.Name {
-		case "starts", "ends", "contains":
-			return true
-		}
-	}
-	return false
-}
-
-func rulesUseRunes(rules []ValidationRule) bool {
-	for _, v := range rules {
-		switch v.Name {
-		case "runes", "minrunes", "maxrunes":
-			return true
-		}
-	}
-	return false
 }
 
 func tokenKind(k TypeKind) string {
@@ -2656,7 +2453,7 @@ func renderDecode(s StructInfo) string {
 	b.WriteString(renderPostLoop(s))
 	b.WriteString("return result, j + 1, nil\n}\n")
 	b.WriteString("return result, 0, scan.ErrBadObject\n")
-	b.WriteString("}\n")
+	b.WriteString("}")
 	return b.String()
 }
 
@@ -4025,7 +3822,7 @@ func renderStreamDecodeStruct(s StructInfo) string {
 	b.WriteString(renderPostLoop(s))
 	b.WriteString("return result, j + 1, nil\n}\n")
 	b.WriteString("return result, 0, scan.ErrBadObject\n")
-	b.WriteString("}\n")
+	b.WriteString("}")
 	return b.String()
 }
 
@@ -4902,9 +4699,19 @@ const genTemplate = `{{if .BuildTag}}//go:build {{.BuildTag}}
 package {{.Package}}
 
 import (
+	"encoding/json"
+	"fmt"
+	"strconv"
+	"strings"
+	"unicode/utf8"
+	"unsafe"
 {{- range .Imports}}
 	{{printf "%q" .}}
 {{- end}}
+	"github.com/sirkostya009/ggen/decode"
+	"github.com/sirkostya009/ggen/decode/validation"
+	"github.com/sirkostya009/ggen/encode"
+	"github.com/sirkostya009/ggen/scan"
 )
 
 {{range .OneOfDecls}}

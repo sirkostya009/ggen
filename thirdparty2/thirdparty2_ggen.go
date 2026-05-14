@@ -3,12 +3,13 @@
 package thirdparty2
 
 import (
+	"strconv"
+	"unsafe"
+
 	"github.com/sirkostya009/ggen/decode"
 	"github.com/sirkostya009/ggen/decode/validation"
 	"github.com/sirkostya009/ggen/encode"
 	"github.com/sirkostya009/ggen/scan"
-	"strconv"
-	"unsafe"
 )
 
 // DecodeFrom decodes one External2 out of data starting at i and returns
@@ -175,7 +176,6 @@ func (External2) DecodeFrom(data []byte, i int) (External2, int, error) {
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
@@ -291,7 +291,6 @@ func (External2) DecodeStreamFrom(_s *scan.Stream, i int) (External2, int, error
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // JSONSize returns an upper bound on the marshaled size, used by

@@ -8,7 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 )
@@ -299,7 +299,7 @@ func (l *prettyLogger) Debug(format string, args ...any) {
 		return
 	}
 	_, _ = fmt.Fprintf(l.w, "%s %s\n",
-		l.paint(ansiCyan, "[debug]"),
+		l.paint(ansiYellow, "[debug]"),
 		fmt.Sprintf(format, args...))
 }
 
@@ -308,7 +308,7 @@ func (l *prettyLogger) Trace(format string, args ...any) {
 		return
 	}
 	_, _ = fmt.Fprintf(l.w, "%s %s\n",
-		l.paint(ansiGray, "[trace]"),
+		l.paint(ansiGreen, "[trace]"),
 		fmt.Sprintf(format, args...))
 }
 
@@ -355,7 +355,7 @@ type renderUnit struct {
 // unwrapping errors.Join batches into a flat slice. Order from the
 // queue is preserved (depth-first within each entry).
 func flattenErrors(queue []error) []error {
-	var out []error
+	out := make([]error, 0, len(queue))
 	var walk func(error)
 	walk = func(err error) {
 		if subs, ok := unwrapMulti(err); ok {
@@ -378,7 +378,7 @@ func flattenErrors(queue []error) []error {
 // position-less and bare errors get their own unit each.
 func groupByLine(errs []error) []renderUnit {
 	var groups []renderUnit
-	index := map[posKey]int{}
+	index := make(map[posKey]int, len(errs))
 	for _, e := range errs {
 		var re *richError
 		if errors.As(e, &re) && re.Pos.IsValid() {
@@ -435,7 +435,7 @@ func (l *prettyLogger) renderUnit(u renderUnit) {
 	} else {
 		col := first.Pos.Column
 		if srcOK {
-			col = effectiveCol(line, first.Pos.Column, first.CodeSpan)
+			col = resolveSpanCol(line, first.Pos.Column, first.CodeSpan, first.Anchor)
 		}
 		prefix = fmt.Sprintf("%s:%d:%d: ", relPath(first.Pos.Filename), first.Pos.Line, col)
 	}
@@ -556,23 +556,19 @@ func (l *prettyLogger) highlightSpans(line string, errs []*richError) string {
 		if re.CodeSpan == "" {
 			continue
 		}
-		col := re.Pos.Column - 1
-		if col < 0 {
-			col = 0
-		}
-		if col >= len(line) {
+		// resolveSpanCol returns 1-indexed; subtract to get the byte
+		// offset into line. Anchor consumed before searching CodeSpan.
+		col := resolveSpanCol(line, re.Pos.Column, re.CodeSpan, re.Anchor) - 1
+		if col < 0 || col >= len(line) {
 			continue
 		}
-		i := strings.Index(line[col:], re.CodeSpan)
-		if i < 0 {
-			continue
-		}
-		spans = append(spans, span{col + i, col + i + len(re.CodeSpan)})
+		end := min(col+len(re.CodeSpan), len(line))
+		spans = append(spans, span{col, end})
 	}
 	if len(spans) == 0 {
 		return line
 	}
-	sort.Slice(spans, func(i, j int) bool { return spans[i].start < spans[j].start })
+	slices.SortFunc(spans, func(a, b span) int { return a.start - b.start })
 	// Merge overlaps so we don't emit half-open ANSI ranges.
 	merged := spans[:1]
 	for _, s := range spans[1:] {
@@ -604,30 +600,16 @@ func (l *prettyLogger) highlightSpans(line string, errs []*richError) string {
 // When errors share a column (rare — typically the user duplicated
 // a rule), the caret renders once at that column.
 func (l *prettyLogger) multiCaretLine(line string, errs []*richError) string {
-	cols := map[int]struct{}{}
-	for _, re := range errs {
-		col := re.Pos.Column - 1
-		if col < 0 {
-			col = 0
-		}
-		if re.CodeSpan != "" && col < len(line) {
-			if i := strings.Index(line[col:], re.CodeSpan); i >= 0 {
-				col += i
-			}
-		}
-		if col > len(line) {
-			col = len(line)
-		}
-		cols[col] = struct{}{}
+	cols := make([]int, len(errs))
+	for i, re := range errs {
+		col := resolveSpanCol(line, re.Pos.Column, re.CodeSpan, re.Anchor) - 1
+		cols[i] = min(max(col, 0), len(line))
 	}
-	sorted := make([]int, 0, len(cols))
-	for c := range cols {
-		sorted = append(sorted, c)
-	}
-	sort.Ints(sorted)
+	slices.Sort(cols)
+	cols = slices.Compact(cols)
 	var b strings.Builder
 	pos := 0
-	for _, c := range sorted {
+	for _, c := range cols {
 		for i := pos; i < c; i++ {
 			if i < len(line) && line[i] == '\t' {
 				b.WriteByte('\t')
@@ -641,19 +623,21 @@ func (l *prettyLogger) multiCaretLine(line string, errs []*richError) string {
 	return b.String()
 }
 
-// effectiveCol returns the 1-indexed column inside line where span
-// actually appears, starting the search at posCol-1 so identical
-// text earlier on the line isn't mistaken for the cause. Falls back
-// to posCol when span is empty or not found. Used by the pretty
-// header to render `file:line:col:` pointing at the offending token
-// rather than at the field declaration that go/types handed us.
-func effectiveCol(line string, posCol int, span string) int {
-	col := posCol - 1
-	if col < 0 {
-		col = 0
+// resolveSpanCol does the actual column-search work, with optional
+// Anchor support. The anchor is a disambiguating prefix the caller
+// trusts to appear before the codeSpan target — useful when codeSpan
+// alone is a short string that collides with other text earlier on
+// the line. Anchor is consumed (search advances past it) but the
+// returned column points at codeSpan, not at the anchor.
+func resolveSpanCol(line string, posCol int, codeSpan, anchor string) int {
+	col := max(posCol-1, 0)
+	if anchor != "" && col < len(line) {
+		if i := strings.Index(line[col:], anchor); i >= 0 {
+			col += i + len(anchor)
+		}
 	}
-	if span != "" && col < len(line) {
-		if i := strings.Index(line[col:], span); i >= 0 {
+	if codeSpan != "" && col < len(line) {
+		if i := strings.Index(line[col:], codeSpan); i >= 0 {
 			col += i
 		}
 	}
@@ -675,25 +659,14 @@ func effectiveCol(line string, posCol int, span string) int {
 //     (CodeSpan = rule name / bad value) typically lives inside the
 //     struct tag a few columns later. Search for CodeSpan starting at
 //     Pos.Column so the caret lands on the actual cause.
-func caretIndent(line, prefix string, posCol int, span string) string {
-	col := posCol - 1
-	if col < 0 {
-		col = 0
-	}
-	if span != "" && col < len(line) {
-		if i := strings.Index(line[col:], span); i >= 0 {
-			col += i
-		}
-	}
-	if col > len(line) {
-		col = len(line)
-	}
+func caretIndent(line, prefix string, posCol int, span, anchor string) string {
+	col := min(max(resolveSpanCol(line, posCol, span, anchor)-1, 0), len(line))
 	var b strings.Builder
 	b.Grow(len(prefix) + col)
 	for i := 0; i < len(prefix); i++ {
 		b.WriteByte(' ')
 	}
-	for i := 0; i < col; i++ {
+	for i := range col {
 		if line[i] == '\t' {
 			b.WriteByte('\t')
 		} else {
@@ -712,11 +685,11 @@ func (l *prettyLogger) highlightSpan(line, span string) string {
 	if span == "" || !l.color {
 		return line
 	}
-	i := strings.Index(line, span)
-	if i < 0 {
+	before, after, ok := strings.Cut(line, span)
+	if !ok {
 		return line
 	}
-	return line[:i] + ansiRed + ansiBold + span + ansiReset + line[i+len(span):]
+	return before + ansiRed + ansiBold + span + ansiReset + after
 }
 
 // ----- source line reader -----
@@ -778,6 +751,7 @@ type richError struct {
 	Pos      token.Position // file:line:col; zero value when unknown
 	Msg      string         // main error message — what failed
 	CodeSpan string         // substring within the source line to highlight + point caret at
+	Anchor   string         // disambiguating prefix used for caret positioning ONLY; not highlighted. When set, the position search finds Anchor first, then searches for CodeSpan AFTER it. Use when CodeSpan is a short token that may collide with other occurrences earlier on the line (e.g. unknown-rule name `b` collides with `json:"b"`).
 	BotHint  string         // technical context for concise/agent output
 	UserHint string         // remedy suggestion for human output (Note:)
 	Err      error          // optional underlying error for errors.Unwrap

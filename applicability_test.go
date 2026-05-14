@@ -366,7 +366,7 @@ func TestCheckOneModRule_ValueShape(t *testing.T) {
 		{"clamp_good", ModRule{Name: "clamp", Value: "0|10"}, KindInt, ""},
 		{"clamp_lo_only", ModRule{Name: "clamp", Value: "0|"}, KindInt, ""},
 		{"clamp_hi_only", ModRule{Name: "clamp", Value: "|10"}, KindInt, ""},
-		{"clamp_no_pipe", ModRule{Name: "clamp", Value: "10"}, KindInt, "is missing the `lo|hi` separator"},
+		{"clamp_no_pipe", ModRule{Name: "clamp", Value: "10"}, KindInt, "is missing the lo`|`hi separator"},
 		{"clamp_both_empty", ModRule{Name: "clamp", Value: "|"}, KindInt, "requires at least one of lo or hi"},
 		{"clamp_bad_lo", ModRule{Name: "clamp", Value: "abc|10"}, KindInt, `lo "abc" is not a valid number`},
 		{"clamp_bad_hi", ModRule{Name: "clamp", Value: "0|abc"}, KindInt, `hi "abc" is not a valid number`},
@@ -502,7 +502,7 @@ func TestIsIntegralNumeric(t *testing.T) {
 
 // ----- needInt / needFloat -----
 
-func TestNeedIntParam(t *testing.T) {
+func TestNeedInt(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		value   string
@@ -521,7 +521,7 @@ func TestNeedIntParam(t *testing.T) {
 	for _, c := range cases {
 		t.Run("v="+c.value, func(t *testing.T) {
 			t.Parallel()
-			err := needIntParam(ValidationRule{Name: "len", Value: c.value}, "ggen", "field f")
+			err := needInt(ValidationRule{Name: "len", Value: c.value}, "field f")
 			if c.wantSub == "" {
 				if err != nil {
 					t.Errorf("expected nil, got: %v", err)
@@ -535,7 +535,7 @@ func TestNeedIntParam(t *testing.T) {
 	}
 }
 
-func TestNeedFloatParam(t *testing.T) {
+func TestNeedFloat(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		value   string
@@ -552,7 +552,7 @@ func TestNeedFloatParam(t *testing.T) {
 	for _, c := range cases {
 		t.Run("v="+c.value, func(t *testing.T) {
 			t.Parallel()
-			err := needFloatParam(ValidationRule{Name: "gt", Value: c.value}, "ggen", "field f")
+			err := needFloat(ValidationRule{Name: "gt", Value: c.value}, "field f")
 			if c.wantSub == "" {
 				if err != nil {
 					t.Errorf("expected nil, got: %v", err)

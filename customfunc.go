@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/types"
@@ -255,56 +256,51 @@ func (s *structSet) resolveCustomRules(structName string, fi *FieldInfo, fieldTy
 	file := s.structFile[structName]
 	pkg := s.typesPkg
 
+	// Accumulate across every @-ref location — a field with both an
+	// unresolvable val ref AND an unresolvable mod ref (or many @-refs
+	// across dive levels) needs all of them surfaced at once. Returning
+	// on the first error means the user fixes one, re-runs, finds
+	// another, fixes that, re-runs… painful UX.
+	var errs []error
+	collect := func(err error) { errs = append(errs, err) }
+
 	// Outer rules see the field's type as-is (incl. *T for pointer fields).
-	if err := resolveValidationRules(fi.Validation, fieldType, file, pkg); err != nil {
-		return err
-	}
-	if err := resolveModRules(fi.Mods, fieldType, file, pkg); err != nil {
-		return err
-	}
+	collect(resolveValidationRules(fi.Validation, fieldType, file, pkg))
+	collect(resolveModRules(fi.Mods, fieldType, file, pkg))
 
 	// Map keys are always string.
 	keyT := types.Typ[types.String]
-	if err := resolveValidationRules(fi.KeyValidation, keyT, file, pkg); err != nil {
-		return err
-	}
-	if err := resolveModRules(fi.KeyMods, keyT, file, pkg); err != nil {
-		return err
-	}
+	collect(resolveValidationRules(fi.KeyValidation, keyT, file, pkg))
+	collect(resolveModRules(fi.KeyMods, keyT, file, pkg))
 
 	// Dive levels: peel one container per level.
 	if len(fi.ElemValidation) > 0 || len(fi.ElemMods) > 0 || len(fi.InnerValidation) > 0 || len(fi.InnerMods) > 0 {
 		elem, err := diveElemType(fieldType)
 		if err != nil {
-			return fmt.Errorf("dive: %w", err)
-		}
-		if err := resolveValidationRules(fi.ElemValidation, elem, file, pkg); err != nil {
-			return err
-		}
-		if err := resolveModRules(fi.ElemMods, elem, file, pkg); err != nil {
-			return err
-		}
-		inner := elem
-		for i := range fi.InnerValidation {
-			next, err := diveElemType(inner)
-			if err != nil {
-				return fmt.Errorf("dive level %d: %w", i+2, err)
-			}
-			inner = next
-			if err := resolveValidationRules(fi.InnerValidation[i], inner, file, pkg); err != nil {
-				return err
-			}
-			if i < len(fi.InnerMods) {
-				if err := resolveModRules(fi.InnerMods[i], inner, file, pkg); err != nil {
-					return err
+			collect(fmt.Errorf("dive: %w", err))
+		} else {
+			collect(resolveValidationRules(fi.ElemValidation, elem, file, pkg))
+			collect(resolveModRules(fi.ElemMods, elem, file, pkg))
+			inner := elem
+			for i := range fi.InnerValidation {
+				next, derr := diveElemType(inner)
+				if derr != nil {
+					collect(fmt.Errorf("dive level %d: %w", i+2, derr))
+					break
+				}
+				inner = next
+				collect(resolveValidationRules(fi.InnerValidation[i], inner, file, pkg))
+				if i < len(fi.InnerMods) {
+					collect(resolveModRules(fi.InnerMods[i], inner, file, pkg))
 				}
 			}
 		}
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
 func resolveValidationRules(rules []ValidationRule, fieldType types.Type, file *ast.File, pkg *types.Package) error {
+	var errs []error
 	for i := range rules {
 		if !strings.HasPrefix(rules[i].Name, "@") {
 			continue
@@ -315,17 +311,19 @@ func resolveValidationRules(rules []ValidationRule, fieldType types.Type, file *
 			// Wrap into a richError with CodeSpan = the original
 			// `@ref` token, so the pretty renderer's caret lands on
 			// the offending tag text, not on the field declaration.
-			return &richError{Msg: err.Error(), CodeSpan: "@" + ref}
+			errs = append(errs, &richError{Msg: err.Error(), CodeSpan: "@" + ref})
+			continue
 		}
 		rules[i].Custom = true
 		rules[i].PkgImport = cf.PkgImport
 		rules[i].PkgName = cf.PkgName
 		rules[i].FuncName = cf.FuncName
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
 func resolveModRules(rules []ModRule, fieldType types.Type, file *ast.File, pkg *types.Package) error {
+	var errs []error
 	for i := range rules {
 		if !strings.HasPrefix(rules[i].Name, "@") {
 			continue
@@ -333,7 +331,8 @@ func resolveModRules(rules []ModRule, fieldType types.Type, file *ast.File, pkg 
 		ref := rules[i].Name[1:]
 		cf, err := resolveCustomFunc(ref, fieldType, file, pkg, true)
 		if err != nil {
-			return &richError{Msg: err.Error(), CodeSpan: "@" + ref}
+			errs = append(errs, &richError{Msg: err.Error(), CodeSpan: "@" + ref})
+			continue
 		}
 		rules[i].Custom = true
 		rules[i].PkgImport = cf.PkgImport
@@ -341,7 +340,7 @@ func resolveModRules(rules []ModRule, fieldType types.Type, file *ast.File, pkg 
 		rules[i].FuncName = cf.FuncName
 		rules[i].Fallible = cf.Fallible
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
 // anyCustom reports whether any rule on fi is `@`-prefixed.

@@ -1709,7 +1709,7 @@ type Msg struct {
 			{"trimright_empty", "S string", `json:"s" mod:"trimright="`, "`trimright` requires a non-empty value"},
 			{"replace_missing_pipe", "S string", `json:"s" mod:"replace=foo"`, "requires `old|new` form"},
 			{"replace_empty_old", "S string", `json:"s" mod:"replace=|new"`, "requires `old|new` form"},
-			{"clamp_missing_pipe", "N int", `json:"n" mod:"clamp=10"`, "is missing the `lo|hi` separator"},
+			{"clamp_missing_pipe", "N int", `json:"n" mod:"clamp=10"`, "is missing the lo`|`hi separator"},
 			{"clamp_both_empty", "N int", `json:"n" mod:"clamp=|"`, "requires at least one of lo or hi"},
 			{"clamp_bad_lo", "N int", `json:"n" mod:"clamp=abc|10"`, "lo \"abc\" is not a valid number"},
 			{"clamp_bad_hi", "N int", `json:"n" mod:"clamp=0|abc"`, "hi \"abc\" is not a valid number"},

@@ -4,13 +4,14 @@ package bench
 
 import (
 	"encoding/base64"
+	"strconv"
+	"time"
+	"unsafe"
+
 	"github.com/sirkostya009/ggen/decode"
 	"github.com/sirkostya009/ggen/decode/validation"
 	"github.com/sirkostya009/ggen/encode"
 	"github.com/sirkostya009/ggen/scan"
-	"strconv"
-	"time"
-	"unsafe"
 )
 
 // DecodeFrom decodes one Addr out of data starting at i and returns
@@ -164,7 +165,6 @@ func (Addr) DecodeFrom(data []byte, i int) (Addr, int, error) {
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
@@ -268,7 +268,6 @@ func (Addr) DecodeStreamFrom(_s *scan.Stream, i int) (Addr, int, error) {
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // JSONSize returns an upper bound on the marshaled size, used by
@@ -1140,7 +1139,6 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
@@ -2033,7 +2031,6 @@ func (Node) DecodeStreamFrom(_s *scan.Stream, i int) (Node, int, error) {
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // JSONSize returns an upper bound on the marshaled size, used by
@@ -2641,7 +2638,6 @@ func (Validated) DecodeFrom(data []byte, i int) (Validated, int, error) {
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
@@ -2895,7 +2891,6 @@ func (Validated) DecodeStreamFrom(_s *scan.Stream, i int) (Validated, int, error
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // JSONSize returns an upper bound on the marshaled size, used by

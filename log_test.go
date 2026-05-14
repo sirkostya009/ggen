@@ -210,11 +210,11 @@ func TestPrettyLogger_ColorAndFormat(t *testing.T) {
 	if !strings.Contains(out, ansiGreen) {
 		t.Errorf("pretty Info missing green color: %q", out)
 	}
-	if !strings.Contains(out, ansiCyan) {
-		t.Errorf("pretty Debug missing cyan color: %q", out)
+	if !strings.Contains(out, ansiYellow) {
+		t.Errorf("pretty Debug missing yellow color: %q", out)
 	}
-	if !strings.Contains(out, ansiGray) {
-		t.Errorf("pretty Trace missing gray color: %q", out)
+	if !strings.Contains(out, ansiGreen) {
+		t.Errorf("pretty Trace missing green color: %q", out)
 	}
 	if !strings.Contains(out, ansiReset) {
 		t.Errorf("expected ANSI reset codes, got: %q", out)
@@ -544,7 +544,7 @@ func TestCaretIndent_AnchorsToCodeSpan(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
-			got := caretIndent(c.line, c.prefix, c.posCol, c.span)
+			got := caretIndent(c.line, c.prefix, c.posCol, c.span, "")
 			// First len(prefix) bytes must be spaces (prefix padding).
 			for i := 0; i < len(c.prefix); i++ {
 				if got[i] != ' ' {
@@ -581,7 +581,7 @@ func TestCaretIndent_PicksSpanOverPosCol(t *testing.T) {
 	// candidates. Source has `bar` at col 4 (1-indexed); Pos.Column
 	// points at 'f' (col 1); span "bar" must shift the caret to col 4.
 	line := "foo bar baz"
-	indent := caretIndent(line, "", 1, "bar")
+	indent := caretIndent(line, "", 1, "bar", "")
 	// indent should be 4 spaces (cols 1..4 → caret at col 5? no — caret
 	// indent itself is the prefix; caret is appended by caller. Span
 	// "bar" starts at byte index 4, so indent.len == 4.

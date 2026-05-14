@@ -1002,10 +1002,15 @@ existing once the testing abstraction is vividly clear.
 
 ## How to regenerate
 
+Build the binary into the project directory (`./ggen`), never `/tmp` or
+other scratch paths. The binary is git-ignored; in-tree builds keep the
+binary discoverable, prevent cross-session collisions when multiple
+agents share the host, and match the path the test harness expects.
+
 ```sh
-GOEXPERIMENT=jsonv2 go build -o /tmp/ggen .
-/tmp/ggen .           # regen schema_ggen_test.go
-/tmp/ggen ./bench     # regen bench/bench_ggen.go (the binary still walks
+GOEXPERIMENT=jsonv2 go build -o ggen .
+./ggen .              # regen schema_ggen_test.go
+./ggen ./bench        # regen bench/bench_ggen.go (the binary still walks
                       # the bench dir even though it is a separate module —
                       # ggen reads source files, not module boundaries)
 # easyjson for bench:

@@ -234,16 +234,16 @@ func walkStructDecls(af *ast.File, isTest bool, set *structSet) {
 				}
 				continue
 			}
-			// Non-struct top-level type. Only register when annotated —
-			// untouched aliases that ggen has nothing to do with stay out
-			// of the set entirely so resolve() can't accidentally pick
-			// them up. Validation happens lazily so unsupported aliases
-			// (interfaces, channels, funcs, struct-aliases, …) only error
-			// when the user explicitly asks for codegen on them.
+			// Non-struct top-level type. Register every alias so an
+			// explicit name filter (`ggen file.go Foo`) can target it
+			// via the underlying introspection path — even when the
+			// alias itself is unannotated. The annotation gate only
+			// decides whether the alias auto-generates without a
+			// filter (annotatedList()); BFS over fields doesn't walk
+			// aliases, so unannotated entries can't be picked up by
+			// accident. Unsupported underlyings (interface/chan/func)
+			// still error lazily inside extractAlias when targeted.
 			flags, annotated := parseAnnotation(gd.Doc, ts.Doc)
-			if !annotated {
-				continue
-			}
 			set.aliases[name] = ts
 			set.order = append(set.order, name)
 			set.structFile[name] = af
@@ -251,7 +251,9 @@ func walkStructDecls(af *ast.File, isTest bool, set *structSet) {
 			if isTest {
 				set.fromTest[name] = struct{}{}
 			}
-			set.annotations[name] = flags
+			if annotated {
+				set.annotations[name] = flags
+			}
 		}
 	}
 }
@@ -962,6 +964,52 @@ func attachPosition(err error, pos token.Position) error {
 	return &richError{Pos: pos, Msg: err.Error(), Err: err}
 }
 
+// qualifyRichErrors walks an error tree and prefixes every richError's
+// Msg with `<prefix>: `. Used to stamp the Struct.Field qualifier onto
+// every sub-error in an errors.Join batch from resolveCustomRules —
+// when a field has two failing @-refs (e.g. unresolvable val + mod),
+// both messages need the qualifier, not just the first one
+// errors.AsType would surface.
+//
+// Returns the same err (mutating richErrors in place); non-richError
+// nodes are unchanged. If the tree carries no richError at all,
+// returns a fresh richError wrapping err with the prefixed message
+// so the caller can still attach a position.
+func qualifyRichErrors(err error, prefix string) error {
+	if err == nil {
+		return nil
+	}
+	if !applyQualifier(err, prefix) {
+		return &richError{Msg: fmt.Sprintf("%s: %s", prefix, err.Error()), Err: err}
+	}
+	return err
+}
+
+func applyQualifier(err error, prefix string) bool {
+	if err == nil {
+		return false
+	}
+	found := false
+	if re, ok := err.(*richError); ok {
+		re.Msg = fmt.Sprintf("%s: %s", prefix, re.Msg)
+		found = true
+	}
+	if u, ok := err.(interface{ Unwrap() []error }); ok {
+		for _, sub := range u.Unwrap() {
+			if applyQualifier(sub, prefix) {
+				found = true
+			}
+		}
+		return found
+	}
+	if u, ok := err.(interface{ Unwrap() error }); ok {
+		if applyQualifier(u.Unwrap(), prefix) {
+			found = true
+		}
+	}
+	return found
+}
+
 // setPosOnAll walks an error tree and fills in any unset Pos on every
 // *richError encountered. Returns true if at least one richError was
 // touched (or already present), false when the tree carries none.
@@ -982,7 +1030,7 @@ func setPosOnAll(err error, pos token.Position) bool {
 			refined := pos
 			if re.CodeSpan != "" {
 				if line, ok := readSourceLine(pos.Filename, pos.Line); ok {
-					refined.Column = effectiveCol(line, pos.Column, re.CodeSpan)
+					refined.Column = resolveSpanCol(line, pos.Column, re.CodeSpan, re.Anchor)
 				}
 			}
 			re.Pos = refined
@@ -1037,10 +1085,17 @@ func (s *structSet) extractStruct(name string, st *ast.StructType) (StructInfo, 
 			if !ident.IsExported() {
 				continue
 			}
-			fi, err := extractField(name, ident.Name, field)
-			if err != nil {
-				errs = append(errs, attachPosition(err, s.fileSet.Position(field.Pos())))
-				continue
+			fi, extractErr := extractField(name, ident.Name, field)
+			if extractErr != nil {
+				errs = append(errs, attachPosition(extractErr, s.fileSet.Position(field.Pos())))
+				// Don't `continue` here: applicability failures (the
+				// usual cause of extractErr) leave FieldInfo fully
+				// populated, and a parallel `@FuncName` in a different
+				// tag list (e.g. unknown ggen rule + unresolved mod
+				// @ref) is a legitimately-separate error the user
+				// needs to see. Fall through so resolveCustomRules
+				// runs too. fi.Ignored skips this entire path so
+				// guard it before continuing.
 			}
 			if fi.Ignored {
 				continue
@@ -1066,24 +1121,25 @@ func (s *structSet) extractStruct(name string, st *ast.StructType) (StructInfo, 
 			// Msg (instead of wrapping into a fresh richError) so
 			// CodeSpan / BotHint / UserHint survive.
 			if err := s.resolveCustomRules(name, &fi, fieldType); err != nil {
-				if re, ok := errors.AsType[*richError](err); ok {
-					re.Msg = fmt.Sprintf("%s.%s: %s", name, ident.Name, re.Msg)
-					errs = append(errs, attachPosition(err, s.fileSet.Position(field.Pos())))
-				} else {
-					wrapped := &richError{
-						Msg: fmt.Sprintf("%s.%s: %s", name, ident.Name, err.Error()),
-					}
-					errs = append(errs, attachPosition(wrapped, s.fileSet.Position(field.Pos())))
-				}
+				// resolveCustomRules may return an errors.Join batch
+				// of multiple richErrors (one per failed @-ref).
+				// Qualify EVERY sub-richError's Msg with the
+				// Struct.Field prefix — qualifying only the first
+				// would leave later messages naked.
+				qualified := qualifyRichErrors(err, fmt.Sprintf("%s.%s", name, ident.Name))
+				errs = append(errs, attachPosition(qualified, s.fileSet.Position(field.Pos())))
 				continue
 			}
-			info.Fields = append(info.Fields, fi)
+			// Only append a valid FieldInfo if extraction itself succeeded.
+			// When extractErr was set, the field had a parse-time problem
+			// (e.g. unknown rule) and the gen file shouldn't emit code
+			// for it.
+			if extractErr == nil {
+				info.Fields = append(info.Fields, fi)
+			}
 		}
 	}
-	if len(errs) > 0 {
-		return info, errors.Join(errs...)
-	}
-	return info, nil
+	return info, errors.Join(errs...)
 }
 
 // extractEmbedded resolves an embedded field and returns the promoted fields

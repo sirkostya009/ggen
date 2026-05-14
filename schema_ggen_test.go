@@ -8,10 +8,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/sirkostya009/ggen/decode"
-	"github.com/sirkostya009/ggen/decode/validation"
-	"github.com/sirkostya009/ggen/encode"
-	"github.com/sirkostya009/ggen/scan"
 	"net"
 	"net/netip"
 	"strconv"
@@ -19,6 +15,11 @@ import (
 	"time"
 	"unicode/utf8"
 	"unsafe"
+
+	"github.com/sirkostya009/ggen/decode"
+	"github.com/sirkostya009/ggen/decode/validation"
+	"github.com/sirkostya009/ggen/encode"
+	"github.com/sirkostya009/ggen/scan"
 )
 
 var _oneof_0 = []string{"admin", "user", "guest"}
@@ -466,7 +467,6 @@ func (PlainAlias) DecodeFrom(data []byte, i int) (PlainAlias, int, error) {
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
@@ -567,7 +567,6 @@ func (PlainAlias) DecodeStreamFrom(_s *scan.Stream, i int) (PlainAlias, int, err
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // JSONSize returns an upper bound on the marshaled size, used by
@@ -740,7 +739,6 @@ func (SamePkgAlias) DecodeFrom(data []byte, i int) (SamePkgAlias, int, error) {
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
@@ -841,7 +839,6 @@ func (SamePkgAlias) DecodeStreamFrom(_s *scan.Stream, i int) (SamePkgAlias, int,
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // JSONSize returns an upper bound on the marshaled size, used by
@@ -1016,7 +1013,6 @@ func (CrossPkgTaggedAlias) DecodeFrom(data []byte, i int) (CrossPkgTaggedAlias, 
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
@@ -1120,7 +1116,6 @@ func (CrossPkgTaggedAlias) DecodeStreamFrom(_s *scan.Stream, i int) (CrossPkgTag
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // JSONSize returns an upper bound on the marshaled size, used by
@@ -1961,7 +1956,6 @@ func (AliasFieldExample) DecodeFrom(data []byte, i int) (AliasFieldExample, int,
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
@@ -2091,7 +2085,6 @@ func (AliasFieldExample) DecodeStreamFrom(_s *scan.Stream, i int) (AliasFieldExa
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // JSONSize returns an upper bound on the marshaled size, used by
@@ -2369,7 +2362,6 @@ func (MultiErrStruct) DecodeFrom(data []byte, i int) (MultiErrStruct, int, error
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
@@ -2552,7 +2544,6 @@ func (MultiErrStruct) DecodeStreamFrom(_s *scan.Stream, i int) (MultiErrStruct, 
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // JSONSize returns an upper bound on the marshaled size, used by
@@ -2743,7 +2734,6 @@ func (AllowDupsStruct) DecodeFrom(data []byte, i int) (AllowDupsStruct, int, err
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
@@ -2859,7 +2849,6 @@ func (AllowDupsStruct) DecodeStreamFrom(_s *scan.Stream, i int) (AllowDupsStruct
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // JSONSize returns an upper bound on the marshaled size, used by
@@ -3212,7 +3201,6 @@ func (DiveStruct) DecodeFrom(data []byte, i int) (DiveStruct, int, error) {
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
@@ -3510,7 +3498,6 @@ func (DiveStruct) DecodeStreamFrom(_s *scan.Stream, i int) (DiveStruct, int, err
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // JSONSize returns an upper bound on the marshaled size, used by
@@ -4079,7 +4066,6 @@ func (CustomDiveStruct) DecodeFrom(data []byte, i int) (CustomDiveStruct, int, e
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
@@ -4572,7 +4558,6 @@ func (CustomDiveStruct) DecodeStreamFrom(_s *scan.Stream, i int) (CustomDiveStru
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // JSONSize returns an upper bound on the marshaled size, used by
@@ -5072,7 +5057,6 @@ func (SQLNullStruct) DecodeFrom(data []byte, i int) (SQLNullStruct, int, error) 
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
@@ -5452,7 +5436,6 @@ func (SQLNullStruct) DecodeStreamFrom(_s *scan.Stream, i int) (SQLNullStruct, in
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // JSONSize returns an upper bound on the marshaled size, used by
@@ -5655,7 +5638,6 @@ func (AnyStruct) DecodeFrom(data []byte, i int) (AnyStruct, int, error) {
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
@@ -5758,7 +5740,6 @@ func (AnyStruct) DecodeStreamFrom(_s *scan.Stream, i int) (AnyStruct, int, error
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // JSONSize returns an upper bound on the marshaled size, used by
@@ -5916,7 +5897,6 @@ func (AnyNumberStruct) DecodeFrom(data []byte, i int) (AnyNumberStruct, int, err
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
@@ -6019,7 +5999,6 @@ func (AnyNumberStruct) DecodeStreamFrom(_s *scan.Stream, i int) (AnyNumberStruct
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // JSONSize returns an upper bound on the marshaled size, used by
@@ -6148,7 +6127,6 @@ func (GofrsUUIDStruct) DecodeFrom(data []byte, i int) (GofrsUUIDStruct, int, err
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
@@ -6240,7 +6218,6 @@ func (GofrsUUIDStruct) DecodeStreamFrom(_s *scan.Stream, i int) (GofrsUUIDStruct
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // JSONSize returns an upper bound on the marshaled size, used by
@@ -6880,7 +6857,6 @@ func (ExtraStruct) DecodeFrom(data []byte, i int) (ExtraStruct, int, error) {
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
@@ -7564,7 +7540,6 @@ func (ExtraStruct) DecodeStreamFrom(_s *scan.Stream, i int) (ExtraStruct, int, e
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // JSONSize returns an upper bound on the marshaled size, used by
@@ -8248,7 +8223,6 @@ func (TupleStruct) DecodeFrom(data []byte, i int) (TupleStruct, int, error) {
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
@@ -8726,7 +8700,6 @@ func (TupleStruct) DecodeStreamFrom(_s *scan.Stream, i int) (TupleStruct, int, e
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // JSONSize returns an upper bound on the marshaled size, used by
@@ -8992,7 +8965,6 @@ func (FallbackStruct) DecodeFrom(data []byte, i int) (FallbackStruct, int, error
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
@@ -9101,7 +9073,6 @@ func (FallbackStruct) DecodeStreamFrom(_s *scan.Stream, i int) (FallbackStruct, 
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // JSONSize returns an upper bound on the marshaled size, used by
@@ -9266,7 +9237,6 @@ func (FastFallbackStruct) DecodeFrom(data []byte, i int) (FastFallbackStruct, in
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
@@ -9372,7 +9342,6 @@ func (FastFallbackStruct) DecodeStreamFrom(_s *scan.Stream, i int) (FastFallback
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // JSONSize returns an upper bound on the marshaled size, used by
@@ -9539,7 +9508,6 @@ func (TextFallbackStruct) DecodeFrom(data []byte, i int) (TextFallbackStruct, in
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
@@ -9647,7 +9615,6 @@ func (TextFallbackStruct) DecodeStreamFrom(_s *scan.Stream, i int) (TextFallback
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // JSONSize returns an upper bound on the marshaled size, used by
@@ -9795,7 +9762,6 @@ func (HTMLRawStruct) DecodeFrom(data []byte, i int) (HTMLRawStruct, int, error) 
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
@@ -9883,7 +9849,6 @@ func (HTMLRawStruct) DecodeStreamFrom(_s *scan.Stream, i int) (HTMLRawStruct, in
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // JSONSize returns an upper bound on the marshaled size, used by
@@ -10022,7 +9987,6 @@ func (HTMLEscapeStruct) DecodeFrom(data []byte, i int) (HTMLEscapeStruct, int, e
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
@@ -10110,7 +10074,6 @@ func (HTMLEscapeStruct) DecodeStreamFrom(_s *scan.Stream, i int) (HTMLEscapeStru
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // JSONSize returns an upper bound on the marshaled size, used by
@@ -10275,7 +10238,6 @@ func (InlineStruct) DecodeFrom(data []byte, i int) (InlineStruct, int, error) {
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
@@ -10389,7 +10351,6 @@ func (InlineStruct) DecodeStreamFrom(_s *scan.Stream, i int) (InlineStruct, int,
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // JSONSize returns an upper bound on the marshaled size, used by
@@ -10830,7 +10791,6 @@ func (MapStruct) DecodeFrom(data []byte, i int) (MapStruct, int, error) {
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
@@ -11211,7 +11171,6 @@ func (MapStruct) DecodeStreamFrom(_s *scan.Stream, i int) (MapStruct, int, error
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // JSONSize returns an upper bound on the marshaled size, used by
@@ -11742,7 +11701,6 @@ func (MapDiveStruct) DecodeFrom(data []byte, i int) (MapDiveStruct, int, error) 
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
@@ -12138,7 +12096,6 @@ func (MapDiveStruct) DecodeStreamFrom(_s *scan.Stream, i int) (MapDiveStruct, in
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // JSONSize returns an upper bound on the marshaled size, used by
@@ -12430,7 +12387,6 @@ func (Derived) DecodeFrom(data []byte, i int) (Derived, int, error) {
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
@@ -12562,7 +12518,6 @@ func (Derived) DecodeStreamFrom(_s *scan.Stream, i int) (Derived, int, error) {
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // JSONSize returns an upper bound on the marshaled size, used by
@@ -12837,7 +12792,6 @@ func (ModStruct) DecodeFrom(data []byte, i int) (ModStruct, int, error) {
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
@@ -13034,7 +12988,6 @@ func (ModStruct) DecodeStreamFrom(_s *scan.Stream, i int) (ModStruct, int, error
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // JSONSize returns an upper bound on the marshaled size, used by
@@ -13214,7 +13167,6 @@ func (FallibleModStruct) DecodeFrom(data []byte, i int) (FallibleModStruct, int,
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
@@ -13319,7 +13271,6 @@ func (FallibleModStruct) DecodeStreamFrom(_s *scan.Stream, i int) (FallibleModSt
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // JSONSize returns an upper bound on the marshaled size, used by
@@ -13499,7 +13450,6 @@ func (FallibleModMultierrStruct) DecodeFrom(data []byte, i int) (FallibleModMult
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
@@ -13628,7 +13578,6 @@ func (FallibleModMultierrStruct) DecodeStreamFrom(_s *scan.Stream, i int) (Falli
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // JSONSize returns an upper bound on the marshaled size, used by
@@ -14142,7 +14091,6 @@ func (NativeTypes) DecodeFrom(data []byte, i int) (NativeTypes, int, error) {
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
@@ -14452,7 +14400,6 @@ func (NativeTypes) DecodeStreamFrom(_s *scan.Stream, i int) (NativeTypes, int, e
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // JSONSize returns an upper bound on the marshaled size, used by
@@ -15074,7 +15021,6 @@ func (OmitStruct) DecodeFrom(data []byte, i int) (OmitStruct, int, error) {
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
@@ -15576,7 +15522,6 @@ func (OmitStruct) DecodeStreamFrom(_s *scan.Stream, i int) (OmitStruct, int, err
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // JSONSize returns an upper bound on the marshaled size, used by
@@ -15994,7 +15939,6 @@ func (PointerStruct) DecodeFrom(data []byte, i int) (PointerStruct, int, error) 
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
@@ -16292,7 +16236,6 @@ func (PointerStruct) DecodeStreamFrom(_s *scan.Stream, i int) (PointerStruct, in
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // JSONSize returns an upper bound on the marshaled size, used by
@@ -16534,7 +16477,6 @@ func (IgnoreUnknownStruct) DecodeFrom(data []byte, i int) (IgnoreUnknownStruct, 
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
@@ -16630,7 +16572,6 @@ func (IgnoreUnknownStruct) DecodeStreamFrom(_s *scan.Stream, i int) (IgnoreUnkno
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // JSONSize returns an upper bound on the marshaled size, used by
@@ -16867,7 +16808,6 @@ func (Address) DecodeFrom(data []byte, i int) (Address, int, error) {
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
@@ -17017,7 +16957,6 @@ func (Address) DecodeStreamFrom(_s *scan.Stream, i int) (Address, int, error) {
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // JSONSize returns an upper bound on the marshaled size, used by
@@ -17554,7 +17493,6 @@ func (SomePayloadRequestStruct) DecodeFrom(data []byte, i int) (SomePayloadReque
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
@@ -17959,7 +17897,6 @@ func (SomePayloadRequestStruct) DecodeStreamFrom(_s *scan.Stream, i int) (SomePa
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // JSONSize returns an upper bound on the marshaled size, used by
@@ -18248,7 +18185,6 @@ func (AnotherStruct) DecodeFrom(data []byte, i int) (AnotherStruct, int, error) 
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
@@ -18404,7 +18340,6 @@ func (AnotherStruct) DecodeStreamFrom(_s *scan.Stream, i int) (AnotherStruct, in
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // JSONSize returns an upper bound on the marshaled size, used by
@@ -18853,7 +18788,6 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
@@ -19256,7 +19190,6 @@ func (Node) DecodeStreamFrom(_s *scan.Stream, i int) (Node, int, error) {
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // JSONSize returns an upper bound on the marshaled size, used by
@@ -20849,7 +20782,6 @@ func (WideStruct) DecodeFrom(data []byte, i int) (WideStruct, int, error) {
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
@@ -21612,7 +21544,6 @@ func (WideStruct) DecodeStreamFrom(_s *scan.Stream, i int) (WideStruct, int, err
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // JSONSize returns an upper bound on the marshaled size, used by
@@ -22054,7 +21985,6 @@ func (PtrSliceStruct) DecodeFrom(data []byte, i int) (PtrSliceStruct, int, error
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
@@ -22473,7 +22403,6 @@ func (PtrSliceStruct) DecodeStreamFrom(_s *scan.Stream, i int) (PtrSliceStruct, 
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // JSONSize returns an upper bound on the marshaled size, used by
