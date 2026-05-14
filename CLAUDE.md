@@ -949,6 +949,57 @@ Running tests: `GOEXPERIMENT=jsonv2 go test ./...` for the root module;
 `(cd bench && GOEXPERIMENT=jsonv2 go test ./...)` for benchmarks
 (separate module, not reached by root's `./...`).
 
+## Adding new tests
+
+Before writing a new test, do this in order:
+
+1. **Audit existing tests.** `grep` the codebase for similar
+   assertions, struct annotations, or feature names. The list under
+   "Test files" above is your first stop. Common cases — Address,
+   Node, slice/map shapes — are covered; the test you're imagining
+   may already exist in spirit.
+2. **Extend, don't duplicate.** When a related test already exists,
+   PREFER modifying it to cover the new case — even when that
+   means refactoring the existing test into a table-driven loop.
+   Patterns to look for:
+    - Single assertion that could become a `cases := []struct{…}{}`
+      slice with one entry per scenario.
+    - Inline subtest body that could be lifted into a helper called
+      from a `for _, c := range cases { t.Run(c.name, …) }` loop.
+    - Multiple `t.Run("X", …)` blocks with copy-pasted bodies —
+      candidates for the same loop treatment.
+   The applicability tests in `cli_test.go` (the big
+   `InvalidRuleApplication` table) are the reference shape:
+   one slice of `{name, input, wantSubstring}` triples, one
+   `t.Run` per row. ~80 cases sit cleanly under one parent.
+3. **Avoid creating new helpers** unless the same setup recurs
+   ≥3 times. `runCLI`, `writeFixture`, `captured`, `mustHaveFile`,
+   `writeGoFile` already exist; check the matching `_test.go` file
+   for in-package helpers before writing your own.
+4. **Pick the host file.** Each `*_test.go` corresponds to a feature
+   area (dive, mods, inline, native, pointer, etc.). New tests
+   belong in the file whose existing tests share the most context
+   with the new case. Don't fragment.
+5. **Only create a new `*_test.go` file** when the new feature has
+   no existing home (rare). New files duplicate setup boilerplate
+   and create grep dilution — avoid unless the test surface is
+   genuinely new.
+6. **Pick the host struct.** Look at `shared_test.go` and the
+   annotated structs at the top of each feature test file.
+   `Address`, `Node`, `WideStruct`, `Multi`, `Bad` etc. cover most
+   feature combinations. Re-use the existing struct when its
+   shape lets you exercise the new case. Can also extend existing
+   structs with new fields if they fall under the same test category
+   but don't have coverage yet.
+7. **Only add a new struct** when no existing one carries the
+   right field kind / tag combination. Annotated test structs go
+   in the same file as the test that uses them; add to
+   `shared_test.go` only when two or more files need it.
+
+When the right approach is unclear, default to: adding new top level
+test functions. After that considering merging newly added tests into
+existing once the testing abstraction is vividly clear.
+
 ## How to regenerate
 
 ```sh
