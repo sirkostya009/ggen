@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# pre-commit: run golangci-lint --fix on the root module + bench.
+# pre-commit: run golangci-lint fmt + run --fix on the root module + bench.
 # Enable for this repo with:
 #   git config core.hooksPath .githooks
 
@@ -16,19 +16,63 @@ export GOEXPERIMENT
 # changes would silently slip into the commit.
 mapfile -t staged < <(git diff --cached --name-only --diff-filter=ACM | grep -E '\.go$' || true)
 
-run() {
-	local dir=$1
-	printf "\e[1;2m$ \e[22;1mgolangci-lint \e[22mrun --fix \e[93m$dir\e[0m\n"
-	(cd "$dir" && golangci-lint run --fix)
+# Stash unstaged worktree changes so fmt/--fix only see the staged content.
+# Without this, a partially-staged file would have its unstaged hunks
+# bundled into the commit when we re-stage --fix's rewrites.
+# Tag with PID so cleanup can sweep the exact entry we created.
+stash_tag="pre-commit-auto-stash-$$"
+stashed=0
+if ! git diff --quiet; then
+	git stash push --keep-index --quiet --message "$stash_tag"
+	stashed=1
+fi
+
+cleanup() {
+	local ec=$?
+	if [ "$stashed" = 1 ]; then
+		# Snapshot the lint-fixed index before pop so we can restore it if
+		# pop conflicts (write-tree requires a clean index, so capture first).
+		local saved_index=""
+		saved_index=$(git write-tree 2>/dev/null) || true
+		if ! git stash pop --quiet 2>/dev/null; then
+			# Conflict between lint's fixes and user's unstaged changes.
+			# Force-restore user's pre-stash worktree so nothing is lost; keep
+			# lint fixes in the index (= what's being committed).
+			if [ -n "$saved_index" ]; then
+				mapfile -t conflicted < <(git diff --name-only --diff-filter=U)
+				git read-tree "$saved_index" 2>/dev/null || true
+				for f in "${conflicted[@]}"; do
+					git show "stash@{0}:$f" > "$f" 2>/dev/null || true
+				done
+				echo "pre-commit: stash conflicted — force-restored worktree from stash; index keeps lint fixes" >&2
+			fi
+		fi
+		# Belt-and-suspenders: drop any stash entry still tagged with our
+		# PID. Covers any pop failure that left our entry behind.
+		local entry
+		while entry=$(git stash list 2>/dev/null | grep -F "$stash_tag" | head -1 | cut -d: -f1) && [ -n "$entry" ]; do
+			git stash drop --quiet "$entry" 2>/dev/null || break
+		done
+	fi
+	return $ec
+}
+trap cleanup EXIT
+
+run_in() {
+	local dir=$1; shift
+	printf "\e[1;2m$ \e[22;1mgolangci-lint \e[22m$* \e[93m$dir\e[0m\n"
+	(cd "$dir" && golangci-lint "$@")
 }
 
-run .
+run_in . fmt
+run_in . run --fix
 if [ -f bench/go.mod ]; then
-	run bench
+	run_in bench fmt
+	run_in bench run --fix
 fi
 
 if [ ${#staged[@]} -gt 0 ]; then
-	# Re-stage only previously-staged files that --fix rewrote.
+	# Re-stage only previously-staged files that fmt/--fix rewrote.
 	restage=()
 	for f in "${staged[@]}"; do
 		if ! git diff --quiet -- "$f"; then
@@ -36,7 +80,7 @@ if [ ${#staged[@]} -gt 0 ]; then
 		fi
 	done
 	if [ ${#restage[@]} -gt 0 ]; then
-		echo "pre-commit: re-staging files modified by --fix:"
+		echo "pre-commit: re-staging files modified by fmt/--fix:"
 		printf '  %s\n' "${restage[@]}"
 		git add -- "${restage[@]}"
 	fi
