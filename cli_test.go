@@ -1224,10 +1224,10 @@ type Msg struct {
 		// generated method falls back to encoding/json against result.Tag /
 		// s.Tag specifically. Field-bound match confirms the json fallback
 		// landed at the correct call site and not some adjacent emission.
-		if got := strings.Count(body, "json.Unmarshal(data[_start:i], &result.Tag)"); got != 1 {
+		if got := strings.Count(body, "json.Unmarshal(data[start:i], &result.Tag)"); got != 1 {
 			t.Errorf("expected 1 json.Unmarshal on &result.Tag in DecodeFrom, got %d:\n%s", got, body)
 		}
-		if got := strings.Count(body, "json.Unmarshal(_s.Bytes()[_start:i], &result.Tag)"); got != 1 {
+		if got := strings.Count(body, "json.Unmarshal(s.Bytes()[start:i], &result.Tag)"); got != 1 {
 			t.Errorf("expected 1 json.Unmarshal on &result.Tag in DecodeStreamFrom, got %d:\n%s", got, body)
 		}
 		if !strings.Contains(body, "json.Marshal(s.Tag)") {
@@ -1342,10 +1342,10 @@ func Reject(s string) (string, error) {
 			t.Fatalf("ggen ./fallible: %v\n%s", err, out)
 		}
 		body := mustReadOutput(t, filepath.Join(dir, "fallible_ggen.go"))
-		if !strings.Contains(body, "if _v, _err := Reject(result.S); _err != nil") {
+		if !strings.Contains(body, "if v, err := Reject(result.S); err != nil") {
 			t.Errorf("expected fallible mod with err-prop branch, got:\n%s", body)
 		}
-		if !strings.Contains(body, "return result, i, _err") {
+		if !strings.Contains(body, "return result, i, err") {
 			t.Errorf("expected parse-error return on fallible mod, got:\n%s", body)
 		}
 	})
@@ -1528,7 +1528,7 @@ type Count int
 		if !strings.Contains(body, "(HtmlString) DecodeFrom") {
 			t.Errorf("HtmlString.DecodeFrom missing:\n%s", body)
 		}
-		if !strings.Contains(body, "result = HtmlString(_v)") {
+		if !strings.Contains(body, "result = HtmlString(v)") {
 			t.Errorf("HtmlString cast missing:\n%s", body)
 		}
 		if !strings.Contains(body, "(Count) DecodeFrom") {

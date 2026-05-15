@@ -40,16 +40,16 @@ func (External2) DecodeFrom(data []byte, i int) (External2, int, error) {
 			return result, i, scan.ErrExpectString
 		}
 		{
-			_ke := i + 1
-			for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
-				_ke++
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' {
+				ke++
 			}
-			if _ke >= len(data) {
+			if ke >= len(data) {
 				return result, i, scan.ErrUnterminated
 			}
-			if data[_ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), _ke-i-1)
-				i = _ke + 1
+			if data[ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
 			} else {
 				key, i, err = scan.String(data, i)
 				if err != nil {
@@ -78,16 +78,16 @@ func (External2) DecodeFrom(data []byte, i int) (External2, int, error) {
 					return result, i, scan.ErrExpectString
 				}
 				{
-					_ke := i + 1
-					for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
-						_ke++
+					ke := i + 1
+					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' {
+						ke++
 					}
-					if _ke >= len(data) {
+					if ke >= len(data) {
 						return result, i, scan.ErrUnterminated
 					}
-					if data[_ke] == '"' {
-						result.Key = unsafe.String(unsafe.SliceData(data[i+1:]), _ke-i-1)
-						i = _ke + 1
+					if data[ke] == '"' {
+						result.Key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						i = ke + 1
 					} else {
 						result.Key, i, err = scan.String(data, i)
 						if err != nil {
@@ -108,29 +108,29 @@ func (External2) DecodeFrom(data []byte, i int) (External2, int, error) {
 				}
 				seenValue = true
 				{
-					_neg := false
+					neg := false
 					if i < len(data) && data[i] == '-' {
-						_neg = true
+						neg = true
 						i++
 					}
 					if i >= len(data) || data[i] < '0' || data[i] > '9' {
 						return result, i, scan.ErrBadNumber
 					}
-					var _n int64
+					var n int64
 					for i < len(data) && data[i] >= '0' && data[i] <= '9' {
-						_n = _n*10 + int64(data[i]-'0')
+						n = n*10 + int64(data[i]-'0')
 						i++
 					}
 					if i < len(data) {
-						_c := data[i]
-						if _c == '.' || _c == 'e' || _c == 'E' {
+						c := data[i]
+						if c == '.' || c == 'e' || c == 'E' {
 							return result, i, scan.ErrBadNumber
 						}
 					}
-					if _neg {
-						_n = -_n
+					if neg {
+						n = -n
 					}
-					result.Value = int(_n)
+					result.Value = int(n)
 				}
 				if result.Value < 0 {
 					return result, i, &validation.GTEError{Field: "value", Limit: 0, Value: result.Value}
@@ -164,24 +164,24 @@ func (External2) DecodeFrom(data []byte, i int) (External2, int, error) {
 	}
 }
 
-func (External2) DecodeStreamFrom(_s *scan.Stream, i int) (External2, int, error) {
+func (External2) DecodeStreamFrom(s *scan.Stream, i int) (External2, int, error) {
 	var result External2
 	seenKey := false
 	seenValue := false
-	i, err := _s.ObjectOpen(i)
+	i, err := s.ObjectOpen(i)
 	if err != nil {
 		return result, i, err
 	}
-	i, err = _s.SkipSpace(i)
+	i, err = s.SkipSpace(i)
 	if err != nil {
 		return result, i, err
 	}
-	if i >= len(_s.Bytes()) {
-		if err = _s.ReadMore(); err != nil {
+	if i >= len(s.Bytes()) {
+		if err = s.ReadMore(); err != nil {
 			return result, i, err
 		}
 	}
-	if _s.Bytes()[i] == '}' {
+	if s.Bytes()[i] == '}' {
 		if !seenKey {
 			return result, i, &validation.RequiredError{Field: "key"}
 		}
@@ -189,23 +189,23 @@ func (External2) DecodeStreamFrom(_s *scan.Stream, i int) (External2, int, error
 	}
 	for {
 		var key string
-		key, i, err = _s.KeyView(i)
+		key, i, err = s.KeyView(i)
 		if err != nil {
 			return result, i, err
 		}
-		i, err = _s.SkipSpace(i)
+		i, err = s.SkipSpace(i)
 		if err != nil {
 			return result, i, err
 		}
-		if i >= len(_s.Bytes()) {
-			if err = _s.ReadMore(); err != nil {
+		if i >= len(s.Bytes()) {
+			if err = s.ReadMore(); err != nil {
 				return result, i, err
 			}
 		}
-		if _s.Bytes()[i] != ':' {
+		if s.Bytes()[i] != ':' {
 			return result, i, scan.ErrBadObject
 		}
-		i, err = _s.SkipSpace(i + 1)
+		i, err = s.SkipSpace(i + 1)
 		if err != nil {
 			return result, i, err
 		}
@@ -216,7 +216,7 @@ func (External2) DecodeStreamFrom(_s *scan.Stream, i int) (External2, int, error
 					return result, i, &validation.DuplicateKeyError{Field: "key"}
 				}
 				seenKey = true
-				result.Key, i, err = _s.String(i)
+				result.Key, i, err = s.String(i)
 				if err != nil {
 					return result, i, err
 				}
@@ -232,12 +232,12 @@ func (External2) DecodeStreamFrom(_s *scan.Stream, i int) (External2, int, error
 					return result, i, &validation.DuplicateKeyError{Field: "value"}
 				}
 				seenValue = true
-				var _iv int64
-				_iv, i, err = _s.Int64(i)
+				var iv int64
+				iv, i, err = s.Int64(i)
 				if err != nil {
 					return result, i, err
 				}
-				result.Value = int(_iv)
+				result.Value = int(iv)
 				if result.Value < 0 {
 					return result, i, &validation.GTEError{Field: "value", Limit: 0, Value: result.Value}
 				}
@@ -247,18 +247,18 @@ func (External2) DecodeStreamFrom(_s *scan.Stream, i int) (External2, int, error
 		default:
 			return result, i, &validation.UnknownKeyError{Field: key}
 		}
-		i, err = _s.SkipSpace(i)
+		i, err = s.SkipSpace(i)
 		if err != nil {
 			return result, i, err
 		}
-		if i >= len(_s.Bytes()) {
-			if err = _s.ReadMore(); err != nil {
+		if i >= len(s.Bytes()) {
+			if err = s.ReadMore(); err != nil {
 				return result, i, err
 			}
 		}
-		c := _s.Bytes()[i]
+		c := s.Bytes()[i]
 		if c == ',' {
-			i, err = _s.SkipSpace(i + 1)
+			i, err = s.SkipSpace(i + 1)
 			if err != nil {
 				return result, i, err
 			}

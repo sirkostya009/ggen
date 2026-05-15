@@ -21,15 +21,15 @@ func renderAliasDecode(s StructInfo) string {
 	b.WriteString("var err error\n_ = err\n")
 	switch s.AliasKind {
 	case KindString:
-		fmt.Fprintf(&b, "var _v string\n_v, i, err = scan.String(data, i)\nif err != nil { return result, i, err }\nresult = %s(_v)\n", s.Name)
+		fmt.Fprintf(&b, "var v string\nv, i, err = scan.String(data, i)\nif err != nil { return result, i, err }\nresult = %s(v)\n", s.Name)
 	case KindBool:
-		fmt.Fprintf(&b, "var _v bool\n_v, i, err = scan.Bool(data, i)\nif err != nil { return result, i, err }\nresult = %s(_v)\n", s.Name)
+		fmt.Fprintf(&b, "var v bool\nv, i, err = scan.Bool(data, i)\nif err != nil { return result, i, err }\nresult = %s(v)\n", s.Name)
 	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
-		fmt.Fprintf(&b, "var _v int64\n_v, i, err = scan.Int64(data, i)\nif err != nil { return result, i, err }\nresult = %s(_v)\n", s.Name)
+		fmt.Fprintf(&b, "var v int64\nv, i, err = scan.Int64(data, i)\nif err != nil { return result, i, err }\nresult = %s(v)\n", s.Name)
 	case KindUint, KindUint8, KindUint16, KindUint32, KindUint64:
-		fmt.Fprintf(&b, "var _v uint64\n_v, i, err = scan.Uint64(data, i)\nif err != nil { return result, i, err }\nresult = %s(_v)\n", s.Name)
+		fmt.Fprintf(&b, "var v uint64\nv, i, err = scan.Uint64(data, i)\nif err != nil { return result, i, err }\nresult = %s(v)\n", s.Name)
 	case KindFloat32, KindFloat64:
-		fmt.Fprintf(&b, "var _v float64\n_v, i, err = scan.Float64(data, i)\nif err != nil { return result, i, err }\nresult = %s(_v)\n", s.Name)
+		fmt.Fprintf(&b, "var v float64\nv, i, err = scan.Float64(data, i)\nif err != nil { return result, i, err }\nresult = %s(v)\n", s.Name)
 	}
 	b.WriteString("return result, i, nil\n")
 	return b.String()
@@ -49,15 +49,15 @@ func renderAliasStreamDecode(s StructInfo) string {
 	b.WriteString("var err error\n_ = err\n")
 	switch s.AliasKind {
 	case KindString:
-		fmt.Fprintf(&b, "var _v string\n_v, i, err = _s.String(i)\nif err != nil { return result, i, err }\nresult = %s(_v)\n", s.Name)
+		fmt.Fprintf(&b, "var v string\nv, i, err = s.String(i)\nif err != nil { return result, i, err }\nresult = %s(v)\n", s.Name)
 	case KindBool:
-		fmt.Fprintf(&b, "var _v bool\n_v, i, err = _s.Bool(i)\nif err != nil { return result, i, err }\nresult = %s(_v)\n", s.Name)
+		fmt.Fprintf(&b, "var v bool\nv, i, err = s.Bool(i)\nif err != nil { return result, i, err }\nresult = %s(v)\n", s.Name)
 	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
-		fmt.Fprintf(&b, "var _v int64\n_v, i, err = _s.Int64(i)\nif err != nil { return result, i, err }\nresult = %s(_v)\n", s.Name)
+		fmt.Fprintf(&b, "var v int64\nv, i, err = s.Int64(i)\nif err != nil { return result, i, err }\nresult = %s(v)\n", s.Name)
 	case KindUint, KindUint8, KindUint16, KindUint32, KindUint64:
-		fmt.Fprintf(&b, "var _v uint64\n_v, i, err = _s.Uint64(i)\nif err != nil { return result, i, err }\nresult = %s(_v)\n", s.Name)
+		fmt.Fprintf(&b, "var v uint64\nv, i, err = s.Uint64(i)\nif err != nil { return result, i, err }\nresult = %s(v)\n", s.Name)
 	case KindFloat32, KindFloat64:
-		fmt.Fprintf(&b, "var _v float64\n_v, i, err = _s.Float64(i)\nif err != nil { return result, i, err }\nresult = %s(_v)\n", s.Name)
+		fmt.Fprintf(&b, "var v float64\nv, i, err = s.Float64(i)\nif err != nil { return result, i, err }\nresult = %s(v)\n", s.Name)
 	}
 	b.WriteString("return result, i, nil\n")
 	return b.String()
@@ -126,7 +126,7 @@ func renderAliasAppendJSON(s StructInfo) string {
 //   - JSONUnmarshaler → SkipValue + UnmarshalJSON over the raw span
 //   - TextUnmarshaler → scan.String + UnmarshalText
 //
-// The receiver is value-typed so we declare a fresh `_u` of the
+// The receiver is value-typed so we declare a fresh `u` of the
 // underlying type, drive its Unmarshal* method, then cast back to the
 // alias type. No allocation beyond what the underlying method itself
 // performs.
@@ -135,38 +135,38 @@ func renderAliasStructDecode(s StructInfo, stream bool) string {
 	b.WriteString("var result " + s.Name + "\n")
 	switch {
 	case s.AliasIface.ByteDecoder && !stream:
-		fmt.Fprintf(&b, "var _u %s\n", s.AliasUnderlying)
-		b.WriteString("v, k, err := _u.DecodeFrom(data, i)\n")
+		fmt.Fprintf(&b, "var u %s\n", s.AliasUnderlying)
+		b.WriteString("v, k, err := u.DecodeFrom(data, i)\n")
 		b.WriteString("if err != nil { return result, i, err }\n")
 		fmt.Fprintf(&b, "result = %s(v)\nreturn result, k, nil\n", s.Name)
 	case s.AliasIface.StreamDecoder && stream:
-		fmt.Fprintf(&b, "var _u %s\n", s.AliasUnderlying)
-		b.WriteString("v, k, err := _u.DecodeStreamFrom(_s, i)\n")
+		fmt.Fprintf(&b, "var u %s\n", s.AliasUnderlying)
+		b.WriteString("v, k, err := u.DecodeStreamFrom(s, i)\n")
 		b.WriteString("if err != nil { return result, i, err }\n")
 		fmt.Fprintf(&b, "result = %s(v)\nreturn result, k, nil\n", s.Name)
 	case s.AliasIface.JSONUnmarshaler:
 		if stream {
-			b.WriteString("_start := i\n_k, err := _s.SkipValue(_start)\n")
+			b.WriteString("start := i\nk, err := s.SkipValue(start)\n")
 			b.WriteString("if err != nil { return result, i, err }\n")
-			fmt.Fprintf(&b, "var _u %s\n", s.AliasUnderlying)
-			b.WriteString("if err := _u.UnmarshalJSON(_s.Bytes()[_start:_k]); err != nil { return result, i, err }\n")
+			fmt.Fprintf(&b, "var u %s\n", s.AliasUnderlying)
+			b.WriteString("if err := u.UnmarshalJSON(s.Bytes()[start:k]); err != nil { return result, i, err }\n")
 		} else {
-			b.WriteString("_start := i\n_k, err := scan.SkipValue(data, _start)\n")
+			b.WriteString("start := i\nk, err := scan.SkipValue(data, start)\n")
 			b.WriteString("if err != nil { return result, i, err }\n")
-			fmt.Fprintf(&b, "var _u %s\n", s.AliasUnderlying)
-			b.WriteString("if err := _u.UnmarshalJSON(data[_start:_k]); err != nil { return result, i, err }\n")
+			fmt.Fprintf(&b, "var u %s\n", s.AliasUnderlying)
+			b.WriteString("if err := u.UnmarshalJSON(data[start:k]); err != nil { return result, i, err }\n")
 		}
-		fmt.Fprintf(&b, "result = %s(_u)\nreturn result, _k, nil\n", s.Name)
+		fmt.Fprintf(&b, "result = %s(u)\nreturn result, k, nil\n", s.Name)
 	case s.AliasIface.TextUnmarshaler:
 		if stream {
-			b.WriteString("_ts, _tj, err := _s.String(i)\n")
+			b.WriteString("ts, tj, err := s.String(i)\n")
 		} else {
-			b.WriteString("_ts, _tj, err := scan.String(data, i)\n")
+			b.WriteString("ts, tj, err := scan.String(data, i)\n")
 		}
 		b.WriteString("if err != nil { return result, i, err }\n")
-		fmt.Fprintf(&b, "var _u %s\n", s.AliasUnderlying)
-		b.WriteString("if err := _u.UnmarshalText(unsafe.Slice(unsafe.StringData(_ts), len(_ts))); err != nil { return result, i, err }\n")
-		fmt.Fprintf(&b, "result = %s(_u)\nreturn result, _tj, nil\n", s.Name)
+		fmt.Fprintf(&b, "var u %s\n", s.AliasUnderlying)
+		b.WriteString("if err := u.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts))); err != nil { return result, i, err }\n")
+		fmt.Fprintf(&b, "result = %s(u)\nreturn result, tj, nil\n", s.Name)
 	default:
 		// extractAlias should have rejected this case via aliasCanDelegate.
 		b.WriteString("// no decode path — ggen could not find a Marshal/Unmarshal pair\n")
@@ -183,25 +183,25 @@ func renderAliasStructAppendJSON(s StructInfo) string {
 	var b strings.Builder
 	switch {
 	case s.AliasIface.AppendJSON:
-		fmt.Fprintf(&b, "_u := %s(s)\n", s.AliasUnderlying)
-		b.WriteString("return _u.AppendJSON(dst)\n")
+		fmt.Fprintf(&b, "u := %s(s)\n", s.AliasUnderlying)
+		b.WriteString("return u.AppendJSON(dst)\n")
 	case s.AliasIface.JSONMarshaler:
-		fmt.Fprintf(&b, "_u := %s(s)\n", s.AliasUnderlying)
-		b.WriteString("_b, err := _u.MarshalJSON()\n")
+		fmt.Fprintf(&b, "u := %s(s)\n", s.AliasUnderlying)
+		b.WriteString("b, err := u.MarshalJSON()\n")
 		b.WriteString("if err != nil { return dst, err }\n")
-		b.WriteString("return append(dst, _b...), nil\n")
+		b.WriteString("return append(dst, b...), nil\n")
 	case s.AliasIface.TextAppender:
-		fmt.Fprintf(&b, "_u := %s(s)\n", s.AliasUnderlying)
+		fmt.Fprintf(&b, "u := %s(s)\n", s.AliasUnderlying)
 		b.WriteString("dst = append(dst, '\"')\n")
 		b.WriteString("var err error\n")
-		b.WriteString("if dst, err = _u.AppendText(dst); err != nil { return dst, err }\n")
+		b.WriteString("if dst, err = u.AppendText(dst); err != nil { return dst, err }\n")
 		b.WriteString("return append(dst, '\"'), nil\n")
 	case s.AliasIface.TextMarshaler:
-		fmt.Fprintf(&b, "_u := %s(s)\n", s.AliasUnderlying)
-		b.WriteString("_t, err := _u.MarshalText()\n")
+		fmt.Fprintf(&b, "u := %s(s)\n", s.AliasUnderlying)
+		b.WriteString("t, err := u.MarshalText()\n")
 		b.WriteString("if err != nil { return dst, err }\n")
 		b.WriteString("dst = append(dst, '\"')\n")
-		fmt.Fprintf(&b, "dst = %s(dst, encode.BytesToString(_t))\n", appendStrFn(s.HTMLEscape))
+		fmt.Fprintf(&b, "dst = %s(dst, encode.BytesToString(t))\n", appendStrFn(s.HTMLEscape))
 		b.WriteString("return dst, nil\n")
 	default:
 		b.WriteString("return dst, nil\n")
@@ -300,7 +300,7 @@ func renderAliasContainerSize(s StructInfo) string {
 
 // aliasUnderlyingImports returns import paths needed by struct-alias
 // codegen. Delegation paths emit a literal cast to the underlying type
-// (e.g. `_u := uuid.UUID(s)`), so when the underlying lives in a foreign
+// (e.g. `u := uuid.UUID(s)`), so when the underlying lives in a foreign
 // package, that package must be imported by the generated file.
 // Same-package and stdlib-basic underlyings contribute "".
 func aliasUnderlyingImports(structs []StructInfo) []string {

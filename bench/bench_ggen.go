@@ -39,16 +39,16 @@ func (Addr) DecodeFrom(data []byte, i int) (Addr, int, error) {
 			return result, i, scan.ErrExpectString
 		}
 		{
-			_ke := i + 1
-			for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
-				_ke++
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' {
+				ke++
 			}
-			if _ke >= len(data) {
+			if ke >= len(data) {
 				return result, i, scan.ErrUnterminated
 			}
-			if data[_ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), _ke-i-1)
-				i = _ke + 1
+			if data[ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
 			} else {
 				key, i, err = scan.String(data, i)
 				if err != nil {
@@ -77,16 +77,16 @@ func (Addr) DecodeFrom(data []byte, i int) (Addr, int, error) {
 					return result, i, scan.ErrExpectString
 				}
 				{
-					_ke := i + 1
-					for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
-						_ke++
+					ke := i + 1
+					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' {
+						ke++
 					}
-					if _ke >= len(data) {
+					if ke >= len(data) {
 						return result, i, scan.ErrUnterminated
 					}
-					if data[_ke] == '"' {
-						result.City = unsafe.String(unsafe.SliceData(data[i+1:]), _ke-i-1)
-						i = _ke + 1
+					if data[ke] == '"' {
+						result.City = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						i = ke + 1
 					} else {
 						result.City, i, err = scan.String(data, i)
 						if err != nil {
@@ -107,16 +107,16 @@ func (Addr) DecodeFrom(data []byte, i int) (Addr, int, error) {
 					return result, i, scan.ErrExpectString
 				}
 				{
-					_ke := i + 1
-					for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
-						_ke++
+					ke := i + 1
+					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' {
+						ke++
 					}
-					if _ke >= len(data) {
+					if ke >= len(data) {
 						return result, i, scan.ErrUnterminated
 					}
-					if data[_ke] == '"' {
-						result.Street = unsafe.String(unsafe.SliceData(data[i+1:]), _ke-i-1)
-						i = _ke + 1
+					if data[ke] == '"' {
+						result.Street = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						i = ke + 1
 					} else {
 						result.Street, i, err = scan.String(data, i)
 						if err != nil {
@@ -150,45 +150,45 @@ func (Addr) DecodeFrom(data []byte, i int) (Addr, int, error) {
 	}
 }
 
-func (Addr) DecodeStreamFrom(_s *scan.Stream, i int) (Addr, int, error) {
+func (Addr) DecodeStreamFrom(s *scan.Stream, i int) (Addr, int, error) {
 	var result Addr
 	seenCity := false
 	seenStreet := false
-	i, err := _s.ObjectOpen(i)
+	i, err := s.ObjectOpen(i)
 	if err != nil {
 		return result, i, err
 	}
-	i, err = _s.SkipSpace(i)
+	i, err = s.SkipSpace(i)
 	if err != nil {
 		return result, i, err
 	}
-	if i >= len(_s.Bytes()) {
-		if err = _s.ReadMore(); err != nil {
+	if i >= len(s.Bytes()) {
+		if err = s.ReadMore(); err != nil {
 			return result, i, err
 		}
 	}
-	if _s.Bytes()[i] == '}' {
+	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
 	}
 	for {
 		var key string
-		key, i, err = _s.KeyView(i)
+		key, i, err = s.KeyView(i)
 		if err != nil {
 			return result, i, err
 		}
-		i, err = _s.SkipSpace(i)
+		i, err = s.SkipSpace(i)
 		if err != nil {
 			return result, i, err
 		}
-		if i >= len(_s.Bytes()) {
-			if err = _s.ReadMore(); err != nil {
+		if i >= len(s.Bytes()) {
+			if err = s.ReadMore(); err != nil {
 				return result, i, err
 			}
 		}
-		if _s.Bytes()[i] != ':' {
+		if s.Bytes()[i] != ':' {
 			return result, i, scan.ErrBadObject
 		}
-		i, err = _s.SkipSpace(i + 1)
+		i, err = s.SkipSpace(i + 1)
 		if err != nil {
 			return result, i, err
 		}
@@ -199,7 +199,7 @@ func (Addr) DecodeStreamFrom(_s *scan.Stream, i int) (Addr, int, error) {
 					return result, i, &validation.DuplicateKeyError{Field: "city"}
 				}
 				seenCity = true
-				result.City, i, err = _s.String(i)
+				result.City, i, err = s.String(i)
 				if err != nil {
 					return result, i, err
 				}
@@ -212,7 +212,7 @@ func (Addr) DecodeStreamFrom(_s *scan.Stream, i int) (Addr, int, error) {
 					return result, i, &validation.DuplicateKeyError{Field: "street"}
 				}
 				seenStreet = true
-				result.Street, i, err = _s.String(i)
+				result.Street, i, err = s.String(i)
 				if err != nil {
 					return result, i, err
 				}
@@ -222,18 +222,18 @@ func (Addr) DecodeStreamFrom(_s *scan.Stream, i int) (Addr, int, error) {
 		default:
 			return result, i, &validation.UnknownKeyError{Field: key}
 		}
-		i, err = _s.SkipSpace(i)
+		i, err = s.SkipSpace(i)
 		if err != nil {
 			return result, i, err
 		}
-		if i >= len(_s.Bytes()) {
-			if err = _s.ReadMore(); err != nil {
+		if i >= len(s.Bytes()) {
+			if err = s.ReadMore(); err != nil {
 				return result, i, err
 			}
 		}
-		c := _s.Bytes()[i]
+		c := s.Bytes()[i]
 		if c == ',' {
-			i, err = _s.SkipSpace(i + 1)
+			i, err = s.SkipSpace(i + 1)
 			if err != nil {
 				return result, i, err
 			}
@@ -307,16 +307,16 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 			return result, i, scan.ErrExpectString
 		}
 		{
-			_ke := i + 1
-			for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
-				_ke++
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' {
+				ke++
 			}
-			if _ke >= len(data) {
+			if ke >= len(data) {
 				return result, i, scan.ErrUnterminated
 			}
-			if data[_ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), _ke-i-1)
-				i = _ke + 1
+			if data[ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
 			} else {
 				key, i, err = scan.String(data, i)
 				if err != nil {
@@ -342,29 +342,29 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 				}
 				seenID = true
 				{
-					_neg := false
+					neg := false
 					if i < len(data) && data[i] == '-' {
-						_neg = true
+						neg = true
 						i++
 					}
 					if i >= len(data) || data[i] < '0' || data[i] > '9' {
 						return result, i, scan.ErrBadNumber
 					}
-					var _n int64
+					var n int64
 					for i < len(data) && data[i] >= '0' && data[i] <= '9' {
-						_n = _n*10 + int64(data[i]-'0')
+						n = n*10 + int64(data[i]-'0')
 						i++
 					}
 					if i < len(data) {
-						_c := data[i]
-						if _c == '.' || _c == 'e' || _c == 'E' {
+						c := data[i]
+						if c == '.' || c == 'e' || c == 'E' {
 							return result, i, scan.ErrBadNumber
 						}
 					}
-					if _neg {
-						_n = -_n
+					if neg {
+						n = -n
 					}
-					result.ID = _n
+					result.ID = n
 				}
 				if result.ID < 0 {
 					return result, i, &validation.GTEError{Field: "id", Limit: 0, Value: result.ID}
@@ -379,12 +379,12 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 				}
 				seenRaw = true
 				{
-					_start := i
-					i, err = scan.SkipValue(data, _start)
+					start := i
+					i, err = scan.SkipValue(data, start)
 					if err != nil {
 						return result, i, err
 					}
-					result.Raw = data[_start:i]
+					result.Raw = data[start:i]
 				}
 			} else {
 				return result, i, &validation.UnknownKeyError{Field: key}
@@ -397,31 +397,31 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 				}
 				seenBlob = true
 				{
-					var _s string
+					var s string
 					if i >= len(data) || data[i] != '"' {
 						return result, i, scan.ErrExpectString
 					}
 					{
-						_ke := i + 1
-						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
-							_ke++
+						ke := i + 1
+						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' {
+							ke++
 						}
-						if _ke >= len(data) {
+						if ke >= len(data) {
 							return result, i, scan.ErrUnterminated
 						}
-						if data[_ke] == '"' {
-							_s = unsafe.String(unsafe.SliceData(data[i+1:]), _ke-i-1)
-							i = _ke + 1
+						if data[ke] == '"' {
+							s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+							i = ke + 1
 						} else {
-							_s, i, err = scan.String(data, i)
+							s, i, err = scan.String(data, i)
 							if err != nil {
 								return result, i, err
 							}
 						}
 					}
 
-					result.Blob = make([]byte, 0, base64.StdEncoding.DecodedLen(len(_s)))
-					result.Blob, err = base64.StdEncoding.AppendDecode(result.Blob, unsafe.Slice(unsafe.StringData(_s), len(_s)))
+					result.Blob = make([]byte, 0, base64.StdEncoding.DecodedLen(len(s)))
+					result.Blob, err = base64.StdEncoding.AppendDecode(result.Blob, unsafe.Slice(unsafe.StringData(s), len(s)))
 					if err != nil {
 						return result, i, err
 					}
@@ -435,16 +435,16 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 					return result, i, scan.ErrExpectString
 				}
 				{
-					_ke := i + 1
-					for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
-						_ke++
+					ke := i + 1
+					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' {
+						ke++
 					}
-					if _ke >= len(data) {
+					if ke >= len(data) {
 						return result, i, scan.ErrUnterminated
 					}
-					if data[_ke] == '"' {
-						result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), _ke-i-1)
-						i = _ke + 1
+					if data[ke] == '"' {
+						result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						i = ke + 1
 					} else {
 						result.Name, i, err = scan.String(data, i)
 						if err != nil {
@@ -477,12 +477,12 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
 						}
-						var _slab0 []Addr
+						var slab0 []Addr
 						if i < len(data) && data[i] == ']' {
 							result.Refs = []*Addr{}
 						} else {
 							result.Refs = make([]*Addr, 0, 4)
-							_slab0 = make([]Addr, 0, 4)
+							slab0 = make([]Addr, 0, 4)
 						}
 						for i < len(data) && data[i] != ']' {
 							if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -500,12 +500,12 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 								}
 								break
 							}
-							_slab0 = append(_slab0, Addr{})
-							_slab0[len(_slab0)-1], i, err = _slab0[len(_slab0)-1].DecodeFrom(data, i)
+							slab0 = append(slab0, Addr{})
+							slab0[len(slab0)-1], i, err = slab0[len(slab0)-1].DecodeFrom(data, i)
 							if err != nil {
 								return result, i, err
 							}
-							result.Refs = append(result.Refs, &_slab0[len(_slab0)-1])
+							result.Refs = append(result.Refs, &slab0[len(slab0)-1])
 							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 								i++
 							}
@@ -557,16 +557,16 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 								return result, i, scan.ErrExpectString
 							}
 							{
-								_ke := i + 1
-								for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
-									_ke++
+								ke := i + 1
+								for ke < len(data) && data[ke] != '"' && data[ke] != '\\' {
+									ke++
 								}
-								if _ke >= len(data) {
+								if ke >= len(data) {
 									return result, i, scan.ErrUnterminated
 								}
-								if data[_ke] == '"' {
-									result.Tags[len(result.Tags)-1] = unsafe.String(unsafe.SliceData(data[i+1:]), _ke-i-1)
-									i = _ke + 1
+								if data[ke] == '"' {
+									result.Tags[len(result.Tags)-1] = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+									i = ke + 1
 								} else {
 									result.Tags[len(result.Tags)-1], i, err = scan.String(data, i)
 									if err != nil {
@@ -642,23 +642,23 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 							result.Props = make(map[string]string)
 						}
 						for i < len(data) && data[i] != '}' {
-							var _mk string
+							var mk string
 							if i >= len(data) || data[i] != '"' {
 								return result, i, scan.ErrExpectString
 							}
 							{
-								_ke := i + 1
-								for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
-									_ke++
+								ke := i + 1
+								for ke < len(data) && data[ke] != '"' && data[ke] != '\\' {
+									ke++
 								}
-								if _ke >= len(data) {
+								if ke >= len(data) {
 									return result, i, scan.ErrUnterminated
 								}
-								if data[_ke] == '"' {
-									_mk = unsafe.String(unsafe.SliceData(data[i+1:]), _ke-i-1)
-									i = _ke + 1
+								if data[ke] == '"' {
+									mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+									i = ke + 1
 								} else {
-									_mk, i, err = scan.String(data, i)
+									mk, i, err = scan.String(data, i)
 									if err != nil {
 										return result, i, err
 									}
@@ -674,29 +674,29 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 								i++
 							}
-							var _mv string
+							var mv string
 							if i >= len(data) || data[i] != '"' {
 								return result, i, scan.ErrExpectString
 							}
 							{
-								_ke := i + 1
-								for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
-									_ke++
+								ke := i + 1
+								for ke < len(data) && data[ke] != '"' && data[ke] != '\\' {
+									ke++
 								}
-								if _ke >= len(data) {
+								if ke >= len(data) {
 									return result, i, scan.ErrUnterminated
 								}
-								if data[_ke] == '"' {
-									_mv = unsafe.String(unsafe.SliceData(data[i+1:]), _ke-i-1)
-									i = _ke + 1
+								if data[ke] == '"' {
+									mv = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+									i = ke + 1
 								} else {
-									_mv, i, err = scan.String(data, i)
+									mv, i, err = scan.String(data, i)
 									if err != nil {
 										return result, i, err
 									}
 								}
 							}
-							result.Props[_mk] = _mv
+							result.Props[mk] = mv
 							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 								i++
 							}
@@ -763,16 +763,16 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
-					var _idx0 int
+					var idx0 int
 					for i < len(data) && data[i] != ']' {
-						if _idx0 >= 2 {
-							return result, i, &validation.LenError{Field: "coords", Want: 2, Got: _idx0}
+						if idx0 >= 2 {
+							return result, i, &validation.LenError{Field: "coords", Want: 2, Got: idx0}
 						}
-						result.Coords[_idx0], i, err = scan.Float64(data, i)
+						result.Coords[idx0], i, err = scan.Float64(data, i)
 						if err != nil {
 							return result, i, err
 						}
-						_idx0++
+						idx0++
 						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
 						}
@@ -788,8 +788,8 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 					if i >= len(data) || data[i] != ']' {
 						return result, i, scan.ErrBadArray
 					}
-					if _idx0 != 2 {
-						return result, i, &validation.LenError{Field: "coords", Want: 2, Got: _idx0}
+					if idx0 != 2 {
+						return result, i, &validation.LenError{Field: "coords", Want: 2, Got: idx0}
 					}
 					i++
 				}
@@ -841,29 +841,29 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 									for i < len(data) && data[i] != ']' {
 										result.Matrix[len(result.Matrix)-1] = append(result.Matrix[len(result.Matrix)-1], 0)
 										{
-											_neg := false
+											neg := false
 											if i < len(data) && data[i] == '-' {
-												_neg = true
+												neg = true
 												i++
 											}
 											if i >= len(data) || data[i] < '0' || data[i] > '9' {
 												return result, i, scan.ErrBadNumber
 											}
-											var _n int64
+											var n int64
 											for i < len(data) && data[i] >= '0' && data[i] <= '9' {
-												_n = _n*10 + int64(data[i]-'0')
+												n = n*10 + int64(data[i]-'0')
 												i++
 											}
 											if i < len(data) {
-												_c := data[i]
-												if _c == '.' || _c == 'e' || _c == 'E' {
+												c := data[i]
+												if c == '.' || c == 'e' || c == 'E' {
 													return result, i, scan.ErrBadNumber
 												}
 											}
-											if _neg {
-												_n = -_n
+											if neg {
+												n = -n
 											}
-											result.Matrix[len(result.Matrix)-1][len(result.Matrix[len(result.Matrix)-1])-1] = int(_n)
+											result.Matrix[len(result.Matrix)-1][len(result.Matrix[len(result.Matrix)-1])-1] = int(n)
 										}
 										for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 											i++
@@ -916,13 +916,13 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 					i = 4 + i
 					result.Parent = nil
 				} else {
-					var _v Addr
-					_v, i, err = _v.DecodeFrom(data, i)
+					var v Addr
+					v, i, err = v.DecodeFrom(data, i)
 					if err != nil {
 						return result, i, err
 					}
 
-					result.Parent = &_v
+					result.Parent = &v
 				}
 			default:
 				return result, i, &validation.UnknownKeyError{Field: key}
@@ -989,30 +989,30 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 				}
 				seenCreatedAt = true
 				{
-					var _s string
+					var s string
 					if i >= len(data) || data[i] != '"' {
 						return result, i, scan.ErrExpectString
 					}
 					{
-						_ke := i + 1
-						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
-							_ke++
+						ke := i + 1
+						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' {
+							ke++
 						}
-						if _ke >= len(data) {
+						if ke >= len(data) {
 							return result, i, scan.ErrUnterminated
 						}
-						if data[_ke] == '"' {
-							_s = unsafe.String(unsafe.SliceData(data[i+1:]), _ke-i-1)
-							i = _ke + 1
+						if data[ke] == '"' {
+							s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+							i = ke + 1
 						} else {
-							_s, i, err = scan.String(data, i)
+							s, i, err = scan.String(data, i)
 							if err != nil {
 								return result, i, err
 							}
 						}
 					}
 
-					result.CreatedAt, err = time.Parse(time.RFC3339Nano, _s)
+					result.CreatedAt, err = time.Parse(time.RFC3339Nano, s)
 					if err != nil {
 						return result, i, err
 					}
@@ -1049,7 +1049,7 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 	}
 }
 
-func (Node) DecodeStreamFrom(_s *scan.Stream, i int) (Node, int, error) {
+func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 	var result Node
 	seenActive := false
 	seenBlob := false
@@ -1066,20 +1066,20 @@ func (Node) DecodeStreamFrom(_s *scan.Stream, i int) (Node, int, error) {
 	seenRefs := false
 	seenScore := false
 	seenTags := false
-	i, err := _s.ObjectOpen(i)
+	i, err := s.ObjectOpen(i)
 	if err != nil {
 		return result, i, err
 	}
-	i, err = _s.SkipSpace(i)
+	i, err = s.SkipSpace(i)
 	if err != nil {
 		return result, i, err
 	}
-	if i >= len(_s.Bytes()) {
-		if err = _s.ReadMore(); err != nil {
+	if i >= len(s.Bytes()) {
+		if err = s.ReadMore(); err != nil {
 			return result, i, err
 		}
 	}
-	if _s.Bytes()[i] == '}' {
+	if s.Bytes()[i] == '}' {
 		if !seenID {
 			return result, i, &validation.RequiredError{Field: "id"}
 		}
@@ -1090,23 +1090,23 @@ func (Node) DecodeStreamFrom(_s *scan.Stream, i int) (Node, int, error) {
 	}
 	for {
 		var key string
-		key, i, err = _s.KeyView(i)
+		key, i, err = s.KeyView(i)
 		if err != nil {
 			return result, i, err
 		}
-		i, err = _s.SkipSpace(i)
+		i, err = s.SkipSpace(i)
 		if err != nil {
 			return result, i, err
 		}
-		if i >= len(_s.Bytes()) {
-			if err = _s.ReadMore(); err != nil {
+		if i >= len(s.Bytes()) {
+			if err = s.ReadMore(); err != nil {
 				return result, i, err
 			}
 		}
-		if _s.Bytes()[i] != ':' {
+		if s.Bytes()[i] != ':' {
 			return result, i, scan.ErrBadObject
 		}
-		i, err = _s.SkipSpace(i + 1)
+		i, err = s.SkipSpace(i + 1)
 		if err != nil {
 			return result, i, err
 		}
@@ -1117,7 +1117,7 @@ func (Node) DecodeStreamFrom(_s *scan.Stream, i int) (Node, int, error) {
 					return result, i, &validation.DuplicateKeyError{Field: "id"}
 				}
 				seenID = true
-				result.ID, i, err = _s.Int64(i)
+				result.ID, i, err = s.Int64(i)
 				if err != nil {
 					return result, i, err
 				}
@@ -1134,13 +1134,13 @@ func (Node) DecodeStreamFrom(_s *scan.Stream, i int) (Node, int, error) {
 				}
 				seenRaw = true
 				{
-					_start := i
-					i, err = _s.SkipValue(_start)
+					start := i
+					i, err = s.SkipValue(start)
 					if err != nil {
 						return result, i, err
 					}
-					_raw := _s.Bytes()[_start:i]
-					result.Raw = append(make([]byte, 0, len(_raw)), _raw...)
+					raw := s.Bytes()[start:i]
+					result.Raw = append(make([]byte, 0, len(raw)), raw...)
 				}
 			} else {
 				return result, i, &validation.UnknownKeyError{Field: key}
@@ -1153,13 +1153,13 @@ func (Node) DecodeStreamFrom(_s *scan.Stream, i int) (Node, int, error) {
 				}
 				seenBlob = true
 				{
-					var _v string
-					_v, i, err = _s.String(i)
+					var v string
+					v, i, err = s.String(i)
 					if err != nil {
 						return result, i, err
 					}
-					result.Blob = make([]byte, 0, base64.StdEncoding.DecodedLen(len(_v)))
-					result.Blob, err = base64.StdEncoding.AppendDecode(result.Blob, unsafe.Slice(unsafe.StringData(_v), len(_v)))
+					result.Blob = make([]byte, 0, base64.StdEncoding.DecodedLen(len(v)))
+					result.Blob, err = base64.StdEncoding.AppendDecode(result.Blob, unsafe.Slice(unsafe.StringData(v), len(v)))
 					if err != nil {
 						return result, i, err
 					}
@@ -1169,7 +1169,7 @@ func (Node) DecodeStreamFrom(_s *scan.Stream, i int) (Node, int, error) {
 					return result, i, &validation.DuplicateKeyError{Field: "name"}
 				}
 				seenName = true
-				result.Name, i, err = _s.String(i)
+				result.Name, i, err = s.String(i)
 				if err != nil {
 					return result, i, err
 				}
@@ -1185,78 +1185,78 @@ func (Node) DecodeStreamFrom(_s *scan.Stream, i int) (Node, int, error) {
 				}
 				seenRefs = true
 				{
-					i, err = _s.SkipSpace(i)
+					i, err = s.SkipSpace(i)
 					if err != nil {
 						return result, i, err
 					}
-					if i >= len(_s.Bytes()) {
-						if err = _s.ReadMore(); err != nil {
+					if i >= len(s.Bytes()) {
+						if err = s.ReadMore(); err != nil {
 							return result, i, err
 						}
 					}
-					if _s.Bytes()[i] == 'n' {
-						for _ki := 1; _ki < 4; _ki++ {
-							if i+_ki >= len(_s.Bytes()) {
-								if err = _s.ReadMore(); err != nil {
+					if s.Bytes()[i] == 'n' {
+						for ki := 1; ki < 4; ki++ {
+							if i+ki >= len(s.Bytes()) {
+								if err = s.ReadMore(); err != nil {
 									return result, i, err
 								}
 							}
-							if _s.Bytes()[i+_ki] != "null"[_ki] {
+							if s.Bytes()[i+ki] != "null"[ki] {
 								return result, i, scan.ErrBadLiteral
 							}
 						}
 						i += 4
 					} else {
-						i, err = _s.ArrayOpen(i)
+						i, err = s.ArrayOpen(i)
 						if err != nil {
 							return result, i, err
 						}
-						i, err = _s.SkipSpace(i)
+						i, err = s.SkipSpace(i)
 						if err != nil {
 							return result, i, err
 						}
-						if i >= len(_s.Bytes()) {
-							if err = _s.ReadMore(); err != nil {
+						if i >= len(s.Bytes()) {
+							if err = s.ReadMore(); err != nil {
 								return result, i, err
 							}
 						}
-						var _slab0 []Addr
-						if _s.Bytes()[i] == ']' {
+						var slab0 []Addr
+						if s.Bytes()[i] == ']' {
 							result.Refs = []*Addr{}
 						} else {
 							result.Refs = make([]*Addr, 0, 4)
-							_slab0 = make([]Addr, 0, 4)
+							slab0 = make([]Addr, 0, 4)
 						}
-						for _s.Bytes()[i] != ']' {
-							if i >= len(_s.Bytes()) {
-								if err = _s.ReadMore(); err != nil {
+						for s.Bytes()[i] != ']' {
+							if i >= len(s.Bytes()) {
+								if err = s.ReadMore(); err != nil {
 									return result, i, err
 								}
 							}
-							if _s.Bytes()[i] == 'n' {
-								for _ki := 1; _ki < 4; _ki++ {
-									if i+_ki >= len(_s.Bytes()) {
-										if err = _s.ReadMore(); err != nil {
+							if s.Bytes()[i] == 'n' {
+								for ki := 1; ki < 4; ki++ {
+									if i+ki >= len(s.Bytes()) {
+										if err = s.ReadMore(); err != nil {
 											return result, i, err
 										}
 									}
-									if _s.Bytes()[i+_ki] != "null"[_ki] {
+									if s.Bytes()[i+ki] != "null"[ki] {
 										return result, i, scan.ErrBadLiteral
 									}
 								}
 								i += 4
 								result.Refs = append(result.Refs, nil)
-								i, err = _s.SkipSpace(i)
+								i, err = s.SkipSpace(i)
 								if err != nil {
 									return result, i, err
 								}
-								if i >= len(_s.Bytes()) {
-									if err = _s.ReadMore(); err != nil {
+								if i >= len(s.Bytes()) {
+									if err = s.ReadMore(); err != nil {
 										return result, i, err
 									}
 								}
-								if _s.Bytes()[i] == ',' {
-									i, err = _s.SkipSpace(i + 1)
+								if s.Bytes()[i] == ',' {
+									i, err = s.SkipSpace(i + 1)
 									if err != nil {
 										return result, i, err
 									}
@@ -1264,23 +1264,23 @@ func (Node) DecodeStreamFrom(_s *scan.Stream, i int) (Node, int, error) {
 								}
 								break
 							}
-							_slab0 = append(_slab0, Addr{})
-							_slab0[len(_slab0)-1], i, err = _slab0[len(_slab0)-1].DecodeStreamFrom(_s, i)
+							slab0 = append(slab0, Addr{})
+							slab0[len(slab0)-1], i, err = slab0[len(slab0)-1].DecodeStreamFrom(s, i)
 							if err != nil {
 								return result, i, err
 							}
-							result.Refs = append(result.Refs, &_slab0[len(_slab0)-1])
-							i, err = _s.SkipSpace(i)
+							result.Refs = append(result.Refs, &slab0[len(slab0)-1])
+							i, err = s.SkipSpace(i)
 							if err != nil {
 								return result, i, err
 							}
-							if i >= len(_s.Bytes()) {
-								if err = _s.ReadMore(); err != nil {
+							if i >= len(s.Bytes()) {
+								if err = s.ReadMore(); err != nil {
 									return result, i, err
 								}
 							}
-							if _s.Bytes()[i] == ',' {
-								i, err = _s.SkipSpace(i + 1)
+							if s.Bytes()[i] == ',' {
+								i, err = s.SkipSpace(i + 1)
 								if err != nil {
 									return result, i, err
 								}
@@ -1288,7 +1288,7 @@ func (Node) DecodeStreamFrom(_s *scan.Stream, i int) (Node, int, error) {
 							}
 							break
 						}
-						if _s.Bytes()[i] != ']' {
+						if s.Bytes()[i] != ']' {
 							return result, i, scan.ErrBadArray
 						}
 						i++
@@ -1303,49 +1303,49 @@ func (Node) DecodeStreamFrom(_s *scan.Stream, i int) (Node, int, error) {
 				}
 				seenTags = true
 				{
-					i, err = _s.SkipSpace(i)
+					i, err = s.SkipSpace(i)
 					if err != nil {
 						return result, i, err
 					}
-					if i >= len(_s.Bytes()) {
-						if err = _s.ReadMore(); err != nil {
+					if i >= len(s.Bytes()) {
+						if err = s.ReadMore(); err != nil {
 							return result, i, err
 						}
 					}
-					if _s.Bytes()[i] == 'n' {
-						for _ki := 1; _ki < 4; _ki++ {
-							if i+_ki >= len(_s.Bytes()) {
-								if err = _s.ReadMore(); err != nil {
+					if s.Bytes()[i] == 'n' {
+						for ki := 1; ki < 4; ki++ {
+							if i+ki >= len(s.Bytes()) {
+								if err = s.ReadMore(); err != nil {
 									return result, i, err
 								}
 							}
-							if _s.Bytes()[i+_ki] != "null"[_ki] {
+							if s.Bytes()[i+ki] != "null"[ki] {
 								return result, i, scan.ErrBadLiteral
 							}
 						}
 						i += 4
 					} else {
-						i, err = _s.ArrayOpen(i)
+						i, err = s.ArrayOpen(i)
 						if err != nil {
 							return result, i, err
 						}
-						i, err = _s.SkipSpace(i)
+						i, err = s.SkipSpace(i)
 						if err != nil {
 							return result, i, err
 						}
-						if i >= len(_s.Bytes()) {
-							if err = _s.ReadMore(); err != nil {
+						if i >= len(s.Bytes()) {
+							if err = s.ReadMore(); err != nil {
 								return result, i, err
 							}
 						}
-						if _s.Bytes()[i] == ']' {
+						if s.Bytes()[i] == ']' {
 							result.Tags = []string{}
 						} else {
 							result.Tags = make([]string, 0, 4)
 						}
-						for _s.Bytes()[i] != ']' {
+						for s.Bytes()[i] != ']' {
 							result.Tags = append(result.Tags, "")
-							result.Tags[len(result.Tags)-1], i, err = _s.String(i)
+							result.Tags[len(result.Tags)-1], i, err = s.String(i)
 							if err != nil {
 								return result, i, err
 							}
@@ -1355,17 +1355,17 @@ func (Node) DecodeStreamFrom(_s *scan.Stream, i int) (Node, int, error) {
 							if len(result.Tags[len(result.Tags)-1]) > 64 {
 								return result, i, &validation.MaxLenError{Field: "tags[]", Limit: 64, Got: len(result.Tags[len(result.Tags)-1])}
 							}
-							i, err = _s.SkipSpace(i)
+							i, err = s.SkipSpace(i)
 							if err != nil {
 								return result, i, err
 							}
-							if i >= len(_s.Bytes()) {
-								if err = _s.ReadMore(); err != nil {
+							if i >= len(s.Bytes()) {
+								if err = s.ReadMore(); err != nil {
 									return result, i, err
 								}
 							}
-							if _s.Bytes()[i] == ',' {
-								i, err = _s.SkipSpace(i + 1)
+							if s.Bytes()[i] == ',' {
+								i, err = s.SkipSpace(i + 1)
 								if err != nil {
 									return result, i, err
 								}
@@ -1373,7 +1373,7 @@ func (Node) DecodeStreamFrom(_s *scan.Stream, i int) (Node, int, error) {
 							}
 							break
 						}
-						if _s.Bytes()[i] != ']' {
+						if s.Bytes()[i] != ']' {
 							return result, i, scan.ErrBadArray
 						}
 						i++
@@ -1393,7 +1393,7 @@ func (Node) DecodeStreamFrom(_s *scan.Stream, i int) (Node, int, error) {
 				}
 				seenExtra = true
 				{
-					result.Extra, i, err = _s.Any(i)
+					result.Extra, i, err = s.Any(i)
 					if err != nil {
 						return result, i, err
 					}
@@ -1404,85 +1404,85 @@ func (Node) DecodeStreamFrom(_s *scan.Stream, i int) (Node, int, error) {
 				}
 				seenProps = true
 				{
-					i, err = _s.SkipSpace(i)
+					i, err = s.SkipSpace(i)
 					if err != nil {
 						return result, i, err
 					}
-					if i >= len(_s.Bytes()) {
-						if err = _s.ReadMore(); err != nil {
+					if i >= len(s.Bytes()) {
+						if err = s.ReadMore(); err != nil {
 							return result, i, err
 						}
 					}
-					if _s.Bytes()[i] == 'n' {
-						for _ki := 1; _ki < 4; _ki++ {
-							if i+_ki >= len(_s.Bytes()) {
-								if err = _s.ReadMore(); err != nil {
+					if s.Bytes()[i] == 'n' {
+						for ki := 1; ki < 4; ki++ {
+							if i+ki >= len(s.Bytes()) {
+								if err = s.ReadMore(); err != nil {
 									return result, i, err
 								}
 							}
-							if _s.Bytes()[i+_ki] != "null"[_ki] {
+							if s.Bytes()[i+ki] != "null"[ki] {
 								return result, i, scan.ErrBadLiteral
 							}
 						}
 						i += 4
 					} else {
-						i, err = _s.ObjectOpen(i)
+						i, err = s.ObjectOpen(i)
 						if err != nil {
 							return result, i, err
 						}
-						i, err = _s.SkipSpace(i)
+						i, err = s.SkipSpace(i)
 						if err != nil {
 							return result, i, err
 						}
-						if i >= len(_s.Bytes()) {
-							if err = _s.ReadMore(); err != nil {
+						if i >= len(s.Bytes()) {
+							if err = s.ReadMore(); err != nil {
 								return result, i, err
 							}
 						}
-						if _s.Bytes()[i] == '}' {
+						if s.Bytes()[i] == '}' {
 							result.Props = map[string]string{}
 						} else {
 							result.Props = make(map[string]string)
 						}
-						for _s.Bytes()[i] != '}' {
-							var _mk string
-							_mk, i, err = _s.String(i)
+						for s.Bytes()[i] != '}' {
+							var mk string
+							mk, i, err = s.String(i)
 							if err != nil {
 								return result, i, err
 							}
-							i, err = _s.SkipSpace(i)
+							i, err = s.SkipSpace(i)
 							if err != nil {
 								return result, i, err
 							}
-							if i >= len(_s.Bytes()) {
-								if err = _s.ReadMore(); err != nil {
+							if i >= len(s.Bytes()) {
+								if err = s.ReadMore(); err != nil {
 									return result, i, err
 								}
 							}
-							if _s.Bytes()[i] != ':' {
+							if s.Bytes()[i] != ':' {
 								return result, i, scan.ErrBadObject
 							}
-							i, err = _s.SkipSpace(i + 1)
+							i, err = s.SkipSpace(i + 1)
 							if err != nil {
 								return result, i, err
 							}
-							var _mv string
-							_mv, i, err = _s.String(i)
+							var mv string
+							mv, i, err = s.String(i)
 							if err != nil {
 								return result, i, err
 							}
-							result.Props[_mk] = _mv
-							i, err = _s.SkipSpace(i)
+							result.Props[mk] = mv
+							i, err = s.SkipSpace(i)
 							if err != nil {
 								return result, i, err
 							}
-							if i >= len(_s.Bytes()) {
-								if err = _s.ReadMore(); err != nil {
+							if i >= len(s.Bytes()) {
+								if err = s.ReadMore(); err != nil {
 									return result, i, err
 								}
 							}
-							if _s.Bytes()[i] == ',' {
-								i, err = _s.SkipSpace(i + 1)
+							if s.Bytes()[i] == ',' {
+								i, err = s.SkipSpace(i + 1)
 								if err != nil {
 									return result, i, err
 								}
@@ -1490,7 +1490,7 @@ func (Node) DecodeStreamFrom(_s *scan.Stream, i int) (Node, int, error) {
 							}
 							break
 						}
-						if _s.Bytes()[i] != '}' {
+						if s.Bytes()[i] != '}' {
 							return result, i, scan.ErrBadObject
 						}
 						i++
@@ -1504,7 +1504,7 @@ func (Node) DecodeStreamFrom(_s *scan.Stream, i int) (Node, int, error) {
 					return result, i, &validation.DuplicateKeyError{Field: "score"}
 				}
 				seenScore = true
-				result.Score, i, err = _s.Float64(i)
+				result.Score, i, err = s.Float64(i)
 				if err != nil {
 					return result, i, err
 				}
@@ -1524,7 +1524,7 @@ func (Node) DecodeStreamFrom(_s *scan.Stream, i int) (Node, int, error) {
 					return result, i, &validation.DuplicateKeyError{Field: "active"}
 				}
 				seenActive = true
-				result.Active, i, err = _s.Bool(i)
+				result.Active, i, err = s.Bool(i)
 				if err != nil {
 					return result, i, err
 				}
@@ -1534,40 +1534,40 @@ func (Node) DecodeStreamFrom(_s *scan.Stream, i int) (Node, int, error) {
 				}
 				seenCoords = true
 				{
-					i, err = _s.ArrayOpen(i)
+					i, err = s.ArrayOpen(i)
 					if err != nil {
 						return result, i, err
 					}
-					i, err = _s.SkipSpace(i)
+					i, err = s.SkipSpace(i)
 					if err != nil {
 						return result, i, err
 					}
-					if i >= len(_s.Bytes()) {
-						if err = _s.ReadMore(); err != nil {
+					if i >= len(s.Bytes()) {
+						if err = s.ReadMore(); err != nil {
 							return result, i, err
 						}
 					}
-					var _idx0 int
-					for _s.Bytes()[i] != ']' {
-						if _idx0 >= 2 {
-							return result, i, &validation.LenError{Field: "coords", Want: 2, Got: _idx0}
+					var idx0 int
+					for s.Bytes()[i] != ']' {
+						if idx0 >= 2 {
+							return result, i, &validation.LenError{Field: "coords", Want: 2, Got: idx0}
 						}
-						result.Coords[_idx0], i, err = _s.Float64(i)
+						result.Coords[idx0], i, err = s.Float64(i)
 						if err != nil {
 							return result, i, err
 						}
-						_idx0++
-						i, err = _s.SkipSpace(i)
+						idx0++
+						i, err = s.SkipSpace(i)
 						if err != nil {
 							return result, i, err
 						}
-						if i >= len(_s.Bytes()) {
-							if err = _s.ReadMore(); err != nil {
+						if i >= len(s.Bytes()) {
+							if err = s.ReadMore(); err != nil {
 								return result, i, err
 							}
 						}
-						if _s.Bytes()[i] == ',' {
-							i, err = _s.SkipSpace(i + 1)
+						if s.Bytes()[i] == ',' {
+							i, err = s.SkipSpace(i + 1)
 							if err != nil {
 								return result, i, err
 							}
@@ -1575,11 +1575,11 @@ func (Node) DecodeStreamFrom(_s *scan.Stream, i int) (Node, int, error) {
 						}
 						break
 					}
-					if _s.Bytes()[i] != ']' {
+					if s.Bytes()[i] != ']' {
 						return result, i, scan.ErrBadArray
 					}
-					if _idx0 != 2 {
-						return result, i, &validation.LenError{Field: "coords", Want: 2, Got: _idx0}
+					if idx0 != 2 {
+						return result, i, &validation.LenError{Field: "coords", Want: 2, Got: idx0}
 					}
 					i++
 				}
@@ -1589,108 +1589,108 @@ func (Node) DecodeStreamFrom(_s *scan.Stream, i int) (Node, int, error) {
 				}
 				seenMatrix = true
 				{
-					i, err = _s.SkipSpace(i)
+					i, err = s.SkipSpace(i)
 					if err != nil {
 						return result, i, err
 					}
-					if i >= len(_s.Bytes()) {
-						if err = _s.ReadMore(); err != nil {
+					if i >= len(s.Bytes()) {
+						if err = s.ReadMore(); err != nil {
 							return result, i, err
 						}
 					}
-					if _s.Bytes()[i] == 'n' {
-						for _ki := 1; _ki < 4; _ki++ {
-							if i+_ki >= len(_s.Bytes()) {
-								if err = _s.ReadMore(); err != nil {
+					if s.Bytes()[i] == 'n' {
+						for ki := 1; ki < 4; ki++ {
+							if i+ki >= len(s.Bytes()) {
+								if err = s.ReadMore(); err != nil {
 									return result, i, err
 								}
 							}
-							if _s.Bytes()[i+_ki] != "null"[_ki] {
+							if s.Bytes()[i+ki] != "null"[ki] {
 								return result, i, scan.ErrBadLiteral
 							}
 						}
 						i += 4
 					} else {
-						i, err = _s.ArrayOpen(i)
+						i, err = s.ArrayOpen(i)
 						if err != nil {
 							return result, i, err
 						}
-						i, err = _s.SkipSpace(i)
+						i, err = s.SkipSpace(i)
 						if err != nil {
 							return result, i, err
 						}
-						if i >= len(_s.Bytes()) {
-							if err = _s.ReadMore(); err != nil {
+						if i >= len(s.Bytes()) {
+							if err = s.ReadMore(); err != nil {
 								return result, i, err
 							}
 						}
-						if _s.Bytes()[i] == ']' {
+						if s.Bytes()[i] == ']' {
 							result.Matrix = [][]int{}
 						} else {
 							result.Matrix = make([][]int, 0, 4)
 						}
-						for _s.Bytes()[i] != ']' {
+						for s.Bytes()[i] != ']' {
 							result.Matrix = append(result.Matrix, nil)
 							{
-								i, err = _s.SkipSpace(i)
+								i, err = s.SkipSpace(i)
 								if err != nil {
 									return result, i, err
 								}
-								if i >= len(_s.Bytes()) {
-									if err = _s.ReadMore(); err != nil {
+								if i >= len(s.Bytes()) {
+									if err = s.ReadMore(); err != nil {
 										return result, i, err
 									}
 								}
-								if _s.Bytes()[i] == 'n' {
-									for _ki := 1; _ki < 4; _ki++ {
-										if i+_ki >= len(_s.Bytes()) {
-											if err = _s.ReadMore(); err != nil {
+								if s.Bytes()[i] == 'n' {
+									for ki := 1; ki < 4; ki++ {
+										if i+ki >= len(s.Bytes()) {
+											if err = s.ReadMore(); err != nil {
 												return result, i, err
 											}
 										}
-										if _s.Bytes()[i+_ki] != "null"[_ki] {
+										if s.Bytes()[i+ki] != "null"[ki] {
 											return result, i, scan.ErrBadLiteral
 										}
 									}
 									i += 4
 								} else {
-									i, err = _s.ArrayOpen(i)
+									i, err = s.ArrayOpen(i)
 									if err != nil {
 										return result, i, err
 									}
-									i, err = _s.SkipSpace(i)
+									i, err = s.SkipSpace(i)
 									if err != nil {
 										return result, i, err
 									}
-									if i >= len(_s.Bytes()) {
-										if err = _s.ReadMore(); err != nil {
+									if i >= len(s.Bytes()) {
+										if err = s.ReadMore(); err != nil {
 											return result, i, err
 										}
 									}
-									if _s.Bytes()[i] == ']' {
+									if s.Bytes()[i] == ']' {
 										result.Matrix[len(result.Matrix)-1] = []int{}
 									} else {
 										result.Matrix[len(result.Matrix)-1] = make([]int, 0, 4)
 									}
-									for _s.Bytes()[i] != ']' {
+									for s.Bytes()[i] != ']' {
 										result.Matrix[len(result.Matrix)-1] = append(result.Matrix[len(result.Matrix)-1], 0)
-										var _iv int64
-										_iv, i, err = _s.Int64(i)
+										var iv int64
+										iv, i, err = s.Int64(i)
 										if err != nil {
 											return result, i, err
 										}
-										result.Matrix[len(result.Matrix)-1][len(result.Matrix[len(result.Matrix)-1])-1] = int(_iv)
-										i, err = _s.SkipSpace(i)
+										result.Matrix[len(result.Matrix)-1][len(result.Matrix[len(result.Matrix)-1])-1] = int(iv)
+										i, err = s.SkipSpace(i)
 										if err != nil {
 											return result, i, err
 										}
-										if i >= len(_s.Bytes()) {
-											if err = _s.ReadMore(); err != nil {
+										if i >= len(s.Bytes()) {
+											if err = s.ReadMore(); err != nil {
 												return result, i, err
 											}
 										}
-										if _s.Bytes()[i] == ',' {
-											i, err = _s.SkipSpace(i + 1)
+										if s.Bytes()[i] == ',' {
+											i, err = s.SkipSpace(i + 1)
 											if err != nil {
 												return result, i, err
 											}
@@ -1698,7 +1698,7 @@ func (Node) DecodeStreamFrom(_s *scan.Stream, i int) (Node, int, error) {
 										}
 										break
 									}
-									if _s.Bytes()[i] != ']' {
+									if s.Bytes()[i] != ']' {
 										return result, i, scan.ErrBadArray
 									}
 									i++
@@ -1707,17 +1707,17 @@ func (Node) DecodeStreamFrom(_s *scan.Stream, i int) (Node, int, error) {
 							if len(result.Matrix[len(result.Matrix)-1]) > 32 {
 								return result, i, &validation.MaxLenError{Field: "matrix[]", Limit: 32, Got: len(result.Matrix[len(result.Matrix)-1])}
 							}
-							i, err = _s.SkipSpace(i)
+							i, err = s.SkipSpace(i)
 							if err != nil {
 								return result, i, err
 							}
-							if i >= len(_s.Bytes()) {
-								if err = _s.ReadMore(); err != nil {
+							if i >= len(s.Bytes()) {
+								if err = s.ReadMore(); err != nil {
 									return result, i, err
 								}
 							}
-							if _s.Bytes()[i] == ',' {
-								i, err = _s.SkipSpace(i + 1)
+							if s.Bytes()[i] == ',' {
+								i, err = s.SkipSpace(i + 1)
 								if err != nil {
 									return result, i, err
 								}
@@ -1725,7 +1725,7 @@ func (Node) DecodeStreamFrom(_s *scan.Stream, i int) (Node, int, error) {
 							}
 							break
 						}
-						if _s.Bytes()[i] != ']' {
+						if s.Bytes()[i] != ']' {
 							return result, i, scan.ErrBadArray
 						}
 						i++
@@ -1739,32 +1739,32 @@ func (Node) DecodeStreamFrom(_s *scan.Stream, i int) (Node, int, error) {
 					return result, i, &validation.DuplicateKeyError{Field: "parent"}
 				}
 				seenParent = true
-				if i >= len(_s.Bytes()) {
-					if err = _s.ReadMore(); err != nil {
+				if i >= len(s.Bytes()) {
+					if err = s.ReadMore(); err != nil {
 						return result, i, err
 					}
 				}
-				if _s.Bytes()[i] == 'n' {
-					for _ki := 1; _ki < 4; _ki++ {
-						if i+_ki >= len(_s.Bytes()) {
-							if err = _s.ReadMore(); err != nil {
+				if s.Bytes()[i] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if i+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(); err != nil {
 								return result, i, err
 							}
 						}
-						if _s.Bytes()[i+_ki] != "null"[_ki] {
+						if s.Bytes()[i+ki] != "null"[ki] {
 							return result, i, scan.ErrBadLiteral
 						}
 					}
 					i = 4 + i
 					result.Parent = nil
 				} else {
-					var _v Addr
-					_v, i, err = _v.DecodeStreamFrom(_s, i)
+					var v Addr
+					v, i, err = v.DecodeStreamFrom(s, i)
 					if err != nil {
 						return result, i, err
 					}
 
-					result.Parent = &_v
+					result.Parent = &v
 				}
 			default:
 				return result, i, &validation.UnknownKeyError{Field: key}
@@ -1776,63 +1776,63 @@ func (Node) DecodeStreamFrom(_s *scan.Stream, i int) (Node, int, error) {
 				}
 				seenChildren = true
 				{
-					i, err = _s.SkipSpace(i)
+					i, err = s.SkipSpace(i)
 					if err != nil {
 						return result, i, err
 					}
-					if i >= len(_s.Bytes()) {
-						if err = _s.ReadMore(); err != nil {
+					if i >= len(s.Bytes()) {
+						if err = s.ReadMore(); err != nil {
 							return result, i, err
 						}
 					}
-					if _s.Bytes()[i] == 'n' {
-						for _ki := 1; _ki < 4; _ki++ {
-							if i+_ki >= len(_s.Bytes()) {
-								if err = _s.ReadMore(); err != nil {
+					if s.Bytes()[i] == 'n' {
+						for ki := 1; ki < 4; ki++ {
+							if i+ki >= len(s.Bytes()) {
+								if err = s.ReadMore(); err != nil {
 									return result, i, err
 								}
 							}
-							if _s.Bytes()[i+_ki] != "null"[_ki] {
+							if s.Bytes()[i+ki] != "null"[ki] {
 								return result, i, scan.ErrBadLiteral
 							}
 						}
 						i += 4
 					} else {
-						i, err = _s.ArrayOpen(i)
+						i, err = s.ArrayOpen(i)
 						if err != nil {
 							return result, i, err
 						}
-						i, err = _s.SkipSpace(i)
+						i, err = s.SkipSpace(i)
 						if err != nil {
 							return result, i, err
 						}
-						if i >= len(_s.Bytes()) {
-							if err = _s.ReadMore(); err != nil {
+						if i >= len(s.Bytes()) {
+							if err = s.ReadMore(); err != nil {
 								return result, i, err
 							}
 						}
-						if _s.Bytes()[i] == ']' {
+						if s.Bytes()[i] == ']' {
 							result.Children = []Node{}
 						} else {
 							result.Children = []Node{}
 						}
-						for _s.Bytes()[i] != ']' {
+						for s.Bytes()[i] != ']' {
 							result.Children = append(result.Children, Node{})
-							result.Children[len(result.Children)-1], i, err = result.Children[len(result.Children)-1].DecodeStreamFrom(_s, i)
+							result.Children[len(result.Children)-1], i, err = result.Children[len(result.Children)-1].DecodeStreamFrom(s, i)
 							if err != nil {
 								return result, i, err
 							}
-							i, err = _s.SkipSpace(i)
+							i, err = s.SkipSpace(i)
 							if err != nil {
 								return result, i, err
 							}
-							if i >= len(_s.Bytes()) {
-								if err = _s.ReadMore(); err != nil {
+							if i >= len(s.Bytes()) {
+								if err = s.ReadMore(); err != nil {
 									return result, i, err
 								}
 							}
-							if _s.Bytes()[i] == ',' {
-								i, err = _s.SkipSpace(i + 1)
+							if s.Bytes()[i] == ',' {
+								i, err = s.SkipSpace(i + 1)
 								if err != nil {
 									return result, i, err
 								}
@@ -1840,7 +1840,7 @@ func (Node) DecodeStreamFrom(_s *scan.Stream, i int) (Node, int, error) {
 							}
 							break
 						}
-						if _s.Bytes()[i] != ']' {
+						if s.Bytes()[i] != ']' {
 							return result, i, scan.ErrBadArray
 						}
 						i++
@@ -1859,12 +1859,12 @@ func (Node) DecodeStreamFrom(_s *scan.Stream, i int) (Node, int, error) {
 				}
 				seenCreatedAt = true
 				{
-					var _v string
-					_v, i, err = _s.String(i)
+					var v string
+					v, i, err = s.String(i)
 					if err != nil {
 						return result, i, err
 					}
-					result.CreatedAt, err = time.Parse(time.RFC3339Nano, _v)
+					result.CreatedAt, err = time.Parse(time.RFC3339Nano, v)
 					if err != nil {
 						return result, i, err
 					}
@@ -1875,18 +1875,18 @@ func (Node) DecodeStreamFrom(_s *scan.Stream, i int) (Node, int, error) {
 		default:
 			return result, i, &validation.UnknownKeyError{Field: key}
 		}
-		i, err = _s.SkipSpace(i)
+		i, err = s.SkipSpace(i)
 		if err != nil {
 			return result, i, err
 		}
-		if i >= len(_s.Bytes()) {
-			if err = _s.ReadMore(); err != nil {
+		if i >= len(s.Bytes()) {
+			if err = s.ReadMore(); err != nil {
 				return result, i, err
 			}
 		}
-		c := _s.Bytes()[i]
+		c := s.Bytes()[i]
 		if c == ',' {
-			i, err = _s.SkipSpace(i + 1)
+			i, err = s.SkipSpace(i + 1)
 			if err != nil {
 				return result, i, err
 			}
@@ -1908,23 +1908,23 @@ func (Node) DecodeStreamFrom(_s *scan.Stream, i int) (Node, int, error) {
 func (s Node) JSONSize() int {
 	size := 550
 	size += ((len(s.Blob) + 2) / 3) * 4
-	if _n := len(s.Children); _n > 0 {
-		size += _n - 1
+	if n := len(s.Children); n > 0 {
+		size += n - 1
 	}
 	for i0 := range s.Children {
 		size += s.Children[i0].JSONSize()
 	}
-	if _n := len(s.Coords); _n > 0 {
-		size += _n - 1
+	if n := len(s.Coords); n > 0 {
+		size += n - 1
 	}
 	size += len(s.Coords) * 24
-	if _n := len(s.Matrix); _n > 0 {
-		size += _n - 1
+	if n := len(s.Matrix); n > 0 {
+		size += n - 1
 	}
 	for i0 := range s.Matrix {
 		size += 2
-		if _n := len(s.Matrix[i0]); _n > 0 {
-			size += _n - 1
+		if n := len(s.Matrix[i0]); n > 0 {
+			size += n - 1
 		}
 		size += len(s.Matrix[i0]) * 20
 	}
@@ -1934,17 +1934,17 @@ func (s Node) JSONSize() int {
 		size += (*s.Parent).JSONSize()
 	}
 	size += len(s.Props) * 4
-	for _k, _v := range s.Props {
-		size += len(_k) * 2
-		size += len(_v)*2 + 2
+	for k, v := range s.Props {
+		size += len(k) * 2
+		size += len(v)*2 + 2
 	}
-	if _n := len(s.Raw); _n > 0 {
-		size += _n
+	if n := len(s.Raw); n > 0 {
+		size += n
 	} else {
 		size += 4
 	}
-	if _n := len(s.Refs); _n > 0 {
-		size += _n - 1
+	if n := len(s.Refs); n > 0 {
+		size += n - 1
 	}
 	for i0 := range s.Refs {
 		if s.Refs[i0] == nil {
@@ -1953,8 +1953,8 @@ func (s Node) JSONSize() int {
 			size += (*s.Refs[i0]).JSONSize()
 		}
 	}
-	if _n := len(s.Tags); _n > 0 {
-		size += _n - 1
+	if n := len(s.Tags); n > 0 {
+		size += n - 1
 	}
 	for i0 := range s.Tags {
 		size += len(s.Tags[i0])*2 + 2
@@ -2097,17 +2097,17 @@ func (s Node) AppendJSON(dst []byte) ([]byte, error) {
 	} else {
 		dst = append(dst, '{')
 		{
-			_first := true
-			for _k, _v := range s.Props {
-				if _first {
-					_first = false
+			first := true
+			for k, v := range s.Props {
+				if first {
+					first = false
 					dst = append(dst, '"')
 				} else {
 					dst = append(dst, ",\""...)
 				}
-				dst = encode.AppendStringNoHTML(dst, _k)
+				dst = encode.AppendStringNoHTML(dst, k)
 				dst = append(dst, ":\""...)
-				dst = encode.AppendStringNoHTML(dst, _v)
+				dst = encode.AppendStringNoHTML(dst, v)
 			}
 		}
 		dst = append(dst, '}')
@@ -2210,16 +2210,16 @@ func (Validated) DecodeFrom(data []byte, i int) (Validated, int, error) {
 			return result, i, scan.ErrExpectString
 		}
 		{
-			_ke := i + 1
-			for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
-				_ke++
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' {
+				ke++
 			}
-			if _ke >= len(data) {
+			if ke >= len(data) {
 				return result, i, scan.ErrUnterminated
 			}
-			if data[_ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), _ke-i-1)
-				i = _ke + 1
+			if data[ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
 			} else {
 				key, i, err = scan.String(data, i)
 				if err != nil {
@@ -2246,29 +2246,29 @@ func (Validated) DecodeFrom(data []byte, i int) (Validated, int, error) {
 				}
 				seenAge = true
 				{
-					_neg := false
+					neg := false
 					if i < len(data) && data[i] == '-' {
-						_neg = true
+						neg = true
 						i++
 					}
 					if i >= len(data) || data[i] < '0' || data[i] > '9' {
 						return result, i, scan.ErrBadNumber
 					}
-					var _n int64
+					var n int64
 					for i < len(data) && data[i] >= '0' && data[i] <= '9' {
-						_n = _n*10 + int64(data[i]-'0')
+						n = n*10 + int64(data[i]-'0')
 						i++
 					}
 					if i < len(data) {
-						_c := data[i]
-						if _c == '.' || _c == 'e' || _c == 'E' {
+						c := data[i]
+						if c == '.' || c == 'e' || c == 'E' {
 							return result, i, scan.ErrBadNumber
 						}
 					}
-					if _neg {
-						_n = -_n
+					if neg {
+						n = -n
 					}
-					result.Age = int(_n)
+					result.Age = int(n)
 				}
 				if result.Age < 0 {
 					return result, i, &validation.GTEError{Field: "age", Limit: 0, Value: result.Age}
@@ -2285,16 +2285,16 @@ func (Validated) DecodeFrom(data []byte, i int) (Validated, int, error) {
 					return result, i, scan.ErrExpectString
 				}
 				{
-					_ke := i + 1
-					for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
-						_ke++
+					ke := i + 1
+					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' {
+						ke++
 					}
-					if _ke >= len(data) {
+					if ke >= len(data) {
 						return result, i, scan.ErrUnterminated
 					}
-					if data[_ke] == '"' {
-						result.Bio = unsafe.String(unsafe.SliceData(data[i+1:]), _ke-i-1)
-						i = _ke + 1
+					if data[ke] == '"' {
+						result.Bio = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						i = ke + 1
 					} else {
 						result.Bio, i, err = scan.String(data, i)
 						if err != nil {
@@ -2319,16 +2319,16 @@ func (Validated) DecodeFrom(data []byte, i int) (Validated, int, error) {
 					return result, i, scan.ErrExpectString
 				}
 				{
-					_ke := i + 1
-					for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
-						_ke++
+					ke := i + 1
+					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' {
+						ke++
 					}
-					if _ke >= len(data) {
+					if ke >= len(data) {
 						return result, i, scan.ErrUnterminated
 					}
-					if data[_ke] == '"' {
-						result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), _ke-i-1)
-						i = _ke + 1
+					if data[ke] == '"' {
+						result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						i = ke + 1
 					} else {
 						result.Name, i, err = scan.String(data, i)
 						if err != nil {
@@ -2372,16 +2372,16 @@ func (Validated) DecodeFrom(data []byte, i int) (Validated, int, error) {
 								return result, i, scan.ErrExpectString
 							}
 							{
-								_ke := i + 1
-								for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
-									_ke++
+								ke := i + 1
+								for ke < len(data) && data[ke] != '"' && data[ke] != '\\' {
+									ke++
 								}
-								if _ke >= len(data) {
+								if ke >= len(data) {
 									return result, i, scan.ErrUnterminated
 								}
-								if data[_ke] == '"' {
-									result.Tags[len(result.Tags)-1] = unsafe.String(unsafe.SliceData(data[i+1:]), _ke-i-1)
-									i = _ke + 1
+								if data[ke] == '"' {
+									result.Tags[len(result.Tags)-1] = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+									i = ke + 1
 								} else {
 									result.Tags[len(result.Tags)-1], i, err = scan.String(data, i)
 									if err != nil {
@@ -2429,16 +2429,16 @@ func (Validated) DecodeFrom(data []byte, i int) (Validated, int, error) {
 					return result, i, scan.ErrExpectString
 				}
 				{
-					_ke := i + 1
-					for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
-						_ke++
+					ke := i + 1
+					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' {
+						ke++
 					}
-					if _ke >= len(data) {
+					if ke >= len(data) {
 						return result, i, scan.ErrUnterminated
 					}
-					if data[_ke] == '"' {
-						result.Email = unsafe.String(unsafe.SliceData(data[i+1:]), _ke-i-1)
-						i = _ke + 1
+					if data[ke] == '"' {
+						result.Email = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						i = ke + 1
 					} else {
 						result.Email, i, err = scan.String(data, i)
 						if err != nil {
@@ -2481,27 +2481,27 @@ func (Validated) DecodeFrom(data []byte, i int) (Validated, int, error) {
 	}
 }
 
-func (Validated) DecodeStreamFrom(_s *scan.Stream, i int) (Validated, int, error) {
+func (Validated) DecodeStreamFrom(s *scan.Stream, i int) (Validated, int, error) {
 	var result Validated
 	seenAge := false
 	seenBio := false
 	seenEmail := false
 	seenName := false
 	seenTags := false
-	i, err := _s.ObjectOpen(i)
+	i, err := s.ObjectOpen(i)
 	if err != nil {
 		return result, i, err
 	}
-	i, err = _s.SkipSpace(i)
+	i, err = s.SkipSpace(i)
 	if err != nil {
 		return result, i, err
 	}
-	if i >= len(_s.Bytes()) {
-		if err = _s.ReadMore(); err != nil {
+	if i >= len(s.Bytes()) {
+		if err = s.ReadMore(); err != nil {
 			return result, i, err
 		}
 	}
-	if _s.Bytes()[i] == '}' {
+	if s.Bytes()[i] == '}' {
 		if !seenEmail {
 			return result, i, &validation.RequiredError{Field: "email"}
 		}
@@ -2512,23 +2512,23 @@ func (Validated) DecodeStreamFrom(_s *scan.Stream, i int) (Validated, int, error
 	}
 	for {
 		var key string
-		key, i, err = _s.KeyView(i)
+		key, i, err = s.KeyView(i)
 		if err != nil {
 			return result, i, err
 		}
-		i, err = _s.SkipSpace(i)
+		i, err = s.SkipSpace(i)
 		if err != nil {
 			return result, i, err
 		}
-		if i >= len(_s.Bytes()) {
-			if err = _s.ReadMore(); err != nil {
+		if i >= len(s.Bytes()) {
+			if err = s.ReadMore(); err != nil {
 				return result, i, err
 			}
 		}
-		if _s.Bytes()[i] != ':' {
+		if s.Bytes()[i] != ':' {
 			return result, i, scan.ErrBadObject
 		}
-		i, err = _s.SkipSpace(i + 1)
+		i, err = s.SkipSpace(i + 1)
 		if err != nil {
 			return result, i, err
 		}
@@ -2540,12 +2540,12 @@ func (Validated) DecodeStreamFrom(_s *scan.Stream, i int) (Validated, int, error
 					return result, i, &validation.DuplicateKeyError{Field: "age"}
 				}
 				seenAge = true
-				var _iv int64
-				_iv, i, err = _s.Int64(i)
+				var iv int64
+				iv, i, err = s.Int64(i)
 				if err != nil {
 					return result, i, err
 				}
-				result.Age = int(_iv)
+				result.Age = int(iv)
 				if result.Age < 0 {
 					return result, i, &validation.GTEError{Field: "age", Limit: 0, Value: result.Age}
 				}
@@ -2557,7 +2557,7 @@ func (Validated) DecodeStreamFrom(_s *scan.Stream, i int) (Validated, int, error
 					return result, i, &validation.DuplicateKeyError{Field: "bio"}
 				}
 				seenBio = true
-				result.Bio, i, err = _s.String(i)
+				result.Bio, i, err = s.String(i)
 				if err != nil {
 					return result, i, err
 				}
@@ -2574,7 +2574,7 @@ func (Validated) DecodeStreamFrom(_s *scan.Stream, i int) (Validated, int, error
 					return result, i, &validation.DuplicateKeyError{Field: "name"}
 				}
 				seenName = true
-				result.Name, i, err = _s.String(i)
+				result.Name, i, err = s.String(i)
 				if err != nil {
 					return result, i, err
 				}
@@ -2590,49 +2590,49 @@ func (Validated) DecodeStreamFrom(_s *scan.Stream, i int) (Validated, int, error
 				}
 				seenTags = true
 				{
-					i, err = _s.SkipSpace(i)
+					i, err = s.SkipSpace(i)
 					if err != nil {
 						return result, i, err
 					}
-					if i >= len(_s.Bytes()) {
-						if err = _s.ReadMore(); err != nil {
+					if i >= len(s.Bytes()) {
+						if err = s.ReadMore(); err != nil {
 							return result, i, err
 						}
 					}
-					if _s.Bytes()[i] == 'n' {
-						for _ki := 1; _ki < 4; _ki++ {
-							if i+_ki >= len(_s.Bytes()) {
-								if err = _s.ReadMore(); err != nil {
+					if s.Bytes()[i] == 'n' {
+						for ki := 1; ki < 4; ki++ {
+							if i+ki >= len(s.Bytes()) {
+								if err = s.ReadMore(); err != nil {
 									return result, i, err
 								}
 							}
-							if _s.Bytes()[i+_ki] != "null"[_ki] {
+							if s.Bytes()[i+ki] != "null"[ki] {
 								return result, i, scan.ErrBadLiteral
 							}
 						}
 						i += 4
 					} else {
-						i, err = _s.ArrayOpen(i)
+						i, err = s.ArrayOpen(i)
 						if err != nil {
 							return result, i, err
 						}
-						i, err = _s.SkipSpace(i)
+						i, err = s.SkipSpace(i)
 						if err != nil {
 							return result, i, err
 						}
-						if i >= len(_s.Bytes()) {
-							if err = _s.ReadMore(); err != nil {
+						if i >= len(s.Bytes()) {
+							if err = s.ReadMore(); err != nil {
 								return result, i, err
 							}
 						}
-						if _s.Bytes()[i] == ']' {
+						if s.Bytes()[i] == ']' {
 							result.Tags = []string{}
 						} else {
 							result.Tags = make([]string, 0, 4)
 						}
-						for _s.Bytes()[i] != ']' {
+						for s.Bytes()[i] != ']' {
 							result.Tags = append(result.Tags, "")
-							result.Tags[len(result.Tags)-1], i, err = _s.String(i)
+							result.Tags[len(result.Tags)-1], i, err = s.String(i)
 							if err != nil {
 								return result, i, err
 							}
@@ -2645,17 +2645,17 @@ func (Validated) DecodeStreamFrom(_s *scan.Stream, i int) (Validated, int, error
 							if len(result.Tags[len(result.Tags)-1]) > 32 {
 								return result, i, &validation.MaxLenError{Field: "tags[]", Limit: 32, Got: len(result.Tags[len(result.Tags)-1])}
 							}
-							i, err = _s.SkipSpace(i)
+							i, err = s.SkipSpace(i)
 							if err != nil {
 								return result, i, err
 							}
-							if i >= len(_s.Bytes()) {
-								if err = _s.ReadMore(); err != nil {
+							if i >= len(s.Bytes()) {
+								if err = s.ReadMore(); err != nil {
 									return result, i, err
 								}
 							}
-							if _s.Bytes()[i] == ',' {
-								i, err = _s.SkipSpace(i + 1)
+							if s.Bytes()[i] == ',' {
+								i, err = s.SkipSpace(i + 1)
 								if err != nil {
 									return result, i, err
 								}
@@ -2663,7 +2663,7 @@ func (Validated) DecodeStreamFrom(_s *scan.Stream, i int) (Validated, int, error
 							}
 							break
 						}
-						if _s.Bytes()[i] != ']' {
+						if s.Bytes()[i] != ']' {
 							return result, i, scan.ErrBadArray
 						}
 						i++
@@ -2678,7 +2678,7 @@ func (Validated) DecodeStreamFrom(_s *scan.Stream, i int) (Validated, int, error
 					return result, i, &validation.DuplicateKeyError{Field: "email"}
 				}
 				seenEmail = true
-				result.Email, i, err = _s.String(i)
+				result.Email, i, err = s.String(i)
 				if err != nil {
 					return result, i, err
 				}
@@ -2691,18 +2691,18 @@ func (Validated) DecodeStreamFrom(_s *scan.Stream, i int) (Validated, int, error
 		default:
 			return result, i, &validation.UnknownKeyError{Field: key}
 		}
-		i, err = _s.SkipSpace(i)
+		i, err = s.SkipSpace(i)
 		if err != nil {
 			return result, i, err
 		}
-		if i >= len(_s.Bytes()) {
-			if err = _s.ReadMore(); err != nil {
+		if i >= len(s.Bytes()) {
+			if err = s.ReadMore(); err != nil {
 				return result, i, err
 			}
 		}
-		c := _s.Bytes()[i]
+		c := s.Bytes()[i]
 		if c == ',' {
-			i, err = _s.SkipSpace(i + 1)
+			i, err = s.SkipSpace(i + 1)
 			if err != nil {
 				return result, i, err
 			}
@@ -2726,8 +2726,8 @@ func (s Validated) JSONSize() int {
 	size += len(s.Bio) * 2
 	size += len(s.Email) * 2
 	size += len(s.Name) * 2
-	if _n := len(s.Tags); _n > 0 {
-		size += _n - 1
+	if n := len(s.Tags); n > 0 {
+		size += n - 1
 	}
 	for i0 := range s.Tags {
 		size += len(s.Tags[i0])*2 + 2
