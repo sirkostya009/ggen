@@ -67,7 +67,7 @@ func renderAliasStreamDecode(s StructInfo) string {
 // Strings dominate length; numerics are bounded by their textual width.
 func renderAliasSize(s StructInfo) string {
 	if s.AliasKind == KindStruct {
-		return renderAliasStructSize()
+		return renderAliasStructSize(s)
 	}
 	if s.AliasKind == KindSlice || s.AliasKind == KindMap || s.AliasKind == KindArray || s.AliasKind == KindBytes {
 		return renderAliasContainerSize(s)
@@ -186,10 +186,9 @@ func renderAliasStructAppendJSON(s StructInfo) string {
 		fmt.Fprintf(&b, "u := %s(s)\n", s.AliasUnderlying)
 		b.WriteString("return u.AppendJSON(dst)\n")
 	case s.AliasIface.JSONMarshaler:
-		fmt.Fprintf(&b, "u := %s(s)\n", s.AliasUnderlying)
-		b.WriteString("b, err := u.MarshalJSON()\n")
-		b.WriteString("if err != nil { return dst, err }\n")
-		b.WriteString("return append(dst, b...), nil\n")
+		// dst is empty (JSONSize returns 0 for this branch) — return
+		// MarshalJSON's slice and err directly to skip the redundant copy.
+		fmt.Fprintf(&b, "return %s(s).MarshalJSON()\n", s.AliasUnderlying)
 	case s.AliasIface.TextAppender:
 		fmt.Fprintf(&b, "u := %s(s)\n", s.AliasUnderlying)
 		b.WriteString("dst = append(dst, '\"')\n")
@@ -210,10 +209,18 @@ func renderAliasStructAppendJSON(s StructInfo) string {
 }
 
 // renderAliasStructSize returns a JSONSize upper bound for a struct
-// alias. Without inspecting the underlying value, the safest bound is
-// a large constant. Picked 128 as a round number — same flat fallback
-// the per-field map estimate uses for nested structs.
-func renderAliasStructSize() string {
+// alias. For aliases that delegate to MarshalJSON / MarshalText we
+// can't predict the output length, AND the AppendJSON body owns its
+// own buffer (it returns the MarshalJSON slice directly, or builds
+// its own quoted text); a 0 hint keeps the top-level Marshal prealloc
+// from over-reserving a buffer that immediately gets discarded.
+// Other delegations (ggen AppendJSON, TextAppender) write into dst,
+// so a flat 128 stays a sensible upper-bound there.
+func renderAliasStructSize(s StructInfo) string {
+	switch {
+	case s.AliasIface.JSONMarshaler, s.AliasIface.TextMarshaler:
+		return "return 0\n"
+	}
 	return "return 128\n"
 }
 

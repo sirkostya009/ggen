@@ -1035,17 +1035,12 @@ func (OpaqueAlias) DecodeStreamFrom(s *scan.Stream, i int) (OpaqueAlias, int, er
 }
 
 func (s OpaqueAlias) JSONSize() int {
-	return 128
+	return 0
 
 }
 
 func (s OpaqueAlias) AppendJSON(dst []byte) ([]byte, error) {
-	u := OpaqueWithMethods(s)
-	b, err := u.MarshalJSON()
-	if err != nil {
-		return dst, err
-	}
-	return append(dst, b...), nil
+	return OpaqueWithMethods(s).MarshalJSON()
 
 }
 
