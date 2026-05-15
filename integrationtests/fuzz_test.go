@@ -1,6 +1,6 @@
 //go:build goexperiment.jsonv2
 
-package main
+package integrationtests
 
 // Fuzz tests. Three targets:
 //   - FuzzScanNoPanic: random bytes must never panic the scanner.

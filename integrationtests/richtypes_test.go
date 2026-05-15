@@ -1,6 +1,6 @@
 //go:build goexperiment.jsonv2
 
-package main
+package integrationtests
 
 // Coverage for the rich built-in type kinds: json.RawMessage / jsontext.Value
 // (passthrough), url.URL, math/big, and google/uuid. One annotated struct

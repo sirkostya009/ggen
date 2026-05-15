@@ -1,4 +1,4 @@
-package main
+package integrationtests
 
 // Coverage for the bare `any` / `interface{}` field kind on annotated
 // structs — both stdlib-default float64 numbers and `usenumber` opt-in

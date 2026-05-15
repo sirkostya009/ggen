@@ -1,4 +1,4 @@
-package main
+package integrationtests
 
 // Coverage for the database/sql.Null* family. ggen emits inner-value-or-null
 // on the wire (the convention every driver expects); stdlib v1/v2 serialize

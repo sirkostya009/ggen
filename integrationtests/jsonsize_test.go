@@ -1,4 +1,4 @@
-package main
+package integrationtests
 
 import (
 	"math"
@@ -12,7 +12,7 @@ import (
 
 	gofrs "github.com/gofrs/uuid/v5"
 	"github.com/google/uuid"
-	"github.com/sirkostya009/ggen/thirdparty2"
+	"github.com/sirkostya009/ggen/integrationtests/thirdparty2"
 )
 
 // URLStruct isolates a single url.URL field so the URL component

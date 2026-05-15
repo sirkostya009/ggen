@@ -1,6 +1,6 @@
 //go:build goexperiment.jsonv2
 
-package main
+package integrationtests
 
 import (
 	jsonv1 "encoding/json"

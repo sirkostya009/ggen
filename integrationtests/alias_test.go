@@ -1,4 +1,4 @@
-package main
+package integrationtests
 
 // Top-level primitive aliases — `type X <primitive>` annotated with
 // //ggen:generate. Each alias gets the same method surface as a struct
@@ -14,7 +14,7 @@ import (
 	"github.com/sirkostya009/ggen/decode"
 	"github.com/sirkostya009/ggen/decode/validation"
 	"github.com/sirkostya009/ggen/encode"
-	"github.com/sirkostya009/ggen/thirdparty"
+	"github.com/sirkostya009/ggen/integrationtests/thirdparty"
 )
 
 //ggen:generate

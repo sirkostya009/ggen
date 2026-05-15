@@ -5,7 +5,7 @@
 // these tests pin every fast-path branch and verify the fallback path
 // still produces output that round-trips through jsonv2.
 
-package main
+package integrationtests
 
 import (
 	"encoding/json"

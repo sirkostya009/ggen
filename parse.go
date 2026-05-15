@@ -145,12 +145,13 @@ func loadStructs(filenames []string) (*structSet, error) {
 // implementation flags at parse time.
 func loadDirWithTypes(dir string) (*structSet, error) {
 	cfg := &packages.Config{
+		Dir: dir,
 		Mode: packages.NeedName | packages.NeedFiles | packages.NeedSyntax |
 			packages.NeedTypes | packages.NeedTypesInfo | packages.NeedDeps |
 			packages.NeedImports,
 		Tests: true,
 	}
-	pkgs, err := packages.Load(cfg, dir)
+	pkgs, err := packages.Load(cfg, ".")
 	if err != nil {
 		return nil, fmt.Errorf("packages.Load %s: %w", dir, err)
 	}

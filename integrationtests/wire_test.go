@@ -1,6 +1,6 @@
 //go:build goexperiment.jsonv2
 
-package main
+package integrationtests
 
 // Tighter wire-format assertions than the round-trip-via-any check in
 // stdcompat_test.go. These probe the marshalled bytes directly:

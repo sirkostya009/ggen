@@ -12,7 +12,7 @@
 // default-literal (matches jsonv2) and `htmlescape` opt-in (matches
 // stdlib v1) both round-trip through jsonv2.
 
-package main
+package integrationtests
 
 import (
 	"encoding/json"
@@ -29,8 +29,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/sirkostya009/ggen/decode"
 	"github.com/sirkostya009/ggen/encode"
-	"github.com/sirkostya009/ggen/thirdparty"
-	"github.com/sirkostya009/ggen/thirdparty2"
+	"github.com/sirkostya009/ggen/integrationtests/thirdparty"
+	"github.com/sirkostya009/ggen/integrationtests/thirdparty2"
 )
 
 // ggenCompat is the subset of generated methods this file needs: each

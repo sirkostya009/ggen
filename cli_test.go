@@ -557,6 +557,65 @@ type Tagged struct {
 		mustHaveFile(t, filepath.Join(b, "b_ggen.go"))
 	})
 
+	t.Run("WalkSubModuleResolvesUnderItsOwnGoMod", func(t *testing.T) {
+		t.Parallel()
+		// `./...` from the root module must descend into a subdirectory
+		// that has its OWN go.mod and successfully load it under that
+		// sub-module's context — packages.Load must be invoked with
+		// cfg.Dir = sub_dir so type info resolves. The custom-validator
+		// `@NotEmpty` reference forces the type-info path: without it,
+		// the AST-only fallback can't resolve @-funcs and the build
+		// fails with "@Func references require Go module context".
+		//
+		// Regressing this (e.g. dropping cfg.Dir) leaves the sub-module
+		// silently un-generated even though `ggen ./...` exits 0 — the
+		// kind of bug a literal "exists in path" check misses; we
+		// explicitly assert (a) basename in filename and (b) the
+		// @NotEmpty call lands in the body.
+		base := t.TempDir()
+		writeFixture(t, filepath.Join(base, "go.mod"), "module rootmod\n\ngo 1.26\n")
+		writeFixture(t, filepath.Join(base, "root.go"),
+			strings.ReplaceAll(minimalStruct, "fixture", "rootmod"))
+		sub := filepath.Join(base, "sub")
+		writeFixture(t, filepath.Join(sub, "go.mod"), "module submod\n\ngo 1.26\n")
+		writeFixture(t, filepath.Join(sub, "msg.go"), `package sub
+
+//ggen:generate
+type Item struct {
+	Name string `+"`"+`json:"name" ggen:"@NotEmpty"`+"`"+`
+}
+
+func NotEmpty(s string) error {
+	if s == "" {
+		return fmt.Errorf("empty")
+	}
+	return nil
+}
+`)
+		// fmt import — keep it simple, the validator references it.
+		writeFixture(t, filepath.Join(sub, "helper.go"), `package sub
+
+import "fmt"
+
+var _ = fmt.Sprint
+`)
+		out, err := runCLI(t, bin, base, "./...")
+		if err != nil {
+			t.Fatalf("ggen ./...: %v\n%s", err, out)
+		}
+		// Sub-module's generated file must (a) exist with the right
+		// basename and (b) contain the @-func call site — proving
+		// type info was available during codegen.
+		genPath := filepath.Join(sub, "sub_ggen.go")
+		mustHaveFile(t, genPath)
+		got := mustReadOutput(t, genPath)
+		if !strings.Contains(got, "NotEmpty(") {
+			t.Errorf("sub_ggen.go missing NotEmpty call — @-func didn't resolve:\n%s", got)
+		}
+		// Root module also generated.
+		mustHaveFile(t, filepath.Join(base, filepath.Base(base)+"_ggen.go"))
+	})
+
 	t.Run("Dot_DoesNotRecurseIntoSubpackages", func(t *testing.T) {
 		t.Parallel()
 		// `.` is single-package mode — only the directly named dir is
@@ -1010,38 +1069,64 @@ type Msg struct {
 		}
 	})
 
+	// taggedExtPkg defines a TextMarshaler/Unmarshaler type with no
+	// `import "encoding"` or interface assertion — purely structural
+	// satisfaction. Shared across CrossPkgText_RealWorldThirdParty and
+	// CrossPkgText_GoWorkspace which only differ in how the consumer
+	// module is wired to the type.
+	const taggedExtPkg = `package ext
+
+type Tagged struct {
+	Name string
+	Tag  string
+}
+
+func (t Tagged) MarshalText() ([]byte, error) {
+	return []byte(t.Name + "#" + t.Tag), nil
+}
+
+func (t *Tagged) UnmarshalText(b []byte) error {
+	for i := 0; i < len(b); i++ {
+		if b[i] == '#' {
+			t.Name = string(b[:i])
+			t.Tag = string(b[i+1:])
+			return nil
+		}
+	}
+	t.Name = string(b)
+	return nil
+}
+`
+	// Consumer source referencing the ext package via the temp module's
+	// own path — no dependency on any sub-package of this repo. The
+	// `tagged` import alias documents that the generator must resolve
+	// the type via go/types method-set scan, not by name.
+	const taggedConsumerSrc = `package consumer
+
+import tagged "consumertest/ext"
+
+//ggen:generate
+type Msg struct {
+	Tag tagged.Tagged ` + "`" + `json:"tag"` + "`" + `
+}
+`
+
 	t.Run("CrossPkgText_RealWorldThirdParty", func(t *testing.T) {
 		t.Parallel()
-		// Real-world flow: a temp module pulls in github.com/sirkostya009/ggen
-		// as a "third-party library" via a replace directive and references
-		// thirdparty.Tagged. That type defines MarshalText / UnmarshalText
-		// on its method set with NO `import "encoding"`, NO `var _
-		// encoding.TextMarshaler = ...` assertion — pure structural
-		// satisfaction. The generator must detect it via types.Implements
-		// against std interfaces it loads on its own, with no help from the
-		// producer's import graph.
-		schemaRoot, err := os.Getwd()
-		if err != nil {
-			t.Fatal(err)
-		}
+		// Real-world flow: a temp module references a type from another
+		// package in the SAME consumer module — TextMarshaler /
+		// UnmarshalText satisfied purely structurally (no `import
+		// "encoding"`, no interface assertion). The generator must
+		// detect it via types.Implements against std interfaces it
+		// loads on its own. Exercises the type-info dispatch end to
+		// end without depending on any sub-package of ggen itself.
 		base := t.TempDir()
 		writeFixture(t, filepath.Join(base, "go.mod"), `module consumertest
 
 go 1.26
-
-require github.com/sirkostya009/ggen v0.0.0-00010101000000-000000000000
-
-replace github.com/sirkostya009/ggen => `+schemaRoot+`
 `)
-		writeFixture(t, filepath.Join(base, "consumer", "msg.go"), `package consumer
-
-import "github.com/sirkostya009/ggen/thirdparty"
-
-//ggen:generate
-type Msg struct {
-	Tag thirdparty.Tagged `+"`"+`json:"tag"`+"`"+`
-}
-`)
+		writeFixture(t, filepath.Join(base, "ext", "tagged.go"), taggedExtPkg)
+		writeFixture(t, filepath.Join(base, "consumer", "msg.go"), taggedConsumerSrc)
 		if out, err := runCLI(t, bin, base, "./consumer"); err != nil {
 			t.Fatalf("ggen ./consumer: %v\n%s", err, out)
 		}
@@ -1062,40 +1147,32 @@ type Msg struct {
 
 	t.Run("CrossPkgText_GoWorkspace", func(t *testing.T) {
 		t.Parallel()
-		// go.work flow: the consumer module and the schema repo are both
-		// workspace members. The workspace overrides the require/replace
-		// resolution chain — `import "github.com/sirkostya009/ggen/..."`
-		// from the consumer resolves directly to the local schema repo via
-		// the use directive. Same structural-detection assertions as the
-		// replace-directive variant; this proves the generator's loader
-		// honors workspace mode (packages.Load picks up GOFLAGS / go.work
-		// the same way `go build` does).
-		schemaRoot, err := os.Getwd()
-		if err != nil {
-			t.Fatal(err)
-		}
+		// go.work flow: the consumer module and the ext module are two
+		// separate modules wired together via a workspace. Same
+		// structural-detection assertions as the single-module variant;
+		// this proves the generator's loader honors workspace mode
+		// (packages.Load picks up GOFLAGS / go.work the same way
+		// `go build` does).
 		base := t.TempDir()
 		consumerDir := filepath.Join(base, "consumer")
+		extDir := filepath.Join(base, "ext")
 		writeFixture(t, filepath.Join(base, "go.work"), `go 1.26
 
 use (
 	./consumer
-	`+schemaRoot+`
+	./ext
 )
 `)
+		writeFixture(t, filepath.Join(extDir, "go.mod"), `module consumertest/ext
+
+go 1.26
+`)
+		writeFixture(t, filepath.Join(extDir, "tagged.go"), taggedExtPkg)
 		writeFixture(t, filepath.Join(consumerDir, "go.mod"), `module consumertest
 
 go 1.26
 `)
-		writeFixture(t, filepath.Join(consumerDir, "msg.go"), `package consumer
-
-import "github.com/sirkostya009/ggen/thirdparty"
-
-//ggen:generate
-type Msg struct {
-	Tag thirdparty.Tagged `+"`"+`json:"tag"`+"`"+`
-}
-`)
+		writeFixture(t, filepath.Join(consumerDir, "msg.go"), taggedConsumerSrc)
 		if out, err := runCLI(t, bin, base, "./consumer"); err != nil {
 			t.Fatalf("ggen ./consumer: %v\n%s", err, out)
 		}

@@ -2,7 +2,7 @@
 // structs (HookedStruct, PointerStruct, NativeTypes, OmitStruct, …) live next
 // to the test functions that exercise them.
 
-package main
+package integrationtests
 
 //ggen:generate
 type Address struct {

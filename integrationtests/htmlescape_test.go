@@ -3,7 +3,7 @@
 // opts in to the v1-style `\uXXXX` escapes — useful when the JSON is
 // embedded in HTML and the consumer doesn't escape on its own.
 
-package main
+package integrationtests
 
 import (
 	"strings"

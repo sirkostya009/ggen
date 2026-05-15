@@ -1,4 +1,4 @@
-package main
+package integrationtests
 
 import (
 	"strings"
@@ -6,8 +6,8 @@ import (
 
 	"github.com/sirkostya009/ggen/decode"
 	"github.com/sirkostya009/ggen/encode"
-	"github.com/sirkostya009/ggen/thirdparty"
-	"github.com/sirkostya009/ggen/thirdparty2"
+	"github.com/sirkostya009/ggen/integrationtests/thirdparty"
+	"github.com/sirkostya009/ggen/integrationtests/thirdparty2"
 )
 
 // FallbackStruct references thirdparty.External — a plain Go struct with

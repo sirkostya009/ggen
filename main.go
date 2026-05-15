@@ -162,7 +162,14 @@ func applyCLIFlags(structs []StructInfo) {
 }
 
 func walkAndGenerate(root string) error {
-	return filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+	// Collect directories first, then process deepest-first so a
+	// parent package that depends on a child package (e.g. a struct
+	// field of type child.Foo) sees the child's already-generated
+	// methods at packages.Load time. Pre-order processing of the same
+	// tree would generate the parent first and miss the child's
+	// JSONSize/AppendJSON, causing the fallback-128 path to kick in.
+	var dirs []string
+	if err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -172,14 +179,26 @@ func walkAndGenerate(root string) error {
 		if path != root && shouldSkipDir(d.Name()) {
 			return fs.SkipDir
 		}
+		dirs = append(dirs, path)
+		return nil
+	}); err != nil {
+		return err
+	}
+	// Sort by descending depth (path-separator count). Deeper dirs
+	// first means leaf packages generate before their ancestors.
+	slices.SortStableFunc(dirs, func(a, b string) int {
+		da := strings.Count(a, string(filepath.Separator))
+		db := strings.Count(b, string(filepath.Separator))
+		return db - da
+	})
+	for _, path := range dirs {
 		// generateDir errors are queued via cliLog.Error and the walk
-		// continues; main() flushes + exits non-zero at the end. Only
-		// genuine WalkDir errors (permissions, IO) bubble up to halt.
+		// continues; main() flushes + exits non-zero at the end.
 		if err := generateDir(path, "", ""); err != nil {
 			cliLog.Error(fmt.Errorf("in %s: %w", path, err))
 		}
-		return nil
-	})
+	}
+	return nil
 }
 
 func shouldSkipDir(name string) bool {
