@@ -721,11 +721,14 @@ func (s *T) UnmarshalJSON(data []byte) error                     // wraps decode
 24. **Slab-allocated `[]*T` / `[N]*T` decode.** For slices of
     pointer-to-struct, allocate one backing slab `make([]T, 0, cap)`
     and append element pointers as `&_slab[len-1]`. For pointer-arrays,
-    a fixed `[N]T` slab. Turns N per-element heap allocs into ~log(N)
-    (slice) or 1 (array). When the slab grows past cap, prior `*T`
-    pointers keep the orphan backing alive — semantically correct,
-    uses ~2× slab memory in the worst case but avoids the per-element
-    alloc storm. Null elements skip the slab entirely (nil pointer).
+    `make([]T, N)` — heap-allocated, exact-sized. A stack `[N]T` would
+    still escape (the per-element `&_slab[i]` forces it), so the heap
+    slice skips the stack hop and avoids cache-line thrash for large
+    T. Turns N per-element heap allocs into ~log(N) (slice) or 1
+    (array). When the slice slab grows past cap, prior `*T` pointers
+    keep the orphan backing alive — semantically correct, uses ~2×
+    slab memory in the worst case but avoids the per-element alloc
+    storm. Null elements skip the slab entirely (nil pointer).
 25. **`preallocCap` returns `(slice, slab int)`** — single switch over
     `f.ElemKind` decides BOTH the slice cap (`make([]E, 0, slice)`)
     and the slab cap (`make([]T, 0, slab)` for `[]*T`). Defaults
@@ -771,6 +774,60 @@ func (s *T) UnmarshalJSON(data []byte) error                     // wraps decode
     each) but cuts the stack frame from N bytes to 8/N⌈/64⌉. Real wins
     only show up on wide + recursive structs where cumulative stack
     pressure and cache locality dominate; below threshold, bools stay.
+29. **In-place decode for every elem kind.** Slice/array elem decode
+    writes directly into the final destination slot, regardless of
+    kind:
+      - `[N]*T` (slab+array):  `_slab[ivar]`
+      - `[N]T`  (dst+array):   `dst[ivar]`
+      - `[]*T`  (slab+slice):  pre-grow `append(_slab, zero(T))`,
+        target `_slab[len-1]`
+      - `[]T`   (dst+slice):   pre-grow `append(dst, zero(T))`,
+        target `dst[len-1]`
+    For structs the slot serves as both receiver-source (value-
+    receivers ignore content) and write target on return:
+    `slot, k, err = slot.DecodeFrom(...)`. For primitive scans
+    (`scan.Bool`, `_s.Int64`, inline int/string scanners) the slot
+    is the assignment target: `slot = _bv` / `slot = int(_n)`. No
+    `var ev0`, no `var _z`, no `var _sv` — saves one struct/primitive
+    copy per element AND drops the post-decode `dst[ivar] = ev0` (or
+    `append(dst, ev0)`) line. `inlineScanInt64`/`inlineScanUint64`
+    receive `target` + `castFn` directly, so the cast happens at the
+    final assignment site. Pre-grow uses `zeroLit(elemType, kind)`
+    (`""`, `false`, `0`, or `T{}`) since composite literal `int{}`
+    is illegal but `append([]int, 0)` works via untyped const.
+    Mods/validation reference the target string, emitting e.g.
+    `if len(dst[len(dst)-1]) > 16 { ... }` — same semantics, slightly
+    longer expressions that the Go compiler folds.
+30. **Position-var pass-through; no `kN := posVar` alias.** Slice and
+    array decoders thread the caller's position variable directly
+    (top-level `j`, or the parent's `k` in nested recursions) — no
+    `kN := posVar` aliasing. Each inner slice/array advances the
+    SAME counter; outer continues with that advanced position when
+    the inner returns. Only data locals (`evN`, `_idxN`, `_slabN`)
+    keep depth suffixes. Drops one assignment per array entry plus
+    the trailing `posVar = kN + 1` sync.
+31. **Inline `null` peek; no `_np`/`_ok` locals.** The 4-byte `null`
+    literal check is emitted byte-by-byte inline at the call site
+    (`if j+4 <= len(data) && data[j]=='n' && data[j+1]=='u' && ...
+    { j += 4 }`). Saves the `_np`, `_ok` locals from
+    `scan.Null(data, j)` and the post-call `j = _np` sync. Matches
+    the same inline shape already used for pointer-to-struct fields
+    (`*T parent` etc.). Exposed via the `inlineNullPeek(posVar)`
+    helper in `generate.go`.
+32. **Single position cursor in dispatch loop.** Object-field
+    dispatch no longer maintains a separate `j := i` cursor — every
+    step (key scan, colon, value decode, comma/`}` handling)
+    advances `i` directly. Removes the `j` local plus the end-of-
+    iteration `i = j` sync. Stream path mirrors: `_s.KeyView(i)`
+    returns into `i` via `=` (caller pre-declares `var key string`).
+33. **Single local in `inlineScanString` (`_ke` only).** The
+    inline string scanner used two locals (`_ks` start, `_ke`
+    cursor). Now only `_ke` is kept — the start is `posIn+1` inline,
+    and the slow-path fallback (`scan.String(data, posIn)`) still
+    reads from the unchanged `posIn`, so no separate "save the
+    original" var is needed. Slice expression becomes
+    `data[posIn+1:]` with length `_ke - posIn - 1`; equivalent to
+    `data[_ks:]` with `_ke - _ks`. Compiler folds the arithmetic.
 
 ## Benchmarks (~5.6 MiB deep Node tree, full validation)
 

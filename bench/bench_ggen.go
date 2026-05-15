@@ -16,13 +16,15 @@ import (
 
 func (Addr) DecodeFrom(data []byte, i int) (Addr, int, error) {
 	var result Addr
+	var err error
+	_ = err
 	seenCity := false
 	seenStreet := false
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
-		return result, 0, scan.ErrBadObject
+		return result, i, scan.ErrBadObject
 	}
 	i++
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -33,129 +35,118 @@ func (Addr) DecodeFrom(data []byte, i int) (Addr, int, error) {
 	}
 	for {
 		var key string
-		j := i
 		if i >= len(data) || data[i] != '"' {
-			return result, 0, scan.ErrExpectString
+			return result, i, scan.ErrExpectString
 		}
 		{
-			_ks := i + 1
-			_ke := _ks
+			_ke := i + 1
 			for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
 				_ke++
 			}
 			if _ke >= len(data) {
-				return result, 0, scan.ErrUnterminated
+				return result, i, scan.ErrUnterminated
 			}
 			if data[_ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
-				j = _ke + 1
+				key = unsafe.String(unsafe.SliceData(data[i+1:]), _ke-i-1)
+				i = _ke + 1
 			} else {
-				_isv, _isj, _iserr := scan.String(data, i)
-				if _iserr != nil {
-					return result, 0, _iserr
+				key, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, err
 				}
-				key = _isv
-				j = _isj
 			}
 		}
-		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
-			j++
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
 		}
-		if j >= len(data) || data[j] != ':' {
-			return result, 0, scan.ErrBadObject
+		if i >= len(data) || data[i] != ':' {
+			return result, i, scan.ErrBadObject
 		}
-		j++
-		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
-			j++
+		i++
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
 		}
 		switch len(key) {
 		case 4:
 			if key == "city" {
 				if seenCity {
-					return result, 0, &validation.DuplicateKeyError{Field: "city"}
+					return result, i, &validation.DuplicateKeyError{Field: "city"}
 				}
 				seenCity = true
-				if j >= len(data) || data[j] != '"' {
-					return result, 0, scan.ErrExpectString
+				if i >= len(data) || data[i] != '"' {
+					return result, i, scan.ErrExpectString
 				}
 				{
-					_ks := j + 1
-					_ke := _ks
+					_ke := i + 1
 					for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
 						_ke++
 					}
 					if _ke >= len(data) {
-						return result, 0, scan.ErrUnterminated
+						return result, i, scan.ErrUnterminated
 					}
 					if data[_ke] == '"' {
-						result.City = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
-						j = _ke + 1
+						result.City = unsafe.String(unsafe.SliceData(data[i+1:]), _ke-i-1)
+						i = _ke + 1
 					} else {
-						_isv, _isj, _iserr := scan.String(data, j)
-						if _iserr != nil {
-							return result, 0, _iserr
+						result.City, i, err = scan.String(data, i)
+						if err != nil {
+							return result, i, err
 						}
-						result.City = _isv
-						j = _isj
 					}
 				}
 			} else {
-				return result, 0, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: key}
 			}
 		case 6:
 			if key == "street" {
 				if seenStreet {
-					return result, 0, &validation.DuplicateKeyError{Field: "street"}
+					return result, i, &validation.DuplicateKeyError{Field: "street"}
 				}
 				seenStreet = true
-				if j >= len(data) || data[j] != '"' {
-					return result, 0, scan.ErrExpectString
+				if i >= len(data) || data[i] != '"' {
+					return result, i, scan.ErrExpectString
 				}
 				{
-					_ks := j + 1
-					_ke := _ks
+					_ke := i + 1
 					for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
 						_ke++
 					}
 					if _ke >= len(data) {
-						return result, 0, scan.ErrUnterminated
+						return result, i, scan.ErrUnterminated
 					}
 					if data[_ke] == '"' {
-						result.Street = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
-						j = _ke + 1
+						result.Street = unsafe.String(unsafe.SliceData(data[i+1:]), _ke-i-1)
+						i = _ke + 1
 					} else {
-						_isv, _isj, _iserr := scan.String(data, j)
-						if _iserr != nil {
-							return result, 0, _iserr
+						result.Street, i, err = scan.String(data, i)
+						if err != nil {
+							return result, i, err
 						}
-						result.Street = _isv
-						j = _isj
 					}
 				}
 			} else {
-				return result, 0, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: key}
 			}
 		default:
-			return result, 0, &validation.UnknownKeyError{Field: key}
+			return result, i, &validation.UnknownKeyError{Field: key}
 		}
-		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
-			j++
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
 		}
-		if j >= len(data) {
-			return result, 0, scan.ErrBadObject
+		if i >= len(data) {
+			return result, i, scan.ErrBadObject
 		}
-		if data[j] == ',' {
-			j++
-			i = j
+		if data[i] == ',' {
+			i++
 			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			continue
 		}
-		if data[j] == '}' {
-			return result, j + 1, nil
+		if data[i] == '}' {
+			return result, i + 1, nil
 		}
-		return result, 0, scan.ErrBadObject
+		return result, i, scan.ErrBadObject
 	}
 }
 
@@ -165,97 +156,93 @@ func (Addr) DecodeStreamFrom(_s *scan.Stream, i int) (Addr, int, error) {
 	seenStreet := false
 	i, err := _s.ObjectOpen(i)
 	if err != nil {
-		return result, 0, err
+		return result, i, err
 	}
 	i, err = _s.SkipSpace(i)
 	if err != nil {
-		return result, 0, err
+		return result, i, err
 	}
 	if i >= len(_s.Bytes()) {
 		if err = _s.ReadMore(); err != nil {
-			return result, 0, err
+			return result, i, err
 		}
 	}
 	if _s.Bytes()[i] == '}' {
 		return result, i + 1, nil
 	}
 	for {
-		key, j, err := _s.KeyView(i)
+		var key string
+		key, i, err = _s.KeyView(i)
 		if err != nil {
-			return result, 0, err
+			return result, i, err
 		}
-		j, err = _s.SkipSpace(j)
+		i, err = _s.SkipSpace(i)
 		if err != nil {
-			return result, 0, err
+			return result, i, err
 		}
-		if j >= len(_s.Bytes()) {
+		if i >= len(_s.Bytes()) {
 			if err = _s.ReadMore(); err != nil {
-				return result, 0, err
+				return result, i, err
 			}
 		}
-		if _s.Bytes()[j] != ':' {
-			return result, 0, scan.ErrBadObject
+		if _s.Bytes()[i] != ':' {
+			return result, i, scan.ErrBadObject
 		}
-		j, err = _s.SkipSpace(j + 1)
+		i, err = _s.SkipSpace(i + 1)
 		if err != nil {
-			return result, 0, err
+			return result, i, err
 		}
 		switch len(key) {
 		case 4:
 			if key == "city" {
 				if seenCity {
-					return result, 0, &validation.DuplicateKeyError{Field: "city"}
+					return result, i, &validation.DuplicateKeyError{Field: "city"}
 				}
 				seenCity = true
-				v, k, err := _s.String(j)
+				result.City, i, err = _s.String(i)
 				if err != nil {
-					return result, 0, err
+					return result, i, err
 				}
-				result.City = v
-				j = k
 			} else {
-				return result, 0, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: key}
 			}
 		case 6:
 			if key == "street" {
 				if seenStreet {
-					return result, 0, &validation.DuplicateKeyError{Field: "street"}
+					return result, i, &validation.DuplicateKeyError{Field: "street"}
 				}
 				seenStreet = true
-				v, k, err := _s.String(j)
+				result.Street, i, err = _s.String(i)
 				if err != nil {
-					return result, 0, err
+					return result, i, err
 				}
-				result.Street = v
-				j = k
 			} else {
-				return result, 0, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: key}
 			}
 		default:
-			return result, 0, &validation.UnknownKeyError{Field: key}
+			return result, i, &validation.UnknownKeyError{Field: key}
 		}
-		j, err = _s.SkipSpace(j)
+		i, err = _s.SkipSpace(i)
 		if err != nil {
-			return result, 0, err
+			return result, i, err
 		}
-		if j >= len(_s.Bytes()) {
+		if i >= len(_s.Bytes()) {
 			if err = _s.ReadMore(); err != nil {
-				return result, 0, err
+				return result, i, err
 			}
 		}
-		c := _s.Bytes()[j]
+		c := _s.Bytes()[i]
 		if c == ',' {
-			i = j + 1
-			i, err = _s.SkipSpace(i)
+			i, err = _s.SkipSpace(i + 1)
 			if err != nil {
-				return result, 0, err
+				return result, i, err
 			}
 			continue
 		}
 		if c == '}' {
-			return result, j + 1, nil
+			return result, i + 1, nil
 		}
-		return result, 0, scan.ErrBadObject
+		return result, i, scan.ErrBadObject
 	}
 }
 
@@ -278,6 +265,8 @@ func (s Addr) AppendJSON(dst []byte) ([]byte, error) {
 
 func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 	var result Node
+	var err error
+	_ = err
 	seenActive := false
 	seenBlob := false
 	seenChildren := false
@@ -297,7 +286,7 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
-		return result, 0, scan.ErrBadObject
+		return result, i, scan.ErrBadObject
 	}
 	i++
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -305,75 +294,71 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 	}
 	if i < len(data) && data[i] == '}' {
 		if !seenID {
-			return result, 0, &validation.RequiredError{Field: "id"}
+			return result, i, &validation.RequiredError{Field: "id"}
 		}
 		if !seenName {
-			return result, 0, &validation.RequiredError{Field: "name"}
+			return result, i, &validation.RequiredError{Field: "name"}
 		}
 		return result, i + 1, nil
 	}
 	for {
 		var key string
-		j := i
 		if i >= len(data) || data[i] != '"' {
-			return result, 0, scan.ErrExpectString
+			return result, i, scan.ErrExpectString
 		}
 		{
-			_ks := i + 1
-			_ke := _ks
+			_ke := i + 1
 			for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
 				_ke++
 			}
 			if _ke >= len(data) {
-				return result, 0, scan.ErrUnterminated
+				return result, i, scan.ErrUnterminated
 			}
 			if data[_ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
-				j = _ke + 1
+				key = unsafe.String(unsafe.SliceData(data[i+1:]), _ke-i-1)
+				i = _ke + 1
 			} else {
-				_isv, _isj, _iserr := scan.String(data, i)
-				if _iserr != nil {
-					return result, 0, _iserr
+				key, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, err
 				}
-				key = _isv
-				j = _isj
 			}
 		}
-		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
-			j++
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
 		}
-		if j >= len(data) || data[j] != ':' {
-			return result, 0, scan.ErrBadObject
+		if i >= len(data) || data[i] != ':' {
+			return result, i, scan.ErrBadObject
 		}
-		j++
-		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
-			j++
+		i++
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
 		}
 		switch len(key) {
 		case 2:
 			if key == "id" {
 				if seenID {
-					return result, 0, &validation.DuplicateKeyError{Field: "id"}
+					return result, i, &validation.DuplicateKeyError{Field: "id"}
 				}
 				seenID = true
 				{
 					_neg := false
-					if j < len(data) && data[j] == '-' {
+					if i < len(data) && data[i] == '-' {
 						_neg = true
-						j++
+						i++
 					}
-					if j >= len(data) || data[j] < '0' || data[j] > '9' {
-						return result, 0, scan.ErrBadNumber
+					if i >= len(data) || data[i] < '0' || data[i] > '9' {
+						return result, i, scan.ErrBadNumber
 					}
 					var _n int64
-					for j < len(data) && data[j] >= '0' && data[j] <= '9' {
-						_n = _n*10 + int64(data[j]-'0')
-						j++
+					for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+						_n = _n*10 + int64(data[i]-'0')
+						i++
 					}
-					if j < len(data) {
-						_c := data[j]
+					if i < len(data) {
+						_c := data[i]
 						if _c == '.' || _c == 'e' || _c == 'E' {
-							return result, 0, scan.ErrBadNumber
+							return result, i, scan.ErrBadNumber
 						}
 					}
 					if _neg {
@@ -382,739 +367,685 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 					result.ID = _n
 				}
 				if result.ID < 0 {
-					return result, 0, &validation.GTEError{Field: "id", Limit: 0, Value: result.ID}
+					return result, i, &validation.GTEError{Field: "id", Limit: 0, Value: result.ID}
 				}
 			} else {
-				return result, 0, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: key}
 			}
 		case 3:
 			if key == "raw" {
 				if seenRaw {
-					return result, 0, &validation.DuplicateKeyError{Field: "raw"}
+					return result, i, &validation.DuplicateKeyError{Field: "raw"}
 				}
 				seenRaw = true
 				{
-					_start := j
-					_k, err := scan.SkipValue(data, _start)
+					_start := i
+					i, err = scan.SkipValue(data, _start)
 					if err != nil {
-						return result, 0, err
+						return result, i, err
 					}
-					result.Raw = data[_start:_k]
-					j = _k
+					result.Raw = data[_start:i]
 				}
 			} else {
-				return result, 0, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: key}
 			}
 		case 4:
 			switch key {
 			case "blob":
 				if seenBlob {
-					return result, 0, &validation.DuplicateKeyError{Field: "blob"}
+					return result, i, &validation.DuplicateKeyError{Field: "blob"}
 				}
 				seenBlob = true
 				{
 					var _s string
-					if j >= len(data) || data[j] != '"' {
-						return result, 0, scan.ErrExpectString
+					if i >= len(data) || data[i] != '"' {
+						return result, i, scan.ErrExpectString
 					}
 					{
-						_ks := j + 1
-						_ke := _ks
+						_ke := i + 1
 						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
 							_ke++
 						}
 						if _ke >= len(data) {
-							return result, 0, scan.ErrUnterminated
+							return result, i, scan.ErrUnterminated
 						}
 						if data[_ke] == '"' {
-							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
-							j = _ke + 1
+							_s = unsafe.String(unsafe.SliceData(data[i+1:]), _ke-i-1)
+							i = _ke + 1
 						} else {
-							_isv, _isj, _iserr := scan.String(data, j)
-							if _iserr != nil {
-								return result, 0, _iserr
+							_s, i, err = scan.String(data, i)
+							if err != nil {
+								return result, i, err
 							}
-							_s = _isv
-							j = _isj
 						}
 					}
 
-					_dst := make([]byte, 0, base64.StdEncoding.DecodedLen(len(_s)))
-					_dst, err := base64.StdEncoding.AppendDecode(_dst, unsafe.Slice(unsafe.StringData(_s), len(_s)))
+					result.Blob = make([]byte, 0, base64.StdEncoding.DecodedLen(len(_s)))
+					result.Blob, err = base64.StdEncoding.AppendDecode(result.Blob, unsafe.Slice(unsafe.StringData(_s), len(_s)))
 					if err != nil {
-						return result, 0, err
+						return result, i, err
 					}
-					result.Blob = _dst
 				}
 			case "name":
 				if seenName {
-					return result, 0, &validation.DuplicateKeyError{Field: "name"}
+					return result, i, &validation.DuplicateKeyError{Field: "name"}
 				}
 				seenName = true
-				if j >= len(data) || data[j] != '"' {
-					return result, 0, scan.ErrExpectString
+				if i >= len(data) || data[i] != '"' {
+					return result, i, scan.ErrExpectString
 				}
 				{
-					_ks := j + 1
-					_ke := _ks
+					_ke := i + 1
 					for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
 						_ke++
 					}
 					if _ke >= len(data) {
-						return result, 0, scan.ErrUnterminated
+						return result, i, scan.ErrUnterminated
 					}
 					if data[_ke] == '"' {
-						result.Name = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
-						j = _ke + 1
+						result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), _ke-i-1)
+						i = _ke + 1
 					} else {
-						_isv, _isj, _iserr := scan.String(data, j)
-						if _iserr != nil {
-							return result, 0, _iserr
+						result.Name, i, err = scan.String(data, i)
+						if err != nil {
+							return result, i, err
 						}
-						result.Name = _isv
-						j = _isj
 					}
 				}
 				if len(result.Name) < 1 {
-					return result, 0, &validation.MinLenError{Field: "name", Limit: 1, Got: len(result.Name)}
+					return result, i, &validation.MinLenError{Field: "name", Limit: 1, Got: len(result.Name)}
 				}
 				if len(result.Name) > 128 {
-					return result, 0, &validation.MaxLenError{Field: "name", Limit: 128, Got: len(result.Name)}
+					return result, i, &validation.MaxLenError{Field: "name", Limit: 128, Got: len(result.Name)}
 				}
 			case "refs":
 				if seenRefs {
-					return result, 0, &validation.DuplicateKeyError{Field: "refs"}
+					return result, i, &validation.DuplicateKeyError{Field: "refs"}
 				}
 				seenRefs = true
 				{
-					k0 := j
-					for k0 < len(data) && (data[k0] == ' ' || data[k0] == '\t' || data[k0] == '\n' || data[k0] == '\r') {
-						k0++
+					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
 					}
-					if _np, _ok := scan.Null(data, k0); _ok {
-						j = _np
+					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+						i += 4
 					} else {
-						if k0 >= len(data) || data[k0] != '[' {
-							return result, 0, scan.ErrBadArray
+						if i >= len(data) || data[i] != '[' {
+							return result, i, scan.ErrBadArray
 						}
-						k0++
-						for k0 < len(data) && (data[k0] == ' ' || data[k0] == '\t' || data[k0] == '\n' || data[k0] == '\r') {
-							k0++
+						i++
+						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
 						}
 						var _slab0 []Addr
-						if k0 < len(data) && data[k0] == ']' {
+						if i < len(data) && data[i] == ']' {
 							result.Refs = []*Addr{}
 						} else {
 							result.Refs = make([]*Addr, 0, 4)
 							_slab0 = make([]Addr, 0, 4)
 						}
-						for k0 < len(data) && data[k0] != ']' {
-							if _np, _ok := scan.Null(data, k0); _ok {
-								k0 = _np
+						for i < len(data) && data[i] != ']' {
+							if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+								i += 4
 								result.Refs = append(result.Refs, nil)
-								for k0 < len(data) && (data[k0] == ' ' || data[k0] == '\t' || data[k0] == '\n' || data[k0] == '\r') {
-									k0++
+								for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+									i++
 								}
-								if k0 < len(data) && data[k0] == ',' {
-									k0++
-									for k0 < len(data) && (data[k0] == ' ' || data[k0] == '\t' || data[k0] == '\n' || data[k0] == '\r') {
-										k0++
+								if i < len(data) && data[i] == ',' {
+									i++
+									for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+										i++
 									}
 									continue
 								}
 								break
 							}
-							var ev0 Addr
-							var _z Addr
-							_sv, _ek, err := _z.DecodeFrom(data, k0)
+							_slab0 = append(_slab0, Addr{})
+							_slab0[len(_slab0)-1], i, err = _slab0[len(_slab0)-1].DecodeFrom(data, i)
 							if err != nil {
-								return result, 0, err
+								return result, i, err
 							}
-							ev0 = _sv
-							k0 = _ek
-							_slab0 = append(_slab0, ev0)
 							result.Refs = append(result.Refs, &_slab0[len(_slab0)-1])
-							for k0 < len(data) && (data[k0] == ' ' || data[k0] == '\t' || data[k0] == '\n' || data[k0] == '\r') {
-								k0++
+							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
 							}
-							if k0 < len(data) && data[k0] == ',' {
-								k0++
-								for k0 < len(data) && (data[k0] == ' ' || data[k0] == '\t' || data[k0] == '\n' || data[k0] == '\r') {
-									k0++
+							if i < len(data) && data[i] == ',' {
+								i++
+								for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+									i++
 								}
 								continue
 							}
 							break
 						}
-						if k0 >= len(data) || data[k0] != ']' {
-							return result, 0, scan.ErrBadArray
+						if i >= len(data) || data[i] != ']' {
+							return result, i, scan.ErrBadArray
 						}
-						j = k0 + 1
+						i++
 					}
 				}
 				if len(result.Refs) > 16 {
-					return result, 0, &validation.MaxLenError{Field: "refs", Limit: 16, Got: len(result.Refs)}
+					return result, i, &validation.MaxLenError{Field: "refs", Limit: 16, Got: len(result.Refs)}
 				}
 			case "tags":
 				if seenTags {
-					return result, 0, &validation.DuplicateKeyError{Field: "tags"}
+					return result, i, &validation.DuplicateKeyError{Field: "tags"}
 				}
 				seenTags = true
 				{
-					k0 := j
-					for k0 < len(data) && (data[k0] == ' ' || data[k0] == '\t' || data[k0] == '\n' || data[k0] == '\r') {
-						k0++
+					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
 					}
-					if _np, _ok := scan.Null(data, k0); _ok {
-						j = _np
+					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+						i += 4
 					} else {
-						if k0 >= len(data) || data[k0] != '[' {
-							return result, 0, scan.ErrBadArray
+						if i >= len(data) || data[i] != '[' {
+							return result, i, scan.ErrBadArray
 						}
-						k0++
-						for k0 < len(data) && (data[k0] == ' ' || data[k0] == '\t' || data[k0] == '\n' || data[k0] == '\r') {
-							k0++
+						i++
+						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
 						}
-						if k0 < len(data) && data[k0] == ']' {
+						if i < len(data) && data[i] == ']' {
 							result.Tags = []string{}
 						} else {
 							result.Tags = make([]string, 0, 4)
 						}
-						for k0 < len(data) && data[k0] != ']' {
-							var ev0 string
-							if k0 >= len(data) || data[k0] != '"' {
-								return result, 0, scan.ErrExpectString
+						for i < len(data) && data[i] != ']' {
+							result.Tags = append(result.Tags, "")
+							if i >= len(data) || data[i] != '"' {
+								return result, i, scan.ErrExpectString
 							}
 							{
-								_ks := k0 + 1
-								_ke := _ks
+								_ke := i + 1
 								for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
 									_ke++
 								}
 								if _ke >= len(data) {
-									return result, 0, scan.ErrUnterminated
+									return result, i, scan.ErrUnterminated
 								}
 								if data[_ke] == '"' {
-									ev0 = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
-									k0 = _ke + 1
+									result.Tags[len(result.Tags)-1] = unsafe.String(unsafe.SliceData(data[i+1:]), _ke-i-1)
+									i = _ke + 1
 								} else {
-									_isv, _isj, _iserr := scan.String(data, k0)
-									if _iserr != nil {
-										return result, 0, _iserr
+									result.Tags[len(result.Tags)-1], i, err = scan.String(data, i)
+									if err != nil {
+										return result, i, err
 									}
-									ev0 = _isv
-									k0 = _isj
 								}
 							}
-							if len(ev0) < 1 {
-								return result, 0, &validation.MinLenError{Field: "tags[]", Limit: 1, Got: len(ev0)}
+							if len(result.Tags[len(result.Tags)-1]) < 1 {
+								return result, i, &validation.MinLenError{Field: "tags[]", Limit: 1, Got: len(result.Tags[len(result.Tags)-1])}
 							}
-							if len(ev0) > 64 {
-								return result, 0, &validation.MaxLenError{Field: "tags[]", Limit: 64, Got: len(ev0)}
+							if len(result.Tags[len(result.Tags)-1]) > 64 {
+								return result, i, &validation.MaxLenError{Field: "tags[]", Limit: 64, Got: len(result.Tags[len(result.Tags)-1])}
 							}
-							result.Tags = append(result.Tags, ev0)
-							for k0 < len(data) && (data[k0] == ' ' || data[k0] == '\t' || data[k0] == '\n' || data[k0] == '\r') {
-								k0++
+							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
 							}
-							if k0 < len(data) && data[k0] == ',' {
-								k0++
-								for k0 < len(data) && (data[k0] == ' ' || data[k0] == '\t' || data[k0] == '\n' || data[k0] == '\r') {
-									k0++
+							if i < len(data) && data[i] == ',' {
+								i++
+								for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+									i++
 								}
 								continue
 							}
 							break
 						}
-						if k0 >= len(data) || data[k0] != ']' {
-							return result, 0, scan.ErrBadArray
+						if i >= len(data) || data[i] != ']' {
+							return result, i, scan.ErrBadArray
 						}
-						j = k0 + 1
+						i++
 					}
 				}
 				if len(result.Tags) > 64 {
-					return result, 0, &validation.MaxLenError{Field: "tags", Limit: 64, Got: len(result.Tags)}
+					return result, i, &validation.MaxLenError{Field: "tags", Limit: 64, Got: len(result.Tags)}
 				}
 			default:
-				return result, 0, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: key}
 			}
 		case 5:
 			switch key {
 			case "extra":
 				if seenExtra {
-					return result, 0, &validation.DuplicateKeyError{Field: "extra"}
+					return result, i, &validation.DuplicateKeyError{Field: "extra"}
 				}
 				seenExtra = true
 				{
-					_v, _k, err := scan.Any(data, j)
+					result.Extra, i, err = scan.Any(data, i)
 					if err != nil {
-						return result, 0, err
+						return result, i, err
 					}
-					result.Extra = _v
-					j = _k
 				}
 			case "props":
 				if seenProps {
-					return result, 0, &validation.DuplicateKeyError{Field: "props"}
+					return result, i, &validation.DuplicateKeyError{Field: "props"}
 				}
 				seenProps = true
 				{
-					k := j
-					for k < len(data) && (data[k] == ' ' || data[k] == '\t' || data[k] == '\n' || data[k] == '\r') {
-						k++
+					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
 					}
-					if _np, _ok := scan.Null(data, k); _ok {
-						j = _np
+					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+						i += 4
 					} else {
-						if k >= len(data) || data[k] != '{' {
-							return result, 0, scan.ErrBadObject
+						if i >= len(data) || data[i] != '{' {
+							return result, i, scan.ErrBadObject
 						}
-						k++
-						for k < len(data) && (data[k] == ' ' || data[k] == '\t' || data[k] == '\n' || data[k] == '\r') {
-							k++
+						i++
+						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
 						}
-						if k < len(data) && data[k] == '}' {
+						if i < len(data) && data[i] == '}' {
 							result.Props = map[string]string{}
 						} else {
 							result.Props = make(map[string]string)
 						}
-						for k < len(data) && data[k] != '}' {
+						for i < len(data) && data[i] != '}' {
 							var _mk string
-							if k >= len(data) || data[k] != '"' {
-								return result, 0, scan.ErrExpectString
+							if i >= len(data) || data[i] != '"' {
+								return result, i, scan.ErrExpectString
 							}
 							{
-								_ks := k + 1
-								_ke := _ks
+								_ke := i + 1
 								for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
 									_ke++
 								}
 								if _ke >= len(data) {
-									return result, 0, scan.ErrUnterminated
+									return result, i, scan.ErrUnterminated
 								}
 								if data[_ke] == '"' {
-									_mk = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
-									k = _ke + 1
+									_mk = unsafe.String(unsafe.SliceData(data[i+1:]), _ke-i-1)
+									i = _ke + 1
 								} else {
-									_isv, _isj, _iserr := scan.String(data, k)
-									if _iserr != nil {
-										return result, 0, _iserr
+									_mk, i, err = scan.String(data, i)
+									if err != nil {
+										return result, i, err
 									}
-									_mk = _isv
-									k = _isj
 								}
 							}
-							for k < len(data) && (data[k] == ' ' || data[k] == '\t' || data[k] == '\n' || data[k] == '\r') {
-								k++
+							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
 							}
-							if k >= len(data) || data[k] != ':' {
-								return result, 0, scan.ErrBadObject
+							if i >= len(data) || data[i] != ':' {
+								return result, i, scan.ErrBadObject
 							}
-							k++
-							for k < len(data) && (data[k] == ' ' || data[k] == '\t' || data[k] == '\n' || data[k] == '\r') {
-								k++
+							i++
+							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
 							}
 							var _mv string
-							if k >= len(data) || data[k] != '"' {
-								return result, 0, scan.ErrExpectString
+							if i >= len(data) || data[i] != '"' {
+								return result, i, scan.ErrExpectString
 							}
 							{
-								_ks := k + 1
-								_ke := _ks
+								_ke := i + 1
 								for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
 									_ke++
 								}
 								if _ke >= len(data) {
-									return result, 0, scan.ErrUnterminated
+									return result, i, scan.ErrUnterminated
 								}
 								if data[_ke] == '"' {
-									_mv = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
-									k = _ke + 1
+									_mv = unsafe.String(unsafe.SliceData(data[i+1:]), _ke-i-1)
+									i = _ke + 1
 								} else {
-									_isv, _isj, _iserr := scan.String(data, k)
-									if _iserr != nil {
-										return result, 0, _iserr
+									_mv, i, err = scan.String(data, i)
+									if err != nil {
+										return result, i, err
 									}
-									_mv = _isv
-									k = _isj
 								}
 							}
 							result.Props[_mk] = _mv
-							for k < len(data) && (data[k] == ' ' || data[k] == '\t' || data[k] == '\n' || data[k] == '\r') {
-								k++
+							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
 							}
-							if k < len(data) && data[k] == ',' {
-								k++
-								for k < len(data) && (data[k] == ' ' || data[k] == '\t' || data[k] == '\n' || data[k] == '\r') {
-									k++
+							if i < len(data) && data[i] == ',' {
+								i++
+								for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+									i++
 								}
 								continue
 							}
 							break
 						}
-						if k >= len(data) || data[k] != '}' {
-							return result, 0, scan.ErrBadObject
+						if i >= len(data) || data[i] != '}' {
+							return result, i, scan.ErrBadObject
 						}
-						j = k + 1
+						i++
 					}
 				}
 				if len(result.Props) > 64 {
-					return result, 0, &validation.MaxLenError{Field: "props", Limit: 64, Got: len(result.Props)}
+					return result, i, &validation.MaxLenError{Field: "props", Limit: 64, Got: len(result.Props)}
 				}
 			case "score":
 				if seenScore {
-					return result, 0, &validation.DuplicateKeyError{Field: "score"}
+					return result, i, &validation.DuplicateKeyError{Field: "score"}
 				}
 				seenScore = true
-				v, k, err := scan.Float64(data, j)
+				result.Score, i, err = scan.Float64(data, i)
 				if err != nil {
-					return result, 0, err
+					return result, i, err
 				}
-				result.Score = v
-				j = k
 				if result.Score < 0 {
-					return result, 0, &validation.GTEError{Field: "score", Limit: 0, Value: result.Score}
+					return result, i, &validation.GTEError{Field: "score", Limit: 0, Value: result.Score}
 				}
 				if result.Score > 100 {
-					return result, 0, &validation.LTEError{Field: "score", Limit: 100, Value: result.Score}
+					return result, i, &validation.LTEError{Field: "score", Limit: 100, Value: result.Score}
 				}
 			default:
-				return result, 0, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: key}
 			}
 		case 6:
 			switch key {
 			case "active":
 				if seenActive {
-					return result, 0, &validation.DuplicateKeyError{Field: "active"}
+					return result, i, &validation.DuplicateKeyError{Field: "active"}
 				}
 				seenActive = true
-				v, k, err := scan.Bool(data, j)
+				result.Active, i, err = scan.Bool(data, i)
 				if err != nil {
-					return result, 0, err
+					return result, i, err
 				}
-				result.Active = v
-				j = k
 			case "coords":
 				if seenCoords {
-					return result, 0, &validation.DuplicateKeyError{Field: "coords"}
+					return result, i, &validation.DuplicateKeyError{Field: "coords"}
 				}
 				seenCoords = true
 				{
-					k0 := j
-					for k0 < len(data) && (data[k0] == ' ' || data[k0] == '\t' || data[k0] == '\n' || data[k0] == '\r') {
-						k0++
+					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
 					}
-					if k0 >= len(data) || data[k0] != '[' {
-						return result, 0, scan.ErrBadArray
+					if i >= len(data) || data[i] != '[' {
+						return result, i, scan.ErrBadArray
 					}
-					k0++
-					for k0 < len(data) && (data[k0] == ' ' || data[k0] == '\t' || data[k0] == '\n' || data[k0] == '\r') {
-						k0++
+					i++
+					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
 					}
 					var _idx0 int
-					for k0 < len(data) && data[k0] != ']' {
+					for i < len(data) && data[i] != ']' {
 						if _idx0 >= 2 {
-							return result, 0, &validation.LenError{Field: "coords", Want: 2, Got: _idx0}
+							return result, i, &validation.LenError{Field: "coords", Want: 2, Got: _idx0}
 						}
-						var ev0 float64
-						_fv, _ek, err := scan.Float64(data, k0)
+						result.Coords[_idx0], i, err = scan.Float64(data, i)
 						if err != nil {
-							return result, 0, err
+							return result, i, err
 						}
-						ev0 = _fv
-						k0 = _ek
-						result.Coords[_idx0] = ev0
 						_idx0++
-						for k0 < len(data) && (data[k0] == ' ' || data[k0] == '\t' || data[k0] == '\n' || data[k0] == '\r') {
-							k0++
+						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
 						}
-						if k0 < len(data) && data[k0] == ',' {
-							k0++
-							for k0 < len(data) && (data[k0] == ' ' || data[k0] == '\t' || data[k0] == '\n' || data[k0] == '\r') {
-								k0++
+						if i < len(data) && data[i] == ',' {
+							i++
+							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
 							}
 							continue
 						}
 						break
 					}
-					if k0 >= len(data) || data[k0] != ']' {
-						return result, 0, scan.ErrBadArray
+					if i >= len(data) || data[i] != ']' {
+						return result, i, scan.ErrBadArray
 					}
 					if _idx0 != 2 {
-						return result, 0, &validation.LenError{Field: "coords", Want: 2, Got: _idx0}
+						return result, i, &validation.LenError{Field: "coords", Want: 2, Got: _idx0}
 					}
-					j = k0 + 1
+					i++
 				}
 			case "matrix":
 				if seenMatrix {
-					return result, 0, &validation.DuplicateKeyError{Field: "matrix"}
+					return result, i, &validation.DuplicateKeyError{Field: "matrix"}
 				}
 				seenMatrix = true
 				{
-					k0 := j
-					for k0 < len(data) && (data[k0] == ' ' || data[k0] == '\t' || data[k0] == '\n' || data[k0] == '\r') {
-						k0++
+					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
 					}
-					if _np, _ok := scan.Null(data, k0); _ok {
-						j = _np
+					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+						i += 4
 					} else {
-						if k0 >= len(data) || data[k0] != '[' {
-							return result, 0, scan.ErrBadArray
+						if i >= len(data) || data[i] != '[' {
+							return result, i, scan.ErrBadArray
 						}
-						k0++
-						for k0 < len(data) && (data[k0] == ' ' || data[k0] == '\t' || data[k0] == '\n' || data[k0] == '\r') {
-							k0++
+						i++
+						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
 						}
-						if k0 < len(data) && data[k0] == ']' {
+						if i < len(data) && data[i] == ']' {
 							result.Matrix = [][]int{}
 						} else {
 							result.Matrix = make([][]int, 0, 4)
 						}
-						for k0 < len(data) && data[k0] != ']' {
-							var ev0 []int
+						for i < len(data) && data[i] != ']' {
+							result.Matrix = append(result.Matrix, nil)
 							{
-								k1 := k0
-								for k1 < len(data) && (data[k1] == ' ' || data[k1] == '\t' || data[k1] == '\n' || data[k1] == '\r') {
-									k1++
+								for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+									i++
 								}
-								if _np, _ok := scan.Null(data, k1); _ok {
-									k0 = _np
+								if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+									i += 4
 								} else {
-									if k1 >= len(data) || data[k1] != '[' {
-										return result, 0, scan.ErrBadArray
+									if i >= len(data) || data[i] != '[' {
+										return result, i, scan.ErrBadArray
 									}
-									k1++
-									for k1 < len(data) && (data[k1] == ' ' || data[k1] == '\t' || data[k1] == '\n' || data[k1] == '\r') {
-										k1++
+									i++
+									for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+										i++
 									}
-									if k1 < len(data) && data[k1] == ']' {
-										ev0 = []int{}
+									if i < len(data) && data[i] == ']' {
+										result.Matrix[len(result.Matrix)-1] = []int{}
 									} else {
-										ev0 = make([]int, 0, 4)
+										result.Matrix[len(result.Matrix)-1] = make([]int, 0, 4)
 									}
-									for k1 < len(data) && data[k1] != ']' {
-										var ev1 int
-										var _ev int64
+									for i < len(data) && data[i] != ']' {
+										result.Matrix[len(result.Matrix)-1] = append(result.Matrix[len(result.Matrix)-1], 0)
 										{
 											_neg := false
-											if k1 < len(data) && data[k1] == '-' {
+											if i < len(data) && data[i] == '-' {
 												_neg = true
-												k1++
+												i++
 											}
-											if k1 >= len(data) || data[k1] < '0' || data[k1] > '9' {
-												return result, 0, scan.ErrBadNumber
+											if i >= len(data) || data[i] < '0' || data[i] > '9' {
+												return result, i, scan.ErrBadNumber
 											}
 											var _n int64
-											for k1 < len(data) && data[k1] >= '0' && data[k1] <= '9' {
-												_n = _n*10 + int64(data[k1]-'0')
-												k1++
+											for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+												_n = _n*10 + int64(data[i]-'0')
+												i++
 											}
-											if k1 < len(data) {
-												_c := data[k1]
+											if i < len(data) {
+												_c := data[i]
 												if _c == '.' || _c == 'e' || _c == 'E' {
-													return result, 0, scan.ErrBadNumber
+													return result, i, scan.ErrBadNumber
 												}
 											}
 											if _neg {
 												_n = -_n
 											}
-											_ev = _n
+											result.Matrix[len(result.Matrix)-1][len(result.Matrix[len(result.Matrix)-1])-1] = int(_n)
 										}
-										ev1 = int(_ev)
-										ev0 = append(ev0, ev1)
-										for k1 < len(data) && (data[k1] == ' ' || data[k1] == '\t' || data[k1] == '\n' || data[k1] == '\r') {
-											k1++
+										for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+											i++
 										}
-										if k1 < len(data) && data[k1] == ',' {
-											k1++
-											for k1 < len(data) && (data[k1] == ' ' || data[k1] == '\t' || data[k1] == '\n' || data[k1] == '\r') {
-												k1++
+										if i < len(data) && data[i] == ',' {
+											i++
+											for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+												i++
 											}
 											continue
 										}
 										break
 									}
-									if k1 >= len(data) || data[k1] != ']' {
-										return result, 0, scan.ErrBadArray
+									if i >= len(data) || data[i] != ']' {
+										return result, i, scan.ErrBadArray
 									}
-									k0 = k1 + 1
+									i++
 								}
 							}
-							if len(ev0) > 32 {
-								return result, 0, &validation.MaxLenError{Field: "matrix[]", Limit: 32, Got: len(ev0)}
+							if len(result.Matrix[len(result.Matrix)-1]) > 32 {
+								return result, i, &validation.MaxLenError{Field: "matrix[]", Limit: 32, Got: len(result.Matrix[len(result.Matrix)-1])}
 							}
-							result.Matrix = append(result.Matrix, ev0)
-							for k0 < len(data) && (data[k0] == ' ' || data[k0] == '\t' || data[k0] == '\n' || data[k0] == '\r') {
-								k0++
+							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
 							}
-							if k0 < len(data) && data[k0] == ',' {
-								k0++
-								for k0 < len(data) && (data[k0] == ' ' || data[k0] == '\t' || data[k0] == '\n' || data[k0] == '\r') {
-									k0++
+							if i < len(data) && data[i] == ',' {
+								i++
+								for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+									i++
 								}
 								continue
 							}
 							break
 						}
-						if k0 >= len(data) || data[k0] != ']' {
-							return result, 0, scan.ErrBadArray
+						if i >= len(data) || data[i] != ']' {
+							return result, i, scan.ErrBadArray
 						}
-						j = k0 + 1
+						i++
 					}
 				}
 				if len(result.Matrix) > 16 {
-					return result, 0, &validation.MaxLenError{Field: "matrix", Limit: 16, Got: len(result.Matrix)}
+					return result, i, &validation.MaxLenError{Field: "matrix", Limit: 16, Got: len(result.Matrix)}
 				}
 			case "parent":
 				if seenParent {
-					return result, 0, &validation.DuplicateKeyError{Field: "parent"}
+					return result, i, &validation.DuplicateKeyError{Field: "parent"}
 				}
 				seenParent = true
-				if j+4 <= len(data) && data[j] == 'n' && data[j+1] == 'u' && data[j+2] == 'l' && data[j+3] == 'l' {
-					j = 4 + j
+				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+					i = 4 + i
 					result.Parent = nil
 				} else {
 					var _v Addr
-					v, k, err := _v.DecodeFrom(data, j)
+					_v, i, err = _v.DecodeFrom(data, i)
 					if err != nil {
-						return result, 0, err
+						return result, i, err
 					}
-					_v = v
-					j = k
 
 					result.Parent = &_v
 				}
 			default:
-				return result, 0, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: key}
 			}
 		case 8:
 			if key == "children" {
 				if seenChildren {
-					return result, 0, &validation.DuplicateKeyError{Field: "children"}
+					return result, i, &validation.DuplicateKeyError{Field: "children"}
 				}
 				seenChildren = true
 				{
-					k0 := j
-					for k0 < len(data) && (data[k0] == ' ' || data[k0] == '\t' || data[k0] == '\n' || data[k0] == '\r') {
-						k0++
+					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
 					}
-					if _np, _ok := scan.Null(data, k0); _ok {
-						j = _np
+					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+						i += 4
 					} else {
-						if k0 >= len(data) || data[k0] != '[' {
-							return result, 0, scan.ErrBadArray
+						if i >= len(data) || data[i] != '[' {
+							return result, i, scan.ErrBadArray
 						}
-						k0++
-						for k0 < len(data) && (data[k0] == ' ' || data[k0] == '\t' || data[k0] == '\n' || data[k0] == '\r') {
-							k0++
+						i++
+						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
 						}
-						if k0 < len(data) && data[k0] == ']' {
+						if i < len(data) && data[i] == ']' {
 							result.Children = []Node{}
 						} else {
 							result.Children = []Node{}
 						}
-						for k0 < len(data) && data[k0] != ']' {
-							var ev0 Node
-							var _z Node
-							_sv, _ek, err := _z.DecodeFrom(data, k0)
+						for i < len(data) && data[i] != ']' {
+							result.Children = append(result.Children, Node{})
+							result.Children[len(result.Children)-1], i, err = result.Children[len(result.Children)-1].DecodeFrom(data, i)
 							if err != nil {
-								return result, 0, err
+								return result, i, err
 							}
-							ev0 = _sv
-							k0 = _ek
-							result.Children = append(result.Children, ev0)
-							for k0 < len(data) && (data[k0] == ' ' || data[k0] == '\t' || data[k0] == '\n' || data[k0] == '\r') {
-								k0++
+							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
 							}
-							if k0 < len(data) && data[k0] == ',' {
-								k0++
-								for k0 < len(data) && (data[k0] == ' ' || data[k0] == '\t' || data[k0] == '\n' || data[k0] == '\r') {
-									k0++
+							if i < len(data) && data[i] == ',' {
+								i++
+								for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+									i++
 								}
 								continue
 							}
 							break
 						}
-						if k0 >= len(data) || data[k0] != ']' {
-							return result, 0, scan.ErrBadArray
+						if i >= len(data) || data[i] != ']' {
+							return result, i, scan.ErrBadArray
 						}
-						j = k0 + 1
+						i++
 					}
 				}
 				if len(result.Children) > 16 {
-					return result, 0, &validation.MaxLenError{Field: "children", Limit: 16, Got: len(result.Children)}
+					return result, i, &validation.MaxLenError{Field: "children", Limit: 16, Got: len(result.Children)}
 				}
 			} else {
-				return result, 0, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: key}
 			}
 		case 9:
 			if key == "createdAt" {
 				if seenCreatedAt {
-					return result, 0, &validation.DuplicateKeyError{Field: "createdAt"}
+					return result, i, &validation.DuplicateKeyError{Field: "createdAt"}
 				}
 				seenCreatedAt = true
 				{
 					var _s string
-					if j >= len(data) || data[j] != '"' {
-						return result, 0, scan.ErrExpectString
+					if i >= len(data) || data[i] != '"' {
+						return result, i, scan.ErrExpectString
 					}
 					{
-						_ks := j + 1
-						_ke := _ks
+						_ke := i + 1
 						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
 							_ke++
 						}
 						if _ke >= len(data) {
-							return result, 0, scan.ErrUnterminated
+							return result, i, scan.ErrUnterminated
 						}
 						if data[_ke] == '"' {
-							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
-							j = _ke + 1
+							_s = unsafe.String(unsafe.SliceData(data[i+1:]), _ke-i-1)
+							i = _ke + 1
 						} else {
-							_isv, _isj, _iserr := scan.String(data, j)
-							if _iserr != nil {
-								return result, 0, _iserr
+							_s, i, err = scan.String(data, i)
+							if err != nil {
+								return result, i, err
 							}
-							_s = _isv
-							j = _isj
 						}
 					}
 
-					var err error
 					result.CreatedAt, err = time.Parse(time.RFC3339Nano, _s)
 					if err != nil {
-						return result, 0, err
+						return result, i, err
 					}
 				}
 			} else {
-				return result, 0, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: key}
 			}
 		default:
-			return result, 0, &validation.UnknownKeyError{Field: key}
+			return result, i, &validation.UnknownKeyError{Field: key}
 		}
-		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
-			j++
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
 		}
-		if j >= len(data) {
-			return result, 0, scan.ErrBadObject
+		if i >= len(data) {
+			return result, i, scan.ErrBadObject
 		}
-		if data[j] == ',' {
-			j++
-			i = j
+		if data[i] == ',' {
+			i++
 			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			continue
 		}
-		if data[j] == '}' {
+		if data[i] == '}' {
 			if !seenID {
-				return result, 0, &validation.RequiredError{Field: "id"}
+				return result, i, &validation.RequiredError{Field: "id"}
 			}
 			if !seenName {
-				return result, 0, &validation.RequiredError{Field: "name"}
+				return result, i, &validation.RequiredError{Field: "name"}
 			}
-			return result, j + 1, nil
+			return result, i + 1, nil
 		}
-		return result, 0, scan.ErrBadObject
+		return result, i, scan.ErrBadObject
 	}
 }
 
@@ -1137,875 +1068,840 @@ func (Node) DecodeStreamFrom(_s *scan.Stream, i int) (Node, int, error) {
 	seenTags := false
 	i, err := _s.ObjectOpen(i)
 	if err != nil {
-		return result, 0, err
+		return result, i, err
 	}
 	i, err = _s.SkipSpace(i)
 	if err != nil {
-		return result, 0, err
+		return result, i, err
 	}
 	if i >= len(_s.Bytes()) {
 		if err = _s.ReadMore(); err != nil {
-			return result, 0, err
+			return result, i, err
 		}
 	}
 	if _s.Bytes()[i] == '}' {
 		if !seenID {
-			return result, 0, &validation.RequiredError{Field: "id"}
+			return result, i, &validation.RequiredError{Field: "id"}
 		}
 		if !seenName {
-			return result, 0, &validation.RequiredError{Field: "name"}
+			return result, i, &validation.RequiredError{Field: "name"}
 		}
 		return result, i + 1, nil
 	}
 	for {
-		key, j, err := _s.KeyView(i)
+		var key string
+		key, i, err = _s.KeyView(i)
 		if err != nil {
-			return result, 0, err
+			return result, i, err
 		}
-		j, err = _s.SkipSpace(j)
+		i, err = _s.SkipSpace(i)
 		if err != nil {
-			return result, 0, err
+			return result, i, err
 		}
-		if j >= len(_s.Bytes()) {
+		if i >= len(_s.Bytes()) {
 			if err = _s.ReadMore(); err != nil {
-				return result, 0, err
+				return result, i, err
 			}
 		}
-		if _s.Bytes()[j] != ':' {
-			return result, 0, scan.ErrBadObject
+		if _s.Bytes()[i] != ':' {
+			return result, i, scan.ErrBadObject
 		}
-		j, err = _s.SkipSpace(j + 1)
+		i, err = _s.SkipSpace(i + 1)
 		if err != nil {
-			return result, 0, err
+			return result, i, err
 		}
 		switch len(key) {
 		case 2:
 			if key == "id" {
 				if seenID {
-					return result, 0, &validation.DuplicateKeyError{Field: "id"}
+					return result, i, &validation.DuplicateKeyError{Field: "id"}
 				}
 				seenID = true
-				v, k, err := _s.Int64(j)
+				result.ID, i, err = _s.Int64(i)
 				if err != nil {
-					return result, 0, err
+					return result, i, err
 				}
-				result.ID = v
-				j = k
 				if result.ID < 0 {
-					return result, 0, &validation.GTEError{Field: "id", Limit: 0, Value: result.ID}
+					return result, i, &validation.GTEError{Field: "id", Limit: 0, Value: result.ID}
 				}
 			} else {
-				return result, 0, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: key}
 			}
 		case 3:
 			if key == "raw" {
 				if seenRaw {
-					return result, 0, &validation.DuplicateKeyError{Field: "raw"}
+					return result, i, &validation.DuplicateKeyError{Field: "raw"}
 				}
 				seenRaw = true
 				{
-					_start := j
-					_k, err := _s.SkipValue(_start)
+					_start := i
+					i, err = _s.SkipValue(_start)
 					if err != nil {
-						return result, 0, err
+						return result, i, err
 					}
-					_raw := _s.Bytes()[_start:_k]
+					_raw := _s.Bytes()[_start:i]
 					result.Raw = append(make([]byte, 0, len(_raw)), _raw...)
-					j = _k
 				}
 			} else {
-				return result, 0, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: key}
 			}
 		case 4:
 			switch key {
 			case "blob":
 				if seenBlob {
-					return result, 0, &validation.DuplicateKeyError{Field: "blob"}
+					return result, i, &validation.DuplicateKeyError{Field: "blob"}
 				}
 				seenBlob = true
 				{
-					_v, _k, err := _s.String(j)
+					var _v string
+					_v, i, err = _s.String(i)
 					if err != nil {
-						return result, 0, err
+						return result, i, err
 					}
-					_dst := make([]byte, 0, base64.StdEncoding.DecodedLen(len(_v)))
-					_dst, err = base64.StdEncoding.AppendDecode(_dst, unsafe.Slice(unsafe.StringData(_v), len(_v)))
+					result.Blob = make([]byte, 0, base64.StdEncoding.DecodedLen(len(_v)))
+					result.Blob, err = base64.StdEncoding.AppendDecode(result.Blob, unsafe.Slice(unsafe.StringData(_v), len(_v)))
 					if err != nil {
-						return result, 0, err
+						return result, i, err
 					}
-					result.Blob = _dst
-					j = _k
 				}
 			case "name":
 				if seenName {
-					return result, 0, &validation.DuplicateKeyError{Field: "name"}
+					return result, i, &validation.DuplicateKeyError{Field: "name"}
 				}
 				seenName = true
-				v, k, err := _s.String(j)
+				result.Name, i, err = _s.String(i)
 				if err != nil {
-					return result, 0, err
+					return result, i, err
 				}
-				result.Name = v
-				j = k
 				if len(result.Name) < 1 {
-					return result, 0, &validation.MinLenError{Field: "name", Limit: 1, Got: len(result.Name)}
+					return result, i, &validation.MinLenError{Field: "name", Limit: 1, Got: len(result.Name)}
 				}
 				if len(result.Name) > 128 {
-					return result, 0, &validation.MaxLenError{Field: "name", Limit: 128, Got: len(result.Name)}
+					return result, i, &validation.MaxLenError{Field: "name", Limit: 128, Got: len(result.Name)}
 				}
 			case "refs":
 				if seenRefs {
-					return result, 0, &validation.DuplicateKeyError{Field: "refs"}
+					return result, i, &validation.DuplicateKeyError{Field: "refs"}
 				}
 				seenRefs = true
 				{
-					var err0 error
-					j, err0 = _s.SkipSpace(j)
-					if err0 != nil {
-						return result, 0, err0
+					i, err = _s.SkipSpace(i)
+					if err != nil {
+						return result, i, err
 					}
-					if j >= len(_s.Bytes()) {
-						if err0 = _s.ReadMore(); err0 != nil {
-							return result, 0, err0
+					if i >= len(_s.Bytes()) {
+						if err = _s.ReadMore(); err != nil {
+							return result, i, err
 						}
 					}
-					if _s.Bytes()[j] == 'n' {
+					if _s.Bytes()[i] == 'n' {
 						for _ki := 1; _ki < 4; _ki++ {
-							if j+_ki >= len(_s.Bytes()) {
-								if err0 = _s.ReadMore(); err0 != nil {
-									return result, 0, err0
+							if i+_ki >= len(_s.Bytes()) {
+								if err = _s.ReadMore(); err != nil {
+									return result, i, err
 								}
 							}
-							if _s.Bytes()[j+_ki] != "null"[_ki] {
-								return result, 0, scan.ErrBadLiteral
+							if _s.Bytes()[i+_ki] != "null"[_ki] {
+								return result, i, scan.ErrBadLiteral
 							}
 						}
-						j += 4
+						i += 4
 					} else {
-						k0, err0 := _s.ArrayOpen(j)
-						if err0 != nil {
-							return result, 0, err0
+						i, err = _s.ArrayOpen(i)
+						if err != nil {
+							return result, i, err
 						}
-						k0, err0 = _s.SkipSpace(k0)
-						if err0 != nil {
-							return result, 0, err0
+						i, err = _s.SkipSpace(i)
+						if err != nil {
+							return result, i, err
 						}
-						if k0 >= len(_s.Bytes()) {
-							if err0 = _s.ReadMore(); err0 != nil {
-								return result, 0, err0
+						if i >= len(_s.Bytes()) {
+							if err = _s.ReadMore(); err != nil {
+								return result, i, err
 							}
 						}
 						var _slab0 []Addr
-						if _s.Bytes()[k0] == ']' {
+						if _s.Bytes()[i] == ']' {
 							result.Refs = []*Addr{}
 						} else {
 							result.Refs = make([]*Addr, 0, 4)
 							_slab0 = make([]Addr, 0, 4)
 						}
-						for _s.Bytes()[k0] != ']' {
-							if k0 >= len(_s.Bytes()) {
-								if err0 = _s.ReadMore(); err0 != nil {
-									return result, 0, err0
+						for _s.Bytes()[i] != ']' {
+							if i >= len(_s.Bytes()) {
+								if err = _s.ReadMore(); err != nil {
+									return result, i, err
 								}
 							}
-							if _s.Bytes()[k0] == 'n' {
+							if _s.Bytes()[i] == 'n' {
 								for _ki := 1; _ki < 4; _ki++ {
-									if k0+_ki >= len(_s.Bytes()) {
-										if err0 = _s.ReadMore(); err0 != nil {
-											return result, 0, err0
+									if i+_ki >= len(_s.Bytes()) {
+										if err = _s.ReadMore(); err != nil {
+											return result, i, err
 										}
 									}
-									if _s.Bytes()[k0+_ki] != "null"[_ki] {
-										return result, 0, scan.ErrBadLiteral
+									if _s.Bytes()[i+_ki] != "null"[_ki] {
+										return result, i, scan.ErrBadLiteral
 									}
 								}
-								k0 += 4
+								i += 4
 								result.Refs = append(result.Refs, nil)
-								k0, err0 = _s.SkipSpace(k0)
-								if err0 != nil {
-									return result, 0, err0
+								i, err = _s.SkipSpace(i)
+								if err != nil {
+									return result, i, err
 								}
-								if k0 >= len(_s.Bytes()) {
-									if err0 = _s.ReadMore(); err0 != nil {
-										return result, 0, err0
+								if i >= len(_s.Bytes()) {
+									if err = _s.ReadMore(); err != nil {
+										return result, i, err
 									}
 								}
-								if _s.Bytes()[k0] == ',' {
-									k0, err0 = _s.SkipSpace(k0 + 1)
-									if err0 != nil {
-										return result, 0, err0
+								if _s.Bytes()[i] == ',' {
+									i, err = _s.SkipSpace(i + 1)
+									if err != nil {
+										return result, i, err
 									}
 									continue
 								}
 								break
 							}
-							var ev0 Addr
-							var _z Addr
-							_sv, _ek, err0 := _z.DecodeStreamFrom(_s, k0)
-							if err0 != nil {
-								return result, 0, err0
+							_slab0 = append(_slab0, Addr{})
+							_slab0[len(_slab0)-1], i, err = _slab0[len(_slab0)-1].DecodeStreamFrom(_s, i)
+							if err != nil {
+								return result, i, err
 							}
-							ev0 = _sv
-							k0 = _ek
-							_slab0 = append(_slab0, ev0)
 							result.Refs = append(result.Refs, &_slab0[len(_slab0)-1])
-							k0, err0 = _s.SkipSpace(k0)
-							if err0 != nil {
-								return result, 0, err0
+							i, err = _s.SkipSpace(i)
+							if err != nil {
+								return result, i, err
 							}
-							if k0 >= len(_s.Bytes()) {
-								if err0 = _s.ReadMore(); err0 != nil {
-									return result, 0, err0
+							if i >= len(_s.Bytes()) {
+								if err = _s.ReadMore(); err != nil {
+									return result, i, err
 								}
 							}
-							if _s.Bytes()[k0] == ',' {
-								k0, err0 = _s.SkipSpace(k0 + 1)
-								if err0 != nil {
-									return result, 0, err0
+							if _s.Bytes()[i] == ',' {
+								i, err = _s.SkipSpace(i + 1)
+								if err != nil {
+									return result, i, err
 								}
 								continue
 							}
 							break
 						}
-						if _s.Bytes()[k0] != ']' {
-							return result, 0, scan.ErrBadArray
+						if _s.Bytes()[i] != ']' {
+							return result, i, scan.ErrBadArray
 						}
-						j = k0 + 1
+						i++
 					}
 				}
 				if len(result.Refs) > 16 {
-					return result, 0, &validation.MaxLenError{Field: "refs", Limit: 16, Got: len(result.Refs)}
+					return result, i, &validation.MaxLenError{Field: "refs", Limit: 16, Got: len(result.Refs)}
 				}
 			case "tags":
 				if seenTags {
-					return result, 0, &validation.DuplicateKeyError{Field: "tags"}
+					return result, i, &validation.DuplicateKeyError{Field: "tags"}
 				}
 				seenTags = true
 				{
-					var err0 error
-					j, err0 = _s.SkipSpace(j)
-					if err0 != nil {
-						return result, 0, err0
+					i, err = _s.SkipSpace(i)
+					if err != nil {
+						return result, i, err
 					}
-					if j >= len(_s.Bytes()) {
-						if err0 = _s.ReadMore(); err0 != nil {
-							return result, 0, err0
+					if i >= len(_s.Bytes()) {
+						if err = _s.ReadMore(); err != nil {
+							return result, i, err
 						}
 					}
-					if _s.Bytes()[j] == 'n' {
+					if _s.Bytes()[i] == 'n' {
 						for _ki := 1; _ki < 4; _ki++ {
-							if j+_ki >= len(_s.Bytes()) {
-								if err0 = _s.ReadMore(); err0 != nil {
-									return result, 0, err0
+							if i+_ki >= len(_s.Bytes()) {
+								if err = _s.ReadMore(); err != nil {
+									return result, i, err
 								}
 							}
-							if _s.Bytes()[j+_ki] != "null"[_ki] {
-								return result, 0, scan.ErrBadLiteral
+							if _s.Bytes()[i+_ki] != "null"[_ki] {
+								return result, i, scan.ErrBadLiteral
 							}
 						}
-						j += 4
+						i += 4
 					} else {
-						k0, err0 := _s.ArrayOpen(j)
-						if err0 != nil {
-							return result, 0, err0
+						i, err = _s.ArrayOpen(i)
+						if err != nil {
+							return result, i, err
 						}
-						k0, err0 = _s.SkipSpace(k0)
-						if err0 != nil {
-							return result, 0, err0
+						i, err = _s.SkipSpace(i)
+						if err != nil {
+							return result, i, err
 						}
-						if k0 >= len(_s.Bytes()) {
-							if err0 = _s.ReadMore(); err0 != nil {
-								return result, 0, err0
+						if i >= len(_s.Bytes()) {
+							if err = _s.ReadMore(); err != nil {
+								return result, i, err
 							}
 						}
-						if _s.Bytes()[k0] == ']' {
+						if _s.Bytes()[i] == ']' {
 							result.Tags = []string{}
 						} else {
 							result.Tags = make([]string, 0, 4)
 						}
-						for _s.Bytes()[k0] != ']' {
-							var ev0 string
-							_sv, _ek, err0 := _s.String(k0)
-							if err0 != nil {
-								return result, 0, err0
+						for _s.Bytes()[i] != ']' {
+							result.Tags = append(result.Tags, "")
+							result.Tags[len(result.Tags)-1], i, err = _s.String(i)
+							if err != nil {
+								return result, i, err
 							}
-							ev0 = _sv
-							k0 = _ek
-							if len(ev0) < 1 {
-								return result, 0, &validation.MinLenError{Field: "tags[]", Limit: 1, Got: len(ev0)}
+							if len(result.Tags[len(result.Tags)-1]) < 1 {
+								return result, i, &validation.MinLenError{Field: "tags[]", Limit: 1, Got: len(result.Tags[len(result.Tags)-1])}
 							}
-							if len(ev0) > 64 {
-								return result, 0, &validation.MaxLenError{Field: "tags[]", Limit: 64, Got: len(ev0)}
+							if len(result.Tags[len(result.Tags)-1]) > 64 {
+								return result, i, &validation.MaxLenError{Field: "tags[]", Limit: 64, Got: len(result.Tags[len(result.Tags)-1])}
 							}
-							result.Tags = append(result.Tags, ev0)
-							k0, err0 = _s.SkipSpace(k0)
-							if err0 != nil {
-								return result, 0, err0
+							i, err = _s.SkipSpace(i)
+							if err != nil {
+								return result, i, err
 							}
-							if k0 >= len(_s.Bytes()) {
-								if err0 = _s.ReadMore(); err0 != nil {
-									return result, 0, err0
+							if i >= len(_s.Bytes()) {
+								if err = _s.ReadMore(); err != nil {
+									return result, i, err
 								}
 							}
-							if _s.Bytes()[k0] == ',' {
-								k0, err0 = _s.SkipSpace(k0 + 1)
-								if err0 != nil {
-									return result, 0, err0
+							if _s.Bytes()[i] == ',' {
+								i, err = _s.SkipSpace(i + 1)
+								if err != nil {
+									return result, i, err
 								}
 								continue
 							}
 							break
 						}
-						if _s.Bytes()[k0] != ']' {
-							return result, 0, scan.ErrBadArray
+						if _s.Bytes()[i] != ']' {
+							return result, i, scan.ErrBadArray
 						}
-						j = k0 + 1
+						i++
 					}
 				}
 				if len(result.Tags) > 64 {
-					return result, 0, &validation.MaxLenError{Field: "tags", Limit: 64, Got: len(result.Tags)}
+					return result, i, &validation.MaxLenError{Field: "tags", Limit: 64, Got: len(result.Tags)}
 				}
 			default:
-				return result, 0, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: key}
 			}
 		case 5:
 			switch key {
 			case "extra":
 				if seenExtra {
-					return result, 0, &validation.DuplicateKeyError{Field: "extra"}
+					return result, i, &validation.DuplicateKeyError{Field: "extra"}
 				}
 				seenExtra = true
 				{
-					_v, _k, err := _s.Any(j)
+					result.Extra, i, err = _s.Any(i)
 					if err != nil {
-						return result, 0, err
+						return result, i, err
 					}
-					result.Extra = _v
-					j = _k
 				}
 			case "props":
 				if seenProps {
-					return result, 0, &validation.DuplicateKeyError{Field: "props"}
+					return result, i, &validation.DuplicateKeyError{Field: "props"}
 				}
 				seenProps = true
 				{
-					_k0, err := _s.SkipSpace(j)
+					i, err = _s.SkipSpace(i)
 					if err != nil {
-						return result, 0, err
+						return result, i, err
 					}
-					if _k0 >= len(_s.Bytes()) {
+					if i >= len(_s.Bytes()) {
 						if err = _s.ReadMore(); err != nil {
-							return result, 0, err
+							return result, i, err
 						}
 					}
-					if _s.Bytes()[_k0] == 'n' {
+					if _s.Bytes()[i] == 'n' {
 						for _ki := 1; _ki < 4; _ki++ {
-							if _k0+_ki >= len(_s.Bytes()) {
+							if i+_ki >= len(_s.Bytes()) {
 								if err = _s.ReadMore(); err != nil {
-									return result, 0, err
+									return result, i, err
 								}
 							}
-							if _s.Bytes()[_k0+_ki] != "null"[_ki] {
-								return result, 0, scan.ErrBadLiteral
+							if _s.Bytes()[i+_ki] != "null"[_ki] {
+								return result, i, scan.ErrBadLiteral
 							}
 						}
-						j = _k0 + 4
+						i += 4
 					} else {
-						k, err := _s.ObjectOpen(_k0)
+						i, err = _s.ObjectOpen(i)
 						if err != nil {
-							return result, 0, err
+							return result, i, err
 						}
-						k, err = _s.SkipSpace(k)
+						i, err = _s.SkipSpace(i)
 						if err != nil {
-							return result, 0, err
+							return result, i, err
 						}
-						if k >= len(_s.Bytes()) {
+						if i >= len(_s.Bytes()) {
 							if err = _s.ReadMore(); err != nil {
-								return result, 0, err
+								return result, i, err
 							}
 						}
-						if _s.Bytes()[k] == '}' {
+						if _s.Bytes()[i] == '}' {
 							result.Props = map[string]string{}
 						} else {
 							result.Props = make(map[string]string)
 						}
-						for _s.Bytes()[k] != '}' {
-							_mk, _k2, err := _s.String(k)
+						for _s.Bytes()[i] != '}' {
+							var _mk string
+							_mk, i, err = _s.String(i)
 							if err != nil {
-								return result, 0, err
+								return result, i, err
 							}
-							k, err = _s.SkipSpace(_k2)
+							i, err = _s.SkipSpace(i)
 							if err != nil {
-								return result, 0, err
+								return result, i, err
 							}
-							if k >= len(_s.Bytes()) {
+							if i >= len(_s.Bytes()) {
 								if err = _s.ReadMore(); err != nil {
-									return result, 0, err
+									return result, i, err
 								}
 							}
-							if _s.Bytes()[k] != ':' {
-								return result, 0, scan.ErrBadObject
+							if _s.Bytes()[i] != ':' {
+								return result, i, scan.ErrBadObject
 							}
-							k, err = _s.SkipSpace(k + 1)
+							i, err = _s.SkipSpace(i + 1)
 							if err != nil {
-								return result, 0, err
+								return result, i, err
 							}
-							_mv, _k3, err := _s.String(k)
+							var _mv string
+							_mv, i, err = _s.String(i)
 							if err != nil {
-								return result, 0, err
+								return result, i, err
 							}
 							result.Props[_mk] = _mv
-							k = _k3
-							k, err = _s.SkipSpace(k)
+							i, err = _s.SkipSpace(i)
 							if err != nil {
-								return result, 0, err
+								return result, i, err
 							}
-							if k >= len(_s.Bytes()) {
+							if i >= len(_s.Bytes()) {
 								if err = _s.ReadMore(); err != nil {
-									return result, 0, err
+									return result, i, err
 								}
 							}
-							if _s.Bytes()[k] == ',' {
-								k, err = _s.SkipSpace(k + 1)
+							if _s.Bytes()[i] == ',' {
+								i, err = _s.SkipSpace(i + 1)
 								if err != nil {
-									return result, 0, err
+									return result, i, err
 								}
 								continue
 							}
 							break
 						}
-						if _s.Bytes()[k] != '}' {
-							return result, 0, scan.ErrBadObject
+						if _s.Bytes()[i] != '}' {
+							return result, i, scan.ErrBadObject
 						}
-						j = k + 1
+						i++
 					}
 				}
 				if len(result.Props) > 64 {
-					return result, 0, &validation.MaxLenError{Field: "props", Limit: 64, Got: len(result.Props)}
+					return result, i, &validation.MaxLenError{Field: "props", Limit: 64, Got: len(result.Props)}
 				}
 			case "score":
 				if seenScore {
-					return result, 0, &validation.DuplicateKeyError{Field: "score"}
+					return result, i, &validation.DuplicateKeyError{Field: "score"}
 				}
 				seenScore = true
-				v, k, err := _s.Float64(j)
+				result.Score, i, err = _s.Float64(i)
 				if err != nil {
-					return result, 0, err
+					return result, i, err
 				}
-				result.Score = v
-				j = k
 				if result.Score < 0 {
-					return result, 0, &validation.GTEError{Field: "score", Limit: 0, Value: result.Score}
+					return result, i, &validation.GTEError{Field: "score", Limit: 0, Value: result.Score}
 				}
 				if result.Score > 100 {
-					return result, 0, &validation.LTEError{Field: "score", Limit: 100, Value: result.Score}
+					return result, i, &validation.LTEError{Field: "score", Limit: 100, Value: result.Score}
 				}
 			default:
-				return result, 0, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: key}
 			}
 		case 6:
 			switch key {
 			case "active":
 				if seenActive {
-					return result, 0, &validation.DuplicateKeyError{Field: "active"}
+					return result, i, &validation.DuplicateKeyError{Field: "active"}
 				}
 				seenActive = true
-				v, k, err := _s.Bool(j)
+				result.Active, i, err = _s.Bool(i)
 				if err != nil {
-					return result, 0, err
+					return result, i, err
 				}
-				result.Active = v
-				j = k
 			case "coords":
 				if seenCoords {
-					return result, 0, &validation.DuplicateKeyError{Field: "coords"}
+					return result, i, &validation.DuplicateKeyError{Field: "coords"}
 				}
 				seenCoords = true
 				{
-					k0, err0 := _s.ArrayOpen(j)
-					if err0 != nil {
-						return result, 0, err0
+					i, err = _s.ArrayOpen(i)
+					if err != nil {
+						return result, i, err
 					}
-					k0, err0 = _s.SkipSpace(k0)
-					if err0 != nil {
-						return result, 0, err0
+					i, err = _s.SkipSpace(i)
+					if err != nil {
+						return result, i, err
 					}
-					if k0 >= len(_s.Bytes()) {
-						if err0 = _s.ReadMore(); err0 != nil {
-							return result, 0, err0
+					if i >= len(_s.Bytes()) {
+						if err = _s.ReadMore(); err != nil {
+							return result, i, err
 						}
 					}
 					var _idx0 int
-					for _s.Bytes()[k0] != ']' {
+					for _s.Bytes()[i] != ']' {
 						if _idx0 >= 2 {
-							return result, 0, &validation.LenError{Field: "coords", Want: 2, Got: _idx0}
+							return result, i, &validation.LenError{Field: "coords", Want: 2, Got: _idx0}
 						}
-						var ev0 float64
-						_fv, _ek, err0 := _s.Float64(k0)
-						if err0 != nil {
-							return result, 0, err0
+						result.Coords[_idx0], i, err = _s.Float64(i)
+						if err != nil {
+							return result, i, err
 						}
-						ev0 = _fv
-						k0 = _ek
-						result.Coords[_idx0] = ev0
 						_idx0++
-						k0, err0 = _s.SkipSpace(k0)
-						if err0 != nil {
-							return result, 0, err0
+						i, err = _s.SkipSpace(i)
+						if err != nil {
+							return result, i, err
 						}
-						if k0 >= len(_s.Bytes()) {
-							if err0 = _s.ReadMore(); err0 != nil {
-								return result, 0, err0
+						if i >= len(_s.Bytes()) {
+							if err = _s.ReadMore(); err != nil {
+								return result, i, err
 							}
 						}
-						if _s.Bytes()[k0] == ',' {
-							k0, err0 = _s.SkipSpace(k0 + 1)
-							if err0 != nil {
-								return result, 0, err0
+						if _s.Bytes()[i] == ',' {
+							i, err = _s.SkipSpace(i + 1)
+							if err != nil {
+								return result, i, err
 							}
 							continue
 						}
 						break
 					}
-					if _s.Bytes()[k0] != ']' {
-						return result, 0, scan.ErrBadArray
+					if _s.Bytes()[i] != ']' {
+						return result, i, scan.ErrBadArray
 					}
 					if _idx0 != 2 {
-						return result, 0, &validation.LenError{Field: "coords", Want: 2, Got: _idx0}
+						return result, i, &validation.LenError{Field: "coords", Want: 2, Got: _idx0}
 					}
-					j = k0 + 1
+					i++
 				}
 			case "matrix":
 				if seenMatrix {
-					return result, 0, &validation.DuplicateKeyError{Field: "matrix"}
+					return result, i, &validation.DuplicateKeyError{Field: "matrix"}
 				}
 				seenMatrix = true
 				{
-					var err0 error
-					j, err0 = _s.SkipSpace(j)
-					if err0 != nil {
-						return result, 0, err0
+					i, err = _s.SkipSpace(i)
+					if err != nil {
+						return result, i, err
 					}
-					if j >= len(_s.Bytes()) {
-						if err0 = _s.ReadMore(); err0 != nil {
-							return result, 0, err0
+					if i >= len(_s.Bytes()) {
+						if err = _s.ReadMore(); err != nil {
+							return result, i, err
 						}
 					}
-					if _s.Bytes()[j] == 'n' {
+					if _s.Bytes()[i] == 'n' {
 						for _ki := 1; _ki < 4; _ki++ {
-							if j+_ki >= len(_s.Bytes()) {
-								if err0 = _s.ReadMore(); err0 != nil {
-									return result, 0, err0
+							if i+_ki >= len(_s.Bytes()) {
+								if err = _s.ReadMore(); err != nil {
+									return result, i, err
 								}
 							}
-							if _s.Bytes()[j+_ki] != "null"[_ki] {
-								return result, 0, scan.ErrBadLiteral
+							if _s.Bytes()[i+_ki] != "null"[_ki] {
+								return result, i, scan.ErrBadLiteral
 							}
 						}
-						j += 4
+						i += 4
 					} else {
-						k0, err0 := _s.ArrayOpen(j)
-						if err0 != nil {
-							return result, 0, err0
+						i, err = _s.ArrayOpen(i)
+						if err != nil {
+							return result, i, err
 						}
-						k0, err0 = _s.SkipSpace(k0)
-						if err0 != nil {
-							return result, 0, err0
+						i, err = _s.SkipSpace(i)
+						if err != nil {
+							return result, i, err
 						}
-						if k0 >= len(_s.Bytes()) {
-							if err0 = _s.ReadMore(); err0 != nil {
-								return result, 0, err0
+						if i >= len(_s.Bytes()) {
+							if err = _s.ReadMore(); err != nil {
+								return result, i, err
 							}
 						}
-						if _s.Bytes()[k0] == ']' {
+						if _s.Bytes()[i] == ']' {
 							result.Matrix = [][]int{}
 						} else {
 							result.Matrix = make([][]int, 0, 4)
 						}
-						for _s.Bytes()[k0] != ']' {
-							var ev0 []int
+						for _s.Bytes()[i] != ']' {
+							result.Matrix = append(result.Matrix, nil)
 							{
-								var err1 error
-								k0, err1 = _s.SkipSpace(k0)
-								if err1 != nil {
-									return result, 0, err1
+								i, err = _s.SkipSpace(i)
+								if err != nil {
+									return result, i, err
 								}
-								if k0 >= len(_s.Bytes()) {
-									if err1 = _s.ReadMore(); err1 != nil {
-										return result, 0, err1
+								if i >= len(_s.Bytes()) {
+									if err = _s.ReadMore(); err != nil {
+										return result, i, err
 									}
 								}
-								if _s.Bytes()[k0] == 'n' {
+								if _s.Bytes()[i] == 'n' {
 									for _ki := 1; _ki < 4; _ki++ {
-										if k0+_ki >= len(_s.Bytes()) {
-											if err1 = _s.ReadMore(); err1 != nil {
-												return result, 0, err1
+										if i+_ki >= len(_s.Bytes()) {
+											if err = _s.ReadMore(); err != nil {
+												return result, i, err
 											}
 										}
-										if _s.Bytes()[k0+_ki] != "null"[_ki] {
-											return result, 0, scan.ErrBadLiteral
+										if _s.Bytes()[i+_ki] != "null"[_ki] {
+											return result, i, scan.ErrBadLiteral
 										}
 									}
-									k0 += 4
+									i += 4
 								} else {
-									k1, err1 := _s.ArrayOpen(k0)
-									if err1 != nil {
-										return result, 0, err1
+									i, err = _s.ArrayOpen(i)
+									if err != nil {
+										return result, i, err
 									}
-									k1, err1 = _s.SkipSpace(k1)
-									if err1 != nil {
-										return result, 0, err1
+									i, err = _s.SkipSpace(i)
+									if err != nil {
+										return result, i, err
 									}
-									if k1 >= len(_s.Bytes()) {
-										if err1 = _s.ReadMore(); err1 != nil {
-											return result, 0, err1
+									if i >= len(_s.Bytes()) {
+										if err = _s.ReadMore(); err != nil {
+											return result, i, err
 										}
 									}
-									if _s.Bytes()[k1] == ']' {
-										ev0 = []int{}
+									if _s.Bytes()[i] == ']' {
+										result.Matrix[len(result.Matrix)-1] = []int{}
 									} else {
-										ev0 = make([]int, 0, 4)
+										result.Matrix[len(result.Matrix)-1] = make([]int, 0, 4)
 									}
-									for _s.Bytes()[k1] != ']' {
-										var ev1 int
-										_iv, _ek, err1 := _s.Int64(k1)
-										if err1 != nil {
-											return result, 0, err1
+									for _s.Bytes()[i] != ']' {
+										result.Matrix[len(result.Matrix)-1] = append(result.Matrix[len(result.Matrix)-1], 0)
+										var _iv int64
+										_iv, i, err = _s.Int64(i)
+										if err != nil {
+											return result, i, err
 										}
-										ev1 = int(_iv)
-										k1 = _ek
-										ev0 = append(ev0, ev1)
-										k1, err1 = _s.SkipSpace(k1)
-										if err1 != nil {
-											return result, 0, err1
+										result.Matrix[len(result.Matrix)-1][len(result.Matrix[len(result.Matrix)-1])-1] = int(_iv)
+										i, err = _s.SkipSpace(i)
+										if err != nil {
+											return result, i, err
 										}
-										if k1 >= len(_s.Bytes()) {
-											if err1 = _s.ReadMore(); err1 != nil {
-												return result, 0, err1
+										if i >= len(_s.Bytes()) {
+											if err = _s.ReadMore(); err != nil {
+												return result, i, err
 											}
 										}
-										if _s.Bytes()[k1] == ',' {
-											k1, err1 = _s.SkipSpace(k1 + 1)
-											if err1 != nil {
-												return result, 0, err1
+										if _s.Bytes()[i] == ',' {
+											i, err = _s.SkipSpace(i + 1)
+											if err != nil {
+												return result, i, err
 											}
 											continue
 										}
 										break
 									}
-									if _s.Bytes()[k1] != ']' {
-										return result, 0, scan.ErrBadArray
+									if _s.Bytes()[i] != ']' {
+										return result, i, scan.ErrBadArray
 									}
-									k0 = k1 + 1
+									i++
 								}
 							}
-							if len(ev0) > 32 {
-								return result, 0, &validation.MaxLenError{Field: "matrix[]", Limit: 32, Got: len(ev0)}
+							if len(result.Matrix[len(result.Matrix)-1]) > 32 {
+								return result, i, &validation.MaxLenError{Field: "matrix[]", Limit: 32, Got: len(result.Matrix[len(result.Matrix)-1])}
 							}
-							result.Matrix = append(result.Matrix, ev0)
-							k0, err0 = _s.SkipSpace(k0)
-							if err0 != nil {
-								return result, 0, err0
+							i, err = _s.SkipSpace(i)
+							if err != nil {
+								return result, i, err
 							}
-							if k0 >= len(_s.Bytes()) {
-								if err0 = _s.ReadMore(); err0 != nil {
-									return result, 0, err0
+							if i >= len(_s.Bytes()) {
+								if err = _s.ReadMore(); err != nil {
+									return result, i, err
 								}
 							}
-							if _s.Bytes()[k0] == ',' {
-								k0, err0 = _s.SkipSpace(k0 + 1)
-								if err0 != nil {
-									return result, 0, err0
+							if _s.Bytes()[i] == ',' {
+								i, err = _s.SkipSpace(i + 1)
+								if err != nil {
+									return result, i, err
 								}
 								continue
 							}
 							break
 						}
-						if _s.Bytes()[k0] != ']' {
-							return result, 0, scan.ErrBadArray
+						if _s.Bytes()[i] != ']' {
+							return result, i, scan.ErrBadArray
 						}
-						j = k0 + 1
+						i++
 					}
 				}
 				if len(result.Matrix) > 16 {
-					return result, 0, &validation.MaxLenError{Field: "matrix", Limit: 16, Got: len(result.Matrix)}
+					return result, i, &validation.MaxLenError{Field: "matrix", Limit: 16, Got: len(result.Matrix)}
 				}
 			case "parent":
 				if seenParent {
-					return result, 0, &validation.DuplicateKeyError{Field: "parent"}
+					return result, i, &validation.DuplicateKeyError{Field: "parent"}
 				}
 				seenParent = true
-				if j >= len(_s.Bytes()) {
+				if i >= len(_s.Bytes()) {
 					if err = _s.ReadMore(); err != nil {
-						return result, 0, err
+						return result, i, err
 					}
 				}
-				if _s.Bytes()[j] == 'n' {
+				if _s.Bytes()[i] == 'n' {
 					for _ki := 1; _ki < 4; _ki++ {
-						if j+_ki >= len(_s.Bytes()) {
+						if i+_ki >= len(_s.Bytes()) {
 							if err = _s.ReadMore(); err != nil {
-								return result, 0, err
+								return result, i, err
 							}
 						}
-						if _s.Bytes()[j+_ki] != "null"[_ki] {
-							return result, 0, scan.ErrBadLiteral
+						if _s.Bytes()[i+_ki] != "null"[_ki] {
+							return result, i, scan.ErrBadLiteral
 						}
 					}
-					j = 4 + j
+					i = 4 + i
 					result.Parent = nil
 				} else {
 					var _v Addr
-					v, k, err := _v.DecodeStreamFrom(_s, j)
+					_v, i, err = _v.DecodeStreamFrom(_s, i)
 					if err != nil {
-						return result, 0, err
+						return result, i, err
 					}
-					_v = v
-					j = k
 
 					result.Parent = &_v
 				}
 			default:
-				return result, 0, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: key}
 			}
 		case 8:
 			if key == "children" {
 				if seenChildren {
-					return result, 0, &validation.DuplicateKeyError{Field: "children"}
+					return result, i, &validation.DuplicateKeyError{Field: "children"}
 				}
 				seenChildren = true
 				{
-					var err0 error
-					j, err0 = _s.SkipSpace(j)
-					if err0 != nil {
-						return result, 0, err0
+					i, err = _s.SkipSpace(i)
+					if err != nil {
+						return result, i, err
 					}
-					if j >= len(_s.Bytes()) {
-						if err0 = _s.ReadMore(); err0 != nil {
-							return result, 0, err0
+					if i >= len(_s.Bytes()) {
+						if err = _s.ReadMore(); err != nil {
+							return result, i, err
 						}
 					}
-					if _s.Bytes()[j] == 'n' {
+					if _s.Bytes()[i] == 'n' {
 						for _ki := 1; _ki < 4; _ki++ {
-							if j+_ki >= len(_s.Bytes()) {
-								if err0 = _s.ReadMore(); err0 != nil {
-									return result, 0, err0
+							if i+_ki >= len(_s.Bytes()) {
+								if err = _s.ReadMore(); err != nil {
+									return result, i, err
 								}
 							}
-							if _s.Bytes()[j+_ki] != "null"[_ki] {
-								return result, 0, scan.ErrBadLiteral
+							if _s.Bytes()[i+_ki] != "null"[_ki] {
+								return result, i, scan.ErrBadLiteral
 							}
 						}
-						j += 4
+						i += 4
 					} else {
-						k0, err0 := _s.ArrayOpen(j)
-						if err0 != nil {
-							return result, 0, err0
+						i, err = _s.ArrayOpen(i)
+						if err != nil {
+							return result, i, err
 						}
-						k0, err0 = _s.SkipSpace(k0)
-						if err0 != nil {
-							return result, 0, err0
+						i, err = _s.SkipSpace(i)
+						if err != nil {
+							return result, i, err
 						}
-						if k0 >= len(_s.Bytes()) {
-							if err0 = _s.ReadMore(); err0 != nil {
-								return result, 0, err0
+						if i >= len(_s.Bytes()) {
+							if err = _s.ReadMore(); err != nil {
+								return result, i, err
 							}
 						}
-						if _s.Bytes()[k0] == ']' {
+						if _s.Bytes()[i] == ']' {
 							result.Children = []Node{}
 						} else {
 							result.Children = []Node{}
 						}
-						for _s.Bytes()[k0] != ']' {
-							var ev0 Node
-							var _z Node
-							_sv, _ek, err0 := _z.DecodeStreamFrom(_s, k0)
-							if err0 != nil {
-								return result, 0, err0
+						for _s.Bytes()[i] != ']' {
+							result.Children = append(result.Children, Node{})
+							result.Children[len(result.Children)-1], i, err = result.Children[len(result.Children)-1].DecodeStreamFrom(_s, i)
+							if err != nil {
+								return result, i, err
 							}
-							ev0 = _sv
-							k0 = _ek
-							result.Children = append(result.Children, ev0)
-							k0, err0 = _s.SkipSpace(k0)
-							if err0 != nil {
-								return result, 0, err0
+							i, err = _s.SkipSpace(i)
+							if err != nil {
+								return result, i, err
 							}
-							if k0 >= len(_s.Bytes()) {
-								if err0 = _s.ReadMore(); err0 != nil {
-									return result, 0, err0
+							if i >= len(_s.Bytes()) {
+								if err = _s.ReadMore(); err != nil {
+									return result, i, err
 								}
 							}
-							if _s.Bytes()[k0] == ',' {
-								k0, err0 = _s.SkipSpace(k0 + 1)
-								if err0 != nil {
-									return result, 0, err0
+							if _s.Bytes()[i] == ',' {
+								i, err = _s.SkipSpace(i + 1)
+								if err != nil {
+									return result, i, err
 								}
 								continue
 							}
 							break
 						}
-						if _s.Bytes()[k0] != ']' {
-							return result, 0, scan.ErrBadArray
+						if _s.Bytes()[i] != ']' {
+							return result, i, scan.ErrBadArray
 						}
-						j = k0 + 1
+						i++
 					}
 				}
 				if len(result.Children) > 16 {
-					return result, 0, &validation.MaxLenError{Field: "children", Limit: 16, Got: len(result.Children)}
+					return result, i, &validation.MaxLenError{Field: "children", Limit: 16, Got: len(result.Children)}
 				}
 			} else {
-				return result, 0, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: key}
 			}
 		case 9:
 			if key == "createdAt" {
 				if seenCreatedAt {
-					return result, 0, &validation.DuplicateKeyError{Field: "createdAt"}
+					return result, i, &validation.DuplicateKeyError{Field: "createdAt"}
 				}
 				seenCreatedAt = true
 				{
-					_v, _k, err := _s.String(j)
+					var _v string
+					_v, i, err = _s.String(i)
 					if err != nil {
-						return result, 0, err
+						return result, i, err
 					}
 					result.CreatedAt, err = time.Parse(time.RFC3339Nano, _v)
 					if err != nil {
-						return result, 0, err
+						return result, i, err
 					}
-					j = _k
 				}
 			} else {
-				return result, 0, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: key}
 			}
 		default:
-			return result, 0, &validation.UnknownKeyError{Field: key}
+			return result, i, &validation.UnknownKeyError{Field: key}
 		}
-		j, err = _s.SkipSpace(j)
+		i, err = _s.SkipSpace(i)
 		if err != nil {
-			return result, 0, err
+			return result, i, err
 		}
-		if j >= len(_s.Bytes()) {
+		if i >= len(_s.Bytes()) {
 			if err = _s.ReadMore(); err != nil {
-				return result, 0, err
+				return result, i, err
 			}
 		}
-		c := _s.Bytes()[j]
+		c := _s.Bytes()[i]
 		if c == ',' {
-			i = j + 1
-			i, err = _s.SkipSpace(i)
+			i, err = _s.SkipSpace(i + 1)
 			if err != nil {
-				return result, 0, err
+				return result, i, err
 			}
 			continue
 		}
 		if c == '}' {
 			if !seenID {
-				return result, 0, &validation.RequiredError{Field: "id"}
+				return result, i, &validation.RequiredError{Field: "id"}
 			}
 			if !seenName {
-				return result, 0, &validation.RequiredError{Field: "name"}
+				return result, i, &validation.RequiredError{Field: "name"}
 			}
-			return result, j + 1, nil
+			return result, i + 1, nil
 		}
-		return result, 0, scan.ErrBadObject
+		return result, i, scan.ErrBadObject
 	}
 }
 
@@ -2282,6 +2178,8 @@ func (s Node) AppendJSON(dst []byte) ([]byte, error) {
 
 func (Validated) DecodeFrom(data []byte, i int) (Validated, int, error) {
 	var result Validated
+	var err error
+	_ = err
 	seenAge := false
 	seenBio := false
 	seenEmail := false
@@ -2291,7 +2189,7 @@ func (Validated) DecodeFrom(data []byte, i int) (Validated, int, error) {
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
-		return result, 0, scan.ErrBadObject
+		return result, i, scan.ErrBadObject
 	}
 	i++
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -2299,76 +2197,72 @@ func (Validated) DecodeFrom(data []byte, i int) (Validated, int, error) {
 	}
 	if i < len(data) && data[i] == '}' {
 		if !seenEmail {
-			return result, 0, &validation.RequiredError{Field: "email"}
+			return result, i, &validation.RequiredError{Field: "email"}
 		}
 		if !seenName {
-			return result, 0, &validation.RequiredError{Field: "name"}
+			return result, i, &validation.RequiredError{Field: "name"}
 		}
 		return result, i + 1, nil
 	}
 	for {
 		var key string
-		j := i
 		if i >= len(data) || data[i] != '"' {
-			return result, 0, scan.ErrExpectString
+			return result, i, scan.ErrExpectString
 		}
 		{
-			_ks := i + 1
-			_ke := _ks
+			_ke := i + 1
 			for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
 				_ke++
 			}
 			if _ke >= len(data) {
-				return result, 0, scan.ErrUnterminated
+				return result, i, scan.ErrUnterminated
 			}
 			if data[_ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
-				j = _ke + 1
+				key = unsafe.String(unsafe.SliceData(data[i+1:]), _ke-i-1)
+				i = _ke + 1
 			} else {
-				_isv, _isj, _iserr := scan.String(data, i)
-				if _iserr != nil {
-					return result, 0, _iserr
+				key, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, err
 				}
-				key = _isv
-				j = _isj
 			}
 		}
-		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
-			j++
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
 		}
-		if j >= len(data) || data[j] != ':' {
-			return result, 0, scan.ErrBadObject
+		if i >= len(data) || data[i] != ':' {
+			return result, i, scan.ErrBadObject
 		}
-		j++
-		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
-			j++
+		i++
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
 		}
 		switch len(key) {
 		case 3:
 			switch key {
 			case "age":
 				if seenAge {
-					return result, 0, &validation.DuplicateKeyError{Field: "age"}
+					return result, i, &validation.DuplicateKeyError{Field: "age"}
 				}
 				seenAge = true
 				{
 					_neg := false
-					if j < len(data) && data[j] == '-' {
+					if i < len(data) && data[i] == '-' {
 						_neg = true
-						j++
+						i++
 					}
-					if j >= len(data) || data[j] < '0' || data[j] > '9' {
-						return result, 0, scan.ErrBadNumber
+					if i >= len(data) || data[i] < '0' || data[i] > '9' {
+						return result, i, scan.ErrBadNumber
 					}
 					var _n int64
-					for j < len(data) && data[j] >= '0' && data[j] <= '9' {
-						_n = _n*10 + int64(data[j]-'0')
-						j++
+					for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+						_n = _n*10 + int64(data[i]-'0')
+						i++
 					}
-					if j < len(data) {
-						_c := data[j]
+					if i < len(data) {
+						_c := data[i]
 						if _c == '.' || _c == 'e' || _c == 'E' {
-							return result, 0, scan.ErrBadNumber
+							return result, i, scan.ErrBadNumber
 						}
 					}
 					if _neg {
@@ -2377,228 +2271,213 @@ func (Validated) DecodeFrom(data []byte, i int) (Validated, int, error) {
 					result.Age = int(_n)
 				}
 				if result.Age < 0 {
-					return result, 0, &validation.GTEError{Field: "age", Limit: 0, Value: result.Age}
+					return result, i, &validation.GTEError{Field: "age", Limit: 0, Value: result.Age}
 				}
 				if result.Age > 150 {
-					return result, 0, &validation.LTEError{Field: "age", Limit: 150, Value: result.Age}
+					return result, i, &validation.LTEError{Field: "age", Limit: 150, Value: result.Age}
 				}
 			case "bio":
 				if seenBio {
-					return result, 0, &validation.DuplicateKeyError{Field: "bio"}
+					return result, i, &validation.DuplicateKeyError{Field: "bio"}
 				}
 				seenBio = true
-				if j >= len(data) || data[j] != '"' {
-					return result, 0, scan.ErrExpectString
+				if i >= len(data) || data[i] != '"' {
+					return result, i, scan.ErrExpectString
 				}
 				{
-					_ks := j + 1
-					_ke := _ks
+					_ke := i + 1
 					for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
 						_ke++
 					}
 					if _ke >= len(data) {
-						return result, 0, scan.ErrUnterminated
+						return result, i, scan.ErrUnterminated
 					}
 					if data[_ke] == '"' {
-						result.Bio = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
-						j = _ke + 1
+						result.Bio = unsafe.String(unsafe.SliceData(data[i+1:]), _ke-i-1)
+						i = _ke + 1
 					} else {
-						_isv, _isj, _iserr := scan.String(data, j)
-						if _iserr != nil {
-							return result, 0, _iserr
+						result.Bio, i, err = scan.String(data, i)
+						if err != nil {
+							return result, i, err
 						}
-						result.Bio = _isv
-						j = _isj
 					}
 				}
 				if len(result.Bio) > 4096 {
-					return result, 0, &validation.MaxLenError{Field: "bio", Limit: 4096, Got: len(result.Bio)}
+					return result, i, &validation.MaxLenError{Field: "bio", Limit: 4096, Got: len(result.Bio)}
 				}
 			default:
-				return result, 0, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: key}
 			}
 		case 4:
 			switch key {
 			case "name":
 				if seenName {
-					return result, 0, &validation.DuplicateKeyError{Field: "name"}
+					return result, i, &validation.DuplicateKeyError{Field: "name"}
 				}
 				seenName = true
-				if j >= len(data) || data[j] != '"' {
-					return result, 0, scan.ErrExpectString
+				if i >= len(data) || data[i] != '"' {
+					return result, i, scan.ErrExpectString
 				}
 				{
-					_ks := j + 1
-					_ke := _ks
+					_ke := i + 1
 					for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
 						_ke++
 					}
 					if _ke >= len(data) {
-						return result, 0, scan.ErrUnterminated
+						return result, i, scan.ErrUnterminated
 					}
 					if data[_ke] == '"' {
-						result.Name = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
-						j = _ke + 1
+						result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), _ke-i-1)
+						i = _ke + 1
 					} else {
-						_isv, _isj, _iserr := scan.String(data, j)
-						if _iserr != nil {
-							return result, 0, _iserr
+						result.Name, i, err = scan.String(data, i)
+						if err != nil {
+							return result, i, err
 						}
-						result.Name = _isv
-						j = _isj
 					}
 				}
 				if len(result.Name) < 1 {
-					return result, 0, &validation.MinLenError{Field: "name", Limit: 1, Got: len(result.Name)}
+					return result, i, &validation.MinLenError{Field: "name", Limit: 1, Got: len(result.Name)}
 				}
 				if len(result.Name) > 64 {
-					return result, 0, &validation.MaxLenError{Field: "name", Limit: 64, Got: len(result.Name)}
+					return result, i, &validation.MaxLenError{Field: "name", Limit: 64, Got: len(result.Name)}
 				}
 			case "tags":
 				if seenTags {
-					return result, 0, &validation.DuplicateKeyError{Field: "tags"}
+					return result, i, &validation.DuplicateKeyError{Field: "tags"}
 				}
 				seenTags = true
 				{
-					k0 := j
-					for k0 < len(data) && (data[k0] == ' ' || data[k0] == '\t' || data[k0] == '\n' || data[k0] == '\r') {
-						k0++
+					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
 					}
-					if _np, _ok := scan.Null(data, k0); _ok {
-						j = _np
+					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+						i += 4
 					} else {
-						if k0 >= len(data) || data[k0] != '[' {
-							return result, 0, scan.ErrBadArray
+						if i >= len(data) || data[i] != '[' {
+							return result, i, scan.ErrBadArray
 						}
-						k0++
-						for k0 < len(data) && (data[k0] == ' ' || data[k0] == '\t' || data[k0] == '\n' || data[k0] == '\r') {
-							k0++
+						i++
+						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
 						}
-						if k0 < len(data) && data[k0] == ']' {
+						if i < len(data) && data[i] == ']' {
 							result.Tags = []string{}
 						} else {
 							result.Tags = make([]string, 0, 4)
 						}
-						for k0 < len(data) && data[k0] != ']' {
-							var ev0 string
-							if k0 >= len(data) || data[k0] != '"' {
-								return result, 0, scan.ErrExpectString
+						for i < len(data) && data[i] != ']' {
+							result.Tags = append(result.Tags, "")
+							if i >= len(data) || data[i] != '"' {
+								return result, i, scan.ErrExpectString
 							}
 							{
-								_ks := k0 + 1
-								_ke := _ks
+								_ke := i + 1
 								for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
 									_ke++
 								}
 								if _ke >= len(data) {
-									return result, 0, scan.ErrUnterminated
+									return result, i, scan.ErrUnterminated
 								}
 								if data[_ke] == '"' {
-									ev0 = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
-									k0 = _ke + 1
+									result.Tags[len(result.Tags)-1] = unsafe.String(unsafe.SliceData(data[i+1:]), _ke-i-1)
+									i = _ke + 1
 								} else {
-									_isv, _isj, _iserr := scan.String(data, k0)
-									if _iserr != nil {
-										return result, 0, _iserr
+									result.Tags[len(result.Tags)-1], i, err = scan.String(data, i)
+									if err != nil {
+										return result, i, err
 									}
-									ev0 = _isv
-									k0 = _isj
 								}
 							}
-							if len(ev0) == 0 {
-								return result, 0, &validation.NotEmptyError{Field: "tags[]"}
+							if len(result.Tags[len(result.Tags)-1]) == 0 {
+								return result, i, &validation.NotEmptyError{Field: "tags[]"}
 							}
-							if len(ev0) < 1 {
-								return result, 0, &validation.MinLenError{Field: "tags[]", Limit: 1, Got: len(ev0)}
+							if len(result.Tags[len(result.Tags)-1]) < 1 {
+								return result, i, &validation.MinLenError{Field: "tags[]", Limit: 1, Got: len(result.Tags[len(result.Tags)-1])}
 							}
-							if len(ev0) > 32 {
-								return result, 0, &validation.MaxLenError{Field: "tags[]", Limit: 32, Got: len(ev0)}
+							if len(result.Tags[len(result.Tags)-1]) > 32 {
+								return result, i, &validation.MaxLenError{Field: "tags[]", Limit: 32, Got: len(result.Tags[len(result.Tags)-1])}
 							}
-							result.Tags = append(result.Tags, ev0)
-							for k0 < len(data) && (data[k0] == ' ' || data[k0] == '\t' || data[k0] == '\n' || data[k0] == '\r') {
-								k0++
+							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
 							}
-							if k0 < len(data) && data[k0] == ',' {
-								k0++
-								for k0 < len(data) && (data[k0] == ' ' || data[k0] == '\t' || data[k0] == '\n' || data[k0] == '\r') {
-									k0++
+							if i < len(data) && data[i] == ',' {
+								i++
+								for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+									i++
 								}
 								continue
 							}
 							break
 						}
-						if k0 >= len(data) || data[k0] != ']' {
-							return result, 0, scan.ErrBadArray
+						if i >= len(data) || data[i] != ']' {
+							return result, i, scan.ErrBadArray
 						}
-						j = k0 + 1
+						i++
 					}
 				}
 			default:
-				return result, 0, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: key}
 			}
 		case 5:
 			if key == "email" {
 				if seenEmail {
-					return result, 0, &validation.DuplicateKeyError{Field: "email"}
+					return result, i, &validation.DuplicateKeyError{Field: "email"}
 				}
 				seenEmail = true
-				if j >= len(data) || data[j] != '"' {
-					return result, 0, scan.ErrExpectString
+				if i >= len(data) || data[i] != '"' {
+					return result, i, scan.ErrExpectString
 				}
 				{
-					_ks := j + 1
-					_ke := _ks
+					_ke := i + 1
 					for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
 						_ke++
 					}
 					if _ke >= len(data) {
-						return result, 0, scan.ErrUnterminated
+						return result, i, scan.ErrUnterminated
 					}
 					if data[_ke] == '"' {
-						result.Email = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
-						j = _ke + 1
+						result.Email = unsafe.String(unsafe.SliceData(data[i+1:]), _ke-i-1)
+						i = _ke + 1
 					} else {
-						_isv, _isj, _iserr := scan.String(data, j)
-						if _iserr != nil {
-							return result, 0, _iserr
+						result.Email, i, err = scan.String(data, i)
+						if err != nil {
+							return result, i, err
 						}
-						result.Email = _isv
-						j = _isj
 					}
 				}
 				if !decode.IsEmail(result.Email) {
-					return result, 0, &validation.EmailError{Field: "email", Value: result.Email}
+					return result, i, &validation.EmailError{Field: "email", Value: result.Email}
 				}
 			} else {
-				return result, 0, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: key}
 			}
 		default:
-			return result, 0, &validation.UnknownKeyError{Field: key}
+			return result, i, &validation.UnknownKeyError{Field: key}
 		}
-		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
-			j++
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
 		}
-		if j >= len(data) {
-			return result, 0, scan.ErrBadObject
+		if i >= len(data) {
+			return result, i, scan.ErrBadObject
 		}
-		if data[j] == ',' {
-			j++
-			i = j
+		if data[i] == ',' {
+			i++
 			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			continue
 		}
-		if data[j] == '}' {
+		if data[i] == '}' {
 			if !seenEmail {
-				return result, 0, &validation.RequiredError{Field: "email"}
+				return result, i, &validation.RequiredError{Field: "email"}
 			}
 			if !seenName {
-				return result, 0, &validation.RequiredError{Field: "name"}
+				return result, i, &validation.RequiredError{Field: "name"}
 			}
-			return result, j + 1, nil
+			return result, i + 1, nil
 		}
-		return result, 0, scan.ErrBadObject
+		return result, i, scan.ErrBadObject
 	}
 }
 
@@ -2611,244 +2490,234 @@ func (Validated) DecodeStreamFrom(_s *scan.Stream, i int) (Validated, int, error
 	seenTags := false
 	i, err := _s.ObjectOpen(i)
 	if err != nil {
-		return result, 0, err
+		return result, i, err
 	}
 	i, err = _s.SkipSpace(i)
 	if err != nil {
-		return result, 0, err
+		return result, i, err
 	}
 	if i >= len(_s.Bytes()) {
 		if err = _s.ReadMore(); err != nil {
-			return result, 0, err
+			return result, i, err
 		}
 	}
 	if _s.Bytes()[i] == '}' {
 		if !seenEmail {
-			return result, 0, &validation.RequiredError{Field: "email"}
+			return result, i, &validation.RequiredError{Field: "email"}
 		}
 		if !seenName {
-			return result, 0, &validation.RequiredError{Field: "name"}
+			return result, i, &validation.RequiredError{Field: "name"}
 		}
 		return result, i + 1, nil
 	}
 	for {
-		key, j, err := _s.KeyView(i)
+		var key string
+		key, i, err = _s.KeyView(i)
 		if err != nil {
-			return result, 0, err
+			return result, i, err
 		}
-		j, err = _s.SkipSpace(j)
+		i, err = _s.SkipSpace(i)
 		if err != nil {
-			return result, 0, err
+			return result, i, err
 		}
-		if j >= len(_s.Bytes()) {
+		if i >= len(_s.Bytes()) {
 			if err = _s.ReadMore(); err != nil {
-				return result, 0, err
+				return result, i, err
 			}
 		}
-		if _s.Bytes()[j] != ':' {
-			return result, 0, scan.ErrBadObject
+		if _s.Bytes()[i] != ':' {
+			return result, i, scan.ErrBadObject
 		}
-		j, err = _s.SkipSpace(j + 1)
+		i, err = _s.SkipSpace(i + 1)
 		if err != nil {
-			return result, 0, err
+			return result, i, err
 		}
 		switch len(key) {
 		case 3:
 			switch key {
 			case "age":
 				if seenAge {
-					return result, 0, &validation.DuplicateKeyError{Field: "age"}
+					return result, i, &validation.DuplicateKeyError{Field: "age"}
 				}
 				seenAge = true
-				v, k, err := _s.Int64(j)
+				var _iv int64
+				_iv, i, err = _s.Int64(i)
 				if err != nil {
-					return result, 0, err
+					return result, i, err
 				}
-				result.Age = int(v)
-				j = k
+				result.Age = int(_iv)
 				if result.Age < 0 {
-					return result, 0, &validation.GTEError{Field: "age", Limit: 0, Value: result.Age}
+					return result, i, &validation.GTEError{Field: "age", Limit: 0, Value: result.Age}
 				}
 				if result.Age > 150 {
-					return result, 0, &validation.LTEError{Field: "age", Limit: 150, Value: result.Age}
+					return result, i, &validation.LTEError{Field: "age", Limit: 150, Value: result.Age}
 				}
 			case "bio":
 				if seenBio {
-					return result, 0, &validation.DuplicateKeyError{Field: "bio"}
+					return result, i, &validation.DuplicateKeyError{Field: "bio"}
 				}
 				seenBio = true
-				v, k, err := _s.String(j)
+				result.Bio, i, err = _s.String(i)
 				if err != nil {
-					return result, 0, err
+					return result, i, err
 				}
-				result.Bio = v
-				j = k
 				if len(result.Bio) > 4096 {
-					return result, 0, &validation.MaxLenError{Field: "bio", Limit: 4096, Got: len(result.Bio)}
+					return result, i, &validation.MaxLenError{Field: "bio", Limit: 4096, Got: len(result.Bio)}
 				}
 			default:
-				return result, 0, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: key}
 			}
 		case 4:
 			switch key {
 			case "name":
 				if seenName {
-					return result, 0, &validation.DuplicateKeyError{Field: "name"}
+					return result, i, &validation.DuplicateKeyError{Field: "name"}
 				}
 				seenName = true
-				v, k, err := _s.String(j)
+				result.Name, i, err = _s.String(i)
 				if err != nil {
-					return result, 0, err
+					return result, i, err
 				}
-				result.Name = v
-				j = k
 				if len(result.Name) < 1 {
-					return result, 0, &validation.MinLenError{Field: "name", Limit: 1, Got: len(result.Name)}
+					return result, i, &validation.MinLenError{Field: "name", Limit: 1, Got: len(result.Name)}
 				}
 				if len(result.Name) > 64 {
-					return result, 0, &validation.MaxLenError{Field: "name", Limit: 64, Got: len(result.Name)}
+					return result, i, &validation.MaxLenError{Field: "name", Limit: 64, Got: len(result.Name)}
 				}
 			case "tags":
 				if seenTags {
-					return result, 0, &validation.DuplicateKeyError{Field: "tags"}
+					return result, i, &validation.DuplicateKeyError{Field: "tags"}
 				}
 				seenTags = true
 				{
-					var err0 error
-					j, err0 = _s.SkipSpace(j)
-					if err0 != nil {
-						return result, 0, err0
+					i, err = _s.SkipSpace(i)
+					if err != nil {
+						return result, i, err
 					}
-					if j >= len(_s.Bytes()) {
-						if err0 = _s.ReadMore(); err0 != nil {
-							return result, 0, err0
+					if i >= len(_s.Bytes()) {
+						if err = _s.ReadMore(); err != nil {
+							return result, i, err
 						}
 					}
-					if _s.Bytes()[j] == 'n' {
+					if _s.Bytes()[i] == 'n' {
 						for _ki := 1; _ki < 4; _ki++ {
-							if j+_ki >= len(_s.Bytes()) {
-								if err0 = _s.ReadMore(); err0 != nil {
-									return result, 0, err0
+							if i+_ki >= len(_s.Bytes()) {
+								if err = _s.ReadMore(); err != nil {
+									return result, i, err
 								}
 							}
-							if _s.Bytes()[j+_ki] != "null"[_ki] {
-								return result, 0, scan.ErrBadLiteral
+							if _s.Bytes()[i+_ki] != "null"[_ki] {
+								return result, i, scan.ErrBadLiteral
 							}
 						}
-						j += 4
+						i += 4
 					} else {
-						k0, err0 := _s.ArrayOpen(j)
-						if err0 != nil {
-							return result, 0, err0
+						i, err = _s.ArrayOpen(i)
+						if err != nil {
+							return result, i, err
 						}
-						k0, err0 = _s.SkipSpace(k0)
-						if err0 != nil {
-							return result, 0, err0
+						i, err = _s.SkipSpace(i)
+						if err != nil {
+							return result, i, err
 						}
-						if k0 >= len(_s.Bytes()) {
-							if err0 = _s.ReadMore(); err0 != nil {
-								return result, 0, err0
+						if i >= len(_s.Bytes()) {
+							if err = _s.ReadMore(); err != nil {
+								return result, i, err
 							}
 						}
-						if _s.Bytes()[k0] == ']' {
+						if _s.Bytes()[i] == ']' {
 							result.Tags = []string{}
 						} else {
 							result.Tags = make([]string, 0, 4)
 						}
-						for _s.Bytes()[k0] != ']' {
-							var ev0 string
-							_sv, _ek, err0 := _s.String(k0)
-							if err0 != nil {
-								return result, 0, err0
+						for _s.Bytes()[i] != ']' {
+							result.Tags = append(result.Tags, "")
+							result.Tags[len(result.Tags)-1], i, err = _s.String(i)
+							if err != nil {
+								return result, i, err
 							}
-							ev0 = _sv
-							k0 = _ek
-							if len(ev0) == 0 {
-								return result, 0, &validation.NotEmptyError{Field: "tags[]"}
+							if len(result.Tags[len(result.Tags)-1]) == 0 {
+								return result, i, &validation.NotEmptyError{Field: "tags[]"}
 							}
-							if len(ev0) < 1 {
-								return result, 0, &validation.MinLenError{Field: "tags[]", Limit: 1, Got: len(ev0)}
+							if len(result.Tags[len(result.Tags)-1]) < 1 {
+								return result, i, &validation.MinLenError{Field: "tags[]", Limit: 1, Got: len(result.Tags[len(result.Tags)-1])}
 							}
-							if len(ev0) > 32 {
-								return result, 0, &validation.MaxLenError{Field: "tags[]", Limit: 32, Got: len(ev0)}
+							if len(result.Tags[len(result.Tags)-1]) > 32 {
+								return result, i, &validation.MaxLenError{Field: "tags[]", Limit: 32, Got: len(result.Tags[len(result.Tags)-1])}
 							}
-							result.Tags = append(result.Tags, ev0)
-							k0, err0 = _s.SkipSpace(k0)
-							if err0 != nil {
-								return result, 0, err0
+							i, err = _s.SkipSpace(i)
+							if err != nil {
+								return result, i, err
 							}
-							if k0 >= len(_s.Bytes()) {
-								if err0 = _s.ReadMore(); err0 != nil {
-									return result, 0, err0
+							if i >= len(_s.Bytes()) {
+								if err = _s.ReadMore(); err != nil {
+									return result, i, err
 								}
 							}
-							if _s.Bytes()[k0] == ',' {
-								k0, err0 = _s.SkipSpace(k0 + 1)
-								if err0 != nil {
-									return result, 0, err0
+							if _s.Bytes()[i] == ',' {
+								i, err = _s.SkipSpace(i + 1)
+								if err != nil {
+									return result, i, err
 								}
 								continue
 							}
 							break
 						}
-						if _s.Bytes()[k0] != ']' {
-							return result, 0, scan.ErrBadArray
+						if _s.Bytes()[i] != ']' {
+							return result, i, scan.ErrBadArray
 						}
-						j = k0 + 1
+						i++
 					}
 				}
 			default:
-				return result, 0, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: key}
 			}
 		case 5:
 			if key == "email" {
 				if seenEmail {
-					return result, 0, &validation.DuplicateKeyError{Field: "email"}
+					return result, i, &validation.DuplicateKeyError{Field: "email"}
 				}
 				seenEmail = true
-				v, k, err := _s.String(j)
+				result.Email, i, err = _s.String(i)
 				if err != nil {
-					return result, 0, err
+					return result, i, err
 				}
-				result.Email = v
-				j = k
 				if !decode.IsEmail(result.Email) {
-					return result, 0, &validation.EmailError{Field: "email", Value: result.Email}
+					return result, i, &validation.EmailError{Field: "email", Value: result.Email}
 				}
 			} else {
-				return result, 0, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: key}
 			}
 		default:
-			return result, 0, &validation.UnknownKeyError{Field: key}
+			return result, i, &validation.UnknownKeyError{Field: key}
 		}
-		j, err = _s.SkipSpace(j)
+		i, err = _s.SkipSpace(i)
 		if err != nil {
-			return result, 0, err
+			return result, i, err
 		}
-		if j >= len(_s.Bytes()) {
+		if i >= len(_s.Bytes()) {
 			if err = _s.ReadMore(); err != nil {
-				return result, 0, err
+				return result, i, err
 			}
 		}
-		c := _s.Bytes()[j]
+		c := _s.Bytes()[i]
 		if c == ',' {
-			i = j + 1
-			i, err = _s.SkipSpace(i)
+			i, err = _s.SkipSpace(i + 1)
 			if err != nil {
-				return result, 0, err
+				return result, i, err
 			}
 			continue
 		}
 		if c == '}' {
 			if !seenEmail {
-				return result, 0, &validation.RequiredError{Field: "email"}
+				return result, i, &validation.RequiredError{Field: "email"}
 			}
 			if !seenName {
-				return result, 0, &validation.RequiredError{Field: "name"}
+				return result, i, &validation.RequiredError{Field: "name"}
 			}
-			return result, j + 1, nil
+			return result, i + 1, nil
 		}
-		return result, 0, scan.ErrBadObject
+		return result, i, scan.ErrBadObject
 	}
 }
 

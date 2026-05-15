@@ -606,10 +606,8 @@ type Event struct {
 
 this whole project was vibe coded with claude opus 4.7. every line of
 the generator, the runtime libraries, the tests, the fuzzers — typed
-by the model, steered by me. benchmarks are real and reproducible
-(`./bench`), the perf claims are measured against jsonv2/sonic/easyjson
-on the same payload on the same machine. don't take the numbers on faith;
-clone, run `go test -bench .` in `./bench`, see for yourself.
+by the model, steered by me. i didnt really care about code of the 
+generator, instead im lazer focused on quality of the *generated* code.
 
 ## license
 

@@ -18,28 +18,20 @@ func renderAliasDecode(s StructInfo) string {
 	}
 	var b strings.Builder
 	b.WriteString("var result " + s.Name + "\n")
+	b.WriteString("var err error\n_ = err\n")
 	switch s.AliasKind {
 	case KindString:
-		b.WriteString("v, k, err := scan.String(data, i)\n")
-		b.WriteString("if err != nil { return result, 0, err }\n")
-		fmt.Fprintf(&b, "result = %s(v)\nreturn result, k, nil\n", s.Name)
+		fmt.Fprintf(&b, "var _v string\n_v, i, err = scan.String(data, i)\nif err != nil { return result, i, err }\nresult = %s(_v)\n", s.Name)
 	case KindBool:
-		b.WriteString("v, k, err := scan.Bool(data, i)\n")
-		b.WriteString("if err != nil { return result, 0, err }\n")
-		fmt.Fprintf(&b, "result = %s(v)\nreturn result, k, nil\n", s.Name)
+		fmt.Fprintf(&b, "var _v bool\n_v, i, err = scan.Bool(data, i)\nif err != nil { return result, i, err }\nresult = %s(_v)\n", s.Name)
 	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
-		b.WriteString("v, k, err := scan.Int64(data, i)\n")
-		b.WriteString("if err != nil { return result, 0, err }\n")
-		fmt.Fprintf(&b, "result = %s(v)\nreturn result, k, nil\n", s.Name)
+		fmt.Fprintf(&b, "var _v int64\n_v, i, err = scan.Int64(data, i)\nif err != nil { return result, i, err }\nresult = %s(_v)\n", s.Name)
 	case KindUint, KindUint8, KindUint16, KindUint32, KindUint64:
-		b.WriteString("v, k, err := scan.Uint64(data, i)\n")
-		b.WriteString("if err != nil { return result, 0, err }\n")
-		fmt.Fprintf(&b, "result = %s(v)\nreturn result, k, nil\n", s.Name)
+		fmt.Fprintf(&b, "var _v uint64\n_v, i, err = scan.Uint64(data, i)\nif err != nil { return result, i, err }\nresult = %s(_v)\n", s.Name)
 	case KindFloat32, KindFloat64:
-		b.WriteString("v, k, err := scan.Float64(data, i)\n")
-		b.WriteString("if err != nil { return result, 0, err }\n")
-		fmt.Fprintf(&b, "result = %s(v)\nreturn result, k, nil\n", s.Name)
+		fmt.Fprintf(&b, "var _v float64\n_v, i, err = scan.Float64(data, i)\nif err != nil { return result, i, err }\nresult = %s(_v)\n", s.Name)
 	}
+	b.WriteString("return result, i, nil\n")
 	return b.String()
 }
 
@@ -54,28 +46,20 @@ func renderAliasStreamDecode(s StructInfo) string {
 	}
 	var b strings.Builder
 	b.WriteString("var result " + s.Name + "\n")
+	b.WriteString("var err error\n_ = err\n")
 	switch s.AliasKind {
 	case KindString:
-		b.WriteString("v, k, err := _s.String(i)\n")
-		b.WriteString("if err != nil { return result, 0, err }\n")
-		fmt.Fprintf(&b, "result = %s(v)\nreturn result, k, nil\n", s.Name)
+		fmt.Fprintf(&b, "var _v string\n_v, i, err = _s.String(i)\nif err != nil { return result, i, err }\nresult = %s(_v)\n", s.Name)
 	case KindBool:
-		b.WriteString("v, k, err := _s.Bool(i)\n")
-		b.WriteString("if err != nil { return result, 0, err }\n")
-		fmt.Fprintf(&b, "result = %s(v)\nreturn result, k, nil\n", s.Name)
+		fmt.Fprintf(&b, "var _v bool\n_v, i, err = _s.Bool(i)\nif err != nil { return result, i, err }\nresult = %s(_v)\n", s.Name)
 	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
-		b.WriteString("v, k, err := _s.Int64(i)\n")
-		b.WriteString("if err != nil { return result, 0, err }\n")
-		fmt.Fprintf(&b, "result = %s(v)\nreturn result, k, nil\n", s.Name)
+		fmt.Fprintf(&b, "var _v int64\n_v, i, err = _s.Int64(i)\nif err != nil { return result, i, err }\nresult = %s(_v)\n", s.Name)
 	case KindUint, KindUint8, KindUint16, KindUint32, KindUint64:
-		b.WriteString("v, k, err := _s.Uint64(i)\n")
-		b.WriteString("if err != nil { return result, 0, err }\n")
-		fmt.Fprintf(&b, "result = %s(v)\nreturn result, k, nil\n", s.Name)
+		fmt.Fprintf(&b, "var _v uint64\n_v, i, err = _s.Uint64(i)\nif err != nil { return result, i, err }\nresult = %s(_v)\n", s.Name)
 	case KindFloat32, KindFloat64:
-		b.WriteString("v, k, err := _s.Float64(i)\n")
-		b.WriteString("if err != nil { return result, 0, err }\n")
-		fmt.Fprintf(&b, "result = %s(v)\nreturn result, k, nil\n", s.Name)
+		fmt.Fprintf(&b, "var _v float64\n_v, i, err = _s.Float64(i)\nif err != nil { return result, i, err }\nresult = %s(_v)\n", s.Name)
 	}
+	b.WriteString("return result, i, nil\n")
 	return b.String()
 }
 
@@ -153,24 +137,24 @@ func renderAliasStructDecode(s StructInfo, stream bool) string {
 	case s.AliasIface.ByteDecoder && !stream:
 		fmt.Fprintf(&b, "var _u %s\n", s.AliasUnderlying)
 		b.WriteString("v, k, err := _u.DecodeFrom(data, i)\n")
-		b.WriteString("if err != nil { return result, 0, err }\n")
+		b.WriteString("if err != nil { return result, i, err }\n")
 		fmt.Fprintf(&b, "result = %s(v)\nreturn result, k, nil\n", s.Name)
 	case s.AliasIface.StreamDecoder && stream:
 		fmt.Fprintf(&b, "var _u %s\n", s.AliasUnderlying)
 		b.WriteString("v, k, err := _u.DecodeStreamFrom(_s, i)\n")
-		b.WriteString("if err != nil { return result, 0, err }\n")
+		b.WriteString("if err != nil { return result, i, err }\n")
 		fmt.Fprintf(&b, "result = %s(v)\nreturn result, k, nil\n", s.Name)
 	case s.AliasIface.JSONUnmarshaler:
 		if stream {
 			b.WriteString("_start := i\n_k, err := _s.SkipValue(_start)\n")
-			b.WriteString("if err != nil { return result, 0, err }\n")
+			b.WriteString("if err != nil { return result, i, err }\n")
 			fmt.Fprintf(&b, "var _u %s\n", s.AliasUnderlying)
-			b.WriteString("if err := _u.UnmarshalJSON(_s.Bytes()[_start:_k]); err != nil { return result, 0, err }\n")
+			b.WriteString("if err := _u.UnmarshalJSON(_s.Bytes()[_start:_k]); err != nil { return result, i, err }\n")
 		} else {
 			b.WriteString("_start := i\n_k, err := scan.SkipValue(data, _start)\n")
-			b.WriteString("if err != nil { return result, 0, err }\n")
+			b.WriteString("if err != nil { return result, i, err }\n")
 			fmt.Fprintf(&b, "var _u %s\n", s.AliasUnderlying)
-			b.WriteString("if err := _u.UnmarshalJSON(data[_start:_k]); err != nil { return result, 0, err }\n")
+			b.WriteString("if err := _u.UnmarshalJSON(data[_start:_k]); err != nil { return result, i, err }\n")
 		}
 		fmt.Fprintf(&b, "result = %s(_u)\nreturn result, _k, nil\n", s.Name)
 	case s.AliasIface.TextUnmarshaler:
@@ -179,14 +163,14 @@ func renderAliasStructDecode(s StructInfo, stream bool) string {
 		} else {
 			b.WriteString("_ts, _tj, err := scan.String(data, i)\n")
 		}
-		b.WriteString("if err != nil { return result, 0, err }\n")
+		b.WriteString("if err != nil { return result, i, err }\n")
 		fmt.Fprintf(&b, "var _u %s\n", s.AliasUnderlying)
-		b.WriteString("if err := _u.UnmarshalText(unsafe.Slice(unsafe.StringData(_ts), len(_ts))); err != nil { return result, 0, err }\n")
+		b.WriteString("if err := _u.UnmarshalText(unsafe.Slice(unsafe.StringData(_ts), len(_ts))); err != nil { return result, i, err }\n")
 		fmt.Fprintf(&b, "result = %s(_u)\nreturn result, _tj, nil\n", s.Name)
 	default:
 		// extractAlias should have rejected this case via aliasCanDelegate.
 		b.WriteString("// no decode path — ggen could not find a Marshal/Unmarshal pair\n")
-		b.WriteString("return result, 0, nil\n")
+		b.WriteString("return result, i, nil\n")
 	}
 	return b.String()
 }
@@ -242,6 +226,11 @@ func renderAliasStructSize() string {
 func renderAliasContainerDecode(s StructInfo, stream bool) string {
 	var b strings.Builder
 	b.WriteString("var result " + s.Name + "\n")
+	// Hoist err for both byte- and stream-path container decoders. Byte
+	// path doesn't have a function-scope err naturally (inline scanners
+	// declare locally); stream's regular non-alias path gets err from
+	// ObjectOpen but alias containers don't open an object first.
+	b.WriteString("var err error\n_ = err\n")
 	f := s.AliasField
 	f.GoType = s.Name
 	switch s.AliasKind {
