@@ -1164,7 +1164,13 @@ dst = append(dst, ']')
 // slack for `_2` style space-pads and timezone offset width.
 func timeFormatSize(format string) int {
 	switch format {
-	case "unix", "unixmilli", "unixmicro", "unixnano":
+	case "unix":
+		// Worst case: sign + 10-digit unix seconds + `.` + 9-digit
+		// nanos = 21 chars. Plus a small slack for the float
+		// formatter's exponent path if it ever kicks in (it doesn't
+		// at 'f' format, but be defensive).
+		return 24
+	case "unixmilli", "unixmicro", "unixnano":
 		return sizeInt // int64 digits, no quotes
 	case "", "RFC3339Nano":
 		return 35 + 2
@@ -1178,7 +1184,8 @@ func timeFormatSize(format string) int {
 	case "RubyDate":
 		return 30 + 2
 	case "RFC822":
-		return 19 + 2
+		// "MST" → up to 5-char offset when zone has no name.
+		return 21 + 2
 	case "RFC822Z":
 		return 21 + 2
 	case "RFC850":
@@ -1252,6 +1259,14 @@ func timeLayoutExpr(format string) (layout string, numeric string) {
 func renderAppendTime(f FieldInfo, ref string) string {
 	layout, numeric := timeLayoutExpr(f.Format)
 	if numeric != "" {
+		// `format:unix` is the seconds unit — sub-second nanos must
+		// emit as a fractional decimal to match jsonv2's wire format
+		// (jsonv2 emits e.g. `1778762096.789` when nanos != 0).
+		// `unixmilli`/`unixmicro`/`unixnano` work at integer granularity
+		// of their respective units, so plain AppendInt is correct.
+		if numeric == "Unix" {
+			return fmt.Sprintf("dst = strconv.AppendFloat(dst, float64(%s.UnixNano())/1e9, 'f', -1, 64)\n", ref)
+		}
 		return fmt.Sprintf("dst = strconv.AppendInt(dst, %s.%s(), 10)\n", ref, numeric)
 	}
 	return fmt.Sprintf("dst = append(dst, '\"')\ndst = %s.AppendFormat(dst, %s)\ndst = append(dst, '\"')\n", ref, layout)
@@ -1792,6 +1807,23 @@ func renderAppendDuration(f FieldInfo, ref string) string {
 	return fmt.Sprintf("dst = %s(dst, %s.String())\n", appendStrFn(f.HTMLEscape), ref)
 }
 
+// structHasAppendFormatTime reports whether any field of s emits via
+// time.Time.AppendFormat (i.e. a non-numeric time format). Used by
+// renderSize to reserve the 64-byte headroom Go's stdlib AppendFormat
+// requires via its internal slices.Grow call.
+func structHasAppendFormatTime(s StructInfo) bool {
+	for _, f := range s.Fields {
+		if f.Kind != KindTime {
+			continue
+		}
+		_, numeric := timeLayoutExpr(f.Format)
+		if numeric == "" {
+			return true
+		}
+	}
+	return false
+}
+
 // renderSize emits the body of a JSONSize method: sums the exact (or
 // worst-case) byte count needed to serialize the struct as JSON. Per-field
 // contributions are split into a compile-time constant (folded into the
@@ -1807,6 +1839,16 @@ func renderSize(s StructInfo) string {
 	// guard, so a zero-valued OmitStruct doesn't reserve room for
 	// fields that won't ship.
 	fixed := 2 // { and }
+	// time.AppendFormat internally calls slices.Grow(b, max(layout, 64))
+	// per invocation. Without 64-byte headroom at every call site the
+	// runtime doubles the backing array — defeating the single-alloc
+	// Marshal contract. Reserve one shared 64-byte tail at struct level
+	// for any non-numeric time-format field; subsequent AppendFormat
+	// calls in the same Marshal benefit from the same slack since their
+	// actual content writes consume less than 64 bytes each.
+	if structHasAppendFormatTime(s) {
+		fixed += 64
+	}
 	named := 0
 	var runtime strings.Builder
 	for _, f := range s.Fields {
@@ -2907,8 +2949,22 @@ func renderBytes(f FieldInfo, ref, posVar string) string {
 func renderTime(f FieldInfo, ref, posVar string) string {
 	layout, numeric := timeLayoutExpr(f.Format)
 	if numeric != "" {
+		// `format:unix` reads a JSON number that may carry fractional
+		// seconds (jsonv2 emits float when nanos != 0). Parse as float
+		// and split into (sec, nsec) so the wire is fully round-trip
+		// safe. Other unix* variants are integer-granular by unit.
+		if numeric == "Unix" {
+			return fmt.Sprintf(`{
+	_f, _k, err := scan.Float64(data, %s)
+	if err != nil { return result, 0, err }
+	_sec := int64(_f)
+	_nsec := int64((_f - float64(_sec)) * 1e9)
+	%s = time.Unix(_sec, _nsec)
+	%s = _k
+}
+`, posVar, ref, posVar)
+		}
 		ctor := map[string]string{
-			"Unix":      "time.Unix(_n, 0)",
 			"UnixMilli": "time.UnixMilli(_n)",
 			"UnixMicro": "time.UnixMicro(_n)",
 			"UnixNano":  "time.Unix(0, _n)",
@@ -4248,8 +4304,18 @@ func renderStreamBytes(f FieldInfo, ref, posVar string) string {
 func renderStreamTime(f FieldInfo, ref, posVar string) string {
 	layout, numeric := timeLayoutExpr(f.Format)
 	if numeric != "" {
+		if numeric == "Unix" {
+			return fmt.Sprintf(`{
+	_f, _k, err := _s.Float64(%s)
+	if err != nil { return result, 0, err }
+	_sec := int64(_f)
+	_nsec := int64((_f - float64(_sec)) * 1e9)
+	%s = time.Unix(_sec, _nsec)
+	%s = _k
+}
+`, posVar, ref, posVar)
+		}
 		ctor := map[string]string{
-			"Unix":      "time.Unix(_n, 0)",
 			"UnixMilli": "time.UnixMilli(_n)",
 			"UnixMicro": "time.UnixMicro(_n)",
 			"UnixNano":  "time.Unix(0, _n)",

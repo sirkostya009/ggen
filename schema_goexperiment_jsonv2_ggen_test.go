@@ -8,6 +8,7 @@ import (
 	"encoding/base32"
 	"net/url"
 	"strconv"
+	"time"
 	"unsafe"
 
 	"github.com/sirkostya009/ggen/decode"
@@ -933,6 +934,5650 @@ func (s RichTypes) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, "\"}"...), nil
 }
 
+// DecodeFrom decodes one TimeDefault out of data starting at i and returns
+// the decoded value, the position past the last consumed byte, and any
+// error. Strings inside the returned value alias data via unsafe.String —
+// callers MUST NOT mutate data while the value is in use.
+//
+// For top-level use, prefer decode.Unmarshal[TimeDefault](data) (or
+// decode.UnmarshalSlice / Read / UnmarshalStream variants from the
+// decode package) — those are convenience wrappers around DecodeFrom.
+func (TimeDefault) DecodeFrom(data []byte, i int) (TimeDefault, int, error) {
+	var result TimeDefault
+	seenDefault := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, 0, scan.ErrBadObject
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		j := i
+		if i >= len(data) || data[i] != '"' {
+			return result, 0, scan.ErrExpectString
+		}
+		{
+			_ks := i + 1
+			_ke := _ks
+			for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+				_ke++
+			}
+			if _ke >= len(data) {
+				return result, 0, scan.ErrUnterminated
+			}
+			if data[_ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+				j = _ke + 1
+			} else {
+				_isv, _isj, _iserr := scan.String(data, i)
+				if _iserr != nil {
+					return result, 0, _iserr
+				}
+				key = _isv
+				j = _isj
+			}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) || data[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j++
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		switch len(key) {
+		case 7:
+			if key == "default" {
+				if seenDefault {
+					return result, 0, &validation.DuplicateKeyError{Field: "default"}
+				}
+				seenDefault = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.Default, err = time.Parse(time.RFC3339Nano, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) {
+			return result, 0, scan.ErrBadObject
+		}
+		if data[j] == ',' {
+			j++
+			i = j
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[j] == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
+// pulling bytes from a *scan.Stream. Use decode.UnmarshalStream to drive
+// it from the top level.
+func (TimeDefault) DecodeStreamFrom(_s *scan.Stream, i int) (TimeDefault, int, error) {
+	var result TimeDefault
+	seenDefault := false
+	i, err := _s.ObjectOpen(i)
+	if err != nil {
+		return result, 0, err
+	}
+	i, err = _s.SkipSpace(i)
+	if err != nil {
+		return result, 0, err
+	}
+	if i >= len(_s.Bytes()) {
+		if err = _s.ReadMore(); err != nil {
+			return result, 0, err
+		}
+	}
+	if _s.Bytes()[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		key, j, err := _s.KeyView(i)
+		if err != nil {
+			return result, 0, err
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		if _s.Bytes()[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j, err = _s.SkipSpace(j + 1)
+		if err != nil {
+			return result, 0, err
+		}
+		switch len(key) {
+		case 7:
+			if key == "default" {
+				if seenDefault {
+					return result, 0, &validation.DuplicateKeyError{Field: "default"}
+				}
+				seenDefault = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.Default, err = time.Parse(time.RFC3339Nano, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		c := _s.Bytes()[j]
+		if c == ',' {
+			i = j + 1
+			i, err = _s.SkipSpace(i)
+			if err != nil {
+				return result, 0, err
+			}
+			continue
+		}
+		if c == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// JSONSize returns an upper bound on the marshaled size, used by
+// encode.Marshal to pre-size the buffer in a single allocation.
+func (s TimeDefault) JSONSize() int {
+	size := 113
+	return size
+}
+
+// AppendJSON appends the JSON encoding of s to dst. This is the core
+// marshal primitive; for top-level use, prefer encode.Marshal(s) /
+// encode.Write(w, s) / encode.MarshalSlice(items) from the encode package.
+func (s TimeDefault) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"default\":\""...)
+	dst = s.Default.AppendFormat(dst, time.RFC3339Nano)
+	return append(dst, "\"}"...), nil
+}
+
+// DecodeFrom decodes one TimeUnix out of data starting at i and returns
+// the decoded value, the position past the last consumed byte, and any
+// error. Strings inside the returned value alias data via unsafe.String —
+// callers MUST NOT mutate data while the value is in use.
+//
+// For top-level use, prefer decode.Unmarshal[TimeUnix](data) (or
+// decode.UnmarshalSlice / Read / UnmarshalStream variants from the
+// decode package) — those are convenience wrappers around DecodeFrom.
+func (TimeUnix) DecodeFrom(data []byte, i int) (TimeUnix, int, error) {
+	var result TimeUnix
+	seenUnix := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, 0, scan.ErrBadObject
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		j := i
+		if i >= len(data) || data[i] != '"' {
+			return result, 0, scan.ErrExpectString
+		}
+		{
+			_ks := i + 1
+			_ke := _ks
+			for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+				_ke++
+			}
+			if _ke >= len(data) {
+				return result, 0, scan.ErrUnterminated
+			}
+			if data[_ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+				j = _ke + 1
+			} else {
+				_isv, _isj, _iserr := scan.String(data, i)
+				if _iserr != nil {
+					return result, 0, _iserr
+				}
+				key = _isv
+				j = _isj
+			}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) || data[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j++
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		switch len(key) {
+		case 4:
+			if key == "unix" {
+				if seenUnix {
+					return result, 0, &validation.DuplicateKeyError{Field: "unix"}
+				}
+				seenUnix = true
+				{
+					_f, _k, err := scan.Float64(data, j)
+					if err != nil {
+						return result, 0, err
+					}
+					_sec := int64(_f)
+					_nsec := int64((_f - float64(_sec)) * 1e9)
+					result.Unix = time.Unix(_sec, _nsec)
+					j = _k
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) {
+			return result, 0, scan.ErrBadObject
+		}
+		if data[j] == ',' {
+			j++
+			i = j
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[j] == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
+// pulling bytes from a *scan.Stream. Use decode.UnmarshalStream to drive
+// it from the top level.
+func (TimeUnix) DecodeStreamFrom(_s *scan.Stream, i int) (TimeUnix, int, error) {
+	var result TimeUnix
+	seenUnix := false
+	i, err := _s.ObjectOpen(i)
+	if err != nil {
+		return result, 0, err
+	}
+	i, err = _s.SkipSpace(i)
+	if err != nil {
+		return result, 0, err
+	}
+	if i >= len(_s.Bytes()) {
+		if err = _s.ReadMore(); err != nil {
+			return result, 0, err
+		}
+	}
+	if _s.Bytes()[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		key, j, err := _s.KeyView(i)
+		if err != nil {
+			return result, 0, err
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		if _s.Bytes()[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j, err = _s.SkipSpace(j + 1)
+		if err != nil {
+			return result, 0, err
+		}
+		switch len(key) {
+		case 4:
+			if key == "unix" {
+				if seenUnix {
+					return result, 0, &validation.DuplicateKeyError{Field: "unix"}
+				}
+				seenUnix = true
+				{
+					_f, _k, err := _s.Float64(j)
+					if err != nil {
+						return result, 0, err
+					}
+					_sec := int64(_f)
+					_nsec := int64((_f - float64(_sec)) * 1e9)
+					result.Unix = time.Unix(_sec, _nsec)
+					j = _k
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		c := _s.Bytes()[j]
+		if c == ',' {
+			i = j + 1
+			i, err = _s.SkipSpace(i)
+			if err != nil {
+				return result, 0, err
+			}
+			continue
+		}
+		if c == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// JSONSize returns an upper bound on the marshaled size, used by
+// encode.Marshal to pre-size the buffer in a single allocation.
+func (s TimeUnix) JSONSize() int {
+	size := 33
+	return size
+}
+
+// AppendJSON appends the JSON encoding of s to dst. This is the core
+// marshal primitive; for top-level use, prefer encode.Marshal(s) /
+// encode.Write(w, s) / encode.MarshalSlice(items) from the encode package.
+func (s TimeUnix) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"unix\":"...)
+	dst = strconv.AppendFloat(dst, float64(s.Unix.UnixNano())/1e9, 'f', -1, 64)
+	return append(dst, '}'), nil
+}
+
+// DecodeFrom decodes one TimeUnixMilli out of data starting at i and returns
+// the decoded value, the position past the last consumed byte, and any
+// error. Strings inside the returned value alias data via unsafe.String —
+// callers MUST NOT mutate data while the value is in use.
+//
+// For top-level use, prefer decode.Unmarshal[TimeUnixMilli](data) (or
+// decode.UnmarshalSlice / Read / UnmarshalStream variants from the
+// decode package) — those are convenience wrappers around DecodeFrom.
+func (TimeUnixMilli) DecodeFrom(data []byte, i int) (TimeUnixMilli, int, error) {
+	var result TimeUnixMilli
+	seenUnixMilli := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, 0, scan.ErrBadObject
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		j := i
+		if i >= len(data) || data[i] != '"' {
+			return result, 0, scan.ErrExpectString
+		}
+		{
+			_ks := i + 1
+			_ke := _ks
+			for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+				_ke++
+			}
+			if _ke >= len(data) {
+				return result, 0, scan.ErrUnterminated
+			}
+			if data[_ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+				j = _ke + 1
+			} else {
+				_isv, _isj, _iserr := scan.String(data, i)
+				if _iserr != nil {
+					return result, 0, _iserr
+				}
+				key = _isv
+				j = _isj
+			}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) || data[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j++
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		switch len(key) {
+		case 9:
+			if key == "unixMilli" {
+				if seenUnixMilli {
+					return result, 0, &validation.DuplicateKeyError{Field: "unixMilli"}
+				}
+				seenUnixMilli = true
+				{
+					_n, _k, err := scan.Int64(data, j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.UnixMilli = time.UnixMilli(_n)
+					j = _k
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) {
+			return result, 0, scan.ErrBadObject
+		}
+		if data[j] == ',' {
+			j++
+			i = j
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[j] == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
+// pulling bytes from a *scan.Stream. Use decode.UnmarshalStream to drive
+// it from the top level.
+func (TimeUnixMilli) DecodeStreamFrom(_s *scan.Stream, i int) (TimeUnixMilli, int, error) {
+	var result TimeUnixMilli
+	seenUnixMilli := false
+	i, err := _s.ObjectOpen(i)
+	if err != nil {
+		return result, 0, err
+	}
+	i, err = _s.SkipSpace(i)
+	if err != nil {
+		return result, 0, err
+	}
+	if i >= len(_s.Bytes()) {
+		if err = _s.ReadMore(); err != nil {
+			return result, 0, err
+		}
+	}
+	if _s.Bytes()[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		key, j, err := _s.KeyView(i)
+		if err != nil {
+			return result, 0, err
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		if _s.Bytes()[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j, err = _s.SkipSpace(j + 1)
+		if err != nil {
+			return result, 0, err
+		}
+		switch len(key) {
+		case 9:
+			if key == "unixMilli" {
+				if seenUnixMilli {
+					return result, 0, &validation.DuplicateKeyError{Field: "unixMilli"}
+				}
+				seenUnixMilli = true
+				{
+					_n, _k, err := _s.Int64(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.UnixMilli = time.UnixMilli(_n)
+					j = _k
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		c := _s.Bytes()[j]
+		if c == ',' {
+			i = j + 1
+			i, err = _s.SkipSpace(i)
+			if err != nil {
+				return result, 0, err
+			}
+			continue
+		}
+		if c == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// JSONSize returns an upper bound on the marshaled size, used by
+// encode.Marshal to pre-size the buffer in a single allocation.
+func (s TimeUnixMilli) JSONSize() int {
+	size := 34
+	return size
+}
+
+// AppendJSON appends the JSON encoding of s to dst. This is the core
+// marshal primitive; for top-level use, prefer encode.Marshal(s) /
+// encode.Write(w, s) / encode.MarshalSlice(items) from the encode package.
+func (s TimeUnixMilli) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"unixMilli\":"...)
+	dst = strconv.AppendInt(dst, s.UnixMilli.UnixMilli(), 10)
+	return append(dst, '}'), nil
+}
+
+// DecodeFrom decodes one TimeUnixMicro out of data starting at i and returns
+// the decoded value, the position past the last consumed byte, and any
+// error. Strings inside the returned value alias data via unsafe.String —
+// callers MUST NOT mutate data while the value is in use.
+//
+// For top-level use, prefer decode.Unmarshal[TimeUnixMicro](data) (or
+// decode.UnmarshalSlice / Read / UnmarshalStream variants from the
+// decode package) — those are convenience wrappers around DecodeFrom.
+func (TimeUnixMicro) DecodeFrom(data []byte, i int) (TimeUnixMicro, int, error) {
+	var result TimeUnixMicro
+	seenUnixMicro := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, 0, scan.ErrBadObject
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		j := i
+		if i >= len(data) || data[i] != '"' {
+			return result, 0, scan.ErrExpectString
+		}
+		{
+			_ks := i + 1
+			_ke := _ks
+			for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+				_ke++
+			}
+			if _ke >= len(data) {
+				return result, 0, scan.ErrUnterminated
+			}
+			if data[_ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+				j = _ke + 1
+			} else {
+				_isv, _isj, _iserr := scan.String(data, i)
+				if _iserr != nil {
+					return result, 0, _iserr
+				}
+				key = _isv
+				j = _isj
+			}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) || data[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j++
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		switch len(key) {
+		case 9:
+			if key == "unixMicro" {
+				if seenUnixMicro {
+					return result, 0, &validation.DuplicateKeyError{Field: "unixMicro"}
+				}
+				seenUnixMicro = true
+				{
+					_n, _k, err := scan.Int64(data, j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.UnixMicro = time.UnixMicro(_n)
+					j = _k
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) {
+			return result, 0, scan.ErrBadObject
+		}
+		if data[j] == ',' {
+			j++
+			i = j
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[j] == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
+// pulling bytes from a *scan.Stream. Use decode.UnmarshalStream to drive
+// it from the top level.
+func (TimeUnixMicro) DecodeStreamFrom(_s *scan.Stream, i int) (TimeUnixMicro, int, error) {
+	var result TimeUnixMicro
+	seenUnixMicro := false
+	i, err := _s.ObjectOpen(i)
+	if err != nil {
+		return result, 0, err
+	}
+	i, err = _s.SkipSpace(i)
+	if err != nil {
+		return result, 0, err
+	}
+	if i >= len(_s.Bytes()) {
+		if err = _s.ReadMore(); err != nil {
+			return result, 0, err
+		}
+	}
+	if _s.Bytes()[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		key, j, err := _s.KeyView(i)
+		if err != nil {
+			return result, 0, err
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		if _s.Bytes()[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j, err = _s.SkipSpace(j + 1)
+		if err != nil {
+			return result, 0, err
+		}
+		switch len(key) {
+		case 9:
+			if key == "unixMicro" {
+				if seenUnixMicro {
+					return result, 0, &validation.DuplicateKeyError{Field: "unixMicro"}
+				}
+				seenUnixMicro = true
+				{
+					_n, _k, err := _s.Int64(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.UnixMicro = time.UnixMicro(_n)
+					j = _k
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		c := _s.Bytes()[j]
+		if c == ',' {
+			i = j + 1
+			i, err = _s.SkipSpace(i)
+			if err != nil {
+				return result, 0, err
+			}
+			continue
+		}
+		if c == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// JSONSize returns an upper bound on the marshaled size, used by
+// encode.Marshal to pre-size the buffer in a single allocation.
+func (s TimeUnixMicro) JSONSize() int {
+	size := 34
+	return size
+}
+
+// AppendJSON appends the JSON encoding of s to dst. This is the core
+// marshal primitive; for top-level use, prefer encode.Marshal(s) /
+// encode.Write(w, s) / encode.MarshalSlice(items) from the encode package.
+func (s TimeUnixMicro) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"unixMicro\":"...)
+	dst = strconv.AppendInt(dst, s.UnixMicro.UnixMicro(), 10)
+	return append(dst, '}'), nil
+}
+
+// DecodeFrom decodes one TimeUnixNano out of data starting at i and returns
+// the decoded value, the position past the last consumed byte, and any
+// error. Strings inside the returned value alias data via unsafe.String —
+// callers MUST NOT mutate data while the value is in use.
+//
+// For top-level use, prefer decode.Unmarshal[TimeUnixNano](data) (or
+// decode.UnmarshalSlice / Read / UnmarshalStream variants from the
+// decode package) — those are convenience wrappers around DecodeFrom.
+func (TimeUnixNano) DecodeFrom(data []byte, i int) (TimeUnixNano, int, error) {
+	var result TimeUnixNano
+	seenUnixNano := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, 0, scan.ErrBadObject
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		j := i
+		if i >= len(data) || data[i] != '"' {
+			return result, 0, scan.ErrExpectString
+		}
+		{
+			_ks := i + 1
+			_ke := _ks
+			for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+				_ke++
+			}
+			if _ke >= len(data) {
+				return result, 0, scan.ErrUnterminated
+			}
+			if data[_ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+				j = _ke + 1
+			} else {
+				_isv, _isj, _iserr := scan.String(data, i)
+				if _iserr != nil {
+					return result, 0, _iserr
+				}
+				key = _isv
+				j = _isj
+			}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) || data[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j++
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		switch len(key) {
+		case 8:
+			if key == "unixNano" {
+				if seenUnixNano {
+					return result, 0, &validation.DuplicateKeyError{Field: "unixNano"}
+				}
+				seenUnixNano = true
+				{
+					_n, _k, err := scan.Int64(data, j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.UnixNano = time.Unix(0, _n)
+					j = _k
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) {
+			return result, 0, scan.ErrBadObject
+		}
+		if data[j] == ',' {
+			j++
+			i = j
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[j] == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
+// pulling bytes from a *scan.Stream. Use decode.UnmarshalStream to drive
+// it from the top level.
+func (TimeUnixNano) DecodeStreamFrom(_s *scan.Stream, i int) (TimeUnixNano, int, error) {
+	var result TimeUnixNano
+	seenUnixNano := false
+	i, err := _s.ObjectOpen(i)
+	if err != nil {
+		return result, 0, err
+	}
+	i, err = _s.SkipSpace(i)
+	if err != nil {
+		return result, 0, err
+	}
+	if i >= len(_s.Bytes()) {
+		if err = _s.ReadMore(); err != nil {
+			return result, 0, err
+		}
+	}
+	if _s.Bytes()[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		key, j, err := _s.KeyView(i)
+		if err != nil {
+			return result, 0, err
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		if _s.Bytes()[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j, err = _s.SkipSpace(j + 1)
+		if err != nil {
+			return result, 0, err
+		}
+		switch len(key) {
+		case 8:
+			if key == "unixNano" {
+				if seenUnixNano {
+					return result, 0, &validation.DuplicateKeyError{Field: "unixNano"}
+				}
+				seenUnixNano = true
+				{
+					_n, _k, err := _s.Int64(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.UnixNano = time.Unix(0, _n)
+					j = _k
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		c := _s.Bytes()[j]
+		if c == ',' {
+			i = j + 1
+			i, err = _s.SkipSpace(i)
+			if err != nil {
+				return result, 0, err
+			}
+			continue
+		}
+		if c == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// JSONSize returns an upper bound on the marshaled size, used by
+// encode.Marshal to pre-size the buffer in a single allocation.
+func (s TimeUnixNano) JSONSize() int {
+	size := 33
+	return size
+}
+
+// AppendJSON appends the JSON encoding of s to dst. This is the core
+// marshal primitive; for top-level use, prefer encode.Marshal(s) /
+// encode.Write(w, s) / encode.MarshalSlice(items) from the encode package.
+func (s TimeUnixNano) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"unixNano\":"...)
+	dst = strconv.AppendInt(dst, s.UnixNano.UnixNano(), 10)
+	return append(dst, '}'), nil
+}
+
+// DecodeFrom decodes one TimeANSIC out of data starting at i and returns
+// the decoded value, the position past the last consumed byte, and any
+// error. Strings inside the returned value alias data via unsafe.String —
+// callers MUST NOT mutate data while the value is in use.
+//
+// For top-level use, prefer decode.Unmarshal[TimeANSIC](data) (or
+// decode.UnmarshalSlice / Read / UnmarshalStream variants from the
+// decode package) — those are convenience wrappers around DecodeFrom.
+func (TimeANSIC) DecodeFrom(data []byte, i int) (TimeANSIC, int, error) {
+	var result TimeANSIC
+	seenANSIC := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, 0, scan.ErrBadObject
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		j := i
+		if i >= len(data) || data[i] != '"' {
+			return result, 0, scan.ErrExpectString
+		}
+		{
+			_ks := i + 1
+			_ke := _ks
+			for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+				_ke++
+			}
+			if _ke >= len(data) {
+				return result, 0, scan.ErrUnterminated
+			}
+			if data[_ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+				j = _ke + 1
+			} else {
+				_isv, _isj, _iserr := scan.String(data, i)
+				if _iserr != nil {
+					return result, 0, _iserr
+				}
+				key = _isv
+				j = _isj
+			}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) || data[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j++
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		switch len(key) {
+		case 5:
+			if key == "ansic" {
+				if seenANSIC {
+					return result, 0, &validation.DuplicateKeyError{Field: "ansic"}
+				}
+				seenANSIC = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.ANSIC, err = time.Parse(time.ANSIC, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) {
+			return result, 0, scan.ErrBadObject
+		}
+		if data[j] == ',' {
+			j++
+			i = j
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[j] == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
+// pulling bytes from a *scan.Stream. Use decode.UnmarshalStream to drive
+// it from the top level.
+func (TimeANSIC) DecodeStreamFrom(_s *scan.Stream, i int) (TimeANSIC, int, error) {
+	var result TimeANSIC
+	seenANSIC := false
+	i, err := _s.ObjectOpen(i)
+	if err != nil {
+		return result, 0, err
+	}
+	i, err = _s.SkipSpace(i)
+	if err != nil {
+		return result, 0, err
+	}
+	if i >= len(_s.Bytes()) {
+		if err = _s.ReadMore(); err != nil {
+			return result, 0, err
+		}
+	}
+	if _s.Bytes()[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		key, j, err := _s.KeyView(i)
+		if err != nil {
+			return result, 0, err
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		if _s.Bytes()[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j, err = _s.SkipSpace(j + 1)
+		if err != nil {
+			return result, 0, err
+		}
+		switch len(key) {
+		case 5:
+			if key == "ansic" {
+				if seenANSIC {
+					return result, 0, &validation.DuplicateKeyError{Field: "ansic"}
+				}
+				seenANSIC = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.ANSIC, err = time.Parse(time.ANSIC, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		c := _s.Bytes()[j]
+		if c == ',' {
+			i = j + 1
+			i, err = _s.SkipSpace(i)
+			if err != nil {
+				return result, 0, err
+			}
+			continue
+		}
+		if c == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// JSONSize returns an upper bound on the marshaled size, used by
+// encode.Marshal to pre-size the buffer in a single allocation.
+func (s TimeANSIC) JSONSize() int {
+	size := 100
+	return size
+}
+
+// AppendJSON appends the JSON encoding of s to dst. This is the core
+// marshal primitive; for top-level use, prefer encode.Marshal(s) /
+// encode.Write(w, s) / encode.MarshalSlice(items) from the encode package.
+func (s TimeANSIC) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"ansic\":\""...)
+	dst = s.ANSIC.AppendFormat(dst, time.ANSIC)
+	return append(dst, "\"}"...), nil
+}
+
+// DecodeFrom decodes one TimeUnixDate out of data starting at i and returns
+// the decoded value, the position past the last consumed byte, and any
+// error. Strings inside the returned value alias data via unsafe.String —
+// callers MUST NOT mutate data while the value is in use.
+//
+// For top-level use, prefer decode.Unmarshal[TimeUnixDate](data) (or
+// decode.UnmarshalSlice / Read / UnmarshalStream variants from the
+// decode package) — those are convenience wrappers around DecodeFrom.
+func (TimeUnixDate) DecodeFrom(data []byte, i int) (TimeUnixDate, int, error) {
+	var result TimeUnixDate
+	seenUnixDate := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, 0, scan.ErrBadObject
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		j := i
+		if i >= len(data) || data[i] != '"' {
+			return result, 0, scan.ErrExpectString
+		}
+		{
+			_ks := i + 1
+			_ke := _ks
+			for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+				_ke++
+			}
+			if _ke >= len(data) {
+				return result, 0, scan.ErrUnterminated
+			}
+			if data[_ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+				j = _ke + 1
+			} else {
+				_isv, _isj, _iserr := scan.String(data, i)
+				if _iserr != nil {
+					return result, 0, _iserr
+				}
+				key = _isv
+				j = _isj
+			}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) || data[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j++
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		switch len(key) {
+		case 8:
+			if key == "unixDate" {
+				if seenUnixDate {
+					return result, 0, &validation.DuplicateKeyError{Field: "unixDate"}
+				}
+				seenUnixDate = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.UnixDate, err = time.Parse(time.UnixDate, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) {
+			return result, 0, scan.ErrBadObject
+		}
+		if data[j] == ',' {
+			j++
+			i = j
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[j] == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
+// pulling bytes from a *scan.Stream. Use decode.UnmarshalStream to drive
+// it from the top level.
+func (TimeUnixDate) DecodeStreamFrom(_s *scan.Stream, i int) (TimeUnixDate, int, error) {
+	var result TimeUnixDate
+	seenUnixDate := false
+	i, err := _s.ObjectOpen(i)
+	if err != nil {
+		return result, 0, err
+	}
+	i, err = _s.SkipSpace(i)
+	if err != nil {
+		return result, 0, err
+	}
+	if i >= len(_s.Bytes()) {
+		if err = _s.ReadMore(); err != nil {
+			return result, 0, err
+		}
+	}
+	if _s.Bytes()[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		key, j, err := _s.KeyView(i)
+		if err != nil {
+			return result, 0, err
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		if _s.Bytes()[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j, err = _s.SkipSpace(j + 1)
+		if err != nil {
+			return result, 0, err
+		}
+		switch len(key) {
+		case 8:
+			if key == "unixDate" {
+				if seenUnixDate {
+					return result, 0, &validation.DuplicateKeyError{Field: "unixDate"}
+				}
+				seenUnixDate = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.UnixDate, err = time.Parse(time.UnixDate, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		c := _s.Bytes()[j]
+		if c == ',' {
+			i = j + 1
+			i, err = _s.SkipSpace(i)
+			if err != nil {
+				return result, 0, err
+			}
+			continue
+		}
+		if c == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// JSONSize returns an upper bound on the marshaled size, used by
+// encode.Marshal to pre-size the buffer in a single allocation.
+func (s TimeUnixDate) JSONSize() int {
+	size := 109
+	return size
+}
+
+// AppendJSON appends the JSON encoding of s to dst. This is the core
+// marshal primitive; for top-level use, prefer encode.Marshal(s) /
+// encode.Write(w, s) / encode.MarshalSlice(items) from the encode package.
+func (s TimeUnixDate) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"unixDate\":\""...)
+	dst = s.UnixDate.AppendFormat(dst, time.UnixDate)
+	return append(dst, "\"}"...), nil
+}
+
+// DecodeFrom decodes one TimeRubyDate out of data starting at i and returns
+// the decoded value, the position past the last consumed byte, and any
+// error. Strings inside the returned value alias data via unsafe.String —
+// callers MUST NOT mutate data while the value is in use.
+//
+// For top-level use, prefer decode.Unmarshal[TimeRubyDate](data) (or
+// decode.UnmarshalSlice / Read / UnmarshalStream variants from the
+// decode package) — those are convenience wrappers around DecodeFrom.
+func (TimeRubyDate) DecodeFrom(data []byte, i int) (TimeRubyDate, int, error) {
+	var result TimeRubyDate
+	seenRubyDate := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, 0, scan.ErrBadObject
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		j := i
+		if i >= len(data) || data[i] != '"' {
+			return result, 0, scan.ErrExpectString
+		}
+		{
+			_ks := i + 1
+			_ke := _ks
+			for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+				_ke++
+			}
+			if _ke >= len(data) {
+				return result, 0, scan.ErrUnterminated
+			}
+			if data[_ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+				j = _ke + 1
+			} else {
+				_isv, _isj, _iserr := scan.String(data, i)
+				if _iserr != nil {
+					return result, 0, _iserr
+				}
+				key = _isv
+				j = _isj
+			}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) || data[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j++
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		switch len(key) {
+		case 8:
+			if key == "rubyDate" {
+				if seenRubyDate {
+					return result, 0, &validation.DuplicateKeyError{Field: "rubyDate"}
+				}
+				seenRubyDate = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.RubyDate, err = time.Parse(time.RubyDate, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) {
+			return result, 0, scan.ErrBadObject
+		}
+		if data[j] == ',' {
+			j++
+			i = j
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[j] == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
+// pulling bytes from a *scan.Stream. Use decode.UnmarshalStream to drive
+// it from the top level.
+func (TimeRubyDate) DecodeStreamFrom(_s *scan.Stream, i int) (TimeRubyDate, int, error) {
+	var result TimeRubyDate
+	seenRubyDate := false
+	i, err := _s.ObjectOpen(i)
+	if err != nil {
+		return result, 0, err
+	}
+	i, err = _s.SkipSpace(i)
+	if err != nil {
+		return result, 0, err
+	}
+	if i >= len(_s.Bytes()) {
+		if err = _s.ReadMore(); err != nil {
+			return result, 0, err
+		}
+	}
+	if _s.Bytes()[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		key, j, err := _s.KeyView(i)
+		if err != nil {
+			return result, 0, err
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		if _s.Bytes()[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j, err = _s.SkipSpace(j + 1)
+		if err != nil {
+			return result, 0, err
+		}
+		switch len(key) {
+		case 8:
+			if key == "rubyDate" {
+				if seenRubyDate {
+					return result, 0, &validation.DuplicateKeyError{Field: "rubyDate"}
+				}
+				seenRubyDate = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.RubyDate, err = time.Parse(time.RubyDate, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		c := _s.Bytes()[j]
+		if c == ',' {
+			i = j + 1
+			i, err = _s.SkipSpace(i)
+			if err != nil {
+				return result, 0, err
+			}
+			continue
+		}
+		if c == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// JSONSize returns an upper bound on the marshaled size, used by
+// encode.Marshal to pre-size the buffer in a single allocation.
+func (s TimeRubyDate) JSONSize() int {
+	size := 109
+	return size
+}
+
+// AppendJSON appends the JSON encoding of s to dst. This is the core
+// marshal primitive; for top-level use, prefer encode.Marshal(s) /
+// encode.Write(w, s) / encode.MarshalSlice(items) from the encode package.
+func (s TimeRubyDate) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"rubyDate\":\""...)
+	dst = s.RubyDate.AppendFormat(dst, time.RubyDate)
+	return append(dst, "\"}"...), nil
+}
+
+// DecodeFrom decodes one TimeRFC822 out of data starting at i and returns
+// the decoded value, the position past the last consumed byte, and any
+// error. Strings inside the returned value alias data via unsafe.String —
+// callers MUST NOT mutate data while the value is in use.
+//
+// For top-level use, prefer decode.Unmarshal[TimeRFC822](data) (or
+// decode.UnmarshalSlice / Read / UnmarshalStream variants from the
+// decode package) — those are convenience wrappers around DecodeFrom.
+func (TimeRFC822) DecodeFrom(data []byte, i int) (TimeRFC822, int, error) {
+	var result TimeRFC822
+	seenRFC822 := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, 0, scan.ErrBadObject
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		j := i
+		if i >= len(data) || data[i] != '"' {
+			return result, 0, scan.ErrExpectString
+		}
+		{
+			_ks := i + 1
+			_ke := _ks
+			for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+				_ke++
+			}
+			if _ke >= len(data) {
+				return result, 0, scan.ErrUnterminated
+			}
+			if data[_ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+				j = _ke + 1
+			} else {
+				_isv, _isj, _iserr := scan.String(data, i)
+				if _iserr != nil {
+					return result, 0, _iserr
+				}
+				key = _isv
+				j = _isj
+			}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) || data[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j++
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		switch len(key) {
+		case 6:
+			if key == "rfc822" {
+				if seenRFC822 {
+					return result, 0, &validation.DuplicateKeyError{Field: "rfc822"}
+				}
+				seenRFC822 = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.RFC822, err = time.Parse(time.RFC822, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) {
+			return result, 0, scan.ErrBadObject
+		}
+		if data[j] == ',' {
+			j++
+			i = j
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[j] == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
+// pulling bytes from a *scan.Stream. Use decode.UnmarshalStream to drive
+// it from the top level.
+func (TimeRFC822) DecodeStreamFrom(_s *scan.Stream, i int) (TimeRFC822, int, error) {
+	var result TimeRFC822
+	seenRFC822 := false
+	i, err := _s.ObjectOpen(i)
+	if err != nil {
+		return result, 0, err
+	}
+	i, err = _s.SkipSpace(i)
+	if err != nil {
+		return result, 0, err
+	}
+	if i >= len(_s.Bytes()) {
+		if err = _s.ReadMore(); err != nil {
+			return result, 0, err
+		}
+	}
+	if _s.Bytes()[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		key, j, err := _s.KeyView(i)
+		if err != nil {
+			return result, 0, err
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		if _s.Bytes()[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j, err = _s.SkipSpace(j + 1)
+		if err != nil {
+			return result, 0, err
+		}
+		switch len(key) {
+		case 6:
+			if key == "rfc822" {
+				if seenRFC822 {
+					return result, 0, &validation.DuplicateKeyError{Field: "rfc822"}
+				}
+				seenRFC822 = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.RFC822, err = time.Parse(time.RFC822, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		c := _s.Bytes()[j]
+		if c == ',' {
+			i = j + 1
+			i, err = _s.SkipSpace(i)
+			if err != nil {
+				return result, 0, err
+			}
+			continue
+		}
+		if c == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// JSONSize returns an upper bound on the marshaled size, used by
+// encode.Marshal to pre-size the buffer in a single allocation.
+func (s TimeRFC822) JSONSize() int {
+	size := 98
+	return size
+}
+
+// AppendJSON appends the JSON encoding of s to dst. This is the core
+// marshal primitive; for top-level use, prefer encode.Marshal(s) /
+// encode.Write(w, s) / encode.MarshalSlice(items) from the encode package.
+func (s TimeRFC822) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"rfc822\":\""...)
+	dst = s.RFC822.AppendFormat(dst, time.RFC822)
+	return append(dst, "\"}"...), nil
+}
+
+// DecodeFrom decodes one TimeRFC822Z out of data starting at i and returns
+// the decoded value, the position past the last consumed byte, and any
+// error. Strings inside the returned value alias data via unsafe.String —
+// callers MUST NOT mutate data while the value is in use.
+//
+// For top-level use, prefer decode.Unmarshal[TimeRFC822Z](data) (or
+// decode.UnmarshalSlice / Read / UnmarshalStream variants from the
+// decode package) — those are convenience wrappers around DecodeFrom.
+func (TimeRFC822Z) DecodeFrom(data []byte, i int) (TimeRFC822Z, int, error) {
+	var result TimeRFC822Z
+	seenRFC822Z := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, 0, scan.ErrBadObject
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		j := i
+		if i >= len(data) || data[i] != '"' {
+			return result, 0, scan.ErrExpectString
+		}
+		{
+			_ks := i + 1
+			_ke := _ks
+			for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+				_ke++
+			}
+			if _ke >= len(data) {
+				return result, 0, scan.ErrUnterminated
+			}
+			if data[_ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+				j = _ke + 1
+			} else {
+				_isv, _isj, _iserr := scan.String(data, i)
+				if _iserr != nil {
+					return result, 0, _iserr
+				}
+				key = _isv
+				j = _isj
+			}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) || data[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j++
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		switch len(key) {
+		case 7:
+			if key == "rfc822Z" {
+				if seenRFC822Z {
+					return result, 0, &validation.DuplicateKeyError{Field: "rfc822Z"}
+				}
+				seenRFC822Z = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.RFC822Z, err = time.Parse(time.RFC822Z, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) {
+			return result, 0, scan.ErrBadObject
+		}
+		if data[j] == ',' {
+			j++
+			i = j
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[j] == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
+// pulling bytes from a *scan.Stream. Use decode.UnmarshalStream to drive
+// it from the top level.
+func (TimeRFC822Z) DecodeStreamFrom(_s *scan.Stream, i int) (TimeRFC822Z, int, error) {
+	var result TimeRFC822Z
+	seenRFC822Z := false
+	i, err := _s.ObjectOpen(i)
+	if err != nil {
+		return result, 0, err
+	}
+	i, err = _s.SkipSpace(i)
+	if err != nil {
+		return result, 0, err
+	}
+	if i >= len(_s.Bytes()) {
+		if err = _s.ReadMore(); err != nil {
+			return result, 0, err
+		}
+	}
+	if _s.Bytes()[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		key, j, err := _s.KeyView(i)
+		if err != nil {
+			return result, 0, err
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		if _s.Bytes()[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j, err = _s.SkipSpace(j + 1)
+		if err != nil {
+			return result, 0, err
+		}
+		switch len(key) {
+		case 7:
+			if key == "rfc822Z" {
+				if seenRFC822Z {
+					return result, 0, &validation.DuplicateKeyError{Field: "rfc822Z"}
+				}
+				seenRFC822Z = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.RFC822Z, err = time.Parse(time.RFC822Z, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		c := _s.Bytes()[j]
+		if c == ',' {
+			i = j + 1
+			i, err = _s.SkipSpace(i)
+			if err != nil {
+				return result, 0, err
+			}
+			continue
+		}
+		if c == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// JSONSize returns an upper bound on the marshaled size, used by
+// encode.Marshal to pre-size the buffer in a single allocation.
+func (s TimeRFC822Z) JSONSize() int {
+	size := 99
+	return size
+}
+
+// AppendJSON appends the JSON encoding of s to dst. This is the core
+// marshal primitive; for top-level use, prefer encode.Marshal(s) /
+// encode.Write(w, s) / encode.MarshalSlice(items) from the encode package.
+func (s TimeRFC822Z) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"rfc822Z\":\""...)
+	dst = s.RFC822Z.AppendFormat(dst, time.RFC822Z)
+	return append(dst, "\"}"...), nil
+}
+
+// DecodeFrom decodes one TimeRFC850 out of data starting at i and returns
+// the decoded value, the position past the last consumed byte, and any
+// error. Strings inside the returned value alias data via unsafe.String —
+// callers MUST NOT mutate data while the value is in use.
+//
+// For top-level use, prefer decode.Unmarshal[TimeRFC850](data) (or
+// decode.UnmarshalSlice / Read / UnmarshalStream variants from the
+// decode package) — those are convenience wrappers around DecodeFrom.
+func (TimeRFC850) DecodeFrom(data []byte, i int) (TimeRFC850, int, error) {
+	var result TimeRFC850
+	seenRFC850 := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, 0, scan.ErrBadObject
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		j := i
+		if i >= len(data) || data[i] != '"' {
+			return result, 0, scan.ErrExpectString
+		}
+		{
+			_ks := i + 1
+			_ke := _ks
+			for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+				_ke++
+			}
+			if _ke >= len(data) {
+				return result, 0, scan.ErrUnterminated
+			}
+			if data[_ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+				j = _ke + 1
+			} else {
+				_isv, _isj, _iserr := scan.String(data, i)
+				if _iserr != nil {
+					return result, 0, _iserr
+				}
+				key = _isv
+				j = _isj
+			}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) || data[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j++
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		switch len(key) {
+		case 6:
+			if key == "rfc850" {
+				if seenRFC850 {
+					return result, 0, &validation.DuplicateKeyError{Field: "rfc850"}
+				}
+				seenRFC850 = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.RFC850, err = time.Parse(time.RFC850, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) {
+			return result, 0, scan.ErrBadObject
+		}
+		if data[j] == ',' {
+			j++
+			i = j
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[j] == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
+// pulling bytes from a *scan.Stream. Use decode.UnmarshalStream to drive
+// it from the top level.
+func (TimeRFC850) DecodeStreamFrom(_s *scan.Stream, i int) (TimeRFC850, int, error) {
+	var result TimeRFC850
+	seenRFC850 := false
+	i, err := _s.ObjectOpen(i)
+	if err != nil {
+		return result, 0, err
+	}
+	i, err = _s.SkipSpace(i)
+	if err != nil {
+		return result, 0, err
+	}
+	if i >= len(_s.Bytes()) {
+		if err = _s.ReadMore(); err != nil {
+			return result, 0, err
+		}
+	}
+	if _s.Bytes()[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		key, j, err := _s.KeyView(i)
+		if err != nil {
+			return result, 0, err
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		if _s.Bytes()[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j, err = _s.SkipSpace(j + 1)
+		if err != nil {
+			return result, 0, err
+		}
+		switch len(key) {
+		case 6:
+			if key == "rfc850" {
+				if seenRFC850 {
+					return result, 0, &validation.DuplicateKeyError{Field: "rfc850"}
+				}
+				seenRFC850 = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.RFC850, err = time.Parse(time.RFC850, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		c := _s.Bytes()[j]
+		if c == ',' {
+			i = j + 1
+			i, err = _s.SkipSpace(i)
+			if err != nil {
+				return result, 0, err
+			}
+			continue
+		}
+		if c == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// JSONSize returns an upper bound on the marshaled size, used by
+// encode.Marshal to pre-size the buffer in a single allocation.
+func (s TimeRFC850) JSONSize() int {
+	size := 109
+	return size
+}
+
+// AppendJSON appends the JSON encoding of s to dst. This is the core
+// marshal primitive; for top-level use, prefer encode.Marshal(s) /
+// encode.Write(w, s) / encode.MarshalSlice(items) from the encode package.
+func (s TimeRFC850) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"rfc850\":\""...)
+	dst = s.RFC850.AppendFormat(dst, time.RFC850)
+	return append(dst, "\"}"...), nil
+}
+
+// DecodeFrom decodes one TimeRFC1123 out of data starting at i and returns
+// the decoded value, the position past the last consumed byte, and any
+// error. Strings inside the returned value alias data via unsafe.String —
+// callers MUST NOT mutate data while the value is in use.
+//
+// For top-level use, prefer decode.Unmarshal[TimeRFC1123](data) (or
+// decode.UnmarshalSlice / Read / UnmarshalStream variants from the
+// decode package) — those are convenience wrappers around DecodeFrom.
+func (TimeRFC1123) DecodeFrom(data []byte, i int) (TimeRFC1123, int, error) {
+	var result TimeRFC1123
+	seenRFC1123 := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, 0, scan.ErrBadObject
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		j := i
+		if i >= len(data) || data[i] != '"' {
+			return result, 0, scan.ErrExpectString
+		}
+		{
+			_ks := i + 1
+			_ke := _ks
+			for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+				_ke++
+			}
+			if _ke >= len(data) {
+				return result, 0, scan.ErrUnterminated
+			}
+			if data[_ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+				j = _ke + 1
+			} else {
+				_isv, _isj, _iserr := scan.String(data, i)
+				if _iserr != nil {
+					return result, 0, _iserr
+				}
+				key = _isv
+				j = _isj
+			}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) || data[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j++
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		switch len(key) {
+		case 7:
+			if key == "rfc1123" {
+				if seenRFC1123 {
+					return result, 0, &validation.DuplicateKeyError{Field: "rfc1123"}
+				}
+				seenRFC1123 = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.RFC1123, err = time.Parse(time.RFC1123, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) {
+			return result, 0, scan.ErrBadObject
+		}
+		if data[j] == ',' {
+			j++
+			i = j
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[j] == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
+// pulling bytes from a *scan.Stream. Use decode.UnmarshalStream to drive
+// it from the top level.
+func (TimeRFC1123) DecodeStreamFrom(_s *scan.Stream, i int) (TimeRFC1123, int, error) {
+	var result TimeRFC1123
+	seenRFC1123 := false
+	i, err := _s.ObjectOpen(i)
+	if err != nil {
+		return result, 0, err
+	}
+	i, err = _s.SkipSpace(i)
+	if err != nil {
+		return result, 0, err
+	}
+	if i >= len(_s.Bytes()) {
+		if err = _s.ReadMore(); err != nil {
+			return result, 0, err
+		}
+	}
+	if _s.Bytes()[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		key, j, err := _s.KeyView(i)
+		if err != nil {
+			return result, 0, err
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		if _s.Bytes()[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j, err = _s.SkipSpace(j + 1)
+		if err != nil {
+			return result, 0, err
+		}
+		switch len(key) {
+		case 7:
+			if key == "rfc1123" {
+				if seenRFC1123 {
+					return result, 0, &validation.DuplicateKeyError{Field: "rfc1123"}
+				}
+				seenRFC1123 = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.RFC1123, err = time.Parse(time.RFC1123, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		c := _s.Bytes()[j]
+		if c == ',' {
+			i = j + 1
+			i, err = _s.SkipSpace(i)
+			if err != nil {
+				return result, 0, err
+			}
+			continue
+		}
+		if c == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// JSONSize returns an upper bound on the marshaled size, used by
+// encode.Marshal to pre-size the buffer in a single allocation.
+func (s TimeRFC1123) JSONSize() int {
+	size := 109
+	return size
+}
+
+// AppendJSON appends the JSON encoding of s to dst. This is the core
+// marshal primitive; for top-level use, prefer encode.Marshal(s) /
+// encode.Write(w, s) / encode.MarshalSlice(items) from the encode package.
+func (s TimeRFC1123) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"rfc1123\":\""...)
+	dst = s.RFC1123.AppendFormat(dst, time.RFC1123)
+	return append(dst, "\"}"...), nil
+}
+
+// DecodeFrom decodes one TimeRFC1123Z out of data starting at i and returns
+// the decoded value, the position past the last consumed byte, and any
+// error. Strings inside the returned value alias data via unsafe.String —
+// callers MUST NOT mutate data while the value is in use.
+//
+// For top-level use, prefer decode.Unmarshal[TimeRFC1123Z](data) (or
+// decode.UnmarshalSlice / Read / UnmarshalStream variants from the
+// decode package) — those are convenience wrappers around DecodeFrom.
+func (TimeRFC1123Z) DecodeFrom(data []byte, i int) (TimeRFC1123Z, int, error) {
+	var result TimeRFC1123Z
+	seenRFC1123Z := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, 0, scan.ErrBadObject
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		j := i
+		if i >= len(data) || data[i] != '"' {
+			return result, 0, scan.ErrExpectString
+		}
+		{
+			_ks := i + 1
+			_ke := _ks
+			for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+				_ke++
+			}
+			if _ke >= len(data) {
+				return result, 0, scan.ErrUnterminated
+			}
+			if data[_ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+				j = _ke + 1
+			} else {
+				_isv, _isj, _iserr := scan.String(data, i)
+				if _iserr != nil {
+					return result, 0, _iserr
+				}
+				key = _isv
+				j = _isj
+			}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) || data[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j++
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		switch len(key) {
+		case 8:
+			if key == "rfc1123Z" {
+				if seenRFC1123Z {
+					return result, 0, &validation.DuplicateKeyError{Field: "rfc1123Z"}
+				}
+				seenRFC1123Z = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.RFC1123Z, err = time.Parse(time.RFC1123Z, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) {
+			return result, 0, scan.ErrBadObject
+		}
+		if data[j] == ',' {
+			j++
+			i = j
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[j] == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
+// pulling bytes from a *scan.Stream. Use decode.UnmarshalStream to drive
+// it from the top level.
+func (TimeRFC1123Z) DecodeStreamFrom(_s *scan.Stream, i int) (TimeRFC1123Z, int, error) {
+	var result TimeRFC1123Z
+	seenRFC1123Z := false
+	i, err := _s.ObjectOpen(i)
+	if err != nil {
+		return result, 0, err
+	}
+	i, err = _s.SkipSpace(i)
+	if err != nil {
+		return result, 0, err
+	}
+	if i >= len(_s.Bytes()) {
+		if err = _s.ReadMore(); err != nil {
+			return result, 0, err
+		}
+	}
+	if _s.Bytes()[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		key, j, err := _s.KeyView(i)
+		if err != nil {
+			return result, 0, err
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		if _s.Bytes()[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j, err = _s.SkipSpace(j + 1)
+		if err != nil {
+			return result, 0, err
+		}
+		switch len(key) {
+		case 8:
+			if key == "rfc1123Z" {
+				if seenRFC1123Z {
+					return result, 0, &validation.DuplicateKeyError{Field: "rfc1123Z"}
+				}
+				seenRFC1123Z = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.RFC1123Z, err = time.Parse(time.RFC1123Z, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		c := _s.Bytes()[j]
+		if c == ',' {
+			i = j + 1
+			i, err = _s.SkipSpace(i)
+			if err != nil {
+				return result, 0, err
+			}
+			continue
+		}
+		if c == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// JSONSize returns an upper bound on the marshaled size, used by
+// encode.Marshal to pre-size the buffer in a single allocation.
+func (s TimeRFC1123Z) JSONSize() int {
+	size := 110
+	return size
+}
+
+// AppendJSON appends the JSON encoding of s to dst. This is the core
+// marshal primitive; for top-level use, prefer encode.Marshal(s) /
+// encode.Write(w, s) / encode.MarshalSlice(items) from the encode package.
+func (s TimeRFC1123Z) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"rfc1123Z\":\""...)
+	dst = s.RFC1123Z.AppendFormat(dst, time.RFC1123Z)
+	return append(dst, "\"}"...), nil
+}
+
+// DecodeFrom decodes one TimeRFC3339 out of data starting at i and returns
+// the decoded value, the position past the last consumed byte, and any
+// error. Strings inside the returned value alias data via unsafe.String —
+// callers MUST NOT mutate data while the value is in use.
+//
+// For top-level use, prefer decode.Unmarshal[TimeRFC3339](data) (or
+// decode.UnmarshalSlice / Read / UnmarshalStream variants from the
+// decode package) — those are convenience wrappers around DecodeFrom.
+func (TimeRFC3339) DecodeFrom(data []byte, i int) (TimeRFC3339, int, error) {
+	var result TimeRFC3339
+	seenRFC3339 := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, 0, scan.ErrBadObject
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		j := i
+		if i >= len(data) || data[i] != '"' {
+			return result, 0, scan.ErrExpectString
+		}
+		{
+			_ks := i + 1
+			_ke := _ks
+			for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+				_ke++
+			}
+			if _ke >= len(data) {
+				return result, 0, scan.ErrUnterminated
+			}
+			if data[_ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+				j = _ke + 1
+			} else {
+				_isv, _isj, _iserr := scan.String(data, i)
+				if _iserr != nil {
+					return result, 0, _iserr
+				}
+				key = _isv
+				j = _isj
+			}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) || data[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j++
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		switch len(key) {
+		case 7:
+			if key == "rfc3339" {
+				if seenRFC3339 {
+					return result, 0, &validation.DuplicateKeyError{Field: "rfc3339"}
+				}
+				seenRFC3339 = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.RFC3339, err = time.Parse(time.RFC3339, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) {
+			return result, 0, scan.ErrBadObject
+		}
+		if data[j] == ',' {
+			j++
+			i = j
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[j] == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
+// pulling bytes from a *scan.Stream. Use decode.UnmarshalStream to drive
+// it from the top level.
+func (TimeRFC3339) DecodeStreamFrom(_s *scan.Stream, i int) (TimeRFC3339, int, error) {
+	var result TimeRFC3339
+	seenRFC3339 := false
+	i, err := _s.ObjectOpen(i)
+	if err != nil {
+		return result, 0, err
+	}
+	i, err = _s.SkipSpace(i)
+	if err != nil {
+		return result, 0, err
+	}
+	if i >= len(_s.Bytes()) {
+		if err = _s.ReadMore(); err != nil {
+			return result, 0, err
+		}
+	}
+	if _s.Bytes()[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		key, j, err := _s.KeyView(i)
+		if err != nil {
+			return result, 0, err
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		if _s.Bytes()[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j, err = _s.SkipSpace(j + 1)
+		if err != nil {
+			return result, 0, err
+		}
+		switch len(key) {
+		case 7:
+			if key == "rfc3339" {
+				if seenRFC3339 {
+					return result, 0, &validation.DuplicateKeyError{Field: "rfc3339"}
+				}
+				seenRFC3339 = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.RFC3339, err = time.Parse(time.RFC3339, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		c := _s.Bytes()[j]
+		if c == ',' {
+			i = j + 1
+			i, err = _s.SkipSpace(i)
+			if err != nil {
+				return result, 0, err
+			}
+			continue
+		}
+		if c == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// JSONSize returns an upper bound on the marshaled size, used by
+// encode.Marshal to pre-size the buffer in a single allocation.
+func (s TimeRFC3339) JSONSize() int {
+	size := 103
+	return size
+}
+
+// AppendJSON appends the JSON encoding of s to dst. This is the core
+// marshal primitive; for top-level use, prefer encode.Marshal(s) /
+// encode.Write(w, s) / encode.MarshalSlice(items) from the encode package.
+func (s TimeRFC3339) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"rfc3339\":\""...)
+	dst = s.RFC3339.AppendFormat(dst, time.RFC3339)
+	return append(dst, "\"}"...), nil
+}
+
+// DecodeFrom decodes one TimeRFC3339Nano out of data starting at i and returns
+// the decoded value, the position past the last consumed byte, and any
+// error. Strings inside the returned value alias data via unsafe.String —
+// callers MUST NOT mutate data while the value is in use.
+//
+// For top-level use, prefer decode.Unmarshal[TimeRFC3339Nano](data) (or
+// decode.UnmarshalSlice / Read / UnmarshalStream variants from the
+// decode package) — those are convenience wrappers around DecodeFrom.
+func (TimeRFC3339Nano) DecodeFrom(data []byte, i int) (TimeRFC3339Nano, int, error) {
+	var result TimeRFC3339Nano
+	seenRFC3339Nano := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, 0, scan.ErrBadObject
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		j := i
+		if i >= len(data) || data[i] != '"' {
+			return result, 0, scan.ErrExpectString
+		}
+		{
+			_ks := i + 1
+			_ke := _ks
+			for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+				_ke++
+			}
+			if _ke >= len(data) {
+				return result, 0, scan.ErrUnterminated
+			}
+			if data[_ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+				j = _ke + 1
+			} else {
+				_isv, _isj, _iserr := scan.String(data, i)
+				if _iserr != nil {
+					return result, 0, _iserr
+				}
+				key = _isv
+				j = _isj
+			}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) || data[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j++
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		switch len(key) {
+		case 11:
+			if key == "rfc3339Nano" {
+				if seenRFC3339Nano {
+					return result, 0, &validation.DuplicateKeyError{Field: "rfc3339Nano"}
+				}
+				seenRFC3339Nano = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.RFC3339Nano, err = time.Parse(time.RFC3339Nano, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) {
+			return result, 0, scan.ErrBadObject
+		}
+		if data[j] == ',' {
+			j++
+			i = j
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[j] == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
+// pulling bytes from a *scan.Stream. Use decode.UnmarshalStream to drive
+// it from the top level.
+func (TimeRFC3339Nano) DecodeStreamFrom(_s *scan.Stream, i int) (TimeRFC3339Nano, int, error) {
+	var result TimeRFC3339Nano
+	seenRFC3339Nano := false
+	i, err := _s.ObjectOpen(i)
+	if err != nil {
+		return result, 0, err
+	}
+	i, err = _s.SkipSpace(i)
+	if err != nil {
+		return result, 0, err
+	}
+	if i >= len(_s.Bytes()) {
+		if err = _s.ReadMore(); err != nil {
+			return result, 0, err
+		}
+	}
+	if _s.Bytes()[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		key, j, err := _s.KeyView(i)
+		if err != nil {
+			return result, 0, err
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		if _s.Bytes()[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j, err = _s.SkipSpace(j + 1)
+		if err != nil {
+			return result, 0, err
+		}
+		switch len(key) {
+		case 11:
+			if key == "rfc3339Nano" {
+				if seenRFC3339Nano {
+					return result, 0, &validation.DuplicateKeyError{Field: "rfc3339Nano"}
+				}
+				seenRFC3339Nano = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.RFC3339Nano, err = time.Parse(time.RFC3339Nano, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		c := _s.Bytes()[j]
+		if c == ',' {
+			i = j + 1
+			i, err = _s.SkipSpace(i)
+			if err != nil {
+				return result, 0, err
+			}
+			continue
+		}
+		if c == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// JSONSize returns an upper bound on the marshaled size, used by
+// encode.Marshal to pre-size the buffer in a single allocation.
+func (s TimeRFC3339Nano) JSONSize() int {
+	size := 117
+	return size
+}
+
+// AppendJSON appends the JSON encoding of s to dst. This is the core
+// marshal primitive; for top-level use, prefer encode.Marshal(s) /
+// encode.Write(w, s) / encode.MarshalSlice(items) from the encode package.
+func (s TimeRFC3339Nano) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"rfc3339Nano\":\""...)
+	dst = s.RFC3339Nano.AppendFormat(dst, time.RFC3339Nano)
+	return append(dst, "\"}"...), nil
+}
+
+// DecodeFrom decodes one TimeKitchen out of data starting at i and returns
+// the decoded value, the position past the last consumed byte, and any
+// error. Strings inside the returned value alias data via unsafe.String —
+// callers MUST NOT mutate data while the value is in use.
+//
+// For top-level use, prefer decode.Unmarshal[TimeKitchen](data) (or
+// decode.UnmarshalSlice / Read / UnmarshalStream variants from the
+// decode package) — those are convenience wrappers around DecodeFrom.
+func (TimeKitchen) DecodeFrom(data []byte, i int) (TimeKitchen, int, error) {
+	var result TimeKitchen
+	seenKitchen := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, 0, scan.ErrBadObject
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		j := i
+		if i >= len(data) || data[i] != '"' {
+			return result, 0, scan.ErrExpectString
+		}
+		{
+			_ks := i + 1
+			_ke := _ks
+			for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+				_ke++
+			}
+			if _ke >= len(data) {
+				return result, 0, scan.ErrUnterminated
+			}
+			if data[_ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+				j = _ke + 1
+			} else {
+				_isv, _isj, _iserr := scan.String(data, i)
+				if _iserr != nil {
+					return result, 0, _iserr
+				}
+				key = _isv
+				j = _isj
+			}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) || data[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j++
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		switch len(key) {
+		case 7:
+			if key == "kitchen" {
+				if seenKitchen {
+					return result, 0, &validation.DuplicateKeyError{Field: "kitchen"}
+				}
+				seenKitchen = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.Kitchen, err = time.Parse(time.Kitchen, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) {
+			return result, 0, scan.ErrBadObject
+		}
+		if data[j] == ',' {
+			j++
+			i = j
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[j] == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
+// pulling bytes from a *scan.Stream. Use decode.UnmarshalStream to drive
+// it from the top level.
+func (TimeKitchen) DecodeStreamFrom(_s *scan.Stream, i int) (TimeKitchen, int, error) {
+	var result TimeKitchen
+	seenKitchen := false
+	i, err := _s.ObjectOpen(i)
+	if err != nil {
+		return result, 0, err
+	}
+	i, err = _s.SkipSpace(i)
+	if err != nil {
+		return result, 0, err
+	}
+	if i >= len(_s.Bytes()) {
+		if err = _s.ReadMore(); err != nil {
+			return result, 0, err
+		}
+	}
+	if _s.Bytes()[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		key, j, err := _s.KeyView(i)
+		if err != nil {
+			return result, 0, err
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		if _s.Bytes()[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j, err = _s.SkipSpace(j + 1)
+		if err != nil {
+			return result, 0, err
+		}
+		switch len(key) {
+		case 7:
+			if key == "kitchen" {
+				if seenKitchen {
+					return result, 0, &validation.DuplicateKeyError{Field: "kitchen"}
+				}
+				seenKitchen = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.Kitchen, err = time.Parse(time.Kitchen, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		c := _s.Bytes()[j]
+		if c == ',' {
+			i = j + 1
+			i, err = _s.SkipSpace(i)
+			if err != nil {
+				return result, 0, err
+			}
+			continue
+		}
+		if c == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// JSONSize returns an upper bound on the marshaled size, used by
+// encode.Marshal to pre-size the buffer in a single allocation.
+func (s TimeKitchen) JSONSize() int {
+	size := 85
+	return size
+}
+
+// AppendJSON appends the JSON encoding of s to dst. This is the core
+// marshal primitive; for top-level use, prefer encode.Marshal(s) /
+// encode.Write(w, s) / encode.MarshalSlice(items) from the encode package.
+func (s TimeKitchen) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"kitchen\":\""...)
+	dst = s.Kitchen.AppendFormat(dst, time.Kitchen)
+	return append(dst, "\"}"...), nil
+}
+
+// DecodeFrom decodes one TimeDateTime out of data starting at i and returns
+// the decoded value, the position past the last consumed byte, and any
+// error. Strings inside the returned value alias data via unsafe.String —
+// callers MUST NOT mutate data while the value is in use.
+//
+// For top-level use, prefer decode.Unmarshal[TimeDateTime](data) (or
+// decode.UnmarshalSlice / Read / UnmarshalStream variants from the
+// decode package) — those are convenience wrappers around DecodeFrom.
+func (TimeDateTime) DecodeFrom(data []byte, i int) (TimeDateTime, int, error) {
+	var result TimeDateTime
+	seenDateTime := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, 0, scan.ErrBadObject
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		j := i
+		if i >= len(data) || data[i] != '"' {
+			return result, 0, scan.ErrExpectString
+		}
+		{
+			_ks := i + 1
+			_ke := _ks
+			for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+				_ke++
+			}
+			if _ke >= len(data) {
+				return result, 0, scan.ErrUnterminated
+			}
+			if data[_ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+				j = _ke + 1
+			} else {
+				_isv, _isj, _iserr := scan.String(data, i)
+				if _iserr != nil {
+					return result, 0, _iserr
+				}
+				key = _isv
+				j = _isj
+			}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) || data[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j++
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		switch len(key) {
+		case 8:
+			if key == "dateTime" {
+				if seenDateTime {
+					return result, 0, &validation.DuplicateKeyError{Field: "dateTime"}
+				}
+				seenDateTime = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.DateTime, err = time.Parse(time.DateTime, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) {
+			return result, 0, scan.ErrBadObject
+		}
+		if data[j] == ',' {
+			j++
+			i = j
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[j] == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
+// pulling bytes from a *scan.Stream. Use decode.UnmarshalStream to drive
+// it from the top level.
+func (TimeDateTime) DecodeStreamFrom(_s *scan.Stream, i int) (TimeDateTime, int, error) {
+	var result TimeDateTime
+	seenDateTime := false
+	i, err := _s.ObjectOpen(i)
+	if err != nil {
+		return result, 0, err
+	}
+	i, err = _s.SkipSpace(i)
+	if err != nil {
+		return result, 0, err
+	}
+	if i >= len(_s.Bytes()) {
+		if err = _s.ReadMore(); err != nil {
+			return result, 0, err
+		}
+	}
+	if _s.Bytes()[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		key, j, err := _s.KeyView(i)
+		if err != nil {
+			return result, 0, err
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		if _s.Bytes()[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j, err = _s.SkipSpace(j + 1)
+		if err != nil {
+			return result, 0, err
+		}
+		switch len(key) {
+		case 8:
+			if key == "dateTime" {
+				if seenDateTime {
+					return result, 0, &validation.DuplicateKeyError{Field: "dateTime"}
+				}
+				seenDateTime = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.DateTime, err = time.Parse(time.DateTime, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		c := _s.Bytes()[j]
+		if c == ',' {
+			i = j + 1
+			i, err = _s.SkipSpace(i)
+			if err != nil {
+				return result, 0, err
+			}
+			continue
+		}
+		if c == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// JSONSize returns an upper bound on the marshaled size, used by
+// encode.Marshal to pre-size the buffer in a single allocation.
+func (s TimeDateTime) JSONSize() int {
+	size := 98
+	return size
+}
+
+// AppendJSON appends the JSON encoding of s to dst. This is the core
+// marshal primitive; for top-level use, prefer encode.Marshal(s) /
+// encode.Write(w, s) / encode.MarshalSlice(items) from the encode package.
+func (s TimeDateTime) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"dateTime\":\""...)
+	dst = s.DateTime.AppendFormat(dst, time.DateTime)
+	return append(dst, "\"}"...), nil
+}
+
+// DecodeFrom decodes one TimeDateOnly out of data starting at i and returns
+// the decoded value, the position past the last consumed byte, and any
+// error. Strings inside the returned value alias data via unsafe.String —
+// callers MUST NOT mutate data while the value is in use.
+//
+// For top-level use, prefer decode.Unmarshal[TimeDateOnly](data) (or
+// decode.UnmarshalSlice / Read / UnmarshalStream variants from the
+// decode package) — those are convenience wrappers around DecodeFrom.
+func (TimeDateOnly) DecodeFrom(data []byte, i int) (TimeDateOnly, int, error) {
+	var result TimeDateOnly
+	seenDateOnly := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, 0, scan.ErrBadObject
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		j := i
+		if i >= len(data) || data[i] != '"' {
+			return result, 0, scan.ErrExpectString
+		}
+		{
+			_ks := i + 1
+			_ke := _ks
+			for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+				_ke++
+			}
+			if _ke >= len(data) {
+				return result, 0, scan.ErrUnterminated
+			}
+			if data[_ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+				j = _ke + 1
+			} else {
+				_isv, _isj, _iserr := scan.String(data, i)
+				if _iserr != nil {
+					return result, 0, _iserr
+				}
+				key = _isv
+				j = _isj
+			}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) || data[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j++
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		switch len(key) {
+		case 8:
+			if key == "dateOnly" {
+				if seenDateOnly {
+					return result, 0, &validation.DuplicateKeyError{Field: "dateOnly"}
+				}
+				seenDateOnly = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.DateOnly, err = time.Parse(time.DateOnly, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) {
+			return result, 0, scan.ErrBadObject
+		}
+		if data[j] == ',' {
+			j++
+			i = j
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[j] == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
+// pulling bytes from a *scan.Stream. Use decode.UnmarshalStream to drive
+// it from the top level.
+func (TimeDateOnly) DecodeStreamFrom(_s *scan.Stream, i int) (TimeDateOnly, int, error) {
+	var result TimeDateOnly
+	seenDateOnly := false
+	i, err := _s.ObjectOpen(i)
+	if err != nil {
+		return result, 0, err
+	}
+	i, err = _s.SkipSpace(i)
+	if err != nil {
+		return result, 0, err
+	}
+	if i >= len(_s.Bytes()) {
+		if err = _s.ReadMore(); err != nil {
+			return result, 0, err
+		}
+	}
+	if _s.Bytes()[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		key, j, err := _s.KeyView(i)
+		if err != nil {
+			return result, 0, err
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		if _s.Bytes()[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j, err = _s.SkipSpace(j + 1)
+		if err != nil {
+			return result, 0, err
+		}
+		switch len(key) {
+		case 8:
+			if key == "dateOnly" {
+				if seenDateOnly {
+					return result, 0, &validation.DuplicateKeyError{Field: "dateOnly"}
+				}
+				seenDateOnly = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.DateOnly, err = time.Parse(time.DateOnly, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		c := _s.Bytes()[j]
+		if c == ',' {
+			i = j + 1
+			i, err = _s.SkipSpace(i)
+			if err != nil {
+				return result, 0, err
+			}
+			continue
+		}
+		if c == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// JSONSize returns an upper bound on the marshaled size, used by
+// encode.Marshal to pre-size the buffer in a single allocation.
+func (s TimeDateOnly) JSONSize() int {
+	size := 89
+	return size
+}
+
+// AppendJSON appends the JSON encoding of s to dst. This is the core
+// marshal primitive; for top-level use, prefer encode.Marshal(s) /
+// encode.Write(w, s) / encode.MarshalSlice(items) from the encode package.
+func (s TimeDateOnly) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"dateOnly\":\""...)
+	dst = s.DateOnly.AppendFormat(dst, time.DateOnly)
+	return append(dst, "\"}"...), nil
+}
+
+// DecodeFrom decodes one TimeTimeOnly out of data starting at i and returns
+// the decoded value, the position past the last consumed byte, and any
+// error. Strings inside the returned value alias data via unsafe.String —
+// callers MUST NOT mutate data while the value is in use.
+//
+// For top-level use, prefer decode.Unmarshal[TimeTimeOnly](data) (or
+// decode.UnmarshalSlice / Read / UnmarshalStream variants from the
+// decode package) — those are convenience wrappers around DecodeFrom.
+func (TimeTimeOnly) DecodeFrom(data []byte, i int) (TimeTimeOnly, int, error) {
+	var result TimeTimeOnly
+	seenTimeOnly := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, 0, scan.ErrBadObject
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		j := i
+		if i >= len(data) || data[i] != '"' {
+			return result, 0, scan.ErrExpectString
+		}
+		{
+			_ks := i + 1
+			_ke := _ks
+			for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+				_ke++
+			}
+			if _ke >= len(data) {
+				return result, 0, scan.ErrUnterminated
+			}
+			if data[_ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+				j = _ke + 1
+			} else {
+				_isv, _isj, _iserr := scan.String(data, i)
+				if _iserr != nil {
+					return result, 0, _iserr
+				}
+				key = _isv
+				j = _isj
+			}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) || data[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j++
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		switch len(key) {
+		case 8:
+			if key == "timeOnly" {
+				if seenTimeOnly {
+					return result, 0, &validation.DuplicateKeyError{Field: "timeOnly"}
+				}
+				seenTimeOnly = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.TimeOnly, err = time.Parse(time.TimeOnly, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) {
+			return result, 0, scan.ErrBadObject
+		}
+		if data[j] == ',' {
+			j++
+			i = j
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[j] == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
+// pulling bytes from a *scan.Stream. Use decode.UnmarshalStream to drive
+// it from the top level.
+func (TimeTimeOnly) DecodeStreamFrom(_s *scan.Stream, i int) (TimeTimeOnly, int, error) {
+	var result TimeTimeOnly
+	seenTimeOnly := false
+	i, err := _s.ObjectOpen(i)
+	if err != nil {
+		return result, 0, err
+	}
+	i, err = _s.SkipSpace(i)
+	if err != nil {
+		return result, 0, err
+	}
+	if i >= len(_s.Bytes()) {
+		if err = _s.ReadMore(); err != nil {
+			return result, 0, err
+		}
+	}
+	if _s.Bytes()[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		key, j, err := _s.KeyView(i)
+		if err != nil {
+			return result, 0, err
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		if _s.Bytes()[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j, err = _s.SkipSpace(j + 1)
+		if err != nil {
+			return result, 0, err
+		}
+		switch len(key) {
+		case 8:
+			if key == "timeOnly" {
+				if seenTimeOnly {
+					return result, 0, &validation.DuplicateKeyError{Field: "timeOnly"}
+				}
+				seenTimeOnly = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.TimeOnly, err = time.Parse(time.TimeOnly, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		c := _s.Bytes()[j]
+		if c == ',' {
+			i = j + 1
+			i, err = _s.SkipSpace(i)
+			if err != nil {
+				return result, 0, err
+			}
+			continue
+		}
+		if c == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// JSONSize returns an upper bound on the marshaled size, used by
+// encode.Marshal to pre-size the buffer in a single allocation.
+func (s TimeTimeOnly) JSONSize() int {
+	size := 87
+	return size
+}
+
+// AppendJSON appends the JSON encoding of s to dst. This is the core
+// marshal primitive; for top-level use, prefer encode.Marshal(s) /
+// encode.Write(w, s) / encode.MarshalSlice(items) from the encode package.
+func (s TimeTimeOnly) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"timeOnly\":\""...)
+	dst = s.TimeOnly.AppendFormat(dst, time.TimeOnly)
+	return append(dst, "\"}"...), nil
+}
+
+// DecodeFrom decodes one TimeFormatsStdCompat out of data starting at i and returns
+// the decoded value, the position past the last consumed byte, and any
+// error. Strings inside the returned value alias data via unsafe.String —
+// callers MUST NOT mutate data while the value is in use.
+//
+// For top-level use, prefer decode.Unmarshal[TimeFormatsStdCompat](data) (or
+// decode.UnmarshalSlice / Read / UnmarshalStream variants from the
+// decode package) — those are convenience wrappers around DecodeFrom.
+func (TimeFormatsStdCompat) DecodeFrom(data []byte, i int) (TimeFormatsStdCompat, int, error) {
+	var result TimeFormatsStdCompat
+	seenANSIC := false
+	seenDateOnly := false
+	seenDateTime := false
+	seenDefault := false
+	seenKitchen := false
+	seenRFC1123 := false
+	seenRFC1123Z := false
+	seenRFC3339 := false
+	seenRFC3339Nano := false
+	seenRFC822 := false
+	seenRFC822Z := false
+	seenRFC850 := false
+	seenRubyDate := false
+	seenTimeOnly := false
+	seenUnix := false
+	seenUnixDate := false
+	seenUnixMicro := false
+	seenUnixMilli := false
+	seenUnixNano := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, 0, scan.ErrBadObject
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		j := i
+		if i >= len(data) || data[i] != '"' {
+			return result, 0, scan.ErrExpectString
+		}
+		{
+			_ks := i + 1
+			_ke := _ks
+			for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+				_ke++
+			}
+			if _ke >= len(data) {
+				return result, 0, scan.ErrUnterminated
+			}
+			if data[_ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+				j = _ke + 1
+			} else {
+				_isv, _isj, _iserr := scan.String(data, i)
+				if _iserr != nil {
+					return result, 0, _iserr
+				}
+				key = _isv
+				j = _isj
+			}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) || data[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j++
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		switch len(key) {
+		case 4:
+			if key == "unix" {
+				if seenUnix {
+					return result, 0, &validation.DuplicateKeyError{Field: "unix"}
+				}
+				seenUnix = true
+				{
+					_f, _k, err := scan.Float64(data, j)
+					if err != nil {
+						return result, 0, err
+					}
+					_sec := int64(_f)
+					_nsec := int64((_f - float64(_sec)) * 1e9)
+					result.Unix = time.Unix(_sec, _nsec)
+					j = _k
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		case 5:
+			if key == "ansic" {
+				if seenANSIC {
+					return result, 0, &validation.DuplicateKeyError{Field: "ansic"}
+				}
+				seenANSIC = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.ANSIC, err = time.Parse(time.ANSIC, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		case 6:
+			switch key {
+			case "rfc822":
+				if seenRFC822 {
+					return result, 0, &validation.DuplicateKeyError{Field: "rfc822"}
+				}
+				seenRFC822 = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.RFC822, err = time.Parse(time.RFC822, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			case "rfc850":
+				if seenRFC850 {
+					return result, 0, &validation.DuplicateKeyError{Field: "rfc850"}
+				}
+				seenRFC850 = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.RFC850, err = time.Parse(time.RFC850, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			default:
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		case 7:
+			switch key {
+			case "default":
+				if seenDefault {
+					return result, 0, &validation.DuplicateKeyError{Field: "default"}
+				}
+				seenDefault = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.Default, err = time.Parse(time.RFC3339Nano, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			case "kitchen":
+				if seenKitchen {
+					return result, 0, &validation.DuplicateKeyError{Field: "kitchen"}
+				}
+				seenKitchen = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.Kitchen, err = time.Parse(time.Kitchen, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			case "rfc1123":
+				if seenRFC1123 {
+					return result, 0, &validation.DuplicateKeyError{Field: "rfc1123"}
+				}
+				seenRFC1123 = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.RFC1123, err = time.Parse(time.RFC1123, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			case "rfc3339":
+				if seenRFC3339 {
+					return result, 0, &validation.DuplicateKeyError{Field: "rfc3339"}
+				}
+				seenRFC3339 = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.RFC3339, err = time.Parse(time.RFC3339, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			case "rfc822Z":
+				if seenRFC822Z {
+					return result, 0, &validation.DuplicateKeyError{Field: "rfc822Z"}
+				}
+				seenRFC822Z = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.RFC822Z, err = time.Parse(time.RFC822Z, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			default:
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		case 8:
+			switch key {
+			case "dateOnly":
+				if seenDateOnly {
+					return result, 0, &validation.DuplicateKeyError{Field: "dateOnly"}
+				}
+				seenDateOnly = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.DateOnly, err = time.Parse(time.DateOnly, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			case "dateTime":
+				if seenDateTime {
+					return result, 0, &validation.DuplicateKeyError{Field: "dateTime"}
+				}
+				seenDateTime = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.DateTime, err = time.Parse(time.DateTime, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			case "rfc1123Z":
+				if seenRFC1123Z {
+					return result, 0, &validation.DuplicateKeyError{Field: "rfc1123Z"}
+				}
+				seenRFC1123Z = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.RFC1123Z, err = time.Parse(time.RFC1123Z, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			case "rubyDate":
+				if seenRubyDate {
+					return result, 0, &validation.DuplicateKeyError{Field: "rubyDate"}
+				}
+				seenRubyDate = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.RubyDate, err = time.Parse(time.RubyDate, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			case "timeOnly":
+				if seenTimeOnly {
+					return result, 0, &validation.DuplicateKeyError{Field: "timeOnly"}
+				}
+				seenTimeOnly = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.TimeOnly, err = time.Parse(time.TimeOnly, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			case "unixDate":
+				if seenUnixDate {
+					return result, 0, &validation.DuplicateKeyError{Field: "unixDate"}
+				}
+				seenUnixDate = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.UnixDate, err = time.Parse(time.UnixDate, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			case "unixNano":
+				if seenUnixNano {
+					return result, 0, &validation.DuplicateKeyError{Field: "unixNano"}
+				}
+				seenUnixNano = true
+				{
+					_n, _k, err := scan.Int64(data, j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.UnixNano = time.Unix(0, _n)
+					j = _k
+				}
+			default:
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		case 9:
+			switch key {
+			case "unixMicro":
+				if seenUnixMicro {
+					return result, 0, &validation.DuplicateKeyError{Field: "unixMicro"}
+				}
+				seenUnixMicro = true
+				{
+					_n, _k, err := scan.Int64(data, j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.UnixMicro = time.UnixMicro(_n)
+					j = _k
+				}
+			case "unixMilli":
+				if seenUnixMilli {
+					return result, 0, &validation.DuplicateKeyError{Field: "unixMilli"}
+				}
+				seenUnixMilli = true
+				{
+					_n, _k, err := scan.Int64(data, j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.UnixMilli = time.UnixMilli(_n)
+					j = _k
+				}
+			default:
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		case 11:
+			if key == "rfc3339Nano" {
+				if seenRFC3339Nano {
+					return result, 0, &validation.DuplicateKeyError{Field: "rfc3339Nano"}
+				}
+				seenRFC3339Nano = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.RFC3339Nano, err = time.Parse(time.RFC3339Nano, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) {
+			return result, 0, scan.ErrBadObject
+		}
+		if data[j] == ',' {
+			j++
+			i = j
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[j] == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
+// pulling bytes from a *scan.Stream. Use decode.UnmarshalStream to drive
+// it from the top level.
+func (TimeFormatsStdCompat) DecodeStreamFrom(_s *scan.Stream, i int) (TimeFormatsStdCompat, int, error) {
+	var result TimeFormatsStdCompat
+	seenANSIC := false
+	seenDateOnly := false
+	seenDateTime := false
+	seenDefault := false
+	seenKitchen := false
+	seenRFC1123 := false
+	seenRFC1123Z := false
+	seenRFC3339 := false
+	seenRFC3339Nano := false
+	seenRFC822 := false
+	seenRFC822Z := false
+	seenRFC850 := false
+	seenRubyDate := false
+	seenTimeOnly := false
+	seenUnix := false
+	seenUnixDate := false
+	seenUnixMicro := false
+	seenUnixMilli := false
+	seenUnixNano := false
+	i, err := _s.ObjectOpen(i)
+	if err != nil {
+		return result, 0, err
+	}
+	i, err = _s.SkipSpace(i)
+	if err != nil {
+		return result, 0, err
+	}
+	if i >= len(_s.Bytes()) {
+		if err = _s.ReadMore(); err != nil {
+			return result, 0, err
+		}
+	}
+	if _s.Bytes()[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		key, j, err := _s.KeyView(i)
+		if err != nil {
+			return result, 0, err
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		if _s.Bytes()[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j, err = _s.SkipSpace(j + 1)
+		if err != nil {
+			return result, 0, err
+		}
+		switch len(key) {
+		case 4:
+			if key == "unix" {
+				if seenUnix {
+					return result, 0, &validation.DuplicateKeyError{Field: "unix"}
+				}
+				seenUnix = true
+				{
+					_f, _k, err := _s.Float64(j)
+					if err != nil {
+						return result, 0, err
+					}
+					_sec := int64(_f)
+					_nsec := int64((_f - float64(_sec)) * 1e9)
+					result.Unix = time.Unix(_sec, _nsec)
+					j = _k
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		case 5:
+			if key == "ansic" {
+				if seenANSIC {
+					return result, 0, &validation.DuplicateKeyError{Field: "ansic"}
+				}
+				seenANSIC = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.ANSIC, err = time.Parse(time.ANSIC, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		case 6:
+			switch key {
+			case "rfc822":
+				if seenRFC822 {
+					return result, 0, &validation.DuplicateKeyError{Field: "rfc822"}
+				}
+				seenRFC822 = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.RFC822, err = time.Parse(time.RFC822, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			case "rfc850":
+				if seenRFC850 {
+					return result, 0, &validation.DuplicateKeyError{Field: "rfc850"}
+				}
+				seenRFC850 = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.RFC850, err = time.Parse(time.RFC850, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			default:
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		case 7:
+			switch key {
+			case "default":
+				if seenDefault {
+					return result, 0, &validation.DuplicateKeyError{Field: "default"}
+				}
+				seenDefault = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.Default, err = time.Parse(time.RFC3339Nano, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			case "kitchen":
+				if seenKitchen {
+					return result, 0, &validation.DuplicateKeyError{Field: "kitchen"}
+				}
+				seenKitchen = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.Kitchen, err = time.Parse(time.Kitchen, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			case "rfc1123":
+				if seenRFC1123 {
+					return result, 0, &validation.DuplicateKeyError{Field: "rfc1123"}
+				}
+				seenRFC1123 = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.RFC1123, err = time.Parse(time.RFC1123, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			case "rfc3339":
+				if seenRFC3339 {
+					return result, 0, &validation.DuplicateKeyError{Field: "rfc3339"}
+				}
+				seenRFC3339 = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.RFC3339, err = time.Parse(time.RFC3339, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			case "rfc822Z":
+				if seenRFC822Z {
+					return result, 0, &validation.DuplicateKeyError{Field: "rfc822Z"}
+				}
+				seenRFC822Z = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.RFC822Z, err = time.Parse(time.RFC822Z, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			default:
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		case 8:
+			switch key {
+			case "dateOnly":
+				if seenDateOnly {
+					return result, 0, &validation.DuplicateKeyError{Field: "dateOnly"}
+				}
+				seenDateOnly = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.DateOnly, err = time.Parse(time.DateOnly, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			case "dateTime":
+				if seenDateTime {
+					return result, 0, &validation.DuplicateKeyError{Field: "dateTime"}
+				}
+				seenDateTime = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.DateTime, err = time.Parse(time.DateTime, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			case "rfc1123Z":
+				if seenRFC1123Z {
+					return result, 0, &validation.DuplicateKeyError{Field: "rfc1123Z"}
+				}
+				seenRFC1123Z = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.RFC1123Z, err = time.Parse(time.RFC1123Z, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			case "rubyDate":
+				if seenRubyDate {
+					return result, 0, &validation.DuplicateKeyError{Field: "rubyDate"}
+				}
+				seenRubyDate = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.RubyDate, err = time.Parse(time.RubyDate, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			case "timeOnly":
+				if seenTimeOnly {
+					return result, 0, &validation.DuplicateKeyError{Field: "timeOnly"}
+				}
+				seenTimeOnly = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.TimeOnly, err = time.Parse(time.TimeOnly, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			case "unixDate":
+				if seenUnixDate {
+					return result, 0, &validation.DuplicateKeyError{Field: "unixDate"}
+				}
+				seenUnixDate = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.UnixDate, err = time.Parse(time.UnixDate, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			case "unixNano":
+				if seenUnixNano {
+					return result, 0, &validation.DuplicateKeyError{Field: "unixNano"}
+				}
+				seenUnixNano = true
+				{
+					_n, _k, err := _s.Int64(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.UnixNano = time.Unix(0, _n)
+					j = _k
+				}
+			default:
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		case 9:
+			switch key {
+			case "unixMicro":
+				if seenUnixMicro {
+					return result, 0, &validation.DuplicateKeyError{Field: "unixMicro"}
+				}
+				seenUnixMicro = true
+				{
+					_n, _k, err := _s.Int64(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.UnixMicro = time.UnixMicro(_n)
+					j = _k
+				}
+			case "unixMilli":
+				if seenUnixMilli {
+					return result, 0, &validation.DuplicateKeyError{Field: "unixMilli"}
+				}
+				seenUnixMilli = true
+				{
+					_n, _k, err := _s.Int64(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.UnixMilli = time.UnixMilli(_n)
+					j = _k
+				}
+			default:
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		case 11:
+			if key == "rfc3339Nano" {
+				if seenRFC3339Nano {
+					return result, 0, &validation.DuplicateKeyError{Field: "rfc3339Nano"}
+				}
+				seenRFC3339Nano = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.RFC3339Nano, err = time.Parse(time.RFC3339Nano, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		c := _s.Bytes()[j]
+		if c == ',' {
+			i = j + 1
+			i, err = _s.SkipSpace(i)
+			if err != nil {
+				return result, 0, err
+			}
+			continue
+		}
+		if c == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// JSONSize returns an upper bound on the marshaled size, used by
+// encode.Marshal to pre-size the buffer in a single allocation.
+func (s TimeFormatsStdCompat) JSONSize() int {
+	size := 755
+	return size
+}
+
+// AppendJSON appends the JSON encoding of s to dst. This is the core
+// marshal primitive; for top-level use, prefer encode.Marshal(s) /
+// encode.Write(w, s) / encode.MarshalSlice(items) from the encode package.
+func (s TimeFormatsStdCompat) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"ansic\":\""...)
+	dst = s.ANSIC.AppendFormat(dst, time.ANSIC)
+	dst = append(dst, "\",\"dateOnly\":\""...)
+	dst = s.DateOnly.AppendFormat(dst, time.DateOnly)
+	dst = append(dst, "\",\"dateTime\":\""...)
+	dst = s.DateTime.AppendFormat(dst, time.DateTime)
+	dst = append(dst, "\",\"default\":\""...)
+	dst = s.Default.AppendFormat(dst, time.RFC3339Nano)
+	dst = append(dst, "\",\"kitchen\":\""...)
+	dst = s.Kitchen.AppendFormat(dst, time.Kitchen)
+	dst = append(dst, "\",\"rfc1123\":\""...)
+	dst = s.RFC1123.AppendFormat(dst, time.RFC1123)
+	dst = append(dst, "\",\"rfc1123Z\":\""...)
+	dst = s.RFC1123Z.AppendFormat(dst, time.RFC1123Z)
+	dst = append(dst, "\",\"rfc3339\":\""...)
+	dst = s.RFC3339.AppendFormat(dst, time.RFC3339)
+	dst = append(dst, "\",\"rfc3339Nano\":\""...)
+	dst = s.RFC3339Nano.AppendFormat(dst, time.RFC3339Nano)
+	dst = append(dst, "\",\"rfc822\":\""...)
+	dst = s.RFC822.AppendFormat(dst, time.RFC822)
+	dst = append(dst, "\",\"rfc822Z\":\""...)
+	dst = s.RFC822Z.AppendFormat(dst, time.RFC822Z)
+	dst = append(dst, "\",\"rfc850\":\""...)
+	dst = s.RFC850.AppendFormat(dst, time.RFC850)
+	dst = append(dst, "\",\"rubyDate\":\""...)
+	dst = s.RubyDate.AppendFormat(dst, time.RubyDate)
+	dst = append(dst, "\",\"timeOnly\":\""...)
+	dst = s.TimeOnly.AppendFormat(dst, time.TimeOnly)
+	dst = append(dst, "\",\"unix\":"...)
+	dst = strconv.AppendFloat(dst, float64(s.Unix.UnixNano())/1e9, 'f', -1, 64)
+	dst = append(dst, ",\"unixDate\":\""...)
+	dst = s.UnixDate.AppendFormat(dst, time.UnixDate)
+	dst = append(dst, "\",\"unixMicro\":"...)
+	dst = strconv.AppendInt(dst, s.UnixMicro.UnixMicro(), 10)
+	dst = append(dst, ",\"unixMilli\":"...)
+	dst = strconv.AppendInt(dst, s.UnixMilli.UnixMilli(), 10)
+	dst = append(dst, ",\"unixNano\":"...)
+	dst = strconv.AppendInt(dst, s.UnixNano.UnixNano(), 10)
+	return append(dst, '}'), nil
+}
+
 // DecodeFrom decodes one richSubset out of data starting at i and returns
 // the decoded value, the position past the last consumed byte, and any
 // error. Strings inside the returned value alias data via unsafe.String —
@@ -1696,5 +7341,3319 @@ func (s base32Wrap) AppendJSON(dst []byte) ([]byte, error) {
 	dst = append(dst, "{\"b\":\""...)
 	dst = base32.StdEncoding.AppendEncode(dst, s.B)
 	dst = append(dst, '"')
+	return append(dst, '}'), nil
+}
+
+// DecodeFrom decodes one TimeLayout out of data starting at i and returns
+// the decoded value, the position past the last consumed byte, and any
+// error. Strings inside the returned value alias data via unsafe.String —
+// callers MUST NOT mutate data while the value is in use.
+//
+// For top-level use, prefer decode.Unmarshal[TimeLayout](data) (or
+// decode.UnmarshalSlice / Read / UnmarshalStream variants from the
+// decode package) — those are convenience wrappers around DecodeFrom.
+func (TimeLayout) DecodeFrom(data []byte, i int) (TimeLayout, int, error) {
+	var result TimeLayout
+	seenLayout := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, 0, scan.ErrBadObject
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		j := i
+		if i >= len(data) || data[i] != '"' {
+			return result, 0, scan.ErrExpectString
+		}
+		{
+			_ks := i + 1
+			_ke := _ks
+			for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+				_ke++
+			}
+			if _ke >= len(data) {
+				return result, 0, scan.ErrUnterminated
+			}
+			if data[_ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+				j = _ke + 1
+			} else {
+				_isv, _isj, _iserr := scan.String(data, i)
+				if _iserr != nil {
+					return result, 0, _iserr
+				}
+				key = _isv
+				j = _isj
+			}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) || data[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j++
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		switch len(key) {
+		case 6:
+			if key == "layout" {
+				if seenLayout {
+					return result, 0, &validation.DuplicateKeyError{Field: "layout"}
+				}
+				seenLayout = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.Layout, err = time.Parse(time.Layout, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) {
+			return result, 0, scan.ErrBadObject
+		}
+		if data[j] == ',' {
+			j++
+			i = j
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[j] == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
+// pulling bytes from a *scan.Stream. Use decode.UnmarshalStream to drive
+// it from the top level.
+func (TimeLayout) DecodeStreamFrom(_s *scan.Stream, i int) (TimeLayout, int, error) {
+	var result TimeLayout
+	seenLayout := false
+	i, err := _s.ObjectOpen(i)
+	if err != nil {
+		return result, 0, err
+	}
+	i, err = _s.SkipSpace(i)
+	if err != nil {
+		return result, 0, err
+	}
+	if i >= len(_s.Bytes()) {
+		if err = _s.ReadMore(); err != nil {
+			return result, 0, err
+		}
+	}
+	if _s.Bytes()[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		key, j, err := _s.KeyView(i)
+		if err != nil {
+			return result, 0, err
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		if _s.Bytes()[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j, err = _s.SkipSpace(j + 1)
+		if err != nil {
+			return result, 0, err
+		}
+		switch len(key) {
+		case 6:
+			if key == "layout" {
+				if seenLayout {
+					return result, 0, &validation.DuplicateKeyError{Field: "layout"}
+				}
+				seenLayout = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.Layout, err = time.Parse(time.Layout, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		c := _s.Bytes()[j]
+		if c == ',' {
+			i = j + 1
+			i, err = _s.SkipSpace(i)
+			if err != nil {
+				return result, 0, err
+			}
+			continue
+		}
+		if c == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// JSONSize returns an upper bound on the marshaled size, used by
+// encode.Marshal to pre-size the buffer in a single allocation.
+func (s TimeLayout) JSONSize() int {
+	size := 103
+	return size
+}
+
+// AppendJSON appends the JSON encoding of s to dst. This is the core
+// marshal primitive; for top-level use, prefer encode.Marshal(s) /
+// encode.Write(w, s) / encode.MarshalSlice(items) from the encode package.
+func (s TimeLayout) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"layout\":\""...)
+	dst = s.Layout.AppendFormat(dst, time.Layout)
+	return append(dst, "\"}"...), nil
+}
+
+// DecodeFrom decodes one TimeStamp out of data starting at i and returns
+// the decoded value, the position past the last consumed byte, and any
+// error. Strings inside the returned value alias data via unsafe.String —
+// callers MUST NOT mutate data while the value is in use.
+//
+// For top-level use, prefer decode.Unmarshal[TimeStamp](data) (or
+// decode.UnmarshalSlice / Read / UnmarshalStream variants from the
+// decode package) — those are convenience wrappers around DecodeFrom.
+func (TimeStamp) DecodeFrom(data []byte, i int) (TimeStamp, int, error) {
+	var result TimeStamp
+	seenStamp := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, 0, scan.ErrBadObject
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		j := i
+		if i >= len(data) || data[i] != '"' {
+			return result, 0, scan.ErrExpectString
+		}
+		{
+			_ks := i + 1
+			_ke := _ks
+			for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+				_ke++
+			}
+			if _ke >= len(data) {
+				return result, 0, scan.ErrUnterminated
+			}
+			if data[_ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+				j = _ke + 1
+			} else {
+				_isv, _isj, _iserr := scan.String(data, i)
+				if _iserr != nil {
+					return result, 0, _iserr
+				}
+				key = _isv
+				j = _isj
+			}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) || data[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j++
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		switch len(key) {
+		case 5:
+			if key == "stamp" {
+				if seenStamp {
+					return result, 0, &validation.DuplicateKeyError{Field: "stamp"}
+				}
+				seenStamp = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.Stamp, err = time.Parse(time.Stamp, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) {
+			return result, 0, scan.ErrBadObject
+		}
+		if data[j] == ',' {
+			j++
+			i = j
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[j] == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
+// pulling bytes from a *scan.Stream. Use decode.UnmarshalStream to drive
+// it from the top level.
+func (TimeStamp) DecodeStreamFrom(_s *scan.Stream, i int) (TimeStamp, int, error) {
+	var result TimeStamp
+	seenStamp := false
+	i, err := _s.ObjectOpen(i)
+	if err != nil {
+		return result, 0, err
+	}
+	i, err = _s.SkipSpace(i)
+	if err != nil {
+		return result, 0, err
+	}
+	if i >= len(_s.Bytes()) {
+		if err = _s.ReadMore(); err != nil {
+			return result, 0, err
+		}
+	}
+	if _s.Bytes()[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		key, j, err := _s.KeyView(i)
+		if err != nil {
+			return result, 0, err
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		if _s.Bytes()[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j, err = _s.SkipSpace(j + 1)
+		if err != nil {
+			return result, 0, err
+		}
+		switch len(key) {
+		case 5:
+			if key == "stamp" {
+				if seenStamp {
+					return result, 0, &validation.DuplicateKeyError{Field: "stamp"}
+				}
+				seenStamp = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.Stamp, err = time.Parse(time.Stamp, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		c := _s.Bytes()[j]
+		if c == ',' {
+			i = j + 1
+			i, err = _s.SkipSpace(i)
+			if err != nil {
+				return result, 0, err
+			}
+			continue
+		}
+		if c == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// JSONSize returns an upper bound on the marshaled size, used by
+// encode.Marshal to pre-size the buffer in a single allocation.
+func (s TimeStamp) JSONSize() int {
+	size := 91
+	return size
+}
+
+// AppendJSON appends the JSON encoding of s to dst. This is the core
+// marshal primitive; for top-level use, prefer encode.Marshal(s) /
+// encode.Write(w, s) / encode.MarshalSlice(items) from the encode package.
+func (s TimeStamp) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"stamp\":\""...)
+	dst = s.Stamp.AppendFormat(dst, time.Stamp)
+	return append(dst, "\"}"...), nil
+}
+
+// DecodeFrom decodes one TimeStampMilli out of data starting at i and returns
+// the decoded value, the position past the last consumed byte, and any
+// error. Strings inside the returned value alias data via unsafe.String —
+// callers MUST NOT mutate data while the value is in use.
+//
+// For top-level use, prefer decode.Unmarshal[TimeStampMilli](data) (or
+// decode.UnmarshalSlice / Read / UnmarshalStream variants from the
+// decode package) — those are convenience wrappers around DecodeFrom.
+func (TimeStampMilli) DecodeFrom(data []byte, i int) (TimeStampMilli, int, error) {
+	var result TimeStampMilli
+	seenStampMilli := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, 0, scan.ErrBadObject
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		j := i
+		if i >= len(data) || data[i] != '"' {
+			return result, 0, scan.ErrExpectString
+		}
+		{
+			_ks := i + 1
+			_ke := _ks
+			for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+				_ke++
+			}
+			if _ke >= len(data) {
+				return result, 0, scan.ErrUnterminated
+			}
+			if data[_ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+				j = _ke + 1
+			} else {
+				_isv, _isj, _iserr := scan.String(data, i)
+				if _iserr != nil {
+					return result, 0, _iserr
+				}
+				key = _isv
+				j = _isj
+			}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) || data[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j++
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		switch len(key) {
+		case 10:
+			if key == "stampMilli" {
+				if seenStampMilli {
+					return result, 0, &validation.DuplicateKeyError{Field: "stampMilli"}
+				}
+				seenStampMilli = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.StampMilli, err = time.Parse(time.StampMilli, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) {
+			return result, 0, scan.ErrBadObject
+		}
+		if data[j] == ',' {
+			j++
+			i = j
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[j] == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
+// pulling bytes from a *scan.Stream. Use decode.UnmarshalStream to drive
+// it from the top level.
+func (TimeStampMilli) DecodeStreamFrom(_s *scan.Stream, i int) (TimeStampMilli, int, error) {
+	var result TimeStampMilli
+	seenStampMilli := false
+	i, err := _s.ObjectOpen(i)
+	if err != nil {
+		return result, 0, err
+	}
+	i, err = _s.SkipSpace(i)
+	if err != nil {
+		return result, 0, err
+	}
+	if i >= len(_s.Bytes()) {
+		if err = _s.ReadMore(); err != nil {
+			return result, 0, err
+		}
+	}
+	if _s.Bytes()[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		key, j, err := _s.KeyView(i)
+		if err != nil {
+			return result, 0, err
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		if _s.Bytes()[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j, err = _s.SkipSpace(j + 1)
+		if err != nil {
+			return result, 0, err
+		}
+		switch len(key) {
+		case 10:
+			if key == "stampMilli" {
+				if seenStampMilli {
+					return result, 0, &validation.DuplicateKeyError{Field: "stampMilli"}
+				}
+				seenStampMilli = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.StampMilli, err = time.Parse(time.StampMilli, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		c := _s.Bytes()[j]
+		if c == ',' {
+			i = j + 1
+			i, err = _s.SkipSpace(i)
+			if err != nil {
+				return result, 0, err
+			}
+			continue
+		}
+		if c == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// JSONSize returns an upper bound on the marshaled size, used by
+// encode.Marshal to pre-size the buffer in a single allocation.
+func (s TimeStampMilli) JSONSize() int {
+	size := 100
+	return size
+}
+
+// AppendJSON appends the JSON encoding of s to dst. This is the core
+// marshal primitive; for top-level use, prefer encode.Marshal(s) /
+// encode.Write(w, s) / encode.MarshalSlice(items) from the encode package.
+func (s TimeStampMilli) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"stampMilli\":\""...)
+	dst = s.StampMilli.AppendFormat(dst, time.StampMilli)
+	return append(dst, "\"}"...), nil
+}
+
+// DecodeFrom decodes one TimeStampMicro out of data starting at i and returns
+// the decoded value, the position past the last consumed byte, and any
+// error. Strings inside the returned value alias data via unsafe.String —
+// callers MUST NOT mutate data while the value is in use.
+//
+// For top-level use, prefer decode.Unmarshal[TimeStampMicro](data) (or
+// decode.UnmarshalSlice / Read / UnmarshalStream variants from the
+// decode package) — those are convenience wrappers around DecodeFrom.
+func (TimeStampMicro) DecodeFrom(data []byte, i int) (TimeStampMicro, int, error) {
+	var result TimeStampMicro
+	seenStampMicro := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, 0, scan.ErrBadObject
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		j := i
+		if i >= len(data) || data[i] != '"' {
+			return result, 0, scan.ErrExpectString
+		}
+		{
+			_ks := i + 1
+			_ke := _ks
+			for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+				_ke++
+			}
+			if _ke >= len(data) {
+				return result, 0, scan.ErrUnterminated
+			}
+			if data[_ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+				j = _ke + 1
+			} else {
+				_isv, _isj, _iserr := scan.String(data, i)
+				if _iserr != nil {
+					return result, 0, _iserr
+				}
+				key = _isv
+				j = _isj
+			}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) || data[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j++
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		switch len(key) {
+		case 10:
+			if key == "stampMicro" {
+				if seenStampMicro {
+					return result, 0, &validation.DuplicateKeyError{Field: "stampMicro"}
+				}
+				seenStampMicro = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.StampMicro, err = time.Parse(time.StampMicro, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) {
+			return result, 0, scan.ErrBadObject
+		}
+		if data[j] == ',' {
+			j++
+			i = j
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[j] == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
+// pulling bytes from a *scan.Stream. Use decode.UnmarshalStream to drive
+// it from the top level.
+func (TimeStampMicro) DecodeStreamFrom(_s *scan.Stream, i int) (TimeStampMicro, int, error) {
+	var result TimeStampMicro
+	seenStampMicro := false
+	i, err := _s.ObjectOpen(i)
+	if err != nil {
+		return result, 0, err
+	}
+	i, err = _s.SkipSpace(i)
+	if err != nil {
+		return result, 0, err
+	}
+	if i >= len(_s.Bytes()) {
+		if err = _s.ReadMore(); err != nil {
+			return result, 0, err
+		}
+	}
+	if _s.Bytes()[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		key, j, err := _s.KeyView(i)
+		if err != nil {
+			return result, 0, err
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		if _s.Bytes()[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j, err = _s.SkipSpace(j + 1)
+		if err != nil {
+			return result, 0, err
+		}
+		switch len(key) {
+		case 10:
+			if key == "stampMicro" {
+				if seenStampMicro {
+					return result, 0, &validation.DuplicateKeyError{Field: "stampMicro"}
+				}
+				seenStampMicro = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.StampMicro, err = time.Parse(time.StampMicro, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		c := _s.Bytes()[j]
+		if c == ',' {
+			i = j + 1
+			i, err = _s.SkipSpace(i)
+			if err != nil {
+				return result, 0, err
+			}
+			continue
+		}
+		if c == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// JSONSize returns an upper bound on the marshaled size, used by
+// encode.Marshal to pre-size the buffer in a single allocation.
+func (s TimeStampMicro) JSONSize() int {
+	size := 103
+	return size
+}
+
+// AppendJSON appends the JSON encoding of s to dst. This is the core
+// marshal primitive; for top-level use, prefer encode.Marshal(s) /
+// encode.Write(w, s) / encode.MarshalSlice(items) from the encode package.
+func (s TimeStampMicro) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"stampMicro\":\""...)
+	dst = s.StampMicro.AppendFormat(dst, time.StampMicro)
+	return append(dst, "\"}"...), nil
+}
+
+// DecodeFrom decodes one TimeStampNano out of data starting at i and returns
+// the decoded value, the position past the last consumed byte, and any
+// error. Strings inside the returned value alias data via unsafe.String —
+// callers MUST NOT mutate data while the value is in use.
+//
+// For top-level use, prefer decode.Unmarshal[TimeStampNano](data) (or
+// decode.UnmarshalSlice / Read / UnmarshalStream variants from the
+// decode package) — those are convenience wrappers around DecodeFrom.
+func (TimeStampNano) DecodeFrom(data []byte, i int) (TimeStampNano, int, error) {
+	var result TimeStampNano
+	seenStampNano := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, 0, scan.ErrBadObject
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		j := i
+		if i >= len(data) || data[i] != '"' {
+			return result, 0, scan.ErrExpectString
+		}
+		{
+			_ks := i + 1
+			_ke := _ks
+			for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+				_ke++
+			}
+			if _ke >= len(data) {
+				return result, 0, scan.ErrUnterminated
+			}
+			if data[_ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+				j = _ke + 1
+			} else {
+				_isv, _isj, _iserr := scan.String(data, i)
+				if _iserr != nil {
+					return result, 0, _iserr
+				}
+				key = _isv
+				j = _isj
+			}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) || data[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j++
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		switch len(key) {
+		case 9:
+			if key == "stampNano" {
+				if seenStampNano {
+					return result, 0, &validation.DuplicateKeyError{Field: "stampNano"}
+				}
+				seenStampNano = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.StampNano, err = time.Parse(time.StampNano, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) {
+			return result, 0, scan.ErrBadObject
+		}
+		if data[j] == ',' {
+			j++
+			i = j
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[j] == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
+// pulling bytes from a *scan.Stream. Use decode.UnmarshalStream to drive
+// it from the top level.
+func (TimeStampNano) DecodeStreamFrom(_s *scan.Stream, i int) (TimeStampNano, int, error) {
+	var result TimeStampNano
+	seenStampNano := false
+	i, err := _s.ObjectOpen(i)
+	if err != nil {
+		return result, 0, err
+	}
+	i, err = _s.SkipSpace(i)
+	if err != nil {
+		return result, 0, err
+	}
+	if i >= len(_s.Bytes()) {
+		if err = _s.ReadMore(); err != nil {
+			return result, 0, err
+		}
+	}
+	if _s.Bytes()[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		key, j, err := _s.KeyView(i)
+		if err != nil {
+			return result, 0, err
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		if _s.Bytes()[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j, err = _s.SkipSpace(j + 1)
+		if err != nil {
+			return result, 0, err
+		}
+		switch len(key) {
+		case 9:
+			if key == "stampNano" {
+				if seenStampNano {
+					return result, 0, &validation.DuplicateKeyError{Field: "stampNano"}
+				}
+				seenStampNano = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.StampNano, err = time.Parse(time.StampNano, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		c := _s.Bytes()[j]
+		if c == ',' {
+			i = j + 1
+			i, err = _s.SkipSpace(i)
+			if err != nil {
+				return result, 0, err
+			}
+			continue
+		}
+		if c == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// JSONSize returns an upper bound on the marshaled size, used by
+// encode.Marshal to pre-size the buffer in a single allocation.
+func (s TimeStampNano) JSONSize() int {
+	size := 105
+	return size
+}
+
+// AppendJSON appends the JSON encoding of s to dst. This is the core
+// marshal primitive; for top-level use, prefer encode.Marshal(s) /
+// encode.Write(w, s) / encode.MarshalSlice(items) from the encode package.
+func (s TimeStampNano) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"stampNano\":\""...)
+	dst = s.StampNano.AppendFormat(dst, time.StampNano)
+	return append(dst, "\"}"...), nil
+}
+
+// DecodeFrom decodes one TimeCustomTiny out of data starting at i and returns
+// the decoded value, the position past the last consumed byte, and any
+// error. Strings inside the returned value alias data via unsafe.String —
+// callers MUST NOT mutate data while the value is in use.
+//
+// For top-level use, prefer decode.Unmarshal[TimeCustomTiny](data) (or
+// decode.UnmarshalSlice / Read / UnmarshalStream variants from the
+// decode package) — those are convenience wrappers around DecodeFrom.
+func (TimeCustomTiny) DecodeFrom(data []byte, i int) (TimeCustomTiny, int, error) {
+	var result TimeCustomTiny
+	seenCustomTiny := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, 0, scan.ErrBadObject
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		j := i
+		if i >= len(data) || data[i] != '"' {
+			return result, 0, scan.ErrExpectString
+		}
+		{
+			_ks := i + 1
+			_ke := _ks
+			for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+				_ke++
+			}
+			if _ke >= len(data) {
+				return result, 0, scan.ErrUnterminated
+			}
+			if data[_ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+				j = _ke + 1
+			} else {
+				_isv, _isj, _iserr := scan.String(data, i)
+				if _iserr != nil {
+					return result, 0, _iserr
+				}
+				key = _isv
+				j = _isj
+			}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) || data[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j++
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		switch len(key) {
+		case 10:
+			if key == "customTiny" {
+				if seenCustomTiny {
+					return result, 0, &validation.DuplicateKeyError{Field: "customTiny"}
+				}
+				seenCustomTiny = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.CustomTiny, err = time.Parse("2", _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) {
+			return result, 0, scan.ErrBadObject
+		}
+		if data[j] == ',' {
+			j++
+			i = j
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[j] == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
+// pulling bytes from a *scan.Stream. Use decode.UnmarshalStream to drive
+// it from the top level.
+func (TimeCustomTiny) DecodeStreamFrom(_s *scan.Stream, i int) (TimeCustomTiny, int, error) {
+	var result TimeCustomTiny
+	seenCustomTiny := false
+	i, err := _s.ObjectOpen(i)
+	if err != nil {
+		return result, 0, err
+	}
+	i, err = _s.SkipSpace(i)
+	if err != nil {
+		return result, 0, err
+	}
+	if i >= len(_s.Bytes()) {
+		if err = _s.ReadMore(); err != nil {
+			return result, 0, err
+		}
+	}
+	if _s.Bytes()[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		key, j, err := _s.KeyView(i)
+		if err != nil {
+			return result, 0, err
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		if _s.Bytes()[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j, err = _s.SkipSpace(j + 1)
+		if err != nil {
+			return result, 0, err
+		}
+		switch len(key) {
+		case 10:
+			if key == "customTiny" {
+				if seenCustomTiny {
+					return result, 0, &validation.DuplicateKeyError{Field: "customTiny"}
+				}
+				seenCustomTiny = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.CustomTiny, err = time.Parse("2", _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		c := _s.Bytes()[j]
+		if c == ',' {
+			i = j + 1
+			i, err = _s.SkipSpace(i)
+			if err != nil {
+				return result, 0, err
+			}
+			continue
+		}
+		if c == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// JSONSize returns an upper bound on the marshaled size, used by
+// encode.Marshal to pre-size the buffer in a single allocation.
+func (s TimeCustomTiny) JSONSize() int {
+	size := 86
+	return size
+}
+
+// AppendJSON appends the JSON encoding of s to dst. This is the core
+// marshal primitive; for top-level use, prefer encode.Marshal(s) /
+// encode.Write(w, s) / encode.MarshalSlice(items) from the encode package.
+func (s TimeCustomTiny) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"customTiny\":\""...)
+	dst = s.CustomTiny.AppendFormat(dst, "2")
+	return append(dst, "\"}"...), nil
+}
+
+// DecodeFrom decodes one TimeCustomLong out of data starting at i and returns
+// the decoded value, the position past the last consumed byte, and any
+// error. Strings inside the returned value alias data via unsafe.String —
+// callers MUST NOT mutate data while the value is in use.
+//
+// For top-level use, prefer decode.Unmarshal[TimeCustomLong](data) (or
+// decode.UnmarshalSlice / Read / UnmarshalStream variants from the
+// decode package) — those are convenience wrappers around DecodeFrom.
+func (TimeCustomLong) DecodeFrom(data []byte, i int) (TimeCustomLong, int, error) {
+	var result TimeCustomLong
+	seenCustomLong := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, 0, scan.ErrBadObject
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		j := i
+		if i >= len(data) || data[i] != '"' {
+			return result, 0, scan.ErrExpectString
+		}
+		{
+			_ks := i + 1
+			_ke := _ks
+			for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+				_ke++
+			}
+			if _ke >= len(data) {
+				return result, 0, scan.ErrUnterminated
+			}
+			if data[_ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+				j = _ke + 1
+			} else {
+				_isv, _isj, _iserr := scan.String(data, i)
+				if _iserr != nil {
+					return result, 0, _iserr
+				}
+				key = _isv
+				j = _isj
+			}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) || data[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j++
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		switch len(key) {
+		case 10:
+			if key == "customLong" {
+				if seenCustomLong {
+					return result, 0, &validation.DuplicateKeyError{Field: "customLong"}
+				}
+				seenCustomLong = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.CustomLong, err = time.Parse("2006-Jan-02T15:04:05.000000000_Mon_-0700", _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) {
+			return result, 0, scan.ErrBadObject
+		}
+		if data[j] == ',' {
+			j++
+			i = j
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[j] == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
+// pulling bytes from a *scan.Stream. Use decode.UnmarshalStream to drive
+// it from the top level.
+func (TimeCustomLong) DecodeStreamFrom(_s *scan.Stream, i int) (TimeCustomLong, int, error) {
+	var result TimeCustomLong
+	seenCustomLong := false
+	i, err := _s.ObjectOpen(i)
+	if err != nil {
+		return result, 0, err
+	}
+	i, err = _s.SkipSpace(i)
+	if err != nil {
+		return result, 0, err
+	}
+	if i >= len(_s.Bytes()) {
+		if err = _s.ReadMore(); err != nil {
+			return result, 0, err
+		}
+	}
+	if _s.Bytes()[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		key, j, err := _s.KeyView(i)
+		if err != nil {
+			return result, 0, err
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		if _s.Bytes()[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j, err = _s.SkipSpace(j + 1)
+		if err != nil {
+			return result, 0, err
+		}
+		switch len(key) {
+		case 10:
+			if key == "customLong" {
+				if seenCustomLong {
+					return result, 0, &validation.DuplicateKeyError{Field: "customLong"}
+				}
+				seenCustomLong = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.CustomLong, err = time.Parse("2006-Jan-02T15:04:05.000000000_Mon_-0700", _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		c := _s.Bytes()[j]
+		if c == ',' {
+			i = j + 1
+			i, err = _s.SkipSpace(i)
+			if err != nil {
+				return result, 0, err
+			}
+			continue
+		}
+		if c == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// JSONSize returns an upper bound on the marshaled size, used by
+// encode.Marshal to pre-size the buffer in a single allocation.
+func (s TimeCustomLong) JSONSize() int {
+	size := 125
+	return size
+}
+
+// AppendJSON appends the JSON encoding of s to dst. This is the core
+// marshal primitive; for top-level use, prefer encode.Marshal(s) /
+// encode.Write(w, s) / encode.MarshalSlice(items) from the encode package.
+func (s TimeCustomLong) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"customLong\":\""...)
+	dst = s.CustomLong.AppendFormat(dst, "2006-Jan-02T15:04:05.000000000_Mon_-0700")
+	return append(dst, "\"}"...), nil
+}
+
+// DecodeFrom decodes one TimeFormatsStruct out of data starting at i and returns
+// the decoded value, the position past the last consumed byte, and any
+// error. Strings inside the returned value alias data via unsafe.String —
+// callers MUST NOT mutate data while the value is in use.
+//
+// For top-level use, prefer decode.Unmarshal[TimeFormatsStruct](data) (or
+// decode.UnmarshalSlice / Read / UnmarshalStream variants from the
+// decode package) — those are convenience wrappers around DecodeFrom.
+func (TimeFormatsStruct) DecodeFrom(data []byte, i int) (TimeFormatsStruct, int, error) {
+	var result TimeFormatsStruct
+	seenANSIC := false
+	seenCustomLong := false
+	seenCustomTiny := false
+	seenDateOnly := false
+	seenDateTime := false
+	seenDefault := false
+	seenKitchen := false
+	seenLayout := false
+	seenRFC1123 := false
+	seenRFC1123Z := false
+	seenRFC3339 := false
+	seenRFC3339Nano := false
+	seenRFC822 := false
+	seenRFC822Z := false
+	seenRFC850 := false
+	seenRubyDate := false
+	seenStamp := false
+	seenStampMicro := false
+	seenStampMilli := false
+	seenStampNano := false
+	seenTimeOnly := false
+	seenUnix := false
+	seenUnixDate := false
+	seenUnixMicro := false
+	seenUnixMilli := false
+	seenUnixNano := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, 0, scan.ErrBadObject
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		j := i
+		if i >= len(data) || data[i] != '"' {
+			return result, 0, scan.ErrExpectString
+		}
+		{
+			_ks := i + 1
+			_ke := _ks
+			for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+				_ke++
+			}
+			if _ke >= len(data) {
+				return result, 0, scan.ErrUnterminated
+			}
+			if data[_ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+				j = _ke + 1
+			} else {
+				_isv, _isj, _iserr := scan.String(data, i)
+				if _iserr != nil {
+					return result, 0, _iserr
+				}
+				key = _isv
+				j = _isj
+			}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) || data[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j++
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		switch len(key) {
+		case 4:
+			if key == "unix" {
+				if seenUnix {
+					return result, 0, &validation.DuplicateKeyError{Field: "unix"}
+				}
+				seenUnix = true
+				{
+					_f, _k, err := scan.Float64(data, j)
+					if err != nil {
+						return result, 0, err
+					}
+					_sec := int64(_f)
+					_nsec := int64((_f - float64(_sec)) * 1e9)
+					result.Unix = time.Unix(_sec, _nsec)
+					j = _k
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		case 5:
+			switch key {
+			case "ansic":
+				if seenANSIC {
+					return result, 0, &validation.DuplicateKeyError{Field: "ansic"}
+				}
+				seenANSIC = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.ANSIC, err = time.Parse(time.ANSIC, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			case "stamp":
+				if seenStamp {
+					return result, 0, &validation.DuplicateKeyError{Field: "stamp"}
+				}
+				seenStamp = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.Stamp, err = time.Parse(time.Stamp, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			default:
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		case 6:
+			switch key {
+			case "layout":
+				if seenLayout {
+					return result, 0, &validation.DuplicateKeyError{Field: "layout"}
+				}
+				seenLayout = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.Layout, err = time.Parse(time.Layout, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			case "rfc822":
+				if seenRFC822 {
+					return result, 0, &validation.DuplicateKeyError{Field: "rfc822"}
+				}
+				seenRFC822 = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.RFC822, err = time.Parse(time.RFC822, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			case "rfc850":
+				if seenRFC850 {
+					return result, 0, &validation.DuplicateKeyError{Field: "rfc850"}
+				}
+				seenRFC850 = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.RFC850, err = time.Parse(time.RFC850, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			default:
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		case 7:
+			switch key {
+			case "default":
+				if seenDefault {
+					return result, 0, &validation.DuplicateKeyError{Field: "default"}
+				}
+				seenDefault = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.Default, err = time.Parse(time.RFC3339Nano, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			case "kitchen":
+				if seenKitchen {
+					return result, 0, &validation.DuplicateKeyError{Field: "kitchen"}
+				}
+				seenKitchen = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.Kitchen, err = time.Parse(time.Kitchen, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			case "rfc1123":
+				if seenRFC1123 {
+					return result, 0, &validation.DuplicateKeyError{Field: "rfc1123"}
+				}
+				seenRFC1123 = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.RFC1123, err = time.Parse(time.RFC1123, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			case "rfc3339":
+				if seenRFC3339 {
+					return result, 0, &validation.DuplicateKeyError{Field: "rfc3339"}
+				}
+				seenRFC3339 = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.RFC3339, err = time.Parse(time.RFC3339, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			case "rfc822Z":
+				if seenRFC822Z {
+					return result, 0, &validation.DuplicateKeyError{Field: "rfc822Z"}
+				}
+				seenRFC822Z = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.RFC822Z, err = time.Parse(time.RFC822Z, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			default:
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		case 8:
+			switch key {
+			case "dateOnly":
+				if seenDateOnly {
+					return result, 0, &validation.DuplicateKeyError{Field: "dateOnly"}
+				}
+				seenDateOnly = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.DateOnly, err = time.Parse(time.DateOnly, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			case "dateTime":
+				if seenDateTime {
+					return result, 0, &validation.DuplicateKeyError{Field: "dateTime"}
+				}
+				seenDateTime = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.DateTime, err = time.Parse(time.DateTime, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			case "rfc1123Z":
+				if seenRFC1123Z {
+					return result, 0, &validation.DuplicateKeyError{Field: "rfc1123Z"}
+				}
+				seenRFC1123Z = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.RFC1123Z, err = time.Parse(time.RFC1123Z, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			case "rubyDate":
+				if seenRubyDate {
+					return result, 0, &validation.DuplicateKeyError{Field: "rubyDate"}
+				}
+				seenRubyDate = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.RubyDate, err = time.Parse(time.RubyDate, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			case "timeOnly":
+				if seenTimeOnly {
+					return result, 0, &validation.DuplicateKeyError{Field: "timeOnly"}
+				}
+				seenTimeOnly = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.TimeOnly, err = time.Parse(time.TimeOnly, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			case "unixDate":
+				if seenUnixDate {
+					return result, 0, &validation.DuplicateKeyError{Field: "unixDate"}
+				}
+				seenUnixDate = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.UnixDate, err = time.Parse(time.UnixDate, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			case "unixNano":
+				if seenUnixNano {
+					return result, 0, &validation.DuplicateKeyError{Field: "unixNano"}
+				}
+				seenUnixNano = true
+				{
+					_n, _k, err := scan.Int64(data, j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.UnixNano = time.Unix(0, _n)
+					j = _k
+				}
+			default:
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		case 9:
+			switch key {
+			case "stampNano":
+				if seenStampNano {
+					return result, 0, &validation.DuplicateKeyError{Field: "stampNano"}
+				}
+				seenStampNano = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.StampNano, err = time.Parse(time.StampNano, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			case "unixMicro":
+				if seenUnixMicro {
+					return result, 0, &validation.DuplicateKeyError{Field: "unixMicro"}
+				}
+				seenUnixMicro = true
+				{
+					_n, _k, err := scan.Int64(data, j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.UnixMicro = time.UnixMicro(_n)
+					j = _k
+				}
+			case "unixMilli":
+				if seenUnixMilli {
+					return result, 0, &validation.DuplicateKeyError{Field: "unixMilli"}
+				}
+				seenUnixMilli = true
+				{
+					_n, _k, err := scan.Int64(data, j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.UnixMilli = time.UnixMilli(_n)
+					j = _k
+				}
+			default:
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		case 10:
+			switch key {
+			case "customLong":
+				if seenCustomLong {
+					return result, 0, &validation.DuplicateKeyError{Field: "customLong"}
+				}
+				seenCustomLong = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.CustomLong, err = time.Parse("2006-Jan-02T15:04:05.000000000_Mon_-0700", _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			case "customTiny":
+				if seenCustomTiny {
+					return result, 0, &validation.DuplicateKeyError{Field: "customTiny"}
+				}
+				seenCustomTiny = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.CustomTiny, err = time.Parse("2", _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			case "stampMicro":
+				if seenStampMicro {
+					return result, 0, &validation.DuplicateKeyError{Field: "stampMicro"}
+				}
+				seenStampMicro = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.StampMicro, err = time.Parse(time.StampMicro, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			case "stampMilli":
+				if seenStampMilli {
+					return result, 0, &validation.DuplicateKeyError{Field: "stampMilli"}
+				}
+				seenStampMilli = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.StampMilli, err = time.Parse(time.StampMilli, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			default:
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		case 11:
+			if key == "rfc3339Nano" {
+				if seenRFC3339Nano {
+					return result, 0, &validation.DuplicateKeyError{Field: "rfc3339Nano"}
+				}
+				seenRFC3339Nano = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					var err error
+					result.RFC3339Nano, err = time.Parse(time.RFC3339Nano, _s)
+					if err != nil {
+						return result, 0, err
+					}
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) {
+			return result, 0, scan.ErrBadObject
+		}
+		if data[j] == ',' {
+			j++
+			i = j
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[j] == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
+// pulling bytes from a *scan.Stream. Use decode.UnmarshalStream to drive
+// it from the top level.
+func (TimeFormatsStruct) DecodeStreamFrom(_s *scan.Stream, i int) (TimeFormatsStruct, int, error) {
+	var result TimeFormatsStruct
+	seenANSIC := false
+	seenCustomLong := false
+	seenCustomTiny := false
+	seenDateOnly := false
+	seenDateTime := false
+	seenDefault := false
+	seenKitchen := false
+	seenLayout := false
+	seenRFC1123 := false
+	seenRFC1123Z := false
+	seenRFC3339 := false
+	seenRFC3339Nano := false
+	seenRFC822 := false
+	seenRFC822Z := false
+	seenRFC850 := false
+	seenRubyDate := false
+	seenStamp := false
+	seenStampMicro := false
+	seenStampMilli := false
+	seenStampNano := false
+	seenTimeOnly := false
+	seenUnix := false
+	seenUnixDate := false
+	seenUnixMicro := false
+	seenUnixMilli := false
+	seenUnixNano := false
+	i, err := _s.ObjectOpen(i)
+	if err != nil {
+		return result, 0, err
+	}
+	i, err = _s.SkipSpace(i)
+	if err != nil {
+		return result, 0, err
+	}
+	if i >= len(_s.Bytes()) {
+		if err = _s.ReadMore(); err != nil {
+			return result, 0, err
+		}
+	}
+	if _s.Bytes()[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		key, j, err := _s.KeyView(i)
+		if err != nil {
+			return result, 0, err
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		if _s.Bytes()[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j, err = _s.SkipSpace(j + 1)
+		if err != nil {
+			return result, 0, err
+		}
+		switch len(key) {
+		case 4:
+			if key == "unix" {
+				if seenUnix {
+					return result, 0, &validation.DuplicateKeyError{Field: "unix"}
+				}
+				seenUnix = true
+				{
+					_f, _k, err := _s.Float64(j)
+					if err != nil {
+						return result, 0, err
+					}
+					_sec := int64(_f)
+					_nsec := int64((_f - float64(_sec)) * 1e9)
+					result.Unix = time.Unix(_sec, _nsec)
+					j = _k
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		case 5:
+			switch key {
+			case "ansic":
+				if seenANSIC {
+					return result, 0, &validation.DuplicateKeyError{Field: "ansic"}
+				}
+				seenANSIC = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.ANSIC, err = time.Parse(time.ANSIC, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			case "stamp":
+				if seenStamp {
+					return result, 0, &validation.DuplicateKeyError{Field: "stamp"}
+				}
+				seenStamp = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.Stamp, err = time.Parse(time.Stamp, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			default:
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		case 6:
+			switch key {
+			case "layout":
+				if seenLayout {
+					return result, 0, &validation.DuplicateKeyError{Field: "layout"}
+				}
+				seenLayout = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.Layout, err = time.Parse(time.Layout, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			case "rfc822":
+				if seenRFC822 {
+					return result, 0, &validation.DuplicateKeyError{Field: "rfc822"}
+				}
+				seenRFC822 = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.RFC822, err = time.Parse(time.RFC822, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			case "rfc850":
+				if seenRFC850 {
+					return result, 0, &validation.DuplicateKeyError{Field: "rfc850"}
+				}
+				seenRFC850 = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.RFC850, err = time.Parse(time.RFC850, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			default:
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		case 7:
+			switch key {
+			case "default":
+				if seenDefault {
+					return result, 0, &validation.DuplicateKeyError{Field: "default"}
+				}
+				seenDefault = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.Default, err = time.Parse(time.RFC3339Nano, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			case "kitchen":
+				if seenKitchen {
+					return result, 0, &validation.DuplicateKeyError{Field: "kitchen"}
+				}
+				seenKitchen = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.Kitchen, err = time.Parse(time.Kitchen, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			case "rfc1123":
+				if seenRFC1123 {
+					return result, 0, &validation.DuplicateKeyError{Field: "rfc1123"}
+				}
+				seenRFC1123 = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.RFC1123, err = time.Parse(time.RFC1123, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			case "rfc3339":
+				if seenRFC3339 {
+					return result, 0, &validation.DuplicateKeyError{Field: "rfc3339"}
+				}
+				seenRFC3339 = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.RFC3339, err = time.Parse(time.RFC3339, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			case "rfc822Z":
+				if seenRFC822Z {
+					return result, 0, &validation.DuplicateKeyError{Field: "rfc822Z"}
+				}
+				seenRFC822Z = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.RFC822Z, err = time.Parse(time.RFC822Z, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			default:
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		case 8:
+			switch key {
+			case "dateOnly":
+				if seenDateOnly {
+					return result, 0, &validation.DuplicateKeyError{Field: "dateOnly"}
+				}
+				seenDateOnly = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.DateOnly, err = time.Parse(time.DateOnly, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			case "dateTime":
+				if seenDateTime {
+					return result, 0, &validation.DuplicateKeyError{Field: "dateTime"}
+				}
+				seenDateTime = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.DateTime, err = time.Parse(time.DateTime, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			case "rfc1123Z":
+				if seenRFC1123Z {
+					return result, 0, &validation.DuplicateKeyError{Field: "rfc1123Z"}
+				}
+				seenRFC1123Z = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.RFC1123Z, err = time.Parse(time.RFC1123Z, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			case "rubyDate":
+				if seenRubyDate {
+					return result, 0, &validation.DuplicateKeyError{Field: "rubyDate"}
+				}
+				seenRubyDate = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.RubyDate, err = time.Parse(time.RubyDate, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			case "timeOnly":
+				if seenTimeOnly {
+					return result, 0, &validation.DuplicateKeyError{Field: "timeOnly"}
+				}
+				seenTimeOnly = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.TimeOnly, err = time.Parse(time.TimeOnly, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			case "unixDate":
+				if seenUnixDate {
+					return result, 0, &validation.DuplicateKeyError{Field: "unixDate"}
+				}
+				seenUnixDate = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.UnixDate, err = time.Parse(time.UnixDate, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			case "unixNano":
+				if seenUnixNano {
+					return result, 0, &validation.DuplicateKeyError{Field: "unixNano"}
+				}
+				seenUnixNano = true
+				{
+					_n, _k, err := _s.Int64(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.UnixNano = time.Unix(0, _n)
+					j = _k
+				}
+			default:
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		case 9:
+			switch key {
+			case "stampNano":
+				if seenStampNano {
+					return result, 0, &validation.DuplicateKeyError{Field: "stampNano"}
+				}
+				seenStampNano = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.StampNano, err = time.Parse(time.StampNano, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			case "unixMicro":
+				if seenUnixMicro {
+					return result, 0, &validation.DuplicateKeyError{Field: "unixMicro"}
+				}
+				seenUnixMicro = true
+				{
+					_n, _k, err := _s.Int64(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.UnixMicro = time.UnixMicro(_n)
+					j = _k
+				}
+			case "unixMilli":
+				if seenUnixMilli {
+					return result, 0, &validation.DuplicateKeyError{Field: "unixMilli"}
+				}
+				seenUnixMilli = true
+				{
+					_n, _k, err := _s.Int64(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.UnixMilli = time.UnixMilli(_n)
+					j = _k
+				}
+			default:
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		case 10:
+			switch key {
+			case "customLong":
+				if seenCustomLong {
+					return result, 0, &validation.DuplicateKeyError{Field: "customLong"}
+				}
+				seenCustomLong = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.CustomLong, err = time.Parse("2006-Jan-02T15:04:05.000000000_Mon_-0700", _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			case "customTiny":
+				if seenCustomTiny {
+					return result, 0, &validation.DuplicateKeyError{Field: "customTiny"}
+				}
+				seenCustomTiny = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.CustomTiny, err = time.Parse("2", _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			case "stampMicro":
+				if seenStampMicro {
+					return result, 0, &validation.DuplicateKeyError{Field: "stampMicro"}
+				}
+				seenStampMicro = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.StampMicro, err = time.Parse(time.StampMicro, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			case "stampMilli":
+				if seenStampMilli {
+					return result, 0, &validation.DuplicateKeyError{Field: "stampMilli"}
+				}
+				seenStampMilli = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.StampMilli, err = time.Parse(time.StampMilli, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			default:
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		case 11:
+			if key == "rfc3339Nano" {
+				if seenRFC3339Nano {
+					return result, 0, &validation.DuplicateKeyError{Field: "rfc3339Nano"}
+				}
+				seenRFC3339Nano = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					result.RFC3339Nano, err = time.Parse(time.RFC3339Nano, _v)
+					if err != nil {
+						return result, 0, err
+					}
+					j = _k
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		c := _s.Bytes()[j]
+		if c == ',' {
+			i = j + 1
+			i, err = _s.SkipSpace(i)
+			if err != nil {
+				return result, 0, err
+			}
+			continue
+		}
+		if c == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// JSONSize returns an upper bound on the marshaled size, used by
+// encode.Marshal to pre-size the buffer in a single allocation.
+func (s TimeFormatsStruct) JSONSize() int {
+	size := 1013
+	return size
+}
+
+// AppendJSON appends the JSON encoding of s to dst. This is the core
+// marshal primitive; for top-level use, prefer encode.Marshal(s) /
+// encode.Write(w, s) / encode.MarshalSlice(items) from the encode package.
+func (s TimeFormatsStruct) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"ansic\":\""...)
+	dst = s.ANSIC.AppendFormat(dst, time.ANSIC)
+	dst = append(dst, "\",\"customLong\":\""...)
+	dst = s.CustomLong.AppendFormat(dst, "2006-Jan-02T15:04:05.000000000_Mon_-0700")
+	dst = append(dst, "\",\"customTiny\":\""...)
+	dst = s.CustomTiny.AppendFormat(dst, "2")
+	dst = append(dst, "\",\"dateOnly\":\""...)
+	dst = s.DateOnly.AppendFormat(dst, time.DateOnly)
+	dst = append(dst, "\",\"dateTime\":\""...)
+	dst = s.DateTime.AppendFormat(dst, time.DateTime)
+	dst = append(dst, "\",\"default\":\""...)
+	dst = s.Default.AppendFormat(dst, time.RFC3339Nano)
+	dst = append(dst, "\",\"kitchen\":\""...)
+	dst = s.Kitchen.AppendFormat(dst, time.Kitchen)
+	dst = append(dst, "\",\"layout\":\""...)
+	dst = s.Layout.AppendFormat(dst, time.Layout)
+	dst = append(dst, "\",\"rfc1123\":\""...)
+	dst = s.RFC1123.AppendFormat(dst, time.RFC1123)
+	dst = append(dst, "\",\"rfc1123Z\":\""...)
+	dst = s.RFC1123Z.AppendFormat(dst, time.RFC1123Z)
+	dst = append(dst, "\",\"rfc3339\":\""...)
+	dst = s.RFC3339.AppendFormat(dst, time.RFC3339)
+	dst = append(dst, "\",\"rfc3339Nano\":\""...)
+	dst = s.RFC3339Nano.AppendFormat(dst, time.RFC3339Nano)
+	dst = append(dst, "\",\"rfc822\":\""...)
+	dst = s.RFC822.AppendFormat(dst, time.RFC822)
+	dst = append(dst, "\",\"rfc822Z\":\""...)
+	dst = s.RFC822Z.AppendFormat(dst, time.RFC822Z)
+	dst = append(dst, "\",\"rfc850\":\""...)
+	dst = s.RFC850.AppendFormat(dst, time.RFC850)
+	dst = append(dst, "\",\"rubyDate\":\""...)
+	dst = s.RubyDate.AppendFormat(dst, time.RubyDate)
+	dst = append(dst, "\",\"stamp\":\""...)
+	dst = s.Stamp.AppendFormat(dst, time.Stamp)
+	dst = append(dst, "\",\"stampMicro\":\""...)
+	dst = s.StampMicro.AppendFormat(dst, time.StampMicro)
+	dst = append(dst, "\",\"stampMilli\":\""...)
+	dst = s.StampMilli.AppendFormat(dst, time.StampMilli)
+	dst = append(dst, "\",\"stampNano\":\""...)
+	dst = s.StampNano.AppendFormat(dst, time.StampNano)
+	dst = append(dst, "\",\"timeOnly\":\""...)
+	dst = s.TimeOnly.AppendFormat(dst, time.TimeOnly)
+	dst = append(dst, "\",\"unix\":"...)
+	dst = strconv.AppendFloat(dst, float64(s.Unix.UnixNano())/1e9, 'f', -1, 64)
+	dst = append(dst, ",\"unixDate\":\""...)
+	dst = s.UnixDate.AppendFormat(dst, time.UnixDate)
+	dst = append(dst, "\",\"unixMicro\":"...)
+	dst = strconv.AppendInt(dst, s.UnixMicro.UnixMicro(), 10)
+	dst = append(dst, ",\"unixMilli\":"...)
+	dst = strconv.AppendInt(dst, s.UnixMilli.UnixMilli(), 10)
+	dst = append(dst, ",\"unixNano\":"...)
+	dst = strconv.AppendInt(dst, s.UnixNano.UnixNano(), 10)
 	return append(dst, '}'), nil
 }

@@ -259,6 +259,50 @@ func TestFormat_DurationUnitsParseable(t *testing.T) {
 	}
 }
 
+// TestFormat_AllTimeLayouts pins wire shape for every supported time
+// format in one shot. Numeric `unix*` variants must emit bare digits
+// (no quotes); every other layout must emit a quoted string whose
+// content time.Parse can read back when given the same layout.
+func TestFormat_AllTimeLayouts(t *testing.T) {
+	out, _ := encode.Marshal(timeFormatsAll())
+	got := objectKeys(t, out)
+
+	// All numeric formats must be unquoted JSON numbers. `unix`
+	// permits a fractional decimal (matches jsonv2 — emits float when
+	// nanos != 0); the others are integer-granular at their unit.
+	intNumericFields := []string{"unixMilli", "unixMicro", "unixNano"}
+	for _, k := range intNumericFields {
+		v := got[k]
+		if len(v) == 0 || v[0] == '"' {
+			t.Errorf("%s must be a JSON number, got: %s", k, v)
+		}
+		if _, err := strconv.ParseInt(string(v), 10, 64); err != nil {
+			t.Errorf("%s: ParseInt %q: %v", k, v, err)
+		}
+	}
+	if v := got["unix"]; len(v) == 0 || v[0] == '"' {
+		t.Errorf("unix must be a JSON number, got: %s", v)
+	} else if _, err := strconv.ParseFloat(string(v), 64); err != nil {
+		t.Errorf("unix: ParseFloat %q: %v", v, err)
+	}
+
+	// All other fields must be quoted strings.
+	stringFields := []string{
+		"default", "layout", "ansic", "unixDate", "rubyDate",
+		"rfc822", "rfc822Z", "rfc850", "rfc1123", "rfc1123Z",
+		"rfc3339", "rfc3339Nano", "kitchen",
+		"stamp", "stampMilli", "stampMicro", "stampNano",
+		"dateTime", "dateOnly", "timeOnly",
+		"customTiny", "customLong",
+	}
+	for _, k := range stringFields {
+		v := got[k]
+		if len(v) < 2 || v[0] != '"' || v[len(v)-1] != '"' {
+			t.Errorf("%s must be a quoted JSON string, got: %s", k, v)
+		}
+	}
+}
+
 // TestFormat_NetIPParseable: net.IP / netip.Addr / netip.Prefix all emit
 // quoted strings the corresponding parser accepts.
 func TestFormat_NetIPParseable(t *testing.T) {
@@ -600,5 +644,88 @@ func TestWideStruct_BitmaskSeenFlags(t *testing.T) {
 	_, err = decode.Unmarshal[WideStruct]([]byte(`{"f1":"a","f1":"b"}`))
 	if err == nil {
 		t.Fatal("expected DuplicateKeyError on repeated key, got nil")
+	}
+}
+
+// --- jsonv2-incompatible time formats. Each is a single-field type so
+// TimeFormatsStruct can embed them alongside the stdcompat-friendly
+// set (defined in stdcompat_test.go) via Go's anonymous-field promotion.
+// Excluded from cross-compat because jsonv2's format-tag parser rejects
+// them; pulled into wire-shape + JSONSize budget coverage here.
+
+//ggen:generate
+type TimeLayout struct {
+	Layout time.Time `json:"layout,format:Layout"`
+}
+
+//ggen:generate
+type TimeStamp struct {
+	Stamp time.Time `json:"stamp,format:Stamp"`
+}
+
+//ggen:generate
+type TimeStampMilli struct {
+	StampMilli time.Time `json:"stampMilli,format:StampMilli"`
+}
+
+//ggen:generate
+type TimeStampMicro struct {
+	StampMicro time.Time `json:"stampMicro,format:StampMicro"`
+}
+
+//ggen:generate
+type TimeStampNano struct {
+	StampNano time.Time `json:"stampNano,format:StampNano"`
+}
+
+// Custom layouts exercise the `len(format)+6` fallback in
+// timeFormatSize. Tiny output (smallest realistic format string) + a
+// verbose layout with literals and high-resolution fractional seconds.
+
+//ggen:generate
+type TimeCustomTiny struct {
+	CustomTiny time.Time `json:"customTiny,format:'2'"`
+}
+
+//ggen:generate
+type TimeCustomLong struct {
+	CustomLong time.Time `json:"customLong,format:'2006-Jan-02T15:04:05.000000000_Mon_-0700'"`
+}
+
+// TimeFormatsStruct is TimeFormatsStdCompat (jsonv2-friendly subset,
+// defined in stdcompat_test.go) plus the jsonv2-rejected formats above.
+// Used for the wire-shape sweep below and the per-format JSONSize
+// budget test in jsonsize_test.go.
+//
+//ggen:generate
+type TimeFormatsStruct struct {
+	TimeFormatsStdCompat
+	TimeLayout
+	TimeStamp
+	TimeStampMilli
+	TimeStampMicro
+	TimeStampNano
+	TimeCustomTiny
+	TimeCustomLong
+}
+
+// timeFormatsAll returns a TimeFormatsStruct with every field set to
+// the same moment. Worst-output cases (max-width nanos, MST → numeric
+// offset fallback when zone is unnamed) maximize per-format byte count
+// so wire-shape + JSONSize tests pin the bound for every format.
+func timeFormatsAll() TimeFormatsStruct {
+	// Fixed-offset zone with NO name forces UnixDate/RFC850/RFC1123 to
+	// emit the 5-char numeric offset instead of a 3-char TZ abbreviation.
+	noName := time.FixedZone("", -7*3600)
+	when := time.Date(9999, 12, 31, 23, 59, 59, 999999999, noName)
+	return TimeFormatsStruct{
+		TimeFormatsStdCompat: timeFormatsStdCompat(when),
+		TimeLayout:           TimeLayout{Layout: when},
+		TimeStamp:            TimeStamp{Stamp: when},
+		TimeStampMilli:       TimeStampMilli{StampMilli: when},
+		TimeStampMicro:       TimeStampMicro{StampMicro: when},
+		TimeStampNano:        TimeStampNano{StampNano: when},
+		TimeCustomTiny:       TimeCustomTiny{CustomTiny: when},
+		TimeCustomLong:       TimeCustomLong{CustomLong: when},
 	}
 }

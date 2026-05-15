@@ -12991,11 +12991,13 @@ func (NativeTypes) DecodeFrom(data []byte, i int) (NativeTypes, int, error) {
 				}
 				seenUnixAt = true
 				{
-					_n, _k, err := scan.Int64(data, j)
+					_f, _k, err := scan.Float64(data, j)
 					if err != nil {
 						return result, 0, err
 					}
-					result.UnixAt = time.Unix(_n, 0)
+					_sec := int64(_f)
+					_nsec := int64((_f - float64(_sec)) * 1e9)
+					result.UnixAt = time.Unix(_sec, _nsec)
 					j = _k
 				}
 			default:
@@ -13404,11 +13406,13 @@ func (NativeTypes) DecodeStreamFrom(_s *scan.Stream, i int) (NativeTypes, int, e
 				}
 				seenUnixAt = true
 				{
-					_n, _k, err := _s.Int64(j)
+					_f, _k, err := _s.Float64(j)
 					if err != nil {
 						return result, 0, err
 					}
-					result.UnixAt = time.Unix(_n, 0)
+					_sec := int64(_f)
+					_nsec := int64((_f - float64(_sec)) * 1e9)
+					result.UnixAt = time.Unix(_sec, _nsec)
 					j = _k
 				}
 			default:
@@ -13590,7 +13594,7 @@ func (NativeTypes) DecodeStreamFrom(_s *scan.Stream, i int) (NativeTypes, int, e
 // JSONSize returns an upper bound on the marshaled size, used by
 // encode.Marshal to pre-size the buffer in a single allocation.
 func (s NativeTypes) JSONSize() int {
-	size := 260
+	size := 328
 	if s.Addr.Is4() {
 		size += 15
 	} else {
@@ -13654,7 +13658,7 @@ func (s NativeTypes) AppendJSON(dst []byte) ([]byte, error) {
 	dst = append(dst, ",\"unitDur\":\""...)
 	dst = encode.AppendStringNoHTML(dst, s.UnitDur.String())
 	dst = append(dst, ",\"unixAt\":"...)
-	dst = strconv.AppendInt(dst, s.UnixAt.Unix(), 10)
+	dst = strconv.AppendFloat(dst, float64(s.UnixAt.UnixNano())/1e9, 'f', -1, 64)
 	return append(dst, '}'), nil
 }
 
@@ -15039,11 +15043,13 @@ func (PointerStruct) DecodeFrom(data []byte, i int) (PointerStruct, int, error) 
 				} else {
 					var _v time.Time
 					{
-						_n, _k, err := scan.Int64(data, j)
+						_f, _k, err := scan.Float64(data, j)
 						if err != nil {
 							return result, 0, err
 						}
-						_v = time.Unix(_n, 0)
+						_sec := int64(_f)
+						_nsec := int64((_f - float64(_sec)) * 1e9)
+						_v = time.Unix(_sec, _nsec)
 						j = _k
 					}
 
@@ -15306,11 +15312,13 @@ func (PointerStruct) DecodeStreamFrom(_s *scan.Stream, i int) (PointerStruct, in
 				} else {
 					var _v time.Time
 					{
-						_n, _k, err := _s.Int64(j)
+						_f, _k, err := _s.Float64(j)
 						if err != nil {
 							return result, 0, err
 						}
-						_v = time.Unix(_n, 0)
+						_sec := int64(_f)
+						_nsec := int64((_f - float64(_sec)) * 1e9)
+						_v = time.Unix(_sec, _nsec)
 						j = _k
 					}
 
@@ -15484,7 +15492,7 @@ func (s PointerStruct) JSONSize() int {
 		size += 33
 	}
 	if s.When != nil {
-		size += 28
+		size += 32
 	}
 	return size
 }
@@ -15559,7 +15567,7 @@ func (s PointerStruct) AppendJSON(dst []byte) ([]byte, error) {
 		if s.When == nil {
 			dst = append(dst, "null"...)
 		} else {
-			dst = strconv.AppendInt(dst, (*s.When).Unix(), 10)
+			dst = strconv.AppendFloat(dst, float64((*s.When).UnixNano())/1e9, 'f', -1, 64)
 		}
 	}
 	return append(dst, '}'), nil

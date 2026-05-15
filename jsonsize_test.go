@@ -288,6 +288,71 @@ func TestJSONSize_URLStruct(t *testing.T) {
 	}
 }
 
+// TestJSONSize_TimeFormats exercises the per-format JSONSize budget
+// for every supported time format in isolation. Each case targets one
+// of the single-field structs (TimeDefault / TimeUnix / TimeRFC3339 /
+// TimeCustomTiny / …) so a regression in timeFormatSize's per-format
+// byte count surfaces at the exact format, not buried inside a
+// composite struct. Uses a fixed-offset unnamed zone + max nanos so
+// the worst-output cases (numeric MST fallback, full-width fractional
+// seconds) are pinned.
+func TestJSONSize_TimeFormats(t *testing.T) {
+	t.Parallel()
+	noName := time.FixedZone("", -7*3600)
+	when := time.Date(9999, 12, 31, 23, 59, 59, 999999999, noName)
+	cases := []struct {
+		name string
+		v    interface {
+			AppendJSON(dst []byte) ([]byte, error)
+			JSONSize() int
+		}
+	}{
+		{"default", TimeDefault{Default: when}},
+		{"unix", TimeUnix{Unix: when}},
+		{"unixMilli", TimeUnixMilli{UnixMilli: when}},
+		{"unixMicro", TimeUnixMicro{UnixMicro: when}},
+		{"unixNano", TimeUnixNano{UnixNano: when}},
+		{"ANSIC", TimeANSIC{ANSIC: when}},
+		{"UnixDate", TimeUnixDate{UnixDate: when}},
+		{"RubyDate", TimeRubyDate{RubyDate: when}},
+		{"RFC822", TimeRFC822{RFC822: when}},
+		{"RFC822Z", TimeRFC822Z{RFC822Z: when}},
+		{"RFC850", TimeRFC850{RFC850: when}},
+		{"RFC1123", TimeRFC1123{RFC1123: when}},
+		{"RFC1123Z", TimeRFC1123Z{RFC1123Z: when}},
+		{"RFC3339", TimeRFC3339{RFC3339: when}},
+		{"RFC3339Nano", TimeRFC3339Nano{RFC3339Nano: when}},
+		{"Kitchen", TimeKitchen{Kitchen: when}},
+		{"DateTime", TimeDateTime{DateTime: when}},
+		{"DateOnly", TimeDateOnly{DateOnly: when}},
+		{"TimeOnly", TimeTimeOnly{TimeOnly: when}},
+		{"Layout", TimeLayout{Layout: when}},
+		{"Stamp", TimeStamp{Stamp: when}},
+		{"StampMilli", TimeStampMilli{StampMilli: when}},
+		{"StampMicro", TimeStampMicro{StampMicro: when}},
+		{"StampNano", TimeStampNano{StampNano: when}},
+		{"CustomTiny", TimeCustomTiny{CustomTiny: when}},
+		{"CustomLong", TimeCustomLong{CustomLong: when}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			size := c.v.JSONSize()
+			got, err := c.v.AppendJSON(make([]byte, 0, size))
+			if err != nil {
+				t.Fatalf("AppendJSON: %v", err)
+			}
+			if cap(got) != size {
+				t.Errorf("realloc happened: JSONSize=%d cap=%d len=%d out=%s",
+					size, cap(got), len(got), got)
+			}
+			if len(got) > size {
+				t.Errorf("output exceeded budget: len=%d > size=%d out=%s",
+					len(got), size, got)
+			}
+		})
+	}
+}
+
 // JSONSize must shrink when omit-eligible fields are at their zero
 // value. The all-populated baseline reserves bytes for every field's
 // worst case; the zero variant must reserve strictly less, otherwise

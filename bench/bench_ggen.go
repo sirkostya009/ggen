@@ -2039,7 +2039,7 @@ func (Node) DecodeStreamFrom(_s *scan.Stream, i int) (Node, int, error) {
 // JSONSize returns an upper bound on the marshaled size, used by
 // encode.Marshal to pre-size the buffer in a single allocation.
 func (s Node) JSONSize() int {
-	size := 486
+	size := 550
 	size += ((len(s.Blob) + 2) / 3) * 4
 	if _n := len(s.Children); _n > 0 {
 		size += _n - 1

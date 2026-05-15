@@ -163,6 +163,177 @@ func TestStdCompat_NativeTypes(t *testing.T) {
 	})
 }
 
+// --- Per-format time structs: stdcompat-friendly subset. -------------
+//
+// Each is a single-field type so TimeFormatsStdCompat / TimeFormatsStruct
+// (jsonsize_test.go) can embed them via Go's anonymous-field promotion.
+// jsonv2's format-tag parser accepts these; the Layout / Stamp* /
+// custom-layout variants in jsonsize_test.go are jsonv2-rejected and
+// exist only for ggen's own JSONSize / wire-shape coverage.
+
+//ggen:generate
+type TimeDefault struct {
+	Default time.Time `json:"default"` // empty format → RFC3339Nano
+}
+
+//ggen:generate
+type TimeUnix struct {
+	Unix time.Time `json:"unix,format:unix"` // numeric int64
+}
+
+//ggen:generate
+type TimeUnixMilli struct {
+	UnixMilli time.Time `json:"unixMilli,format:unixmilli"`
+}
+
+//ggen:generate
+type TimeUnixMicro struct {
+	UnixMicro time.Time `json:"unixMicro,format:unixmicro"`
+}
+
+//ggen:generate
+type TimeUnixNano struct {
+	UnixNano time.Time `json:"unixNano,format:unixnano"`
+}
+
+//ggen:generate
+type TimeANSIC struct {
+	ANSIC time.Time `json:"ansic,format:ANSIC"`
+}
+
+//ggen:generate
+type TimeUnixDate struct {
+	UnixDate time.Time `json:"unixDate,format:UnixDate"` // MST → up to 5-char offset
+}
+
+//ggen:generate
+type TimeRubyDate struct {
+	RubyDate time.Time `json:"rubyDate,format:RubyDate"`
+}
+
+//ggen:generate
+type TimeRFC822 struct {
+	RFC822 time.Time `json:"rfc822,format:RFC822"`
+}
+
+//ggen:generate
+type TimeRFC822Z struct {
+	RFC822Z time.Time `json:"rfc822Z,format:RFC822Z"`
+}
+
+//ggen:generate
+type TimeRFC850 struct {
+	RFC850 time.Time `json:"rfc850,format:RFC850"`
+}
+
+//ggen:generate
+type TimeRFC1123 struct {
+	RFC1123 time.Time `json:"rfc1123,format:RFC1123"`
+}
+
+//ggen:generate
+type TimeRFC1123Z struct {
+	RFC1123Z time.Time `json:"rfc1123Z,format:RFC1123Z"`
+}
+
+//ggen:generate
+type TimeRFC3339 struct {
+	RFC3339 time.Time `json:"rfc3339,format:RFC3339"`
+}
+
+//ggen:generate
+type TimeRFC3339Nano struct {
+	RFC3339Nano time.Time `json:"rfc3339Nano,format:RFC3339Nano"`
+}
+
+//ggen:generate
+type TimeKitchen struct {
+	Kitchen time.Time `json:"kitchen,format:Kitchen"` // smallest stdlib preset
+}
+
+//ggen:generate
+type TimeDateTime struct {
+	DateTime time.Time `json:"dateTime,format:DateTime"`
+}
+
+//ggen:generate
+type TimeDateOnly struct {
+	DateOnly time.Time `json:"dateOnly,format:DateOnly"`
+}
+
+//ggen:generate
+type TimeTimeOnly struct {
+	TimeOnly time.Time `json:"timeOnly,format:TimeOnly"`
+}
+
+// TimeFormatsStdCompat embeds every jsonv2-compatible per-format type.
+// Used by the cross-compat round-trip below and inherited by
+// TimeFormatsStruct in jsonsize_test.go.
+//
+//ggen:generate
+type TimeFormatsStdCompat struct {
+	TimeDefault
+	TimeUnix
+	TimeUnixMilli
+	TimeUnixMicro
+	TimeUnixNano
+	TimeANSIC
+	TimeUnixDate
+	TimeRubyDate
+	TimeRFC822
+	TimeRFC822Z
+	TimeRFC850
+	TimeRFC1123
+	TimeRFC1123Z
+	TimeRFC3339
+	TimeRFC3339Nano
+	TimeKitchen
+	TimeDateTime
+	TimeDateOnly
+	TimeTimeOnly
+}
+
+// timeFormatsStdCompat builds the jsonv2-compatible subset. Reused by
+// the stdcompat round-trip test and (in jsonsize_test.go) by timeFormatsAll.
+func timeFormatsStdCompat(when time.Time) TimeFormatsStdCompat {
+	return TimeFormatsStdCompat{
+		TimeDefault:     TimeDefault{Default: when},
+		TimeUnix:        TimeUnix{Unix: when},
+		TimeUnixMilli:   TimeUnixMilli{UnixMilli: when},
+		TimeUnixMicro:   TimeUnixMicro{UnixMicro: when},
+		TimeUnixNano:    TimeUnixNano{UnixNano: when},
+		TimeANSIC:       TimeANSIC{ANSIC: when},
+		TimeUnixDate:    TimeUnixDate{UnixDate: when},
+		TimeRubyDate:    TimeRubyDate{RubyDate: when},
+		TimeRFC822:      TimeRFC822{RFC822: when},
+		TimeRFC822Z:     TimeRFC822Z{RFC822Z: when},
+		TimeRFC850:      TimeRFC850{RFC850: when},
+		TimeRFC1123:     TimeRFC1123{RFC1123: when},
+		TimeRFC1123Z:    TimeRFC1123Z{RFC1123Z: when},
+		TimeRFC3339:     TimeRFC3339{RFC3339: when},
+		TimeRFC3339Nano: TimeRFC3339Nano{RFC3339Nano: when},
+		TimeKitchen:     TimeKitchen{Kitchen: when},
+		TimeDateTime:    TimeDateTime{DateTime: when},
+		TimeDateOnly:    TimeDateOnly{DateOnly: when},
+		TimeTimeOnly:    TimeTimeOnly{TimeOnly: when},
+	}
+}
+
+// TestStdCompat_TimeFormatsStdCompat round-trips the subset of time
+// formats jsonv2's format-tag parser accepts (Layout / Stamp variants /
+// custom layouts are jsonv2-rejected and live only in TimeFormatsStruct;
+// wire-shape coverage for those is in TestFormat_AllTimeLayouts).
+//
+// Uses UTC so the RFC1123/RFC850/UnixDate layouts emit the literal `UTC`
+// token jsonv2's parser expects — unnamed FixedZones round-trip to
+// numeric `-0700` which the named-MST layout can't decode. Non-zero
+// nanos exercises the `format:unix` fractional decimal path that
+// matches jsonv2's float wire form.
+func TestStdCompat_TimeFormatsStdCompat(t *testing.T) {
+	when := time.Date(2026, 5, 14, 12, 34, 56, 789000000, time.UTC)
+	crossCompat(t, timeFormatsStdCompat(when))
+}
+
 func TestStdCompat_OmitStruct(t *testing.T) {
 	// Zero values on omitempty/omitzero fields.
 	crossCompat(t, OmitStruct{Name: "alice", StrCount: 1})
