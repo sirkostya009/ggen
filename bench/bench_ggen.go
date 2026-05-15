@@ -14,14 +14,6 @@ import (
 	"github.com/sirkostya009/ggen/scan"
 )
 
-// DecodeFrom decodes one Addr out of data starting at i and returns
-// the decoded value, the position past the last consumed byte, and any
-// error. Strings inside the returned value alias data via unsafe.String —
-// callers MUST NOT mutate data while the value is in use.
-//
-// For top-level use, prefer decode.Unmarshal[Addr](data) (or
-// decode.UnmarshalSlice / Read / UnmarshalStream variants from the
-// decode package) — those are convenience wrappers around DecodeFrom.
 func (Addr) DecodeFrom(data []byte, i int) (Addr, int, error) {
 	var result Addr
 	seenCity := false
@@ -167,9 +159,6 @@ func (Addr) DecodeFrom(data []byte, i int) (Addr, int, error) {
 	}
 }
 
-// DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
-// pulling bytes from a *scan.Stream. Use decode.UnmarshalStream to drive
-// it from the top level.
 func (Addr) DecodeStreamFrom(_s *scan.Stream, i int) (Addr, int, error) {
 	var result Addr
 	seenCity := false
@@ -270,8 +259,6 @@ func (Addr) DecodeStreamFrom(_s *scan.Stream, i int) (Addr, int, error) {
 	}
 }
 
-// JSONSize returns an upper bound on the marshaled size, used by
-// encode.Marshal to pre-size the buffer in a single allocation.
 func (s Addr) JSONSize() int {
 	size := 23
 	size += len(s.City) * 2
@@ -279,9 +266,6 @@ func (s Addr) JSONSize() int {
 	return size
 }
 
-// AppendJSON appends the JSON encoding of s to dst. This is the core
-// marshal primitive; for top-level use, prefer encode.Marshal(s) /
-// encode.Write(w, s) / encode.MarshalSlice(items) from the encode package.
 func (s Addr) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
@@ -292,14 +276,6 @@ func (s Addr) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-// DecodeFrom decodes one Node out of data starting at i and returns
-// the decoded value, the position past the last consumed byte, and any
-// error. Strings inside the returned value alias data via unsafe.String —
-// callers MUST NOT mutate data while the value is in use.
-//
-// For top-level use, prefer decode.Unmarshal[Node](data) (or
-// decode.UnmarshalSlice / Read / UnmarshalStream variants from the
-// decode package) — those are convenience wrappers around DecodeFrom.
 func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 	var result Node
 	seenActive := false
@@ -1142,9 +1118,6 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 	}
 }
 
-// DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
-// pulling bytes from a *scan.Stream. Use decode.UnmarshalStream to drive
-// it from the top level.
 func (Node) DecodeStreamFrom(_s *scan.Stream, i int) (Node, int, error) {
 	var result Node
 	seenActive := false
@@ -2036,8 +2009,6 @@ func (Node) DecodeStreamFrom(_s *scan.Stream, i int) (Node, int, error) {
 	}
 }
 
-// JSONSize returns an upper bound on the marshaled size, used by
-// encode.Marshal to pre-size the buffer in a single allocation.
 func (s Node) JSONSize() int {
 	size := 550
 	size += ((len(s.Blob) + 2) / 3) * 4
@@ -2095,9 +2066,6 @@ func (s Node) JSONSize() int {
 	return size
 }
 
-// AppendJSON appends the JSON encoding of s to dst. This is the core
-// marshal primitive; for top-level use, prefer encode.Marshal(s) /
-// encode.Write(w, s) / encode.MarshalSlice(items) from the encode package.
 func (s Node) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
@@ -2312,14 +2280,6 @@ func (s Node) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-// DecodeFrom decodes one Validated out of data starting at i and returns
-// the decoded value, the position past the last consumed byte, and any
-// error. Strings inside the returned value alias data via unsafe.String —
-// callers MUST NOT mutate data while the value is in use.
-//
-// For top-level use, prefer decode.Unmarshal[Validated](data) (or
-// decode.UnmarshalSlice / Read / UnmarshalStream variants from the
-// decode package) — those are convenience wrappers around DecodeFrom.
 func (Validated) DecodeFrom(data []byte, i int) (Validated, int, error) {
 	var result Validated
 	seenAge := false
@@ -2642,9 +2602,6 @@ func (Validated) DecodeFrom(data []byte, i int) (Validated, int, error) {
 	}
 }
 
-// DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
-// pulling bytes from a *scan.Stream. Use decode.UnmarshalStream to drive
-// it from the top level.
 func (Validated) DecodeStreamFrom(_s *scan.Stream, i int) (Validated, int, error) {
 	var result Validated
 	seenAge := false
@@ -2895,8 +2852,6 @@ func (Validated) DecodeStreamFrom(_s *scan.Stream, i int) (Validated, int, error
 	}
 }
 
-// JSONSize returns an upper bound on the marshaled size, used by
-// encode.Marshal to pre-size the buffer in a single allocation.
 func (s Validated) JSONSize() int {
 	size := 68
 	size += len(s.Bio) * 2
@@ -2911,9 +2866,6 @@ func (s Validated) JSONSize() int {
 	return size
 }
 
-// AppendJSON appends the JSON encoding of s to dst. This is the core
-// marshal primitive; for top-level use, prefer encode.Marshal(s) /
-// encode.Write(w, s) / encode.MarshalSlice(items) from the encode package.
 func (s Validated) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err

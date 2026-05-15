@@ -4961,48 +4961,29 @@ import (
 {{.}}
 {{end}}
 {{range .Structs}}
-// DecodeFrom decodes one {{.Name}} out of data starting at i and returns
-// the decoded value, the position past the last consumed byte, and any
-// error. Strings inside the returned value alias data via unsafe.String —
-// callers MUST NOT mutate data while the value is in use.
-//
-// For top-level use, prefer decode.Unmarshal[{{.Name}}](data) (or
-// decode.UnmarshalSlice / Read / UnmarshalStream variants from the
-// decode package) — those are convenience wrappers around DecodeFrom.
 func ({{.Name}}) DecodeFrom(data []byte, i int) ({{.Name}}, int, error) {
 	{{decode .}}
 }
 
-// DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
-// pulling bytes from a *scan.Stream. Use decode.UnmarshalStream to drive
-// it from the top level.
 func ({{.Name}}) DecodeStreamFrom(_s *scan.Stream, i int) ({{.Name}}, int, error) {
 	{{streamDecode .}}
 }
 
-// JSONSize returns an upper bound on the marshaled size, used by
-// encode.Marshal to pre-size the buffer in a single allocation.
 func (s {{.Name}}) JSONSize() int {
 	{{sizeJSON .}}
 }
 
-// AppendJSON appends the JSON encoding of s to dst. This is the core
-// marshal primitive; for top-level use, prefer encode.Marshal(s) /
-// encode.Write(w, s) / encode.MarshalSlice(items) from the encode package.
 func (s {{.Name}}) AppendJSON(dst []byte) ([]byte, error) {
 	{{appendJSON .}}
 }
 
 {{if .Marshal}}
-// MarshalJSON implements json.Marshaler (encoding/json and encoding/json/v2).
 func (s {{.Name}}) MarshalJSON() ([]byte, error) {
 	return encode.Marshal(s)
 }
 {{end}}
 
 {{if .Unmarshal}}
-// UnmarshalJSON implements json.Unmarshaler (encoding/json and encoding/json/v2).
-// Note: overwrites the receiver; does not implement merge semantics.
 func (s *{{.Name}}) UnmarshalJSON(data []byte) error {
 	v, err := decode.Unmarshal[{{.Name}}](data)
 	if err != nil {
