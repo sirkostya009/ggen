@@ -93,6 +93,7 @@ type FieldInfo struct {
 	KeyMods         []ModRule          // `keys:` mods — map keys only
 	HintLen         int                // explicit preallocation hint for slices/maps; -1=unset (fall through to len/minlen/default), 0=user opt-out (no prealloc), N>0=use N as cap. Overrides len/minlen.
 	Iface           FieldInterfaces    // statically detected method-set membership (TextMarshaler, ByteDecoder, ...)
+	ElemIface       FieldInterfaces    // method-set probe on the slice/array/map element type (used by size estimators for struct elements)
 	OmitEmpty       bool
 	OmitZero        bool
 	String          bool   // marshal/unmarshal the field as a JSON-quoted string

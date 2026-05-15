@@ -6,13 +6,14 @@ package main
 
 import (
 	"encoding/base32"
+	"net/url"
+	"strconv"
+	"unsafe"
+
 	"github.com/sirkostya009/ggen/decode"
 	"github.com/sirkostya009/ggen/decode/validation"
 	"github.com/sirkostya009/ggen/encode"
 	"github.com/sirkostya009/ggen/scan"
-	"net/url"
-	"strconv"
-	"unsafe"
 )
 
 // DecodeFrom decodes one HookedStruct out of data starting at i and returns
@@ -185,7 +186,6 @@ func (HookedStruct) DecodeFrom(data []byte, i int) (HookedStruct, int, error) {
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
@@ -307,7 +307,6 @@ func (HookedStruct) DecodeStreamFrom(_s *scan.Stream, i int) (HookedStruct, int,
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // JSONSize returns an upper bound on the marshaled size, used by
@@ -619,7 +618,6 @@ func (RichTypes) DecodeFrom(data []byte, i int) (RichTypes, int, error) {
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
@@ -820,13 +818,12 @@ func (RichTypes) DecodeStreamFrom(_s *scan.Stream, i int) (RichTypes, int, error
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // JSONSize returns an upper bound on the marshaled size, used by
 // encode.Marshal to pre-size the buffer in a single allocation.
 func (s RichTypes) JSONSize() int {
-	size := 1284
+	size := 268
 	size += s.Big.BitLen() / 3
 	size += (s.BigR.Num().BitLen() + s.BigR.Denom().BitLen()) / 3
 	if _n := len(s.Raw1); _n > 0 {
@@ -838,6 +835,11 @@ func (s RichTypes) JSONSize() int {
 		size += _n
 	} else {
 		size += 4
+	}
+	size += len(s.Site.Scheme) + len(s.Site.Host)*3 + len(s.Site.Path)*3 + len(s.Site.RawQuery) + len(s.Site.Fragment)*3 + len(s.Site.Opaque)
+	if s.Site.User != nil {
+		_pw, _ := s.Site.User.Password()
+		size += (len(s.Site.User.Username())+len(_pw))*3 + 2
 	}
 	return size
 }
@@ -853,8 +855,10 @@ func (s RichTypes) AppendJSON(dst []byte) ([]byte, error) {
 	dst = append(dst, ",\"bigF\":\""...)
 	dst = (&s.BigF).Append(dst, 'g', -1)
 	dst = append(dst, "\",\"bigR\":\""...)
-	dst = encode.AppendStringNoHTML(dst, (&s.BigR).RatString())
-	dst = append(dst, ",\"id\":"...)
+	if dst, err = (&s.BigR).AppendText(dst); err != nil {
+		return dst, err
+	}
+	dst = append(dst, "\",\"id\":"...)
 	{
 		_t, _err := s.ID.MarshalText()
 		if _err != nil {
@@ -876,8 +880,8 @@ func (s RichTypes) AppendJSON(dst []byte) ([]byte, error) {
 		dst = append(dst, s.Raw2...)
 	}
 	dst = append(dst, ",\"site\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.Site.String())
-	return append(dst, '}'), nil
+	dst = encode.AppendURL(dst, s.Site)
+	return append(dst, "\"}"...), nil
 }
 
 // DecodeFrom decodes one richSubset out of data starting at i and returns
@@ -1113,7 +1117,6 @@ func (richSubset) DecodeFrom(data []byte, i int) (richSubset, int, error) {
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
@@ -1296,7 +1299,6 @@ func (richSubset) DecodeStreamFrom(_s *scan.Stream, i int) (richSubset, int, err
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // JSONSize returns an upper bound on the marshaled size, used by
@@ -1329,8 +1331,10 @@ func (s richSubset) AppendJSON(dst []byte) ([]byte, error) {
 	dst = append(dst, ",\"bigF\":\""...)
 	dst = (&s.BigF).Append(dst, 'g', -1)
 	dst = append(dst, "\",\"bigR\":\""...)
-	dst = encode.AppendStringNoHTML(dst, (&s.BigR).RatString())
-	dst = append(dst, ",\"id\":"...)
+	if dst, err = (&s.BigR).AppendText(dst); err != nil {
+		return dst, err
+	}
+	dst = append(dst, "\",\"id\":"...)
 	{
 		_t, _err := s.ID.MarshalText()
 		if _err != nil {
@@ -1449,11 +1453,12 @@ func (base32Wrap) DecodeFrom(data []byte, i int) (base32Wrap, int, error) {
 						}
 					}
 
-					var err error
-					result.B, err = base32.StdEncoding.DecodeString(_s)
+					_dst := make([]byte, 0, base32.StdEncoding.DecodedLen(len(_s)))
+					_dst, err := base32.StdEncoding.AppendDecode(_dst, unsafe.Slice(unsafe.StringData(_s), len(_s)))
 					if err != nil {
 						return result, 0, err
 					}
+					result.B = _dst
 				}
 			} else {
 				return result, 0, &validation.UnknownKeyError{Field: key}
@@ -1480,7 +1485,6 @@ func (base32Wrap) DecodeFrom(data []byte, i int) (base32Wrap, int, error) {
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
@@ -1538,10 +1542,12 @@ func (base32Wrap) DecodeStreamFrom(_s *scan.Stream, i int) (base32Wrap, int, err
 					if err != nil {
 						return result, 0, err
 					}
-					result.B, err = base32.StdEncoding.DecodeString(_v)
+					_dst := make([]byte, 0, base32.StdEncoding.DecodedLen(len(_v)))
+					_dst, err = base32.StdEncoding.AppendDecode(_dst, unsafe.Slice(unsafe.StringData(_v), len(_v)))
 					if err != nil {
 						return result, 0, err
 					}
+					result.B = _dst
 					j = _k
 				}
 			} else {
@@ -1573,14 +1579,13 @@ func (base32Wrap) DecodeStreamFrom(_s *scan.Stream, i int) (base32Wrap, int, err
 		}
 		return result, 0, scan.ErrBadObject
 	}
-
 }
 
 // JSONSize returns an upper bound on the marshaled size, used by
 // encode.Marshal to pre-size the buffer in a single allocation.
 func (s base32Wrap) JSONSize() int {
 	size := 8
-	size += len(s.B) * 2
+	size += ((len(s.B) + 4) / 5) * 8
 	return size
 }
 

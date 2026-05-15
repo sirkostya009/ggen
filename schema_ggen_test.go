@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -5441,7 +5442,7 @@ func (SQLNullStruct) DecodeStreamFrom(_s *scan.Stream, i int) (SQLNullStruct, in
 // JSONSize returns an upper bound on the marshaled size, used by
 // encode.Marshal to pre-size the buffer in a single allocation.
 func (s SQLNullStruct) JSONSize() int {
-	size := 197
+	size := 194
 	size += len(s.S.String) * 2
 	return size
 }
@@ -9347,7 +9348,8 @@ func (FastFallbackStruct) DecodeStreamFrom(_s *scan.Stream, i int) (FastFallback
 // JSONSize returns an upper bound on the marshaled size, used by
 // encode.Marshal to pre-size the buffer in a single allocation.
 func (s FastFallbackStruct) JSONSize() int {
-	size := 146
+	size := 18
+	size += s.Extra.JSONSize()
 	size += len(s.ID) * 2
 	return size
 }
@@ -10191,13 +10193,8 @@ func (InlineStruct) DecodeFrom(data []byte, i int) (InlineStruct, int, error) {
 				if result.Extra == nil {
 					result.Extra = make(map[string]any)
 				}
-				_start := j
-				_k, err := scan.SkipValue(data, _start)
+				_v, _k, err := scan.Any(data, j)
 				if err != nil {
-					return result, 0, err
-				}
-				var _v any
-				if err := json.Unmarshal(data[_start:_k], &_v); err != nil {
 					return result, 0, err
 				}
 				result.Extra[key] = _v
@@ -10207,13 +10204,8 @@ func (InlineStruct) DecodeFrom(data []byte, i int) (InlineStruct, int, error) {
 			if result.Extra == nil {
 				result.Extra = make(map[string]any)
 			}
-			_start := j
-			_k, err := scan.SkipValue(data, _start)
+			_v, _k, err := scan.Any(data, j)
 			if err != nil {
-				return result, 0, err
-			}
-			var _v any
-			if err := json.Unmarshal(data[_start:_k], &_v); err != nil {
 				return result, 0, err
 			}
 			result.Extra[key] = _v
@@ -10300,13 +10292,8 @@ func (InlineStruct) DecodeStreamFrom(_s *scan.Stream, i int) (InlineStruct, int,
 				if result.Extra == nil {
 					result.Extra = make(map[string]any)
 				}
-				_start := j
-				_k, err := _s.SkipValue(_start)
+				_v, _k, err := _s.Any(j)
 				if err != nil {
-					return result, 0, err
-				}
-				var _v any
-				if err := json.Unmarshal(_s.Bytes()[_start:_k], &_v); err != nil {
 					return result, 0, err
 				}
 				result.Extra[key] = _v
@@ -10316,13 +10303,8 @@ func (InlineStruct) DecodeStreamFrom(_s *scan.Stream, i int) (InlineStruct, int,
 			if result.Extra == nil {
 				result.Extra = make(map[string]any)
 			}
-			_start := j
-			_k, err := _s.SkipValue(_start)
+			_v, _k, err := _s.Any(j)
 			if err != nil {
-				return result, 0, err
-			}
-			var _v any
-			if err := json.Unmarshal(_s.Bytes()[_start:_k], &_v); err != nil {
 				return result, 0, err
 			}
 			result.Extra[key] = _v
@@ -10356,9 +10338,9 @@ func (InlineStruct) DecodeStreamFrom(_s *scan.Stream, i int) (InlineStruct, int,
 // JSONSize returns an upper bound on the marshaled size, used by
 // encode.Marshal to pre-size the buffer in a single allocation.
 func (s InlineStruct) JSONSize() int {
-	size := 13
+	size := 11
 	size += len(s.Name) * 2
-	size += len(s.Extra) * 260
+	size += len(s.Extra) * 68
 	for _k := range s.Extra {
 		size += len(_k) * 2
 	}
@@ -10392,6 +10374,250 @@ func (s InlineStruct) AppendJSON(dst []byte) ([]byte, error) {
 		}
 	}
 	return append(dst, '}'), nil
+}
+
+// DecodeFrom decodes one URLStruct out of data starting at i and returns
+// the decoded value, the position past the last consumed byte, and any
+// error. Strings inside the returned value alias data via unsafe.String —
+// callers MUST NOT mutate data while the value is in use.
+//
+// For top-level use, prefer decode.Unmarshal[URLStruct](data) (or
+// decode.UnmarshalSlice / Read / UnmarshalStream variants from the
+// decode package) — those are convenience wrappers around DecodeFrom.
+func (URLStruct) DecodeFrom(data []byte, i int) (URLStruct, int, error) {
+	var result URLStruct
+	seenSite := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, 0, scan.ErrBadObject
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		j := i
+		if i >= len(data) || data[i] != '"' {
+			return result, 0, scan.ErrExpectString
+		}
+		{
+			_ks := i + 1
+			_ke := _ks
+			for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+				_ke++
+			}
+			if _ke >= len(data) {
+				return result, 0, scan.ErrUnterminated
+			}
+			if data[_ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+				j = _ke + 1
+			} else {
+				_isv, _isj, _iserr := scan.String(data, i)
+				if _iserr != nil {
+					return result, 0, _iserr
+				}
+				key = _isv
+				j = _isj
+			}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) || data[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j++
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		switch len(key) {
+		case 4:
+			if key == "site" {
+				if seenSite {
+					return result, 0, &validation.DuplicateKeyError{Field: "site"}
+				}
+				seenSite = true
+				{
+					var _s string
+					if j >= len(data) || data[j] != '"' {
+						return result, 0, scan.ErrExpectString
+					}
+					{
+						_ks := j + 1
+						_ke := _ks
+						for _ke < len(data) && data[_ke] != '"' && data[_ke] != '\\' {
+							_ke++
+						}
+						if _ke >= len(data) {
+							return result, 0, scan.ErrUnterminated
+						}
+						if data[_ke] == '"' {
+							_s = unsafe.String(unsafe.SliceData(data[_ks:]), _ke-_ks)
+							j = _ke + 1
+						} else {
+							_isv, _isj, _iserr := scan.String(data, j)
+							if _iserr != nil {
+								return result, 0, _iserr
+							}
+							_s = _isv
+							j = _isj
+						}
+					}
+
+					_u, _err := url.Parse(_s)
+					if _err != nil {
+						return result, 0, _err
+					}
+					result.Site = *_u
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\n' || data[j] == '\r') {
+			j++
+		}
+		if j >= len(data) {
+			return result, 0, scan.ErrBadObject
+		}
+		if data[j] == ',' {
+			j++
+			i = j
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[j] == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// DecodeStreamFrom is the io.Reader-backed counterpart of DecodeFrom,
+// pulling bytes from a *scan.Stream. Use decode.UnmarshalStream to drive
+// it from the top level.
+func (URLStruct) DecodeStreamFrom(_s *scan.Stream, i int) (URLStruct, int, error) {
+	var result URLStruct
+	seenSite := false
+	i, err := _s.ObjectOpen(i)
+	if err != nil {
+		return result, 0, err
+	}
+	i, err = _s.SkipSpace(i)
+	if err != nil {
+		return result, 0, err
+	}
+	if i >= len(_s.Bytes()) {
+		if err = _s.ReadMore(); err != nil {
+			return result, 0, err
+		}
+	}
+	if _s.Bytes()[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		key, j, err := _s.KeyView(i)
+		if err != nil {
+			return result, 0, err
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		if _s.Bytes()[j] != ':' {
+			return result, 0, scan.ErrBadObject
+		}
+		j, err = _s.SkipSpace(j + 1)
+		if err != nil {
+			return result, 0, err
+		}
+		switch len(key) {
+		case 4:
+			if key == "site" {
+				if seenSite {
+					return result, 0, &validation.DuplicateKeyError{Field: "site"}
+				}
+				seenSite = true
+				{
+					_v, _k, err := _s.String(j)
+					if err != nil {
+						return result, 0, err
+					}
+					_u, _err := url.Parse(_v)
+					if _err != nil {
+						return result, 0, _err
+					}
+					result.Site = *_u
+					j = _k
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, 0, &validation.UnknownKeyError{Field: key}
+		}
+		j, err = _s.SkipSpace(j)
+		if err != nil {
+			return result, 0, err
+		}
+		if j >= len(_s.Bytes()) {
+			if err = _s.ReadMore(); err != nil {
+				return result, 0, err
+			}
+		}
+		c := _s.Bytes()[j]
+		if c == ',' {
+			i = j + 1
+			i, err = _s.SkipSpace(i)
+			if err != nil {
+				return result, 0, err
+			}
+			continue
+		}
+		if c == '}' {
+			return result, j + 1, nil
+		}
+		return result, 0, scan.ErrBadObject
+	}
+}
+
+// JSONSize returns an upper bound on the marshaled size, used by
+// encode.Marshal to pre-size the buffer in a single allocation.
+func (s URLStruct) JSONSize() int {
+	size := 17
+	size += len(s.Site.Scheme) + len(s.Site.Host)*3 + len(s.Site.Path)*3 + len(s.Site.RawQuery) + len(s.Site.Fragment)*3 + len(s.Site.Opaque)
+	if s.Site.User != nil {
+		_pw, _ := s.Site.User.Password()
+		size += (len(s.Site.User.Username())+len(_pw))*3 + 2
+	}
+	return size
+}
+
+// AppendJSON appends the JSON encoding of s to dst. This is the core
+// marshal primitive; for top-level use, prefer encode.Marshal(s) /
+// encode.Write(w, s) / encode.MarshalSlice(items) from the encode package.
+func (s URLStruct) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"site\":\""...)
+	dst = encode.AppendURL(dst, s.Site)
+	return append(dst, "\"}"...), nil
 }
 
 // DecodeFrom decodes one MapStruct out of data starting at i and returns
@@ -12523,9 +12749,12 @@ func (Derived) DecodeStreamFrom(_s *scan.Stream, i int) (Derived, int, error) {
 // JSONSize returns an upper bound on the marshaled size, used by
 // encode.Marshal to pre-size the buffer in a single allocation.
 func (s Derived) JSONSize() int {
-	size := 29
+	size := 19
 	size += len(s.ID) * 2
-	size += len(s.Meta) * 2
+	if s.Meta != "" {
+		size += 10
+		size += len(s.Meta) * 2
+	}
 	size += len(s.Name) * 2
 	return size
 }
@@ -13743,11 +13972,12 @@ func (NativeTypes) DecodeFrom(data []byte, i int) (NativeTypes, int, error) {
 						}
 					}
 
-					var err error
-					result.Blob, err = base64.StdEncoding.DecodeString(_s)
+					_dst := make([]byte, 0, base64.StdEncoding.DecodedLen(len(_s)))
+					_dst, err := base64.StdEncoding.AppendDecode(_dst, unsafe.Slice(unsafe.StringData(_s), len(_s)))
 					if err != nil {
 						return result, 0, err
 					}
+					result.Blob = _dst
 				}
 			case "cidr":
 				if seenCidr {
@@ -13855,11 +14085,12 @@ func (NativeTypes) DecodeFrom(data []byte, i int) (NativeTypes, int, error) {
 						}
 					}
 
-					var err error
-					result.HexBlob, err = hex.DecodeString(_s)
+					_dst := make([]byte, 0, hex.DecodedLen(len(_s)))
+					_dst, err := hex.AppendDecode(_dst, unsafe.Slice(unsafe.StringData(_s), len(_s)))
 					if err != nil {
 						return result, 0, err
 					}
+					result.HexBlob = _dst
 				}
 			case "unitDur":
 				if seenUnitDur {
@@ -14175,10 +14406,12 @@ func (NativeTypes) DecodeStreamFrom(_s *scan.Stream, i int) (NativeTypes, int, e
 					if err != nil {
 						return result, 0, err
 					}
-					result.Blob, err = base64.StdEncoding.DecodeString(_v)
+					_dst := make([]byte, 0, base64.StdEncoding.DecodedLen(len(_v)))
+					_dst, err = base64.StdEncoding.AppendDecode(_dst, unsafe.Slice(unsafe.StringData(_v), len(_v)))
 					if err != nil {
 						return result, 0, err
 					}
+					result.Blob = _dst
 					j = _k
 				}
 			case "cidr":
@@ -14243,10 +14476,12 @@ func (NativeTypes) DecodeStreamFrom(_s *scan.Stream, i int) (NativeTypes, int, e
 					if err != nil {
 						return result, 0, err
 					}
-					result.HexBlob, err = hex.DecodeString(_v)
+					_dst := make([]byte, 0, hex.DecodedLen(len(_v)))
+					_dst, err = hex.AppendDecode(_dst, unsafe.Slice(unsafe.StringData(_v), len(_v)))
 					if err != nil {
 						return result, 0, err
 					}
+					result.HexBlob = _dst
 					j = _k
 				}
 			case "unitDur":
@@ -14405,10 +14640,27 @@ func (NativeTypes) DecodeStreamFrom(_s *scan.Stream, i int) (NativeTypes, int, e
 // JSONSize returns an upper bound on the marshaled size, used by
 // encode.Marshal to pre-size the buffer in a single allocation.
 func (s NativeTypes) JSONSize() int {
-	size := 473
-	size += len(s.Blob) * 2
+	size := 260
+	if s.Addr.Is4() {
+		size += 15
+	} else {
+		size += 39
+	}
+	size += ((len(s.Blob) + 2) / 3) * 4
 	size += len(s.ByteArray) * 4
+	if s.Cidr.Addr().Is4() {
+		size += 19
+	} else {
+		size += 43
+	}
 	size += len(s.HexBlob) * 2
+	if s.LegacyIP.To4() != nil {
+		size += 15
+	} else if len(s.LegacyIP) != 0 {
+		size += 39
+	} else {
+		size += 2
+	}
 	return size
 }
 
@@ -15527,30 +15779,48 @@ func (OmitStruct) DecodeStreamFrom(_s *scan.Stream, i int) (OmitStruct, int, err
 // JSONSize returns an upper bound on the marshaled size, used by
 // encode.Marshal to pre-size the buffer in a single allocation.
 func (s OmitStruct) JSONSize() int {
-	size := 125
-	size += len(s.Bio) * 2
-	if _n := len(s.Extra); _n > 0 {
-		size += _n - 1
+	size := 40
+	if s.Bio != "" {
+		size += 9
+		size += len(s.Bio) * 2
 	}
-	for i0 := range s.Extra {
-		size += len(s.Extra[i0])*2 + 2
+	if s.Extra != nil {
+		size += 11
+		if _n := len(s.Extra); _n > 0 {
+			size += _n - 1
+		}
+		for i0 := range s.Extra {
+			size += len(s.Extra[i0])*2 + 2
+		}
 	}
-	size += len(s.Labels) * 4
-	for _k, _v := range s.Labels {
-		size += len(_k) * 2
-		size += len(_v)*2 + 2
+	if len(s.Labels) > 0 {
+		size += 12
+		size += len(s.Labels) * 4
+		for _k, _v := range s.Labels {
+			size += len(_k) * 2
+			size += len(_v)*2 + 2
+		}
 	}
-	size += len(s.Meta) * 4
-	for _k, _v := range s.Meta {
-		size += len(_k) * 2
-		size += len(_v)*2 + 2
+	if s.Meta != nil {
+		size += 10
+		size += len(s.Meta) * 4
+		for _k, _v := range s.Meta {
+			size += len(_k) * 2
+			size += len(_v)*2 + 2
+		}
 	}
 	size += len(s.Name) * 2
-	if _n := len(s.Tags); _n > 0 {
-		size += _n - 1
+	if s.Score != 0 {
+		size += 33
 	}
-	for i0 := range s.Tags {
-		size += len(s.Tags[i0])*2 + 2
+	if len(s.Tags) > 0 {
+		size += 10
+		if _n := len(s.Tags); _n > 0 {
+			size += _n - 1
+		}
+		for i0 := range s.Tags {
+			size += len(s.Tags[i0])*2 + 2
+		}
 	}
 	return size
 }
@@ -16241,16 +16511,13 @@ func (PointerStruct) DecodeStreamFrom(_s *scan.Stream, i int) (PointerStruct, in
 // JSONSize returns an upper bound on the marshaled size, used by
 // encode.Marshal to pre-size the buffer in a single allocation.
 func (s PointerStruct) JSONSize() int {
-	size := 54
-	if s.Addr == nil {
-		size += 4
-	} else {
+	size := 20
+	if s.Addr != nil {
+		size += 8
 		size += (*s.Addr).JSONSize()
 	}
-	if s.Count == nil {
-		size += 4
-	} else {
-		size += 20
+	if s.Count != nil {
+		size += 29
 	}
 	if s.Enabled == nil {
 		size += 4
@@ -16263,15 +16530,11 @@ func (s PointerStruct) JSONSize() int {
 		size += 2
 		size += len((*s.Name)) * 2
 	}
-	if s.Ratio == nil {
-		size += 4
-	} else {
-		size += 24
+	if s.Ratio != nil {
+		size += 33
 	}
-	if s.When == nil {
-		size += 4
-	} else {
-		size += 40
+	if s.When != nil {
+		size += 28
 	}
 	return size
 }

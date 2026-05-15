@@ -127,9 +127,15 @@ func UnmarshalStreamResponse[T Decoder[T]](resp *http.Response) (T, []byte, erro
   all error-returning equivalents for `[]T` of `Marshaler`s.
 - `JSONSize()` is an intentional upper-bound overshoot. Map estimate is
   per-entry — `4 + 2*len(key) + value-bound` (kind-derived) or flat 128
-  for variable values; string is `len*2+2` for escape worst-case. Constant
-  per-field contributions are folded into the initial `size := N` at
-  codegen time; only loops/len() emit runtime adds.
+  for variable values; string is `len*2+2` for short-escape worst-case
+  (`\n`, `\"`, `\\`, `\t`, `\b`, `\f` — every byte becomes 2). Control
+  chars below 0x20 that have no short escape expand to `\uXXXX` (6×)
+  and DO overflow the bound; we accept the one-time realloc on that
+  pathological input since real-world payloads rarely contain raw
+  control bytes. Constant per-field contributions are folded into the
+  initial `size := N` at codegen time; only loops/len() emit runtime
+  adds. `TestJSONSize_NoReallocOnWorstCase` pins the cap-guarantee on
+  realistic worst-case input.
 - `BytesToString(buf []byte) string` — unsafe.String over buffer.
 - `AppendString(dst, s)` — escaped string body + closing `"`. The CALLER
   is responsible for the opening `"`: codegen folds it into the constant

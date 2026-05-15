@@ -25,6 +25,9 @@ type FieldInterfaces struct {
 	ByteDecoder     bool // T has DecodeFrom(data []byte, i int) (T, int, error)
 	StreamDecoder   bool // T has DecodeStreamFrom(s *scan.Stream, i int) (T, int, error)
 	AppendJSON      bool // T has AppendJSON(dst []byte) ([]byte, error)
+	JSONSize        bool // T has JSONSize() int — used to call the real
+	// upper bound instead of falling back to a flat 128/256 guess when
+	// the field type is foreign.
 }
 
 // stdInterfaces caches well-known interface types loaded from the user's
@@ -165,8 +168,7 @@ func inspectType(t types.Type, std stdInterfaces) FieldInterfaces {
 	// clean stdlib interface to test against. Walk the method set and
 	// shape-match the signatures.
 	ms := types.NewMethodSet(t)
-	for i := 0; i < ms.Len(); i++ {
-		sel := ms.At(i)
+	for sel := range ms.Methods() {
 		fn, ok := sel.Obj().(*types.Func)
 		if !ok {
 			continue
@@ -188,9 +190,23 @@ func inspectType(t types.Type, std stdInterfaces) FieldInterfaces {
 			if matchAppendJSON(sig) {
 				iface.AppendJSON = true
 			}
+		case "JSONSize":
+			if matchJSONSize(sig) {
+				iface.JSONSize = true
+			}
 		}
 	}
 	return iface
+}
+
+// matchJSONSize reports whether sig is `func() int` — no params, single
+// int result. Mirrors the encode.Marshaler half of the ggen contract.
+func matchJSONSize(sig *types.Signature) bool {
+	if sig.Params().Len() != 0 || sig.Results().Len() != 1 {
+		return false
+	}
+	b, ok := sig.Results().At(0).Type().(*types.Basic)
+	return ok && b.Kind() == types.Int
 }
 
 // matchByteDecoder reports whether sig is `func(data []byte, i int) (T, int, error)`

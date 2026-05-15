@@ -1089,7 +1089,7 @@ dst = append(dst, '"')
 }
 `, ref, ref)
 	case KindURL:
-		return fmt.Sprintf("dst = append(dst, '\"')\ndst =%s(dst, %s.String())\n", appendStrFn(f.HTMLEscape), ref)
+		return fmt.Sprintf("dst = append(dst, '\"')\ndst = encode.AppendURL(dst, %s)\ndst = append(dst, '\"')\n", ref)
 	case KindBigInt:
 		// big.Int.Append takes (buf, base) and appends in place — no alloc.
 		return fmt.Sprintf("dst = (&%s).Append(dst, 10)\n", ref)
@@ -1098,9 +1098,11 @@ dst = append(dst, '"')
 		// big.Float.Append: (buf, format byte, prec int).
 		return fmt.Sprintf("dst = append(dst, '\"')\ndst = (&%s).Append(dst, 'g', -1)\ndst = append(dst, '\"')\n", ref)
 	case KindBigRat:
-		// Rat is JSON-stringified ("num/denom"). RatString avoids the slash
-		// when the value is a whole number.
-		return fmt.Sprintf("dst = append(dst, '\"')\ndst =%s(dst, (&%s).RatString())\n", appendStrFn(f.HTMLEscape), ref)
+		// Rat is JSON-stringified ("num/denom" or just "n" when whole).
+		// AppendText cuts ~3 allocs vs %s(dst, (&r).RatString()) — same
+		// wire shape (collapses to integer when IsInt()), but writes
+		// straight into dst instead of materializing a fresh string.
+		return fmt.Sprintf("dst = append(dst, '\"')\nif dst, err = (&%s).AppendText(dst); err != nil { return dst, err }\ndst = append(dst, '\"')\n", ref)
 	case KindSQLNull:
 		spec, ok := SQLNullSpec(f.GoType)
 		if !ok {
@@ -1154,6 +1156,73 @@ dst = append(dst, ']')
 // timeLayoutExpr returns the Go expression for a format value on a time.Time
 // field (e.g. "RFC3339" → time.RFC3339, 'custom' → "custom" literal). It also
 // returns whether the format targets a numeric encoding (unix family).
+// timeFormatSize returns the JSONSize byte budget for a `time.Time`
+// field with the given `format:` option, including surrounding quotes
+// (or none for numeric `unix*` variants). Unknown / custom layouts
+// fall back to `len(format) + 6` — output length tracks the layout
+// string closely (literal text passes through verbatim) with a small
+// slack for `_2` style space-pads and timezone offset width.
+func timeFormatSize(format string) int {
+	switch format {
+	case "unix", "unixmilli", "unixmicro", "unixnano":
+		return sizeInt // int64 digits, no quotes
+	case "", "RFC3339Nano":
+		return 35 + 2
+	case "RFC3339":
+		return 25 + 2
+	case "ANSIC":
+		return 24 + 2
+	case "UnixDate":
+		// "MST" → up to 5-char offset when zone has no name.
+		return 30 + 2
+	case "RubyDate":
+		return 30 + 2
+	case "RFC822":
+		return 19 + 2
+	case "RFC822Z":
+		return 21 + 2
+	case "RFC850":
+		// "MST" → up to 5-char offset when zone has no name.
+		return 32 + 2
+	case "RFC1123":
+		// "MST" → up to 5-char offset when zone has no name.
+		return 31 + 2
+	case "RFC1123Z":
+		return 31 + 2
+	case "Kitchen":
+		return 7 + 2
+	case "Stamp":
+		return 15 + 2
+	case "StampMilli":
+		return 19 + 2
+	case "StampMicro":
+		return 22 + 2
+	case "StampNano":
+		return 25 + 2
+	case "DateTime":
+		return 19 + 2
+	case "DateOnly":
+		return 10 + 2
+	case "TimeOnly":
+		return 8 + 2
+	case "Layout":
+		return 26 + 2
+	}
+	return len(format) + 6
+}
+
+// durationFormatSize returns the JSONSize byte budget for a
+// `time.Duration` field. Numeric formats (sec/milli/micro/nano) emit
+// an int with no quotes; the default `units` format renders as a
+// quoted "NhNmNs" string capped at ~25 chars + quotes.
+func durationFormatSize(format string) int {
+	switch format {
+	case "sec", "milli", "micro", "nano":
+		return sizeInt
+	}
+	return 25 + 2 // "<NhNmNs>" worst case
+}
+
 func timeLayoutExpr(format string) (layout string, numeric string) {
 	switch format {
 	case "":
@@ -1733,24 +1802,57 @@ func renderSize(s StructInfo) string {
 	}
 	var b strings.Builder
 	// Fixed overhead: braces + per-field key bytes + separating commas.
+	// omitempty/omitzero fields move their key+value contribution out
+	// of the constant and into a runtime `if <emit> { size += ... }`
+	// guard, so a zero-valued OmitStruct doesn't reserve room for
+	// fields that won't ship.
 	fixed := 2 // { and }
 	named := 0
-	for _, f := range s.Fields {
-		if f.Inline {
-			continue // name/colon/comma budgeted per-entry in map size
-		}
-		fixed += len(f.JSONName) + 3 // "name":
-		if named > 0 {
-			fixed++ // comma
-		}
-		named++
-	}
 	var runtime strings.Builder
 	for _, f := range s.Fields {
+		if f.Inline {
+			// Inline catch-all: name/colon/comma budgeted per-entry
+			// in sizeMapContrib. No fixed key bytes here.
+			ref := "s." + f.GoName
+			_, code := sizeContrib(f, ref)
+			runtime.WriteString(code)
+			continue
+		}
 		ref := "s." + f.GoName
-		n, code := sizeContrib(f, ref)
-		fixed += n
-		runtime.WriteString(code)
+		emit := fieldSkipExpr(f, ref)
+		// For pointer fields whose emit predicate is the nil check,
+		// the outer guard already proves non-nil. Pass the
+		// dereferenced inner to sizeContrib so it doesn't emit a
+		// redundant `if ref == nil { 4 } else { ... }` inside the
+		// `if ref != nil { ... }` we're already in.
+		sizeField, sizeRef := f, ref
+		if emit != "" && f.Pointer {
+			sizeField.Pointer = false
+			if f.PointeeType != "" {
+				sizeField.GoType = f.PointeeType
+			}
+			sizeRef = "(*" + ref + ")"
+		}
+		n, code := sizeContrib(sizeField, sizeRef)
+		if emit == "" {
+			fixed += len(f.JSONName) + 3 // "name":
+			if named > 0 {
+				fixed++ // comma
+			}
+			named++
+			fixed += n
+			runtime.WriteString(code)
+			continue
+		}
+		// Omit-eligible field: pessimistic worst-case includes a
+		// leading comma (cheaper than threading "is this the first
+		// emitted field" through the runtime guard).
+		var fb strings.Builder
+		fmt.Fprintf(&fb, "if %s {\n", emit)
+		fmt.Fprintf(&fb, "size += %d\n", len(f.JSONName)+4+n) // key + ":" + "," + const value bytes
+		fb.WriteString(code)
+		fb.WriteString("}\n")
+		runtime.WriteString(fb.String())
 	}
 	fmt.Fprintf(&b, "size := %d\n", fixed)
 	b.WriteString(runtime.String())
@@ -1804,9 +1906,14 @@ dst = append(dst, '"')
 			return prefix + `"`, fmt.Sprintf("dst = hex.AppendEncode(dst, %s)\ndst =append(dst, '\"')\n", ref), true
 		}
 	case KindURL:
-		return prefix + `"`, fmt.Sprintf("dst = %s(dst, %s.String())\n", appendStrFn(f.HTMLEscape), ref), true
+		// encode.AppendURL replicates url.URL.String semantics with
+		// byte-append — zero alloc (the stdlib AppendBinary internally
+		// calls String, which builds a strings.Builder buffer).
+		// URL output never contains `"` or `\` (both percent-encoded),
+		// so safe to drop between JSON quotes without escaping.
+		return prefix + `"`, fmt.Sprintf("dst = encode.AppendURL(dst, %s)\ndst = append(dst, '\"')\n", ref), true
 	case KindBigRat:
-		return prefix + `"`, fmt.Sprintf("dst = %s(dst, (&%s).RatString())\n", appendStrFn(f.HTMLEscape), ref), true
+		return prefix + `"`, fmt.Sprintf("if dst, err = (&%s).AppendText(dst); err != nil { return dst, err }\ndst = append(dst, '\"')\n", ref), true
 	case KindBigFloat:
 		return prefix + `"`, fmt.Sprintf("dst = (&%s).Append(dst, 'g', -1)\ndst = append(dst, '\"')\n", ref), true
 	}
@@ -1819,8 +1926,10 @@ const (
 	sizeInt     = 20 // "-9223372036854775808"
 	sizeUint    = 20 // "18446744073709551615"
 	sizeFloat   = 24 // IEEE-754 shortest round-trip printing
-	sizeStrMult = 2  // 2× for escape worst case
-	sizeStrPad  = 2  // surrounding quotes
+	sizeStrMult = 2  // 2× covers short escapes (\n, \", \\, …). Control
+	// chars expand to \uXXXX (6×) but are rare in real payloads; we
+	// accept the one-time realloc on pathological input.
+	sizeStrPad = 2 // surrounding quotes
 )
 
 // sizeContrib returns (constN, runtimeCode) — the constant byte count
@@ -1856,7 +1965,7 @@ func sizeContrib(f FieldInfo, ref string) (int, string) {
 	case KindFloat32, KindFloat64:
 		return sizeFloat, ""
 	case KindStruct:
-		if isGenerated(f.GoType) {
+		if isGenerated(f.GoType) || f.Iface.JSONSize {
 			return 0, fmt.Sprintf("size += %s.JSONSize()\n", ref)
 		}
 		return 128, ""
@@ -1865,30 +1974,48 @@ func sizeContrib(f FieldInfo, ref string) (int, string) {
 	case KindMap:
 		return sizeMapContrib(f, ref)
 	case KindBytes:
-		// base64 ≈ 4/3 of input + padding + quotes; array ≈ 4 per byte + brackets.
-		if f.Format == "array" {
+		switch f.Format {
+		case "array":
+			// JSON array of numbers: each byte → up to 3 digits + comma,
+			// minus 1 for missing trailing comma. Upper-bound with *4 and
+			// the +2 const covers `[` + `]`.
 			return 2, fmt.Sprintf("size += len(%s)*4\n", ref)
+		case "base16", "hex":
+			// Exactly 2× input.
+			return 2, fmt.Sprintf("size += len(%s)*2\n", ref)
+		case "base32", "base32hex":
+			// 8/5 of input rounded up to a block of 8. ((n+4)/5)*8.
+			return 2, fmt.Sprintf("size += ((len(%s)+4)/5)*8\n", ref)
 		}
-		// Worst case: hex = 2x, base64 ≈ 1.34x. Use 2x + quotes as upper bound.
-		return 2, fmt.Sprintf("size += len(%s)*2\n", ref)
+		// base64 (default) / base64url: ((n+2)/3)*4.
+		return 2, fmt.Sprintf("size += ((len(%s)+2)/3)*4\n", ref)
 	case KindTime:
-		// RFC3339Nano max ~35 chars including quotes; unix number up to 20.
-		return 40, ""
+		return timeFormatSize(f.Format), ""
 	case KindDuration:
-		// Number or "NhMm..." string; 32 upper bound.
-		return 32, ""
-	case KindNetIP, KindNetipAddr:
-		// IPv6 max "xxxx:...:xxxx" + zone = ~50 bytes + quotes.
-		return 54, ""
+		return durationFormatSize(f.Format), ""
+	case KindNetIP:
+		// net.IP is []byte, but ParseIP returns 16 bytes even for IPv4,
+		// so a raw `len(ip)==4` check is dead code. Use To4() — returns
+		// non-nil only when the address actually fits in 4 octets.
+		return 2, fmt.Sprintf("if %s.To4() != nil { size += 15 } else if len(%s) != 0 { size += 39 } else { size += 2 }\n", ref, ref)
+	case KindNetipAddr:
+		// netip.Addr: Is4() splits v4 vs v6 budget.
+		return 2, fmt.Sprintf("if %s.Is4() { size += 15 } else { size += 39 }\n", ref)
 	case KindNetipPrefix:
-		// IPv6 prefix "addr/128" = ~54 bytes + quotes.
-		return 58, ""
+		// netip.Prefix is Addr + /N: +4 for "/128" worst case.
+		return 2, fmt.Sprintf("if %s.Addr().Is4() { size += 19 } else { size += 43 }\n", ref)
 	case KindRawJSON:
 		return 0, fmt.Sprintf("if _n := len(%s); _n > 0 { size += _n } else { size += 4 }\n", ref)
 	case KindURL:
-		// URL string + quotes. 1 KB conservative upper bound — most URLs
-		// are well under, but path/query can grow.
-		return 1024, ""
+		// Sum the components instead of reserving a flat 256. The +8
+		// const covers `"` + `://` + `?` + `#` + closing `"`. Path and
+		// Fragment are stored decoded; String() re-percent-encodes
+		// non-ASCII bytes (3 chars per byte worst case) so we multiply
+		// by 3. Host and RawQuery emit as-is. User info reads
+		// Username/Password directly (no alloc) and multiplies by 3
+		// for percent-escape worst case.
+		return 8, fmt.Sprintf("size += len(%s.Scheme) + len(%s.Host)*3 + len(%s.Path)*3 + len(%s.RawQuery) + len(%s.Fragment)*3 + len(%s.Opaque)\nif %s.User != nil { _pw, _ := %s.User.Password(); size += (len(%s.User.Username()) + len(_pw))*3 + 2 }\n",
+			ref, ref, ref, ref, ref, ref, ref, ref, ref)
 	case KindBigInt:
 		// log10(2^bits) ≈ bits * 0.302. Add sign + safety. BitLen is cheap.
 		return 4, fmt.Sprintf("size += %s.BitLen()/3\n", ref)
@@ -1936,7 +2063,7 @@ func sizeSliceContrib(f FieldInfo, ref string, depth int) (int, string) {
 	case KindFloat32, KindFloat64:
 		fmt.Fprintf(&b, "size += len(%s) * %d\n", ref, sizeFloat)
 	case KindStruct:
-		if isGenerated(f.ElemType) {
+		if isGenerated(f.ElemType) || f.ElemIface.JSONSize {
 			if f.ElemPointer {
 				// `[]*T` / `[N]*T`: nil elements contribute `null` (4 bytes),
 				// non-nil deref-and-call.
@@ -1972,7 +2099,7 @@ func sizeMapContrib(f FieldInfo, ref string) (int, string) {
 
 	// Try to lift the value contribution out of the loop when it's a
 	// constant per-entry size — saves one map iteration over keys-only.
-	if v, ok := constSizePerEntry(f.ElemKind); ok {
+	if v, ok := constSizePerEntry(f.ElemKind, f.Format); ok {
 		fmt.Fprintf(&b, "size += len(%s) * %d\n", ref, perEntryFixed+v)
 		fmt.Fprintf(&b, "for _k := range %s { size += len(_k) * %d }\n", ref, sizeStrMult)
 		return 2, b.String()
@@ -1986,7 +2113,7 @@ func sizeMapContrib(f FieldInfo, ref string) (int, string) {
 	case KindString:
 		fmt.Fprintf(&b, "size += len(_v)*%d + %d\n", sizeStrMult, sizeStrPad)
 	case KindStruct:
-		if isGenerated(f.ElemType) {
+		if isGenerated(f.ElemType) || f.ElemIface.JSONSize {
 			b.WriteString("size += _v.JSONSize()\n")
 		} else {
 			b.WriteString("size += 128\n")
@@ -1995,6 +2122,15 @@ func sizeMapContrib(f FieldInfo, ref string) (int, string) {
 		b.WriteString("size += _v.BitLen()/3 + 4\n")
 	case KindBigRat:
 		b.WriteString("size += (_v.Num().BitLen() + _v.Denom().BitLen())/3 + 8\n")
+	case KindNetIP:
+		b.WriteString("if _v.To4() != nil { size += 17 } else if len(_v) != 0 { size += 41 } else { size += 4 }\n")
+	case KindNetipAddr:
+		b.WriteString("if _v.Is4() { size += 17 } else { size += 41 }\n")
+	case KindNetipPrefix:
+		b.WriteString("if _v.Addr().Is4() { size += 21 } else { size += 45 }\n")
+	case KindURL:
+		b.WriteString("size += len(_v.Scheme) + len(_v.Host)*3 + len(_v.Path)*3 + len(_v.RawQuery) + len(_v.Fragment)*3 + len(_v.Opaque) + 8\n")
+		b.WriteString("if _v.User != nil { _pw, _ := _v.User.Password(); size += (len(_v.User.Username()) + len(_pw))*3 + 2 }\n")
 	default:
 		// Anything else (nested slice/map, KindAny, …) falls back to the
 		// legacy flat estimate. Refining further is doable but rarely worth
@@ -2008,7 +2144,10 @@ func sizeMapContrib(f FieldInfo, ref string) (int, string) {
 // constSizePerEntry reports whether a value of the given kind has a
 // known fixed upper-bound size, and returns that size. Used to lift the
 // value contribution out of the per-entry loop in renderSizeMap.
-func constSizePerEntry(kind TypeKind) (int, bool) {
+// `format` is honored for KindTime / KindDuration so e.g. a
+// `map[string]time.Time` with `format:Kitchen` reserves ~9 bytes per
+// entry instead of the RFC3339Nano-sized 37.
+func constSizePerEntry(kind TypeKind, format string) (int, bool) {
 	switch kind {
 	case KindBool:
 		return sizeBool, true
@@ -2019,19 +2158,13 @@ func constSizePerEntry(kind TypeKind) (int, bool) {
 	case KindFloat32, KindFloat64:
 		return sizeFloat, true
 	case KindTime:
-		return 40, true
+		return timeFormatSize(format), true
 	case KindDuration:
-		return 32, true
-	case KindNetIP, KindNetipAddr:
-		return 54, true
-	case KindNetipPrefix:
-		return 58, true
+		return durationFormatSize(format), true
 	case KindBigFloat:
 		return 66, true // +2 for surrounding quotes
-	case KindURL:
-		return 1024, true
 	case KindAny:
-		return 256, true
+		return 64, true
 	}
 	return 0, false
 }
@@ -2729,25 +2862,45 @@ func renderBytes(f FieldInfo, ref, posVar string) string {
 }
 `, posVar, inlineSkipWS("k"), inlineSkipWS("k"), ref, ref, inlineSkipWS("k"), inlineSkipWS("k"), posVar)
 	}
-	parser := "base64.StdEncoding.DecodeString"
+	// AppendDecode form skips the `[]byte(_s)` copy DecodeString does
+	// internally. We pre-size dst via DecodedLen so the single
+	// allocation is exact and AppendDecode never grows it.
+	enc := "base64.StdEncoding"
+	dlen := "base64.StdEncoding.DecodedLen"
 	switch f.Format {
 	case "base64url":
-		parser = "base64.URLEncoding.DecodeString"
+		enc = "base64.URLEncoding"
+		dlen = "base64.URLEncoding.DecodedLen"
 	case "base32":
-		parser = "base32.StdEncoding.DecodeString"
+		enc = "base32.StdEncoding"
+		dlen = "base32.StdEncoding.DecodedLen"
 	case "base32hex":
-		parser = "base32.HexEncoding.DecodeString"
+		enc = "base32.HexEncoding"
+		dlen = "base32.HexEncoding.DecodedLen"
 	case "base16", "hex":
-		parser = "hex.DecodeString"
+		enc = "" // hex doesn't share the Encoding API
+	}
+	if enc == "" {
+		// hex.AppendDecode + hex.DecodedLen.
+		return fmt.Sprintf(`{
+	var _s string
+	%s
+	_dst := make([]byte, 0, hex.DecodedLen(len(_s)))
+	_dst, err := hex.AppendDecode(_dst, unsafe.Slice(unsafe.StringData(_s), len(_s)))
+	if err != nil { return result, 0, err }
+	%s = _dst
+}
+`, inlineScanString(posVar, "_s", posVar), ref)
 	}
 	return fmt.Sprintf(`{
 	var _s string
 	%s
-	var err error
-	%s, err = %s(_s)
+	_dst := make([]byte, 0, %s(len(_s)))
+	_dst, err := %s.AppendDecode(_dst, unsafe.Slice(unsafe.StringData(_s), len(_s)))
 	if err != nil { return result, 0, err }
+	%s = _dst
 }
-`, inlineScanString(posVar, "_s", posVar), ref, parser)
+`, inlineScanString(posVar, "_s", posVar), dlen, enc, ref)
 }
 
 // renderTime emits time.Time decode decode.
@@ -3284,15 +3437,16 @@ func seenSet(s StructInfo, f FieldInfo) string {
 // `key` must already be populated by inlineScanString.
 func unknownKey(s StructInfo, posVar string) string {
 	if inline := s.InlineField(); inline.Inline {
+		anyFn := "scan.Any"
+		if s.UseNumber {
+			anyFn = "scan.AnyNumber"
+		}
 		return fmt.Sprintf(`if result.%s == nil { result.%s = make(%s) }
-_start := %s
-_k, err := scan.SkipValue(data, _start)
+_v, _k, err := %s(data, %s)
 if err != nil { return result, 0, err }
-var _v any
-if err := json.Unmarshal(data[_start:_k], &_v); err != nil { return result, 0, err }
 result.%s[key] = _v
 %s = _k
-`, inline.GoName, inline.GoName, inline.GoType, posVar, inline.GoName, posVar)
+`, inline.GoName, inline.GoName, inline.GoType, anyFn, posVar, inline.GoName, posVar)
 	}
 	if s.IgnoreUnknown {
 		return fmt.Sprintf(`k, err := scan.SkipValue(data, %s)
@@ -4048,25 +4202,47 @@ func renderStreamBytes(f FieldInfo, ref, posVar string) string {
 }
 `, posVar, ref, ref, posVar)
 	}
-	parser := "base64.StdEncoding.DecodeString"
+	// AppendDecode path: skips the `[]byte(_v)` copy DecodeString does.
+	// _v is already a copied string owned by the decoder (stream path
+	// can't alias), so converting back to []byte via unsafe is sound
+	// for the duration of the decode call.
+	enc := "base64.StdEncoding"
+	dlen := "base64.StdEncoding.DecodedLen"
 	switch f.Format {
 	case "base64url":
-		parser = "base64.URLEncoding.DecodeString"
+		enc = "base64.URLEncoding"
+		dlen = "base64.URLEncoding.DecodedLen"
 	case "base32":
-		parser = "base32.StdEncoding.DecodeString"
+		enc = "base32.StdEncoding"
+		dlen = "base32.StdEncoding.DecodedLen"
 	case "base32hex":
-		parser = "base32.HexEncoding.DecodeString"
+		enc = "base32.HexEncoding"
+		dlen = "base32.HexEncoding.DecodedLen"
 	case "base16", "hex":
-		parser = "hex.DecodeString"
+		enc = ""
+	}
+	if enc == "" {
+		return fmt.Sprintf(`{
+	_v, _k, err := _s.String(%s)
+	if err != nil { return result, 0, err }
+	_dst := make([]byte, 0, hex.DecodedLen(len(_v)))
+	_dst, err = hex.AppendDecode(_dst, unsafe.Slice(unsafe.StringData(_v), len(_v)))
+	if err != nil { return result, 0, err }
+	%s = _dst
+	%s = _k
+}
+`, posVar, ref, posVar)
 	}
 	return fmt.Sprintf(`{
 	_v, _k, err := _s.String(%s)
 	if err != nil { return result, 0, err }
-	%s, err = %s(_v)
+	_dst := make([]byte, 0, %s(len(_v)))
+	_dst, err = %s.AppendDecode(_dst, unsafe.Slice(unsafe.StringData(_v), len(_v)))
 	if err != nil { return result, 0, err }
+	%s = _dst
 	%s = _k
 }
-`, posVar, ref, parser, posVar)
+`, posVar, dlen, enc, ref, posVar)
 }
 
 func renderStreamTime(f FieldInfo, ref, posVar string) string {
@@ -4303,15 +4479,16 @@ func renderStreamAny(f FieldInfo, ref, posVar string) string {
 // streamUnknownKey is the stream-scanner counterpart of unknownKey.
 func streamUnknownKey(s StructInfo, posVar string) string {
 	if inline := s.InlineField(); inline.Inline {
+		anyFn := "_s.Any"
+		if s.UseNumber {
+			anyFn = "_s.AnyNumber"
+		}
 		return fmt.Sprintf(`if result.%s == nil { result.%s = make(%s) }
-_start := %s
-_k, err := _s.SkipValue(_start)
+_v, _k, err := %s(%s)
 if err != nil { return result, 0, err }
-var _v any
-if err := json.Unmarshal(_s.Bytes()[_start:_k], &_v); err != nil { return result, 0, err }
 result.%s[key] = _v
 %s = _k
-`, inline.GoName, inline.GoName, inline.GoType, posVar, inline.GoName, posVar)
+`, inline.GoName, inline.GoName, inline.GoType, anyFn, posVar, inline.GoName, posVar)
 	}
 	if s.IgnoreUnknown {
 		return fmt.Sprintf(`k, err := _s.SkipValue(%s)

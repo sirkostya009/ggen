@@ -903,6 +903,7 @@ func (s *structSet) extractFieldFromTypes(structName string, field *types.Var, t
 		fi.Kind = KindMap
 		fi.ElemType = types.TypeString(tt.Elem(), qualifier)
 		fi.ElemKind = resolveKind(fi.ElemType)
+		fi.ElemIface = inspectType(tt.Elem(), s.stdIfaces)
 	case *types.Slice:
 		// `[]byte` and `[]uint8` were already classified as KindBytes
 		// by resolveKind — leave that alone so base64/hex/array paths
@@ -916,6 +917,7 @@ func (s *structSet) extractFieldFromTypes(structName string, field *types.Var, t
 			}
 			fi.ElemType = types.TypeString(elem, qualifier)
 			fi.ElemKind = resolveKind(fi.ElemType)
+			fi.ElemIface = inspectType(elem, s.stdIfaces)
 		}
 	case *types.Array:
 		if fi.Kind != KindBytes {
@@ -928,6 +930,7 @@ func (s *structSet) extractFieldFromTypes(structName string, field *types.Var, t
 			}
 			fi.ElemType = types.TypeString(elem, qualifier)
 			fi.ElemKind = resolveKind(fi.ElemType)
+			fi.ElemIface = inspectType(elem, s.stdIfaces)
 		}
 	}
 

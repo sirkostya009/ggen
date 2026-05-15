@@ -463,11 +463,12 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 						}
 					}
 
-					var err error
-					result.Blob, err = base64.StdEncoding.DecodeString(_s)
+					_dst := make([]byte, 0, base64.StdEncoding.DecodedLen(len(_s)))
+					_dst, err := base64.StdEncoding.AppendDecode(_dst, unsafe.Slice(unsafe.StringData(_s), len(_s)))
 					if err != nil {
 						return result, 0, err
 					}
+					result.Blob = _dst
 				}
 			case "name":
 				if seenName {
@@ -1254,10 +1255,12 @@ func (Node) DecodeStreamFrom(_s *scan.Stream, i int) (Node, int, error) {
 					if err != nil {
 						return result, 0, err
 					}
-					result.Blob, err = base64.StdEncoding.DecodeString(_v)
+					_dst := make([]byte, 0, base64.StdEncoding.DecodedLen(len(_v)))
+					_dst, err = base64.StdEncoding.AppendDecode(_dst, unsafe.Slice(unsafe.StringData(_v), len(_v)))
 					if err != nil {
 						return result, 0, err
 					}
+					result.Blob = _dst
 					j = _k
 				}
 			case "name":
@@ -2036,8 +2039,8 @@ func (Node) DecodeStreamFrom(_s *scan.Stream, i int) (Node, int, error) {
 // JSONSize returns an upper bound on the marshaled size, used by
 // encode.Marshal to pre-size the buffer in a single allocation.
 func (s Node) JSONSize() int {
-	size := 499
-	size += len(s.Blob) * 2
+	size := 486
+	size += ((len(s.Blob) + 2) / 3) * 4
 	if _n := len(s.Children); _n > 0 {
 		size += _n - 1
 	}
@@ -2059,9 +2062,8 @@ func (s Node) JSONSize() int {
 		size += len(s.Matrix[i0]) * 20
 	}
 	size += len(s.Name) * 2
-	if s.Parent == nil {
-		size += 4
-	} else {
+	if s.Parent != nil {
+		size += 10
 		size += (*s.Parent).JSONSize()
 	}
 	size += len(s.Props) * 4
