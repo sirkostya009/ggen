@@ -11,28 +11,6 @@ type Address struct {
 	ZipCode string `json:"zipCode" ggen:"required,len=5"`
 }
 
-//ggen:generate
-type SomePayloadRequestStruct struct {
-	Field1   string    `json:"field1" ggen:"optional,minlen=2,maxlen=23"`
-	Slice    []int     `json:"array" ggen:"required,minlen=1,maxlen=10"`
-	Address  Address   `json:"address" ggen:"required"`
-	Contacts []Address `json:"contacts" ggen:"maxlen=5"`
-	Email    string    `json:"email" ggen:"email"`
-	Website  string    `json:"website" ggen:"url"`
-	UserID   string    `json:"userId"`
-	Role     string    `json:"role" ggen:"oneof=admin|user|guest"`
-	Age      int       `json:"age" ggen:"gte=0,lte=150"`
-	Quota    int       `json:"quota" ggen:"gt=0"`
-}
-
-//ggen:generate
-type AnotherStruct struct {
-	Title  string  `json:"title" ggen:"required,minlen=1,maxlen=100"`
-	Score  float64 `json:"score" ggen:"gte=0,lte=10"`
-	Active bool    `json:"active"`
-	Kind   int     `json:"kind" ggen:"oneof=1|2|3"`
-}
-
 // Node is a recursive tree node used for the ~1 MB deep-payload benchmark.
 // Shape mirrors what sonic uses in their macro benchmarks: a mix of scalars,
 // slices, maps, and a self-referential child array.

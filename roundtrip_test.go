@@ -12,21 +12,21 @@ import (
 // generated parser accepts, matching the original value.
 func TestMarshalRoundtrip(t *testing.T) {
 	out, _ := encode.Marshal(complexValue)
-	got, err := decode.Unmarshal[SomePayloadRequestStruct](out)
+	got, err := decode.Unmarshal[Node](out)
 	if err != nil {
 		t.Fatalf("parse: %v\n%s", err, out)
 	}
-	if got.Field1 != complexValue.Field1 {
-		t.Errorf("Field1 mismatch: %q vs %q", got.Field1, complexValue.Field1)
+	if got.Name != complexValue.Name {
+		t.Errorf("Name mismatch: %q vs %q", got.Name, complexValue.Name)
 	}
-	if len(got.Slice) != len(complexValue.Slice) {
-		t.Errorf("Slice len: %d vs %d", len(got.Slice), len(complexValue.Slice))
+	if len(got.Tags) != len(complexValue.Tags) {
+		t.Errorf("Tags len: %d vs %d", len(got.Tags), len(complexValue.Tags))
 	}
-	if got.Address.City != complexValue.Address.City {
-		t.Errorf("Address.City: %q vs %q", got.Address.City, complexValue.Address.City)
+	if len(got.Children) != len(complexValue.Children) {
+		t.Errorf("Children len: %d vs %d", len(got.Children), len(complexValue.Children))
 	}
-	if len(got.Contacts) != len(complexValue.Contacts) {
-		t.Errorf("Contacts len: %d vs %d", len(got.Contacts), len(complexValue.Contacts))
+	if got.Children[1].Name != complexValue.Children[1].Name {
+		t.Errorf("nested mismatch: %q vs %q", got.Children[1].Name, complexValue.Children[1].Name)
 	}
 }
 
@@ -74,11 +74,11 @@ func TestWrite(t *testing.T) {
 	if err := encode.Write(&buf, complexValue); err != nil {
 		t.Fatal(err)
 	}
-	got, err := decode.Unmarshal[SomePayloadRequestStruct](buf.Bytes())
+	got, err := decode.Unmarshal[Node](buf.Bytes())
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
-	if got.Field1 != complexValue.Field1 {
-		t.Errorf("Field1 mismatch")
+	if got.Name != complexValue.Name {
+		t.Errorf("Name mismatch")
 	}
 }

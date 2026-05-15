@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	gofrs "github.com/gofrs/uuid/v5"
 	"github.com/google/uuid"
 	"github.com/sirkostya009/ggen/thirdparty2"
 )
@@ -336,13 +337,15 @@ func richTypesWorst() RichTypes {
 	hugeInt, _ := new(big.Int).SetString("123456789012345678901234567890123456789012345678901234567890", 10)
 	hugeRat, _ := new(big.Rat).SetString("987654321098765432109876543210/123456789012345678901234567890")
 	hugeFloat, _, _ := big.ParseFloat("3.14159265358979323846264338327950288419716939937510", 10, 200, big.ToNearestEven)
+	gofrsID, _ := gofrs.FromString("550e8400-e29b-41d4-a716-446655440000")
 	return RichTypes{
-		Raw1: []byte(`{"nested":{"deep":[1,2,3,"abc","def"]}}`),
-		Raw2: []byte(`[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]`),
-		Site: *site,
-		Big:  *hugeInt,
-		BigF: *hugeFloat,
-		BigR: *hugeRat,
-		ID:   uuid.MustParse("550e8400-e29b-41d4-a716-446655440000"),
+		Raw1:    []byte(`{"nested":{"deep":[1,2,3,"abc","def"]}}`),
+		Raw2:    []byte(`[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]`),
+		Site:    *site,
+		Big:     *hugeInt,
+		BigF:    *hugeFloat,
+		BigR:    *hugeRat,
+		ID:      uuid.MustParse("550e8400-e29b-41d4-a716-446655440000"),
+		GofrsID: gofrsID,
 	}
 }

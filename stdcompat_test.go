@@ -100,14 +100,6 @@ func TestStdCompat_Address(t *testing.T) {
 	crossCompat(t, Address{Street: "Main 1", City: "Lviv", ZipCode: "79000"})
 }
 
-func TestStdCompat_SomePayloadRequestStruct(t *testing.T) {
-	crossCompat(t, complexValue)
-}
-
-func TestStdCompat_AnotherStruct(t *testing.T) {
-	crossCompat(t, AnotherStruct{Title: "hi", Score: 7.5, Active: true, Kind: 2})
-}
-
 func TestStdCompat_Node(t *testing.T) {
 	// A small hand-built tree keeps the failure message readable when the
 	// giant megaValue is used and something breaks.
@@ -243,26 +235,29 @@ func TestStdCompat_InlineStruct(t *testing.T) {
 //
 //ggen:generate
 type richSubset struct {
-	Raw1 json.RawMessage `json:"raw1"`
-	Raw2 jsontext.Value  `json:"raw2"`
-	Big  big.Int         `json:"big"`
-	BigF big.Float       `json:"bigF"`
-	BigR big.Rat         `json:"bigR"`
-	ID   uuid.UUID       `json:"id"`
+	Raw1    json.RawMessage `json:"raw1"`
+	Raw2    jsontext.Value  `json:"raw2"`
+	Big     big.Int         `json:"big"`
+	BigF    big.Float       `json:"bigF"`
+	BigR    big.Rat         `json:"bigR"`
+	ID      uuid.UUID       `json:"id"`
+	GofrsID gofrs.UUID      `json:"gofrsId"`
 }
 
 func TestStdCompat_RichTypes(t *testing.T) {
 	hugeInt, _ := new(big.Int).SetString("123456789012345678901234567890", 10)
 	id := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
+	gofrsID, _ := gofrs.FromString("550e8400-e29b-41d4-a716-446655440000")
 	rat, _ := new(big.Rat).SetString("22/7")
 	bigF, _, _ := big.ParseFloat("3.14159265358979323846", 10, 100, big.ToNearestEven)
 	crossCompat(t, richSubset{
-		Raw1: json.RawMessage(`{"nested":42}`),
-		Raw2: jsontext.Value(`[1,2,3]`),
-		Big:  *hugeInt,
-		BigF: *bigF,
-		BigR: *rat,
-		ID:   id,
+		Raw1:    json.RawMessage(`{"nested":42}`),
+		Raw2:    jsontext.Value(`[1,2,3]`),
+		Big:     *hugeInt,
+		BigF:    *bigF,
+		BigR:    *rat,
+		ID:      id,
+		GofrsID: gofrsID,
 	})
 }
 
@@ -298,11 +293,6 @@ func TestStdCompat_AnyStruct(t *testing.T) {
 	// Scalar bodies.
 	crossCompat(t, AnyStruct{Name: "y", Body: "scalar"})
 	crossCompat(t, AnyStruct{Name: "z", Body: nil})
-}
-
-func TestStdCompat_GofrsUUIDStruct(t *testing.T) {
-	id, _ := gofrs.FromString("550e8400-e29b-41d4-a716-446655440000")
-	crossCompat(t, GofrsUUIDStruct{ID: id})
 }
 
 func TestStdCompat_TextFallbackStruct(t *testing.T) {

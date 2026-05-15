@@ -359,6 +359,7 @@ func (RichTypes) DecodeFrom(data []byte, i int) (RichTypes, int, error) {
 	seenBig := false
 	seenBigF := false
 	seenBigR := false
+	seenGofrsID := false
 	seenID := false
 	seenRaw1 := false
 	seenRaw2 := false
@@ -596,6 +597,25 @@ func (RichTypes) DecodeFrom(data []byte, i int) (RichTypes, int, error) {
 			default:
 				return result, 0, &validation.UnknownKeyError{Field: key}
 			}
+		case 7:
+			if key == "gofrsId" {
+				if seenGofrsID {
+					return result, 0, &validation.DuplicateKeyError{Field: "gofrsId"}
+				}
+				seenGofrsID = true
+				{
+					_ts, _tj, _terr := scan.String(data, j)
+					if _terr != nil {
+						return result, 0, _terr
+					}
+					if _err := result.GofrsID.UnmarshalText(unsafe.Slice(unsafe.StringData(_ts), len(_ts))); _err != nil {
+						return result, 0, _err
+					}
+					j = _tj
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
 		default:
 			return result, 0, &validation.UnknownKeyError{Field: key}
 		}
@@ -628,6 +648,7 @@ func (RichTypes) DecodeStreamFrom(_s *scan.Stream, i int) (RichTypes, int, error
 	seenBig := false
 	seenBigF := false
 	seenBigR := false
+	seenGofrsID := false
 	seenID := false
 	seenRaw1 := false
 	seenRaw2 := false
@@ -792,6 +813,25 @@ func (RichTypes) DecodeStreamFrom(_s *scan.Stream, i int) (RichTypes, int, error
 			default:
 				return result, 0, &validation.UnknownKeyError{Field: key}
 			}
+		case 7:
+			if key == "gofrsId" {
+				if seenGofrsID {
+					return result, 0, &validation.DuplicateKeyError{Field: "gofrsId"}
+				}
+				seenGofrsID = true
+				{
+					_ts, _tj, _terr := _s.String(j)
+					if _terr != nil {
+						return result, 0, _terr
+					}
+					if _err := result.GofrsID.UnmarshalText(unsafe.Slice(unsafe.StringData(_ts), len(_ts))); _err != nil {
+						return result, 0, _err
+					}
+					j = _tj
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
 		default:
 			return result, 0, &validation.UnknownKeyError{Field: key}
 		}
@@ -823,7 +863,7 @@ func (RichTypes) DecodeStreamFrom(_s *scan.Stream, i int) (RichTypes, int, error
 // JSONSize returns an upper bound on the marshaled size, used by
 // encode.Marshal to pre-size the buffer in a single allocation.
 func (s RichTypes) JSONSize() int {
-	size := 268
+	size := 407
 	size += s.Big.BitLen() / 3
 	size += (s.BigR.Num().BitLen() + s.BigR.Denom().BitLen()) / 3
 	if _n := len(s.Raw1); _n > 0 {
@@ -858,7 +898,16 @@ func (s RichTypes) AppendJSON(dst []byte) ([]byte, error) {
 	if dst, err = (&s.BigR).AppendText(dst); err != nil {
 		return dst, err
 	}
-	dst = append(dst, "\",\"id\":"...)
+	dst = append(dst, "\",\"gofrsId\":"...)
+	{
+		_t, _err := s.GofrsID.MarshalText()
+		if _err != nil {
+			return dst, _err
+		}
+		dst = append(dst, '"')
+		dst = encode.AppendStringNoHTML(dst, encode.BytesToString(_t))
+	}
+	dst = append(dst, ",\"id\":"...)
 	{
 		_t, _err := s.ID.MarshalText()
 		if _err != nil {
@@ -897,6 +946,7 @@ func (richSubset) DecodeFrom(data []byte, i int) (richSubset, int, error) {
 	seenBig := false
 	seenBigF := false
 	seenBigR := false
+	seenGofrsID := false
 	seenID := false
 	seenRaw1 := false
 	seenRaw2 := false
@@ -1095,6 +1145,25 @@ func (richSubset) DecodeFrom(data []byte, i int) (richSubset, int, error) {
 			default:
 				return result, 0, &validation.UnknownKeyError{Field: key}
 			}
+		case 7:
+			if key == "gofrsId" {
+				if seenGofrsID {
+					return result, 0, &validation.DuplicateKeyError{Field: "gofrsId"}
+				}
+				seenGofrsID = true
+				{
+					_ts, _tj, _terr := scan.String(data, j)
+					if _terr != nil {
+						return result, 0, _terr
+					}
+					if _err := result.GofrsID.UnmarshalText(unsafe.Slice(unsafe.StringData(_ts), len(_ts))); _err != nil {
+						return result, 0, _err
+					}
+					j = _tj
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
 		default:
 			return result, 0, &validation.UnknownKeyError{Field: key}
 		}
@@ -1127,6 +1196,7 @@ func (richSubset) DecodeStreamFrom(_s *scan.Stream, i int) (richSubset, int, err
 	seenBig := false
 	seenBigF := false
 	seenBigR := false
+	seenGofrsID := false
 	seenID := false
 	seenRaw1 := false
 	seenRaw2 := false
@@ -1273,6 +1343,25 @@ func (richSubset) DecodeStreamFrom(_s *scan.Stream, i int) (richSubset, int, err
 			default:
 				return result, 0, &validation.UnknownKeyError{Field: key}
 			}
+		case 7:
+			if key == "gofrsId" {
+				if seenGofrsID {
+					return result, 0, &validation.DuplicateKeyError{Field: "gofrsId"}
+				}
+				seenGofrsID = true
+				{
+					_ts, _tj, _terr := _s.String(j)
+					if _terr != nil {
+						return result, 0, _terr
+					}
+					if _err := result.GofrsID.UnmarshalText(unsafe.Slice(unsafe.StringData(_ts), len(_ts))); _err != nil {
+						return result, 0, _err
+					}
+					j = _tj
+				}
+			} else {
+				return result, 0, &validation.UnknownKeyError{Field: key}
+			}
 		default:
 			return result, 0, &validation.UnknownKeyError{Field: key}
 		}
@@ -1304,7 +1393,7 @@ func (richSubset) DecodeStreamFrom(_s *scan.Stream, i int) (richSubset, int, err
 // JSONSize returns an upper bound on the marshaled size, used by
 // encode.Marshal to pre-size the buffer in a single allocation.
 func (s richSubset) JSONSize() int {
-	size := 252
+	size := 391
 	size += s.Big.BitLen() / 3
 	size += (s.BigR.Num().BitLen() + s.BigR.Denom().BitLen()) / 3
 	if _n := len(s.Raw1); _n > 0 {
@@ -1334,7 +1423,16 @@ func (s richSubset) AppendJSON(dst []byte) ([]byte, error) {
 	if dst, err = (&s.BigR).AppendText(dst); err != nil {
 		return dst, err
 	}
-	dst = append(dst, "\",\"id\":"...)
+	dst = append(dst, "\",\"gofrsId\":"...)
+	{
+		_t, _err := s.GofrsID.MarshalText()
+		if _err != nil {
+			return dst, _err
+		}
+		dst = append(dst, '"')
+		dst = encode.AppendStringNoHTML(dst, encode.BytesToString(_t))
+	}
+	dst = append(dst, ",\"id\":"...)
 	{
 		_t, _err := s.ID.MarshalText()
 		if _err != nil {

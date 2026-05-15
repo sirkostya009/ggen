@@ -15,23 +15,28 @@ import (
 	"strings"
 	"testing"
 
+	gofrs "github.com/gofrs/uuid/v5"
 	"github.com/google/uuid"
 	"github.com/sirkostya009/ggen/decode"
 	"github.com/sirkostya009/ggen/encode"
 )
 
 // RichTypes mixes every newly-added Kind. Field naming mirrors the type so
-// failures point straight at the offending dispatch case.
+// failures point straight at the offending dispatch case. ID and GofrsID
+// cover both major UUID libraries — both are `type UUID [16]byte` and
+// satisfy TextMarshaler/Unmarshaler, so the same generated dispatch
+// serves both with no per-lib codegen.
 //
 //ggen:generate
 type RichTypes struct {
-	Raw1 json.RawMessage `json:"raw1"`
-	Raw2 jsontext.Value  `json:"raw2"`
-	Site url.URL         `json:"site"`
-	Big  big.Int         `json:"big"`
-	BigF big.Float       `json:"bigF"`
-	BigR big.Rat         `json:"bigR"`
-	ID   uuid.UUID       `json:"id"`
+	Raw1    json.RawMessage `json:"raw1"`
+	Raw2    jsontext.Value  `json:"raw2"`
+	Site    url.URL         `json:"site"`
+	Big     big.Int         `json:"big"`
+	BigF    big.Float       `json:"bigF"`
+	BigR    big.Rat         `json:"bigR"`
+	ID      uuid.UUID       `json:"id"`
+	GofrsID gofrs.UUID      `json:"gofrsId"`
 }
 
 // TestRich_Roundtrip marshal → unmarshal preserves every field. Big values
@@ -40,17 +45,19 @@ func TestRich_Roundtrip(t *testing.T) {
 	hugeInt, _ := new(big.Int).SetString("123456789012345678901234567890", 10)
 	site, _ := url.Parse("https://example.com/path?q=1")
 	id := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
+	gofrsID, _ := gofrs.FromString("550e8400-e29b-41d4-a716-446655440000")
 	rat, _ := new(big.Rat).SetString("22/7")
 	bigF, _, _ := big.ParseFloat("3.14159265358979323846", 10, 100, big.ToNearestEven)
 
 	in := RichTypes{
-		Raw1: json.RawMessage(`{"nested":42}`),
-		Raw2: jsontext.Value(`[1,2,3]`),
-		Site: *site,
-		Big:  *hugeInt,
-		BigF: *bigF,
-		BigR: *rat,
-		ID:   id,
+		Raw1:    json.RawMessage(`{"nested":42}`),
+		Raw2:    jsontext.Value(`[1,2,3]`),
+		Site:    *site,
+		Big:     *hugeInt,
+		BigF:    *bigF,
+		BigR:    *rat,
+		ID:      id,
+		GofrsID: gofrsID,
 	}
 	out, _ := encode.Marshal(in)
 	got, err := decode.Unmarshal[RichTypes](out)
@@ -83,6 +90,29 @@ func TestRich_Roundtrip(t *testing.T) {
 	}
 	if got.ID != in.ID {
 		t.Errorf("ID = %s, want %s", got.ID, in.ID)
+	}
+	if got.GofrsID != in.GofrsID {
+		t.Errorf("GofrsID = %s, want %s", got.GofrsID, in.GofrsID)
+	}
+}
+
+// TestRich_GofrsUUID_AltForms confirms the generated decoder delegates to
+// the lib's UnmarshalText, which accepts more forms than the canonical
+// 8-4-4-4-12 dashed string: hyphen-less and urn-prefixed pass too. Bytes-
+// malformed input still errors.
+func TestRich_GofrsUUID_AltForms(t *testing.T) {
+	cases := [][]byte{
+		[]byte(`{"gofrsId":"550e8400-e29b-41d4-a716-446655440000"}`), // canonical
+		[]byte(`{"gofrsId":"550e8400e29b41d4a716446655440000"}`),     // hyphen-less
+		[]byte(`{"gofrsId":"urn:uuid:550e8400-e29b-41d4-a716-446655440000"}`),
+	}
+	for _, c := range cases {
+		if _, err := decode.Unmarshal[RichTypes](c); err != nil {
+			t.Errorf("unmarshal %s: %v", c, err)
+		}
+	}
+	if _, err := decode.Unmarshal[RichTypes]([]byte(`{"gofrsId":"not-a-uuid-at-all"}`)); err == nil {
+		t.Error("expected error on garbage")
 	}
 }
 

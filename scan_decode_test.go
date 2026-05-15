@@ -34,39 +34,30 @@ func (c *chunkReader) Read(p []byte) (int, error) {
 }
 
 func TestUnmarshal_roundtrip(t *testing.T) {
-	got, err := decode.Unmarshal[SomePayloadRequestStruct](complexPayload)
+	got, err := decode.Unmarshal[Node](complexPayload)
 	if err != nil {
 		t.Fatalf("Unmarshal: %v", err)
 	}
-	if got.Field1 != "hello world" {
-		t.Errorf("Field1 = %q", got.Field1)
+	if got.ID != 42 || got.Name != "hello world" || got.Score != 9.5 || !got.Active {
+		t.Errorf("scalars wrong: %+v", got)
 	}
-	if len(got.Slice) != 5 || got.Slice[0] != 1 || got.Slice[4] != 5 {
-		t.Errorf("Slice = %v", got.Slice)
+	if len(got.Tags) != 3 || got.Tags[0] != "alpha" || got.Tags[2] != "gamma" {
+		t.Errorf("Tags = %v", got.Tags)
 	}
-	if got.Address.Street != "Main 1" || got.Address.City != "Lviv" || got.Address.ZipCode != "79000" {
-		t.Errorf("Address = %+v", got.Address)
+	if got.Props["k1"] != "v1" || got.Props["k2"] != "v2" {
+		t.Errorf("Props = %v", got.Props)
 	}
-	if len(got.Contacts) != 2 || got.Contacts[1].Street != "S2" || got.Contacts[0].ZipCode != "00001" {
-		t.Errorf("Contacts = %+v", got.Contacts)
-	}
-	if got.Email != "foo@bar.com" || got.Website != "https://example.com/x" {
-		t.Errorf("Email/Website = %q / %q", got.Email, got.Website)
-	}
-	if got.UserID != "550e8400-e29b-41d4-a716-446655440000" {
-		t.Errorf("UserID = %q", got.UserID)
-	}
-	if got.Role != "admin" || got.Age != 30 || got.Quota != 5 {
-		t.Errorf("Role/Age/Quota = %q/%d/%d", got.Role, got.Age, got.Quota)
+	if len(got.Children) != 2 || got.Children[0].ID != 1 || got.Children[1].Name != "child-2" {
+		t.Errorf("Children = %+v", got.Children)
 	}
 }
 
 func TestRead_roundtrip(t *testing.T) {
-	got, err := decode.Read[SomePayloadRequestStruct](bytes.NewReader(complexPayload))
+	got, err := decode.Read[Node](bytes.NewReader(complexPayload))
 	if err != nil {
 		t.Fatalf("Read: %v", err)
 	}
-	if got.Field1 != "hello world" || got.Role != "admin" {
+	if got.Name != "hello world" || got.ID != 42 {
 		t.Errorf("got %+v", got)
 	}
 }
@@ -100,34 +91,34 @@ func TestReadSlice_roundtrip(t *testing.T) {
 }
 
 func TestUnmarshalStream_roundtrip(t *testing.T) {
-	got, _, err := decode.UnmarshalStream[SomePayloadRequestStruct](
+	got, _, err := decode.UnmarshalStream[Node](
 		bytes.NewReader(complexPayload), make([]byte, 0, len(complexPayload)))
 	if err != nil {
 		t.Fatalf("UnmarshalStream: %v", err)
 	}
-	if got.Field1 != "hello world" || got.Role != "admin" || got.Age != 30 {
+	if got.Name != "hello world" || got.ID != 42 || got.Score != 9.5 {
 		t.Errorf("got %+v", got)
 	}
-	if len(got.Slice) != 5 || len(got.Contacts) != 2 {
+	if len(got.Tags) != 3 || len(got.Children) != 2 {
 		t.Errorf("slices wrong: %+v", got)
 	}
-	if got.Address.City != "Lviv" || got.Contacts[1].Street != "S2" {
-		t.Errorf("nested structs wrong: %+v", got)
+	if got.Children[1].Name != "child-2" {
+		t.Errorf("nested struct wrong: %+v", got)
 	}
 }
 
 func TestUnmarshalStream_chunked(t *testing.T) {
 	// Force Ensure to loop: reader hands out 1 byte per Read call.
 	r := &chunkReader{data: complexPayload, max: 1}
-	got, _, err := decode.UnmarshalStream[SomePayloadRequestStruct](r, nil)
+	got, _, err := decode.UnmarshalStream[Node](r, nil)
 	if err != nil {
 		t.Fatalf("UnmarshalStream (1-byte chunks): %v", err)
 	}
-	if got.Field1 != "hello world" || got.UserID != "550e8400-e29b-41d4-a716-446655440000" {
+	if got.Name != "hello world" || got.ID != 42 {
 		t.Errorf("chunked decode wrong: %+v", got)
 	}
-	if len(got.Slice) != 5 || got.Slice[3] != 4 {
-		t.Errorf("slice wrong: %v", got.Slice)
+	if len(got.Tags) != 3 || got.Tags[2] != "gamma" {
+		t.Errorf("tags wrong: %v", got.Tags)
 	}
 }
 
@@ -135,15 +126,15 @@ func TestUnmarshalStream_tinyInitial(t *testing.T) {
 	// Hint smaller than payload — buffer must grow via append mid-parse.
 	// Zero-copy strings must remain valid across the grow (GC keeps old
 	// backing arrays alive because aliases reference them).
-	got, _, err := decode.UnmarshalStream[SomePayloadRequestStruct](
+	got, _, err := decode.UnmarshalStream[Node](
 		bytes.NewReader(complexPayload), make([]byte, 0, 32))
 	if err != nil {
 		t.Fatalf("UnmarshalStream (tiny hint): %v", err)
 	}
-	if got.Field1 != "hello world" || got.UserID != "550e8400-e29b-41d4-a716-446655440000" {
+	if got.Name != "hello world" || got.ID != 42 {
 		t.Errorf("post-grow alias corrupted: %+v", got)
 	}
-	if got.Address.Street != "Main 1" {
-		t.Errorf("nested string alias corrupted: %q", got.Address.Street)
+	if got.Children[0].Name != "child-1" {
+		t.Errorf("nested string alias corrupted: %q", got.Children[0].Name)
 	}
 }

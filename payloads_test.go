@@ -1,64 +1,55 @@
 package main
 
-import (
-	"math/rand"
+import "math/rand"
 
-	"github.com/sirkostya009/ggen/encode"
-)
-
-// --- complex payload: SomePayloadRequestStruct -------------------------------
+// --- complex payload: small handcrafted Node -------------------------------
+//
+// Used by the roundtrip / read / scan-decode test families to exercise the
+// dispatch surface (scalars + slices + maps + a couple of children) without
+// the noise of the multi-megabyte mega payload. Field values are fixed so
+// tests can assert on them directly.
 
 var complexPayload = []byte(`{
-    "field1": "hello world",
-    "array": [1,2,3,4,5],
-    "address": {"street":"Main 1","city":"Lviv","zipCode":"79000"},
-    "contacts": [
-        {"street":"S1","city":"C1","zipCode":"00001"},
-        {"street":"S2","city":"C2","zipCode":"00002"}
-    ],
-    "email": "foo@bar.com",
-    "website": "https://example.com/x",
-    "userId": "550e8400-e29b-41d4-a716-446655440000",
-    "role": "admin",
-    "age": 30,
-    "quota": 5
+    "id": 42,
+    "name": "hello world",
+    "score": 9.5,
+    "active": true,
+    "tags": ["alpha","beta","gamma"],
+    "props": {"k1":"v1","k2":"v2"},
+    "children": [
+        {"id":1, "name": "child-1", "score":1.5, "active": false, "tags": ["x"], "props": {"a":"1"}, "children": null},
+        {"id":2, "name": "child-2", "score":2.5, "active": true, "tags": ["y","z"], "props": {"b":"2"}, "children": null}
+    ]
 }`)
 
 // complexValue is the struct form of complexPayload, used by marshal benches.
-var complexValue = SomePayloadRequestStruct{
-	Field1:   "hello world",
-	Slice:    []int{1, 2, 3, 4, 5},
-	Address:  Address{Street: "Main 1", City: "Lviv", ZipCode: "79000"},
-	Contacts: []Address{{Street: "S1", City: "C1", ZipCode: "00001"}, {Street: "S2", City: "C2", ZipCode: "00002"}},
-	Email:    "foo@bar.com",
-	Website:  "https://example.com/x",
-	UserID:   "550e8400-e29b-41d4-a716-446655440000",
-	Role:     "admin",
-	Age:      30,
-	Quota:    5,
+var complexValue = Node{
+	ID:     42,
+	Name:   "hello world",
+	Score:  9.5,
+	Active: true,
+	Tags:   []string{"alpha", "beta", "gamma"},
+	Props:  map[string]string{"k1": "v1", "k2": "v2"},
+	Children: []Node{
+		{ID: 1, Name: "child-1", Score: 1.5, Active: false, Tags: []string{"x"}, Props: map[string]string{"a": "1"}},
+		{ID: 2, Name: "child-2", Score: 2.5, Active: true, Tags: []string{"y", "z"}, Props: map[string]string{"b": "2"}},
+	},
 }
 
-// --- mega payload: deep Node tree ≈ 1 MB ------------------------------------
+// --- mega value: deep Node tree ≈ 1 MB ------------------------------------
 
-// megaPayload is a pseudorandom, 6-level-deep tree of Node values serialised
-// to JSON. Generated once at init with a fixed seed so results are
-// reproducible across runs. Shape (scalars + slices + maps + recursive
-// children) mirrors the kind of input other JSON libs benchmark against.
-var (
-	megaValue   Node
-	megaPayload []byte
-)
+// megaValue is a pseudorandom, 6-level-deep tree of Node values built
+// once at init with a fixed seed so results are reproducible across runs.
+// Shape (scalars + slices + maps + recursive children) mirrors the kind
+// of input other JSON libs benchmark against. Used by stdcompat to catch
+// float-formatting / ordering drift that only shows up at scale.
+var megaValue Node
 
 func init() {
 	r := rand.New(rand.NewSource(1))
 	// Fanout per level chosen so the resulting payload lands near 1 MiB. Tune
 	// here if content/Node shape changes.
 	megaValue = buildNode(r, 6, []int{4, 4, 4, 4, 3, 3, 0})
-	var err error
-	megaPayload, err = encode.Marshal(megaValue)
-	if err != nil {
-		panic(err)
-	}
 }
 
 func buildNode(r *rand.Rand, depth int, fanout []int) Node {
