@@ -127,6 +127,11 @@ func generate(pkg string, structs []StructInfo) ([]byte, error) {
 		return nil, fmt.Errorf("executing template: %w", err)
 	}
 
+	if noFormat {
+		out := make([]byte, buf.Len())
+		copy(out, buf.Bytes())
+		return out, nil
+	}
 	src, err := format.Source(buf.Bytes())
 	if err != nil {
 		return nil, fmt.Errorf("formatting generated code: %w\n\nraw output:\n%s", err, buf.Bytes())

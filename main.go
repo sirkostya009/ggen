@@ -20,6 +20,7 @@ const (
 var (
 	cliFlags annotationFlags
 	cliLog   Logger
+	noFormat bool
 )
 
 func main() {
@@ -41,6 +42,7 @@ func main() {
 	flag.BoolVar(&cliFlags.nosortkeys, "nosortkeys", false, "emit struct fields in declaration order (default: sorted by JSON name at codegen time)")
 	flag.BoolVar(&cliFlags.usenumber, "usenumber", false, "decode JSON numbers into `any` fields as json.Number instead of float64 (mirrors json.Decoder.UseNumber)")
 	flag.BoolVar(&cliFlags.htmlescape, "htmlescape", false, "HTML-safe escape <, >, & in emitted strings (default: literal, matches stdlib jsonv2)")
+	flag.BoolVar(&noFormat, "noformat", false, "skip the gofmt pass over rendered output (faster + lower-memory, but output is single-tab indentation)")
 	flag.BoolVar(&v, "v", false, "\nverbose: info-level progress (wrote <file>)")
 	flag.BoolVar(&vv, "vv", false, "more verbose: per-package / per-struct debug")
 	flag.BoolVar(&vvv, "vvv", false, "trace-level diagnostics")
