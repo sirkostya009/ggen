@@ -8,19 +8,30 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
+	"sync"
 )
 
 const (
 	genSuffix     = "_ggen.go"
 	genTestSuffix = "_ggen_test.go"
+	// defaultJobs caps `ggen ./...` walk-mode concurrency when -jobs
+	// isn't passed. Each in-flight package keeps its own packages.Load
+	// type-info graph in memory — the biggest single pkg's type-check
+	// already costs ~1.5 GB peak, and each additional concurrent
+	// package piles on a few hundred MB. Four workers ≈ 2.3× faster
+	// than serial; -jobs 1 keeps RSS at the single-pkg floor, higher
+	// values trade memory for more parallelism.
+	defaultJobs = 4
 )
 
 var (
 	cliFlags annotationFlags
 	cliLog   Logger
 	noFormat bool
+	jobsFlag int // -jobs N; 0 means use defaultJobs / NumCPU min.
 )
 
 func main() {
@@ -43,6 +54,7 @@ func main() {
 	flag.BoolVar(&cliFlags.usenumber, "usenumber", false, "decode JSON numbers into `any` fields as json.Number instead of float64 (mirrors json.Decoder.UseNumber)")
 	flag.BoolVar(&cliFlags.htmlescape, "htmlescape", false, "HTML-safe escape <, >, & in emitted strings (default: literal, matches stdlib jsonv2)")
 	flag.BoolVar(&noFormat, "noformat", false, "skip the gofmt pass over rendered output (faster + lower-memory, but output is single-tab indentation)")
+	flag.IntVar(&jobsFlag, "jobs", 0, "max parallel packages during ./... walk (0 = min(NumCPU, 4); each in-flight pkg keeps ~hundreds-of-MB type info live)")
 	flag.BoolVar(&v, "v", false, "\nverbose: info-level progress (wrote <file>)")
 	flag.BoolVar(&vv, "vv", false, "more verbose: per-package / per-struct debug")
 	flag.BoolVar(&vvv, "vvv", false, "trace-level diagnostics")
@@ -186,19 +198,54 @@ func walkAndGenerate(root string) error {
 	}); err != nil {
 		return err
 	}
-	// Sort by descending depth (path-separator count). Deeper dirs
-	// first means leaf packages generate before their ancestors.
-	slices.SortStableFunc(dirs, func(a, b string) int {
-		da := strings.Count(a, string(filepath.Separator))
-		db := strings.Count(b, string(filepath.Separator))
-		return db - da
-	})
-	for _, path := range dirs {
-		// generateDir errors are queued via cliLog.Error and the walk
-		// continues; main() flushes + exits non-zero at the end.
-		if err := generateDir(path, "", ""); err != nil {
-			cliLog.Error(fmt.Errorf("in %s: %w", path, err))
+	// Bucket by depth so we can fan out parallel processing within
+	// each level while keeping the deepest-first invariant: every
+	// child finishes (parse + generate + write) before any parent
+	// starts. Sibling packages at the same depth have no ordering
+	// dependency on each other.
+	byDepth := make(map[int][]string, len(dirs))
+	for _, p := range dirs {
+		d := strings.Count(p, string(filepath.Separator))
+		byDepth[d] = append(byDepth[d], p)
+	}
+	depths := make([]int, 0, len(byDepth))
+	for d := range byDepth {
+		depths = append(depths, d)
+	}
+	// Descending depth — leaves first.
+	slices.SortFunc(depths, func(a, b int) int { return b - a })
+
+	// Goroutine fanout caps the live memory: each in-flight package
+	// holds its own packages.Load type info (~few-hundred-MB on a
+	// non-trivial pkg). Going wider than the workerCount default
+	// quickly trades wall clock for resident memory. -jobs N
+	// overrides; otherwise NumCPU is bounded to defaultJobs so a
+	// 32-core box doesn't burn 32× that footprint.
+	workers := jobsFlag
+	if workers <= 0 {
+		workers = min(runtime.NumCPU(), defaultJobs)
+	}
+	for _, d := range depths {
+		level := byDepth[d]
+		if len(level) == 1 {
+			// One package at this depth — skip the goroutine overhead.
+			if err := generateDir(level[0], "", ""); err != nil {
+				cliLog.Error(fmt.Errorf("in %s: %w", level[0], err))
+			}
+			continue
 		}
+		sem := make(chan struct{}, workers)
+		var wg sync.WaitGroup
+		for _, path := range level {
+			sem <- struct{}{}
+			wg.Go(func() {
+				defer func() { <-sem }()
+				if err := generateDir(path, "", ""); err != nil {
+					cliLog.Error(fmt.Errorf("in %s: %w", path, err))
+				}
+			})
+		}
+		wg.Wait()
 	}
 	return nil
 }
@@ -214,8 +261,20 @@ func shouldSkipDir(name string) bool {
 	return name[0] == '.' || name[0] == '_'
 }
 
+// genGlobalsMu protects every globally-shared piece of generator
+// state touched by generate() — generatedTypes, generatedAliasKinds,
+// the oneof registry, and the smallPool/filePool consumers via the
+// renderer functions. walkAndGenerate fans parallel goroutines across
+// sibling packages at the same depth; parsing runs concurrently, but
+// only one goroutine at a time enters the generate+write section.
+// Holding the lock for the whole post-parse phase is fine — generate
+// is ~12 ms / package, dwarfed by parsePackage's go/packages.Load.
+var genGlobalsMu sync.Mutex
+
 func generateDir(dir, outFlag, pkgFlag string) error {
 	cliLog.Debug("parsing package %s", dir)
+	// Parsing runs UNLOCKED — go/packages.Load does its own
+	// concurrency and doesn't touch our globals.
 	structs, pkgName, err := parsePackage(dir)
 	if err != nil {
 		return err
@@ -241,12 +300,15 @@ func generateDir(dir, outFlag, pkgFlag string) error {
 		return fmt.Errorf("-o cannot be used when %s has structs across multiple build-tag / test groups (%d buckets)", dir, len(buckets))
 	}
 
-	// Seed generatedTypes with the full package set BEFORE running any
-	// bucket. A struct in the tagged bucket may reference a struct in the
-	// untagged bucket (or vice versa); since both end up in the same Go
-	// package, the cross-bucket call must route to the direct DecodeFrom
-	// (not the encoding/json fallback). Reset after the loop to avoid
-	// leaking state into the next generateDir call.
+	// LOCKED from here through the per-bucket generate+write loop.
+	// Seed generatedTypes with the full package set BEFORE running
+	// any bucket — a struct in the tagged bucket may reference one
+	// in the untagged bucket (same Go package), so the cross-bucket
+	// call must route to the direct DecodeFrom rather than the
+	// encoding/json fallback. Clear at the end to avoid leaking
+	// state into the next call.
+	genGlobalsMu.Lock()
+	defer genGlobalsMu.Unlock()
 	generatedTypes = make(map[string]struct{}, len(structs))
 	generatedAliasKinds = make(map[string]TypeKind)
 	for _, s := range structs {

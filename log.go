@@ -174,8 +174,11 @@ func formatPos(pos token.Position) string {
 // ----- concise impl -----
 
 type conciseLogger struct {
-	level  Level
-	w      io.Writer
+	level Level
+	w     io.Writer
+	// mu protects every field below — the CLI walks packages in
+	// parallel and each goroutine may emit logs / queue errors.
+	mu     sync.Mutex
 	queue  []error // Error() appends here; Flush() drains
 	errSet bool    // sticky: true once any error has been seen (queue or Fatal)
 }
@@ -184,24 +187,35 @@ func (l *conciseLogger) Info(format string, args ...any) {
 	if l.level < LevelInfo {
 		return
 	}
-	_, _ = fmt.Fprintf(l.w, "inf: %s\n", fmt.Sprintf(format, args...))
+	msg := fmt.Sprintf(format, args...)
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	_, _ = fmt.Fprintf(l.w, "inf: %s\n", msg)
 }
 
 func (l *conciseLogger) Debug(format string, args ...any) {
 	if l.level < LevelDebug {
 		return
 	}
-	_, _ = fmt.Fprintf(l.w, "dbg: %s\n", fmt.Sprintf(format, args...))
+	msg := fmt.Sprintf(format, args...)
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	_, _ = fmt.Fprintf(l.w, "dbg: %s\n", msg)
 }
 
 func (l *conciseLogger) Trace(format string, args ...any) {
 	if l.level < LevelTrace {
 		return
 	}
-	_, _ = fmt.Fprintf(l.w, "trc: %s\n", fmt.Sprintf(format, args...))
+	msg := fmt.Sprintf(format, args...)
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	_, _ = fmt.Fprintf(l.w, "trc: %s\n", msg)
 }
 
 func (l *conciseLogger) Error(err error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	l.queue = append(l.queue, err)
 	l.errSet = true
 }
@@ -242,16 +256,24 @@ func unwrapMulti(err error) ([]error, bool) {
 }
 
 func (l *conciseLogger) Flush() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	for _, e := range l.queue {
 		l.renderError(e)
 	}
 	l.queue = l.queue[:0]
 }
 
-func (l *conciseLogger) HasErrors() bool { return l.errSet }
+func (l *conciseLogger) HasErrors() bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.errSet
+}
 
 func (l *conciseLogger) Fatal(err error) {
 	l.Flush()
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	l.renderError(err)
 	l.errSet = true
 	os.Exit(1)
@@ -260,9 +282,12 @@ func (l *conciseLogger) Fatal(err error) {
 // ----- pretty impl -----
 
 type prettyLogger struct {
-	level  Level
-	w      io.Writer
-	color  bool
+	level Level
+	w     io.Writer
+	color bool
+	// mu protects every field below — the CLI walks packages in
+	// parallel and each goroutine may emit logs / queue errors.
+	mu     sync.Mutex
 	queue  []error // Error() appends here; Flush() drains
 	errSet bool    // sticky: true once any error has been seen
 }
@@ -289,35 +314,42 @@ func (l *prettyLogger) Info(format string, args ...any) {
 	if l.level < LevelInfo {
 		return
 	}
-	_, _ = fmt.Fprintf(l.w, "%s %s\n",
-		l.paint(ansiGreen+ansiBold, "✓"),
-		fmt.Sprintf(format, args...))
+	msg := fmt.Sprintf(format, args...)
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	_, _ = fmt.Fprintf(l.w, "%s %s\n", l.paint(ansiGreen+ansiBold, "✓"), msg)
 }
 
 func (l *prettyLogger) Debug(format string, args ...any) {
 	if l.level < LevelDebug {
 		return
 	}
-	_, _ = fmt.Fprintf(l.w, "%s %s\n",
-		l.paint(ansiYellow, "[debug]"),
-		fmt.Sprintf(format, args...))
+	msg := fmt.Sprintf(format, args...)
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	_, _ = fmt.Fprintf(l.w, "%s %s\n", l.paint(ansiYellow, "[debug]"), msg)
 }
 
 func (l *prettyLogger) Trace(format string, args ...any) {
 	if l.level < LevelTrace {
 		return
 	}
-	_, _ = fmt.Fprintf(l.w, "%s %s\n",
-		l.paint(ansiGreen, "[trace]"),
-		fmt.Sprintf(format, args...))
+	msg := fmt.Sprintf(format, args...)
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	_, _ = fmt.Fprintf(l.w, "%s %s\n", l.paint(ansiGreen, "[trace]"), msg)
 }
 
 func (l *prettyLogger) Error(err error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	l.queue = append(l.queue, err)
 	l.errSet = true
 }
 
 func (l *prettyLogger) Flush() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	groups := groupByLine(flattenErrors(l.queue))
 	for _, g := range groups {
 		l.renderUnit(g)
@@ -325,11 +357,17 @@ func (l *prettyLogger) Flush() {
 	l.queue = l.queue[:0]
 }
 
-func (l *prettyLogger) HasErrors() bool { return l.errSet }
+func (l *prettyLogger) HasErrors() bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.errSet
+}
 
 func (l *prettyLogger) Fatal(err error) {
+	l.mu.Lock()
 	l.errSet = true
 	l.queue = append(l.queue, err)
+	l.mu.Unlock()
 	l.Flush()
 	os.Exit(1)
 }
