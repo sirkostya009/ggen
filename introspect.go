@@ -33,12 +33,21 @@ type FieldInterfaces struct {
 // stdInterfaces caches well-known interface types loaded from the user's
 // transitive dependency graph (encoding, encoding/json). Built once per
 // parse pass; nil entries mean the package wasn't reachable.
+//
+// inspectCache memoizes inspectType results by the field type's
+// pointer identity. types.Named instances are unique per parse pass
+// — same named type → same *types.Named → same key — so this dedups
+// the per-field types.Implements + NewMethodSet work when several
+// fields share a type (lots of uuid.UUID / time.Time / etc.). Cleared
+// implicitly: stdInterfaces is built once per parse pass, so the
+// cache lifetime matches.
 type stdInterfaces struct {
 	textMarshaler   *types.Interface
 	textUnmarshaler *types.Interface
 	textAppender    *types.Interface
 	jsonMarshaler   *types.Interface
 	jsonUnmarshaler *types.Interface
+	inspectCache    map[types.Type]FieldInterfaces
 }
 
 // findStdInterfaces resolves the encoding / encoding/json interface types
@@ -50,7 +59,7 @@ type stdInterfaces struct {
 // of cross-package text-encoded types would silently miss the fast path
 // and route through the encoding/json fallback.
 func findStdInterfaces(pkgs []*packages.Package) stdInterfaces {
-	var out stdInterfaces
+	out := stdInterfaces{inspectCache: map[types.Type]FieldInterfaces{}}
 	visited := map[string]struct{}{}
 	var visit func(p *packages.Package)
 	visit = func(p *packages.Package) {
@@ -141,6 +150,9 @@ func inspectType(t types.Type, std stdInterfaces) FieldInterfaces {
 	if t == nil {
 		return FieldInterfaces{}
 	}
+	if hit, ok := std.inspectCache[t]; ok {
+		return hit
+	}
 	iface := FieldInterfaces{Resolved: true}
 	ptr := types.NewPointer(t)
 
@@ -195,6 +207,9 @@ func inspectType(t types.Type, std stdInterfaces) FieldInterfaces {
 				iface.JSONSize = true
 			}
 		}
+	}
+	if std.inspectCache != nil {
+		std.inspectCache[t] = iface
 	}
 	return iface
 }

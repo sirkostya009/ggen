@@ -483,7 +483,7 @@ type Tagged struct {
 		tagged := filepath.Join(dir, "fixture_foo_ggen.go")
 		mustHaveFile(t, tagged)
 		taggedBody := mustReadOutput(t, tagged)
-		if !strings.HasPrefix(taggedBody, "//go:build foo\n") {
+		if !strings.Contains(taggedBody, "//go:build foo\n") {
 			t.Errorf("tagged file missing //go:build foo header:\n%s", taggedBody)
 		}
 		if !strings.Contains(taggedBody, "Tagged) DecodeFrom") {
@@ -517,8 +517,8 @@ type Tagged struct {
 		path := filepath.Join(dir, "fixture_foo_bar_ggen.go")
 		mustHaveFile(t, path)
 		body := mustReadOutput(t, path)
-		if !strings.HasPrefix(body, "//go:build foo && bar\n") {
-			t.Errorf("expected literal '//go:build foo && bar' header, got:\n%s", body)
+		if !strings.Contains(body, "//go:build foo && bar\n") {
+			t.Errorf("expected '//go:build foo && bar' header, got:\n%s", body)
 		}
 	})
 

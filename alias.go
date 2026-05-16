@@ -295,25 +295,3 @@ func renderAliasContainerAppendJSON(s StructInfo) string {
 	b.WriteString("return dst, nil\n")
 	return b.String()
 }
-
-// aliasUnderlyingImports returns import paths needed by struct-alias
-// codegen. Delegation paths emit a literal cast to the underlying type
-// (e.g. `u := uuid.UUID(s)`), so when the underlying lives in a foreign
-// package, that package must be imported by the generated file.
-// Same-package and stdlib-basic underlyings contribute "".
-func aliasUnderlyingImports(structs []StructInfo) []string {
-	seen := map[string]struct{}{}
-	for _, s := range structs {
-		if !s.IsAlias || s.AliasKind != KindStruct {
-			continue
-		}
-		if s.AliasUnderlyingImport != "" {
-			seen[s.AliasUnderlyingImport] = struct{}{}
-		}
-	}
-	out := make([]string, 0, len(seen))
-	for p := range seen {
-		out = append(out, p)
-	}
-	return out
-}
