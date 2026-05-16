@@ -707,8 +707,8 @@ func (s *structSet) extractAliasFromTypes(name string, t types.Type, rhs ast.Exp
 		}
 		structType := underlying.(*types.Struct)
 		hasExported := false
-		for i := 0; i < structType.NumFields(); i++ {
-			if structType.Field(i).Exported() {
+		for field := range structType.Fields() {
+			if field.Exported() {
 				hasExported = true
 				break
 			}

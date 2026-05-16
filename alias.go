@@ -66,12 +66,6 @@ func renderAliasStreamDecode(s StructInfo) string {
 // renderAliasSize returns an upper-bound JSONSize body for the alias.
 // Strings dominate length; numerics are bounded by their textual width.
 func renderAliasSize(s StructInfo) string {
-	if s.AliasKind == KindStruct {
-		return renderAliasStructSize(s)
-	}
-	if s.AliasKind == KindSlice || s.AliasKind == KindMap || s.AliasKind == KindArray || s.AliasKind == KindBytes {
-		return renderAliasContainerSize(s)
-	}
 	switch s.AliasKind {
 	case KindString:
 		// `*2 + 2` — worst-case escape ratio plus the surrounding quotes.
@@ -84,6 +78,17 @@ func renderAliasSize(s StructInfo) string {
 		return "return 20\n" // 18446744073709551615
 	case KindFloat32, KindFloat64:
 		return "return 24\n" // strconv.AppendFloat 'g' max
+	case KindBytes:
+		// `[]byte` base64 expansion is ~4/3 + padding + quotes
+		return "return len(s)*4/3 + 8\n"
+	case KindSlice, KindMap, KindArray:
+		return "return 1024\n"
+	case KindStruct:
+		switch {
+		case s.AliasIface.JSONMarshaler, s.AliasIface.TextMarshaler:
+			return "return 0\n"
+		}
+		return "return 128\n"
 	}
 	return "return 0\n"
 }
@@ -97,26 +102,23 @@ func renderAliasAppendJSON(s StructInfo) string {
 	if s.AliasKind == KindSlice || s.AliasKind == KindMap || s.AliasKind == KindArray || s.AliasKind == KindBytes {
 		return renderAliasContainerAppendJSON(s)
 	}
-	var b strings.Builder
 	switch s.AliasKind {
 	case KindString:
 		// CALLER side: emit the opening quote, then the body via the
 		// chosen string-append helper (which writes the closing quote).
-		b.WriteString("dst = append(dst, '\"')\n")
-		fmt.Fprintf(&b, "dst = %s(dst, string(s))\n", appendStrFn(s.HTMLEscape))
-		b.WriteString("return dst, nil\n")
+		return fmt.Sprintf("dst = append(dst, '\"')\ndst = %s(dst, string(s))\nreturn dst, nil\n", appendStrFn(s.HTMLEscape))
 	case KindBool:
-		fmt.Fprintf(&b, "return strconv.AppendBool(dst, bool(s)), nil\n")
+		return "return strconv.AppendBool(dst, bool(s)), nil\n"
 	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
-		fmt.Fprintf(&b, "return strconv.AppendInt(dst, int64(s), 10), nil\n")
+		return "return strconv.AppendInt(dst, int64(s), 10), nil\n"
 	case KindUint, KindUint8, KindUint16, KindUint32, KindUint64:
-		fmt.Fprintf(&b, "return strconv.AppendUint(dst, uint64(s), 10), nil\n")
+		return "return strconv.AppendUint(dst, uint64(s), 10), nil\n"
 	case KindFloat32:
-		fmt.Fprintf(&b, "return strconv.AppendFloat(dst, float64(s), 'g', -1, 32), nil\n")
+		return "return strconv.AppendFloat(dst, float64(s), 'g', -1, 32), nil\n"
 	case KindFloat64:
-		fmt.Fprintf(&b, "return strconv.AppendFloat(dst, float64(s), 'g', -1, 64), nil\n")
+		return "return strconv.AppendFloat(dst, float64(s), 'g', -1, 64), nil\n"
 	}
-	return b.String()
+	return ""
 }
 
 // renderAliasStructDecode emits DecodeFrom (or DecodeStreamFrom when
@@ -135,42 +137,54 @@ func renderAliasStructDecode(s StructInfo, stream bool) string {
 	b.WriteString("var result " + s.Name + "\n")
 	switch {
 	case s.AliasIface.ByteDecoder && !stream:
-		fmt.Fprintf(&b, "var u %s\n", s.AliasUnderlying)
-		b.WriteString("v, k, err := u.DecodeFrom(data, i)\n")
-		b.WriteString("if err != nil { return result, i, err }\n")
-		fmt.Fprintf(&b, "result = %s(v)\nreturn result, k, nil\n", s.Name)
+		fmt.Fprintf(&b, `var u %[1]s
+v, k, err := u.DecodeFrom(data, i)
+if err != nil { return result, i, err }
+result = %[2]s(v)
+return result, k, nil
+`, s.AliasUnderlying, s.Name)
 	case s.AliasIface.StreamDecoder && stream:
-		fmt.Fprintf(&b, "var u %s\n", s.AliasUnderlying)
-		b.WriteString("v, k, err := u.DecodeStreamFrom(s, i)\n")
-		b.WriteString("if err != nil { return result, i, err }\n")
-		fmt.Fprintf(&b, "result = %s(v)\nreturn result, k, nil\n", s.Name)
+		fmt.Fprintf(&b, `var u %[1]s
+v, k, err := u.DecodeStreamFrom(s, i)
+if err != nil { return result, i, err }
+result = %[2]s(v)
+return result, k, nil
+`, s.AliasUnderlying, s.Name)
 	case s.AliasIface.JSONUnmarshaler:
 		if stream {
-			b.WriteString("start := i\nk, err := s.SkipValue(start)\n")
-			b.WriteString("if err != nil { return result, i, err }\n")
-			fmt.Fprintf(&b, "var u %s\n", s.AliasUnderlying)
-			b.WriteString("if err := u.UnmarshalJSON(s.Bytes()[start:k]); err != nil { return result, i, err }\n")
+			fmt.Fprintf(&b, `start := i
+k, err := s.SkipValue(start)
+if err != nil { return result, i, err }
+var u %[1]s
+if err := u.UnmarshalJSON(s.Bytes()[start:k]); err != nil { return result, i, err }
+result = %[2]s(u)
+return result, k, nil
+`, s.AliasUnderlying, s.Name)
 		} else {
-			b.WriteString("start := i\nk, err := scan.SkipValue(data, start)\n")
-			b.WriteString("if err != nil { return result, i, err }\n")
-			fmt.Fprintf(&b, "var u %s\n", s.AliasUnderlying)
-			b.WriteString("if err := u.UnmarshalJSON(data[start:k]); err != nil { return result, i, err }\n")
+			fmt.Fprintf(&b, `start := i
+k, err := scan.SkipValue(data, start)
+if err != nil { return result, i, err }
+var u %[1]s
+if err := u.UnmarshalJSON(data[start:k]); err != nil { return result, i, err }
+result = %[2]s(u)
+return result, k, nil
+`, s.AliasUnderlying, s.Name)
 		}
-		fmt.Fprintf(&b, "result = %s(u)\nreturn result, k, nil\n", s.Name)
 	case s.AliasIface.TextUnmarshaler:
+		scanCall := "scan.String(data, i)"
 		if stream {
-			b.WriteString("ts, tj, err := s.String(i)\n")
-		} else {
-			b.WriteString("ts, tj, err := scan.String(data, i)\n")
+			scanCall = "s.String(i)"
 		}
-		b.WriteString("if err != nil { return result, i, err }\n")
-		fmt.Fprintf(&b, "var u %s\n", s.AliasUnderlying)
-		b.WriteString("if err := u.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts))); err != nil { return result, i, err }\n")
-		fmt.Fprintf(&b, "result = %s(u)\nreturn result, tj, nil\n", s.Name)
+		fmt.Fprintf(&b, `ts, tj, err := %[1]s
+if err != nil { return result, i, err }
+var u %[2]s
+if err := u.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts))); err != nil { return result, i, err }
+result = %[3]s(u)
+return result, tj, nil
+`, scanCall, s.AliasUnderlying, s.Name)
 	default:
 		// extractAlias should have rejected this case via aliasCanDelegate.
-		b.WriteString("// no decode path — ggen could not find a Marshal/Unmarshal pair\n")
-		b.WriteString("return result, i, nil\n")
+		b.WriteString("// no decode path — ggen could not find a Marshal/Unmarshal pair\nreturn result, i, nil\n")
 	}
 	return b.String()
 }
@@ -183,45 +197,30 @@ func renderAliasStructAppendJSON(s StructInfo) string {
 	var b strings.Builder
 	switch {
 	case s.AliasIface.AppendJSON:
-		fmt.Fprintf(&b, "u := %s(s)\n", s.AliasUnderlying)
-		b.WriteString("return u.AppendJSON(dst)\n")
+		fmt.Fprintf(&b, "u := %s(s)\nreturn u.AppendJSON(dst)\n", s.AliasUnderlying)
 	case s.AliasIface.JSONMarshaler:
 		// dst is empty (JSONSize returns 0 for this branch) — return
 		// MarshalJSON's slice and err directly to skip the redundant copy.
 		fmt.Fprintf(&b, "return %s(s).MarshalJSON()\n", s.AliasUnderlying)
 	case s.AliasIface.TextAppender:
-		fmt.Fprintf(&b, "u := %s(s)\n", s.AliasUnderlying)
-		b.WriteString("dst = append(dst, '\"')\n")
-		b.WriteString("var err error\n")
-		b.WriteString("if dst, err = u.AppendText(dst); err != nil { return dst, err }\n")
-		b.WriteString("return append(dst, '\"'), nil\n")
+		fmt.Fprintf(&b, `u := %s(s)
+dst = append(dst, '"')
+var err error
+if dst, err = u.AppendText(dst); err != nil { return dst, err }
+return append(dst, '"'), nil
+`, s.AliasUnderlying)
 	case s.AliasIface.TextMarshaler:
-		fmt.Fprintf(&b, "u := %s(s)\n", s.AliasUnderlying)
-		b.WriteString("t, err := u.MarshalText()\n")
-		b.WriteString("if err != nil { return dst, err }\n")
-		b.WriteString("dst = append(dst, '\"')\n")
-		fmt.Fprintf(&b, "dst = %s(dst, encode.BytesToString(t))\n", appendStrFn(s.HTMLEscape))
-		b.WriteString("return dst, nil\n")
+		fmt.Fprintf(&b, `u := %s(s)
+t, err := u.MarshalText()
+if err != nil { return dst, err }
+dst = append(dst, '"')
+dst = %s(dst, encode.BytesToString(t))
+return dst, nil
+`, s.AliasUnderlying, appendStrFn(s.HTMLEscape))
 	default:
 		b.WriteString("return dst, nil\n")
 	}
 	return b.String()
-}
-
-// renderAliasStructSize returns a JSONSize upper bound for a struct
-// alias. For aliases that delegate to MarshalJSON / MarshalText we
-// can't predict the output length, AND the AppendJSON body owns its
-// own buffer (it returns the MarshalJSON slice directly, or builds
-// its own quoted text); a 0 hint keeps the top-level Marshal prealloc
-// from over-reserving a buffer that immediately gets discarded.
-// Other delegations (ggen AppendJSON, TextAppender) write into dst,
-// so a flat 128 stays a sensible upper-bound there.
-func renderAliasStructSize(s StructInfo) string {
-	switch {
-	case s.AliasIface.JSONMarshaler, s.AliasIface.TextMarshaler:
-		return "return 0\n"
-	}
-	return "return 128\n"
 }
 
 // renderAliasContainerDecode dispatches a slice/map/array alias into
@@ -243,29 +242,29 @@ func renderAliasContainerDecode(s StructInfo, stream bool) string {
 	switch s.AliasKind {
 	case KindSlice:
 		if stream {
-			b.WriteString(renderStreamSlice(f, "result", "i"))
+			renderStreamSlice(&b, f, "result", "i")
 		} else {
-			b.WriteString(renderSlice(f, "result", "i"))
+			renderSlice(&b, f, "result", "i")
 		}
 	case KindArray:
 		// emit{Byte,Stream}SliceRead handle both KindSlice and
 		// KindArray internally via f.Kind / f.ArrayLen.
 		if stream {
-			b.WriteString(emitStreamSliceRead(f, "result", "i", 0))
+			emitStreamSliceRead(&b, f, "result", "i", 0)
 		} else {
-			b.WriteString(emitByteArrayRead(f, "result", "i", 0))
+			emitByteArrayRead(&b, f, "result", "i", 0)
 		}
 	case KindMap:
 		if stream {
-			b.WriteString(renderStreamMap(f, "result", "i"))
+			renderStreamMap(&b, f, "result", "i")
 		} else {
-			b.WriteString(renderMap(f, "result", "i"))
+			renderMap(&b, f, "result", "i")
 		}
 	case KindBytes:
 		if stream {
-			b.WriteString(renderStreamBytes(f, "result", "i"))
+			renderStreamBytes(&b, f, "result", "i")
 		} else {
-			b.WriteString(renderBytes(f, "result", "i"))
+			renderBytes(&b, f, "result", "i")
 		}
 	}
 	b.WriteString("return result, i, nil\n")
@@ -282,27 +281,14 @@ func renderAliasContainerAppendJSON(s StructInfo) string {
 	switch s.AliasKind {
 	case KindSlice, KindArray:
 		// renderAppendSlice handles both via f.Kind / f.ArrayLen.
-		b.WriteString(renderAppendSlice(f, "s"))
+		renderAppendSlice(&b, f, "s")
 	case KindMap:
-		b.WriteString(renderAppendMap(f, "s"))
+		renderAppendMap(&b, f, "s")
 	case KindBytes:
 		b.WriteString(renderAppendBytes(f, "s"))
 	}
 	b.WriteString("return dst, nil\n")
 	return b.String()
-}
-
-// renderAliasContainerSize: upper-bound JSONSize for container aliases.
-// Conservative — flat 1024 is plenty for typical small payloads, and
-// the encoder pre-grows when the actual body exceeds the hint anyway.
-// Tightening this requires per-element walks (slow at marshal time).
-func renderAliasContainerSize(s StructInfo) string {
-	switch s.AliasKind {
-	case KindBytes:
-		// `[]byte` base64 expansion is ~4/3 + padding + quotes
-		return "return len(s)*4/3 + 8\n"
-	}
-	return "return 1024\n"
 }
 
 // aliasUnderlyingImports returns import paths needed by struct-alias

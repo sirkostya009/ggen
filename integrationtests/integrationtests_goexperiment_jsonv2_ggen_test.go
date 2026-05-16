@@ -447,7 +447,6 @@ func (RichTypes) DecodeFrom(data []byte, i int) (RichTypes, int, error) {
 							}
 						}
 					}
-
 					if _, _, err := (&result.BigF).Parse(s, 10); err != nil {
 						return result, i, err
 					}
@@ -480,7 +479,6 @@ func (RichTypes) DecodeFrom(data []byte, i int) (RichTypes, int, error) {
 							}
 						}
 					}
-
 					if _, ok := (&result.BigR).SetString(s); !ok {
 						return result, i, scan.ErrBadNumber
 					}
@@ -539,7 +537,6 @@ func (RichTypes) DecodeFrom(data []byte, i int) (RichTypes, int, error) {
 							}
 						}
 					}
-
 					var u *url.URL
 					u, err = url.Parse(s)
 					if err != nil {
@@ -957,7 +954,6 @@ func (TimeDefault) DecodeFrom(data []byte, i int) (TimeDefault, int, error) {
 							}
 						}
 					}
-
 					result.Default, err = time.Parse(time.RFC3339Nano, s)
 					if err != nil {
 						return result, i, err
@@ -1940,7 +1936,6 @@ func (TimeANSIC) DecodeFrom(data []byte, i int) (TimeANSIC, int, error) {
 							}
 						}
 					}
-
 					result.ANSIC, err = time.Parse(time.ANSIC, s)
 					if err != nil {
 						return result, i, err
@@ -2155,7 +2150,6 @@ func (TimeUnixDate) DecodeFrom(data []byte, i int) (TimeUnixDate, int, error) {
 							}
 						}
 					}
-
 					result.UnixDate, err = time.Parse(time.UnixDate, s)
 					if err != nil {
 						return result, i, err
@@ -2370,7 +2364,6 @@ func (TimeRubyDate) DecodeFrom(data []byte, i int) (TimeRubyDate, int, error) {
 							}
 						}
 					}
-
 					result.RubyDate, err = time.Parse(time.RubyDate, s)
 					if err != nil {
 						return result, i, err
@@ -2585,7 +2578,6 @@ func (TimeRFC822) DecodeFrom(data []byte, i int) (TimeRFC822, int, error) {
 							}
 						}
 					}
-
 					result.RFC822, err = time.Parse(time.RFC822, s)
 					if err != nil {
 						return result, i, err
@@ -2800,7 +2792,6 @@ func (TimeRFC822Z) DecodeFrom(data []byte, i int) (TimeRFC822Z, int, error) {
 							}
 						}
 					}
-
 					result.RFC822Z, err = time.Parse(time.RFC822Z, s)
 					if err != nil {
 						return result, i, err
@@ -3015,7 +3006,6 @@ func (TimeRFC850) DecodeFrom(data []byte, i int) (TimeRFC850, int, error) {
 							}
 						}
 					}
-
 					result.RFC850, err = time.Parse(time.RFC850, s)
 					if err != nil {
 						return result, i, err
@@ -3230,7 +3220,6 @@ func (TimeRFC1123) DecodeFrom(data []byte, i int) (TimeRFC1123, int, error) {
 							}
 						}
 					}
-
 					result.RFC1123, err = time.Parse(time.RFC1123, s)
 					if err != nil {
 						return result, i, err
@@ -3445,7 +3434,6 @@ func (TimeRFC1123Z) DecodeFrom(data []byte, i int) (TimeRFC1123Z, int, error) {
 							}
 						}
 					}
-
 					result.RFC1123Z, err = time.Parse(time.RFC1123Z, s)
 					if err != nil {
 						return result, i, err
@@ -3660,7 +3648,6 @@ func (TimeRFC3339) DecodeFrom(data []byte, i int) (TimeRFC3339, int, error) {
 							}
 						}
 					}
-
 					result.RFC3339, err = time.Parse(time.RFC3339, s)
 					if err != nil {
 						return result, i, err
@@ -3875,7 +3862,6 @@ func (TimeRFC3339Nano) DecodeFrom(data []byte, i int) (TimeRFC3339Nano, int, err
 							}
 						}
 					}
-
 					result.RFC3339Nano, err = time.Parse(time.RFC3339Nano, s)
 					if err != nil {
 						return result, i, err
@@ -4090,7 +4076,6 @@ func (TimeKitchen) DecodeFrom(data []byte, i int) (TimeKitchen, int, error) {
 							}
 						}
 					}
-
 					result.Kitchen, err = time.Parse(time.Kitchen, s)
 					if err != nil {
 						return result, i, err
@@ -4305,7 +4290,6 @@ func (TimeDateTime) DecodeFrom(data []byte, i int) (TimeDateTime, int, error) {
 							}
 						}
 					}
-
 					result.DateTime, err = time.Parse(time.DateTime, s)
 					if err != nil {
 						return result, i, err
@@ -4520,7 +4504,6 @@ func (TimeDateOnly) DecodeFrom(data []byte, i int) (TimeDateOnly, int, error) {
 							}
 						}
 					}
-
 					result.DateOnly, err = time.Parse(time.DateOnly, s)
 					if err != nil {
 						return result, i, err
@@ -4735,7 +4718,6 @@ func (TimeTimeOnly) DecodeFrom(data []byte, i int) (TimeTimeOnly, int, error) {
 							}
 						}
 					}
-
 					result.TimeOnly, err = time.Parse(time.TimeOnly, s)
 					if err != nil {
 						return result, i, err
@@ -4987,7 +4969,6 @@ func (TimeFormatsStdCompat) DecodeFrom(data []byte, i int) (TimeFormatsStdCompat
 							}
 						}
 					}
-
 					result.ANSIC, err = time.Parse(time.ANSIC, s)
 					if err != nil {
 						return result, i, err
@@ -5026,7 +5007,6 @@ func (TimeFormatsStdCompat) DecodeFrom(data []byte, i int) (TimeFormatsStdCompat
 							}
 						}
 					}
-
 					result.RFC822, err = time.Parse(time.RFC822, s)
 					if err != nil {
 						return result, i, err
@@ -5060,7 +5040,6 @@ func (TimeFormatsStdCompat) DecodeFrom(data []byte, i int) (TimeFormatsStdCompat
 							}
 						}
 					}
-
 					result.RFC850, err = time.Parse(time.RFC850, s)
 					if err != nil {
 						return result, i, err
@@ -5099,7 +5078,6 @@ func (TimeFormatsStdCompat) DecodeFrom(data []byte, i int) (TimeFormatsStdCompat
 							}
 						}
 					}
-
 					result.Default, err = time.Parse(time.RFC3339Nano, s)
 					if err != nil {
 						return result, i, err
@@ -5133,7 +5111,6 @@ func (TimeFormatsStdCompat) DecodeFrom(data []byte, i int) (TimeFormatsStdCompat
 							}
 						}
 					}
-
 					result.Kitchen, err = time.Parse(time.Kitchen, s)
 					if err != nil {
 						return result, i, err
@@ -5167,7 +5144,6 @@ func (TimeFormatsStdCompat) DecodeFrom(data []byte, i int) (TimeFormatsStdCompat
 							}
 						}
 					}
-
 					result.RFC1123, err = time.Parse(time.RFC1123, s)
 					if err != nil {
 						return result, i, err
@@ -5201,7 +5177,6 @@ func (TimeFormatsStdCompat) DecodeFrom(data []byte, i int) (TimeFormatsStdCompat
 							}
 						}
 					}
-
 					result.RFC3339, err = time.Parse(time.RFC3339, s)
 					if err != nil {
 						return result, i, err
@@ -5235,7 +5210,6 @@ func (TimeFormatsStdCompat) DecodeFrom(data []byte, i int) (TimeFormatsStdCompat
 							}
 						}
 					}
-
 					result.RFC822Z, err = time.Parse(time.RFC822Z, s)
 					if err != nil {
 						return result, i, err
@@ -5274,7 +5248,6 @@ func (TimeFormatsStdCompat) DecodeFrom(data []byte, i int) (TimeFormatsStdCompat
 							}
 						}
 					}
-
 					result.DateOnly, err = time.Parse(time.DateOnly, s)
 					if err != nil {
 						return result, i, err
@@ -5308,7 +5281,6 @@ func (TimeFormatsStdCompat) DecodeFrom(data []byte, i int) (TimeFormatsStdCompat
 							}
 						}
 					}
-
 					result.DateTime, err = time.Parse(time.DateTime, s)
 					if err != nil {
 						return result, i, err
@@ -5342,7 +5314,6 @@ func (TimeFormatsStdCompat) DecodeFrom(data []byte, i int) (TimeFormatsStdCompat
 							}
 						}
 					}
-
 					result.RFC1123Z, err = time.Parse(time.RFC1123Z, s)
 					if err != nil {
 						return result, i, err
@@ -5376,7 +5347,6 @@ func (TimeFormatsStdCompat) DecodeFrom(data []byte, i int) (TimeFormatsStdCompat
 							}
 						}
 					}
-
 					result.RubyDate, err = time.Parse(time.RubyDate, s)
 					if err != nil {
 						return result, i, err
@@ -5410,7 +5380,6 @@ func (TimeFormatsStdCompat) DecodeFrom(data []byte, i int) (TimeFormatsStdCompat
 							}
 						}
 					}
-
 					result.TimeOnly, err = time.Parse(time.TimeOnly, s)
 					if err != nil {
 						return result, i, err
@@ -5444,7 +5413,6 @@ func (TimeFormatsStdCompat) DecodeFrom(data []byte, i int) (TimeFormatsStdCompat
 							}
 						}
 					}
-
 					result.UnixDate, err = time.Parse(time.UnixDate, s)
 					if err != nil {
 						return result, i, err
@@ -5526,7 +5494,6 @@ func (TimeFormatsStdCompat) DecodeFrom(data []byte, i int) (TimeFormatsStdCompat
 							}
 						}
 					}
-
 					result.RFC3339Nano, err = time.Parse(time.RFC3339Nano, s)
 					if err != nil {
 						return result, i, err
@@ -6146,7 +6113,6 @@ func (richSubset) DecodeFrom(data []byte, i int) (richSubset, int, error) {
 							}
 						}
 					}
-
 					if _, _, err := (&result.BigF).Parse(s, 10); err != nil {
 						return result, i, err
 					}
@@ -6179,7 +6145,6 @@ func (richSubset) DecodeFrom(data []byte, i int) (richSubset, int, error) {
 							}
 						}
 					}
-
 					if _, ok := (&result.BigR).SetString(s); !ok {
 						return result, i, scan.ErrBadNumber
 					}
@@ -6595,7 +6560,6 @@ func (base32Wrap) DecodeFrom(data []byte, i int) (base32Wrap, int, error) {
 							}
 						}
 					}
-
 					result.B = make([]byte, 0, base32.StdEncoding.DecodedLen(len(s)))
 					result.B, err = base32.StdEncoding.AppendDecode(result.B, unsafe.Slice(unsafe.StringData(s), len(s)))
 					if err != nil {
@@ -6814,7 +6778,6 @@ func (TimeLayout) DecodeFrom(data []byte, i int) (TimeLayout, int, error) {
 							}
 						}
 					}
-
 					result.Layout, err = time.Parse(time.Layout, s)
 					if err != nil {
 						return result, i, err
@@ -7029,7 +6992,6 @@ func (TimeStamp) DecodeFrom(data []byte, i int) (TimeStamp, int, error) {
 							}
 						}
 					}
-
 					result.Stamp, err = time.Parse(time.Stamp, s)
 					if err != nil {
 						return result, i, err
@@ -7244,7 +7206,6 @@ func (TimeStampMilli) DecodeFrom(data []byte, i int) (TimeStampMilli, int, error
 							}
 						}
 					}
-
 					result.StampMilli, err = time.Parse(time.StampMilli, s)
 					if err != nil {
 						return result, i, err
@@ -7459,7 +7420,6 @@ func (TimeStampMicro) DecodeFrom(data []byte, i int) (TimeStampMicro, int, error
 							}
 						}
 					}
-
 					result.StampMicro, err = time.Parse(time.StampMicro, s)
 					if err != nil {
 						return result, i, err
@@ -7674,7 +7634,6 @@ func (TimeStampNano) DecodeFrom(data []byte, i int) (TimeStampNano, int, error) 
 							}
 						}
 					}
-
 					result.StampNano, err = time.Parse(time.StampNano, s)
 					if err != nil {
 						return result, i, err
@@ -7889,7 +7848,6 @@ func (TimeCustomTiny) DecodeFrom(data []byte, i int) (TimeCustomTiny, int, error
 							}
 						}
 					}
-
 					result.CustomTiny, err = time.Parse("2", s)
 					if err != nil {
 						return result, i, err
@@ -8104,7 +8062,6 @@ func (TimeCustomLong) DecodeFrom(data []byte, i int) (TimeCustomLong, int, error
 							}
 						}
 					}
-
 					result.CustomLong, err = time.Parse("2006-Jan-02T15:04:05.000000000_Mon_-0700", s)
 					if err != nil {
 						return result, i, err
@@ -8364,7 +8321,6 @@ func (TimeFormatsStruct) DecodeFrom(data []byte, i int) (TimeFormatsStruct, int,
 							}
 						}
 					}
-
 					result.ANSIC, err = time.Parse(time.ANSIC, s)
 					if err != nil {
 						return result, i, err
@@ -8398,7 +8354,6 @@ func (TimeFormatsStruct) DecodeFrom(data []byte, i int) (TimeFormatsStruct, int,
 							}
 						}
 					}
-
 					result.Stamp, err = time.Parse(time.Stamp, s)
 					if err != nil {
 						return result, i, err
@@ -8437,7 +8392,6 @@ func (TimeFormatsStruct) DecodeFrom(data []byte, i int) (TimeFormatsStruct, int,
 							}
 						}
 					}
-
 					result.Layout, err = time.Parse(time.Layout, s)
 					if err != nil {
 						return result, i, err
@@ -8471,7 +8425,6 @@ func (TimeFormatsStruct) DecodeFrom(data []byte, i int) (TimeFormatsStruct, int,
 							}
 						}
 					}
-
 					result.RFC822, err = time.Parse(time.RFC822, s)
 					if err != nil {
 						return result, i, err
@@ -8505,7 +8458,6 @@ func (TimeFormatsStruct) DecodeFrom(data []byte, i int) (TimeFormatsStruct, int,
 							}
 						}
 					}
-
 					result.RFC850, err = time.Parse(time.RFC850, s)
 					if err != nil {
 						return result, i, err
@@ -8544,7 +8496,6 @@ func (TimeFormatsStruct) DecodeFrom(data []byte, i int) (TimeFormatsStruct, int,
 							}
 						}
 					}
-
 					result.Default, err = time.Parse(time.RFC3339Nano, s)
 					if err != nil {
 						return result, i, err
@@ -8578,7 +8529,6 @@ func (TimeFormatsStruct) DecodeFrom(data []byte, i int) (TimeFormatsStruct, int,
 							}
 						}
 					}
-
 					result.Kitchen, err = time.Parse(time.Kitchen, s)
 					if err != nil {
 						return result, i, err
@@ -8612,7 +8562,6 @@ func (TimeFormatsStruct) DecodeFrom(data []byte, i int) (TimeFormatsStruct, int,
 							}
 						}
 					}
-
 					result.RFC1123, err = time.Parse(time.RFC1123, s)
 					if err != nil {
 						return result, i, err
@@ -8646,7 +8595,6 @@ func (TimeFormatsStruct) DecodeFrom(data []byte, i int) (TimeFormatsStruct, int,
 							}
 						}
 					}
-
 					result.RFC3339, err = time.Parse(time.RFC3339, s)
 					if err != nil {
 						return result, i, err
@@ -8680,7 +8628,6 @@ func (TimeFormatsStruct) DecodeFrom(data []byte, i int) (TimeFormatsStruct, int,
 							}
 						}
 					}
-
 					result.RFC822Z, err = time.Parse(time.RFC822Z, s)
 					if err != nil {
 						return result, i, err
@@ -8719,7 +8666,6 @@ func (TimeFormatsStruct) DecodeFrom(data []byte, i int) (TimeFormatsStruct, int,
 							}
 						}
 					}
-
 					result.DateOnly, err = time.Parse(time.DateOnly, s)
 					if err != nil {
 						return result, i, err
@@ -8753,7 +8699,6 @@ func (TimeFormatsStruct) DecodeFrom(data []byte, i int) (TimeFormatsStruct, int,
 							}
 						}
 					}
-
 					result.DateTime, err = time.Parse(time.DateTime, s)
 					if err != nil {
 						return result, i, err
@@ -8787,7 +8732,6 @@ func (TimeFormatsStruct) DecodeFrom(data []byte, i int) (TimeFormatsStruct, int,
 							}
 						}
 					}
-
 					result.RFC1123Z, err = time.Parse(time.RFC1123Z, s)
 					if err != nil {
 						return result, i, err
@@ -8821,7 +8765,6 @@ func (TimeFormatsStruct) DecodeFrom(data []byte, i int) (TimeFormatsStruct, int,
 							}
 						}
 					}
-
 					result.RubyDate, err = time.Parse(time.RubyDate, s)
 					if err != nil {
 						return result, i, err
@@ -8855,7 +8798,6 @@ func (TimeFormatsStruct) DecodeFrom(data []byte, i int) (TimeFormatsStruct, int,
 							}
 						}
 					}
-
 					result.TimeOnly, err = time.Parse(time.TimeOnly, s)
 					if err != nil {
 						return result, i, err
@@ -8889,7 +8831,6 @@ func (TimeFormatsStruct) DecodeFrom(data []byte, i int) (TimeFormatsStruct, int,
 							}
 						}
 					}
-
 					result.UnixDate, err = time.Parse(time.UnixDate, s)
 					if err != nil {
 						return result, i, err
@@ -8941,7 +8882,6 @@ func (TimeFormatsStruct) DecodeFrom(data []byte, i int) (TimeFormatsStruct, int,
 							}
 						}
 					}
-
 					result.StampNano, err = time.Parse(time.StampNano, s)
 					if err != nil {
 						return result, i, err
@@ -9006,7 +8946,6 @@ func (TimeFormatsStruct) DecodeFrom(data []byte, i int) (TimeFormatsStruct, int,
 							}
 						}
 					}
-
 					result.CustomLong, err = time.Parse("2006-Jan-02T15:04:05.000000000_Mon_-0700", s)
 					if err != nil {
 						return result, i, err
@@ -9040,7 +8979,6 @@ func (TimeFormatsStruct) DecodeFrom(data []byte, i int) (TimeFormatsStruct, int,
 							}
 						}
 					}
-
 					result.CustomTiny, err = time.Parse("2", s)
 					if err != nil {
 						return result, i, err
@@ -9074,7 +9012,6 @@ func (TimeFormatsStruct) DecodeFrom(data []byte, i int) (TimeFormatsStruct, int,
 							}
 						}
 					}
-
 					result.StampMicro, err = time.Parse(time.StampMicro, s)
 					if err != nil {
 						return result, i, err
@@ -9108,7 +9045,6 @@ func (TimeFormatsStruct) DecodeFrom(data []byte, i int) (TimeFormatsStruct, int,
 							}
 						}
 					}
-
 					result.StampMilli, err = time.Parse(time.StampMilli, s)
 					if err != nil {
 						return result, i, err
@@ -9146,7 +9082,6 @@ func (TimeFormatsStruct) DecodeFrom(data []byte, i int) (TimeFormatsStruct, int,
 							}
 						}
 					}
-
 					result.RFC3339Nano, err = time.Parse(time.RFC3339Nano, s)
 					if err != nil {
 						return result, i, err

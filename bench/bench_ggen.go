@@ -419,7 +419,6 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 							}
 						}
 					}
-
 					result.Blob = make([]byte, 0, base64.StdEncoding.DecodedLen(len(s)))
 					result.Blob, err = base64.StdEncoding.AppendDecode(result.Blob, unsafe.Slice(unsafe.StringData(s), len(s)))
 					if err != nil {
@@ -921,7 +920,6 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 					if err != nil {
 						return result, i, err
 					}
-
 					result.Parent = &v
 				}
 			default:
@@ -1011,7 +1009,6 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 							}
 						}
 					}
-
 					result.CreatedAt, err = time.Parse(time.RFC3339Nano, s)
 					if err != nil {
 						return result, i, err

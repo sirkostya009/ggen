@@ -3765,7 +3765,6 @@ func (CustomDiveStruct) DecodeFrom(data []byte, i int) (CustomDiveStruct, int, e
 						}
 						v = int(n)
 					}
-
 					result.Ptr = &v
 				}
 				if err := PointerCheck(result.Ptr); err != nil {
@@ -8687,7 +8686,6 @@ func (URLStruct) DecodeFrom(data []byte, i int) (URLStruct, int, error) {
 							}
 						}
 					}
-
 					var u *url.URL
 					u, err = url.Parse(s)
 					if err != nil {
@@ -11940,7 +11938,6 @@ func (NativeTypes) DecodeFrom(data []byte, i int) (NativeTypes, int, error) {
 							}
 						}
 					}
-
 					result.Addr, err = netip.ParseAddr(s)
 					if err != nil {
 						return result, i, err
@@ -11974,7 +11971,6 @@ func (NativeTypes) DecodeFrom(data []byte, i int) (NativeTypes, int, error) {
 							}
 						}
 					}
-
 					result.Blob = make([]byte, 0, base64.StdEncoding.DecodedLen(len(s)))
 					result.Blob, err = base64.StdEncoding.AppendDecode(result.Blob, unsafe.Slice(unsafe.StringData(s), len(s)))
 					if err != nil {
@@ -12009,7 +12005,6 @@ func (NativeTypes) DecodeFrom(data []byte, i int) (NativeTypes, int, error) {
 							}
 						}
 					}
-
 					result.Cidr, err = netip.ParsePrefix(s)
 					if err != nil {
 						return result, i, err
@@ -12081,7 +12076,6 @@ func (NativeTypes) DecodeFrom(data []byte, i int) (NativeTypes, int, error) {
 							}
 						}
 					}
-
 					result.HexBlob = make([]byte, 0, hex.DecodedLen(len(s)))
 					result.HexBlob, err = hex.AppendDecode(result.HexBlob, unsafe.Slice(unsafe.StringData(s), len(s)))
 					if err != nil {
@@ -12116,7 +12110,6 @@ func (NativeTypes) DecodeFrom(data []byte, i int) (NativeTypes, int, error) {
 							}
 						}
 					}
-
 					result.UnitDur, err = time.ParseDuration(s)
 					if err != nil {
 						return result, i, err
@@ -12155,7 +12148,6 @@ func (NativeTypes) DecodeFrom(data []byte, i int) (NativeTypes, int, error) {
 							}
 						}
 					}
-
 					result.IssuedAt, err = time.Parse(time.RFC3339, s)
 					if err != nil {
 						return result, i, err
@@ -12189,7 +12181,6 @@ func (NativeTypes) DecodeFrom(data []byte, i int) (NativeTypes, int, error) {
 							}
 						}
 					}
-
 					result.LegacyIP = net.ParseIP(s)
 					if result.LegacyIP == nil {
 						return result, i, fmt.Errorf("invalid IP")
@@ -12209,7 +12200,6 @@ func (NativeTypes) DecodeFrom(data []byte, i int) (NativeTypes, int, error) {
 					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
-
 					if i >= len(data) || data[i] != '[' {
 						return result, i, scan.ErrBadArray
 					}
@@ -12217,7 +12207,6 @@ func (NativeTypes) DecodeFrom(data []byte, i int) (NativeTypes, int, error) {
 					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
-
 					var v uint64
 					for i < len(data) && data[i] != ']' {
 						v, i, err = scan.Uint64(data, i)
@@ -12228,7 +12217,6 @@ func (NativeTypes) DecodeFrom(data []byte, i int) (NativeTypes, int, error) {
 						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
 						}
-
 						if i < len(data) && data[i] == ',' {
 							i++
 							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -12271,7 +12259,6 @@ func (NativeTypes) DecodeFrom(data []byte, i int) (NativeTypes, int, error) {
 							}
 						}
 					}
-
 					result.CreatedAt, err = time.Parse(time.RFC3339Nano, s)
 					if err != nil {
 						return result, i, err
@@ -13932,7 +13919,6 @@ func (PointerStruct) DecodeFrom(data []byte, i int) (PointerStruct, int, error) 
 					if err != nil {
 						return result, i, err
 					}
-
 					result.Addr = &v
 				}
 			case "name":
@@ -13966,7 +13952,6 @@ func (PointerStruct) DecodeFrom(data []byte, i int) (PointerStruct, int, error) 
 							}
 						}
 					}
-
 					result.Name = &v
 				}
 			case "when":
@@ -13989,7 +13974,6 @@ func (PointerStruct) DecodeFrom(data []byte, i int) (PointerStruct, int, error) 
 						nsec := int64((f - float64(sec)) * 1e9)
 						v = time.Unix(sec, nsec)
 					}
-
 					result.When = &v
 				}
 			default:
@@ -14032,7 +14016,6 @@ func (PointerStruct) DecodeFrom(data []byte, i int) (PointerStruct, int, error) 
 						}
 						v = int(n)
 					}
-
 					result.Count = &v
 				}
 			case "ratio":
@@ -14049,7 +14032,6 @@ func (PointerStruct) DecodeFrom(data []byte, i int) (PointerStruct, int, error) 
 					if err != nil {
 						return result, i, err
 					}
-
 					result.Ratio = &v
 				}
 			default:
@@ -14070,7 +14052,6 @@ func (PointerStruct) DecodeFrom(data []byte, i int) (PointerStruct, int, error) 
 					if err != nil {
 						return result, i, err
 					}
-
 					result.Enabled = &v
 				}
 			} else {
@@ -19103,7 +19084,6 @@ func (SQLNullStruct) DecodeFrom(data []byte, i int) (SQLNullStruct, int, error) 
 									}
 								}
 							}
-
 							nv, err = time.Parse(time.RFC3339Nano, s)
 							if err != nil {
 								return result, i, err
