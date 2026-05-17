@@ -4,6 +4,7 @@ package thirdparty2
 
 import (
 	"strconv"
+	"strings"
 	"unsafe"
 
 	"github.com/sirkostya009/ggen/decode"
@@ -177,9 +178,10 @@ func (External2) DecodeStreamFrom(s *scan.Stream, i int) (External2, int, error)
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(); err != nil {
+		if err = s.ReadMore(i); err != nil {
 			return result, i, err
 		}
+		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		if !seenKey {
@@ -193,25 +195,13 @@ func (External2) DecodeStreamFrom(s *scan.Stream, i int) (External2, int, error)
 		if err != nil {
 			return result, i, err
 		}
-		i, err = s.SkipSpace(i)
-		if err != nil {
-			return result, i, err
-		}
-		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
-				return result, i, err
-			}
-		}
-		if s.Bytes()[i] != ':' {
-			return result, i, scan.ErrBadObject
-		}
-		i, err = s.SkipSpace(i + 1)
-		if err != nil {
-			return result, i, err
-		}
 		switch len(key) {
 		case 3:
 			if key == "key" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenKey {
 					return result, i, &validation.DuplicateKeyError{Field: "key"}
 				}
@@ -224,10 +214,14 @@ func (External2) DecodeStreamFrom(s *scan.Stream, i int) (External2, int, error)
 					return result, i, &validation.MinLenError{Field: "key", Limit: 1, Got: len(result.Key)}
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 5:
 			if key == "value" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenValue {
 					return result, i, &validation.DuplicateKeyError{Field: "value"}
 				}
@@ -242,19 +236,20 @@ func (External2) DecodeStreamFrom(s *scan.Stream, i int) (External2, int, error)
 					return result, i, &validation.GTEError{Field: "value", Limit: 0, Value: result.Value}
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: key}
+			return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 		}
 		i, err = s.SkipSpace(i)
 		if err != nil {
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
+			if err = s.ReadMore(i); err != nil {
 				return result, i, err
 			}
+			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {

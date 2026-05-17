@@ -407,9 +407,10 @@ func (PlainAlias) DecodeStreamFrom(s *scan.Stream, i int) (PlainAlias, int, erro
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(); err != nil {
+		if err = s.ReadMore(i); err != nil {
 			return result, i, err
 		}
+		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -420,26 +421,14 @@ func (PlainAlias) DecodeStreamFrom(s *scan.Stream, i int) (PlainAlias, int, erro
 		if err != nil {
 			return result, i, err
 		}
-		i, err = s.SkipSpace(i)
-		if err != nil {
-			return result, i, err
-		}
-		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
-				return result, i, err
-			}
-		}
-		if s.Bytes()[i] != ':' {
-			return result, i, scan.ErrBadObject
-		}
-		i, err = s.SkipSpace(i + 1)
-		if err != nil {
-			return result, i, err
-		}
 		switch len(key) {
 		case 5:
 			switch key {
 			case "count":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenCount {
 					return result, i, &validation.DuplicateKeyError{Field: "count"}
 				}
@@ -451,6 +440,10 @@ func (PlainAlias) DecodeStreamFrom(s *scan.Stream, i int) (PlainAlias, int, erro
 				}
 				result.Count = int(iv)
 			case "title":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenTitle {
 					return result, i, &validation.DuplicateKeyError{Field: "title"}
 				}
@@ -460,19 +453,20 @@ func (PlainAlias) DecodeStreamFrom(s *scan.Stream, i int) (PlainAlias, int, erro
 					return result, i, err
 				}
 			default:
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: key}
+			return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 		}
 		i, err = s.SkipSpace(i)
 		if err != nil {
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
+			if err = s.ReadMore(i); err != nil {
 				return result, i, err
 			}
+			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -655,9 +649,10 @@ func (SamePkgAlias) DecodeStreamFrom(s *scan.Stream, i int) (SamePkgAlias, int, 
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(); err != nil {
+		if err = s.ReadMore(i); err != nil {
 			return result, i, err
 		}
+		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -668,26 +663,14 @@ func (SamePkgAlias) DecodeStreamFrom(s *scan.Stream, i int) (SamePkgAlias, int, 
 		if err != nil {
 			return result, i, err
 		}
-		i, err = s.SkipSpace(i)
-		if err != nil {
-			return result, i, err
-		}
-		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
-				return result, i, err
-			}
-		}
-		if s.Bytes()[i] != ':' {
-			return result, i, scan.ErrBadObject
-		}
-		i, err = s.SkipSpace(i + 1)
-		if err != nil {
-			return result, i, err
-		}
 		switch len(key) {
 		case 1:
 			switch key {
 			case "X":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenX {
 					return result, i, &validation.DuplicateKeyError{Field: "X"}
 				}
@@ -699,6 +682,10 @@ func (SamePkgAlias) DecodeStreamFrom(s *scan.Stream, i int) (SamePkgAlias, int, 
 				}
 				result.X = int(iv)
 			case "Y":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenY {
 					return result, i, &validation.DuplicateKeyError{Field: "Y"}
 				}
@@ -708,19 +695,20 @@ func (SamePkgAlias) DecodeStreamFrom(s *scan.Stream, i int) (SamePkgAlias, int, 
 					return result, i, err
 				}
 			default:
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: key}
+			return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 		}
 		i, err = s.SkipSpace(i)
 		if err != nil {
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
+			if err = s.ReadMore(i); err != nil {
 				return result, i, err
 			}
+			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -902,9 +890,10 @@ func (CrossPkgTaggedAlias) DecodeStreamFrom(s *scan.Stream, i int) (CrossPkgTagg
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(); err != nil {
+		if err = s.ReadMore(i); err != nil {
 			return result, i, err
 		}
+		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -915,25 +904,13 @@ func (CrossPkgTaggedAlias) DecodeStreamFrom(s *scan.Stream, i int) (CrossPkgTagg
 		if err != nil {
 			return result, i, err
 		}
-		i, err = s.SkipSpace(i)
-		if err != nil {
-			return result, i, err
-		}
-		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
-				return result, i, err
-			}
-		}
-		if s.Bytes()[i] != ':' {
-			return result, i, scan.ErrBadObject
-		}
-		i, err = s.SkipSpace(i + 1)
-		if err != nil {
-			return result, i, err
-		}
 		switch len(key) {
 		case 3:
 			if key == "Tag" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenTag {
 					return result, i, &validation.DuplicateKeyError{Field: "Tag"}
 				}
@@ -943,10 +920,14 @@ func (CrossPkgTaggedAlias) DecodeStreamFrom(s *scan.Stream, i int) (CrossPkgTagg
 					return result, i, err
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 4:
 			if key == "Name" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenName {
 					return result, i, &validation.DuplicateKeyError{Field: "Name"}
 				}
@@ -956,19 +937,20 @@ func (CrossPkgTaggedAlias) DecodeStreamFrom(s *scan.Stream, i int) (CrossPkgTagg
 					return result, i, err
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: key}
+			return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 		}
 		i, err = s.SkipSpace(i)
 		if err != nil {
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
+			if err = s.ReadMore(i); err != nil {
 				return result, i, err
 			}
+			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -1021,7 +1003,10 @@ func (OpaqueAlias) DecodeFrom(data []byte, i int) (OpaqueAlias, int, error) {
 func (OpaqueAlias) DecodeStreamFrom(s *scan.Stream, i int) (OpaqueAlias, int, error) {
 	var result OpaqueAlias
 	start := i
+	prevPin := s.Shift
+	s.Shift = false
 	k, err := s.SkipValue(start)
+	s.Shift = prevPin
 	if err != nil {
 		return result, i, err
 	}
@@ -1122,14 +1107,14 @@ func (AliasTags) DecodeStreamFrom(s *scan.Stream, i int) (AliasTags, int, error)
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
 		}
 		if s.Bytes()[i] == 'n' {
 			for ki := 1; ki < 4; ki++ {
 				if i+ki >= len(s.Bytes()) {
-					if err = s.ReadMore(); err != nil {
+					if err = s.ReadMore(0); err != nil {
 						return result, i, err
 					}
 				}
@@ -1148,7 +1133,7 @@ func (AliasTags) DecodeStreamFrom(s *scan.Stream, i int) (AliasTags, int, error)
 				return result, i, err
 			}
 			if i >= len(s.Bytes()) {
-				if err = s.ReadMore(); err != nil {
+				if err = s.ReadMore(0); err != nil {
 					return result, i, err
 				}
 			}
@@ -1168,7 +1153,7 @@ func (AliasTags) DecodeStreamFrom(s *scan.Stream, i int) (AliasTags, int, error)
 					return result, i, err
 				}
 				if i >= len(s.Bytes()) {
-					if err = s.ReadMore(); err != nil {
+					if err = s.ReadMore(0); err != nil {
 						return result, i, err
 					}
 				}
@@ -1331,14 +1316,14 @@ func (AliasLookup) DecodeStreamFrom(s *scan.Stream, i int) (AliasLookup, int, er
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
 		}
 		if s.Bytes()[i] == 'n' {
 			for ki := 1; ki < 4; ki++ {
 				if i+ki >= len(s.Bytes()) {
-					if err = s.ReadMore(); err != nil {
+					if err = s.ReadMore(0); err != nil {
 						return result, i, err
 					}
 				}
@@ -1357,7 +1342,7 @@ func (AliasLookup) DecodeStreamFrom(s *scan.Stream, i int) (AliasLookup, int, er
 				return result, i, err
 			}
 			if i >= len(s.Bytes()) {
-				if err = s.ReadMore(); err != nil {
+				if err = s.ReadMore(0); err != nil {
 					return result, i, err
 				}
 			}
@@ -1377,7 +1362,7 @@ func (AliasLookup) DecodeStreamFrom(s *scan.Stream, i int) (AliasLookup, int, er
 					return result, i, err
 				}
 				if i >= len(s.Bytes()) {
-					if err = s.ReadMore(); err != nil {
+					if err = s.ReadMore(0); err != nil {
 						return result, i, err
 					}
 				}
@@ -1399,7 +1384,7 @@ func (AliasLookup) DecodeStreamFrom(s *scan.Stream, i int) (AliasLookup, int, er
 					return result, i, err
 				}
 				if i >= len(s.Bytes()) {
-					if err = s.ReadMore(); err != nil {
+					if err = s.ReadMore(0); err != nil {
 						return result, i, err
 					}
 				}
@@ -1536,7 +1521,7 @@ func (AliasTuple) DecodeStreamFrom(s *scan.Stream, i int) (AliasTuple, int, erro
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
 		}
@@ -1557,7 +1542,7 @@ func (AliasTuple) DecodeStreamFrom(s *scan.Stream, i int) (AliasTuple, int, erro
 				return result, i, err
 			}
 			if i >= len(s.Bytes()) {
-				if err = s.ReadMore(); err != nil {
+				if err = s.ReadMore(0); err != nil {
 					return result, i, err
 				}
 			}
@@ -1742,9 +1727,10 @@ func (AliasFieldExample) DecodeStreamFrom(s *scan.Stream, i int) (AliasFieldExam
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(); err != nil {
+		if err = s.ReadMore(i); err != nil {
 			return result, i, err
 		}
+		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		if !seenBody {
@@ -1758,25 +1744,13 @@ func (AliasFieldExample) DecodeStreamFrom(s *scan.Stream, i int) (AliasFieldExam
 		if err != nil {
 			return result, i, err
 		}
-		i, err = s.SkipSpace(i)
-		if err != nil {
-			return result, i, err
-		}
-		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
-				return result, i, err
-			}
-		}
-		if s.Bytes()[i] != ':' {
-			return result, i, scan.ErrBadObject
-		}
-		i, err = s.SkipSpace(i + 1)
-		if err != nil {
-			return result, i, err
-		}
 		switch len(key) {
 		case 4:
 			if key == "body" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenBody {
 					return result, i, &validation.DuplicateKeyError{Field: "body"}
 				}
@@ -1794,10 +1768,14 @@ func (AliasFieldExample) DecodeStreamFrom(s *scan.Stream, i int) (AliasFieldExam
 					return result, i, &validation.MaxLenError{Field: "body", Limit: 10, Got: len(result.Body)}
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 5:
 			if key == "count" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenCount {
 					return result, i, &validation.DuplicateKeyError{Field: "count"}
 				}
@@ -1819,19 +1797,20 @@ func (AliasFieldExample) DecodeStreamFrom(s *scan.Stream, i int) (AliasFieldExam
 					return result, i, &validation.LTEError{Field: "count", Limit: 100, Value: result.Count}
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: key}
+			return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 		}
 		i, err = s.SkipSpace(i)
 		if err != nil {
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
+			if err = s.ReadMore(i); err != nil {
 				return result, i, err
 			}
+			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -2003,9 +1982,10 @@ func (AnyStruct) DecodeStreamFrom(s *scan.Stream, i int) (AnyStruct, int, error)
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(); err != nil {
+		if err = s.ReadMore(i); err != nil {
 			return result, i, err
 		}
+		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -2016,26 +1996,14 @@ func (AnyStruct) DecodeStreamFrom(s *scan.Stream, i int) (AnyStruct, int, error)
 		if err != nil {
 			return result, i, err
 		}
-		i, err = s.SkipSpace(i)
-		if err != nil {
-			return result, i, err
-		}
-		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
-				return result, i, err
-			}
-		}
-		if s.Bytes()[i] != ':' {
-			return result, i, scan.ErrBadObject
-		}
-		i, err = s.SkipSpace(i + 1)
-		if err != nil {
-			return result, i, err
-		}
 		switch len(key) {
 		case 4:
 			switch key {
 			case "body":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenBody {
 					return result, i, &validation.DuplicateKeyError{Field: "body"}
 				}
@@ -2047,6 +2015,10 @@ func (AnyStruct) DecodeStreamFrom(s *scan.Stream, i int) (AnyStruct, int, error)
 					}
 				}
 			case "name":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenName {
 					return result, i, &validation.DuplicateKeyError{Field: "name"}
 				}
@@ -2056,19 +2028,20 @@ func (AnyStruct) DecodeStreamFrom(s *scan.Stream, i int) (AnyStruct, int, error)
 					return result, i, err
 				}
 			default:
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: key}
+			return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 		}
 		i, err = s.SkipSpace(i)
 		if err != nil {
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
+			if err = s.ReadMore(i); err != nil {
 				return result, i, err
 			}
+			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -2234,9 +2207,10 @@ func (AnyNumberStruct) DecodeStreamFrom(s *scan.Stream, i int) (AnyNumberStruct,
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(); err != nil {
+		if err = s.ReadMore(i); err != nil {
 			return result, i, err
 		}
+		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -2247,26 +2221,14 @@ func (AnyNumberStruct) DecodeStreamFrom(s *scan.Stream, i int) (AnyNumberStruct,
 		if err != nil {
 			return result, i, err
 		}
-		i, err = s.SkipSpace(i)
-		if err != nil {
-			return result, i, err
-		}
-		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
-				return result, i, err
-			}
-		}
-		if s.Bytes()[i] != ':' {
-			return result, i, scan.ErrBadObject
-		}
-		i, err = s.SkipSpace(i + 1)
-		if err != nil {
-			return result, i, err
-		}
 		switch len(key) {
 		case 4:
 			switch key {
 			case "body":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenBody {
 					return result, i, &validation.DuplicateKeyError{Field: "body"}
 				}
@@ -2278,6 +2240,10 @@ func (AnyNumberStruct) DecodeStreamFrom(s *scan.Stream, i int) (AnyNumberStruct,
 					}
 				}
 			case "name":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenName {
 					return result, i, &validation.DuplicateKeyError{Field: "name"}
 				}
@@ -2287,19 +2253,20 @@ func (AnyNumberStruct) DecodeStreamFrom(s *scan.Stream, i int) (AnyNumberStruct,
 					return result, i, err
 				}
 			default:
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: key}
+			return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 		}
 		i, err = s.SkipSpace(i)
 		if err != nil {
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
+			if err = s.ReadMore(i); err != nil {
 				return result, i, err
 			}
+			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -2577,9 +2544,10 @@ func (MultiErrStruct) DecodeStreamFrom(s *scan.Stream, i int) (MultiErrStruct, i
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(); err != nil {
+		if err = s.ReadMore(i); err != nil {
 			return result, i, err
 		}
+		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		if !seenName {
@@ -2596,25 +2564,13 @@ func (MultiErrStruct) DecodeStreamFrom(s *scan.Stream, i int) (MultiErrStruct, i
 		if err != nil {
 			return result, i, err
 		}
-		i, err = s.SkipSpace(i)
-		if err != nil {
-			return result, i, err
-		}
-		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
-				return result, i, err
-			}
-		}
-		if s.Bytes()[i] != ':' {
-			return result, i, scan.ErrBadObject
-		}
-		i, err = s.SkipSpace(i + 1)
-		if err != nil {
-			return result, i, err
-		}
 		switch len(key) {
 		case 3:
 			if key == "age" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenAge {
 					errs = append(errs, &validation.DuplicateKeyError{Field: "age"})
 					i, err = s.SkipValue(i)
@@ -2638,7 +2594,11 @@ func (MultiErrStruct) DecodeStreamFrom(s *scan.Stream, i int) (MultiErrStruct, i
 
 				}
 			} else {
-				errs = append(errs, &validation.UnknownKeyError{Field: key})
+				errs = append(errs, &validation.UnknownKeyError{Field: strings.Clone(key)})
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				i, err = s.SkipValue(i)
 				if err != nil {
 					return result, i, err
@@ -2647,6 +2607,10 @@ func (MultiErrStruct) DecodeStreamFrom(s *scan.Stream, i int) (MultiErrStruct, i
 		case 4:
 			switch key {
 			case "name":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenName {
 					errs = append(errs, &validation.DuplicateKeyError{Field: "name"})
 					i, err = s.SkipValue(i)
@@ -2668,6 +2632,10 @@ func (MultiErrStruct) DecodeStreamFrom(s *scan.Stream, i int) (MultiErrStruct, i
 
 				}
 			case "role":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenRole {
 					errs = append(errs, &validation.DuplicateKeyError{Field: "role"})
 					i, err = s.SkipValue(i)
@@ -2688,14 +2656,22 @@ func (MultiErrStruct) DecodeStreamFrom(s *scan.Stream, i int) (MultiErrStruct, i
 
 				}
 			default:
-				errs = append(errs, &validation.UnknownKeyError{Field: key})
+				errs = append(errs, &validation.UnknownKeyError{Field: strings.Clone(key)})
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				i, err = s.SkipValue(i)
 				if err != nil {
 					return result, i, err
 				}
 			}
 		default:
-			errs = append(errs, &validation.UnknownKeyError{Field: key})
+			errs = append(errs, &validation.UnknownKeyError{Field: strings.Clone(key)})
+			i, err = s.ConsumeColon(i)
+			if err != nil {
+				return result, i, err
+			}
 			i, err = s.SkipValue(i)
 			if err != nil {
 				return result, i, err
@@ -2706,9 +2682,10 @@ func (MultiErrStruct) DecodeStreamFrom(s *scan.Stream, i int) (MultiErrStruct, i
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
+			if err = s.ReadMore(i); err != nil {
 				return result, i, err
 			}
+			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -2913,9 +2890,10 @@ func (AllowDupsStruct) DecodeStreamFrom(s *scan.Stream, i int) (AllowDupsStruct,
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(); err != nil {
+		if err = s.ReadMore(i); err != nil {
 			return result, i, err
 		}
+		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -2926,25 +2904,13 @@ func (AllowDupsStruct) DecodeStreamFrom(s *scan.Stream, i int) (AllowDupsStruct,
 		if err != nil {
 			return result, i, err
 		}
-		i, err = s.SkipSpace(i)
-		if err != nil {
-			return result, i, err
-		}
-		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
-				return result, i, err
-			}
-		}
-		if s.Bytes()[i] != ':' {
-			return result, i, scan.ErrBadObject
-		}
-		i, err = s.SkipSpace(i + 1)
-		if err != nil {
-			return result, i, err
-		}
 		switch len(key) {
 		case 1:
 			if key == "n" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenN {
 					i, err = s.SkipValue(i)
 					if err != nil {
@@ -2961,10 +2927,14 @@ func (AllowDupsStruct) DecodeStreamFrom(s *scan.Stream, i int) (AllowDupsStruct,
 
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 4:
 			if key == "name" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenName {
 					i, err = s.SkipValue(i)
 					if err != nil {
@@ -2979,19 +2949,20 @@ func (AllowDupsStruct) DecodeStreamFrom(s *scan.Stream, i int) (AllowDupsStruct,
 
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: key}
+			return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 		}
 		i, err = s.SkipSpace(i)
 		if err != nil {
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
+			if err = s.ReadMore(i); err != nil {
 				return result, i, err
 			}
+			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -3347,9 +3318,10 @@ func (DiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (DiveStruct, int, erro
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(); err != nil {
+		if err = s.ReadMore(i); err != nil {
 			return result, i, err
 		}
+		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -3360,25 +3332,13 @@ func (DiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (DiveStruct, int, erro
 		if err != nil {
 			return result, i, err
 		}
-		i, err = s.SkipSpace(i)
-		if err != nil {
-			return result, i, err
-		}
-		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
-				return result, i, err
-			}
-		}
-		if s.Bytes()[i] != ':' {
-			return result, i, scan.ErrBadObject
-		}
-		i, err = s.SkipSpace(i + 1)
-		if err != nil {
-			return result, i, err
-		}
 		switch len(key) {
 		case 4:
 			if key == "tags" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenTags {
 					return result, i, &validation.DuplicateKeyError{Field: "tags"}
 				}
@@ -3389,14 +3349,14 @@ func (DiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (DiveStruct, int, erro
 						return result, i, err
 					}
 					if i >= len(s.Bytes()) {
-						if err = s.ReadMore(); err != nil {
+						if err = s.ReadMore(0); err != nil {
 							return result, i, err
 						}
 					}
 					if s.Bytes()[i] == 'n' {
 						for ki := 1; ki < 4; ki++ {
 							if i+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -3415,7 +3375,7 @@ func (DiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (DiveStruct, int, erro
 							return result, i, err
 						}
 						if i >= len(s.Bytes()) {
-							if err = s.ReadMore(); err != nil {
+							if err = s.ReadMore(0); err != nil {
 								return result, i, err
 							}
 						}
@@ -3441,7 +3401,7 @@ func (DiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (DiveStruct, int, erro
 								return result, i, err
 							}
 							if i >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -3467,11 +3427,15 @@ func (DiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (DiveStruct, int, erro
 					return result, i, &validation.MaxLenError{Field: "tags", Limit: 3, Got: len(result.Tags)}
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 5:
 			switch key {
 			case "count":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenCount {
 					return result, i, &validation.DuplicateKeyError{Field: "count"}
 				}
@@ -3486,6 +3450,10 @@ func (DiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (DiveStruct, int, erro
 					return result, i, &validation.CustomError{Field: "count", Name: "@EvenOnly", Cause: err}
 				}
 			case "title":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenTitle {
 					return result, i, &validation.DuplicateKeyError{Field: "title"}
 				}
@@ -3501,10 +3469,14 @@ func (DiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (DiveStruct, int, erro
 					return result, i, &validation.MaxRunesError{Field: "title", Limit: 5, Got: utf8.RuneCountInString(result.Title)}
 				}
 			default:
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 6:
 			if key == "scores" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenScores {
 					return result, i, &validation.DuplicateKeyError{Field: "scores"}
 				}
@@ -3515,14 +3487,14 @@ func (DiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (DiveStruct, int, erro
 						return result, i, err
 					}
 					if i >= len(s.Bytes()) {
-						if err = s.ReadMore(); err != nil {
+						if err = s.ReadMore(0); err != nil {
 							return result, i, err
 						}
 					}
 					if s.Bytes()[i] == 'n' {
 						for ki := 1; ki < 4; ki++ {
 							if i+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -3541,7 +3513,7 @@ func (DiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (DiveStruct, int, erro
 							return result, i, err
 						}
 						if i >= len(s.Bytes()) {
-							if err = s.ReadMore(); err != nil {
+							if err = s.ReadMore(0); err != nil {
 								return result, i, err
 							}
 						}
@@ -3569,7 +3541,7 @@ func (DiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (DiveStruct, int, erro
 								return result, i, err
 							}
 							if i >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -3589,19 +3561,20 @@ func (DiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (DiveStruct, int, erro
 					}
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: key}
+			return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 		}
 		i, err = s.SkipSpace(i)
 		if err != nil {
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
+			if err = s.ReadMore(i); err != nil {
 				return result, i, err
 			}
+			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -4167,9 +4140,10 @@ func (CustomDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (CustomDiveStruc
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(); err != nil {
+		if err = s.ReadMore(i); err != nil {
 			return result, i, err
 		}
+		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -4180,38 +4154,26 @@ func (CustomDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (CustomDiveStruc
 		if err != nil {
 			return result, i, err
 		}
-		i, err = s.SkipSpace(i)
-		if err != nil {
-			return result, i, err
-		}
-		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
-				return result, i, err
-			}
-		}
-		if s.Bytes()[i] != ':' {
-			return result, i, scan.ErrBadObject
-		}
-		i, err = s.SkipSpace(i + 1)
-		if err != nil {
-			return result, i, err
-		}
 		switch len(key) {
 		case 3:
 			if key == "ptr" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenPtr {
 					return result, i, &validation.DuplicateKeyError{Field: "ptr"}
 				}
 				seenPtr = true
 				if i >= len(s.Bytes()) {
-					if err = s.ReadMore(); err != nil {
+					if err = s.ReadMore(0); err != nil {
 						return result, i, err
 					}
 				}
 				if s.Bytes()[i] == 'n' {
 					for ki := 1; ki < 4; ki++ {
 						if i+ki >= len(s.Bytes()) {
-							if err = s.ReadMore(); err != nil {
+							if err = s.ReadMore(0); err != nil {
 								return result, i, err
 							}
 						}
@@ -4236,11 +4198,15 @@ func (CustomDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (CustomDiveStruc
 					return result, i, &validation.CustomError{Field: "ptr", Name: "@PointerCheck", Cause: err}
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 4:
 			switch key {
 			case "tags":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenTags {
 					return result, i, &validation.DuplicateKeyError{Field: "tags"}
 				}
@@ -4251,14 +4217,14 @@ func (CustomDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (CustomDiveStruc
 						return result, i, err
 					}
 					if i >= len(s.Bytes()) {
-						if err = s.ReadMore(); err != nil {
+						if err = s.ReadMore(0); err != nil {
 							return result, i, err
 						}
 					}
 					if s.Bytes()[i] == 'n' {
 						for ki := 1; ki < 4; ki++ {
 							if i+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -4277,7 +4243,7 @@ func (CustomDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (CustomDiveStruc
 							return result, i, err
 						}
 						if i >= len(s.Bytes()) {
-							if err = s.ReadMore(); err != nil {
+							if err = s.ReadMore(0); err != nil {
 								return result, i, err
 							}
 						}
@@ -4300,7 +4266,7 @@ func (CustomDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (CustomDiveStruc
 								return result, i, err
 							}
 							if i >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -4320,6 +4286,10 @@ func (CustomDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (CustomDiveStruc
 					}
 				}
 			case "trim":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenTrim {
 					return result, i, &validation.DuplicateKeyError{Field: "trim"}
 				}
@@ -4330,14 +4300,14 @@ func (CustomDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (CustomDiveStruc
 						return result, i, err
 					}
 					if i >= len(s.Bytes()) {
-						if err = s.ReadMore(); err != nil {
+						if err = s.ReadMore(0); err != nil {
 							return result, i, err
 						}
 					}
 					if s.Bytes()[i] == 'n' {
 						for ki := 1; ki < 4; ki++ {
 							if i+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -4356,7 +4326,7 @@ func (CustomDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (CustomDiveStruc
 							return result, i, err
 						}
 						if i >= len(s.Bytes()) {
-							if err = s.ReadMore(); err != nil {
+							if err = s.ReadMore(0); err != nil {
 								return result, i, err
 							}
 						}
@@ -4377,7 +4347,7 @@ func (CustomDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (CustomDiveStruc
 								return result, i, err
 							}
 							if i >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -4397,10 +4367,14 @@ func (CustomDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (CustomDiveStruc
 					}
 				}
 			default:
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 5:
 			if key == "mixed" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenMixed {
 					return result, i, &validation.DuplicateKeyError{Field: "mixed"}
 				}
@@ -4411,14 +4385,14 @@ func (CustomDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (CustomDiveStruc
 						return result, i, err
 					}
 					if i >= len(s.Bytes()) {
-						if err = s.ReadMore(); err != nil {
+						if err = s.ReadMore(0); err != nil {
 							return result, i, err
 						}
 					}
 					if s.Bytes()[i] == 'n' {
 						for ki := 1; ki < 4; ki++ {
 							if i+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -4437,7 +4411,7 @@ func (CustomDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (CustomDiveStruc
 							return result, i, err
 						}
 						if i >= len(s.Bytes()) {
-							if err = s.ReadMore(); err != nil {
+							if err = s.ReadMore(0); err != nil {
 								return result, i, err
 							}
 						}
@@ -4458,7 +4432,7 @@ func (CustomDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (CustomDiveStruc
 								return result, i, err
 							}
 							if i >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -4480,7 +4454,7 @@ func (CustomDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (CustomDiveStruc
 								return result, i, err
 							}
 							if i >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -4500,10 +4474,14 @@ func (CustomDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (CustomDiveStruc
 					}
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 6:
 			if key == "lookup" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenLookup {
 					return result, i, &validation.DuplicateKeyError{Field: "lookup"}
 				}
@@ -4514,14 +4492,14 @@ func (CustomDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (CustomDiveStruc
 						return result, i, err
 					}
 					if i >= len(s.Bytes()) {
-						if err = s.ReadMore(); err != nil {
+						if err = s.ReadMore(0); err != nil {
 							return result, i, err
 						}
 					}
 					if s.Bytes()[i] == 'n' {
 						for ki := 1; ki < 4; ki++ {
 							if i+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -4540,7 +4518,7 @@ func (CustomDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (CustomDiveStruc
 							return result, i, err
 						}
 						if i >= len(s.Bytes()) {
-							if err = s.ReadMore(); err != nil {
+							if err = s.ReadMore(0); err != nil {
 								return result, i, err
 							}
 						}
@@ -4563,7 +4541,7 @@ func (CustomDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (CustomDiveStruc
 								return result, i, err
 							}
 							if i >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -4585,7 +4563,7 @@ func (CustomDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (CustomDiveStruc
 								return result, i, err
 							}
 							if i >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -4605,19 +4583,20 @@ func (CustomDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (CustomDiveStruc
 					}
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: key}
+			return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 		}
 		i, err = s.SkipSpace(i)
 		if err != nil {
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
+			if err = s.ReadMore(i); err != nil {
 				return result, i, err
 			}
+			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -5343,9 +5322,10 @@ func (ExtraStruct) DecodeStreamFrom(s *scan.Stream, i int) (ExtraStruct, int, er
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(); err != nil {
+		if err = s.ReadMore(i); err != nil {
 			return result, i, err
 		}
+		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -5356,25 +5336,13 @@ func (ExtraStruct) DecodeStreamFrom(s *scan.Stream, i int) (ExtraStruct, int, er
 		if err != nil {
 			return result, i, err
 		}
-		i, err = s.SkipSpace(i)
-		if err != nil {
-			return result, i, err
-		}
-		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
-				return result, i, err
-			}
-		}
-		if s.Bytes()[i] != ':' {
-			return result, i, scan.ErrBadObject
-		}
-		i, err = s.SkipSpace(i + 1)
-		if err != nil {
-			return result, i, err
-		}
 		switch len(key) {
 		case 6:
 			if key == "triple" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenTriple {
 					return result, i, &validation.DuplicateKeyError{Field: "triple"}
 				}
@@ -5385,14 +5353,14 @@ func (ExtraStruct) DecodeStreamFrom(s *scan.Stream, i int) (ExtraStruct, int, er
 						return result, i, err
 					}
 					if i >= len(s.Bytes()) {
-						if err = s.ReadMore(); err != nil {
+						if err = s.ReadMore(0); err != nil {
 							return result, i, err
 						}
 					}
 					if s.Bytes()[i] == 'n' {
 						for ki := 1; ki < 4; ki++ {
 							if i+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -5411,7 +5379,7 @@ func (ExtraStruct) DecodeStreamFrom(s *scan.Stream, i int) (ExtraStruct, int, er
 							return result, i, err
 						}
 						if i >= len(s.Bytes()) {
-							if err = s.ReadMore(); err != nil {
+							if err = s.ReadMore(0); err != nil {
 								return result, i, err
 							}
 						}
@@ -5428,14 +5396,14 @@ func (ExtraStruct) DecodeStreamFrom(s *scan.Stream, i int) (ExtraStruct, int, er
 									return result, i, err
 								}
 								if i >= len(s.Bytes()) {
-									if err = s.ReadMore(); err != nil {
+									if err = s.ReadMore(0); err != nil {
 										return result, i, err
 									}
 								}
 								if s.Bytes()[i] == 'n' {
 									for ki := 1; ki < 4; ki++ {
 										if i+ki >= len(s.Bytes()) {
-											if err = s.ReadMore(); err != nil {
+											if err = s.ReadMore(0); err != nil {
 												return result, i, err
 											}
 										}
@@ -5454,7 +5422,7 @@ func (ExtraStruct) DecodeStreamFrom(s *scan.Stream, i int) (ExtraStruct, int, er
 										return result, i, err
 									}
 									if i >= len(s.Bytes()) {
-										if err = s.ReadMore(); err != nil {
+										if err = s.ReadMore(0); err != nil {
 											return result, i, err
 										}
 									}
@@ -5471,14 +5439,14 @@ func (ExtraStruct) DecodeStreamFrom(s *scan.Stream, i int) (ExtraStruct, int, er
 												return result, i, err
 											}
 											if i >= len(s.Bytes()) {
-												if err = s.ReadMore(); err != nil {
+												if err = s.ReadMore(0); err != nil {
 													return result, i, err
 												}
 											}
 											if s.Bytes()[i] == 'n' {
 												for ki := 1; ki < 4; ki++ {
 													if i+ki >= len(s.Bytes()) {
-														if err = s.ReadMore(); err != nil {
+														if err = s.ReadMore(0); err != nil {
 															return result, i, err
 														}
 													}
@@ -5497,7 +5465,7 @@ func (ExtraStruct) DecodeStreamFrom(s *scan.Stream, i int) (ExtraStruct, int, er
 													return result, i, err
 												}
 												if i >= len(s.Bytes()) {
-													if err = s.ReadMore(); err != nil {
+													if err = s.ReadMore(0); err != nil {
 														return result, i, err
 													}
 												}
@@ -5520,7 +5488,7 @@ func (ExtraStruct) DecodeStreamFrom(s *scan.Stream, i int) (ExtraStruct, int, er
 														return result, i, err
 													}
 													if i >= len(s.Bytes()) {
-														if err = s.ReadMore(); err != nil {
+														if err = s.ReadMore(0); err != nil {
 															return result, i, err
 														}
 													}
@@ -5547,7 +5515,7 @@ func (ExtraStruct) DecodeStreamFrom(s *scan.Stream, i int) (ExtraStruct, int, er
 											return result, i, err
 										}
 										if i >= len(s.Bytes()) {
-											if err = s.ReadMore(); err != nil {
+											if err = s.ReadMore(0); err != nil {
 												return result, i, err
 											}
 										}
@@ -5574,7 +5542,7 @@ func (ExtraStruct) DecodeStreamFrom(s *scan.Stream, i int) (ExtraStruct, int, er
 								return result, i, err
 							}
 							if i >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -5594,10 +5562,14 @@ func (ExtraStruct) DecodeStreamFrom(s *scan.Stream, i int) (ExtraStruct, int, er
 					}
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 8:
 			if key == "keyedMap" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenKeyedMap {
 					return result, i, &validation.DuplicateKeyError{Field: "keyedMap"}
 				}
@@ -5608,14 +5580,14 @@ func (ExtraStruct) DecodeStreamFrom(s *scan.Stream, i int) (ExtraStruct, int, er
 						return result, i, err
 					}
 					if i >= len(s.Bytes()) {
-						if err = s.ReadMore(); err != nil {
+						if err = s.ReadMore(0); err != nil {
 							return result, i, err
 						}
 					}
 					if s.Bytes()[i] == 'n' {
 						for ki := 1; ki < 4; ki++ {
 							if i+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -5634,7 +5606,7 @@ func (ExtraStruct) DecodeStreamFrom(s *scan.Stream, i int) (ExtraStruct, int, er
 							return result, i, err
 						}
 						if i >= len(s.Bytes()) {
-							if err = s.ReadMore(); err != nil {
+							if err = s.ReadMore(0); err != nil {
 								return result, i, err
 							}
 						}
@@ -5662,7 +5634,7 @@ func (ExtraStruct) DecodeStreamFrom(s *scan.Stream, i int) (ExtraStruct, int, er
 								return result, i, err
 							}
 							if i >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -5684,7 +5656,7 @@ func (ExtraStruct) DecodeStreamFrom(s *scan.Stream, i int) (ExtraStruct, int, er
 								return result, i, err
 							}
 							if i >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -5704,11 +5676,15 @@ func (ExtraStruct) DecodeStreamFrom(s *scan.Stream, i int) (ExtraStruct, int, er
 					}
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 10:
 			switch key {
 			case "hintedTags":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenHintedTags {
 					return result, i, &validation.DuplicateKeyError{Field: "hintedTags"}
 				}
@@ -5719,14 +5695,14 @@ func (ExtraStruct) DecodeStreamFrom(s *scan.Stream, i int) (ExtraStruct, int, er
 						return result, i, err
 					}
 					if i >= len(s.Bytes()) {
-						if err = s.ReadMore(); err != nil {
+						if err = s.ReadMore(0); err != nil {
 							return result, i, err
 						}
 					}
 					if s.Bytes()[i] == 'n' {
 						for ki := 1; ki < 4; ki++ {
 							if i+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -5745,7 +5721,7 @@ func (ExtraStruct) DecodeStreamFrom(s *scan.Stream, i int) (ExtraStruct, int, er
 							return result, i, err
 						}
 						if i >= len(s.Bytes()) {
-							if err = s.ReadMore(); err != nil {
+							if err = s.ReadMore(0); err != nil {
 								return result, i, err
 							}
 						}
@@ -5765,7 +5741,7 @@ func (ExtraStruct) DecodeStreamFrom(s *scan.Stream, i int) (ExtraStruct, int, er
 								return result, i, err
 							}
 							if i >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -5788,6 +5764,10 @@ func (ExtraStruct) DecodeStreamFrom(s *scan.Stream, i int) (ExtraStruct, int, er
 					return result, i, &validation.MaxLenError{Field: "hintedTags", Limit: 1000, Got: len(result.HintedTags)}
 				}
 			case "nestedInts":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenNestedInts {
 					return result, i, &validation.DuplicateKeyError{Field: "nestedInts"}
 				}
@@ -5798,14 +5778,14 @@ func (ExtraStruct) DecodeStreamFrom(s *scan.Stream, i int) (ExtraStruct, int, er
 						return result, i, err
 					}
 					if i >= len(s.Bytes()) {
-						if err = s.ReadMore(); err != nil {
+						if err = s.ReadMore(0); err != nil {
 							return result, i, err
 						}
 					}
 					if s.Bytes()[i] == 'n' {
 						for ki := 1; ki < 4; ki++ {
 							if i+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -5824,7 +5804,7 @@ func (ExtraStruct) DecodeStreamFrom(s *scan.Stream, i int) (ExtraStruct, int, er
 							return result, i, err
 						}
 						if i >= len(s.Bytes()) {
-							if err = s.ReadMore(); err != nil {
+							if err = s.ReadMore(0); err != nil {
 								return result, i, err
 							}
 						}
@@ -5841,14 +5821,14 @@ func (ExtraStruct) DecodeStreamFrom(s *scan.Stream, i int) (ExtraStruct, int, er
 									return result, i, err
 								}
 								if i >= len(s.Bytes()) {
-									if err = s.ReadMore(); err != nil {
+									if err = s.ReadMore(0); err != nil {
 										return result, i, err
 									}
 								}
 								if s.Bytes()[i] == 'n' {
 									for ki := 1; ki < 4; ki++ {
 										if i+ki >= len(s.Bytes()) {
-											if err = s.ReadMore(); err != nil {
+											if err = s.ReadMore(0); err != nil {
 												return result, i, err
 											}
 										}
@@ -5867,7 +5847,7 @@ func (ExtraStruct) DecodeStreamFrom(s *scan.Stream, i int) (ExtraStruct, int, er
 										return result, i, err
 									}
 									if i >= len(s.Bytes()) {
-										if err = s.ReadMore(); err != nil {
+										if err = s.ReadMore(0); err != nil {
 											return result, i, err
 										}
 									}
@@ -5895,7 +5875,7 @@ func (ExtraStruct) DecodeStreamFrom(s *scan.Stream, i int) (ExtraStruct, int, er
 											return result, i, err
 										}
 										if i >= len(s.Bytes()) {
-											if err = s.ReadMore(); err != nil {
+											if err = s.ReadMore(0); err != nil {
 												return result, i, err
 											}
 										}
@@ -5922,7 +5902,7 @@ func (ExtraStruct) DecodeStreamFrom(s *scan.Stream, i int) (ExtraStruct, int, er
 								return result, i, err
 							}
 							if i >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -5942,10 +5922,14 @@ func (ExtraStruct) DecodeStreamFrom(s *scan.Stream, i int) (ExtraStruct, int, er
 					}
 				}
 			default:
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 12:
 			if key == "clampedScore" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenClampedScore {
 					return result, i, &validation.DuplicateKeyError{Field: "clampedScore"}
 				}
@@ -5963,19 +5947,20 @@ func (ExtraStruct) DecodeStreamFrom(s *scan.Stream, i int) (ExtraStruct, int, er
 					result.ClampedScore = 100
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: key}
+			return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 		}
 		i, err = s.SkipSpace(i)
 		if err != nil {
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
+			if err = s.ReadMore(i); err != nil {
 				return result, i, err
 			}
+			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -6649,9 +6634,10 @@ func (TupleStruct) DecodeStreamFrom(s *scan.Stream, i int) (TupleStruct, int, er
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(); err != nil {
+		if err = s.ReadMore(i); err != nil {
 			return result, i, err
 		}
+		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -6662,25 +6648,13 @@ func (TupleStruct) DecodeStreamFrom(s *scan.Stream, i int) (TupleStruct, int, er
 		if err != nil {
 			return result, i, err
 		}
-		i, err = s.SkipSpace(i)
-		if err != nil {
-			return result, i, err
-		}
-		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
-				return result, i, err
-			}
-		}
-		if s.Bytes()[i] != ':' {
-			return result, i, scan.ErrBadObject
-		}
-		i, err = s.SkipSpace(i + 1)
-		if err != nil {
-			return result, i, err
-		}
 		switch len(key) {
 		case 3:
 			if key == "rgb" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenRGB {
 					return result, i, &validation.DuplicateKeyError{Field: "rgb"}
 				}
@@ -6695,7 +6669,7 @@ func (TupleStruct) DecodeStreamFrom(s *scan.Stream, i int) (TupleStruct, int, er
 						return result, i, err
 					}
 					if i >= len(s.Bytes()) {
-						if err = s.ReadMore(); err != nil {
+						if err = s.ReadMore(0); err != nil {
 							return result, i, err
 						}
 					}
@@ -6728,7 +6702,7 @@ func (TupleStruct) DecodeStreamFrom(s *scan.Stream, i int) (TupleStruct, int, er
 							return result, i, err
 						}
 						if i >= len(s.Bytes()) {
-							if err = s.ReadMore(); err != nil {
+							if err = s.ReadMore(0); err != nil {
 								return result, i, err
 							}
 						}
@@ -6750,10 +6724,14 @@ func (TupleStruct) DecodeStreamFrom(s *scan.Stream, i int) (TupleStruct, int, er
 					i++
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 4:
 			if key == "pair" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenPair {
 					return result, i, &validation.DuplicateKeyError{Field: "pair"}
 				}
@@ -6768,7 +6746,7 @@ func (TupleStruct) DecodeStreamFrom(s *scan.Stream, i int) (TupleStruct, int, er
 						return result, i, err
 					}
 					if i >= len(s.Bytes()) {
-						if err = s.ReadMore(); err != nil {
+						if err = s.ReadMore(0); err != nil {
 							return result, i, err
 						}
 					}
@@ -6783,14 +6761,14 @@ func (TupleStruct) DecodeStreamFrom(s *scan.Stream, i int) (TupleStruct, int, er
 								return result, i, err
 							}
 							if i >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
 							if s.Bytes()[i] == 'n' {
 								for ki := 1; ki < 4; ki++ {
 									if i+ki >= len(s.Bytes()) {
-										if err = s.ReadMore(); err != nil {
+										if err = s.ReadMore(0); err != nil {
 											return result, i, err
 										}
 									}
@@ -6809,7 +6787,7 @@ func (TupleStruct) DecodeStreamFrom(s *scan.Stream, i int) (TupleStruct, int, er
 									return result, i, err
 								}
 								if i >= len(s.Bytes()) {
-									if err = s.ReadMore(); err != nil {
+									if err = s.ReadMore(0); err != nil {
 										return result, i, err
 									}
 								}
@@ -6829,7 +6807,7 @@ func (TupleStruct) DecodeStreamFrom(s *scan.Stream, i int) (TupleStruct, int, er
 										return result, i, err
 									}
 									if i >= len(s.Bytes()) {
-										if err = s.ReadMore(); err != nil {
+										if err = s.ReadMore(0); err != nil {
 											return result, i, err
 										}
 									}
@@ -6854,7 +6832,7 @@ func (TupleStruct) DecodeStreamFrom(s *scan.Stream, i int) (TupleStruct, int, er
 							return result, i, err
 						}
 						if i >= len(s.Bytes()) {
-							if err = s.ReadMore(); err != nil {
+							if err = s.ReadMore(0); err != nil {
 								return result, i, err
 							}
 						}
@@ -6876,10 +6854,14 @@ func (TupleStruct) DecodeStreamFrom(s *scan.Stream, i int) (TupleStruct, int, er
 					i++
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 5:
 			if key == "point" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenPoint {
 					return result, i, &validation.DuplicateKeyError{Field: "point"}
 				}
@@ -6894,7 +6876,7 @@ func (TupleStruct) DecodeStreamFrom(s *scan.Stream, i int) (TupleStruct, int, er
 						return result, i, err
 					}
 					if i >= len(s.Bytes()) {
-						if err = s.ReadMore(); err != nil {
+						if err = s.ReadMore(0); err != nil {
 							return result, i, err
 						}
 					}
@@ -6913,7 +6895,7 @@ func (TupleStruct) DecodeStreamFrom(s *scan.Stream, i int) (TupleStruct, int, er
 							return result, i, err
 						}
 						if i >= len(s.Bytes()) {
-							if err = s.ReadMore(); err != nil {
+							if err = s.ReadMore(0); err != nil {
 								return result, i, err
 							}
 						}
@@ -6935,10 +6917,14 @@ func (TupleStruct) DecodeStreamFrom(s *scan.Stream, i int) (TupleStruct, int, er
 					i++
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 8:
 			if key == "segments" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenSegments {
 					return result, i, &validation.DuplicateKeyError{Field: "segments"}
 				}
@@ -6949,14 +6935,14 @@ func (TupleStruct) DecodeStreamFrom(s *scan.Stream, i int) (TupleStruct, int, er
 						return result, i, err
 					}
 					if i >= len(s.Bytes()) {
-						if err = s.ReadMore(); err != nil {
+						if err = s.ReadMore(0); err != nil {
 							return result, i, err
 						}
 					}
 					if s.Bytes()[i] == 'n' {
 						for ki := 1; ki < 4; ki++ {
 							if i+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -6975,7 +6961,7 @@ func (TupleStruct) DecodeStreamFrom(s *scan.Stream, i int) (TupleStruct, int, er
 							return result, i, err
 						}
 						if i >= len(s.Bytes()) {
-							if err = s.ReadMore(); err != nil {
+							if err = s.ReadMore(0); err != nil {
 								return result, i, err
 							}
 						}
@@ -6996,7 +6982,7 @@ func (TupleStruct) DecodeStreamFrom(s *scan.Stream, i int) (TupleStruct, int, er
 									return result, i, err
 								}
 								if i >= len(s.Bytes()) {
-									if err = s.ReadMore(); err != nil {
+									if err = s.ReadMore(0); err != nil {
 										return result, i, err
 									}
 								}
@@ -7017,7 +7003,7 @@ func (TupleStruct) DecodeStreamFrom(s *scan.Stream, i int) (TupleStruct, int, er
 										return result, i, err
 									}
 									if i >= len(s.Bytes()) {
-										if err = s.ReadMore(); err != nil {
+										if err = s.ReadMore(0); err != nil {
 											return result, i, err
 										}
 									}
@@ -7043,7 +7029,7 @@ func (TupleStruct) DecodeStreamFrom(s *scan.Stream, i int) (TupleStruct, int, er
 								return result, i, err
 							}
 							if i >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -7063,19 +7049,20 @@ func (TupleStruct) DecodeStreamFrom(s *scan.Stream, i int) (TupleStruct, int, er
 					}
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: key}
+			return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 		}
 		i, err = s.SkipSpace(i)
 		if err != nil {
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
+			if err = s.ReadMore(i); err != nil {
 				return result, i, err
 			}
+			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -7350,9 +7337,10 @@ func (FallbackStruct) DecodeStreamFrom(s *scan.Stream, i int) (FallbackStruct, i
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(); err != nil {
+		if err = s.ReadMore(i); err != nil {
 			return result, i, err
 		}
+		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -7363,25 +7351,13 @@ func (FallbackStruct) DecodeStreamFrom(s *scan.Stream, i int) (FallbackStruct, i
 		if err != nil {
 			return result, i, err
 		}
-		i, err = s.SkipSpace(i)
-		if err != nil {
-			return result, i, err
-		}
-		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
-				return result, i, err
-			}
-		}
-		if s.Bytes()[i] != ':' {
-			return result, i, scan.ErrBadObject
-		}
-		i, err = s.SkipSpace(i + 1)
-		if err != nil {
-			return result, i, err
-		}
 		switch len(key) {
 		case 2:
 			if key == "id" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenID {
 					return result, i, &validation.DuplicateKeyError{Field: "id"}
 				}
@@ -7391,17 +7367,24 @@ func (FallbackStruct) DecodeStreamFrom(s *scan.Stream, i int) (FallbackStruct, i
 					return result, i, err
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 5:
 			if key == "extra" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenExtra {
 					return result, i, &validation.DuplicateKeyError{Field: "extra"}
 				}
 				seenExtra = true
 				{
 					start := i
+					prevPin := s.Shift
+					s.Shift = false
 					i, err = s.SkipValue(start)
+					s.Shift = prevPin
 					if err != nil {
 						return result, i, err
 					}
@@ -7410,19 +7393,20 @@ func (FallbackStruct) DecodeStreamFrom(s *scan.Stream, i int) (FallbackStruct, i
 					}
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: key}
+			return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 		}
 		i, err = s.SkipSpace(i)
 		if err != nil {
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
+			if err = s.ReadMore(i); err != nil {
 				return result, i, err
 			}
+			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -7596,9 +7580,10 @@ func (FastFallbackStruct) DecodeStreamFrom(s *scan.Stream, i int) (FastFallbackS
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(); err != nil {
+		if err = s.ReadMore(i); err != nil {
 			return result, i, err
 		}
+		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -7609,25 +7594,13 @@ func (FastFallbackStruct) DecodeStreamFrom(s *scan.Stream, i int) (FastFallbackS
 		if err != nil {
 			return result, i, err
 		}
-		i, err = s.SkipSpace(i)
-		if err != nil {
-			return result, i, err
-		}
-		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
-				return result, i, err
-			}
-		}
-		if s.Bytes()[i] != ':' {
-			return result, i, scan.ErrBadObject
-		}
-		i, err = s.SkipSpace(i + 1)
-		if err != nil {
-			return result, i, err
-		}
 		switch len(key) {
 		case 2:
 			if key == "id" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenID {
 					return result, i, &validation.DuplicateKeyError{Field: "id"}
 				}
@@ -7637,10 +7610,14 @@ func (FastFallbackStruct) DecodeStreamFrom(s *scan.Stream, i int) (FastFallbackS
 					return result, i, err
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 5:
 			if key == "extra" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenExtra {
 					return result, i, &validation.DuplicateKeyError{Field: "extra"}
 				}
@@ -7652,19 +7629,20 @@ func (FastFallbackStruct) DecodeStreamFrom(s *scan.Stream, i int) (FastFallbackS
 					}
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: key}
+			return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 		}
 		i, err = s.SkipSpace(i)
 		if err != nil {
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
+			if err = s.ReadMore(i); err != nil {
 				return result, i, err
 			}
+			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -7843,9 +7821,10 @@ func (TextFallbackStruct) DecodeStreamFrom(s *scan.Stream, i int) (TextFallbackS
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(); err != nil {
+		if err = s.ReadMore(i); err != nil {
 			return result, i, err
 		}
+		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -7856,25 +7835,13 @@ func (TextFallbackStruct) DecodeStreamFrom(s *scan.Stream, i int) (TextFallbackS
 		if err != nil {
 			return result, i, err
 		}
-		i, err = s.SkipSpace(i)
-		if err != nil {
-			return result, i, err
-		}
-		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
-				return result, i, err
-			}
-		}
-		if s.Bytes()[i] != ':' {
-			return result, i, scan.ErrBadObject
-		}
-		i, err = s.SkipSpace(i + 1)
-		if err != nil {
-			return result, i, err
-		}
 		switch len(key) {
 		case 2:
 			if key == "id" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenID {
 					return result, i, &validation.DuplicateKeyError{Field: "id"}
 				}
@@ -7884,10 +7851,14 @@ func (TextFallbackStruct) DecodeStreamFrom(s *scan.Stream, i int) (TextFallbackS
 					return result, i, err
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 3:
 			if key == "tag" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenTag {
 					return result, i, &validation.DuplicateKeyError{Field: "tag"}
 				}
@@ -7903,19 +7874,20 @@ func (TextFallbackStruct) DecodeStreamFrom(s *scan.Stream, i int) (TextFallbackS
 					}
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: key}
+			return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 		}
 		i, err = s.SkipSpace(i)
 		if err != nil {
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
+			if err = s.ReadMore(i); err != nil {
 				return result, i, err
 			}
+			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -8073,9 +8045,10 @@ func (HTMLRawStruct) DecodeStreamFrom(s *scan.Stream, i int) (HTMLRawStruct, int
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(); err != nil {
+		if err = s.ReadMore(i); err != nil {
 			return result, i, err
 		}
+		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -8086,25 +8059,13 @@ func (HTMLRawStruct) DecodeStreamFrom(s *scan.Stream, i int) (HTMLRawStruct, int
 		if err != nil {
 			return result, i, err
 		}
-		i, err = s.SkipSpace(i)
-		if err != nil {
-			return result, i, err
-		}
-		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
-				return result, i, err
-			}
-		}
-		if s.Bytes()[i] != ':' {
-			return result, i, scan.ErrBadObject
-		}
-		i, err = s.SkipSpace(i + 1)
-		if err != nil {
-			return result, i, err
-		}
 		switch len(key) {
 		case 4:
 			if key == "note" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenNote {
 					return result, i, &validation.DuplicateKeyError{Field: "note"}
 				}
@@ -8114,19 +8075,20 @@ func (HTMLRawStruct) DecodeStreamFrom(s *scan.Stream, i int) (HTMLRawStruct, int
 					return result, i, err
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: key}
+			return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 		}
 		i, err = s.SkipSpace(i)
 		if err != nil {
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
+			if err = s.ReadMore(i); err != nil {
 				return result, i, err
 			}
+			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -8274,9 +8236,10 @@ func (HTMLEscapeStruct) DecodeStreamFrom(s *scan.Stream, i int) (HTMLEscapeStruc
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(); err != nil {
+		if err = s.ReadMore(i); err != nil {
 			return result, i, err
 		}
+		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -8287,25 +8250,13 @@ func (HTMLEscapeStruct) DecodeStreamFrom(s *scan.Stream, i int) (HTMLEscapeStruc
 		if err != nil {
 			return result, i, err
 		}
-		i, err = s.SkipSpace(i)
-		if err != nil {
-			return result, i, err
-		}
-		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
-				return result, i, err
-			}
-		}
-		if s.Bytes()[i] != ':' {
-			return result, i, scan.ErrBadObject
-		}
-		i, err = s.SkipSpace(i + 1)
-		if err != nil {
-			return result, i, err
-		}
 		switch len(key) {
 		case 4:
 			if key == "note" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenNote {
 					return result, i, &validation.DuplicateKeyError{Field: "note"}
 				}
@@ -8315,19 +8266,20 @@ func (HTMLEscapeStruct) DecodeStreamFrom(s *scan.Stream, i int) (HTMLEscapeStruc
 					return result, i, err
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: key}
+			return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 		}
 		i, err = s.SkipSpace(i)
 		if err != nil {
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
+			if err = s.ReadMore(i); err != nil {
 				return result, i, err
 			}
+			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -8487,9 +8439,10 @@ func (InlineStruct) DecodeStreamFrom(s *scan.Stream, i int) (InlineStruct, int, 
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(); err != nil {
+		if err = s.ReadMore(i); err != nil {
 			return result, i, err
 		}
+		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -8500,25 +8453,13 @@ func (InlineStruct) DecodeStreamFrom(s *scan.Stream, i int) (InlineStruct, int, 
 		if err != nil {
 			return result, i, err
 		}
-		i, err = s.SkipSpace(i)
-		if err != nil {
-			return result, i, err
-		}
-		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
-				return result, i, err
-			}
-		}
-		if s.Bytes()[i] != ':' {
-			return result, i, scan.ErrBadObject
-		}
-		i, err = s.SkipSpace(i + 1)
-		if err != nil {
-			return result, i, err
-		}
 		switch len(key) {
 		case 4:
 			if key == "name" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenName {
 					return result, i, &validation.DuplicateKeyError{Field: "name"}
 				}
@@ -8528,19 +8469,29 @@ func (InlineStruct) DecodeStreamFrom(s *scan.Stream, i int) (InlineStruct, int, 
 					return result, i, err
 				}
 			} else {
+				ownKey := strings.Clone(key)
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if result.Extra == nil {
 					result.Extra = make(map[string]any)
 				}
-				result.Extra[key], i, err = s.Any(i)
+				result.Extra[ownKey], i, err = s.Any(i)
 				if err != nil {
 					return result, i, err
 				}
 			}
 		default:
+			ownKey := strings.Clone(key)
+			i, err = s.ConsumeColon(i)
+			if err != nil {
+				return result, i, err
+			}
 			if result.Extra == nil {
 				result.Extra = make(map[string]any)
 			}
-			result.Extra[key], i, err = s.Any(i)
+			result.Extra[ownKey], i, err = s.Any(i)
 			if err != nil {
 				return result, i, err
 			}
@@ -8550,9 +8501,10 @@ func (InlineStruct) DecodeStreamFrom(s *scan.Stream, i int) (InlineStruct, int, 
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
+			if err = s.ReadMore(i); err != nil {
 				return result, i, err
 			}
+			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -8731,9 +8683,10 @@ func (URLStruct) DecodeStreamFrom(s *scan.Stream, i int) (URLStruct, int, error)
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(); err != nil {
+		if err = s.ReadMore(i); err != nil {
 			return result, i, err
 		}
+		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -8744,25 +8697,13 @@ func (URLStruct) DecodeStreamFrom(s *scan.Stream, i int) (URLStruct, int, error)
 		if err != nil {
 			return result, i, err
 		}
-		i, err = s.SkipSpace(i)
-		if err != nil {
-			return result, i, err
-		}
-		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
-				return result, i, err
-			}
-		}
-		if s.Bytes()[i] != ':' {
-			return result, i, scan.ErrBadObject
-		}
-		i, err = s.SkipSpace(i + 1)
-		if err != nil {
-			return result, i, err
-		}
 		switch len(key) {
 		case 4:
 			if key == "site" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenSite {
 					return result, i, &validation.DuplicateKeyError{Field: "site"}
 				}
@@ -8780,19 +8721,20 @@ func (URLStruct) DecodeStreamFrom(s *scan.Stream, i int) (URLStruct, int, error)
 					result.Site = *u
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: key}
+			return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 		}
 		i, err = s.SkipSpace(i)
 		if err != nil {
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
+			if err = s.ReadMore(i); err != nil {
 				return result, i, err
 			}
+			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -9214,9 +9156,10 @@ func (MapStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapStruct, int, error)
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(); err != nil {
+		if err = s.ReadMore(i); err != nil {
 			return result, i, err
 		}
+		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -9227,26 +9170,14 @@ func (MapStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapStruct, int, error)
 		if err != nil {
 			return result, i, err
 		}
-		i, err = s.SkipSpace(i)
-		if err != nil {
-			return result, i, err
-		}
-		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
-				return result, i, err
-			}
-		}
-		if s.Bytes()[i] != ':' {
-			return result, i, scan.ErrBadObject
-		}
-		i, err = s.SkipSpace(i + 1)
-		if err != nil {
-			return result, i, err
-		}
 		switch len(key) {
 		case 6:
 			switch key {
 			case "counts":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenCounts {
 					return result, i, &validation.DuplicateKeyError{Field: "counts"}
 				}
@@ -9257,14 +9188,14 @@ func (MapStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapStruct, int, error)
 						return result, i, err
 					}
 					if i >= len(s.Bytes()) {
-						if err = s.ReadMore(); err != nil {
+						if err = s.ReadMore(0); err != nil {
 							return result, i, err
 						}
 					}
 					if s.Bytes()[i] == 'n' {
 						for ki := 1; ki < 4; ki++ {
 							if i+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -9283,7 +9214,7 @@ func (MapStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapStruct, int, error)
 							return result, i, err
 						}
 						if i >= len(s.Bytes()) {
-							if err = s.ReadMore(); err != nil {
+							if err = s.ReadMore(0); err != nil {
 								return result, i, err
 							}
 						}
@@ -9303,7 +9234,7 @@ func (MapStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapStruct, int, error)
 								return result, i, err
 							}
 							if i >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -9325,7 +9256,7 @@ func (MapStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapStruct, int, error)
 								return result, i, err
 							}
 							if i >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -9348,6 +9279,10 @@ func (MapStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapStruct, int, error)
 					return result, i, &validation.MaxLenError{Field: "counts", Limit: 10, Got: len(result.Counts)}
 				}
 			case "labels":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenLabels {
 					return result, i, &validation.DuplicateKeyError{Field: "labels"}
 				}
@@ -9358,14 +9293,14 @@ func (MapStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapStruct, int, error)
 						return result, i, err
 					}
 					if i >= len(s.Bytes()) {
-						if err = s.ReadMore(); err != nil {
+						if err = s.ReadMore(0); err != nil {
 							return result, i, err
 						}
 					}
 					if s.Bytes()[i] == 'n' {
 						for ki := 1; ki < 4; ki++ {
 							if i+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -9384,7 +9319,7 @@ func (MapStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapStruct, int, error)
 							return result, i, err
 						}
 						if i >= len(s.Bytes()) {
-							if err = s.ReadMore(); err != nil {
+							if err = s.ReadMore(0); err != nil {
 								return result, i, err
 							}
 						}
@@ -9404,7 +9339,7 @@ func (MapStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapStruct, int, error)
 								return result, i, err
 							}
 							if i >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -9428,7 +9363,7 @@ func (MapStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapStruct, int, error)
 								return result, i, err
 							}
 							if i >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -9448,10 +9383,14 @@ func (MapStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapStruct, int, error)
 					}
 				}
 			default:
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 9:
 			if key == "addresses" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenAddresses {
 					return result, i, &validation.DuplicateKeyError{Field: "addresses"}
 				}
@@ -9462,14 +9401,14 @@ func (MapStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapStruct, int, error)
 						return result, i, err
 					}
 					if i >= len(s.Bytes()) {
-						if err = s.ReadMore(); err != nil {
+						if err = s.ReadMore(0); err != nil {
 							return result, i, err
 						}
 					}
 					if s.Bytes()[i] == 'n' {
 						for ki := 1; ki < 4; ki++ {
 							if i+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -9488,7 +9427,7 @@ func (MapStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapStruct, int, error)
 							return result, i, err
 						}
 						if i >= len(s.Bytes()) {
-							if err = s.ReadMore(); err != nil {
+							if err = s.ReadMore(0); err != nil {
 								return result, i, err
 							}
 						}
@@ -9508,7 +9447,7 @@ func (MapStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapStruct, int, error)
 								return result, i, err
 							}
 							if i >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -9530,7 +9469,7 @@ func (MapStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapStruct, int, error)
 								return result, i, err
 							}
 							if i >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -9550,19 +9489,20 @@ func (MapStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapStruct, int, error)
 					}
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: key}
+			return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 		}
 		i, err = s.SkipSpace(i)
 		if err != nil {
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
+			if err = s.ReadMore(i); err != nil {
 				return result, i, err
 			}
+			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -10092,9 +10032,10 @@ func (MapDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapDiveStruct, int
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(); err != nil {
+		if err = s.ReadMore(i); err != nil {
 			return result, i, err
 		}
+		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -10105,25 +10046,13 @@ func (MapDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapDiveStruct, int
 		if err != nil {
 			return result, i, err
 		}
-		i, err = s.SkipSpace(i)
-		if err != nil {
-			return result, i, err
-		}
-		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
-				return result, i, err
-			}
-		}
-		if s.Bytes()[i] != ':' {
-			return result, i, scan.ErrBadObject
-		}
-		i, err = s.SkipSpace(i + 1)
-		if err != nil {
-			return result, i, err
-		}
 		switch len(key) {
 		case 5:
 			if key == "names" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenNames {
 					return result, i, &validation.DuplicateKeyError{Field: "names"}
 				}
@@ -10134,14 +10063,14 @@ func (MapDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapDiveStruct, int
 						return result, i, err
 					}
 					if i >= len(s.Bytes()) {
-						if err = s.ReadMore(); err != nil {
+						if err = s.ReadMore(0); err != nil {
 							return result, i, err
 						}
 					}
 					if s.Bytes()[i] == 'n' {
 						for ki := 1; ki < 4; ki++ {
 							if i+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -10160,7 +10089,7 @@ func (MapDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapDiveStruct, int
 							return result, i, err
 						}
 						if i >= len(s.Bytes()) {
-							if err = s.ReadMore(); err != nil {
+							if err = s.ReadMore(0); err != nil {
 								return result, i, err
 							}
 						}
@@ -10180,7 +10109,7 @@ func (MapDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapDiveStruct, int
 								return result, i, err
 							}
 							if i >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -10208,7 +10137,7 @@ func (MapDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapDiveStruct, int
 								return result, i, err
 							}
 							if i >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -10228,10 +10157,14 @@ func (MapDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapDiveStruct, int
 					}
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 6:
 			if key == "counts" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenCounts {
 					return result, i, &validation.DuplicateKeyError{Field: "counts"}
 				}
@@ -10242,14 +10175,14 @@ func (MapDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapDiveStruct, int
 						return result, i, err
 					}
 					if i >= len(s.Bytes()) {
-						if err = s.ReadMore(); err != nil {
+						if err = s.ReadMore(0); err != nil {
 							return result, i, err
 						}
 					}
 					if s.Bytes()[i] == 'n' {
 						for ki := 1; ki < 4; ki++ {
 							if i+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -10268,7 +10201,7 @@ func (MapDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapDiveStruct, int
 							return result, i, err
 						}
 						if i >= len(s.Bytes()) {
-							if err = s.ReadMore(); err != nil {
+							if err = s.ReadMore(0); err != nil {
 								return result, i, err
 							}
 						}
@@ -10288,7 +10221,7 @@ func (MapDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapDiveStruct, int
 								return result, i, err
 							}
 							if i >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -10316,7 +10249,7 @@ func (MapDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapDiveStruct, int
 								return result, i, err
 							}
 							if i >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -10336,10 +10269,14 @@ func (MapDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapDiveStruct, int
 					}
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 7:
 			if key == "clamped" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenClamped {
 					return result, i, &validation.DuplicateKeyError{Field: "clamped"}
 				}
@@ -10350,14 +10287,14 @@ func (MapDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapDiveStruct, int
 						return result, i, err
 					}
 					if i >= len(s.Bytes()) {
-						if err = s.ReadMore(); err != nil {
+						if err = s.ReadMore(0); err != nil {
 							return result, i, err
 						}
 					}
 					if s.Bytes()[i] == 'n' {
 						for ki := 1; ki < 4; ki++ {
 							if i+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -10376,7 +10313,7 @@ func (MapDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapDiveStruct, int
 							return result, i, err
 						}
 						if i >= len(s.Bytes()) {
-							if err = s.ReadMore(); err != nil {
+							if err = s.ReadMore(0); err != nil {
 								return result, i, err
 							}
 						}
@@ -10396,7 +10333,7 @@ func (MapDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapDiveStruct, int
 								return result, i, err
 							}
 							if i >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -10424,7 +10361,7 @@ func (MapDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapDiveStruct, int
 								return result, i, err
 							}
 							if i >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -10444,19 +10381,20 @@ func (MapDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapDiveStruct, int
 					}
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: key}
+			return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 		}
 		i, err = s.SkipSpace(i)
 		if err != nil {
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
+			if err = s.ReadMore(i); err != nil {
 				return result, i, err
 			}
+			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -10753,9 +10691,10 @@ func (Derived) DecodeStreamFrom(s *scan.Stream, i int) (Derived, int, error) {
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(); err != nil {
+		if err = s.ReadMore(i); err != nil {
 			return result, i, err
 		}
+		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		if !seenID {
@@ -10772,25 +10711,13 @@ func (Derived) DecodeStreamFrom(s *scan.Stream, i int) (Derived, int, error) {
 		if err != nil {
 			return result, i, err
 		}
-		i, err = s.SkipSpace(i)
-		if err != nil {
-			return result, i, err
-		}
-		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
-				return result, i, err
-			}
-		}
-		if s.Bytes()[i] != ':' {
-			return result, i, scan.ErrBadObject
-		}
-		i, err = s.SkipSpace(i + 1)
-		if err != nil {
-			return result, i, err
-		}
 		switch len(key) {
 		case 2:
 			if key == "id" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenID {
 					return result, i, &validation.DuplicateKeyError{Field: "id"}
 				}
@@ -10800,11 +10727,15 @@ func (Derived) DecodeStreamFrom(s *scan.Stream, i int) (Derived, int, error) {
 					return result, i, err
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 4:
 			switch key {
 			case "meta":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenMeta {
 					return result, i, &validation.DuplicateKeyError{Field: "meta"}
 				}
@@ -10814,6 +10745,10 @@ func (Derived) DecodeStreamFrom(s *scan.Stream, i int) (Derived, int, error) {
 					return result, i, err
 				}
 			case "name":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenName {
 					return result, i, &validation.DuplicateKeyError{Field: "name"}
 				}
@@ -10826,19 +10761,20 @@ func (Derived) DecodeStreamFrom(s *scan.Stream, i int) (Derived, int, error) {
 					return result, i, &validation.MinLenError{Field: "name", Limit: 1, Got: len(result.Name)}
 				}
 			default:
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: key}
+			return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 		}
 		i, err = s.SkipSpace(i)
 		if err != nil {
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
+			if err = s.ReadMore(i); err != nil {
 				return result, i, err
 			}
+			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -11125,9 +11061,10 @@ func (ModStruct) DecodeStreamFrom(s *scan.Stream, i int) (ModStruct, int, error)
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(); err != nil {
+		if err = s.ReadMore(i); err != nil {
 			return result, i, err
 		}
+		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -11138,25 +11075,13 @@ func (ModStruct) DecodeStreamFrom(s *scan.Stream, i int) (ModStruct, int, error)
 		if err != nil {
 			return result, i, err
 		}
-		i, err = s.SkipSpace(i)
-		if err != nil {
-			return result, i, err
-		}
-		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
-				return result, i, err
-			}
-		}
-		if s.Bytes()[i] != ':' {
-			return result, i, scan.ErrBadObject
-		}
-		i, err = s.SkipSpace(i + 1)
-		if err != nil {
-			return result, i, err
-		}
 		switch len(key) {
 		case 3:
 			if key == "sku" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenSKU {
 					return result, i, &validation.DuplicateKeyError{Field: "sku"}
 				}
@@ -11167,10 +11092,14 @@ func (ModStruct) DecodeStreamFrom(s *scan.Stream, i int) (ModStruct, int, error)
 				}
 				result.SKU = strings.TrimPrefix(result.SKU, "SKU-")
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 4:
 			if key == "tags" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenTags {
 					return result, i, &validation.DuplicateKeyError{Field: "tags"}
 				}
@@ -11181,14 +11110,14 @@ func (ModStruct) DecodeStreamFrom(s *scan.Stream, i int) (ModStruct, int, error)
 						return result, i, err
 					}
 					if i >= len(s.Bytes()) {
-						if err = s.ReadMore(); err != nil {
+						if err = s.ReadMore(0); err != nil {
 							return result, i, err
 						}
 					}
 					if s.Bytes()[i] == 'n' {
 						for ki := 1; ki < 4; ki++ {
 							if i+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -11207,7 +11136,7 @@ func (ModStruct) DecodeStreamFrom(s *scan.Stream, i int) (ModStruct, int, error)
 							return result, i, err
 						}
 						if i >= len(s.Bytes()) {
-							if err = s.ReadMore(); err != nil {
+							if err = s.ReadMore(0); err != nil {
 								return result, i, err
 							}
 						}
@@ -11229,7 +11158,7 @@ func (ModStruct) DecodeStreamFrom(s *scan.Stream, i int) (ModStruct, int, error)
 								return result, i, err
 							}
 							if i >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -11249,10 +11178,14 @@ func (ModStruct) DecodeStreamFrom(s *scan.Stream, i int) (ModStruct, int, error)
 					}
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 5:
 			if key == "email" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenEmail {
 					return result, i, &validation.DuplicateKeyError{Field: "email"}
 				}
@@ -11267,19 +11200,20 @@ func (ModStruct) DecodeStreamFrom(s *scan.Stream, i int) (ModStruct, int, error)
 					return result, i, &validation.EmailError{Field: "email", Value: result.Email}
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: key}
+			return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 		}
 		i, err = s.SkipSpace(i)
 		if err != nil {
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
+			if err = s.ReadMore(i); err != nil {
 				return result, i, err
 			}
+			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -11468,9 +11402,10 @@ func (FallibleModStruct) DecodeStreamFrom(s *scan.Stream, i int) (FallibleModStr
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(); err != nil {
+		if err = s.ReadMore(i); err != nil {
 			return result, i, err
 		}
+		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		if !seenEmail {
@@ -11484,25 +11419,13 @@ func (FallibleModStruct) DecodeStreamFrom(s *scan.Stream, i int) (FallibleModStr
 		if err != nil {
 			return result, i, err
 		}
-		i, err = s.SkipSpace(i)
-		if err != nil {
-			return result, i, err
-		}
-		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
-				return result, i, err
-			}
-		}
-		if s.Bytes()[i] != ':' {
-			return result, i, scan.ErrBadObject
-		}
-		i, err = s.SkipSpace(i + 1)
-		if err != nil {
-			return result, i, err
-		}
 		switch len(key) {
 		case 5:
 			if key == "email" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenEmail {
 					return result, i, &validation.DuplicateKeyError{Field: "email"}
 				}
@@ -11523,19 +11446,20 @@ func (FallibleModStruct) DecodeStreamFrom(s *scan.Stream, i int) (FallibleModStr
 					return result, i, &validation.MinLenError{Field: "email", Limit: 10, Got: len(result.Email)}
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: key}
+			return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 		}
 		i, err = s.SkipSpace(i)
 		if err != nil {
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
+			if err = s.ReadMore(i); err != nil {
 				return result, i, err
 			}
+			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -11725,9 +11649,10 @@ func (FallibleModMultierrStruct) DecodeStreamFrom(s *scan.Stream, i int) (Fallib
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(); err != nil {
+		if err = s.ReadMore(i); err != nil {
 			return result, i, err
 		}
+		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		if !seenEmail {
@@ -11744,25 +11669,13 @@ func (FallibleModMultierrStruct) DecodeStreamFrom(s *scan.Stream, i int) (Fallib
 		if err != nil {
 			return result, i, err
 		}
-		i, err = s.SkipSpace(i)
-		if err != nil {
-			return result, i, err
-		}
-		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
-				return result, i, err
-			}
-		}
-		if s.Bytes()[i] != ':' {
-			return result, i, scan.ErrBadObject
-		}
-		i, err = s.SkipSpace(i + 1)
-		if err != nil {
-			return result, i, err
-		}
 		switch len(key) {
 		case 5:
 			if key == "email" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenEmail {
 					errs = append(errs, &validation.DuplicateKeyError{Field: "email"})
 					i, err = s.SkipValue(i)
@@ -11789,14 +11702,22 @@ func (FallibleModMultierrStruct) DecodeStreamFrom(s *scan.Stream, i int) (Fallib
 
 				}
 			} else {
-				errs = append(errs, &validation.UnknownKeyError{Field: key})
+				errs = append(errs, &validation.UnknownKeyError{Field: strings.Clone(key)})
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				i, err = s.SkipValue(i)
 				if err != nil {
 					return result, i, err
 				}
 			}
 		default:
-			errs = append(errs, &validation.UnknownKeyError{Field: key})
+			errs = append(errs, &validation.UnknownKeyError{Field: strings.Clone(key)})
+			i, err = s.ConsumeColon(i)
+			if err != nil {
+				return result, i, err
+			}
 			i, err = s.SkipValue(i)
 			if err != nil {
 				return result, i, err
@@ -11807,9 +11728,10 @@ func (FallibleModMultierrStruct) DecodeStreamFrom(s *scan.Stream, i int) (Fallib
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
+			if err = s.ReadMore(i); err != nil {
 				return result, i, err
 			}
+			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -12312,9 +12234,10 @@ func (NativeTypes) DecodeStreamFrom(s *scan.Stream, i int) (NativeTypes, int, er
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(); err != nil {
+		if err = s.ReadMore(i); err != nil {
 			return result, i, err
 		}
+		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -12325,26 +12248,14 @@ func (NativeTypes) DecodeStreamFrom(s *scan.Stream, i int) (NativeTypes, int, er
 		if err != nil {
 			return result, i, err
 		}
-		i, err = s.SkipSpace(i)
-		if err != nil {
-			return result, i, err
-		}
-		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
-				return result, i, err
-			}
-		}
-		if s.Bytes()[i] != ':' {
-			return result, i, scan.ErrBadObject
-		}
-		i, err = s.SkipSpace(i + 1)
-		if err != nil {
-			return result, i, err
-		}
 		switch len(key) {
 		case 4:
 			switch key {
 			case "addr":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenAddr {
 					return result, i, &validation.DuplicateKeyError{Field: "addr"}
 				}
@@ -12361,6 +12272,10 @@ func (NativeTypes) DecodeStreamFrom(s *scan.Stream, i int) (NativeTypes, int, er
 					}
 				}
 			case "blob":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenBlob {
 					return result, i, &validation.DuplicateKeyError{Field: "blob"}
 				}
@@ -12378,6 +12293,10 @@ func (NativeTypes) DecodeStreamFrom(s *scan.Stream, i int) (NativeTypes, int, er
 					}
 				}
 			case "cidr":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenCidr {
 					return result, i, &validation.DuplicateKeyError{Field: "cidr"}
 				}
@@ -12394,11 +12313,15 @@ func (NativeTypes) DecodeStreamFrom(s *scan.Stream, i int) (NativeTypes, int, er
 					}
 				}
 			default:
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 6:
 			switch key {
 			case "secDur":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenSecDur {
 					return result, i, &validation.DuplicateKeyError{Field: "secDur"}
 				}
@@ -12412,6 +12335,10 @@ func (NativeTypes) DecodeStreamFrom(s *scan.Stream, i int) (NativeTypes, int, er
 					result.SecDur = time.Duration(v * float64(time.Second))
 				}
 			case "unixAt":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenUnixAt {
 					return result, i, &validation.DuplicateKeyError{Field: "unixAt"}
 				}
@@ -12427,11 +12354,15 @@ func (NativeTypes) DecodeStreamFrom(s *scan.Stream, i int) (NativeTypes, int, er
 					result.UnixAt = time.Unix(sec, nsec)
 				}
 			default:
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 7:
 			switch key {
 			case "hexBlob":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenHexBlob {
 					return result, i, &validation.DuplicateKeyError{Field: "hexBlob"}
 				}
@@ -12449,6 +12380,10 @@ func (NativeTypes) DecodeStreamFrom(s *scan.Stream, i int) (NativeTypes, int, er
 					}
 				}
 			case "unitDur":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenUnitDur {
 					return result, i, &validation.DuplicateKeyError{Field: "unitDur"}
 				}
@@ -12465,11 +12400,15 @@ func (NativeTypes) DecodeStreamFrom(s *scan.Stream, i int) (NativeTypes, int, er
 					}
 				}
 			default:
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 8:
 			switch key {
 			case "issuedAt":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenIssuedAt {
 					return result, i, &validation.DuplicateKeyError{Field: "issuedAt"}
 				}
@@ -12486,6 +12425,10 @@ func (NativeTypes) DecodeStreamFrom(s *scan.Stream, i int) (NativeTypes, int, er
 					}
 				}
 			case "legacyIP":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenLegacyIP {
 					return result, i, &validation.DuplicateKeyError{Field: "legacyIP"}
 				}
@@ -12502,11 +12445,15 @@ func (NativeTypes) DecodeStreamFrom(s *scan.Stream, i int) (NativeTypes, int, er
 					}
 				}
 			default:
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 9:
 			switch key {
 			case "byteArray":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenByteArray {
 					return result, i, &validation.DuplicateKeyError{Field: "byteArray"}
 				}
@@ -12521,7 +12468,7 @@ func (NativeTypes) DecodeStreamFrom(s *scan.Stream, i int) (NativeTypes, int, er
 						return result, i, err
 					}
 					if i >= len(s.Bytes()) {
-						if err = s.ReadMore(); err != nil {
+						if err = s.ReadMore(0); err != nil {
 							return result, i, err
 						}
 					}
@@ -12537,7 +12484,7 @@ func (NativeTypes) DecodeStreamFrom(s *scan.Stream, i int) (NativeTypes, int, er
 							return result, i, err
 						}
 						if i >= len(s.Bytes()) {
-							if err = s.ReadMore(); err != nil {
+							if err = s.ReadMore(0); err != nil {
 								return result, i, err
 							}
 						}
@@ -12556,6 +12503,10 @@ func (NativeTypes) DecodeStreamFrom(s *scan.Stream, i int) (NativeTypes, int, er
 					i++
 				}
 			case "createdAt":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenCreatedAt {
 					return result, i, &validation.DuplicateKeyError{Field: "createdAt"}
 				}
@@ -12572,19 +12523,20 @@ func (NativeTypes) DecodeStreamFrom(s *scan.Stream, i int) (NativeTypes, int, er
 					}
 				}
 			default:
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: key}
+			return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 		}
 		i, err = s.SkipSpace(i)
 		if err != nil {
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
+			if err = s.ReadMore(i); err != nil {
 				return result, i, err
 			}
+			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -13207,9 +13159,10 @@ func (OmitStruct) DecodeStreamFrom(s *scan.Stream, i int) (OmitStruct, int, erro
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(); err != nil {
+		if err = s.ReadMore(i); err != nil {
 			return result, i, err
 		}
+		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -13220,25 +13173,13 @@ func (OmitStruct) DecodeStreamFrom(s *scan.Stream, i int) (OmitStruct, int, erro
 		if err != nil {
 			return result, i, err
 		}
-		i, err = s.SkipSpace(i)
-		if err != nil {
-			return result, i, err
-		}
-		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
-				return result, i, err
-			}
-		}
-		if s.Bytes()[i] != ':' {
-			return result, i, scan.ErrBadObject
-		}
-		i, err = s.SkipSpace(i + 1)
-		if err != nil {
-			return result, i, err
-		}
 		switch len(key) {
 		case 3:
 			if key == "bio" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenBio {
 					return result, i, &validation.DuplicateKeyError{Field: "bio"}
 				}
@@ -13248,11 +13189,15 @@ func (OmitStruct) DecodeStreamFrom(s *scan.Stream, i int) (OmitStruct, int, erro
 					return result, i, err
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 4:
 			switch key {
 			case "meta":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenMeta {
 					return result, i, &validation.DuplicateKeyError{Field: "meta"}
 				}
@@ -13263,14 +13208,14 @@ func (OmitStruct) DecodeStreamFrom(s *scan.Stream, i int) (OmitStruct, int, erro
 						return result, i, err
 					}
 					if i >= len(s.Bytes()) {
-						if err = s.ReadMore(); err != nil {
+						if err = s.ReadMore(0); err != nil {
 							return result, i, err
 						}
 					}
 					if s.Bytes()[i] == 'n' {
 						for ki := 1; ki < 4; ki++ {
 							if i+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -13289,7 +13234,7 @@ func (OmitStruct) DecodeStreamFrom(s *scan.Stream, i int) (OmitStruct, int, erro
 							return result, i, err
 						}
 						if i >= len(s.Bytes()) {
-							if err = s.ReadMore(); err != nil {
+							if err = s.ReadMore(0); err != nil {
 								return result, i, err
 							}
 						}
@@ -13309,7 +13254,7 @@ func (OmitStruct) DecodeStreamFrom(s *scan.Stream, i int) (OmitStruct, int, erro
 								return result, i, err
 							}
 							if i >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -13331,7 +13276,7 @@ func (OmitStruct) DecodeStreamFrom(s *scan.Stream, i int) (OmitStruct, int, erro
 								return result, i, err
 							}
 							if i >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -13351,6 +13296,10 @@ func (OmitStruct) DecodeStreamFrom(s *scan.Stream, i int) (OmitStruct, int, erro
 					}
 				}
 			case "name":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenName {
 					return result, i, &validation.DuplicateKeyError{Field: "name"}
 				}
@@ -13360,6 +13309,10 @@ func (OmitStruct) DecodeStreamFrom(s *scan.Stream, i int) (OmitStruct, int, erro
 					return result, i, err
 				}
 			case "tags":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenTags {
 					return result, i, &validation.DuplicateKeyError{Field: "tags"}
 				}
@@ -13370,14 +13323,14 @@ func (OmitStruct) DecodeStreamFrom(s *scan.Stream, i int) (OmitStruct, int, erro
 						return result, i, err
 					}
 					if i >= len(s.Bytes()) {
-						if err = s.ReadMore(); err != nil {
+						if err = s.ReadMore(0); err != nil {
 							return result, i, err
 						}
 					}
 					if s.Bytes()[i] == 'n' {
 						for ki := 1; ki < 4; ki++ {
 							if i+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -13396,7 +13349,7 @@ func (OmitStruct) DecodeStreamFrom(s *scan.Stream, i int) (OmitStruct, int, erro
 							return result, i, err
 						}
 						if i >= len(s.Bytes()) {
-							if err = s.ReadMore(); err != nil {
+							if err = s.ReadMore(0); err != nil {
 								return result, i, err
 							}
 						}
@@ -13416,7 +13369,7 @@ func (OmitStruct) DecodeStreamFrom(s *scan.Stream, i int) (OmitStruct, int, erro
 								return result, i, err
 							}
 							if i >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -13436,11 +13389,15 @@ func (OmitStruct) DecodeStreamFrom(s *scan.Stream, i int) (OmitStruct, int, erro
 					}
 				}
 			default:
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 5:
 			switch key {
 			case "count":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenStrCount {
 					return result, i, &validation.DuplicateKeyError{Field: "count"}
 				}
@@ -13458,6 +13415,10 @@ func (OmitStruct) DecodeStreamFrom(s *scan.Stream, i int) (OmitStruct, int, erro
 					result.StrCount = int(n)
 				}
 			case "extra":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenExtra {
 					return result, i, &validation.DuplicateKeyError{Field: "extra"}
 				}
@@ -13468,14 +13429,14 @@ func (OmitStruct) DecodeStreamFrom(s *scan.Stream, i int) (OmitStruct, int, erro
 						return result, i, err
 					}
 					if i >= len(s.Bytes()) {
-						if err = s.ReadMore(); err != nil {
+						if err = s.ReadMore(0); err != nil {
 							return result, i, err
 						}
 					}
 					if s.Bytes()[i] == 'n' {
 						for ki := 1; ki < 4; ki++ {
 							if i+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -13494,7 +13455,7 @@ func (OmitStruct) DecodeStreamFrom(s *scan.Stream, i int) (OmitStruct, int, erro
 							return result, i, err
 						}
 						if i >= len(s.Bytes()) {
-							if err = s.ReadMore(); err != nil {
+							if err = s.ReadMore(0); err != nil {
 								return result, i, err
 							}
 						}
@@ -13514,7 +13475,7 @@ func (OmitStruct) DecodeStreamFrom(s *scan.Stream, i int) (OmitStruct, int, erro
 								return result, i, err
 							}
 							if i >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -13534,6 +13495,10 @@ func (OmitStruct) DecodeStreamFrom(s *scan.Stream, i int) (OmitStruct, int, erro
 					}
 				}
 			case "score":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenScore {
 					return result, i, &validation.DuplicateKeyError{Field: "score"}
 				}
@@ -13543,10 +13508,14 @@ func (OmitStruct) DecodeStreamFrom(s *scan.Stream, i int) (OmitStruct, int, erro
 					return result, i, err
 				}
 			default:
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 6:
 			if key == "labels" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenLabels {
 					return result, i, &validation.DuplicateKeyError{Field: "labels"}
 				}
@@ -13557,14 +13526,14 @@ func (OmitStruct) DecodeStreamFrom(s *scan.Stream, i int) (OmitStruct, int, erro
 						return result, i, err
 					}
 					if i >= len(s.Bytes()) {
-						if err = s.ReadMore(); err != nil {
+						if err = s.ReadMore(0); err != nil {
 							return result, i, err
 						}
 					}
 					if s.Bytes()[i] == 'n' {
 						for ki := 1; ki < 4; ki++ {
 							if i+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -13583,7 +13552,7 @@ func (OmitStruct) DecodeStreamFrom(s *scan.Stream, i int) (OmitStruct, int, erro
 							return result, i, err
 						}
 						if i >= len(s.Bytes()) {
-							if err = s.ReadMore(); err != nil {
+							if err = s.ReadMore(0); err != nil {
 								return result, i, err
 							}
 						}
@@ -13603,7 +13572,7 @@ func (OmitStruct) DecodeStreamFrom(s *scan.Stream, i int) (OmitStruct, int, erro
 								return result, i, err
 							}
 							if i >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -13625,7 +13594,7 @@ func (OmitStruct) DecodeStreamFrom(s *scan.Stream, i int) (OmitStruct, int, erro
 								return result, i, err
 							}
 							if i >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -13645,19 +13614,20 @@ func (OmitStruct) DecodeStreamFrom(s *scan.Stream, i int) (OmitStruct, int, erro
 					}
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: key}
+			return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 		}
 		i, err = s.SkipSpace(i)
 		if err != nil {
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
+			if err = s.ReadMore(i); err != nil {
 				return result, i, err
 			}
+			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -14097,9 +14067,10 @@ func (PointerStruct) DecodeStreamFrom(s *scan.Stream, i int) (PointerStruct, int
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(); err != nil {
+		if err = s.ReadMore(i); err != nil {
 			return result, i, err
 		}
+		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -14110,39 +14081,27 @@ func (PointerStruct) DecodeStreamFrom(s *scan.Stream, i int) (PointerStruct, int
 		if err != nil {
 			return result, i, err
 		}
-		i, err = s.SkipSpace(i)
-		if err != nil {
-			return result, i, err
-		}
-		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
-				return result, i, err
-			}
-		}
-		if s.Bytes()[i] != ':' {
-			return result, i, scan.ErrBadObject
-		}
-		i, err = s.SkipSpace(i + 1)
-		if err != nil {
-			return result, i, err
-		}
 		switch len(key) {
 		case 4:
 			switch key {
 			case "addr":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenAddr {
 					return result, i, &validation.DuplicateKeyError{Field: "addr"}
 				}
 				seenAddr = true
 				if i >= len(s.Bytes()) {
-					if err = s.ReadMore(); err != nil {
+					if err = s.ReadMore(0); err != nil {
 						return result, i, err
 					}
 				}
 				if s.Bytes()[i] == 'n' {
 					for ki := 1; ki < 4; ki++ {
 						if i+ki >= len(s.Bytes()) {
-							if err = s.ReadMore(); err != nil {
+							if err = s.ReadMore(0); err != nil {
 								return result, i, err
 							}
 						}
@@ -14162,19 +14121,23 @@ func (PointerStruct) DecodeStreamFrom(s *scan.Stream, i int) (PointerStruct, int
 					result.Addr = &v
 				}
 			case "name":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenName {
 					return result, i, &validation.DuplicateKeyError{Field: "name"}
 				}
 				seenName = true
 				if i >= len(s.Bytes()) {
-					if err = s.ReadMore(); err != nil {
+					if err = s.ReadMore(0); err != nil {
 						return result, i, err
 					}
 				}
 				if s.Bytes()[i] == 'n' {
 					for ki := 1; ki < 4; ki++ {
 						if i+ki >= len(s.Bytes()) {
-							if err = s.ReadMore(); err != nil {
+							if err = s.ReadMore(0); err != nil {
 								return result, i, err
 							}
 						}
@@ -14194,19 +14157,23 @@ func (PointerStruct) DecodeStreamFrom(s *scan.Stream, i int) (PointerStruct, int
 					result.Name = &v
 				}
 			case "when":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenWhen {
 					return result, i, &validation.DuplicateKeyError{Field: "when"}
 				}
 				seenWhen = true
 				if i >= len(s.Bytes()) {
-					if err = s.ReadMore(); err != nil {
+					if err = s.ReadMore(0); err != nil {
 						return result, i, err
 					}
 				}
 				if s.Bytes()[i] == 'n' {
 					for ki := 1; ki < 4; ki++ {
 						if i+ki >= len(s.Bytes()) {
-							if err = s.ReadMore(); err != nil {
+							if err = s.ReadMore(0); err != nil {
 								return result, i, err
 							}
 						}
@@ -14232,24 +14199,28 @@ func (PointerStruct) DecodeStreamFrom(s *scan.Stream, i int) (PointerStruct, int
 					result.When = &v
 				}
 			default:
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 5:
 			switch key {
 			case "count":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenCount {
 					return result, i, &validation.DuplicateKeyError{Field: "count"}
 				}
 				seenCount = true
 				if i >= len(s.Bytes()) {
-					if err = s.ReadMore(); err != nil {
+					if err = s.ReadMore(0); err != nil {
 						return result, i, err
 					}
 				}
 				if s.Bytes()[i] == 'n' {
 					for ki := 1; ki < 4; ki++ {
 						if i+ki >= len(s.Bytes()) {
-							if err = s.ReadMore(); err != nil {
+							if err = s.ReadMore(0); err != nil {
 								return result, i, err
 							}
 						}
@@ -14271,19 +14242,23 @@ func (PointerStruct) DecodeStreamFrom(s *scan.Stream, i int) (PointerStruct, int
 					result.Count = &v
 				}
 			case "ratio":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenRatio {
 					return result, i, &validation.DuplicateKeyError{Field: "ratio"}
 				}
 				seenRatio = true
 				if i >= len(s.Bytes()) {
-					if err = s.ReadMore(); err != nil {
+					if err = s.ReadMore(0); err != nil {
 						return result, i, err
 					}
 				}
 				if s.Bytes()[i] == 'n' {
 					for ki := 1; ki < 4; ki++ {
 						if i+ki >= len(s.Bytes()) {
-							if err = s.ReadMore(); err != nil {
+							if err = s.ReadMore(0); err != nil {
 								return result, i, err
 							}
 						}
@@ -14303,23 +14278,27 @@ func (PointerStruct) DecodeStreamFrom(s *scan.Stream, i int) (PointerStruct, int
 					result.Ratio = &v
 				}
 			default:
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 7:
 			if key == "enabled" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenEnabled {
 					return result, i, &validation.DuplicateKeyError{Field: "enabled"}
 				}
 				seenEnabled = true
 				if i >= len(s.Bytes()) {
-					if err = s.ReadMore(); err != nil {
+					if err = s.ReadMore(0); err != nil {
 						return result, i, err
 					}
 				}
 				if s.Bytes()[i] == 'n' {
 					for ki := 1; ki < 4; ki++ {
 						if i+ki >= len(s.Bytes()) {
-							if err = s.ReadMore(); err != nil {
+							if err = s.ReadMore(0); err != nil {
 								return result, i, err
 							}
 						}
@@ -14339,19 +14318,20 @@ func (PointerStruct) DecodeStreamFrom(s *scan.Stream, i int) (PointerStruct, int
 					result.Enabled = &v
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: key}
+			return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 		}
 		i, err = s.SkipSpace(i)
 		if err != nil {
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
+			if err = s.ReadMore(i); err != nil {
 				return result, i, err
 			}
+			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -14593,9 +14573,10 @@ func (IgnoreUnknownStruct) DecodeStreamFrom(s *scan.Stream, i int) (IgnoreUnknow
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(); err != nil {
+		if err = s.ReadMore(i); err != nil {
 			return result, i, err
 		}
+		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -14606,25 +14587,13 @@ func (IgnoreUnknownStruct) DecodeStreamFrom(s *scan.Stream, i int) (IgnoreUnknow
 		if err != nil {
 			return result, i, err
 		}
-		i, err = s.SkipSpace(i)
-		if err != nil {
-			return result, i, err
-		}
-		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
-				return result, i, err
-			}
-		}
-		if s.Bytes()[i] != ':' {
-			return result, i, scan.ErrBadObject
-		}
-		i, err = s.SkipSpace(i + 1)
-		if err != nil {
-			return result, i, err
-		}
 		switch len(key) {
 		case 4:
 			if key == "name" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenName {
 					return result, i, &validation.DuplicateKeyError{Field: "name"}
 				}
@@ -14634,12 +14603,20 @@ func (IgnoreUnknownStruct) DecodeStreamFrom(s *scan.Stream, i int) (IgnoreUnknow
 					return result, i, err
 				}
 			} else {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				i, err = s.SkipValue(i)
 				if err != nil {
 					return result, i, err
 				}
 			}
 		default:
+			i, err = s.ConsumeColon(i)
+			if err != nil {
+				return result, i, err
+			}
 			i, err = s.SkipValue(i)
 			if err != nil {
 				return result, i, err
@@ -14650,9 +14627,10 @@ func (IgnoreUnknownStruct) DecodeStreamFrom(s *scan.Stream, i int) (IgnoreUnknow
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
+			if err = s.ReadMore(i); err != nil {
 				return result, i, err
 			}
+			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -14894,9 +14872,10 @@ func (Address) DecodeStreamFrom(s *scan.Stream, i int) (Address, int, error) {
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(); err != nil {
+		if err = s.ReadMore(i); err != nil {
 			return result, i, err
 		}
+		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		if !seenCity {
@@ -14916,25 +14895,13 @@ func (Address) DecodeStreamFrom(s *scan.Stream, i int) (Address, int, error) {
 		if err != nil {
 			return result, i, err
 		}
-		i, err = s.SkipSpace(i)
-		if err != nil {
-			return result, i, err
-		}
-		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
-				return result, i, err
-			}
-		}
-		if s.Bytes()[i] != ':' {
-			return result, i, scan.ErrBadObject
-		}
-		i, err = s.SkipSpace(i + 1)
-		if err != nil {
-			return result, i, err
-		}
 		switch len(key) {
 		case 4:
 			if key == "city" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenCity {
 					return result, i, &validation.DuplicateKeyError{Field: "city"}
 				}
@@ -14947,10 +14914,14 @@ func (Address) DecodeStreamFrom(s *scan.Stream, i int) (Address, int, error) {
 					return result, i, &validation.NotEmptyError{Field: "city"}
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 6:
 			if key == "street" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenStreet {
 					return result, i, &validation.DuplicateKeyError{Field: "street"}
 				}
@@ -14966,10 +14937,14 @@ func (Address) DecodeStreamFrom(s *scan.Stream, i int) (Address, int, error) {
 					return result, i, &validation.MaxLenError{Field: "street", Limit: 200, Got: len(result.Street)}
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 7:
 			if key == "zipCode" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenZipCode {
 					return result, i, &validation.DuplicateKeyError{Field: "zipCode"}
 				}
@@ -14982,19 +14957,20 @@ func (Address) DecodeStreamFrom(s *scan.Stream, i int) (Address, int, error) {
 					return result, i, &validation.LenError{Field: "zipCode", Want: 5, Got: len(result.ZipCode)}
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: key}
+			return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 		}
 		i, err = s.SkipSpace(i)
 		if err != nil {
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
+			if err = s.ReadMore(i); err != nil {
 				return result, i, err
 			}
+			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -15446,9 +15422,10 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(); err != nil {
+		if err = s.ReadMore(i); err != nil {
 			return result, i, err
 		}
+		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -15459,25 +15436,13 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 		if err != nil {
 			return result, i, err
 		}
-		i, err = s.SkipSpace(i)
-		if err != nil {
-			return result, i, err
-		}
-		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
-				return result, i, err
-			}
-		}
-		if s.Bytes()[i] != ':' {
-			return result, i, scan.ErrBadObject
-		}
-		i, err = s.SkipSpace(i + 1)
-		if err != nil {
-			return result, i, err
-		}
 		switch len(key) {
 		case 2:
 			if key == "id" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenID {
 					return result, i, &validation.DuplicateKeyError{Field: "id"}
 				}
@@ -15487,11 +15452,15 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 					return result, i, err
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 4:
 			switch key {
 			case "name":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenName {
 					return result, i, &validation.DuplicateKeyError{Field: "name"}
 				}
@@ -15501,6 +15470,10 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 					return result, i, err
 				}
 			case "tags":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenTags {
 					return result, i, &validation.DuplicateKeyError{Field: "tags"}
 				}
@@ -15511,14 +15484,14 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 						return result, i, err
 					}
 					if i >= len(s.Bytes()) {
-						if err = s.ReadMore(); err != nil {
+						if err = s.ReadMore(0); err != nil {
 							return result, i, err
 						}
 					}
 					if s.Bytes()[i] == 'n' {
 						for ki := 1; ki < 4; ki++ {
 							if i+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -15537,7 +15510,7 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 							return result, i, err
 						}
 						if i >= len(s.Bytes()) {
-							if err = s.ReadMore(); err != nil {
+							if err = s.ReadMore(0); err != nil {
 								return result, i, err
 							}
 						}
@@ -15557,7 +15530,7 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 								return result, i, err
 							}
 							if i >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -15577,11 +15550,15 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 					}
 				}
 			default:
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 5:
 			switch key {
 			case "props":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenProps {
 					return result, i, &validation.DuplicateKeyError{Field: "props"}
 				}
@@ -15592,14 +15569,14 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 						return result, i, err
 					}
 					if i >= len(s.Bytes()) {
-						if err = s.ReadMore(); err != nil {
+						if err = s.ReadMore(0); err != nil {
 							return result, i, err
 						}
 					}
 					if s.Bytes()[i] == 'n' {
 						for ki := 1; ki < 4; ki++ {
 							if i+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -15618,7 +15595,7 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 							return result, i, err
 						}
 						if i >= len(s.Bytes()) {
-							if err = s.ReadMore(); err != nil {
+							if err = s.ReadMore(0); err != nil {
 								return result, i, err
 							}
 						}
@@ -15638,7 +15615,7 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 								return result, i, err
 							}
 							if i >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -15660,7 +15637,7 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 								return result, i, err
 							}
 							if i >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -15680,6 +15657,10 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 					}
 				}
 			case "score":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenScore {
 					return result, i, &validation.DuplicateKeyError{Field: "score"}
 				}
@@ -15689,10 +15670,14 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 					return result, i, err
 				}
 			default:
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 6:
 			if key == "active" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenActive {
 					return result, i, &validation.DuplicateKeyError{Field: "active"}
 				}
@@ -15702,10 +15687,14 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 					return result, i, err
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 8:
 			if key == "children" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenChildren {
 					return result, i, &validation.DuplicateKeyError{Field: "children"}
 				}
@@ -15716,14 +15705,14 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 						return result, i, err
 					}
 					if i >= len(s.Bytes()) {
-						if err = s.ReadMore(); err != nil {
+						if err = s.ReadMore(0); err != nil {
 							return result, i, err
 						}
 					}
 					if s.Bytes()[i] == 'n' {
 						for ki := 1; ki < 4; ki++ {
 							if i+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -15742,7 +15731,7 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 							return result, i, err
 						}
 						if i >= len(s.Bytes()) {
-							if err = s.ReadMore(); err != nil {
+							if err = s.ReadMore(0); err != nil {
 								return result, i, err
 							}
 						}
@@ -15762,7 +15751,7 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 								return result, i, err
 							}
 							if i >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -15782,19 +15771,20 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 					}
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: key}
+			return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 		}
 		i, err = s.SkipSpace(i)
 		if err != nil {
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
+			if err = s.ReadMore(i); err != nil {
 				return result, i, err
 			}
+			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -17279,9 +17269,10 @@ func (WideStruct) DecodeStreamFrom(s *scan.Stream, i int) (WideStruct, int, erro
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(); err != nil {
+		if err = s.ReadMore(i); err != nil {
 			return result, i, err
 		}
+		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		if seen&(1<<0) == 0 {
@@ -17412,26 +17403,14 @@ func (WideStruct) DecodeStreamFrom(s *scan.Stream, i int) (WideStruct, int, erro
 		if err != nil {
 			return result, i, err
 		}
-		i, err = s.SkipSpace(i)
-		if err != nil {
-			return result, i, err
-		}
-		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
-				return result, i, err
-			}
-		}
-		if s.Bytes()[i] != ':' {
-			return result, i, scan.ErrBadObject
-		}
-		i, err = s.SkipSpace(i + 1)
-		if err != nil {
-			return result, i, err
-		}
 		switch len(key) {
 		case 2:
 			switch key {
 			case "f1":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seen&(1<<0) != 0 {
 					return result, i, &validation.DuplicateKeyError{Field: "f1"}
 				}
@@ -17441,6 +17420,10 @@ func (WideStruct) DecodeStreamFrom(s *scan.Stream, i int) (WideStruct, int, erro
 					return result, i, err
 				}
 			case "f2":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seen&(1<<11) != 0 {
 					return result, i, &validation.DuplicateKeyError{Field: "f2"}
 				}
@@ -17450,6 +17433,10 @@ func (WideStruct) DecodeStreamFrom(s *scan.Stream, i int) (WideStruct, int, erro
 					return result, i, err
 				}
 			case "f3":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seen&(1<<22) != 0 {
 					return result, i, &validation.DuplicateKeyError{Field: "f3"}
 				}
@@ -17459,6 +17446,10 @@ func (WideStruct) DecodeStreamFrom(s *scan.Stream, i int) (WideStruct, int, erro
 					return result, i, err
 				}
 			case "f4":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seen&(1<<33) != 0 {
 					return result, i, &validation.DuplicateKeyError{Field: "f4"}
 				}
@@ -17468,6 +17459,10 @@ func (WideStruct) DecodeStreamFrom(s *scan.Stream, i int) (WideStruct, int, erro
 					return result, i, err
 				}
 			case "f5":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seen&(1<<35) != 0 {
 					return result, i, &validation.DuplicateKeyError{Field: "f5"}
 				}
@@ -17477,6 +17472,10 @@ func (WideStruct) DecodeStreamFrom(s *scan.Stream, i int) (WideStruct, int, erro
 					return result, i, err
 				}
 			case "f6":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seen&(1<<36) != 0 {
 					return result, i, &validation.DuplicateKeyError{Field: "f6"}
 				}
@@ -17486,6 +17485,10 @@ func (WideStruct) DecodeStreamFrom(s *scan.Stream, i int) (WideStruct, int, erro
 					return result, i, err
 				}
 			case "f7":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seen&(1<<37) != 0 {
 					return result, i, &validation.DuplicateKeyError{Field: "f7"}
 				}
@@ -17495,6 +17498,10 @@ func (WideStruct) DecodeStreamFrom(s *scan.Stream, i int) (WideStruct, int, erro
 					return result, i, err
 				}
 			case "f8":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seen&(1<<38) != 0 {
 					return result, i, &validation.DuplicateKeyError{Field: "f8"}
 				}
@@ -17504,6 +17511,10 @@ func (WideStruct) DecodeStreamFrom(s *scan.Stream, i int) (WideStruct, int, erro
 					return result, i, err
 				}
 			case "f9":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seen&(1<<39) != 0 {
 					return result, i, &validation.DuplicateKeyError{Field: "f9"}
 				}
@@ -17513,11 +17524,15 @@ func (WideStruct) DecodeStreamFrom(s *scan.Stream, i int) (WideStruct, int, erro
 					return result, i, err
 				}
 			default:
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 3:
 			switch key {
 			case "f10":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seen&(1<<1) != 0 {
 					return result, i, &validation.DuplicateKeyError{Field: "f10"}
 				}
@@ -17527,6 +17542,10 @@ func (WideStruct) DecodeStreamFrom(s *scan.Stream, i int) (WideStruct, int, erro
 					return result, i, err
 				}
 			case "f11":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seen&(1<<2) != 0 {
 					return result, i, &validation.DuplicateKeyError{Field: "f11"}
 				}
@@ -17536,6 +17555,10 @@ func (WideStruct) DecodeStreamFrom(s *scan.Stream, i int) (WideStruct, int, erro
 					return result, i, err
 				}
 			case "f12":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seen&(1<<3) != 0 {
 					return result, i, &validation.DuplicateKeyError{Field: "f12"}
 				}
@@ -17545,6 +17568,10 @@ func (WideStruct) DecodeStreamFrom(s *scan.Stream, i int) (WideStruct, int, erro
 					return result, i, err
 				}
 			case "f13":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seen&(1<<4) != 0 {
 					return result, i, &validation.DuplicateKeyError{Field: "f13"}
 				}
@@ -17554,6 +17581,10 @@ func (WideStruct) DecodeStreamFrom(s *scan.Stream, i int) (WideStruct, int, erro
 					return result, i, err
 				}
 			case "f14":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seen&(1<<5) != 0 {
 					return result, i, &validation.DuplicateKeyError{Field: "f14"}
 				}
@@ -17563,6 +17594,10 @@ func (WideStruct) DecodeStreamFrom(s *scan.Stream, i int) (WideStruct, int, erro
 					return result, i, err
 				}
 			case "f15":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seen&(1<<6) != 0 {
 					return result, i, &validation.DuplicateKeyError{Field: "f15"}
 				}
@@ -17572,6 +17607,10 @@ func (WideStruct) DecodeStreamFrom(s *scan.Stream, i int) (WideStruct, int, erro
 					return result, i, err
 				}
 			case "f16":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seen&(1<<7) != 0 {
 					return result, i, &validation.DuplicateKeyError{Field: "f16"}
 				}
@@ -17581,6 +17620,10 @@ func (WideStruct) DecodeStreamFrom(s *scan.Stream, i int) (WideStruct, int, erro
 					return result, i, err
 				}
 			case "f17":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seen&(1<<8) != 0 {
 					return result, i, &validation.DuplicateKeyError{Field: "f17"}
 				}
@@ -17590,6 +17633,10 @@ func (WideStruct) DecodeStreamFrom(s *scan.Stream, i int) (WideStruct, int, erro
 					return result, i, err
 				}
 			case "f18":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seen&(1<<9) != 0 {
 					return result, i, &validation.DuplicateKeyError{Field: "f18"}
 				}
@@ -17599,6 +17646,10 @@ func (WideStruct) DecodeStreamFrom(s *scan.Stream, i int) (WideStruct, int, erro
 					return result, i, err
 				}
 			case "f19":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seen&(1<<10) != 0 {
 					return result, i, &validation.DuplicateKeyError{Field: "f19"}
 				}
@@ -17608,6 +17659,10 @@ func (WideStruct) DecodeStreamFrom(s *scan.Stream, i int) (WideStruct, int, erro
 					return result, i, err
 				}
 			case "f20":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seen&(1<<12) != 0 {
 					return result, i, &validation.DuplicateKeyError{Field: "f20"}
 				}
@@ -17617,6 +17672,10 @@ func (WideStruct) DecodeStreamFrom(s *scan.Stream, i int) (WideStruct, int, erro
 					return result, i, err
 				}
 			case "f21":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seen&(1<<13) != 0 {
 					return result, i, &validation.DuplicateKeyError{Field: "f21"}
 				}
@@ -17626,6 +17685,10 @@ func (WideStruct) DecodeStreamFrom(s *scan.Stream, i int) (WideStruct, int, erro
 					return result, i, err
 				}
 			case "f22":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seen&(1<<14) != 0 {
 					return result, i, &validation.DuplicateKeyError{Field: "f22"}
 				}
@@ -17635,6 +17698,10 @@ func (WideStruct) DecodeStreamFrom(s *scan.Stream, i int) (WideStruct, int, erro
 					return result, i, err
 				}
 			case "f23":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seen&(1<<15) != 0 {
 					return result, i, &validation.DuplicateKeyError{Field: "f23"}
 				}
@@ -17644,6 +17711,10 @@ func (WideStruct) DecodeStreamFrom(s *scan.Stream, i int) (WideStruct, int, erro
 					return result, i, err
 				}
 			case "f24":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seen&(1<<16) != 0 {
 					return result, i, &validation.DuplicateKeyError{Field: "f24"}
 				}
@@ -17653,6 +17724,10 @@ func (WideStruct) DecodeStreamFrom(s *scan.Stream, i int) (WideStruct, int, erro
 					return result, i, err
 				}
 			case "f25":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seen&(1<<17) != 0 {
 					return result, i, &validation.DuplicateKeyError{Field: "f25"}
 				}
@@ -17662,6 +17737,10 @@ func (WideStruct) DecodeStreamFrom(s *scan.Stream, i int) (WideStruct, int, erro
 					return result, i, err
 				}
 			case "f26":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seen&(1<<18) != 0 {
 					return result, i, &validation.DuplicateKeyError{Field: "f26"}
 				}
@@ -17671,6 +17750,10 @@ func (WideStruct) DecodeStreamFrom(s *scan.Stream, i int) (WideStruct, int, erro
 					return result, i, err
 				}
 			case "f27":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seen&(1<<19) != 0 {
 					return result, i, &validation.DuplicateKeyError{Field: "f27"}
 				}
@@ -17680,6 +17763,10 @@ func (WideStruct) DecodeStreamFrom(s *scan.Stream, i int) (WideStruct, int, erro
 					return result, i, err
 				}
 			case "f28":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seen&(1<<20) != 0 {
 					return result, i, &validation.DuplicateKeyError{Field: "f28"}
 				}
@@ -17689,6 +17776,10 @@ func (WideStruct) DecodeStreamFrom(s *scan.Stream, i int) (WideStruct, int, erro
 					return result, i, err
 				}
 			case "f29":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seen&(1<<21) != 0 {
 					return result, i, &validation.DuplicateKeyError{Field: "f29"}
 				}
@@ -17698,6 +17789,10 @@ func (WideStruct) DecodeStreamFrom(s *scan.Stream, i int) (WideStruct, int, erro
 					return result, i, err
 				}
 			case "f30":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seen&(1<<23) != 0 {
 					return result, i, &validation.DuplicateKeyError{Field: "f30"}
 				}
@@ -17707,6 +17802,10 @@ func (WideStruct) DecodeStreamFrom(s *scan.Stream, i int) (WideStruct, int, erro
 					return result, i, err
 				}
 			case "f31":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seen&(1<<24) != 0 {
 					return result, i, &validation.DuplicateKeyError{Field: "f31"}
 				}
@@ -17716,6 +17815,10 @@ func (WideStruct) DecodeStreamFrom(s *scan.Stream, i int) (WideStruct, int, erro
 					return result, i, err
 				}
 			case "f32":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seen&(1<<25) != 0 {
 					return result, i, &validation.DuplicateKeyError{Field: "f32"}
 				}
@@ -17725,6 +17828,10 @@ func (WideStruct) DecodeStreamFrom(s *scan.Stream, i int) (WideStruct, int, erro
 					return result, i, err
 				}
 			case "f33":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seen&(1<<26) != 0 {
 					return result, i, &validation.DuplicateKeyError{Field: "f33"}
 				}
@@ -17734,6 +17841,10 @@ func (WideStruct) DecodeStreamFrom(s *scan.Stream, i int) (WideStruct, int, erro
 					return result, i, err
 				}
 			case "f34":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seen&(1<<27) != 0 {
 					return result, i, &validation.DuplicateKeyError{Field: "f34"}
 				}
@@ -17743,6 +17854,10 @@ func (WideStruct) DecodeStreamFrom(s *scan.Stream, i int) (WideStruct, int, erro
 					return result, i, err
 				}
 			case "f35":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seen&(1<<28) != 0 {
 					return result, i, &validation.DuplicateKeyError{Field: "f35"}
 				}
@@ -17752,6 +17867,10 @@ func (WideStruct) DecodeStreamFrom(s *scan.Stream, i int) (WideStruct, int, erro
 					return result, i, err
 				}
 			case "f36":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seen&(1<<29) != 0 {
 					return result, i, &validation.DuplicateKeyError{Field: "f36"}
 				}
@@ -17761,6 +17880,10 @@ func (WideStruct) DecodeStreamFrom(s *scan.Stream, i int) (WideStruct, int, erro
 					return result, i, err
 				}
 			case "f37":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seen&(1<<30) != 0 {
 					return result, i, &validation.DuplicateKeyError{Field: "f37"}
 				}
@@ -17770,6 +17893,10 @@ func (WideStruct) DecodeStreamFrom(s *scan.Stream, i int) (WideStruct, int, erro
 					return result, i, err
 				}
 			case "f38":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seen&(1<<31) != 0 {
 					return result, i, &validation.DuplicateKeyError{Field: "f38"}
 				}
@@ -17779,6 +17906,10 @@ func (WideStruct) DecodeStreamFrom(s *scan.Stream, i int) (WideStruct, int, erro
 					return result, i, err
 				}
 			case "f39":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seen&(1<<32) != 0 {
 					return result, i, &validation.DuplicateKeyError{Field: "f39"}
 				}
@@ -17788,6 +17919,10 @@ func (WideStruct) DecodeStreamFrom(s *scan.Stream, i int) (WideStruct, int, erro
 					return result, i, err
 				}
 			case "f40":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seen&(1<<34) != 0 {
 					return result, i, &validation.DuplicateKeyError{Field: "f40"}
 				}
@@ -17797,19 +17932,20 @@ func (WideStruct) DecodeStreamFrom(s *scan.Stream, i int) (WideStruct, int, erro
 					return result, i, err
 				}
 			default:
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: key}
+			return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 		}
 		i, err = s.SkipSpace(i)
 		if err != nil {
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
+			if err = s.ReadMore(i); err != nil {
 				return result, i, err
 			}
+			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -18369,9 +18505,10 @@ func (PtrSliceStruct) DecodeStreamFrom(s *scan.Stream, i int) (PtrSliceStruct, i
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(); err != nil {
+		if err = s.ReadMore(i); err != nil {
 			return result, i, err
 		}
+		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -18382,26 +18519,14 @@ func (PtrSliceStruct) DecodeStreamFrom(s *scan.Stream, i int) (PtrSliceStruct, i
 		if err != nil {
 			return result, i, err
 		}
-		i, err = s.SkipSpace(i)
-		if err != nil {
-			return result, i, err
-		}
-		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
-				return result, i, err
-			}
-		}
-		if s.Bytes()[i] != ':' {
-			return result, i, scan.ErrBadObject
-		}
-		i, err = s.SkipSpace(i + 1)
-		if err != nil {
-			return result, i, err
-		}
 		switch len(key) {
 		case 5:
 			switch key {
 			case "items":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenItems {
 					return result, i, &validation.DuplicateKeyError{Field: "items"}
 				}
@@ -18412,14 +18537,14 @@ func (PtrSliceStruct) DecodeStreamFrom(s *scan.Stream, i int) (PtrSliceStruct, i
 						return result, i, err
 					}
 					if i >= len(s.Bytes()) {
-						if err = s.ReadMore(); err != nil {
+						if err = s.ReadMore(0); err != nil {
 							return result, i, err
 						}
 					}
 					if s.Bytes()[i] == 'n' {
 						for ki := 1; ki < 4; ki++ {
 							if i+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -18438,7 +18563,7 @@ func (PtrSliceStruct) DecodeStreamFrom(s *scan.Stream, i int) (PtrSliceStruct, i
 							return result, i, err
 						}
 						if i >= len(s.Bytes()) {
-							if err = s.ReadMore(); err != nil {
+							if err = s.ReadMore(0); err != nil {
 								return result, i, err
 							}
 						}
@@ -18451,14 +18576,14 @@ func (PtrSliceStruct) DecodeStreamFrom(s *scan.Stream, i int) (PtrSliceStruct, i
 						}
 						for s.Bytes()[i] != ']' {
 							if i >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
 							if s.Bytes()[i] == 'n' {
 								for ki := 1; ki < 4; ki++ {
 									if i+ki >= len(s.Bytes()) {
-										if err = s.ReadMore(); err != nil {
+										if err = s.ReadMore(0); err != nil {
 											return result, i, err
 										}
 									}
@@ -18473,7 +18598,7 @@ func (PtrSliceStruct) DecodeStreamFrom(s *scan.Stream, i int) (PtrSliceStruct, i
 									return result, i, err
 								}
 								if i >= len(s.Bytes()) {
-									if err = s.ReadMore(); err != nil {
+									if err = s.ReadMore(0); err != nil {
 										return result, i, err
 									}
 								}
@@ -18497,7 +18622,7 @@ func (PtrSliceStruct) DecodeStreamFrom(s *scan.Stream, i int) (PtrSliceStruct, i
 								return result, i, err
 							}
 							if i >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -18517,6 +18642,10 @@ func (PtrSliceStruct) DecodeStreamFrom(s *scan.Stream, i int) (PtrSliceStruct, i
 					}
 				}
 			case "nodes":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenNodes {
 					return result, i, &validation.DuplicateKeyError{Field: "nodes"}
 				}
@@ -18527,14 +18656,14 @@ func (PtrSliceStruct) DecodeStreamFrom(s *scan.Stream, i int) (PtrSliceStruct, i
 						return result, i, err
 					}
 					if i >= len(s.Bytes()) {
-						if err = s.ReadMore(); err != nil {
+						if err = s.ReadMore(0); err != nil {
 							return result, i, err
 						}
 					}
 					if s.Bytes()[i] == 'n' {
 						for ki := 1; ki < 4; ki++ {
 							if i+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -18553,7 +18682,7 @@ func (PtrSliceStruct) DecodeStreamFrom(s *scan.Stream, i int) (PtrSliceStruct, i
 							return result, i, err
 						}
 						if i >= len(s.Bytes()) {
-							if err = s.ReadMore(); err != nil {
+							if err = s.ReadMore(0); err != nil {
 								return result, i, err
 							}
 						}
@@ -18566,14 +18695,14 @@ func (PtrSliceStruct) DecodeStreamFrom(s *scan.Stream, i int) (PtrSliceStruct, i
 						}
 						for s.Bytes()[i] != ']' {
 							if i >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
 							if s.Bytes()[i] == 'n' {
 								for ki := 1; ki < 4; ki++ {
 									if i+ki >= len(s.Bytes()) {
-										if err = s.ReadMore(); err != nil {
+										if err = s.ReadMore(0); err != nil {
 											return result, i, err
 										}
 									}
@@ -18588,7 +18717,7 @@ func (PtrSliceStruct) DecodeStreamFrom(s *scan.Stream, i int) (PtrSliceStruct, i
 									return result, i, err
 								}
 								if i >= len(s.Bytes()) {
-									if err = s.ReadMore(); err != nil {
+									if err = s.ReadMore(0); err != nil {
 										return result, i, err
 									}
 								}
@@ -18612,7 +18741,7 @@ func (PtrSliceStruct) DecodeStreamFrom(s *scan.Stream, i int) (PtrSliceStruct, i
 								return result, i, err
 							}
 							if i >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -18632,6 +18761,10 @@ func (PtrSliceStruct) DecodeStreamFrom(s *scan.Stream, i int) (PtrSliceStruct, i
 					}
 				}
 			case "tuple":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenTuple {
 					return result, i, &validation.DuplicateKeyError{Field: "tuple"}
 				}
@@ -18646,7 +18779,7 @@ func (PtrSliceStruct) DecodeStreamFrom(s *scan.Stream, i int) (PtrSliceStruct, i
 						return result, i, err
 					}
 					if i >= len(s.Bytes()) {
-						if err = s.ReadMore(); err != nil {
+						if err = s.ReadMore(0); err != nil {
 							return result, i, err
 						}
 					}
@@ -18657,14 +18790,14 @@ func (PtrSliceStruct) DecodeStreamFrom(s *scan.Stream, i int) (PtrSliceStruct, i
 							return result, i, &validation.LenError{Field: "tuple", Want: 3, Got: idx0}
 						}
 						if i >= len(s.Bytes()) {
-							if err = s.ReadMore(); err != nil {
+							if err = s.ReadMore(0); err != nil {
 								return result, i, err
 							}
 						}
 						if s.Bytes()[i] == 'n' {
 							for ki := 1; ki < 4; ki++ {
 								if i+ki >= len(s.Bytes()) {
-									if err = s.ReadMore(); err != nil {
+									if err = s.ReadMore(0); err != nil {
 										return result, i, err
 									}
 								}
@@ -18680,7 +18813,7 @@ func (PtrSliceStruct) DecodeStreamFrom(s *scan.Stream, i int) (PtrSliceStruct, i
 								return result, i, err
 							}
 							if i >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -18704,7 +18837,7 @@ func (PtrSliceStruct) DecodeStreamFrom(s *scan.Stream, i int) (PtrSliceStruct, i
 							return result, i, err
 						}
 						if i >= len(s.Bytes()) {
-							if err = s.ReadMore(); err != nil {
+							if err = s.ReadMore(0); err != nil {
 								return result, i, err
 							}
 						}
@@ -18726,19 +18859,20 @@ func (PtrSliceStruct) DecodeStreamFrom(s *scan.Stream, i int) (PtrSliceStruct, i
 					i++
 				}
 			default:
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: key}
+			return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 		}
 		i, err = s.SkipSpace(i)
 		if err != nil {
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
+			if err = s.ReadMore(i); err != nil {
 				return result, i, err
 			}
+			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -19246,9 +19380,10 @@ func (SQLNullStruct) DecodeStreamFrom(s *scan.Stream, i int) (SQLNullStruct, int
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(); err != nil {
+		if err = s.ReadMore(i); err != nil {
 			return result, i, err
 		}
+		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -19259,40 +19394,28 @@ func (SQLNullStruct) DecodeStreamFrom(s *scan.Stream, i int) (SQLNullStruct, int
 		if err != nil {
 			return result, i, err
 		}
-		i, err = s.SkipSpace(i)
-		if err != nil {
-			return result, i, err
-		}
-		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
-				return result, i, err
-			}
-		}
-		if s.Bytes()[i] != ':' {
-			return result, i, scan.ErrBadObject
-		}
-		i, err = s.SkipSpace(i + 1)
-		if err != nil {
-			return result, i, err
-		}
 		switch len(key) {
 		case 1:
 			switch key {
 			case "b":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenB {
 					return result, i, &validation.DuplicateKeyError{Field: "b"}
 				}
 				seenB = true
 				{
 					if i >= len(s.Bytes()) {
-						if err = s.ReadMore(); err != nil {
+						if err = s.ReadMore(0); err != nil {
 							return result, i, err
 						}
 					}
 					if s.Bytes()[i] == 'n' {
 						for ki := 1; ki < 4; ki++ {
 							if i+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -19313,20 +19436,24 @@ func (SQLNullStruct) DecodeStreamFrom(s *scan.Stream, i int) (SQLNullStruct, int
 					}
 				}
 			case "f":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenF {
 					return result, i, &validation.DuplicateKeyError{Field: "f"}
 				}
 				seenF = true
 				{
 					if i >= len(s.Bytes()) {
-						if err = s.ReadMore(); err != nil {
+						if err = s.ReadMore(0); err != nil {
 							return result, i, err
 						}
 					}
 					if s.Bytes()[i] == 'n' {
 						for ki := 1; ki < 4; ki++ {
 							if i+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -19347,20 +19474,24 @@ func (SQLNullStruct) DecodeStreamFrom(s *scan.Stream, i int) (SQLNullStruct, int
 					}
 				}
 			case "i":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenI {
 					return result, i, &validation.DuplicateKeyError{Field: "i"}
 				}
 				seenI = true
 				{
 					if i >= len(s.Bytes()) {
-						if err = s.ReadMore(); err != nil {
+						if err = s.ReadMore(0); err != nil {
 							return result, i, err
 						}
 					}
 					if s.Bytes()[i] == 'n' {
 						for ki := 1; ki < 4; ki++ {
 							if i+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -19381,20 +19512,24 @@ func (SQLNullStruct) DecodeStreamFrom(s *scan.Stream, i int) (SQLNullStruct, int
 					}
 				}
 			case "s":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenS {
 					return result, i, &validation.DuplicateKeyError{Field: "s"}
 				}
 				seenS = true
 				{
 					if i >= len(s.Bytes()) {
-						if err = s.ReadMore(); err != nil {
+						if err = s.ReadMore(0); err != nil {
 							return result, i, err
 						}
 					}
 					if s.Bytes()[i] == 'n' {
 						for ki := 1; ki < 4; ki++ {
 							if i+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -19415,20 +19550,24 @@ func (SQLNullStruct) DecodeStreamFrom(s *scan.Stream, i int) (SQLNullStruct, int
 					}
 				}
 			case "t":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenT {
 					return result, i, &validation.DuplicateKeyError{Field: "t"}
 				}
 				seenT = true
 				{
 					if i >= len(s.Bytes()) {
-						if err = s.ReadMore(); err != nil {
+						if err = s.ReadMore(0); err != nil {
 							return result, i, err
 						}
 					}
 					if s.Bytes()[i] == 'n' {
 						for ki := 1; ki < 4; ki++ {
 							if i+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -19456,24 +19595,28 @@ func (SQLNullStruct) DecodeStreamFrom(s *scan.Stream, i int) (SQLNullStruct, int
 					}
 				}
 			default:
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 2:
 			if key == "bl" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenBL {
 					return result, i, &validation.DuplicateKeyError{Field: "bl"}
 				}
 				seenBL = true
 				{
 					if i >= len(s.Bytes()) {
-						if err = s.ReadMore(); err != nil {
+						if err = s.ReadMore(0); err != nil {
 							return result, i, err
 						}
 					}
 					if s.Bytes()[i] == 'n' {
 						for ki := 1; ki < 4; ki++ {
 							if i+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -19494,25 +19637,29 @@ func (SQLNullStruct) DecodeStreamFrom(s *scan.Stream, i int) (SQLNullStruct, int
 					}
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 3:
 			switch key {
 			case "i16":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenI16 {
 					return result, i, &validation.DuplicateKeyError{Field: "i16"}
 				}
 				seenI16 = true
 				{
 					if i >= len(s.Bytes()) {
-						if err = s.ReadMore(); err != nil {
+						if err = s.ReadMore(0); err != nil {
 							return result, i, err
 						}
 					}
 					if s.Bytes()[i] == 'n' {
 						for ki := 1; ki < 4; ki++ {
 							if i+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -19533,20 +19680,24 @@ func (SQLNullStruct) DecodeStreamFrom(s *scan.Stream, i int) (SQLNullStruct, int
 					}
 				}
 			case "i32":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenI32 {
 					return result, i, &validation.DuplicateKeyError{Field: "i32"}
 				}
 				seenI32 = true
 				{
 					if i >= len(s.Bytes()) {
-						if err = s.ReadMore(); err != nil {
+						if err = s.ReadMore(0); err != nil {
 							return result, i, err
 						}
 					}
 					if s.Bytes()[i] == 'n' {
 						for ki := 1; ki < 4; ki++ {
 							if i+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -19567,19 +19718,20 @@ func (SQLNullStruct) DecodeStreamFrom(s *scan.Stream, i int) (SQLNullStruct, int
 					}
 				}
 			default:
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: key}
+			return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 		}
 		i, err = s.SkipSpace(i)
 		if err != nil {
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
+			if err = s.ReadMore(i); err != nil {
 				return result, i, err
 			}
+			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {

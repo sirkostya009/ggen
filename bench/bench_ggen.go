@@ -5,6 +5,7 @@ package bench
 import (
 	"encoding/base64"
 	"strconv"
+	"strings"
 	"time"
 	"unsafe"
 
@@ -163,9 +164,10 @@ func (Addr) DecodeStreamFrom(s *scan.Stream, i int) (Addr, int, error) {
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(); err != nil {
+		if err = s.ReadMore(i); err != nil {
 			return result, i, err
 		}
+		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -176,25 +178,13 @@ func (Addr) DecodeStreamFrom(s *scan.Stream, i int) (Addr, int, error) {
 		if err != nil {
 			return result, i, err
 		}
-		i, err = s.SkipSpace(i)
-		if err != nil {
-			return result, i, err
-		}
-		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
-				return result, i, err
-			}
-		}
-		if s.Bytes()[i] != ':' {
-			return result, i, scan.ErrBadObject
-		}
-		i, err = s.SkipSpace(i + 1)
-		if err != nil {
-			return result, i, err
-		}
 		switch len(key) {
 		case 4:
 			if key == "city" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenCity {
 					return result, i, &validation.DuplicateKeyError{Field: "city"}
 				}
@@ -204,10 +194,14 @@ func (Addr) DecodeStreamFrom(s *scan.Stream, i int) (Addr, int, error) {
 					return result, i, err
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 6:
 			if key == "street" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenStreet {
 					return result, i, &validation.DuplicateKeyError{Field: "street"}
 				}
@@ -217,19 +211,20 @@ func (Addr) DecodeStreamFrom(s *scan.Stream, i int) (Addr, int, error) {
 					return result, i, err
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: key}
+			return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 		}
 		i, err = s.SkipSpace(i)
 		if err != nil {
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
+			if err = s.ReadMore(i); err != nil {
 				return result, i, err
 			}
+			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -1072,9 +1067,10 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(); err != nil {
+		if err = s.ReadMore(i); err != nil {
 			return result, i, err
 		}
+		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		if !seenID {
@@ -1091,25 +1087,13 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 		if err != nil {
 			return result, i, err
 		}
-		i, err = s.SkipSpace(i)
-		if err != nil {
-			return result, i, err
-		}
-		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
-				return result, i, err
-			}
-		}
-		if s.Bytes()[i] != ':' {
-			return result, i, scan.ErrBadObject
-		}
-		i, err = s.SkipSpace(i + 1)
-		if err != nil {
-			return result, i, err
-		}
 		switch len(key) {
 		case 2:
 			if key == "id" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenID {
 					return result, i, &validation.DuplicateKeyError{Field: "id"}
 				}
@@ -1122,17 +1106,24 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 					return result, i, &validation.GTEError{Field: "id", Limit: 0, Value: result.ID}
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 3:
 			if key == "raw" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenRaw {
 					return result, i, &validation.DuplicateKeyError{Field: "raw"}
 				}
 				seenRaw = true
 				{
 					start := i
+					prevPin := s.Shift
+					s.Shift = false
 					i, err = s.SkipValue(start)
+					s.Shift = prevPin
 					if err != nil {
 						return result, i, err
 					}
@@ -1140,11 +1131,15 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 					result.Raw = append(make([]byte, 0, len(raw)), raw...)
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 4:
 			switch key {
 			case "blob":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenBlob {
 					return result, i, &validation.DuplicateKeyError{Field: "blob"}
 				}
@@ -1162,6 +1157,10 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 					}
 				}
 			case "name":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenName {
 					return result, i, &validation.DuplicateKeyError{Field: "name"}
 				}
@@ -1177,6 +1176,10 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 					return result, i, &validation.MaxLenError{Field: "name", Limit: 128, Got: len(result.Name)}
 				}
 			case "refs":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenRefs {
 					return result, i, &validation.DuplicateKeyError{Field: "refs"}
 				}
@@ -1187,14 +1190,14 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 						return result, i, err
 					}
 					if i >= len(s.Bytes()) {
-						if err = s.ReadMore(); err != nil {
+						if err = s.ReadMore(0); err != nil {
 							return result, i, err
 						}
 					}
 					if s.Bytes()[i] == 'n' {
 						for ki := 1; ki < 4; ki++ {
 							if i+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -1213,7 +1216,7 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 							return result, i, err
 						}
 						if i >= len(s.Bytes()) {
-							if err = s.ReadMore(); err != nil {
+							if err = s.ReadMore(0); err != nil {
 								return result, i, err
 							}
 						}
@@ -1226,14 +1229,14 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 						}
 						for s.Bytes()[i] != ']' {
 							if i >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
 							if s.Bytes()[i] == 'n' {
 								for ki := 1; ki < 4; ki++ {
 									if i+ki >= len(s.Bytes()) {
-										if err = s.ReadMore(); err != nil {
+										if err = s.ReadMore(0); err != nil {
 											return result, i, err
 										}
 									}
@@ -1248,7 +1251,7 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 									return result, i, err
 								}
 								if i >= len(s.Bytes()) {
-									if err = s.ReadMore(); err != nil {
+									if err = s.ReadMore(0); err != nil {
 										return result, i, err
 									}
 								}
@@ -1272,7 +1275,7 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 								return result, i, err
 							}
 							if i >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -1295,6 +1298,10 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 					return result, i, &validation.MaxLenError{Field: "refs", Limit: 16, Got: len(result.Refs)}
 				}
 			case "tags":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenTags {
 					return result, i, &validation.DuplicateKeyError{Field: "tags"}
 				}
@@ -1305,14 +1312,14 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 						return result, i, err
 					}
 					if i >= len(s.Bytes()) {
-						if err = s.ReadMore(); err != nil {
+						if err = s.ReadMore(0); err != nil {
 							return result, i, err
 						}
 					}
 					if s.Bytes()[i] == 'n' {
 						for ki := 1; ki < 4; ki++ {
 							if i+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -1331,7 +1338,7 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 							return result, i, err
 						}
 						if i >= len(s.Bytes()) {
-							if err = s.ReadMore(); err != nil {
+							if err = s.ReadMore(0); err != nil {
 								return result, i, err
 							}
 						}
@@ -1357,7 +1364,7 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 								return result, i, err
 							}
 							if i >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -1380,11 +1387,15 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 					return result, i, &validation.MaxLenError{Field: "tags", Limit: 64, Got: len(result.Tags)}
 				}
 			default:
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 5:
 			switch key {
 			case "extra":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenExtra {
 					return result, i, &validation.DuplicateKeyError{Field: "extra"}
 				}
@@ -1396,6 +1407,10 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 					}
 				}
 			case "props":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenProps {
 					return result, i, &validation.DuplicateKeyError{Field: "props"}
 				}
@@ -1406,14 +1421,14 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 						return result, i, err
 					}
 					if i >= len(s.Bytes()) {
-						if err = s.ReadMore(); err != nil {
+						if err = s.ReadMore(0); err != nil {
 							return result, i, err
 						}
 					}
 					if s.Bytes()[i] == 'n' {
 						for ki := 1; ki < 4; ki++ {
 							if i+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -1432,7 +1447,7 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 							return result, i, err
 						}
 						if i >= len(s.Bytes()) {
-							if err = s.ReadMore(); err != nil {
+							if err = s.ReadMore(0); err != nil {
 								return result, i, err
 							}
 						}
@@ -1452,7 +1467,7 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 								return result, i, err
 							}
 							if i >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -1474,7 +1489,7 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 								return result, i, err
 							}
 							if i >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -1497,6 +1512,10 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 					return result, i, &validation.MaxLenError{Field: "props", Limit: 64, Got: len(result.Props)}
 				}
 			case "score":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenScore {
 					return result, i, &validation.DuplicateKeyError{Field: "score"}
 				}
@@ -1512,11 +1531,15 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 					return result, i, &validation.LTEError{Field: "score", Limit: 100, Value: result.Score}
 				}
 			default:
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 6:
 			switch key {
 			case "active":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenActive {
 					return result, i, &validation.DuplicateKeyError{Field: "active"}
 				}
@@ -1526,6 +1549,10 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 					return result, i, err
 				}
 			case "coords":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenCoords {
 					return result, i, &validation.DuplicateKeyError{Field: "coords"}
 				}
@@ -1540,7 +1567,7 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 						return result, i, err
 					}
 					if i >= len(s.Bytes()) {
-						if err = s.ReadMore(); err != nil {
+						if err = s.ReadMore(0); err != nil {
 							return result, i, err
 						}
 					}
@@ -1559,7 +1586,7 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 							return result, i, err
 						}
 						if i >= len(s.Bytes()) {
-							if err = s.ReadMore(); err != nil {
+							if err = s.ReadMore(0); err != nil {
 								return result, i, err
 							}
 						}
@@ -1581,6 +1608,10 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 					i++
 				}
 			case "matrix":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenMatrix {
 					return result, i, &validation.DuplicateKeyError{Field: "matrix"}
 				}
@@ -1591,14 +1622,14 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 						return result, i, err
 					}
 					if i >= len(s.Bytes()) {
-						if err = s.ReadMore(); err != nil {
+						if err = s.ReadMore(0); err != nil {
 							return result, i, err
 						}
 					}
 					if s.Bytes()[i] == 'n' {
 						for ki := 1; ki < 4; ki++ {
 							if i+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -1617,7 +1648,7 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 							return result, i, err
 						}
 						if i >= len(s.Bytes()) {
-							if err = s.ReadMore(); err != nil {
+							if err = s.ReadMore(0); err != nil {
 								return result, i, err
 							}
 						}
@@ -1634,14 +1665,14 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 									return result, i, err
 								}
 								if i >= len(s.Bytes()) {
-									if err = s.ReadMore(); err != nil {
+									if err = s.ReadMore(0); err != nil {
 										return result, i, err
 									}
 								}
 								if s.Bytes()[i] == 'n' {
 									for ki := 1; ki < 4; ki++ {
 										if i+ki >= len(s.Bytes()) {
-											if err = s.ReadMore(); err != nil {
+											if err = s.ReadMore(0); err != nil {
 												return result, i, err
 											}
 										}
@@ -1660,7 +1691,7 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 										return result, i, err
 									}
 									if i >= len(s.Bytes()) {
-										if err = s.ReadMore(); err != nil {
+										if err = s.ReadMore(0); err != nil {
 											return result, i, err
 										}
 									}
@@ -1682,7 +1713,7 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 											return result, i, err
 										}
 										if i >= len(s.Bytes()) {
-											if err = s.ReadMore(); err != nil {
+											if err = s.ReadMore(0); err != nil {
 												return result, i, err
 											}
 										}
@@ -1709,7 +1740,7 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 								return result, i, err
 							}
 							if i >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -1732,19 +1763,23 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 					return result, i, &validation.MaxLenError{Field: "matrix", Limit: 16, Got: len(result.Matrix)}
 				}
 			case "parent":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenParent {
 					return result, i, &validation.DuplicateKeyError{Field: "parent"}
 				}
 				seenParent = true
 				if i >= len(s.Bytes()) {
-					if err = s.ReadMore(); err != nil {
+					if err = s.ReadMore(0); err != nil {
 						return result, i, err
 					}
 				}
 				if s.Bytes()[i] == 'n' {
 					for ki := 1; ki < 4; ki++ {
 						if i+ki >= len(s.Bytes()) {
-							if err = s.ReadMore(); err != nil {
+							if err = s.ReadMore(0); err != nil {
 								return result, i, err
 							}
 						}
@@ -1764,10 +1799,14 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 					result.Parent = &v
 				}
 			default:
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 8:
 			if key == "children" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenChildren {
 					return result, i, &validation.DuplicateKeyError{Field: "children"}
 				}
@@ -1778,14 +1817,14 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 						return result, i, err
 					}
 					if i >= len(s.Bytes()) {
-						if err = s.ReadMore(); err != nil {
+						if err = s.ReadMore(0); err != nil {
 							return result, i, err
 						}
 					}
 					if s.Bytes()[i] == 'n' {
 						for ki := 1; ki < 4; ki++ {
 							if i+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -1804,7 +1843,7 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 							return result, i, err
 						}
 						if i >= len(s.Bytes()) {
-							if err = s.ReadMore(); err != nil {
+							if err = s.ReadMore(0); err != nil {
 								return result, i, err
 							}
 						}
@@ -1824,7 +1863,7 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 								return result, i, err
 							}
 							if i >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -1847,10 +1886,14 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 					return result, i, &validation.MaxLenError{Field: "children", Limit: 16, Got: len(result.Children)}
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 9:
 			if key == "createdAt" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenCreatedAt {
 					return result, i, &validation.DuplicateKeyError{Field: "createdAt"}
 				}
@@ -1867,19 +1910,20 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 					}
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: key}
+			return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 		}
 		i, err = s.SkipSpace(i)
 		if err != nil {
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
+			if err = s.ReadMore(i); err != nil {
 				return result, i, err
 			}
+			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -2494,9 +2538,10 @@ func (Validated) DecodeStreamFrom(s *scan.Stream, i int) (Validated, int, error)
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(); err != nil {
+		if err = s.ReadMore(i); err != nil {
 			return result, i, err
 		}
+		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		if !seenEmail {
@@ -2513,26 +2558,14 @@ func (Validated) DecodeStreamFrom(s *scan.Stream, i int) (Validated, int, error)
 		if err != nil {
 			return result, i, err
 		}
-		i, err = s.SkipSpace(i)
-		if err != nil {
-			return result, i, err
-		}
-		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
-				return result, i, err
-			}
-		}
-		if s.Bytes()[i] != ':' {
-			return result, i, scan.ErrBadObject
-		}
-		i, err = s.SkipSpace(i + 1)
-		if err != nil {
-			return result, i, err
-		}
 		switch len(key) {
 		case 3:
 			switch key {
 			case "age":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenAge {
 					return result, i, &validation.DuplicateKeyError{Field: "age"}
 				}
@@ -2550,6 +2583,10 @@ func (Validated) DecodeStreamFrom(s *scan.Stream, i int) (Validated, int, error)
 					return result, i, &validation.LTEError{Field: "age", Limit: 150, Value: result.Age}
 				}
 			case "bio":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenBio {
 					return result, i, &validation.DuplicateKeyError{Field: "bio"}
 				}
@@ -2562,11 +2599,15 @@ func (Validated) DecodeStreamFrom(s *scan.Stream, i int) (Validated, int, error)
 					return result, i, &validation.MaxLenError{Field: "bio", Limit: 4096, Got: len(result.Bio)}
 				}
 			default:
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 4:
 			switch key {
 			case "name":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenName {
 					return result, i, &validation.DuplicateKeyError{Field: "name"}
 				}
@@ -2582,6 +2623,10 @@ func (Validated) DecodeStreamFrom(s *scan.Stream, i int) (Validated, int, error)
 					return result, i, &validation.MaxLenError{Field: "name", Limit: 64, Got: len(result.Name)}
 				}
 			case "tags":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenTags {
 					return result, i, &validation.DuplicateKeyError{Field: "tags"}
 				}
@@ -2592,14 +2637,14 @@ func (Validated) DecodeStreamFrom(s *scan.Stream, i int) (Validated, int, error)
 						return result, i, err
 					}
 					if i >= len(s.Bytes()) {
-						if err = s.ReadMore(); err != nil {
+						if err = s.ReadMore(0); err != nil {
 							return result, i, err
 						}
 					}
 					if s.Bytes()[i] == 'n' {
 						for ki := 1; ki < 4; ki++ {
 							if i+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -2618,7 +2663,7 @@ func (Validated) DecodeStreamFrom(s *scan.Stream, i int) (Validated, int, error)
 							return result, i, err
 						}
 						if i >= len(s.Bytes()) {
-							if err = s.ReadMore(); err != nil {
+							if err = s.ReadMore(0); err != nil {
 								return result, i, err
 							}
 						}
@@ -2647,7 +2692,7 @@ func (Validated) DecodeStreamFrom(s *scan.Stream, i int) (Validated, int, error)
 								return result, i, err
 							}
 							if i >= len(s.Bytes()) {
-								if err = s.ReadMore(); err != nil {
+								if err = s.ReadMore(0); err != nil {
 									return result, i, err
 								}
 							}
@@ -2667,10 +2712,14 @@ func (Validated) DecodeStreamFrom(s *scan.Stream, i int) (Validated, int, error)
 					}
 				}
 			default:
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 5:
 			if key == "email" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
 				if seenEmail {
 					return result, i, &validation.DuplicateKeyError{Field: "email"}
 				}
@@ -2683,19 +2732,20 @@ func (Validated) DecodeStreamFrom(s *scan.Stream, i int) (Validated, int, error)
 					return result, i, &validation.EmailError{Field: "email", Value: result.Email}
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: key}
+			return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
 		}
 		i, err = s.SkipSpace(i)
 		if err != nil {
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
+			if err = s.ReadMore(i); err != nil {
 				return result, i, err
 			}
+			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {

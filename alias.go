@@ -155,7 +155,10 @@ return result, k, nil
 	case s.AliasIface.JSONUnmarshaler:
 		if stream {
 			fmt.Fprintf(b, `start := i
+prevPin := s.Shift
+	s.Shift = false
 k, err := s.SkipValue(start)
+s.Shift = prevPin
 if err != nil { return result, i, err }
 var u %[1]s
 if err := u.UnmarshalJSON(s.Bytes()[start:k]); err != nil { return result, i, err }

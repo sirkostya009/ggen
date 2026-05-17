@@ -132,9 +132,10 @@ func UnmarshalSliceStream[T Decoder[T]](r io.Reader, buf []byte) ([]T, []byte, e
 		return nil, s.Bytes(), err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(); err != nil {
+		if err = s.ReadMore(i); err != nil {
 			return nil, s.Bytes(), err
 		}
+		i = 0
 	}
 	var result []T
 	if s.Bytes()[i] == ']' {
@@ -152,9 +153,10 @@ func UnmarshalSliceStream[T Decoder[T]](r io.Reader, buf []byte) ([]T, []byte, e
 			return nil, s.Bytes(), err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(); err != nil {
+			if err = s.ReadMore(i); err != nil {
 				return nil, s.Bytes(), err
 			}
+			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {

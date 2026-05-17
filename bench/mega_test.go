@@ -154,6 +154,7 @@ func BenchmarkMega_Unmarshal(b *testing.B) {
 	}{
 		{"jsonv2", func(p []byte) error { var v NodePlain; return jsonv2.Unmarshal(p, &v) }},
 		{"sonic", func(p []byte) error { var v NodePlain; return sonic.Unmarshal(p, &v) }},
+		{"sonic_fast", func(p []byte) error { var v NodePlain; return sonic.ConfigFastest.Unmarshal(p, &v) }},
 		{"easyjson", func(p []byte) error { var v Node; return v.UnmarshalJSON(p) }},
 		{"ggen", func(p []byte) error { _, err := decode.Unmarshal[Node](p); return err }},
 	}
@@ -179,6 +180,7 @@ func BenchmarkMega_Marshal(b *testing.B) {
 	}{
 		{"jsonv2", func() ([]byte, error) { return jsonv2.Marshal(MegaValuePlain) }},
 		{"sonic", func() ([]byte, error) { return sonic.Marshal(MegaValuePlain) }},
+		{"sonic_fast", func() ([]byte, error) { return sonic.ConfigFastest.Marshal(MegaValuePlain) }},
 		{"easyjson", func() ([]byte, error) { return MegaValue.MarshalJSON() }},
 		{"ggen", func() ([]byte, error) { return encode.Marshal(MegaValue) }},
 	}
@@ -237,6 +239,13 @@ func BenchmarkRetention(b *testing.B) {
 		{"sonic", func(_ *[]byte) any {
 			n := new(NodePlain)
 			if err := sonic.Unmarshal(slowPayload, n); err != nil {
+				b.Fatal(err)
+			}
+			return n
+		}},
+		{"sonic_fast", func(_ *[]byte) any {
+			n := new(NodePlain)
+			if err := sonic.ConfigFastest.Unmarshal(slowPayload, n); err != nil {
 				b.Fatal(err)
 			}
 			return n
@@ -383,6 +392,11 @@ func BenchmarkMega_Reader(b *testing.B) {
 			s.r.Reset(MegaPayload)
 			var v NodePlain
 			return sonic.ConfigDefault.NewDecoder(&s.r).Decode(&v)
+		}},
+		{"sonic_fast", func(s *readerState) error {
+			s.r.Reset(MegaPayload)
+			var v NodePlain
+			return sonic.ConfigFastest.NewDecoder(&s.r).Decode(&v)
 		}},
 		{"easyjson", func(s *readerState) error {
 			s.r.Reset(MegaPayload)

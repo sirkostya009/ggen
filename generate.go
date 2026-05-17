@@ -224,6 +224,12 @@ func collectImports(structs []StructInfo) []string {
 		if s.IsAlias && s.AliasKind == KindStruct {
 			add(s.AliasUnderlyingImport)
 		}
+		// streamUnknownKey emits strings.Clone(key) in every mode
+		// except pure -ignoreunknown (no inline catch-all). Add the
+		// import here so the generated file links.
+		if !s.IsAlias && (s.InlineField().Inline || !s.IgnoreUnknown) {
+			add("strings")
+		}
 		for _, f := range s.Fields {
 			collectFieldImports(f, add, &anyString, &anyValidation, &anyBytes, &anyRequired)
 			walkCustomV(f.Validation)
@@ -3487,7 +3493,10 @@ func renderCrossPkgStructStreamDecode(f FieldInfo, ref, posVar string) string {
 		case f.Iface.JSONUnmarshaler:
 			return fmt.Sprintf(`{
 	start := %s
+	prevPin := s.Shift
+	s.Shift = false
 	%s, err = s.SkipValue(start)
+	s.Shift = prevPin
 	if err != nil { return result, i, err }
 	if err = %s.UnmarshalJSON(s.Bytes()[start:%s]); err != nil { return result, i, err }
 }
@@ -3505,7 +3514,10 @@ func renderCrossPkgStructStreamDecode(f FieldInfo, ref, posVar string) string {
 		default:
 			return fmt.Sprintf(`{
 	start := %s
+	prevPin := s.Shift
+	s.Shift = false
 	%s, err = s.SkipValue(start)
+	s.Shift = prevPin
 	if err != nil { return result, i, err }
 	if err = json.Unmarshal(s.Bytes()[start:%s], &%s); err != nil { return result, i, err }
 }
@@ -3515,7 +3527,10 @@ func renderCrossPkgStructStreamDecode(f FieldInfo, ref, posVar string) string {
 	// Unresolved (AST-only) — plain encoding/json fallback.
 	return fmt.Sprintf(`{
 	start := %s
+	prevPin := s.Shift
+	s.Shift = false
 	%s, err = s.SkipValue(start)
+	s.Shift = prevPin
 	if err != nil { return result, i, err }
 	if err = json.Unmarshal(s.Bytes()[start:%s], &%s); err != nil { return result, i, err }
 }
@@ -4306,11 +4321,18 @@ func renderStreamDecodeStruct(b *bytes.Buffer, s StructInfo) {
 	var pl bytes.Buffer
 	renderPostLoop(&pl, s)
 	plStr := pl.String()
+	// Dispatch happens IMMEDIATELY after KeyView so the alias is still
+	// valid when the switch compares it against constants. Each case
+	// body opens with s.ConsumeColon — that's where the buffer may
+	// compact (via SkipSpace's internal shift) and where the alias
+	// dies. Cases that capture key (inline catch-all, UnknownKeyError
+	// in multierr/immediate-return paths) must clone BEFORE
+	// ConsumeColon.
 	fmt.Fprintf(b, `i, err := s.ObjectOpen(i)
 if err != nil { return result, i, err }
 i, err = s.SkipSpace(i)
 if err != nil { return result, i, err }
-if i >= len(s.Bytes()) { if err = s.ReadMore(); err != nil { return result, i, err } }
+if i >= len(s.Bytes()) { if err = s.ReadMore(i); err != nil { return result, i, err }; i = 0 }
 if s.Bytes()[i] == '}' {
 %sreturn result, i + 1, nil
 }
@@ -4318,15 +4340,9 @@ for {
 	var key string
 	key, i, err = s.KeyView(i)
 	if err != nil { return result, i, err }
-	i, err = s.SkipSpace(i)
-	if err != nil { return result, i, err }
-	if i >= len(s.Bytes()) { if err = s.ReadMore(); err != nil { return result, i, err } }
-	if s.Bytes()[i] != ':' { return result, i, scan.ErrBadObject }
-	i, err = s.SkipSpace(i + 1)
-	if err != nil { return result, i, err }
 	%s	i, err = s.SkipSpace(i)
 	if err != nil { return result, i, err }
-	if i >= len(s.Bytes()) { if err = s.ReadMore(); err != nil { return result, i, err } }
+	if i >= len(s.Bytes()) { if err = s.ReadMore(i); err != nil { return result, i, err }; i = 0 }
 	c := s.Bytes()[i]
 	if c == ',' {
 		i, err = s.SkipSpace(i + 1)
@@ -4355,7 +4371,10 @@ func renderStreamDispatch(s StructInfo) string {
 	}
 	slices.Sort(lens)
 
+	// Each known-key case opens with s.ConsumeColon — the alias is no
+	// longer needed past this point, so the shift it triggers is safe.
 	emitField := func(b *bytes.Buffer, f FieldInfo, parse string) {
+		b.WriteString("i, err = s.ConsumeColon(i)\nif err != nil { return result, i, err }\n")
 		if f.Inline || !needsSeen(f) {
 			b.WriteString(parse)
 			return
@@ -4433,10 +4452,10 @@ func renderStreamMap(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	fmt.Fprintf(b, `{
 %[1]s, err = s.SkipSpace(%[1]s)
 if err != nil { return result, i, err }
-if %[1]s >= len(s.Bytes()) { if err = s.ReadMore(); err != nil { return result, i, err } }
+if %[1]s >= len(s.Bytes()) { if err = s.ReadMore(0); err != nil { return result, i, err } }
 if s.Bytes()[%[1]s] == 'n' {
 	for ki := 1; ki < 4; ki++ {
-		if %[1]s+ki >= len(s.Bytes()) { if err = s.ReadMore(); err != nil { return result, i, err } }
+		if %[1]s+ki >= len(s.Bytes()) { if err = s.ReadMore(0); err != nil { return result, i, err } }
 		if s.Bytes()[%[1]s+ki] != "null"[ki] { return result, i, scan.ErrBadLiteral }
 	}
 	%[1]s += 4
@@ -4445,7 +4464,7 @@ if s.Bytes()[%[1]s] == 'n' {
 	if err != nil { return result, i, err }
 	%[1]s, err = s.SkipSpace(%[1]s)
 	if err != nil { return result, i, err }
-	if %[1]s >= len(s.Bytes()) { if err = s.ReadMore(); err != nil { return result, i, err } }
+	if %[1]s >= len(s.Bytes()) { if err = s.ReadMore(0); err != nil { return result, i, err } }
 	if s.Bytes()[%[1]s] == '}' {
 		%[2]s = %[3]s{}
 	} else {
@@ -4457,7 +4476,7 @@ if s.Bytes()[%[1]s] == 'n' {
 		if err != nil { return result, i, err }
 		%[5]s		%[1]s, err = s.SkipSpace(%[1]s)
 		if err != nil { return result, i, err }
-		if %[1]s >= len(s.Bytes()) { if err = s.ReadMore(); err != nil { return result, i, err } }
+		if %[1]s >= len(s.Bytes()) { if err = s.ReadMore(0); err != nil { return result, i, err } }
 		if s.Bytes()[%[1]s] != ':' { return result, i, scan.ErrBadObject }
 		%[1]s, err = s.SkipSpace(%[1]s + 1)
 		if err != nil { return result, i, err }
@@ -4516,7 +4535,10 @@ if err != nil { return result, i, err }
 `, f.ElemType, posVar, posVar, mapTarget)
 		} else {
 			fmt.Fprintf(b, `start := %s
+prevPin := s.Shift
+	s.Shift = false
 %s, err = s.SkipValue(start)
+s.Shift = prevPin
 if err != nil { return result, i, err }
 var mv %s
 if err := json.Unmarshal(s.Bytes()[start:%s], &mv); err != nil { return result, i, err }
@@ -4539,7 +4561,7 @@ if err != nil { return result, i, err }
 	}
 	fmt.Fprintf(b, `		%[1]s, err = s.SkipSpace(%[1]s)
 		if err != nil { return result, i, err }
-		if %[1]s >= len(s.Bytes()) { if err = s.ReadMore(); err != nil { return result, i, err } }
+		if %[1]s >= len(s.Bytes()) { if err = s.ReadMore(0); err != nil { return result, i, err } }
 		if s.Bytes()[%[1]s] == ',' { %[1]s, err = s.SkipSpace(%[1]s + 1); if err != nil { return result, i, err }; continue }
 		break
 	}
@@ -4559,7 +4581,7 @@ func renderStreamBytes(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	if err != nil { return result, i, err }
 	%s, err = s.SkipSpace(%s)
 	if err != nil { return result, i, err }
-	if %s >= len(s.Bytes()) { if err = s.ReadMore(); err != nil { return result, i, err } }
+	if %s >= len(s.Bytes()) { if err = s.ReadMore(0); err != nil { return result, i, err } }
 	for s.Bytes()[%s] != ']' {
 		var v uint64
 		v, %s, err = s.Uint64(%s)
@@ -4567,7 +4589,7 @@ func renderStreamBytes(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 		%s = append(%s, byte(v))
 		%s, err = s.SkipSpace(%s)
 		if err != nil { return result, i, err }
-		if %s >= len(s.Bytes()) { if err = s.ReadMore(); err != nil { return result, i, err } }
+		if %s >= len(s.Bytes()) { if err = s.ReadMore(0); err != nil { return result, i, err } }
 		if s.Bytes()[%s] == ',' { %s, err = s.SkipSpace(%s + 1); if err != nil { return result, i, err }; continue }
 		break
 	}
@@ -4728,12 +4750,17 @@ func renderStreamNetipPrefix(b *bytes.Buffer, ref, posVar string) {
 }
 
 // renderStreamRawJSON copies the stream's buffer span into the
-// field. ReadMore never shifts, so start stays valid against the
-// buffer for the duration of SkipValue.
+// field. Stream methods compact in-place via ReadMore(keep>0), which
+// would invalidate the absolute `start` offset — pin the buffer with
+// s.Shift = false for the duration of SkipValue so the captured
+// span stays valid.
 func renderStreamRawJSON(b *bytes.Buffer, ref, posVar string) {
 	fmt.Fprintf(b, `{
 	start := %s
+	prevPin := s.Shift
+	s.Shift = false
 	%s, err = s.SkipValue(start)
+	s.Shift = prevPin
 	if err != nil { return result, i, err }
 	raw := s.Bytes()[start:%s]
 	%s = append(make([]byte, 0, len(raw)), raw...)
@@ -4756,7 +4783,10 @@ func renderStreamURL(b *bytes.Buffer, ref, posVar string) {
 func renderStreamBigInt(b *bytes.Buffer, ref, posVar string) {
 	fmt.Fprintf(b, `{
 	start := %s
+	prevPin := s.Shift
+	s.Shift = false
 	%s, err = s.SkipValue(start)
+	s.Shift = prevPin
 	if err != nil { return result, i, err }
 	buf := s.Bytes()
 	if _, ok := (&%s).SetString(unsafe.String(unsafe.SliceData(buf[start:]), %s-start), 10); !ok {
@@ -4838,10 +4868,10 @@ if err != nil { return result, i, err }
 		valExpr = "nv"
 	}
 	fmt.Fprintf(b, `{
-	if %[1]s >= len(s.Bytes()) { if err = s.ReadMore(); err != nil { return result, i, err } }
+	if %[1]s >= len(s.Bytes()) { if err = s.ReadMore(0); err != nil { return result, i, err } }
 	if s.Bytes()[%[1]s] == 'n' {
 		for ki := 1; ki < 4; ki++ {
-			if %[1]s+ki >= len(s.Bytes()) { if err = s.ReadMore(); err != nil { return result, i, err } }
+			if %[1]s+ki >= len(s.Bytes()) { if err = s.ReadMore(0); err != nil { return result, i, err } }
 			if s.Bytes()[%[1]s+ki] != "null"[ki] { return result, i, scan.ErrBadLiteral }
 		}
 		%[2]s = sql.%[3]s{}
@@ -4867,29 +4897,43 @@ func renderStreamAny(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 }
 
 // streamUnknownKey is the stream-scanner counterpart of unknownKey.
+// `key` is an alias into the stream buffer (Stream.KeyView is
+// zero-copy on the no-escape happy path). ConsumeColon shifts the
+// buffer and invalidates the alias, so any value that survives past
+// that shift — stored map keys, retained errors — must hold an owned
+// copy, captured BEFORE ConsumeColon runs. The immediate-return
+// branch is safe to read the alias directly since the function exits
+// before any subsequent Stream call.
 func streamUnknownKey(s StructInfo, posVar string) string {
 	if inline := s.InlineField(); inline.Inline {
 		anyFn := "s.Any"
 		if s.UseNumber {
 			anyFn = "s.AnyNumber"
 		}
-		return fmt.Sprintf(`if result.%s == nil { result.%s = make(%s) }
-result.%s[key], %s, err = %s(%s)
+		return fmt.Sprintf(`ownKey := strings.Clone(key)
+%s, err = s.ConsumeColon(%s)
 if err != nil { return result, i, err }
-`, inline.GoName, inline.GoName, inline.GoType, inline.GoName, posVar, anyFn, posVar)
+if result.%s == nil { result.%s = make(%s) }
+result.%s[ownKey], %s, err = %s(%s)
+if err != nil { return result, i, err }
+`, posVar, posVar, inline.GoName, inline.GoName, inline.GoType, inline.GoName, posVar, anyFn, posVar)
 	}
 	if s.IgnoreUnknown {
-		return fmt.Sprintf(`%s, err = s.SkipValue(%s)
+		return fmt.Sprintf(`%s, err = s.ConsumeColon(%s)
 if err != nil { return result, i, err }
-`, posVar, posVar)
-	}
-	if s.MultiErr {
-		return fmt.Sprintf(`errs = append(errs, &validation.UnknownKeyError{Field: key})
 %s, err = s.SkipValue(%s)
 if err != nil { return result, i, err }
-`, posVar, posVar)
+`, posVar, posVar, posVar, posVar)
 	}
-	return "return result, i, &validation.UnknownKeyError{Field: key}\n"
+	if s.MultiErr {
+		return fmt.Sprintf(`errs = append(errs, &validation.UnknownKeyError{Field: strings.Clone(key)})
+%s, err = s.ConsumeColon(%s)
+if err != nil { return result, i, err }
+%s, err = s.SkipValue(%s)
+if err != nil { return result, i, err }
+`, posVar, posVar, posVar, posVar)
+	}
+	return "return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}\n"
 }
 
 func renderStreamStringTag(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
@@ -4959,10 +5003,10 @@ func renderStreamField(f FieldInfo, ref, posVar string) string {
 		builtinM, customM := partitionCustomMods(f.Mods)
 		inner.Validation = builtinV
 		inner.Mods = builtinM
-		block := fmt.Sprintf(`if %[1]s >= len(s.Bytes()) { if err = s.ReadMore(); err != nil { return result, i, err } }
+		block := fmt.Sprintf(`if %[1]s >= len(s.Bytes()) { if err = s.ReadMore(0); err != nil { return result, i, err } }
 if s.Bytes()[%[1]s] == 'n' {
 	for ki := 1; ki < 4; ki++ {
-		if %[1]s+ki >= len(s.Bytes()) { if err = s.ReadMore(); err != nil { return result, i, err } }
+		if %[1]s+ki >= len(s.Bytes()) { if err = s.ReadMore(0); err != nil { return result, i, err } }
 		if s.Bytes()[%[1]s+ki] != "null"[ki] { return result, i, scan.ErrBadLiteral }
 	}
 	%[1]s = 4 + %[1]s
@@ -5100,10 +5144,10 @@ func emitStreamSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth
 		// `null` → leave slice nil and consume the literal.
 		fmt.Fprintf(b, `%[1]s, %[2]s = s.SkipSpace(%[1]s)
 if %[2]s != nil { return result, i, %[2]s }
-if %[1]s >= len(s.Bytes()) { if %[2]s = s.ReadMore(); %[2]s != nil { return result, i, %[2]s } }
+if %[1]s >= len(s.Bytes()) { if %[2]s = s.ReadMore(0); %[2]s != nil { return result, i, %[2]s } }
 if s.Bytes()[%[1]s] == 'n' {
 	for ki := 1; ki < 4; ki++ {
-		if %[1]s+ki >= len(s.Bytes()) { if %[2]s = s.ReadMore(); %[2]s != nil { return result, i, %[2]s } }
+		if %[1]s+ki >= len(s.Bytes()) { if %[2]s = s.ReadMore(0); %[2]s != nil { return result, i, %[2]s } }
 		if s.Bytes()[%[1]s+ki] != "null"[ki] { return result, i, scan.ErrBadLiteral }
 	}
 	%[1]s += 4
@@ -5114,7 +5158,7 @@ if s.Bytes()[%[1]s] == 'n' {
 if %[2]s != nil { return result, i, %[2]s }
 %[1]s, %[2]s = s.SkipSpace(%[1]s)
 if %[2]s != nil { return result, i, %[2]s }
-if %[1]s >= len(s.Bytes()) { if %[2]s = s.ReadMore(); %[2]s != nil { return result, i, %[2]s } }
+if %[1]s >= len(s.Bytes()) { if %[2]s = s.ReadMore(0); %[2]s != nil { return result, i, %[2]s } }
 `, kvar, errvar, posVar)
 	if isArray {
 		fmt.Fprintf(b, "var %s int\n", ivar)
@@ -5159,16 +5203,16 @@ if %[1]s >= len(s.Bytes()) { if %[2]s = s.ReadMore(); %[2]s != nil { return resu
 		if isArray {
 			nilAssign = fmt.Sprintf("%s[%s] = nil\n%s++\n", dst, ivar, ivar)
 		}
-		fmt.Fprintf(b, `if %[1]s >= len(s.Bytes()) { if %[2]s = s.ReadMore(); %[2]s != nil { return result, i, %[2]s } }
+		fmt.Fprintf(b, `if %[1]s >= len(s.Bytes()) { if %[2]s = s.ReadMore(0); %[2]s != nil { return result, i, %[2]s } }
 if s.Bytes()[%[1]s] == 'n' {
 	for ki := 1; ki < 4; ki++ {
-		if %[1]s+ki >= len(s.Bytes()) { if %[2]s = s.ReadMore(); %[2]s != nil { return result, i, %[2]s } }
+		if %[1]s+ki >= len(s.Bytes()) { if %[2]s = s.ReadMore(0); %[2]s != nil { return result, i, %[2]s } }
 		if s.Bytes()[%[1]s+ki] != "null"[ki] { return result, i, scan.ErrBadLiteral }
 	}
 	%[1]s += 4
 	%[3]s	%[1]s, %[2]s = s.SkipSpace(%[1]s)
 	if %[2]s != nil { return result, i, %[2]s }
-	if %[1]s >= len(s.Bytes()) { if %[2]s = s.ReadMore(); %[2]s != nil { return result, i, %[2]s } }
+	if %[1]s >= len(s.Bytes()) { if %[2]s = s.ReadMore(0); %[2]s != nil { return result, i, %[2]s } }
 	if s.Bytes()[%[1]s] == ',' { %[1]s, %[2]s = s.SkipSpace(%[1]s + 1); if %[2]s != nil { return result, i, %[2]s }; continue }
 	break
 }
@@ -5270,7 +5314,7 @@ if %[3]s != nil { return result, i, %[3]s }
 	}
 	fmt.Fprintf(b, `%[1]s, %[2]s = s.SkipSpace(%[1]s)
 if %[2]s != nil { return result, i, %[2]s }
-if %[1]s >= len(s.Bytes()) { if %[2]s = s.ReadMore(); %[2]s != nil { return result, i, %[2]s } }
+if %[1]s >= len(s.Bytes()) { if %[2]s = s.ReadMore(0); %[2]s != nil { return result, i, %[2]s } }
 if s.Bytes()[%[1]s] == ',' { %[1]s, %[2]s = s.SkipSpace(%[1]s + 1); if %[2]s != nil { return result, i, %[2]s }; continue }
 break
 }

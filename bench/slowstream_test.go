@@ -126,6 +126,11 @@ func BenchmarkSlowStream_Valid(b *testing.B) {
 			var v NodePlain
 			return sonic.ConfigDefault.NewDecoder(s.r).Decode(&v)
 		}},
+		{"sonic_fast", func(s *slowState) error {
+			s.r.reset()
+			var v NodePlain
+			return sonic.ConfigFastest.NewDecoder(s.r).Decode(&v)
+		}},
 		{"easyjson", func(s *slowState) error {
 			s.r.reset()
 			var v Node
@@ -200,6 +205,11 @@ func BenchmarkSlowStream_Invalid(b *testing.B) {
 			s.r.reset()
 			var v Validated
 			return sonic.ConfigDefault.NewDecoder(s.r).Decode(&v)
+		}, false},
+		{"sonic_fast", func(s *slowState) error {
+			s.r.reset()
+			var v Validated
+			return sonic.ConfigFastest.NewDecoder(s.r).Decode(&v)
 		}, false},
 	}
 

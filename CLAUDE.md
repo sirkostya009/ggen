@@ -59,22 +59,51 @@ methods use the hand-rolled `scan` package directly.
 - `String()` uses `unsafe.String(unsafe.SliceData(data[start:]), len)` for
   zero-copy aliasing when no escape sequences. Falls back to `stringSlow`
   with `utf8.AppendRune` for `\uXXXX` + surrogates.
-- `Stream` type wraps `io.Reader` with a growable internal buffer (`buf []byte`
-  grown via `append`). The single I/O primitive is `ReadMore() error`:
-  one Read call, grows buf when full, NEVER loops, NEVER shifts. Buffer
-  offsets are stable across calls — `_start` saved before a SkipValue
-  is still valid after, so RawJSON capture trivially copies
-  `buf[_start:_k]` out at the end.
+- `Stream` type wraps `io.Reader` with a growable internal buffer
+  (`buf []byte` grown via `append`). The single I/O primitive is
+  `ReadMore(keep int) error`: one Read call per invocation, never
+  loops. `keep` is the lowest offset the caller still needs — bytes
+  before it are eligible for discard:
+    - `keep == 0` grows without shifting (alloc bigger backing if
+      currently full). Buffer offsets stay stable; aliases survive.
+    - `keep == len(buf)` resets the buffer to `[:0]` and refills
+      from offset 0. Same effect as a full compaction.
+    - `0 < keep < len(buf)` performs an in-place `memmove` of
+      `buf[keep:n]` down to `buf[0:n-keep]`, then reads into the
+      freed tail. Aliases into the buffer are invalidated whenever
+      `keep > 0` — the bytes physically move on the same backing
+      array, so any string alias the caller still holds points at
+      wrong content after the call.
+  Internal Stream methods compact aggressively: `SkipSpace`,
+  `ConsumeColon`, `Int64`/`Uint64`, and `String`/`KeyView` all pass
+  a non-zero `keep` (current cursor `i`, or the value-start `start`
+  for spans that need to outlast the loop) so the buffer stays
+  bounded at roughly `max(chunk_size, single_value_size)` even
+  across long streams. Each method updates its own cursors after
+  the shift (`i = 0`, or `j -= start; start = 0` for the
+  string-body case). The `noShift` mode disables this for `SkipValue`
+  inside RawJSON capture and `json.Unmarshal` fallback spans, where
+  the generated code needs stable absolute offsets to slice
+  `s.Bytes()[start:i]`; bookkeeping branches in SkipSpace/etc check
+  `s.noShift` before resetting the cursor.
+  Generated code adds two more shift points at the dispatch-loop
+  boundary: `ReadMore(i); i = 0` after `ObjectOpen+SkipSpace` and
+  after the per-iteration value decode + SkipSpace. Each known-key
+  case opens with `s.ConsumeColon(i)` — the alias from `KeyView` is
+  no longer needed past dispatch, so the shift it triggers is safe.
+  `UnknownKeyError` and the inline-catch-all map key both detach
+  the alias with `strings.Clone(key)` so subsequent compactions
+  don't corrupt the stored value.
   Each `(*Stream).X(i)` method does its own bounds check (`if i >=
-  len(s.buf) { ... ReadMore() ... }`) and proceeds once one new byte
-  has landed. Multi-byte literals (`true`, `false`, `null`,
+  len(s.buf) { ... ReadMore(i) ... }`) and proceeds once one new
+  byte has landed. Multi-byte literals (`true`, `false`, `null`,
   `\uXXXX`) are scanned **byte-by-byte**: each char triggers an
-  individual bounds check + maybe ReadMore, and a mismatch fails fast
-  without fetching the rest. This is the lazy-streaming property —
-  parse-what-you-have, fetch one chunk only when truly stuck. See
-  "tried and rejected" for the older `Ensure(p *int, n int)` +
-  `Anchor`/`Unanchor` design that bulk-fetched N bytes via an
-  internal Read loop.
+  individual bounds check + maybe ReadMore, and a mismatch fails
+  fast without fetching the rest. This is the lazy-streaming
+  property — parse-what-you-have, fetch one chunk only when truly
+  stuck. See "tried and rejected" for the older `Ensure(p *int, n
+  int)` + `Anchor`/`Unanchor` design that bulk-fetched N bytes via
+  an internal Read loop.
 - `Stream` is **stack-allocatable**, no internal pool: `var s scan.Stream;
   s.Reset(r, buf)`. Caller owns `buf` lifecycle. There used to be an
   `Acquire`/`Release` pair around a `sync.Pool` of Streams; the pool was
@@ -1176,15 +1205,18 @@ their generated code.
   The anchor mechanism plus `*int` cursor adjustment across shifts
   was a constant source of stale-position bugs (e.g. the Float64 /
   Number paths needed `&start` not `&i`, or the buffer would silently
-  drop the digit prefix mid-parse). Replaced with `ReadMore() error`
-  — single Read, grows when full, never shifts — and **byte-by-byte
-  multi-byte literal scans** at the parser level. Bounded streaming is
-  gone (the buffer just grows to the size of the largest payload-or-
-  field), but `RawJSON` capture works trivially because offsets are
-  stable. Performance lands within noise of the bulk-fetch baseline
-  (~34 ms Mega Stream); fail-fast is preserved (~67 ms vs ~78 ms
-  ReadAll on invalid payload). Don't reintroduce a bulk-fetch primitive
-  without a fail-fast story that doesn't regress lazy semantics.
+  drop the digit prefix mid-parse). Replaced with `ReadMore(keep int)
+  error` — single Read per call, optionally compacts in-place when
+  the caller passes `keep > 0` — and **byte-by-byte multi-byte
+  literal scans** at the parser level. The simpler `ReadMore()` /
+  never-shift shape shipped briefly before this; the `keep` parameter
+  came back specifically to bound buffer growth on long streams
+  without resurrecting Ensure's bulk-fetch loop. Internal Stream
+  methods still pass `keep=0` (grow-only) so caller cursors stay
+  valid; only the top-level dispatch-loop bounds checks compact.
+  Fail-fast is preserved (~67 ms vs ~78 ms ReadAll on invalid
+  payload). Don't reintroduce a bulk-fetch primitive without a
+  fail-fast story that doesn't regress lazy semantics.
 
 - **Stream `Acquire`/`Release` pool with reused buffer.** Originally
   `scan.Acquire(r, hint)` returned a pooled `*Stream` and `Release`
