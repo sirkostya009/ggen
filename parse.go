@@ -147,8 +147,7 @@ func loadDirWithTypes(dir string) (*structSet, error) {
 	cfg := &packages.Config{
 		Dir: dir,
 		Mode: packages.NeedName | packages.NeedFiles | packages.NeedSyntax |
-			packages.NeedTypes | packages.NeedTypesInfo | packages.NeedDeps |
-			packages.NeedImports,
+			packages.NeedTypes | packages.NeedTypesInfo | packages.NeedImports,
 		Tests: true,
 	}
 	pkgs, err := packages.Load(cfg, ".")
