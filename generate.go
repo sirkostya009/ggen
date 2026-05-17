@@ -11,11 +11,6 @@ import (
 	"sync"
 )
 
-// filePool recycles the bytes.Buffer that holds the entire rendered
-// template before goimports runs over it. One per generate() call —
-// pooling matters when the binary processes many packages in one walk.
-var filePool = sync.Pool{New: func() any { return new(bytes.Buffer) }}
-
 // smallPool recycles bytes.Buffer for the per-renderer temp buffers.
 // bytes.Buffer.Reset() truncates buf to [:0] so the underlying array's
 // capacity carries across Get/Put cycles — first call after a Put hits
@@ -23,7 +18,11 @@ var filePool = sync.Pool{New: func() any { return new(bytes.Buffer) }}
 // returns a fresh copy of the bytes (unlike strings.Builder.String()
 // which aliases), so reusing the buf after Put can't corrupt prior
 // callers' returned strings.
-var smallPool = sync.Pool{New: func() any { return new(bytes.Buffer) }}
+var smallPool = sync.Pool{New: func() any {
+	b := new(bytes.Buffer)
+	b.Grow(512)
+	return b
+}}
 
 func getSmall() *bytes.Buffer {
 	b := smallPool.Get().(*bytes.Buffer)
@@ -33,28 +32,12 @@ func getSmall() *bytes.Buffer {
 
 func putSmall(b *bytes.Buffer) { smallPool.Put(b) }
 
-func getFileBuf() *bytes.Buffer {
-	b := filePool.Get().(*bytes.Buffer)
-	b.Reset()
-	return b
-}
-
-func putFileBuf(b *bytes.Buffer) { filePool.Put(b) }
-
-// generate renders the full set of structs into Go source. The bytes
-// path materializes the result in memory (used by tests and the
-// formatted-output path that hands the buffer to go/format.Source).
-// The streaming sibling generateTo writes the prelude and each
-// per-struct body to w as separate calls — saving one large copy
-// when format.Source is disabled.
-func generate(pkg string, structs []StructInfo) ([]byte, error) {
-	var buf bytes.Buffer
-	if err := generateTo(&buf, pkg, structs); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
-}
-
+// generateTo renders the full set of structs into Go source and writes
+// it to w. Prod callers (generateDir / generateSingleFile in main.go)
+// pass the destination *os.File directly. In -noformat mode the prelude,
+// oneOf decls, and each per-struct body land in w as separate Write
+// calls; in format mode the buffer is materialized so format.Source can
+// process it, then the formatted result is written in one shot.
 func generateTo(w io.Writer, pkg string, structs []StructInfo) error {
 	resetOneofRegistry()
 	// `generatedTypes` is populated by the caller before invoking generate.
@@ -105,38 +88,36 @@ func generateTo(w io.Writer, pkg string, structs []StructInfo) error {
 		tag = structs[0].BuildTag
 	}
 
+	count := 0
+	buf := &bytes.Buffer{}
 	// Render each struct into its own pool-borrowed buffer. The bodies
 	// concatenate into the file (or stream straight to it) in struct
 	// order after the prelude. Per-struct buffers (rather than one big
 	// shared one) keep this loop straightforward and let the streaming
 	// noFormat path avoid an extra copy.
-	bodies := make([]*bytes.Buffer, len(structs))
+	bodies := make([][]byte, len(structs))
 	for i := range structs {
-		b := getSmall()
-		renderStructMethods(b, structs[i])
-		bodies[i] = b
+		renderStructMethods(buf, structs[i])
+		count += buf.Len()
+		bodies[i] = bytes.Clone(buf.Bytes())
+		buf.Reset()
 	}
 
-	// Imports come from StructInfo features, not a body scan — so the
-	// full prelude (build-tag + generated marker + package decl +
-	// sorted import block) can be emitted before any struct body.
-	prelude := buildPrelude(pkg, tag, collectImports(structs))
-
+	stdlib, third := collectImports(structs)
 	if noFormat {
+		if err := writePrelude(w, pkg, tag, stdlib, third); err != nil {
+			return err
+		}
 		// Stream prelude → oneOf decls → each per-struct body straight
 		// to w. Each Write is its own syscall (for *os.File) — the
 		// caller doesn't pay for one big buf-into-file copy.
-		if _, err := w.Write(prelude); err != nil {
-			return err
-		}
 		for _, decl := range oneofRegistry.decls {
 			if _, err := io.WriteString(w, decl+"\n"); err != nil {
 				return err
 			}
 		}
 		for _, body := range bodies {
-			_, err := w.Write(body.Bytes())
-			putSmall(body)
+			_, err := w.Write(body)
 			if err != nil {
 				return err
 			}
@@ -145,17 +126,22 @@ func generateTo(w io.Writer, pkg string, structs []StructInfo) error {
 	}
 
 	// format.Source needs the whole file in one []byte. Build a single
-	// buffer, format it, then write the formatted result to w.
-	buf := getFileBuf()
-	defer putFileBuf(buf)
-	buf.Write(prelude)
+	// buffer, format it, then write the formatted result to w. Pre-grow
+	// once to fit the per-struct body sum so the concat loop doesn't
+	// trip the geometric-grow chain — the prelude + oneOf headroom is
+	// noise next to the body sum. *bytes.Buffer never errors on Write
+	// so the writePrelude error is unconditionally nil here, but the
+	// returned err keeps the signature uniform with the noFormat path.
+	if err := writePrelude(buf, pkg, tag, stdlib, third); err != nil {
+		return err
+	}
 	for _, decl := range oneofRegistry.decls {
 		buf.WriteString(decl)
 		buf.WriteByte('\n')
 	}
+	buf.Grow(count)
 	for _, body := range bodies {
-		buf.Write(body.Bytes())
-		putSmall(body)
+		buf.Write(body)
 	}
 	src, err := format.Source(buf.Bytes())
 	if err != nil {
@@ -165,25 +151,70 @@ func generateTo(w io.Writer, pkg string, structs []StructInfo) error {
 	return err
 }
 
-// buildPrelude emits the file header (build-tag, generated marker,
-// package decl, import block). Returns the assembled []byte. Caller
-// concatenates with the rendered body before formatting.
-func buildPrelude(pkg, buildTag string, imports []string) []byte {
-	// Worst-case 256 bytes for the fixed parts (marker, package) + 64
-	// bytes per import path. Pre-sizes the underlying array so the
-	// appends don't trigger the geometric grow chain.
-	cap := 256 + len(imports)*64 + len(buildTag)
-	out := make([]byte, 0, cap)
-	out = append(out, "// Code generated by ggen; DO NOT EDIT.\n\n"...)
-	if buildTag != "" {
-		out = append(out, "//go:build "...)
-		out = append(out, buildTag...)
-		out = append(out, "\n\n"...)
+// writePrelude emits the file header (build-tag, generated marker,
+// package decl, import block) straight to w. Returns the first I/O
+// error: writes against the destination *os.File (noFormat path) can
+// fail on disk-full / broken-pipe; writes against *bytes.Buffer (format
+// path) cannot, but the signature stays unified.
+func writePrelude(w io.Writer, pkg, buildTag string, stdlib, third []string) error {
+	write := func(s string) error {
+		_, err := io.WriteString(w, s)
+		return err
 	}
-	out = append(out, "package "...)
-	out = append(out, pkg...)
-	out = append(out, "\n\n"...)
-	return appendImportBlock(out, imports)
+	if err := write("// Code generated by ggen; DO NOT EDIT.\n\n"); err != nil {
+		return err
+	}
+	if buildTag != "" {
+		if err := write("//go:build "); err != nil {
+			return err
+		}
+		if err := write(buildTag); err != nil {
+			return err
+		}
+		if err := write("\n\n"); err != nil {
+			return err
+		}
+	}
+	if err := write("package "); err != nil {
+		return err
+	}
+	if err := write(pkg); err != nil {
+		return err
+	}
+	if err := write("\n\n"); err != nil {
+		return err
+	}
+	if len(stdlib) == 0 && len(third) == 0 {
+		return nil
+	}
+	if err := write("import (\n"); err != nil {
+		return err
+	}
+	writeQuotedLine := func(p string) error {
+		if err := write("\t\""); err != nil {
+			return err
+		}
+		if err := write(p); err != nil {
+			return err
+		}
+		return write("\"\n")
+	}
+	for _, p := range stdlib {
+		if err := writeQuotedLine(p); err != nil {
+			return err
+		}
+	}
+	if len(stdlib) > 0 && len(third) > 0 {
+		if err := write("\n"); err != nil {
+			return err
+		}
+	}
+	for _, p := range third {
+		if err := writeQuotedLine(p); err != nil {
+			return err
+		}
+	}
+	return write(")\n\n")
 }
 
 // renderStructMethods writes the full method set for a single struct
@@ -192,21 +223,13 @@ func buildPrelude(pkg, buildTag string, imports []string) []byte {
 // hooks) so a hand-rolled write is cheaper than the prior text/template
 // dispatch through reflect.Value.Call.
 func renderStructMethods(buf *bytes.Buffer, s StructInfo) {
-	fmt.Fprintf(buf, "func (%s) DecodeFrom(data []byte, i int) (%s, int, error) {\n", s.Name, s.Name)
 	renderDecode(buf, s)
-	buf.WriteString("}\n\n")
 
-	fmt.Fprintf(buf, "func (%s) DecodeStreamFrom(s *scan.Stream, i int) (%s, int, error) {\n", s.Name, s.Name)
 	renderStreamDecode(buf, s)
-	buf.WriteString("}\n\n")
 
-	fmt.Fprintf(buf, "func (s %s) JSONSize() int {\n", s.Name)
 	renderSize(buf, s)
-	buf.WriteString("}\n\n")
 
-	fmt.Fprintf(buf, "func (s %s) AppendJSON(dst []byte) ([]byte, error) {\n", s.Name)
 	renderAppendJSON(buf, s)
-	buf.WriteString("}\n\n")
 
 	if s.Marshal {
 		fmt.Fprintf(buf, "func (s %s) MarshalJSON() ([]byte, error) {\n\treturn encode.Marshal(s)\n}\n\n", s.Name)
@@ -222,7 +245,7 @@ func renderStructMethods(buf *bytes.Buffer, s StructInfo) {
 // underlyings, custom-func packages) — no body-scan required, so the
 // prelude can be assembled before tmpl.Execute and the body can be
 // appended in place.
-func collectImports(structs []StructInfo) []string {
+func collectImports(structs []StructInfo) ([]string, []string) {
 	need := map[string]struct{}{
 		// scan + encode are emitted by every generated method. They're
 		// always referenced: scan.X (or s.X for stream) in DecodeFrom,
@@ -328,11 +351,17 @@ func collectImports(structs []StructInfo) []string {
 		add("unsafe")
 	}
 	out := make([]string, 0, len(need))
+	third := make([]string, 0, len(need))
 	for p := range need {
-		out = append(out, p)
+		if isThirdParty(p) {
+			third = append(third, p)
+		} else {
+			out = append(out, p)
+		}
 	}
 	slices.Sort(out)
-	return out
+	slices.Sort(third)
+	return out, third
 }
 
 // collectFieldImports adds per-field imports. Flags get flipped for
@@ -469,58 +498,9 @@ func collectFieldImports(f FieldInfo, add func(string), anyString, anyValidation
 	}
 }
 
-// appendImportBlock appends a Go `import (...)` block to out, with
-// stdlib paths first, blank line, then third-party. Caller guarantees
-// paths are sorted alphabetically; the in-category order is preserved
-// after partitioning. Empty list appends nothing. Stdlib detection
-// mirrors gofmt convention: paths whose first segment has no `.` are
-// stdlib.
-func appendImportBlock(out []byte, paths []string) []byte {
-	if len(paths) == 0 {
-		return out
-	}
-	// Partition first — the sorted input interleaves "encoding/json"
-	// with "github.com/..." with "net" etc. alphabetically, so a
-	// single-pass scan can't tell where the stdlib group ends.
-	stdlib, third := splitStdlibThird(paths)
-	out = append(out, "import (\n"...)
-	for _, p := range stdlib {
-		out = appendQuotedLine(out, p)
-	}
-	if len(stdlib) > 0 && len(third) > 0 {
-		out = append(out, '\n')
-	}
-	for _, p := range third {
-		out = appendQuotedLine(out, p)
-	}
-	return append(out, ")\n\n"...)
-}
-
-// splitStdlibThird partitions paths into (stdlib, third-party),
-// preserving the relative order within each group. Caller passes a
-// list sorted alphabetically across both groups; each group remains
-// sorted in the output.
-func splitStdlibThird(paths []string) (stdlib, third []string) {
-	stdlib = make([]string, 0, len(paths))
-	for _, p := range paths {
-		if isThirdParty(p) {
-			third = append(third, p)
-		} else {
-			stdlib = append(stdlib, p)
-		}
-	}
-	return stdlib, third
-}
-
 func isThirdParty(p string) bool {
 	seg, _, _ := strings.Cut(p, "/")
 	return strings.ContainsRune(seg, '.')
-}
-
-func appendQuotedLine(out []byte, p string) []byte {
-	out = append(out, '\t', '"')
-	out = append(out, p...)
-	return append(out, '"', '\n')
 }
 
 // preregisterOneOfs walks all rules (top-level, dive-elem, key, inner-nested)
@@ -566,9 +546,9 @@ func isNumeric(k TypeKind) bool {
 // string`) and wrap stdlib calls with casts to the underlying primitive,
 // since `strings.TrimSpace` won't accept an `AliasString` directly.
 // Pass goType="" or goType==<primitive name> when no cast is needed.
-func renderMods(mods []ModRule, ref, goType string, kind TypeKind) string {
+func renderMods(b *bytes.Buffer, mods []ModRule, ref, goType string, kind TypeKind) {
 	if len(mods) == 0 {
-		return ""
+		return
 	}
 	// If the field is typed as a primitive alias generated in this same
 	// pass (e.g. `type AliasString string`), the field's declared kind
@@ -592,8 +572,6 @@ func renderMods(mods []ModRule, ref, goType string, kind TypeKind) string {
 		}
 		return expr
 	}
-	b := getSmall()
-	defer putSmall(b)
 	for _, m := range mods {
 		if m.Custom {
 			call := m.FuncName
@@ -647,7 +625,6 @@ func renderMods(mods []ModRule, ref, goType string, kind TypeKind) string {
 			}
 		}
 	}
-	return b.String()
 }
 
 // kindPrimitiveName returns the Go literal name for a primitive TypeKind,
@@ -730,18 +707,21 @@ func registerOneOf(parts []string) string {
 // renderValidationOn emits Go source for validation checks against the
 // variable named by ref. jsonName appears in error messages; kind selects
 // type-appropriate comparisons; multiErr switches the failure action from
-// early return to `errs = append(errs, ...)`.
-func renderValidationOn(rules []ValidationRule, ref, jsonName string, kind TypeKind, multiErr bool) string {
-	b := getSmall()
-	defer putSmall(b)
-
+// early return to `errs = append(errs, ...)`. posVar controls the return
+// shape: "" emits the top-level 2-tuple `return result, err`; any other
+// value emits the 3-tuple `return result, <posVar>, err` used by mid-
+// stream callers (slice/map element readers).
+func renderValidationOn(b *bytes.Buffer, rules []ValidationRule, ref, jsonName string, kind TypeKind, multiErr bool, posVar string) {
 	// onErr wraps a `&validation.XError{...}` literal into the appropriate
 	// failure action: append in multierr mode, early return otherwise.
 	onErr := func(errExpr string) string {
 		if multiErr {
 			return "errs = append(errs, " + errExpr + ")"
 		}
-		return "return result, " + errExpr
+		if posVar == "" {
+			return "return result, " + errExpr
+		}
+		return "return result, " + posVar + ", " + errExpr
 	}
 
 	// vstr is the source expression for the offending Value field of a
@@ -883,7 +863,6 @@ func renderValidationOn(rules []ValidationRule, ref, jsonName string, kind TypeK
 			// parser tolerant of forward-compatible rule additions.
 		}
 	}
-	return b.String()
 }
 
 func renderOneofCases(kind TypeKind, raw string) string {
@@ -1002,8 +981,10 @@ func fieldSkipExpr(f FieldInfo, ref string) string {
 }
 
 func renderAppendJSON(b *bytes.Buffer, s StructInfo) {
+	fmt.Fprintf(b, "func (s %s) AppendJSON(dst []byte) ([]byte, error) {\n", s.Name)
 	if s.IsAlias {
-		b.WriteString(renderAliasAppendJSON(s))
+		renderAliasAppendJSON(b, s)
+		b.WriteString("}\n\n")
 		return
 	}
 	// coalesceConstAppends operates on the assembled body string — fold
@@ -1012,6 +993,7 @@ func renderAppendJSON(b *bytes.Buffer, s StructInfo) {
 	var body bytes.Buffer
 	renderAppendJSONBody(&body, s)
 	b.WriteString(coalesceConstAppends(body.String()))
+	b.WriteString("}\n\n")
 }
 
 // coalesceConstAppends merges adjacent constant-bytes append lines into a
@@ -1169,7 +1151,7 @@ func renderAppendJSONBody(b *bytes.Buffer, s StructInfo) {
 				b.WriteString(code)
 			} else {
 				fmt.Fprintf(b, "dst = append(dst, %q...)\n", prefix)
-				b.WriteString(renderAppendValue(f, ref))
+				renderAppendValue(b, f, ref)
 			}
 		}
 		b.WriteString("return append(dst, '}'), nil")
@@ -1207,7 +1189,7 @@ dst = append(dst, ':')
 			b.WriteString(code)
 		} else {
 			fmt.Fprintf(b, "dst = append(dst, %q...)\n", prefix)
-			b.WriteString(renderAppendValue(f, ref))
+			renderAppendValue(b, f, ref)
 		}
 		if emit != "" {
 			b.WriteString("}\n")
@@ -1216,7 +1198,7 @@ dst = append(dst, ':')
 	b.WriteString("return append(dst, '}'), nil")
 }
 
-func renderAppendValue(f FieldInfo, ref string) string {
+func renderAppendValue(b *bytes.Buffer, f FieldInfo, ref string) {
 	if f.Pointer {
 		// null when nil; otherwise recurse into the pointee via dereference.
 		inner := f
@@ -1225,143 +1207,139 @@ func renderAppendValue(f FieldInfo, ref string) string {
 			inner.GoType = inner.PointeeType
 		}
 		innerRef := "(*" + ref + ")"
-		return fmt.Sprintf(`if %s == nil {
-	dst = append(dst, 'n', 'u', 'l', 'l')
-} else {
-	%s}
-`, ref, renderAppendValue(inner, innerRef))
+		fmt.Fprintf(b, "if %s == nil {\n\tdst = append(dst, 'n', 'u', 'l', 'l')\n} else {\n\t", ref)
+		renderAppendValue(b, inner, innerRef)
+		b.WriteString("}\n")
+		return
 	}
 	if f.String {
 		switch f.Kind {
 		case KindBool:
-			return fmt.Sprintf("if %s { dst = append(dst, '\"', 't', 'r', 'u', 'e', '\"') } else { dst = append(dst, '\"', 'f', 'a', 'l', 's', 'e', '\"') }\n", ref)
+			fmt.Fprintf(b, "if %s { dst = append(dst, '\"', 't', 'r', 'u', 'e', '\"') } else { dst = append(dst, '\"', 'f', 'a', 'l', 's', 'e', '\"') }\n", ref)
+			return
 		case KindInt:
-			return fmt.Sprintf("dst = append(dst, '\"')\ndst = strconv.AppendInt(dst, int64(%s), 10)\ndst = append(dst, '\"')\n", ref)
+			fmt.Fprintf(b, "dst = append(dst, '\"')\ndst = strconv.AppendInt(dst, int64(%s), 10)\ndst = append(dst, '\"')\n", ref)
+			return
 		case KindInt64:
-			return fmt.Sprintf("dst = append(dst, '\"')\ndst = strconv.AppendInt(dst, %s, 10)\ndst = append(dst, '\"')\n", ref)
+			fmt.Fprintf(b, "dst = append(dst, '\"')\ndst = strconv.AppendInt(dst, %s, 10)\ndst = append(dst, '\"')\n", ref)
+			return
 		case KindUint64:
-			return fmt.Sprintf("dst = append(dst, '\"')\ndst = strconv.AppendUint(dst, %s, 10)\ndst = append(dst, '\"')\n", ref)
+			fmt.Fprintf(b, "dst = append(dst, '\"')\ndst = strconv.AppendUint(dst, %s, 10)\ndst = append(dst, '\"')\n", ref)
+			return
 		case KindFloat64:
-			return fmt.Sprintf("dst = append(dst, '\"')\ndst = strconv.AppendFloat(dst, %s, 'g', -1, 64)\ndst = append(dst, '\"')\n", ref)
+			fmt.Fprintf(b, "dst = append(dst, '\"')\ndst = strconv.AppendFloat(dst, %s, 'g', -1, 64)\ndst = append(dst, '\"')\n", ref)
+			return
 		}
 		// unknown/invalid combo — fall through to default
 	}
 	switch f.Kind {
 	case KindString:
-		return fmt.Sprintf("dst = append(dst, '\"')\ndst =%s(dst, %s)\n", appendStrFn(f.HTMLEscape), ref)
+		fmt.Fprintf(b, "dst = append(dst, '\"')\ndst =%s(dst, %s)\n", appendStrFn(f.HTMLEscape), ref)
 	case KindBool:
-		return fmt.Sprintf("dst = strconv.AppendBool(dst, %s)\n", ref)
+		fmt.Fprintf(b, "dst = strconv.AppendBool(dst, %s)\n", ref)
 	case KindInt, KindInt8, KindInt16, KindInt32:
-		return fmt.Sprintf("dst = strconv.AppendInt(dst, int64(%s), 10)\n", ref)
+		fmt.Fprintf(b, "dst = strconv.AppendInt(dst, int64(%s), 10)\n", ref)
 	case KindInt64:
-		return fmt.Sprintf("dst = strconv.AppendInt(dst, %s, 10)\n", ref)
+		fmt.Fprintf(b, "dst = strconv.AppendInt(dst, %s, 10)\n", ref)
 	case KindUint, KindUint8, KindUint16, KindUint32:
-		return fmt.Sprintf("dst = strconv.AppendUint(dst, uint64(%s), 10)\n", ref)
+		fmt.Fprintf(b, "dst = strconv.AppendUint(dst, uint64(%s), 10)\n", ref)
 	case KindUint64:
-		return fmt.Sprintf("dst = strconv.AppendUint(dst, %s, 10)\n", ref)
+		fmt.Fprintf(b, "dst = strconv.AppendUint(dst, %s, 10)\n", ref)
 	case KindFloat32:
-		return fmt.Sprintf("dst = strconv.AppendFloat(dst, float64(%s), 'g', -1, 64)\n", ref)
+		fmt.Fprintf(b, "dst = strconv.AppendFloat(dst, float64(%s), 'g', -1, 64)\n", ref)
 	case KindFloat64:
-		return fmt.Sprintf("dst = strconv.AppendFloat(dst, %s, 'g', -1, 64)\n", ref)
+		fmt.Fprintf(b, "dst = strconv.AppendFloat(dst, %s, 'g', -1, 64)\n", ref)
 	case KindStruct:
 		if isGenerated(f.GoType) {
-			return fmt.Sprintf("if dst, err = %s.AppendJSON(dst); err != nil { return dst, err }\n", ref)
+			fmt.Fprintf(b, "if dst, err = %s.AppendJSON(dst); err != nil { return dst, err }\n", ref)
+		} else {
+			b.WriteString(renderCrossPkgStructAppend(f, ref))
 		}
-		return renderCrossPkgStructAppend(f, ref)
 	case KindSlice, KindArray:
-		b := getSmall()
-		defer putSmall(b)
 		renderAppendSlice(b, f, ref)
-		return b.String()
 	case KindMap:
-		b := getSmall()
-		defer putSmall(b)
 		renderAppendMap(b, f, ref)
-		return b.String()
 	case KindBytes:
-		return renderAppendBytes(f, ref)
+		renderAppendBytes(b, f, ref)
 	case KindTime:
-		return renderAppendTime(f, ref)
+		renderAppendTime(b, f, ref)
 	case KindDuration:
-		return renderAppendDuration(f, ref)
+		renderAppendDuration(b, f, ref)
 	case KindNetIP, KindNetipAddr, KindNetipPrefix:
 		// All three implement encoding.TextAppender (Go 1.24+). One
 		// uniform emit path — same as the cross-pkg TextAppender branch.
-		return fmt.Sprintf(`dst = append(dst, '"')
+		fmt.Fprintf(b, `dst = append(dst, '"')
 if dst, err = %s.AppendText(dst); err != nil { return dst, err }
 dst = append(dst, '"')
 `, ref)
 	case KindRawJSON:
 		// Emit raw bytes verbatim (or "null" if empty/nil).
-		return fmt.Sprintf(`if len(%s) == 0 {
+		fmt.Fprintf(b, `if len(%s) == 0 {
 	dst = append(dst, 'n', 'u', 'l', 'l')
 } else {
 	dst = append(dst, %s...)
 }
 `, ref, ref)
 	case KindURL:
-		return fmt.Sprintf("dst = append(dst, '\"')\ndst = encode.AppendURL(dst, %s)\ndst = append(dst, '\"')\n", ref)
+		fmt.Fprintf(b, "dst = append(dst, '\"')\ndst = encode.AppendURL(dst, %s)\ndst = append(dst, '\"')\n", ref)
 	case KindBigInt:
 		// big.Int.Append takes (buf, base) and appends in place — no alloc.
-		return fmt.Sprintf("dst = (&%s).Append(dst, 10)\n", ref)
+		fmt.Fprintf(b, "dst = (&%s).Append(dst, 10)\n", ref)
 	case KindBigFloat:
 		// big.Float as JSON string — matches jsonv2's expected wire format.
 		// big.Float.Append: (buf, format byte, prec int).
-		return fmt.Sprintf("dst = append(dst, '\"')\ndst = (&%s).Append(dst, 'g', -1)\ndst = append(dst, '\"')\n", ref)
+		fmt.Fprintf(b, "dst = append(dst, '\"')\ndst = (&%s).Append(dst, 'g', -1)\ndst = append(dst, '\"')\n", ref)
 	case KindBigRat:
 		// Rat is JSON-stringified ("num/denom" or just "n" when whole).
 		// AppendText cuts ~3 allocs vs %s(dst, (&r).RatString()) — same
 		// wire shape (collapses to integer when IsInt()), but writes
 		// straight into dst instead of materializing a fresh string.
-		return fmt.Sprintf("dst = append(dst, '\"')\nif dst, err = (&%s).AppendText(dst); err != nil { return dst, err }\ndst = append(dst, '\"')\n", ref)
+		fmt.Fprintf(b, "dst = append(dst, '\"')\nif dst, err = (&%s).AppendText(dst); err != nil { return dst, err }\ndst = append(dst, '\"')\n", ref)
 	case KindSQLNull:
 		spec, ok := SQLNullSpec(f.GoType)
 		if !ok {
-			return ""
+			return
 		}
 		// Build the inner-value emit for the .X field — reuse renderAppendValue
 		// with a synthetic FieldInfo whose Kind is the inner kind.
 		innerField := FieldInfo{Kind: spec.Inner, GoType: spec.Type, Format: f.Format}
-		innerEmit := renderAppendValue(innerField, ref+"."+spec.Field)
-		return fmt.Sprintf(`if !%s.Valid {
-	dst = append(dst, 'n', 'u', 'l', 'l')
-} else {
-	%s}
-`, ref, innerEmit)
+		fmt.Fprintf(b, "if !%s.Valid {\n\tdst = append(dst, 'n', 'u', 'l', 'l')\n} else {\n\t", ref)
+		renderAppendValue(b, innerField, ref+"."+spec.Field)
+		b.WriteString("}\n")
 	case KindAny:
 		// AppendAny type-switches on common runtime types (primitives,
 		// []any, map[string]any) before falling back to encoding/json.
-		return fmt.Sprintf("if dst, err = encode.AppendAny(dst, %s); err != nil { return dst, err }\n", ref)
+		fmt.Fprintf(b, "if dst, err = encode.AppendAny(dst, %s); err != nil { return dst, err }\n", ref)
 	}
-	return ""
 }
 
 // renderAppendBytes emits marshal code for a []byte field based on format.
 // Inlines the stdlib AppendEncode call between quote bytes — the
 // previously-helper-wrapped versions saved no work over the inlined form.
-func renderAppendBytes(f FieldInfo, ref string) string {
+func renderAppendBytes(b *bytes.Buffer, f FieldInfo, ref string) {
 	switch f.Format {
 	case "", "base64":
-		return fmt.Sprintf("dst = append(dst, '\"')\ndst =base64.StdEncoding.AppendEncode(dst, %s)\ndst =append(dst, '\"')\n", ref)
+		fmt.Fprintf(b, "dst = append(dst, '\"')\ndst =base64.StdEncoding.AppendEncode(dst, %s)\ndst =append(dst, '\"')\n", ref)
 	case "base64url":
-		return fmt.Sprintf("dst = append(dst, '\"')\ndst =base64.URLEncoding.AppendEncode(dst, %s)\ndst =append(dst, '\"')\n", ref)
+		fmt.Fprintf(b, "dst = append(dst, '\"')\ndst =base64.URLEncoding.AppendEncode(dst, %s)\ndst =append(dst, '\"')\n", ref)
 	case "base32":
-		return fmt.Sprintf("dst = append(dst, '\"')\ndst =base32.StdEncoding.AppendEncode(dst, %s)\ndst =append(dst, '\"')\n", ref)
+		fmt.Fprintf(b, "dst = append(dst, '\"')\ndst =base32.StdEncoding.AppendEncode(dst, %s)\ndst =append(dst, '\"')\n", ref)
 	case "base32hex":
-		return fmt.Sprintf("dst = append(dst, '\"')\ndst =base32.HexEncoding.AppendEncode(dst, %s)\ndst =append(dst, '\"')\n", ref)
+		fmt.Fprintf(b, "dst = append(dst, '\"')\ndst =base32.HexEncoding.AppendEncode(dst, %s)\ndst =append(dst, '\"')\n", ref)
 	case "base16", "hex":
-		return fmt.Sprintf("dst = append(dst, '\"')\ndst =hex.AppendEncode(dst, %s)\ndst =append(dst, '\"')\n", ref)
+		fmt.Fprintf(b, "dst = append(dst, '\"')\ndst =hex.AppendEncode(dst, %s)\ndst =append(dst, '\"')\n", ref)
 	case "array":
-		return fmt.Sprintf(`dst = append(dst, '[')
+		fmt.Fprintf(b, `dst = append(dst, '[')
 for i, b := range %s {
 	if i > 0 { dst = append(dst, ',') }
 	dst = strconv.AppendUint(dst, uint64(b), 10)
 }
 dst = append(dst, ']')
 `, ref)
+	default:
+		// Unknown format: fall back to base64.
+		fmt.Fprintf(b, "dst = append(dst, '\"')\ndst =base64.StdEncoding.AppendEncode(dst, %s)\ndst =append(dst, '\"')\n", ref)
 	}
-	// Unknown format: fall back to base64.
-	return fmt.Sprintf("dst = append(dst, '\"')\ndst =base64.StdEncoding.AppendEncode(dst, %s)\ndst =append(dst, '\"')\n", ref)
 }
 
 // timeLayoutExpr returns the Go expression for a format value on a time.Time
@@ -1467,7 +1445,7 @@ func timeLayoutExpr(format string) (layout string, numeric string) {
 	return strconv.Quote(format), ""
 }
 
-func renderAppendTime(f FieldInfo, ref string) string {
+func renderAppendTime(b *bytes.Buffer, f FieldInfo, ref string) {
 	layout, numeric := timeLayoutExpr(f.Format)
 	if numeric != "" {
 		// `format:unix` is the seconds unit — sub-second nanos must
@@ -1476,28 +1454,31 @@ func renderAppendTime(f FieldInfo, ref string) string {
 		// `unixmilli`/`unixmicro`/`unixnano` work at integer granularity
 		// of their respective units, so plain AppendInt is correct.
 		if numeric == "Unix" {
-			return fmt.Sprintf("dst = strconv.AppendFloat(dst, float64(%s.UnixNano())/1e9, 'f', -1, 64)\n", ref)
+			fmt.Fprintf(b, "dst = strconv.AppendFloat(dst, float64(%s.UnixNano())/1e9, 'f', -1, 64)\n", ref)
+			return
 		}
-		return fmt.Sprintf("dst = strconv.AppendInt(dst, %s.%s(), 10)\n", ref, numeric)
+		fmt.Fprintf(b, "dst = strconv.AppendInt(dst, %s.%s(), 10)\n", ref, numeric)
+		return
 	}
-	return fmt.Sprintf("dst = append(dst, '\"')\ndst = %s.AppendFormat(dst, %s)\ndst = append(dst, '\"')\n", ref, layout)
+	fmt.Fprintf(b, "dst = append(dst, '\"')\ndst = %s.AppendFormat(dst, %s)\ndst = append(dst, '\"')\n", ref, layout)
 }
 
-func renderAppendDuration(f FieldInfo, ref string) string {
+func renderAppendDuration(b *bytes.Buffer, f FieldInfo, ref string) {
 	switch f.Format {
 	case "sec":
-		return fmt.Sprintf("dst = strconv.AppendFloat(dst, %s.Seconds(), 'g', -1, 64)\n", ref)
+		fmt.Fprintf(b, "dst = strconv.AppendFloat(dst, %s.Seconds(), 'g', -1, 64)\n", ref)
 	case "milli":
-		return fmt.Sprintf("dst = strconv.AppendInt(dst, %s.Milliseconds(), 10)\n", ref)
+		fmt.Fprintf(b, "dst = strconv.AppendInt(dst, %s.Milliseconds(), 10)\n", ref)
 	case "micro":
-		return fmt.Sprintf("dst = strconv.AppendInt(dst, %s.Microseconds(), 10)\n", ref)
+		fmt.Fprintf(b, "dst = strconv.AppendInt(dst, %s.Microseconds(), 10)\n", ref)
 	case "nano":
-		return fmt.Sprintf("dst = strconv.AppendInt(dst, %s.Nanoseconds(), 10)\n", ref)
+		fmt.Fprintf(b, "dst = strconv.AppendInt(dst, %s.Nanoseconds(), 10)\n", ref)
 	case "units":
-		return fmt.Sprintf("dst = append(dst, '\"')\ndst =%s(dst, %s.String())\n", appendStrFn(f.HTMLEscape), ref)
+		fmt.Fprintf(b, "dst = append(dst, '\"')\ndst =%s(dst, %s.String())\n", appendStrFn(f.HTMLEscape), ref)
+	default:
+		// jsonv2 requires an explicit format for Duration; fall back to units string.
+		fmt.Fprintf(b, "dst = %s(dst, %s.String())\n", appendStrFn(f.HTMLEscape), ref)
 	}
-	// jsonv2 requires an explicit format for Duration; fall back to units string.
-	return fmt.Sprintf("dst = %s(dst, %s.String())\n", appendStrFn(f.HTMLEscape), ref)
 }
 
 // structHasAppendFormatTime reports whether any field of s emits via
@@ -1526,8 +1507,10 @@ func structHasAppendFormatTime(s StructInfo) bool {
 // collect runtime additions into a sibling builder during the constant
 // pass and flush them after the `size := N` line is written.
 func renderSize(b *bytes.Buffer, s StructInfo) {
+	fmt.Fprintf(b, "func (s %s) JSONSize() int {\n", s.Name)
 	if s.IsAlias {
 		b.WriteString(renderAliasSize(s))
+		b.WriteString("}\n\n")
 		return
 	}
 	// Fixed overhead: braces + per-field key bytes + separating commas.
@@ -1591,8 +1574,9 @@ func renderSize(b *bytes.Buffer, s StructInfo) {
 		runtime.WriteString("}\n")
 	}
 	fmt.Fprintf(b, "size := %d\n", fixed)
-	b.WriteString(runtime.String())
-	b.WriteString("return size")
+	// b is *bytes.Buffer — WriteTo's err can't be non-nil here.
+	_, _ = runtime.WriteTo(b)
+	b.WriteString("return size\n}\n\n")
 }
 
 // appendStrFn returns the encode-pkg helper to call for emitting a JSON
@@ -2292,8 +2276,10 @@ func inlineScanString(b *bytes.Buffer, posIn, dst, posOut string) {
 // instead of a string compare per case. Whitespace skipping is inlined at
 // each hot-path site to avoid the ~5ns/call overhead dominating runtime.
 func renderDecode(b *bytes.Buffer, s StructInfo) {
+	fmt.Fprintf(b, "func (%s) DecodeFrom(data []byte, i int) (%s, int, error) {\n", s.Name, s.Name)
 	if s.IsAlias {
-		b.WriteString(renderAliasDecode(s))
+		renderAliasDecode(b, s)
+		b.WriteString("}\n\n")
 		return
 	}
 	b.WriteString("var result " + s.Name + "\n")
@@ -2334,13 +2320,14 @@ func renderDecode(b *bytes.Buffer, s StructInfo) {
 	inlineSkipWS(b, "i")
 	b.WriteString("if i >= len(data) || data[i] != ':' { return result, i, scan.ErrBadObject }\ni++\n")
 	inlineSkipWS(b, "i")
-	b.WriteString(renderDispatch(s))
+	renderDispatch(b, s)
 	inlineSkipWS(b, "i")
 	b.WriteString("if i >= len(data) { return result, i, scan.ErrBadObject }\nif data[i] == ',' { i++; ")
 	inlineSkipWS(b, "i")
 	b.WriteString("continue }\nif data[i] == '}' {\n")
 	renderPostLoop(b, s)
 	b.WriteString("return result, i + 1, nil\n}\nreturn result, i, scan.ErrBadObject\n}")
+	b.WriteString("}\n\n")
 }
 
 // renderPostLoop emits end-of-parse bookkeeping: required-field checks
@@ -2369,9 +2356,9 @@ func renderPostLoop(b *bytes.Buffer, s StructInfo) {
 // renderDispatch emits a length-first switch on len(key). For each length
 // with ≥1 field, emits a nested string switch. Single-field lengths skip the
 // nested switch and go direct to the field handler.
-func renderDispatch(s StructInfo) string {
-	byLen := map[int][]FieldInfo{}
-	var lens []int
+func renderDispatch(b *bytes.Buffer, s StructInfo) {
+	byLen := make(map[int][]FieldInfo, len(s.Fields))
+	lens := make([]int, 0, len(s.Fields))
 	for _, f := range s.Fields {
 		if f.Inline {
 			continue
@@ -2384,17 +2371,20 @@ func renderDispatch(s StructInfo) string {
 	}
 	slices.Sort(lens)
 
-	// emitField wraps the parse code with seen-tracking and dup handling.
-	// Three shapes share the same `if seen { … } else { set; parse }`
-	// skeleton — what changes is the seen-branch:
+	// emitField wraps the per-field parse code with seen-tracking and dup
+	// handling. Three shapes share the same `if seen { … } else { set;
+	// render }` skeleton — what changes is the seen-branch:
 	//   - AllowDups: skip the duplicate value via scan.SkipValue
 	//     (first-wins — the second occurrence's value is dropped).
 	//   - MultiErr: log a DuplicateKeyError AND skip, so partial decode
 	//     stays intact for the rest of the multierr accumulation.
 	//   - default: error out immediately.
-	emitField := func(b *bytes.Buffer, f FieldInfo, parse string) {
+	// `render` writes the field's decode body into b directly so the
+	// renderField call drills the same buffer instead of routing through
+	// an intermediate string.
+	emitField := func(b *bytes.Buffer, f FieldInfo) {
 		if f.Inline || !needsSeen(f) {
-			b.WriteString(parse)
+			renderField(b, f, "result."+f.GoName, "i")
 			return
 		}
 		set := seenSet(s, f)
@@ -2404,9 +2394,9 @@ func renderDispatch(s StructInfo) string {
 	i, err = scan.SkipValue(data, i)
 	if err != nil { return result, i, err }
 } else {
-	%s%s
-}
-`, seen, set, parse)
+	%s`, seen, set)
+			renderField(b, f, "result."+f.GoName, "i")
+			b.WriteString("}\n")
 			return
 		}
 		if s.MultiErr {
@@ -2415,17 +2405,16 @@ func renderDispatch(s StructInfo) string {
 	i, err = scan.SkipValue(data, i)
 	if err != nil { return result, i, err }
 } else {
-	%s%s
-}
-`, seen, f.JSONName, set, parse)
+	%s`, seen, f.JSONName, set)
+			renderField(b, f, "result."+f.GoName, "i")
+			b.WriteString("}\n")
 			return
 		}
 		fmt.Fprintf(b, `if %s { return result, i, &validation.DuplicateKeyError{Field: %q} }
-%s%s`, seen, f.JSONName, set, parse)
+%s`, seen, f.JSONName, set)
+		renderField(b, f, "result."+f.GoName, "i")
 	}
 
-	b := getSmall()
-	defer putSmall(b)
 	b.WriteString("switch len(key) {\n")
 	for _, n := range lens {
 		fs := byLen[n]
@@ -2433,7 +2422,7 @@ func renderDispatch(s StructInfo) string {
 		if len(fs) == 1 {
 			f := fs[0]
 			fmt.Fprintf(b, "if key == %q {\n", f.JSONName)
-			emitField(b, f, captureRenderField(f, "result."+f.GoName, "i"))
+			emitField(b, f)
 			b.WriteString("} else {\n")
 			b.WriteString(unknownKey(s, "i"))
 			b.WriteString("}\n")
@@ -2442,7 +2431,7 @@ func renderDispatch(s StructInfo) string {
 		b.WriteString("switch key {\n")
 		for _, f := range fs {
 			fmt.Fprintf(b, "case %q:\n", f.JSONName)
-			emitField(b, f, captureRenderField(f, "result."+f.GoName, "i"))
+			emitField(b, f)
 		}
 		b.WriteString("default:\n")
 		b.WriteString(unknownKey(s, "i"))
@@ -2451,29 +2440,22 @@ func renderDispatch(s StructInfo) string {
 	b.WriteString("default:\n")
 	b.WriteString(unknownKey(s, "i"))
 	b.WriteString("}\n")
-	return b.String()
 }
 
 // keyValidateAndMod emits mods and validation on the map key variable
-// (keyRef). The rules come from the `keys:` tag bucket. Error-return shape
-// is the 3-tuple `(result, 0, err)` that map/slice readers use, so any
-// `return result, err` baked into renderValidationOn is rewritten.
-func keyValidateAndMod(f FieldInfo, keyRef string) string {
+// (keyRef) into b. The rules come from the `keys:` tag bucket. Both
+// renderMods and renderValidationOn are called with the 3-tuple return
+// shape (posVar="i") since map readers always run mid-stream.
+func keyValidateAndMod(b *bytes.Buffer, f FieldInfo, keyRef string) {
 	if f.NoValidate || (len(f.KeyMods) == 0 && len(f.KeyValidation) == 0) {
-		return ""
+		return
 	}
-	var out bytes.Buffer
 	if len(f.KeyMods) > 0 {
-		out.WriteString(renderMods(f.KeyMods, keyRef, "string", KindString))
+		renderMods(b, f.KeyMods, keyRef, "string", KindString)
 	}
 	if len(f.KeyValidation) > 0 {
-		code := renderValidationOn(f.KeyValidation, keyRef, f.JSONName+".key", KindString, f.MultiErr)
-		if !f.MultiErr {
-			code = strings.ReplaceAll(code, "return result, ", "return result, i, ")
-		}
-		out.WriteString(code)
+		renderValidationOn(b, f.KeyValidation, keyRef, f.JSONName+".key", KindString, f.MultiErr, "i")
 	}
-	return out.String()
 }
 
 // renderMap emits map[string]V decode. Accepts `null` → leave field nil
@@ -2508,7 +2490,7 @@ func renderMap(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 		var mk string
 `, posVar, ref, f.GoType, makeExpr)
 	inlineScanString(b, posVar, "mk", posVar)
-	b.WriteString(keyValidateAndMod(f, "mk"))
+	keyValidateAndMod(b, f, "mk")
 	inlineSkipWS(b, posVar)
 	fmt.Fprintf(b, `		if %[1]s >= len(data) || data[%[1]s] != ':' { return result, i, scan.ErrBadObject }
 		%[1]s++
@@ -2582,13 +2564,10 @@ if err != nil { return result, i, err }
 	}
 	// dive-mods on mv — only for string elem; patch ref in the mod output.
 	if len(f.ElemMods) > 0 {
-		patched := strings.ReplaceAll(renderMods(f.ElemMods, "mvx", f.ElemType, f.ElemKind), "mvx", mapTarget)
-		b.WriteString(patched)
+		renderMods(b, f.ElemMods, mapTarget, f.ElemType, f.ElemKind)
 	}
 	if len(f.ElemValidation) > 0 {
-		code := renderValidationOn(f.ElemValidation, mapTarget, f.JSONName+".value", f.ElemKind, f.MultiErr)
-		code = strings.ReplaceAll(code, "return result, &validation.", "return result, i, &validation.")
-		b.WriteString(code)
+		renderValidationOn(b, f.ElemValidation, mapTarget, f.JSONName+".value", f.ElemKind, f.MultiErr, "i")
 	}
 	inlineSkipWS(b, posVar)
 	fmt.Fprintf(b, `		if %[1]s < len(data) && data[%[1]s] == ',' { %[1]s++; `, posVar)
@@ -3232,24 +3211,17 @@ if err != nil { return result, i, err }
 	return "return result, i, &validation.UnknownKeyError{Field: key}\n"
 }
 
-// validateAndMod emits mods + validation for a field inline in the decoder body.
-// Reuses renderMods / renderValidationOn; patches stop-on-first return shape
-// from "(T, error)" to "(T, int, error)". When f.MultiErr is on, the reused
-// code appends to an `errs` slice instead of returning, so no patch is
-// needed. Skipped entirely when f.NoValidate.
-func validateAndMod(f FieldInfo, ref string) string {
-	var out bytes.Buffer
+// validateAndMod emits mods + validation for a field inline in the decoder
+// body. The 3-tuple return shape `(T, int, error)` is requested via posVar="i"
+// since validation runs mid-stream where the decoder needs to thread the
+// cursor through every return. Skipped entirely when f.NoValidate.
+func validateAndMod(b *bytes.Buffer, f FieldInfo, ref string) {
 	if len(f.Mods) > 0 {
-		out.WriteString(renderMods(f.Mods, ref, f.GoType, f.Kind))
+		renderMods(b, f.Mods, ref, f.GoType, f.Kind)
 	}
 	if len(f.Validation) > 0 {
-		code := renderValidationOn(f.Validation, ref, f.JSONName, f.Kind, f.MultiErr)
-		if !f.MultiErr {
-			code = strings.ReplaceAll(code, "return result, ", "return result, i, ")
-		}
-		out.WriteString(code)
+		renderValidationOn(b, f.Validation, ref, f.JSONName, f.Kind, f.MultiErr, "i")
 	}
-	return out.String()
 }
 
 // renderField emits the body of a single case: read the value via scan
@@ -3296,21 +3268,11 @@ default: return result, i, scan.ErrBadBool
 	b.WriteString("}\n")
 }
 
-// captureRenderField runs renderField into a fresh builder and returns
-// the result as a string. Used by renderDispatch's emitField wrapper,
-// which composes the per-field body into seen-guard wrappers via %s.
-func captureRenderField(f FieldInfo, ref, posVar string) string {
-	b := getSmall()
-	defer putSmall(b)
-	renderField(b, f, ref, posVar)
-	return b.String()
-}
-
 func renderField(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	if f.String {
 		renderStringTag(b, f, ref, posVar)
 		if !f.NoValidate {
-			b.WriteString(validateAndMod(f, ref))
+			validateAndMod(b, f, ref)
 		}
 		return
 	}
@@ -3348,7 +3310,7 @@ func renderField(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 			outer := f
 			outer.Validation = customV
 			outer.Mods = customM
-			b.WriteString(validateAndMod(outer, ref))
+			validateAndMod(b, outer, ref)
 		}
 		return
 	}
@@ -3428,7 +3390,7 @@ if err != nil { return result, i, err }
 	// Post-decode: mods then validation. The `seen<GoName>` bool is set
 	// by the caller (renderDispatch emits it), not here.
 	if !f.NoValidate {
-		b.WriteString(validateAndMod(f, ref))
+		validateAndMod(b, f, ref)
 	}
 }
 
@@ -3663,14 +3625,10 @@ func emitByteSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth i
 		emitByteSliceRead(b, peelSliceField(f), target, kvar, depth+1)
 	}
 	if len(f.ElemMods) > 0 {
-		b.WriteString(renderMods(f.ElemMods, target, f.ElemType, f.ElemKind))
+		renderMods(b, f.ElemMods, target, f.ElemType, f.ElemKind)
 	}
 	if len(f.ElemValidation) > 0 {
-		code := renderValidationOn(f.ElemValidation, target, f.JSONName+"[]", f.ElemKind, f.MultiErr)
-		if !f.MultiErr {
-			code = strings.ReplaceAll(code, "return result, ", "return result, i, ")
-		}
-		b.WriteString(code)
+		renderValidationOn(b, f.ElemValidation, target, f.JSONName+"[]", f.ElemKind, f.MultiErr, "i")
 	}
 	switch {
 	case isArray && f.ElemPointer:
@@ -3711,11 +3669,14 @@ func emitByteSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth i
 // array is fixed-capacity and never reallocates — zero-copy string aliases
 // stay valid for the lifetime of the Stream.
 func renderStreamDecode(b *bytes.Buffer, s StructInfo) {
+	fmt.Fprintf(b, "func (%s) DecodeStreamFrom(s *scan.Stream, i int) (%s, int, error) {\n", s.Name, s.Name)
 	if s.IsAlias {
-		b.WriteString(renderAliasStreamDecode(s))
+		renderAliasStreamDecode(b, s)
+		b.WriteString("}\n\n")
 		return
 	}
 	renderStreamDecodeStruct(b, s)
+	b.WriteString("}\n\n")
 }
 
 func renderStreamDecodeStruct(b *bytes.Buffer, s StructInfo) {
@@ -3774,8 +3735,8 @@ for {
 }
 
 func renderStreamDispatch(s StructInfo) string {
-	byLen := map[int][]FieldInfo{}
-	var lens []int
+	byLen := make(map[int][]FieldInfo, len(s.Fields))
+	lens := make([]int, 0, len(s.Fields))
 	for _, f := range s.Fields {
 		if f.Inline {
 			continue
@@ -3891,13 +3852,15 @@ if s.Bytes()[%[1]s] == 'n' {
 		var mk string
 		mk, %[1]s, err = s.String(%[1]s)
 		if err != nil { return result, i, err }
-		%[5]s		%[1]s, err = s.SkipSpace(%[1]s)
+`, posVar, ref, f.GoType, makeExpr)
+	keyValidateAndMod(b, f, "mk")
+	fmt.Fprintf(b, `		%[1]s, err = s.SkipSpace(%[1]s)
 		if err != nil { return result, i, err }
 		if %[1]s >= len(s.Bytes()) { if err = s.ReadMore(0); err != nil { return result, i, err } }
 		if s.Bytes()[%[1]s] != ':' { return result, i, scan.ErrBadObject }
 		%[1]s, err = s.SkipSpace(%[1]s + 1)
 		if err != nil { return result, i, err }
-`, posVar, ref, f.GoType, makeExpr, keyValidateAndMod(f, "mk"))
+`, posVar)
 
 	mapTarget := fmt.Sprintf("%s[mk]", ref)
 	switch f.ElemKind {
@@ -3968,13 +3931,10 @@ if err != nil { return result, i, err }
 `, posVar, posVar)
 	}
 	if len(f.ElemMods) > 0 {
-		patched := strings.ReplaceAll(renderMods(f.ElemMods, "mvx", f.ElemType, f.ElemKind), "mvx", mapTarget)
-		b.WriteString(patched)
+		renderMods(b, f.ElemMods, mapTarget, f.ElemType, f.ElemKind)
 	}
 	if len(f.ElemValidation) > 0 {
-		code := renderValidationOn(f.ElemValidation, mapTarget, f.JSONName+".value", f.ElemKind, f.MultiErr)
-		code = strings.ReplaceAll(code, "return result, &validation.", "return result, i, &validation.")
-		b.WriteString(code)
+		renderValidationOn(b, f.ElemValidation, mapTarget, f.JSONName+".value", f.ElemKind, f.MultiErr, "i")
 	}
 	fmt.Fprintf(b, `		%[1]s, err = s.SkipSpace(%[1]s)
 		if err != nil { return result, i, err }
@@ -4404,10 +4364,12 @@ func renderStreamField(f FieldInfo, ref, posVar string) string {
 		var out bytes.Buffer
 		renderStreamStringTag(&out, f, ref, posVar)
 		if !f.NoValidate {
-			out.WriteString(validateAndMod(f, ref))
+			validateAndMod(&out, f, ref)
 		}
 		return out.String()
 	}
+	b := getSmall()
+	defer putSmall(b)
 	if f.Pointer {
 		inner := f
 		inner.Pointer = false
@@ -4420,7 +4382,7 @@ func renderStreamField(f FieldInfo, ref, posVar string) string {
 		builtinM, customM := partitionCustomMods(f.Mods)
 		inner.Validation = builtinV
 		inner.Mods = builtinM
-		block := fmt.Sprintf(`if %[1]s >= len(s.Bytes()) { if err = s.ReadMore(0); err != nil { return result, i, err } }
+		fmt.Fprintf(b, `if %[1]s >= len(s.Bytes()) { if err = s.ReadMore(0); err != nil { return result, i, err } }
 if s.Bytes()[%[1]s] == 'n' {
 	for ki := 1; ki < 4; ki++ {
 		if %[1]s+ki >= len(s.Bytes()) { if err = s.ReadMore(0); err != nil { return result, i, err } }
@@ -4438,12 +4400,10 @@ if s.Bytes()[%[1]s] == 'n' {
 			outer := f
 			outer.Validation = customV
 			outer.Mods = customM
-			block += validateAndMod(outer, ref)
+			validateAndMod(b, outer, ref)
 		}
-		return block
+		return b.String()
 	}
-	b := getSmall()
-	defer putSmall(b)
 	// primScan: direct LHS multi-assign + err check. Shape is identical
 	// across String/Bool/Int64/Uint64/Float64 — only the s.X method name
 	// differs.
@@ -4528,7 +4488,7 @@ if err != nil { return result, i, err }
 `, posVar)
 	}
 	if !f.NoValidate {
-		b.WriteString(validateAndMod(f, ref))
+		validateAndMod(b, f, ref)
 	}
 	return b.String()
 }
@@ -4707,14 +4667,10 @@ if %[3]s != nil { return result, i, %[3]s }
 		emitStreamSliceRead(b, peelSliceField(f), target, kvar, depth+1)
 	}
 	if len(f.ElemMods) > 0 {
-		b.WriteString(renderMods(f.ElemMods, target, f.ElemType, f.ElemKind))
+		renderMods(b, f.ElemMods, target, f.ElemType, f.ElemKind)
 	}
 	if len(f.ElemValidation) > 0 {
-		code := renderValidationOn(f.ElemValidation, target, f.JSONName+"[]", f.ElemKind, f.MultiErr)
-		if !f.MultiErr {
-			code = strings.ReplaceAll(code, "return result, ", "return result, i, ")
-		}
-		b.WriteString(code)
+		renderValidationOn(b, f.ElemValidation, target, f.JSONName+"[]", f.ElemKind, f.MultiErr, "i")
 	}
 	switch {
 	case isArray && f.ElemPointer:

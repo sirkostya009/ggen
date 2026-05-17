@@ -2363,7 +2363,6 @@ func (MultiErrStruct) DecodeFrom(data []byte, i int) (MultiErrStruct, int, error
 					if result.Age > 100 {
 						errs = append(errs, &validation.LTEError{Field: "age", Limit: 100, Value: result.Age})
 					}
-
 				}
 			} else {
 				errs = append(errs, &validation.UnknownKeyError{Field: key})
@@ -2410,7 +2409,6 @@ func (MultiErrStruct) DecodeFrom(data []byte, i int) (MultiErrStruct, int, error
 					if len(result.Name) > 5 {
 						errs = append(errs, &validation.MaxLenError{Field: "name", Limit: 5, Got: len(result.Name)})
 					}
-
 				}
 			case "role":
 				if seenRole {
@@ -2447,7 +2445,6 @@ func (MultiErrStruct) DecodeFrom(data []byte, i int) (MultiErrStruct, int, error
 					default:
 						errs = append(errs, &validation.OneOfError{Field: "role", Allowed: ggenOneof0, Value: result.Role})
 					}
-
 				}
 			default:
 				errs = append(errs, &validation.UnknownKeyError{Field: key})
@@ -2774,7 +2771,6 @@ func (AllowDupsStruct) DecodeFrom(data []byte, i int) (AllowDupsStruct, int, err
 						}
 						result.N = int(n)
 					}
-
 				}
 			} else {
 				return result, i, &validation.UnknownKeyError{Field: key}
@@ -2809,7 +2805,6 @@ func (AllowDupsStruct) DecodeFrom(data []byte, i int) (AllowDupsStruct, int, err
 							}
 						}
 					}
-
 				}
 			} else {
 				return result, i, &validation.UnknownKeyError{Field: key}
@@ -11554,7 +11549,6 @@ func (FallibleModMultierrStruct) DecodeFrom(data []byte, i int) (FallibleModMult
 					if len(result.Email) < 10 {
 						errs = append(errs, &validation.MinLenError{Field: "email", Limit: 10, Got: len(result.Email)})
 					}
-
 				}
 			} else {
 				errs = append(errs, &validation.UnknownKeyError{Field: key})

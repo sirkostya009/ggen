@@ -1145,6 +1145,23 @@ their generated code.
        radius.
   Pick when there's a concrete consumer asking for the merge shape.
 
+- **Refactor generator to emit `go/ast` nodes instead of text** — today
+  every render function writes Go source as a `[]byte` via
+  `fmt.Fprintf` / `WriteString` into a buffer, then `format.Source`
+  parses that text and re-emits it. If the generator built
+  `*ast.FuncDecl` / `ast.BlockStmt` directly, the format step could
+  drop the parse half (~30% of `format.Source` cost — see profiling in
+  the May session) and call `printer.Fprint` directly. Bigger payoff:
+  no more careful whitespace bookkeeping in render code (no `\n`
+  threading, no trailing-blank-line cosmetics), and Go's compiler
+  catches malformed expressions at codegen time instead of at the
+  format step. Costs: full rewrite of every `render*` helper (currently
+  ~5k LOC of text-emitting code), every `fmt.Sprintf` template becomes
+  an AST builder, and the buffer-drilling work just done becomes moot.
+  Worth doing only if (a) the text-emit codebase becomes hard to
+  maintain, or (b) profiling shows `format.Source`'s parse phase as a
+  bottleneck on real workloads.
+
 ## Tried and rejected (don't re-attempt without new evidence)
 
 - **Pointer-arithmetic decoder / `unsafe.Add` byte loads** to eliminate

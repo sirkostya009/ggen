@@ -1,11 +1,26 @@
 package main
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+// generate is a test-only convenience over generateTo: it materializes
+// the output into a returned []byte. Production code paths in main.go
+// (generateDir / generateSingleFile) call generateTo directly against
+// the destination *os.File so there is no intermediate copy. Tests and
+// benchmarks need the bytes in memory to assert on or roundtrip, so the
+// helper lives here and stays out of release binaries.
+func generate(pkg string, structs []StructInfo) ([]byte, error) {
+	var buf bytes.Buffer
+	if err := generateTo(&buf, pkg, structs); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
 
 func writeGoFile(t *testing.T, src string) string {
 	t.Helper()
