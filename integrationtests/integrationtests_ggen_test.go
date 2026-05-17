@@ -36,7 +36,6 @@ func (AliasString) DecodeFrom(data []byte, i int) (AliasString, int, error) {
 	}
 	result = AliasString(v)
 	return result, i, nil
-
 }
 
 func (AliasString) DecodeStreamFrom(s *scan.Stream, i int) (AliasString, int, error) {
@@ -50,19 +49,16 @@ func (AliasString) DecodeStreamFrom(s *scan.Stream, i int) (AliasString, int, er
 	}
 	result = AliasString(v)
 	return result, i, nil
-
 }
 
 func (s AliasString) JSONSize() int {
 	return len(string(s))*2 + 2
-
 }
 
 func (s AliasString) AppendJSON(dst []byte) ([]byte, error) {
 	dst = append(dst, '"')
 	dst = encode.AppendStringNoHTML(dst, string(s))
 	return dst, nil
-
 }
 
 func (AliasHTML) DecodeFrom(data []byte, i int) (AliasHTML, int, error) {
@@ -76,7 +72,6 @@ func (AliasHTML) DecodeFrom(data []byte, i int) (AliasHTML, int, error) {
 	}
 	result = AliasHTML(v)
 	return result, i, nil
-
 }
 
 func (AliasHTML) DecodeStreamFrom(s *scan.Stream, i int) (AliasHTML, int, error) {
@@ -90,19 +85,16 @@ func (AliasHTML) DecodeStreamFrom(s *scan.Stream, i int) (AliasHTML, int, error)
 	}
 	result = AliasHTML(v)
 	return result, i, nil
-
 }
 
 func (s AliasHTML) JSONSize() int {
 	return len(string(s))*2 + 2
-
 }
 
 func (s AliasHTML) AppendJSON(dst []byte) ([]byte, error) {
 	dst = append(dst, '"')
 	dst = encode.AppendString(dst, string(s))
 	return dst, nil
-
 }
 
 func (AliasInt) DecodeFrom(data []byte, i int) (AliasInt, int, error) {
@@ -116,7 +108,6 @@ func (AliasInt) DecodeFrom(data []byte, i int) (AliasInt, int, error) {
 	}
 	result = AliasInt(v)
 	return result, i, nil
-
 }
 
 func (AliasInt) DecodeStreamFrom(s *scan.Stream, i int) (AliasInt, int, error) {
@@ -130,17 +121,14 @@ func (AliasInt) DecodeStreamFrom(s *scan.Stream, i int) (AliasInt, int, error) {
 	}
 	result = AliasInt(v)
 	return result, i, nil
-
 }
 
 func (s AliasInt) JSONSize() int {
 	return 20
-
 }
 
 func (s AliasInt) AppendJSON(dst []byte) ([]byte, error) {
 	return strconv.AppendInt(dst, int64(s), 10), nil
-
 }
 
 func (AliasUint64) DecodeFrom(data []byte, i int) (AliasUint64, int, error) {
@@ -154,7 +142,6 @@ func (AliasUint64) DecodeFrom(data []byte, i int) (AliasUint64, int, error) {
 	}
 	result = AliasUint64(v)
 	return result, i, nil
-
 }
 
 func (AliasUint64) DecodeStreamFrom(s *scan.Stream, i int) (AliasUint64, int, error) {
@@ -168,17 +155,14 @@ func (AliasUint64) DecodeStreamFrom(s *scan.Stream, i int) (AliasUint64, int, er
 	}
 	result = AliasUint64(v)
 	return result, i, nil
-
 }
 
 func (s AliasUint64) JSONSize() int {
 	return 20
-
 }
 
 func (s AliasUint64) AppendJSON(dst []byte) ([]byte, error) {
 	return strconv.AppendUint(dst, uint64(s), 10), nil
-
 }
 
 func (AliasFloat64) DecodeFrom(data []byte, i int) (AliasFloat64, int, error) {
@@ -192,7 +176,6 @@ func (AliasFloat64) DecodeFrom(data []byte, i int) (AliasFloat64, int, error) {
 	}
 	result = AliasFloat64(v)
 	return result, i, nil
-
 }
 
 func (AliasFloat64) DecodeStreamFrom(s *scan.Stream, i int) (AliasFloat64, int, error) {
@@ -206,17 +189,14 @@ func (AliasFloat64) DecodeStreamFrom(s *scan.Stream, i int) (AliasFloat64, int, 
 	}
 	result = AliasFloat64(v)
 	return result, i, nil
-
 }
 
 func (s AliasFloat64) JSONSize() int {
 	return 24
-
 }
 
 func (s AliasFloat64) AppendJSON(dst []byte) ([]byte, error) {
 	return strconv.AppendFloat(dst, float64(s), 'g', -1, 64), nil
-
 }
 
 func (AliasBool) DecodeFrom(data []byte, i int) (AliasBool, int, error) {
@@ -230,7 +210,6 @@ func (AliasBool) DecodeFrom(data []byte, i int) (AliasBool, int, error) {
 	}
 	result = AliasBool(v)
 	return result, i, nil
-
 }
 
 func (AliasBool) DecodeStreamFrom(s *scan.Stream, i int) (AliasBool, int, error) {
@@ -244,17 +223,14 @@ func (AliasBool) DecodeStreamFrom(s *scan.Stream, i int) (AliasBool, int, error)
 	}
 	result = AliasBool(v)
 	return result, i, nil
-
 }
 
 func (s AliasBool) JSONSize() int {
 	return 5
-
 }
 
 func (s AliasBool) AppendJSON(dst []byte) ([]byte, error) {
 	return strconv.AppendBool(dst, bool(s)), nil
-
 }
 
 func (PlainAlias) DecodeFrom(data []byte, i int) (PlainAlias, int, error) {
@@ -997,7 +973,6 @@ func (OpaqueAlias) DecodeFrom(data []byte, i int) (OpaqueAlias, int, error) {
 	}
 	result = OpaqueAlias(u)
 	return result, k, nil
-
 }
 
 func (OpaqueAlias) DecodeStreamFrom(s *scan.Stream, i int) (OpaqueAlias, int, error) {
@@ -1016,17 +991,14 @@ func (OpaqueAlias) DecodeStreamFrom(s *scan.Stream, i int) (OpaqueAlias, int, er
 	}
 	result = OpaqueAlias(u)
 	return result, k, nil
-
 }
 
 func (s OpaqueAlias) JSONSize() int {
 	return 0
-
 }
 
 func (s OpaqueAlias) AppendJSON(dst []byte) ([]byte, error) {
 	return OpaqueWithMethods(s).MarshalJSON()
-
 }
 
 func (AliasTags) DecodeFrom(data []byte, i int) (AliasTags, int, error) {
@@ -1094,7 +1066,6 @@ func (AliasTags) DecodeFrom(data []byte, i int) (AliasTags, int, error) {
 		}
 	}
 	return result, i, nil
-
 }
 
 func (AliasTags) DecodeStreamFrom(s *scan.Stream, i int) (AliasTags, int, error) {
@@ -1173,12 +1144,10 @@ func (AliasTags) DecodeStreamFrom(s *scan.Stream, i int) (AliasTags, int, error)
 		}
 	}
 	return result, i, nil
-
 }
 
 func (s AliasTags) JSONSize() int {
 	return 1024
-
 }
 
 func (s AliasTags) AppendJSON(dst []byte) ([]byte, error) {
@@ -1198,7 +1167,6 @@ func (s AliasTags) AppendJSON(dst []byte) ([]byte, error) {
 		dst = append(dst, ']')
 	}
 	return dst, nil
-
 }
 
 func (AliasLookup) DecodeFrom(data []byte, i int) (AliasLookup, int, error) {
@@ -1303,7 +1271,6 @@ func (AliasLookup) DecodeFrom(data []byte, i int) (AliasLookup, int, error) {
 		}
 	}
 	return result, i, nil
-
 }
 
 func (AliasLookup) DecodeStreamFrom(s *scan.Stream, i int) (AliasLookup, int, error) {
@@ -1404,12 +1371,10 @@ func (AliasLookup) DecodeStreamFrom(s *scan.Stream, i int) (AliasLookup, int, er
 		}
 	}
 	return result, i, nil
-
 }
 
 func (s AliasLookup) JSONSize() int {
 	return 1024
-
 }
 
 func (s AliasLookup) AppendJSON(dst []byte) ([]byte, error) {
@@ -1434,7 +1399,6 @@ func (s AliasLookup) AppendJSON(dst []byte) ([]byte, error) {
 		dst = append(dst, '}')
 	}
 	return dst, nil
-
 }
 
 func (AliasTuple) DecodeFrom(data []byte, i int) (AliasTuple, int, error) {
@@ -1504,7 +1468,6 @@ func (AliasTuple) DecodeFrom(data []byte, i int) (AliasTuple, int, error) {
 		i++
 	}
 	return result, i, nil
-
 }
 
 func (AliasTuple) DecodeStreamFrom(s *scan.Stream, i int) (AliasTuple, int, error) {
@@ -1564,12 +1527,10 @@ func (AliasTuple) DecodeStreamFrom(s *scan.Stream, i int) (AliasTuple, int, erro
 		i++
 	}
 	return result, i, nil
-
 }
 
 func (s AliasTuple) JSONSize() int {
 	return 1024
-
 }
 
 func (s AliasTuple) AppendJSON(dst []byte) ([]byte, error) {
@@ -1583,7 +1544,6 @@ func (s AliasTuple) AppendJSON(dst []byte) ([]byte, error) {
 	}
 	dst = append(dst, ']')
 	return dst, nil
-
 }
 
 func (AliasFieldExample) DecodeFrom(data []byte, i int) (AliasFieldExample, int, error) {

@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"fmt"
 	"go/format"
+	"io"
 	"slices"
 	"strconv"
 	"strings"
 	"sync"
-	"text/template"
 )
 
 // filePool recycles the bytes.Buffer that holds the entire rendered
@@ -41,7 +41,21 @@ func getFileBuf() *bytes.Buffer {
 
 func putFileBuf(b *bytes.Buffer) { filePool.Put(b) }
 
+// generate renders the full set of structs into Go source. The bytes
+// path materializes the result in memory (used by tests and the
+// formatted-output path that hands the buffer to go/format.Source).
+// The streaming sibling generateTo writes the prelude and each
+// per-struct body to w as separate calls — saving one large copy
+// when format.Source is disabled.
 func generate(pkg string, structs []StructInfo) ([]byte, error) {
+	var buf bytes.Buffer
+	if err := generateTo(&buf, pkg, structs); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func generateTo(w io.Writer, pkg string, structs []StructInfo) error {
 	resetOneofRegistry()
 	// `generatedTypes` is populated by the caller before invoking generate.
 	// It reflects every struct in the same Go package the caller is about
@@ -84,80 +98,122 @@ func generate(pkg string, structs []StructInfo) ([]byte, error) {
 			return 0
 		})
 	}
-	data := buildTemplateData(pkg, structs)
+	preregisterOneOfs(structs)
 
-	renderer := func(renderFunc func(*bytes.Buffer, StructInfo)) func(StructInfo) string {
-		return func(s StructInfo) string {
-			b := getSmall()
-			defer putSmall(b)
-			renderFunc(b, s)
-			return b.String()
-		}
+	var tag string
+	if len(structs) > 0 {
+		tag = structs[0].BuildTag
 	}
 
-	tmpl := template.Must(template.New("gen").Funcs(template.FuncMap{
-		"tokenKind":       tokenKind,
-		"tokenExtract":    tokenExtract,
-		"kindName":        kindName,
-		"validate":        renderValidation,
-		"elemValidate":    renderElemValidation,
-		"appendJSON":      renderer(renderAppendJSON),
-		"sizeJSON":        renderer(renderSize),
-		"hasElemRules":    hasElemRules,
-		"readField":       renderReadField,
-		"readBytes":       renderReadBytes,
-		"readTime":        renderReadTime,
-		"readDuration":    renderReadDuration,
-		"readNetIP":       renderReadNetIP,
-		"readNetipAddr":   renderReadNetipAddr,
-		"readNetipPrefix": renderReadNetipPrefix,
-		"decode":          renderer(renderDecode),
-		"streamDecode":    renderer(renderStreamDecode),
-	}).Parse(genTemplate))
-
-	// Imports come from StructInfo features, not a body scan — so we
-	// can write the full prelude (build-tag + generated marker +
-	// package decl + sorted import block) into the buffer BEFORE
-	// rendering. tmpl.Execute then appends the body to the same
-	// buffer, no separate copy.
-	buf := getFileBuf()
-	defer putFileBuf(buf)
-	buf.Write(buildPrelude(data, collectImports(structs)))
-	if err := tmpl.Execute(buf, data); err != nil {
-		return nil, fmt.Errorf("executing template: %w", err)
+	// Render each struct into its own pool-borrowed buffer. The bodies
+	// concatenate into the file (or stream straight to it) in struct
+	// order after the prelude. Per-struct buffers (rather than one big
+	// shared one) keep this loop straightforward and let the streaming
+	// noFormat path avoid an extra copy.
+	bodies := make([]*bytes.Buffer, len(structs))
+	for i := range structs {
+		b := getSmall()
+		renderStructMethods(b, structs[i])
+		bodies[i] = b
 	}
+
+	// Imports come from StructInfo features, not a body scan — so the
+	// full prelude (build-tag + generated marker + package decl +
+	// sorted import block) can be emitted before any struct body.
+	prelude := buildPrelude(pkg, tag, collectImports(structs))
 
 	if noFormat {
-		out := make([]byte, buf.Len())
-		copy(out, buf.Bytes())
-		return out, nil
+		// Stream prelude → oneOf decls → each per-struct body straight
+		// to w. Each Write is its own syscall (for *os.File) — the
+		// caller doesn't pay for one big buf-into-file copy.
+		if _, err := w.Write(prelude); err != nil {
+			return err
+		}
+		for _, decl := range oneofRegistry.decls {
+			if _, err := io.WriteString(w, decl+"\n"); err != nil {
+				return err
+			}
+		}
+		for _, body := range bodies {
+			_, err := w.Write(body.Bytes())
+			putSmall(body)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	// format.Source needs the whole file in one []byte. Build a single
+	// buffer, format it, then write the formatted result to w.
+	buf := getFileBuf()
+	defer putFileBuf(buf)
+	buf.Write(prelude)
+	for _, decl := range oneofRegistry.decls {
+		buf.WriteString(decl)
+		buf.WriteByte('\n')
+	}
+	for _, body := range bodies {
+		buf.Write(body.Bytes())
+		putSmall(body)
 	}
 	src, err := format.Source(buf.Bytes())
 	if err != nil {
-		return nil, fmt.Errorf("formatting generated code: %w\n\nraw output:\n%s", err, buf.Bytes())
+		return fmt.Errorf("formatting generated code: %w\n\nraw output:\n%s", err, buf.Bytes())
 	}
-	return src, nil
+	_, err = w.Write(src)
+	return err
 }
 
 // buildPrelude emits the file header (build-tag, generated marker,
 // package decl, import block). Returns the assembled []byte. Caller
 // concatenates with the rendered body before formatting.
-func buildPrelude(data templateData, imports []string) []byte {
+func buildPrelude(pkg, buildTag string, imports []string) []byte {
 	// Worst-case 256 bytes for the fixed parts (marker, package) + 64
 	// bytes per import path. Pre-sizes the underlying array so the
 	// appends don't trigger the geometric grow chain.
-	cap := 256 + len(imports)*64 + len(data.BuildTag)
+	cap := 256 + len(imports)*64 + len(buildTag)
 	out := make([]byte, 0, cap)
 	out = append(out, "// Code generated by ggen; DO NOT EDIT.\n\n"...)
-	if data.BuildTag != "" {
+	if buildTag != "" {
 		out = append(out, "//go:build "...)
-		out = append(out, data.BuildTag...)
+		out = append(out, buildTag...)
 		out = append(out, "\n\n"...)
 	}
 	out = append(out, "package "...)
-	out = append(out, data.Package...)
+	out = append(out, pkg...)
 	out = append(out, "\n\n"...)
 	return appendImportBlock(out, imports)
+}
+
+// renderStructMethods writes the full method set for a single struct
+// directly to buf. The set is fixed (DecodeFrom + DecodeStreamFrom +
+// JSONSize + AppendJSON, plus optional MarshalJSON / UnmarshalJSON
+// hooks) so a hand-rolled write is cheaper than the prior text/template
+// dispatch through reflect.Value.Call.
+func renderStructMethods(buf *bytes.Buffer, s StructInfo) {
+	fmt.Fprintf(buf, "func (%s) DecodeFrom(data []byte, i int) (%s, int, error) {\n", s.Name, s.Name)
+	renderDecode(buf, s)
+	buf.WriteString("}\n\n")
+
+	fmt.Fprintf(buf, "func (%s) DecodeStreamFrom(s *scan.Stream, i int) (%s, int, error) {\n", s.Name, s.Name)
+	renderStreamDecode(buf, s)
+	buf.WriteString("}\n\n")
+
+	fmt.Fprintf(buf, "func (s %s) JSONSize() int {\n", s.Name)
+	renderSize(buf, s)
+	buf.WriteString("}\n\n")
+
+	fmt.Fprintf(buf, "func (s %s) AppendJSON(dst []byte) ([]byte, error) {\n", s.Name)
+	renderAppendJSON(buf, s)
+	buf.WriteString("}\n\n")
+
+	if s.Marshal {
+		fmt.Fprintf(buf, "func (s %s) MarshalJSON() ([]byte, error) {\n\treturn encode.Marshal(s)\n}\n\n", s.Name)
+	}
+	if s.Unmarshal {
+		fmt.Fprintf(buf, "func (s *%s) UnmarshalJSON(data []byte) error {\n\tv, err := decode.Unmarshal[%s](data)\n\tif err != nil {\n\t\treturn err\n\t}\n\t*s = v\n\treturn nil\n}\n\n", s.Name, s.Name)
+	}
 }
 
 // collectImports walks structs and returns the sorted set of import
@@ -467,17 +523,11 @@ func appendQuotedLine(out []byte, p string) []byte {
 	return append(out, '"', '\n')
 }
 
-type templateData struct {
-	Package    string
-	BuildTag   string // canonical //go:build expression, "" when unconstrained
-	Structs    []StructInfo
-	OneOfDecls []string
-}
-
 // preregisterOneOfs walks all rules (top-level, dive-elem, key, inner-nested)
-// to populate the OneOf frozen-slice registry before template execution.
-// Order-independent: registerOneOf dedupes by joined value, so re-walking
-// during render returns the same name.
+// to populate the OneOf frozen-slice registry before render. Order-independent:
+// registerOneOf dedupes by joined value, so re-walking during render returns
+// the same name. Required for safe parallel struct rendering — once the
+// registry is fully populated up front, render-time lookups are pure map reads.
 func preregisterOneOfs(structs []StructInfo) {
 	walk := func(rules []ValidationRule) {
 		for _, v := range rules {
@@ -498,99 +548,6 @@ func preregisterOneOfs(structs []StructInfo) {
 	}
 }
 
-func buildTemplateData(pkg string, structs []StructInfo) templateData {
-	preregisterOneOfs(structs)
-	// All structs in a single generation pass share the same build tag —
-	// the caller (generateDir) buckets them by BuildTag before invoking
-	// generate(). Empty for unconstrained, non-empty for files behind a
-	// //go:build directive.
-	var tag string
-	if len(structs) > 0 {
-		tag = structs[0].BuildTag
-	}
-	return templateData{
-		Package:    pkg,
-		BuildTag:   tag,
-		Structs:    structs,
-		OneOfDecls: oneofRegistry.decls,
-	}
-}
-
-// (customFuncImports / customTypeImports removed — collectImports now
-// walks struct/field features comprehensively, including custom-func
-// PkgImports and alias underlying paths.)
-
-func tokenKind(k TypeKind) string {
-	switch k {
-	case KindString:
-		return `'"'`
-	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64,
-		KindUint, KindUint8, KindUint16, KindUint32, KindUint64,
-		KindFloat32, KindFloat64:
-		return `'0'`
-	case KindStruct:
-		return `'{'`
-	case KindSlice:
-		return `'['`
-	default:
-		return `'"'`
-	}
-}
-
-func tokenExtract(k TypeKind, tokVar string) string {
-	switch k {
-	case KindString:
-		return tokVar + ".String()"
-	case KindInt:
-		return "int(" + tokVar + ".Int())"
-	case KindInt8:
-		return "int8(" + tokVar + ".Int())"
-	case KindInt16:
-		return "int16(" + tokVar + ".Int())"
-	case KindInt32:
-		return "int32(" + tokVar + ".Int())"
-	case KindInt64:
-		return tokVar + ".Int()"
-	case KindUint:
-		return "uint(" + tokVar + ".Uint())"
-	case KindUint8:
-		return "uint8(" + tokVar + ".Uint())"
-	case KindUint16:
-		return "uint16(" + tokVar + ".Uint())"
-	case KindUint32:
-		return "uint32(" + tokVar + ".Uint())"
-	case KindUint64:
-		return tokVar + ".Uint()"
-	case KindFloat32:
-		return "float32(" + tokVar + ".Float())"
-	case KindFloat64:
-		return tokVar + ".Float()"
-	case KindBool:
-		return tokVar + ".Bool()"
-	default:
-		return tokVar + ".String()"
-	}
-}
-
-func kindName(k TypeKind) string {
-	switch k {
-	case KindString:
-		return "string"
-	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64,
-		KindUint, KindUint8, KindUint16, KindUint32, KindUint64,
-		KindFloat32, KindFloat64:
-		return "number"
-	case KindBool:
-		return "bool"
-	case KindStruct:
-		return "object"
-	case KindSlice:
-		return "array"
-	default:
-		return "unknown"
-	}
-}
-
 func isNumeric(k TypeKind) bool {
 	switch k {
 	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64,
@@ -600,21 +557,6 @@ func isNumeric(k TypeKind) bool {
 	}
 	return false
 }
-
-// renderValidation emits Go source for all validation checks on a field,
-// excluding "required" (which is tracked separately via the seen<Field> flag).
-func renderValidation(f FieldInfo) string {
-	return renderValidationOn(f.Validation, "result."+f.GoName, f.JSONName, f.Kind, f.MultiErr)
-}
-
-// renderElemValidation emits validation for a slice element (loop variable
-// `elem`). Called from the slice-read template when ElemValidation is set.
-func renderElemValidation(f FieldInfo) string {
-	return renderValidationOn(f.ElemValidation, "elem", f.JSONName+"[]", f.ElemKind, f.MultiErr)
-}
-
-// hasElemRules reports whether a field has per-element validation rules.
-func hasElemRules(f FieldInfo) bool { return len(f.ElemValidation) > 0 }
 
 // renderMods emits post-decode transformation code against ref using the
 // field's Mods list. String mods (trim/lower/...) and numeric mods (clamp)
@@ -754,11 +696,6 @@ func arrayLenErr(field string, want int, gotExpr string) string {
 // requiredErr builds a typed *validation.RequiredError literal.
 func requiredErr(field string) string {
 	return fmt.Sprintf("&validation.RequiredError{Field: %q}", field)
-}
-
-// duplicateKeyErr builds a typed *validation.DuplicateKeyError literal.
-func duplicateKeyErr(field string) string {
-	return fmt.Sprintf("&validation.DuplicateKeyError{Field: %q}", field)
 }
 
 // oneofRegistry collects unique allowed-string sets emitted as
@@ -1544,526 +1481,6 @@ func renderAppendTime(f FieldInfo, ref string) string {
 		return fmt.Sprintf("dst = strconv.AppendInt(dst, %s.%s(), 10)\n", ref, numeric)
 	}
 	return fmt.Sprintf("dst = append(dst, '\"')\ndst = %s.AppendFormat(dst, %s)\ndst = append(dst, '\"')\n", ref, layout)
-}
-
-// renderReadField emits the full unmarshal code block for a single field.
-// It handles:
-//   - duplicate-key guard (unless AllowDups is set)
-//   - pointer wrapping (null → nil, non-null → allocate + read pointee)
-//   - json:",string" wrapping
-//   - dispatch by Kind to the appropriate read primitive
-//
-// The emitted code reads from dec and assigns to result.<GoName>.
-func renderReadField(f FieldInfo) string {
-	var prefix string
-	if !f.AllowDups {
-		errExpr := duplicateKeyErr(f.JSONName)
-		var guard string
-		if f.MultiErr {
-			guard = "errs = append(errs, " + errExpr + ")"
-		} else {
-			guard = "return result, " + errExpr
-		}
-		prefix = fmt.Sprintf("if seen%s { %s }\nseen%s = true\n", f.GoName, guard, f.GoName)
-	} else if f.IsRequired() {
-		// Required tracking still needed.
-		prefix = fmt.Sprintf("seen%s = true\n", f.GoName)
-	}
-	var body string
-	if f.Pointer {
-		body = renderReadPointer(f)
-	} else {
-		body = renderReadNonPointer(f)
-	}
-	// Mods run after decode, before validation (so validation sees the
-	// transformed value). Only applies to non-pointer fields; for pointers the
-	// *deref would be needed and is uncommon — skip for now.
-	if !f.Pointer && len(f.Mods) > 0 {
-		body += renderMods(f.Mods, "result."+f.GoName, f.GoType, f.Kind)
-	}
-	return prefix + body
-}
-
-func renderReadPointer(f FieldInfo) string {
-	ref := "result." + f.GoName
-	// Strip Pointer for the inner render, and use a scratch variable `v`.
-	inner := f
-	inner.Pointer = false
-	if inner.PointeeType != "" {
-		inner.GoType = inner.PointeeType
-	}
-	innerRef := "v"
-	innerCode := renderReadBlockInto(inner, innerRef)
-	return fmt.Sprintf(`if dec.PeekKind() == 'n' {
-	if _, err := dec.ReadToken(); err != nil {
-		return result, fmt.Errorf(%q, err)
-	}
-	%s = nil
-} else {
-	var v %s
-	%s
-	%s = &v
-}
-`,
-		"reading "+`"`+f.JSONName+`"`+": %w",
-		ref,
-		inner.GoType,
-		innerCode,
-		ref)
-}
-
-// renderReadNonPointer emits read-and-assign for a non-pointer field,
-// writing into result.<GoName>.
-func renderReadNonPointer(f FieldInfo) string {
-	return renderReadBlockInto(f, "result."+f.GoName)
-}
-
-// renderReadBlockInto emits read code that assigns into ref (which must be
-// addressable-by-assignment, e.g., "result.Foo" or "v").
-func renderReadBlockInto(f FieldInfo, ref string) string {
-	switch {
-	case f.String:
-		return renderReadStringTag(f, ref)
-	}
-	switch f.Kind {
-	case KindString:
-		return renderReadPrimString(f, ref)
-	case KindBool:
-		return renderReadPrimBool(f, ref)
-	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64,
-		KindUint, KindUint8, KindUint16, KindUint32, KindUint64,
-		KindFloat32, KindFloat64:
-		return renderReadPrimNumber(f, ref)
-	case KindStruct:
-		return renderReadStruct(f, ref)
-	case KindSlice:
-		return renderReadSlice(f, ref)
-	case KindMap:
-		return renderReadMap(f, ref)
-	case KindBytes:
-		return renderReadBytesInto(f, ref)
-	case KindTime:
-		return renderReadTimeInto(f, ref)
-	case KindDuration:
-		return renderReadDurationInto(f, ref)
-	case KindNetIP:
-		return renderReadNetIPInto(f, ref)
-	case KindNetipAddr:
-		return renderReadNetipAddrInto(f, ref)
-	case KindNetipPrefix:
-		return renderReadNetipPrefixInto(f, ref)
-	}
-	return ""
-}
-
-func renderReadPrimString(f FieldInfo, ref string) string {
-	return fmt.Sprintf(`valTok, err := dec.ReadToken()
-if err != nil { return result, fmt.Errorf(%q, err) }
-if valTok.Kind() != '"' { return result, fmt.Errorf(%q, valTok.Kind()) }
-%s = valTok.String()
-`,
-		"reading "+`"`+f.JSONName+`"`+": %w",
-		"expected string for "+`"`+f.JSONName+`"`+", got %v",
-		ref)
-}
-
-func renderReadPrimBool(f FieldInfo, ref string) string {
-	return fmt.Sprintf(`valTok, err := dec.ReadToken()
-if err != nil { return result, fmt.Errorf(%q, err) }
-if valTok.Kind() != 't' && valTok.Kind() != 'f' { return result, fmt.Errorf(%q, valTok.Kind()) }
-%s = valTok.Bool()
-`,
-		"reading "+`"`+f.JSONName+`"`+": %w",
-		"expected bool for "+`"`+f.JSONName+`"`+", got %v",
-		ref)
-}
-
-func renderReadPrimNumber(f FieldInfo, ref string) string {
-	extract := tokenExtract(f.Kind, "valTok")
-	return fmt.Sprintf(`valTok, err := dec.ReadToken()
-if err != nil { return result, fmt.Errorf(%q, err) }
-if valTok.Kind() != '0' { return result, fmt.Errorf(%q, valTok.Kind()) }
-%s = %s
-`,
-		"reading "+`"`+f.JSONName+`"`+": %w",
-		"expected number for "+`"`+f.JSONName+`"`+", got %v",
-		ref, extract)
-}
-
-func renderReadStruct(f FieldInfo, ref string) string {
-	wrap := "decoding " + `"` + f.JSONName + `"` + ": %w"
-	if isGenerated(f.GoType) {
-		return fmt.Sprintf(`nested, err := %s{}.DecodeFrom(dec)
-if err != nil { return result, fmt.Errorf(%q, err) }
-%s = nested
-`, f.GoType, wrap, ref)
-	}
-	// Fallback for types not in this generation pass (e.g., cross-package):
-	// delegate to json.UnmarshalDecode, which picks up any UnmarshalerFrom
-	// implementation and otherwise uses reflection.
-	return fmt.Sprintf(`if err := json.UnmarshalDecode(dec, &%s); err != nil {
-	return result, fmt.Errorf(%q, err)
-}
-`, ref, wrap)
-}
-
-func renderReadStringTag(f FieldInfo, ref string) string {
-	// json:",string" — read a JSON string and parse its contents.
-	j := `"` + f.JSONName + `"`
-	base := fmt.Sprintf(`valTok, err := dec.ReadToken()
-if err != nil { return result, fmt.Errorf(%q, err) }
-if valTok.Kind() != '"' { return result, fmt.Errorf(%q, valTok.Kind()) }
-strVal := valTok.String()
-`,
-		"reading "+j+": %w",
-		"expected string-wrapped value for "+j+", got %v")
-	switch f.Kind {
-	case KindBool:
-		return base + fmt.Sprintf(`switch strVal {
-case "true": %s = true
-case "false": %s = false
-default: return result, fmt.Errorf(%q, strVal)
-}
-`, ref, ref, j+": %q is not a valid bool")
-	case KindFloat64:
-		return base + fmt.Sprintf(`f, err := strconv.ParseFloat(strVal, 64)
-if err != nil { return result, fmt.Errorf(%q, err) }
-%s = f
-`, j+": %w", ref)
-	case KindUint64:
-		return base + fmt.Sprintf(`u, err := strconv.ParseUint(strVal, 10, 64)
-if err != nil { return result, fmt.Errorf(%q, err) }
-%s = u
-`, j+": %w", ref)
-	case KindInt, KindInt64:
-		cast := "n"
-		if f.Kind == KindInt {
-			cast = "int(n)"
-		}
-		return base + fmt.Sprintf(`n, err := strconv.ParseInt(strVal, 10, 64)
-if err != nil { return result, fmt.Errorf(%q, err) }
-%s = %s
-`, j+": %w", ref, cast)
-	}
-	return base
-}
-
-// Slice/bytes/time/duration/netip readers are thin wrappers over the existing
-// helpers, but re-exposed so renderReadBlockInto can call them with a custom
-// ref (for pointer-to-value allocation).
-
-func renderReadSlice(f FieldInfo, ref string) string {
-	// For slices, call the existing template logic is awkward from Go; so we
-	// inline a minimal reader that mirrors it.
-	j := `"` + f.JSONName + `"`
-	b := getSmall()
-	defer putSmall(b)
-	fmt.Fprintf(b, `arrTok, err := dec.ReadToken()
-if err != nil { return result, fmt.Errorf(%q, err) }
-if arrTok.Kind() != '[' { return result, fmt.Errorf(%q, arrTok.Kind()) }
-for dec.PeekKind() != ']' {
-`,
-		"reading "+j+": %w",
-		"expected '[' for "+j+", got %v")
-	if f.ElemKind == KindStruct {
-		if isGenerated(f.ElemType) {
-			fmt.Fprintf(b, `	elem, err := %s{}.DecodeFrom(dec)
-	if err != nil { return result, fmt.Errorf(%q, err) }
-`, f.ElemType, "decoding element of "+j+": %w")
-		} else {
-			fmt.Fprintf(b, `	var elem %s
-	if err := json.UnmarshalDecode(dec, &elem); err != nil {
-		return result, fmt.Errorf(%q, err)
-	}
-`, f.ElemType, "decoding element of "+j+": %w")
-		}
-	} else {
-		fmt.Fprintf(b, `	elemTok, err := dec.ReadToken()
-	if err != nil { return result, fmt.Errorf(%q, err) }
-`, "reading element of "+j+": %w")
-		if f.ElemKind == KindBool {
-			fmt.Fprintf(b, `	if elemTok.Kind() != 't' && elemTok.Kind() != 'f' { return result, fmt.Errorf(%q, elemTok.Kind()) }
-`, "expected bool in "+j+", got %v")
-		} else {
-			fmt.Fprintf(b, `	if elemTok.Kind() != %s { return result, fmt.Errorf(%q, elemTok.Kind()) }
-`, tokenKind(f.ElemKind), "expected "+kindName(f.ElemKind)+" in "+j+", got %v")
-		}
-		fmt.Fprintf(b, "\telem := %s\n", tokenExtract(f.ElemKind, "elemTok"))
-	}
-	if len(f.ElemMods) > 0 {
-		b.WriteString(renderMods(f.ElemMods, "elem", f.ElemType, f.ElemKind))
-	}
-	if len(f.ElemValidation) > 0 {
-		b.WriteString(renderElemValidation(f))
-	}
-	fmt.Fprintf(b, `	%[1]s = append(%[1]s, elem)
-}
-if _, err := dec.ReadToken(); err != nil { return result, fmt.Errorf(%[2]q, err) }
-`, ref, "expected ']' for "+j+": %w")
-	return b.String()
-}
-
-// renderReadMap emits unmarshal code for map[string]V. Dive-applied mods
-// and validation run per-value.
-func renderReadMap(f FieldInfo, ref string) string {
-	j := `"` + f.JSONName + `"`
-	b := getSmall()
-	defer putSmall(b)
-	b.WriteString("{\n") // scope block to isolate locals across adjacent maps
-	fmt.Fprintf(b, `objTok, err := dec.ReadToken()
-if err != nil { return result, fmt.Errorf(%q, err) }
-if objTok.Kind() != '{' { return result, fmt.Errorf(%q, objTok.Kind()) }
-if %s == nil { %s = make(map[string]%s) }
-for dec.PeekKind() != '}' {
-	keyTok, err := dec.ReadToken()
-	if err != nil { return result, fmt.Errorf(%q, err) }
-	if keyTok.Kind() != '"' { return result, fmt.Errorf(%q, keyTok.Kind()) }
-	k := keyTok.String()
-`,
-		"reading "+j+": %w",
-		"expected '{' for "+j+", got %v",
-		ref, ref, f.ElemType,
-		"reading key of "+j+": %w",
-		"expected string key in "+j+", got %v")
-
-	// Read value into v based on element kind.
-	if f.ElemKind == KindStruct {
-		if isGenerated(f.ElemType) {
-			fmt.Fprintf(b, `	v, err := %s{}.DecodeFrom(dec)
-	if err != nil { return result, fmt.Errorf(%q, err) }
-`, f.ElemType, "decoding value of "+j+": %w")
-		} else {
-			fmt.Fprintf(b, `	var v %s
-	if err := json.UnmarshalDecode(dec, &v); err != nil {
-		return result, fmt.Errorf(%q, err)
-	}
-`, f.ElemType, "decoding value of "+j+": %w")
-		}
-	} else {
-		fmt.Fprintf(b, `	valTok, err := dec.ReadToken()
-	if err != nil { return result, fmt.Errorf(%q, err) }
-`, "reading value of "+j+": %w")
-		if f.ElemKind == KindBool {
-			fmt.Fprintf(b, `	if valTok.Kind() != 't' && valTok.Kind() != 'f' { return result, fmt.Errorf(%q, valTok.Kind()) }
-`, "expected bool in "+j+", got %v")
-		} else {
-			fmt.Fprintf(b, `	if valTok.Kind() != %s { return result, fmt.Errorf(%q, valTok.Kind()) }
-`, tokenKind(f.ElemKind), "expected "+kindName(f.ElemKind)+" in "+j+", got %v")
-		}
-		fmt.Fprintf(b, "\t_v := %s\n", tokenExtract(f.ElemKind, "valTok"))
-	}
-
-	// dive: mods + validation apply to v.
-	if len(f.ElemMods) > 0 {
-		b.WriteString(renderMods(f.ElemMods, "v", f.ElemType, f.ElemKind))
-	}
-	if len(f.ElemValidation) > 0 {
-		b.WriteString(renderValidationOn(f.ElemValidation, "v", f.JSONName+"[]", f.ElemKind, f.MultiErr))
-	}
-
-	fmt.Fprintf(b, `	%s[k] = v
-}
-if _, err := dec.ReadToken(); err != nil { return result, fmt.Errorf(%q, err) }
-}
-`, ref, "expected '}' for "+j+": %w")
-	return b.String()
-}
-
-func renderReadBytesInto(f FieldInfo, ref string) string {
-	saved := f.GoName
-	// swap goName so the helper's `result.<GoName>` becomes `ref` — easier: rewrite.
-	_ = saved
-	return rewriteRef(renderReadBytes(f), "result."+f.GoName, ref)
-}
-
-func renderReadTimeInto(f FieldInfo, ref string) string {
-	return rewriteRef(renderReadTime(f), "result."+f.GoName, ref)
-}
-
-func renderReadDurationInto(f FieldInfo, ref string) string {
-	return rewriteRef(renderReadDuration(f), "result."+f.GoName, ref)
-}
-
-func renderReadNetIPInto(f FieldInfo, ref string) string {
-	return rewriteRef(renderReadNetIP(f), "result."+f.GoName, ref)
-}
-
-func renderReadNetipAddrInto(f FieldInfo, ref string) string {
-	return rewriteRef(renderReadNetipAddr(f), "result."+f.GoName, ref)
-}
-
-func renderReadNetipPrefixInto(f FieldInfo, ref string) string {
-	return rewriteRef(renderReadNetipPrefix(f), "result."+f.GoName, ref)
-}
-
-// rewriteRef replaces occurrences of old with new in the generated Go code.
-// Used by the *Into wrappers to redirect assignments to a scratch variable
-// when rendering pointer-wrapped reads.
-func rewriteRef(src, old, new string) string {
-	return strings.ReplaceAll(src, old, new)
-}
-
-// renderReadBytes emits unmarshal code for a []byte field based on format.
-func renderReadBytes(f FieldInfo) string {
-	ref := "result." + f.GoName
-	j := `"` + f.JSONName + `"`
-	if f.Format == "array" {
-		return fmt.Sprintf(`arrTok, err := dec.ReadToken()
-if err != nil { return result, fmt.Errorf(%q, err) }
-if arrTok.Kind() != '[' { return result, fmt.Errorf(%q, arrTok.Kind()) }
-for dec.PeekKind() != ']' {
-	elemTok, err := dec.ReadToken()
-	if err != nil { return result, fmt.Errorf(%q, err) }
-	if elemTok.Kind() != '0' { return result, fmt.Errorf(%q, elemTok.Kind()) }
-	%s = append(%s, byte(elemTok.Uint()))
-}
-if _, err := dec.ReadToken(); err != nil { return result, fmt.Errorf(%q, err) }
-`,
-			"reading "+j+": %w",
-			"expected '[' for "+j+", got %v",
-			"reading element of "+j+": %w",
-			"expected number in "+j+", got %v",
-			ref, ref,
-			"expected ']' for "+j+": %w")
-	}
-	parser := "base64.StdEncoding.DecodeString"
-	switch f.Format {
-	case "base64url":
-		parser = "base64.URLEncoding.DecodeString"
-	case "base32":
-		parser = "base32.StdEncoding.DecodeString"
-	case "base32hex":
-		parser = "base32.HexEncoding.DecodeString"
-	case "base16", "hex":
-		parser = "hex.DecodeString"
-	}
-	return fmt.Sprintf(`valTok, err := dec.ReadToken()
-if err != nil { return result, fmt.Errorf(%q, err) }
-if valTok.Kind() != '"' { return result, fmt.Errorf(%q, valTok.Kind()) }
-%s, err = %s(valTok.String())
-if err != nil { return result, fmt.Errorf(%q, err) }
-`,
-		"reading "+j+": %w",
-		"expected string for "+j+", got %v",
-		ref, parser,
-		j+": %w")
-}
-
-// renderReadTime emits unmarshal code for a time.Time field based on format.
-func renderReadTime(f FieldInfo) string {
-	ref := "result." + f.GoName
-	j := `"` + f.JSONName + `"`
-	layout, numeric := timeLayoutExpr(f.Format)
-	if numeric != "" {
-		// numeric unix family → read number token
-		ctor := map[string]string{
-			"Unix":      "time.Unix(valTok.Int(), 0)",
-			"UnixMilli": "time.UnixMilli(valTok.Int())",
-			"UnixMicro": "time.UnixMicro(valTok.Int())",
-			"UnixNano":  "time.Unix(0, valTok.Int())",
-		}[numeric]
-		return fmt.Sprintf(`valTok, err := dec.ReadToken()
-if err != nil { return result, fmt.Errorf(%q, err) }
-if valTok.Kind() != '0' { return result, fmt.Errorf(%q, valTok.Kind()) }
-%s = %s
-`,
-			"reading "+j+": %w",
-			"expected number for "+j+", got %v",
-			ref, ctor)
-	}
-	return fmt.Sprintf(`valTok, err := dec.ReadToken()
-if err != nil { return result, fmt.Errorf(%q, err) }
-if valTok.Kind() != '"' { return result, fmt.Errorf(%q, valTok.Kind()) }
-%s, err = time.Parse(%s, valTok.String())
-if err != nil { return result, fmt.Errorf(%q, err) }
-`,
-		"reading "+j+": %w",
-		"expected string for "+j+", got %v",
-		ref, layout,
-		j+": %w")
-}
-
-// renderReadDuration emits unmarshal code for a time.Duration field.
-func renderReadDuration(f FieldInfo) string {
-	ref := "result." + f.GoName
-	j := `"` + f.JSONName + `"`
-	numRead := func(assign string) string {
-		return fmt.Sprintf(`valTok, err := dec.ReadToken()
-if err != nil { return result, fmt.Errorf(%q, err) }
-if valTok.Kind() != '0' { return result, fmt.Errorf(%q, valTok.Kind()) }
-%s
-`,
-			"reading "+j+": %w",
-			"expected number for "+j+", got %v",
-			assign)
-	}
-	switch f.Format {
-	case "sec":
-		return numRead(fmt.Sprintf("%s = time.Duration(valTok.Float() * float64(time.Second))", ref))
-	case "milli":
-		return numRead(fmt.Sprintf("%s = time.Duration(valTok.Int()) * time.Millisecond", ref))
-	case "micro":
-		return numRead(fmt.Sprintf("%s = time.Duration(valTok.Int()) * time.Microsecond", ref))
-	case "nano":
-		return numRead(fmt.Sprintf("%s = time.Duration(valTok.Int())", ref))
-	}
-	// units / default — parse string like "1h30m"
-	return fmt.Sprintf(`valTok, err := dec.ReadToken()
-if err != nil { return result, fmt.Errorf(%q, err) }
-if valTok.Kind() != '"' { return result, fmt.Errorf(%q, valTok.Kind()) }
-%s, err = time.ParseDuration(valTok.String())
-if err != nil { return result, fmt.Errorf(%q, err) }
-`,
-		"reading "+j+": %w",
-		"expected string for "+j+", got %v",
-		ref,
-		j+": %w")
-}
-
-// renderReadNetIP / renderReadNetipAddr / renderReadNetipPrefix share a shape.
-func renderReadNetIP(f FieldInfo) string {
-	ref := "result." + f.GoName
-	j := `"` + f.JSONName + `"`
-	return fmt.Sprintf(`valTok, err := dec.ReadToken()
-if err != nil { return result, fmt.Errorf(%q, err) }
-if valTok.Kind() != '"' { return result, fmt.Errorf(%q, valTok.Kind()) }
-%s = net.ParseIP(valTok.String())
-if %s == nil { return result, fmt.Errorf(%q) }
-`,
-		"reading "+j+": %w",
-		"expected string for "+j+", got %v",
-		ref, ref,
-		j+": invalid IP")
-}
-
-func renderReadNetipAddr(f FieldInfo) string {
-	ref := "result." + f.GoName
-	j := `"` + f.JSONName + `"`
-	return fmt.Sprintf(`valTok, err := dec.ReadToken()
-if err != nil { return result, fmt.Errorf(%q, err) }
-if valTok.Kind() != '"' { return result, fmt.Errorf(%q, valTok.Kind()) }
-%s, err = netip.ParseAddr(valTok.String())
-if err != nil { return result, fmt.Errorf(%q, err) }
-`,
-		"reading "+j+": %w",
-		"expected string for "+j+", got %v",
-		ref,
-		j+": %w")
-}
-
-func renderReadNetipPrefix(f FieldInfo) string {
-	ref := "result." + f.GoName
-	j := `"` + f.JSONName + `"`
-	return fmt.Sprintf(`valTok, err := dec.ReadToken()
-if err != nil { return result, fmt.Errorf(%q, err) }
-if valTok.Kind() != '"' { return result, fmt.Errorf(%q, valTok.Kind()) }
-%s, err = netip.ParsePrefix(valTok.String())
-if err != nil { return result, fmt.Errorf(%q, err) }
-`,
-		"reading "+j+": %w",
-		"expected string for "+j+", got %v",
-		ref,
-		j+": %w")
 }
 
 func renderAppendDuration(f FieldInfo, ref string) string {
@@ -5332,47 +4749,3 @@ if s.Bytes()[%[1]s] != ']' { return result, i, scan.ErrBadArray }
 	}
 	b.WriteString("}\n") // close outer block
 }
-
-// genTemplate emits the body of the generated file — struct methods
-// plus oneOf frozen-slice decls. The package decl, build-tag, and
-// import block are prepended by generate() after the body is rendered
-// and scanned for which packages it actually references.
-const genTemplate = `
-{{range .OneOfDecls}}
-{{.}}
-{{end}}
-{{range .Structs}}
-func ({{.Name}}) DecodeFrom(data []byte, i int) ({{.Name}}, int, error) {
-	{{decode .}}
-}
-
-func ({{.Name}}) DecodeStreamFrom(s *scan.Stream, i int) ({{.Name}}, int, error) {
-	{{streamDecode .}}
-}
-
-func (s {{.Name}}) JSONSize() int {
-	{{sizeJSON .}}
-}
-
-func (s {{.Name}}) AppendJSON(dst []byte) ([]byte, error) {
-	{{appendJSON .}}
-}
-
-{{if .Marshal}}
-func (s {{.Name}}) MarshalJSON() ([]byte, error) {
-	return encode.Marshal(s)
-}
-{{end}}
-
-{{if .Unmarshal}}
-func (s *{{.Name}}) UnmarshalJSON(data []byte) error {
-	v, err := decode.Unmarshal[{{.Name}}](data)
-	if err != nil {
-		return err
-	}
-	*s = v
-	return nil
-}
-{{end}}
-{{end}}
-`

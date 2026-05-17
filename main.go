@@ -324,16 +324,21 @@ func generateDir(dir, outFlag, pkgFlag string) error {
 
 	for _, bk := range bucketKeys(buckets) {
 		group := buckets[bk]
-		src, err := generate(outPkg, group)
-		if err != nil {
-			return err
-		}
 		out := outFlag
 		if out == "" {
 			out = filepath.Join(dir, packageFileName(dir, bk.tag, bk.test))
 		}
-		if err := os.WriteFile(out, src, 0644); err != nil {
+		f, err := os.Create(out)
+		if err != nil {
 			return err
+		}
+		err = generateTo(f, outPkg, group)
+		cerr := f.Close()
+		if err != nil {
+			return err
+		}
+		if cerr != nil {
+			return cerr
 		}
 		cliLog.Info("wrote %s", out)
 	}
@@ -433,11 +438,6 @@ func generateSingleFile(file string, wanted []string, outFlag, pkgFlag string) e
 		outPkg = pkgName
 	}
 
-	src, err := generate(outPkg, structs)
-	if err != nil {
-		return err
-	}
-
 	out := outFlag
 	if out == "" {
 		// Source foo_test.go → foo_ggen_test.go; otherwise foo.go → foo_ggen.go.
@@ -447,8 +447,17 @@ func generateSingleFile(file string, wanted []string, outFlag, pkgFlag string) e
 			out = strings.TrimSuffix(file, ".go") + genSuffix
 		}
 	}
-	if err := os.WriteFile(out, src, 0644); err != nil {
+	f, err := os.Create(out)
+	if err != nil {
 		return err
+	}
+	err = generateTo(f, outPkg, structs)
+	cerr := f.Close()
+	if err != nil {
+		return err
+	}
+	if cerr != nil {
+		return cerr
 	}
 	cliLog.Info("wrote %s", out)
 	return nil
