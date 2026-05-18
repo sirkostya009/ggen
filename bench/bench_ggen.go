@@ -17,6 +17,7 @@ import (
 
 func (Addr) DecodeFrom(data []byte, i int) (Addr, int, error) {
 	var result Addr
+
 	var err error
 	_ = err
 	seenCity := false
@@ -28,6 +29,7 @@ func (Addr) DecodeFrom(data []byte, i int) (Addr, int, error) {
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -149,8 +151,8 @@ func (Addr) DecodeFrom(data []byte, i int) (Addr, int, error) {
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (Addr) DecodeStreamFrom(s *scan.Stream, i int) (Addr, int, error) {
 	var result Addr
 	seenCity := false
@@ -164,10 +166,9 @@ func (Addr) DecodeStreamFrom(s *scan.Stream, i int) (Addr, int, error) {
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -221,10 +222,9 @@ func (Addr) DecodeStreamFrom(s *scan.Stream, i int) (Addr, int, error) {
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -239,15 +239,14 @@ func (Addr) DecodeStreamFrom(s *scan.Stream, i int) (Addr, int, error) {
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s Addr) JSONSize() int {
 	size := 23
 	size += len(s.City) * 2
 	size += len(s.Street) * 2
 	return size
 }
-
 func (s Addr) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
@@ -257,9 +256,9 @@ func (s Addr) AppendJSON(dst []byte) ([]byte, error) {
 	dst = encode.AppendStringNoHTML(dst, s.Street)
 	return append(dst, '}'), nil
 }
-
 func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 	var result Node
+
 	var err error
 	_ = err
 	seenActive := false
@@ -284,6 +283,7 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -605,11 +605,9 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 					return result, i, &validation.DuplicateKeyError{Field: "extra"}
 				}
 				seenExtra = true
-				{
-					result.Extra, i, err = scan.Any(data, i)
-					if err != nil {
-						return result, i, err
-					}
+				result.Extra, i, err = scan.Any(data, i)
+				if err != nil {
+					return result, i, err
 				}
 			case "props":
 				if seenProps {
@@ -907,7 +905,7 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 				}
 				seenParent = true
 				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-					i = 4 + i
+					i += 4
 					result.Parent = nil
 				} else {
 					var v Addr
@@ -1039,8 +1037,8 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 	var result Node
 	seenActive := false
@@ -1067,10 +1065,9 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		if !seenID {
@@ -1263,6 +1260,7 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 									continue
 								}
 								break
+							} else {
 							}
 							slab0 = append(slab0, Addr{})
 							slab0[len(slab0)-1], i, err = slab0[len(slab0)-1].DecodeStreamFrom(s, i)
@@ -1787,6 +1785,7 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 							return result, i, scan.ErrBadLiteral
 						}
 					}
+					i += 4
 					i = 4 + i
 					result.Parent = nil
 				} else {
@@ -1795,7 +1794,6 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 					if err != nil {
 						return result, i, err
 					}
-
 					result.Parent = &v
 				}
 			default:
@@ -1920,10 +1918,9 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -1944,8 +1941,8 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s Node) JSONSize() int {
 	size := 550
 	size += ((len(s.Blob) + 2) / 3) * 4
@@ -2002,7 +1999,6 @@ func (s Node) JSONSize() int {
 	}
 	return size
 }
-
 func (s Node) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
@@ -2023,6 +2019,7 @@ func (s Node) AppendJSON(dst []byte) ([]byte, error) {
 		dst = append(dst, ',')
 	}
 	dst = append(dst, "\"children\":"...)
+
 	if s.Children == nil {
 		dst = append(dst, "null"...)
 	} else {
@@ -2040,10 +2037,12 @@ func (s Node) AppendJSON(dst []byte) ([]byte, error) {
 		}
 		dst = append(dst, ']')
 	}
+
 	if len(dst) > start {
 		dst = append(dst, ',')
 	}
 	dst = append(dst, "\"coords\":["...)
+
 	if len(s.Coords) > 0 {
 		dst = strconv.AppendFloat(dst, s.Coords[0], 'g', -1, 64)
 		for _, v0 := range s.Coords[1:] {
@@ -2062,6 +2061,7 @@ func (s Node) AppendJSON(dst []byte) ([]byte, error) {
 		dst = append(dst, ',')
 	}
 	dst = append(dst, "\"extra\":"...)
+
 	if dst, err = encode.AppendAny(dst, s.Extra); err != nil {
 		return dst, err
 	}
@@ -2074,6 +2074,7 @@ func (s Node) AppendJSON(dst []byte) ([]byte, error) {
 		dst = append(dst, ',')
 	}
 	dst = append(dst, "\"matrix\":"...)
+
 	if s.Matrix == nil {
 		dst = append(dst, "null"...)
 	} else {
@@ -2111,6 +2112,7 @@ func (s Node) AppendJSON(dst []byte) ([]byte, error) {
 		}
 		dst = append(dst, ']')
 	}
+
 	if len(dst) > start {
 		dst = append(dst, ',')
 	}
@@ -2129,10 +2131,12 @@ func (s Node) AppendJSON(dst []byte) ([]byte, error) {
 			}
 		}
 	}
+
 	if len(dst) > start {
 		dst = append(dst, ',')
 	}
 	dst = append(dst, "\"props\":"...)
+
 	if s.Props == nil {
 		dst = append(dst, "null"...)
 	} else {
@@ -2153,19 +2157,23 @@ func (s Node) AppendJSON(dst []byte) ([]byte, error) {
 		}
 		dst = append(dst, '}')
 	}
+
 	if len(dst) > start {
 		dst = append(dst, ',')
 	}
 	dst = append(dst, "\"raw\":"...)
+
 	if len(s.Raw) == 0 {
 		dst = append(dst, "null"...)
 	} else {
 		dst = append(dst, s.Raw...)
 	}
+
 	if len(dst) > start {
 		dst = append(dst, ',')
 	}
 	dst = append(dst, "\"refs\":"...)
+
 	if s.Refs == nil {
 		dst = append(dst, "null"...)
 	} else {
@@ -2191,6 +2199,7 @@ func (s Node) AppendJSON(dst []byte) ([]byte, error) {
 		}
 		dst = append(dst, ']')
 	}
+
 	if len(dst) > start {
 		dst = append(dst, ',')
 	}
@@ -2200,6 +2209,7 @@ func (s Node) AppendJSON(dst []byte) ([]byte, error) {
 		dst = append(dst, ',')
 	}
 	dst = append(dst, "\"tags\":"...)
+
 	if s.Tags == nil {
 		dst = append(dst, "null"...)
 	} else {
@@ -2214,11 +2224,12 @@ func (s Node) AppendJSON(dst []byte) ([]byte, error) {
 		}
 		dst = append(dst, ']')
 	}
+
 	return append(dst, '}'), nil
 }
-
 func (Validated) DecodeFrom(data []byte, i int) (Validated, int, error) {
 	var result Validated
+
 	var err error
 	_ = err
 	seenAge := false
@@ -2233,6 +2244,7 @@ func (Validated) DecodeFrom(data []byte, i int) (Validated, int, error) {
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -2520,8 +2532,8 @@ func (Validated) DecodeFrom(data []byte, i int) (Validated, int, error) {
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (Validated) DecodeStreamFrom(s *scan.Stream, i int) (Validated, int, error) {
 	var result Validated
 	seenAge := false
@@ -2538,10 +2550,9 @@ func (Validated) DecodeStreamFrom(s *scan.Stream, i int) (Validated, int, error)
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		if !seenEmail {
@@ -2742,10 +2753,9 @@ func (Validated) DecodeStreamFrom(s *scan.Stream, i int) (Validated, int, error)
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -2766,8 +2776,8 @@ func (Validated) DecodeStreamFrom(s *scan.Stream, i int) (Validated, int, error)
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s Validated) JSONSize() int {
 	size := 68
 	size += len(s.Bio) * 2
@@ -2781,7 +2791,6 @@ func (s Validated) JSONSize() int {
 	}
 	return size
 }
-
 func (s Validated) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
@@ -2794,6 +2803,7 @@ func (s Validated) AppendJSON(dst []byte) ([]byte, error) {
 	dst = append(dst, ",\"name\":\""...)
 	dst = encode.AppendStringNoHTML(dst, s.Name)
 	dst = append(dst, ",\"tags\":"...)
+
 	if s.Tags == nil {
 		dst = append(dst, "null"...)
 	} else {
@@ -2808,5 +2818,6 @@ func (s Validated) AppendJSON(dst []byte) ([]byte, error) {
 		}
 		dst = append(dst, ']')
 	}
+
 	return append(dst, '}'), nil
 }

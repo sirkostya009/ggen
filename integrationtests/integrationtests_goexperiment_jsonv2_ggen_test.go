@@ -20,6 +20,7 @@ import (
 
 func (HookedStruct) DecodeFrom(data []byte, i int) (HookedStruct, int, error) {
 	var result HookedStruct
+
 	var err error
 	_ = err
 	seenN := false
@@ -31,6 +32,7 @@ func (HookedStruct) DecodeFrom(data []byte, i int) (HookedStruct, int, error) {
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -174,8 +176,8 @@ func (HookedStruct) DecodeFrom(data []byte, i int) (HookedStruct, int, error) {
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (HookedStruct) DecodeStreamFrom(s *scan.Stream, i int) (HookedStruct, int, error) {
 	var result HookedStruct
 	seenN := false
@@ -189,10 +191,9 @@ func (HookedStruct) DecodeStreamFrom(s *scan.Stream, i int) (HookedStruct, int, 
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		if !seenName {
@@ -263,10 +264,9 @@ func (HookedStruct) DecodeStreamFrom(s *scan.Stream, i int) (HookedStruct, int, 
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -284,14 +284,13 @@ func (HookedStruct) DecodeStreamFrom(s *scan.Stream, i int) (HookedStruct, int, 
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s HookedStruct) JSONSize() int {
 	size := 36
 	size += len(s.Name) * 2
 	return size
 }
-
 func (s HookedStruct) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
@@ -301,11 +300,9 @@ func (s HookedStruct) AppendJSON(dst []byte) ([]byte, error) {
 	dst = encode.AppendStringNoHTML(dst, s.Name)
 	return append(dst, '}'), nil
 }
-
 func (s HookedStruct) MarshalJSON() ([]byte, error) {
 	return encode.Marshal(s)
 }
-
 func (s *HookedStruct) UnmarshalJSON(data []byte) error {
 	v, err := decode.Unmarshal[HookedStruct](data)
 	if err != nil {
@@ -314,9 +311,9 @@ func (s *HookedStruct) UnmarshalJSON(data []byte) error {
 	*s = v
 	return nil
 }
-
 func (RichTypes) DecodeFrom(data []byte, i int) (RichTypes, int, error) {
 	var result RichTypes
+
 	var err error
 	_ = err
 	seenBig := false
@@ -334,6 +331,7 @@ func (RichTypes) DecodeFrom(data []byte, i int) (RichTypes, int, error) {
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -582,8 +580,8 @@ func (RichTypes) DecodeFrom(data []byte, i int) (RichTypes, int, error) {
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (RichTypes) DecodeStreamFrom(s *scan.Stream, i int) (RichTypes, int, error) {
 	var result RichTypes
 	seenBig := false
@@ -603,10 +601,9 @@ func (RichTypes) DecodeStreamFrom(s *scan.Stream, i int) (RichTypes, int, error)
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -805,10 +802,9 @@ func (RichTypes) DecodeStreamFrom(s *scan.Stream, i int) (RichTypes, int, error)
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -823,8 +819,8 @@ func (RichTypes) DecodeStreamFrom(s *scan.Stream, i int) (RichTypes, int, error)
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s RichTypes) JSONSize() int {
 	size := 407
 	size += s.Big.BitLen() / 3
@@ -846,7 +842,6 @@ func (s RichTypes) JSONSize() int {
 	}
 	return size
 }
-
 func (s RichTypes) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
@@ -855,10 +850,12 @@ func (s RichTypes) AppendJSON(dst []byte) ([]byte, error) {
 	dst = append(dst, ",\"bigF\":\""...)
 	dst = (&s.BigF).Append(dst, 'g', -1)
 	dst = append(dst, "\",\"bigR\":\""...)
+
 	if dst, err = (&s.BigR).AppendText(dst); err != nil {
 		return dst, err
 	}
 	dst = append(dst, "\",\"gofrsId\":"...)
+
 	{
 		var t []byte
 		t, err = s.GofrsID.MarshalText()
@@ -867,8 +864,10 @@ func (s RichTypes) AppendJSON(dst []byte) ([]byte, error) {
 		}
 		dst = append(dst, '"')
 		dst = encode.AppendStringNoHTML(dst, encode.BytesToString(t))
+		dst = append(dst, '"')
 	}
 	dst = append(dst, ",\"id\":"...)
+
 	{
 		var t []byte
 		t, err = s.ID.MarshalText()
@@ -877,14 +876,17 @@ func (s RichTypes) AppendJSON(dst []byte) ([]byte, error) {
 		}
 		dst = append(dst, '"')
 		dst = encode.AppendStringNoHTML(dst, encode.BytesToString(t))
+		dst = append(dst, '"')
 	}
 	dst = append(dst, ",\"raw1\":"...)
+
 	if len(s.Raw1) == 0 {
 		dst = append(dst, "null"...)
 	} else {
 		dst = append(dst, s.Raw1...)
 	}
 	dst = append(dst, ",\"raw2\":"...)
+
 	if len(s.Raw2) == 0 {
 		dst = append(dst, "null"...)
 	} else {
@@ -893,10 +895,11 @@ func (s RichTypes) AppendJSON(dst []byte) ([]byte, error) {
 	dst = append(dst, ",\"site\":\""...)
 	dst = encode.AppendURL(dst, s.Site)
 	return append(dst, "\"}"...), nil
-}
 
+}
 func (TimeDefault) DecodeFrom(data []byte, i int) (TimeDefault, int, error) {
 	var result TimeDefault
+
 	var err error
 	_ = err
 	seenDefault := false
@@ -907,6 +910,7 @@ func (TimeDefault) DecodeFrom(data []byte, i int) (TimeDefault, int, error) {
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -1005,8 +1009,8 @@ func (TimeDefault) DecodeFrom(data []byte, i int) (TimeDefault, int, error) {
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (TimeDefault) DecodeStreamFrom(s *scan.Stream, i int) (TimeDefault, int, error) {
 	var result TimeDefault
 	seenDefault := false
@@ -1019,10 +1023,9 @@ func (TimeDefault) DecodeStreamFrom(s *scan.Stream, i int) (TimeDefault, int, er
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -1066,10 +1069,9 @@ func (TimeDefault) DecodeStreamFrom(s *scan.Stream, i int) (TimeDefault, int, er
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -1084,23 +1086,23 @@ func (TimeDefault) DecodeStreamFrom(s *scan.Stream, i int) (TimeDefault, int, er
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s TimeDefault) JSONSize() int {
 	size := 113
 	return size
 }
-
 func (s TimeDefault) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"default\":\""...)
 	dst = s.Default.AppendFormat(dst, time.RFC3339Nano)
 	return append(dst, "\"}"...), nil
-}
 
+}
 func (TimeUnix) DecodeFrom(data []byte, i int) (TimeUnix, int, error) {
 	var result TimeUnix
+
 	var err error
 	_ = err
 	seenUnix := false
@@ -1111,6 +1113,7 @@ func (TimeUnix) DecodeFrom(data []byte, i int) (TimeUnix, int, error) {
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -1191,8 +1194,8 @@ func (TimeUnix) DecodeFrom(data []byte, i int) (TimeUnix, int, error) {
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (TimeUnix) DecodeStreamFrom(s *scan.Stream, i int) (TimeUnix, int, error) {
 	var result TimeUnix
 	seenUnix := false
@@ -1205,10 +1208,9 @@ func (TimeUnix) DecodeStreamFrom(s *scan.Stream, i int) (TimeUnix, int, error) {
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -1251,10 +1253,9 @@ func (TimeUnix) DecodeStreamFrom(s *scan.Stream, i int) (TimeUnix, int, error) {
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -1269,13 +1270,12 @@ func (TimeUnix) DecodeStreamFrom(s *scan.Stream, i int) (TimeUnix, int, error) {
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s TimeUnix) JSONSize() int {
 	size := 33
 	return size
 }
-
 func (s TimeUnix) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
@@ -1283,9 +1283,9 @@ func (s TimeUnix) AppendJSON(dst []byte) ([]byte, error) {
 	dst = strconv.AppendFloat(dst, float64(s.Unix.UnixNano())/1e9, 'f', -1, 64)
 	return append(dst, '}'), nil
 }
-
 func (TimeUnixMilli) DecodeFrom(data []byte, i int) (TimeUnixMilli, int, error) {
 	var result TimeUnixMilli
+
 	var err error
 	_ = err
 	seenUnixMilli := false
@@ -1296,6 +1296,7 @@ func (TimeUnixMilli) DecodeFrom(data []byte, i int) (TimeUnixMilli, int, error) 
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -1374,8 +1375,8 @@ func (TimeUnixMilli) DecodeFrom(data []byte, i int) (TimeUnixMilli, int, error) 
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (TimeUnixMilli) DecodeStreamFrom(s *scan.Stream, i int) (TimeUnixMilli, int, error) {
 	var result TimeUnixMilli
 	seenUnixMilli := false
@@ -1388,10 +1389,9 @@ func (TimeUnixMilli) DecodeStreamFrom(s *scan.Stream, i int) (TimeUnixMilli, int
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -1432,10 +1432,9 @@ func (TimeUnixMilli) DecodeStreamFrom(s *scan.Stream, i int) (TimeUnixMilli, int
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -1450,13 +1449,12 @@ func (TimeUnixMilli) DecodeStreamFrom(s *scan.Stream, i int) (TimeUnixMilli, int
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s TimeUnixMilli) JSONSize() int {
 	size := 34
 	return size
 }
-
 func (s TimeUnixMilli) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
@@ -1464,9 +1462,9 @@ func (s TimeUnixMilli) AppendJSON(dst []byte) ([]byte, error) {
 	dst = strconv.AppendInt(dst, s.UnixMilli.UnixMilli(), 10)
 	return append(dst, '}'), nil
 }
-
 func (TimeUnixMicro) DecodeFrom(data []byte, i int) (TimeUnixMicro, int, error) {
 	var result TimeUnixMicro
+
 	var err error
 	_ = err
 	seenUnixMicro := false
@@ -1477,6 +1475,7 @@ func (TimeUnixMicro) DecodeFrom(data []byte, i int) (TimeUnixMicro, int, error) 
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -1555,8 +1554,8 @@ func (TimeUnixMicro) DecodeFrom(data []byte, i int) (TimeUnixMicro, int, error) 
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (TimeUnixMicro) DecodeStreamFrom(s *scan.Stream, i int) (TimeUnixMicro, int, error) {
 	var result TimeUnixMicro
 	seenUnixMicro := false
@@ -1569,10 +1568,9 @@ func (TimeUnixMicro) DecodeStreamFrom(s *scan.Stream, i int) (TimeUnixMicro, int
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -1613,10 +1611,9 @@ func (TimeUnixMicro) DecodeStreamFrom(s *scan.Stream, i int) (TimeUnixMicro, int
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -1631,13 +1628,12 @@ func (TimeUnixMicro) DecodeStreamFrom(s *scan.Stream, i int) (TimeUnixMicro, int
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s TimeUnixMicro) JSONSize() int {
 	size := 34
 	return size
 }
-
 func (s TimeUnixMicro) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
@@ -1645,9 +1641,9 @@ func (s TimeUnixMicro) AppendJSON(dst []byte) ([]byte, error) {
 	dst = strconv.AppendInt(dst, s.UnixMicro.UnixMicro(), 10)
 	return append(dst, '}'), nil
 }
-
 func (TimeUnixNano) DecodeFrom(data []byte, i int) (TimeUnixNano, int, error) {
 	var result TimeUnixNano
+
 	var err error
 	_ = err
 	seenUnixNano := false
@@ -1658,6 +1654,7 @@ func (TimeUnixNano) DecodeFrom(data []byte, i int) (TimeUnixNano, int, error) {
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -1736,8 +1733,8 @@ func (TimeUnixNano) DecodeFrom(data []byte, i int) (TimeUnixNano, int, error) {
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (TimeUnixNano) DecodeStreamFrom(s *scan.Stream, i int) (TimeUnixNano, int, error) {
 	var result TimeUnixNano
 	seenUnixNano := false
@@ -1750,10 +1747,9 @@ func (TimeUnixNano) DecodeStreamFrom(s *scan.Stream, i int) (TimeUnixNano, int, 
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -1794,10 +1790,9 @@ func (TimeUnixNano) DecodeStreamFrom(s *scan.Stream, i int) (TimeUnixNano, int, 
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -1812,13 +1807,12 @@ func (TimeUnixNano) DecodeStreamFrom(s *scan.Stream, i int) (TimeUnixNano, int, 
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s TimeUnixNano) JSONSize() int {
 	size := 33
 	return size
 }
-
 func (s TimeUnixNano) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
@@ -1826,9 +1820,9 @@ func (s TimeUnixNano) AppendJSON(dst []byte) ([]byte, error) {
 	dst = strconv.AppendInt(dst, s.UnixNano.UnixNano(), 10)
 	return append(dst, '}'), nil
 }
-
 func (TimeANSIC) DecodeFrom(data []byte, i int) (TimeANSIC, int, error) {
 	var result TimeANSIC
+
 	var err error
 	_ = err
 	seenANSIC := false
@@ -1839,6 +1833,7 @@ func (TimeANSIC) DecodeFrom(data []byte, i int) (TimeANSIC, int, error) {
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -1937,8 +1932,8 @@ func (TimeANSIC) DecodeFrom(data []byte, i int) (TimeANSIC, int, error) {
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (TimeANSIC) DecodeStreamFrom(s *scan.Stream, i int) (TimeANSIC, int, error) {
 	var result TimeANSIC
 	seenANSIC := false
@@ -1951,10 +1946,9 @@ func (TimeANSIC) DecodeStreamFrom(s *scan.Stream, i int) (TimeANSIC, int, error)
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -1998,10 +1992,9 @@ func (TimeANSIC) DecodeStreamFrom(s *scan.Stream, i int) (TimeANSIC, int, error)
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -2016,23 +2009,23 @@ func (TimeANSIC) DecodeStreamFrom(s *scan.Stream, i int) (TimeANSIC, int, error)
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s TimeANSIC) JSONSize() int {
 	size := 100
 	return size
 }
-
 func (s TimeANSIC) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"ansic\":\""...)
 	dst = s.ANSIC.AppendFormat(dst, time.ANSIC)
 	return append(dst, "\"}"...), nil
-}
 
+}
 func (TimeUnixDate) DecodeFrom(data []byte, i int) (TimeUnixDate, int, error) {
 	var result TimeUnixDate
+
 	var err error
 	_ = err
 	seenUnixDate := false
@@ -2043,6 +2036,7 @@ func (TimeUnixDate) DecodeFrom(data []byte, i int) (TimeUnixDate, int, error) {
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -2141,8 +2135,8 @@ func (TimeUnixDate) DecodeFrom(data []byte, i int) (TimeUnixDate, int, error) {
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (TimeUnixDate) DecodeStreamFrom(s *scan.Stream, i int) (TimeUnixDate, int, error) {
 	var result TimeUnixDate
 	seenUnixDate := false
@@ -2155,10 +2149,9 @@ func (TimeUnixDate) DecodeStreamFrom(s *scan.Stream, i int) (TimeUnixDate, int, 
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -2202,10 +2195,9 @@ func (TimeUnixDate) DecodeStreamFrom(s *scan.Stream, i int) (TimeUnixDate, int, 
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -2220,23 +2212,23 @@ func (TimeUnixDate) DecodeStreamFrom(s *scan.Stream, i int) (TimeUnixDate, int, 
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s TimeUnixDate) JSONSize() int {
 	size := 109
 	return size
 }
-
 func (s TimeUnixDate) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"unixDate\":\""...)
 	dst = s.UnixDate.AppendFormat(dst, time.UnixDate)
 	return append(dst, "\"}"...), nil
-}
 
+}
 func (TimeRubyDate) DecodeFrom(data []byte, i int) (TimeRubyDate, int, error) {
 	var result TimeRubyDate
+
 	var err error
 	_ = err
 	seenRubyDate := false
@@ -2247,6 +2239,7 @@ func (TimeRubyDate) DecodeFrom(data []byte, i int) (TimeRubyDate, int, error) {
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -2345,8 +2338,8 @@ func (TimeRubyDate) DecodeFrom(data []byte, i int) (TimeRubyDate, int, error) {
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (TimeRubyDate) DecodeStreamFrom(s *scan.Stream, i int) (TimeRubyDate, int, error) {
 	var result TimeRubyDate
 	seenRubyDate := false
@@ -2359,10 +2352,9 @@ func (TimeRubyDate) DecodeStreamFrom(s *scan.Stream, i int) (TimeRubyDate, int, 
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -2406,10 +2398,9 @@ func (TimeRubyDate) DecodeStreamFrom(s *scan.Stream, i int) (TimeRubyDate, int, 
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -2424,23 +2415,23 @@ func (TimeRubyDate) DecodeStreamFrom(s *scan.Stream, i int) (TimeRubyDate, int, 
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s TimeRubyDate) JSONSize() int {
 	size := 109
 	return size
 }
-
 func (s TimeRubyDate) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"rubyDate\":\""...)
 	dst = s.RubyDate.AppendFormat(dst, time.RubyDate)
 	return append(dst, "\"}"...), nil
-}
 
+}
 func (TimeRFC822) DecodeFrom(data []byte, i int) (TimeRFC822, int, error) {
 	var result TimeRFC822
+
 	var err error
 	_ = err
 	seenRFC822 := false
@@ -2451,6 +2442,7 @@ func (TimeRFC822) DecodeFrom(data []byte, i int) (TimeRFC822, int, error) {
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -2549,8 +2541,8 @@ func (TimeRFC822) DecodeFrom(data []byte, i int) (TimeRFC822, int, error) {
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (TimeRFC822) DecodeStreamFrom(s *scan.Stream, i int) (TimeRFC822, int, error) {
 	var result TimeRFC822
 	seenRFC822 := false
@@ -2563,10 +2555,9 @@ func (TimeRFC822) DecodeStreamFrom(s *scan.Stream, i int) (TimeRFC822, int, erro
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -2610,10 +2601,9 @@ func (TimeRFC822) DecodeStreamFrom(s *scan.Stream, i int) (TimeRFC822, int, erro
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -2628,23 +2618,23 @@ func (TimeRFC822) DecodeStreamFrom(s *scan.Stream, i int) (TimeRFC822, int, erro
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s TimeRFC822) JSONSize() int {
 	size := 98
 	return size
 }
-
 func (s TimeRFC822) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"rfc822\":\""...)
 	dst = s.RFC822.AppendFormat(dst, time.RFC822)
 	return append(dst, "\"}"...), nil
-}
 
+}
 func (TimeRFC822Z) DecodeFrom(data []byte, i int) (TimeRFC822Z, int, error) {
 	var result TimeRFC822Z
+
 	var err error
 	_ = err
 	seenRFC822Z := false
@@ -2655,6 +2645,7 @@ func (TimeRFC822Z) DecodeFrom(data []byte, i int) (TimeRFC822Z, int, error) {
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -2753,8 +2744,8 @@ func (TimeRFC822Z) DecodeFrom(data []byte, i int) (TimeRFC822Z, int, error) {
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (TimeRFC822Z) DecodeStreamFrom(s *scan.Stream, i int) (TimeRFC822Z, int, error) {
 	var result TimeRFC822Z
 	seenRFC822Z := false
@@ -2767,10 +2758,9 @@ func (TimeRFC822Z) DecodeStreamFrom(s *scan.Stream, i int) (TimeRFC822Z, int, er
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -2814,10 +2804,9 @@ func (TimeRFC822Z) DecodeStreamFrom(s *scan.Stream, i int) (TimeRFC822Z, int, er
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -2832,23 +2821,23 @@ func (TimeRFC822Z) DecodeStreamFrom(s *scan.Stream, i int) (TimeRFC822Z, int, er
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s TimeRFC822Z) JSONSize() int {
 	size := 99
 	return size
 }
-
 func (s TimeRFC822Z) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"rfc822Z\":\""...)
 	dst = s.RFC822Z.AppendFormat(dst, time.RFC822Z)
 	return append(dst, "\"}"...), nil
-}
 
+}
 func (TimeRFC850) DecodeFrom(data []byte, i int) (TimeRFC850, int, error) {
 	var result TimeRFC850
+
 	var err error
 	_ = err
 	seenRFC850 := false
@@ -2859,6 +2848,7 @@ func (TimeRFC850) DecodeFrom(data []byte, i int) (TimeRFC850, int, error) {
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -2957,8 +2947,8 @@ func (TimeRFC850) DecodeFrom(data []byte, i int) (TimeRFC850, int, error) {
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (TimeRFC850) DecodeStreamFrom(s *scan.Stream, i int) (TimeRFC850, int, error) {
 	var result TimeRFC850
 	seenRFC850 := false
@@ -2971,10 +2961,9 @@ func (TimeRFC850) DecodeStreamFrom(s *scan.Stream, i int) (TimeRFC850, int, erro
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -3018,10 +3007,9 @@ func (TimeRFC850) DecodeStreamFrom(s *scan.Stream, i int) (TimeRFC850, int, erro
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -3036,23 +3024,23 @@ func (TimeRFC850) DecodeStreamFrom(s *scan.Stream, i int) (TimeRFC850, int, erro
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s TimeRFC850) JSONSize() int {
 	size := 109
 	return size
 }
-
 func (s TimeRFC850) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"rfc850\":\""...)
 	dst = s.RFC850.AppendFormat(dst, time.RFC850)
 	return append(dst, "\"}"...), nil
-}
 
+}
 func (TimeRFC1123) DecodeFrom(data []byte, i int) (TimeRFC1123, int, error) {
 	var result TimeRFC1123
+
 	var err error
 	_ = err
 	seenRFC1123 := false
@@ -3063,6 +3051,7 @@ func (TimeRFC1123) DecodeFrom(data []byte, i int) (TimeRFC1123, int, error) {
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -3161,8 +3150,8 @@ func (TimeRFC1123) DecodeFrom(data []byte, i int) (TimeRFC1123, int, error) {
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (TimeRFC1123) DecodeStreamFrom(s *scan.Stream, i int) (TimeRFC1123, int, error) {
 	var result TimeRFC1123
 	seenRFC1123 := false
@@ -3175,10 +3164,9 @@ func (TimeRFC1123) DecodeStreamFrom(s *scan.Stream, i int) (TimeRFC1123, int, er
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -3222,10 +3210,9 @@ func (TimeRFC1123) DecodeStreamFrom(s *scan.Stream, i int) (TimeRFC1123, int, er
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -3240,23 +3227,23 @@ func (TimeRFC1123) DecodeStreamFrom(s *scan.Stream, i int) (TimeRFC1123, int, er
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s TimeRFC1123) JSONSize() int {
 	size := 109
 	return size
 }
-
 func (s TimeRFC1123) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"rfc1123\":\""...)
 	dst = s.RFC1123.AppendFormat(dst, time.RFC1123)
 	return append(dst, "\"}"...), nil
-}
 
+}
 func (TimeRFC1123Z) DecodeFrom(data []byte, i int) (TimeRFC1123Z, int, error) {
 	var result TimeRFC1123Z
+
 	var err error
 	_ = err
 	seenRFC1123Z := false
@@ -3267,6 +3254,7 @@ func (TimeRFC1123Z) DecodeFrom(data []byte, i int) (TimeRFC1123Z, int, error) {
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -3365,8 +3353,8 @@ func (TimeRFC1123Z) DecodeFrom(data []byte, i int) (TimeRFC1123Z, int, error) {
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (TimeRFC1123Z) DecodeStreamFrom(s *scan.Stream, i int) (TimeRFC1123Z, int, error) {
 	var result TimeRFC1123Z
 	seenRFC1123Z := false
@@ -3379,10 +3367,9 @@ func (TimeRFC1123Z) DecodeStreamFrom(s *scan.Stream, i int) (TimeRFC1123Z, int, 
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -3426,10 +3413,9 @@ func (TimeRFC1123Z) DecodeStreamFrom(s *scan.Stream, i int) (TimeRFC1123Z, int, 
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -3444,23 +3430,23 @@ func (TimeRFC1123Z) DecodeStreamFrom(s *scan.Stream, i int) (TimeRFC1123Z, int, 
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s TimeRFC1123Z) JSONSize() int {
 	size := 110
 	return size
 }
-
 func (s TimeRFC1123Z) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"rfc1123Z\":\""...)
 	dst = s.RFC1123Z.AppendFormat(dst, time.RFC1123Z)
 	return append(dst, "\"}"...), nil
-}
 
+}
 func (TimeRFC3339) DecodeFrom(data []byte, i int) (TimeRFC3339, int, error) {
 	var result TimeRFC3339
+
 	var err error
 	_ = err
 	seenRFC3339 := false
@@ -3471,6 +3457,7 @@ func (TimeRFC3339) DecodeFrom(data []byte, i int) (TimeRFC3339, int, error) {
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -3569,8 +3556,8 @@ func (TimeRFC3339) DecodeFrom(data []byte, i int) (TimeRFC3339, int, error) {
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (TimeRFC3339) DecodeStreamFrom(s *scan.Stream, i int) (TimeRFC3339, int, error) {
 	var result TimeRFC3339
 	seenRFC3339 := false
@@ -3583,10 +3570,9 @@ func (TimeRFC3339) DecodeStreamFrom(s *scan.Stream, i int) (TimeRFC3339, int, er
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -3630,10 +3616,9 @@ func (TimeRFC3339) DecodeStreamFrom(s *scan.Stream, i int) (TimeRFC3339, int, er
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -3648,23 +3633,23 @@ func (TimeRFC3339) DecodeStreamFrom(s *scan.Stream, i int) (TimeRFC3339, int, er
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s TimeRFC3339) JSONSize() int {
 	size := 103
 	return size
 }
-
 func (s TimeRFC3339) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"rfc3339\":\""...)
 	dst = s.RFC3339.AppendFormat(dst, time.RFC3339)
 	return append(dst, "\"}"...), nil
-}
 
+}
 func (TimeRFC3339Nano) DecodeFrom(data []byte, i int) (TimeRFC3339Nano, int, error) {
 	var result TimeRFC3339Nano
+
 	var err error
 	_ = err
 	seenRFC3339Nano := false
@@ -3675,6 +3660,7 @@ func (TimeRFC3339Nano) DecodeFrom(data []byte, i int) (TimeRFC3339Nano, int, err
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -3773,8 +3759,8 @@ func (TimeRFC3339Nano) DecodeFrom(data []byte, i int) (TimeRFC3339Nano, int, err
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (TimeRFC3339Nano) DecodeStreamFrom(s *scan.Stream, i int) (TimeRFC3339Nano, int, error) {
 	var result TimeRFC3339Nano
 	seenRFC3339Nano := false
@@ -3787,10 +3773,9 @@ func (TimeRFC3339Nano) DecodeStreamFrom(s *scan.Stream, i int) (TimeRFC3339Nano,
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -3834,10 +3819,9 @@ func (TimeRFC3339Nano) DecodeStreamFrom(s *scan.Stream, i int) (TimeRFC3339Nano,
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -3852,23 +3836,23 @@ func (TimeRFC3339Nano) DecodeStreamFrom(s *scan.Stream, i int) (TimeRFC3339Nano,
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s TimeRFC3339Nano) JSONSize() int {
 	size := 117
 	return size
 }
-
 func (s TimeRFC3339Nano) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"rfc3339Nano\":\""...)
 	dst = s.RFC3339Nano.AppendFormat(dst, time.RFC3339Nano)
 	return append(dst, "\"}"...), nil
-}
 
+}
 func (TimeKitchen) DecodeFrom(data []byte, i int) (TimeKitchen, int, error) {
 	var result TimeKitchen
+
 	var err error
 	_ = err
 	seenKitchen := false
@@ -3879,6 +3863,7 @@ func (TimeKitchen) DecodeFrom(data []byte, i int) (TimeKitchen, int, error) {
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -3977,8 +3962,8 @@ func (TimeKitchen) DecodeFrom(data []byte, i int) (TimeKitchen, int, error) {
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (TimeKitchen) DecodeStreamFrom(s *scan.Stream, i int) (TimeKitchen, int, error) {
 	var result TimeKitchen
 	seenKitchen := false
@@ -3991,10 +3976,9 @@ func (TimeKitchen) DecodeStreamFrom(s *scan.Stream, i int) (TimeKitchen, int, er
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -4038,10 +4022,9 @@ func (TimeKitchen) DecodeStreamFrom(s *scan.Stream, i int) (TimeKitchen, int, er
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -4056,23 +4039,23 @@ func (TimeKitchen) DecodeStreamFrom(s *scan.Stream, i int) (TimeKitchen, int, er
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s TimeKitchen) JSONSize() int {
 	size := 85
 	return size
 }
-
 func (s TimeKitchen) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"kitchen\":\""...)
 	dst = s.Kitchen.AppendFormat(dst, time.Kitchen)
 	return append(dst, "\"}"...), nil
-}
 
+}
 func (TimeDateTime) DecodeFrom(data []byte, i int) (TimeDateTime, int, error) {
 	var result TimeDateTime
+
 	var err error
 	_ = err
 	seenDateTime := false
@@ -4083,6 +4066,7 @@ func (TimeDateTime) DecodeFrom(data []byte, i int) (TimeDateTime, int, error) {
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -4181,8 +4165,8 @@ func (TimeDateTime) DecodeFrom(data []byte, i int) (TimeDateTime, int, error) {
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (TimeDateTime) DecodeStreamFrom(s *scan.Stream, i int) (TimeDateTime, int, error) {
 	var result TimeDateTime
 	seenDateTime := false
@@ -4195,10 +4179,9 @@ func (TimeDateTime) DecodeStreamFrom(s *scan.Stream, i int) (TimeDateTime, int, 
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -4242,10 +4225,9 @@ func (TimeDateTime) DecodeStreamFrom(s *scan.Stream, i int) (TimeDateTime, int, 
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -4260,23 +4242,23 @@ func (TimeDateTime) DecodeStreamFrom(s *scan.Stream, i int) (TimeDateTime, int, 
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s TimeDateTime) JSONSize() int {
 	size := 98
 	return size
 }
-
 func (s TimeDateTime) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"dateTime\":\""...)
 	dst = s.DateTime.AppendFormat(dst, time.DateTime)
 	return append(dst, "\"}"...), nil
-}
 
+}
 func (TimeDateOnly) DecodeFrom(data []byte, i int) (TimeDateOnly, int, error) {
 	var result TimeDateOnly
+
 	var err error
 	_ = err
 	seenDateOnly := false
@@ -4287,6 +4269,7 @@ func (TimeDateOnly) DecodeFrom(data []byte, i int) (TimeDateOnly, int, error) {
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -4385,8 +4368,8 @@ func (TimeDateOnly) DecodeFrom(data []byte, i int) (TimeDateOnly, int, error) {
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (TimeDateOnly) DecodeStreamFrom(s *scan.Stream, i int) (TimeDateOnly, int, error) {
 	var result TimeDateOnly
 	seenDateOnly := false
@@ -4399,10 +4382,9 @@ func (TimeDateOnly) DecodeStreamFrom(s *scan.Stream, i int) (TimeDateOnly, int, 
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -4446,10 +4428,9 @@ func (TimeDateOnly) DecodeStreamFrom(s *scan.Stream, i int) (TimeDateOnly, int, 
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -4464,23 +4445,23 @@ func (TimeDateOnly) DecodeStreamFrom(s *scan.Stream, i int) (TimeDateOnly, int, 
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s TimeDateOnly) JSONSize() int {
 	size := 89
 	return size
 }
-
 func (s TimeDateOnly) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"dateOnly\":\""...)
 	dst = s.DateOnly.AppendFormat(dst, time.DateOnly)
 	return append(dst, "\"}"...), nil
-}
 
+}
 func (TimeTimeOnly) DecodeFrom(data []byte, i int) (TimeTimeOnly, int, error) {
 	var result TimeTimeOnly
+
 	var err error
 	_ = err
 	seenTimeOnly := false
@@ -4491,6 +4472,7 @@ func (TimeTimeOnly) DecodeFrom(data []byte, i int) (TimeTimeOnly, int, error) {
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -4589,8 +4571,8 @@ func (TimeTimeOnly) DecodeFrom(data []byte, i int) (TimeTimeOnly, int, error) {
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (TimeTimeOnly) DecodeStreamFrom(s *scan.Stream, i int) (TimeTimeOnly, int, error) {
 	var result TimeTimeOnly
 	seenTimeOnly := false
@@ -4603,10 +4585,9 @@ func (TimeTimeOnly) DecodeStreamFrom(s *scan.Stream, i int) (TimeTimeOnly, int, 
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -4650,10 +4631,9 @@ func (TimeTimeOnly) DecodeStreamFrom(s *scan.Stream, i int) (TimeTimeOnly, int, 
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -4668,23 +4648,23 @@ func (TimeTimeOnly) DecodeStreamFrom(s *scan.Stream, i int) (TimeTimeOnly, int, 
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s TimeTimeOnly) JSONSize() int {
 	size := 87
 	return size
 }
-
 func (s TimeTimeOnly) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"timeOnly\":\""...)
 	dst = s.TimeOnly.AppendFormat(dst, time.TimeOnly)
 	return append(dst, "\"}"...), nil
-}
 
+}
 func (TimeFormatsStdCompat) DecodeFrom(data []byte, i int) (TimeFormatsStdCompat, int, error) {
 	var result TimeFormatsStdCompat
+
 	var err error
 	_ = err
 	seenANSIC := false
@@ -4713,6 +4693,7 @@ func (TimeFormatsStdCompat) DecodeFrom(data []byte, i int) (TimeFormatsStdCompat
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -5355,8 +5336,8 @@ func (TimeFormatsStdCompat) DecodeFrom(data []byte, i int) (TimeFormatsStdCompat
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (TimeFormatsStdCompat) DecodeStreamFrom(s *scan.Stream, i int) (TimeFormatsStdCompat, int, error) {
 	var result TimeFormatsStdCompat
 	seenANSIC := false
@@ -5387,10 +5368,9 @@ func (TimeFormatsStdCompat) DecodeStreamFrom(s *scan.Stream, i int) (TimeFormats
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -5812,10 +5792,9 @@ func (TimeFormatsStdCompat) DecodeStreamFrom(s *scan.Stream, i int) (TimeFormats
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -5830,13 +5809,12 @@ func (TimeFormatsStdCompat) DecodeStreamFrom(s *scan.Stream, i int) (TimeFormats
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s TimeFormatsStdCompat) JSONSize() int {
 	size := 755
 	return size
 }
-
 func (s TimeFormatsStdCompat) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
@@ -5880,9 +5858,9 @@ func (s TimeFormatsStdCompat) AppendJSON(dst []byte) ([]byte, error) {
 	dst = strconv.AppendInt(dst, s.UnixNano.UnixNano(), 10)
 	return append(dst, '}'), nil
 }
-
 func (richSubset) DecodeFrom(data []byte, i int) (richSubset, int, error) {
 	var result richSubset
+
 	var err error
 	_ = err
 	seenBig := false
@@ -5899,6 +5877,7 @@ func (richSubset) DecodeFrom(data []byte, i int) (richSubset, int, error) {
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -6112,8 +6091,8 @@ func (richSubset) DecodeFrom(data []byte, i int) (richSubset, int, error) {
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (richSubset) DecodeStreamFrom(s *scan.Stream, i int) (richSubset, int, error) {
 	var result richSubset
 	seenBig := false
@@ -6132,10 +6111,9 @@ func (richSubset) DecodeStreamFrom(s *scan.Stream, i int) (richSubset, int, erro
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -6313,10 +6291,9 @@ func (richSubset) DecodeStreamFrom(s *scan.Stream, i int) (richSubset, int, erro
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -6331,8 +6308,8 @@ func (richSubset) DecodeStreamFrom(s *scan.Stream, i int) (richSubset, int, erro
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s richSubset) JSONSize() int {
 	size := 391
 	size += s.Big.BitLen() / 3
@@ -6349,7 +6326,6 @@ func (s richSubset) JSONSize() int {
 	}
 	return size
 }
-
 func (s richSubset) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
@@ -6358,10 +6334,12 @@ func (s richSubset) AppendJSON(dst []byte) ([]byte, error) {
 	dst = append(dst, ",\"bigF\":\""...)
 	dst = (&s.BigF).Append(dst, 'g', -1)
 	dst = append(dst, "\",\"bigR\":\""...)
+
 	if dst, err = (&s.BigR).AppendText(dst); err != nil {
 		return dst, err
 	}
 	dst = append(dst, "\",\"gofrsId\":"...)
+
 	{
 		var t []byte
 		t, err = s.GofrsID.MarshalText()
@@ -6370,8 +6348,10 @@ func (s richSubset) AppendJSON(dst []byte) ([]byte, error) {
 		}
 		dst = append(dst, '"')
 		dst = encode.AppendStringNoHTML(dst, encode.BytesToString(t))
+		dst = append(dst, '"')
 	}
 	dst = append(dst, ",\"id\":"...)
+
 	{
 		var t []byte
 		t, err = s.ID.MarshalText()
@@ -6380,24 +6360,28 @@ func (s richSubset) AppendJSON(dst []byte) ([]byte, error) {
 		}
 		dst = append(dst, '"')
 		dst = encode.AppendStringNoHTML(dst, encode.BytesToString(t))
+		dst = append(dst, '"')
 	}
 	dst = append(dst, ",\"raw1\":"...)
+
 	if len(s.Raw1) == 0 {
 		dst = append(dst, "null"...)
 	} else {
 		dst = append(dst, s.Raw1...)
 	}
 	dst = append(dst, ",\"raw2\":"...)
+
 	if len(s.Raw2) == 0 {
 		dst = append(dst, "null"...)
 	} else {
 		dst = append(dst, s.Raw2...)
 	}
+
 	return append(dst, '}'), nil
 }
-
 func (base32Wrap) DecodeFrom(data []byte, i int) (base32Wrap, int, error) {
 	var result base32Wrap
+
 	var err error
 	_ = err
 	seenB := false
@@ -6408,6 +6392,7 @@ func (base32Wrap) DecodeFrom(data []byte, i int) (base32Wrap, int, error) {
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -6507,8 +6492,8 @@ func (base32Wrap) DecodeFrom(data []byte, i int) (base32Wrap, int, error) {
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (base32Wrap) DecodeStreamFrom(s *scan.Stream, i int) (base32Wrap, int, error) {
 	var result base32Wrap
 	seenB := false
@@ -6521,10 +6506,9 @@ func (base32Wrap) DecodeStreamFrom(s *scan.Stream, i int) (base32Wrap, int, erro
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -6569,10 +6553,9 @@ func (base32Wrap) DecodeStreamFrom(s *scan.Stream, i int) (base32Wrap, int, erro
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -6587,25 +6570,24 @@ func (base32Wrap) DecodeStreamFrom(s *scan.Stream, i int) (base32Wrap, int, erro
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s base32Wrap) JSONSize() int {
 	size := 8
 	size += ((len(s.B) + 4) / 5) * 8
 	return size
 }
-
 func (s base32Wrap) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"b\":\""...)
 	dst = base32.StdEncoding.AppendEncode(dst, s.B)
-	dst = append(dst, '"')
-	return append(dst, '}'), nil
-}
+	return append(dst, "\"}"...), nil
 
+}
 func (TimeLayout) DecodeFrom(data []byte, i int) (TimeLayout, int, error) {
 	var result TimeLayout
+
 	var err error
 	_ = err
 	seenLayout := false
@@ -6616,6 +6598,7 @@ func (TimeLayout) DecodeFrom(data []byte, i int) (TimeLayout, int, error) {
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -6714,8 +6697,8 @@ func (TimeLayout) DecodeFrom(data []byte, i int) (TimeLayout, int, error) {
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (TimeLayout) DecodeStreamFrom(s *scan.Stream, i int) (TimeLayout, int, error) {
 	var result TimeLayout
 	seenLayout := false
@@ -6728,10 +6711,9 @@ func (TimeLayout) DecodeStreamFrom(s *scan.Stream, i int) (TimeLayout, int, erro
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -6775,10 +6757,9 @@ func (TimeLayout) DecodeStreamFrom(s *scan.Stream, i int) (TimeLayout, int, erro
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -6793,23 +6774,23 @@ func (TimeLayout) DecodeStreamFrom(s *scan.Stream, i int) (TimeLayout, int, erro
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s TimeLayout) JSONSize() int {
 	size := 103
 	return size
 }
-
 func (s TimeLayout) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"layout\":\""...)
 	dst = s.Layout.AppendFormat(dst, time.Layout)
 	return append(dst, "\"}"...), nil
-}
 
+}
 func (TimeStamp) DecodeFrom(data []byte, i int) (TimeStamp, int, error) {
 	var result TimeStamp
+
 	var err error
 	_ = err
 	seenStamp := false
@@ -6820,6 +6801,7 @@ func (TimeStamp) DecodeFrom(data []byte, i int) (TimeStamp, int, error) {
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -6918,8 +6900,8 @@ func (TimeStamp) DecodeFrom(data []byte, i int) (TimeStamp, int, error) {
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (TimeStamp) DecodeStreamFrom(s *scan.Stream, i int) (TimeStamp, int, error) {
 	var result TimeStamp
 	seenStamp := false
@@ -6932,10 +6914,9 @@ func (TimeStamp) DecodeStreamFrom(s *scan.Stream, i int) (TimeStamp, int, error)
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -6979,10 +6960,9 @@ func (TimeStamp) DecodeStreamFrom(s *scan.Stream, i int) (TimeStamp, int, error)
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -6997,23 +6977,23 @@ func (TimeStamp) DecodeStreamFrom(s *scan.Stream, i int) (TimeStamp, int, error)
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s TimeStamp) JSONSize() int {
 	size := 91
 	return size
 }
-
 func (s TimeStamp) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"stamp\":\""...)
 	dst = s.Stamp.AppendFormat(dst, time.Stamp)
 	return append(dst, "\"}"...), nil
-}
 
+}
 func (TimeStampMilli) DecodeFrom(data []byte, i int) (TimeStampMilli, int, error) {
 	var result TimeStampMilli
+
 	var err error
 	_ = err
 	seenStampMilli := false
@@ -7024,6 +7004,7 @@ func (TimeStampMilli) DecodeFrom(data []byte, i int) (TimeStampMilli, int, error
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -7122,8 +7103,8 @@ func (TimeStampMilli) DecodeFrom(data []byte, i int) (TimeStampMilli, int, error
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (TimeStampMilli) DecodeStreamFrom(s *scan.Stream, i int) (TimeStampMilli, int, error) {
 	var result TimeStampMilli
 	seenStampMilli := false
@@ -7136,10 +7117,9 @@ func (TimeStampMilli) DecodeStreamFrom(s *scan.Stream, i int) (TimeStampMilli, i
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -7183,10 +7163,9 @@ func (TimeStampMilli) DecodeStreamFrom(s *scan.Stream, i int) (TimeStampMilli, i
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -7201,23 +7180,23 @@ func (TimeStampMilli) DecodeStreamFrom(s *scan.Stream, i int) (TimeStampMilli, i
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s TimeStampMilli) JSONSize() int {
 	size := 100
 	return size
 }
-
 func (s TimeStampMilli) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"stampMilli\":\""...)
 	dst = s.StampMilli.AppendFormat(dst, time.StampMilli)
 	return append(dst, "\"}"...), nil
-}
 
+}
 func (TimeStampMicro) DecodeFrom(data []byte, i int) (TimeStampMicro, int, error) {
 	var result TimeStampMicro
+
 	var err error
 	_ = err
 	seenStampMicro := false
@@ -7228,6 +7207,7 @@ func (TimeStampMicro) DecodeFrom(data []byte, i int) (TimeStampMicro, int, error
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -7326,8 +7306,8 @@ func (TimeStampMicro) DecodeFrom(data []byte, i int) (TimeStampMicro, int, error
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (TimeStampMicro) DecodeStreamFrom(s *scan.Stream, i int) (TimeStampMicro, int, error) {
 	var result TimeStampMicro
 	seenStampMicro := false
@@ -7340,10 +7320,9 @@ func (TimeStampMicro) DecodeStreamFrom(s *scan.Stream, i int) (TimeStampMicro, i
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -7387,10 +7366,9 @@ func (TimeStampMicro) DecodeStreamFrom(s *scan.Stream, i int) (TimeStampMicro, i
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -7405,23 +7383,23 @@ func (TimeStampMicro) DecodeStreamFrom(s *scan.Stream, i int) (TimeStampMicro, i
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s TimeStampMicro) JSONSize() int {
 	size := 103
 	return size
 }
-
 func (s TimeStampMicro) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"stampMicro\":\""...)
 	dst = s.StampMicro.AppendFormat(dst, time.StampMicro)
 	return append(dst, "\"}"...), nil
-}
 
+}
 func (TimeStampNano) DecodeFrom(data []byte, i int) (TimeStampNano, int, error) {
 	var result TimeStampNano
+
 	var err error
 	_ = err
 	seenStampNano := false
@@ -7432,6 +7410,7 @@ func (TimeStampNano) DecodeFrom(data []byte, i int) (TimeStampNano, int, error) 
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -7530,8 +7509,8 @@ func (TimeStampNano) DecodeFrom(data []byte, i int) (TimeStampNano, int, error) 
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (TimeStampNano) DecodeStreamFrom(s *scan.Stream, i int) (TimeStampNano, int, error) {
 	var result TimeStampNano
 	seenStampNano := false
@@ -7544,10 +7523,9 @@ func (TimeStampNano) DecodeStreamFrom(s *scan.Stream, i int) (TimeStampNano, int
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -7591,10 +7569,9 @@ func (TimeStampNano) DecodeStreamFrom(s *scan.Stream, i int) (TimeStampNano, int
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -7609,23 +7586,23 @@ func (TimeStampNano) DecodeStreamFrom(s *scan.Stream, i int) (TimeStampNano, int
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s TimeStampNano) JSONSize() int {
 	size := 105
 	return size
 }
-
 func (s TimeStampNano) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"stampNano\":\""...)
 	dst = s.StampNano.AppendFormat(dst, time.StampNano)
 	return append(dst, "\"}"...), nil
-}
 
+}
 func (TimeCustomTiny) DecodeFrom(data []byte, i int) (TimeCustomTiny, int, error) {
 	var result TimeCustomTiny
+
 	var err error
 	_ = err
 	seenCustomTiny := false
@@ -7636,6 +7613,7 @@ func (TimeCustomTiny) DecodeFrom(data []byte, i int) (TimeCustomTiny, int, error
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -7734,8 +7712,8 @@ func (TimeCustomTiny) DecodeFrom(data []byte, i int) (TimeCustomTiny, int, error
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (TimeCustomTiny) DecodeStreamFrom(s *scan.Stream, i int) (TimeCustomTiny, int, error) {
 	var result TimeCustomTiny
 	seenCustomTiny := false
@@ -7748,10 +7726,9 @@ func (TimeCustomTiny) DecodeStreamFrom(s *scan.Stream, i int) (TimeCustomTiny, i
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -7795,10 +7772,9 @@ func (TimeCustomTiny) DecodeStreamFrom(s *scan.Stream, i int) (TimeCustomTiny, i
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -7813,23 +7789,23 @@ func (TimeCustomTiny) DecodeStreamFrom(s *scan.Stream, i int) (TimeCustomTiny, i
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s TimeCustomTiny) JSONSize() int {
 	size := 86
 	return size
 }
-
 func (s TimeCustomTiny) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"customTiny\":\""...)
 	dst = s.CustomTiny.AppendFormat(dst, "2")
 	return append(dst, "\"}"...), nil
-}
 
+}
 func (TimeCustomLong) DecodeFrom(data []byte, i int) (TimeCustomLong, int, error) {
 	var result TimeCustomLong
+
 	var err error
 	_ = err
 	seenCustomLong := false
@@ -7840,6 +7816,7 @@ func (TimeCustomLong) DecodeFrom(data []byte, i int) (TimeCustomLong, int, error
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -7938,8 +7915,8 @@ func (TimeCustomLong) DecodeFrom(data []byte, i int) (TimeCustomLong, int, error
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (TimeCustomLong) DecodeStreamFrom(s *scan.Stream, i int) (TimeCustomLong, int, error) {
 	var result TimeCustomLong
 	seenCustomLong := false
@@ -7952,10 +7929,9 @@ func (TimeCustomLong) DecodeStreamFrom(s *scan.Stream, i int) (TimeCustomLong, i
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -7999,10 +7975,9 @@ func (TimeCustomLong) DecodeStreamFrom(s *scan.Stream, i int) (TimeCustomLong, i
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -8017,23 +7992,23 @@ func (TimeCustomLong) DecodeStreamFrom(s *scan.Stream, i int) (TimeCustomLong, i
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s TimeCustomLong) JSONSize() int {
 	size := 125
 	return size
 }
-
 func (s TimeCustomLong) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"customLong\":\""...)
 	dst = s.CustomLong.AppendFormat(dst, "2006-Jan-02T15:04:05.000000000_Mon_-0700")
 	return append(dst, "\"}"...), nil
-}
 
+}
 func (TimeFormatsStruct) DecodeFrom(data []byte, i int) (TimeFormatsStruct, int, error) {
 	var result TimeFormatsStruct
+
 	var err error
 	_ = err
 	seenANSIC := false
@@ -8069,6 +8044,7 @@ func (TimeFormatsStruct) DecodeFrom(data []byte, i int) (TimeFormatsStruct, int,
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -8948,8 +8924,8 @@ func (TimeFormatsStruct) DecodeFrom(data []byte, i int) (TimeFormatsStruct, int,
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (TimeFormatsStruct) DecodeStreamFrom(s *scan.Stream, i int) (TimeFormatsStruct, int, error) {
 	var result TimeFormatsStruct
 	seenANSIC := false
@@ -8987,10 +8963,9 @@ func (TimeFormatsStruct) DecodeStreamFrom(s *scan.Stream, i int) (TimeFormatsStr
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -9558,10 +9533,9 @@ func (TimeFormatsStruct) DecodeStreamFrom(s *scan.Stream, i int) (TimeFormatsStr
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -9576,13 +9550,12 @@ func (TimeFormatsStruct) DecodeStreamFrom(s *scan.Stream, i int) (TimeFormatsStr
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s TimeFormatsStruct) JSONSize() int {
 	size := 1013
 	return size
 }
-
 func (s TimeFormatsStruct) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err

@@ -27,6 +27,7 @@ var ggenOneof0 = []string{"admin", "user", "guest"}
 
 func (AliasString) DecodeFrom(data []byte, i int) (AliasString, int, error) {
 	var result AliasString
+
 	var err error
 	_ = err
 	var v string
@@ -37,9 +38,9 @@ func (AliasString) DecodeFrom(data []byte, i int) (AliasString, int, error) {
 	result = AliasString(v)
 	return result, i, nil
 }
-
 func (AliasString) DecodeStreamFrom(s *scan.Stream, i int) (AliasString, int, error) {
 	var result AliasString
+
 	var err error
 	_ = err
 	var v string
@@ -50,19 +51,17 @@ func (AliasString) DecodeStreamFrom(s *scan.Stream, i int) (AliasString, int, er
 	result = AliasString(v)
 	return result, i, nil
 }
-
 func (s AliasString) JSONSize() int {
 	return len(string(s))*2 + 2
 }
-
 func (s AliasString) AppendJSON(dst []byte) ([]byte, error) {
 	dst = append(dst, '"')
 	dst = encode.AppendStringNoHTML(dst, string(s))
 	return dst, nil
 }
-
 func (AliasHTML) DecodeFrom(data []byte, i int) (AliasHTML, int, error) {
 	var result AliasHTML
+
 	var err error
 	_ = err
 	var v string
@@ -73,9 +72,9 @@ func (AliasHTML) DecodeFrom(data []byte, i int) (AliasHTML, int, error) {
 	result = AliasHTML(v)
 	return result, i, nil
 }
-
 func (AliasHTML) DecodeStreamFrom(s *scan.Stream, i int) (AliasHTML, int, error) {
 	var result AliasHTML
+
 	var err error
 	_ = err
 	var v string
@@ -86,19 +85,17 @@ func (AliasHTML) DecodeStreamFrom(s *scan.Stream, i int) (AliasHTML, int, error)
 	result = AliasHTML(v)
 	return result, i, nil
 }
-
 func (s AliasHTML) JSONSize() int {
 	return len(string(s))*2 + 2
 }
-
 func (s AliasHTML) AppendJSON(dst []byte) ([]byte, error) {
 	dst = append(dst, '"')
 	dst = encode.AppendString(dst, string(s))
 	return dst, nil
 }
-
 func (AliasInt) DecodeFrom(data []byte, i int) (AliasInt, int, error) {
 	var result AliasInt
+
 	var err error
 	_ = err
 	var v int64
@@ -109,9 +106,9 @@ func (AliasInt) DecodeFrom(data []byte, i int) (AliasInt, int, error) {
 	result = AliasInt(v)
 	return result, i, nil
 }
-
 func (AliasInt) DecodeStreamFrom(s *scan.Stream, i int) (AliasInt, int, error) {
 	var result AliasInt
+
 	var err error
 	_ = err
 	var v int64
@@ -122,17 +119,15 @@ func (AliasInt) DecodeStreamFrom(s *scan.Stream, i int) (AliasInt, int, error) {
 	result = AliasInt(v)
 	return result, i, nil
 }
-
 func (s AliasInt) JSONSize() int {
 	return 20
 }
-
 func (s AliasInt) AppendJSON(dst []byte) ([]byte, error) {
 	return strconv.AppendInt(dst, int64(s), 10), nil
 }
-
 func (AliasUint64) DecodeFrom(data []byte, i int) (AliasUint64, int, error) {
 	var result AliasUint64
+
 	var err error
 	_ = err
 	var v uint64
@@ -143,9 +138,9 @@ func (AliasUint64) DecodeFrom(data []byte, i int) (AliasUint64, int, error) {
 	result = AliasUint64(v)
 	return result, i, nil
 }
-
 func (AliasUint64) DecodeStreamFrom(s *scan.Stream, i int) (AliasUint64, int, error) {
 	var result AliasUint64
+
 	var err error
 	_ = err
 	var v uint64
@@ -156,17 +151,15 @@ func (AliasUint64) DecodeStreamFrom(s *scan.Stream, i int) (AliasUint64, int, er
 	result = AliasUint64(v)
 	return result, i, nil
 }
-
 func (s AliasUint64) JSONSize() int {
 	return 20
 }
-
 func (s AliasUint64) AppendJSON(dst []byte) ([]byte, error) {
 	return strconv.AppendUint(dst, uint64(s), 10), nil
 }
-
 func (AliasFloat64) DecodeFrom(data []byte, i int) (AliasFloat64, int, error) {
 	var result AliasFloat64
+
 	var err error
 	_ = err
 	var v float64
@@ -177,9 +170,9 @@ func (AliasFloat64) DecodeFrom(data []byte, i int) (AliasFloat64, int, error) {
 	result = AliasFloat64(v)
 	return result, i, nil
 }
-
 func (AliasFloat64) DecodeStreamFrom(s *scan.Stream, i int) (AliasFloat64, int, error) {
 	var result AliasFloat64
+
 	var err error
 	_ = err
 	var v float64
@@ -190,17 +183,15 @@ func (AliasFloat64) DecodeStreamFrom(s *scan.Stream, i int) (AliasFloat64, int, 
 	result = AliasFloat64(v)
 	return result, i, nil
 }
-
 func (s AliasFloat64) JSONSize() int {
 	return 24
 }
-
 func (s AliasFloat64) AppendJSON(dst []byte) ([]byte, error) {
 	return strconv.AppendFloat(dst, float64(s), 'g', -1, 64), nil
 }
-
 func (AliasBool) DecodeFrom(data []byte, i int) (AliasBool, int, error) {
 	var result AliasBool
+
 	var err error
 	_ = err
 	var v bool
@@ -211,9 +202,9 @@ func (AliasBool) DecodeFrom(data []byte, i int) (AliasBool, int, error) {
 	result = AliasBool(v)
 	return result, i, nil
 }
-
 func (AliasBool) DecodeStreamFrom(s *scan.Stream, i int) (AliasBool, int, error) {
 	var result AliasBool
+
 	var err error
 	_ = err
 	var v bool
@@ -224,17 +215,15 @@ func (AliasBool) DecodeStreamFrom(s *scan.Stream, i int) (AliasBool, int, error)
 	result = AliasBool(v)
 	return result, i, nil
 }
-
 func (s AliasBool) JSONSize() int {
 	return 5
 }
-
 func (s AliasBool) AppendJSON(dst []byte) ([]byte, error) {
 	return strconv.AppendBool(dst, bool(s)), nil
 }
-
 func (PlainAlias) DecodeFrom(data []byte, i int) (PlainAlias, int, error) {
 	var result PlainAlias
+
 	var err error
 	_ = err
 	seenCount := false
@@ -246,6 +235,7 @@ func (PlainAlias) DecodeFrom(data []byte, i int) (PlainAlias, int, error) {
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -368,8 +358,8 @@ func (PlainAlias) DecodeFrom(data []byte, i int) (PlainAlias, int, error) {
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (PlainAlias) DecodeStreamFrom(s *scan.Stream, i int) (PlainAlias, int, error) {
 	var result PlainAlias
 	seenCount := false
@@ -383,10 +373,9 @@ func (PlainAlias) DecodeStreamFrom(s *scan.Stream, i int) (PlainAlias, int, erro
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -439,10 +428,9 @@ func (PlainAlias) DecodeStreamFrom(s *scan.Stream, i int) (PlainAlias, int, erro
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -457,14 +445,13 @@ func (PlainAlias) DecodeStreamFrom(s *scan.Stream, i int) (PlainAlias, int, erro
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s PlainAlias) JSONSize() int {
 	size := 41
 	size += len(s.Title) * 2
 	return size
 }
-
 func (s PlainAlias) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
@@ -474,9 +461,9 @@ func (s PlainAlias) AppendJSON(dst []byte) ([]byte, error) {
 	dst = encode.AppendStringNoHTML(dst, s.Title)
 	return append(dst, '}'), nil
 }
-
 func (SamePkgAlias) DecodeFrom(data []byte, i int) (SamePkgAlias, int, error) {
 	var result SamePkgAlias
+
 	var err error
 	_ = err
 	seenX := false
@@ -488,6 +475,7 @@ func (SamePkgAlias) DecodeFrom(data []byte, i int) (SamePkgAlias, int, error) {
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -610,8 +598,8 @@ func (SamePkgAlias) DecodeFrom(data []byte, i int) (SamePkgAlias, int, error) {
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (SamePkgAlias) DecodeStreamFrom(s *scan.Stream, i int) (SamePkgAlias, int, error) {
 	var result SamePkgAlias
 	seenX := false
@@ -625,10 +613,9 @@ func (SamePkgAlias) DecodeStreamFrom(s *scan.Stream, i int) (SamePkgAlias, int, 
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -681,10 +668,9 @@ func (SamePkgAlias) DecodeStreamFrom(s *scan.Stream, i int) (SamePkgAlias, int, 
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -699,14 +685,13 @@ func (SamePkgAlias) DecodeStreamFrom(s *scan.Stream, i int) (SamePkgAlias, int, 
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s SamePkgAlias) JSONSize() int {
 	size := 33
 	size += len(s.Y) * 2
 	return size
 }
-
 func (s SamePkgAlias) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
@@ -716,9 +701,9 @@ func (s SamePkgAlias) AppendJSON(dst []byte) ([]byte, error) {
 	dst = encode.AppendStringNoHTML(dst, s.Y)
 	return append(dst, '}'), nil
 }
-
 func (CrossPkgTaggedAlias) DecodeFrom(data []byte, i int) (CrossPkgTaggedAlias, int, error) {
 	var result CrossPkgTaggedAlias
+
 	var err error
 	_ = err
 	seenName := false
@@ -730,6 +715,7 @@ func (CrossPkgTaggedAlias) DecodeFrom(data []byte, i int) (CrossPkgTaggedAlias, 
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -851,8 +837,8 @@ func (CrossPkgTaggedAlias) DecodeFrom(data []byte, i int) (CrossPkgTaggedAlias, 
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (CrossPkgTaggedAlias) DecodeStreamFrom(s *scan.Stream, i int) (CrossPkgTaggedAlias, int, error) {
 	var result CrossPkgTaggedAlias
 	seenName := false
@@ -866,10 +852,9 @@ func (CrossPkgTaggedAlias) DecodeStreamFrom(s *scan.Stream, i int) (CrossPkgTagg
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -923,10 +908,9 @@ func (CrossPkgTaggedAlias) DecodeStreamFrom(s *scan.Stream, i int) (CrossPkgTagg
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -941,15 +925,14 @@ func (CrossPkgTaggedAlias) DecodeStreamFrom(s *scan.Stream, i int) (CrossPkgTagg
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s CrossPkgTaggedAlias) JSONSize() int {
 	size := 20
 	size += len(s.Name) * 2
 	size += len(s.Tag) * 2
 	return size
 }
-
 func (s CrossPkgTaggedAlias) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
@@ -959,7 +942,6 @@ func (s CrossPkgTaggedAlias) AppendJSON(dst []byte) ([]byte, error) {
 	dst = encode.AppendStringNoHTML(dst, s.Tag)
 	return append(dst, '}'), nil
 }
-
 func (OpaqueAlias) DecodeFrom(data []byte, i int) (OpaqueAlias, int, error) {
 	var result OpaqueAlias
 	start := i
@@ -968,13 +950,12 @@ func (OpaqueAlias) DecodeFrom(data []byte, i int) (OpaqueAlias, int, error) {
 		return result, i, err
 	}
 	var u OpaqueWithMethods
-	if err := u.UnmarshalJSON(data[start:k]); err != nil {
+	if err = u.UnmarshalJSON(data[start:k]); err != nil {
 		return result, i, err
 	}
 	result = OpaqueAlias(u)
 	return result, k, nil
 }
-
 func (OpaqueAlias) DecodeStreamFrom(s *scan.Stream, i int) (OpaqueAlias, int, error) {
 	var result OpaqueAlias
 	start := i
@@ -986,23 +967,21 @@ func (OpaqueAlias) DecodeStreamFrom(s *scan.Stream, i int) (OpaqueAlias, int, er
 		return result, i, err
 	}
 	var u OpaqueWithMethods
-	if err := u.UnmarshalJSON(s.Bytes()[start:k]); err != nil {
+	if err = u.UnmarshalJSON(s.Bytes()[start:k]); err != nil {
 		return result, i, err
 	}
 	result = OpaqueAlias(u)
 	return result, k, nil
 }
-
 func (s OpaqueAlias) JSONSize() int {
 	return 0
 }
-
 func (s OpaqueAlias) AppendJSON(dst []byte) ([]byte, error) {
 	return OpaqueWithMethods(s).MarshalJSON()
 }
-
 func (AliasTags) DecodeFrom(data []byte, i int) (AliasTags, int, error) {
 	var result AliasTags
+
 	var err error
 	_ = err
 	{
@@ -1067,9 +1046,9 @@ func (AliasTags) DecodeFrom(data []byte, i int) (AliasTags, int, error) {
 	}
 	return result, i, nil
 }
-
 func (AliasTags) DecodeStreamFrom(s *scan.Stream, i int) (AliasTags, int, error) {
 	var result AliasTags
+
 	var err error
 	_ = err
 	{
@@ -1145,11 +1124,9 @@ func (AliasTags) DecodeStreamFrom(s *scan.Stream, i int) (AliasTags, int, error)
 	}
 	return result, i, nil
 }
-
 func (s AliasTags) JSONSize() int {
 	return 1024
 }
-
 func (s AliasTags) AppendJSON(dst []byte) ([]byte, error) {
 	if s == nil {
 		dst = append(dst, "null"...)
@@ -1168,9 +1145,9 @@ func (s AliasTags) AppendJSON(dst []byte) ([]byte, error) {
 	}
 	return dst, nil
 }
-
 func (AliasLookup) DecodeFrom(data []byte, i int) (AliasLookup, int, error) {
 	var result AliasLookup
+
 	var err error
 	_ = err
 	{
@@ -1270,11 +1247,12 @@ func (AliasLookup) DecodeFrom(data []byte, i int) (AliasLookup, int, error) {
 			i++
 		}
 	}
+
 	return result, i, nil
 }
-
 func (AliasLookup) DecodeStreamFrom(s *scan.Stream, i int) (AliasLookup, int, error) {
 	var result AliasLookup
+
 	var err error
 	_ = err
 	{
@@ -1370,13 +1348,12 @@ func (AliasLookup) DecodeStreamFrom(s *scan.Stream, i int) (AliasLookup, int, er
 			i++
 		}
 	}
+
 	return result, i, nil
 }
-
 func (s AliasLookup) JSONSize() int {
 	return 1024
 }
-
 func (s AliasLookup) AppendJSON(dst []byte) ([]byte, error) {
 	if s == nil {
 		dst = append(dst, "null"...)
@@ -1400,9 +1377,9 @@ func (s AliasLookup) AppendJSON(dst []byte) ([]byte, error) {
 	}
 	return dst, nil
 }
-
 func (AliasTuple) DecodeFrom(data []byte, i int) (AliasTuple, int, error) {
 	var result AliasTuple
+
 	var err error
 	_ = err
 	{
@@ -1467,11 +1444,12 @@ func (AliasTuple) DecodeFrom(data []byte, i int) (AliasTuple, int, error) {
 		}
 		i++
 	}
+
 	return result, i, nil
 }
-
 func (AliasTuple) DecodeStreamFrom(s *scan.Stream, i int) (AliasTuple, int, error) {
 	var result AliasTuple
+
 	var err error
 	_ = err
 	{
@@ -1526,13 +1504,12 @@ func (AliasTuple) DecodeStreamFrom(s *scan.Stream, i int) (AliasTuple, int, erro
 		}
 		i++
 	}
+
 	return result, i, nil
 }
-
 func (s AliasTuple) JSONSize() int {
 	return 1024
 }
-
 func (s AliasTuple) AppendJSON(dst []byte) ([]byte, error) {
 	dst = append(dst, '[')
 	if len(s) > 0 {
@@ -1545,9 +1522,9 @@ func (s AliasTuple) AppendJSON(dst []byte) ([]byte, error) {
 	dst = append(dst, ']')
 	return dst, nil
 }
-
 func (AliasFieldExample) DecodeFrom(data []byte, i int) (AliasFieldExample, int, error) {
 	var result AliasFieldExample
+
 	var err error
 	_ = err
 	seenBody := false
@@ -1559,6 +1536,7 @@ func (AliasFieldExample) DecodeFrom(data []byte, i int) (AliasFieldExample, int,
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -1672,8 +1650,8 @@ func (AliasFieldExample) DecodeFrom(data []byte, i int) (AliasFieldExample, int,
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (AliasFieldExample) DecodeStreamFrom(s *scan.Stream, i int) (AliasFieldExample, int, error) {
 	var result AliasFieldExample
 	seenBody := false
@@ -1687,10 +1665,9 @@ func (AliasFieldExample) DecodeStreamFrom(s *scan.Stream, i int) (AliasFieldExam
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		if !seenBody {
@@ -1767,10 +1744,9 @@ func (AliasFieldExample) DecodeStreamFrom(s *scan.Stream, i int) (AliasFieldExam
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -1788,31 +1764,32 @@ func (AliasFieldExample) DecodeStreamFrom(s *scan.Stream, i int) (AliasFieldExam
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s AliasFieldExample) JSONSize() int {
 	size := 18
 	size += s.Body.JSONSize()
 	size += s.Count.JSONSize()
 	return size
 }
-
 func (s AliasFieldExample) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"body\":"...)
+
 	if dst, err = s.Body.AppendJSON(dst); err != nil {
 		return dst, err
 	}
 	dst = append(dst, ",\"count\":"...)
+
 	if dst, err = s.Count.AppendJSON(dst); err != nil {
 		return dst, err
 	}
 	return append(dst, '}'), nil
 }
-
 func (AnyStruct) DecodeFrom(data []byte, i int) (AnyStruct, int, error) {
 	var result AnyStruct
+
 	var err error
 	_ = err
 	seenBody := false
@@ -1824,6 +1801,7 @@ func (AnyStruct) DecodeFrom(data []byte, i int) (AnyStruct, int, error) {
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -1871,11 +1849,9 @@ func (AnyStruct) DecodeFrom(data []byte, i int) (AnyStruct, int, error) {
 					return result, i, &validation.DuplicateKeyError{Field: "body"}
 				}
 				seenBody = true
-				{
-					result.Body, i, err = scan.Any(data, i)
-					if err != nil {
-						return result, i, err
-					}
+				result.Body, i, err = scan.Any(data, i)
+				if err != nil {
+					return result, i, err
 				}
 			case "name":
 				if seenName {
@@ -1927,8 +1903,8 @@ func (AnyStruct) DecodeFrom(data []byte, i int) (AnyStruct, int, error) {
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (AnyStruct) DecodeStreamFrom(s *scan.Stream, i int) (AnyStruct, int, error) {
 	var result AnyStruct
 	seenBody := false
@@ -1942,10 +1918,9 @@ func (AnyStruct) DecodeStreamFrom(s *scan.Stream, i int) (AnyStruct, int, error)
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -1998,10 +1973,9 @@ func (AnyStruct) DecodeStreamFrom(s *scan.Stream, i int) (AnyStruct, int, error)
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -2016,18 +1990,18 @@ func (AnyStruct) DecodeStreamFrom(s *scan.Stream, i int) (AnyStruct, int, error)
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s AnyStruct) JSONSize() int {
 	size := 275
 	size += len(s.Name) * 2
 	return size
 }
-
 func (s AnyStruct) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"body\":"...)
+
 	if dst, err = encode.AppendAny(dst, s.Body); err != nil {
 		return dst, err
 	}
@@ -2035,9 +2009,9 @@ func (s AnyStruct) AppendJSON(dst []byte) ([]byte, error) {
 	dst = encode.AppendStringNoHTML(dst, s.Name)
 	return append(dst, '}'), nil
 }
-
 func (AnyNumberStruct) DecodeFrom(data []byte, i int) (AnyNumberStruct, int, error) {
 	var result AnyNumberStruct
+
 	var err error
 	_ = err
 	seenBody := false
@@ -2049,6 +2023,7 @@ func (AnyNumberStruct) DecodeFrom(data []byte, i int) (AnyNumberStruct, int, err
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -2096,11 +2071,9 @@ func (AnyNumberStruct) DecodeFrom(data []byte, i int) (AnyNumberStruct, int, err
 					return result, i, &validation.DuplicateKeyError{Field: "body"}
 				}
 				seenBody = true
-				{
-					result.Body, i, err = scan.AnyNumber(data, i)
-					if err != nil {
-						return result, i, err
-					}
+				result.Body, i, err = scan.AnyNumber(data, i)
+				if err != nil {
+					return result, i, err
 				}
 			case "name":
 				if seenName {
@@ -2152,8 +2125,8 @@ func (AnyNumberStruct) DecodeFrom(data []byte, i int) (AnyNumberStruct, int, err
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (AnyNumberStruct) DecodeStreamFrom(s *scan.Stream, i int) (AnyNumberStruct, int, error) {
 	var result AnyNumberStruct
 	seenBody := false
@@ -2167,10 +2140,9 @@ func (AnyNumberStruct) DecodeStreamFrom(s *scan.Stream, i int) (AnyNumberStruct,
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -2223,10 +2195,9 @@ func (AnyNumberStruct) DecodeStreamFrom(s *scan.Stream, i int) (AnyNumberStruct,
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -2241,18 +2212,18 @@ func (AnyNumberStruct) DecodeStreamFrom(s *scan.Stream, i int) (AnyNumberStruct,
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s AnyNumberStruct) JSONSize() int {
 	size := 275
 	size += len(s.Name) * 2
 	return size
 }
-
 func (s AnyNumberStruct) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"body\":"...)
+
 	if dst, err = encode.AppendAny(dst, s.Body); err != nil {
 		return dst, err
 	}
@@ -2260,9 +2231,9 @@ func (s AnyNumberStruct) AppendJSON(dst []byte) ([]byte, error) {
 	dst = encode.AppendStringNoHTML(dst, s.Name)
 	return append(dst, '}'), nil
 }
-
 func (MultiErrStruct) DecodeFrom(data []byte, i int) (MultiErrStruct, int, error) {
 	var result MultiErrStruct
+
 	var err error
 	_ = err
 	var errs validation.Errors
@@ -2276,6 +2247,7 @@ func (MultiErrStruct) DecodeFrom(data []byte, i int) (MultiErrStruct, int, error
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -2484,10 +2456,11 @@ func (MultiErrStruct) DecodeFrom(data []byte, i int) (MultiErrStruct, int, error
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (MultiErrStruct) DecodeStreamFrom(s *scan.Stream, i int) (MultiErrStruct, int, error) {
 	var result MultiErrStruct
+
 	var errs validation.Errors
 	seenAge := false
 	seenName := false
@@ -2501,10 +2474,9 @@ func (MultiErrStruct) DecodeStreamFrom(s *scan.Stream, i int) (MultiErrStruct, i
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		if !seenName {
@@ -2548,7 +2520,6 @@ func (MultiErrStruct) DecodeStreamFrom(s *scan.Stream, i int) (MultiErrStruct, i
 					if result.Age > 100 {
 						errs = append(errs, &validation.LTEError{Field: "age", Limit: 100, Value: result.Age})
 					}
-
 				}
 			} else {
 				errs = append(errs, &validation.UnknownKeyError{Field: strings.Clone(key)})
@@ -2586,7 +2557,6 @@ func (MultiErrStruct) DecodeStreamFrom(s *scan.Stream, i int) (MultiErrStruct, i
 					if len(result.Name) > 5 {
 						errs = append(errs, &validation.MaxLenError{Field: "name", Limit: 5, Got: len(result.Name)})
 					}
-
 				}
 			case "role":
 				i, err = s.ConsumeColon(i)
@@ -2610,7 +2580,6 @@ func (MultiErrStruct) DecodeStreamFrom(s *scan.Stream, i int) (MultiErrStruct, i
 					default:
 						errs = append(errs, &validation.OneOfError{Field: "role", Allowed: ggenOneof0, Value: result.Role})
 					}
-
 				}
 			default:
 				errs = append(errs, &validation.UnknownKeyError{Field: strings.Clone(key)})
@@ -2639,10 +2608,9 @@ func (MultiErrStruct) DecodeStreamFrom(s *scan.Stream, i int) (MultiErrStruct, i
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -2663,15 +2631,14 @@ func (MultiErrStruct) DecodeStreamFrom(s *scan.Stream, i int) (MultiErrStruct, i
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s MultiErrStruct) JSONSize() int {
 	size := 48
 	size += len(s.Name) * 2
 	size += len(s.Role) * 2
 	return size
 }
-
 func (s MultiErrStruct) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
@@ -2683,9 +2650,9 @@ func (s MultiErrStruct) AppendJSON(dst []byte) ([]byte, error) {
 	dst = encode.AppendStringNoHTML(dst, s.Role)
 	return append(dst, '}'), nil
 }
-
 func (AllowDupsStruct) DecodeFrom(data []byte, i int) (AllowDupsStruct, int, error) {
 	var result AllowDupsStruct
+
 	var err error
 	_ = err
 	seenN := false
@@ -2697,6 +2664,7 @@ func (AllowDupsStruct) DecodeFrom(data []byte, i int) (AllowDupsStruct, int, err
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -2830,8 +2798,8 @@ func (AllowDupsStruct) DecodeFrom(data []byte, i int) (AllowDupsStruct, int, err
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (AllowDupsStruct) DecodeStreamFrom(s *scan.Stream, i int) (AllowDupsStruct, int, error) {
 	var result AllowDupsStruct
 	seenN := false
@@ -2845,10 +2813,9 @@ func (AllowDupsStruct) DecodeStreamFrom(s *scan.Stream, i int) (AllowDupsStruct,
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -2879,7 +2846,6 @@ func (AllowDupsStruct) DecodeStreamFrom(s *scan.Stream, i int) (AllowDupsStruct,
 						return result, i, err
 					}
 					result.N = int(iv)
-
 				}
 			} else {
 				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
@@ -2901,7 +2867,6 @@ func (AllowDupsStruct) DecodeStreamFrom(s *scan.Stream, i int) (AllowDupsStruct,
 					if err != nil {
 						return result, i, err
 					}
-
 				}
 			} else {
 				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
@@ -2914,10 +2879,9 @@ func (AllowDupsStruct) DecodeStreamFrom(s *scan.Stream, i int) (AllowDupsStruct,
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -2932,14 +2896,13 @@ func (AllowDupsStruct) DecodeStreamFrom(s *scan.Stream, i int) (AllowDupsStruct,
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s AllowDupsStruct) JSONSize() int {
 	size := 36
 	size += len(s.Name) * 2
 	return size
 }
-
 func (s AllowDupsStruct) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
@@ -2949,9 +2912,9 @@ func (s AllowDupsStruct) AppendJSON(dst []byte) ([]byte, error) {
 	dst = encode.AppendStringNoHTML(dst, s.Name)
 	return append(dst, '}'), nil
 }
-
 func (DiveStruct) DecodeFrom(data []byte, i int) (DiveStruct, int, error) {
 	var result DiveStruct
+
 	var err error
 	_ = err
 	seenCount := false
@@ -2965,6 +2928,7 @@ func (DiveStruct) DecodeFrom(data []byte, i int) (DiveStruct, int, error) {
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -3256,8 +3220,8 @@ func (DiveStruct) DecodeFrom(data []byte, i int) (DiveStruct, int, error) {
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (DiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (DiveStruct, int, error) {
 	var result DiveStruct
 	seenCount := false
@@ -3273,10 +3237,9 @@ func (DiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (DiveStruct, int, erro
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -3526,10 +3489,9 @@ func (DiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (DiveStruct, int, erro
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -3544,8 +3506,8 @@ func (DiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (DiveStruct, int, erro
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s DiveStruct) JSONSize() int {
 	size := 63
 	if n := len(s.Scores); n > 0 {
@@ -3561,13 +3523,13 @@ func (s DiveStruct) JSONSize() int {
 	size += len(s.Title) * 2
 	return size
 }
-
 func (s DiveStruct) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"count\":"...)
 	dst = strconv.AppendInt(dst, int64(s.Count), 10)
 	dst = append(dst, ",\"scores\":"...)
+
 	if s.Scores == nil {
 		dst = append(dst, "null"...)
 	} else {
@@ -3582,6 +3544,7 @@ func (s DiveStruct) AppendJSON(dst []byte) ([]byte, error) {
 		dst = append(dst, ']')
 	}
 	dst = append(dst, ",\"tags\":"...)
+
 	if s.Tags == nil {
 		dst = append(dst, "null"...)
 	} else {
@@ -3600,9 +3563,9 @@ func (s DiveStruct) AppendJSON(dst []byte) ([]byte, error) {
 	dst = encode.AppendStringNoHTML(dst, s.Title)
 	return append(dst, '}'), nil
 }
-
 func (CustomDiveStruct) DecodeFrom(data []byte, i int) (CustomDiveStruct, int, error) {
 	var result CustomDiveStruct
+
 	var err error
 	_ = err
 	seenLookup := false
@@ -3617,6 +3580,7 @@ func (CustomDiveStruct) DecodeFrom(data []byte, i int) (CustomDiveStruct, int, e
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -3664,7 +3628,7 @@ func (CustomDiveStruct) DecodeFrom(data []byte, i int) (CustomDiveStruct, int, e
 				}
 				seenPtr = true
 				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-					i = 4 + i
+					i += 4
 					result.Ptr = nil
 				} else {
 					var v int
@@ -4077,8 +4041,8 @@ func (CustomDiveStruct) DecodeFrom(data []byte, i int) (CustomDiveStruct, int, e
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (CustomDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (CustomDiveStruct, int, error) {
 	var result CustomDiveStruct
 	seenLookup := false
@@ -4095,10 +4059,9 @@ func (CustomDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (CustomDiveStruc
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -4136,6 +4099,7 @@ func (CustomDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (CustomDiveStruc
 							return result, i, scan.ErrBadLiteral
 						}
 					}
+					i += 4
 					i = 4 + i
 					result.Ptr = nil
 				} else {
@@ -4146,7 +4110,6 @@ func (CustomDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (CustomDiveStruc
 						return result, i, err
 					}
 					v = int(iv)
-
 					result.Ptr = &v
 				}
 				if err := PointerCheck(result.Ptr); err != nil {
@@ -4548,10 +4511,9 @@ func (CustomDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (CustomDiveStruc
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -4566,8 +4528,8 @@ func (CustomDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (CustomDiveStruc
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s CustomDiveStruct) JSONSize() int {
 	size := 51
 	size += len(s.Lookup) * 24
@@ -4597,11 +4559,11 @@ func (s CustomDiveStruct) JSONSize() int {
 	}
 	return size
 }
-
 func (s CustomDiveStruct) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"lookup\":"...)
+
 	if s.Lookup == nil {
 		dst = append(dst, "null"...)
 	} else {
@@ -4623,6 +4585,7 @@ func (s CustomDiveStruct) AppendJSON(dst []byte) ([]byte, error) {
 		dst = append(dst, '}')
 	}
 	dst = append(dst, ",\"mixed\":"...)
+
 	if s.Mixed == nil {
 		dst = append(dst, "null"...)
 	} else {
@@ -4644,12 +4607,14 @@ func (s CustomDiveStruct) AppendJSON(dst []byte) ([]byte, error) {
 		dst = append(dst, '}')
 	}
 	dst = append(dst, ",\"ptr\":"...)
+
 	if s.Ptr == nil {
 		dst = append(dst, "null"...)
 	} else {
 		dst = strconv.AppendInt(dst, int64((*s.Ptr)), 10)
 	}
 	dst = append(dst, ",\"tags\":"...)
+
 	if s.Tags == nil {
 		dst = append(dst, "null"...)
 	} else {
@@ -4665,6 +4630,7 @@ func (s CustomDiveStruct) AppendJSON(dst []byte) ([]byte, error) {
 		dst = append(dst, ']')
 	}
 	dst = append(dst, ",\"trim\":"...)
+
 	if s.Trim == nil {
 		dst = append(dst, "null"...)
 	} else {
@@ -4679,11 +4645,12 @@ func (s CustomDiveStruct) AppendJSON(dst []byte) ([]byte, error) {
 		}
 		dst = append(dst, ']')
 	}
+
 	return append(dst, '}'), nil
 }
-
 func (ExtraStruct) DecodeFrom(data []byte, i int) (ExtraStruct, int, error) {
 	var result ExtraStruct
+
 	var err error
 	_ = err
 	seenClampedScore := false
@@ -4698,6 +4665,7 @@ func (ExtraStruct) DecodeFrom(data []byte, i int) (ExtraStruct, int, error) {
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -5259,8 +5227,8 @@ func (ExtraStruct) DecodeFrom(data []byte, i int) (ExtraStruct, int, error) {
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (ExtraStruct) DecodeStreamFrom(s *scan.Stream, i int) (ExtraStruct, int, error) {
 	var result ExtraStruct
 	seenClampedScore := false
@@ -5277,10 +5245,9 @@ func (ExtraStruct) DecodeStreamFrom(s *scan.Stream, i int) (ExtraStruct, int, er
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -5912,10 +5879,9 @@ func (ExtraStruct) DecodeStreamFrom(s *scan.Stream, i int) (ExtraStruct, int, er
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -5930,8 +5896,8 @@ func (ExtraStruct) DecodeStreamFrom(s *scan.Stream, i int) (ExtraStruct, int, er
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s ExtraStruct) JSONSize() int {
 	size := 95
 	if n := len(s.HintedTags); n > 0 {
@@ -5974,13 +5940,13 @@ func (s ExtraStruct) JSONSize() int {
 	}
 	return size
 }
-
 func (s ExtraStruct) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"clampedScore\":"...)
 	dst = strconv.AppendInt(dst, int64(s.ClampedScore), 10)
 	dst = append(dst, ",\"hintedTags\":"...)
+
 	if s.HintedTags == nil {
 		dst = append(dst, "null"...)
 	} else {
@@ -5996,6 +5962,7 @@ func (s ExtraStruct) AppendJSON(dst []byte) ([]byte, error) {
 		dst = append(dst, ']')
 	}
 	dst = append(dst, ",\"keyedMap\":"...)
+
 	if s.KeyedMap == nil {
 		dst = append(dst, "null"...)
 	} else {
@@ -6017,6 +5984,7 @@ func (s ExtraStruct) AppendJSON(dst []byte) ([]byte, error) {
 		dst = append(dst, '}')
 	}
 	dst = append(dst, ",\"nestedInts\":"...)
+
 	if s.NestedInts == nil {
 		dst = append(dst, "null"...)
 	} else {
@@ -6055,6 +6023,7 @@ func (s ExtraStruct) AppendJSON(dst []byte) ([]byte, error) {
 		dst = append(dst, ']')
 	}
 	dst = append(dst, ",\"triple\":"...)
+
 	if s.Triple == nil {
 		dst = append(dst, "null"...)
 	} else {
@@ -6144,11 +6113,12 @@ func (s ExtraStruct) AppendJSON(dst []byte) ([]byte, error) {
 		}
 		dst = append(dst, ']')
 	}
+
 	return append(dst, '}'), nil
 }
-
 func (TupleStruct) DecodeFrom(data []byte, i int) (TupleStruct, int, error) {
 	var result TupleStruct
+
 	var err error
 	_ = err
 	seenPair := false
@@ -6162,6 +6132,7 @@ func (TupleStruct) DecodeFrom(data []byte, i int) (TupleStruct, int, error) {
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -6572,8 +6543,8 @@ func (TupleStruct) DecodeFrom(data []byte, i int) (TupleStruct, int, error) {
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (TupleStruct) DecodeStreamFrom(s *scan.Stream, i int) (TupleStruct, int, error) {
 	var result TupleStruct
 	seenPair := false
@@ -6589,10 +6560,9 @@ func (TupleStruct) DecodeStreamFrom(s *scan.Stream, i int) (TupleStruct, int, er
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -7014,10 +6984,9 @@ func (TupleStruct) DecodeStreamFrom(s *scan.Stream, i int) (TupleStruct, int, er
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -7032,8 +7001,8 @@ func (TupleStruct) DecodeStreamFrom(s *scan.Stream, i int) (TupleStruct, int, er
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s TupleStruct) JSONSize() int {
 	size := 45
 	if n := len(s.Pair); n > 0 {
@@ -7068,11 +7037,11 @@ func (s TupleStruct) JSONSize() int {
 	}
 	return size
 }
-
 func (s TupleStruct) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"pair\":["...)
+
 	if len(s.Pair) > 0 {
 		if s.Pair[0] == nil {
 			dst = append(dst, "null"...)
@@ -7107,6 +7076,7 @@ func (s TupleStruct) AppendJSON(dst []byte) ([]byte, error) {
 		}
 	}
 	dst = append(dst, "],\"point\":["...)
+
 	if len(s.Point) > 0 {
 		dst = strconv.AppendFloat(dst, s.Point[0], 'g', -1, 64)
 		for _, v0 := range s.Point[1:] {
@@ -7115,6 +7085,7 @@ func (s TupleStruct) AppendJSON(dst []byte) ([]byte, error) {
 		}
 	}
 	dst = append(dst, "],\"rgb\":["...)
+
 	if len(s.RGB) > 0 {
 		dst = strconv.AppendInt(dst, int64(s.RGB[0]), 10)
 		for _, v0 := range s.RGB[1:] {
@@ -7123,6 +7094,7 @@ func (s TupleStruct) AppendJSON(dst []byte) ([]byte, error) {
 		}
 	}
 	dst = append(dst, "],\"segments\":"...)
+
 	if s.Segments == nil {
 		dst = append(dst, "null"...)
 	} else {
@@ -7151,11 +7123,12 @@ func (s TupleStruct) AppendJSON(dst []byte) ([]byte, error) {
 		}
 		dst = append(dst, ']')
 	}
+
 	return append(dst, '}'), nil
 }
-
 func (FallbackStruct) DecodeFrom(data []byte, i int) (FallbackStruct, int, error) {
 	var result FallbackStruct
+
 	var err error
 	_ = err
 	seenExtra := false
@@ -7167,6 +7140,7 @@ func (FallbackStruct) DecodeFrom(data []byte, i int) (FallbackStruct, int, error
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -7277,8 +7251,8 @@ func (FallbackStruct) DecodeFrom(data []byte, i int) (FallbackStruct, int, error
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (FallbackStruct) DecodeStreamFrom(s *scan.Stream, i int) (FallbackStruct, int, error) {
 	var result FallbackStruct
 	seenExtra := false
@@ -7292,10 +7266,9 @@ func (FallbackStruct) DecodeStreamFrom(s *scan.Stream, i int) (FallbackStruct, i
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -7358,10 +7331,9 @@ func (FallbackStruct) DecodeStreamFrom(s *scan.Stream, i int) (FallbackStruct, i
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -7376,33 +7348,32 @@ func (FallbackStruct) DecodeStreamFrom(s *scan.Stream, i int) (FallbackStruct, i
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s FallbackStruct) JSONSize() int {
 	size := 146
 	size += len(s.ID) * 2
 	return size
 }
-
 func (s FallbackStruct) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"extra\":"...)
+
 	{
-		var b []byte
-		b, err = json.Marshal(s.Extra)
+		bs, err := json.Marshal(s.Extra)
 		if err != nil {
 			return dst, err
 		}
-		dst = append(dst, b...)
+		dst = append(dst, bs...)
 	}
 	dst = append(dst, ",\"id\":\""...)
 	dst = encode.AppendStringNoHTML(dst, s.ID)
 	return append(dst, '}'), nil
 }
-
 func (FastFallbackStruct) DecodeFrom(data []byte, i int) (FastFallbackStruct, int, error) {
 	var result FastFallbackStruct
+
 	var err error
 	_ = err
 	seenExtra := false
@@ -7414,6 +7385,7 @@ func (FastFallbackStruct) DecodeFrom(data []byte, i int) (FastFallbackStruct, in
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -7520,8 +7492,8 @@ func (FastFallbackStruct) DecodeFrom(data []byte, i int) (FastFallbackStruct, in
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (FastFallbackStruct) DecodeStreamFrom(s *scan.Stream, i int) (FastFallbackStruct, int, error) {
 	var result FastFallbackStruct
 	seenExtra := false
@@ -7535,10 +7507,9 @@ func (FastFallbackStruct) DecodeStreamFrom(s *scan.Stream, i int) (FastFallbackS
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -7594,10 +7565,9 @@ func (FastFallbackStruct) DecodeStreamFrom(s *scan.Stream, i int) (FastFallbackS
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -7612,34 +7582,33 @@ func (FastFallbackStruct) DecodeStreamFrom(s *scan.Stream, i int) (FastFallbackS
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s FastFallbackStruct) JSONSize() int {
 	size := 18
 	size += s.Extra.JSONSize()
 	size += len(s.ID) * 2
 	return size
 }
-
 func (s FastFallbackStruct) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"extra\":"...)
+
 	{
-		var b []byte
-		b, err = s.Extra.MarshalJSON()
+		bs, err := s.Extra.MarshalJSON()
 		if err != nil {
 			return dst, err
 		}
-		dst = append(dst, b...)
+		dst = append(dst, bs...)
 	}
 	dst = append(dst, ",\"id\":\""...)
 	dst = encode.AppendStringNoHTML(dst, s.ID)
 	return append(dst, '}'), nil
 }
-
 func (TextFallbackStruct) DecodeFrom(data []byte, i int) (TextFallbackStruct, int, error) {
 	var result TextFallbackStruct
+
 	var err error
 	_ = err
 	seenID := false
@@ -7651,6 +7620,7 @@ func (TextFallbackStruct) DecodeFrom(data []byte, i int) (TextFallbackStruct, in
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -7761,8 +7731,8 @@ func (TextFallbackStruct) DecodeFrom(data []byte, i int) (TextFallbackStruct, in
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (TextFallbackStruct) DecodeStreamFrom(s *scan.Stream, i int) (TextFallbackStruct, int, error) {
 	var result TextFallbackStruct
 	seenID := false
@@ -7776,10 +7746,9 @@ func (TextFallbackStruct) DecodeStreamFrom(s *scan.Stream, i int) (TextFallbackS
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -7839,10 +7808,9 @@ func (TextFallbackStruct) DecodeStreamFrom(s *scan.Stream, i int) (TextFallbackS
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -7857,20 +7825,20 @@ func (TextFallbackStruct) DecodeStreamFrom(s *scan.Stream, i int) (TextFallbackS
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s TextFallbackStruct) JSONSize() int {
 	size := 144
 	size += len(s.ID) * 2
 	return size
 }
-
 func (s TextFallbackStruct) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"id\":\""...)
 	dst = encode.AppendStringNoHTML(dst, s.ID)
 	dst = append(dst, ",\"tag\":"...)
+
 	{
 		var t []byte
 		t, err = s.Tag.MarshalText()
@@ -7879,12 +7847,13 @@ func (s TextFallbackStruct) AppendJSON(dst []byte) ([]byte, error) {
 		}
 		dst = append(dst, '"')
 		dst = encode.AppendStringNoHTML(dst, encode.BytesToString(t))
+		dst = append(dst, '"')
 	}
 	return append(dst, '}'), nil
 }
-
 func (HTMLRawStruct) DecodeFrom(data []byte, i int) (HTMLRawStruct, int, error) {
 	var result HTMLRawStruct
+
 	var err error
 	_ = err
 	seenNote := false
@@ -7895,6 +7864,7 @@ func (HTMLRawStruct) DecodeFrom(data []byte, i int) (HTMLRawStruct, int, error) 
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -7986,8 +7956,8 @@ func (HTMLRawStruct) DecodeFrom(data []byte, i int) (HTMLRawStruct, int, error) 
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (HTMLRawStruct) DecodeStreamFrom(s *scan.Stream, i int) (HTMLRawStruct, int, error) {
 	var result HTMLRawStruct
 	seenNote := false
@@ -8000,10 +7970,9 @@ func (HTMLRawStruct) DecodeStreamFrom(s *scan.Stream, i int) (HTMLRawStruct, int
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -8040,10 +8009,9 @@ func (HTMLRawStruct) DecodeStreamFrom(s *scan.Stream, i int) (HTMLRawStruct, int
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -8058,14 +8026,13 @@ func (HTMLRawStruct) DecodeStreamFrom(s *scan.Stream, i int) (HTMLRawStruct, int
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s HTMLRawStruct) JSONSize() int {
 	size := 11
 	size += len(s.Note) * 2
 	return size
 }
-
 func (s HTMLRawStruct) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
@@ -8073,9 +8040,9 @@ func (s HTMLRawStruct) AppendJSON(dst []byte) ([]byte, error) {
 	dst = encode.AppendStringNoHTML(dst, s.Note)
 	return append(dst, '}'), nil
 }
-
 func (HTMLEscapeStruct) DecodeFrom(data []byte, i int) (HTMLEscapeStruct, int, error) {
 	var result HTMLEscapeStruct
+
 	var err error
 	_ = err
 	seenNote := false
@@ -8086,6 +8053,7 @@ func (HTMLEscapeStruct) DecodeFrom(data []byte, i int) (HTMLEscapeStruct, int, e
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -8177,8 +8145,8 @@ func (HTMLEscapeStruct) DecodeFrom(data []byte, i int) (HTMLEscapeStruct, int, e
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (HTMLEscapeStruct) DecodeStreamFrom(s *scan.Stream, i int) (HTMLEscapeStruct, int, error) {
 	var result HTMLEscapeStruct
 	seenNote := false
@@ -8191,10 +8159,9 @@ func (HTMLEscapeStruct) DecodeStreamFrom(s *scan.Stream, i int) (HTMLEscapeStruc
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -8231,10 +8198,9 @@ func (HTMLEscapeStruct) DecodeStreamFrom(s *scan.Stream, i int) (HTMLEscapeStruc
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -8249,14 +8215,13 @@ func (HTMLEscapeStruct) DecodeStreamFrom(s *scan.Stream, i int) (HTMLEscapeStruc
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s HTMLEscapeStruct) JSONSize() int {
 	size := 11
 	size += len(s.Note) * 2
 	return size
 }
-
 func (s HTMLEscapeStruct) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
@@ -8264,9 +8229,9 @@ func (s HTMLEscapeStruct) AppendJSON(dst []byte) ([]byte, error) {
 	dst = encode.AppendString(dst, s.Note)
 	return append(dst, '}'), nil
 }
-
 func (InlineStruct) DecodeFrom(data []byte, i int) (InlineStruct, int, error) {
 	var result InlineStruct
+
 	var err error
 	_ = err
 	seenName := false
@@ -8277,6 +8242,7 @@ func (InlineStruct) DecodeFrom(data []byte, i int) (InlineStruct, int, error) {
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -8380,8 +8346,8 @@ func (InlineStruct) DecodeFrom(data []byte, i int) (InlineStruct, int, error) {
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (InlineStruct) DecodeStreamFrom(s *scan.Stream, i int) (InlineStruct, int, error) {
 	var result InlineStruct
 	seenName := false
@@ -8394,10 +8360,9 @@ func (InlineStruct) DecodeStreamFrom(s *scan.Stream, i int) (InlineStruct, int, 
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -8456,10 +8421,9 @@ func (InlineStruct) DecodeStreamFrom(s *scan.Stream, i int) (InlineStruct, int, 
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -8474,8 +8438,8 @@ func (InlineStruct) DecodeStreamFrom(s *scan.Stream, i int) (InlineStruct, int, 
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s InlineStruct) JSONSize() int {
 	size := 11
 	size += len(s.Name) * 2
@@ -8485,7 +8449,6 @@ func (s InlineStruct) JSONSize() int {
 	}
 	return size
 }
-
 func (s InlineStruct) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
@@ -8511,9 +8474,9 @@ func (s InlineStruct) AppendJSON(dst []byte) ([]byte, error) {
 	}
 	return append(dst, '}'), nil
 }
-
 func (URLStruct) DecodeFrom(data []byte, i int) (URLStruct, int, error) {
 	var result URLStruct
+
 	var err error
 	_ = err
 	seenSite := false
@@ -8524,6 +8487,7 @@ func (URLStruct) DecodeFrom(data []byte, i int) (URLStruct, int, error) {
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -8624,8 +8588,8 @@ func (URLStruct) DecodeFrom(data []byte, i int) (URLStruct, int, error) {
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (URLStruct) DecodeStreamFrom(s *scan.Stream, i int) (URLStruct, int, error) {
 	var result URLStruct
 	seenSite := false
@@ -8638,10 +8602,9 @@ func (URLStruct) DecodeStreamFrom(s *scan.Stream, i int) (URLStruct, int, error)
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -8686,10 +8649,9 @@ func (URLStruct) DecodeStreamFrom(s *scan.Stream, i int) (URLStruct, int, error)
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -8704,8 +8666,8 @@ func (URLStruct) DecodeStreamFrom(s *scan.Stream, i int) (URLStruct, int, error)
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s URLStruct) JSONSize() int {
 	size := 17
 	size += len(s.Site.Scheme) + len(s.Site.Host)*3 + len(s.Site.Path)*3 + len(s.Site.RawQuery) + len(s.Site.Fragment)*3 + len(s.Site.Opaque)
@@ -8715,17 +8677,17 @@ func (s URLStruct) JSONSize() int {
 	}
 	return size
 }
-
 func (s URLStruct) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"site\":\""...)
 	dst = encode.AppendURL(dst, s.Site)
 	return append(dst, "\"}"...), nil
-}
 
+}
 func (MapStruct) DecodeFrom(data []byte, i int) (MapStruct, int, error) {
 	var result MapStruct
+
 	var err error
 	_ = err
 	seenAddresses := false
@@ -8738,6 +8700,7 @@ func (MapStruct) DecodeFrom(data []byte, i int) (MapStruct, int, error) {
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -9095,8 +9058,8 @@ func (MapStruct) DecodeFrom(data []byte, i int) (MapStruct, int, error) {
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (MapStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapStruct, int, error) {
 	var result MapStruct
 	seenAddresses := false
@@ -9111,10 +9074,9 @@ func (MapStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapStruct, int, error)
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -9454,10 +9416,9 @@ func (MapStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapStruct, int, error)
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -9472,8 +9433,8 @@ func (MapStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapStruct, int, error)
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s MapStruct) JSONSize() int {
 	size := 40
 	size += len(s.Addresses) * 4
@@ -9492,11 +9453,11 @@ func (s MapStruct) JSONSize() int {
 	}
 	return size
 }
-
 func (s MapStruct) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"addresses\":"...)
+
 	if s.Addresses == nil {
 		dst = append(dst, "null"...)
 	} else {
@@ -9520,6 +9481,7 @@ func (s MapStruct) AppendJSON(dst []byte) ([]byte, error) {
 		dst = append(dst, '}')
 	}
 	dst = append(dst, ",\"counts\":"...)
+
 	if s.Counts == nil {
 		dst = append(dst, "null"...)
 	} else {
@@ -9541,6 +9503,7 @@ func (s MapStruct) AppendJSON(dst []byte) ([]byte, error) {
 		dst = append(dst, '}')
 	}
 	dst = append(dst, ",\"labels\":"...)
+
 	if s.Labels == nil {
 		dst = append(dst, "null"...)
 	} else {
@@ -9561,11 +9524,12 @@ func (s MapStruct) AppendJSON(dst []byte) ([]byte, error) {
 		}
 		dst = append(dst, '}')
 	}
+
 	return append(dst, '}'), nil
 }
-
 func (MapDiveStruct) DecodeFrom(data []byte, i int) (MapDiveStruct, int, error) {
 	var result MapDiveStruct
+
 	var err error
 	_ = err
 	seenClamped := false
@@ -9578,6 +9542,7 @@ func (MapDiveStruct) DecodeFrom(data []byte, i int) (MapDiveStruct, int, error) 
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -9971,8 +9936,8 @@ func (MapDiveStruct) DecodeFrom(data []byte, i int) (MapDiveStruct, int, error) 
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (MapDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapDiveStruct, int, error) {
 	var result MapDiveStruct
 	seenClamped := false
@@ -9987,10 +9952,9 @@ func (MapDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapDiveStruct, int
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -10346,10 +10310,9 @@ func (MapDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapDiveStruct, int
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -10364,8 +10327,8 @@ func (MapDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapDiveStruct, int
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s MapDiveStruct) JSONSize() int {
 	size := 37
 	size += len(s.Clamped) * 24
@@ -10383,11 +10346,11 @@ func (s MapDiveStruct) JSONSize() int {
 	}
 	return size
 }
-
 func (s MapDiveStruct) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"clamped\":"...)
+
 	if s.Clamped == nil {
 		dst = append(dst, "null"...)
 	} else {
@@ -10409,6 +10372,7 @@ func (s MapDiveStruct) AppendJSON(dst []byte) ([]byte, error) {
 		dst = append(dst, '}')
 	}
 	dst = append(dst, ",\"counts\":"...)
+
 	if s.Counts == nil {
 		dst = append(dst, "null"...)
 	} else {
@@ -10430,6 +10394,7 @@ func (s MapDiveStruct) AppendJSON(dst []byte) ([]byte, error) {
 		dst = append(dst, '}')
 	}
 	dst = append(dst, ",\"names\":"...)
+
 	if s.Names == nil {
 		dst = append(dst, "null"...)
 	} else {
@@ -10450,11 +10415,12 @@ func (s MapDiveStruct) AppendJSON(dst []byte) ([]byte, error) {
 		}
 		dst = append(dst, '}')
 	}
+
 	return append(dst, '}'), nil
 }
-
 func (Derived) DecodeFrom(data []byte, i int) (Derived, int, error) {
 	var result Derived
+
 	var err error
 	_ = err
 	seenID := false
@@ -10467,6 +10433,7 @@ func (Derived) DecodeFrom(data []byte, i int) (Derived, int, error) {
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -10630,8 +10597,8 @@ func (Derived) DecodeFrom(data []byte, i int) (Derived, int, error) {
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (Derived) DecodeStreamFrom(s *scan.Stream, i int) (Derived, int, error) {
 	var result Derived
 	seenID := false
@@ -10646,10 +10613,9 @@ func (Derived) DecodeStreamFrom(s *scan.Stream, i int) (Derived, int, error) {
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		if !seenID {
@@ -10726,10 +10692,9 @@ func (Derived) DecodeStreamFrom(s *scan.Stream, i int) (Derived, int, error) {
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -10750,8 +10715,8 @@ func (Derived) DecodeStreamFrom(s *scan.Stream, i int) (Derived, int, error) {
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s Derived) JSONSize() int {
 	size := 19
 	size += len(s.ID) * 2
@@ -10762,7 +10727,6 @@ func (s Derived) JSONSize() int {
 	size += len(s.Name) * 2
 	return size
 }
-
 func (s Derived) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
@@ -10780,6 +10744,7 @@ func (s Derived) AppendJSON(dst []byte) ([]byte, error) {
 		dst = append(dst, "\"meta\":\""...)
 		dst = encode.AppendStringNoHTML(dst, s.Meta)
 	}
+
 	if len(dst) > start {
 		dst = append(dst, ',')
 	}
@@ -10787,9 +10752,9 @@ func (s Derived) AppendJSON(dst []byte) ([]byte, error) {
 	dst = encode.AppendStringNoHTML(dst, s.Name)
 	return append(dst, '}'), nil
 }
-
 func (ModStruct) DecodeFrom(data []byte, i int) (ModStruct, int, error) {
 	var result ModStruct
+
 	var err error
 	_ = err
 	seenEmail := false
@@ -10802,6 +10767,7 @@ func (ModStruct) DecodeFrom(data []byte, i int) (ModStruct, int, error) {
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -11000,8 +10966,8 @@ func (ModStruct) DecodeFrom(data []byte, i int) (ModStruct, int, error) {
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (ModStruct) DecodeStreamFrom(s *scan.Stream, i int) (ModStruct, int, error) {
 	var result ModStruct
 	seenEmail := false
@@ -11016,10 +10982,9 @@ func (ModStruct) DecodeStreamFrom(s *scan.Stream, i int) (ModStruct, int, error)
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -11165,10 +11130,9 @@ func (ModStruct) DecodeStreamFrom(s *scan.Stream, i int) (ModStruct, int, error)
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -11183,8 +11147,8 @@ func (ModStruct) DecodeStreamFrom(s *scan.Stream, i int) (ModStruct, int, error)
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s ModStruct) JSONSize() int {
 	size := 31
 	size += len(s.Email) * 2
@@ -11197,7 +11161,6 @@ func (s ModStruct) JSONSize() int {
 	}
 	return size
 }
-
 func (s ModStruct) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
@@ -11206,6 +11169,7 @@ func (s ModStruct) AppendJSON(dst []byte) ([]byte, error) {
 	dst = append(dst, ",\"sku\":\""...)
 	dst = encode.AppendStringNoHTML(dst, s.SKU)
 	dst = append(dst, ",\"tags\":"...)
+
 	if s.Tags == nil {
 		dst = append(dst, "null"...)
 	} else {
@@ -11220,11 +11184,12 @@ func (s ModStruct) AppendJSON(dst []byte) ([]byte, error) {
 		}
 		dst = append(dst, ']')
 	}
+
 	return append(dst, '}'), nil
 }
-
 func (FallibleModStruct) DecodeFrom(data []byte, i int) (FallibleModStruct, int, error) {
 	var result FallibleModStruct
+
 	var err error
 	_ = err
 	seenEmail := false
@@ -11235,6 +11200,7 @@ func (FallibleModStruct) DecodeFrom(data []byte, i int) (FallibleModStruct, int,
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -11343,8 +11309,8 @@ func (FallibleModStruct) DecodeFrom(data []byte, i int) (FallibleModStruct, int,
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (FallibleModStruct) DecodeStreamFrom(s *scan.Stream, i int) (FallibleModStruct, int, error) {
 	var result FallibleModStruct
 	seenEmail := false
@@ -11357,10 +11323,9 @@ func (FallibleModStruct) DecodeStreamFrom(s *scan.Stream, i int) (FallibleModStr
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		if !seenEmail {
@@ -11411,10 +11376,9 @@ func (FallibleModStruct) DecodeStreamFrom(s *scan.Stream, i int) (FallibleModStr
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -11432,14 +11396,13 @@ func (FallibleModStruct) DecodeStreamFrom(s *scan.Stream, i int) (FallibleModStr
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s FallibleModStruct) JSONSize() int {
 	size := 12
 	size += len(s.Email) * 2
 	return size
 }
-
 func (s FallibleModStruct) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
@@ -11447,9 +11410,9 @@ func (s FallibleModStruct) AppendJSON(dst []byte) ([]byte, error) {
 	dst = encode.AppendStringNoHTML(dst, s.Email)
 	return append(dst, '}'), nil
 }
-
 func (FallibleModMultierrStruct) DecodeFrom(data []byte, i int) (FallibleModMultierrStruct, int, error) {
 	var result FallibleModMultierrStruct
+
 	var err error
 	_ = err
 	var errs validation.Errors
@@ -11461,6 +11424,7 @@ func (FallibleModMultierrStruct) DecodeFrom(data []byte, i int) (FallibleModMult
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -11588,10 +11552,11 @@ func (FallibleModMultierrStruct) DecodeFrom(data []byte, i int) (FallibleModMult
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (FallibleModMultierrStruct) DecodeStreamFrom(s *scan.Stream, i int) (FallibleModMultierrStruct, int, error) {
 	var result FallibleModMultierrStruct
+
 	var errs validation.Errors
 	seenEmail := false
 	i, err := s.ObjectOpen(i)
@@ -11603,10 +11568,9 @@ func (FallibleModMultierrStruct) DecodeStreamFrom(s *scan.Stream, i int) (Fallib
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		if !seenEmail {
@@ -11653,7 +11617,6 @@ func (FallibleModMultierrStruct) DecodeStreamFrom(s *scan.Stream, i int) (Fallib
 					if len(result.Email) < 10 {
 						errs = append(errs, &validation.MinLenError{Field: "email", Limit: 10, Got: len(result.Email)})
 					}
-
 				}
 			} else {
 				errs = append(errs, &validation.UnknownKeyError{Field: strings.Clone(key)})
@@ -11682,10 +11645,9 @@ func (FallibleModMultierrStruct) DecodeStreamFrom(s *scan.Stream, i int) (Fallib
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -11706,14 +11668,13 @@ func (FallibleModMultierrStruct) DecodeStreamFrom(s *scan.Stream, i int) (Fallib
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s FallibleModMultierrStruct) JSONSize() int {
 	size := 12
 	size += len(s.Email) * 2
 	return size
 }
-
 func (s FallibleModMultierrStruct) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
@@ -11721,9 +11682,9 @@ func (s FallibleModMultierrStruct) AppendJSON(dst []byte) ([]byte, error) {
 	dst = encode.AppendStringNoHTML(dst, s.Email)
 	return append(dst, '}'), nil
 }
-
 func (NativeTypes) DecodeFrom(data []byte, i int) (NativeTypes, int, error) {
 	var result NativeTypes
+
 	var err error
 	_ = err
 	seenAddr := false
@@ -11744,6 +11705,7 @@ func (NativeTypes) DecodeFrom(data []byte, i int) (NativeTypes, int, error) {
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -12164,8 +12126,8 @@ func (NativeTypes) DecodeFrom(data []byte, i int) (NativeTypes, int, error) {
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (NativeTypes) DecodeStreamFrom(s *scan.Stream, i int) (NativeTypes, int, error) {
 	var result NativeTypes
 	seenAddr := false
@@ -12188,10 +12150,9 @@ func (NativeTypes) DecodeStreamFrom(s *scan.Stream, i int) (NativeTypes, int, er
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -12487,10 +12448,9 @@ func (NativeTypes) DecodeStreamFrom(s *scan.Stream, i int) (NativeTypes, int, er
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -12505,8 +12465,8 @@ func (NativeTypes) DecodeStreamFrom(s *scan.Stream, i int) (NativeTypes, int, er
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s NativeTypes) JSONSize() int {
 	size := 328
 	if s.Addr.Is4() {
@@ -12531,18 +12491,18 @@ func (s NativeTypes) JSONSize() int {
 	}
 	return size
 }
-
 func (s NativeTypes) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"addr\":\""...)
+
 	if dst, err = s.Addr.AppendText(dst); err != nil {
 		return dst, err
 	}
 	dst = append(dst, "\",\"blob\":\""...)
 	dst = base64.StdEncoding.AppendEncode(dst, s.Blob)
-	dst = append(dst, '"')
-	dst = append(dst, ",\"byteArray\":["...)
+	dst = append(dst, "\",\"byteArray\":["...)
+
 	for i, b := range s.ByteArray {
 		if i > 0 {
 			dst = append(dst, ',')
@@ -12550,6 +12510,7 @@ func (s NativeTypes) AppendJSON(dst []byte) ([]byte, error) {
 		dst = strconv.AppendUint(dst, uint64(b), 10)
 	}
 	dst = append(dst, "],\"cidr\":\""...)
+
 	if dst, err = s.Cidr.AppendText(dst); err != nil {
 		return dst, err
 	}
@@ -12557,10 +12518,10 @@ func (s NativeTypes) AppendJSON(dst []byte) ([]byte, error) {
 	dst = s.CreatedAt.AppendFormat(dst, time.RFC3339Nano)
 	dst = append(dst, "\",\"hexBlob\":\""...)
 	dst = hex.AppendEncode(dst, s.HexBlob)
-	dst = append(dst, '"')
-	dst = append(dst, ",\"issuedAt\":\""...)
+	dst = append(dst, "\",\"issuedAt\":\""...)
 	dst = s.IssuedAt.AppendFormat(dst, time.RFC3339)
 	dst = append(dst, "\",\"legacyIP\":\""...)
+
 	if dst, err = s.LegacyIP.AppendText(dst); err != nil {
 		return dst, err
 	}
@@ -12572,9 +12533,9 @@ func (s NativeTypes) AppendJSON(dst []byte) ([]byte, error) {
 	dst = strconv.AppendFloat(dst, float64(s.UnixAt.UnixNano())/1e9, 'f', -1, 64)
 	return append(dst, '}'), nil
 }
-
 func (OmitStruct) DecodeFrom(data []byte, i int) (OmitStruct, int, error) {
 	var result OmitStruct
+
 	var err error
 	_ = err
 	seenBio := false
@@ -12592,6 +12553,7 @@ func (OmitStruct) DecodeFrom(data []byte, i int) (OmitStruct, int, error) {
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -13092,8 +13054,8 @@ func (OmitStruct) DecodeFrom(data []byte, i int) (OmitStruct, int, error) {
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (OmitStruct) DecodeStreamFrom(s *scan.Stream, i int) (OmitStruct, int, error) {
 	var result OmitStruct
 	seenBio := false
@@ -13113,10 +13075,9 @@ func (OmitStruct) DecodeStreamFrom(s *scan.Stream, i int) (OmitStruct, int, erro
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -13578,10 +13539,9 @@ func (OmitStruct) DecodeStreamFrom(s *scan.Stream, i int) (OmitStruct, int, erro
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -13596,8 +13556,8 @@ func (OmitStruct) DecodeStreamFrom(s *scan.Stream, i int) (OmitStruct, int, erro
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s OmitStruct) JSONSize() int {
 	size := 40
 	if s.Bio != "" {
@@ -13644,7 +13604,6 @@ func (s OmitStruct) JSONSize() int {
 	}
 	return size
 }
-
 func (s OmitStruct) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
@@ -13657,6 +13616,7 @@ func (s OmitStruct) AppendJSON(dst []byte) ([]byte, error) {
 		dst = append(dst, "\"bio\":\""...)
 		dst = encode.AppendStringNoHTML(dst, s.Bio)
 	}
+
 	if len(dst) > start {
 		dst = append(dst, ',')
 	}
@@ -13683,6 +13643,7 @@ func (s OmitStruct) AppendJSON(dst []byte) ([]byte, error) {
 			dst = append(dst, ']')
 		}
 	}
+
 	if len(s.Labels) > 0 {
 		if len(dst) > start {
 			dst = append(dst, ',')
@@ -13709,6 +13670,7 @@ func (s OmitStruct) AppendJSON(dst []byte) ([]byte, error) {
 			dst = append(dst, '}')
 		}
 	}
+
 	if s.Meta != nil {
 		if len(dst) > start {
 			dst = append(dst, ',')
@@ -13735,6 +13697,7 @@ func (s OmitStruct) AppendJSON(dst []byte) ([]byte, error) {
 			dst = append(dst, '}')
 		}
 	}
+
 	if len(dst) > start {
 		dst = append(dst, ',')
 	}
@@ -13747,6 +13710,7 @@ func (s OmitStruct) AppendJSON(dst []byte) ([]byte, error) {
 		dst = append(dst, "\"score\":"...)
 		dst = strconv.AppendFloat(dst, s.Score, 'g', -1, 64)
 	}
+
 	if len(s.Tags) > 0 {
 		if len(dst) > start {
 			dst = append(dst, ',')
@@ -13767,11 +13731,12 @@ func (s OmitStruct) AppendJSON(dst []byte) ([]byte, error) {
 			dst = append(dst, ']')
 		}
 	}
+
 	return append(dst, '}'), nil
 }
-
 func (PointerStruct) DecodeFrom(data []byte, i int) (PointerStruct, int, error) {
 	var result PointerStruct
+
 	var err error
 	_ = err
 	seenAddr := false
@@ -13787,6 +13752,7 @@ func (PointerStruct) DecodeFrom(data []byte, i int) (PointerStruct, int, error) 
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -13835,7 +13801,7 @@ func (PointerStruct) DecodeFrom(data []byte, i int) (PointerStruct, int, error) 
 				}
 				seenAddr = true
 				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-					i = 4 + i
+					i += 4
 					result.Addr = nil
 				} else {
 					var v Address
@@ -13851,7 +13817,7 @@ func (PointerStruct) DecodeFrom(data []byte, i int) (PointerStruct, int, error) 
 				}
 				seenName = true
 				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-					i = 4 + i
+					i += 4
 					result.Name = nil
 				} else {
 					var v string
@@ -13884,7 +13850,7 @@ func (PointerStruct) DecodeFrom(data []byte, i int) (PointerStruct, int, error) 
 				}
 				seenWhen = true
 				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-					i = 4 + i
+					i += 4
 					result.When = nil
 				} else {
 					var v time.Time
@@ -13911,7 +13877,7 @@ func (PointerStruct) DecodeFrom(data []byte, i int) (PointerStruct, int, error) 
 				}
 				seenCount = true
 				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-					i = 4 + i
+					i += 4
 					result.Count = nil
 				} else {
 					var v int
@@ -13948,7 +13914,7 @@ func (PointerStruct) DecodeFrom(data []byte, i int) (PointerStruct, int, error) 
 				}
 				seenRatio = true
 				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-					i = 4 + i
+					i += 4
 					result.Ratio = nil
 				} else {
 					var v float64
@@ -13968,7 +13934,7 @@ func (PointerStruct) DecodeFrom(data []byte, i int) (PointerStruct, int, error) 
 				}
 				seenEnabled = true
 				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-					i = 4 + i
+					i += 4
 					result.Enabled = nil
 				} else {
 					var v bool
@@ -14002,8 +13968,8 @@ func (PointerStruct) DecodeFrom(data []byte, i int) (PointerStruct, int, error) 
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (PointerStruct) DecodeStreamFrom(s *scan.Stream, i int) (PointerStruct, int, error) {
 	var result PointerStruct
 	seenAddr := false
@@ -14021,10 +13987,9 @@ func (PointerStruct) DecodeStreamFrom(s *scan.Stream, i int) (PointerStruct, int
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -14063,6 +14028,7 @@ func (PointerStruct) DecodeStreamFrom(s *scan.Stream, i int) (PointerStruct, int
 							return result, i, scan.ErrBadLiteral
 						}
 					}
+					i += 4
 					i = 4 + i
 					result.Addr = nil
 				} else {
@@ -14071,7 +14037,6 @@ func (PointerStruct) DecodeStreamFrom(s *scan.Stream, i int) (PointerStruct, int
 					if err != nil {
 						return result, i, err
 					}
-
 					result.Addr = &v
 				}
 			case "name":
@@ -14099,6 +14064,7 @@ func (PointerStruct) DecodeStreamFrom(s *scan.Stream, i int) (PointerStruct, int
 							return result, i, scan.ErrBadLiteral
 						}
 					}
+					i += 4
 					i = 4 + i
 					result.Name = nil
 				} else {
@@ -14107,7 +14073,6 @@ func (PointerStruct) DecodeStreamFrom(s *scan.Stream, i int) (PointerStruct, int
 					if err != nil {
 						return result, i, err
 					}
-
 					result.Name = &v
 				}
 			case "when":
@@ -14135,6 +14100,7 @@ func (PointerStruct) DecodeStreamFrom(s *scan.Stream, i int) (PointerStruct, int
 							return result, i, scan.ErrBadLiteral
 						}
 					}
+					i += 4
 					i = 4 + i
 					result.When = nil
 				} else {
@@ -14149,7 +14115,6 @@ func (PointerStruct) DecodeStreamFrom(s *scan.Stream, i int) (PointerStruct, int
 						nsec := int64((f - float64(sec)) * 1e9)
 						v = time.Unix(sec, nsec)
 					}
-
 					result.When = &v
 				}
 			default:
@@ -14182,6 +14147,7 @@ func (PointerStruct) DecodeStreamFrom(s *scan.Stream, i int) (PointerStruct, int
 							return result, i, scan.ErrBadLiteral
 						}
 					}
+					i += 4
 					i = 4 + i
 					result.Count = nil
 				} else {
@@ -14192,7 +14158,6 @@ func (PointerStruct) DecodeStreamFrom(s *scan.Stream, i int) (PointerStruct, int
 						return result, i, err
 					}
 					v = int(iv)
-
 					result.Count = &v
 				}
 			case "ratio":
@@ -14220,6 +14185,7 @@ func (PointerStruct) DecodeStreamFrom(s *scan.Stream, i int) (PointerStruct, int
 							return result, i, scan.ErrBadLiteral
 						}
 					}
+					i += 4
 					i = 4 + i
 					result.Ratio = nil
 				} else {
@@ -14228,7 +14194,6 @@ func (PointerStruct) DecodeStreamFrom(s *scan.Stream, i int) (PointerStruct, int
 					if err != nil {
 						return result, i, err
 					}
-
 					result.Ratio = &v
 				}
 			default:
@@ -14260,6 +14225,7 @@ func (PointerStruct) DecodeStreamFrom(s *scan.Stream, i int) (PointerStruct, int
 							return result, i, scan.ErrBadLiteral
 						}
 					}
+					i += 4
 					i = 4 + i
 					result.Enabled = nil
 				} else {
@@ -14268,7 +14234,6 @@ func (PointerStruct) DecodeStreamFrom(s *scan.Stream, i int) (PointerStruct, int
 					if err != nil {
 						return result, i, err
 					}
-
 					result.Enabled = &v
 				}
 			} else {
@@ -14282,10 +14247,9 @@ func (PointerStruct) DecodeStreamFrom(s *scan.Stream, i int) (PointerStruct, int
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -14300,8 +14264,8 @@ func (PointerStruct) DecodeStreamFrom(s *scan.Stream, i int) (PointerStruct, int
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s PointerStruct) JSONSize() int {
 	size := 20
 	if s.Addr != nil {
@@ -14330,7 +14294,6 @@ func (s PointerStruct) JSONSize() int {
 	}
 	return size
 }
-
 func (s PointerStruct) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
@@ -14349,6 +14312,7 @@ func (s PointerStruct) AppendJSON(dst []byte) ([]byte, error) {
 			}
 		}
 	}
+
 	if s.Count != nil {
 		if len(dst) > start {
 			dst = append(dst, ',')
@@ -14360,25 +14324,30 @@ func (s PointerStruct) AppendJSON(dst []byte) ([]byte, error) {
 			dst = strconv.AppendInt(dst, int64((*s.Count)), 10)
 		}
 	}
+
 	if len(dst) > start {
 		dst = append(dst, ',')
 	}
 	dst = append(dst, "\"enabled\":"...)
+
 	if s.Enabled == nil {
 		dst = append(dst, "null"...)
 	} else {
 		dst = strconv.AppendBool(dst, (*s.Enabled))
 	}
+
 	if len(dst) > start {
 		dst = append(dst, ',')
 	}
 	dst = append(dst, "\"name\":"...)
+
 	if s.Name == nil {
 		dst = append(dst, "null"...)
 	} else {
 		dst = append(dst, '"')
 		dst = encode.AppendStringNoHTML(dst, (*s.Name))
 	}
+
 	if s.Ratio != nil {
 		if len(dst) > start {
 			dst = append(dst, ',')
@@ -14390,6 +14359,7 @@ func (s PointerStruct) AppendJSON(dst []byte) ([]byte, error) {
 			dst = strconv.AppendFloat(dst, (*s.Ratio), 'g', -1, 64)
 		}
 	}
+
 	if s.When != nil {
 		if len(dst) > start {
 			dst = append(dst, ',')
@@ -14401,11 +14371,12 @@ func (s PointerStruct) AppendJSON(dst []byte) ([]byte, error) {
 			dst = strconv.AppendFloat(dst, float64((*s.When).UnixNano())/1e9, 'f', -1, 64)
 		}
 	}
+
 	return append(dst, '}'), nil
 }
-
 func (IgnoreUnknownStruct) DecodeFrom(data []byte, i int) (IgnoreUnknownStruct, int, error) {
 	var result IgnoreUnknownStruct
+
 	var err error
 	_ = err
 	seenName := false
@@ -14416,6 +14387,7 @@ func (IgnoreUnknownStruct) DecodeFrom(data []byte, i int) (IgnoreUnknownStruct, 
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -14513,8 +14485,8 @@ func (IgnoreUnknownStruct) DecodeFrom(data []byte, i int) (IgnoreUnknownStruct, 
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (IgnoreUnknownStruct) DecodeStreamFrom(s *scan.Stream, i int) (IgnoreUnknownStruct, int, error) {
 	var result IgnoreUnknownStruct
 	seenName := false
@@ -14527,10 +14499,9 @@ func (IgnoreUnknownStruct) DecodeStreamFrom(s *scan.Stream, i int) (IgnoreUnknow
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -14581,10 +14552,9 @@ func (IgnoreUnknownStruct) DecodeStreamFrom(s *scan.Stream, i int) (IgnoreUnknow
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -14599,14 +14569,13 @@ func (IgnoreUnknownStruct) DecodeStreamFrom(s *scan.Stream, i int) (IgnoreUnknow
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s IgnoreUnknownStruct) JSONSize() int {
 	size := 11
 	size += len(s.Name) * 2
 	return size
 }
-
 func (s IgnoreUnknownStruct) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
@@ -14614,9 +14583,9 @@ func (s IgnoreUnknownStruct) AppendJSON(dst []byte) ([]byte, error) {
 	dst = encode.AppendStringNoHTML(dst, s.Name)
 	return append(dst, '}'), nil
 }
-
 func (Address) DecodeFrom(data []byte, i int) (Address, int, error) {
 	var result Address
+
 	var err error
 	_ = err
 	seenCity := false
@@ -14629,6 +14598,7 @@ func (Address) DecodeFrom(data []byte, i int) (Address, int, error) {
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -14810,8 +14780,8 @@ func (Address) DecodeFrom(data []byte, i int) (Address, int, error) {
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (Address) DecodeStreamFrom(s *scan.Stream, i int) (Address, int, error) {
 	var result Address
 	seenCity := false
@@ -14826,10 +14796,9 @@ func (Address) DecodeStreamFrom(s *scan.Stream, i int) (Address, int, error) {
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		if !seenCity {
@@ -14921,10 +14890,9 @@ func (Address) DecodeStreamFrom(s *scan.Stream, i int) (Address, int, error) {
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -14948,8 +14916,8 @@ func (Address) DecodeStreamFrom(s *scan.Stream, i int) (Address, int, error) {
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s Address) JSONSize() int {
 	size := 36
 	size += len(s.City) * 2
@@ -14957,7 +14925,6 @@ func (s Address) JSONSize() int {
 	size += len(s.ZipCode) * 2
 	return size
 }
-
 func (s Address) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
@@ -14969,9 +14936,9 @@ func (s Address) AppendJSON(dst []byte) ([]byte, error) {
 	dst = encode.AppendStringNoHTML(dst, s.ZipCode)
 	return append(dst, '}'), nil
 }
-
 func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 	var result Node
+
 	var err error
 	_ = err
 	seenActive := false
@@ -14988,6 +14955,7 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -15356,8 +15324,8 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 	var result Node
 	seenActive := false
@@ -15376,10 +15344,9 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -15735,10 +15702,9 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -15753,8 +15719,8 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s Node) JSONSize() int {
 	size := 120
 	if n := len(s.Children); n > 0 {
@@ -15777,13 +15743,13 @@ func (s Node) JSONSize() int {
 	}
 	return size
 }
-
 func (s Node) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"active\":"...)
 	dst = strconv.AppendBool(dst, s.Active)
 	dst = append(dst, ",\"children\":"...)
+
 	if s.Children == nil {
 		dst = append(dst, "null"...)
 	} else {
@@ -15806,6 +15772,7 @@ func (s Node) AppendJSON(dst []byte) ([]byte, error) {
 	dst = append(dst, ",\"name\":\""...)
 	dst = encode.AppendStringNoHTML(dst, s.Name)
 	dst = append(dst, ",\"props\":"...)
+
 	if s.Props == nil {
 		dst = append(dst, "null"...)
 	} else {
@@ -15829,6 +15796,7 @@ func (s Node) AppendJSON(dst []byte) ([]byte, error) {
 	dst = append(dst, ",\"score\":"...)
 	dst = strconv.AppendFloat(dst, s.Score, 'g', -1, 64)
 	dst = append(dst, ",\"tags\":"...)
+
 	if s.Tags == nil {
 		dst = append(dst, "null"...)
 	} else {
@@ -15843,14 +15811,16 @@ func (s Node) AppendJSON(dst []byte) ([]byte, error) {
 		}
 		dst = append(dst, ']')
 	}
+
 	return append(dst, '}'), nil
 }
-
 func (WideStruct) DecodeFrom(data []byte, i int) (WideStruct, int, error) {
 	var result WideStruct
+
 	var err error
 	_ = err
 	var seen uint64
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -15858,6 +15828,7 @@ func (WideStruct) DecodeFrom(data []byte, i int) (WideStruct, int, error) {
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -17209,10 +17180,11 @@ func (WideStruct) DecodeFrom(data []byte, i int) (WideStruct, int, error) {
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (WideStruct) DecodeStreamFrom(s *scan.Stream, i int) (WideStruct, int, error) {
 	var result WideStruct
+
 	var seen uint64
 	i, err := s.ObjectOpen(i)
 	if err != nil {
@@ -17223,10 +17195,9 @@ func (WideStruct) DecodeStreamFrom(s *scan.Stream, i int) (WideStruct, int, erro
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		if seen&(1<<0) == 0 {
@@ -17896,10 +17867,9 @@ func (WideStruct) DecodeStreamFrom(s *scan.Stream, i int) (WideStruct, int, erro
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -18034,8 +18004,8 @@ func (WideStruct) DecodeStreamFrom(s *scan.Stream, i int) (WideStruct, int, erro
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s WideStruct) JSONSize() int {
 	size := 352
 	size += len(s.F1) * 2
@@ -18080,7 +18050,6 @@ func (s WideStruct) JSONSize() int {
 	size += len(s.F9) * 2
 	return size
 }
-
 func (s WideStruct) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
@@ -18166,9 +18135,9 @@ func (s WideStruct) AppendJSON(dst []byte) ([]byte, error) {
 	dst = encode.AppendStringNoHTML(dst, s.F9)
 	return append(dst, '}'), nil
 }
-
 func (PtrSliceStruct) DecodeFrom(data []byte, i int) (PtrSliceStruct, int, error) {
 	var result PtrSliceStruct
+
 	var err error
 	_ = err
 	seenItems := false
@@ -18181,6 +18150,7 @@ func (PtrSliceStruct) DecodeFrom(data []byte, i int) (PtrSliceStruct, int, error
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -18443,8 +18413,8 @@ func (PtrSliceStruct) DecodeFrom(data []byte, i int) (PtrSliceStruct, int, error
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (PtrSliceStruct) DecodeStreamFrom(s *scan.Stream, i int) (PtrSliceStruct, int, error) {
 	var result PtrSliceStruct
 	seenItems := false
@@ -18459,10 +18429,9 @@ func (PtrSliceStruct) DecodeStreamFrom(s *scan.Stream, i int) (PtrSliceStruct, i
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -18564,6 +18533,7 @@ func (PtrSliceStruct) DecodeStreamFrom(s *scan.Stream, i int) (PtrSliceStruct, i
 									continue
 								}
 								break
+							} else {
 							}
 							slab0 = append(slab0, Address{})
 							slab0[len(slab0)-1], i, err = slab0[len(slab0)-1].DecodeStreamFrom(s, i)
@@ -18683,6 +18653,7 @@ func (PtrSliceStruct) DecodeStreamFrom(s *scan.Stream, i int) (PtrSliceStruct, i
 									continue
 								}
 								break
+							} else {
 							}
 							slab0 = append(slab0, Node{})
 							slab0[len(slab0)-1], i, err = slab0[len(slab0)-1].DecodeStreamFrom(s, i)
@@ -18779,6 +18750,7 @@ func (PtrSliceStruct) DecodeStreamFrom(s *scan.Stream, i int) (PtrSliceStruct, i
 								continue
 							}
 							break
+						} else {
 						}
 						slab0[idx0], i, err = slab0[idx0].DecodeStreamFrom(s, i)
 						if err != nil {
@@ -18823,10 +18795,9 @@ func (PtrSliceStruct) DecodeStreamFrom(s *scan.Stream, i int) (PtrSliceStruct, i
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -18841,8 +18812,8 @@ func (PtrSliceStruct) DecodeStreamFrom(s *scan.Stream, i int) (PtrSliceStruct, i
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s PtrSliceStruct) JSONSize() int {
 	size := 34
 	if n := len(s.Items); n > 0 {
@@ -18877,11 +18848,11 @@ func (s PtrSliceStruct) JSONSize() int {
 	}
 	return size
 }
-
 func (s PtrSliceStruct) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"items\":"...)
+
 	if s.Items == nil {
 		dst = append(dst, "null"...)
 	} else {
@@ -18908,6 +18879,7 @@ func (s PtrSliceStruct) AppendJSON(dst []byte) ([]byte, error) {
 		dst = append(dst, ']')
 	}
 	dst = append(dst, ",\"nodes\":"...)
+
 	if s.Nodes == nil {
 		dst = append(dst, "null"...)
 	} else {
@@ -18934,6 +18906,7 @@ func (s PtrSliceStruct) AppendJSON(dst []byte) ([]byte, error) {
 		dst = append(dst, ']')
 	}
 	dst = append(dst, ",\"tuple\":["...)
+
 	if len(s.Tuple) > 0 {
 		if s.Tuple[0] == nil {
 			dst = append(dst, "null"...)
@@ -18953,11 +18926,13 @@ func (s PtrSliceStruct) AppendJSON(dst []byte) ([]byte, error) {
 			}
 		}
 	}
-	return append(dst, "]}"...), nil
-}
 
+	return append(dst, "]}"...), nil
+
+}
 func (SQLNullStruct) DecodeFrom(data []byte, i int) (SQLNullStruct, int, error) {
 	var result SQLNullStruct
+
 	var err error
 	_ = err
 	seenB := false
@@ -18975,6 +18950,7 @@ func (SQLNullStruct) DecodeFrom(data []byte, i int) (SQLNullStruct, int, error) 
 		return result, i, scan.ErrBadObject
 	}
 	i++
+
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -19039,7 +19015,6 @@ func (SQLNullStruct) DecodeFrom(data []byte, i int) (SQLNullStruct, int, error) 
 							}
 							nv = byte(n)
 						}
-
 						result.B = sql.NullByte{Byte: nv, Valid: true}
 					}
 				}
@@ -19058,7 +19033,6 @@ func (SQLNullStruct) DecodeFrom(data []byte, i int) (SQLNullStruct, int, error) 
 						if err != nil {
 							return result, i, err
 						}
-
 						result.F = sql.NullFloat64{Float64: nv, Valid: true}
 					}
 				}
@@ -19098,7 +19072,6 @@ func (SQLNullStruct) DecodeFrom(data []byte, i int) (SQLNullStruct, int, error) 
 							}
 							nv = n
 						}
-
 						result.I = sql.NullInt64{Int64: nv, Valid: true}
 					}
 				}
@@ -19134,7 +19107,6 @@ func (SQLNullStruct) DecodeFrom(data []byte, i int) (SQLNullStruct, int, error) 
 								}
 							}
 						}
-
 						result.S = sql.NullString{String: nv, Valid: true}
 					}
 				}
@@ -19177,7 +19149,6 @@ func (SQLNullStruct) DecodeFrom(data []byte, i int) (SQLNullStruct, int, error) 
 								return result, i, err
 							}
 						}
-
 						result.T = sql.NullTime{Time: nv, Valid: true}
 					}
 				}
@@ -19200,7 +19171,6 @@ func (SQLNullStruct) DecodeFrom(data []byte, i int) (SQLNullStruct, int, error) 
 						if err != nil {
 							return result, i, err
 						}
-
 						result.BL = sql.NullBool{Bool: nv, Valid: true}
 					}
 				}
@@ -19245,7 +19215,6 @@ func (SQLNullStruct) DecodeFrom(data []byte, i int) (SQLNullStruct, int, error) 
 							}
 							nv = int16(n)
 						}
-
 						result.I16 = sql.NullInt16{Int16: nv, Valid: true}
 					}
 				}
@@ -19285,7 +19254,6 @@ func (SQLNullStruct) DecodeFrom(data []byte, i int) (SQLNullStruct, int, error) 
 							}
 							nv = int32(n)
 						}
-
 						result.I32 = sql.NullInt32{Int32: nv, Valid: true}
 					}
 				}
@@ -19313,8 +19281,8 @@ func (SQLNullStruct) DecodeFrom(data []byte, i int) (SQLNullStruct, int, error) 
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (SQLNullStruct) DecodeStreamFrom(s *scan.Stream, i int) (SQLNullStruct, int, error) {
 	var result SQLNullStruct
 	seenB := false
@@ -19334,10 +19302,9 @@ func (SQLNullStruct) DecodeStreamFrom(s *scan.Stream, i int) (SQLNullStruct, int
 		return result, i, err
 	}
 	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+		if err = s.ReadMore(0); err != nil {
 			return result, i, err
 		}
-		i = 0
 	}
 	if s.Bytes()[i] == '}' {
 		return result, i + 1, nil
@@ -19377,15 +19344,14 @@ func (SQLNullStruct) DecodeStreamFrom(s *scan.Stream, i int) (SQLNullStruct, int
 								return result, i, scan.ErrBadLiteral
 							}
 						}
-						result.B = sql.NullByte{}
 						i += 4
+						result.B = sql.NullByte{}
 					} else {
 						var nv uint64
 						nv, i, err = s.Uint64(i)
 						if err != nil {
 							return result, i, err
 						}
-
 						result.B = sql.NullByte{Byte: byte(nv), Valid: true}
 					}
 				}
@@ -19415,15 +19381,14 @@ func (SQLNullStruct) DecodeStreamFrom(s *scan.Stream, i int) (SQLNullStruct, int
 								return result, i, scan.ErrBadLiteral
 							}
 						}
-						result.F = sql.NullFloat64{}
 						i += 4
+						result.F = sql.NullFloat64{}
 					} else {
 						var nv float64
 						nv, i, err = s.Float64(i)
 						if err != nil {
 							return result, i, err
 						}
-
 						result.F = sql.NullFloat64{Float64: nv, Valid: true}
 					}
 				}
@@ -19453,15 +19418,14 @@ func (SQLNullStruct) DecodeStreamFrom(s *scan.Stream, i int) (SQLNullStruct, int
 								return result, i, scan.ErrBadLiteral
 							}
 						}
-						result.I = sql.NullInt64{}
 						i += 4
+						result.I = sql.NullInt64{}
 					} else {
 						var nv int64
 						nv, i, err = s.Int64(i)
 						if err != nil {
 							return result, i, err
 						}
-
 						result.I = sql.NullInt64{Int64: nv, Valid: true}
 					}
 				}
@@ -19491,15 +19455,14 @@ func (SQLNullStruct) DecodeStreamFrom(s *scan.Stream, i int) (SQLNullStruct, int
 								return result, i, scan.ErrBadLiteral
 							}
 						}
-						result.S = sql.NullString{}
 						i += 4
+						result.S = sql.NullString{}
 					} else {
 						var nv string
 						nv, i, err = s.String(i)
 						if err != nil {
 							return result, i, err
 						}
-
 						result.S = sql.NullString{String: nv, Valid: true}
 					}
 				}
@@ -19529,8 +19492,8 @@ func (SQLNullStruct) DecodeStreamFrom(s *scan.Stream, i int) (SQLNullStruct, int
 								return result, i, scan.ErrBadLiteral
 							}
 						}
-						result.T = sql.NullTime{}
 						i += 4
+						result.T = sql.NullTime{}
 					} else {
 						var nv time.Time
 						{
@@ -19544,7 +19507,6 @@ func (SQLNullStruct) DecodeStreamFrom(s *scan.Stream, i int) (SQLNullStruct, int
 								return result, i, err
 							}
 						}
-
 						result.T = sql.NullTime{Time: nv, Valid: true}
 					}
 				}
@@ -19578,15 +19540,14 @@ func (SQLNullStruct) DecodeStreamFrom(s *scan.Stream, i int) (SQLNullStruct, int
 								return result, i, scan.ErrBadLiteral
 							}
 						}
-						result.BL = sql.NullBool{}
 						i += 4
+						result.BL = sql.NullBool{}
 					} else {
 						var nv bool
 						nv, i, err = s.Bool(i)
 						if err != nil {
 							return result, i, err
 						}
-
 						result.BL = sql.NullBool{Bool: nv, Valid: true}
 					}
 				}
@@ -19621,15 +19582,14 @@ func (SQLNullStruct) DecodeStreamFrom(s *scan.Stream, i int) (SQLNullStruct, int
 								return result, i, scan.ErrBadLiteral
 							}
 						}
-						result.I16 = sql.NullInt16{}
 						i += 4
+						result.I16 = sql.NullInt16{}
 					} else {
 						var nv int64
 						nv, i, err = s.Int64(i)
 						if err != nil {
 							return result, i, err
 						}
-
 						result.I16 = sql.NullInt16{Int16: int16(nv), Valid: true}
 					}
 				}
@@ -19659,15 +19619,14 @@ func (SQLNullStruct) DecodeStreamFrom(s *scan.Stream, i int) (SQLNullStruct, int
 								return result, i, scan.ErrBadLiteral
 							}
 						}
-						result.I32 = sql.NullInt32{}
 						i += 4
+						result.I32 = sql.NullInt32{}
 					} else {
 						var nv int64
 						nv, i, err = s.Int64(i)
 						if err != nil {
 							return result, i, err
 						}
-
 						result.I32 = sql.NullInt32{Int32: int32(nv), Valid: true}
 					}
 				}
@@ -19682,10 +19641,9 @@ func (SQLNullStruct) DecodeStreamFrom(s *scan.Stream, i int) (SQLNullStruct, int
 			return result, i, err
 		}
 		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+			if err = s.ReadMore(0); err != nil {
 				return result, i, err
 			}
-			i = 0
 		}
 		c := s.Bytes()[i]
 		if c == ',' {
@@ -19700,54 +19658,60 @@ func (SQLNullStruct) DecodeStreamFrom(s *scan.Stream, i int) (SQLNullStruct, int
 		}
 		return result, i, scan.ErrBadObject
 	}
-}
 
+}
 func (s SQLNullStruct) JSONSize() int {
 	size := 194
 	size += len(s.S.String) * 2
 	return size
 }
-
 func (s SQLNullStruct) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"b\":"...)
+
 	if !s.B.Valid {
 		dst = append(dst, "null"...)
 	} else {
 		dst = strconv.AppendUint(dst, uint64(s.B.Byte), 10)
 	}
 	dst = append(dst, ",\"bl\":"...)
+
 	if !s.BL.Valid {
 		dst = append(dst, "null"...)
 	} else {
 		dst = strconv.AppendBool(dst, s.BL.Bool)
 	}
 	dst = append(dst, ",\"f\":"...)
+
 	if !s.F.Valid {
 		dst = append(dst, "null"...)
 	} else {
 		dst = strconv.AppendFloat(dst, s.F.Float64, 'g', -1, 64)
 	}
 	dst = append(dst, ",\"i\":"...)
+
 	if !s.I.Valid {
 		dst = append(dst, "null"...)
 	} else {
 		dst = strconv.AppendInt(dst, s.I.Int64, 10)
 	}
 	dst = append(dst, ",\"i16\":"...)
+
 	if !s.I16.Valid {
 		dst = append(dst, "null"...)
 	} else {
 		dst = strconv.AppendInt(dst, int64(s.I16.Int16), 10)
 	}
 	dst = append(dst, ",\"i32\":"...)
+
 	if !s.I32.Valid {
 		dst = append(dst, "null"...)
 	} else {
 		dst = strconv.AppendInt(dst, int64(s.I32.Int32), 10)
 	}
 	dst = append(dst, ",\"s\":"...)
+
 	if !s.S.Valid {
 		dst = append(dst, "null"...)
 	} else {
@@ -19755,6 +19719,7 @@ func (s SQLNullStruct) AppendJSON(dst []byte) ([]byte, error) {
 		dst = encode.AppendStringNoHTML(dst, s.S.String)
 	}
 	dst = append(dst, ",\"t\":"...)
+
 	if !s.T.Valid {
 		dst = append(dst, "null"...)
 	} else {
@@ -19762,5 +19727,6 @@ func (s SQLNullStruct) AppendJSON(dst []byte) ([]byte, error) {
 		dst = s.T.Time.AppendFormat(dst, time.RFC3339Nano)
 		dst = append(dst, '"')
 	}
+
 	return append(dst, '}'), nil
 }
