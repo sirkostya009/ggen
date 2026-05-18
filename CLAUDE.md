@@ -233,6 +233,22 @@ fallback for cross-package types.
 code is built with** — packages.Load honors build tags, so files behind
 `goexperiment.jsonv2` are otherwise invisible.
 
+The load Mode intentionally omits `packages.NeedDeps`. Imported package
+signatures come from compiled export data (gcexportdata) instead of
+re-typechecking every transitive dep from source. Method-set lookups on
+imported types still work — export data carries methods. Peak RSS on
+`ggen ./...` drops from ~1.4 GB to ~50 MB for projects with heavy import
+graphs (sonic / easyjson / jsonv2). When the export data is unavailable
+(rare — fresh checkout with no `go build` ever), the AST-only fallback
+emits `encoding/json` for the affected type. Soft degradation, not a
+hard failure.
+
+Walk mode (`./...`) fans goroutines per depth level via `wg.Go`. Leaves
+process first so a parent package's `packages.Load` reads its children's
+already-generated `_ggen.go` files. Sibling packages at the same depth
+have no ordering dependency and run concurrently — no manual job cap;
+the post-NeedDeps memory budget makes unbounded NumCPU fanout fine.
+
 ### Flags (all opt-in, apply to every struct in the pass)
 
 - `-o <path>` — override output path (single file / single dir only)
@@ -426,6 +442,7 @@ Accepted underlying kinds, with the codegen path for each:
   you want the underlying's exact wire shape, declare the struct
   with no exported fields (force fallback to delegation) or write
   your own marshal hook.
+
 - **slice / map / array** (`type Tags []string`, `type Lookup
   map[string]int`, `type Tuple [3]int`): build a synthetic FieldInfo
   capturing the container shape (ElemType, ElemKind, ArrayLen) and
@@ -540,6 +557,7 @@ for these fields. Round-trip within ggen itself is fine.
 | `sql.Null*`   | inner value or `null` | `{"<Inner>":val,"Valid":true}` (plain struct, no hook)   |
 
 Reasons:
+
 - **`url.URL`**: stdlib's struct dump is unusable for any external API
   consumer; every web service uses URL-as-string. ggen ships the
   ergonomic shape.
@@ -868,30 +886,30 @@ real-world API response shapes.
 
 **Unmarshal:**
 
-| path     | ns/op       | B/op    | allocs     | MB/s    |
-| -------- | ----------- | ------- | ---------- | ------- |
-| jsonv2   | 29115 K     | 16990 K | 245929     | 201     |
-| sonic    | 26008 K     | 22871 K | 245873     | 226     |
-| easyjson | 21064 K     | 16983 K | 245859     | 278     |
-| **ggen** | **11577 K** | 26268 K | **65716**  | **507** |
+| path     | ns/op       | B/op    | allocs    | MB/s    |
+| -------- | ----------- | ------- | --------- | ------- |
+| jsonv2   | 29115 K     | 16990 K | 245929    | 201     |
+| sonic    | 26008 K     | 22871 K | 245873    | 226     |
+| easyjson | 21064 K     | 16983 K | 245859    | 278     |
+| **ggen** | **11577 K** | 26268 K | **65716** | **507** |
 
 **Marshal:**
 
-| path     | ns/op       | B/op       | allocs    | MB/s    |
-| -------- | ----------- | ---------- | --------- | ------- |
-| jsonv2   | 21385 K     | 27001 K    | 7667      | 274     |
-| sonic    | 14749 K     | 12097 K    | 7608      | 398     |
-| easyjson | 9143 K      | 6140 K     | 7590      | 642     |
-| **ggen** | **7820 K**  | 11922 K    | **2185**  | **750** |
+| path     | ns/op      | B/op    | allocs   | MB/s    |
+| -------- | ---------- | ------- | -------- | ------- |
+| jsonv2   | 21385 K    | 27001 K | 7667     | 274     |
+| sonic    | 14749 K    | 12097 K | 7608     | 398     |
+| easyjson | 9143 K     | 6140 K  | 7590     | 642     |
+| **ggen** | **7820 K** | 11922 K | **2185** | **750** |
 
 **Reader input (streaming):**
 
-| path                         | ns/op    | B/op    | allocs  |
-| ---------------------------- | -------- | ------- | ------- |
-| jsonv2.UnmarshalRead         | 54 ms    | 33.8 MB | 246 K   |
-| easyjson.UnmarshalFromReader | 37.3 ms  | 31.5 MB | 246 K   |
-| **ggen UnmarshalStream**     | 34.5 ms  | 19.3 MB | 384 K   |
-| **ggen ReadAllUnmarshal**    | 25.3 ms  | 29.9 MB | 153 K   |
+| path                         | ns/op   | B/op    | allocs |
+| ---------------------------- | ------- | ------- | ------ |
+| jsonv2.UnmarshalRead         | 54 ms   | 33.8 MB | 246 K  |
+| easyjson.UnmarshalFromReader | 37.3 ms | 31.5 MB | 246 K  |
+| **ggen UnmarshalStream**     | 34.5 ms | 19.3 MB | 384 K  |
+| **ggen ReadAllUnmarshal**    | 25.3 ms | 29.9 MB | 153 K  |
 
 ggen Stream copies strings during parse (each scanned string is its
 own heap alloc — that's the 230K extra allocs over the bytes path),
@@ -977,34 +995,68 @@ On the tiny complex payload (~440 bytes): Unmarshal ~415 ns, 2 allocs,
 
 ## Test files
 
-- `shared_test.go` — shared annotated structs (Address, Node, …) used
-  across the feature tests.
-- `schema_ggen_test.go` — generated methods for the test structs. Test-only.
-- `read_test.go` — basic Read tests + unknown-key error & ignoreunknown opt-in.
-- `scan_decode_test.go` — bytes-path + stream-path correctness (including
-  chunked-reader + tiny-hint-forces-grow).
-- `payloads_test.go` — `complexPayload` + `complexValue` (used by
-  roundtrip / stdcompat tests) and `megaPayload` / `megaValue`
-  (1 MiB generated Node tree, fixed seed 1; used by `stdcompat_test.go`
-  to exercise cross-compat at scale). No benchmark functions live in
-  the root module — all benchmarks moved to `bench/`.
-- `stdcompat_test.go` — exhaustive cross-compat: for every annotated
-  struct, ggen-marshal → jsonv2-unmarshal AND jsonv2-marshal → ggen-unmarshal;
-  results re-marshaled via jsonv2 and compared as parsed `any` (map order
-  and nil/empty-slice noise normalized).
-- `htmlescape_test.go` — verifies literal default (jsonv2-shaped) + `htmlescape` opt-in (v1-shaped).
-- `fuzz_test.go` — three fuzzers over `Node`: panic safety, roundtrip
-  fixed-point, jsonv2-compat.
-- `roundtrip_test.go`, `custom_test.go`, `dive_test.go`, `extra_test.go`,
-  `fallback_test.go`, `hooks_test.go`, `inline_test.go`, `maps_test.go`,
-  `mods_test.go`, `native_test.go`, `omit_test.go`, `pointer_test.go`,
-  `decode_dups_test.go`, `richtypes_test.go`, `wire_test.go` — feature
-  coverage.
+Tests live in three places: the root module (CLI / parse / tags),
+`integrationtests/` (every feature test that decodes/encodes through
+generated methods), and `bench/` (benchmarks). `integrationtests/` is
+its own Go module — it imports the root packages as a normal external
+consumer would, so the test surface exercises the public API at the
+same boundary users hit.
+
+Root module (`./`):
+
+- `parse_test.go` — annotation parsing, tag parsing, rule extraction,
+  cross-package symbol resolution. Also hosts the test-only
+  `generate(pkg, structs) ([]byte, error)` wrapper that materializes
+  `generateTo`'s output into bytes; production code paths in main.go
+  call `generateTo` directly against the destination \*os.File.
+- `tags_test.go` — `json:"…"`, `ggen:"…"`, `mod:"…"` tag parser unit
+  tests, including dive/keys prefix handling.
+- `applicability_test.go` — rule-applicability matrix (string-only
+  validators rejected on numeric fields, etc.).
 - `cli_test.go` — CLI integration: builds the ggen binary in TestMain,
   exercises file-naming contract (single-file/dir, test/non-test, `-o`
   override), `./...` walk + dot/underscore-dir skip, and per-flag
   effects on generated output (`-marshal`, `-unmarshal`, `-pkg`,
   `-novalidate`, `-ignoreunknown`, `-htmlescape`, name filter).
+- `bench_test.go` — `BenchmarkGenerate` cycles `generate()` over a
+  representative fixture to track allocs/op across generator refactors.
+- `log_test.go` — Logger level + sink behaviour.
+
+`integrationtests/` (own module, imports root packages as a consumer):
+
+- `shared_test.go` — shared annotated structs (Address, Node, …) used
+  across the feature tests.
+- `integrationtests_ggen_test.go` +
+  `integrationtests_goexperiment_jsonv2_ggen_test.go` — generated
+  methods for every annotated struct in the module; the second file
+  exists because some test structs sit behind a build tag.
+- `payloads_test.go` — `complexPayload` + `complexValue` (used by
+  roundtrip / stdcompat tests) and `megaPayload` / `megaValue` (1 MiB
+  generated Node tree, fixed seed 1; used by `stdcompat_test.go` to
+  exercise cross-compat at scale).
+- `read_test.go` — basic Read tests + unknown-key error & ignoreunknown
+  opt-in.
+- `scan_decode_test.go` — bytes-path + stream-path correctness
+  (including chunked-reader + tiny-hint-forces-grow).
+- `stdcompat_test.go` — exhaustive cross-compat: for every annotated
+  struct, ggen-marshal → jsonv2-unmarshal AND jsonv2-marshal →
+  ggen-unmarshal; results re-marshaled via jsonv2 and compared as
+  parsed `any` (map order and nil/empty-slice noise normalized).
+- `htmlescape_test.go` — verifies literal default (jsonv2-shaped) +
+  `htmlescape` opt-in (v1-shaped).
+- `fuzz_test.go` — three fuzzers over `Node`: panic safety, roundtrip
+  fixed-point, jsonv2-compat.
+- `alias_test.go`, `any_test.go`, `appendany_test.go`, `custom_test.go`,
+  `decode_dups_test.go`, `dive_test.go`, `extra_test.go`,
+  `fallback_test.go`, `hooks_test.go`, `inline_test.go`,
+  `jsonsize_test.go`, `maps_test.go`, `mods_test.go`, `native_test.go`,
+  `omit_test.go`, `pointer_test.go`, `richtypes_test.go`,
+  `roundtrip_test.go`, `sql_test.go`, `wire_test.go` — per-feature
+  coverage.
+- `thirdparty/` + `thirdparty2/` — non-annotated and annotated external
+  package fixtures (exercise cross-package generated-decoder pickup
+  via `packages.Load` and the `encoding/json` fallback for unannotated
+  types).
 - `bench/mega_test.go` — 4-way mega benchmarks (jsonv2 / sonic /
   easyjson / ggen) collapsed into three table-driven benches:
   `BenchmarkMega_Unmarshal`, `BenchmarkMega_Marshal`, and
@@ -1028,6 +1080,12 @@ On the tiny complex payload (~440 bytes): Unmarshal ~415 ns, 2 allocs,
   sleeps — useful for "N slow clients hitting one parser" sims).
   The Invalid group is where streaming pays off: fail-fast bails as
   soon as the bad field is seen, ReadAll has to drain the body first.
+- `bench/small_test.go` — small-value (~2.9 KiB ValidPayload) variants
+  of the Unmarshal + Reader paths. Companion to mega: at this size the
+  decoded value is small enough that per-call buffer management /
+  streaming overhead is visible rather than drowned by tree-walk cost.
+  Two ggen-stream Reader rows (512-byte initial buf vs payload-sized
+  buf) isolate the buffer-grow chain from steady-state throughput.
 - `BenchmarkRetention` in `bench/mega_test.go` — folded the old
   `TestResidency` into a parallel-safe bench. Each goroutine holds
   its produced `*Node` values in a local sink; sinks merge after
@@ -1037,9 +1095,14 @@ On the tiny complex payload (~440 bytes): Unmarshal ~415 ns, 2 allocs,
   a fixed iter count (`-benchtime=1000x`) for comparable per-codec
   numbers.
 
-Running tests: `GOEXPERIMENT=jsonv2 go test ./...` for the root module;
-`(cd bench && GOEXPERIMENT=jsonv2 go test ./...)` for benchmarks
-(separate module, not reached by root's `./...`).
+Running tests — each sub-module is reached by `cd`-ing into it since
+`./...` from the root does not cross module boundaries:
+
+```sh
+go test ./...
+(cd integrationtests && GOEXPERIMENT=jsonv2 go test ./...)
+(cd bench && GOEXPERIMENT=jsonv2 go test ./...)
+```
 
 ## Adding new tests
 
@@ -1100,14 +1163,15 @@ binary discoverable, prevent cross-session collisions when multiple
 agents share the host, and match the path the test harness expects.
 
 ```sh
-GOEXPERIMENT=jsonv2 go build -o ggen .
-./ggen .              # regen schema_ggen_test.go
-./ggen ./bench        # regen bench/bench_ggen.go (the binary still walks
-                      # the bench dir even though it is a separate module —
-                      # ggen reads source files, not module boundaries)
+go build -o ggen .
+./ggen ./...
 # easyjson for bench:
 easyjson bench/types.go
 ```
+
+The walk crosses module boundaries — `./...` from the root visits
+`bench/` and `integrationtests/` even though they are separate
+sub-modules. ggen reads source files, not module manifests.
 
 `go install github.com/sirkostya009/ggen@latest` gives users the CLI binary.
 The subpackages (`decode`, `decode/validation`, `encode`, `scan`) are importable by
@@ -1145,24 +1209,28 @@ their generated code.
        radius.
   Pick when there's a concrete consumer asking for the merge shape.
 
-- **Refactor generator to emit `go/ast` nodes instead of text** — today
-  every render function writes Go source as a `[]byte` via
-  `fmt.Fprintf` / `WriteString` into a buffer, then `format.Source`
-  parses that text and re-emits it. If the generator built
-  `*ast.FuncDecl` / `ast.BlockStmt` directly, the format step could
-  drop the parse half (~30% of `format.Source` cost — see profiling in
-  the May session) and call `printer.Fprint` directly. Bigger payoff:
-  no more careful whitespace bookkeeping in render code (no `\n`
-  threading, no trailing-blank-line cosmetics), and Go's compiler
-  catches malformed expressions at codegen time instead of at the
-  format step. Costs: full rewrite of every `render*` helper (currently
-  ~5k LOC of text-emitting code), every `fmt.Sprintf` template becomes
-  an AST builder, and the buffer-drilling work just done becomes moot.
-  Worth doing only if (a) the text-emit codebase becomes hard to
-  maintain, or (b) profiling shows `format.Source`'s parse phase as a
-  bottleneck on real workloads.
-
 ## Tried and rejected (don't re-attempt without new evidence)
+
+- **Generator emitting `go/ast` nodes instead of text.** Full rewrite
+  lives on the `ast-conversion` branch (commit `feadbba`). Each renderer
+  returns `[]ast.Stmt`; `renderStructMethods` composes the four core
+  methods (DecodeFrom, DecodeStreamFrom, JSONSize, AppendJSON) plus the
+  optional Marshal/UnmarshalJSON hooks as `*ast.FuncDecl`s, then the file
+  emits via `format.Node`. Generated code came out byte-identical.
+  Rejected for three reasons:
+    1. **Less readable.** Every `fmt.Fprintf(b, "if %s == nil {…", ref)`
+       turns into an `&ast.IfStmt{Cond: &ast.BinaryExpr{…}, Body:
+       &ast.BlockStmt{List: …}}` tree. Render code becomes pointer-
+       struct boilerplate; you can't skim the rendered Go shape out of
+       the generator source anymore.
+    2. **Higher peak RAM.** AST nodes are pointer-heavy Go structs that
+       survive until the whole file is printed.
+    3. **Marginally slower codegen.** Small but consistent regression.
+    4. **Slightly larger binary footprint.** Another unwanted thing.
+
+  Kept on the branch in case the AST layer ever enables an `ast.Walk`-
+  based optimization not feasible against text (e.g. replacing
+  `coalesceConstAppends`), but no current use justifies the cost.
 
 - **Pointer-arithmetic decoder / `unsafe.Add` byte loads** to eliminate
   bounds checks. Conversion of all four hot inliners (SkipWS,

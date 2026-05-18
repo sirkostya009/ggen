@@ -606,8 +606,8 @@ type Event struct {
 
 this whole project was vibe coded with claude opus 4.7. every line of
 the generator, the runtime libraries, the tests, the fuzzers — typed
-by the model, steered by me. i didnt really care about code of the 
-generator, instead im lazer focused on quality of the *generated* code.
+by the model, steered by me. i didnt really care about code of the
+generator, instead im lazer focused on quality of the _generated_ code.
 
 ## license
 
