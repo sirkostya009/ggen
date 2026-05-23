@@ -18,7 +18,6 @@ func renderAliasDecode(b *bytes.Buffer, s StructInfo) {
 		renderAliasContainerDecode(b, s, false)
 		return
 	}
-	b.WriteString("var result " + s.Name + "\n")
 	b.WriteString("var err error\n_ = err\n")
 	switch s.AliasKind {
 	case KindString:
@@ -46,7 +45,6 @@ func renderAliasStreamDecode(b *bytes.Buffer, s StructInfo) {
 		renderAliasContainerDecode(b, s, true)
 		return
 	}
-	b.WriteString("var result " + s.Name + "\n")
 	b.WriteString("var err error\n_ = err\n")
 	switch s.AliasKind {
 	case KindString:
@@ -136,7 +134,6 @@ func renderAliasAppendJSON(b *bytes.Buffer, s StructInfo) {
 // alias type. No allocation beyond what the underlying method itself
 // performs.
 func renderAliasStructDecode(b *bytes.Buffer, s StructInfo, stream bool) {
-	b.WriteString("var result " + s.Name + "\n")
 	switch {
 	case s.AliasIface.ByteDecoder && !stream:
 		fmt.Fprintf(b, `var u %[1]s
@@ -232,12 +229,20 @@ return dst, nil
 // full slice/map/array machinery — empty-peek bypass, hint-len cap,
 // pointer-elem slab, dive validation, the lot.
 func renderAliasContainerDecode(b *bytes.Buffer, s StructInfo, stream bool) {
-	b.WriteString("var result " + s.Name + "\n")
 	// Hoist err for both byte- and stream-path container decoders. Byte
 	// path doesn't have a function-scope err naturally (inline scanners
 	// declare locally); stream's regular non-alias path gets err from
 	// ObjectOpen but alias containers don't open an object first.
 	b.WriteString("var err error\n_ = err\n")
+	// Receiver IS the container — reset before decode so we don't append
+	// over data carried in from the caller. KindArray has no nil state;
+	// every slot gets overwritten or errors via strict-length decode.
+	switch s.AliasKind {
+	case KindSlice, KindBytes:
+		b.WriteString("if result != nil { result = result[:0] }\n")
+	case KindMap:
+		b.WriteString("if result != nil { clear(result) }\n")
+	}
 	f := s.AliasField
 	f.GoType = s.Name
 	switch s.AliasKind {

@@ -1525,13 +1525,13 @@ type Count int
 			t.Fatalf("ggen msg.go: %v\n%s", err, out)
 		}
 		body := mustReadOutput(t, filepath.Join(dir, "msg_ggen.go"))
-		if !strings.Contains(body, "(HtmlString) DecodeFrom") {
+		if !strings.Contains(body, "(result HtmlString) DecodeFrom") {
 			t.Errorf("HtmlString.DecodeFrom missing:\n%s", body)
 		}
 		if !strings.Contains(body, "result = HtmlString(v)") {
 			t.Errorf("HtmlString cast missing:\n%s", body)
 		}
-		if !strings.Contains(body, "(Count) DecodeFrom") {
+		if !strings.Contains(body, "(result Count) DecodeFrom") {
 			t.Errorf("Count.DecodeFrom missing:\n%s", body)
 		}
 		if !strings.Contains(body, "strconv.AppendInt(dst, int64(s), 10)") {

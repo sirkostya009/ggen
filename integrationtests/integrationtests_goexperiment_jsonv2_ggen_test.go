@@ -18,8 +18,1440 @@ import (
 	"github.com/sirkostya009/ggen/scan"
 )
 
-func (HookedStruct) DecodeFrom(data []byte, i int) (HookedStruct, int, error) {
-	var result HookedStruct
+func (result StringTagStruct) DecodeFrom(data []byte, i int) (StringTagStruct, int, error) {
+	var err error
+	_ = err
+	seenB := false
+	seenF32 := false
+	seenF64 := false
+	seenI16 := false
+	seenI32 := false
+	seenI64 := false
+	seenI8 := false
+	seenU16 := false
+	seenU32 := false
+	seenU64 := false
+	seenU8 := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, scan.ErrBadObject
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, scan.ErrExpectString
+		}
+		{
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, scan.ErrUnterminated
+			}
+			if data[ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				key, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, err
+				}
+			}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, scan.ErrBadObject
+		}
+		i++
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch len(key) {
+		case 1:
+			if key == "b" {
+				if seenB {
+					return result, i, &validation.DuplicateKeyError{Field: "b"}
+				}
+				seenB = true
+				{
+					var sv string
+					if i >= len(data) || data[i] != '"' {
+						return result, i, scan.ErrExpectString
+					}
+					{
+						ke := i + 1
+						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' {
+							ke++
+						}
+						if ke >= len(data) {
+							return result, i, scan.ErrUnterminated
+						}
+						if data[ke] == '"' {
+							sv = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+							i = ke + 1
+						} else {
+							sv, i, err = scan.String(data, i)
+							if err != nil {
+								return result, i, err
+							}
+						}
+					}
+					switch sv {
+					case "true":
+						result.B = true
+					case "false":
+						result.B = false
+					default:
+						return result, i, scan.ErrBadBool
+					}
+				}
+			} else {
+				return result, i, &validation.UnknownKeyError{Field: key}
+			}
+		case 2:
+			switch key {
+			case "i8":
+				if seenI8 {
+					return result, i, &validation.DuplicateKeyError{Field: "i8"}
+				}
+				seenI8 = true
+				{
+					var sv string
+					if i >= len(data) || data[i] != '"' {
+						return result, i, scan.ErrExpectString
+					}
+					{
+						ke := i + 1
+						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' {
+							ke++
+						}
+						if ke >= len(data) {
+							return result, i, scan.ErrUnterminated
+						}
+						if data[ke] == '"' {
+							sv = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+							i = ke + 1
+						} else {
+							sv, i, err = scan.String(data, i)
+							if err != nil {
+								return result, i, err
+							}
+						}
+					}
+					n, err := strconv.ParseInt(sv, 10, 64)
+					if err != nil {
+						return result, i, err
+					}
+					result.I8 = int8(n)
+				}
+			case "u8":
+				if seenU8 {
+					return result, i, &validation.DuplicateKeyError{Field: "u8"}
+				}
+				seenU8 = true
+				{
+					var sv string
+					if i >= len(data) || data[i] != '"' {
+						return result, i, scan.ErrExpectString
+					}
+					{
+						ke := i + 1
+						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' {
+							ke++
+						}
+						if ke >= len(data) {
+							return result, i, scan.ErrUnterminated
+						}
+						if data[ke] == '"' {
+							sv = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+							i = ke + 1
+						} else {
+							sv, i, err = scan.String(data, i)
+							if err != nil {
+								return result, i, err
+							}
+						}
+					}
+					u, err := strconv.ParseUint(sv, 10, 64)
+					if err != nil {
+						return result, i, err
+					}
+					result.U8 = uint8(u)
+				}
+			default:
+				return result, i, &validation.UnknownKeyError{Field: key}
+			}
+		case 3:
+			switch key {
+			case "f32":
+				if seenF32 {
+					return result, i, &validation.DuplicateKeyError{Field: "f32"}
+				}
+				seenF32 = true
+				{
+					var sv string
+					if i >= len(data) || data[i] != '"' {
+						return result, i, scan.ErrExpectString
+					}
+					{
+						ke := i + 1
+						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' {
+							ke++
+						}
+						if ke >= len(data) {
+							return result, i, scan.ErrUnterminated
+						}
+						if data[ke] == '"' {
+							sv = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+							i = ke + 1
+						} else {
+							sv, i, err = scan.String(data, i)
+							if err != nil {
+								return result, i, err
+							}
+						}
+					}
+					f, err := strconv.ParseFloat(sv, 64)
+					if err != nil {
+						return result, i, err
+					}
+					result.F32 = float32(f)
+				}
+			case "f64":
+				if seenF64 {
+					return result, i, &validation.DuplicateKeyError{Field: "f64"}
+				}
+				seenF64 = true
+				{
+					var sv string
+					if i >= len(data) || data[i] != '"' {
+						return result, i, scan.ErrExpectString
+					}
+					{
+						ke := i + 1
+						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' {
+							ke++
+						}
+						if ke >= len(data) {
+							return result, i, scan.ErrUnterminated
+						}
+						if data[ke] == '"' {
+							sv = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+							i = ke + 1
+						} else {
+							sv, i, err = scan.String(data, i)
+							if err != nil {
+								return result, i, err
+							}
+						}
+					}
+					f, err := strconv.ParseFloat(sv, 64)
+					if err != nil {
+						return result, i, err
+					}
+					result.F64 = f
+				}
+			case "i16":
+				if seenI16 {
+					return result, i, &validation.DuplicateKeyError{Field: "i16"}
+				}
+				seenI16 = true
+				{
+					var sv string
+					if i >= len(data) || data[i] != '"' {
+						return result, i, scan.ErrExpectString
+					}
+					{
+						ke := i + 1
+						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' {
+							ke++
+						}
+						if ke >= len(data) {
+							return result, i, scan.ErrUnterminated
+						}
+						if data[ke] == '"' {
+							sv = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+							i = ke + 1
+						} else {
+							sv, i, err = scan.String(data, i)
+							if err != nil {
+								return result, i, err
+							}
+						}
+					}
+					n, err := strconv.ParseInt(sv, 10, 64)
+					if err != nil {
+						return result, i, err
+					}
+					result.I16 = int16(n)
+				}
+			case "i32":
+				if seenI32 {
+					return result, i, &validation.DuplicateKeyError{Field: "i32"}
+				}
+				seenI32 = true
+				{
+					var sv string
+					if i >= len(data) || data[i] != '"' {
+						return result, i, scan.ErrExpectString
+					}
+					{
+						ke := i + 1
+						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' {
+							ke++
+						}
+						if ke >= len(data) {
+							return result, i, scan.ErrUnterminated
+						}
+						if data[ke] == '"' {
+							sv = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+							i = ke + 1
+						} else {
+							sv, i, err = scan.String(data, i)
+							if err != nil {
+								return result, i, err
+							}
+						}
+					}
+					n, err := strconv.ParseInt(sv, 10, 64)
+					if err != nil {
+						return result, i, err
+					}
+					result.I32 = int32(n)
+				}
+			case "i64":
+				if seenI64 {
+					return result, i, &validation.DuplicateKeyError{Field: "i64"}
+				}
+				seenI64 = true
+				{
+					var sv string
+					if i >= len(data) || data[i] != '"' {
+						return result, i, scan.ErrExpectString
+					}
+					{
+						ke := i + 1
+						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' {
+							ke++
+						}
+						if ke >= len(data) {
+							return result, i, scan.ErrUnterminated
+						}
+						if data[ke] == '"' {
+							sv = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+							i = ke + 1
+						} else {
+							sv, i, err = scan.String(data, i)
+							if err != nil {
+								return result, i, err
+							}
+						}
+					}
+					n, err := strconv.ParseInt(sv, 10, 64)
+					if err != nil {
+						return result, i, err
+					}
+					result.I64 = n
+				}
+			case "u16":
+				if seenU16 {
+					return result, i, &validation.DuplicateKeyError{Field: "u16"}
+				}
+				seenU16 = true
+				{
+					var sv string
+					if i >= len(data) || data[i] != '"' {
+						return result, i, scan.ErrExpectString
+					}
+					{
+						ke := i + 1
+						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' {
+							ke++
+						}
+						if ke >= len(data) {
+							return result, i, scan.ErrUnterminated
+						}
+						if data[ke] == '"' {
+							sv = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+							i = ke + 1
+						} else {
+							sv, i, err = scan.String(data, i)
+							if err != nil {
+								return result, i, err
+							}
+						}
+					}
+					u, err := strconv.ParseUint(sv, 10, 64)
+					if err != nil {
+						return result, i, err
+					}
+					result.U16 = uint16(u)
+				}
+			case "u32":
+				if seenU32 {
+					return result, i, &validation.DuplicateKeyError{Field: "u32"}
+				}
+				seenU32 = true
+				{
+					var sv string
+					if i >= len(data) || data[i] != '"' {
+						return result, i, scan.ErrExpectString
+					}
+					{
+						ke := i + 1
+						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' {
+							ke++
+						}
+						if ke >= len(data) {
+							return result, i, scan.ErrUnterminated
+						}
+						if data[ke] == '"' {
+							sv = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+							i = ke + 1
+						} else {
+							sv, i, err = scan.String(data, i)
+							if err != nil {
+								return result, i, err
+							}
+						}
+					}
+					u, err := strconv.ParseUint(sv, 10, 64)
+					if err != nil {
+						return result, i, err
+					}
+					result.U32 = uint32(u)
+				}
+			case "u64":
+				if seenU64 {
+					return result, i, &validation.DuplicateKeyError{Field: "u64"}
+				}
+				seenU64 = true
+				{
+					var sv string
+					if i >= len(data) || data[i] != '"' {
+						return result, i, scan.ErrExpectString
+					}
+					{
+						ke := i + 1
+						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' {
+							ke++
+						}
+						if ke >= len(data) {
+							return result, i, scan.ErrUnterminated
+						}
+						if data[ke] == '"' {
+							sv = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+							i = ke + 1
+						} else {
+							sv, i, err = scan.String(data, i)
+							if err != nil {
+								return result, i, err
+							}
+						}
+					}
+					u, err := strconv.ParseUint(sv, 10, 64)
+					if err != nil {
+						return result, i, err
+					}
+					result.U64 = u
+				}
+			default:
+				return result, i, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, i, &validation.UnknownKeyError{Field: key}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, scan.ErrBadObject
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			return result, i + 1, nil
+		}
+		return result, i, scan.ErrBadObject
+	}
+}
+
+func (result StringTagStruct) DecodeStreamFrom(s *scan.Stream, i int) (StringTagStruct, int, error) {
+	seenB := false
+	seenF32 := false
+	seenF64 := false
+	seenI16 := false
+	seenI32 := false
+	seenI64 := false
+	seenI8 := false
+	seenU16 := false
+	seenU32 := false
+	seenU64 := false
+	seenU8 := false
+	i, err := s.ObjectOpen(i)
+	if err != nil {
+		return result, i, err
+	}
+	i, err = s.SkipSpace(i)
+	if err != nil {
+		return result, i, err
+	}
+	if i >= len(s.Bytes()) {
+		if err = s.ReadMore(i); err != nil {
+			return result, i, err
+		}
+		i = 0
+	}
+	if s.Bytes()[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		key, i, err = s.KeyView(i)
+		if err != nil {
+			return result, i, err
+		}
+		switch len(key) {
+		case 1:
+			if key == "b" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
+				if seenB {
+					return result, i, &validation.DuplicateKeyError{Field: "b"}
+				}
+				seenB = true
+				{
+					var sv string
+					sv, i, err = s.KeyView(i)
+					if err != nil {
+						return result, i, err
+					}
+					switch sv {
+					case "true":
+						result.B = true
+					case "false":
+						result.B = false
+					default:
+						return result, i, scan.ErrBadBool
+					}
+				}
+			} else {
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+			}
+		case 2:
+			switch key {
+			case "i8":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
+				if seenI8 {
+					return result, i, &validation.DuplicateKeyError{Field: "i8"}
+				}
+				seenI8 = true
+				{
+					var sv string
+					sv, i, err = s.KeyView(i)
+					if err != nil {
+						return result, i, err
+					}
+					n, err := strconv.ParseInt(sv, 10, 64)
+					if err != nil {
+						return result, i, err
+					}
+					result.I8 = int8(n)
+				}
+			case "u8":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
+				if seenU8 {
+					return result, i, &validation.DuplicateKeyError{Field: "u8"}
+				}
+				seenU8 = true
+				{
+					var sv string
+					sv, i, err = s.KeyView(i)
+					if err != nil {
+						return result, i, err
+					}
+					u, err := strconv.ParseUint(sv, 10, 64)
+					if err != nil {
+						return result, i, err
+					}
+					result.U8 = uint8(u)
+				}
+			default:
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+			}
+		case 3:
+			switch key {
+			case "f32":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
+				if seenF32 {
+					return result, i, &validation.DuplicateKeyError{Field: "f32"}
+				}
+				seenF32 = true
+				{
+					var sv string
+					sv, i, err = s.KeyView(i)
+					if err != nil {
+						return result, i, err
+					}
+					f, err := strconv.ParseFloat(sv, 64)
+					if err != nil {
+						return result, i, err
+					}
+					result.F32 = float32(f)
+				}
+			case "f64":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
+				if seenF64 {
+					return result, i, &validation.DuplicateKeyError{Field: "f64"}
+				}
+				seenF64 = true
+				{
+					var sv string
+					sv, i, err = s.KeyView(i)
+					if err != nil {
+						return result, i, err
+					}
+					f, err := strconv.ParseFloat(sv, 64)
+					if err != nil {
+						return result, i, err
+					}
+					result.F64 = f
+				}
+			case "i16":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
+				if seenI16 {
+					return result, i, &validation.DuplicateKeyError{Field: "i16"}
+				}
+				seenI16 = true
+				{
+					var sv string
+					sv, i, err = s.KeyView(i)
+					if err != nil {
+						return result, i, err
+					}
+					n, err := strconv.ParseInt(sv, 10, 64)
+					if err != nil {
+						return result, i, err
+					}
+					result.I16 = int16(n)
+				}
+			case "i32":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
+				if seenI32 {
+					return result, i, &validation.DuplicateKeyError{Field: "i32"}
+				}
+				seenI32 = true
+				{
+					var sv string
+					sv, i, err = s.KeyView(i)
+					if err != nil {
+						return result, i, err
+					}
+					n, err := strconv.ParseInt(sv, 10, 64)
+					if err != nil {
+						return result, i, err
+					}
+					result.I32 = int32(n)
+				}
+			case "i64":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
+				if seenI64 {
+					return result, i, &validation.DuplicateKeyError{Field: "i64"}
+				}
+				seenI64 = true
+				{
+					var sv string
+					sv, i, err = s.KeyView(i)
+					if err != nil {
+						return result, i, err
+					}
+					n, err := strconv.ParseInt(sv, 10, 64)
+					if err != nil {
+						return result, i, err
+					}
+					result.I64 = n
+				}
+			case "u16":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
+				if seenU16 {
+					return result, i, &validation.DuplicateKeyError{Field: "u16"}
+				}
+				seenU16 = true
+				{
+					var sv string
+					sv, i, err = s.KeyView(i)
+					if err != nil {
+						return result, i, err
+					}
+					u, err := strconv.ParseUint(sv, 10, 64)
+					if err != nil {
+						return result, i, err
+					}
+					result.U16 = uint16(u)
+				}
+			case "u32":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
+				if seenU32 {
+					return result, i, &validation.DuplicateKeyError{Field: "u32"}
+				}
+				seenU32 = true
+				{
+					var sv string
+					sv, i, err = s.KeyView(i)
+					if err != nil {
+						return result, i, err
+					}
+					u, err := strconv.ParseUint(sv, 10, 64)
+					if err != nil {
+						return result, i, err
+					}
+					result.U32 = uint32(u)
+				}
+			case "u64":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
+				if seenU64 {
+					return result, i, &validation.DuplicateKeyError{Field: "u64"}
+				}
+				seenU64 = true
+				{
+					var sv string
+					sv, i, err = s.KeyView(i)
+					if err != nil {
+						return result, i, err
+					}
+					u, err := strconv.ParseUint(sv, 10, 64)
+					if err != nil {
+						return result, i, err
+					}
+					result.U64 = u
+				}
+			default:
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+			}
+		default:
+			return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+		}
+		i, err = s.SkipSpace(i)
+		if err != nil {
+			return result, i, err
+		}
+		if i >= len(s.Bytes()) {
+			if err = s.ReadMore(i); err != nil {
+				return result, i, err
+			}
+			i = 0
+		}
+		c := s.Bytes()[i]
+		if c == ',' {
+			i, err = s.SkipSpace(i + 1)
+			if err != nil {
+				return result, i, err
+			}
+			continue
+		}
+		if c == '}' {
+			return result, i + 1, nil
+		}
+		return result, i, scan.ErrBadObject
+	}
+}
+
+func (s StringTagStruct) JSONSize() int {
+	size := 287
+	return size
+}
+
+func (s StringTagStruct) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"b\":"...)
+	if s.B {
+		dst = append(dst, '"', 't', 'r', 'u', 'e', '"')
+	} else {
+		dst = append(dst, '"', 'f', 'a', 'l', 's', 'e', '"')
+	}
+	dst = append(dst, ",\"f32\":"...)
+	dst = strconv.AppendFloat(dst, float64(s.F32), 'g', -1, 64)
+	dst = append(dst, ",\"f64\":\""...)
+	dst = strconv.AppendFloat(dst, s.F64, 'g', -1, 64)
+	dst = append(dst, "\",\"i16\":"...)
+	dst = strconv.AppendInt(dst, int64(s.I16), 10)
+	dst = append(dst, ",\"i32\":"...)
+	dst = strconv.AppendInt(dst, int64(s.I32), 10)
+	dst = append(dst, ",\"i64\":\""...)
+	dst = strconv.AppendInt(dst, s.I64, 10)
+	dst = append(dst, "\",\"i8\":"...)
+	dst = strconv.AppendInt(dst, int64(s.I8), 10)
+	dst = append(dst, ",\"u16\":"...)
+	dst = strconv.AppendUint(dst, uint64(s.U16), 10)
+	dst = append(dst, ",\"u32\":"...)
+	dst = strconv.AppendUint(dst, uint64(s.U32), 10)
+	dst = append(dst, ",\"u64\":\""...)
+	dst = strconv.AppendUint(dst, s.U64, 10)
+	dst = append(dst, "\",\"u8\":"...)
+	dst = strconv.AppendUint(dst, uint64(s.U8), 10)
+	return append(dst, '}'), nil
+}
+
+func (result BoundaryStruct) DecodeFrom(data []byte, i int) (BoundaryStruct, int, error) {
+	var err error
+	_ = err
+	seenF := false
+	seenI := false
+	seenStr := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, scan.ErrBadObject
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, scan.ErrExpectString
+		}
+		{
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, scan.ErrUnterminated
+			}
+			if data[ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				key, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, err
+				}
+			}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, scan.ErrBadObject
+		}
+		i++
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch len(key) {
+		case 1:
+			switch key {
+			case "f":
+				if seenF {
+					return result, i, &validation.DuplicateKeyError{Field: "f"}
+				}
+				seenF = true
+				result.F, i, err = scan.Float64(data, i)
+				if err != nil {
+					return result, i, err
+				}
+			case "i":
+				if seenI {
+					return result, i, &validation.DuplicateKeyError{Field: "i"}
+				}
+				seenI = true
+				{
+					neg := false
+					if i < len(data) && data[i] == '-' {
+						neg = true
+						i++
+					}
+					if i >= len(data) || data[i] < '0' || data[i] > '9' {
+						return result, i, scan.ErrBadNumber
+					}
+					var n int64
+					for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+						n = n*10 + int64(data[i]-'0')
+						i++
+					}
+					if i < len(data) {
+						c := data[i]
+						if c == '.' || c == 'e' || c == 'E' {
+							return result, i, scan.ErrBadNumber
+						}
+					}
+					if neg {
+						n = -n
+					}
+					result.I = n
+				}
+			default:
+				return result, i, &validation.UnknownKeyError{Field: key}
+			}
+		case 3:
+			if key == "str" {
+				if seenStr {
+					return result, i, &validation.DuplicateKeyError{Field: "str"}
+				}
+				seenStr = true
+				if i >= len(data) || data[i] != '"' {
+					return result, i, scan.ErrExpectString
+				}
+				{
+					ke := i + 1
+					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' {
+						ke++
+					}
+					if ke >= len(data) {
+						return result, i, scan.ErrUnterminated
+					}
+					if data[ke] == '"' {
+						result.Str = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						i = ke + 1
+					} else {
+						result.Str, i, err = scan.String(data, i)
+						if err != nil {
+							return result, i, err
+						}
+					}
+				}
+			} else {
+				return result, i, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, i, &validation.UnknownKeyError{Field: key}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, scan.ErrBadObject
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			return result, i + 1, nil
+		}
+		return result, i, scan.ErrBadObject
+	}
+}
+
+func (result BoundaryStruct) DecodeStreamFrom(s *scan.Stream, i int) (BoundaryStruct, int, error) {
+	seenF := false
+	seenI := false
+	seenStr := false
+	i, err := s.ObjectOpen(i)
+	if err != nil {
+		return result, i, err
+	}
+	i, err = s.SkipSpace(i)
+	if err != nil {
+		return result, i, err
+	}
+	if i >= len(s.Bytes()) {
+		if err = s.ReadMore(i); err != nil {
+			return result, i, err
+		}
+		i = 0
+	}
+	if s.Bytes()[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		key, i, err = s.KeyView(i)
+		if err != nil {
+			return result, i, err
+		}
+		switch len(key) {
+		case 1:
+			switch key {
+			case "f":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
+				if seenF {
+					return result, i, &validation.DuplicateKeyError{Field: "f"}
+				}
+				seenF = true
+				result.F, i, err = s.Float64(i)
+				if err != nil {
+					return result, i, err
+				}
+			case "i":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
+				if seenI {
+					return result, i, &validation.DuplicateKeyError{Field: "i"}
+				}
+				seenI = true
+				result.I, i, err = s.Int64(i)
+				if err != nil {
+					return result, i, err
+				}
+			default:
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+			}
+		case 3:
+			if key == "str" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
+				if seenStr {
+					return result, i, &validation.DuplicateKeyError{Field: "str"}
+				}
+				seenStr = true
+				result.Str, i, err = s.String(i)
+				if err != nil {
+					return result, i, err
+				}
+			} else {
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+			}
+		default:
+			return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+		}
+		i, err = s.SkipSpace(i)
+		if err != nil {
+			return result, i, err
+		}
+		if i >= len(s.Bytes()) {
+			if err = s.ReadMore(i); err != nil {
+				return result, i, err
+			}
+			i = 0
+		}
+		c := s.Bytes()[i]
+		if c == ',' {
+			i, err = s.SkipSpace(i + 1)
+			if err != nil {
+				return result, i, err
+			}
+			continue
+		}
+		if c == '}' {
+			return result, i + 1, nil
+		}
+		return result, i, scan.ErrBadObject
+	}
+}
+
+func (s BoundaryStruct) JSONSize() int {
+	size := 64
+	size += len(s.Str) * 2
+	return size
+}
+
+func (s BoundaryStruct) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"f\":"...)
+	dst = strconv.AppendFloat(dst, s.F, 'g', -1, 64)
+	dst = append(dst, ",\"i\":"...)
+	dst = strconv.AppendInt(dst, s.I, 10)
+	dst = append(dst, ",\"str\":\""...)
+	dst = encode.AppendStringNoHTML(dst, s.Str)
+	return append(dst, '}'), nil
+}
+
+func (result CustomBothStruct) DecodeFrom(data []byte, i int) (CustomBothStruct, int, error) {
+	if result.Tags != nil {
+		result.Tags = result.Tags[:0]
+	}
+	var err error
+	_ = err
+	seenTags := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, scan.ErrBadObject
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, scan.ErrExpectString
+		}
+		{
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, scan.ErrUnterminated
+			}
+			if data[ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				key, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, err
+				}
+			}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, scan.ErrBadObject
+		}
+		i++
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch len(key) {
+		case 4:
+			if key == "tags" {
+				if seenTags {
+					return result, i, &validation.DuplicateKeyError{Field: "tags"}
+				}
+				seenTags = true
+				{
+					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+						i += 4
+						result.Tags = nil
+					} else {
+						if i >= len(data) || data[i] != '[' {
+							return result, i, scan.ErrBadArray
+						}
+						i++
+						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i < len(data) && data[i] == ']' {
+							if result.Tags == nil {
+								result.Tags = []string{}
+							}
+						} else {
+							if result.Tags == nil {
+								result.Tags = make([]string, 0, 4)
+							}
+						}
+						for i < len(data) && data[i] != ']' {
+							result.Tags = append(result.Tags, "")
+							if i >= len(data) || data[i] != '"' {
+								return result, i, scan.ErrExpectString
+							}
+							{
+								ke := i + 1
+								for ke < len(data) && data[ke] != '"' && data[ke] != '\\' {
+									ke++
+								}
+								if ke >= len(data) {
+									return result, i, scan.ErrUnterminated
+								}
+								if data[ke] == '"' {
+									result.Tags[len(result.Tags)-1] = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+									i = ke + 1
+								} else {
+									result.Tags[len(result.Tags)-1], i, err = scan.String(data, i)
+									if err != nil {
+										return result, i, err
+									}
+								}
+							}
+							result.Tags[len(result.Tags)-1] = TrimSpace(result.Tags[len(result.Tags)-1])
+							if err := NotBlank(result.Tags[len(result.Tags)-1]); err != nil {
+								return result, i, &validation.CustomError{Field: "tags[]", Name: "@NotBlank", Cause: err}
+							}
+							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
+							}
+							if i < len(data) && data[i] == ',' {
+								i++
+								for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+									i++
+								}
+								continue
+							}
+							break
+						}
+						if i >= len(data) || data[i] != ']' {
+							return result, i, scan.ErrBadArray
+						}
+						i++
+					}
+				}
+			} else {
+				return result, i, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, i, &validation.UnknownKeyError{Field: key}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, scan.ErrBadObject
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			return result, i + 1, nil
+		}
+		return result, i, scan.ErrBadObject
+	}
+}
+
+func (result CustomBothStruct) DecodeStreamFrom(s *scan.Stream, i int) (CustomBothStruct, int, error) {
+	if result.Tags != nil {
+		result.Tags = result.Tags[:0]
+	}
+	seenTags := false
+	i, err := s.ObjectOpen(i)
+	if err != nil {
+		return result, i, err
+	}
+	i, err = s.SkipSpace(i)
+	if err != nil {
+		return result, i, err
+	}
+	if i >= len(s.Bytes()) {
+		if err = s.ReadMore(i); err != nil {
+			return result, i, err
+		}
+		i = 0
+	}
+	if s.Bytes()[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		key, i, err = s.KeyView(i)
+		if err != nil {
+			return result, i, err
+		}
+		switch len(key) {
+		case 4:
+			if key == "tags" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
+				if seenTags {
+					return result, i, &validation.DuplicateKeyError{Field: "tags"}
+				}
+				seenTags = true
+				{
+					i, err = s.SkipSpace(i)
+					if err != nil {
+						return result, i, err
+					}
+					if i >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, i, err
+						}
+					}
+					if s.Bytes()[i] == 'n' {
+						for ki := 1; ki < 4; ki++ {
+							if i+ki >= len(s.Bytes()) {
+								if err = s.ReadMore(0); err != nil {
+									return result, i, err
+								}
+							}
+							if s.Bytes()[i+ki] != "null"[ki] {
+								return result, i, scan.ErrBadLiteral
+							}
+						}
+						i += 4
+						result.Tags = nil
+					} else {
+						i, err = s.ArrayOpen(i)
+						if err != nil {
+							return result, i, err
+						}
+						i, err = s.SkipSpace(i)
+						if err != nil {
+							return result, i, err
+						}
+						if i >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, i, err
+							}
+						}
+						if s.Bytes()[i] == ']' {
+							if result.Tags == nil {
+								result.Tags = []string{}
+							}
+						} else {
+							if result.Tags == nil {
+								result.Tags = make([]string, 0, 4)
+							}
+						}
+						for s.Bytes()[i] != ']' {
+							result.Tags = append(result.Tags, "")
+							result.Tags[len(result.Tags)-1], i, err = s.String(i)
+							if err != nil {
+								return result, i, err
+							}
+							result.Tags[len(result.Tags)-1] = TrimSpace(result.Tags[len(result.Tags)-1])
+							if err := NotBlank(result.Tags[len(result.Tags)-1]); err != nil {
+								return result, i, &validation.CustomError{Field: "tags[]", Name: "@NotBlank", Cause: err}
+							}
+							i, err = s.SkipSpace(i)
+							if err != nil {
+								return result, i, err
+							}
+							if i >= len(s.Bytes()) {
+								if err = s.ReadMore(0); err != nil {
+									return result, i, err
+								}
+							}
+							if s.Bytes()[i] == ',' {
+								i, err = s.SkipSpace(i + 1)
+								if err != nil {
+									return result, i, err
+								}
+								continue
+							}
+							break
+						}
+						if s.Bytes()[i] != ']' {
+							return result, i, scan.ErrBadArray
+						}
+						i++
+					}
+				}
+			} else {
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+			}
+		default:
+			return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+		}
+		i, err = s.SkipSpace(i)
+		if err != nil {
+			return result, i, err
+		}
+		if i >= len(s.Bytes()) {
+			if err = s.ReadMore(i); err != nil {
+				return result, i, err
+			}
+			i = 0
+		}
+		c := s.Bytes()[i]
+		if c == ',' {
+			i, err = s.SkipSpace(i + 1)
+			if err != nil {
+				return result, i, err
+			}
+			continue
+		}
+		if c == '}' {
+			return result, i + 1, nil
+		}
+		return result, i, scan.ErrBadObject
+	}
+}
+
+func (s CustomBothStruct) JSONSize() int {
+	size := 11
+	if n := len(s.Tags); n > 0 {
+		size += n - 1
+	}
+	for i0 := range s.Tags {
+		size += len(s.Tags[i0])*2 + 2
+	}
+	return size
+}
+
+func (s CustomBothStruct) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"tags\":"...)
+	if s.Tags == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '[')
+		if len(s.Tags) > 0 {
+			dst = append(dst, '"')
+			dst = encode.AppendStringNoHTML(dst, s.Tags[0])
+			for _, v0 := range s.Tags[1:] {
+				dst = append(dst, ",\""...)
+				dst = encode.AppendStringNoHTML(dst, v0)
+			}
+		}
+		dst = append(dst, ']')
+	}
+	return append(dst, '}'), nil
+}
+
+func (result HookedStruct) DecodeFrom(data []byte, i int) (HookedStruct, int, error) {
 	var err error
 	_ = err
 	seenN := false
@@ -176,8 +1608,7 @@ func (HookedStruct) DecodeFrom(data []byte, i int) (HookedStruct, int, error) {
 	}
 }
 
-func (HookedStruct) DecodeStreamFrom(s *scan.Stream, i int) (HookedStruct, int, error) {
-	var result HookedStruct
+func (result HookedStruct) DecodeStreamFrom(s *scan.Stream, i int) (HookedStruct, int, error) {
 	seenN := false
 	seenName := false
 	i, err := s.ObjectOpen(i)
@@ -315,8 +1746,7 @@ func (s *HookedStruct) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (RichTypes) DecodeFrom(data []byte, i int) (RichTypes, int, error) {
-	var result RichTypes
+func (result RichTypes) DecodeFrom(data []byte, i int) (RichTypes, int, error) {
 	var err error
 	_ = err
 	seenBig := false
@@ -584,8 +2014,7 @@ func (RichTypes) DecodeFrom(data []byte, i int) (RichTypes, int, error) {
 	}
 }
 
-func (RichTypes) DecodeStreamFrom(s *scan.Stream, i int) (RichTypes, int, error) {
-	var result RichTypes
+func (result RichTypes) DecodeStreamFrom(s *scan.Stream, i int) (RichTypes, int, error) {
 	seenBig := false
 	seenBigF := false
 	seenBigR := false
@@ -895,8 +2324,7 @@ func (s RichTypes) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, "\"}"...), nil
 }
 
-func (TimeDefault) DecodeFrom(data []byte, i int) (TimeDefault, int, error) {
-	var result TimeDefault
+func (result TimeDefault) DecodeFrom(data []byte, i int) (TimeDefault, int, error) {
 	var err error
 	_ = err
 	seenDefault := false
@@ -1007,8 +2435,7 @@ func (TimeDefault) DecodeFrom(data []byte, i int) (TimeDefault, int, error) {
 	}
 }
 
-func (TimeDefault) DecodeStreamFrom(s *scan.Stream, i int) (TimeDefault, int, error) {
-	var result TimeDefault
+func (result TimeDefault) DecodeStreamFrom(s *scan.Stream, i int) (TimeDefault, int, error) {
 	seenDefault := false
 	i, err := s.ObjectOpen(i)
 	if err != nil {
@@ -1099,8 +2526,7 @@ func (s TimeDefault) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, "\"}"...), nil
 }
 
-func (TimeUnix) DecodeFrom(data []byte, i int) (TimeUnix, int, error) {
-	var result TimeUnix
+func (result TimeUnix) DecodeFrom(data []byte, i int) (TimeUnix, int, error) {
 	var err error
 	_ = err
 	seenUnix := false
@@ -1193,8 +2619,7 @@ func (TimeUnix) DecodeFrom(data []byte, i int) (TimeUnix, int, error) {
 	}
 }
 
-func (TimeUnix) DecodeStreamFrom(s *scan.Stream, i int) (TimeUnix, int, error) {
-	var result TimeUnix
+func (result TimeUnix) DecodeStreamFrom(s *scan.Stream, i int) (TimeUnix, int, error) {
 	seenUnix := false
 	i, err := s.ObjectOpen(i)
 	if err != nil {
@@ -1284,8 +2709,7 @@ func (s TimeUnix) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (TimeUnixMilli) DecodeFrom(data []byte, i int) (TimeUnixMilli, int, error) {
-	var result TimeUnixMilli
+func (result TimeUnixMilli) DecodeFrom(data []byte, i int) (TimeUnixMilli, int, error) {
 	var err error
 	_ = err
 	seenUnixMilli := false
@@ -1376,8 +2800,7 @@ func (TimeUnixMilli) DecodeFrom(data []byte, i int) (TimeUnixMilli, int, error) 
 	}
 }
 
-func (TimeUnixMilli) DecodeStreamFrom(s *scan.Stream, i int) (TimeUnixMilli, int, error) {
-	var result TimeUnixMilli
+func (result TimeUnixMilli) DecodeStreamFrom(s *scan.Stream, i int) (TimeUnixMilli, int, error) {
 	seenUnixMilli := false
 	i, err := s.ObjectOpen(i)
 	if err != nil {
@@ -1465,8 +2888,7 @@ func (s TimeUnixMilli) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (TimeUnixMicro) DecodeFrom(data []byte, i int) (TimeUnixMicro, int, error) {
-	var result TimeUnixMicro
+func (result TimeUnixMicro) DecodeFrom(data []byte, i int) (TimeUnixMicro, int, error) {
 	var err error
 	_ = err
 	seenUnixMicro := false
@@ -1557,8 +2979,7 @@ func (TimeUnixMicro) DecodeFrom(data []byte, i int) (TimeUnixMicro, int, error) 
 	}
 }
 
-func (TimeUnixMicro) DecodeStreamFrom(s *scan.Stream, i int) (TimeUnixMicro, int, error) {
-	var result TimeUnixMicro
+func (result TimeUnixMicro) DecodeStreamFrom(s *scan.Stream, i int) (TimeUnixMicro, int, error) {
 	seenUnixMicro := false
 	i, err := s.ObjectOpen(i)
 	if err != nil {
@@ -1646,8 +3067,7 @@ func (s TimeUnixMicro) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (TimeUnixNano) DecodeFrom(data []byte, i int) (TimeUnixNano, int, error) {
-	var result TimeUnixNano
+func (result TimeUnixNano) DecodeFrom(data []byte, i int) (TimeUnixNano, int, error) {
 	var err error
 	_ = err
 	seenUnixNano := false
@@ -1738,8 +3158,7 @@ func (TimeUnixNano) DecodeFrom(data []byte, i int) (TimeUnixNano, int, error) {
 	}
 }
 
-func (TimeUnixNano) DecodeStreamFrom(s *scan.Stream, i int) (TimeUnixNano, int, error) {
-	var result TimeUnixNano
+func (result TimeUnixNano) DecodeStreamFrom(s *scan.Stream, i int) (TimeUnixNano, int, error) {
 	seenUnixNano := false
 	i, err := s.ObjectOpen(i)
 	if err != nil {
@@ -1827,8 +3246,7 @@ func (s TimeUnixNano) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (TimeANSIC) DecodeFrom(data []byte, i int) (TimeANSIC, int, error) {
-	var result TimeANSIC
+func (result TimeANSIC) DecodeFrom(data []byte, i int) (TimeANSIC, int, error) {
 	var err error
 	_ = err
 	seenANSIC := false
@@ -1939,8 +3357,7 @@ func (TimeANSIC) DecodeFrom(data []byte, i int) (TimeANSIC, int, error) {
 	}
 }
 
-func (TimeANSIC) DecodeStreamFrom(s *scan.Stream, i int) (TimeANSIC, int, error) {
-	var result TimeANSIC
+func (result TimeANSIC) DecodeStreamFrom(s *scan.Stream, i int) (TimeANSIC, int, error) {
 	seenANSIC := false
 	i, err := s.ObjectOpen(i)
 	if err != nil {
@@ -2031,8 +3448,7 @@ func (s TimeANSIC) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, "\"}"...), nil
 }
 
-func (TimeUnixDate) DecodeFrom(data []byte, i int) (TimeUnixDate, int, error) {
-	var result TimeUnixDate
+func (result TimeUnixDate) DecodeFrom(data []byte, i int) (TimeUnixDate, int, error) {
 	var err error
 	_ = err
 	seenUnixDate := false
@@ -2143,8 +3559,7 @@ func (TimeUnixDate) DecodeFrom(data []byte, i int) (TimeUnixDate, int, error) {
 	}
 }
 
-func (TimeUnixDate) DecodeStreamFrom(s *scan.Stream, i int) (TimeUnixDate, int, error) {
-	var result TimeUnixDate
+func (result TimeUnixDate) DecodeStreamFrom(s *scan.Stream, i int) (TimeUnixDate, int, error) {
 	seenUnixDate := false
 	i, err := s.ObjectOpen(i)
 	if err != nil {
@@ -2235,8 +3650,7 @@ func (s TimeUnixDate) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, "\"}"...), nil
 }
 
-func (TimeRubyDate) DecodeFrom(data []byte, i int) (TimeRubyDate, int, error) {
-	var result TimeRubyDate
+func (result TimeRubyDate) DecodeFrom(data []byte, i int) (TimeRubyDate, int, error) {
 	var err error
 	_ = err
 	seenRubyDate := false
@@ -2347,8 +3761,7 @@ func (TimeRubyDate) DecodeFrom(data []byte, i int) (TimeRubyDate, int, error) {
 	}
 }
 
-func (TimeRubyDate) DecodeStreamFrom(s *scan.Stream, i int) (TimeRubyDate, int, error) {
-	var result TimeRubyDate
+func (result TimeRubyDate) DecodeStreamFrom(s *scan.Stream, i int) (TimeRubyDate, int, error) {
 	seenRubyDate := false
 	i, err := s.ObjectOpen(i)
 	if err != nil {
@@ -2439,8 +3852,7 @@ func (s TimeRubyDate) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, "\"}"...), nil
 }
 
-func (TimeRFC822) DecodeFrom(data []byte, i int) (TimeRFC822, int, error) {
-	var result TimeRFC822
+func (result TimeRFC822) DecodeFrom(data []byte, i int) (TimeRFC822, int, error) {
 	var err error
 	_ = err
 	seenRFC822 := false
@@ -2551,8 +3963,7 @@ func (TimeRFC822) DecodeFrom(data []byte, i int) (TimeRFC822, int, error) {
 	}
 }
 
-func (TimeRFC822) DecodeStreamFrom(s *scan.Stream, i int) (TimeRFC822, int, error) {
-	var result TimeRFC822
+func (result TimeRFC822) DecodeStreamFrom(s *scan.Stream, i int) (TimeRFC822, int, error) {
 	seenRFC822 := false
 	i, err := s.ObjectOpen(i)
 	if err != nil {
@@ -2643,8 +4054,7 @@ func (s TimeRFC822) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, "\"}"...), nil
 }
 
-func (TimeRFC822Z) DecodeFrom(data []byte, i int) (TimeRFC822Z, int, error) {
-	var result TimeRFC822Z
+func (result TimeRFC822Z) DecodeFrom(data []byte, i int) (TimeRFC822Z, int, error) {
 	var err error
 	_ = err
 	seenRFC822Z := false
@@ -2755,8 +4165,7 @@ func (TimeRFC822Z) DecodeFrom(data []byte, i int) (TimeRFC822Z, int, error) {
 	}
 }
 
-func (TimeRFC822Z) DecodeStreamFrom(s *scan.Stream, i int) (TimeRFC822Z, int, error) {
-	var result TimeRFC822Z
+func (result TimeRFC822Z) DecodeStreamFrom(s *scan.Stream, i int) (TimeRFC822Z, int, error) {
 	seenRFC822Z := false
 	i, err := s.ObjectOpen(i)
 	if err != nil {
@@ -2847,8 +4256,7 @@ func (s TimeRFC822Z) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, "\"}"...), nil
 }
 
-func (TimeRFC850) DecodeFrom(data []byte, i int) (TimeRFC850, int, error) {
-	var result TimeRFC850
+func (result TimeRFC850) DecodeFrom(data []byte, i int) (TimeRFC850, int, error) {
 	var err error
 	_ = err
 	seenRFC850 := false
@@ -2959,8 +4367,7 @@ func (TimeRFC850) DecodeFrom(data []byte, i int) (TimeRFC850, int, error) {
 	}
 }
 
-func (TimeRFC850) DecodeStreamFrom(s *scan.Stream, i int) (TimeRFC850, int, error) {
-	var result TimeRFC850
+func (result TimeRFC850) DecodeStreamFrom(s *scan.Stream, i int) (TimeRFC850, int, error) {
 	seenRFC850 := false
 	i, err := s.ObjectOpen(i)
 	if err != nil {
@@ -3051,8 +4458,7 @@ func (s TimeRFC850) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, "\"}"...), nil
 }
 
-func (TimeRFC1123) DecodeFrom(data []byte, i int) (TimeRFC1123, int, error) {
-	var result TimeRFC1123
+func (result TimeRFC1123) DecodeFrom(data []byte, i int) (TimeRFC1123, int, error) {
 	var err error
 	_ = err
 	seenRFC1123 := false
@@ -3163,8 +4569,7 @@ func (TimeRFC1123) DecodeFrom(data []byte, i int) (TimeRFC1123, int, error) {
 	}
 }
 
-func (TimeRFC1123) DecodeStreamFrom(s *scan.Stream, i int) (TimeRFC1123, int, error) {
-	var result TimeRFC1123
+func (result TimeRFC1123) DecodeStreamFrom(s *scan.Stream, i int) (TimeRFC1123, int, error) {
 	seenRFC1123 := false
 	i, err := s.ObjectOpen(i)
 	if err != nil {
@@ -3255,8 +4660,7 @@ func (s TimeRFC1123) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, "\"}"...), nil
 }
 
-func (TimeRFC1123Z) DecodeFrom(data []byte, i int) (TimeRFC1123Z, int, error) {
-	var result TimeRFC1123Z
+func (result TimeRFC1123Z) DecodeFrom(data []byte, i int) (TimeRFC1123Z, int, error) {
 	var err error
 	_ = err
 	seenRFC1123Z := false
@@ -3367,8 +4771,7 @@ func (TimeRFC1123Z) DecodeFrom(data []byte, i int) (TimeRFC1123Z, int, error) {
 	}
 }
 
-func (TimeRFC1123Z) DecodeStreamFrom(s *scan.Stream, i int) (TimeRFC1123Z, int, error) {
-	var result TimeRFC1123Z
+func (result TimeRFC1123Z) DecodeStreamFrom(s *scan.Stream, i int) (TimeRFC1123Z, int, error) {
 	seenRFC1123Z := false
 	i, err := s.ObjectOpen(i)
 	if err != nil {
@@ -3459,8 +4862,7 @@ func (s TimeRFC1123Z) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, "\"}"...), nil
 }
 
-func (TimeRFC3339) DecodeFrom(data []byte, i int) (TimeRFC3339, int, error) {
-	var result TimeRFC3339
+func (result TimeRFC3339) DecodeFrom(data []byte, i int) (TimeRFC3339, int, error) {
 	var err error
 	_ = err
 	seenRFC3339 := false
@@ -3571,8 +4973,7 @@ func (TimeRFC3339) DecodeFrom(data []byte, i int) (TimeRFC3339, int, error) {
 	}
 }
 
-func (TimeRFC3339) DecodeStreamFrom(s *scan.Stream, i int) (TimeRFC3339, int, error) {
-	var result TimeRFC3339
+func (result TimeRFC3339) DecodeStreamFrom(s *scan.Stream, i int) (TimeRFC3339, int, error) {
 	seenRFC3339 := false
 	i, err := s.ObjectOpen(i)
 	if err != nil {
@@ -3663,8 +5064,7 @@ func (s TimeRFC3339) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, "\"}"...), nil
 }
 
-func (TimeRFC3339Nano) DecodeFrom(data []byte, i int) (TimeRFC3339Nano, int, error) {
-	var result TimeRFC3339Nano
+func (result TimeRFC3339Nano) DecodeFrom(data []byte, i int) (TimeRFC3339Nano, int, error) {
 	var err error
 	_ = err
 	seenRFC3339Nano := false
@@ -3775,8 +5175,7 @@ func (TimeRFC3339Nano) DecodeFrom(data []byte, i int) (TimeRFC3339Nano, int, err
 	}
 }
 
-func (TimeRFC3339Nano) DecodeStreamFrom(s *scan.Stream, i int) (TimeRFC3339Nano, int, error) {
-	var result TimeRFC3339Nano
+func (result TimeRFC3339Nano) DecodeStreamFrom(s *scan.Stream, i int) (TimeRFC3339Nano, int, error) {
 	seenRFC3339Nano := false
 	i, err := s.ObjectOpen(i)
 	if err != nil {
@@ -3867,8 +5266,7 @@ func (s TimeRFC3339Nano) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, "\"}"...), nil
 }
 
-func (TimeKitchen) DecodeFrom(data []byte, i int) (TimeKitchen, int, error) {
-	var result TimeKitchen
+func (result TimeKitchen) DecodeFrom(data []byte, i int) (TimeKitchen, int, error) {
 	var err error
 	_ = err
 	seenKitchen := false
@@ -3979,8 +5377,7 @@ func (TimeKitchen) DecodeFrom(data []byte, i int) (TimeKitchen, int, error) {
 	}
 }
 
-func (TimeKitchen) DecodeStreamFrom(s *scan.Stream, i int) (TimeKitchen, int, error) {
-	var result TimeKitchen
+func (result TimeKitchen) DecodeStreamFrom(s *scan.Stream, i int) (TimeKitchen, int, error) {
 	seenKitchen := false
 	i, err := s.ObjectOpen(i)
 	if err != nil {
@@ -4071,8 +5468,7 @@ func (s TimeKitchen) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, "\"}"...), nil
 }
 
-func (TimeDateTime) DecodeFrom(data []byte, i int) (TimeDateTime, int, error) {
-	var result TimeDateTime
+func (result TimeDateTime) DecodeFrom(data []byte, i int) (TimeDateTime, int, error) {
 	var err error
 	_ = err
 	seenDateTime := false
@@ -4183,8 +5579,7 @@ func (TimeDateTime) DecodeFrom(data []byte, i int) (TimeDateTime, int, error) {
 	}
 }
 
-func (TimeDateTime) DecodeStreamFrom(s *scan.Stream, i int) (TimeDateTime, int, error) {
-	var result TimeDateTime
+func (result TimeDateTime) DecodeStreamFrom(s *scan.Stream, i int) (TimeDateTime, int, error) {
 	seenDateTime := false
 	i, err := s.ObjectOpen(i)
 	if err != nil {
@@ -4275,8 +5670,7 @@ func (s TimeDateTime) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, "\"}"...), nil
 }
 
-func (TimeDateOnly) DecodeFrom(data []byte, i int) (TimeDateOnly, int, error) {
-	var result TimeDateOnly
+func (result TimeDateOnly) DecodeFrom(data []byte, i int) (TimeDateOnly, int, error) {
 	var err error
 	_ = err
 	seenDateOnly := false
@@ -4387,8 +5781,7 @@ func (TimeDateOnly) DecodeFrom(data []byte, i int) (TimeDateOnly, int, error) {
 	}
 }
 
-func (TimeDateOnly) DecodeStreamFrom(s *scan.Stream, i int) (TimeDateOnly, int, error) {
-	var result TimeDateOnly
+func (result TimeDateOnly) DecodeStreamFrom(s *scan.Stream, i int) (TimeDateOnly, int, error) {
 	seenDateOnly := false
 	i, err := s.ObjectOpen(i)
 	if err != nil {
@@ -4479,8 +5872,7 @@ func (s TimeDateOnly) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, "\"}"...), nil
 }
 
-func (TimeTimeOnly) DecodeFrom(data []byte, i int) (TimeTimeOnly, int, error) {
-	var result TimeTimeOnly
+func (result TimeTimeOnly) DecodeFrom(data []byte, i int) (TimeTimeOnly, int, error) {
 	var err error
 	_ = err
 	seenTimeOnly := false
@@ -4591,8 +5983,7 @@ func (TimeTimeOnly) DecodeFrom(data []byte, i int) (TimeTimeOnly, int, error) {
 	}
 }
 
-func (TimeTimeOnly) DecodeStreamFrom(s *scan.Stream, i int) (TimeTimeOnly, int, error) {
-	var result TimeTimeOnly
+func (result TimeTimeOnly) DecodeStreamFrom(s *scan.Stream, i int) (TimeTimeOnly, int, error) {
 	seenTimeOnly := false
 	i, err := s.ObjectOpen(i)
 	if err != nil {
@@ -4683,8 +6074,7 @@ func (s TimeTimeOnly) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, "\"}"...), nil
 }
 
-func (TimeFormatsStdCompat) DecodeFrom(data []byte, i int) (TimeFormatsStdCompat, int, error) {
-	var result TimeFormatsStdCompat
+func (result TimeFormatsStdCompat) DecodeFrom(data []byte, i int) (TimeFormatsStdCompat, int, error) {
 	var err error
 	_ = err
 	seenANSIC := false
@@ -5357,8 +6747,7 @@ func (TimeFormatsStdCompat) DecodeFrom(data []byte, i int) (TimeFormatsStdCompat
 	}
 }
 
-func (TimeFormatsStdCompat) DecodeStreamFrom(s *scan.Stream, i int) (TimeFormatsStdCompat, int, error) {
-	var result TimeFormatsStdCompat
+func (result TimeFormatsStdCompat) DecodeStreamFrom(s *scan.Stream, i int) (TimeFormatsStdCompat, int, error) {
 	seenANSIC := false
 	seenDateOnly := false
 	seenDateTime := false
@@ -5881,8 +7270,7 @@ func (s TimeFormatsStdCompat) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (richSubset) DecodeFrom(data []byte, i int) (richSubset, int, error) {
-	var result richSubset
+func (result richSubset) DecodeFrom(data []byte, i int) (richSubset, int, error) {
 	var err error
 	_ = err
 	seenBig := false
@@ -6114,8 +7502,7 @@ func (richSubset) DecodeFrom(data []byte, i int) (richSubset, int, error) {
 	}
 }
 
-func (richSubset) DecodeStreamFrom(s *scan.Stream, i int) (richSubset, int, error) {
-	var result richSubset
+func (result richSubset) DecodeStreamFrom(s *scan.Stream, i int) (richSubset, int, error) {
 	seenBig := false
 	seenBigF := false
 	seenBigR := false
@@ -6396,8 +7783,887 @@ func (s richSubset) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (base32Wrap) DecodeFrom(data []byte, i int) (base32Wrap, int, error) {
-	var result base32Wrap
+func (result HugeStringStruct) DecodeFrom(data []byte, i int) (HugeStringStruct, int, error) {
+	var err error
+	_ = err
+	seenBig := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, scan.ErrBadObject
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, scan.ErrExpectString
+		}
+		{
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, scan.ErrUnterminated
+			}
+			if data[ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				key, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, err
+				}
+			}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, scan.ErrBadObject
+		}
+		i++
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch len(key) {
+		case 3:
+			if key == "big" {
+				if seenBig {
+					return result, i, &validation.DuplicateKeyError{Field: "big"}
+				}
+				seenBig = true
+				if i >= len(data) || data[i] != '"' {
+					return result, i, scan.ErrExpectString
+				}
+				{
+					ke := i + 1
+					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' {
+						ke++
+					}
+					if ke >= len(data) {
+						return result, i, scan.ErrUnterminated
+					}
+					if data[ke] == '"' {
+						result.Big = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						i = ke + 1
+					} else {
+						result.Big, i, err = scan.String(data, i)
+						if err != nil {
+							return result, i, err
+						}
+					}
+				}
+			} else {
+				return result, i, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, i, &validation.UnknownKeyError{Field: key}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, scan.ErrBadObject
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			return result, i + 1, nil
+		}
+		return result, i, scan.ErrBadObject
+	}
+}
+
+func (result HugeStringStruct) DecodeStreamFrom(s *scan.Stream, i int) (HugeStringStruct, int, error) {
+	seenBig := false
+	i, err := s.ObjectOpen(i)
+	if err != nil {
+		return result, i, err
+	}
+	i, err = s.SkipSpace(i)
+	if err != nil {
+		return result, i, err
+	}
+	if i >= len(s.Bytes()) {
+		if err = s.ReadMore(i); err != nil {
+			return result, i, err
+		}
+		i = 0
+	}
+	if s.Bytes()[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		key, i, err = s.KeyView(i)
+		if err != nil {
+			return result, i, err
+		}
+		switch len(key) {
+		case 3:
+			if key == "big" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
+				if seenBig {
+					return result, i, &validation.DuplicateKeyError{Field: "big"}
+				}
+				seenBig = true
+				result.Big, i, err = s.String(i)
+				if err != nil {
+					return result, i, err
+				}
+			} else {
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+			}
+		default:
+			return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+		}
+		i, err = s.SkipSpace(i)
+		if err != nil {
+			return result, i, err
+		}
+		if i >= len(s.Bytes()) {
+			if err = s.ReadMore(i); err != nil {
+				return result, i, err
+			}
+			i = 0
+		}
+		c := s.Bytes()[i]
+		if c == ',' {
+			i, err = s.SkipSpace(i + 1)
+			if err != nil {
+				return result, i, err
+			}
+			continue
+		}
+		if c == '}' {
+			return result, i + 1, nil
+		}
+		return result, i, scan.ErrBadObject
+	}
+}
+
+func (s HugeStringStruct) JSONSize() int {
+	size := 10
+	size += len(s.Big) * 2
+	return size
+}
+
+func (s HugeStringStruct) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"big\":\""...)
+	dst = encode.AppendStringNoHTML(dst, s.Big)
+	return append(dst, '}'), nil
+}
+
+func (result SequentialStringsStruct) DecodeFrom(data []byte, i int) (SequentialStringsStruct, int, error) {
+	var err error
+	_ = err
+	seenA := false
+	seenB := false
+	seenC := false
+	seenD := false
+	seenE := false
+	seenF := false
+	seenG := false
+	seenH := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, scan.ErrBadObject
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, scan.ErrExpectString
+		}
+		{
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, scan.ErrUnterminated
+			}
+			if data[ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				key, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, err
+				}
+			}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, scan.ErrBadObject
+		}
+		i++
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch len(key) {
+		case 1:
+			switch key {
+			case "a":
+				if seenA {
+					return result, i, &validation.DuplicateKeyError{Field: "a"}
+				}
+				seenA = true
+				if i >= len(data) || data[i] != '"' {
+					return result, i, scan.ErrExpectString
+				}
+				{
+					ke := i + 1
+					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' {
+						ke++
+					}
+					if ke >= len(data) {
+						return result, i, scan.ErrUnterminated
+					}
+					if data[ke] == '"' {
+						result.A = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						i = ke + 1
+					} else {
+						result.A, i, err = scan.String(data, i)
+						if err != nil {
+							return result, i, err
+						}
+					}
+				}
+			case "b":
+				if seenB {
+					return result, i, &validation.DuplicateKeyError{Field: "b"}
+				}
+				seenB = true
+				if i >= len(data) || data[i] != '"' {
+					return result, i, scan.ErrExpectString
+				}
+				{
+					ke := i + 1
+					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' {
+						ke++
+					}
+					if ke >= len(data) {
+						return result, i, scan.ErrUnterminated
+					}
+					if data[ke] == '"' {
+						result.B = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						i = ke + 1
+					} else {
+						result.B, i, err = scan.String(data, i)
+						if err != nil {
+							return result, i, err
+						}
+					}
+				}
+			case "c":
+				if seenC {
+					return result, i, &validation.DuplicateKeyError{Field: "c"}
+				}
+				seenC = true
+				if i >= len(data) || data[i] != '"' {
+					return result, i, scan.ErrExpectString
+				}
+				{
+					ke := i + 1
+					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' {
+						ke++
+					}
+					if ke >= len(data) {
+						return result, i, scan.ErrUnterminated
+					}
+					if data[ke] == '"' {
+						result.C = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						i = ke + 1
+					} else {
+						result.C, i, err = scan.String(data, i)
+						if err != nil {
+							return result, i, err
+						}
+					}
+				}
+			case "d":
+				if seenD {
+					return result, i, &validation.DuplicateKeyError{Field: "d"}
+				}
+				seenD = true
+				if i >= len(data) || data[i] != '"' {
+					return result, i, scan.ErrExpectString
+				}
+				{
+					ke := i + 1
+					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' {
+						ke++
+					}
+					if ke >= len(data) {
+						return result, i, scan.ErrUnterminated
+					}
+					if data[ke] == '"' {
+						result.D = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						i = ke + 1
+					} else {
+						result.D, i, err = scan.String(data, i)
+						if err != nil {
+							return result, i, err
+						}
+					}
+				}
+			case "e":
+				if seenE {
+					return result, i, &validation.DuplicateKeyError{Field: "e"}
+				}
+				seenE = true
+				if i >= len(data) || data[i] != '"' {
+					return result, i, scan.ErrExpectString
+				}
+				{
+					ke := i + 1
+					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' {
+						ke++
+					}
+					if ke >= len(data) {
+						return result, i, scan.ErrUnterminated
+					}
+					if data[ke] == '"' {
+						result.E = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						i = ke + 1
+					} else {
+						result.E, i, err = scan.String(data, i)
+						if err != nil {
+							return result, i, err
+						}
+					}
+				}
+			case "f":
+				if seenF {
+					return result, i, &validation.DuplicateKeyError{Field: "f"}
+				}
+				seenF = true
+				if i >= len(data) || data[i] != '"' {
+					return result, i, scan.ErrExpectString
+				}
+				{
+					ke := i + 1
+					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' {
+						ke++
+					}
+					if ke >= len(data) {
+						return result, i, scan.ErrUnterminated
+					}
+					if data[ke] == '"' {
+						result.F = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						i = ke + 1
+					} else {
+						result.F, i, err = scan.String(data, i)
+						if err != nil {
+							return result, i, err
+						}
+					}
+				}
+			case "g":
+				if seenG {
+					return result, i, &validation.DuplicateKeyError{Field: "g"}
+				}
+				seenG = true
+				if i >= len(data) || data[i] != '"' {
+					return result, i, scan.ErrExpectString
+				}
+				{
+					ke := i + 1
+					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' {
+						ke++
+					}
+					if ke >= len(data) {
+						return result, i, scan.ErrUnterminated
+					}
+					if data[ke] == '"' {
+						result.G = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						i = ke + 1
+					} else {
+						result.G, i, err = scan.String(data, i)
+						if err != nil {
+							return result, i, err
+						}
+					}
+				}
+			case "h":
+				if seenH {
+					return result, i, &validation.DuplicateKeyError{Field: "h"}
+				}
+				seenH = true
+				if i >= len(data) || data[i] != '"' {
+					return result, i, scan.ErrExpectString
+				}
+				{
+					ke := i + 1
+					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' {
+						ke++
+					}
+					if ke >= len(data) {
+						return result, i, scan.ErrUnterminated
+					}
+					if data[ke] == '"' {
+						result.H = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						i = ke + 1
+					} else {
+						result.H, i, err = scan.String(data, i)
+						if err != nil {
+							return result, i, err
+						}
+					}
+				}
+			default:
+				return result, i, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, i, &validation.UnknownKeyError{Field: key}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, scan.ErrBadObject
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			return result, i + 1, nil
+		}
+		return result, i, scan.ErrBadObject
+	}
+}
+
+func (result SequentialStringsStruct) DecodeStreamFrom(s *scan.Stream, i int) (SequentialStringsStruct, int, error) {
+	seenA := false
+	seenB := false
+	seenC := false
+	seenD := false
+	seenE := false
+	seenF := false
+	seenG := false
+	seenH := false
+	i, err := s.ObjectOpen(i)
+	if err != nil {
+		return result, i, err
+	}
+	i, err = s.SkipSpace(i)
+	if err != nil {
+		return result, i, err
+	}
+	if i >= len(s.Bytes()) {
+		if err = s.ReadMore(i); err != nil {
+			return result, i, err
+		}
+		i = 0
+	}
+	if s.Bytes()[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		key, i, err = s.KeyView(i)
+		if err != nil {
+			return result, i, err
+		}
+		switch len(key) {
+		case 1:
+			switch key {
+			case "a":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
+				if seenA {
+					return result, i, &validation.DuplicateKeyError{Field: "a"}
+				}
+				seenA = true
+				result.A, i, err = s.String(i)
+				if err != nil {
+					return result, i, err
+				}
+			case "b":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
+				if seenB {
+					return result, i, &validation.DuplicateKeyError{Field: "b"}
+				}
+				seenB = true
+				result.B, i, err = s.String(i)
+				if err != nil {
+					return result, i, err
+				}
+			case "c":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
+				if seenC {
+					return result, i, &validation.DuplicateKeyError{Field: "c"}
+				}
+				seenC = true
+				result.C, i, err = s.String(i)
+				if err != nil {
+					return result, i, err
+				}
+			case "d":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
+				if seenD {
+					return result, i, &validation.DuplicateKeyError{Field: "d"}
+				}
+				seenD = true
+				result.D, i, err = s.String(i)
+				if err != nil {
+					return result, i, err
+				}
+			case "e":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
+				if seenE {
+					return result, i, &validation.DuplicateKeyError{Field: "e"}
+				}
+				seenE = true
+				result.E, i, err = s.String(i)
+				if err != nil {
+					return result, i, err
+				}
+			case "f":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
+				if seenF {
+					return result, i, &validation.DuplicateKeyError{Field: "f"}
+				}
+				seenF = true
+				result.F, i, err = s.String(i)
+				if err != nil {
+					return result, i, err
+				}
+			case "g":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
+				if seenG {
+					return result, i, &validation.DuplicateKeyError{Field: "g"}
+				}
+				seenG = true
+				result.G, i, err = s.String(i)
+				if err != nil {
+					return result, i, err
+				}
+			case "h":
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
+				if seenH {
+					return result, i, &validation.DuplicateKeyError{Field: "h"}
+				}
+				seenH = true
+				result.H, i, err = s.String(i)
+				if err != nil {
+					return result, i, err
+				}
+			default:
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+			}
+		default:
+			return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+		}
+		i, err = s.SkipSpace(i)
+		if err != nil {
+			return result, i, err
+		}
+		if i >= len(s.Bytes()) {
+			if err = s.ReadMore(i); err != nil {
+				return result, i, err
+			}
+			i = 0
+		}
+		c := s.Bytes()[i]
+		if c == ',' {
+			i, err = s.SkipSpace(i + 1)
+			if err != nil {
+				return result, i, err
+			}
+			continue
+		}
+		if c == '}' {
+			return result, i + 1, nil
+		}
+		return result, i, scan.ErrBadObject
+	}
+}
+
+func (s SequentialStringsStruct) JSONSize() int {
+	size := 57
+	size += len(s.A) * 2
+	size += len(s.B) * 2
+	size += len(s.C) * 2
+	size += len(s.D) * 2
+	size += len(s.E) * 2
+	size += len(s.F) * 2
+	size += len(s.G) * 2
+	size += len(s.H) * 2
+	return size
+}
+
+func (s SequentialStringsStruct) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"a\":\""...)
+	dst = encode.AppendStringNoHTML(dst, s.A)
+	dst = append(dst, ",\"b\":\""...)
+	dst = encode.AppendStringNoHTML(dst, s.B)
+	dst = append(dst, ",\"c\":\""...)
+	dst = encode.AppendStringNoHTML(dst, s.C)
+	dst = append(dst, ",\"d\":\""...)
+	dst = encode.AppendStringNoHTML(dst, s.D)
+	dst = append(dst, ",\"e\":\""...)
+	dst = encode.AppendStringNoHTML(dst, s.E)
+	dst = append(dst, ",\"f\":\""...)
+	dst = encode.AppendStringNoHTML(dst, s.F)
+	dst = append(dst, ",\"g\":\""...)
+	dst = encode.AppendStringNoHTML(dst, s.G)
+	dst = append(dst, ",\"h\":\""...)
+	dst = encode.AppendStringNoHTML(dst, s.H)
+	return append(dst, '}'), nil
+}
+
+func (result UnknownErrorStruct) DecodeFrom(data []byte, i int) (UnknownErrorStruct, int, error) {
+	var err error
+	_ = err
+	seenName := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, scan.ErrBadObject
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, scan.ErrExpectString
+		}
+		{
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, scan.ErrUnterminated
+			}
+			if data[ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				key, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, err
+				}
+			}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, scan.ErrBadObject
+		}
+		i++
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch len(key) {
+		case 4:
+			if key == "name" {
+				if seenName {
+					return result, i, &validation.DuplicateKeyError{Field: "name"}
+				}
+				seenName = true
+				if i >= len(data) || data[i] != '"' {
+					return result, i, scan.ErrExpectString
+				}
+				{
+					ke := i + 1
+					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' {
+						ke++
+					}
+					if ke >= len(data) {
+						return result, i, scan.ErrUnterminated
+					}
+					if data[ke] == '"' {
+						result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						i = ke + 1
+					} else {
+						result.Name, i, err = scan.String(data, i)
+						if err != nil {
+							return result, i, err
+						}
+					}
+				}
+			} else {
+				return result, i, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, i, &validation.UnknownKeyError{Field: key}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, scan.ErrBadObject
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			return result, i + 1, nil
+		}
+		return result, i, scan.ErrBadObject
+	}
+}
+
+func (result UnknownErrorStruct) DecodeStreamFrom(s *scan.Stream, i int) (UnknownErrorStruct, int, error) {
+	seenName := false
+	i, err := s.ObjectOpen(i)
+	if err != nil {
+		return result, i, err
+	}
+	i, err = s.SkipSpace(i)
+	if err != nil {
+		return result, i, err
+	}
+	if i >= len(s.Bytes()) {
+		if err = s.ReadMore(i); err != nil {
+			return result, i, err
+		}
+		i = 0
+	}
+	if s.Bytes()[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		key, i, err = s.KeyView(i)
+		if err != nil {
+			return result, i, err
+		}
+		switch len(key) {
+		case 4:
+			if key == "name" {
+				i, err = s.ConsumeColon(i)
+				if err != nil {
+					return result, i, err
+				}
+				if seenName {
+					return result, i, &validation.DuplicateKeyError{Field: "name"}
+				}
+				seenName = true
+				result.Name, i, err = s.String(i)
+				if err != nil {
+					return result, i, err
+				}
+			} else {
+				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+			}
+		default:
+			return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+		}
+		i, err = s.SkipSpace(i)
+		if err != nil {
+			return result, i, err
+		}
+		if i >= len(s.Bytes()) {
+			if err = s.ReadMore(i); err != nil {
+				return result, i, err
+			}
+			i = 0
+		}
+		c := s.Bytes()[i]
+		if c == ',' {
+			i, err = s.SkipSpace(i + 1)
+			if err != nil {
+				return result, i, err
+			}
+			continue
+		}
+		if c == '}' {
+			return result, i + 1, nil
+		}
+		return result, i, scan.ErrBadObject
+	}
+}
+
+func (s UnknownErrorStruct) JSONSize() int {
+	size := 11
+	size += len(s.Name) * 2
+	return size
+}
+
+func (s UnknownErrorStruct) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"name\":\""...)
+	dst = encode.AppendStringNoHTML(dst, s.Name)
+	return append(dst, '}'), nil
+}
+
+func (result base32Wrap) DecodeFrom(data []byte, i int) (base32Wrap, int, error) {
+	if result.B != nil {
+		result.B = result.B[:0]
+	}
 	var err error
 	_ = err
 	seenB := false
@@ -6477,7 +8743,9 @@ func (base32Wrap) DecodeFrom(data []byte, i int) (base32Wrap, int, error) {
 							}
 						}
 					}
-					result.B = make([]byte, 0, base32.StdEncoding.DecodedLen(len(s)))
+					if cap(result.B) < base32.StdEncoding.DecodedLen(len(s)) {
+						result.B = make([]byte, 0, base32.StdEncoding.DecodedLen(len(s)))
+					}
 					result.B, err = base32.StdEncoding.AppendDecode(result.B, unsafe.Slice(unsafe.StringData(s), len(s)))
 					if err != nil {
 						return result, i, err
@@ -6509,8 +8777,10 @@ func (base32Wrap) DecodeFrom(data []byte, i int) (base32Wrap, int, error) {
 	}
 }
 
-func (base32Wrap) DecodeStreamFrom(s *scan.Stream, i int) (base32Wrap, int, error) {
-	var result base32Wrap
+func (result base32Wrap) DecodeStreamFrom(s *scan.Stream, i int) (base32Wrap, int, error) {
+	if result.B != nil {
+		result.B = result.B[:0]
+	}
 	seenB := false
 	i, err := s.ObjectOpen(i)
 	if err != nil {
@@ -6552,7 +8822,9 @@ func (base32Wrap) DecodeStreamFrom(s *scan.Stream, i int) (base32Wrap, int, erro
 					if err != nil {
 						return result, i, err
 					}
-					result.B = make([]byte, 0, base32.StdEncoding.DecodedLen(len(v)))
+					if cap(result.B) < base32.StdEncoding.DecodedLen(len(v)) {
+						result.B = make([]byte, 0, base32.StdEncoding.DecodedLen(len(v)))
+					}
 					result.B, err = base32.StdEncoding.AppendDecode(result.B, unsafe.Slice(unsafe.StringData(v), len(v)))
 					if err != nil {
 						return result, i, err
@@ -6604,8 +8876,7 @@ func (s base32Wrap) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (TimeLayout) DecodeFrom(data []byte, i int) (TimeLayout, int, error) {
-	var result TimeLayout
+func (result TimeLayout) DecodeFrom(data []byte, i int) (TimeLayout, int, error) {
 	var err error
 	_ = err
 	seenLayout := false
@@ -6716,8 +8987,7 @@ func (TimeLayout) DecodeFrom(data []byte, i int) (TimeLayout, int, error) {
 	}
 }
 
-func (TimeLayout) DecodeStreamFrom(s *scan.Stream, i int) (TimeLayout, int, error) {
-	var result TimeLayout
+func (result TimeLayout) DecodeStreamFrom(s *scan.Stream, i int) (TimeLayout, int, error) {
 	seenLayout := false
 	i, err := s.ObjectOpen(i)
 	if err != nil {
@@ -6808,8 +9078,7 @@ func (s TimeLayout) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, "\"}"...), nil
 }
 
-func (TimeStamp) DecodeFrom(data []byte, i int) (TimeStamp, int, error) {
-	var result TimeStamp
+func (result TimeStamp) DecodeFrom(data []byte, i int) (TimeStamp, int, error) {
 	var err error
 	_ = err
 	seenStamp := false
@@ -6920,8 +9189,7 @@ func (TimeStamp) DecodeFrom(data []byte, i int) (TimeStamp, int, error) {
 	}
 }
 
-func (TimeStamp) DecodeStreamFrom(s *scan.Stream, i int) (TimeStamp, int, error) {
-	var result TimeStamp
+func (result TimeStamp) DecodeStreamFrom(s *scan.Stream, i int) (TimeStamp, int, error) {
 	seenStamp := false
 	i, err := s.ObjectOpen(i)
 	if err != nil {
@@ -7012,8 +9280,7 @@ func (s TimeStamp) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, "\"}"...), nil
 }
 
-func (TimeStampMilli) DecodeFrom(data []byte, i int) (TimeStampMilli, int, error) {
-	var result TimeStampMilli
+func (result TimeStampMilli) DecodeFrom(data []byte, i int) (TimeStampMilli, int, error) {
 	var err error
 	_ = err
 	seenStampMilli := false
@@ -7124,8 +9391,7 @@ func (TimeStampMilli) DecodeFrom(data []byte, i int) (TimeStampMilli, int, error
 	}
 }
 
-func (TimeStampMilli) DecodeStreamFrom(s *scan.Stream, i int) (TimeStampMilli, int, error) {
-	var result TimeStampMilli
+func (result TimeStampMilli) DecodeStreamFrom(s *scan.Stream, i int) (TimeStampMilli, int, error) {
 	seenStampMilli := false
 	i, err := s.ObjectOpen(i)
 	if err != nil {
@@ -7216,8 +9482,7 @@ func (s TimeStampMilli) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, "\"}"...), nil
 }
 
-func (TimeStampMicro) DecodeFrom(data []byte, i int) (TimeStampMicro, int, error) {
-	var result TimeStampMicro
+func (result TimeStampMicro) DecodeFrom(data []byte, i int) (TimeStampMicro, int, error) {
 	var err error
 	_ = err
 	seenStampMicro := false
@@ -7328,8 +9593,7 @@ func (TimeStampMicro) DecodeFrom(data []byte, i int) (TimeStampMicro, int, error
 	}
 }
 
-func (TimeStampMicro) DecodeStreamFrom(s *scan.Stream, i int) (TimeStampMicro, int, error) {
-	var result TimeStampMicro
+func (result TimeStampMicro) DecodeStreamFrom(s *scan.Stream, i int) (TimeStampMicro, int, error) {
 	seenStampMicro := false
 	i, err := s.ObjectOpen(i)
 	if err != nil {
@@ -7420,8 +9684,7 @@ func (s TimeStampMicro) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, "\"}"...), nil
 }
 
-func (TimeStampNano) DecodeFrom(data []byte, i int) (TimeStampNano, int, error) {
-	var result TimeStampNano
+func (result TimeStampNano) DecodeFrom(data []byte, i int) (TimeStampNano, int, error) {
 	var err error
 	_ = err
 	seenStampNano := false
@@ -7532,8 +9795,7 @@ func (TimeStampNano) DecodeFrom(data []byte, i int) (TimeStampNano, int, error) 
 	}
 }
 
-func (TimeStampNano) DecodeStreamFrom(s *scan.Stream, i int) (TimeStampNano, int, error) {
-	var result TimeStampNano
+func (result TimeStampNano) DecodeStreamFrom(s *scan.Stream, i int) (TimeStampNano, int, error) {
 	seenStampNano := false
 	i, err := s.ObjectOpen(i)
 	if err != nil {
@@ -7624,8 +9886,7 @@ func (s TimeStampNano) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, "\"}"...), nil
 }
 
-func (TimeCustomTiny) DecodeFrom(data []byte, i int) (TimeCustomTiny, int, error) {
-	var result TimeCustomTiny
+func (result TimeCustomTiny) DecodeFrom(data []byte, i int) (TimeCustomTiny, int, error) {
 	var err error
 	_ = err
 	seenCustomTiny := false
@@ -7736,8 +9997,7 @@ func (TimeCustomTiny) DecodeFrom(data []byte, i int) (TimeCustomTiny, int, error
 	}
 }
 
-func (TimeCustomTiny) DecodeStreamFrom(s *scan.Stream, i int) (TimeCustomTiny, int, error) {
-	var result TimeCustomTiny
+func (result TimeCustomTiny) DecodeStreamFrom(s *scan.Stream, i int) (TimeCustomTiny, int, error) {
 	seenCustomTiny := false
 	i, err := s.ObjectOpen(i)
 	if err != nil {
@@ -7828,8 +10088,7 @@ func (s TimeCustomTiny) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, "\"}"...), nil
 }
 
-func (TimeCustomLong) DecodeFrom(data []byte, i int) (TimeCustomLong, int, error) {
-	var result TimeCustomLong
+func (result TimeCustomLong) DecodeFrom(data []byte, i int) (TimeCustomLong, int, error) {
 	var err error
 	_ = err
 	seenCustomLong := false
@@ -7940,8 +10199,7 @@ func (TimeCustomLong) DecodeFrom(data []byte, i int) (TimeCustomLong, int, error
 	}
 }
 
-func (TimeCustomLong) DecodeStreamFrom(s *scan.Stream, i int) (TimeCustomLong, int, error) {
-	var result TimeCustomLong
+func (result TimeCustomLong) DecodeStreamFrom(s *scan.Stream, i int) (TimeCustomLong, int, error) {
 	seenCustomLong := false
 	i, err := s.ObjectOpen(i)
 	if err != nil {
@@ -8032,8 +10290,7 @@ func (s TimeCustomLong) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, "\"}"...), nil
 }
 
-func (TimeFormatsStruct) DecodeFrom(data []byte, i int) (TimeFormatsStruct, int, error) {
-	var result TimeFormatsStruct
+func (result TimeFormatsStruct) DecodeFrom(data []byte, i int) (TimeFormatsStruct, int, error) {
 	var err error
 	_ = err
 	seenANSIC := false
@@ -8950,8 +11207,7 @@ func (TimeFormatsStruct) DecodeFrom(data []byte, i int) (TimeFormatsStruct, int,
 	}
 }
 
-func (TimeFormatsStruct) DecodeStreamFrom(s *scan.Stream, i int) (TimeFormatsStruct, int, error) {
-	var result TimeFormatsStruct
+func (result TimeFormatsStruct) DecodeStreamFrom(s *scan.Stream, i int) (TimeFormatsStruct, int, error) {
 	seenANSIC := false
 	seenCustomLong := false
 	seenCustomTiny := false

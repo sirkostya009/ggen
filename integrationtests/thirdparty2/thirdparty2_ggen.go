@@ -13,8 +13,7 @@ import (
 	"github.com/sirkostya009/ggen/scan"
 )
 
-func (External2) DecodeFrom(data []byte, i int) (External2, int, error) {
-	var result External2
+func (result External2) DecodeFrom(data []byte, i int) (External2, int, error) {
 	var err error
 	_ = err
 	seenKey := false
@@ -165,8 +164,7 @@ func (External2) DecodeFrom(data []byte, i int) (External2, int, error) {
 	}
 }
 
-func (External2) DecodeStreamFrom(s *scan.Stream, i int) (External2, int, error) {
-	var result External2
+func (result External2) DecodeStreamFrom(s *scan.Stream, i int) (External2, int, error) {
 	seenKey := false
 	seenValue := false
 	i, err := s.ObjectOpen(i)

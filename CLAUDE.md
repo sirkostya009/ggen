@@ -626,12 +626,44 @@ stays small: 4 methods per struct (plus 0–2 opt-in JSON hooks).
 Always emitted:
 
 ```go
-func (T) DecodeFrom(data []byte, i int) (T, int, error)          // recursive entry; satisfies decode.Decoder[T]
-func (T) DecodeStreamFrom(s *scan.Stream, i int) (T, int, error) // io.Reader-backed counterpart
+func (result T) DecodeFrom(data []byte, i int) (T, int, error)          // recursive entry; satisfies decode.Decoder[T]
+func (result T) DecodeStreamFrom(s *scan.Stream, i int) (T, int, error) // io.Reader-backed counterpart
 
-func (s T) JSONSize() int                                        // upper-bound for one-alloc Marshal
-func (s T) AppendJSON(dst []byte) ([]byte, error)                // core marshal — propagates nested errors
+func (s T) JSONSize() int                                                // upper-bound for one-alloc Marshal
+func (s T) AppendJSON(dst []byte) ([]byte, error)                        // core marshal — propagates nested errors
 ```
+
+**Decode-into-receiver semantics.** The receiver passed in IS the merge
+source. Scalar fields persist across JSON omission (stdlib-merge
+shape); container fields are reset at the top of DecodeFrom so the
+decoder never appends over data carried in from the caller. Concretely:
+
+- slices and `[]byte` fields: `if X != nil { X = X[:0] }` at entry.
+  Backing array is reused — a 200-cap slice that gets a 50-element
+  JSON array decodes without allocating a new array. The slice
+  decoder itself only emits `make(...)` when `X == nil`.
+- `map[K]V` fields: `if X != nil { clear(X) }` at entry. Map bucket
+  array reused; only nil maps trigger `make(map, cap)`.
+- nested struct fields: recursion is `result.X, _, _ = result.X.DecodeFrom(...)`.
+  The value-receiver method takes the existing value as the merge
+  source automatically — no special-case codegen.
+- pointer fields (`*T`): currently always allocate a fresh pointee
+  via `var v T; ... result.X = &v`. The receiver pointer is
+  discarded. Decode-into-receiver merge on the pointee is future
+  work — see the renderField pointer block.
+- fixed-length arrays (`[N]T`): every slot gets overwritten or
+  errors via strict-length check, so no entry reset is needed.
+
+JSON `null` for a slice/map field sets `result.X = nil` (matches
+stdlib v1/v2). JSON `[]` / `{}` on a non-nil receiver keeps the
+`[:0]`'d / cleared container; on a nil receiver, allocates an empty
+non-nil container (also stdlib parity).
+
+The top-level entry points (`decode.Unmarshal[T]`, `Read[T]`, slice
+and stream variants) all pass `var zero T` as the receiver — so
+calling those gives you fresh decode with no behaviour change vs the
+old fresh-only model. The merge shape is opt-in: call
+`existing.DecodeFrom(data, 0)` directly to merge.
 
 Top-level wrappers in the runtime libraries (call these from user code):
 
@@ -683,7 +715,12 @@ func (s *T) UnmarshalJSON(data []byte) error                     // wraps decode
    (`return result, err` at top level, `return result, i, err` mid-stream
    for slice/map element readers) — no post-processing pass.
 9. **Pointer fields** emit a 4-byte `null` peek → nil branch, else stack-
-   local `var _v <PointeeType>` + recursive inner read + `&_v`.
+   local `var v <PointeeType>` + recursive inner read + `&v`. Dispatch
+   order in `renderField` is pointer-first → string-tag → kind switch:
+   running the `,string` branch before the pointer block would emit the
+   broken `result.X = *<PointeeType>(n)` (e.g. `*int(n)`); pointer-first
+   recurses with `inner.GoType = PointeeType` and the string-tag branch
+   runs against the pointee type, assigning to the stack-local instead.
 10. **Cross-package struct fallback (statically dispatched).** The
     generator loads the user's package via `golang.org/x/tools/go/packages`
     with full type info, then for each cross-package field type checks
@@ -892,6 +929,8 @@ func (s *T) UnmarshalJSON(data []byte) error                     // wraps decode
 ## Benchmarks (~5.6 MiB deep Node tree, full validation)
 
 AMD Ryzen AI MAX+ 395 (mitigations off), Go 1.26, GOEXPERIMENT=jsonv2.
+Bench harness uses `b.RunParallel`, default `-cpu=NumCPU` (32-thread
+aggregate throughput); for single-thread numbers run with `-cpu=1`.
 Node carries scalars, slices, string-keyed maps, fixed-length tuples,
 slices of pointers (slab path), nested slices, pointer fields, time,
 bytes (base64), `any`, and `json.RawMessage` — the full breadth of
@@ -899,38 +938,37 @@ real-world API response shapes.
 
 **Unmarshal:**
 
-| path     | ns/op       | B/op    | allocs    | MB/s    |
-| -------- | ----------- | ------- | --------- | ------- |
-| jsonv2   | 29115 K     | 16990 K | 245929    | 201     |
-| sonic    | 26008 K     | 22871 K | 245873    | 226     |
-| easyjson | 21064 K     | 16983 K | 245859    | 278     |
-| **ggen** | **11577 K** | 26268 K | **65716** | **507** |
+| path     | ns/op       | B/op    | allocs     | MB/s     |
+| -------- | ----------- | ------- | ---------- | -------- |
+| jsonv2   | 3962 K      | 17.7 MB | 316830     | 1480     |
+| sonic    | 2131 K      | 20.8 MB | 137770     | 2751     |
+| easyjson | 3337 K      | 17.0 MB | 245856     | 1758     |
+| **ggen** | **2310 K**  | 14.4 MB | **101927** | **2539** |
 
 **Marshal:**
 
-| path     | ns/op      | B/op    | allocs   | MB/s    |
-| -------- | ---------- | ------- | -------- | ------- |
-| jsonv2   | 21385 K    | 27001 K | 7667     | 274     |
-| sonic    | 14749 K    | 12097 K | 7608     | 398     |
-| easyjson | 9143 K     | 6140 K  | 7590     | 642     |
-| **ggen** | **7820 K** | 11922 K | **2185** | **750** |
+| path     | ns/op      | B/op    | allocs   | MB/s     |
+| -------- | ---------- | ------- | -------- | -------- |
+| jsonv2   | 1477 K     | 6.5 MB  | 7408     | 3968     |
+| sonic    | 1110 K     | 33.6 MB | 5115     | 5285     |
+| easyjson | 1112 K     | 6.2 MB  | 7597     | 5275     |
+| **ggen** | **756 K**  | 11.9 MB | **2185** | **7762** |
 
 **Reader input (streaming):**
 
-| path                         | ns/op   | B/op    | allocs |
-| ---------------------------- | ------- | ------- | ------ |
-| jsonv2.UnmarshalRead         | 54 ms   | 33.8 MB | 246 K  |
-| easyjson.UnmarshalFromReader | 37.3 ms | 31.5 MB | 246 K  |
-| **ggen UnmarshalStream**     | 34.5 ms | 19.3 MB | 384 K  |
-| **ggen ReadAllUnmarshal**    | 25.3 ms | 29.9 MB | 153 K  |
+| path                         | ns/op  | B/op    | allocs |
+| ---------------------------- | ------ | ------- | ------ |
+| jsonv2.UnmarshalRead         | 4365 K | 17.7 MB | 316828 |
+| easyjson.UnmarshalFromReader | 3237 K | 31.5 MB | 245886 |
+| **ggen UnmarshalStream**     | 8866 K | 17.8 MB | 256589 |
+| **ggen ReadAllUnmarshal**    | 2297 K | 29.0 MB | 101956 |
 
 ggen Stream copies strings during parse (each scanned string is its
-own heap alloc — that's the 230K extra allocs over the bytes path),
-which is why it loses ground on alloc count. The win returns on
-**Marshal** (still 1.18× faster than easyjson) and the **bytes-only
-path** (1.7× faster than easyjson). The cleanest "I have an
-io.Reader" pattern is `ReadAllUnmarshal` — only 1.4 ms slower than
-direct bytes decode and the same alloc count.
+own heap alloc), which is why it loses ground on alloc count. The win
+returns on **Marshal** (1.47× faster than easyjson) and the
+**bytes-only path** (1.45× faster than easyjson). The cleanest "I have
+an io.Reader" pattern is `ReadAllUnmarshal` — same shape as the bytes
+path, comparable wall clock at the cost of one `io.ReadAll` buffer.
 
 **Where streaming actually pays off:** fail-fast on validation
 errors. `BenchmarkSlowStream_Invalid/ggen_stream` rejects a malformed
@@ -1064,6 +1102,11 @@ Root module (`./`):
   `htmlescape` opt-in (v1-shaped).
 - `fuzz_test.go` — three fuzzers over `Node`: panic safety, roundtrip
   fixed-point, jsonv2-compat.
+- `merge_test.go` — decode-into-receiver semantics: scalar persistence
+  across omitted JSON fields, slice backing-array reuse via `[:0]`,
+  map `clear()` reuse, JSON `null` → nil container, JSON `[]` / `{}`
+  on non-nil vs nil receiver. Test pins the user-facing contract;
+  changes to the reset/merge codegen MUST keep these passing.
 - `alias_test.go`, `any_test.go`, `appendany_test.go`, `custom_test.go`,
   `decode_dups_test.go`, `dive_test.go`, `extra_test.go`,
   `fallback_test.go`, `hooks_test.go`, `inline_test.go`,
@@ -1196,36 +1239,6 @@ The subpackages (`decode`, `decode/validation`, `encode`, `scan`) are importable
 their generated code.
 
 ## Backlog (ideas worth pursuing, not yet scheduled)
-
-- **Decode-into-receiver mode** — switch `DecodeFrom` from its current
-  "return a fresh `T`" shape to "merge JSON into the receiver and
-  return it" (or expose a sibling `DecodeInto(dst *T, data, i)` method).
-  Today the generated body declares `var result T` and ignores the
-  receiver — so the slice/map field handlers can assume `result.X` is
-  always nil and emit `result.X = make(...)` unconditionally. Brief
-  "reuse the caller's backing" branches (`if dst != nil { dst =
-  dst[:0] }` for slices, `clear(dst)` for maps) shipped briefly and
-  were ripped out as dead code on 2026-05-13, see the
-  `c90794b` → `<follow-up>` commit pair; the test that supposedly
-  exercised them (`TestStdlibVsGgen_MapReplaceDivergence`) was bogus
-  — both `decode.Unmarshal[Node]` and `Node.DecodeFrom` always build
-  fresh, so the reuse branches were unreachable from any user
-  codepath. If/when a decode-into-receiver mode lands, those reuse
-  branches become live and the divergence test becomes meaningful.
-  Surface options when revisiting:
-    1. `result := receiver` at top of DecodeFrom — receiver state
-       flows in, fields decoded by JSON overwrite it. Stdlib-merge
-       semantics. Breaking for existing `var zero T; zero.DecodeFrom`
-       callers because zero-value receivers no longer guarantee fresh
-       output.
-    2. New `DecodeInto(dst *T, data []byte, i int) (int, error)` —
-       coexists with `DecodeFrom`. Codegen forks the field handlers
-       to drive `dst.X` instead of `result.X` and the reuse branches
-       come back. Heavier generator change.
-    3. Opt-in `//ggen:generate decodeinto` annotation — emits the
-       sibling method only for structs that want it. Lowest blast
-       radius.
-  Pick when there's a concrete consumer asking for the merge shape.
 
 - **Improve fuzz coverage.** Current fuzz surface (in
   `integrationtests/fuzz_test.go`) is three fuzzers over `Node`:

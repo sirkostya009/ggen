@@ -15,8 +15,7 @@ import (
 	"github.com/sirkostya009/ggen/scan"
 )
 
-func (Addr) DecodeFrom(data []byte, i int) (Addr, int, error) {
-	var result Addr
+func (result Addr) DecodeFrom(data []byte, i int) (Addr, int, error) {
 	var err error
 	_ = err
 	seenCity := false
@@ -151,8 +150,7 @@ func (Addr) DecodeFrom(data []byte, i int) (Addr, int, error) {
 	}
 }
 
-func (Addr) DecodeStreamFrom(s *scan.Stream, i int) (Addr, int, error) {
-	var result Addr
+func (result Addr) DecodeStreamFrom(s *scan.Stream, i int) (Addr, int, error) {
 	seenCity := false
 	seenStreet := false
 	i, err := s.ObjectOpen(i)
@@ -258,8 +256,25 @@ func (s Addr) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
-	var result Node
+func (result Node) DecodeFrom(data []byte, i int) (Node, int, error) {
+	if result.Blob != nil {
+		result.Blob = result.Blob[:0]
+	}
+	if result.Children != nil {
+		result.Children = result.Children[:0]
+	}
+	if result.Matrix != nil {
+		result.Matrix = result.Matrix[:0]
+	}
+	if result.Props != nil {
+		clear(result.Props)
+	}
+	if result.Refs != nil {
+		result.Refs = result.Refs[:0]
+	}
+	if result.Tags != nil {
+		result.Tags = result.Tags[:0]
+	}
 	var err error
 	_ = err
 	seenActive := false
@@ -414,7 +429,9 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 							}
 						}
 					}
-					result.Blob = make([]byte, 0, base64.StdEncoding.DecodedLen(len(s)))
+					if cap(result.Blob) < base64.StdEncoding.DecodedLen(len(s)) {
+						result.Blob = make([]byte, 0, base64.StdEncoding.DecodedLen(len(s)))
+					}
 					result.Blob, err = base64.StdEncoding.AppendDecode(result.Blob, unsafe.Slice(unsafe.StringData(s), len(s)))
 					if err != nil {
 						return result, i, err
@@ -463,6 +480,7 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 					}
 					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 						i += 4
+						result.Refs = nil
 					} else {
 						if i >= len(data) || data[i] != '[' {
 							return result, i, scan.ErrBadArray
@@ -473,9 +491,13 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 						}
 						var slab0 []Addr
 						if i < len(data) && data[i] == ']' {
-							result.Refs = []*Addr{}
+							if result.Refs == nil {
+								result.Refs = []*Addr{}
+							}
 						} else {
-							result.Refs = make([]*Addr, 0, 4)
+							if result.Refs == nil {
+								result.Refs = make([]*Addr, 0, 4)
+							}
 							slab0 = make([]Addr, 0, 4)
 						}
 						for i < len(data) && data[i] != ']' {
@@ -532,6 +554,7 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 					}
 					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 						i += 4
+						result.Tags = nil
 					} else {
 						if i >= len(data) || data[i] != '[' {
 							return result, i, scan.ErrBadArray
@@ -541,9 +564,13 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 							i++
 						}
 						if i < len(data) && data[i] == ']' {
-							result.Tags = []string{}
+							if result.Tags == nil {
+								result.Tags = []string{}
+							}
 						} else {
-							result.Tags = make([]string, 0, 4)
+							if result.Tags == nil {
+								result.Tags = make([]string, 0, 4)
+							}
 						}
 						for i < len(data) && data[i] != ']' {
 							result.Tags = append(result.Tags, "")
@@ -622,6 +649,7 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 					}
 					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 						i += 4
+						result.Props = nil
 					} else {
 						if i >= len(data) || data[i] != '{' {
 							return result, i, scan.ErrBadObject
@@ -631,9 +659,13 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 							i++
 						}
 						if i < len(data) && data[i] == '}' {
-							result.Props = map[string]string{}
+							if result.Props == nil {
+								result.Props = map[string]string{}
+							}
 						} else {
-							result.Props = make(map[string]string)
+							if result.Props == nil {
+								result.Props = make(map[string]string)
+							}
 						}
 						for i < len(data) && data[i] != '}' {
 							var mk string
@@ -798,6 +830,7 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 					}
 					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 						i += 4
+						result.Matrix = nil
 					} else {
 						if i >= len(data) || data[i] != '[' {
 							return result, i, scan.ErrBadArray
@@ -807,9 +840,13 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 							i++
 						}
 						if i < len(data) && data[i] == ']' {
-							result.Matrix = [][]int{}
+							if result.Matrix == nil {
+								result.Matrix = [][]int{}
+							}
 						} else {
-							result.Matrix = make([][]int, 0, 4)
+							if result.Matrix == nil {
+								result.Matrix = make([][]int, 0, 4)
+							}
 						}
 						for i < len(data) && data[i] != ']' {
 							result.Matrix = append(result.Matrix, nil)
@@ -819,6 +856,7 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 								}
 								if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 									i += 4
+									result.Matrix[len(result.Matrix)-1] = nil
 								} else {
 									if i >= len(data) || data[i] != '[' {
 										return result, i, scan.ErrBadArray
@@ -828,9 +866,13 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 										i++
 									}
 									if i < len(data) && data[i] == ']' {
-										result.Matrix[len(result.Matrix)-1] = []int{}
+										if result.Matrix[len(result.Matrix)-1] == nil {
+											result.Matrix[len(result.Matrix)-1] = []int{}
+										}
 									} else {
-										result.Matrix[len(result.Matrix)-1] = make([]int, 0, 4)
+										if result.Matrix[len(result.Matrix)-1] == nil {
+											result.Matrix[len(result.Matrix)-1] = make([]int, 0, 4)
+										}
 									}
 									for i < len(data) && data[i] != ']' {
 										result.Matrix[len(result.Matrix)-1] = append(result.Matrix[len(result.Matrix)-1], 0)
@@ -932,6 +974,7 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 					}
 					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 						i += 4
+						result.Children = nil
 					} else {
 						if i >= len(data) || data[i] != '[' {
 							return result, i, scan.ErrBadArray
@@ -941,9 +984,13 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 							i++
 						}
 						if i < len(data) && data[i] == ']' {
-							result.Children = []Node{}
+							if result.Children == nil {
+								result.Children = []Node{}
+							}
 						} else {
-							result.Children = []Node{}
+							if result.Children == nil {
+								result.Children = []Node{}
+							}
 						}
 						for i < len(data) && data[i] != ']' {
 							result.Children = append(result.Children, Node{})
@@ -1041,8 +1088,25 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 	}
 }
 
-func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
-	var result Node
+func (result Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
+	if result.Blob != nil {
+		result.Blob = result.Blob[:0]
+	}
+	if result.Children != nil {
+		result.Children = result.Children[:0]
+	}
+	if result.Matrix != nil {
+		result.Matrix = result.Matrix[:0]
+	}
+	if result.Props != nil {
+		clear(result.Props)
+	}
+	if result.Refs != nil {
+		result.Refs = result.Refs[:0]
+	}
+	if result.Tags != nil {
+		result.Tags = result.Tags[:0]
+	}
 	seenActive := false
 	seenBlob := false
 	seenChildren := false
@@ -1150,7 +1214,9 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 					if err != nil {
 						return result, i, err
 					}
-					result.Blob = make([]byte, 0, base64.StdEncoding.DecodedLen(len(v)))
+					if cap(result.Blob) < base64.StdEncoding.DecodedLen(len(v)) {
+						result.Blob = make([]byte, 0, base64.StdEncoding.DecodedLen(len(v)))
+					}
 					result.Blob, err = base64.StdEncoding.AppendDecode(result.Blob, unsafe.Slice(unsafe.StringData(v), len(v)))
 					if err != nil {
 						return result, i, err
@@ -1206,6 +1272,7 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 							}
 						}
 						i += 4
+						result.Refs = nil
 					} else {
 						i, err = s.ArrayOpen(i)
 						if err != nil {
@@ -1222,9 +1289,13 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 						}
 						var slab0 []Addr
 						if s.Bytes()[i] == ']' {
-							result.Refs = []*Addr{}
+							if result.Refs == nil {
+								result.Refs = []*Addr{}
+							}
 						} else {
-							result.Refs = make([]*Addr, 0, 4)
+							if result.Refs == nil {
+								result.Refs = make([]*Addr, 0, 4)
+							}
 							slab0 = make([]Addr, 0, 4)
 						}
 						for s.Bytes()[i] != ']' {
@@ -1328,6 +1399,7 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 							}
 						}
 						i += 4
+						result.Tags = nil
 					} else {
 						i, err = s.ArrayOpen(i)
 						if err != nil {
@@ -1343,9 +1415,13 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 							}
 						}
 						if s.Bytes()[i] == ']' {
-							result.Tags = []string{}
+							if result.Tags == nil {
+								result.Tags = []string{}
+							}
 						} else {
-							result.Tags = make([]string, 0, 4)
+							if result.Tags == nil {
+								result.Tags = make([]string, 0, 4)
+							}
 						}
 						for s.Bytes()[i] != ']' {
 							result.Tags = append(result.Tags, "")
@@ -1437,6 +1513,7 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 							}
 						}
 						i += 4
+						result.Props = nil
 					} else {
 						i, err = s.ObjectOpen(i)
 						if err != nil {
@@ -1452,9 +1529,13 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 							}
 						}
 						if s.Bytes()[i] == '}' {
-							result.Props = map[string]string{}
+							if result.Props == nil {
+								result.Props = map[string]string{}
+							}
 						} else {
-							result.Props = make(map[string]string)
+							if result.Props == nil {
+								result.Props = make(map[string]string)
+							}
 						}
 						for s.Bytes()[i] != '}' {
 							var mk string
@@ -1638,6 +1719,7 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 							}
 						}
 						i += 4
+						result.Matrix = nil
 					} else {
 						i, err = s.ArrayOpen(i)
 						if err != nil {
@@ -1653,9 +1735,13 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 							}
 						}
 						if s.Bytes()[i] == ']' {
-							result.Matrix = [][]int{}
+							if result.Matrix == nil {
+								result.Matrix = [][]int{}
+							}
 						} else {
-							result.Matrix = make([][]int, 0, 4)
+							if result.Matrix == nil {
+								result.Matrix = make([][]int, 0, 4)
+							}
 						}
 						for s.Bytes()[i] != ']' {
 							result.Matrix = append(result.Matrix, nil)
@@ -1681,6 +1767,7 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 										}
 									}
 									i += 4
+									result.Matrix[len(result.Matrix)-1] = nil
 								} else {
 									i, err = s.ArrayOpen(i)
 									if err != nil {
@@ -1696,9 +1783,13 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 										}
 									}
 									if s.Bytes()[i] == ']' {
-										result.Matrix[len(result.Matrix)-1] = []int{}
+										if result.Matrix[len(result.Matrix)-1] == nil {
+											result.Matrix[len(result.Matrix)-1] = []int{}
+										}
 									} else {
-										result.Matrix[len(result.Matrix)-1] = make([]int, 0, 4)
+										if result.Matrix[len(result.Matrix)-1] == nil {
+											result.Matrix[len(result.Matrix)-1] = make([]int, 0, 4)
+										}
 									}
 									for s.Bytes()[i] != ']' {
 										result.Matrix[len(result.Matrix)-1] = append(result.Matrix[len(result.Matrix)-1], 0)
@@ -1833,6 +1924,7 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 							}
 						}
 						i += 4
+						result.Children = nil
 					} else {
 						i, err = s.ArrayOpen(i)
 						if err != nil {
@@ -1848,9 +1940,13 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 							}
 						}
 						if s.Bytes()[i] == ']' {
-							result.Children = []Node{}
+							if result.Children == nil {
+								result.Children = []Node{}
+							}
 						} else {
-							result.Children = []Node{}
+							if result.Children == nil {
+								result.Children = []Node{}
+							}
 						}
 						for s.Bytes()[i] != ']' {
 							result.Children = append(result.Children, Node{})
@@ -2217,8 +2313,10 @@ func (s Node) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (Validated) DecodeFrom(data []byte, i int) (Validated, int, error) {
-	var result Validated
+func (result Validated) DecodeFrom(data []byte, i int) (Validated, int, error) {
+	if result.Tags != nil {
+		result.Tags = result.Tags[:0]
+	}
 	var err error
 	_ = err
 	seenAge := false
@@ -2394,6 +2492,7 @@ func (Validated) DecodeFrom(data []byte, i int) (Validated, int, error) {
 					}
 					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 						i += 4
+						result.Tags = nil
 					} else {
 						if i >= len(data) || data[i] != '[' {
 							return result, i, scan.ErrBadArray
@@ -2403,9 +2502,13 @@ func (Validated) DecodeFrom(data []byte, i int) (Validated, int, error) {
 							i++
 						}
 						if i < len(data) && data[i] == ']' {
-							result.Tags = []string{}
+							if result.Tags == nil {
+								result.Tags = []string{}
+							}
 						} else {
-							result.Tags = make([]string, 0, 4)
+							if result.Tags == nil {
+								result.Tags = make([]string, 0, 4)
+							}
 						}
 						for i < len(data) && data[i] != ']' {
 							result.Tags = append(result.Tags, "")
@@ -2522,8 +2625,10 @@ func (Validated) DecodeFrom(data []byte, i int) (Validated, int, error) {
 	}
 }
 
-func (Validated) DecodeStreamFrom(s *scan.Stream, i int) (Validated, int, error) {
-	var result Validated
+func (result Validated) DecodeStreamFrom(s *scan.Stream, i int) (Validated, int, error) {
+	if result.Tags != nil {
+		result.Tags = result.Tags[:0]
+	}
 	seenAge := false
 	seenBio := false
 	seenEmail := false
@@ -2653,6 +2758,7 @@ func (Validated) DecodeStreamFrom(s *scan.Stream, i int) (Validated, int, error)
 							}
 						}
 						i += 4
+						result.Tags = nil
 					} else {
 						i, err = s.ArrayOpen(i)
 						if err != nil {
@@ -2668,9 +2774,13 @@ func (Validated) DecodeStreamFrom(s *scan.Stream, i int) (Validated, int, error)
 							}
 						}
 						if s.Bytes()[i] == ']' {
-							result.Tags = []string{}
+							if result.Tags == nil {
+								result.Tags = []string{}
+							}
 						} else {
-							result.Tags = make([]string, 0, 4)
+							if result.Tags == nil {
+								result.Tags = make([]string, 0, 4)
+							}
 						}
 						for s.Bytes()[i] != ']' {
 							result.Tags = append(result.Tags, "")

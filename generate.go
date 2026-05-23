@@ -2216,6 +2216,41 @@ func inlineScanString(b *bytes.Buffer, posIn, dst, posOut string) {
 `, posIn, posIn, posIn, dst, posIn, posIn, posOut, dst, posOut, posIn)
 }
 
+// emitReceiverReset emits the per-container reset block at the top of
+// DecodeFrom / DecodeStreamFrom. The decoder is decode-into-receiver:
+// `result` IS the value the caller passed in. Scalars / structs merge
+// naturally (recursive DecodeFrom on a nested struct passes the existing
+// value as the receiver of the next call); containers MUST be reset so
+// the new decoder never appends over data carried in from the receiver.
+//
+//   - slices, []byte (KindBytes), and the inline catch-all map all get
+//     `if X != nil { X = X[:0] }` (or `clear(X)` for maps) so existing
+//     backing is reused but starts at len=0.
+//   - fixed-length arrays (KindArray) need no reset — strict-length
+//     decode overwrites every slot or errors.
+//   - pointer fields are not reset here. Today they always allocate
+//     fresh via `var v T` in the renderField pointer branch; the
+//     receiver pointer is discarded. Decode-into-receiver for the
+//     pointee is future work (see CLAUDE.md backlog).
+func emitReceiverReset(b *bytes.Buffer, s StructInfo) {
+	for _, f := range s.Fields {
+		// Pointer-to-container fields (`*[]T`, `*map[K]V`) are not reset:
+		// the pointer-emit path discards the receiver pointer and
+		// allocates a fresh pointee anyway, so resetting the receiver's
+		// pointee here would also be wrong syntax (`*[]int[:0]` is not
+		// a valid expression).
+		if f.Pointer {
+			continue
+		}
+		switch f.Kind {
+		case KindSlice, KindBytes:
+			fmt.Fprintf(b, "if result.%[1]s != nil { result.%[1]s = result.%[1]s[:0] }\n", f.GoName)
+		case KindMap:
+			fmt.Fprintf(b, "if result.%[1]s != nil { clear(result.%[1]s) }\n", f.GoName)
+		}
+	}
+}
+
 // renderDecode emits the body of DecodeFrom: a loop that reads each
 // JSON key, dispatches to per-field scan code, and handles ',' / '}'.
 // Zero-copy (strings alias the input) and zero-alloc on the happy path.
@@ -2223,13 +2258,13 @@ func inlineScanString(b *bytes.Buffer, posIn, dst, posOut string) {
 // instead of a string compare per case. Whitespace skipping is inlined at
 // each hot-path site to avoid the ~5ns/call overhead dominating runtime.
 func renderDecode(b *bytes.Buffer, s StructInfo) {
-	fmt.Fprintf(b, "func (%s) DecodeFrom(data []byte, i int) (%s, int, error) {\n", s.Name, s.Name)
+	fmt.Fprintf(b, "func (result %s) DecodeFrom(data []byte, i int) (%s, int, error) {\n", s.Name, s.Name)
 	if s.IsAlias {
 		renderAliasDecode(b, s)
 		b.WriteString("}\n\n")
 		return
 	}
-	b.WriteString("var result " + s.Name + "\n")
+	emitReceiverReset(b, s)
 	// Function-scope err shared by every sub-render — slice/map/SQL-null
 	// emitters use `=` to reassign instead of declaring local `var err
 	// error` per block. `_ = err` keeps it kosher when no sub-render
@@ -2405,16 +2440,16 @@ func keyValidateAndMod(b *bytes.Buffer, f FieldInfo, keyRef string) {
 	}
 }
 
-// renderMap emits map[string]V decode. Accepts `null` → leave field nil
-// (matches stdlib `encoding/json`).
-// renderMap emits map decode for the byte path. err is from the
-// DecodeFrom function-body scope; no local decl needed. Empty `{}` ->
-// non-nil empty (stdlib parity); else fresh make() with optional sizing
-// hint. The surrounding DecodeFrom's `var result T` builds fresh, so
-// ref is always nil here — no reuse branch to emit. Maps don't expose
-// interior pointers (`&m[k]` is illegal), so unlike slices we can't
-// decode struct elems directly into the slot. We decode into `mv` (or
-// the inline scanner's `mn` for primitives) and assign at the end.
+// renderMap emits map[string]V decode for the byte path. Accepts `null`
+// → nil out the map field; empty `{}` → non-nil empty (stdlib parity).
+// Receiver merge: emitReceiverReset has already done `clear(ref)` at
+// the top of DecodeFrom, so non-nil maps keep their bucket array
+// (allocation only when ref is nil — `if ref == nil { ref = make(...) }`).
+// err is from the DecodeFrom function-body scope; no local decl. Maps
+// don't expose interior pointers (`&m[k]` is illegal), so unlike slices
+// we can't decode struct elems directly into the slot. We decode into
+// `mv` (or the inline scanner's `mn` for primitives) and assign at the
+// end.
 func renderMap(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	makeExpr := fmt.Sprintf("make(%s)", f.GoType)
 	if cap := mapPreallocCap(f); cap > 0 {
@@ -2423,15 +2458,19 @@ func renderMap(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	b.WriteString("{\n")
 	inlineSkipWS(b, posVar)
 	inlineNullPeek(b, posVar)
+	fmt.Fprintf(b, "%s = nil\n", ref)
 	fmt.Fprintf(b, `} else {
 	if %[1]s >= len(data) || data[%[1]s] != '{' { return result, i, scan.ErrBadObject }
 	%[1]s++
 `, posVar)
 	inlineSkipWS(b, posVar)
+	// ref is decode-into-receiver: either nil (fresh) or already cleared
+	// at the top of DecodeFrom (existing map kept for reuse). Allocate only
+	// when nil; cleared maps reuse their bucket array.
 	fmt.Fprintf(b, `	if %[1]s < len(data) && data[%[1]s] == '}' {
-		%[2]s = %[3]s{}
+		if %[2]s == nil { %[2]s = %[3]s{} }
 	} else {
-		%[2]s = %[4]s
+		if %[2]s == nil { %[2]s = %[4]s }
 	}
 	for %[1]s < len(data) && data[%[1]s] != '}' {
 		var mk string
@@ -2575,23 +2614,24 @@ if %[1]s >= len(data) || data[%[1]s] != ']' { return result, i, scan.ErrBadArray
 		enc = "" // hex doesn't share the Encoding API
 	}
 	if enc == "" {
-		// hex.AppendDecode + hex.DecodedLen.
+		// hex.AppendDecode + hex.DecodedLen. ref was pre-reset to [:0] at
+		// DecodeFrom's top; only realloc when cap is insufficient.
 		b.WriteString("{\n\tvar s string\n\t")
 		inlineScanString(b, posVar, "s", posVar)
-		fmt.Fprintf(b, `	%s = make([]byte, 0, hex.DecodedLen(len(s)))
+		fmt.Fprintf(b, `	if cap(%s) < hex.DecodedLen(len(s)) { %s = make([]byte, 0, hex.DecodedLen(len(s))) }
 	%s, err = hex.AppendDecode(%s, unsafe.Slice(unsafe.StringData(s), len(s)))
 	if err != nil { return result, i, err }
 }
-`, ref, ref, ref)
+`, ref, ref, ref, ref)
 		return
 	}
 	b.WriteString("{\n\tvar s string\n\t")
 	inlineScanString(b, posVar, "s", posVar)
-	fmt.Fprintf(b, `	%s = make([]byte, 0, %s(len(s)))
+	fmt.Fprintf(b, `	if cap(%s) < %s(len(s)) { %s = make([]byte, 0, %s(len(s))) }
 	%s, err = %s.AppendDecode(%s, unsafe.Slice(unsafe.StringData(s), len(s)))
 	if err != nil { return result, i, err }
 }
-`, ref, dlen, ref, enc, ref)
+`, ref, dlen, ref, dlen, ref, enc, ref)
 }
 
 // renderTime emits time.Time decode decode.
@@ -3216,13 +3256,12 @@ default: return result, i, scan.ErrBadBool
 }
 
 func renderField(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
-	if f.String {
-		renderStringTag(b, f, ref, posVar)
-		if !f.NoValidate {
-			validateAndMod(b, f, ref)
-		}
-		return
-	}
+	// Pointer FIRST: a pointer-to-T field with json:",string" needs to
+	// decode into the pointee's T and then take its address. Running the
+	// string-tag branch with f.GoType="*T" emits the broken
+	// `result.X = *T(n)`. The pointer block recurses with inner.GoType=T,
+	// inner.String preserved — the string-tag branch then runs on the
+	// inner-of-T type and assigns to the stack-local `v`.
 	if f.Pointer {
 		// null → nil; otherwise decode into a stack-local of the pointee
 		// type and take its address. Strip Pointer for the inner recursion.
@@ -3258,6 +3297,13 @@ func renderField(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 			outer.Validation = customV
 			outer.Mods = customM
 			validateAndMod(b, outer, ref)
+		}
+		return
+	}
+	if f.String {
+		renderStringTag(b, f, ref, posVar)
+		if !f.NoValidate {
+			validateAndMod(b, f, ref)
 		}
 		return
 	}
@@ -3437,10 +3483,12 @@ func emitByteSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth i
 	ivar := fmt.Sprintf("idx%d", depth)
 	b.WriteString("{\n")
 	inlineSkipWS(b, kvar)
-	// `null` → leave slice nil and consume the literal. Arrays don't accept
-	// null (no nil array values in Go); they still error on non-`[` input.
+	// `null` → nil out the slice and consume the literal. Arrays don't
+	// accept null (no nil array values in Go); they still error on
+	// non-`[` input.
 	if !isArray {
 		inlineNullPeek(b, kvar)
+		fmt.Fprintf(b, "%s = nil\n", dst)
 		b.WriteString("} else {\n")
 	}
 	fmt.Fprintf(b, "if %s >= len(data) || data[%s] != '[' { return result, i, scan.ErrBadArray }\n", kvar, kvar)
@@ -3463,13 +3511,17 @@ func emitByteSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth i
 		if f.ElemPointer {
 			fmt.Fprintf(b, "var %s []%s\n", slabVar, f.ElemType)
 		}
+		// dst is decode-into-receiver: either nil (fresh) or already [:0]'d
+		// at the top of DecodeFrom (existing backing kept for reuse). Only
+		// allocate when nil; otherwise the [:0]'d slice serves as the
+		// append target and re-uses the caller's backing array.
 		fmt.Fprintf(b, "if %s < len(data) && data[%s] == ']' {\n", kvar, kvar)
-		fmt.Fprintf(b, "%s = %s{}\n", dst, f.GoType)
+		fmt.Fprintf(b, "if %s == nil { %s = %s{} }\n", dst, dst, f.GoType)
 		fmt.Fprintf(b, "} else {\n")
 		if sCap > 0 {
-			fmt.Fprintf(b, "%s = make(%s, 0, %d)\n", dst, f.GoType, sCap)
+			fmt.Fprintf(b, "if %s == nil { %s = make(%s, 0, %d) }\n", dst, dst, f.GoType, sCap)
 		} else {
-			fmt.Fprintf(b, "%s = %s{}\n", dst, f.GoType)
+			fmt.Fprintf(b, "if %s == nil { %s = %s{} }\n", dst, dst, f.GoType)
 		}
 		if f.ElemPointer {
 			fmt.Fprintf(b, "%s = make([]%s, 0, %d)\n", slabVar, f.ElemType, slCap)
@@ -3616,7 +3668,7 @@ func emitByteSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth i
 // array is fixed-capacity and never reallocates — zero-copy string aliases
 // stay valid for the lifetime of the Stream.
 func renderStreamDecode(b *bytes.Buffer, s StructInfo) {
-	fmt.Fprintf(b, "func (%s) DecodeStreamFrom(s *scan.Stream, i int) (%s, int, error) {\n", s.Name, s.Name)
+	fmt.Fprintf(b, "func (result %s) DecodeStreamFrom(s *scan.Stream, i int) (%s, int, error) {\n", s.Name, s.Name)
 	if s.IsAlias {
 		renderAliasStreamDecode(b, s)
 		b.WriteString("}\n\n")
@@ -3627,7 +3679,7 @@ func renderStreamDecode(b *bytes.Buffer, s StructInfo) {
 }
 
 func renderStreamDecodeStruct(b *bytes.Buffer, s StructInfo) {
-	b.WriteString("var result " + s.Name + "\n")
+	emitReceiverReset(b, s)
 	if s.MultiErr {
 		b.WriteString("var errs validation.Errors\n")
 	}
@@ -3784,6 +3836,7 @@ if s.Bytes()[%[1]s] == 'n' {
 		if s.Bytes()[%[1]s+ki] != "null"[ki] { return result, i, scan.ErrBadLiteral }
 	}
 	%[1]s += 4
+	%[2]s = nil
 } else {
 	%[1]s, err = s.ObjectOpen(%[1]s)
 	if err != nil { return result, i, err }
@@ -3791,9 +3844,9 @@ if s.Bytes()[%[1]s] == 'n' {
 	if err != nil { return result, i, err }
 	if %[1]s >= len(s.Bytes()) { if err = s.ReadMore(0); err != nil { return result, i, err } }
 	if s.Bytes()[%[1]s] == '}' {
-		%[2]s = %[3]s{}
+		if %[2]s == nil { %[2]s = %[3]s{} }
 	} else {
-		%[2]s = %[4]s
+		if %[2]s == nil { %[2]s = %[4]s }
 	}
 	for s.Bytes()[%[1]s] != '}' {
 		var mk string
@@ -3947,22 +4000,22 @@ func renderStreamBytes(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	var v string
 	v, %s, err = s.String(%s)
 	if err != nil { return result, i, err }
-	%s = make([]byte, 0, hex.DecodedLen(len(v)))
+	if cap(%s) < hex.DecodedLen(len(v)) { %s = make([]byte, 0, hex.DecodedLen(len(v))) }
 	%s, err = hex.AppendDecode(%s, unsafe.Slice(unsafe.StringData(v), len(v)))
 	if err != nil { return result, i, err }
 }
-`, posVar, posVar, ref, ref, ref)
+`, posVar, posVar, ref, ref, ref, ref)
 		return
 	}
 	fmt.Fprintf(b, `{
 	var v string
 	v, %s, err = s.String(%s)
 	if err != nil { return result, i, err }
-	%s = make([]byte, 0, %s(len(v)))
+	if cap(%s) < %s(len(v)) { %s = make([]byte, 0, %s(len(v))) }
 	%s, err = %s.AppendDecode(%s, unsafe.Slice(unsafe.StringData(v), len(v)))
 	if err != nil { return result, i, err }
 }
-`, posVar, posVar, ref, dlen, ref, enc, ref)
+`, posVar, posVar, ref, dlen, ref, dlen, ref, enc, ref)
 }
 
 func renderStreamTime(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
@@ -4465,7 +4518,7 @@ func emitStreamSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth
 	// err comes from the function-body scope (ObjectOpen / alias-container
 	// synthetic decl). No per-depth declaration needed.
 	if !isArray {
-		// `null` → leave slice nil and consume the literal.
+		// `null` → nil out the slice and consume the literal.
 		fmt.Fprintf(b, `%[1]s, %[2]s = s.SkipSpace(%[1]s)
 if %[2]s != nil { return result, i, %[2]s }
 if %[1]s >= len(s.Bytes()) { if %[2]s = s.ReadMore(0); %[2]s != nil { return result, i, %[2]s } }
@@ -4475,8 +4528,9 @@ if s.Bytes()[%[1]s] == 'n' {
 		if s.Bytes()[%[1]s+ki] != "null"[ki] { return result, i, scan.ErrBadLiteral }
 	}
 	%[1]s += 4
+	%[3]s = nil
 } else {
-`, posVar, errvar)
+`, posVar, errvar, dst)
 	}
 	fmt.Fprintf(b, `%[1]s, %[2]s = s.ArrayOpen(%[3]s)
 if %[2]s != nil { return result, i, %[2]s }
@@ -4491,8 +4545,10 @@ if %[1]s >= len(s.Bytes()) { if %[2]s = s.ReadMore(0); %[2]s != nil { return res
 		}
 	} else {
 		sCap, slCap := preallocCap(f)
-		// Empty `[]` → non-nil empty (stdlib parity); else fresh make()
-		// with prealloc. See emitByteSliceRead for the same shape.
+		// dst is decode-into-receiver: either nil (fresh) or already [:0]'d
+		// at the top of DecodeStreamFrom (existing backing kept for reuse).
+		// Only allocate when nil; otherwise the [:0]'d slice serves as the
+		// append target and re-uses the caller's backing array.
 		if f.ElemPointer {
 			fmt.Fprintf(b, "var %s []%s\n", slabVar, f.ElemType)
 		}
@@ -4501,9 +4557,9 @@ if %[1]s >= len(s.Bytes()) { if %[2]s = s.ReadMore(0); %[2]s != nil { return res
 			makeExpr = fmt.Sprintf("make(%s, 0, %d)", f.GoType, sCap)
 		}
 		fmt.Fprintf(b, `if s.Bytes()[%[1]s] == ']' {
-	%[2]s = %[3]s{}
+	if %[2]s == nil { %[2]s = %[3]s{} }
 } else {
-	%[2]s = %[4]s
+	if %[2]s == nil { %[2]s = %[4]s }
 `, kvar, dst, f.GoType, makeExpr)
 		if f.ElemPointer {
 			fmt.Fprintf(b, "%s = make([]%s, 0, %d)\n", slabVar, f.ElemType, slCap)

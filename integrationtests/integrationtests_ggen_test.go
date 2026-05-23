@@ -25,8 +25,7 @@ import (
 
 var ggenOneof0 = []string{"admin", "user", "guest"}
 
-func (AliasString) DecodeFrom(data []byte, i int) (AliasString, int, error) {
-	var result AliasString
+func (result AliasString) DecodeFrom(data []byte, i int) (AliasString, int, error) {
 	var err error
 	_ = err
 	var v string
@@ -38,8 +37,7 @@ func (AliasString) DecodeFrom(data []byte, i int) (AliasString, int, error) {
 	return result, i, nil
 }
 
-func (AliasString) DecodeStreamFrom(s *scan.Stream, i int) (AliasString, int, error) {
-	var result AliasString
+func (result AliasString) DecodeStreamFrom(s *scan.Stream, i int) (AliasString, int, error) {
 	var err error
 	_ = err
 	var v string
@@ -61,8 +59,7 @@ func (s AliasString) AppendJSON(dst []byte) ([]byte, error) {
 	return dst, nil
 }
 
-func (AliasHTML) DecodeFrom(data []byte, i int) (AliasHTML, int, error) {
-	var result AliasHTML
+func (result AliasHTML) DecodeFrom(data []byte, i int) (AliasHTML, int, error) {
 	var err error
 	_ = err
 	var v string
@@ -74,8 +71,7 @@ func (AliasHTML) DecodeFrom(data []byte, i int) (AliasHTML, int, error) {
 	return result, i, nil
 }
 
-func (AliasHTML) DecodeStreamFrom(s *scan.Stream, i int) (AliasHTML, int, error) {
-	var result AliasHTML
+func (result AliasHTML) DecodeStreamFrom(s *scan.Stream, i int) (AliasHTML, int, error) {
 	var err error
 	_ = err
 	var v string
@@ -97,8 +93,7 @@ func (s AliasHTML) AppendJSON(dst []byte) ([]byte, error) {
 	return dst, nil
 }
 
-func (AliasInt) DecodeFrom(data []byte, i int) (AliasInt, int, error) {
-	var result AliasInt
+func (result AliasInt) DecodeFrom(data []byte, i int) (AliasInt, int, error) {
 	var err error
 	_ = err
 	var v int64
@@ -110,8 +105,7 @@ func (AliasInt) DecodeFrom(data []byte, i int) (AliasInt, int, error) {
 	return result, i, nil
 }
 
-func (AliasInt) DecodeStreamFrom(s *scan.Stream, i int) (AliasInt, int, error) {
-	var result AliasInt
+func (result AliasInt) DecodeStreamFrom(s *scan.Stream, i int) (AliasInt, int, error) {
 	var err error
 	_ = err
 	var v int64
@@ -131,8 +125,7 @@ func (s AliasInt) AppendJSON(dst []byte) ([]byte, error) {
 	return strconv.AppendInt(dst, int64(s), 10), nil
 }
 
-func (AliasUint64) DecodeFrom(data []byte, i int) (AliasUint64, int, error) {
-	var result AliasUint64
+func (result AliasUint64) DecodeFrom(data []byte, i int) (AliasUint64, int, error) {
 	var err error
 	_ = err
 	var v uint64
@@ -144,8 +137,7 @@ func (AliasUint64) DecodeFrom(data []byte, i int) (AliasUint64, int, error) {
 	return result, i, nil
 }
 
-func (AliasUint64) DecodeStreamFrom(s *scan.Stream, i int) (AliasUint64, int, error) {
-	var result AliasUint64
+func (result AliasUint64) DecodeStreamFrom(s *scan.Stream, i int) (AliasUint64, int, error) {
 	var err error
 	_ = err
 	var v uint64
@@ -165,8 +157,7 @@ func (s AliasUint64) AppendJSON(dst []byte) ([]byte, error) {
 	return strconv.AppendUint(dst, uint64(s), 10), nil
 }
 
-func (AliasFloat64) DecodeFrom(data []byte, i int) (AliasFloat64, int, error) {
-	var result AliasFloat64
+func (result AliasFloat64) DecodeFrom(data []byte, i int) (AliasFloat64, int, error) {
 	var err error
 	_ = err
 	var v float64
@@ -178,8 +169,7 @@ func (AliasFloat64) DecodeFrom(data []byte, i int) (AliasFloat64, int, error) {
 	return result, i, nil
 }
 
-func (AliasFloat64) DecodeStreamFrom(s *scan.Stream, i int) (AliasFloat64, int, error) {
-	var result AliasFloat64
+func (result AliasFloat64) DecodeStreamFrom(s *scan.Stream, i int) (AliasFloat64, int, error) {
 	var err error
 	_ = err
 	var v float64
@@ -199,8 +189,7 @@ func (s AliasFloat64) AppendJSON(dst []byte) ([]byte, error) {
 	return strconv.AppendFloat(dst, float64(s), 'g', -1, 64), nil
 }
 
-func (AliasBool) DecodeFrom(data []byte, i int) (AliasBool, int, error) {
-	var result AliasBool
+func (result AliasBool) DecodeFrom(data []byte, i int) (AliasBool, int, error) {
 	var err error
 	_ = err
 	var v bool
@@ -212,8 +201,7 @@ func (AliasBool) DecodeFrom(data []byte, i int) (AliasBool, int, error) {
 	return result, i, nil
 }
 
-func (AliasBool) DecodeStreamFrom(s *scan.Stream, i int) (AliasBool, int, error) {
-	var result AliasBool
+func (result AliasBool) DecodeStreamFrom(s *scan.Stream, i int) (AliasBool, int, error) {
 	var err error
 	_ = err
 	var v bool
@@ -233,8 +221,7 @@ func (s AliasBool) AppendJSON(dst []byte) ([]byte, error) {
 	return strconv.AppendBool(dst, bool(s)), nil
 }
 
-func (PlainAlias) DecodeFrom(data []byte, i int) (PlainAlias, int, error) {
-	var result PlainAlias
+func (result PlainAlias) DecodeFrom(data []byte, i int) (PlainAlias, int, error) {
 	var err error
 	_ = err
 	seenCount := false
@@ -370,8 +357,7 @@ func (PlainAlias) DecodeFrom(data []byte, i int) (PlainAlias, int, error) {
 	}
 }
 
-func (PlainAlias) DecodeStreamFrom(s *scan.Stream, i int) (PlainAlias, int, error) {
-	var result PlainAlias
+func (result PlainAlias) DecodeStreamFrom(s *scan.Stream, i int) (PlainAlias, int, error) {
 	seenCount := false
 	seenTitle := false
 	i, err := s.ObjectOpen(i)
@@ -475,8 +461,7 @@ func (s PlainAlias) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (SamePkgAlias) DecodeFrom(data []byte, i int) (SamePkgAlias, int, error) {
-	var result SamePkgAlias
+func (result SamePkgAlias) DecodeFrom(data []byte, i int) (SamePkgAlias, int, error) {
 	var err error
 	_ = err
 	seenX := false
@@ -612,8 +597,7 @@ func (SamePkgAlias) DecodeFrom(data []byte, i int) (SamePkgAlias, int, error) {
 	}
 }
 
-func (SamePkgAlias) DecodeStreamFrom(s *scan.Stream, i int) (SamePkgAlias, int, error) {
-	var result SamePkgAlias
+func (result SamePkgAlias) DecodeStreamFrom(s *scan.Stream, i int) (SamePkgAlias, int, error) {
 	seenX := false
 	seenY := false
 	i, err := s.ObjectOpen(i)
@@ -717,8 +701,7 @@ func (s SamePkgAlias) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (CrossPkgTaggedAlias) DecodeFrom(data []byte, i int) (CrossPkgTaggedAlias, int, error) {
-	var result CrossPkgTaggedAlias
+func (result CrossPkgTaggedAlias) DecodeFrom(data []byte, i int) (CrossPkgTaggedAlias, int, error) {
 	var err error
 	_ = err
 	seenName := false
@@ -853,8 +836,7 @@ func (CrossPkgTaggedAlias) DecodeFrom(data []byte, i int) (CrossPkgTaggedAlias, 
 	}
 }
 
-func (CrossPkgTaggedAlias) DecodeStreamFrom(s *scan.Stream, i int) (CrossPkgTaggedAlias, int, error) {
-	var result CrossPkgTaggedAlias
+func (result CrossPkgTaggedAlias) DecodeStreamFrom(s *scan.Stream, i int) (CrossPkgTaggedAlias, int, error) {
 	seenName := false
 	seenTag := false
 	i, err := s.ObjectOpen(i)
@@ -960,8 +942,7 @@ func (s CrossPkgTaggedAlias) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (OpaqueAlias) DecodeFrom(data []byte, i int) (OpaqueAlias, int, error) {
-	var result OpaqueAlias
+func (result OpaqueAlias) DecodeFrom(data []byte, i int) (OpaqueAlias, int, error) {
 	start := i
 	k, err := scan.SkipValue(data, start)
 	if err != nil {
@@ -975,8 +956,7 @@ func (OpaqueAlias) DecodeFrom(data []byte, i int) (OpaqueAlias, int, error) {
 	return result, k, nil
 }
 
-func (OpaqueAlias) DecodeStreamFrom(s *scan.Stream, i int) (OpaqueAlias, int, error) {
-	var result OpaqueAlias
+func (result OpaqueAlias) DecodeStreamFrom(s *scan.Stream, i int) (OpaqueAlias, int, error) {
 	start := i
 	prevPin := s.Shift
 	s.Shift = false
@@ -1001,16 +981,19 @@ func (s OpaqueAlias) AppendJSON(dst []byte) ([]byte, error) {
 	return OpaqueWithMethods(s).MarshalJSON()
 }
 
-func (AliasTags) DecodeFrom(data []byte, i int) (AliasTags, int, error) {
-	var result AliasTags
+func (result AliasTags) DecodeFrom(data []byte, i int) (AliasTags, int, error) {
 	var err error
 	_ = err
+	if result != nil {
+		result = result[:0]
+	}
 	{
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 			i += 4
+			result = nil
 		} else {
 			if i >= len(data) || data[i] != '[' {
 				return result, i, scan.ErrBadArray
@@ -1020,9 +1003,13 @@ func (AliasTags) DecodeFrom(data []byte, i int) (AliasTags, int, error) {
 				i++
 			}
 			if i < len(data) && data[i] == ']' {
-				result = AliasTags{}
+				if result == nil {
+					result = AliasTags{}
+				}
 			} else {
-				result = AliasTags{}
+				if result == nil {
+					result = AliasTags{}
+				}
 			}
 			for i < len(data) && data[i] != ']' {
 				result = append(result, "")
@@ -1068,10 +1055,12 @@ func (AliasTags) DecodeFrom(data []byte, i int) (AliasTags, int, error) {
 	return result, i, nil
 }
 
-func (AliasTags) DecodeStreamFrom(s *scan.Stream, i int) (AliasTags, int, error) {
-	var result AliasTags
+func (result AliasTags) DecodeStreamFrom(s *scan.Stream, i int) (AliasTags, int, error) {
 	var err error
 	_ = err
+	if result != nil {
+		result = result[:0]
+	}
 	{
 		i, err = s.SkipSpace(i)
 		if err != nil {
@@ -1094,6 +1083,7 @@ func (AliasTags) DecodeStreamFrom(s *scan.Stream, i int) (AliasTags, int, error)
 				}
 			}
 			i += 4
+			result = nil
 		} else {
 			i, err = s.ArrayOpen(i)
 			if err != nil {
@@ -1109,9 +1099,13 @@ func (AliasTags) DecodeStreamFrom(s *scan.Stream, i int) (AliasTags, int, error)
 				}
 			}
 			if s.Bytes()[i] == ']' {
-				result = AliasTags{}
+				if result == nil {
+					result = AliasTags{}
+				}
 			} else {
-				result = AliasTags{}
+				if result == nil {
+					result = AliasTags{}
+				}
 			}
 			for s.Bytes()[i] != ']' {
 				result = append(result, "")
@@ -1169,16 +1163,19 @@ func (s AliasTags) AppendJSON(dst []byte) ([]byte, error) {
 	return dst, nil
 }
 
-func (AliasLookup) DecodeFrom(data []byte, i int) (AliasLookup, int, error) {
-	var result AliasLookup
+func (result AliasLookup) DecodeFrom(data []byte, i int) (AliasLookup, int, error) {
 	var err error
 	_ = err
+	if result != nil {
+		clear(result)
+	}
 	{
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 			i += 4
+			result = nil
 		} else {
 			if i >= len(data) || data[i] != '{' {
 				return result, i, scan.ErrBadObject
@@ -1188,9 +1185,13 @@ func (AliasLookup) DecodeFrom(data []byte, i int) (AliasLookup, int, error) {
 				i++
 			}
 			if i < len(data) && data[i] == '}' {
-				result = AliasLookup{}
+				if result == nil {
+					result = AliasLookup{}
+				}
 			} else {
-				result = make(AliasLookup)
+				if result == nil {
+					result = make(AliasLookup)
+				}
 			}
 			for i < len(data) && data[i] != '}' {
 				var mk string
@@ -1273,10 +1274,12 @@ func (AliasLookup) DecodeFrom(data []byte, i int) (AliasLookup, int, error) {
 	return result, i, nil
 }
 
-func (AliasLookup) DecodeStreamFrom(s *scan.Stream, i int) (AliasLookup, int, error) {
-	var result AliasLookup
+func (result AliasLookup) DecodeStreamFrom(s *scan.Stream, i int) (AliasLookup, int, error) {
 	var err error
 	_ = err
+	if result != nil {
+		clear(result)
+	}
 	{
 		i, err = s.SkipSpace(i)
 		if err != nil {
@@ -1299,6 +1302,7 @@ func (AliasLookup) DecodeStreamFrom(s *scan.Stream, i int) (AliasLookup, int, er
 				}
 			}
 			i += 4
+			result = nil
 		} else {
 			i, err = s.ObjectOpen(i)
 			if err != nil {
@@ -1314,9 +1318,13 @@ func (AliasLookup) DecodeStreamFrom(s *scan.Stream, i int) (AliasLookup, int, er
 				}
 			}
 			if s.Bytes()[i] == '}' {
-				result = AliasLookup{}
+				if result == nil {
+					result = AliasLookup{}
+				}
 			} else {
-				result = make(AliasLookup)
+				if result == nil {
+					result = make(AliasLookup)
+				}
 			}
 			for s.Bytes()[i] != '}' {
 				var mk string
@@ -1401,8 +1409,7 @@ func (s AliasLookup) AppendJSON(dst []byte) ([]byte, error) {
 	return dst, nil
 }
 
-func (AliasTuple) DecodeFrom(data []byte, i int) (AliasTuple, int, error) {
-	var result AliasTuple
+func (result AliasTuple) DecodeFrom(data []byte, i int) (AliasTuple, int, error) {
 	var err error
 	_ = err
 	{
@@ -1470,8 +1477,7 @@ func (AliasTuple) DecodeFrom(data []byte, i int) (AliasTuple, int, error) {
 	return result, i, nil
 }
 
-func (AliasTuple) DecodeStreamFrom(s *scan.Stream, i int) (AliasTuple, int, error) {
-	var result AliasTuple
+func (result AliasTuple) DecodeStreamFrom(s *scan.Stream, i int) (AliasTuple, int, error) {
 	var err error
 	_ = err
 	{
@@ -1546,8 +1552,7 @@ func (s AliasTuple) AppendJSON(dst []byte) ([]byte, error) {
 	return dst, nil
 }
 
-func (AliasFieldExample) DecodeFrom(data []byte, i int) (AliasFieldExample, int, error) {
-	var result AliasFieldExample
+func (result AliasFieldExample) DecodeFrom(data []byte, i int) (AliasFieldExample, int, error) {
 	var err error
 	_ = err
 	seenBody := false
@@ -1674,8 +1679,7 @@ func (AliasFieldExample) DecodeFrom(data []byte, i int) (AliasFieldExample, int,
 	}
 }
 
-func (AliasFieldExample) DecodeStreamFrom(s *scan.Stream, i int) (AliasFieldExample, int, error) {
-	var result AliasFieldExample
+func (result AliasFieldExample) DecodeStreamFrom(s *scan.Stream, i int) (AliasFieldExample, int, error) {
 	seenBody := false
 	seenCount := false
 	i, err := s.ObjectOpen(i)
@@ -1811,8 +1815,7 @@ func (s AliasFieldExample) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (AnyStruct) DecodeFrom(data []byte, i int) (AnyStruct, int, error) {
-	var result AnyStruct
+func (result AnyStruct) DecodeFrom(data []byte, i int) (AnyStruct, int, error) {
 	var err error
 	_ = err
 	seenBody := false
@@ -1929,8 +1932,7 @@ func (AnyStruct) DecodeFrom(data []byte, i int) (AnyStruct, int, error) {
 	}
 }
 
-func (AnyStruct) DecodeStreamFrom(s *scan.Stream, i int) (AnyStruct, int, error) {
-	var result AnyStruct
+func (result AnyStruct) DecodeStreamFrom(s *scan.Stream, i int) (AnyStruct, int, error) {
 	seenBody := false
 	seenName := false
 	i, err := s.ObjectOpen(i)
@@ -2036,8 +2038,7 @@ func (s AnyStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (AnyNumberStruct) DecodeFrom(data []byte, i int) (AnyNumberStruct, int, error) {
-	var result AnyNumberStruct
+func (result AnyNumberStruct) DecodeFrom(data []byte, i int) (AnyNumberStruct, int, error) {
 	var err error
 	_ = err
 	seenBody := false
@@ -2154,8 +2155,7 @@ func (AnyNumberStruct) DecodeFrom(data []byte, i int) (AnyNumberStruct, int, err
 	}
 }
 
-func (AnyNumberStruct) DecodeStreamFrom(s *scan.Stream, i int) (AnyNumberStruct, int, error) {
-	var result AnyNumberStruct
+func (result AnyNumberStruct) DecodeStreamFrom(s *scan.Stream, i int) (AnyNumberStruct, int, error) {
 	seenBody := false
 	seenName := false
 	i, err := s.ObjectOpen(i)
@@ -2261,8 +2261,7 @@ func (s AnyNumberStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (MultiErrStruct) DecodeFrom(data []byte, i int) (MultiErrStruct, int, error) {
-	var result MultiErrStruct
+func (result MultiErrStruct) DecodeFrom(data []byte, i int) (MultiErrStruct, int, error) {
 	var err error
 	_ = err
 	var errs validation.Errors
@@ -2486,8 +2485,7 @@ func (MultiErrStruct) DecodeFrom(data []byte, i int) (MultiErrStruct, int, error
 	}
 }
 
-func (MultiErrStruct) DecodeStreamFrom(s *scan.Stream, i int) (MultiErrStruct, int, error) {
-	var result MultiErrStruct
+func (result MultiErrStruct) DecodeStreamFrom(s *scan.Stream, i int) (MultiErrStruct, int, error) {
 	var errs validation.Errors
 	seenAge := false
 	seenName := false
@@ -2684,8 +2682,7 @@ func (s MultiErrStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (AllowDupsStruct) DecodeFrom(data []byte, i int) (AllowDupsStruct, int, error) {
-	var result AllowDupsStruct
+func (result AllowDupsStruct) DecodeFrom(data []byte, i int) (AllowDupsStruct, int, error) {
 	var err error
 	_ = err
 	seenN := false
@@ -2832,8 +2829,7 @@ func (AllowDupsStruct) DecodeFrom(data []byte, i int) (AllowDupsStruct, int, err
 	}
 }
 
-func (AllowDupsStruct) DecodeStreamFrom(s *scan.Stream, i int) (AllowDupsStruct, int, error) {
-	var result AllowDupsStruct
+func (result AllowDupsStruct) DecodeStreamFrom(s *scan.Stream, i int) (AllowDupsStruct, int, error) {
 	seenN := false
 	seenName := false
 	i, err := s.ObjectOpen(i)
@@ -2950,8 +2946,13 @@ func (s AllowDupsStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (DiveStruct) DecodeFrom(data []byte, i int) (DiveStruct, int, error) {
-	var result DiveStruct
+func (result DiveStruct) DecodeFrom(data []byte, i int) (DiveStruct, int, error) {
+	if result.Scores != nil {
+		result.Scores = result.Scores[:0]
+	}
+	if result.Tags != nil {
+		result.Tags = result.Tags[:0]
+	}
 	var err error
 	_ = err
 	seenCount := false
@@ -3017,6 +3018,7 @@ func (DiveStruct) DecodeFrom(data []byte, i int) (DiveStruct, int, error) {
 					}
 					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 						i += 4
+						result.Tags = nil
 					} else {
 						if i >= len(data) || data[i] != '[' {
 							return result, i, scan.ErrBadArray
@@ -3026,9 +3028,13 @@ func (DiveStruct) DecodeFrom(data []byte, i int) (DiveStruct, int, error) {
 							i++
 						}
 						if i < len(data) && data[i] == ']' {
-							result.Tags = []string{}
+							if result.Tags == nil {
+								result.Tags = []string{}
+							}
 						} else {
-							result.Tags = make([]string, 0, 1)
+							if result.Tags == nil {
+								result.Tags = make([]string, 0, 1)
+							}
 						}
 						for i < len(data) && data[i] != ']' {
 							result.Tags = append(result.Tags, "")
@@ -3168,6 +3174,7 @@ func (DiveStruct) DecodeFrom(data []byte, i int) (DiveStruct, int, error) {
 					}
 					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 						i += 4
+						result.Scores = nil
 					} else {
 						if i >= len(data) || data[i] != '[' {
 							return result, i, scan.ErrBadArray
@@ -3177,9 +3184,13 @@ func (DiveStruct) DecodeFrom(data []byte, i int) (DiveStruct, int, error) {
 							i++
 						}
 						if i < len(data) && data[i] == ']' {
-							result.Scores = []int{}
+							if result.Scores == nil {
+								result.Scores = []int{}
+							}
 						} else {
-							result.Scores = make([]int, 0, 4)
+							if result.Scores == nil {
+								result.Scores = make([]int, 0, 4)
+							}
 						}
 						for i < len(data) && data[i] != ']' {
 							result.Scores = append(result.Scores, 0)
@@ -3258,8 +3269,13 @@ func (DiveStruct) DecodeFrom(data []byte, i int) (DiveStruct, int, error) {
 	}
 }
 
-func (DiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (DiveStruct, int, error) {
-	var result DiveStruct
+func (result DiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (DiveStruct, int, error) {
+	if result.Scores != nil {
+		result.Scores = result.Scores[:0]
+	}
+	if result.Tags != nil {
+		result.Tags = result.Tags[:0]
+	}
 	seenCount := false
 	seenScores := false
 	seenTags := false
@@ -3320,6 +3336,7 @@ func (DiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (DiveStruct, int, erro
 							}
 						}
 						i += 4
+						result.Tags = nil
 					} else {
 						i, err = s.ArrayOpen(i)
 						if err != nil {
@@ -3335,9 +3352,13 @@ func (DiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (DiveStruct, int, erro
 							}
 						}
 						if s.Bytes()[i] == ']' {
-							result.Tags = []string{}
+							if result.Tags == nil {
+								result.Tags = []string{}
+							}
 						} else {
-							result.Tags = make([]string, 0, 1)
+							if result.Tags == nil {
+								result.Tags = make([]string, 0, 1)
+							}
 						}
 						for s.Bytes()[i] != ']' {
 							result.Tags = append(result.Tags, "")
@@ -3458,6 +3479,7 @@ func (DiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (DiveStruct, int, erro
 							}
 						}
 						i += 4
+						result.Scores = nil
 					} else {
 						i, err = s.ArrayOpen(i)
 						if err != nil {
@@ -3473,9 +3495,13 @@ func (DiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (DiveStruct, int, erro
 							}
 						}
 						if s.Bytes()[i] == ']' {
-							result.Scores = []int{}
+							if result.Scores == nil {
+								result.Scores = []int{}
+							}
 						} else {
-							result.Scores = make([]int, 0, 4)
+							if result.Scores == nil {
+								result.Scores = make([]int, 0, 4)
+							}
 						}
 						for s.Bytes()[i] != ']' {
 							result.Scores = append(result.Scores, 0)
@@ -3601,8 +3627,19 @@ func (s DiveStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (CustomDiveStruct) DecodeFrom(data []byte, i int) (CustomDiveStruct, int, error) {
-	var result CustomDiveStruct
+func (result CustomDiveStruct) DecodeFrom(data []byte, i int) (CustomDiveStruct, int, error) {
+	if result.Lookup != nil {
+		clear(result.Lookup)
+	}
+	if result.Mixed != nil {
+		clear(result.Mixed)
+	}
+	if result.Tags != nil {
+		result.Tags = result.Tags[:0]
+	}
+	if result.Trim != nil {
+		result.Trim = result.Trim[:0]
+	}
 	var err error
 	_ = err
 	seenLookup := false
@@ -3714,6 +3751,7 @@ func (CustomDiveStruct) DecodeFrom(data []byte, i int) (CustomDiveStruct, int, e
 					}
 					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 						i += 4
+						result.Tags = nil
 					} else {
 						if i >= len(data) || data[i] != '[' {
 							return result, i, scan.ErrBadArray
@@ -3723,9 +3761,13 @@ func (CustomDiveStruct) DecodeFrom(data []byte, i int) (CustomDiveStruct, int, e
 							i++
 						}
 						if i < len(data) && data[i] == ']' {
-							result.Tags = []string{}
+							if result.Tags == nil {
+								result.Tags = []string{}
+							}
 						} else {
-							result.Tags = make([]string, 0, 4)
+							if result.Tags == nil {
+								result.Tags = make([]string, 0, 4)
+							}
 						}
 						for i < len(data) && data[i] != ']' {
 							result.Tags = append(result.Tags, "")
@@ -3782,6 +3824,7 @@ func (CustomDiveStruct) DecodeFrom(data []byte, i int) (CustomDiveStruct, int, e
 					}
 					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 						i += 4
+						result.Trim = nil
 					} else {
 						if i >= len(data) || data[i] != '[' {
 							return result, i, scan.ErrBadArray
@@ -3791,9 +3834,13 @@ func (CustomDiveStruct) DecodeFrom(data []byte, i int) (CustomDiveStruct, int, e
 							i++
 						}
 						if i < len(data) && data[i] == ']' {
-							result.Trim = []string{}
+							if result.Trim == nil {
+								result.Trim = []string{}
+							}
 						} else {
-							result.Trim = make([]string, 0, 4)
+							if result.Trim == nil {
+								result.Trim = make([]string, 0, 4)
+							}
 						}
 						for i < len(data) && data[i] != ']' {
 							result.Trim = append(result.Trim, "")
@@ -3852,6 +3899,7 @@ func (CustomDiveStruct) DecodeFrom(data []byte, i int) (CustomDiveStruct, int, e
 					}
 					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 						i += 4
+						result.Mixed = nil
 					} else {
 						if i >= len(data) || data[i] != '{' {
 							return result, i, scan.ErrBadObject
@@ -3861,9 +3909,13 @@ func (CustomDiveStruct) DecodeFrom(data []byte, i int) (CustomDiveStruct, int, e
 							i++
 						}
 						if i < len(data) && data[i] == '}' {
-							result.Mixed = map[string]int{}
+							if result.Mixed == nil {
+								result.Mixed = map[string]int{}
+							}
 						} else {
-							result.Mixed = make(map[string]int)
+							if result.Mixed == nil {
+								result.Mixed = make(map[string]int)
+							}
 						}
 						for i < len(data) && data[i] != '}' {
 							var mk string
@@ -3959,6 +4011,7 @@ func (CustomDiveStruct) DecodeFrom(data []byte, i int) (CustomDiveStruct, int, e
 					}
 					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 						i += 4
+						result.Lookup = nil
 					} else {
 						if i >= len(data) || data[i] != '{' {
 							return result, i, scan.ErrBadObject
@@ -3968,9 +4021,13 @@ func (CustomDiveStruct) DecodeFrom(data []byte, i int) (CustomDiveStruct, int, e
 							i++
 						}
 						if i < len(data) && data[i] == '}' {
-							result.Lookup = map[string]int{}
+							if result.Lookup == nil {
+								result.Lookup = map[string]int{}
+							}
 						} else {
-							result.Lookup = make(map[string]int)
+							if result.Lookup == nil {
+								result.Lookup = make(map[string]int)
+							}
 						}
 						for i < len(data) && data[i] != '}' {
 							var mk string
@@ -4079,8 +4136,19 @@ func (CustomDiveStruct) DecodeFrom(data []byte, i int) (CustomDiveStruct, int, e
 	}
 }
 
-func (CustomDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (CustomDiveStruct, int, error) {
-	var result CustomDiveStruct
+func (result CustomDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (CustomDiveStruct, int, error) {
+	if result.Lookup != nil {
+		clear(result.Lookup)
+	}
+	if result.Mixed != nil {
+		clear(result.Mixed)
+	}
+	if result.Tags != nil {
+		result.Tags = result.Tags[:0]
+	}
+	if result.Trim != nil {
+		result.Trim = result.Trim[:0]
+	}
 	seenLookup := false
 	seenMixed := false
 	seenPtr := false
@@ -4188,6 +4256,7 @@ func (CustomDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (CustomDiveStruc
 							}
 						}
 						i += 4
+						result.Tags = nil
 					} else {
 						i, err = s.ArrayOpen(i)
 						if err != nil {
@@ -4203,9 +4272,13 @@ func (CustomDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (CustomDiveStruc
 							}
 						}
 						if s.Bytes()[i] == ']' {
-							result.Tags = []string{}
+							if result.Tags == nil {
+								result.Tags = []string{}
+							}
 						} else {
-							result.Tags = make([]string, 0, 4)
+							if result.Tags == nil {
+								result.Tags = make([]string, 0, 4)
+							}
 						}
 						for s.Bytes()[i] != ']' {
 							result.Tags = append(result.Tags, "")
@@ -4271,6 +4344,7 @@ func (CustomDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (CustomDiveStruc
 							}
 						}
 						i += 4
+						result.Trim = nil
 					} else {
 						i, err = s.ArrayOpen(i)
 						if err != nil {
@@ -4286,9 +4360,13 @@ func (CustomDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (CustomDiveStruc
 							}
 						}
 						if s.Bytes()[i] == ']' {
-							result.Trim = []string{}
+							if result.Trim == nil {
+								result.Trim = []string{}
+							}
 						} else {
-							result.Trim = make([]string, 0, 4)
+							if result.Trim == nil {
+								result.Trim = make([]string, 0, 4)
+							}
 						}
 						for s.Bytes()[i] != ']' {
 							result.Trim = append(result.Trim, "")
@@ -4356,6 +4434,7 @@ func (CustomDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (CustomDiveStruc
 							}
 						}
 						i += 4
+						result.Mixed = nil
 					} else {
 						i, err = s.ObjectOpen(i)
 						if err != nil {
@@ -4371,9 +4450,13 @@ func (CustomDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (CustomDiveStruc
 							}
 						}
 						if s.Bytes()[i] == '}' {
-							result.Mixed = map[string]int{}
+							if result.Mixed == nil {
+								result.Mixed = map[string]int{}
+							}
 						} else {
-							result.Mixed = make(map[string]int)
+							if result.Mixed == nil {
+								result.Mixed = make(map[string]int)
+							}
 						}
 						for s.Bytes()[i] != '}' {
 							var mk string
@@ -4463,6 +4546,7 @@ func (CustomDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (CustomDiveStruc
 							}
 						}
 						i += 4
+						result.Lookup = nil
 					} else {
 						i, err = s.ObjectOpen(i)
 						if err != nil {
@@ -4478,9 +4562,13 @@ func (CustomDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (CustomDiveStruc
 							}
 						}
 						if s.Bytes()[i] == '}' {
-							result.Lookup = map[string]int{}
+							if result.Lookup == nil {
+								result.Lookup = map[string]int{}
+							}
 						} else {
-							result.Lookup = make(map[string]int)
+							if result.Lookup == nil {
+								result.Lookup = make(map[string]int)
+							}
 						}
 						for s.Bytes()[i] != '}' {
 							var mk string
@@ -4682,8 +4770,19 @@ func (s CustomDiveStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (ExtraStruct) DecodeFrom(data []byte, i int) (ExtraStruct, int, error) {
-	var result ExtraStruct
+func (result ExtraStruct) DecodeFrom(data []byte, i int) (ExtraStruct, int, error) {
+	if result.HintedTags != nil {
+		result.HintedTags = result.HintedTags[:0]
+	}
+	if result.KeyedMap != nil {
+		clear(result.KeyedMap)
+	}
+	if result.NestedInts != nil {
+		result.NestedInts = result.NestedInts[:0]
+	}
+	if result.Triple != nil {
+		result.Triple = result.Triple[:0]
+	}
 	var err error
 	_ = err
 	seenClampedScore := false
@@ -4750,6 +4849,7 @@ func (ExtraStruct) DecodeFrom(data []byte, i int) (ExtraStruct, int, error) {
 					}
 					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 						i += 4
+						result.Triple = nil
 					} else {
 						if i >= len(data) || data[i] != '[' {
 							return result, i, scan.ErrBadArray
@@ -4759,9 +4859,13 @@ func (ExtraStruct) DecodeFrom(data []byte, i int) (ExtraStruct, int, error) {
 							i++
 						}
 						if i < len(data) && data[i] == ']' {
-							result.Triple = [][][]string{}
+							if result.Triple == nil {
+								result.Triple = [][][]string{}
+							}
 						} else {
-							result.Triple = make([][][]string, 0, 4)
+							if result.Triple == nil {
+								result.Triple = make([][][]string, 0, 4)
+							}
 						}
 						for i < len(data) && data[i] != ']' {
 							result.Triple = append(result.Triple, nil)
@@ -4771,6 +4875,7 @@ func (ExtraStruct) DecodeFrom(data []byte, i int) (ExtraStruct, int, error) {
 								}
 								if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 									i += 4
+									result.Triple[len(result.Triple)-1] = nil
 								} else {
 									if i >= len(data) || data[i] != '[' {
 										return result, i, scan.ErrBadArray
@@ -4780,9 +4885,13 @@ func (ExtraStruct) DecodeFrom(data []byte, i int) (ExtraStruct, int, error) {
 										i++
 									}
 									if i < len(data) && data[i] == ']' {
-										result.Triple[len(result.Triple)-1] = [][]string{}
+										if result.Triple[len(result.Triple)-1] == nil {
+											result.Triple[len(result.Triple)-1] = [][]string{}
+										}
 									} else {
-										result.Triple[len(result.Triple)-1] = make([][]string, 0, 4)
+										if result.Triple[len(result.Triple)-1] == nil {
+											result.Triple[len(result.Triple)-1] = make([][]string, 0, 4)
+										}
 									}
 									for i < len(data) && data[i] != ']' {
 										result.Triple[len(result.Triple)-1] = append(result.Triple[len(result.Triple)-1], nil)
@@ -4792,6 +4901,7 @@ func (ExtraStruct) DecodeFrom(data []byte, i int) (ExtraStruct, int, error) {
 											}
 											if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 												i += 4
+												result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1] = nil
 											} else {
 												if i >= len(data) || data[i] != '[' {
 													return result, i, scan.ErrBadArray
@@ -4801,9 +4911,13 @@ func (ExtraStruct) DecodeFrom(data []byte, i int) (ExtraStruct, int, error) {
 													i++
 												}
 												if i < len(data) && data[i] == ']' {
-													result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1] = []string{}
+													if result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1] == nil {
+														result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1] = []string{}
+													}
 												} else {
-													result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1] = make([]string, 0, 4)
+													if result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1] == nil {
+														result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1] = make([]string, 0, 4)
+													}
 												}
 												for i < len(data) && data[i] != ']' {
 													result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1] = append(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1], "")
@@ -4906,6 +5020,7 @@ func (ExtraStruct) DecodeFrom(data []byte, i int) (ExtraStruct, int, error) {
 					}
 					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 						i += 4
+						result.KeyedMap = nil
 					} else {
 						if i >= len(data) || data[i] != '{' {
 							return result, i, scan.ErrBadObject
@@ -4915,9 +5030,13 @@ func (ExtraStruct) DecodeFrom(data []byte, i int) (ExtraStruct, int, error) {
 							i++
 						}
 						if i < len(data) && data[i] == '}' {
-							result.KeyedMap = map[string]int{}
+							if result.KeyedMap == nil {
+								result.KeyedMap = map[string]int{}
+							}
 						} else {
-							result.KeyedMap = make(map[string]int)
+							if result.KeyedMap == nil {
+								result.KeyedMap = make(map[string]int)
+							}
 						}
 						for i < len(data) && data[i] != '}' {
 							var mk string
@@ -5021,6 +5140,7 @@ func (ExtraStruct) DecodeFrom(data []byte, i int) (ExtraStruct, int, error) {
 					}
 					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 						i += 4
+						result.HintedTags = nil
 					} else {
 						if i >= len(data) || data[i] != '[' {
 							return result, i, scan.ErrBadArray
@@ -5030,9 +5150,13 @@ func (ExtraStruct) DecodeFrom(data []byte, i int) (ExtraStruct, int, error) {
 							i++
 						}
 						if i < len(data) && data[i] == ']' {
-							result.HintedTags = []string{}
+							if result.HintedTags == nil {
+								result.HintedTags = []string{}
+							}
 						} else {
-							result.HintedTags = make([]string, 0, 4)
+							if result.HintedTags == nil {
+								result.HintedTags = make([]string, 0, 4)
+							}
 						}
 						for i < len(data) && data[i] != ']' {
 							result.HintedTags = append(result.HintedTags, "")
@@ -5089,6 +5213,7 @@ func (ExtraStruct) DecodeFrom(data []byte, i int) (ExtraStruct, int, error) {
 					}
 					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 						i += 4
+						result.NestedInts = nil
 					} else {
 						if i >= len(data) || data[i] != '[' {
 							return result, i, scan.ErrBadArray
@@ -5098,9 +5223,13 @@ func (ExtraStruct) DecodeFrom(data []byte, i int) (ExtraStruct, int, error) {
 							i++
 						}
 						if i < len(data) && data[i] == ']' {
-							result.NestedInts = [][]int{}
+							if result.NestedInts == nil {
+								result.NestedInts = [][]int{}
+							}
 						} else {
-							result.NestedInts = make([][]int, 0, 4)
+							if result.NestedInts == nil {
+								result.NestedInts = make([][]int, 0, 4)
+							}
 						}
 						for i < len(data) && data[i] != ']' {
 							result.NestedInts = append(result.NestedInts, nil)
@@ -5110,6 +5239,7 @@ func (ExtraStruct) DecodeFrom(data []byte, i int) (ExtraStruct, int, error) {
 								}
 								if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 									i += 4
+									result.NestedInts[len(result.NestedInts)-1] = nil
 								} else {
 									if i >= len(data) || data[i] != '[' {
 										return result, i, scan.ErrBadArray
@@ -5119,9 +5249,13 @@ func (ExtraStruct) DecodeFrom(data []byte, i int) (ExtraStruct, int, error) {
 										i++
 									}
 									if i < len(data) && data[i] == ']' {
-										result.NestedInts[len(result.NestedInts)-1] = []int{}
+										if result.NestedInts[len(result.NestedInts)-1] == nil {
+											result.NestedInts[len(result.NestedInts)-1] = []int{}
+										}
 									} else {
-										result.NestedInts[len(result.NestedInts)-1] = make([]int, 0, 4)
+										if result.NestedInts[len(result.NestedInts)-1] == nil {
+											result.NestedInts[len(result.NestedInts)-1] = make([]int, 0, 4)
+										}
 									}
 									for i < len(data) && data[i] != ']' {
 										result.NestedInts[len(result.NestedInts)-1] = append(result.NestedInts[len(result.NestedInts)-1], 0)
@@ -5261,8 +5395,19 @@ func (ExtraStruct) DecodeFrom(data []byte, i int) (ExtraStruct, int, error) {
 	}
 }
 
-func (ExtraStruct) DecodeStreamFrom(s *scan.Stream, i int) (ExtraStruct, int, error) {
-	var result ExtraStruct
+func (result ExtraStruct) DecodeStreamFrom(s *scan.Stream, i int) (ExtraStruct, int, error) {
+	if result.HintedTags != nil {
+		result.HintedTags = result.HintedTags[:0]
+	}
+	if result.KeyedMap != nil {
+		clear(result.KeyedMap)
+	}
+	if result.NestedInts != nil {
+		result.NestedInts = result.NestedInts[:0]
+	}
+	if result.Triple != nil {
+		result.Triple = result.Triple[:0]
+	}
 	seenClampedScore := false
 	seenHintedTags := false
 	seenKeyedMap := false
@@ -5324,6 +5469,7 @@ func (ExtraStruct) DecodeStreamFrom(s *scan.Stream, i int) (ExtraStruct, int, er
 							}
 						}
 						i += 4
+						result.Triple = nil
 					} else {
 						i, err = s.ArrayOpen(i)
 						if err != nil {
@@ -5339,9 +5485,13 @@ func (ExtraStruct) DecodeStreamFrom(s *scan.Stream, i int) (ExtraStruct, int, er
 							}
 						}
 						if s.Bytes()[i] == ']' {
-							result.Triple = [][][]string{}
+							if result.Triple == nil {
+								result.Triple = [][][]string{}
+							}
 						} else {
-							result.Triple = make([][][]string, 0, 4)
+							if result.Triple == nil {
+								result.Triple = make([][][]string, 0, 4)
+							}
 						}
 						for s.Bytes()[i] != ']' {
 							result.Triple = append(result.Triple, nil)
@@ -5367,6 +5517,7 @@ func (ExtraStruct) DecodeStreamFrom(s *scan.Stream, i int) (ExtraStruct, int, er
 										}
 									}
 									i += 4
+									result.Triple[len(result.Triple)-1] = nil
 								} else {
 									i, err = s.ArrayOpen(i)
 									if err != nil {
@@ -5382,9 +5533,13 @@ func (ExtraStruct) DecodeStreamFrom(s *scan.Stream, i int) (ExtraStruct, int, er
 										}
 									}
 									if s.Bytes()[i] == ']' {
-										result.Triple[len(result.Triple)-1] = [][]string{}
+										if result.Triple[len(result.Triple)-1] == nil {
+											result.Triple[len(result.Triple)-1] = [][]string{}
+										}
 									} else {
-										result.Triple[len(result.Triple)-1] = make([][]string, 0, 4)
+										if result.Triple[len(result.Triple)-1] == nil {
+											result.Triple[len(result.Triple)-1] = make([][]string, 0, 4)
+										}
 									}
 									for s.Bytes()[i] != ']' {
 										result.Triple[len(result.Triple)-1] = append(result.Triple[len(result.Triple)-1], nil)
@@ -5410,6 +5565,7 @@ func (ExtraStruct) DecodeStreamFrom(s *scan.Stream, i int) (ExtraStruct, int, er
 													}
 												}
 												i += 4
+												result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1] = nil
 											} else {
 												i, err = s.ArrayOpen(i)
 												if err != nil {
@@ -5425,9 +5581,13 @@ func (ExtraStruct) DecodeStreamFrom(s *scan.Stream, i int) (ExtraStruct, int, er
 													}
 												}
 												if s.Bytes()[i] == ']' {
-													result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1] = []string{}
+													if result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1] == nil {
+														result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1] = []string{}
+													}
 												} else {
-													result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1] = make([]string, 0, 4)
+													if result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1] == nil {
+														result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1] = make([]string, 0, 4)
+													}
 												}
 												for s.Bytes()[i] != ']' {
 													result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1] = append(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1], "")
@@ -5551,6 +5711,7 @@ func (ExtraStruct) DecodeStreamFrom(s *scan.Stream, i int) (ExtraStruct, int, er
 							}
 						}
 						i += 4
+						result.KeyedMap = nil
 					} else {
 						i, err = s.ObjectOpen(i)
 						if err != nil {
@@ -5566,9 +5727,13 @@ func (ExtraStruct) DecodeStreamFrom(s *scan.Stream, i int) (ExtraStruct, int, er
 							}
 						}
 						if s.Bytes()[i] == '}' {
-							result.KeyedMap = map[string]int{}
+							if result.KeyedMap == nil {
+								result.KeyedMap = map[string]int{}
+							}
 						} else {
-							result.KeyedMap = make(map[string]int)
+							if result.KeyedMap == nil {
+								result.KeyedMap = make(map[string]int)
+							}
 						}
 						for s.Bytes()[i] != '}' {
 							var mk string
@@ -5666,6 +5831,7 @@ func (ExtraStruct) DecodeStreamFrom(s *scan.Stream, i int) (ExtraStruct, int, er
 							}
 						}
 						i += 4
+						result.HintedTags = nil
 					} else {
 						i, err = s.ArrayOpen(i)
 						if err != nil {
@@ -5681,9 +5847,13 @@ func (ExtraStruct) DecodeStreamFrom(s *scan.Stream, i int) (ExtraStruct, int, er
 							}
 						}
 						if s.Bytes()[i] == ']' {
-							result.HintedTags = []string{}
+							if result.HintedTags == nil {
+								result.HintedTags = []string{}
+							}
 						} else {
-							result.HintedTags = make([]string, 0, 4)
+							if result.HintedTags == nil {
+								result.HintedTags = make([]string, 0, 4)
+							}
 						}
 						for s.Bytes()[i] != ']' {
 							result.HintedTags = append(result.HintedTags, "")
@@ -5749,6 +5919,7 @@ func (ExtraStruct) DecodeStreamFrom(s *scan.Stream, i int) (ExtraStruct, int, er
 							}
 						}
 						i += 4
+						result.NestedInts = nil
 					} else {
 						i, err = s.ArrayOpen(i)
 						if err != nil {
@@ -5764,9 +5935,13 @@ func (ExtraStruct) DecodeStreamFrom(s *scan.Stream, i int) (ExtraStruct, int, er
 							}
 						}
 						if s.Bytes()[i] == ']' {
-							result.NestedInts = [][]int{}
+							if result.NestedInts == nil {
+								result.NestedInts = [][]int{}
+							}
 						} else {
-							result.NestedInts = make([][]int, 0, 4)
+							if result.NestedInts == nil {
+								result.NestedInts = make([][]int, 0, 4)
+							}
 						}
 						for s.Bytes()[i] != ']' {
 							result.NestedInts = append(result.NestedInts, nil)
@@ -5792,6 +5967,7 @@ func (ExtraStruct) DecodeStreamFrom(s *scan.Stream, i int) (ExtraStruct, int, er
 										}
 									}
 									i += 4
+									result.NestedInts[len(result.NestedInts)-1] = nil
 								} else {
 									i, err = s.ArrayOpen(i)
 									if err != nil {
@@ -5807,9 +5983,13 @@ func (ExtraStruct) DecodeStreamFrom(s *scan.Stream, i int) (ExtraStruct, int, er
 										}
 									}
 									if s.Bytes()[i] == ']' {
-										result.NestedInts[len(result.NestedInts)-1] = []int{}
+										if result.NestedInts[len(result.NestedInts)-1] == nil {
+											result.NestedInts[len(result.NestedInts)-1] = []int{}
+										}
 									} else {
-										result.NestedInts[len(result.NestedInts)-1] = make([]int, 0, 4)
+										if result.NestedInts[len(result.NestedInts)-1] == nil {
+											result.NestedInts[len(result.NestedInts)-1] = make([]int, 0, 4)
+										}
 									}
 									for s.Bytes()[i] != ']' {
 										result.NestedInts[len(result.NestedInts)-1] = append(result.NestedInts[len(result.NestedInts)-1], 0)
@@ -6147,8 +6327,10 @@ func (s ExtraStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (TupleStruct) DecodeFrom(data []byte, i int) (TupleStruct, int, error) {
-	var result TupleStruct
+func (result TupleStruct) DecodeFrom(data []byte, i int) (TupleStruct, int, error) {
+	if result.Segments != nil {
+		result.Segments = result.Segments[:0]
+	}
 	var err error
 	_ = err
 	seenPair := false
@@ -6313,6 +6495,7 @@ func (TupleStruct) DecodeFrom(data []byte, i int) (TupleStruct, int, error) {
 							}
 							if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 								i += 4
+								result.Pair[idx0] = nil
 							} else {
 								if i >= len(data) || data[i] != '[' {
 									return result, i, scan.ErrBadArray
@@ -6322,9 +6505,13 @@ func (TupleStruct) DecodeFrom(data []byte, i int) (TupleStruct, int, error) {
 									i++
 								}
 								if i < len(data) && data[i] == ']' {
-									result.Pair[idx0] = []string{}
+									if result.Pair[idx0] == nil {
+										result.Pair[idx0] = []string{}
+									}
 								} else {
-									result.Pair[idx0] = make([]string, 0, 4)
+									if result.Pair[idx0] == nil {
+										result.Pair[idx0] = make([]string, 0, 4)
+									}
 								}
 								for i < len(data) && data[i] != ']' {
 									result.Pair[idx0] = append(result.Pair[idx0], "")
@@ -6453,6 +6640,7 @@ func (TupleStruct) DecodeFrom(data []byte, i int) (TupleStruct, int, error) {
 					}
 					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 						i += 4
+						result.Segments = nil
 					} else {
 						if i >= len(data) || data[i] != '[' {
 							return result, i, scan.ErrBadArray
@@ -6462,9 +6650,13 @@ func (TupleStruct) DecodeFrom(data []byte, i int) (TupleStruct, int, error) {
 							i++
 						}
 						if i < len(data) && data[i] == ']' {
-							result.Segments = [][2]int{}
+							if result.Segments == nil {
+								result.Segments = [][2]int{}
+							}
 						} else {
-							result.Segments = [][2]int{}
+							if result.Segments == nil {
+								result.Segments = [][2]int{}
+							}
 						}
 						for i < len(data) && data[i] != ']' {
 							result.Segments = append(result.Segments, [2]int{})
@@ -6574,8 +6766,10 @@ func (TupleStruct) DecodeFrom(data []byte, i int) (TupleStruct, int, error) {
 	}
 }
 
-func (TupleStruct) DecodeStreamFrom(s *scan.Stream, i int) (TupleStruct, int, error) {
-	var result TupleStruct
+func (result TupleStruct) DecodeStreamFrom(s *scan.Stream, i int) (TupleStruct, int, error) {
+	if result.Segments != nil {
+		result.Segments = result.Segments[:0]
+	}
 	seenPair := false
 	seenPoint := false
 	seenRGB := false
@@ -6732,6 +6926,7 @@ func (TupleStruct) DecodeStreamFrom(s *scan.Stream, i int) (TupleStruct, int, er
 									}
 								}
 								i += 4
+								result.Pair[idx0] = nil
 							} else {
 								i, err = s.ArrayOpen(i)
 								if err != nil {
@@ -6747,9 +6942,13 @@ func (TupleStruct) DecodeStreamFrom(s *scan.Stream, i int) (TupleStruct, int, er
 									}
 								}
 								if s.Bytes()[i] == ']' {
-									result.Pair[idx0] = []string{}
+									if result.Pair[idx0] == nil {
+										result.Pair[idx0] = []string{}
+									}
 								} else {
-									result.Pair[idx0] = make([]string, 0, 4)
+									if result.Pair[idx0] == nil {
+										result.Pair[idx0] = make([]string, 0, 4)
+									}
 								}
 								for s.Bytes()[i] != ']' {
 									result.Pair[idx0] = append(result.Pair[idx0], "")
@@ -6906,6 +7105,7 @@ func (TupleStruct) DecodeStreamFrom(s *scan.Stream, i int) (TupleStruct, int, er
 							}
 						}
 						i += 4
+						result.Segments = nil
 					} else {
 						i, err = s.ArrayOpen(i)
 						if err != nil {
@@ -6921,9 +7121,13 @@ func (TupleStruct) DecodeStreamFrom(s *scan.Stream, i int) (TupleStruct, int, er
 							}
 						}
 						if s.Bytes()[i] == ']' {
-							result.Segments = [][2]int{}
+							if result.Segments == nil {
+								result.Segments = [][2]int{}
+							}
 						} else {
-							result.Segments = [][2]int{}
+							if result.Segments == nil {
+								result.Segments = [][2]int{}
+							}
 						}
 						for s.Bytes()[i] != ']' {
 							result.Segments = append(result.Segments, [2]int{})
@@ -7154,8 +7358,7 @@ func (s TupleStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (FallbackStruct) DecodeFrom(data []byte, i int) (FallbackStruct, int, error) {
-	var result FallbackStruct
+func (result FallbackStruct) DecodeFrom(data []byte, i int) (FallbackStruct, int, error) {
 	var err error
 	_ = err
 	seenExtra := false
@@ -7279,8 +7482,7 @@ func (FallbackStruct) DecodeFrom(data []byte, i int) (FallbackStruct, int, error
 	}
 }
 
-func (FallbackStruct) DecodeStreamFrom(s *scan.Stream, i int) (FallbackStruct, int, error) {
-	var result FallbackStruct
+func (result FallbackStruct) DecodeStreamFrom(s *scan.Stream, i int) (FallbackStruct, int, error) {
 	seenExtra := false
 	seenID := false
 	i, err := s.ObjectOpen(i)
@@ -7401,8 +7603,7 @@ func (s FallbackStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (FastFallbackStruct) DecodeFrom(data []byte, i int) (FastFallbackStruct, int, error) {
-	var result FastFallbackStruct
+func (result FastFallbackStruct) DecodeFrom(data []byte, i int) (FastFallbackStruct, int, error) {
 	var err error
 	_ = err
 	seenExtra := false
@@ -7522,8 +7723,7 @@ func (FastFallbackStruct) DecodeFrom(data []byte, i int) (FastFallbackStruct, in
 	}
 }
 
-func (FastFallbackStruct) DecodeStreamFrom(s *scan.Stream, i int) (FastFallbackStruct, int, error) {
-	var result FastFallbackStruct
+func (result FastFallbackStruct) DecodeStreamFrom(s *scan.Stream, i int) (FastFallbackStruct, int, error) {
 	seenExtra := false
 	seenID := false
 	i, err := s.ObjectOpen(i)
@@ -7638,8 +7838,7 @@ func (s FastFallbackStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (TextFallbackStruct) DecodeFrom(data []byte, i int) (TextFallbackStruct, int, error) {
-	var result TextFallbackStruct
+func (result TextFallbackStruct) DecodeFrom(data []byte, i int) (TextFallbackStruct, int, error) {
 	var err error
 	_ = err
 	seenID := false
@@ -7763,8 +7962,7 @@ func (TextFallbackStruct) DecodeFrom(data []byte, i int) (TextFallbackStruct, in
 	}
 }
 
-func (TextFallbackStruct) DecodeStreamFrom(s *scan.Stream, i int) (TextFallbackStruct, int, error) {
-	var result TextFallbackStruct
+func (result TextFallbackStruct) DecodeStreamFrom(s *scan.Stream, i int) (TextFallbackStruct, int, error) {
 	seenID := false
 	seenTag := false
 	i, err := s.ObjectOpen(i)
@@ -7883,8 +8081,7 @@ func (s TextFallbackStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (HTMLRawStruct) DecodeFrom(data []byte, i int) (HTMLRawStruct, int, error) {
-	var result HTMLRawStruct
+func (result HTMLRawStruct) DecodeFrom(data []byte, i int) (HTMLRawStruct, int, error) {
 	var err error
 	_ = err
 	seenNote := false
@@ -7988,8 +8185,7 @@ func (HTMLRawStruct) DecodeFrom(data []byte, i int) (HTMLRawStruct, int, error) 
 	}
 }
 
-func (HTMLRawStruct) DecodeStreamFrom(s *scan.Stream, i int) (HTMLRawStruct, int, error) {
-	var result HTMLRawStruct
+func (result HTMLRawStruct) DecodeStreamFrom(s *scan.Stream, i int) (HTMLRawStruct, int, error) {
 	seenNote := false
 	i, err := s.ObjectOpen(i)
 	if err != nil {
@@ -8074,8 +8270,7 @@ func (s HTMLRawStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (HTMLEscapeStruct) DecodeFrom(data []byte, i int) (HTMLEscapeStruct, int, error) {
-	var result HTMLEscapeStruct
+func (result HTMLEscapeStruct) DecodeFrom(data []byte, i int) (HTMLEscapeStruct, int, error) {
 	var err error
 	_ = err
 	seenNote := false
@@ -8179,8 +8374,7 @@ func (HTMLEscapeStruct) DecodeFrom(data []byte, i int) (HTMLEscapeStruct, int, e
 	}
 }
 
-func (HTMLEscapeStruct) DecodeStreamFrom(s *scan.Stream, i int) (HTMLEscapeStruct, int, error) {
-	var result HTMLEscapeStruct
+func (result HTMLEscapeStruct) DecodeStreamFrom(s *scan.Stream, i int) (HTMLEscapeStruct, int, error) {
 	seenNote := false
 	i, err := s.ObjectOpen(i)
 	if err != nil {
@@ -8265,8 +8459,10 @@ func (s HTMLEscapeStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (InlineStruct) DecodeFrom(data []byte, i int) (InlineStruct, int, error) {
-	var result InlineStruct
+func (result InlineStruct) DecodeFrom(data []byte, i int) (InlineStruct, int, error) {
+	if result.Extra != nil {
+		clear(result.Extra)
+	}
 	var err error
 	_ = err
 	seenName := false
@@ -8382,8 +8578,10 @@ func (InlineStruct) DecodeFrom(data []byte, i int) (InlineStruct, int, error) {
 	}
 }
 
-func (InlineStruct) DecodeStreamFrom(s *scan.Stream, i int) (InlineStruct, int, error) {
-	var result InlineStruct
+func (result InlineStruct) DecodeStreamFrom(s *scan.Stream, i int) (InlineStruct, int, error) {
+	if result.Extra != nil {
+		clear(result.Extra)
+	}
 	seenName := false
 	i, err := s.ObjectOpen(i)
 	if err != nil {
@@ -8512,8 +8710,7 @@ func (s InlineStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (URLStruct) DecodeFrom(data []byte, i int) (URLStruct, int, error) {
-	var result URLStruct
+func (result URLStruct) DecodeFrom(data []byte, i int) (URLStruct, int, error) {
 	var err error
 	_ = err
 	seenSite := false
@@ -8626,8 +8823,7 @@ func (URLStruct) DecodeFrom(data []byte, i int) (URLStruct, int, error) {
 	}
 }
 
-func (URLStruct) DecodeStreamFrom(s *scan.Stream, i int) (URLStruct, int, error) {
-	var result URLStruct
+func (result URLStruct) DecodeStreamFrom(s *scan.Stream, i int) (URLStruct, int, error) {
 	seenSite := false
 	i, err := s.ObjectOpen(i)
 	if err != nil {
@@ -8724,8 +8920,16 @@ func (s URLStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, "\"}"...), nil
 }
 
-func (MapStruct) DecodeFrom(data []byte, i int) (MapStruct, int, error) {
-	var result MapStruct
+func (result MapStruct) DecodeFrom(data []byte, i int) (MapStruct, int, error) {
+	if result.Addresses != nil {
+		clear(result.Addresses)
+	}
+	if result.Counts != nil {
+		clear(result.Counts)
+	}
+	if result.Labels != nil {
+		clear(result.Labels)
+	}
 	var err error
 	_ = err
 	seenAddresses := false
@@ -8791,6 +8995,7 @@ func (MapStruct) DecodeFrom(data []byte, i int) (MapStruct, int, error) {
 					}
 					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 						i += 4
+						result.Counts = nil
 					} else {
 						if i >= len(data) || data[i] != '{' {
 							return result, i, scan.ErrBadObject
@@ -8800,9 +9005,13 @@ func (MapStruct) DecodeFrom(data []byte, i int) (MapStruct, int, error) {
 							i++
 						}
 						if i < len(data) && data[i] == '}' {
-							result.Counts = map[string]int{}
+							if result.Counts == nil {
+								result.Counts = map[string]int{}
+							}
 						} else {
-							result.Counts = make(map[string]int)
+							if result.Counts == nil {
+								result.Counts = make(map[string]int)
+							}
 						}
 						for i < len(data) && data[i] != '}' {
 							var mk string
@@ -8896,6 +9105,7 @@ func (MapStruct) DecodeFrom(data []byte, i int) (MapStruct, int, error) {
 					}
 					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 						i += 4
+						result.Labels = nil
 					} else {
 						if i >= len(data) || data[i] != '{' {
 							return result, i, scan.ErrBadObject
@@ -8905,9 +9115,13 @@ func (MapStruct) DecodeFrom(data []byte, i int) (MapStruct, int, error) {
 							i++
 						}
 						if i < len(data) && data[i] == '}' {
-							result.Labels = map[string]string{}
+							if result.Labels == nil {
+								result.Labels = map[string]string{}
+							}
 						} else {
-							result.Labels = make(map[string]string)
+							if result.Labels == nil {
+								result.Labels = make(map[string]string)
+							}
 						}
 						for i < len(data) && data[i] != '}' {
 							var mk string
@@ -9000,6 +9214,7 @@ func (MapStruct) DecodeFrom(data []byte, i int) (MapStruct, int, error) {
 					}
 					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 						i += 4
+						result.Addresses = nil
 					} else {
 						if i >= len(data) || data[i] != '{' {
 							return result, i, scan.ErrBadObject
@@ -9009,9 +9224,13 @@ func (MapStruct) DecodeFrom(data []byte, i int) (MapStruct, int, error) {
 							i++
 						}
 						if i < len(data) && data[i] == '}' {
-							result.Addresses = map[string]Address{}
+							if result.Addresses == nil {
+								result.Addresses = map[string]Address{}
+							}
 						} else {
-							result.Addresses = make(map[string]Address)
+							if result.Addresses == nil {
+								result.Addresses = make(map[string]Address)
+							}
 						}
 						for i < len(data) && data[i] != '}' {
 							var mk string
@@ -9097,8 +9316,16 @@ func (MapStruct) DecodeFrom(data []byte, i int) (MapStruct, int, error) {
 	}
 }
 
-func (MapStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapStruct, int, error) {
-	var result MapStruct
+func (result MapStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapStruct, int, error) {
+	if result.Addresses != nil {
+		clear(result.Addresses)
+	}
+	if result.Counts != nil {
+		clear(result.Counts)
+	}
+	if result.Labels != nil {
+		clear(result.Labels)
+	}
 	seenAddresses := false
 	seenCounts := false
 	seenLabels := false
@@ -9159,6 +9386,7 @@ func (MapStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapStruct, int, error)
 							}
 						}
 						i += 4
+						result.Counts = nil
 					} else {
 						i, err = s.ObjectOpen(i)
 						if err != nil {
@@ -9174,9 +9402,13 @@ func (MapStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapStruct, int, error)
 							}
 						}
 						if s.Bytes()[i] == '}' {
-							result.Counts = map[string]int{}
+							if result.Counts == nil {
+								result.Counts = map[string]int{}
+							}
 						} else {
-							result.Counts = make(map[string]int)
+							if result.Counts == nil {
+								result.Counts = make(map[string]int)
+							}
 						}
 						for s.Bytes()[i] != '}' {
 							var mk string
@@ -9264,6 +9496,7 @@ func (MapStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapStruct, int, error)
 							}
 						}
 						i += 4
+						result.Labels = nil
 					} else {
 						i, err = s.ObjectOpen(i)
 						if err != nil {
@@ -9279,9 +9512,13 @@ func (MapStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapStruct, int, error)
 							}
 						}
 						if s.Bytes()[i] == '}' {
-							result.Labels = map[string]string{}
+							if result.Labels == nil {
+								result.Labels = map[string]string{}
+							}
 						} else {
-							result.Labels = make(map[string]string)
+							if result.Labels == nil {
+								result.Labels = make(map[string]string)
+							}
 						}
 						for s.Bytes()[i] != '}' {
 							var mk string
@@ -9372,6 +9609,7 @@ func (MapStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapStruct, int, error)
 							}
 						}
 						i += 4
+						result.Addresses = nil
 					} else {
 						i, err = s.ObjectOpen(i)
 						if err != nil {
@@ -9387,9 +9625,13 @@ func (MapStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapStruct, int, error)
 							}
 						}
 						if s.Bytes()[i] == '}' {
-							result.Addresses = map[string]Address{}
+							if result.Addresses == nil {
+								result.Addresses = map[string]Address{}
+							}
 						} else {
-							result.Addresses = make(map[string]Address)
+							if result.Addresses == nil {
+								result.Addresses = make(map[string]Address)
+							}
 						}
 						for s.Bytes()[i] != '}' {
 							var mk string
@@ -9564,8 +9806,16 @@ func (s MapStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (MapDiveStruct) DecodeFrom(data []byte, i int) (MapDiveStruct, int, error) {
-	var result MapDiveStruct
+func (result MapDiveStruct) DecodeFrom(data []byte, i int) (MapDiveStruct, int, error) {
+	if result.Clamped != nil {
+		clear(result.Clamped)
+	}
+	if result.Counts != nil {
+		clear(result.Counts)
+	}
+	if result.Names != nil {
+		clear(result.Names)
+	}
 	var err error
 	_ = err
 	seenClamped := false
@@ -9630,6 +9880,7 @@ func (MapDiveStruct) DecodeFrom(data []byte, i int) (MapDiveStruct, int, error) 
 					}
 					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 						i += 4
+						result.Names = nil
 					} else {
 						if i >= len(data) || data[i] != '{' {
 							return result, i, scan.ErrBadObject
@@ -9639,9 +9890,13 @@ func (MapDiveStruct) DecodeFrom(data []byte, i int) (MapDiveStruct, int, error) 
 							i++
 						}
 						if i < len(data) && data[i] == '}' {
-							result.Names = map[string]string{}
+							if result.Names == nil {
+								result.Names = map[string]string{}
+							}
 						} else {
-							result.Names = make(map[string]string)
+							if result.Names == nil {
+								result.Names = make(map[string]string)
+							}
 						}
 						for i < len(data) && data[i] != '}' {
 							var mk string
@@ -9738,6 +9993,7 @@ func (MapDiveStruct) DecodeFrom(data []byte, i int) (MapDiveStruct, int, error) 
 					}
 					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 						i += 4
+						result.Counts = nil
 					} else {
 						if i >= len(data) || data[i] != '{' {
 							return result, i, scan.ErrBadObject
@@ -9747,9 +10003,13 @@ func (MapDiveStruct) DecodeFrom(data []byte, i int) (MapDiveStruct, int, error) 
 							i++
 						}
 						if i < len(data) && data[i] == '}' {
-							result.Counts = map[string]int{}
+							if result.Counts == nil {
+								result.Counts = map[string]int{}
+							}
 						} else {
-							result.Counts = make(map[string]int)
+							if result.Counts == nil {
+								result.Counts = make(map[string]int)
+							}
 						}
 						for i < len(data) && data[i] != '}' {
 							var mk string
@@ -9850,6 +10110,7 @@ func (MapDiveStruct) DecodeFrom(data []byte, i int) (MapDiveStruct, int, error) 
 					}
 					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 						i += 4
+						result.Clamped = nil
 					} else {
 						if i >= len(data) || data[i] != '{' {
 							return result, i, scan.ErrBadObject
@@ -9859,9 +10120,13 @@ func (MapDiveStruct) DecodeFrom(data []byte, i int) (MapDiveStruct, int, error) 
 							i++
 						}
 						if i < len(data) && data[i] == '}' {
-							result.Clamped = map[string]int{}
+							if result.Clamped == nil {
+								result.Clamped = map[string]int{}
+							}
 						} else {
-							result.Clamped = make(map[string]int)
+							if result.Clamped == nil {
+								result.Clamped = make(map[string]int)
+							}
 						}
 						for i < len(data) && data[i] != '}' {
 							var mk string
@@ -9973,8 +10238,16 @@ func (MapDiveStruct) DecodeFrom(data []byte, i int) (MapDiveStruct, int, error) 
 	}
 }
 
-func (MapDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapDiveStruct, int, error) {
-	var result MapDiveStruct
+func (result MapDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapDiveStruct, int, error) {
+	if result.Clamped != nil {
+		clear(result.Clamped)
+	}
+	if result.Counts != nil {
+		clear(result.Counts)
+	}
+	if result.Names != nil {
+		clear(result.Names)
+	}
 	seenClamped := false
 	seenCounts := false
 	seenNames := false
@@ -10034,6 +10307,7 @@ func (MapDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapDiveStruct, int
 							}
 						}
 						i += 4
+						result.Names = nil
 					} else {
 						i, err = s.ObjectOpen(i)
 						if err != nil {
@@ -10049,9 +10323,13 @@ func (MapDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapDiveStruct, int
 							}
 						}
 						if s.Bytes()[i] == '}' {
-							result.Names = map[string]string{}
+							if result.Names == nil {
+								result.Names = map[string]string{}
+							}
 						} else {
-							result.Names = make(map[string]string)
+							if result.Names == nil {
+								result.Names = make(map[string]string)
+							}
 						}
 						for s.Bytes()[i] != '}' {
 							var mk string
@@ -10146,6 +10424,7 @@ func (MapDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapDiveStruct, int
 							}
 						}
 						i += 4
+						result.Counts = nil
 					} else {
 						i, err = s.ObjectOpen(i)
 						if err != nil {
@@ -10161,9 +10440,13 @@ func (MapDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapDiveStruct, int
 							}
 						}
 						if s.Bytes()[i] == '}' {
-							result.Counts = map[string]int{}
+							if result.Counts == nil {
+								result.Counts = map[string]int{}
+							}
 						} else {
-							result.Counts = make(map[string]int)
+							if result.Counts == nil {
+								result.Counts = make(map[string]int)
+							}
 						}
 						for s.Bytes()[i] != '}' {
 							var mk string
@@ -10258,6 +10541,7 @@ func (MapDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapDiveStruct, int
 							}
 						}
 						i += 4
+						result.Clamped = nil
 					} else {
 						i, err = s.ObjectOpen(i)
 						if err != nil {
@@ -10273,9 +10557,13 @@ func (MapDiveStruct) DecodeStreamFrom(s *scan.Stream, i int) (MapDiveStruct, int
 							}
 						}
 						if s.Bytes()[i] == '}' {
-							result.Clamped = map[string]int{}
+							if result.Clamped == nil {
+								result.Clamped = map[string]int{}
+							}
 						} else {
-							result.Clamped = make(map[string]int)
+							if result.Clamped == nil {
+								result.Clamped = make(map[string]int)
+							}
 						}
 						for s.Bytes()[i] != '}' {
 							var mk string
@@ -10453,8 +10741,7 @@ func (s MapDiveStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (Derived) DecodeFrom(data []byte, i int) (Derived, int, error) {
-	var result Derived
+func (result Derived) DecodeFrom(data []byte, i int) (Derived, int, error) {
 	var err error
 	_ = err
 	seenID := false
@@ -10632,8 +10919,7 @@ func (Derived) DecodeFrom(data []byte, i int) (Derived, int, error) {
 	}
 }
 
-func (Derived) DecodeStreamFrom(s *scan.Stream, i int) (Derived, int, error) {
-	var result Derived
+func (result Derived) DecodeStreamFrom(s *scan.Stream, i int) (Derived, int, error) {
 	seenID := false
 	seenMeta := false
 	seenName := false
@@ -10788,8 +11074,10 @@ func (s Derived) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (ModStruct) DecodeFrom(data []byte, i int) (ModStruct, int, error) {
-	var result ModStruct
+func (result ModStruct) DecodeFrom(data []byte, i int) (ModStruct, int, error) {
+	if result.Tags != nil {
+		result.Tags = result.Tags[:0]
+	}
 	var err error
 	_ = err
 	seenEmail := false
@@ -10885,6 +11173,7 @@ func (ModStruct) DecodeFrom(data []byte, i int) (ModStruct, int, error) {
 					}
 					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 						i += 4
+						result.Tags = nil
 					} else {
 						if i >= len(data) || data[i] != '[' {
 							return result, i, scan.ErrBadArray
@@ -10894,9 +11183,13 @@ func (ModStruct) DecodeFrom(data []byte, i int) (ModStruct, int, error) {
 							i++
 						}
 						if i < len(data) && data[i] == ']' {
-							result.Tags = []string{}
+							if result.Tags == nil {
+								result.Tags = []string{}
+							}
 						} else {
-							result.Tags = make([]string, 0, 4)
+							if result.Tags == nil {
+								result.Tags = make([]string, 0, 4)
+							}
 						}
 						for i < len(data) && data[i] != ']' {
 							result.Tags = append(result.Tags, "")
@@ -11002,8 +11295,10 @@ func (ModStruct) DecodeFrom(data []byte, i int) (ModStruct, int, error) {
 	}
 }
 
-func (ModStruct) DecodeStreamFrom(s *scan.Stream, i int) (ModStruct, int, error) {
-	var result ModStruct
+func (result ModStruct) DecodeStreamFrom(s *scan.Stream, i int) (ModStruct, int, error) {
+	if result.Tags != nil {
+		result.Tags = result.Tags[:0]
+	}
 	seenEmail := false
 	seenSKU := false
 	seenTags := false
@@ -11081,6 +11376,7 @@ func (ModStruct) DecodeStreamFrom(s *scan.Stream, i int) (ModStruct, int, error)
 							}
 						}
 						i += 4
+						result.Tags = nil
 					} else {
 						i, err = s.ArrayOpen(i)
 						if err != nil {
@@ -11096,9 +11392,13 @@ func (ModStruct) DecodeStreamFrom(s *scan.Stream, i int) (ModStruct, int, error)
 							}
 						}
 						if s.Bytes()[i] == ']' {
-							result.Tags = []string{}
+							if result.Tags == nil {
+								result.Tags = []string{}
+							}
 						} else {
-							result.Tags = make([]string, 0, 4)
+							if result.Tags == nil {
+								result.Tags = make([]string, 0, 4)
+							}
 						}
 						for s.Bytes()[i] != ']' {
 							result.Tags = append(result.Tags, "")
@@ -11223,8 +11523,7 @@ func (s ModStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (FallibleModStruct) DecodeFrom(data []byte, i int) (FallibleModStruct, int, error) {
-	var result FallibleModStruct
+func (result FallibleModStruct) DecodeFrom(data []byte, i int) (FallibleModStruct, int, error) {
 	var err error
 	_ = err
 	seenEmail := false
@@ -11345,8 +11644,7 @@ func (FallibleModStruct) DecodeFrom(data []byte, i int) (FallibleModStruct, int,
 	}
 }
 
-func (FallibleModStruct) DecodeStreamFrom(s *scan.Stream, i int) (FallibleModStruct, int, error) {
-	var result FallibleModStruct
+func (result FallibleModStruct) DecodeStreamFrom(s *scan.Stream, i int) (FallibleModStruct, int, error) {
 	seenEmail := false
 	i, err := s.ObjectOpen(i)
 	if err != nil {
@@ -11448,8 +11746,7 @@ func (s FallibleModStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (FallibleModMultierrStruct) DecodeFrom(data []byte, i int) (FallibleModMultierrStruct, int, error) {
-	var result FallibleModMultierrStruct
+func (result FallibleModMultierrStruct) DecodeFrom(data []byte, i int) (FallibleModMultierrStruct, int, error) {
 	var err error
 	_ = err
 	var errs validation.Errors
@@ -11590,8 +11887,7 @@ func (FallibleModMultierrStruct) DecodeFrom(data []byte, i int) (FallibleModMult
 	}
 }
 
-func (FallibleModMultierrStruct) DecodeStreamFrom(s *scan.Stream, i int) (FallibleModMultierrStruct, int, error) {
-	var result FallibleModMultierrStruct
+func (result FallibleModMultierrStruct) DecodeStreamFrom(s *scan.Stream, i int) (FallibleModMultierrStruct, int, error) {
 	var errs validation.Errors
 	seenEmail := false
 	i, err := s.ObjectOpen(i)
@@ -11722,8 +12018,16 @@ func (s FallibleModMultierrStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (NativeTypes) DecodeFrom(data []byte, i int) (NativeTypes, int, error) {
-	var result NativeTypes
+func (result NativeTypes) DecodeFrom(data []byte, i int) (NativeTypes, int, error) {
+	if result.Blob != nil {
+		result.Blob = result.Blob[:0]
+	}
+	if result.ByteArray != nil {
+		result.ByteArray = result.ByteArray[:0]
+	}
+	if result.HexBlob != nil {
+		result.HexBlob = result.HexBlob[:0]
+	}
 	var err error
 	_ = err
 	seenAddr := false
@@ -11847,7 +12151,9 @@ func (NativeTypes) DecodeFrom(data []byte, i int) (NativeTypes, int, error) {
 							}
 						}
 					}
-					result.Blob = make([]byte, 0, base64.StdEncoding.DecodedLen(len(s)))
+					if cap(result.Blob) < base64.StdEncoding.DecodedLen(len(s)) {
+						result.Blob = make([]byte, 0, base64.StdEncoding.DecodedLen(len(s)))
+					}
 					result.Blob, err = base64.StdEncoding.AppendDecode(result.Blob, unsafe.Slice(unsafe.StringData(s), len(s)))
 					if err != nil {
 						return result, i, err
@@ -11952,7 +12258,9 @@ func (NativeTypes) DecodeFrom(data []byte, i int) (NativeTypes, int, error) {
 							}
 						}
 					}
-					result.HexBlob = make([]byte, 0, hex.DecodedLen(len(s)))
+					if cap(result.HexBlob) < hex.DecodedLen(len(s)) {
+						result.HexBlob = make([]byte, 0, hex.DecodedLen(len(s)))
+					}
 					result.HexBlob, err = hex.AppendDecode(result.HexBlob, unsafe.Slice(unsafe.StringData(s), len(s)))
 					if err != nil {
 						return result, i, err
@@ -12166,8 +12474,16 @@ func (NativeTypes) DecodeFrom(data []byte, i int) (NativeTypes, int, error) {
 	}
 }
 
-func (NativeTypes) DecodeStreamFrom(s *scan.Stream, i int) (NativeTypes, int, error) {
-	var result NativeTypes
+func (result NativeTypes) DecodeStreamFrom(s *scan.Stream, i int) (NativeTypes, int, error) {
+	if result.Blob != nil {
+		result.Blob = result.Blob[:0]
+	}
+	if result.ByteArray != nil {
+		result.ByteArray = result.ByteArray[:0]
+	}
+	if result.HexBlob != nil {
+		result.HexBlob = result.HexBlob[:0]
+	}
 	seenAddr := false
 	seenBlob := false
 	seenByteArray := false
@@ -12240,7 +12556,9 @@ func (NativeTypes) DecodeStreamFrom(s *scan.Stream, i int) (NativeTypes, int, er
 					if err != nil {
 						return result, i, err
 					}
-					result.Blob = make([]byte, 0, base64.StdEncoding.DecodedLen(len(v)))
+					if cap(result.Blob) < base64.StdEncoding.DecodedLen(len(v)) {
+						result.Blob = make([]byte, 0, base64.StdEncoding.DecodedLen(len(v)))
+					}
 					result.Blob, err = base64.StdEncoding.AppendDecode(result.Blob, unsafe.Slice(unsafe.StringData(v), len(v)))
 					if err != nil {
 						return result, i, err
@@ -12327,7 +12645,9 @@ func (NativeTypes) DecodeStreamFrom(s *scan.Stream, i int) (NativeTypes, int, er
 					if err != nil {
 						return result, i, err
 					}
-					result.HexBlob = make([]byte, 0, hex.DecodedLen(len(v)))
+					if cap(result.HexBlob) < hex.DecodedLen(len(v)) {
+						result.HexBlob = make([]byte, 0, hex.DecodedLen(len(v)))
+					}
 					result.HexBlob, err = hex.AppendDecode(result.HexBlob, unsafe.Slice(unsafe.StringData(v), len(v)))
 					if err != nil {
 						return result, i, err
@@ -12573,8 +12893,19 @@ func (s NativeTypes) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (OmitStruct) DecodeFrom(data []byte, i int) (OmitStruct, int, error) {
-	var result OmitStruct
+func (result OmitStruct) DecodeFrom(data []byte, i int) (OmitStruct, int, error) {
+	if result.Extra != nil {
+		result.Extra = result.Extra[:0]
+	}
+	if result.Labels != nil {
+		clear(result.Labels)
+	}
+	if result.Meta != nil {
+		clear(result.Meta)
+	}
+	if result.Tags != nil {
+		result.Tags = result.Tags[:0]
+	}
 	var err error
 	_ = err
 	seenBio := false
@@ -12675,6 +13006,7 @@ func (OmitStruct) DecodeFrom(data []byte, i int) (OmitStruct, int, error) {
 					}
 					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 						i += 4
+						result.Meta = nil
 					} else {
 						if i >= len(data) || data[i] != '{' {
 							return result, i, scan.ErrBadObject
@@ -12684,9 +13016,13 @@ func (OmitStruct) DecodeFrom(data []byte, i int) (OmitStruct, int, error) {
 							i++
 						}
 						if i < len(data) && data[i] == '}' {
-							result.Meta = map[string]string{}
+							if result.Meta == nil {
+								result.Meta = map[string]string{}
+							}
 						} else {
-							result.Meta = make(map[string]string)
+							if result.Meta == nil {
+								result.Meta = make(map[string]string)
+							}
 						}
 						for i < len(data) && data[i] != '}' {
 							var mk string
@@ -12799,6 +13135,7 @@ func (OmitStruct) DecodeFrom(data []byte, i int) (OmitStruct, int, error) {
 					}
 					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 						i += 4
+						result.Tags = nil
 					} else {
 						if i >= len(data) || data[i] != '[' {
 							return result, i, scan.ErrBadArray
@@ -12808,9 +13145,13 @@ func (OmitStruct) DecodeFrom(data []byte, i int) (OmitStruct, int, error) {
 							i++
 						}
 						if i < len(data) && data[i] == ']' {
-							result.Tags = []string{}
+							if result.Tags == nil {
+								result.Tags = []string{}
+							}
 						} else {
-							result.Tags = make([]string, 0, 4)
+							if result.Tags == nil {
+								result.Tags = make([]string, 0, 4)
+							}
 						}
 						for i < len(data) && data[i] != ']' {
 							result.Tags = append(result.Tags, "")
@@ -12903,6 +13244,7 @@ func (OmitStruct) DecodeFrom(data []byte, i int) (OmitStruct, int, error) {
 					}
 					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 						i += 4
+						result.Extra = nil
 					} else {
 						if i >= len(data) || data[i] != '[' {
 							return result, i, scan.ErrBadArray
@@ -12912,9 +13254,13 @@ func (OmitStruct) DecodeFrom(data []byte, i int) (OmitStruct, int, error) {
 							i++
 						}
 						if i < len(data) && data[i] == ']' {
-							result.Extra = []string{}
+							if result.Extra == nil {
+								result.Extra = []string{}
+							}
 						} else {
-							result.Extra = make([]string, 0, 4)
+							if result.Extra == nil {
+								result.Extra = make([]string, 0, 4)
+							}
 						}
 						for i < len(data) && data[i] != ']' {
 							result.Extra = append(result.Extra, "")
@@ -12981,6 +13327,7 @@ func (OmitStruct) DecodeFrom(data []byte, i int) (OmitStruct, int, error) {
 					}
 					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 						i += 4
+						result.Labels = nil
 					} else {
 						if i >= len(data) || data[i] != '{' {
 							return result, i, scan.ErrBadObject
@@ -12990,9 +13337,13 @@ func (OmitStruct) DecodeFrom(data []byte, i int) (OmitStruct, int, error) {
 							i++
 						}
 						if i < len(data) && data[i] == '}' {
-							result.Labels = map[string]string{}
+							if result.Labels == nil {
+								result.Labels = map[string]string{}
+							}
 						} else {
-							result.Labels = make(map[string]string)
+							if result.Labels == nil {
+								result.Labels = make(map[string]string)
+							}
 						}
 						for i < len(data) && data[i] != '}' {
 							var mk string
@@ -13094,8 +13445,19 @@ func (OmitStruct) DecodeFrom(data []byte, i int) (OmitStruct, int, error) {
 	}
 }
 
-func (OmitStruct) DecodeStreamFrom(s *scan.Stream, i int) (OmitStruct, int, error) {
-	var result OmitStruct
+func (result OmitStruct) DecodeStreamFrom(s *scan.Stream, i int) (OmitStruct, int, error) {
+	if result.Extra != nil {
+		result.Extra = result.Extra[:0]
+	}
+	if result.Labels != nil {
+		clear(result.Labels)
+	}
+	if result.Meta != nil {
+		clear(result.Meta)
+	}
+	if result.Tags != nil {
+		result.Tags = result.Tags[:0]
+	}
 	seenBio := false
 	seenStrCount := false
 	seenExtra := false
@@ -13178,6 +13540,7 @@ func (OmitStruct) DecodeStreamFrom(s *scan.Stream, i int) (OmitStruct, int, erro
 							}
 						}
 						i += 4
+						result.Meta = nil
 					} else {
 						i, err = s.ObjectOpen(i)
 						if err != nil {
@@ -13193,9 +13556,13 @@ func (OmitStruct) DecodeStreamFrom(s *scan.Stream, i int) (OmitStruct, int, erro
 							}
 						}
 						if s.Bytes()[i] == '}' {
-							result.Meta = map[string]string{}
+							if result.Meta == nil {
+								result.Meta = map[string]string{}
+							}
 						} else {
-							result.Meta = make(map[string]string)
+							if result.Meta == nil {
+								result.Meta = make(map[string]string)
+							}
 						}
 						for s.Bytes()[i] != '}' {
 							var mk string
@@ -13293,6 +13660,7 @@ func (OmitStruct) DecodeStreamFrom(s *scan.Stream, i int) (OmitStruct, int, erro
 							}
 						}
 						i += 4
+						result.Tags = nil
 					} else {
 						i, err = s.ArrayOpen(i)
 						if err != nil {
@@ -13308,9 +13676,13 @@ func (OmitStruct) DecodeStreamFrom(s *scan.Stream, i int) (OmitStruct, int, erro
 							}
 						}
 						if s.Bytes()[i] == ']' {
-							result.Tags = []string{}
+							if result.Tags == nil {
+								result.Tags = []string{}
+							}
 						} else {
-							result.Tags = make([]string, 0, 4)
+							if result.Tags == nil {
+								result.Tags = make([]string, 0, 4)
+							}
 						}
 						for s.Bytes()[i] != ']' {
 							result.Tags = append(result.Tags, "")
@@ -13399,6 +13771,7 @@ func (OmitStruct) DecodeStreamFrom(s *scan.Stream, i int) (OmitStruct, int, erro
 							}
 						}
 						i += 4
+						result.Extra = nil
 					} else {
 						i, err = s.ArrayOpen(i)
 						if err != nil {
@@ -13414,9 +13787,13 @@ func (OmitStruct) DecodeStreamFrom(s *scan.Stream, i int) (OmitStruct, int, erro
 							}
 						}
 						if s.Bytes()[i] == ']' {
-							result.Extra = []string{}
+							if result.Extra == nil {
+								result.Extra = []string{}
+							}
 						} else {
-							result.Extra = make([]string, 0, 4)
+							if result.Extra == nil {
+								result.Extra = make([]string, 0, 4)
+							}
 						}
 						for s.Bytes()[i] != ']' {
 							result.Extra = append(result.Extra, "")
@@ -13496,6 +13873,7 @@ func (OmitStruct) DecodeStreamFrom(s *scan.Stream, i int) (OmitStruct, int, erro
 							}
 						}
 						i += 4
+						result.Labels = nil
 					} else {
 						i, err = s.ObjectOpen(i)
 						if err != nil {
@@ -13511,9 +13889,13 @@ func (OmitStruct) DecodeStreamFrom(s *scan.Stream, i int) (OmitStruct, int, erro
 							}
 						}
 						if s.Bytes()[i] == '}' {
-							result.Labels = map[string]string{}
+							if result.Labels == nil {
+								result.Labels = map[string]string{}
+							}
 						} else {
-							result.Labels = make(map[string]string)
+							if result.Labels == nil {
+								result.Labels = make(map[string]string)
+							}
 						}
 						for s.Bytes()[i] != '}' {
 							var mk string
@@ -13770,8 +14152,7 @@ func (s OmitStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (PointerStruct) DecodeFrom(data []byte, i int) (PointerStruct, int, error) {
-	var result PointerStruct
+func (result PointerStruct) DecodeFrom(data []byte, i int) (PointerStruct, int, error) {
 	var err error
 	_ = err
 	seenAddr := false
@@ -14004,8 +14385,7 @@ func (PointerStruct) DecodeFrom(data []byte, i int) (PointerStruct, int, error) 
 	}
 }
 
-func (PointerStruct) DecodeStreamFrom(s *scan.Stream, i int) (PointerStruct, int, error) {
-	var result PointerStruct
+func (result PointerStruct) DecodeStreamFrom(s *scan.Stream, i int) (PointerStruct, int, error) {
 	seenAddr := false
 	seenCount := false
 	seenEnabled := false
@@ -14404,8 +14784,7 @@ func (s PointerStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (IgnoreUnknownStruct) DecodeFrom(data []byte, i int) (IgnoreUnknownStruct, int, error) {
-	var result IgnoreUnknownStruct
+func (result IgnoreUnknownStruct) DecodeFrom(data []byte, i int) (IgnoreUnknownStruct, int, error) {
 	var err error
 	_ = err
 	seenName := false
@@ -14515,8 +14894,7 @@ func (IgnoreUnknownStruct) DecodeFrom(data []byte, i int) (IgnoreUnknownStruct, 
 	}
 }
 
-func (IgnoreUnknownStruct) DecodeStreamFrom(s *scan.Stream, i int) (IgnoreUnknownStruct, int, error) {
-	var result IgnoreUnknownStruct
+func (result IgnoreUnknownStruct) DecodeStreamFrom(s *scan.Stream, i int) (IgnoreUnknownStruct, int, error) {
 	seenName := false
 	i, err := s.ObjectOpen(i)
 	if err != nil {
@@ -14615,8 +14993,7 @@ func (s IgnoreUnknownStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (Address) DecodeFrom(data []byte, i int) (Address, int, error) {
-	var result Address
+func (result Address) DecodeFrom(data []byte, i int) (Address, int, error) {
 	var err error
 	_ = err
 	seenCity := false
@@ -14812,8 +15189,7 @@ func (Address) DecodeFrom(data []byte, i int) (Address, int, error) {
 	}
 }
 
-func (Address) DecodeStreamFrom(s *scan.Stream, i int) (Address, int, error) {
-	var result Address
+func (result Address) DecodeStreamFrom(s *scan.Stream, i int) (Address, int, error) {
 	seenCity := false
 	seenStreet := false
 	seenZipCode := false
@@ -14970,8 +15346,16 @@ func (s Address) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
-	var result Node
+func (result Node) DecodeFrom(data []byte, i int) (Node, int, error) {
+	if result.Children != nil {
+		result.Children = result.Children[:0]
+	}
+	if result.Props != nil {
+		clear(result.Props)
+	}
+	if result.Tags != nil {
+		result.Tags = result.Tags[:0]
+	}
 	var err error
 	_ = err
 	seenActive := false
@@ -15101,6 +15485,7 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 					}
 					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 						i += 4
+						result.Tags = nil
 					} else {
 						if i >= len(data) || data[i] != '[' {
 							return result, i, scan.ErrBadArray
@@ -15110,9 +15495,13 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 							i++
 						}
 						if i < len(data) && data[i] == ']' {
-							result.Tags = []string{}
+							if result.Tags == nil {
+								result.Tags = []string{}
+							}
 						} else {
-							result.Tags = make([]string, 0, 4)
+							if result.Tags == nil {
+								result.Tags = make([]string, 0, 4)
+							}
 						}
 						for i < len(data) && data[i] != ']' {
 							result.Tags = append(result.Tags, "")
@@ -15171,6 +15560,7 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 					}
 					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 						i += 4
+						result.Props = nil
 					} else {
 						if i >= len(data) || data[i] != '{' {
 							return result, i, scan.ErrBadObject
@@ -15180,9 +15570,13 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 							i++
 						}
 						if i < len(data) && data[i] == '}' {
-							result.Props = map[string]string{}
+							if result.Props == nil {
+								result.Props = map[string]string{}
+							}
 						} else {
-							result.Props = make(map[string]string)
+							if result.Props == nil {
+								result.Props = make(map[string]string)
+							}
 						}
 						for i < len(data) && data[i] != '}' {
 							var mk string
@@ -15295,6 +15689,7 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 					}
 					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 						i += 4
+						result.Children = nil
 					} else {
 						if i >= len(data) || data[i] != '[' {
 							return result, i, scan.ErrBadArray
@@ -15304,9 +15699,13 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 							i++
 						}
 						if i < len(data) && data[i] == ']' {
-							result.Children = []Node{}
+							if result.Children == nil {
+								result.Children = []Node{}
+							}
 						} else {
-							result.Children = []Node{}
+							if result.Children == nil {
+								result.Children = []Node{}
+							}
 						}
 						for i < len(data) && data[i] != ']' {
 							result.Children = append(result.Children, Node{})
@@ -15358,8 +15757,16 @@ func (Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 	}
 }
 
-func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
-	var result Node
+func (result Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
+	if result.Children != nil {
+		result.Children = result.Children[:0]
+	}
+	if result.Props != nil {
+		clear(result.Props)
+	}
+	if result.Tags != nil {
+		result.Tags = result.Tags[:0]
+	}
 	seenActive := false
 	seenChildren := false
 	seenID := false
@@ -15454,6 +15861,7 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 							}
 						}
 						i += 4
+						result.Tags = nil
 					} else {
 						i, err = s.ArrayOpen(i)
 						if err != nil {
@@ -15469,9 +15877,13 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 							}
 						}
 						if s.Bytes()[i] == ']' {
-							result.Tags = []string{}
+							if result.Tags == nil {
+								result.Tags = []string{}
+							}
 						} else {
-							result.Tags = make([]string, 0, 4)
+							if result.Tags == nil {
+								result.Tags = make([]string, 0, 4)
+							}
 						}
 						for s.Bytes()[i] != ']' {
 							result.Tags = append(result.Tags, "")
@@ -15539,6 +15951,7 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 							}
 						}
 						i += 4
+						result.Props = nil
 					} else {
 						i, err = s.ObjectOpen(i)
 						if err != nil {
@@ -15554,9 +15967,13 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 							}
 						}
 						if s.Bytes()[i] == '}' {
-							result.Props = map[string]string{}
+							if result.Props == nil {
+								result.Props = map[string]string{}
+							}
 						} else {
-							result.Props = make(map[string]string)
+							if result.Props == nil {
+								result.Props = make(map[string]string)
+							}
 						}
 						for s.Bytes()[i] != '}' {
 							var mk string
@@ -15675,6 +16092,7 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 							}
 						}
 						i += 4
+						result.Children = nil
 					} else {
 						i, err = s.ArrayOpen(i)
 						if err != nil {
@@ -15690,9 +16108,13 @@ func (Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 							}
 						}
 						if s.Bytes()[i] == ']' {
-							result.Children = []Node{}
+							if result.Children == nil {
+								result.Children = []Node{}
+							}
 						} else {
-							result.Children = []Node{}
+							if result.Children == nil {
+								result.Children = []Node{}
+							}
 						}
 						for s.Bytes()[i] != ']' {
 							result.Children = append(result.Children, Node{})
@@ -15846,8 +16268,7 @@ func (s Node) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (WideStruct) DecodeFrom(data []byte, i int) (WideStruct, int, error) {
-	var result WideStruct
+func (result WideStruct) DecodeFrom(data []byte, i int) (WideStruct, int, error) {
 	var err error
 	_ = err
 	var seen uint64
@@ -17211,8 +17632,7 @@ func (WideStruct) DecodeFrom(data []byte, i int) (WideStruct, int, error) {
 	}
 }
 
-func (WideStruct) DecodeStreamFrom(s *scan.Stream, i int) (WideStruct, int, error) {
-	var result WideStruct
+func (result WideStruct) DecodeStreamFrom(s *scan.Stream, i int) (WideStruct, int, error) {
 	var seen uint64
 	i, err := s.ObjectOpen(i)
 	if err != nil {
@@ -18167,8 +18587,13 @@ func (s WideStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (PtrSliceStruct) DecodeFrom(data []byte, i int) (PtrSliceStruct, int, error) {
-	var result PtrSliceStruct
+func (result PtrSliceStruct) DecodeFrom(data []byte, i int) (PtrSliceStruct, int, error) {
+	if result.Items != nil {
+		result.Items = result.Items[:0]
+	}
+	if result.Nodes != nil {
+		result.Nodes = result.Nodes[:0]
+	}
 	var err error
 	_ = err
 	seenItems := false
@@ -18234,6 +18659,7 @@ func (PtrSliceStruct) DecodeFrom(data []byte, i int) (PtrSliceStruct, int, error
 					}
 					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 						i += 4
+						result.Items = nil
 					} else {
 						if i >= len(data) || data[i] != '[' {
 							return result, i, scan.ErrBadArray
@@ -18244,9 +18670,13 @@ func (PtrSliceStruct) DecodeFrom(data []byte, i int) (PtrSliceStruct, int, error
 						}
 						var slab0 []Address
 						if i < len(data) && data[i] == ']' {
-							result.Items = []*Address{}
+							if result.Items == nil {
+								result.Items = []*Address{}
+							}
 						} else {
-							result.Items = make([]*Address, 0, 4)
+							if result.Items == nil {
+								result.Items = make([]*Address, 0, 4)
+							}
 							slab0 = make([]Address, 0, 4)
 						}
 						for i < len(data) && data[i] != ']' {
@@ -18300,6 +18730,7 @@ func (PtrSliceStruct) DecodeFrom(data []byte, i int) (PtrSliceStruct, int, error
 					}
 					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 						i += 4
+						result.Nodes = nil
 					} else {
 						if i >= len(data) || data[i] != '[' {
 							return result, i, scan.ErrBadArray
@@ -18310,9 +18741,13 @@ func (PtrSliceStruct) DecodeFrom(data []byte, i int) (PtrSliceStruct, int, error
 						}
 						var slab0 []Node
 						if i < len(data) && data[i] == ']' {
-							result.Nodes = []*Node{}
+							if result.Nodes == nil {
+								result.Nodes = []*Node{}
+							}
 						} else {
-							result.Nodes = make([]*Node, 0, 4)
+							if result.Nodes == nil {
+								result.Nodes = make([]*Node, 0, 4)
+							}
 							slab0 = make([]Node, 0, 4)
 						}
 						for i < len(data) && data[i] != ']' {
@@ -18445,8 +18880,13 @@ func (PtrSliceStruct) DecodeFrom(data []byte, i int) (PtrSliceStruct, int, error
 	}
 }
 
-func (PtrSliceStruct) DecodeStreamFrom(s *scan.Stream, i int) (PtrSliceStruct, int, error) {
-	var result PtrSliceStruct
+func (result PtrSliceStruct) DecodeStreamFrom(s *scan.Stream, i int) (PtrSliceStruct, int, error) {
+	if result.Items != nil {
+		result.Items = result.Items[:0]
+	}
+	if result.Nodes != nil {
+		result.Nodes = result.Nodes[:0]
+	}
 	seenItems := false
 	seenNodes := false
 	seenTuple := false
@@ -18507,6 +18947,7 @@ func (PtrSliceStruct) DecodeStreamFrom(s *scan.Stream, i int) (PtrSliceStruct, i
 							}
 						}
 						i += 4
+						result.Items = nil
 					} else {
 						i, err = s.ArrayOpen(i)
 						if err != nil {
@@ -18523,9 +18964,13 @@ func (PtrSliceStruct) DecodeStreamFrom(s *scan.Stream, i int) (PtrSliceStruct, i
 						}
 						var slab0 []Address
 						if s.Bytes()[i] == ']' {
-							result.Items = []*Address{}
+							if result.Items == nil {
+								result.Items = []*Address{}
+							}
 						} else {
-							result.Items = make([]*Address, 0, 4)
+							if result.Items == nil {
+								result.Items = make([]*Address, 0, 4)
+							}
 							slab0 = make([]Address, 0, 4)
 						}
 						for s.Bytes()[i] != ']' {
@@ -18626,6 +19071,7 @@ func (PtrSliceStruct) DecodeStreamFrom(s *scan.Stream, i int) (PtrSliceStruct, i
 							}
 						}
 						i += 4
+						result.Nodes = nil
 					} else {
 						i, err = s.ArrayOpen(i)
 						if err != nil {
@@ -18642,9 +19088,13 @@ func (PtrSliceStruct) DecodeStreamFrom(s *scan.Stream, i int) (PtrSliceStruct, i
 						}
 						var slab0 []Node
 						if s.Bytes()[i] == ']' {
-							result.Nodes = []*Node{}
+							if result.Nodes == nil {
+								result.Nodes = []*Node{}
+							}
 						} else {
-							result.Nodes = make([]*Node, 0, 4)
+							if result.Nodes == nil {
+								result.Nodes = make([]*Node, 0, 4)
+							}
 							slab0 = make([]Node, 0, 4)
 						}
 						for s.Bytes()[i] != ']' {
@@ -18956,8 +19406,7 @@ func (s PtrSliceStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, "]}"...), nil
 }
 
-func (SQLNullStruct) DecodeFrom(data []byte, i int) (SQLNullStruct, int, error) {
-	var result SQLNullStruct
+func (result SQLNullStruct) DecodeFrom(data []byte, i int) (SQLNullStruct, int, error) {
 	var err error
 	_ = err
 	seenB := false
@@ -19315,8 +19764,7 @@ func (SQLNullStruct) DecodeFrom(data []byte, i int) (SQLNullStruct, int, error) 
 	}
 }
 
-func (SQLNullStruct) DecodeStreamFrom(s *scan.Stream, i int) (SQLNullStruct, int, error) {
-	var result SQLNullStruct
+func (result SQLNullStruct) DecodeStreamFrom(s *scan.Stream, i int) (SQLNullStruct, int, error) {
 	seenB := false
 	seenBL := false
 	seenF := false
