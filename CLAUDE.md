@@ -13,22 +13,27 @@ Module: `github.com/sirkostya009/ggen`. Binary: `ggen` (CLI). Go ≥ 1.26.
 schema/
 ├── main.go, parse.go, generate.go, tags.go, types.go   ← CLI (package main)
 ├── introspect.go                                       ← go/types-driven interface detection (TextAppender, TextMarshaler, …)
+├── alias.go                                            ← alias-type code emitters (decode + AppendJSON)
+├── applicability.go                                    ← parse-time rule/kind compatibility matrix
+├── customfunc.go                                       ← @Func resolution for custom validators / mods
+├── log.go                                              ← cliLog: leveled logger with deferred flush
 ├── parse_test.go, tags_test.go                         ← CLI tests
-├── shared_test.go                                      ← shared demo structs (Address, Node, …) used across feature tests
-├── schema_ggen_test.go                                  ← generated decoders for the test structs
-├── *_test.go                                           ← feature + roundtrip + compat + fuzz tests
-├── fuzz_test.go                                        ← FuzzScanNoPanic / FuzzRoundtrip / FuzzCompat
+├── shared_test.go (in integrationtests/)               ← shared demo structs (Address, Node, …) used across feature tests
+├── bench_test.go                                       ← BenchmarkGenerate over a representative fixture (generator perf only)
 ├── decode/                                             ← runtime: Decoder interface + top-level generics
 ├── encode/                                             ← runtime: AppendString helpers + Marshal/Write/Slice generics
 ├── scan/                                               ← runtime: hand-rolled JSON scanner + streaming Stream type
 ├── decode/validation/                                  ← typed validation error structs (one per rule)
-├── thirdparty/                                         ← non-annotated external type — exercises encoding/json fallback
-├── thirdparty2/                                        ← annotated external type — exercises static analyzer pickup of cross-pkg generated decoder
-└── bench/                                              ← separate Go module (own go.mod) — all benchmarks live here
+├── integrationtests/                                   ← separate Go module — every feature/roundtrip/compat/fuzz test
+│   ├── thirdparty/                                     ← non-annotated external type — exercises encoding/json fallback
+│   └── thirdparty2/                                    ← annotated external type — exercises static analyzer pickup of cross-pkg generated decoder
+└── bench/                                              ← separate Go module — Mega/Small/SlowStream/Retention benchmarks
 ```
 
-`bench/` is its own **separate Go module** (`bench/go.mod` with
-`replace github.com/sirkostya009/ggen => ../`). Two reasons:
+`bench/` and `integrationtests/` are each their own **separate Go
+module** (each has its own `go.mod` with `replace github.com/sirkostya009/ggen => ../`).
+
+`bench/` exists separately for two reasons:
 
 1. easyjson's codegen bootstrap compiles a non-test build, which can't
    see types in `_test.go` files. The bench module has `types.go`
@@ -40,9 +45,14 @@ schema/
    pull only the minimal deps (uuid + `golang.org/x/tools`) and
    never see the benchmark world.
 
-The root module's tests cover correctness; the bench module holds
-**all** benchmarks (Mega payload + reader paths + retention +
-slow-stream). The root has no `Benchmark*` funcs.
+`integrationtests/` exists separately so the feature tests import the
+root packages as an external consumer would — the test surface
+exercises the public API at the same boundary users hit.
+
+The root module's tests cover the CLI itself (parse/tag/applicability/
+log) plus one generator bench (`BenchmarkGenerate`). All other benches
+live in `bench/`. All feature/roundtrip/compat/fuzz tests live in
+`integrationtests/`.
 
 ## Architecture — decode path
 
@@ -81,11 +91,12 @@ methods use the hand-rolled `scan` package directly.
   bounded at roughly `max(chunk_size, single_value_size)` even
   across long streams. Each method updates its own cursors after
   the shift (`i = 0`, or `j -= start; start = 0` for the
-  string-body case). The `noShift` mode disables this for `SkipValue`
-  inside RawJSON capture and `json.Unmarshal` fallback spans, where
-  the generated code needs stable absolute offsets to slice
-  `s.Bytes()[start:i]`; bookkeeping branches in SkipSpace/etc check
-  `s.noShift` before resetting the cursor.
+  string-body case). The `Shift` field (defaults to true via
+  `Reset`) gets flipped off around `SkipValue` inside RawJSON capture
+  and `json.Unmarshal` fallback spans, where the generated code needs
+  stable absolute offsets to slice `s.Bytes()[start:i]`; bookkeeping
+  branches in SkipSpace/etc check `s.Shift` before resetting the
+  cursor.
   Generated code adds two more shift points at the dispatch-loop
   boundary: `ReadMore(i); i = 0` after `ObjectOpen+SkipSpace` and
   after the per-iteration value decode + SkipSpace. Each known-key
@@ -667,8 +678,10 @@ func (s *T) UnmarshalJSON(data []byte) error                     // wraps decode
    instead of returning. Single `if len(errs) > 0 { return errs }` at
    success paths.
 8. **Mod + validation after field read.** `renderMods` → `renderValidationOn`
-   (regular path's helper, post-processed to rewrite `return result, err`
-   into `return result, 0, err` for the `(T, int, error)` shape).
+   both write directly into the parent buffer; `renderValidationOn` takes
+   a `posVar` parameter that emits the right return shape inline
+   (`return result, err` at top level, `return result, i, err` mid-stream
+   for slice/map element readers) — no post-processing pass.
 9. **Pointer fields** emit a 4-byte `null` peek → nil branch, else stack-
    local `var _v <PointeeType>` + recursive inner read + `&_v`.
 10. **Cross-package struct fallback (statically dispatched).** The
@@ -967,8 +980,13 @@ On the tiny complex payload (~440 bytes): Unmarshal ~415 ns, 2 allocs,
 3. **No runtime reflection anywhere.** Even the cross-package struct fallback
    uses `encoding/json.Unmarshal` (which reflects) only for types NOT in
    the generation pass.
-4. **Stream pool only pools the `*Stream` wrapper**, not its buffer. The
-   buffer is fresh-allocated per `Init` and retained by aliases after return.
+4. **`Stream` is stack-allocatable; no pool.** `var s scan.Stream; s.Reset(r, buf)`
+   and the caller owns `buf`'s lifecycle. There used to be an
+   `Acquire`/`Release` pair around a `sync.Pool` of Streams; the pool
+   was removed because it bundled too many implicit-lifetime
+   assumptions about the buffer and led to silent corruption when
+   callers reused buf across decodes. Honest API now: the caller
+   knows what their buffer does.
 5. **Benchmarks live in a separate module (`bench/` with its own
    `go.mod`).** Two reasons. (a) easyjson's codegen bootstrap compiles
    a non-test build that can't see types in `_test.go` files, so the
@@ -1099,7 +1117,7 @@ Running tests — each sub-module is reached by `cd`-ing into it since
 `./...` from the root does not cross module boundaries:
 
 ```sh
-go test ./...
+GOEXPERIMENT=jsonv2 go test ./...
 (cd integrationtests && GOEXPERIMENT=jsonv2 go test ./...)
 (cd bench && GOEXPERIMENT=jsonv2 go test ./...)
 ```
@@ -1208,6 +1226,82 @@ their generated code.
        sibling method only for structs that want it. Lowest blast
        radius.
   Pick when there's a concrete consumer asking for the merge shape.
+
+- **Improve fuzz coverage.** Current fuzz surface (in
+  `integrationtests/fuzz_test.go`) is three fuzzers over `Node`:
+  `FuzzScanNoPanic` (panic safety on random bytes), `FuzzRoundtrip`
+  (encode → decode fixed-point after one round), and `FuzzCompat`
+  (ggen ↔ jsonv2 agreement when both accept). Gaps worth closing:
+  per-feature fuzzers covering the corners `Node` doesn't reach —
+  alias types (primitive, struct, container variants), every
+  validation rule (oneof, runes, ascii, email, …) with rule-specific
+  generators, the streaming path (`UnmarshalStream` over a chunked
+  reader with varied chunk sizes), `[N]T` strict-length arrays,
+  `KindAny`/`KindRawJSON` edge cases (deep nesting, mixed
+  null/array/object), `omitempty`/`omitzero` round-trip stability,
+  multierr accumulation. Add per-fuzzer seeds for known-tricky
+  inputs (truncated `\uXXXX`, surrogate pairs, `null` mid-value,
+  trailing-garbage variants).
+
+- **Add more CLI flags.** Specifically what's missing is TBD —
+  candidates to consider when revisiting: a `-out-dir` for shared
+  output (vs the current next-to-source layout), per-struct selectors
+  beyond the trailing-name filter (`-only=Foo,Bar` style), an explicit
+  `-tag <tag>` to scope generation to one build-tag bucket, and a
+  `-dry-run` that prints what would be written without touching the
+  filesystem. None are urgent; pick the ones that map to a real
+  workflow before adding.
+
+- **Custom vet tool.** Ship a `ggenvet` (`go vet -vettool=ggenvet`)
+  binary that catches misuses the compiler can't see. The biggest one
+  is the **zero-copy aliasing footgun**: decoded strings alias the
+  source `[]byte`, so mutating the input after `DecodeFrom` silently
+  corrupts the decoded values. A flow-sensitive check that flags any
+  write to a `data` arg (slice index assignment, `append` over the
+  same backing, `copy(data, …)`) after it was passed to a ggen
+  `DecodeFrom` / `decode.Unmarshal[T]` / `decode.Read[T]` would catch
+  real bugs. Other candidates:
+    - **stale generated file** — find a struct with `//ggen:generate`
+      whose `<dir>_ggen.go` is missing the corresponding method set
+      (e.g. field added after last regen).
+    - **annotation/tag mismatch** — `ggen:"required"` on a pointer
+      field marked `omitempty`; `ggen:"oneof=…"` whose values don't
+      lex as the field's kind; `mod:"trim"` on a non-string.
+    - **validation-rule applicability gaps** — extend the parse-time
+      matrix into vet so misuses appear at `go vet` time instead of
+      next codegen.
+  Distribution shape: separate `ggenvet/` subpackage with its own
+  `main.go` so users can `go install …/ggenvet@latest`. Reuses ggen's
+  parse layer (`packages.Load` + the tag parser) so checks stay in
+  sync with codegen rules.
+
+- **Ship a `SKILL.md` for the ggen CLI.** Claude Code Skills format —
+  a single markdown file that briefs an AI agent on how to drive ggen
+  from the shell: when to invoke it, which flags map to which user
+  intents, the annotation surface, the regen-after-edit workflow, and
+  the common pitfalls (zero-copy aliasing, build-tag bucketing, AST-only
+  fallback when no `go.mod`). Distribution shape: drop `SKILL.md` at the
+  repo root (mirrors how other tools ship). Most of the content can be
+  distilled from this CLAUDE.md's "Generator CLI" + "Flags" + "Struct
+  tags" sections; the skill version trims internal-implementation
+  asides and focuses on the user-facing decision tree.
+
+- **Revisit `validation.CustomError` shape.** Today it carries
+  `{Field, Name string, Cause error}` and exposes `Unwrap()`. Specifics
+  TBD, but the current shape has rough edges worth a pass:
+    - `Name` doubles as the rule identifier in messages ("validation
+      %q failed") and as the registry key — separating those (e.g.
+      `Rule string` for the rule name vs `Name string` for the
+      user-facing label) would let downstream consumers match on rule
+      identity without string comparison.
+    - No `Value any` field like the other typed errors carry, so a
+      `CustomError` doesn't expose what the user's validator rejected.
+      Adding one would unify the inspect-failure pattern across all
+      `validation.Error` types.
+    - `Cause` is `error` but in practice it's almost always the user
+      function's return — a typed sub-interface could make the
+      `errors.As` shape more useful.
+  Pick the angle when there's a concrete report-shape ask.
 
 ## Tried and rejected (don't re-attempt without new evidence)
 
@@ -1392,11 +1486,11 @@ their generated code.
   can write themselves; no need to bake it in.
 
 - **SIMD / AVX2 vectorization for hot scanning loops.** Sonic's
-  decoder hits 235 MB/s on Mega Unmarshal vs ggen's 251 MB/s in part
-  because bytedance hand-wrote AMD64 assembly that uses AVX2 for
-  string-quote scanning, whitespace skipping, and number parsing.
-  ggen currently does these byte-at-a-time in `scan/scan.go` and
-  `scan/stream.go`. Candidates worth probing:
+  decoder narrows the gap on Mega Unmarshal in part because bytedance
+  hand-wrote AMD64 assembly that uses AVX2 for string-quote scanning,
+  whitespace skipping, and number parsing. ggen currently does these
+  byte-at-a-time in `scan/scan.go` and `scan/stream.go`. Candidates
+  worth probing:
     - `bytes.IndexByte` (already SIMD-accelerated by Go runtime — we
       use it for the string-closing-quote scan; verify it's vectorizing
       on amd64).
@@ -1418,13 +1512,14 @@ their generated code.
   acceptable. Don't speculatively add asm files "to keep up with
   sonic"; the gap is small and ggen's portability is a feature.
 
-Fuzz tests live in `fuzz_test.go` — three targets over `Node`:
-`FuzzScanNoPanic` (panic safety on random bytes), `FuzzRoundtrip` (encode
-→ decode is a fixed point after one round), `FuzzCompat` (when both ggen
-and jsonv2 accept input, decoded values must agree via `sameWire`). Run a
-target with `go test -run=^$ -fuzz=FuzzX -fuzztime=30s`. Known
-accept/reject drifts the compat target deliberately ignores: top-level
-`null`, trailing garbage, invalid UTF-8 inside strings.
+Fuzz tests live in `integrationtests/fuzz_test.go` — three targets
+over `Node`: `FuzzScanNoPanic` (panic safety on random bytes),
+`FuzzRoundtrip` (encode → decode is a fixed point after one round),
+`FuzzCompat` (when both ggen and jsonv2 accept input, decoded values
+must agree via `sameWire`). Run a target with `go test -run=^$
+-fuzz=FuzzX -fuzztime=30s` from inside `integrationtests/`. Known
+accept/reject drifts the compat target deliberately ignores:
+top-level `null`, trailing garbage, invalid UTF-8 inside strings.
 
 ## Working with this file
 
