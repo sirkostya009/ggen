@@ -4,13 +4,14 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/fs"
 	"maps"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
+
+	"golang.org/x/tools/go/packages"
 )
 
 const (
@@ -49,7 +50,7 @@ func main() {
 	flag.BoolVar(&vvv, "vvv", false, "trace-level diagnostics")
 	flag.Usage = func() {
 		fmt.Fprintln(os.Stderr, "usage:")
-		fmt.Fprintln(os.Stderr, "  ggen ./...                    walk, process every package with //ggen:generate-annotated structs")
+		fmt.Fprintln(os.Stderr, "  ggen ./...                    process every package matched by the pattern (module-scoped, same as `go build`)")
 		fmt.Fprintln(os.Stderr, "  ggen <dir>                    process one package")
 		fmt.Fprintln(os.Stderr, "  ggen <file.go> [Types...]     single-file mode")
 		fmt.Fprintln(os.Stderr)
@@ -100,19 +101,19 @@ func main() {
 		cliLog.Fatal(errors.New("-o / -pkg cannot be used with -dry (dry run emits no file)"))
 	}
 
-	if root, ok := strings.CutSuffix(target, "/..."); ok {
+	if strings.HasSuffix(target, "...") {
 		if outFlag != "" {
-			cliLog.Fatal(errors.New("-o cannot be used with ./... (walk visits multiple directories; each writes its own output)"))
+			cliLog.Fatal(errors.New("-o cannot be used with ./... (pattern matches multiple packages; each writes its own output)"))
 		}
-		// Walk mode collects errors across packages instead of bailing
-		// on the first: a single bad rule in pkg/a shouldn't hide
-		// problems in pkg/b. Filesystem-walk errors are fatal — we
-		// can't recover from a permissions failure mid-walk.
+		// Pattern mode collects errors across packages instead of
+		// bailing on the first: a single bad rule in pkg/a shouldn't
+		// hide problems in pkg/b. packages.Load failures (no go.mod,
+		// invalid pattern, etc.) are fatal — we can't recover.
 		act := func(dir string) error { return generateDir(dir, "", "") }
 		if cliDry {
 			act = checkPackage
 		}
-		if err := walkPackages(root, act); err != nil {
+		if err := walkPackages(target, act); err != nil {
 			cliLog.Fatal(err)
 		}
 	} else if info, err := os.Stat(target); err != nil {
@@ -190,86 +191,74 @@ func applyCLIFlags(structs []StructInfo) {
 	}
 }
 
-// walkPackages descends `root` recursively, depth-first, and invokes
-// `act` on every directory containing Go source. Used by both the
-// codegen walk (act = generateDir) and the dry-run check walk
-// (act = checkPackage) — every per-package processing path goes through
-// here so traversal semantics (skip rules, parent-after-children
-// ordering, per-level concurrency, error accumulation) stay in lockstep.
-func walkPackages(root string, act func(dir string) error) error {
-	// Collect directories first, then process deepest-first so a
-	// parent package that depends on a child package (e.g. a struct
-	// field of type child.Foo) sees the child's already-generated
-	// methods at packages.Load time. Pre-order processing of the same
-	// tree would generate the parent first and miss the child's
-	// JSONSize/AppendJSON, causing the fallback-128 path to kick in.
-	var dirs []string
-	if err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if !d.IsDir() {
-			return nil
-		}
-		if path != root && shouldSkipDir(d.Name()) {
-			return fs.SkipDir
-		}
-		dirs = append(dirs, path)
-		return nil
-	}); err != nil {
+// walkPackages resolves `pattern` via golang.org/x/tools/go/packages
+// and invokes `act` on every matched package's directory. Module-
+// scoped, workspace-aware, same dispatch as `go build <pattern>` /
+// `go test <pattern>` — never crosses module boundaries. Patterns
+// matching no packages produce a load-level diagnostic; the run still
+// returns nil so a no-op `ggen ./...` in an empty tree doesn't blow up.
+//
+// Processing order is post-order over the matched import subgraph:
+// a package's `_ggen.go` is on disk before any matched importer
+// runs, so the parent's parsePackage reads the child's generated
+// methods and routes cross-package field types through direct
+// DecodeFrom / AppendJSON calls instead of falling back to
+// encoding/json. Dependencies outside the matched set are left
+// alone — they're someone else's run.
+func walkPackages(pattern string, act func(dir string) error) error {
+	cfg := &packages.Config{
+		Mode: packages.NeedName | packages.NeedFiles | packages.NeedImports,
+	}
+	pkgs, err := packages.Load(cfg, pattern)
+	if err != nil {
 		return err
 	}
-	// Bucket by depth so we can fan out parallel processing within
-	// each level while keeping the deepest-first invariant: every
-	// child finishes (parse + generate + write) before any parent
-	// starts. Sibling packages at the same depth have no ordering
-	// dependency on each other.
-	byDepth := make(map[int][]string, len(dirs))
-	for _, p := range dirs {
-		d := strings.Count(p, string(filepath.Separator))
-		byDepth[d] = append(byDepth[d], p)
+	// Surface per-package load errors via our logger instead of
+	// returning on the first one — a broken-import package shouldn't
+	// hide problems in its siblings, and the user wants the full
+	// punch list in one run.
+	for _, p := range pkgs {
+		for _, e := range p.Errors {
+			cliLog.Error(fmt.Errorf("%s: %s", p.PkgPath, e))
+		}
 	}
-	depths := make([]int, 0, len(byDepth))
-	for d := range byDepth {
-		depths = append(depths, d)
-	}
-	// Descending depth — leaves first. Sibling packages at the same
-	// depth still fan out concurrently; the bucketing exists to keep
-	// the leaves-before-parents invariant (a parent's packages.Load
-	// can read a child's already-generated _ggen.go).
-	slices.SortFunc(depths, func(a, b int) int { return b - a })
 
-	for _, d := range depths {
-		level := byDepth[d]
-		if len(level) == 1 {
-			// One package at this depth — skip the goroutine overhead.
-			if err := act(level[0]); err != nil {
-				cliLog.Error(fmt.Errorf("in %s: %w", level[0], err))
+	matched := make(map[string]bool, len(pkgs))
+	for _, p := range pkgs {
+		matched[p.PkgPath] = true
+	}
+	// Dedup by directory (packages.Load can return base + test
+	// variants pointing at the same dir; generateDir already loads
+	// both via Tests:true internally, so visit once).
+	visited := make(map[string]struct{}, len(pkgs))
+	seenPath := make(map[string]struct{}, len(pkgs))
+	var visit func(p *packages.Package)
+	visit = func(p *packages.Package) {
+		if _, ok := seenPath[p.PkgPath]; ok {
+			return
+		}
+		seenPath[p.PkgPath] = struct{}{}
+		for _, imp := range p.Imports {
+			if matched[imp.PkgPath] {
+				visit(imp)
 			}
-			continue
 		}
-		var wg sync.WaitGroup
-		for _, path := range level {
-			wg.Go(func() {
-				if err := act(path); err != nil {
-					cliLog.Error(fmt.Errorf("in %s: %w", path, err))
-				}
-			})
+		if len(p.GoFiles) == 0 {
+			return
 		}
-		wg.Wait()
+		dir := filepath.Dir(p.GoFiles[0])
+		if _, ok := visited[dir]; ok {
+			return
+		}
+		visited[dir] = struct{}{}
+		if err := act(dir); err != nil {
+			cliLog.Error(fmt.Errorf("in %s: %w", dir, err))
+		}
+	}
+	for _, p := range pkgs {
+		visit(p)
 	}
 	return nil
-}
-
-func shouldSkipDir(name string) bool {
-	if name == "" {
-		return false
-	}
-	switch name {
-	case "vendor", "testdata", "node_modules":
-		return true
-	}
-	return name[0] == '.' || name[0] == '_'
 }
 
 // genGlobalsMu protects every globally-shared piece of generator

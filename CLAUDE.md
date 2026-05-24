@@ -256,7 +256,7 @@ net.IP/netip helpers are inlined directly in generated code (just
 ### Invocation
 
 ```
-ggen ./...                    walk all packages from cwd
+ggen ./...                    process every package matched by the pattern (module-scoped, same as `go build`)
 ggen <dir>                    one package
 ggen <file.go> [Names...]     single file; optional struct name filter
 ```
@@ -282,11 +282,31 @@ graphs (sonic / easyjson / jsonv2). When the export data is unavailable
 emits `encoding/json` for the affected type. Soft degradation, not a
 hard failure.
 
-Walk mode (`./...`) fans goroutines per depth level via `wg.Go`. Leaves
-process first so a parent package's `packages.Load` reads its children's
-already-generated `_ggen.go` files. Sibling packages at the same depth
-have no ordering dependency and run concurrently — no manual job cap;
-the post-NeedDeps memory budget makes unbounded NumCPU fanout fine.
+Pattern mode (`./...`, `./sub/...`, `...`) resolves the pattern via
+`packages.Load` — same dispatch as `go build <pattern>` / `go test
+<pattern>`. Module-scoped and workspace-aware; never crosses module
+boundaries. A subdirectory carrying its own `go.mod` is a separate
+module and is skipped under the parent's `./...`, same as `go build`;
+multi-module repos invoke ggen once per module (or wire a `go.work`
++ per-module loop) the way they already do for `go build` / `go test`.
+Test-only packages (no non-`_test.go` files) are skipped — the
+discovery `Mode` doesn't set `Tests: true`, mirroring `go list`'s
+default. Single-package mode (`ggen <dir>`) still picks them up.
+
+Processing order is post-order over the matched import subgraph (deps
+first within the matched set) so each parent's `parsePackage` reads
+its already-generated child `_ggen.go` and routes cross-package field
+types through direct `DecodeFrom` / `AppendJSON` calls instead of the
+`encoding/json` fallback. Transitive deps outside the matched set are
+left alone — they're someone else's run. Pattern-mode work runs
+sequentially in topo order; the per-pkg parse cost dominates and the
+generator's global lock already serializes the codegen phase, so the
+old depth-keyed goroutine fanout is gone.
+
+Dot- and underscore-prefixed dirs (`.git`, `_build`, …), `vendor/`,
+`testdata/`, and `node_modules/` are skipped automatically — `go list`
+already filters them out under any pattern. No custom skip rule lives
+in ggen anymore.
 
 ### Flags (all opt-in, apply to every struct in the pass)
 
@@ -1355,7 +1375,9 @@ agents share the host, and match the path the test harness expects.
 
 ```sh
 go build -o ggen .
-./ggen . ./bench ./integrationtests/thirdparty2
+./ggen .
+(cd bench && GOEXPERIMENT=jsonv2 ../ggen ./...)
+(cd integrationtests && GOEXPERIMENT=jsonv2 ../ggen ./thirdparty2)
 # easyjson for bench:
 easyjson bench/types.go
 # integrationtests is wired with //go:generate directives; from inside
@@ -1363,9 +1385,11 @@ easyjson bench/types.go
 (cd integrationtests && GOEXPERIMENT=jsonv2 go generate ./...)
 ```
 
-The walk crosses module boundaries — `./...` from the root visits
-`bench/` and `integrationtests/` even though they are separate
-sub-modules. ggen reads source files, not module manifests.
+ggen is now module-scoped — `./...` from the root visits ONLY root-
+module packages. `bench/` and `integrationtests/` each carry their own
+`go.mod` and must be regen'd from inside (one invocation per module),
+the same way `go build ./...` already behaves on this repo. The whole
+project regen is therefore a small loop rather than a single command.
 
 In `integrationtests/`, each annotated source file carries its own
 `//go:generate ../ggen $GOFILE` directive and emits a sibling
@@ -1444,29 +1468,6 @@ their generated code.
       function's return — a typed sub-interface could make the
       `errors.As` shape more useful.
   Pick the angle when there's a concrete report-shape ask.
-
-- **Drop eager directory walk in `./...` mode; rely on module
-  declarations + work files instead.** Today `ggen ./...` from the
-  repo root walks the filesystem depth-first to discover every
-  directory containing `.go` files, then calls `packages.Load` on
-  each. Cross-module boundaries are crossed implicitly — the walker
-  doesn't know about `go.mod` / `go.work`, it just sees directories.
-  That works but has two costs: (1) `.gitignore`d / vendored /
-  tooling directories that happen to contain Go files get loaded for
-  nothing; (2) the parent-after-children ordering needed for cross-
-  pkg ggen-method detection (see "Walk mode" in this doc) is enforced
-  by a depth-keyed wg fan-out instead of being derivable from module
-  topology. Replace the walker with: parse the nearest `go.mod` (or
-  `go.work` if present), enumerate its `module`/`use` declarations,
-  and load each package via its import path. Modules outside the
-  declaration set are skipped; the walker's "depth" becomes the
-  module graph's reverse-topological order. Pros: matches what `go
-  build ./...` actually does, no surprise hits on vendored Go, faster
-  startup on big trees. Cons: a sub-tree that lacks a `go.mod` /
-  isn't `use`d from a `go.work` becomes invisible to `./...` — users
-  with multi-module repos that aren't workspaced lose the implicit
-  cross-walk. Probably want a `-walk` opt-out flag to restore the
-  current filesystem walk for those holdouts.
 
 ## Tried and rejected (don't re-attempt without new evidence)
 

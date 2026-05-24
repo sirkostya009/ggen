@@ -373,21 +373,6 @@ type A struct { X int `+"`"+`json:"x"`+"`"+` }
 	}
 }
 
-func TestShouldSkipDir(t *testing.T) {
-	skip := []string{".git", "_build", "vendor", "testdata", "node_modules"}
-	for _, n := range skip {
-		if !shouldSkipDir(n) {
-			t.Errorf("shouldSkipDir(%q) = false, want true", n)
-		}
-	}
-	keep := []string{"src", "example", "pkg"}
-	for _, n := range keep {
-		if shouldSkipDir(n) {
-			t.Errorf("shouldSkipDir(%q) = true, want false", n)
-		}
-	}
-}
-
 func writeFile(t *testing.T, dir, name, content string) {
 	t.Helper()
 	if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0644); err != nil {

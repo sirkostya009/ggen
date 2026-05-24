@@ -59,6 +59,14 @@ func writeFixture(t *testing.T, path, content string) {
 	}
 }
 
+// writeGoMod drops a minimal go.mod into dir. Walk-mode tests need
+// one because `ggen ./...` now resolves the pattern via
+// packages.Load — same as `go build ./...`, so it needs module context.
+func writeGoMod(t *testing.T, dir, module string) {
+	t.Helper()
+	writeFixture(t, filepath.Join(dir, "go.mod"), "module "+module+"\n\ngo 1.26\n")
+}
+
 func mustReadOutput(t *testing.T, path string) string {
 	t.Helper()
 	b, err := os.ReadFile(path)
@@ -231,6 +239,7 @@ type Skipped struct {
 		// -vvv lifts to LevelTrace. Use a dir with no annotations so
 		// the `no annotated structs in X; skipping` trace line fires.
 		base := t.TempDir()
+		writeGoMod(t, base, "vvvtrace")
 		sub := filepath.Join(base, "empty")
 		writeFixture(t, filepath.Join(sub, "msg.go"), `package empty
 
@@ -544,6 +553,7 @@ type Tagged struct {
 	t.Run("WalkSubpackages", func(t *testing.T) {
 		t.Parallel()
 		base := t.TempDir()
+		writeGoMod(t, base, "walksub")
 		a := filepath.Join(base, "a")
 		b := filepath.Join(base, "b")
 		writeFixture(t, filepath.Join(a, "msg.go"),
@@ -557,63 +567,28 @@ type Tagged struct {
 		mustHaveFile(t, filepath.Join(b, "b_ggen.go"))
 	})
 
-	t.Run("WalkSubModuleResolvesUnderItsOwnGoMod", func(t *testing.T) {
+	t.Run("WalkStopsAtSubModuleBoundary", func(t *testing.T) {
 		t.Parallel()
-		// `./...` from the root module must descend into a subdirectory
-		// that has its OWN go.mod and successfully load it under that
-		// sub-module's context — packages.Load must be invoked with
-		// cfg.Dir = sub_dir so type info resolves. The custom-validator
-		// `@NotEmpty` reference forces the type-info path: without it,
-		// the AST-only fallback can't resolve @-funcs and the build
-		// fails with "@Func references require Go module context".
-		//
-		// Regressing this (e.g. dropping cfg.Dir) leaves the sub-module
-		// silently un-generated even though `ggen ./...` exits 0 — the
-		// kind of bug a literal "exists in path" check misses; we
-		// explicitly assert (a) basename in filename and (b) the
-		// @NotEmpty call lands in the body.
+		// `ggen ./...` is now module-scoped — same as `go build ./...`
+		// / `go test ./...`. A subdirectory with its OWN go.mod is a
+		// separate module and must NOT be visited by the parent's
+		// pattern run. Users with multi-module repos invoke ggen
+		// once per module (or wire a go.work + per-module loop) the
+		// same way they already do for `go build`.
 		base := t.TempDir()
-		writeFixture(t, filepath.Join(base, "go.mod"), "module rootmod\n\ngo 1.26\n")
+		writeGoMod(t, base, "rootmod")
 		writeFixture(t, filepath.Join(base, "root.go"),
 			strings.ReplaceAll(minimalStruct, "fixture", "rootmod"))
 		sub := filepath.Join(base, "sub")
-		writeFixture(t, filepath.Join(sub, "go.mod"), "module submod\n\ngo 1.26\n")
-		writeFixture(t, filepath.Join(sub, "msg.go"), `package sub
-
-//ggen:generate
-type Item struct {
-	Name string `+"`"+`json:"name" ggen:"@NotEmpty"`+"`"+`
-}
-
-func NotEmpty(s string) error {
-	if s == "" {
-		return fmt.Errorf("empty")
-	}
-	return nil
-}
-`)
-		// fmt import — keep it simple, the validator references it.
-		writeFixture(t, filepath.Join(sub, "helper.go"), `package sub
-
-import "fmt"
-
-var _ = fmt.Sprint
-`)
-		out, err := runCLI(t, bin, base, "./...")
-		if err != nil {
+		writeGoMod(t, sub, "submod")
+		writeFixture(t, filepath.Join(sub, "msg.go"),
+			strings.ReplaceAll(strings.ReplaceAll(minimalStruct, "fixture", "sub"), "Msg", "SubMsg"))
+		if out, err := runCLI(t, bin, base, "./..."); err != nil {
 			t.Fatalf("ggen ./...: %v\n%s", err, out)
 		}
-		// Sub-module's generated file must (a) exist with the right
-		// basename and (b) contain the @-func call site — proving
-		// type info was available during codegen.
-		genPath := filepath.Join(sub, "sub_ggen.go")
-		mustHaveFile(t, genPath)
-		got := mustReadOutput(t, genPath)
-		if !strings.Contains(got, "NotEmpty(") {
-			t.Errorf("sub_ggen.go missing NotEmpty call — @-func didn't resolve:\n%s", got)
-		}
-		// Root module also generated.
+		// Root module generated; sub-module skipped.
 		mustHaveFile(t, filepath.Join(base, filepath.Base(base)+"_ggen.go"))
+		mustNotHaveFile(t, filepath.Join(sub, "sub_ggen.go"))
 	})
 
 	t.Run("Dot_DoesNotRecurseIntoSubpackages", func(t *testing.T) {
@@ -637,13 +612,13 @@ var _ = fmt.Sprint
 		mustNotHaveFile(t, filepath.Join(sub, "sub_ggen.go"))
 	})
 
-	t.Run("Walk_PathSlashEllipsis", func(t *testing.T) {
+	t.Run("Walk_RelativeSubtreePattern", func(t *testing.T) {
 		t.Parallel()
-		// `path/...` (relative path without leading `./`) is a third
-		// accepted walk form — walkTarget strips `/...` and walks from
-		// the prefix. Confirms the suffix-strip branch, distinct from
-		// the literal `./...` / `...` switch above.
+		// `./pkg/...` scopes the pattern to a subtree — same as
+		// `go build ./pkg/...`. Sibling dirs outside the prefix
+		// don't get processed.
 		base := t.TempDir()
+		writeGoMod(t, base, "subtree")
 		root := filepath.Join(base, "pkg")
 		leaf := filepath.Join(root, "leaf")
 		writeFixture(t, filepath.Join(root, "top.go"),
@@ -655,8 +630,8 @@ var _ = fmt.Sprint
 		sibling := filepath.Join(base, "other")
 		writeFixture(t, filepath.Join(sibling, "msg.go"),
 			strings.ReplaceAll(strings.ReplaceAll(minimalStruct, "fixture", "other"), "Msg", "Other"))
-		if out, err := runCLI(t, bin, base, "pkg/..."); err != nil {
-			t.Fatalf("ggen pkg/...: %v\n%s", err, out)
+		if out, err := runCLI(t, bin, base, "./pkg/..."); err != nil {
+			t.Fatalf("ggen ./pkg/...: %v\n%s", err, out)
 		}
 		mustHaveFile(t, filepath.Join(root, "pkg_ggen.go"))
 		mustHaveFile(t, filepath.Join(leaf, "leaf_ggen.go"))
@@ -762,6 +737,7 @@ type Bad struct {
 		// must surface, the clean dir's `wrote` line must still appear,
 		// and the exit code must be non-zero.
 		base := t.TempDir()
+		writeGoMod(t, base, "walkerrs")
 		writeFixture(t, filepath.Join(base, "a", "msg.go"), `package a
 
 //ggen:generate
@@ -803,9 +779,10 @@ type C struct {
 
 	t.Run("Walk_RejectsOutputOverride", func(t *testing.T) {
 		t.Parallel()
-		// `-o` writes one file; walk mode writes one per package. The
+		// `-o` writes one file; pattern mode writes one per package. The
 		// combination has no sensible meaning, so reject it up front
-		// instead of silently dropping the flag.
+		// instead of silently dropping the flag. Rejection fires before
+		// packages.Load runs, so no go.mod is needed.
 		base := t.TempDir()
 		a := filepath.Join(base, "a")
 		writeFixture(t, filepath.Join(a, "msg.go"),
@@ -852,6 +829,7 @@ type C struct {
 				name: "Walk",
 				setup: func(t *testing.T) (string, []string, []string) {
 					base := t.TempDir()
+					writeGoMod(t, base, "drywalk")
 					a := filepath.Join(base, "a")
 					b := filepath.Join(base, "b")
 					writeFixture(t, filepath.Join(a, "msg.go"),
@@ -914,6 +892,7 @@ type Multi struct {
 				name: "Walk_AcrossPackages",
 				setup: func(t *testing.T) (string, []string, []string, []string) {
 					base := t.TempDir()
+					writeGoMod(t, base, "drywalkerrs")
 					writeFixture(t, filepath.Join(base, "a", "msg.go"), `package a
 
 //ggen:generate
@@ -982,7 +961,11 @@ type B struct {
 
 	t.Run("WalkSkipsDotAndUnderscoreDirs", func(t *testing.T) {
 		t.Parallel()
+		// `go list ./...` skips dot- and underscore-prefixed dirs by
+		// convention; packages.Load inherits that, so the previous
+		// custom skip rule is redundant.
 		base := t.TempDir()
+		writeGoMod(t, base, "skipdirs")
 		hidden := filepath.Join(base, ".hidden")
 		skipped := filepath.Join(base, "_skipped")
 		visible := filepath.Join(base, "visible")

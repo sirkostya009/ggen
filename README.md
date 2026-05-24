@@ -147,7 +147,8 @@ type User struct {
 
 ```sh
 ggen .                # current package
-ggen ./...            # walk recursively (skips dot/underscore dirs, vendor, testdata, node_modules)
+ggen ./...            # every package matched by the pattern — module-scoped, same as `go build ./...`
+ggen ./pkg/...        # subtree pattern (relative paths must start with `./`)
 ggen path/to/file.go  # one file; optional struct-name filter as trailing args
 ```
 

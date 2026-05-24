@@ -46,14 +46,16 @@ go get github.com/sirkostya009/ggen            # runtime subpackages
 
 ```sh
 ggen .                 # current package
-ggen ./...             # walk recursively (skips dot/underscore dirs, vendor, testdata, node_modules)
+ggen ./...             # every package matched by the pattern — module-scoped, same as `go build ./...`
+ggen ./pkg/...         # subtree pattern (relative paths must start with `./`)
 ggen <dir>             # one package
 ggen <file.go>         # one file
 ggen <file.go> Foo Bar # one file, only structs named Foo or Bar, will fully overwrite existing <file_ggen.go> file
 ```
 
-The walk crosses module boundaries — `./...` reads source files, not
-module manifests.
+Test-only packages (no non-`_test.go` files) are skipped under pattern
+mode — invoke `ggen <dir>` directly when the target only has
+`_test.go` sources.
 
 **Run ggen under the same `GOEXPERIMENT` as the user's build** —
 `packages.Load` honors build tags, so files behind `goexperiment.jsonv2`
