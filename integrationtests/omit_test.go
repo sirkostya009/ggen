@@ -4,7 +4,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sirkostya009/ggen/decode"
 	"github.com/sirkostya009/ggen/encode"
 )
 
@@ -76,7 +75,7 @@ func TestStringTag_marshal(t *testing.T) {
 
 func TestStringTag_unmarshal(t *testing.T) {
 	input := []byte(`{"name":"x","count":"99"}`)
-	got, err := decode.Unmarshal[OmitStruct](input)
+	got, _, err := OmitStruct{}.DecodeFrom(input)
 	if err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -87,7 +86,7 @@ func TestStringTag_unmarshal(t *testing.T) {
 
 func TestStringTag_unmarshalBadString(t *testing.T) {
 	input := []byte(`{"name":"x","count":"abc"}`)
-	if _, err := decode.Unmarshal[OmitStruct](input); err == nil {
+	if _, _, err := (OmitStruct{}).DecodeFrom(input); err == nil {
 		t.Error("expected parse error for non-numeric string")
 	}
 }
@@ -95,7 +94,7 @@ func TestStringTag_unmarshalBadString(t *testing.T) {
 func TestStringTag_unmarshalExpectsString(t *testing.T) {
 	// count is plain number, not a string — must error
 	input := []byte(`{"name":"x","count":99}`)
-	if _, err := decode.Unmarshal[OmitStruct](input); err == nil {
+	if _, _, err := (OmitStruct{}).DecodeFrom(input); err == nil {
 		t.Error("expected error when count is bare number instead of string-wrapped")
 	}
 }
@@ -103,7 +102,7 @@ func TestStringTag_unmarshalExpectsString(t *testing.T) {
 func TestOmit_roundtrip(t *testing.T) {
 	orig := OmitStruct{Name: "alice", Bio: "dev", Score: 9.5, StrCount: 42, Tags: []string{"go", "rust"}}
 	out, _ := encode.Marshal(orig)
-	got, err := decode.Unmarshal[OmitStruct](out)
+	got, _, err := OmitStruct{}.DecodeFrom(out)
 	if err != nil {
 		t.Fatalf("unmarshal: %v\n%s", err, out)
 	}
@@ -167,7 +166,7 @@ func TestStringTag_AllVariants_unmarshal(t *testing.T) {
 	in := []byte(`{"i8":"-8","i16":"16","i32":"-32","i64":"64",` +
 		`"u8":"8","u16":"16","u32":"32","u64":"64",` +
 		`"f32":"1.25","f64":"2.5","b":true}`)
-	got, err := decode.Unmarshal[StringTagStruct](in)
+	got, _, err := StringTagStruct{}.DecodeFrom(in)
 	if err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}

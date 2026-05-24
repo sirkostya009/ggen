@@ -3,8 +3,6 @@ package integrationtests
 import (
 	"strings"
 	"testing"
-
-	"github.com/sirkostya009/ggen/decode"
 )
 
 func TestDuplicateKey_rejected(t *testing.T) {
@@ -12,7 +10,7 @@ func TestDuplicateKey_rejected(t *testing.T) {
 	// decoder level; if that's ever relaxed, our generated `seen<Field>`
 	// guard is the fallback.
 	in := []byte(`{"name":"guest","n":1,"n":999}`)
-	_, err := decode.Unmarshal[HookedStruct](in)
+	_, _, err := HookedStruct{}.DecodeFrom(in)
 	if err == nil {
 		t.Fatal("expected duplicate-key error")
 	}
@@ -23,7 +21,7 @@ func TestDuplicateKey_rejected(t *testing.T) {
 
 func TestDuplicateKey_firstFieldAlsoRejected(t *testing.T) {
 	in := []byte(`{"name":"a","name":"b","n":1}`)
-	_, err := decode.Unmarshal[HookedStruct](in)
+	_, _, err := HookedStruct{}.DecodeFrom(in)
 	if err == nil {
 		t.Fatal("expected duplicate-key error")
 	}
@@ -34,7 +32,7 @@ func TestDuplicateKey_firstFieldAlsoRejected(t *testing.T) {
 
 func TestDuplicateKey_cleanPasses(t *testing.T) {
 	in := []byte(`{"name":"ok","n":42}`)
-	got, err := decode.Unmarshal[HookedStruct](in)
+	got, _, err := HookedStruct{}.DecodeFrom(in)
 	if err != nil {
 		t.Fatalf("unexpected: %v", err)
 	}
@@ -59,7 +57,7 @@ type AllowDupsStruct struct {
 // scan.SkipValue'd past instead of being parsed and assigned.
 func TestAllowDups_firstWins(t *testing.T) {
 	in := []byte(`{"name":"alice","name":"bob","n":1}`)
-	got, err := decode.Unmarshal[AllowDupsStruct](in)
+	got, _, err := AllowDupsStruct{}.DecodeFrom(in)
 	if err != nil {
 		t.Fatalf("unexpected: %v", err)
 	}
@@ -75,7 +73,7 @@ func TestAllowDups_firstWins(t *testing.T) {
 // to confirm the skip path works for non-string values too.
 func TestAllowDups_firstWins_numeric(t *testing.T) {
 	in := []byte(`{"name":"x","n":10,"n":999,"n":-5}`)
-	got, err := decode.Unmarshal[AllowDupsStruct](in)
+	got, _, err := AllowDupsStruct{}.DecodeFrom(in)
 	if err != nil {
 		t.Fatalf("unexpected: %v", err)
 	}
@@ -91,7 +89,7 @@ func TestAllowDups_firstWins_numeric(t *testing.T) {
 func TestAllowDups_skipMalformedValueStillErrors(t *testing.T) {
 	// First "n":1 parsed; second "n":@@@ is invalid JSON.
 	in := []byte(`{"name":"x","n":1,"n":@@@}`)
-	if _, err := decode.Unmarshal[AllowDupsStruct](in); err == nil {
+	if _, _, err := (AllowDupsStruct{}).DecodeFrom(in); err == nil {
 		t.Error("expected scan error on malformed duplicate value")
 	}
 }

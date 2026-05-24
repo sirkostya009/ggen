@@ -18,8 +18,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/sirkostya009/ggen/decode"
 	"github.com/sirkostya009/ggen/encode"
+	"github.com/sirkostya009/ggen/scan"
 )
 
 var fuzzSeeds = [][]byte{
@@ -45,7 +45,7 @@ func addSeeds(f *testing.F) {
 func FuzzScanNoPanic(f *testing.F) {
 	addSeeds(f)
 	f.Fuzz(func(t *testing.T, data []byte) {
-		_, _ = decode.Unmarshal[Node](data)
+		_, _, _ = Node{}.DecodeFrom(data)
 	})
 }
 
@@ -55,7 +55,7 @@ func FuzzScanNoPanic(f *testing.F) {
 func FuzzRoundtrip(f *testing.F) {
 	addSeeds(f)
 	f.Fuzz(func(t *testing.T, data []byte) {
-		v1, err := decode.Unmarshal[Node](data)
+		v1, _, err := Node{}.DecodeFrom(data)
 		if err != nil {
 			return
 		}
@@ -67,7 +67,7 @@ func FuzzRoundtrip(f *testing.F) {
 		if err != nil {
 			t.Fatalf("re-marshal failed for accepted input: %v\nin: %s", err, data)
 		}
-		v2, err := decode.Unmarshal[Node](out1)
+		v2, _, err := Node{}.DecodeFrom(out1)
 		if err != nil {
 			t.Fatalf("re-decode failed: %v\nin: %s\nremarshalled: %s", err, data, out1)
 		}
@@ -75,7 +75,7 @@ func FuzzRoundtrip(f *testing.F) {
 		if err != nil {
 			t.Fatalf("second marshal failed: %v\nv2: %+v", err, v2)
 		}
-		v3, err := decode.Unmarshal[Node](out2)
+		v3, _, err := Node{}.DecodeFrom(out2)
 		if err != nil {
 			t.Fatalf("third decode failed: %v\nbytes: %s", err, out2)
 		}
@@ -91,7 +91,7 @@ func FuzzRoundtrip(f *testing.F) {
 func FuzzCompat(f *testing.F) {
 	addSeeds(f)
 	f.Fuzz(func(t *testing.T, data []byte) {
-		gv, gerr := decode.Unmarshal[Node](data)
+		gv, _, gerr := Node{}.DecodeFrom(data)
 		var sv Node
 		serr := jsonv2.Unmarshal(data, &sv)
 
@@ -122,12 +122,14 @@ func FuzzStreamEqualsBytes(f *testing.F) {
 		if chunkSize == 0 {
 			chunkSize = 1
 		}
-		want, errBytes := decode.Unmarshal[Node](data)
+		want, _, errBytes := Node{}.DecodeFrom(data)
 		if errBytes != nil {
 			return
 		}
 		r := &chunkReader{data: data, max: int(chunkSize)}
-		got, _, errStream := decode.UnmarshalStream[Node](r, make([]byte, 0, 8))
+		var s scan.Stream
+		s.Reset(r, make([]byte, 0, 8))
+		got, errStream := Node{}.DecodeStreamFrom(&s)
 		if errStream != nil {
 			t.Fatalf("bytes accepted but stream rejected (chunk=%d):\n bytes: %s\n err:   %v",
 				chunkSize, data, errStream)
@@ -162,7 +164,7 @@ func FuzzBoundaryNoPanic(f *testing.F) {
 				t.Fatalf("panic on boundary input %q: %v", data, r)
 			}
 		}()
-		_, _ = decode.Unmarshal[BoundaryStruct](data)
+		_, _, _ = BoundaryStruct{}.DecodeFrom(data)
 	})
 }
 
@@ -187,7 +189,9 @@ func FuzzStreamHugeStringNoPanic(f *testing.F) {
 			}
 		}()
 		r := &chunkReader{data: payload, max: int(chunk)}
-		got, _, err := decode.UnmarshalStream[HugeStringStruct](r, make([]byte, 0, 16))
+		var s scan.Stream
+		s.Reset(r, make([]byte, 0, 16))
+		got, err := HugeStringStruct{}.DecodeStreamFrom(&s)
 		if err != nil {
 			t.Fatalf("err chunk=%d repeat=%d: %v", chunk, repeat, err)
 		}
@@ -203,7 +207,7 @@ func FuzzStreamHugeStringNoPanic(f *testing.F) {
 func FuzzAppendJSONIdempotent(f *testing.F) {
 	addSeeds(f)
 	f.Fuzz(func(t *testing.T, data []byte) {
-		v, err := decode.Unmarshal[Node](data)
+		v, _, err := Node{}.DecodeFrom(data)
 		if err != nil {
 			return
 		}
@@ -215,11 +219,11 @@ func FuzzAppendJSONIdempotent(f *testing.F) {
 		if err != nil {
 			t.Fatalf("second marshal: %v", err)
 		}
-		v1, err := decode.Unmarshal[Node](out1)
+		v1, _, err := Node{}.DecodeFrom(out1)
 		if err != nil {
 			t.Fatalf("re-decode 1: %v\nout: %s", err, out1)
 		}
-		v2, err := decode.Unmarshal[Node](out2)
+		v2, _, err := Node{}.DecodeFrom(out2)
 		if err != nil {
 			t.Fatalf("re-decode 2: %v\nout: %s", err, out2)
 		}

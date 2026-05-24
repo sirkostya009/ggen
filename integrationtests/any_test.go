@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sirkostya009/ggen/decode"
 	"github.com/sirkostya009/ggen/encode"
 )
 
@@ -33,7 +32,7 @@ type AnyNumberStruct struct {
 
 func TestAny_DecodeObject(t *testing.T) {
 	in := []byte(`{"name":"x","body":{"k":1,"l":[1,2,3]}}`)
-	got, err := decode.Unmarshal[AnyStruct](in)
+	got, _, err := AnyStruct{}.DecodeFrom(in)
 	if err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -57,7 +56,7 @@ func TestAny_DecodeScalars(t *testing.T) {
 		{`{"name":"x","body":null}`, nil},
 	}
 	for _, tc := range cases {
-		got, err := decode.Unmarshal[AnyStruct]([]byte(tc.json))
+		got, _, err := AnyStruct{}.DecodeFrom([]byte(tc.json))
 		if err != nil {
 			t.Fatalf("unmarshal %s: %v", tc.json, err)
 		}
@@ -70,7 +69,7 @@ func TestAny_DecodeScalars(t *testing.T) {
 func TestAny_MarshalRoundtrip(t *testing.T) {
 	in := AnyStruct{Name: "x", Body: map[string]any{"k": float64(1), "v": "y"}}
 	out, _ := encode.Marshal(in)
-	got, err := decode.Unmarshal[AnyStruct](out)
+	got, _, err := AnyStruct{}.DecodeFrom(out)
 	if err != nil {
 		t.Fatalf("unmarshal: %v\n%s", err, out)
 	}
@@ -83,7 +82,7 @@ func TestAny_MarshalRoundtrip(t *testing.T) {
 func TestAnyNumber_Preservesint64Precision(t *testing.T) {
 	// 9007199254740993 = 2^53 + 1 — loses precision when round-tripped via float64.
 	in := []byte(`{"name":"x","body":9007199254740993}`)
-	got, err := decode.Unmarshal[AnyNumberStruct](in)
+	got, _, err := AnyNumberStruct{}.DecodeFrom(in)
 	if err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -102,7 +101,7 @@ func TestAnyNumber_Preservesint64Precision(t *testing.T) {
 
 func TestAnyNumber_NestedShape(t *testing.T) {
 	in := []byte(`{"name":"x","body":{"k":[1,2.5,3],"big":12345678901234567}}`)
-	got, err := decode.Unmarshal[AnyNumberStruct](in)
+	got, _, err := AnyNumberStruct{}.DecodeFrom(in)
 	if err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}

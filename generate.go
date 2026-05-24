@@ -182,7 +182,7 @@ func renderStructMethods(buf *bytes.Buffer, s StructInfo) {
 		fmt.Fprintf(buf, "func (s %s) MarshalJSON() ([]byte, error) {\n\treturn encode.Marshal(s)\n}\n\n", s.Name)
 	}
 	if s.Unmarshal {
-		fmt.Fprintf(buf, "func (s *%s) UnmarshalJSON(data []byte) error {\n\tv, err := decode.Unmarshal[%s](data)\n\tif err != nil {\n\t\treturn err\n\t}\n\t*s = v\n\treturn nil\n}\n\n", s.Name, s.Name)
+		fmt.Fprintf(buf, "func (s *%s) UnmarshalJSON(data []byte) error {\n\tvar zero %s\n\tv, _, err := zero.DecodeFrom(data)\n\tif err != nil {\n\t\treturn err\n\t}\n\t*s = v\n\treturn nil\n}\n\n", s.Name, s.Name)
 	}
 }
 
@@ -277,10 +277,7 @@ func collectImports(structs []StructInfo) ([]string, []string) {
 		// already in. No extra path needed.
 		_ = anyMarshal
 	}
-	if anyUnmarshal {
-		// UnmarshalJSON hook uses decode.Unmarshal[T].
-		add("github.com/sirkostya009/ggen/decode")
-	}
+	_ = anyUnmarshal // UnmarshalJSON hook expands inline via zero.DecodeFrom; no import needed.
 	if anyValidation || anyRequired {
 		add("github.com/sirkostya009/ggen/decode/validation")
 	}

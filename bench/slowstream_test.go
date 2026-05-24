@@ -13,8 +13,8 @@ import (
 
 	"github.com/bytedance/sonic"
 	"github.com/mailru/easyjson"
-	"github.com/sirkostya009/ggen/decode"
 	"github.com/sirkostya009/ggen/encode"
+	"github.com/sirkostya009/ggen/scan"
 )
 
 // slowPayload — a few-dozen-KiB Node tree, separate from MegaPayload so the
@@ -139,7 +139,10 @@ func BenchmarkSlowStream_Valid(b *testing.B) {
 		{"ggen_stream", func(s *slowState) error {
 			s.r.reset()
 			var err error
-			_, s.buf, err = decode.UnmarshalStream[Node](s.r, s.buf[:0])
+			var _st scan.Stream
+			_st.Reset(s.r, s.buf[:0])
+			_, err = Node{}.DecodeStreamFrom(&_st)
+			s.buf = _st.Bytes()
 			return err
 		}},
 		{"ggen_readall", func(s *slowState) error {
@@ -148,7 +151,7 @@ func BenchmarkSlowStream_Valid(b *testing.B) {
 			if err != nil {
 				return err
 			}
-			_, err = decode.Unmarshal[Node](data)
+			_, _, err = Node{}.DecodeFrom(data)
 			return err
 		}},
 	}
@@ -184,7 +187,10 @@ func BenchmarkSlowStream_Invalid(b *testing.B) {
 		{"ggen_stream", func(s *slowState) error {
 			s.r.reset()
 			var err error
-			_, s.buf, err = decode.UnmarshalStream[Validated](s.r, s.buf[:0])
+			var _st scan.Stream
+			_st.Reset(s.r, s.buf[:0])
+			_, err = Validated{}.DecodeStreamFrom(&_st)
+			s.buf = _st.Bytes()
 			return err
 		}, true},
 		{"ggen_readall", func(s *slowState) error {
@@ -193,7 +199,7 @@ func BenchmarkSlowStream_Invalid(b *testing.B) {
 			if err != nil {
 				return err
 			}
-			_, err = decode.Unmarshal[Validated](data)
+			_, _, err = Validated{}.DecodeFrom(data)
 			return err
 		}, true},
 		{"jsonv2", func(s *slowState) error {

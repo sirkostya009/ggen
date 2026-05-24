@@ -12,6 +12,7 @@ import (
 
 	"github.com/sirkostya009/ggen/decode"
 	"github.com/sirkostya009/ggen/decode/validation"
+	"github.com/sirkostya009/ggen/scan"
 )
 
 // chunkReader delivers payload one byte at a time (or maxChunk at a time).
@@ -38,7 +39,7 @@ func (c *chunkReader) Read(p []byte) (int, error) {
 }
 
 func TestUnmarshal_roundtrip(t *testing.T) {
-	got, err := decode.Unmarshal[Node](complexPayload)
+	got, _, err := Node{}.DecodeFrom(complexPayload)
 	if err != nil {
 		t.Fatalf("Unmarshal: %v", err)
 	}
@@ -57,7 +58,7 @@ func TestUnmarshal_roundtrip(t *testing.T) {
 }
 
 func TestRead_roundtrip(t *testing.T) {
-	got, err := decode.Read[Node](bytes.NewReader(complexPayload))
+	got, _, err := Node{}.DecodeFrom(complexPayload)
 	if err != nil {
 		t.Fatalf("Read: %v", err)
 	}
@@ -95,8 +96,9 @@ func TestReadSlice_roundtrip(t *testing.T) {
 }
 
 func TestUnmarshalStream_roundtrip(t *testing.T) {
-	got, _, err := decode.UnmarshalStream[Node](
-		bytes.NewReader(complexPayload), make([]byte, 0, len(complexPayload)))
+	var s scan.Stream
+	s.Reset(bytes.NewReader(complexPayload), make([]byte, 0, len(complexPayload)))
+	got, err := Node{}.DecodeStreamFrom(&s)
 	if err != nil {
 		t.Fatalf("UnmarshalStream: %v", err)
 	}
@@ -114,7 +116,9 @@ func TestUnmarshalStream_roundtrip(t *testing.T) {
 func TestUnmarshalStream_chunked(t *testing.T) {
 	// Force Ensure to loop: reader hands out 1 byte per Read call.
 	r := &chunkReader{data: complexPayload, max: 1}
-	got, _, err := decode.UnmarshalStream[Node](r, nil)
+	var s scan.Stream
+	s.Reset(r, nil)
+	got, err := Node{}.DecodeStreamFrom(&s)
 	if err != nil {
 		t.Fatalf("UnmarshalStream (1-byte chunks): %v", err)
 	}
@@ -130,8 +134,9 @@ func TestUnmarshalStream_tinyInitial(t *testing.T) {
 	// Hint smaller than payload — buffer must grow via append mid-parse.
 	// Zero-copy strings must remain valid across the grow (GC keeps old
 	// backing arrays alive because aliases reference them).
-	got, _, err := decode.UnmarshalStream[Node](
-		bytes.NewReader(complexPayload), make([]byte, 0, 32))
+	var s scan.Stream
+	s.Reset(bytes.NewReader(complexPayload), make([]byte, 0, 32))
+	got, err := Node{}.DecodeStreamFrom(&s)
 	if err != nil {
 		t.Fatalf("UnmarshalStream (tiny hint): %v", err)
 	}
@@ -159,8 +164,9 @@ func TestUnmarshalStream_SingleHugeString(t *testing.T) {
 	huge := strings.Repeat("x", size)
 	payload := []byte(`{"big":"` + huge + `"}`)
 
-	got, _, err := decode.UnmarshalStream[HugeStringStruct](
-		bytes.NewReader(payload), make([]byte, 0, 64))
+	var s scan.Stream
+	s.Reset(bytes.NewReader(payload), make([]byte, 0, 64))
+	got, err := HugeStringStruct{}.DecodeStreamFrom(&s)
 	if err != nil {
 		t.Fatalf("UnmarshalStream: %v", err)
 	}
@@ -179,8 +185,9 @@ func TestUnmarshalStream_MassiveWhitespace(t *testing.T) {
 	gap := strings.Repeat("\n \t", 100_000)
 	payload := []byte(`{` + gap + `"big":` + gap + `"hello"` + gap + `}`)
 
-	got, _, err := decode.UnmarshalStream[HugeStringStruct](
-		bytes.NewReader(payload), make([]byte, 0, 64))
+	var s scan.Stream
+	s.Reset(bytes.NewReader(payload), make([]byte, 0, 64))
+	got, err := HugeStringStruct{}.DecodeStreamFrom(&s)
 	if err != nil {
 		t.Fatalf("UnmarshalStream: %v\npayload size: %d", err, len(payload))
 	}
@@ -213,7 +220,9 @@ func TestUnmarshalStream_ValuesSurviveCompaction(t *testing.T) {
 	in := []byte(`{"a":"AAAAAAAA","b":"BBBBBBBB","c":"CCCCCCCC","d":"DDDDDDDD",` +
 		`"e":"EEEEEEEE","f":"FFFFFFFF","g":"GGGGGGGG","h":"HHHHHHHH"}`)
 	r := &chunkReader{data: in, max: 1}
-	got, _, err := decode.UnmarshalStream[SequentialStringsStruct](r, make([]byte, 0, 16))
+	var s scan.Stream
+	s.Reset(r, make([]byte, 0, 16))
+	got, err := SequentialStringsStruct{}.DecodeStreamFrom(&s)
 	if err != nil {
 		t.Fatalf("UnmarshalStream: %v", err)
 	}
@@ -238,8 +247,9 @@ func TestUnmarshalStream_RawJSONAcrossBoundary(t *testing.T) {
 	in := []byte(`{"raw1":` + bigInner + `,"raw2":null,"site":"http://x",` +
 		`"big":0,"bigF":"0","bigR":"0","id":"00000000-0000-0000-0000-000000000000",` +
 		`"gofrsId":"00000000-0000-0000-0000-000000000000"}`)
-	got, _, err := decode.UnmarshalStream[RichTypes](
-		bytes.NewReader(in), make([]byte, 0, 64))
+	var s scan.Stream
+	s.Reset(bytes.NewReader(in), make([]byte, 0, 64))
+	got, err := RichTypes{}.DecodeStreamFrom(&s)
 	if err != nil {
 		t.Fatalf("UnmarshalStream: %v\npayload size: %d", err, len(in))
 	}
@@ -257,7 +267,9 @@ func TestUnmarshalStream_InlineMapKeyClone(t *testing.T) {
 	in := []byte(`{"name":"alice","kAlpha":1,"kBravoo":2,"kCharlie":3,` +
 		`"kDelta11":4,"kEcho1234":5,"kFoxtrot1":6,"kGolf12345":7}`)
 	r := &chunkReader{data: in, max: 1}
-	got, _, err := decode.UnmarshalStream[InlineStruct](r, make([]byte, 0, 16))
+	var s scan.Stream
+	s.Reset(r, make([]byte, 0, 16))
+	got, err := InlineStruct{}.DecodeStreamFrom(&s)
 	if err != nil {
 		t.Fatalf("UnmarshalStream: %v", err)
 	}
@@ -280,7 +292,9 @@ type UnknownErrorStruct struct {
 func TestUnmarshalStream_UnknownKeyErrorClone(t *testing.T) {
 	in := []byte(`{"name":"alice","SomeUnknownKeyHere":42}`)
 	r := &chunkReader{data: in, max: 4}
-	_, _, err := decode.UnmarshalStream[UnknownErrorStruct](r, make([]byte, 0, 8))
+	var s scan.Stream
+	s.Reset(r, make([]byte, 0, 8))
+	_, err := UnknownErrorStruct{}.DecodeStreamFrom(&s)
 	if err == nil {
 		t.Fatal("expected UnknownKeyError")
 	}
@@ -304,7 +318,9 @@ func TestUnmarshalStream_TinyBufManyKeys(t *testing.T) {
 	in := []byte(`{` + strings.Join(parts, ",") + `}`)
 
 	r := &chunkReader{data: in, max: 1}
-	got, _, err := decode.UnmarshalStream[WideStruct](r, make([]byte, 0, 1))
+	var s scan.Stream
+	s.Reset(r, make([]byte, 0, 1))
+	got, err := WideStruct{}.DecodeStreamFrom(&s)
 	if err != nil {
 		t.Fatalf("UnmarshalStream: %v", err)
 	}
@@ -328,7 +344,9 @@ func TestUnmarshalStream_HintBufSmallerThanValue(t *testing.T) {
 	for _, hint := range []int{1, 4, 16, 64, 256} {
 		t.Run(strconv.Itoa(hint), func(t *testing.T) {
 			r := bytes.NewReader(complexPayload)
-			got, _, err := decode.UnmarshalStream[Node](r, make([]byte, 0, hint))
+			var s scan.Stream
+			s.Reset(r, make([]byte, 0, hint))
+			got, err := Node{}.DecodeStreamFrom(&s)
 			if err != nil {
 				t.Fatalf("hint=%d: %v", hint, err)
 			}
@@ -343,7 +361,9 @@ func TestUnmarshalStream_HintBufSmallerThanValue(t *testing.T) {
 // chunk sizes — bursts then stalls. Models a real network reader.
 func TestUnmarshalStream_PartialReadAtBoundaries(t *testing.T) {
 	r := &burstReader{data: complexPayload, sizes: []int{3, 1, 7, 1, 13, 1, 50, 1}}
-	got, _, err := decode.UnmarshalStream[Node](r, make([]byte, 0, 16))
+	var s scan.Stream
+	s.Reset(r, make([]byte, 0, 16))
+	got, err := Node{}.DecodeStreamFrom(&s)
 	if err != nil {
 		t.Fatalf("UnmarshalStream: %v", err)
 	}
@@ -397,13 +417,15 @@ func TestUnmarshalStream_BytesEqualsStream(t *testing.T) {
 	}
 	chunks := []int{1, 2, 7, 13, 31, 64, 256}
 	for _, seed := range seeds {
-		want, errBytes := decode.Unmarshal[Node](seed)
+		want, _, errBytes := Node{}.DecodeFrom(seed)
 		if errBytes != nil {
 			continue
 		}
 		for _, ch := range chunks {
 			r := &chunkReader{data: seed, max: ch}
-			got, _, errS := decode.UnmarshalStream[Node](r, make([]byte, 0, 8))
+			var s scan.Stream
+			s.Reset(r, make([]byte, 0, 8))
+			got, errS := Node{}.DecodeStreamFrom(&s)
 			if errS != nil {
 				t.Errorf("stream err with chunk=%d on %s: %v", ch, seed, errS)
 				continue
@@ -419,13 +441,15 @@ func TestUnmarshalStream_BytesEqualsStream(t *testing.T) {
 // check for the same property over the existing fuzz seed set.
 func TestUnmarshalStream_AcceptedByBytes_AlsoAcceptedByStream(t *testing.T) {
 	for _, seed := range fuzzSeeds {
-		want, errA := decode.Unmarshal[Node](seed)
+		want, _, errA := Node{}.DecodeFrom(seed)
 		if errA != nil {
 			continue
 		}
 		for _, ch := range []int{1, 4, 16} {
 			r := &chunkReader{data: seed, max: ch}
-			got, _, errB := decode.UnmarshalStream[Node](r, make([]byte, 0, 4))
+			var s scan.Stream
+			s.Reset(r, make([]byte, 0, 4))
+			got, errB := Node{}.DecodeStreamFrom(&s)
 			if errB != nil {
 				t.Errorf("seed %q ch=%d: bytes accepted but stream errored: %v", seed, ch, errB)
 				continue

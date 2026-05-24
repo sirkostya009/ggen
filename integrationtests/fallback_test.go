@@ -4,7 +4,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sirkostya009/ggen/decode"
 	"github.com/sirkostya009/ggen/encode"
 	"github.com/sirkostya009/ggen/integrationtests/thirdparty"
 	"github.com/sirkostya009/ggen/integrationtests/thirdparty2"
@@ -54,7 +53,7 @@ func TestFallback_roundtrip(t *testing.T) {
 		t.Errorf("marshal output missing expected shape: %s", out)
 	}
 
-	got, err := decode.Unmarshal[FallbackStruct]([]byte(out))
+	got, _, err := FallbackStruct{}.DecodeFrom([]byte(out))
 	if err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -73,7 +72,7 @@ func TestFastFallback_roundtrip(t *testing.T) {
 		Extra: thirdparty2.External2{Key: "k", Value: 42},
 	}
 	out, _ := encode.MarshalString(in)
-	got, err := decode.Unmarshal[FastFallbackStruct]([]byte(out))
+	got, _, err := FastFallbackStruct{}.DecodeFrom([]byte(out))
 	if err != nil {
 		t.Fatalf("unmarshal: %v\n%s", err, out)
 	}
@@ -90,7 +89,7 @@ func TestFastFallback_roundtrip(t *testing.T) {
 func TestFastFallback_validationFromGeneratedDecoder(t *testing.T) {
 	// Empty Key violates required.
 	bad := []byte(`{"id":"x","extra":{"key":"","value":1}}`)
-	_, err := decode.Unmarshal[FastFallbackStruct](bad)
+	_, _, err := FastFallbackStruct{}.DecodeFrom(bad)
 	if err == nil {
 		t.Fatal("expected validation error from generated External2 decoder")
 	}
@@ -111,7 +110,7 @@ func TestTextFallback_roundtrip(t *testing.T) {
 	if !strings.Contains(out, `"tag":"alice#admin"`) {
 		t.Fatalf("expected text-encoded form, got: %s", out)
 	}
-	got, err := decode.Unmarshal[TextFallbackStruct]([]byte(out))
+	got, _, err := TextFallbackStruct{}.DecodeFrom([]byte(out))
 	if err != nil {
 		t.Fatalf("unmarshal: %v\n%s", err, out)
 	}
@@ -124,7 +123,7 @@ func TestTextFallback_roundtrip(t *testing.T) {
 // surface UnmarshalText's error from inside the cross-pkg fallback.
 func TestTextFallback_unmarshalErrorPropagates(t *testing.T) {
 	bad := []byte(`{"id":"x","tag":"no-separator-here"}`)
-	_, err := decode.Unmarshal[TextFallbackStruct](bad)
+	_, _, err := TextFallbackStruct{}.DecodeFrom(bad)
 	if err == nil {
 		t.Fatal("expected UnmarshalText error to propagate")
 	}

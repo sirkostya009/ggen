@@ -8,7 +8,6 @@ import (
 	"strings"
 	"unsafe"
 
-	"github.com/sirkostya009/ggen/decode"
 	"github.com/sirkostya009/ggen/decode/validation"
 	"github.com/sirkostya009/ggen/encode"
 	"github.com/sirkostya009/ggen/scan"
@@ -314,7 +313,8 @@ func (s External2) MarshalJSON() ([]byte, error) {
 }
 
 func (s *External2) UnmarshalJSON(data []byte) error {
-	v, err := decode.Unmarshal[External2](data)
+	var zero External2
+	v, _, err := zero.DecodeFrom(data)
 	if err != nil {
 		return err
 	}

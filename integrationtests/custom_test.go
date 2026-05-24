@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sirkostya009/ggen/decode"
 	"github.com/sirkostya009/ggen/decode/validation"
 )
 
@@ -21,7 +20,7 @@ type MultiErrStruct struct {
 
 func TestCustomValidator_pass(t *testing.T) {
 	in := []byte(`{"tags":["go","rust"],"title":"ok","scores":[50],"count":4}`)
-	got, err := decode.Unmarshal[DiveStruct](in)
+	got, _, err := DiveStruct{}.DecodeFrom(in)
 	if err != nil {
 		t.Fatalf("unexpected: %v", err)
 	}
@@ -32,7 +31,7 @@ func TestCustomValidator_pass(t *testing.T) {
 
 func TestCustomValidator_fail(t *testing.T) {
 	in := []byte(`{"tags":["go","rust"],"title":"ok","scores":[50],"count":5}`)
-	_, err := decode.Unmarshal[DiveStruct](in)
+	_, _, err := DiveStruct{}.DecodeFrom(in)
 	if err == nil {
 		t.Fatal("expected custom-validator error")
 	}
@@ -44,7 +43,7 @@ func TestCustomValidator_fail(t *testing.T) {
 func TestAggregate_allErrors(t *testing.T) {
 	// All three fields violate: Name too long, Age negative, Role not in set.
 	in := []byte(`{"name":"longname","age":-1,"role":"pirate"}`)
-	_, err := decode.Unmarshal[MultiErrStruct](in)
+	_, _, err := MultiErrStruct{}.DecodeFrom(in)
 	if err == nil {
 		t.Fatal("expected aggregated errors")
 	}
@@ -66,7 +65,7 @@ func TestAggregate_allErrors(t *testing.T) {
 
 func TestAggregate_pass(t *testing.T) {
 	in := []byte(`{"name":"ok","age":30,"role":"user"}`)
-	got, err := decode.Unmarshal[MultiErrStruct](in)
+	got, _, err := MultiErrStruct{}.DecodeFrom(in)
 	if err != nil {
 		t.Fatalf("unexpected: %v", err)
 	}
@@ -89,7 +88,7 @@ type CustomBothStruct struct {
 // Input `"   "` → trim → `""` → fails NotBlank.
 func TestCustomBoth_modThenValidator(t *testing.T) {
 	good := []byte(`{"tags":["  hello  ","  world  "]}`)
-	got, err := decode.Unmarshal[CustomBothStruct](good)
+	got, _, err := CustomBothStruct{}.DecodeFrom(good)
 	if err != nil {
 		t.Fatalf("unmarshal good: %v", err)
 	}
@@ -99,7 +98,7 @@ func TestCustomBoth_modThenValidator(t *testing.T) {
 	}
 
 	bad := []byte(`{"tags":["ok","     "]}`)
-	if _, err := decode.Unmarshal[CustomBothStruct](bad); err == nil {
+	if _, _, err := (CustomBothStruct{}).DecodeFrom(bad); err == nil {
 		t.Fatal("expected blank-after-trim error")
 	}
 }

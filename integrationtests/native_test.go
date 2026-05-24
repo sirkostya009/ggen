@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sirkostya009/ggen/decode"
 	"github.com/sirkostya009/ggen/encode"
 )
 
@@ -63,7 +62,7 @@ func TestNativeTypes_roundtrip(t *testing.T) {
 	out, _ := encode.Marshal(in)
 	t.Logf("marshaled: %s", out)
 
-	got, err := decode.Unmarshal[NativeTypes](out)
+	got, _, err := NativeTypes{}.DecodeFrom(out)
 	if err != nil {
 		t.Fatalf("unmarshal: %v\n%s", err, out)
 	}

@@ -25,7 +25,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sirkostya009/ggen/decode"
 	"github.com/sirkostya009/ggen/encode"
 )
 
@@ -388,7 +387,7 @@ func TestNilMap_MarshalsAsNull(t *testing.T) {
 // TestNullDecode_LeavesContainerNil.
 func TestEmptyArrayDecode_NonNil(t *testing.T) {
 	in := []byte(`{"id":1,"name":"n","tags":[],"children":[],"props":{},"score":0,"active":false}`)
-	got, err := decode.Unmarshal[Node](in)
+	got, _, err := Node{}.DecodeFrom(in)
 	if err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -403,7 +402,7 @@ func TestEmptyArrayDecode_NonNil(t *testing.T) {
 	}
 
 	// Pointer-element slices (slab path) also produce empty non-nil.
-	ptr, err := decode.Unmarshal[PtrSliceStruct]([]byte(`{"items":[],"tuple":[null,null,null],"nodes":[]}`))
+	ptr, _, err := PtrSliceStruct{}.DecodeFrom([]byte(`{"items":[],"tuple":[null,null,null],"nodes":[]}`))
 	if err != nil {
 		t.Fatalf("unmarshal PtrSliceStruct: %v", err)
 	}
@@ -464,7 +463,7 @@ func TestStdlibVsGgen_MapReplaceDivergence(t *testing.T) {
 // and map fields, leaving the Go value nil — symmetric to the encoder.
 func TestNullDecode_LeavesContainerNil(t *testing.T) {
 	in := []byte(`{"id":1,"name":"n","tags":null,"children":null,"props":null,"score":0,"active":false}`)
-	got, err := decode.Unmarshal[Node](in)
+	got, _, err := Node{}.DecodeFrom(in)
 	if err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -537,7 +536,7 @@ func TestPtrSlice_RoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := decode.Unmarshal[PtrSliceStruct](out)
+	got, _, err := PtrSliceStruct{}.DecodeFrom(out)
 	if err != nil {
 		t.Fatalf("unmarshal: %v\nbytes: %s", err, out)
 	}
@@ -576,7 +575,7 @@ func TestPtrSlice_NilSlice_AsNull(t *testing.T) {
 		t.Errorf("nil nodes → %s, want null", got["nodes"])
 	}
 	// Roundtrip back to nil.
-	parsed, err := decode.Unmarshal[PtrSliceStruct](out)
+	parsed, _, err := PtrSliceStruct{}.DecodeFrom(out)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -589,7 +588,7 @@ func TestPtrSlice_NilSlice_AsNull(t *testing.T) {
 // a slice of nil pointers (length preserved).
 func TestPtrSlice_AllNullElements(t *testing.T) {
 	in := []byte(`{"items":[null,null,null],"tuple":[null,null,null],"nodes":[null]}`)
-	got, err := decode.Unmarshal[PtrSliceStruct](in)
+	got, _, err := PtrSliceStruct{}.DecodeFrom(in)
 	if err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -626,7 +625,7 @@ func TestWideStruct_BitmaskSeenFlags(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := decode.Unmarshal[WideStruct](out)
+	got, _, err := WideStruct{}.DecodeFrom(out)
 	if err != nil {
 		t.Fatalf("unmarshal: %v\nbytes: %s", err, out)
 	}
@@ -636,14 +635,14 @@ func TestWideStruct_BitmaskSeenFlags(t *testing.T) {
 
 	// Missing-required: every field omitted must surface a RequiredError
 	// after the bitmask post-loop check.
-	_, err = decode.Unmarshal[WideStruct]([]byte(`{"f1":"x"}`))
+	_, _, err = WideStruct{}.DecodeFrom([]byte(`{"f1":"x"}`))
 	if err == nil {
 		t.Fatal("expected RequiredError on missing fields, got nil")
 	}
 
 	// Duplicate-key: the bitmask check must fire on a repeat just like
 	// the bool path did.
-	_, err = decode.Unmarshal[WideStruct]([]byte(`{"f1":"a","f1":"b"}`))
+	_, _, err = WideStruct{}.DecodeFrom([]byte(`{"f1":"a","f1":"b"}`))
 	if err == nil {
 		t.Fatal("expected DuplicateKeyError on repeated key, got nil")
 	}
@@ -776,7 +775,7 @@ func TestBoundary_FloatInf_marshal(t *testing.T) {
 // nines) is above 2^63-1 ≈ 9.22e18.
 func TestBoundary_IntegerOverflow_unmarshal(t *testing.T) {
 	in := []byte(`{"i":9999999999999999999,"f":0,"str":""}`)
-	got, err := decode.Unmarshal[BoundaryStruct](in)
+	got, _, err := BoundaryStruct{}.DecodeFrom(in)
 	if err == nil {
 		// MaxInt64 = 9223372036854775807. Saturation/clamping at MaxInt64
 		// is acceptable; arbitrary truncation isn't.
@@ -790,13 +789,13 @@ func TestBoundary_IntegerOverflow_unmarshal(t *testing.T) {
 // overflows to +Inf. The decoder must distinguish and never panic.
 func TestBoundary_FloatPrecision_unmarshal(t *testing.T) {
 	ok := []byte(`{"f":1e308,"i":0,"str":""}`)
-	if got, err := decode.Unmarshal[BoundaryStruct](ok); err == nil {
+	if got, _, err := (BoundaryStruct{}).DecodeFrom(ok); err == nil {
 		if math.IsInf(got.F, 0) || math.IsNaN(got.F) {
 			t.Errorf("1e308 → %v, want finite", got.F)
 		}
 	}
 	overflow := []byte(`{"f":1e309,"i":0,"str":""}`)
-	_, err := decode.Unmarshal[BoundaryStruct](overflow)
+	_, _, err := BoundaryStruct{}.DecodeFrom(overflow)
 	_ = err // either error or +Inf is documented stdlib behavior
 }
 
@@ -810,7 +809,7 @@ func TestBoundary_EveryEscapeAtOnce(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	got, err := decode.Unmarshal[BoundaryStruct](out)
+	got, _, err := BoundaryStruct{}.DecodeFrom(out)
 	if err != nil {
 		t.Fatalf("unmarshal: %v\nwire: %s", err, out)
 	}
@@ -836,7 +835,7 @@ func TestBoundary_LoneSurrogate_unmarshal(t *testing.T) {
 			t.Fatalf("panic on lone surrogate: %v", r)
 		}
 	}()
-	_, _ = decode.Unmarshal[BoundaryStruct](in)
+	_, _, _ = BoundaryStruct{}.DecodeFrom(in)
 }
 
 // TestBoundary_RawControlChar: a literal \x01 inside a JSON string is
@@ -845,7 +844,7 @@ func TestBoundary_LoneSurrogate_unmarshal(t *testing.T) {
 // follows stdlib.
 func TestBoundary_RawControlChar_unmarshal(t *testing.T) {
 	in := []byte("{\"f\":0,\"i\":0,\"str\":\"a\x01b\"}")
-	_, err := decode.Unmarshal[BoundaryStruct](in)
+	_, _, err := BoundaryStruct{}.DecodeFrom(in)
 	if err == nil {
 		t.Errorf("expected error on raw control char")
 	}

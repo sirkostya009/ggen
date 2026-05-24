@@ -13,7 +13,6 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/sirkostya009/ggen/decode"
 	"github.com/sirkostya009/ggen/decode/validation"
 	"github.com/sirkostya009/ggen/encode"
 	"github.com/sirkostya009/ggen/scan"
@@ -331,7 +330,8 @@ func (s HookedStruct) MarshalJSON() ([]byte, error) {
 }
 
 func (s *HookedStruct) UnmarshalJSON(data []byte) error {
-	v, err := decode.Unmarshal[HookedStruct](data)
+	var zero HookedStruct
+	v, _, err := zero.DecodeFrom(data)
 	if err != nil {
 		return err
 	}

@@ -21,8 +21,8 @@ import (
 
 	"github.com/bytedance/sonic"
 	"github.com/mailru/easyjson"
-	"github.com/sirkostya009/ggen/decode"
 	"github.com/sirkostya009/ggen/encode"
+	"github.com/sirkostya009/ggen/scan"
 )
 
 // memProfileSample is one entry in a flattened MemProfile snapshot —
@@ -156,7 +156,7 @@ func BenchmarkMega_Unmarshal(b *testing.B) {
 		{"sonic", func(p []byte) error { var v NodePlain; return sonic.Unmarshal(p, &v) }},
 		{"sonic_fast", func(p []byte) error { var v NodePlain; return sonic.ConfigFastest.Unmarshal(p, &v) }},
 		{"easyjson", func(p []byte) error { var v Node; return v.UnmarshalJSON(p) }},
-		{"ggen", func(p []byte) error { _, err := decode.Unmarshal[Node](p); return err }},
+		{"ggen", func(p []byte) error { _, _, err := Node{}.DecodeFrom(p); return err }},
 	}
 
 	for _, c := range unmarshalCodecs {
@@ -280,14 +280,17 @@ func BenchmarkRetention(b *testing.B) {
 		{"ggen_stream", func(buf *[]byte) any {
 			var n Node
 			var err error
-			n, *buf, err = decode.UnmarshalStream[Node](bytes.NewReader(slowPayload), (*buf)[:0])
+			var _st scan.Stream
+			_st.Reset(bytes.NewReader(slowPayload), (*buf)[:0])
+			n, err = Node{}.DecodeStreamFrom(&_st)
+			*buf = _st.Bytes()
 			if err != nil {
 				b.Fatal(err)
 			}
 			return &n
 		}},
 		{"ggen_bytes", func(_ *[]byte) any {
-			n, err := decode.Unmarshal[Node](slowPayload)
+			n, _, err := Node{}.DecodeFrom(slowPayload)
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -298,7 +301,7 @@ func BenchmarkRetention(b *testing.B) {
 			if err != nil {
 				b.Fatal(err)
 			}
-			n, err := decode.Unmarshal[Node](data)
+			n, _, err := Node{}.DecodeFrom(data)
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -427,7 +430,10 @@ func BenchmarkMega_Reader(b *testing.B) {
 		{"ggen stream", func(s *readerState) error {
 			s.r.Reset(MegaPayload)
 			var err error
-			_, s.buf, err = decode.UnmarshalStream[Node](&s.r, s.buf[:0])
+			var _st scan.Stream
+			_st.Reset(&s.r, s.buf[:0])
+			_, err = Node{}.DecodeStreamFrom(&_st)
+			s.buf = _st.Bytes()
 			return err
 		}},
 		{"ggen readall", func(s *readerState) error {
@@ -436,7 +442,7 @@ func BenchmarkMega_Reader(b *testing.B) {
 			if err != nil {
 				return err
 			}
-			_, err = decode.Unmarshal[Node](data)
+			_, _, err = Node{}.DecodeFrom(data)
 			return err
 		}},
 	}
@@ -466,7 +472,7 @@ func BenchmarkDeepNested_Unmarshal(b *testing.B) {
 		{"jsonv2", func(p []byte) error { var v NodePlain; return jsonv2.Unmarshal(p, &v) }},
 		{"sonic", func(p []byte) error { var v NodePlain; return sonic.Unmarshal(p, &v) }},
 		{"easyjson", func(p []byte) error { var v Node; return v.UnmarshalJSON(p) }},
-		{"ggen", func(p []byte) error { _, err := decode.Unmarshal[Node](p); return err }},
+		{"ggen", func(p []byte) error { _, _, err := Node{}.DecodeFrom(p); return err }},
 	}
 	for _, c := range codecs {
 		b.Run(c.name, func(b *testing.B) {
@@ -492,7 +498,7 @@ func BenchmarkMapHeavy_Unmarshal(b *testing.B) {
 	}{
 		{"jsonv2", func(p []byte) error { var v MapHeavy; return jsonv2.Unmarshal(p, &v) }},
 		{"sonic", func(p []byte) error { var v MapHeavy; return sonic.Unmarshal(p, &v) }},
-		{"ggen", func(p []byte) error { _, err := decode.Unmarshal[MapHeavy](p); return err }},
+		{"ggen", func(p []byte) error { _, _, err := MapHeavy{}.DecodeFrom(p); return err }},
 	}
 	for _, c := range codecs {
 		b.Run(c.name, func(b *testing.B) {

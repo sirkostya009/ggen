@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sirkostya009/ggen/decode"
 	"github.com/sirkostya009/ggen/encode"
 )
 
@@ -32,7 +31,7 @@ type SQLNullStruct struct {
 
 func TestSQLNull_NullValues(t *testing.T) {
 	in := []byte(`{"s":null,"i":null,"i32":null,"i16":null,"b":null,"bl":null,"f":null,"t":null}`)
-	got, err := decode.Unmarshal[SQLNullStruct](in)
+	got, _, err := SQLNullStruct{}.DecodeFrom(in)
 	if err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -44,7 +43,7 @@ func TestSQLNull_NullValues(t *testing.T) {
 
 func TestSQLNull_PresentValues(t *testing.T) {
 	in := []byte(`{"s":"hello","i":42,"i32":33,"i16":7,"b":255,"bl":true,"f":3.14,"t":"2023-11-14T22:13:20Z"}`)
-	got, err := decode.Unmarshal[SQLNullStruct](in)
+	got, _, err := SQLNullStruct{}.DecodeFrom(in)
 	if err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -116,7 +115,7 @@ func TestSQLNull_Roundtrip(t *testing.T) {
 		T: sql.NullTime{Time: when, Valid: true},
 	}
 	bs, _ := encode.Marshal(in)
-	got, err := decode.Unmarshal[SQLNullStruct](bs)
+	got, _, err := SQLNullStruct{}.DecodeFrom(bs)
 	if err != nil {
 		t.Fatalf("unmarshal: %v\n%s", err, bs)
 	}

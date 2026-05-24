@@ -35,7 +35,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/sirkostya009/ggen/decode"
 	"github.com/sirkostya009/ggen/encode"
 )
 
@@ -73,7 +72,7 @@ func TestPtrExotic_AllNil_marshalsAsNull(t *testing.T) {
 
 func TestPtrExotic_AllNilRoundtrip(t *testing.T) {
 	out, _ := encode.Marshal(PtrExoticStruct{})
-	got, err := decode.Unmarshal[PtrExoticStruct](out)
+	got, _, err := PtrExoticStruct{}.DecodeFrom(out)
 	if err != nil {
 		t.Fatalf("unmarshal: %v\nwire: %s", err, out)
 	}
@@ -102,7 +101,7 @@ func TestPtrExotic_AllPopulated_roundtrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	got, err := decode.Unmarshal[PtrExoticStruct](out)
+	got, _, err := PtrExoticStruct{}.DecodeFrom(out)
 	if err != nil {
 		t.Fatalf("unmarshal: %v\nwire: %s", err, out)
 	}
@@ -188,7 +187,7 @@ func TestSliceExotic_roundtrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	got, err := decode.Unmarshal[SliceExoticStruct](out)
+	got, _, err := SliceExoticStruct{}.DecodeFrom(out)
 	if err != nil {
 		t.Fatalf("unmarshal: %v\nwire: %s", err, out)
 	}
@@ -266,7 +265,7 @@ func TestMapExotic_roundtrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	got, err := decode.Unmarshal[MapExoticStruct](out)
+	got, _, err := MapExoticStruct{}.DecodeFrom(out)
 	if err != nil {
 		t.Fatalf("unmarshal: %v\nwire: %s", err, out)
 	}
@@ -340,7 +339,7 @@ func TestTupleExotic_roundtrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	got, err := decode.Unmarshal[TupleExoticStruct](out)
+	got, _, err := TupleExoticStruct{}.DecodeFrom(out)
 	if err != nil {
 		t.Fatalf("unmarshal: %v\nwire: %s", err, out)
 	}
@@ -425,7 +424,7 @@ func TestPtrContainer_PopulatedRoundtrip(t *testing.T) {
 		OptInts: &ints, OptMap: &m, OptStrs: &strs,
 	}
 	out, _ := encode.Marshal(in)
-	got, err := decode.Unmarshal[PtrContainerStruct](out)
+	got, _, err := PtrContainerStruct{}.DecodeFrom(out)
 	if err != nil {
 		t.Fatalf("unmarshal: %v\nwire: %s", err, out)
 	}
@@ -461,7 +460,7 @@ func TestPtrStringTag_roundtrip(t *testing.T) {
 	if want := `"ptrI":"42"`; !strings.Contains(out, want) {
 		t.Errorf("missing %s in %s", want, out)
 	}
-	got, err := decode.Unmarshal[PtrStringTagStruct]([]byte(out))
+	got, _, err := PtrStringTagStruct{}.DecodeFrom([]byte(out))
 	if err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -489,7 +488,7 @@ func FuzzPtrExoticNoPanic(f *testing.F) {
 				t.Fatalf("panic on PtrExoticStruct input %q: %v", data, r)
 			}
 		}()
-		_, _ = decode.Unmarshal[PtrExoticStruct](data)
+		_, _, _ = PtrExoticStruct{}.DecodeFrom(data)
 	})
 }
 

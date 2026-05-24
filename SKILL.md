@@ -368,29 +368,34 @@ u, _, err := existing.DecodeFrom(payload)
 Generic helper functions in `decode` package do not have merge
 semantics.
 
-Call from user code via the runtime packages:
+Call from user code:
 
 ```go
 import (
 	"github.com/sirkostya009/ggen/decode"
 	"github.com/sirkostya009/ggen/encode"
+	"github.com/sirkostya009/ggen/scan"
 )
 
-// single value
-u, err := decode.Unmarshal[User](payload)
+// single value — call the generated method directly with a zero-value receiver
+u, _, err := User{}.DecodeFrom(payload)
 out, err := encode.Marshal(u)
+// primitive aliases (`type UserID uint64`): use a typed zero
+// id, _, err := UserID(0).DecodeFrom(payload)
 
-// slices
+// slices (loop helpers — saves caller from reimplementing the array walk)
 users, err := decode.UnmarshalSlice[User](payload)
-out, err  = encode.MarshalSlice(users)
+out, err = encode.MarshalSlice(users)
+out, err = encode.AppendSlice(out[:0], users) // can use just AppendSlice to reuse buffers
 
-// streaming
-u, buf, err := decode.UnmarshalStream[User](req.Body, nil)
+// streaming single value — caller owns the scan.Stream
+s := scan.NewStream(req.Body, nil)  // or pre-sized buf, e.g. make([]byte, 0, hint)
+u, err = User{}.DecodeStreamFrom(s)
+// s.Bytes() is now recyclable
+// (use `var s scan.Stream; s.Reset(...)` to stack-allocate)
+
+// streaming array
 users, buf, err := decode.UnmarshalSliceStream[User](req.Body, buf[:0])
-
-// http.Request / http.Response convenience (pre-sizes from ContentLength)
-u, _, err := decode.UnmarshalStreamRequest[User](r)
-u, _, err := decode.UnmarshalStreamResponse[User](resp)
 ```
 
 ## Regen workflow

@@ -1,13 +1,18 @@
-// Package decode provides the small set of runtime helpers that ggen-generated
-// decoders delegate to — pooled Stream acquisition, and top-level generic
-// entry points (Unmarshal, UnmarshalSlice, Read, ReadSlice, and their
-// streaming counterparts).
+// Package decode provides a small set of runtime helpers that ggen-generated
+// decoders delegate to — the Decoder interface every generated type satisfies,
+// plus the array-walking helpers (UnmarshalSlice / ReadSlice /
+// UnmarshalSliceStream) callers would otherwise have to reimplement.
+//
+// Single-value entry points are NOT provided here: call the generated method
+// directly with a zero-value receiver, e.g.
+//
+//	res, _, err := T{}.DecodeFrom(data)
+//	res, err := T{}.DecodeFromStream(s)
 package decode
 
 import (
 	"fmt"
 	"io"
-	"net/http"
 
 	"github.com/sirkostya009/ggen/scan"
 )
@@ -20,36 +25,15 @@ import (
 //	v1, n, err := zero.DecodeFrom(data)
 //	// data[n:] is what remains
 //
-// Unmarshal is the top-level wrapper. DecodeStreamFrom is the streaming
-// counterpart that pulls bytes from a *scan.Stream; the Stream owns
-// the cursor (s.Pos), so the method returns only (T, error).
+// DecodeStreamFrom is the streaming counterpart that pulls bytes from a
+// *scan.Stream; the Stream owns the cursor (s.Pos), so the method
+// returns only (T, error).
 //
 // Strings inside the returned value alias the caller's bytes via unsafe.String
 // — callers MUST NOT mutate the input buffer while the value is in use.
 type Decoder[T any] interface {
 	DecodeFrom(data []byte) (T, int, error)
 	DecodeStreamFrom(s *scan.Stream) (T, error)
-}
-
-// Unmarshal is the top-level entry: decode one T out of data using the
-// hand-rolled scan path. Strings inside the returned value alias data —
-// caller MUST NOT mutate the buffer while the value is in use.
-func Unmarshal[T Decoder[T]](data []byte) (T, error) {
-	var zero T
-	v, _, err := zero.DecodeFrom(data)
-	return v, err
-}
-
-// Read slurps r into memory then decodes. Convenience for callers that don't
-// want to manage the intermediate buffer themselves. Use UnmarshalStream when
-// you need lazy I/O (e.g. HTTP bodies on slow networks).
-func Read[T Decoder[T]](r io.Reader) (T, error) {
-	data, err := io.ReadAll(r)
-	if err != nil {
-		var zero T
-		return zero, err
-	}
-	return Unmarshal[T](data)
 }
 
 // UnmarshalSlice decodes a JSON array of T by walking the array with scan
@@ -96,36 +80,11 @@ func ReadSlice[T Decoder[T]](r io.Reader) ([]T, error) {
 	return UnmarshalSlice[T](data)
 }
 
-// UnmarshalStream decodes a single T from r as bytes arrive, overlapping
-// I/O with parsing. buf is a reusable working area; pass nil to allocate
-// fresh, or a pre-sized / pooled slice (its capacity is used as initial
-// buffer size). The returned []byte is the (possibly grown) buffer —
-// caller can recycle it immediately, the decoded T owns its own
-// string content and has no dependency on the buffer.
-func UnmarshalStream[T Decoder[T]](r io.Reader, buf []byte) (T, []byte, error) {
-	var s scan.Stream
-	s.Reset(r, buf)
-	var zero T
-	v, err := zero.DecodeStreamFrom(&s)
-	return v, s.Bytes(), err
-}
-
-// UnmarshalStreamRequest decodes the body of an http.Request using the
-// streaming path, pre-sizing the buffer from req.ContentLength when
-// available.
-func UnmarshalStreamRequest[T Decoder[T]](req *http.Request) (T, []byte, error) {
-	hint := max(int(req.ContentLength), 0)
-	return UnmarshalStream[T](req.Body, make([]byte, 0, hint))
-}
-
-// UnmarshalStreamResponse is the response-body counterpart.
-func UnmarshalStreamResponse[T Decoder[T]](resp *http.Response) (T, []byte, error) {
-	hint := max(int(resp.ContentLength), 0)
-	return UnmarshalStream[T](resp.Body, make([]byte, 0, hint))
-}
-
-// UnmarshalSliceStream decodes a JSON array of T lazily from r. Same
-// buf / aliasing contract as UnmarshalStream.
+// UnmarshalSliceStream decodes a JSON array of T lazily from r. buf is a
+// reusable working area; pass nil to allocate fresh, or a pre-sized /
+// pooled slice. The returned []byte is the (possibly grown) buffer —
+// caller can recycle it immediately, the decoded values own their
+// string content and have no dependency on the buffer.
 func UnmarshalSliceStream[T Decoder[T]](r io.Reader, buf []byte) ([]T, []byte, error) {
 	var s scan.Stream
 	s.Reset(r, buf)

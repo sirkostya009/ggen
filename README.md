@@ -187,26 +187,30 @@ via `$GOFILE`, so the same line works in every file:
 ```
 
 Apart from the byte-scan and append primitives, the runtime packages
-also expose top-level helpers you'd actually use from your own code
-— generic `Unmarshal` / `Marshal` over the generated methods, plus
-streaming and slice-of-T variants:
+also expose a small set of helpers in `encode` / `decode` for the
+patterns you'd actually use from your own code.
 
 ```go
 import (
     "github.com/sirkostya009/ggen/decode"
     "github.com/sirkostya009/ggen/encode"
+    "github.com/sirkostya009/ggen/scan"
 )
 
 // single value
-u, err := decode.Unmarshal[User](payload)
+u, _, err := User{}.DecodeFrom(payload)
 out, err := encode.Marshal(u)
 
 // JSON array of T → []T
 users, err := decode.UnmarshalSlice[User](payload)
 out, err := encode.MarshalSlice(users)
 
-// streaming (single value or array, with reusable buf)
-u, buf, err := decode.UnmarshalStream[User](req.Body, nil)
+// streaming single value — caller owns the buf
+s := scan.NewStream(req.Body, nil)
+u, err := User{}.DecodeStreamFrom(s)    // recycle s.Bytes() afterwards
+// (or `var s scan.Stream; s.Reset(...)` to stack-allocate)
+
+// streaming array
 users, buf, err := decode.UnmarshalSliceStream[User](req.Body, buf[:0])
 ```
 
@@ -426,9 +430,9 @@ if none of the aforementioned methods are present on the custom type.
 
 `//ggen:generate` on a named top-level type generates the full method
 surface (`DecodeFrom`, `DecodeStreamFrom`, `JSONSize`, `AppendJSON`)
-so the alias works directly with `decode.Unmarshal[T]` and
-`encode.Marshal`. The codegen strategy is picked automatically from
-the underlying type's shape and method set:
+so the alias is decoded the same way as any other ggen type. The codegen
+strategy is picked automatically from the underlying type's shape and
+method set:
 
 | flavor                           | example                 | strategy                                                                              |
 | -------------------------------- | ----------------------- | ------------------------------------------------------------------------------------- |
@@ -531,15 +535,15 @@ The map case is the easiest to observe:
 
 ## streaming
 
-`UnmarshalStreamRequest` and `UnmarshalStreamResponse` are the typical
-streaming entry points — they pre-size the parse buffer from
-`ContentLength` and feed the reader chunk-by-chunk. Combined with
+The streaming entry point is `(T).DecodeStreamFrom(s *scan.Stream)`.
+Callers own the `scan.Stream` — `Reset(r, buf)` it once and the parser
+feeds the reader chunk-by-chunk into the supplied buf. Combined with
 per-field validation (default, no `-multierr`), an invalid request
 errors out after a few fields' worth of bytes — the client doesn't
 waste bandwidth finishing the upload, the server doesn't buffer the
 rest. See [slow-network streaming](#slow-network-streaming) and
 [memory residency](#memory-residency) above for when this actually
-pays off vs `Unmarshal` over a `ReadAll` buffer.
+pays off vs `T{}.DecodeFrom` over a `ReadAll` buffer.
 
 ```go
 //ggen:generate
@@ -548,20 +552,31 @@ type CreateUser struct {
     Bio   string `json:"bio"   ggen:"maxlen=4096"`
 }
 
+var bufPool = sync.Pool{New: func() any {
+	return scan.NewStream(nil, make([]byte, 0, 512))
+}}
+
+func parseRequest[T decode.Decoder[T]](r *http.Request) (T, error) {
+	var zero T
+	s := bufPool.Get().(*scan.Stream)
+	// grow the buf to match incoming content length (if available)
+	b := slices.Grow(s.Bytes(), max(int(r.ContentLength), 0))
+	// limit actual reader
+	s.Reset(io.LimitReader(r.Body, 10<<20), b)
+	// recycle the buf with stream
+	defer bufPool.Put(s)
+	return zero.DecodeStreamFrom(s)
+}
+
 func handler(w http.ResponseWriter, r *http.Request) {
-    in, _, err := decode.UnmarshalStreamRequest[CreateUser](r)
-    if err != nil {
-        // Returns immediately on the first validation failure —
-        // rest of r.Body is never read.
-        http.Error(w, err.Error(), http.StatusBadRequest)
-        return
-    }
-    // ... use in ...
+	u, err := parseRequest[CreateUser](r)
+	if err != nil {
+		// build a proper error message and send it to the client
+		parseFailure(w, err)
+		return
+	}
 }
 ```
-
-Note that using Request and Response helpers does not allow for
-providing custom buffers to Stream instance.
 
 ## generated methods
 

@@ -4,7 +4,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sirkostya009/ggen/decode"
 	"github.com/sirkostya009/ggen/encode"
 )
 
@@ -53,7 +52,7 @@ func TestMap_primitiveRoundtrip(t *testing.T) {
 		Counts: map[string]int{"a": 1, "b": 2, "c": 3},
 	}
 	out, _ := encode.MarshalString(in)
-	got, err := decode.Unmarshal[MapStruct]([]byte(out))
+	got, _, err := MapStruct{}.DecodeFrom([]byte(out))
 	if err != nil {
 		t.Fatalf("unmarshal: %v\n%s", err, out)
 	}
@@ -71,7 +70,7 @@ func TestMap_structValueRoundtrip(t *testing.T) {
 		},
 	}
 	out, _ := encode.MarshalString(in)
-	got, err := decode.Unmarshal[MapStruct]([]byte(out))
+	got, _, err := MapStruct{}.DecodeFrom([]byte(out))
 	if err != nil {
 		t.Fatalf("unmarshal: %v\n%s", err, out)
 	}
@@ -83,7 +82,7 @@ func TestMap_structValueRoundtrip(t *testing.T) {
 func TestMap_diveMod(t *testing.T) {
 	// Labels has `mod:"dive:trim,lower"` — each value normalized on decode.
 	in := []byte(`{"labels":{"en":"  HELLO ","es":" HOLA "}}`)
-	got, err := decode.Unmarshal[MapStruct](in)
+	got, _, err := MapStruct{}.DecodeFrom(in)
 	if err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -107,7 +106,7 @@ func TestMap_maxlenViolation(t *testing.T) {
 		b.WriteByte('0' + byte(i%10))
 	}
 	b.WriteString(`}}`)
-	_, err := decode.Unmarshal[MapStruct]([]byte(b.String()))
+	_, _, err := MapStruct{}.DecodeFrom([]byte(b.String()))
 	if err == nil {
 		t.Fatal("expected maxlen violation")
 	}
@@ -118,7 +117,7 @@ func TestMap_maxlenViolation(t *testing.T) {
 
 func TestMap_diveValueValidation_intOOB(t *testing.T) {
 	in := []byte(`{"counts":{"a":50,"b":200}}`)
-	_, err := decode.Unmarshal[MapDiveStruct](in)
+	_, _, err := MapDiveStruct{}.DecodeFrom(in)
 	if err == nil {
 		t.Fatal("expected lte violation on map value")
 	}
@@ -129,7 +128,7 @@ func TestMap_diveValueValidation_intOOB(t *testing.T) {
 
 func TestMap_diveValueValidation_stringTooLong(t *testing.T) {
 	in := []byte(`{"names":{"a":"ok","b":"toolong"}}`)
-	_, err := decode.Unmarshal[MapDiveStruct](in)
+	_, _, err := MapDiveStruct{}.DecodeFrom(in)
 	if err == nil {
 		t.Fatal("expected maxlen violation on map value")
 	}
@@ -137,7 +136,7 @@ func TestMap_diveValueValidation_stringTooLong(t *testing.T) {
 
 func TestMap_diveMod_numericClamp(t *testing.T) {
 	in := []byte(`{"clamped":{"a":-5,"b":50,"c":250}}`)
-	got, err := decode.Unmarshal[MapDiveStruct](in)
+	got, _, err := MapDiveStruct{}.DecodeFrom(in)
 	if err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -148,7 +147,7 @@ func TestMap_diveMod_numericClamp(t *testing.T) {
 
 func TestMap_diveValueValidation_pass(t *testing.T) {
 	in := []byte(`{"counts":{"a":50,"b":99},"names":{"x":"hi"}}`)
-	got, err := decode.Unmarshal[MapDiveStruct](in)
+	got, _, err := MapDiveStruct{}.DecodeFrom(in)
 	if err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -168,7 +167,7 @@ func TestEmbedded_promotedFields(t *testing.T) {
 			t.Errorf("marshal missing %q in %q", want, out)
 		}
 	}
-	got, err := decode.Unmarshal[Derived]([]byte(out))
+	got, _, err := Derived{}.DecodeFrom([]byte(out))
 	if err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -180,7 +179,7 @@ func TestEmbedded_promotedFields(t *testing.T) {
 func TestEmbedded_promotedRequired(t *testing.T) {
 	// Base.ID is required; missing should fail.
 	in := []byte(`{"name":"bob"}`)
-	_, err := decode.Unmarshal[Derived](in)
+	_, _, err := Derived{}.DecodeFrom(in)
 	if err == nil {
 		t.Fatal("expected missing-required error")
 	}

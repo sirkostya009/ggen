@@ -55,6 +55,16 @@ type Stream struct {
 	Shift bool
 }
 
+// NewStream allocates a Stream bound to r with buf as the initial
+// backing slice. See Reset for the buf / Shift semantics. Equivalent
+// to `var s Stream; s.Reset(r, buf); return &s`; use Reset directly
+// to recycle an existing Stream (stack-allocatable, no heap alloc).
+func NewStream(r io.Reader, buf []byte) *Stream {
+	s := &Stream{}
+	s.Reset(r, buf)
+	return s
+}
+
 // Reset binds the Stream to r with buf as the initial backing slice.
 // buf is truncated to length 0 — its capacity is retained for parse
 // working area. Pass nil to start with no backing (ReadMore allocates

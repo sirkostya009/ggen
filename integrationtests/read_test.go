@@ -3,8 +3,6 @@ package integrationtests
 import (
 	"strings"
 	"testing"
-
-	"github.com/sirkostya009/ggen/decode"
 )
 
 // IgnoreUnknownStruct tests that `//ggen:generate ignoreunknown` suppresses
@@ -18,7 +16,7 @@ type IgnoreUnknownStruct struct {
 const validAddress = `{"street": "Main 1", "city": "Lviv", "zipCode": "79000"}`
 
 func TestRead_valid(t *testing.T) {
-	got, err := decode.Read[Address](strings.NewReader(validAddress))
+	got, _, err := Address{}.DecodeFrom([]byte(validAddress))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,7 +27,7 @@ func TestRead_valid(t *testing.T) {
 
 func TestRead_missingRequired(t *testing.T) {
 	// city omitted — Address.city is `required,notempty`.
-	_, err := decode.Read[Address](strings.NewReader(`{"street":"a","zipCode":"12345"}`))
+	_, _, err := Address{}.DecodeFrom([]byte(`{"street":"a","zipCode":"12345"}`))
 	if err == nil {
 		t.Fatal("expected missing-required error")
 	}
@@ -41,7 +39,7 @@ func TestRead_missingRequired(t *testing.T) {
 func TestRead_notempty(t *testing.T) {
 	// city has notempty; empty string fails.
 	bad := `{"street":"s","city":"","zipCode":"12345"}`
-	_, err := decode.Read[Address](strings.NewReader(bad))
+	_, _, err := Address{}.DecodeFrom([]byte(bad))
 	if err == nil {
 		t.Fatal("expected notempty error")
 	}
@@ -53,7 +51,7 @@ func TestRead_notempty(t *testing.T) {
 func TestRead_len(t *testing.T) {
 	// zipCode len=5 exact; length 6 fails.
 	bad := `{"street":"s","city":"c","zipCode":"123456"}`
-	_, err := decode.Read[Address](strings.NewReader(bad))
+	_, _, err := Address{}.DecodeFrom([]byte(bad))
 	if err == nil {
 		t.Fatal("expected len error")
 	}
@@ -64,7 +62,7 @@ func TestRead_len(t *testing.T) {
 
 func TestRead_unknownFields_errorByDefault(t *testing.T) {
 	input := `{"street":"s","city":"c","zipCode":"12345","xx":"y"}`
-	_, err := decode.Read[Address](strings.NewReader(input))
+	_, _, err := Address{}.DecodeFrom([]byte(input))
 	if err == nil {
 		t.Fatal("expected error on unknown key")
 	}
@@ -76,7 +74,7 @@ func TestRead_unknownFields_errorByDefault(t *testing.T) {
 func TestRead_unknownFields_ignoreOptIn(t *testing.T) {
 	// IgnoreUnknownStruct has `//ggen:generate ignoreunknown` — extras silently skipped.
 	input := []byte(`{"name":"alice","extra":42,"also":"ignored"}`)
-	got, err := decode.Unmarshal[IgnoreUnknownStruct](input)
+	got, _, err := IgnoreUnknownStruct{}.DecodeFrom(input)
 	if err != nil {
 		t.Fatalf("unexpected: %v", err)
 	}
@@ -88,7 +86,7 @@ func TestRead_unknownFields_ignoreOptIn(t *testing.T) {
 func TestRead_wrongType(t *testing.T) {
 	// street is a string; integer should error.
 	input := `{"street":123,"city":"c","zipCode":"12345"}`
-	_, err := decode.Read[Address](strings.NewReader(input))
+	_, _, err := Address{}.DecodeFrom([]byte(input))
 	if err == nil {
 		t.Fatal("expected wrong-type error")
 	}
@@ -98,7 +96,7 @@ func TestRead_wrongType(t *testing.T) {
 }
 
 func TestRead_notObject(t *testing.T) {
-	_, err := decode.Read[Address](strings.NewReader(`[1,2,3]`))
+	_, _, err := Address{}.DecodeFrom([]byte(`[1,2,3]`))
 	if err == nil {
 		t.Fatal("expected not-object error")
 	}

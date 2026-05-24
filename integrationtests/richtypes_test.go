@@ -17,7 +17,6 @@ import (
 
 	gofrs "github.com/gofrs/uuid/v5"
 	"github.com/google/uuid"
-	"github.com/sirkostya009/ggen/decode"
 	"github.com/sirkostya009/ggen/encode"
 )
 
@@ -60,7 +59,7 @@ func TestRich_Roundtrip(t *testing.T) {
 		GofrsID: gofrsID,
 	}
 	out, _ := encode.Marshal(in)
-	got, err := decode.Unmarshal[RichTypes](out)
+	got, _, err := RichTypes{}.DecodeFrom(out)
 	if err != nil {
 		t.Fatalf("unmarshal: %v\n%s", err, out)
 	}
@@ -107,11 +106,11 @@ func TestRich_GofrsUUID_AltForms(t *testing.T) {
 		[]byte(`{"gofrsId":"urn:uuid:550e8400-e29b-41d4-a716-446655440000"}`),
 	}
 	for _, c := range cases {
-		if _, err := decode.Unmarshal[RichTypes](c); err != nil {
+		if _, _, err := (RichTypes{}).DecodeFrom(c); err != nil {
 			t.Errorf("unmarshal %s: %v", c, err)
 		}
 	}
-	if _, err := decode.Unmarshal[RichTypes]([]byte(`{"gofrsId":"not-a-uuid-at-all"}`)); err == nil {
+	if _, _, err := (RichTypes{}).DecodeFrom([]byte(`{"gofrsId":"not-a-uuid-at-all"}`)); err == nil {
 		t.Error("expected error on garbage")
 	}
 }
@@ -124,7 +123,7 @@ func TestRich_GofrsUUID_AltForms(t *testing.T) {
 // users have to understand.)
 func TestRich_RawJSON_ZeroCopy(t *testing.T) {
 	in := []byte(`{"raw1":"alpha","raw2":null,"site":"http://x","big":0,"bigF":"0","bigR":"0","id":"00000000-0000-0000-0000-000000000000"}`)
-	got, err := decode.Unmarshal[RichTypes](in)
+	got, _, err := RichTypes{}.DecodeFrom(in)
 	if err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -147,7 +146,7 @@ func TestRich_RawJSON_ZeroCopy(t *testing.T) {
 // through DecodeFrom's error return.
 func TestRich_URLValidation(t *testing.T) {
 	bad := []byte(`{"raw1":null,"raw2":null,"site":"://broken","big":0,"bigF":"0","bigR":"0","id":"00000000-0000-0000-0000-000000000000"}`)
-	if _, err := decode.Unmarshal[RichTypes](bad); err == nil {
+	if _, _, err := (RichTypes{}).DecodeFrom(bad); err == nil {
 		t.Error("expected url.Parse error")
 	}
 }
@@ -156,7 +155,7 @@ func TestRich_URLValidation(t *testing.T) {
 func TestRich_BigIntArbitraryPrecision(t *testing.T) {
 	huge := strings.Repeat("9", 100) // 100-digit number
 	in := []byte(`{"raw1":null,"raw2":null,"site":"http://x","big":` + huge + `,"bigF":"0","bigR":"0","id":"00000000-0000-0000-0000-000000000000"}`)
-	got, err := decode.Unmarshal[RichTypes](in)
+	got, _, err := RichTypes{}.DecodeFrom(in)
 	if err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -168,7 +167,7 @@ func TestRich_BigIntArbitraryPrecision(t *testing.T) {
 // TestRich_UUIDInvalid surfaces uuid.Parse's error.
 func TestRich_UUIDInvalid(t *testing.T) {
 	in := []byte(`{"raw1":null,"raw2":null,"site":"http://x","big":0,"bigF":"0","bigR":"0","id":"not-a-uuid"}`)
-	if _, err := decode.Unmarshal[RichTypes](in); err == nil {
+	if _, _, err := (RichTypes{}).DecodeFrom(in); err == nil {
 		t.Error("expected uuid.Parse error")
 	}
 }
@@ -181,7 +180,7 @@ func TestRich_RoundtripDeepEqual(t *testing.T) {
 	site, _ := url.Parse("https://x.test")
 	in := RichTypes{Site: *site, ID: id}
 	out, _ := encode.Marshal(in)
-	got, err := decode.Unmarshal[RichTypes](out)
+	got, _, err := RichTypes{}.DecodeFrom(out)
 	if err != nil {
 		t.Fatalf("unmarshal: %v\n%s", err, out)
 	}

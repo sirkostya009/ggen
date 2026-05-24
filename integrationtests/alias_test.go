@@ -11,7 +11,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sirkostya009/ggen/decode"
 	"github.com/sirkostya009/ggen/decode/validation"
 	"github.com/sirkostya009/ggen/encode"
 	"github.com/sirkostya009/ggen/integrationtests/thirdparty"
@@ -44,7 +43,7 @@ func TestAlias_String_Roundtrip(t *testing.T) {
 	if string(out) != `"hello"` {
 		t.Errorf("marshal = %q, want %q", out, `"hello"`)
 	}
-	got, err := decode.Unmarshal[AliasString](out)
+	got, _, err := AliasString("").DecodeFrom(out)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +89,7 @@ func TestAlias_Int_Roundtrip(t *testing.T) {
 	if string(out) != "-42" {
 		t.Errorf("marshal = %q, want -42", out)
 	}
-	got, err := decode.Unmarshal[AliasInt]([]byte("-42"))
+	got, _, err := AliasInt(0).DecodeFrom([]byte("-42"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +101,7 @@ func TestAlias_Int_Roundtrip(t *testing.T) {
 func TestAlias_Uint64_Roundtrip(t *testing.T) {
 	in := AliasUint64(18446744073709551615) // max uint64
 	out, _ := encode.Marshal(in)
-	got, err := decode.Unmarshal[AliasUint64](out)
+	got, _, err := AliasUint64(0).DecodeFrom(out)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +113,7 @@ func TestAlias_Uint64_Roundtrip(t *testing.T) {
 func TestAlias_Float64_Roundtrip(t *testing.T) {
 	in := AliasFloat64(3.14159)
 	out, _ := encode.Marshal(in)
-	got, err := decode.Unmarshal[AliasFloat64](out)
+	got, _, err := AliasFloat64(0).DecodeFrom(out)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +125,7 @@ func TestAlias_Float64_Roundtrip(t *testing.T) {
 func TestAlias_Bool_Roundtrip(t *testing.T) {
 	for _, in := range []AliasBool{true, false} {
 		out, _ := encode.Marshal(in)
-		got, err := decode.Unmarshal[AliasBool](out)
+		got, _, err := AliasBool(false).DecodeFrom(out)
 		if err != nil {
 			t.Fatalf("%v: %v", in, err)
 		}
@@ -139,7 +138,7 @@ func TestAlias_Bool_Roundtrip(t *testing.T) {
 // TestAlias_String_RejectsNonString: feeding a JSON number to a string
 // alias must surface scan.ErrBadString, not a silent type coercion.
 func TestAlias_String_RejectsNonString(t *testing.T) {
-	if _, err := decode.Unmarshal[AliasString]([]byte("42")); err == nil {
+	if _, _, err := (AliasString("")).DecodeFrom([]byte("42")); err == nil {
 		t.Error("expected scan error on number → string-alias")
 	}
 }
@@ -152,7 +151,7 @@ func TestAlias_String_RejectsNonString(t *testing.T) {
 // the documented hazard zero-copy aliasing buys you.)
 func TestAlias_String_ZeroCopy(t *testing.T) {
 	in := []byte(`"alpha"`)
-	got, err := decode.Unmarshal[AliasString](in)
+	got, _, err := AliasString("").DecodeFrom(in)
 	if err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -197,7 +196,7 @@ func TestAlias_StructIntrospect_NoMethods(t *testing.T) {
 	if string(out) != `{"count":42,"title":"hello"}` {
 		t.Errorf("marshal = %s, want struct-shaped JSON", out)
 	}
-	got, err := decode.Unmarshal[PlainAlias](out)
+	got, _, err := PlainAlias{}.DecodeFrom(out)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -250,7 +249,7 @@ func TestAlias_StructIntrospect_CrossPkg(t *testing.T) {
 	if string(out) != `{"Name":"alice","Tag":"admin"}` {
 		t.Errorf("marshal = %s, want field-introspected JSON object", out)
 	}
-	got, err := decode.Unmarshal[CrossPkgTaggedAlias](out)
+	got, _, err := CrossPkgTaggedAlias{}.DecodeFrom(out)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -272,7 +271,7 @@ func TestAlias_StructIntrospect_SamePkg(t *testing.T) {
 	if string(out) != `{"X":42,"Y":"hello"}` {
 		t.Errorf("marshal = %s, want field-introspected JSON object", out)
 	}
-	got, err := decode.Unmarshal[SamePkgAlias](out)
+	got, _, err := SamePkgAlias{}.DecodeFrom(out)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -316,7 +315,7 @@ func TestAlias_StructDelegation_OpaqueFallback(t *testing.T) {
 	if string(out) != `"secret"` {
 		t.Errorf("marshal = %s, want delegated MarshalJSON output", out)
 	}
-	got, err := decode.Unmarshal[OpaqueAlias](out)
+	got, _, err := OpaqueAlias{}.DecodeFrom(out)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -346,7 +345,7 @@ func TestAlias_Slice_Roundtrip(t *testing.T) {
 	if string(out) != `["go","rust","zig"]` {
 		t.Errorf("marshal = %s, want JSON array", out)
 	}
-	got, err := decode.Unmarshal[AliasTags](out)
+	got, _, err := AliasTags{}.DecodeFrom(out)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -363,7 +362,7 @@ func TestAlias_Map_Roundtrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := decode.Unmarshal[AliasLookup](out)
+	got, _, err := AliasLookup{}.DecodeFrom(out)
 	if err != nil {
 		t.Fatalf("unmarshal: %v\n%s", err, out)
 	}
@@ -383,7 +382,7 @@ func TestAlias_Array_Roundtrip(t *testing.T) {
 	if string(out) != `[10,20,30]` {
 		t.Errorf("marshal = %s, want [10,20,30]", out)
 	}
-	got, err := decode.Unmarshal[AliasTuple](out)
+	got, _, err := AliasTuple{}.DecodeFrom(out)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -396,10 +395,10 @@ func TestAlias_Array_Roundtrip(t *testing.T) {
 // errors when the JSON tuple has the wrong element count — same
 // validation.LenError as the field-level array path.
 func TestAlias_Array_StrictLen(t *testing.T) {
-	if _, err := decode.Unmarshal[AliasTuple]([]byte(`[1,2]`)); err == nil {
+	if _, _, err := (AliasTuple{}).DecodeFrom([]byte(`[1,2]`)); err == nil {
 		t.Error("expected LenError on short tuple")
 	}
-	if _, err := decode.Unmarshal[AliasTuple]([]byte(`[1,2,3,4]`)); err == nil {
+	if _, _, err := (AliasTuple{}).DecodeFrom([]byte(`[1,2,3,4]`)); err == nil {
 		t.Error("expected LenError on long tuple")
 	}
 }
@@ -411,7 +410,7 @@ func TestAlias_Array_StrictLen(t *testing.T) {
 func TestAlias_String_ZeroAllocations(t *testing.T) {
 	in := []byte(`"some-typical-html-payload-here"`)
 	allocs := testing.AllocsPerRun(100, func() {
-		v, err := decode.Unmarshal[AliasString](in)
+		v, _, err := AliasString("").DecodeFrom(in)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -440,7 +439,7 @@ type AliasFieldExample struct {
 func TestAlias_Field_ValidationAndMods(t *testing.T) {
 	// trim + lower run before validation; the value the validator sees
 	// is the post-mod one.
-	got, err := decode.Unmarshal[AliasFieldExample]([]byte(`{"body":"  HI  ","count":5}`))
+	got, _, err := AliasFieldExample{}.DecodeFrom([]byte(`{"body":"  HI  ","count":5}`))
 	if err != nil {
 		t.Fatalf("decode: %v", err)
 	}
@@ -449,7 +448,7 @@ func TestAlias_Field_ValidationAndMods(t *testing.T) {
 	}
 
 	// clamp pulls 500 back into [1,100]; gte/lte then pass on the clamped value.
-	got, err = decode.Unmarshal[AliasFieldExample]([]byte(`{"body":"hello","count":500}`))
+	got, _, err = AliasFieldExample{}.DecodeFrom([]byte(`{"body":"hello","count":500}`))
 	if err != nil {
 		t.Fatalf("clamp+validate: %v", err)
 	}
@@ -458,7 +457,7 @@ func TestAlias_Field_ValidationAndMods(t *testing.T) {
 	}
 
 	// minlen fires post-trim — `" a "` → `"a"` → length 1, below the limit.
-	_, err = decode.Unmarshal[AliasFieldExample]([]byte(`{"body":" a ","count":5}`))
+	_, _, err = AliasFieldExample{}.DecodeFrom([]byte(`{"body":" a ","count":5}`))
 	var minlen *validation.MinLenError
 	if !errors.As(err, &minlen) {
 		t.Errorf("expected MinLenError post-trim, got %v", err)

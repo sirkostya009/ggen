@@ -124,7 +124,9 @@ methods use the hand-rolled `scan` package directly.
   `Ensure(p *int, n int)` + `Anchor`/`Unanchor` design that
   bulk-fetched N bytes via an internal Read loop.
 - `Stream` is **stack-allocatable**, no internal pool: `var s scan.Stream;
-  s.Reset(r, buf)`. Caller owns `buf` lifecycle. There used to be an
+  s.Reset(r, buf)`. Caller owns `buf` lifecycle. `scan.NewStream(r, buf)`
+  is the heap-allocating shorthand for callers who don't care about the
+  one-time alloc and want a single-expression form. There used to be an
   `Acquire`/`Release` pair around a `sync.Pool` of Streams; the pool was
   removed because it bundled too many implicit-lifetime assumptions about
   the buffer and led to silent corruption when callers reused buf across
@@ -144,19 +146,37 @@ type Decoder[T any] interface {
     DecodeStreamFrom(s *scan.Stream) (T, error)         // Stream owns cursor via s.Pos
 }
 
-func Unmarshal[T Decoder[T]](data []byte) (T, error)
-func Read[T Decoder[T]](r io.Reader) (T, error)                 // io.ReadAll + Unmarshal
+// Array walkers — callers would otherwise have to reimplement the
+// bracket / comma / element-dispatch loop.
 func UnmarshalSlice[T Decoder[T]](data []byte) ([]T, error)
-func ReadSlice[T Decoder[T]](r io.Reader) ([]T, error)
-// Streaming entry points — buf is a reusable working area; pass nil for
-// fresh, or a pre-sized / pooled slice. Returned []byte is the
-// (possibly grown) buffer; safe to recycle immediately since strings
-// inside the value are owned copies.
-func UnmarshalStream[T Decoder[T]](r io.Reader, buf []byte) (T, []byte, error)
+func ReadSlice[T Decoder[T]](r io.Reader) ([]T, error)               // io.ReadAll + UnmarshalSlice
 func UnmarshalSliceStream[T Decoder[T]](r io.Reader, buf []byte) ([]T, []byte, error)
-func UnmarshalStreamRequest[T Decoder[T]](req *http.Request) (T, []byte, error)
-func UnmarshalStreamResponse[T Decoder[T]](resp *http.Response) (T, []byte, error)
 ```
+
+Single-value entry points were intentionally NOT added: the generated
+method is callable directly with a zero-value receiver. For struct
+types and slice/map/array aliases the receiver is the one-liner
+composite literal `T{}`; primitive aliases need an explicit zero
+(`AliasInt(0)`, `AliasString("")`, `AliasBool(false)`, …) or a
+`var zero T`. Stream callers construct the Stream themselves:
+
+```go
+// bytes path
+v, _, err := T{}.DecodeFrom(data)
+
+// streaming path
+var s scan.Stream
+s.Reset(r, buf)              // buf nil OK
+v, err := T{}.DecodeStreamFrom(&s)
+// caller may recycle s.Bytes() afterwards
+```
+
+The previous one-line wrappers (`Unmarshal[T]`, `Read[T]`,
+`UnmarshalStream[T]`, `UnmarshalStreamRequest`,
+`UnmarshalStreamResponse`) were removed: they were direct passthroughs
+to the generated method, and the package surface is honest about what
+the user actually pays for. The array walkers stay because
+reimplementing the bracket/comma loop everywhere is real toil.
 
 **`encode` package** (`encode/encode.go`):
 
@@ -677,21 +697,28 @@ stdlib v1/v2). JSON `[]` / `{}` on a non-nil receiver keeps the
 `[:0]`'d / cleared container; on a nil receiver, allocates an empty
 non-nil container (also stdlib parity).
 
-The top-level entry points (`decode.Unmarshal[T]`, `Read[T]`, slice
-and stream variants) all pass `var zero T` as the receiver — so
-calling those gives you fresh decode with no behaviour change vs the
-old fresh-only model. The merge shape is opt-in: call
-`existing.DecodeFrom(data)` directly to merge.
+Call the generated methods with a zero-value receiver for fresh
+decode (`T{}.DecodeFrom(data)` for struct/slice/map/array;
+`var zero T; zero.DecodeFrom(data)` for primitive aliases). To merge
+into an existing value, call its `DecodeFrom` directly.
 
-Top-level wrappers in the runtime libraries (call these from user code):
+Runtime entry points (call these from user code):
 
 ```go
-decode.Unmarshal[T](data)              decode.UnmarshalSlice[T](data)
-decode.Read[T](r)                      decode.ReadSlice[T](r)
-decode.UnmarshalStream[T](r, buf)      decode.UnmarshalSliceStream[T](r, buf)
-decode.UnmarshalStreamRequest[T](req)  decode.UnmarshalStreamResponse[T](resp)
-// stream variants return (T, []byte, error) — caller owns buf, safe to recycle
+// bytes path — single value
+T{}.DecodeFrom(data)                       // (T, int, error)
 
+// stream path — single value
+var s scan.Stream
+s.Reset(r, buf)
+T{}.DecodeStreamFrom(&s)                   // (T, error); recycle s.Bytes()
+
+// array walkers (decode package — keep what reimplementation would cost)
+decode.UnmarshalSlice[T](data)             // ([]T, error)
+decode.ReadSlice[T](r)                     // ([]T, error)
+decode.UnmarshalSliceStream[T](r, buf)     // ([]T, []byte, error)
+
+// encode package (unchanged)
 encode.Marshal(t)            encode.MarshalString(t)        encode.Write(w, t)
 encode.MarshalSlice(items)   encode.MarshalSliceString(items) encode.WriteSlice(w, items)
 encode.AppendSlice(dst, items)
@@ -701,7 +728,7 @@ Opt-in (via `//ggen:generate marshal` / `//ggen:generate unmarshal`):
 
 ```go
 func (s T) MarshalJSON() ([]byte, error)                         // wraps encode.Marshal(s)
-func (s *T) UnmarshalJSON(data []byte) error                     // wraps decode.Unmarshal[T](data)
+func (s *T) UnmarshalJSON(data []byte) error                     // inlines `var zero T; zero.DecodeFrom(data)`
 ```
 
 ## Optimizations applied in codegen (nothing at runtime)
@@ -1358,8 +1385,7 @@ their generated code.
   corrupts the decoded values. A flow-sensitive check that flags any
   write to a `data` arg (slice index assignment, `append` over the
   same backing, `copy(data, …)`) after it was passed to a ggen
-  `DecodeFrom` / `decode.Unmarshal[T]` / `decode.Read[T]` would catch
-  real bugs. Other candidates:
+  `DecodeFrom` would catch real bugs. Other candidates:
     - **stale generated file** — find a struct with `//ggen:generate`
       whose `<dir>_ggen.go` is missing the corresponding method set
       (e.g. field added after last regen).
@@ -1512,15 +1538,14 @@ their generated code.
 - **`[512]byte` inline scratch in `Stream`.** Idea: avoid the buffer
   heap alloc for small payloads by embedding a stack-resident scratch
   array in `Stream`, spilling to heap only when payload > 512. Doesn't
-  work because Go's escape analysis can't prove `&s` is safe across the
-  `zero.DecodeStreamFrom(&s, 0)` call inside `UnmarshalStream` — the
-  generic function dispatch defeats it, so the entire `Stream` (now
-  including the 512-byte array) gets heap-allocated. Net result: same
-  alloc count, larger Stream object. The dream of stack-resident Stream
-  needs a non-generic API (caller writes `var s scan.Stream` themselves
-  and calls `Node{}.DecodeStreamFrom(&s, 0)` directly) — the convenient
-  `decode.UnmarshalStream[T]` wrapper precludes it. Don't retry without
-  also redesigning the user-facing API.
+  work in the original tests because Go's escape analysis can't prove
+  `&s` is safe across the `zero.DecodeStreamFrom(&s)` call inside
+  what was then a generic `decode.UnmarshalStream[T]` wrapper — the
+  generic dispatch defeated it, so the entire `Stream` (now including
+  the 512-byte array) got heap-allocated. The wrapper is now gone and
+  the call site is direct (`var s scan.Stream; ...; T{}.DecodeStreamFrom(&s)`),
+  so the escape constraint may no longer apply — worth re-measuring
+  if a new residency push needs the small-payload alloc back.
 
 - **Per-decode arena + `StreamArenaSize`/`StreamArenaCompact` codegen.**
   Flow: parse with aliased strings (zero per-string alloc, fast),

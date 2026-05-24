@@ -15,8 +15,8 @@ import (
 	"testing"
 
 	"github.com/bytedance/sonic"
-	"github.com/sirkostya009/ggen/decode"
 	"github.com/sirkostya009/ggen/encode"
+	"github.com/sirkostya009/ggen/scan"
 )
 
 // BenchmarkSmall_Unmarshal — bytes-path decode of ValidPayload into a
@@ -30,7 +30,7 @@ func BenchmarkSmall_Unmarshal(b *testing.B) {
 		{"jsonv2", func(p []byte) error { var v Validated; return jsonv2.Unmarshal(p, &v) }},
 		{"sonic", func(p []byte) error { var v Validated; return sonic.Unmarshal(p, &v) }},
 		{"sonic_fast", func(p []byte) error { var v Validated; return sonic.ConfigFastest.Unmarshal(p, &v) }},
-		{"ggen", func(p []byte) error { _, err := decode.Unmarshal[Validated](p); return err }},
+		{"ggen", func(p []byte) error { _, _, err := Validated{}.DecodeFrom(p); return err }},
 	}
 	for _, c := range codecs {
 		b.Run(c.name, func(b *testing.B) {
@@ -79,13 +79,19 @@ func BenchmarkSmall_Reader(b *testing.B) {
 		{"ggen_stream_512", 512, func(s *readerState) error {
 			s.r.Reset(ValidPayload)
 			var err error
-			_, s.buf, err = decode.UnmarshalStream[Validated](&s.r, s.buf[:0])
+			var _st scan.Stream
+			_st.Reset(&s.r, s.buf[:0])
+			_, err = Validated{}.DecodeStreamFrom(&_st)
+			s.buf = _st.Bytes()
 			return err
 		}},
 		{"ggen_stream_full", len(ValidPayload), func(s *readerState) error {
 			s.r.Reset(ValidPayload)
 			var err error
-			_, s.buf, err = decode.UnmarshalStream[Validated](&s.r, s.buf[:0])
+			var _st scan.Stream
+			_st.Reset(&s.r, s.buf[:0])
+			_, err = Validated{}.DecodeStreamFrom(&_st)
+			s.buf = _st.Bytes()
 			return err
 		}},
 		{"ggen_readall", 0, func(s *readerState) error {
@@ -94,7 +100,7 @@ func BenchmarkSmall_Reader(b *testing.B) {
 			if err != nil {
 				return err
 			}
-			_, err = decode.Unmarshal[Validated](data)
+			_, _, err = Validated{}.DecodeFrom(data)
 			return err
 		}},
 	}
@@ -125,7 +131,7 @@ func BenchmarkTiny_Unmarshal(b *testing.B) {
 		{"sonic", func(p []byte) error { var v Claim; return sonic.Unmarshal(p, &v) }},
 		{"sonic_fast", func(p []byte) error { var v Claim; return sonic.ConfigFastest.Unmarshal(p, &v) }},
 		{"easyjson", func(p []byte) error { var v EasyClaim; return v.UnmarshalJSON(p) }},
-		{"ggen", func(p []byte) error { _, err := decode.Unmarshal[Claim](p); return err }},
+		{"ggen", func(p []byte) error { _, _, err := Claim{}.DecodeFrom(p); return err }},
 	}
 	for _, c := range codecs {
 		b.Run(c.name, func(b *testing.B) {
@@ -181,8 +187,8 @@ func BenchmarkValidationHeavy_Unmarshal(b *testing.B) {
 		{"jsonv2_noval", func(p []byte) error { var v ValidationHeavy; return jsonv2.Unmarshal(p, &v) }},
 		{"sonic_noval", func(p []byte) error { var v ValidationHeavy; return sonic.Unmarshal(p, &v) }},
 		{"easyjson_noval", func(p []byte) error { var v EasyValidationHeavy; return v.UnmarshalJSON(p) }},
-		{"ggen_noval", func(p []byte) error { _, err := decode.Unmarshal[NoValidationHeavy](p); return err }},
-		{"ggen_validated", func(p []byte) error { _, err := decode.Unmarshal[ValidationHeavy](p); return err }},
+		{"ggen_noval", func(p []byte) error { _, _, err := NoValidationHeavy{}.DecodeFrom(p); return err }},
+		{"ggen_validated", func(p []byte) error { _, _, err := ValidationHeavy{}.DecodeFrom(p); return err }},
 	}
 	for _, c := range codecs {
 		b.Run(c.name, func(b *testing.B) {

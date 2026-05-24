@@ -62,7 +62,8 @@ func crossCompat[T ggenCompat[T]](t *testing.T, in T) {
 	if err != nil {
 		t.Fatalf("jsonv2.Marshal for %T: %v", in, err)
 	}
-	viaGgen, err := decode.Unmarshal[T](stdBytes)
+	var zero T
+	viaGgen, _, err := zero.DecodeFrom(stdBytes)
 	if err != nil {
 		t.Fatalf("ggen Unmarshal of jsonv2 output failed for %T: %v\n%s", in, err, stdBytes)
 	}

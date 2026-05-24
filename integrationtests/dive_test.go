@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"strings"
 	"testing"
-
-	"github.com/sirkostya009/ggen/decode"
 )
 
 // DiveStruct exercises per-element (dive) validation, rune-counting length
@@ -38,7 +36,7 @@ func EvenOnly(n int) error {
 
 func TestDive_valid(t *testing.T) {
 	input := `{"tags":["go","rust"],"title":"héllo","scores":[10,50,100]}`
-	got, err := decode.Unmarshal[DiveStruct]([]byte(input))
+	got, _, err := (DiveStruct{}).DecodeFrom([]byte(input))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -53,7 +51,7 @@ func TestDive_valid(t *testing.T) {
 func TestDive_tagTooShort(t *testing.T) {
 	// "x" is 1 rune, below minrunes=2 → per-element error
 	input := `{"tags":["ok","x"],"title":"hi","scores":[]}`
-	_, err := decode.Unmarshal[DiveStruct]([]byte(input))
+	_, _, err := (DiveStruct{}).DecodeFrom([]byte(input))
 	if err == nil {
 		t.Fatal("expected error for too-short tag element")
 	}
@@ -65,7 +63,7 @@ func TestDive_tagTooShort(t *testing.T) {
 func TestDive_scoreOutOfRange(t *testing.T) {
 	// 101 violates lte=100 per element
 	input := `{"tags":["ok"],"title":"hi","scores":[50,101]}`
-	_, err := decode.Unmarshal[DiveStruct]([]byte(input))
+	_, _, err := (DiveStruct{}).DecodeFrom([]byte(input))
 	if err == nil {
 		t.Fatal("expected error for out-of-range score")
 	}
@@ -77,13 +75,13 @@ func TestDive_scoreOutOfRange(t *testing.T) {
 func TestRuneCount_byteVsRune(t *testing.T) {
 	// "héllo" is 5 runes but 6 bytes. With rune-count bounds (1..5), it passes.
 	input := `{"tags":["ok"],"title":"héllo","scores":[]}`
-	if _, err := decode.Unmarshal[DiveStruct]([]byte(input)); err != nil {
+	if _, _, err := (DiveStruct{}).DecodeFrom([]byte(input)); err != nil {
 		t.Errorf("5-rune multibyte title should pass: %v", err)
 	}
 
 	// 6 runes should fail maxrunes=5
 	input2 := `{"tags":["ok"],"title":"héllos","scores":[]}`
-	if _, err := decode.Unmarshal[DiveStruct]([]byte(input2)); err == nil {
+	if _, _, err := (DiveStruct{}).DecodeFrom([]byte(input2)); err == nil {
 		t.Error("6-rune title should fail maxrunes=5")
 	}
 }
@@ -91,7 +89,7 @@ func TestRuneCount_byteVsRune(t *testing.T) {
 func TestTags_sliceLengthVsElement(t *testing.T) {
 	// 4 tags > maxlen=3 → slice-level error
 	input := `{"tags":["aa","bb","cc","dd"],"title":"hi","scores":[]}`
-	_, err := decode.Unmarshal[DiveStruct]([]byte(input))
+	_, _, err := (DiveStruct{}).DecodeFrom([]byte(input))
 	if err == nil {
 		t.Fatal("expected slice-length error")
 	}
@@ -153,7 +151,7 @@ func PointerCheck(p *int) error {
 // element. Locks down the per-element call site for slices.
 func TestCustomDive_sliceValidator(t *testing.T) {
 	in := []byte(`{"tags":["ok","   "],"trim":[],"lookup":{},"mixed":{},"ptr":null}`)
-	_, err := decode.Unmarshal[CustomDiveStruct](in)
+	_, _, err := (CustomDiveStruct{}).DecodeFrom(in)
 	if err == nil {
 		t.Fatal("expected blank-element error")
 	}
@@ -166,7 +164,7 @@ func TestCustomDive_sliceValidator(t *testing.T) {
 // (visible because the trimmed result differs from the input).
 func TestCustomDive_sliceMod(t *testing.T) {
 	in := []byte(`{"tags":["ok"],"trim":["  hi  ","  bye"],"lookup":{},"mixed":{},"ptr":null}`)
-	got, err := decode.Unmarshal[CustomDiveStruct](in)
+	got, _, err := (CustomDiveStruct{}).DecodeFrom(in)
 	if err != nil {
 		t.Fatalf("unexpected: %v", err)
 	}
@@ -183,7 +181,7 @@ func TestCustomDive_sliceMod(t *testing.T) {
 // call site for maps.
 func TestCustomDive_keysValidator(t *testing.T) {
 	in := []byte(`{"tags":["ok"],"trim":[],"lookup":{"BAD!":1},"mixed":{},"ptr":null}`)
-	_, err := decode.Unmarshal[CustomDiveStruct](in)
+	_, _, err := (CustomDiveStruct{}).DecodeFrom(in)
 	if err == nil {
 		t.Fatal("expected bad-key error")
 	}
@@ -197,7 +195,7 @@ func TestCustomDive_keysValidator(t *testing.T) {
 // lowered keys).
 func TestCustomDive_keysMod(t *testing.T) {
 	in := []byte(`{"tags":["ok"],"trim":[],"lookup":{},"mixed":{"FOO":1,"Bar":2},"ptr":null}`)
-	got, err := decode.Unmarshal[CustomDiveStruct](in)
+	got, _, err := (CustomDiveStruct{}).DecodeFrom(in)
 	if err != nil {
 		t.Fatalf("unexpected: %v", err)
 	}
@@ -215,12 +213,12 @@ func TestCustomDive_keysMod(t *testing.T) {
 func TestCustomDive_pointerField(t *testing.T) {
 	// Negative value rejected.
 	bad := []byte(`{"tags":["ok"],"trim":[],"lookup":{},"mixed":{},"ptr":-5}`)
-	if _, err := decode.Unmarshal[CustomDiveStruct](bad); err == nil {
+	if _, _, err := (CustomDiveStruct{}).DecodeFrom(bad); err == nil {
 		t.Error("expected negative-value error from PointerCheck")
 	}
 	// Positive value accepted.
 	good := []byte(`{"tags":["ok"],"trim":[],"lookup":{},"mixed":{},"ptr":5}`)
-	got, err := decode.Unmarshal[CustomDiveStruct](good)
+	got, _, err := (CustomDiveStruct{}).DecodeFrom(good)
 	if err != nil {
 		t.Fatalf("unexpected: %v", err)
 	}
@@ -229,7 +227,7 @@ func TestCustomDive_pointerField(t *testing.T) {
 	}
 	// nil accepted (PointerCheck handles nil itself).
 	null := []byte(`{"tags":["ok"],"trim":[],"lookup":{},"mixed":{},"ptr":null}`)
-	if _, err := decode.Unmarshal[CustomDiveStruct](null); err != nil {
+	if _, _, err := (CustomDiveStruct{}).DecodeFrom(null); err != nil {
 		t.Errorf("nil pointer rejected: %v", err)
 	}
 }

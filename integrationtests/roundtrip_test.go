@@ -12,7 +12,7 @@ import (
 // generated parser accepts, matching the original value.
 func TestMarshalRoundtrip(t *testing.T) {
 	out, _ := encode.Marshal(complexValue)
-	got, err := decode.Unmarshal[Node](out)
+	got, _, err := Node{}.DecodeFrom(out)
 	if err != nil {
 		t.Fatalf("parse: %v\n%s", err, out)
 	}
@@ -74,7 +74,7 @@ func TestWrite(t *testing.T) {
 	if err := encode.Write(&buf, complexValue); err != nil {
 		t.Fatal(err)
 	}
-	got, err := decode.Unmarshal[Node](buf.Bytes())
+	got, _, err := Node{}.DecodeFrom(buf.Bytes())
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}

@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sirkostya009/ggen/decode"
 	"github.com/sirkostya009/ggen/encode"
 )
 
@@ -32,7 +31,7 @@ func TestPointer_roundtripAllSet(t *testing.T) {
 		Enabled: new(true),
 	}
 	out, _ := encode.MarshalString(in)
-	got, err := decode.Unmarshal[PointerStruct]([]byte(out))
+	got, _, err := PointerStruct{}.DecodeFrom([]byte(out))
 	if err != nil {
 		t.Fatalf("unmarshal: %v\n%s", err, out)
 	}
@@ -63,7 +62,7 @@ func TestPointer_nilOmitted(t *testing.T) {
 func TestPointer_nullRoundtrip(t *testing.T) {
 	// Non-omit pointer explicitly null should decode to nil.
 	in := []byte(`{"name":null,"enabled":null}`)
-	got, err := decode.Unmarshal[PointerStruct](in)
+	got, _, err := PointerStruct{}.DecodeFrom(in)
 	if err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}

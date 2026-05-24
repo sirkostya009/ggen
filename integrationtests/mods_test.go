@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sirkostya009/ggen/decode"
 	"github.com/sirkostya009/ggen/decode/validation"
 )
 
@@ -25,7 +24,7 @@ type ModStruct struct {
 func TestMods_trimLowerEmail(t *testing.T) {
 	// Raw has leading/trailing space and uppercase; mods normalize before validation.
 	in := []byte(`{"email":"  Foo@Bar.COM  "}`)
-	got, err := decode.Unmarshal[ModStruct](in)
+	got, _, err := ModStruct{}.DecodeFrom(in)
 	if err != nil {
 		t.Fatalf("unexpected: %v", err)
 	}
@@ -36,7 +35,7 @@ func TestMods_trimLowerEmail(t *testing.T) {
 
 func TestMods_diveTagTrim(t *testing.T) {
 	in := []byte(`{"tags":["  Go  ","  Rust  ","  C++  "]}`)
-	got, err := decode.Unmarshal[ModStruct](in)
+	got, _, err := ModStruct{}.DecodeFrom(in)
 	if err != nil {
 		t.Fatalf("unexpected: %v", err)
 	}
@@ -49,7 +48,7 @@ func TestMods_diveTagTrim(t *testing.T) {
 
 func TestMods_trimleft(t *testing.T) {
 	in := []byte(`{"sku":"SKU-ABC123"}`)
-	got, err := decode.Unmarshal[ModStruct](in)
+	got, _, err := ModStruct{}.DecodeFrom(in)
 	if err != nil {
 		t.Fatalf("unexpected: %v", err)
 	}
@@ -59,7 +58,7 @@ func TestMods_trimleft(t *testing.T) {
 
 	// Without the prefix, pass-through.
 	in2 := []byte(`{"sku":"XYZ"}`)
-	got2, _ := decode.Unmarshal[ModStruct](in2)
+	got2, _, _ := ModStruct{}.DecodeFrom(in2)
 	if got2.SKU != "XYZ" {
 		t.Errorf("SKU = %q", got2.SKU)
 	}
@@ -96,7 +95,7 @@ func RejectShort(s string) (string, error) {
 // mod and the email/minlen validators would fail, but the mod runs first
 // and its error is what surfaces.
 func TestFallibleMod_shortCircuitsValidation(t *testing.T) {
-	_, err := decode.Unmarshal[FallibleModStruct]([]byte(`{"email":"x"}`))
+	_, _, err := FallibleModStruct{}.DecodeFrom([]byte(`{"email":"x"}`))
 	if err == nil {
 		t.Fatal("expected mod rejection")
 	}
@@ -115,7 +114,7 @@ func TestFallibleMod_shortCircuitsValidation(t *testing.T) {
 // immediately, NOT a validation.Errors slice. The multierr aggregation
 // is only for validation-rule failures.
 func TestFallibleMod_multierrStillShortCircuits(t *testing.T) {
-	_, err := decode.Unmarshal[FallibleModMultierrStruct]([]byte(`{"email":"x"}`))
+	_, _, err := FallibleModMultierrStruct{}.DecodeFrom([]byte(`{"email":"x"}`))
 	if err == nil {
 		t.Fatal("expected mod rejection in multierr mode")
 	}
@@ -132,7 +131,7 @@ func TestFallibleMod_multierrStillShortCircuits(t *testing.T) {
 // the mod is a gate, not a bypass.
 func TestFallibleMod_passLetsValidationRun(t *testing.T) {
 	// "abcdef" passes RejectShort (len >= 3) but fails minlen=10 + email.
-	_, err := decode.Unmarshal[FallibleModStruct]([]byte(`{"email":"abcdef"}`))
+	_, _, err := FallibleModStruct{}.DecodeFrom([]byte(`{"email":"abcdef"}`))
 	if err == nil {
 		t.Fatal("expected validation error after mod passed")
 	}

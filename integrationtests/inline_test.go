@@ -4,7 +4,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sirkostya009/ggen/decode"
 	"github.com/sirkostya009/ggen/encode"
 )
 
@@ -20,7 +19,7 @@ type InlineStruct struct {
 
 func TestInline_decodeAbsorbsUnknown(t *testing.T) {
 	in := []byte(`{"name":"alice","age":30,"city":"Lviv","tags":["a","b"]}`)
-	got, err := decode.Unmarshal[InlineStruct](in)
+	got, _, err := InlineStruct{}.DecodeFrom(in)
 	if err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -45,7 +44,7 @@ func TestInline_decodeAbsorbsUnknown(t *testing.T) {
 
 func TestInline_emptyDecode(t *testing.T) {
 	// No unknown keys → Extra stays nil, not an empty map.
-	got, err := decode.Unmarshal[InlineStruct]([]byte(`{"name":"bob"}`))
+	got, _, err := InlineStruct{}.DecodeFrom([]byte(`{"name":"bob"}`))
 	if err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -81,7 +80,7 @@ func TestInline_roundtrip(t *testing.T) {
 		Extra: map[string]any{"age": float64(30), "city": "Lviv", "active": true},
 	}
 	out, _ := encode.Marshal(orig)
-	got, err := decode.Unmarshal[InlineStruct](out)
+	got, _, err := InlineStruct{}.DecodeFrom(out)
 	if err != nil {
 		t.Fatalf("unmarshal: %v\n%s", err, out)
 	}
