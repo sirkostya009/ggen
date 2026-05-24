@@ -22,8 +22,8 @@ type FieldInterfaces struct {
 	TextAppender    bool // T or *T has AppendText(dst []byte) ([]byte, error) — Go 1.24+ encoding.TextAppender
 	JSONUnmarshaler bool // *T has UnmarshalJSON([]byte) error
 	JSONMarshaler   bool // T or *T has MarshalJSON() ([]byte, error)
-	ByteDecoder     bool // T has DecodeFrom(data []byte, i int) (T, int, error)
-	StreamDecoder   bool // T has DecodeStreamFrom(s *scan.Stream, i int) (T, int, error)
+	ByteDecoder     bool // T has DecodeFrom(data []byte) (T, int, error)
+	StreamDecoder   bool // T has DecodeStreamFrom(s *scan.Stream) (T, error)
 	AppendJSON      bool // T has AppendJSON(dst []byte) ([]byte, error)
 	JSONSize        bool // T has JSONSize() int — used to call the real
 	// upper bound instead of falling back to a flat 128/256 guess when
@@ -224,18 +224,15 @@ func matchJSONSize(sig *types.Signature) bool {
 	return ok && b.Kind() == types.Int
 }
 
-// matchByteDecoder reports whether sig is `func(data []byte, i int) (T, int, error)`
+// matchByteDecoder reports whether sig is `func(data []byte) (T, int, error)`
 // where T is the receiver type.
 func matchByteDecoder(sig *types.Signature, recv types.Type) bool {
 	params := sig.Params()
 	results := sig.Results()
-	if params.Len() != 2 || results.Len() != 3 {
+	if params.Len() != 1 || results.Len() != 3 {
 		return false
 	}
 	if !isByteSlice(params.At(0).Type()) {
-		return false
-	}
-	if !isInt(params.At(1).Type()) {
 		return false
 	}
 	if !types.Identical(results.At(0).Type(), recv) {
@@ -247,28 +244,22 @@ func matchByteDecoder(sig *types.Signature, recv types.Type) bool {
 	return isError(results.At(2).Type())
 }
 
-// matchStreamDecoder reports whether sig is `func(s *scan.Stream, i int) (T, int, error)`.
+// matchStreamDecoder reports whether sig is `func(s *scan.Stream) (T, error)`.
 // We don't have a handle on scan.Stream's type here, so we only match the
-// shape (one pointer-to-struct param + one int + (T, int, error)).
+// shape (one pointer-to-struct param + (T, error)).
 func matchStreamDecoder(sig *types.Signature, recv types.Type) bool {
 	params := sig.Params()
 	results := sig.Results()
-	if params.Len() != 2 || results.Len() != 3 {
+	if params.Len() != 1 || results.Len() != 2 {
 		return false
 	}
 	if _, ok := params.At(0).Type().(*types.Pointer); !ok {
 		return false
 	}
-	if !isInt(params.At(1).Type()) {
-		return false
-	}
 	if !types.Identical(results.At(0).Type(), recv) {
 		return false
 	}
-	if !isInt(results.At(1).Type()) {
-		return false
-	}
-	return isError(results.At(2).Type())
+	return isError(results.At(1).Type())
 }
 
 // matchAppendJSON reports whether sig is `func(dst []byte) []byte`.

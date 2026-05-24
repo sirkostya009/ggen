@@ -70,10 +70,17 @@ methods use the hand-rolled `scan` package directly.
   zero-copy aliasing when no escape sequences. Falls back to `stringSlow`
   with `utf8.AppendRune` for `\uXXXX` + surrogates.
 - `Stream` type wraps `io.Reader` with a growable internal buffer
-  (`buf []byte` grown via `append`). The single I/O primitive is
-  `ReadMore(keep int) error`: one Read call per invocation, never
-  loops. `keep` is the lowest offset the caller still needs — bytes
-  before it are eligible for discard:
+  (`buf []byte` grown via `append`). The cursor lives in the
+  exported `Pos int` field — every scan primitive
+  (`s.SkipSpace()`, `s.String()`, `s.KeyView()`, `s.Int64()`,
+  `s.SkipValue()`, …) reads from `s.Pos` and writes it back before
+  returning. Methods take no cursor argument and never return one;
+  the position state is in the Stream itself. Generated code that
+  needs to capture a raw span reads `s.Pos` directly
+  (`start := s.Pos; s.SkipValue(); raw := s.Bytes()[start:s.Pos]`).
+  The single I/O primitive is `ReadMore(keep int) error`: one Read
+  call per invocation, never loops. `keep` is the lowest offset the
+  caller still needs — bytes before it are eligible for discard:
     - `keep == 0` grows without shifting (alloc bigger backing if
       currently full). Buffer offsets stay stable; aliases survive.
     - `keep == len(buf)` resets the buffer to `[:0]` and refills
@@ -86,35 +93,36 @@ methods use the hand-rolled `scan` package directly.
       wrong content after the call.
   Internal Stream methods compact aggressively: `SkipSpace`,
   `ConsumeColon`, `Int64`/`Uint64`, and `String`/`KeyView` all pass
-  a non-zero `keep` (current cursor `i`, or the value-start `start`
+  a non-zero `keep` (current local cursor, or the value-start `start`
   for spans that need to outlast the loop) so the buffer stays
   bounded at roughly `max(chunk_size, single_value_size)` even
-  across long streams. Each method updates its own cursors after
-  the shift (`i = 0`, or `j -= start; start = 0` for the
-  string-body case). The `Shift` field (defaults to true via
-  `Reset`) gets flipped off around `SkipValue` inside RawJSON capture
-  and `json.Unmarshal` fallback spans, where the generated code needs
-  stable absolute offsets to slice `s.Bytes()[start:i]`; bookkeeping
-  branches in SkipSpace/etc check `s.Shift` before resetting the
-  cursor.
+  across long streams. Each method updates its own locals after the
+  shift (`i = 0` for the entry cursor, or `j -= start; start = 0`
+  for the string-body case), then writes the final position into
+  `s.Pos` before return. The `Shift` field (defaults to true via
+  `Reset`) gets flipped off around `SkipValue` inside RawJSON
+  capture and `json.Unmarshal` fallback spans, where the generated
+  code needs stable absolute offsets to slice
+  `s.Bytes()[start:s.Pos]`; bookkeeping branches in SkipSpace/etc
+  check `s.Shift` before resetting the cursor.
   Generated code adds two more shift points at the dispatch-loop
-  boundary: `ReadMore(i); i = 0` after `ObjectOpen+SkipSpace` and
-  after the per-iteration value decode + SkipSpace. Each known-key
-  case opens with `s.ConsumeColon(i)` — the alias from `KeyView` is
-  no longer needed past dispatch, so the shift it triggers is safe.
-  `UnknownKeyError` and the inline-catch-all map key both detach
-  the alias with `strings.Clone(key)` so subsequent compactions
-  don't corrupt the stored value.
-  Each `(*Stream).X(i)` method does its own bounds check (`if i >=
-  len(s.buf) { ... ReadMore(i) ... }`) and proceeds once one new
-  byte has landed. Multi-byte literals (`true`, `false`, `null`,
-  `\uXXXX`) are scanned **byte-by-byte**: each char triggers an
-  individual bounds check + maybe ReadMore, and a mismatch fails
-  fast without fetching the rest. This is the lazy-streaming
-  property — parse-what-you-have, fetch one chunk only when truly
-  stuck. See "tried and rejected" for the older `Ensure(p *int, n
-  int)` + `Anchor`/`Unanchor` design that bulk-fetched N bytes via
-  an internal Read loop.
+  boundary: `ReadMore(s.Pos); s.Pos = 0` after `ObjectOpen+SkipSpace`
+  and after the per-iteration value decode + SkipSpace. Each
+  known-key case opens with `s.ConsumeColon()` — the alias from
+  `KeyView` is no longer needed past dispatch, so the shift it
+  triggers is safe. `UnknownKeyError` and the inline-catch-all map
+  key both detach the alias with `strings.Clone(key)` so subsequent
+  compactions don't corrupt the stored value.
+  Each `(*Stream).X()` method does its own bounds check
+  (`if s.Pos >= len(s.buf) { ... ReadMore(s.Pos) ... }`) and proceeds
+  once one new byte has landed. Multi-byte literals (`true`,
+  `false`, `null`, `\uXXXX`) are scanned **byte-by-byte**: each char
+  triggers an individual bounds check + maybe ReadMore, and a
+  mismatch fails fast without fetching the rest. This is the
+  lazy-streaming property — parse-what-you-have, fetch one chunk
+  only when truly stuck. See "tried and rejected" for the older
+  `Ensure(p *int, n int)` + `Anchor`/`Unanchor` design that
+  bulk-fetched N bytes via an internal Read loop.
 - `Stream` is **stack-allocatable**, no internal pool: `var s scan.Stream;
   s.Reset(r, buf)`. Caller owns `buf` lifecycle. There used to be an
   `Acquire`/`Release` pair around a `sync.Pool` of Streams; the pool was
@@ -132,9 +140,8 @@ methods use the hand-rolled `scan` package directly.
 
 ```go
 type Decoder[T any] interface {
-    DecodeFrom(data []byte, i int) (T, int, error)
-    Unmarshal(data []byte) (T, error)
-    DecodeStreamFrom(s *scan.Stream, i int) (T, int, error)
+    DecodeFrom(data []byte) (T, int, error)             // returns bytes consumed
+    DecodeStreamFrom(s *scan.Stream) (T, error)         // Stream owns cursor via s.Pos
 }
 
 func Unmarshal[T Decoder[T]](data []byte) (T, error)
@@ -626,12 +633,23 @@ stays small: 4 methods per struct (plus 0–2 opt-in JSON hooks).
 Always emitted:
 
 ```go
-func (result T) DecodeFrom(data []byte, i int) (T, int, error)          // recursive entry; satisfies decode.Decoder[T]
-func (result T) DecodeStreamFrom(s *scan.Stream, i int) (T, int, error) // io.Reader-backed counterpart
+func (result T) DecodeFrom(data []byte) (T, int, error)          // returns bytes consumed; satisfies decode.Decoder[T]
+func (result T) DecodeStreamFrom(s *scan.Stream) (T, error)      // Stream owns cursor via s.Pos
 
-func (s T) JSONSize() int                                                // upper-bound for one-alloc Marshal
-func (s T) AppendJSON(dst []byte) ([]byte, error)                        // core marshal — propagates nested errors
+func (s T) JSONSize() int                                         // upper-bound for one-alloc Marshal
+func (s T) AppendJSON(dst []byte) ([]byte, error)                 // core marshal — propagates nested errors
 ```
+
+**Cursor convention.** The bytes-path `DecodeFrom` takes a slice
+starting at the value's first byte and returns how many bytes were
+consumed; the caller advances its own cursor (`i += n` after
+reslicing as `data[i:]`). Generated nested-struct calls follow this
+pattern internally. The stream-path `DecodeStreamFrom` doesn't take
+or return a cursor at all — the cursor is `s.Pos`, owned by the
+Stream and advanced in-place by every scan primitive
+(`s.SkipSpace()`, `s.KeyView()`, `s.String()`, …). Generated code
+that needs to capture a raw span snapshots `s.Pos` before and reads
+it again after (`start := s.Pos; s.SkipValue(); raw := s.Bytes()[start:s.Pos]`).
 
 **Decode-into-receiver semantics.** The receiver passed in IS the merge
 source. Scalar fields persist across JSON omission (stdlib-merge
@@ -663,7 +681,7 @@ The top-level entry points (`decode.Unmarshal[T]`, `Read[T]`, slice
 and stream variants) all pass `var zero T` as the receiver — so
 calling those gives you fresh decode with no behaviour change vs the
 old fresh-only model. The merge shape is opt-in: call
-`existing.DecodeFrom(data, 0)` directly to merge.
+`existing.DecodeFrom(data)` directly to merge.
 
 Top-level wrappers in the runtime libraries (call these from user code):
 
@@ -847,7 +865,7 @@ func (s *T) UnmarshalJSON(data []byte) error                     // wraps decode
     non-empty arm.
 26. **Stream key dispatch via `Stream.KeyView`.** Object-field switch
     keys are read once, matched against constant strings, then
-    discarded. The old codegen used `_s.String(i)` which allocates a
+    discarded. The old codegen used `_s.String()` which allocates a
     fresh heap string for each key — wasted ~200 throwaway allocs per
     decoded value, inflating mheap span retention. `KeyView` is a
     sibling method that aliases via `unsafe.String(unsafe.SliceData
@@ -881,8 +899,10 @@ func (s *T) UnmarshalJSON(data []byte) error                     // wraps decode
       - `[]T`   (dst+slice):   pre-grow `append(dst, zero(T))`,
         target `dst[len-1]`
     For structs the slot serves as both receiver-source (value-
-    receivers ignore content) and write target on return:
-    `slot, k, err = slot.DecodeFrom(...)`. For primitive scans
+    receivers ignore content) and write target on return: bytes path
+    emits `var _n int; slot, _n, err = slot.DecodeFrom(data[k:]); k += _n`;
+    stream path emits `slot, err = slot.DecodeStreamFrom(s)` since
+    `s.Pos` advances internally. For primitive scans
     (`scan.Bool`, `_s.Int64`, inline int/string scanners) the slot
     is the assignment target: `slot = _bv` / `slot = int(_n)`. No
     `var ev0`, no `var _z`, no `var _sv` — saves one struct/primitive
@@ -915,8 +935,9 @@ func (s *T) UnmarshalJSON(data []byte) error                     // wraps decode
     dispatch no longer maintains a separate `j := i` cursor — every
     step (key scan, colon, value decode, comma/`}` handling)
     advances `i` directly. Removes the `j` local plus the end-of-
-    iteration `i = j` sync. Stream path mirrors: `_s.KeyView(i)`
-    returns into `i` via `=` (caller pre-declares `var key string`).
+    iteration `i = j` sync. Stream path mirrors via `s.Pos`: every
+    primitive (`s.KeyView()`, `s.ConsumeColon()`, `s.SkipValue()`,
+    …) advances the same field, no per-call cursor passed in.
 33. **Single local in `inlineScanString` (`_ke` only).** The
     inline string scanner used two locals (`_ks` start, `_ke`
     cursor). Now only `_ke` is kept — the start is `posIn+1` inline,

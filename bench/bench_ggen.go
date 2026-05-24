@@ -20,7 +20,8 @@ import (
 var ggenOneof0 = []string{"en", "es", "fr", "de", "uk"}
 var ggenOneof1 = []string{"admin", "user", "guest"}
 
-func (result Addr) DecodeFrom(data []byte, i int) (Addr, int, error) {
+func (result Addr) DecodeFrom(data []byte) (Addr, int, error) {
+	i := 0
 	var err error
 	_ = err
 	seenCity := false
@@ -164,92 +165,95 @@ func (result Addr) DecodeFrom(data []byte, i int) (Addr, int, error) {
 	}
 }
 
-func (result Addr) DecodeStreamFrom(s *scan.Stream, i int) (Addr, int, error) {
+func (result Addr) DecodeStreamFrom(s *scan.Stream) (Addr, error) {
 	seenCity := false
 	seenStreet := false
-	i, err := s.ObjectOpen(i)
+	err := s.ObjectOpen()
 	if err != nil {
-		return result, i, err
+		return result, err
 	}
-	i, err = s.SkipSpace(i)
+	err = s.SkipSpace()
 	if err != nil {
-		return result, i, err
+		return result, err
 	}
-	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
-			return result, i, err
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, err
 		}
-		i = 0
+		s.Pos = 0
 	}
-	if s.Bytes()[i] == '}' {
-		return result, i + 1, nil
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		return result, nil
 	}
 	for {
 		var key string
-		key, i, err = s.KeyView(i)
+		key, err = s.KeyView()
 		if err != nil {
-			return result, i, err
+			return result, err
 		}
 		switch len(key) {
 		case 4:
 			if key == "city" {
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenCity {
-					return result, i, &validation.DuplicateKeyError{Field: "city"}
+					return result, &validation.DuplicateKeyError{Field: "city"}
 				}
 				seenCity = true
-				result.City, i, err = s.String(i)
+				result.City, err = s.String()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 6:
 			if key == "street" {
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenStreet {
-					return result, i, &validation.DuplicateKeyError{Field: "street"}
+					return result, &validation.DuplicateKeyError{Field: "street"}
 				}
 				seenStreet = true
-				result.Street, i, err = s.String(i)
+				result.Street, err = s.String()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+			return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
 		}
-		i, err = s.SkipSpace(i)
+		err = s.SkipSpace()
 		if err != nil {
-			return result, i, err
+			return result, err
 		}
-		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
-				return result, i, err
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, err
 			}
-			i = 0
+			s.Pos = 0
 		}
-		c := s.Bytes()[i]
+		c := s.Bytes()[s.Pos]
 		if c == ',' {
-			i, err = s.SkipSpace(i + 1)
+			s.Pos++
+			err = s.SkipSpace()
 			if err != nil {
-				return result, i, err
+				return result, err
 			}
 			continue
 		}
 		if c == '}' {
-			return result, i + 1, nil
+			s.Pos++
+			return result, nil
 		}
-		return result, i, scan.ErrBadObject
+		return result, scan.ErrBadObject
 	}
 }
 
@@ -270,7 +274,8 @@ func (s Addr) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (result Node) DecodeFrom(data []byte, i int) (Node, int, error) {
+func (result Node) DecodeFrom(data []byte) (Node, int, error) {
+	i := 0
 	if result.Blob != nil {
 		result.Blob = result.Blob[:0]
 	}
@@ -555,7 +560,11 @@ func (result Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 								break
 							}
 							slab0 = append(slab0, Addr{})
-							slab0[len(slab0)-1], i, err = slab0[len(slab0)-1].DecodeFrom(data, i)
+							{
+								var _n int
+								slab0[len(slab0)-1], _n, err = slab0[len(slab0)-1].DecodeFrom(data[i:])
+								i += _n
+							}
 							if err != nil {
 								return result, i, err
 							}
@@ -1015,9 +1024,13 @@ func (result Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 					result.Parent = nil
 				} else {
 					var v Addr
-					v, i, err = v.DecodeFrom(data, i)
-					if err != nil {
-						return result, i, err
+					{
+						var _n int
+						v, _n, err = v.DecodeFrom(data[i:])
+						i += _n
+						if err != nil {
+							return result, i, err
+						}
 					}
 					result.Parent = &v
 				}
@@ -1056,7 +1069,11 @@ func (result Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 						}
 						for i < len(data) && data[i] != ']' {
 							result.Children = append(result.Children, Node{})
-							result.Children[len(result.Children)-1], i, err = result.Children[len(result.Children)-1].DecodeFrom(data, i)
+							{
+								var _n int
+								result.Children[len(result.Children)-1], _n, err = result.Children[len(result.Children)-1].DecodeFrom(data[i:])
+								i += _n
+							}
 							if err != nil {
 								return result, i, err
 							}
@@ -1153,7 +1170,7 @@ func (result Node) DecodeFrom(data []byte, i int) (Node, int, error) {
 	}
 }
 
-func (result Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
+func (result Node) DecodeStreamFrom(s *scan.Stream) (Node, error) {
 	if result.Blob != nil {
 		result.Blob = result.Blob[:0]
 	}
@@ -1187,173 +1204,174 @@ func (result Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 	seenRefs := false
 	seenScore := false
 	seenTags := false
-	i, err := s.ObjectOpen(i)
+	err := s.ObjectOpen()
 	if err != nil {
-		return result, i, err
+		return result, err
 	}
-	i, err = s.SkipSpace(i)
+	err = s.SkipSpace()
 	if err != nil {
-		return result, i, err
+		return result, err
 	}
-	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
-			return result, i, err
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, err
 		}
-		i = 0
+		s.Pos = 0
 	}
-	if s.Bytes()[i] == '}' {
+	if s.Bytes()[s.Pos] == '}' {
 		if !seenID {
-			return result, i, &validation.RequiredError{Field: "id"}
+			return result, &validation.RequiredError{Field: "id"}
 		}
 		if !seenName {
-			return result, i, &validation.RequiredError{Field: "name"}
+			return result, &validation.RequiredError{Field: "name"}
 		}
-		return result, i + 1, nil
+		s.Pos++
+		return result, nil
 	}
 	for {
 		var key string
-		key, i, err = s.KeyView(i)
+		key, err = s.KeyView()
 		if err != nil {
-			return result, i, err
+			return result, err
 		}
 		switch len(key) {
 		case 2:
 			if key == "id" {
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenID {
-					return result, i, &validation.DuplicateKeyError{Field: "id"}
+					return result, &validation.DuplicateKeyError{Field: "id"}
 				}
 				seenID = true
-				result.ID, i, err = s.Int64(i)
+				result.ID, err = s.Int64()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if result.ID < 0 {
-					return result, i, &validation.GTEError{Field: "id", Limit: 0, Value: result.ID}
+					return result, &validation.GTEError{Field: "id", Limit: 0, Value: result.ID}
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 3:
 			if key == "raw" {
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenRaw {
-					return result, i, &validation.DuplicateKeyError{Field: "raw"}
+					return result, &validation.DuplicateKeyError{Field: "raw"}
 				}
 				seenRaw = true
 				{
-					start := i
+					start := s.Pos
 					prevPin := s.Shift
 					s.Shift = false
-					i, err = s.SkipValue(start)
+					err = s.SkipValue()
 					s.Shift = prevPin
 					if err != nil {
-						return result, i, err
+						return result, err
 					}
-					raw := s.Bytes()[start:i]
+					raw := s.Bytes()[start:s.Pos]
 					result.Raw = append(make([]byte, 0, len(raw)), raw...)
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 4:
 			switch key {
 			case "blob":
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenBlob {
-					return result, i, &validation.DuplicateKeyError{Field: "blob"}
+					return result, &validation.DuplicateKeyError{Field: "blob"}
 				}
 				seenBlob = true
 				{
 					var v string
-					v, i, err = s.String(i)
+					v, err = s.String()
 					if err != nil {
-						return result, i, err
+						return result, err
 					}
 					if cap(result.Blob) < base64.StdEncoding.DecodedLen(len(v)) {
 						result.Blob = make([]byte, 0, base64.StdEncoding.DecodedLen(len(v)))
 					}
 					result.Blob, err = base64.StdEncoding.AppendDecode(result.Blob, unsafe.Slice(unsafe.StringData(v), len(v)))
 					if err != nil {
-						return result, i, err
+						return result, err
 					}
 				}
 			case "name":
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenName {
-					return result, i, &validation.DuplicateKeyError{Field: "name"}
+					return result, &validation.DuplicateKeyError{Field: "name"}
 				}
 				seenName = true
-				result.Name, i, err = s.String(i)
+				result.Name, err = s.String()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if len(result.Name) < 1 {
-					return result, i, &validation.MinLenError{Field: "name", Limit: 1, Got: len(result.Name)}
+					return result, &validation.MinLenError{Field: "name", Limit: 1, Got: len(result.Name)}
 				}
 				if len(result.Name) > 128 {
-					return result, i, &validation.MaxLenError{Field: "name", Limit: 128, Got: len(result.Name)}
+					return result, &validation.MaxLenError{Field: "name", Limit: 128, Got: len(result.Name)}
 				}
 			case "refs":
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenRefs {
-					return result, i, &validation.DuplicateKeyError{Field: "refs"}
+					return result, &validation.DuplicateKeyError{Field: "refs"}
 				}
 				seenRefs = true
 				{
-					i, err = s.SkipSpace(i)
+					err = s.SkipSpace()
 					if err != nil {
-						return result, i, err
+						return result, err
 					}
-					if i >= len(s.Bytes()) {
+					if s.Pos >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, i, err
+							return result, err
 						}
 					}
-					if s.Bytes()[i] == 'n' {
+					if s.Bytes()[s.Pos] == 'n' {
 						for ki := 1; ki < 4; ki++ {
-							if i+ki >= len(s.Bytes()) {
+							if s.Pos+ki >= len(s.Bytes()) {
 								if err = s.ReadMore(0); err != nil {
-									return result, i, err
+									return result, err
 								}
 							}
-							if s.Bytes()[i+ki] != "null"[ki] {
-								return result, i, scan.ErrBadLiteral
+							if s.Bytes()[s.Pos+ki] != "null"[ki] {
+								return result, scan.ErrBadLiteral
 							}
 						}
-						i += 4
+						s.Pos += 4
 						result.Refs = nil
 					} else {
-						i, err = s.ArrayOpen(i)
+						err = s.ArrayOpen()
 						if err != nil {
-							return result, i, err
+							return result, err
 						}
-						i, err = s.SkipSpace(i)
+						err = s.SkipSpace()
 						if err != nil {
-							return result, i, err
+							return result, err
 						}
-						if i >= len(s.Bytes()) {
+						if s.Pos >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, i, err
+								return result, err
 							}
 						}
 						var slab0 []Addr
-						if s.Bytes()[i] == ']' {
+						if s.Bytes()[s.Pos] == ']' {
 							if result.Refs == nil {
 								result.Refs = []*Addr{}
 							}
@@ -1363,123 +1381,125 @@ func (result Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 							}
 							slab0 = make([]Addr, 0, 4)
 						}
-						for s.Bytes()[i] != ']' {
-							if i >= len(s.Bytes()) {
+						for s.Bytes()[s.Pos] != ']' {
+							if s.Pos >= len(s.Bytes()) {
 								if err = s.ReadMore(0); err != nil {
-									return result, i, err
+									return result, err
 								}
 							}
-							if s.Bytes()[i] == 'n' {
+							if s.Bytes()[s.Pos] == 'n' {
 								for ki := 1; ki < 4; ki++ {
-									if i+ki >= len(s.Bytes()) {
+									if s.Pos+ki >= len(s.Bytes()) {
 										if err = s.ReadMore(0); err != nil {
-											return result, i, err
+											return result, err
 										}
 									}
-									if s.Bytes()[i+ki] != "null"[ki] {
-										return result, i, scan.ErrBadLiteral
+									if s.Bytes()[s.Pos+ki] != "null"[ki] {
+										return result, scan.ErrBadLiteral
 									}
 								}
-								i += 4
+								s.Pos += 4
 								result.Refs = append(result.Refs, nil)
-								i, err = s.SkipSpace(i)
+								err = s.SkipSpace()
 								if err != nil {
-									return result, i, err
+									return result, err
 								}
-								if i >= len(s.Bytes()) {
+								if s.Pos >= len(s.Bytes()) {
 									if err = s.ReadMore(0); err != nil {
-										return result, i, err
+										return result, err
 									}
 								}
-								if s.Bytes()[i] == ',' {
-									i, err = s.SkipSpace(i + 1)
+								if s.Bytes()[s.Pos] == ',' {
+									s.Pos++
+									err = s.SkipSpace()
 									if err != nil {
-										return result, i, err
+										return result, err
 									}
 									continue
 								}
 								break
 							}
 							slab0 = append(slab0, Addr{})
-							slab0[len(slab0)-1], i, err = slab0[len(slab0)-1].DecodeStreamFrom(s, i)
+							slab0[len(slab0)-1], err = slab0[len(slab0)-1].DecodeStreamFrom(s)
 							if err != nil {
-								return result, i, err
+								return result, err
 							}
 							result.Refs = append(result.Refs, &slab0[len(slab0)-1])
-							i, err = s.SkipSpace(i)
+							err = s.SkipSpace()
 							if err != nil {
-								return result, i, err
+								return result, err
 							}
-							if i >= len(s.Bytes()) {
+							if s.Pos >= len(s.Bytes()) {
 								if err = s.ReadMore(0); err != nil {
-									return result, i, err
+									return result, err
 								}
 							}
-							if s.Bytes()[i] == ',' {
-								i, err = s.SkipSpace(i + 1)
+							if s.Bytes()[s.Pos] == ',' {
+								s.Pos++
+								err = s.SkipSpace()
 								if err != nil {
-									return result, i, err
+									return result, err
 								}
 								continue
 							}
 							break
 						}
-						if s.Bytes()[i] != ']' {
-							return result, i, scan.ErrBadArray
+						if s.Bytes()[s.Pos] != ']' {
+							return result, scan.ErrBadArray
 						}
-						i++
+						s.Pos++
 					}
 				}
 				if len(result.Refs) > 16 {
-					return result, i, &validation.MaxLenError{Field: "refs", Limit: 16, Got: len(result.Refs)}
+					return result, &validation.MaxLenError{Field: "refs", Limit: 16, Got: len(result.Refs)}
 				}
 			case "tags":
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenTags {
-					return result, i, &validation.DuplicateKeyError{Field: "tags"}
+					return result, &validation.DuplicateKeyError{Field: "tags"}
 				}
 				seenTags = true
 				{
-					i, err = s.SkipSpace(i)
+					err = s.SkipSpace()
 					if err != nil {
-						return result, i, err
+						return result, err
 					}
-					if i >= len(s.Bytes()) {
+					if s.Pos >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, i, err
+							return result, err
 						}
 					}
-					if s.Bytes()[i] == 'n' {
+					if s.Bytes()[s.Pos] == 'n' {
 						for ki := 1; ki < 4; ki++ {
-							if i+ki >= len(s.Bytes()) {
+							if s.Pos+ki >= len(s.Bytes()) {
 								if err = s.ReadMore(0); err != nil {
-									return result, i, err
+									return result, err
 								}
 							}
-							if s.Bytes()[i+ki] != "null"[ki] {
-								return result, i, scan.ErrBadLiteral
+							if s.Bytes()[s.Pos+ki] != "null"[ki] {
+								return result, scan.ErrBadLiteral
 							}
 						}
-						i += 4
+						s.Pos += 4
 						result.Tags = nil
 					} else {
-						i, err = s.ArrayOpen(i)
+						err = s.ArrayOpen()
 						if err != nil {
-							return result, i, err
+							return result, err
 						}
-						i, err = s.SkipSpace(i)
+						err = s.SkipSpace()
 						if err != nil {
-							return result, i, err
+							return result, err
 						}
-						if i >= len(s.Bytes()) {
+						if s.Pos >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, i, err
+								return result, err
 							}
 						}
-						if s.Bytes()[i] == ']' {
+						if s.Bytes()[s.Pos] == ']' {
 							if result.Tags == nil {
 								result.Tags = []string{}
 							}
@@ -1488,112 +1508,113 @@ func (result Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 								result.Tags = make([]string, 0, 4)
 							}
 						}
-						for s.Bytes()[i] != ']' {
+						for s.Bytes()[s.Pos] != ']' {
 							result.Tags = append(result.Tags, "")
-							result.Tags[len(result.Tags)-1], i, err = s.String(i)
+							result.Tags[len(result.Tags)-1], err = s.String()
 							if err != nil {
-								return result, i, err
+								return result, err
 							}
 							if len(result.Tags[len(result.Tags)-1]) < 1 {
-								return result, i, &validation.MinLenError{Field: "tags[]", Limit: 1, Got: len(result.Tags[len(result.Tags)-1])}
+								return result, &validation.MinLenError{Field: "tags[]", Limit: 1, Got: len(result.Tags[len(result.Tags)-1])}
 							}
 							if len(result.Tags[len(result.Tags)-1]) > 64 {
-								return result, i, &validation.MaxLenError{Field: "tags[]", Limit: 64, Got: len(result.Tags[len(result.Tags)-1])}
+								return result, &validation.MaxLenError{Field: "tags[]", Limit: 64, Got: len(result.Tags[len(result.Tags)-1])}
 							}
-							i, err = s.SkipSpace(i)
+							err = s.SkipSpace()
 							if err != nil {
-								return result, i, err
+								return result, err
 							}
-							if i >= len(s.Bytes()) {
+							if s.Pos >= len(s.Bytes()) {
 								if err = s.ReadMore(0); err != nil {
-									return result, i, err
+									return result, err
 								}
 							}
-							if s.Bytes()[i] == ',' {
-								i, err = s.SkipSpace(i + 1)
+							if s.Bytes()[s.Pos] == ',' {
+								s.Pos++
+								err = s.SkipSpace()
 								if err != nil {
-									return result, i, err
+									return result, err
 								}
 								continue
 							}
 							break
 						}
-						if s.Bytes()[i] != ']' {
-							return result, i, scan.ErrBadArray
+						if s.Bytes()[s.Pos] != ']' {
+							return result, scan.ErrBadArray
 						}
-						i++
+						s.Pos++
 					}
 				}
 				if len(result.Tags) > 64 {
-					return result, i, &validation.MaxLenError{Field: "tags", Limit: 64, Got: len(result.Tags)}
+					return result, &validation.MaxLenError{Field: "tags", Limit: 64, Got: len(result.Tags)}
 				}
 			default:
-				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 5:
 			switch key {
 			case "extra":
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenExtra {
-					return result, i, &validation.DuplicateKeyError{Field: "extra"}
+					return result, &validation.DuplicateKeyError{Field: "extra"}
 				}
 				seenExtra = true
 				{
-					result.Extra, i, err = s.Any(i)
+					result.Extra, err = s.Any()
 					if err != nil {
-						return result, i, err
+						return result, err
 					}
 				}
 			case "props":
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenProps {
-					return result, i, &validation.DuplicateKeyError{Field: "props"}
+					return result, &validation.DuplicateKeyError{Field: "props"}
 				}
 				seenProps = true
 				{
-					i, err = s.SkipSpace(i)
+					err = s.SkipSpace()
 					if err != nil {
-						return result, i, err
+						return result, err
 					}
-					if i >= len(s.Bytes()) {
+					if s.Pos >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, i, err
+							return result, err
 						}
 					}
-					if s.Bytes()[i] == 'n' {
+					if s.Bytes()[s.Pos] == 'n' {
 						for ki := 1; ki < 4; ki++ {
-							if i+ki >= len(s.Bytes()) {
+							if s.Pos+ki >= len(s.Bytes()) {
 								if err = s.ReadMore(0); err != nil {
-									return result, i, err
+									return result, err
 								}
 							}
-							if s.Bytes()[i+ki] != "null"[ki] {
-								return result, i, scan.ErrBadLiteral
+							if s.Bytes()[s.Pos+ki] != "null"[ki] {
+								return result, scan.ErrBadLiteral
 							}
 						}
-						i += 4
+						s.Pos += 4
 						result.Props = nil
 					} else {
-						i, err = s.ObjectOpen(i)
+						err = s.ObjectOpen()
 						if err != nil {
-							return result, i, err
+							return result, err
 						}
-						i, err = s.SkipSpace(i)
+						err = s.SkipSpace()
 						if err != nil {
-							return result, i, err
+							return result, err
 						}
-						if i >= len(s.Bytes()) {
+						if s.Pos >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, i, err
+								return result, err
 							}
 						}
-						if s.Bytes()[i] == '}' {
+						if s.Bytes()[s.Pos] == '}' {
 							if result.Props == nil {
 								result.Props = map[string]string{}
 							}
@@ -1602,204 +1623,207 @@ func (result Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 								result.Props = make(map[string]string)
 							}
 						}
-						for s.Bytes()[i] != '}' {
+						for s.Bytes()[s.Pos] != '}' {
 							var mk string
-							mk, i, err = s.String(i)
+							mk, err = s.String()
 							if err != nil {
-								return result, i, err
+								return result, err
 							}
-							i, err = s.SkipSpace(i)
+							err = s.SkipSpace()
 							if err != nil {
-								return result, i, err
+								return result, err
 							}
-							if i >= len(s.Bytes()) {
+							if s.Pos >= len(s.Bytes()) {
 								if err = s.ReadMore(0); err != nil {
-									return result, i, err
+									return result, err
 								}
 							}
-							if s.Bytes()[i] != ':' {
-								return result, i, scan.ErrBadObject
+							if s.Bytes()[s.Pos] != ':' {
+								return result, scan.ErrBadObject
 							}
-							i, err = s.SkipSpace(i + 1)
+							s.Pos++
+							err = s.SkipSpace()
 							if err != nil {
-								return result, i, err
+								return result, err
 							}
 							var mv string
-							mv, i, err = s.String(i)
+							mv, err = s.String()
 							if err != nil {
-								return result, i, err
+								return result, err
 							}
 							result.Props[mk] = mv
-							i, err = s.SkipSpace(i)
+							err = s.SkipSpace()
 							if err != nil {
-								return result, i, err
+								return result, err
 							}
-							if i >= len(s.Bytes()) {
+							if s.Pos >= len(s.Bytes()) {
 								if err = s.ReadMore(0); err != nil {
-									return result, i, err
+									return result, err
 								}
 							}
-							if s.Bytes()[i] == ',' {
-								i, err = s.SkipSpace(i + 1)
+							if s.Bytes()[s.Pos] == ',' {
+								s.Pos++
+								err = s.SkipSpace()
 								if err != nil {
-									return result, i, err
+									return result, err
 								}
 								continue
 							}
 							break
 						}
-						if s.Bytes()[i] != '}' {
-							return result, i, scan.ErrBadObject
+						if s.Bytes()[s.Pos] != '}' {
+							return result, scan.ErrBadObject
 						}
-						i++
+						s.Pos++
 					}
 				}
 				if len(result.Props) > 64 {
-					return result, i, &validation.MaxLenError{Field: "props", Limit: 64, Got: len(result.Props)}
+					return result, &validation.MaxLenError{Field: "props", Limit: 64, Got: len(result.Props)}
 				}
 			case "score":
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenScore {
-					return result, i, &validation.DuplicateKeyError{Field: "score"}
+					return result, &validation.DuplicateKeyError{Field: "score"}
 				}
 				seenScore = true
-				result.Score, i, err = s.Float64(i)
+				result.Score, err = s.Float64()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if result.Score < 0 {
-					return result, i, &validation.GTEError{Field: "score", Limit: 0, Value: result.Score}
+					return result, &validation.GTEError{Field: "score", Limit: 0, Value: result.Score}
 				}
 				if result.Score > 100 {
-					return result, i, &validation.LTEError{Field: "score", Limit: 100, Value: result.Score}
+					return result, &validation.LTEError{Field: "score", Limit: 100, Value: result.Score}
 				}
 			default:
-				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 6:
 			switch key {
 			case "active":
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenActive {
-					return result, i, &validation.DuplicateKeyError{Field: "active"}
+					return result, &validation.DuplicateKeyError{Field: "active"}
 				}
 				seenActive = true
-				result.Active, i, err = s.Bool(i)
+				result.Active, err = s.Bool()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 			case "coords":
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenCoords {
-					return result, i, &validation.DuplicateKeyError{Field: "coords"}
+					return result, &validation.DuplicateKeyError{Field: "coords"}
 				}
 				seenCoords = true
 				{
-					i, err = s.ArrayOpen(i)
+					err = s.ArrayOpen()
 					if err != nil {
-						return result, i, err
+						return result, err
 					}
-					i, err = s.SkipSpace(i)
+					err = s.SkipSpace()
 					if err != nil {
-						return result, i, err
+						return result, err
 					}
-					if i >= len(s.Bytes()) {
+					if s.Pos >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, i, err
+							return result, err
 						}
 					}
 					var idx0 int
-					for s.Bytes()[i] != ']' {
+					for s.Bytes()[s.Pos] != ']' {
 						if idx0 >= 2 {
-							return result, i, &validation.LenError{Field: "coords", Want: 2, Got: idx0}
+							return result, &validation.LenError{Field: "coords", Want: 2, Got: idx0}
 						}
-						result.Coords[idx0], i, err = s.Float64(i)
+						result.Coords[idx0], err = s.Float64()
 						if err != nil {
-							return result, i, err
+							return result, err
 						}
 						idx0++
-						i, err = s.SkipSpace(i)
+						err = s.SkipSpace()
 						if err != nil {
-							return result, i, err
+							return result, err
 						}
-						if i >= len(s.Bytes()) {
+						if s.Pos >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, i, err
+								return result, err
 							}
 						}
-						if s.Bytes()[i] == ',' {
-							i, err = s.SkipSpace(i + 1)
+						if s.Bytes()[s.Pos] == ',' {
+							s.Pos++
+							err = s.SkipSpace()
 							if err != nil {
-								return result, i, err
+								return result, err
 							}
 							continue
 						}
 						break
 					}
-					if s.Bytes()[i] != ']' {
-						return result, i, scan.ErrBadArray
+					if s.Bytes()[s.Pos] != ']' {
+						return result, scan.ErrBadArray
 					}
 					if idx0 != 2 {
-						return result, i, &validation.LenError{Field: "coords", Want: 2, Got: idx0}
+						return result, &validation.LenError{Field: "coords", Want: 2, Got: idx0}
 					}
-					i++
+					s.Pos++
 				}
 			case "matrix":
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenMatrix {
-					return result, i, &validation.DuplicateKeyError{Field: "matrix"}
+					return result, &validation.DuplicateKeyError{Field: "matrix"}
 				}
 				seenMatrix = true
 				{
-					i, err = s.SkipSpace(i)
+					err = s.SkipSpace()
 					if err != nil {
-						return result, i, err
+						return result, err
 					}
-					if i >= len(s.Bytes()) {
+					if s.Pos >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, i, err
+							return result, err
 						}
 					}
-					if s.Bytes()[i] == 'n' {
+					if s.Bytes()[s.Pos] == 'n' {
 						for ki := 1; ki < 4; ki++ {
-							if i+ki >= len(s.Bytes()) {
+							if s.Pos+ki >= len(s.Bytes()) {
 								if err = s.ReadMore(0); err != nil {
-									return result, i, err
+									return result, err
 								}
 							}
-							if s.Bytes()[i+ki] != "null"[ki] {
-								return result, i, scan.ErrBadLiteral
+							if s.Bytes()[s.Pos+ki] != "null"[ki] {
+								return result, scan.ErrBadLiteral
 							}
 						}
-						i += 4
+						s.Pos += 4
 						result.Matrix = nil
 					} else {
-						i, err = s.ArrayOpen(i)
+						err = s.ArrayOpen()
 						if err != nil {
-							return result, i, err
+							return result, err
 						}
-						i, err = s.SkipSpace(i)
+						err = s.SkipSpace()
 						if err != nil {
-							return result, i, err
+							return result, err
 						}
-						if i >= len(s.Bytes()) {
+						if s.Pos >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, i, err
+								return result, err
 							}
 						}
-						if s.Bytes()[i] == ']' {
+						if s.Bytes()[s.Pos] == ']' {
 							if result.Matrix == nil {
 								result.Matrix = [][]int{}
 							}
@@ -1808,46 +1832,46 @@ func (result Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 								result.Matrix = make([][]int, 0, 4)
 							}
 						}
-						for s.Bytes()[i] != ']' {
+						for s.Bytes()[s.Pos] != ']' {
 							result.Matrix = append(result.Matrix, nil)
 							{
-								i, err = s.SkipSpace(i)
+								err = s.SkipSpace()
 								if err != nil {
-									return result, i, err
+									return result, err
 								}
-								if i >= len(s.Bytes()) {
+								if s.Pos >= len(s.Bytes()) {
 									if err = s.ReadMore(0); err != nil {
-										return result, i, err
+										return result, err
 									}
 								}
-								if s.Bytes()[i] == 'n' {
+								if s.Bytes()[s.Pos] == 'n' {
 									for ki := 1; ki < 4; ki++ {
-										if i+ki >= len(s.Bytes()) {
+										if s.Pos+ki >= len(s.Bytes()) {
 											if err = s.ReadMore(0); err != nil {
-												return result, i, err
+												return result, err
 											}
 										}
-										if s.Bytes()[i+ki] != "null"[ki] {
-											return result, i, scan.ErrBadLiteral
+										if s.Bytes()[s.Pos+ki] != "null"[ki] {
+											return result, scan.ErrBadLiteral
 										}
 									}
-									i += 4
+									s.Pos += 4
 									result.Matrix[len(result.Matrix)-1] = nil
 								} else {
-									i, err = s.ArrayOpen(i)
+									err = s.ArrayOpen()
 									if err != nil {
-										return result, i, err
+										return result, err
 									}
-									i, err = s.SkipSpace(i)
+									err = s.SkipSpace()
 									if err != nil {
-										return result, i, err
+										return result, err
 									}
-									if i >= len(s.Bytes()) {
+									if s.Pos >= len(s.Bytes()) {
 										if err = s.ReadMore(0); err != nil {
-											return result, i, err
+											return result, err
 										}
 									}
-									if s.Bytes()[i] == ']' {
+									if s.Bytes()[s.Pos] == ']' {
 										if result.Matrix[len(result.Matrix)-1] == nil {
 											result.Matrix[len(result.Matrix)-1] = []int{}
 										}
@@ -1856,155 +1880,157 @@ func (result Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 											result.Matrix[len(result.Matrix)-1] = make([]int, 0, 4)
 										}
 									}
-									for s.Bytes()[i] != ']' {
+									for s.Bytes()[s.Pos] != ']' {
 										result.Matrix[len(result.Matrix)-1] = append(result.Matrix[len(result.Matrix)-1], 0)
 										var iv int64
-										iv, i, err = s.Int64(i)
+										iv, err = s.Int64()
 										if err != nil {
-											return result, i, err
+											return result, err
 										}
 										result.Matrix[len(result.Matrix)-1][len(result.Matrix[len(result.Matrix)-1])-1] = int(iv)
-										i, err = s.SkipSpace(i)
+										err = s.SkipSpace()
 										if err != nil {
-											return result, i, err
+											return result, err
 										}
-										if i >= len(s.Bytes()) {
+										if s.Pos >= len(s.Bytes()) {
 											if err = s.ReadMore(0); err != nil {
-												return result, i, err
+												return result, err
 											}
 										}
-										if s.Bytes()[i] == ',' {
-											i, err = s.SkipSpace(i + 1)
+										if s.Bytes()[s.Pos] == ',' {
+											s.Pos++
+											err = s.SkipSpace()
 											if err != nil {
-												return result, i, err
+												return result, err
 											}
 											continue
 										}
 										break
 									}
-									if s.Bytes()[i] != ']' {
-										return result, i, scan.ErrBadArray
+									if s.Bytes()[s.Pos] != ']' {
+										return result, scan.ErrBadArray
 									}
-									i++
+									s.Pos++
 								}
 							}
 							if len(result.Matrix[len(result.Matrix)-1]) > 32 {
-								return result, i, &validation.MaxLenError{Field: "matrix[]", Limit: 32, Got: len(result.Matrix[len(result.Matrix)-1])}
+								return result, &validation.MaxLenError{Field: "matrix[]", Limit: 32, Got: len(result.Matrix[len(result.Matrix)-1])}
 							}
-							i, err = s.SkipSpace(i)
+							err = s.SkipSpace()
 							if err != nil {
-								return result, i, err
+								return result, err
 							}
-							if i >= len(s.Bytes()) {
+							if s.Pos >= len(s.Bytes()) {
 								if err = s.ReadMore(0); err != nil {
-									return result, i, err
+									return result, err
 								}
 							}
-							if s.Bytes()[i] == ',' {
-								i, err = s.SkipSpace(i + 1)
+							if s.Bytes()[s.Pos] == ',' {
+								s.Pos++
+								err = s.SkipSpace()
 								if err != nil {
-									return result, i, err
+									return result, err
 								}
 								continue
 							}
 							break
 						}
-						if s.Bytes()[i] != ']' {
-							return result, i, scan.ErrBadArray
+						if s.Bytes()[s.Pos] != ']' {
+							return result, scan.ErrBadArray
 						}
-						i++
+						s.Pos++
 					}
 				}
 				if len(result.Matrix) > 16 {
-					return result, i, &validation.MaxLenError{Field: "matrix", Limit: 16, Got: len(result.Matrix)}
+					return result, &validation.MaxLenError{Field: "matrix", Limit: 16, Got: len(result.Matrix)}
 				}
 			case "parent":
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenParent {
-					return result, i, &validation.DuplicateKeyError{Field: "parent"}
+					return result, &validation.DuplicateKeyError{Field: "parent"}
 				}
 				seenParent = true
-				if i >= len(s.Bytes()) {
+				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, i, err
+						return result, err
 					}
 				}
-				if s.Bytes()[i] == 'n' {
+				if s.Bytes()[s.Pos] == 'n' {
 					for ki := 1; ki < 4; ki++ {
-						if i+ki >= len(s.Bytes()) {
+						if s.Pos+ki >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, i, err
+								return result, err
 							}
 						}
-						if s.Bytes()[i+ki] != "null"[ki] {
-							return result, i, scan.ErrBadLiteral
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, scan.ErrBadLiteral
 						}
 					}
-					i = 4 + i
+					s.Pos += 4
 					result.Parent = nil
 				} else {
 					var v Addr
-					v, i, err = v.DecodeStreamFrom(s, i)
+					v, err = v.DecodeStreamFrom(s)
 					if err != nil {
-						return result, i, err
+						return result, err
 					}
 
 					result.Parent = &v
 				}
 			default:
-				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 8:
 			if key == "children" {
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenChildren {
-					return result, i, &validation.DuplicateKeyError{Field: "children"}
+					return result, &validation.DuplicateKeyError{Field: "children"}
 				}
 				seenChildren = true
 				{
-					i, err = s.SkipSpace(i)
+					err = s.SkipSpace()
 					if err != nil {
-						return result, i, err
+						return result, err
 					}
-					if i >= len(s.Bytes()) {
+					if s.Pos >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, i, err
+							return result, err
 						}
 					}
-					if s.Bytes()[i] == 'n' {
+					if s.Bytes()[s.Pos] == 'n' {
 						for ki := 1; ki < 4; ki++ {
-							if i+ki >= len(s.Bytes()) {
+							if s.Pos+ki >= len(s.Bytes()) {
 								if err = s.ReadMore(0); err != nil {
-									return result, i, err
+									return result, err
 								}
 							}
-							if s.Bytes()[i+ki] != "null"[ki] {
-								return result, i, scan.ErrBadLiteral
+							if s.Bytes()[s.Pos+ki] != "null"[ki] {
+								return result, scan.ErrBadLiteral
 							}
 						}
-						i += 4
+						s.Pos += 4
 						result.Children = nil
 					} else {
-						i, err = s.ArrayOpen(i)
+						err = s.ArrayOpen()
 						if err != nil {
-							return result, i, err
+							return result, err
 						}
-						i, err = s.SkipSpace(i)
+						err = s.SkipSpace()
 						if err != nil {
-							return result, i, err
+							return result, err
 						}
-						if i >= len(s.Bytes()) {
+						if s.Pos >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, i, err
+								return result, err
 							}
 						}
-						if s.Bytes()[i] == ']' {
+						if s.Bytes()[s.Pos] == ']' {
 							if result.Children == nil {
 								result.Children = []Node{}
 							}
@@ -2013,97 +2039,100 @@ func (result Node) DecodeStreamFrom(s *scan.Stream, i int) (Node, int, error) {
 								result.Children = []Node{}
 							}
 						}
-						for s.Bytes()[i] != ']' {
+						for s.Bytes()[s.Pos] != ']' {
 							result.Children = append(result.Children, Node{})
-							result.Children[len(result.Children)-1], i, err = result.Children[len(result.Children)-1].DecodeStreamFrom(s, i)
+							result.Children[len(result.Children)-1], err = result.Children[len(result.Children)-1].DecodeStreamFrom(s)
 							if err != nil {
-								return result, i, err
+								return result, err
 							}
-							i, err = s.SkipSpace(i)
+							err = s.SkipSpace()
 							if err != nil {
-								return result, i, err
+								return result, err
 							}
-							if i >= len(s.Bytes()) {
+							if s.Pos >= len(s.Bytes()) {
 								if err = s.ReadMore(0); err != nil {
-									return result, i, err
+									return result, err
 								}
 							}
-							if s.Bytes()[i] == ',' {
-								i, err = s.SkipSpace(i + 1)
+							if s.Bytes()[s.Pos] == ',' {
+								s.Pos++
+								err = s.SkipSpace()
 								if err != nil {
-									return result, i, err
+									return result, err
 								}
 								continue
 							}
 							break
 						}
-						if s.Bytes()[i] != ']' {
-							return result, i, scan.ErrBadArray
+						if s.Bytes()[s.Pos] != ']' {
+							return result, scan.ErrBadArray
 						}
-						i++
+						s.Pos++
 					}
 				}
 				if len(result.Children) > 16 {
-					return result, i, &validation.MaxLenError{Field: "children", Limit: 16, Got: len(result.Children)}
+					return result, &validation.MaxLenError{Field: "children", Limit: 16, Got: len(result.Children)}
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 9:
 			if key == "createdAt" {
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenCreatedAt {
-					return result, i, &validation.DuplicateKeyError{Field: "createdAt"}
+					return result, &validation.DuplicateKeyError{Field: "createdAt"}
 				}
 				seenCreatedAt = true
 				{
 					var v string
-					v, i, err = s.String(i)
+					v, err = s.String()
 					if err != nil {
-						return result, i, err
+						return result, err
 					}
 					result.CreatedAt, err = time.Parse(time.RFC3339Nano, v)
 					if err != nil {
-						return result, i, err
+						return result, err
 					}
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+			return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
 		}
-		i, err = s.SkipSpace(i)
+		err = s.SkipSpace()
 		if err != nil {
-			return result, i, err
+			return result, err
 		}
-		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
-				return result, i, err
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, err
 			}
-			i = 0
+			s.Pos = 0
 		}
-		c := s.Bytes()[i]
+		c := s.Bytes()[s.Pos]
 		if c == ',' {
-			i, err = s.SkipSpace(i + 1)
+			s.Pos++
+			err = s.SkipSpace()
 			if err != nil {
-				return result, i, err
+				return result, err
 			}
 			continue
 		}
 		if c == '}' {
 			if !seenID {
-				return result, i, &validation.RequiredError{Field: "id"}
+				return result, &validation.RequiredError{Field: "id"}
 			}
 			if !seenName {
-				return result, i, &validation.RequiredError{Field: "name"}
+				return result, &validation.RequiredError{Field: "name"}
 			}
-			return result, i + 1, nil
+			s.Pos++
+			return result, nil
 		}
-		return result, i, scan.ErrBadObject
+		return result, scan.ErrBadObject
 	}
 }
 
@@ -2384,7 +2413,8 @@ func (s Node) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (result Validated) DecodeFrom(data []byte, i int) (Validated, int, error) {
+func (result Validated) DecodeFrom(data []byte) (Validated, int, error) {
+	i := 0
 	if result.Tags != nil {
 		result.Tags = result.Tags[:0]
 	}
@@ -2726,7 +2756,7 @@ func (result Validated) DecodeFrom(data []byte, i int) (Validated, int, error) {
 	}
 }
 
-func (result Validated) DecodeStreamFrom(s *scan.Stream, i int) (Validated, int, error) {
+func (result Validated) DecodeStreamFrom(s *scan.Stream) (Validated, error) {
 	if result.Tags != nil {
 		result.Tags = result.Tags[:0]
 	}
@@ -2735,146 +2765,147 @@ func (result Validated) DecodeStreamFrom(s *scan.Stream, i int) (Validated, int,
 	seenEmail := false
 	seenName := false
 	seenTags := false
-	i, err := s.ObjectOpen(i)
+	err := s.ObjectOpen()
 	if err != nil {
-		return result, i, err
+		return result, err
 	}
-	i, err = s.SkipSpace(i)
+	err = s.SkipSpace()
 	if err != nil {
-		return result, i, err
+		return result, err
 	}
-	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
-			return result, i, err
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, err
 		}
-		i = 0
+		s.Pos = 0
 	}
-	if s.Bytes()[i] == '}' {
+	if s.Bytes()[s.Pos] == '}' {
 		if !seenEmail {
-			return result, i, &validation.RequiredError{Field: "email"}
+			return result, &validation.RequiredError{Field: "email"}
 		}
 		if !seenName {
-			return result, i, &validation.RequiredError{Field: "name"}
+			return result, &validation.RequiredError{Field: "name"}
 		}
-		return result, i + 1, nil
+		s.Pos++
+		return result, nil
 	}
 	for {
 		var key string
-		key, i, err = s.KeyView(i)
+		key, err = s.KeyView()
 		if err != nil {
-			return result, i, err
+			return result, err
 		}
 		switch len(key) {
 		case 3:
 			switch key {
 			case "age":
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenAge {
-					return result, i, &validation.DuplicateKeyError{Field: "age"}
+					return result, &validation.DuplicateKeyError{Field: "age"}
 				}
 				seenAge = true
 				var iv int64
-				iv, i, err = s.Int64(i)
+				iv, err = s.Int64()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				result.Age = int(iv)
 				if result.Age < 0 {
-					return result, i, &validation.GTEError{Field: "age", Limit: 0, Value: result.Age}
+					return result, &validation.GTEError{Field: "age", Limit: 0, Value: result.Age}
 				}
 				if result.Age > 150 {
-					return result, i, &validation.LTEError{Field: "age", Limit: 150, Value: result.Age}
+					return result, &validation.LTEError{Field: "age", Limit: 150, Value: result.Age}
 				}
 			case "bio":
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenBio {
-					return result, i, &validation.DuplicateKeyError{Field: "bio"}
+					return result, &validation.DuplicateKeyError{Field: "bio"}
 				}
 				seenBio = true
-				result.Bio, i, err = s.String(i)
+				result.Bio, err = s.String()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if len(result.Bio) > 4096 {
-					return result, i, &validation.MaxLenError{Field: "bio", Limit: 4096, Got: len(result.Bio)}
+					return result, &validation.MaxLenError{Field: "bio", Limit: 4096, Got: len(result.Bio)}
 				}
 			default:
-				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 4:
 			switch key {
 			case "name":
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenName {
-					return result, i, &validation.DuplicateKeyError{Field: "name"}
+					return result, &validation.DuplicateKeyError{Field: "name"}
 				}
 				seenName = true
-				result.Name, i, err = s.String(i)
+				result.Name, err = s.String()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if len(result.Name) < 1 {
-					return result, i, &validation.MinLenError{Field: "name", Limit: 1, Got: len(result.Name)}
+					return result, &validation.MinLenError{Field: "name", Limit: 1, Got: len(result.Name)}
 				}
 				if len(result.Name) > 64 {
-					return result, i, &validation.MaxLenError{Field: "name", Limit: 64, Got: len(result.Name)}
+					return result, &validation.MaxLenError{Field: "name", Limit: 64, Got: len(result.Name)}
 				}
 			case "tags":
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenTags {
-					return result, i, &validation.DuplicateKeyError{Field: "tags"}
+					return result, &validation.DuplicateKeyError{Field: "tags"}
 				}
 				seenTags = true
 				{
-					i, err = s.SkipSpace(i)
+					err = s.SkipSpace()
 					if err != nil {
-						return result, i, err
+						return result, err
 					}
-					if i >= len(s.Bytes()) {
+					if s.Pos >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, i, err
+							return result, err
 						}
 					}
-					if s.Bytes()[i] == 'n' {
+					if s.Bytes()[s.Pos] == 'n' {
 						for ki := 1; ki < 4; ki++ {
-							if i+ki >= len(s.Bytes()) {
+							if s.Pos+ki >= len(s.Bytes()) {
 								if err = s.ReadMore(0); err != nil {
-									return result, i, err
+									return result, err
 								}
 							}
-							if s.Bytes()[i+ki] != "null"[ki] {
-								return result, i, scan.ErrBadLiteral
+							if s.Bytes()[s.Pos+ki] != "null"[ki] {
+								return result, scan.ErrBadLiteral
 							}
 						}
-						i += 4
+						s.Pos += 4
 						result.Tags = nil
 					} else {
-						i, err = s.ArrayOpen(i)
+						err = s.ArrayOpen()
 						if err != nil {
-							return result, i, err
+							return result, err
 						}
-						i, err = s.SkipSpace(i)
+						err = s.SkipSpace()
 						if err != nil {
-							return result, i, err
+							return result, err
 						}
-						if i >= len(s.Bytes()) {
+						if s.Pos >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, i, err
+								return result, err
 							}
 						}
-						if s.Bytes()[i] == ']' {
+						if s.Bytes()[s.Pos] == ']' {
 							if result.Tags == nil {
 								result.Tags = []string{}
 							}
@@ -2883,99 +2914,102 @@ func (result Validated) DecodeStreamFrom(s *scan.Stream, i int) (Validated, int,
 								result.Tags = make([]string, 0, 4)
 							}
 						}
-						for s.Bytes()[i] != ']' {
+						for s.Bytes()[s.Pos] != ']' {
 							result.Tags = append(result.Tags, "")
-							result.Tags[len(result.Tags)-1], i, err = s.String(i)
+							result.Tags[len(result.Tags)-1], err = s.String()
 							if err != nil {
-								return result, i, err
+								return result, err
 							}
 							if len(result.Tags[len(result.Tags)-1]) == 0 {
-								return result, i, &validation.NotEmptyError{Field: "tags[]"}
+								return result, &validation.NotEmptyError{Field: "tags[]"}
 							}
 							if len(result.Tags[len(result.Tags)-1]) < 1 {
-								return result, i, &validation.MinLenError{Field: "tags[]", Limit: 1, Got: len(result.Tags[len(result.Tags)-1])}
+								return result, &validation.MinLenError{Field: "tags[]", Limit: 1, Got: len(result.Tags[len(result.Tags)-1])}
 							}
 							if len(result.Tags[len(result.Tags)-1]) > 32 {
-								return result, i, &validation.MaxLenError{Field: "tags[]", Limit: 32, Got: len(result.Tags[len(result.Tags)-1])}
+								return result, &validation.MaxLenError{Field: "tags[]", Limit: 32, Got: len(result.Tags[len(result.Tags)-1])}
 							}
-							i, err = s.SkipSpace(i)
+							err = s.SkipSpace()
 							if err != nil {
-								return result, i, err
+								return result, err
 							}
-							if i >= len(s.Bytes()) {
+							if s.Pos >= len(s.Bytes()) {
 								if err = s.ReadMore(0); err != nil {
-									return result, i, err
+									return result, err
 								}
 							}
-							if s.Bytes()[i] == ',' {
-								i, err = s.SkipSpace(i + 1)
+							if s.Bytes()[s.Pos] == ',' {
+								s.Pos++
+								err = s.SkipSpace()
 								if err != nil {
-									return result, i, err
+									return result, err
 								}
 								continue
 							}
 							break
 						}
-						if s.Bytes()[i] != ']' {
-							return result, i, scan.ErrBadArray
+						if s.Bytes()[s.Pos] != ']' {
+							return result, scan.ErrBadArray
 						}
-						i++
+						s.Pos++
 					}
 				}
 			default:
-				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 5:
 			if key == "email" {
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenEmail {
-					return result, i, &validation.DuplicateKeyError{Field: "email"}
+					return result, &validation.DuplicateKeyError{Field: "email"}
 				}
 				seenEmail = true
-				result.Email, i, err = s.String(i)
+				result.Email, err = s.String()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if !decode.IsEmail(result.Email) {
-					return result, i, &validation.EmailError{Field: "email", Value: result.Email}
+					return result, &validation.EmailError{Field: "email", Value: result.Email}
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+			return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
 		}
-		i, err = s.SkipSpace(i)
+		err = s.SkipSpace()
 		if err != nil {
-			return result, i, err
+			return result, err
 		}
-		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
-				return result, i, err
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, err
 			}
-			i = 0
+			s.Pos = 0
 		}
-		c := s.Bytes()[i]
+		c := s.Bytes()[s.Pos]
 		if c == ',' {
-			i, err = s.SkipSpace(i + 1)
+			s.Pos++
+			err = s.SkipSpace()
 			if err != nil {
-				return result, i, err
+				return result, err
 			}
 			continue
 		}
 		if c == '}' {
 			if !seenEmail {
-				return result, i, &validation.RequiredError{Field: "email"}
+				return result, &validation.RequiredError{Field: "email"}
 			}
 			if !seenName {
-				return result, i, &validation.RequiredError{Field: "name"}
+				return result, &validation.RequiredError{Field: "name"}
 			}
-			return result, i + 1, nil
+			s.Pos++
+			return result, nil
 		}
-		return result, i, scan.ErrBadObject
+		return result, scan.ErrBadObject
 	}
 }
 
@@ -3022,7 +3056,8 @@ func (s Validated) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (result Claim) DecodeFrom(data []byte, i int) (Claim, int, error) {
+func (result Claim) DecodeFrom(data []byte) (Claim, int, error) {
+	i := 0
 	var err error
 	_ = err
 	seenAud := false
@@ -3379,7 +3414,7 @@ func (result Claim) DecodeFrom(data []byte, i int) (Claim, int, error) {
 	}
 }
 
-func (result Claim) DecodeStreamFrom(s *scan.Stream, i int) (Claim, int, error) {
+func (result Claim) DecodeStreamFrom(s *scan.Stream) (Claim, error) {
 	seenAud := false
 	seenExp := false
 	seenIat := false
@@ -3387,169 +3422,172 @@ func (result Claim) DecodeStreamFrom(s *scan.Stream, i int) (Claim, int, error) 
 	seenJti := false
 	seenNbf := false
 	seenSub := false
-	i, err := s.ObjectOpen(i)
+	err := s.ObjectOpen()
 	if err != nil {
-		return result, i, err
+		return result, err
 	}
-	i, err = s.SkipSpace(i)
+	err = s.SkipSpace()
 	if err != nil {
-		return result, i, err
+		return result, err
 	}
-	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
-			return result, i, err
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, err
 		}
-		i = 0
+		s.Pos = 0
 	}
-	if s.Bytes()[i] == '}' {
+	if s.Bytes()[s.Pos] == '}' {
 		if !seenIss {
-			return result, i, &validation.RequiredError{Field: "iss"}
+			return result, &validation.RequiredError{Field: "iss"}
 		}
 		if !seenSub {
-			return result, i, &validation.RequiredError{Field: "sub"}
+			return result, &validation.RequiredError{Field: "sub"}
 		}
-		return result, i + 1, nil
+		s.Pos++
+		return result, nil
 	}
 	for {
 		var key string
-		key, i, err = s.KeyView(i)
+		key, err = s.KeyView()
 		if err != nil {
-			return result, i, err
+			return result, err
 		}
 		switch len(key) {
 		case 3:
 			switch key {
 			case "aud":
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenAud {
-					return result, i, &validation.DuplicateKeyError{Field: "aud"}
+					return result, &validation.DuplicateKeyError{Field: "aud"}
 				}
 				seenAud = true
-				result.Aud, i, err = s.String(i)
+				result.Aud, err = s.String()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 			case "exp":
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenExp {
-					return result, i, &validation.DuplicateKeyError{Field: "exp"}
+					return result, &validation.DuplicateKeyError{Field: "exp"}
 				}
 				seenExp = true
-				result.Exp, i, err = s.Int64(i)
+				result.Exp, err = s.Int64()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if result.Exp < 0 {
-					return result, i, &validation.GTEError{Field: "exp", Limit: 0, Value: result.Exp}
+					return result, &validation.GTEError{Field: "exp", Limit: 0, Value: result.Exp}
 				}
 			case "iat":
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenIat {
-					return result, i, &validation.DuplicateKeyError{Field: "iat"}
+					return result, &validation.DuplicateKeyError{Field: "iat"}
 				}
 				seenIat = true
-				result.Iat, i, err = s.Int64(i)
+				result.Iat, err = s.Int64()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if result.Iat < 0 {
-					return result, i, &validation.GTEError{Field: "iat", Limit: 0, Value: result.Iat}
+					return result, &validation.GTEError{Field: "iat", Limit: 0, Value: result.Iat}
 				}
 			case "iss":
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenIss {
-					return result, i, &validation.DuplicateKeyError{Field: "iss"}
+					return result, &validation.DuplicateKeyError{Field: "iss"}
 				}
 				seenIss = true
-				result.Iss, i, err = s.String(i)
+				result.Iss, err = s.String()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 			case "jti":
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenJti {
-					return result, i, &validation.DuplicateKeyError{Field: "jti"}
+					return result, &validation.DuplicateKeyError{Field: "jti"}
 				}
 				seenJti = true
-				result.Jti, i, err = s.String(i)
+				result.Jti, err = s.String()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 			case "nbf":
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenNbf {
-					return result, i, &validation.DuplicateKeyError{Field: "nbf"}
+					return result, &validation.DuplicateKeyError{Field: "nbf"}
 				}
 				seenNbf = true
-				result.Nbf, i, err = s.Int64(i)
+				result.Nbf, err = s.Int64()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 			case "sub":
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenSub {
-					return result, i, &validation.DuplicateKeyError{Field: "sub"}
+					return result, &validation.DuplicateKeyError{Field: "sub"}
 				}
 				seenSub = true
-				result.Sub, i, err = s.String(i)
+				result.Sub, err = s.String()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 			default:
-				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+			return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
 		}
-		i, err = s.SkipSpace(i)
+		err = s.SkipSpace()
 		if err != nil {
-			return result, i, err
+			return result, err
 		}
-		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
-				return result, i, err
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, err
 			}
-			i = 0
+			s.Pos = 0
 		}
-		c := s.Bytes()[i]
+		c := s.Bytes()[s.Pos]
 		if c == ',' {
-			i, err = s.SkipSpace(i + 1)
+			s.Pos++
+			err = s.SkipSpace()
 			if err != nil {
-				return result, i, err
+				return result, err
 			}
 			continue
 		}
 		if c == '}' {
 			if !seenIss {
-				return result, i, &validation.RequiredError{Field: "iss"}
+				return result, &validation.RequiredError{Field: "iss"}
 			}
 			if !seenSub {
-				return result, i, &validation.RequiredError{Field: "sub"}
+				return result, &validation.RequiredError{Field: "sub"}
 			}
-			return result, i + 1, nil
+			s.Pos++
+			return result, nil
 		}
-		return result, i, scan.ErrBadObject
+		return result, scan.ErrBadObject
 	}
 }
 
@@ -3610,7 +3648,8 @@ func (s Claim) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (result ValidationHeavy) DecodeFrom(data []byte, i int) (ValidationHeavy, int, error) {
+func (result ValidationHeavy) DecodeFrom(data []byte) (ValidationHeavy, int, error) {
+	i := 0
 	var err error
 	_ = err
 	seenAge := false
@@ -4087,7 +4126,7 @@ func (result ValidationHeavy) DecodeFrom(data []byte, i int) (ValidationHeavy, i
 	}
 }
 
-func (result ValidationHeavy) DecodeStreamFrom(s *scan.Stream, i int) (ValidationHeavy, int, error) {
+func (result ValidationHeavy) DecodeStreamFrom(s *scan.Stream) (ValidationHeavy, error) {
 	seenAge := false
 	seenCountry := false
 	seenEmail := false
@@ -4098,292 +4137,295 @@ func (result ValidationHeavy) DecodeStreamFrom(s *scan.Stream, i int) (Validatio
 	seenScore := false
 	seenURL := false
 	seenUsername := false
-	i, err := s.ObjectOpen(i)
+	err := s.ObjectOpen()
 	if err != nil {
-		return result, i, err
+		return result, err
 	}
-	i, err = s.SkipSpace(i)
+	err = s.SkipSpace()
 	if err != nil {
-		return result, i, err
+		return result, err
 	}
-	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
-			return result, i, err
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, err
 		}
-		i = 0
+		s.Pos = 0
 	}
-	if s.Bytes()[i] == '}' {
+	if s.Bytes()[s.Pos] == '}' {
 		if !seenEmail {
-			return result, i, &validation.RequiredError{Field: "email"}
+			return result, &validation.RequiredError{Field: "email"}
 		}
 		if !seenName {
-			return result, i, &validation.RequiredError{Field: "name"}
+			return result, &validation.RequiredError{Field: "name"}
 		}
 		if !seenUsername {
-			return result, i, &validation.RequiredError{Field: "username"}
+			return result, &validation.RequiredError{Field: "username"}
 		}
-		return result, i + 1, nil
+		s.Pos++
+		return result, nil
 	}
 	for {
 		var key string
-		key, i, err = s.KeyView(i)
+		key, err = s.KeyView()
 		if err != nil {
-			return result, i, err
+			return result, err
 		}
 		switch len(key) {
 		case 3:
 			switch key {
 			case "age":
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenAge {
-					return result, i, &validation.DuplicateKeyError{Field: "age"}
+					return result, &validation.DuplicateKeyError{Field: "age"}
 				}
 				seenAge = true
 				var iv int64
-				iv, i, err = s.Int64(i)
+				iv, err = s.Int64()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				result.Age = int(iv)
 				if result.Age < 0 {
-					return result, i, &validation.GTEError{Field: "age", Limit: 0, Value: result.Age}
+					return result, &validation.GTEError{Field: "age", Limit: 0, Value: result.Age}
 				}
 				if result.Age > 130 {
-					return result, i, &validation.LTEError{Field: "age", Limit: 130, Value: result.Age}
+					return result, &validation.LTEError{Field: "age", Limit: 130, Value: result.Age}
 				}
 			case "url":
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenURL {
-					return result, i, &validation.DuplicateKeyError{Field: "url"}
+					return result, &validation.DuplicateKeyError{Field: "url"}
 				}
 				seenURL = true
-				result.URL, i, err = s.String(i)
+				result.URL, err = s.String()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if !decode.IsURL(result.URL) {
-					return result, i, &validation.URLError{Field: "url", Value: result.URL}
+					return result, &validation.URLError{Field: "url", Value: result.URL}
 				}
 			default:
-				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 4:
 			switch key {
 			case "lang":
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenLang {
-					return result, i, &validation.DuplicateKeyError{Field: "lang"}
+					return result, &validation.DuplicateKeyError{Field: "lang"}
 				}
 				seenLang = true
-				result.Lang, i, err = s.String(i)
+				result.Lang, err = s.String()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				switch result.Lang {
 				case "en", "es", "fr", "de", "uk":
 				default:
-					return result, i, &validation.OneOfError{Field: "lang", Allowed: ggenOneof0, Value: result.Lang}
+					return result, &validation.OneOfError{Field: "lang", Allowed: ggenOneof0, Value: result.Lang}
 				}
 			case "name":
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenName {
-					return result, i, &validation.DuplicateKeyError{Field: "name"}
+					return result, &validation.DuplicateKeyError{Field: "name"}
 				}
 				seenName = true
-				result.Name, i, err = s.String(i)
+				result.Name, err = s.String()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if utf8.RuneCountInString(result.Name) < 1 {
-					return result, i, &validation.MinRunesError{Field: "name", Limit: 1, Got: utf8.RuneCountInString(result.Name)}
+					return result, &validation.MinRunesError{Field: "name", Limit: 1, Got: utf8.RuneCountInString(result.Name)}
 				}
 				if utf8.RuneCountInString(result.Name) > 64 {
-					return result, i, &validation.MaxRunesError{Field: "name", Limit: 64, Got: utf8.RuneCountInString(result.Name)}
+					return result, &validation.MaxRunesError{Field: "name", Limit: 64, Got: utf8.RuneCountInString(result.Name)}
 				}
 			case "role":
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenRole {
-					return result, i, &validation.DuplicateKeyError{Field: "role"}
+					return result, &validation.DuplicateKeyError{Field: "role"}
 				}
 				seenRole = true
-				result.Role, i, err = s.String(i)
+				result.Role, err = s.String()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				switch result.Role {
 				case "admin", "user", "guest":
 				default:
-					return result, i, &validation.OneOfError{Field: "role", Allowed: ggenOneof1, Value: result.Role}
+					return result, &validation.OneOfError{Field: "role", Allowed: ggenOneof1, Value: result.Role}
 				}
 			default:
-				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 5:
 			switch key {
 			case "email":
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenEmail {
-					return result, i, &validation.DuplicateKeyError{Field: "email"}
+					return result, &validation.DuplicateKeyError{Field: "email"}
 				}
 				seenEmail = true
-				result.Email, i, err = s.String(i)
+				result.Email, err = s.String()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if !decode.IsEmail(result.Email) {
-					return result, i, &validation.EmailError{Field: "email", Value: result.Email}
+					return result, &validation.EmailError{Field: "email", Value: result.Email}
 				}
 				if utf8.RuneCountInString(result.Email) > 128 {
-					return result, i, &validation.MaxRunesError{Field: "email", Limit: 128, Got: utf8.RuneCountInString(result.Email)}
+					return result, &validation.MaxRunesError{Field: "email", Limit: 128, Got: utf8.RuneCountInString(result.Email)}
 				}
 			case "phone":
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenPhone {
-					return result, i, &validation.DuplicateKeyError{Field: "phone"}
+					return result, &validation.DuplicateKeyError{Field: "phone"}
 				}
 				seenPhone = true
-				result.Phone, i, err = s.String(i)
+				result.Phone, err = s.String()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if utf8.RuneCountInString(result.Phone) < 7 {
-					return result, i, &validation.MinRunesError{Field: "phone", Limit: 7, Got: utf8.RuneCountInString(result.Phone)}
+					return result, &validation.MinRunesError{Field: "phone", Limit: 7, Got: utf8.RuneCountInString(result.Phone)}
 				}
 				if utf8.RuneCountInString(result.Phone) > 20 {
-					return result, i, &validation.MaxRunesError{Field: "phone", Limit: 20, Got: utf8.RuneCountInString(result.Phone)}
+					return result, &validation.MaxRunesError{Field: "phone", Limit: 20, Got: utf8.RuneCountInString(result.Phone)}
 				}
 				if !decode.IsNumeric(result.Phone) {
-					return result, i, &validation.NumericError{Field: "phone", Value: result.Phone}
+					return result, &validation.NumericError{Field: "phone", Value: result.Phone}
 				}
 			case "score":
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenScore {
-					return result, i, &validation.DuplicateKeyError{Field: "score"}
+					return result, &validation.DuplicateKeyError{Field: "score"}
 				}
 				seenScore = true
-				result.Score, i, err = s.Float64(i)
+				result.Score, err = s.Float64()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if result.Score < 0 {
-					return result, i, &validation.GTEError{Field: "score", Limit: 0, Value: result.Score}
+					return result, &validation.GTEError{Field: "score", Limit: 0, Value: result.Score}
 				}
 				if result.Score > 100 {
-					return result, i, &validation.LTEError{Field: "score", Limit: 100, Value: result.Score}
+					return result, &validation.LTEError{Field: "score", Limit: 100, Value: result.Score}
 				}
 			default:
-				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 7:
 			if key == "country" {
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenCountry {
-					return result, i, &validation.DuplicateKeyError{Field: "country"}
+					return result, &validation.DuplicateKeyError{Field: "country"}
 				}
 				seenCountry = true
-				result.Country, i, err = s.String(i)
+				result.Country, err = s.String()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if utf8.RuneCountInString(result.Country) != 2 {
-					return result, i, &validation.RunesError{Field: "country", Want: 2, Got: utf8.RuneCountInString(result.Country)}
+					return result, &validation.RunesError{Field: "country", Want: 2, Got: utf8.RuneCountInString(result.Country)}
 				}
 				if !decode.IsUpper(result.Country) {
-					return result, i, &validation.UpperError{Field: "country", Value: result.Country}
+					return result, &validation.UpperError{Field: "country", Value: result.Country}
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 8:
 			if key == "username" {
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenUsername {
-					return result, i, &validation.DuplicateKeyError{Field: "username"}
+					return result, &validation.DuplicateKeyError{Field: "username"}
 				}
 				seenUsername = true
-				result.Username, i, err = s.String(i)
+				result.Username, err = s.String()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if utf8.RuneCountInString(result.Username) < 3 {
-					return result, i, &validation.MinRunesError{Field: "username", Limit: 3, Got: utf8.RuneCountInString(result.Username)}
+					return result, &validation.MinRunesError{Field: "username", Limit: 3, Got: utf8.RuneCountInString(result.Username)}
 				}
 				if utf8.RuneCountInString(result.Username) > 32 {
-					return result, i, &validation.MaxRunesError{Field: "username", Limit: 32, Got: utf8.RuneCountInString(result.Username)}
+					return result, &validation.MaxRunesError{Field: "username", Limit: 32, Got: utf8.RuneCountInString(result.Username)}
 				}
 				if !decode.IsAlphanum(result.Username) {
-					return result, i, &validation.AlphanumError{Field: "username", Value: result.Username}
+					return result, &validation.AlphanumError{Field: "username", Value: result.Username}
 				}
 				if !decode.IsLower(result.Username) {
-					return result, i, &validation.LowerError{Field: "username", Value: result.Username}
+					return result, &validation.LowerError{Field: "username", Value: result.Username}
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+			return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
 		}
-		i, err = s.SkipSpace(i)
+		err = s.SkipSpace()
 		if err != nil {
-			return result, i, err
+			return result, err
 		}
-		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
-				return result, i, err
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, err
 			}
-			i = 0
+			s.Pos = 0
 		}
-		c := s.Bytes()[i]
+		c := s.Bytes()[s.Pos]
 		if c == ',' {
-			i, err = s.SkipSpace(i + 1)
+			s.Pos++
+			err = s.SkipSpace()
 			if err != nil {
-				return result, i, err
+				return result, err
 			}
 			continue
 		}
 		if c == '}' {
 			if !seenEmail {
-				return result, i, &validation.RequiredError{Field: "email"}
+				return result, &validation.RequiredError{Field: "email"}
 			}
 			if !seenName {
-				return result, i, &validation.RequiredError{Field: "name"}
+				return result, &validation.RequiredError{Field: "name"}
 			}
 			if !seenUsername {
-				return result, i, &validation.RequiredError{Field: "username"}
+				return result, &validation.RequiredError{Field: "username"}
 			}
-			return result, i + 1, nil
+			s.Pos++
+			return result, nil
 		}
-		return result, i, scan.ErrBadObject
+		return result, scan.ErrBadObject
 	}
 }
 
@@ -4428,7 +4470,8 @@ func (s ValidationHeavy) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (result NoValidationHeavy) DecodeFrom(data []byte, i int) (NoValidationHeavy, int, error) {
+func (result NoValidationHeavy) DecodeFrom(data []byte) (NoValidationHeavy, int, error) {
+	i := 0
 	var err error
 	_ = err
 	seenAge := false
@@ -4823,7 +4866,7 @@ func (result NoValidationHeavy) DecodeFrom(data []byte, i int) (NoValidationHeav
 	}
 }
 
-func (result NoValidationHeavy) DecodeStreamFrom(s *scan.Stream, i int) (NoValidationHeavy, int, error) {
+func (result NoValidationHeavy) DecodeStreamFrom(s *scan.Stream) (NoValidationHeavy, error) {
 	seenAge := false
 	seenCountry := false
 	seenEmail := false
@@ -4834,210 +4877,213 @@ func (result NoValidationHeavy) DecodeStreamFrom(s *scan.Stream, i int) (NoValid
 	seenScore := false
 	seenURL := false
 	seenUsername := false
-	i, err := s.ObjectOpen(i)
+	err := s.ObjectOpen()
 	if err != nil {
-		return result, i, err
+		return result, err
 	}
-	i, err = s.SkipSpace(i)
+	err = s.SkipSpace()
 	if err != nil {
-		return result, i, err
+		return result, err
 	}
-	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
-			return result, i, err
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, err
 		}
-		i = 0
+		s.Pos = 0
 	}
-	if s.Bytes()[i] == '}' {
-		return result, i + 1, nil
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		return result, nil
 	}
 	for {
 		var key string
-		key, i, err = s.KeyView(i)
+		key, err = s.KeyView()
 		if err != nil {
-			return result, i, err
+			return result, err
 		}
 		switch len(key) {
 		case 3:
 			switch key {
 			case "age":
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenAge {
-					return result, i, &validation.DuplicateKeyError{Field: "age"}
+					return result, &validation.DuplicateKeyError{Field: "age"}
 				}
 				seenAge = true
 				var iv int64
-				iv, i, err = s.Int64(i)
+				iv, err = s.Int64()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				result.Age = int(iv)
 			case "url":
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenURL {
-					return result, i, &validation.DuplicateKeyError{Field: "url"}
+					return result, &validation.DuplicateKeyError{Field: "url"}
 				}
 				seenURL = true
-				result.URL, i, err = s.String(i)
+				result.URL, err = s.String()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 			default:
-				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 4:
 			switch key {
 			case "lang":
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenLang {
-					return result, i, &validation.DuplicateKeyError{Field: "lang"}
+					return result, &validation.DuplicateKeyError{Field: "lang"}
 				}
 				seenLang = true
-				result.Lang, i, err = s.String(i)
+				result.Lang, err = s.String()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 			case "name":
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenName {
-					return result, i, &validation.DuplicateKeyError{Field: "name"}
+					return result, &validation.DuplicateKeyError{Field: "name"}
 				}
 				seenName = true
-				result.Name, i, err = s.String(i)
+				result.Name, err = s.String()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 			case "role":
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenRole {
-					return result, i, &validation.DuplicateKeyError{Field: "role"}
+					return result, &validation.DuplicateKeyError{Field: "role"}
 				}
 				seenRole = true
-				result.Role, i, err = s.String(i)
+				result.Role, err = s.String()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 			default:
-				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 5:
 			switch key {
 			case "email":
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenEmail {
-					return result, i, &validation.DuplicateKeyError{Field: "email"}
+					return result, &validation.DuplicateKeyError{Field: "email"}
 				}
 				seenEmail = true
-				result.Email, i, err = s.String(i)
+				result.Email, err = s.String()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 			case "phone":
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenPhone {
-					return result, i, &validation.DuplicateKeyError{Field: "phone"}
+					return result, &validation.DuplicateKeyError{Field: "phone"}
 				}
 				seenPhone = true
-				result.Phone, i, err = s.String(i)
+				result.Phone, err = s.String()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 			case "score":
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenScore {
-					return result, i, &validation.DuplicateKeyError{Field: "score"}
+					return result, &validation.DuplicateKeyError{Field: "score"}
 				}
 				seenScore = true
-				result.Score, i, err = s.Float64(i)
+				result.Score, err = s.Float64()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 			default:
-				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 7:
 			if key == "country" {
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenCountry {
-					return result, i, &validation.DuplicateKeyError{Field: "country"}
+					return result, &validation.DuplicateKeyError{Field: "country"}
 				}
 				seenCountry = true
-				result.Country, i, err = s.String(i)
+				result.Country, err = s.String()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 8:
 			if key == "username" {
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenUsername {
-					return result, i, &validation.DuplicateKeyError{Field: "username"}
+					return result, &validation.DuplicateKeyError{Field: "username"}
 				}
 				seenUsername = true
-				result.Username, i, err = s.String(i)
+				result.Username, err = s.String()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+			return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
 		}
-		i, err = s.SkipSpace(i)
+		err = s.SkipSpace()
 		if err != nil {
-			return result, i, err
+			return result, err
 		}
-		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
-				return result, i, err
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, err
 			}
-			i = 0
+			s.Pos = 0
 		}
-		c := s.Bytes()[i]
+		c := s.Bytes()[s.Pos]
 		if c == ',' {
-			i, err = s.SkipSpace(i + 1)
+			s.Pos++
+			err = s.SkipSpace()
 			if err != nil {
-				return result, i, err
+				return result, err
 			}
 			continue
 		}
 		if c == '}' {
-			return result, i + 1, nil
+			s.Pos++
+			return result, nil
 		}
-		return result, i, scan.ErrBadObject
+		return result, scan.ErrBadObject
 	}
 }
 
@@ -5082,7 +5128,8 @@ func (s NoValidationHeavy) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (result HTMLEscape) DecodeFrom(data []byte, i int) (HTMLEscape, int, error) {
+func (result HTMLEscape) DecodeFrom(data []byte) (HTMLEscape, int, error) {
+	i := 0
 	var err error
 	_ = err
 	seenNote := false
@@ -5192,74 +5239,77 @@ func (result HTMLEscape) DecodeFrom(data []byte, i int) (HTMLEscape, int, error)
 	}
 }
 
-func (result HTMLEscape) DecodeStreamFrom(s *scan.Stream, i int) (HTMLEscape, int, error) {
+func (result HTMLEscape) DecodeStreamFrom(s *scan.Stream) (HTMLEscape, error) {
 	seenNote := false
-	i, err := s.ObjectOpen(i)
+	err := s.ObjectOpen()
 	if err != nil {
-		return result, i, err
+		return result, err
 	}
-	i, err = s.SkipSpace(i)
+	err = s.SkipSpace()
 	if err != nil {
-		return result, i, err
+		return result, err
 	}
-	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
-			return result, i, err
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, err
 		}
-		i = 0
+		s.Pos = 0
 	}
-	if s.Bytes()[i] == '}' {
-		return result, i + 1, nil
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		return result, nil
 	}
 	for {
 		var key string
-		key, i, err = s.KeyView(i)
+		key, err = s.KeyView()
 		if err != nil {
-			return result, i, err
+			return result, err
 		}
 		switch len(key) {
 		case 4:
 			if key == "note" {
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenNote {
-					return result, i, &validation.DuplicateKeyError{Field: "note"}
+					return result, &validation.DuplicateKeyError{Field: "note"}
 				}
 				seenNote = true
-				result.Note, i, err = s.String(i)
+				result.Note, err = s.String()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+			return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
 		}
-		i, err = s.SkipSpace(i)
+		err = s.SkipSpace()
 		if err != nil {
-			return result, i, err
+			return result, err
 		}
-		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
-				return result, i, err
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, err
 			}
-			i = 0
+			s.Pos = 0
 		}
-		c := s.Bytes()[i]
+		c := s.Bytes()[s.Pos]
 		if c == ',' {
-			i, err = s.SkipSpace(i + 1)
+			s.Pos++
+			err = s.SkipSpace()
 			if err != nil {
-				return result, i, err
+				return result, err
 			}
 			continue
 		}
 		if c == '}' {
-			return result, i + 1, nil
+			s.Pos++
+			return result, nil
 		}
-		return result, i, scan.ErrBadObject
+		return result, scan.ErrBadObject
 	}
 }
 
@@ -5277,7 +5327,8 @@ func (s HTMLEscape) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (result HTMLPlain) DecodeFrom(data []byte, i int) (HTMLPlain, int, error) {
+func (result HTMLPlain) DecodeFrom(data []byte) (HTMLPlain, int, error) {
+	i := 0
 	var err error
 	_ = err
 	seenNote := false
@@ -5387,74 +5438,77 @@ func (result HTMLPlain) DecodeFrom(data []byte, i int) (HTMLPlain, int, error) {
 	}
 }
 
-func (result HTMLPlain) DecodeStreamFrom(s *scan.Stream, i int) (HTMLPlain, int, error) {
+func (result HTMLPlain) DecodeStreamFrom(s *scan.Stream) (HTMLPlain, error) {
 	seenNote := false
-	i, err := s.ObjectOpen(i)
+	err := s.ObjectOpen()
 	if err != nil {
-		return result, i, err
+		return result, err
 	}
-	i, err = s.SkipSpace(i)
+	err = s.SkipSpace()
 	if err != nil {
-		return result, i, err
+		return result, err
 	}
-	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
-			return result, i, err
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, err
 		}
-		i = 0
+		s.Pos = 0
 	}
-	if s.Bytes()[i] == '}' {
-		return result, i + 1, nil
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		return result, nil
 	}
 	for {
 		var key string
-		key, i, err = s.KeyView(i)
+		key, err = s.KeyView()
 		if err != nil {
-			return result, i, err
+			return result, err
 		}
 		switch len(key) {
 		case 4:
 			if key == "note" {
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenNote {
-					return result, i, &validation.DuplicateKeyError{Field: "note"}
+					return result, &validation.DuplicateKeyError{Field: "note"}
 				}
 				seenNote = true
-				result.Note, i, err = s.String(i)
+				result.Note, err = s.String()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+			return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
 		}
-		i, err = s.SkipSpace(i)
+		err = s.SkipSpace()
 		if err != nil {
-			return result, i, err
+			return result, err
 		}
-		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
-				return result, i, err
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, err
 			}
-			i = 0
+			s.Pos = 0
 		}
-		c := s.Bytes()[i]
+		c := s.Bytes()[s.Pos]
 		if c == ',' {
-			i, err = s.SkipSpace(i + 1)
+			s.Pos++
+			err = s.SkipSpace()
 			if err != nil {
-				return result, i, err
+				return result, err
 			}
 			continue
 		}
 		if c == '}' {
-			return result, i + 1, nil
+			s.Pos++
+			return result, nil
 		}
-		return result, i, scan.ErrBadObject
+		return result, scan.ErrBadObject
 	}
 }
 
@@ -5472,7 +5526,8 @@ func (s HTMLPlain) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (result MapHeavy) DecodeFrom(data []byte, i int) (MapHeavy, int, error) {
+func (result MapHeavy) DecodeFrom(data []byte) (MapHeavy, int, error) {
+	i := 0
 	if result.Labels != nil {
 		clear(result.Labels)
 	}
@@ -5665,83 +5720,84 @@ func (result MapHeavy) DecodeFrom(data []byte, i int) (MapHeavy, int, error) {
 	}
 }
 
-func (result MapHeavy) DecodeStreamFrom(s *scan.Stream, i int) (MapHeavy, int, error) {
+func (result MapHeavy) DecodeStreamFrom(s *scan.Stream) (MapHeavy, error) {
 	if result.Labels != nil {
 		clear(result.Labels)
 	}
 	seenLabels := false
-	i, err := s.ObjectOpen(i)
+	err := s.ObjectOpen()
 	if err != nil {
-		return result, i, err
+		return result, err
 	}
-	i, err = s.SkipSpace(i)
+	err = s.SkipSpace()
 	if err != nil {
-		return result, i, err
+		return result, err
 	}
-	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
-			return result, i, err
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, err
 		}
-		i = 0
+		s.Pos = 0
 	}
-	if s.Bytes()[i] == '}' {
-		return result, i + 1, nil
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		return result, nil
 	}
 	for {
 		var key string
-		key, i, err = s.KeyView(i)
+		key, err = s.KeyView()
 		if err != nil {
-			return result, i, err
+			return result, err
 		}
 		switch len(key) {
 		case 6:
 			if key == "labels" {
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenLabels {
-					return result, i, &validation.DuplicateKeyError{Field: "labels"}
+					return result, &validation.DuplicateKeyError{Field: "labels"}
 				}
 				seenLabels = true
 				{
-					i, err = s.SkipSpace(i)
+					err = s.SkipSpace()
 					if err != nil {
-						return result, i, err
+						return result, err
 					}
-					if i >= len(s.Bytes()) {
+					if s.Pos >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, i, err
+							return result, err
 						}
 					}
-					if s.Bytes()[i] == 'n' {
+					if s.Bytes()[s.Pos] == 'n' {
 						for ki := 1; ki < 4; ki++ {
-							if i+ki >= len(s.Bytes()) {
+							if s.Pos+ki >= len(s.Bytes()) {
 								if err = s.ReadMore(0); err != nil {
-									return result, i, err
+									return result, err
 								}
 							}
-							if s.Bytes()[i+ki] != "null"[ki] {
-								return result, i, scan.ErrBadLiteral
+							if s.Bytes()[s.Pos+ki] != "null"[ki] {
+								return result, scan.ErrBadLiteral
 							}
 						}
-						i += 4
+						s.Pos += 4
 						result.Labels = nil
 					} else {
-						i, err = s.ObjectOpen(i)
+						err = s.ObjectOpen()
 						if err != nil {
-							return result, i, err
+							return result, err
 						}
-						i, err = s.SkipSpace(i)
+						err = s.SkipSpace()
 						if err != nil {
-							return result, i, err
+							return result, err
 						}
-						if i >= len(s.Bytes()) {
+						if s.Pos >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, i, err
+								return result, err
 							}
 						}
-						if s.Bytes()[i] == '}' {
+						if s.Bytes()[s.Pos] == '}' {
 							if result.Labels == nil {
 								result.Labels = map[string]string{}
 							}
@@ -5750,86 +5806,90 @@ func (result MapHeavy) DecodeStreamFrom(s *scan.Stream, i int) (MapHeavy, int, e
 								result.Labels = make(map[string]string)
 							}
 						}
-						for s.Bytes()[i] != '}' {
+						for s.Bytes()[s.Pos] != '}' {
 							var mk string
-							mk, i, err = s.String(i)
+							mk, err = s.String()
 							if err != nil {
-								return result, i, err
+								return result, err
 							}
-							i, err = s.SkipSpace(i)
+							err = s.SkipSpace()
 							if err != nil {
-								return result, i, err
+								return result, err
 							}
-							if i >= len(s.Bytes()) {
+							if s.Pos >= len(s.Bytes()) {
 								if err = s.ReadMore(0); err != nil {
-									return result, i, err
+									return result, err
 								}
 							}
-							if s.Bytes()[i] != ':' {
-								return result, i, scan.ErrBadObject
+							if s.Bytes()[s.Pos] != ':' {
+								return result, scan.ErrBadObject
 							}
-							i, err = s.SkipSpace(i + 1)
+							s.Pos++
+							err = s.SkipSpace()
 							if err != nil {
-								return result, i, err
+								return result, err
 							}
 							var mv string
-							mv, i, err = s.String(i)
+							mv, err = s.String()
 							if err != nil {
-								return result, i, err
+								return result, err
 							}
 							result.Labels[mk] = mv
-							i, err = s.SkipSpace(i)
+							err = s.SkipSpace()
 							if err != nil {
-								return result, i, err
+								return result, err
 							}
-							if i >= len(s.Bytes()) {
+							if s.Pos >= len(s.Bytes()) {
 								if err = s.ReadMore(0); err != nil {
-									return result, i, err
+									return result, err
 								}
 							}
-							if s.Bytes()[i] == ',' {
-								i, err = s.SkipSpace(i + 1)
+							if s.Bytes()[s.Pos] == ',' {
+								s.Pos++
+								err = s.SkipSpace()
 								if err != nil {
-									return result, i, err
+									return result, err
 								}
 								continue
 							}
 							break
 						}
-						if s.Bytes()[i] != '}' {
-							return result, i, scan.ErrBadObject
+						if s.Bytes()[s.Pos] != '}' {
+							return result, scan.ErrBadObject
 						}
-						i++
+						s.Pos++
 					}
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+			return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
 		}
-		i, err = s.SkipSpace(i)
+		err = s.SkipSpace()
 		if err != nil {
-			return result, i, err
+			return result, err
 		}
-		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
-				return result, i, err
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, err
 			}
-			i = 0
+			s.Pos = 0
 		}
-		c := s.Bytes()[i]
+		c := s.Bytes()[s.Pos]
 		if c == ',' {
-			i, err = s.SkipSpace(i + 1)
+			s.Pos++
+			err = s.SkipSpace()
 			if err != nil {
-				return result, i, err
+				return result, err
 			}
 			continue
 		}
 		if c == '}' {
-			return result, i + 1, nil
+			s.Pos++
+			return result, nil
 		}
-		return result, i, scan.ErrBadObject
+		return result, scan.ErrBadObject
 	}
 }
 

@@ -18,7 +18,7 @@ func TestMerge_scalarFieldsPersistAcrossOmitted(t *testing.T) {
 	// receiver carries Name and ZipCode. Payload only sets Street. Merge
 	// keeps the un-omitted fields from the receiver.
 	receiver := Address{Street: "old street", City: "OldCity", ZipCode: "12345"}
-	got, _, err := receiver.DecodeFrom([]byte(`{"street":"new street","city":"NewCity","zipCode":"54321"}`), 0)
+	got, _, err := receiver.DecodeFrom([]byte(`{"street":"new street","city":"NewCity","zipCode":"54321"}`))
 	if err != nil {
 		t.Fatalf("decode: %v", err)
 	}
@@ -37,7 +37,7 @@ func TestMerge_sliceBackingReused(t *testing.T) {
 	receiver := Node{Tags: pre}
 	preBackingPtr := unsafe.SliceData(receiver.Tags)
 
-	got, _, err := receiver.DecodeFrom([]byte(`{"tags":["a","b","c"]}`), 0)
+	got, _, err := receiver.DecodeFrom([]byte(`{"tags":["a","b","c"]}`))
 	if err != nil {
 		t.Fatalf("decode: %v", err)
 	}
@@ -57,7 +57,7 @@ func TestMerge_sliceDoesNotAppendOverExisting(t *testing.T) {
 	// "new decoder must not append into an existing slice" — receiver had 5
 	// entries, JSON has 2; result has exactly 2 (not 7).
 	receiver := Node{Tags: []string{"old1", "old2", "old3", "old4", "old5"}}
-	got, _, err := receiver.DecodeFrom([]byte(`{"tags":["a","b"]}`), 0)
+	got, _, err := receiver.DecodeFrom([]byte(`{"tags":["a","b"]}`))
 	if err != nil {
 		t.Fatalf("decode: %v", err)
 	}
@@ -68,7 +68,7 @@ func TestMerge_sliceDoesNotAppendOverExisting(t *testing.T) {
 
 func TestMerge_sliceNullSetsNil(t *testing.T) {
 	receiver := Node{Tags: []string{"old"}}
-	got, _, err := receiver.DecodeFrom([]byte(`{"tags":null}`), 0)
+	got, _, err := receiver.DecodeFrom([]byte(`{"tags":null}`))
 	if err != nil {
 		t.Fatalf("decode: %v", err)
 	}
@@ -80,7 +80,7 @@ func TestMerge_sliceNullSetsNil(t *testing.T) {
 func TestMerge_sliceEmptyPreservesNonNilBacking(t *testing.T) {
 	pre := make([]string, 0, 16)
 	receiver := Node{Tags: pre}
-	got, _, err := receiver.DecodeFrom([]byte(`{"tags":[]}`), 0)
+	got, _, err := receiver.DecodeFrom([]byte(`{"tags":[]}`))
 	if err != nil {
 		t.Fatalf("decode: %v", err)
 	}
@@ -98,7 +98,7 @@ func TestMerge_sliceEmptyPreservesNonNilBacking(t *testing.T) {
 func TestMerge_sliceEmptyOnNilReceiverProducesNonNilEmpty(t *testing.T) {
 	// stdlib parity: nil receiver + JSON [] → non-nil empty.
 	receiver := Node{}
-	got, _, err := receiver.DecodeFrom([]byte(`{"tags":[]}`), 0)
+	got, _, err := receiver.DecodeFrom([]byte(`{"tags":[]}`))
 	if err != nil {
 		t.Fatalf("decode: %v", err)
 	}
@@ -113,7 +113,7 @@ func TestMerge_sliceEmptyOnNilReceiverProducesNonNilEmpty(t *testing.T) {
 func TestMerge_mapClearedAndRefilled(t *testing.T) {
 	pre := map[string]string{"old": "value", "ghost": "data"}
 	receiver := Node{Props: pre}
-	got, _, err := receiver.DecodeFrom([]byte(`{"props":{"a":"1","b":"2"}}`), 0)
+	got, _, err := receiver.DecodeFrom([]byte(`{"props":{"a":"1","b":"2"}}`))
 	if err != nil {
 		t.Fatalf("decode: %v", err)
 	}
@@ -127,7 +127,7 @@ func TestMerge_mapClearedAndRefilled(t *testing.T) {
 
 func TestMerge_mapNullSetsNil(t *testing.T) {
 	receiver := Node{Props: map[string]string{"old": "value"}}
-	got, _, err := receiver.DecodeFrom([]byte(`{"props":null}`), 0)
+	got, _, err := receiver.DecodeFrom([]byte(`{"props":null}`))
 	if err != nil {
 		t.Fatalf("decode: %v", err)
 	}
@@ -143,7 +143,7 @@ func TestMerge_nestedStructRecursesIntoExisting(t *testing.T) {
 	receiver := Node{
 		Children: []Node{{Name: "cached", Tags: []string{"stale"}}},
 	}
-	got, _, err := receiver.DecodeFrom([]byte(`{"children":[{"tags":["fresh"]}]}`), 0)
+	got, _, err := receiver.DecodeFrom([]byte(`{"children":[{"tags":["fresh"]}]}`))
 	if err != nil {
 		t.Fatalf("decode: %v", err)
 	}

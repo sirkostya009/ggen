@@ -11,14 +11,17 @@ import (
 	"unsafe"
 )
 
-// Stream wraps an io.Reader. Scan primitives operate on absolute
-// offsets into the buffer. When a primitive's bounds check fails,
-// it calls ReadMore(0) to pull a single chunk without shifting —
-// internal Stream methods preserve the offset coordinate system so
-// their callers' cursors stay valid. Callers that own the buffer at
-// a coarser granularity (top-level decode loops between iterations)
-// can pass ReadMore(keep) with keep > 0 to compact the buffer; see
-// the ReadMore doc for the cursor-adjustment contract.
+// Stream wraps an io.Reader. The cursor lives in [Stream.Pos] — every
+// scan primitive consumes from there and updates it on return. Callers
+// that need to slice raw spans (RawJSON capture, json.Unmarshal
+// fallback) snapshot Pos before the scan and read it again after.
+//
+// When a primitive's bounds check fails, it calls ReadMore(0) to pull
+// a single chunk without shifting — Pos and any in-flight local
+// cursors stay valid. Internal methods that hold a body span (String,
+// Number) pass ReadMore(spanStart > 0) so the buffer stays bounded
+// across long streams; they reset their local cursors and Pos after
+// the shift.
 //
 // Usage:
 //
@@ -32,6 +35,11 @@ import (
 type Stream struct {
 	buf []byte
 	r   io.Reader
+	// Pos is the current parse cursor — the offset of the next byte to
+	// consume. Every scan primitive reads from Pos and writes it back
+	// before returning. Generated code reads Pos directly to capture
+	// raw spans (e.g. `start := s.Pos; s.SkipValue(); raw := s.Bytes()[start:s.Pos]`).
+	Pos int
 	// Err is the sticky reader error. Once set (non-EOF), every
 	// subsequent ReadMore call returns it without touching the reader.
 	Err error
@@ -42,7 +50,7 @@ type Stream struct {
 	// suffix down to offset 0. When false, ReadMore treats any keep
 	// as 0 (grow-only). Callers flip it off for spans that depend on
 	// stable absolute buffer offsets — RawJSON capture, json.Unmarshal
-	// fallback against s.Bytes()[start:end] — and restore the previous
+	// fallback against s.Bytes()[start:s.Pos] — and restore the previous
 	// value after.
 	Shift bool
 }
@@ -74,10 +82,11 @@ func (s *Stream) Bytes() []byte { return s.buf }
 //     to s.buf[0:n-keep], reads refill the freed tail.
 //
 // Callers MUST subtract `keep` from every cursor / index they hold
-// that was previously >= keep. String aliases into s.buf become
-// invalid whenever keep > 0 — the bytes physically move (in-place
-// memmove on the same backing) and the alias points at the wrong
-// content afterwards.
+// that was previously >= keep (including [Stream.Pos] when the
+// caller is mid-scan). String aliases into s.buf become invalid
+// whenever keep > 0 — the bytes physically move (in-place memmove
+// on the same backing) and the alias points at the wrong content
+// afterwards.
 //
 // NEVER loops the Read call: one chunk in, return whatever the reader
 // gave.
@@ -129,21 +138,25 @@ func (s *Stream) ReadMore(keep int) error {
 	return nil
 }
 
-// SkipSpace advances past whitespace, pulling more bytes as needed.
-// Compacts in-place: the consumed whitespace is overwritten by the
-// next chunk via ReadMore(i). Caller must hold no offsets < i (the
-// key alias from a prior KeyView is the obvious one — caller must
-// either copy it before SkipSpace or treat it as discardable). When
-// the Stream is in no-shift mode (RawJSON capture), ReadMore behaves
-// as grow-only and the cursor stays where it was.
-func (s *Stream) SkipSpace(i int) (int, error) {
+// SkipSpace advances Pos past whitespace, pulling more bytes as
+// needed. Compacts in-place: the consumed whitespace is overwritten
+// by the next chunk via ReadMore(Pos). Caller must hold no aliases
+// at offsets < Pos (a key alias from a prior KeyView is the obvious
+// one — caller must either copy it before SkipSpace or treat it as
+// discardable). When the Stream is in no-shift mode (RawJSON
+// capture), ReadMore behaves as grow-only and Pos stays where it
+// was.
+func (s *Stream) SkipSpace() error {
+	i := s.Pos
 	for {
 		if i >= len(s.buf) {
 			if err := s.ReadMore(i); err != nil {
 				if err == io.ErrUnexpectedEOF {
-					return i, nil
+					s.Pos = i
+					return nil
 				}
-				return i, err
+				s.Pos = i
+				return err
 			}
 			if s.Shift {
 				i = 0
@@ -151,7 +164,8 @@ func (s *Stream) SkipSpace(i int) (int, error) {
 		}
 		c := s.buf[i]
 		if c != ' ' && c != '\t' && c != '\n' && c != '\r' {
-			return i, nil
+			s.Pos = i
+			return nil
 		}
 		i++
 	}
@@ -160,49 +174,52 @@ func (s *Stream) SkipSpace(i int) (int, error) {
 // ConsumeColon skips whitespace, consumes ':', then skips whitespace
 // again — the canonical post-key key/value separator. Shifts in-place
 // via the underlying SkipSpace calls, so any aliases the caller holds
-// at offsets < i become invalid. Use this only after the key has been
-// dispatched / consumed.
-func (s *Stream) ConsumeColon(i int) (int, error) {
-	i, err := s.SkipSpace(i)
-	if err != nil {
-		return 0, err
+// at offsets < Pos become invalid. Use this only after the key has
+// been dispatched / consumed.
+func (s *Stream) ConsumeColon() error {
+	if err := s.SkipSpace(); err != nil {
+		return err
 	}
+	i := s.Pos
 	if i >= len(s.buf) {
 		if err := s.ReadMore(i); err != nil {
-			return 0, err
+			return err
 		}
 		if s.Shift {
 			i = 0
 		}
 	}
 	if s.buf[i] != ':' {
-		return 0, ErrBadObject
+		return ErrBadObject
 	}
-	return s.SkipSpace(i + 1)
+	s.Pos = i + 1
+	return s.SkipSpace()
 }
 
 // ObjectOpen skips whitespace then consumes '{'.
-func (s *Stream) ObjectOpen(i int) (int, error) {
-	j, err := s.SkipSpace(i)
-	if err != nil {
-		return 0, err
+func (s *Stream) ObjectOpen() error {
+	if err := s.SkipSpace(); err != nil {
+		return err
 	}
+	j := s.Pos
 	if j >= len(s.buf) || s.buf[j] != '{' {
-		return 0, ErrBadObject
+		return ErrBadObject
 	}
-	return j + 1, nil
+	s.Pos = j + 1
+	return nil
 }
 
 // ArrayOpen skips whitespace then consumes '['.
-func (s *Stream) ArrayOpen(i int) (int, error) {
-	j, err := s.SkipSpace(i)
-	if err != nil {
-		return 0, err
+func (s *Stream) ArrayOpen() error {
+	if err := s.SkipSpace(); err != nil {
+		return err
 	}
+	j := s.Pos
 	if j >= len(s.buf) || s.buf[j] != '[' {
-		return 0, ErrBadArray
+		return ErrBadArray
 	}
-	return j + 1, nil
+	s.Pos = j + 1
+	return nil
 }
 
 // String decodes a JSON string. Always copies the body out of the
@@ -213,17 +230,18 @@ func (s *Stream) ArrayOpen(i int) (int, error) {
 // Compacts in-place when the buffer fills mid-scan: ReadMore(start)
 // preserves the partial string body (`s.buf[start:j]`) and discards
 // everything before it.
-func (s *Stream) String(i int) (string, int, error) {
+func (s *Stream) String() (string, error) {
+	i := s.Pos
 	if i >= len(s.buf) {
 		if err := s.ReadMore(i); err != nil {
-			return "", 0, err
+			return "", err
 		}
 		if s.Shift {
 			i = 0
 		}
 	}
 	if s.buf[i] != '"' {
-		return "", 0, ErrExpectString
+		return "", ErrExpectString
 	}
 	start := i + 1
 	j := start
@@ -238,7 +256,7 @@ func (s *Stream) String(i int) (string, int, error) {
 			}
 			for k := j; k < len(s.buf); k++ {
 				if s.buf[k] < 0x20 {
-					return "", 0, ErrBadString
+					return "", ErrBadString
 				}
 			}
 			j = len(s.buf)
@@ -248,7 +266,7 @@ func (s *Stream) String(i int) (string, int, error) {
 				start = 0
 			}
 			if err != nil {
-				return "", 0, ErrUnterminated
+				return "", ErrUnterminated
 			}
 			continue
 		}
@@ -258,10 +276,11 @@ func (s *Stream) String(i int) (string, int, error) {
 		}
 		for k := j; k < end; k++ {
 			if s.buf[k] < 0x20 {
-				return "", 0, ErrBadString
+				return "", ErrBadString
 			}
 		}
-		return string(s.buf[start:end]), end + 1, nil
+		s.Pos = end + 1
+		return string(s.buf[start:end]), nil
 	}
 }
 
@@ -279,17 +298,18 @@ func (s *Stream) String(i int) (string, int, error) {
 // On escape sequences in the key, falls back to the copy path
 // (stringSlow) — aliasing only works when the source bytes ARE the
 // final string bytes.
-func (s *Stream) KeyView(i int) (string, int, error) {
+func (s *Stream) KeyView() (string, error) {
+	i := s.Pos
 	if i >= len(s.buf) {
 		if err := s.ReadMore(i); err != nil {
-			return "", 0, err
+			return "", err
 		}
 		if s.Shift {
 			i = 0
 		}
 	}
 	if s.buf[i] != '"' {
-		return "", 0, ErrExpectString
+		return "", ErrExpectString
 	}
 	start := i + 1
 	j := start
@@ -301,7 +321,7 @@ func (s *Stream) KeyView(i int) (string, int, error) {
 			}
 			for k := j; k < len(s.buf); k++ {
 				if s.buf[k] < 0x20 {
-					return "", 0, ErrBadString
+					return "", ErrBadString
 				}
 			}
 			j = len(s.buf)
@@ -311,7 +331,7 @@ func (s *Stream) KeyView(i int) (string, int, error) {
 				start = 0
 			}
 			if err != nil {
-				return "", 0, ErrUnterminated
+				return "", ErrUnterminated
 			}
 			continue
 		}
@@ -321,29 +341,30 @@ func (s *Stream) KeyView(i int) (string, int, error) {
 		}
 		for k := j; k < end; k++ {
 			if s.buf[k] < 0x20 {
-				return "", 0, ErrBadString
+				return "", ErrBadString
 			}
 		}
-		return unsafe.String(unsafe.SliceData(s.buf[start:]), end-start), end + 1, nil
+		s.Pos = end + 1
+		return unsafe.String(unsafe.SliceData(s.buf[start:]), end-start), nil
 	}
 }
 
-// skipString advances past a JSON string and returns the position one
-// byte past the closing `"`. No copy, no body decode — escapes are
-// validated only enough to advance correctly (`\uXXXX` consumes 6,
-// other escapes 2). Use when the caller doesn't need the string value
-// (SkipValue, skipObject key-skip).
-func (s *Stream) skipString(i int) (int, error) {
+// skipString advances Pos past a JSON string. No copy, no body
+// decode — escapes are validated only enough to advance correctly
+// (`\uXXXX` consumes 6, other escapes 2). Use when the caller doesn't
+// need the string value (SkipValue, skipObject key-skip).
+func (s *Stream) skipString() error {
+	i := s.Pos
 	if i >= len(s.buf) {
 		if err := s.ReadMore(i); err != nil {
-			return 0, err
+			return err
 		}
 		if s.Shift {
 			i = 0
 		}
 	}
 	if s.buf[i] != '"' {
-		return 0, ErrExpectString
+		return ErrExpectString
 	}
 	start := i + 1
 	j := start
@@ -355,10 +376,11 @@ func (s *Stream) skipString(i int) (int, error) {
 			end := j + rel
 			for k := j; k < end; k++ {
 				if s.buf[k] < 0x20 {
-					return 0, ErrBadString
+					return ErrBadString
 				}
 			}
-			return end + 1, nil
+			s.Pos = end + 1
+			return nil
 		}
 		// Backslash before any closing quote — slow path: validate
 		// literal bytes up to the backslash, then handle the escape.
@@ -366,13 +388,13 @@ func (s *Stream) skipString(i int) (int, error) {
 			bs := j + bsRel
 			for k := j; k < bs; k++ {
 				if s.buf[k] < 0x20 {
-					return 0, ErrBadString
+					return ErrBadString
 				}
 			}
 			// Need at least one byte past the backslash for the escape kind.
 			if bs+1 >= len(s.buf) {
 				if err := s.ReadMore(bs); err != nil {
-					return 0, ErrBadString
+					return ErrBadString
 				}
 				if s.Shift {
 					j -= bs
@@ -387,7 +409,7 @@ func (s *Stream) skipString(i int) (int, error) {
 				// Need 4 hex digits past `\u`.
 				for bs+6 > len(s.buf) {
 					if err := s.ReadMore(bs); err != nil {
-						return 0, ErrBadString
+						return ErrBadString
 					}
 					if s.Shift {
 						j -= bs
@@ -396,11 +418,11 @@ func (s *Stream) skipString(i int) (int, error) {
 					}
 				}
 				if _, ok := parseHex4(s.buf[bs+2 : bs+6]); !ok {
-					return 0, ErrBadString
+					return ErrBadString
 				}
 				j = bs + 6
 			default:
-				return 0, ErrBadString
+				return ErrBadString
 			}
 			continue
 		}
@@ -408,7 +430,7 @@ func (s *Stream) skipString(i int) (int, error) {
 		// what's there, then read more.
 		for k := j; k < len(s.buf); k++ {
 			if s.buf[k] < 0x20 {
-				return 0, ErrBadString
+				return ErrBadString
 			}
 		}
 		j = len(s.buf)
@@ -418,7 +440,7 @@ func (s *Stream) skipString(i int) (int, error) {
 			start = 0
 		}
 		if err != nil {
-			return 0, ErrUnterminated
+			return ErrUnterminated
 		}
 	}
 }
@@ -426,25 +448,26 @@ func (s *Stream) skipString(i int) (int, error) {
 // stringSlow handles escape sequences. Builds a fresh local buffer
 // (`buf`) and copies the already-scanned prefix into it, so once we
 // enter the slow path the bytes in s.buf at offsets < j are no longer
-// needed — every ReadMore inside the loop passes `j` as keep so those
-// bytes are discarded and j is reset to 0 in the new coord system.
-func (s *Stream) stringSlow(start, j int) (string, int, error) {
+// needed — every ReadMore inside the loop passes 0 (grow-only) so
+// offsets stay stable across reads.
+func (s *Stream) stringSlow(start, j int) (string, error) {
 	buf := make([]byte, 0, 32)
 	buf = append(buf, s.buf[start:j]...)
 	for {
 		if j >= len(s.buf) {
 			if err := s.ReadMore(0); err != nil {
-				return "", 0, ErrUnterminated
+				return "", ErrUnterminated
 			}
 		}
 		c := s.buf[j]
 		if c == '"' {
-			return string(buf), j + 1, nil
+			s.Pos = j + 1
+			return string(buf), nil
 		}
 		if c == '\\' {
 			if j+1 >= len(s.buf) {
 				if err := s.ReadMore(0); err != nil {
-					return "", 0, ErrBadString
+					return "", ErrBadString
 				}
 			}
 			esc := s.buf[j+1]
@@ -472,13 +495,13 @@ func (s *Stream) stringSlow(start, j int) (string, int, error) {
 					pos := j + 2 + k
 					if pos >= len(s.buf) {
 						if err := s.ReadMore(0); err != nil {
-							return "", 0, ErrBadString
+							return "", ErrBadString
 						}
 					}
 				}
 				r, ok := parseHex4(s.buf[j+2 : j+6])
 				if !ok {
-					return "", 0, ErrBadString
+					return "", ErrBadString
 				}
 				j += 6
 				if utf16.IsSurrogate(r) {
@@ -493,12 +516,12 @@ func (s *Stream) stringSlow(start, j int) (string, int, error) {
 				}
 				buf = utf8.AppendRune(buf, r)
 			default:
-				return "", 0, ErrBadString
+				return "", ErrBadString
 			}
 			continue
 		}
 		if c < 0x20 {
-			return "", 0, ErrBadString
+			return "", ErrBadString
 		}
 		buf = append(buf, c)
 		j++
@@ -510,10 +533,11 @@ func (s *Stream) stringSlow(start, j int) (string, int, error) {
 // buffer span preserved, so the loop's ReadMore passes i as keep —
 // bytes < i are discarded and i resets to 0. Matches Int64 in scan.go
 // for out-of-range error reporting.
-func (s *Stream) Int64(i int) (int64, int, error) {
+func (s *Stream) Int64() (int64, error) {
+	i := s.Pos
 	if i >= len(s.buf) {
 		if err := s.ReadMore(i); err != nil {
-			return 0, 0, err
+			return 0, err
 		}
 		if s.Shift {
 			i = 0
@@ -525,7 +549,7 @@ func (s *Stream) Int64(i int) (int64, int, error) {
 		i++
 		if i >= len(s.buf) {
 			if err := s.ReadMore(i); err != nil {
-				return 0, 0, err
+				return 0, err
 			}
 			if s.Shift {
 				i = 0
@@ -533,7 +557,7 @@ func (s *Stream) Int64(i int) (int64, int, error) {
 		}
 	}
 	if s.buf[i] < '0' || s.buf[i] > '9' {
-		return 0, 0, ErrBadNumber
+		return 0, ErrBadNumber
 	}
 	limit := uint64(math.MaxInt64)
 	if neg {
@@ -551,39 +575,41 @@ func (s *Stream) Int64(i int) (int64, int, error) {
 		c := s.buf[i]
 		if c < '0' || c > '9' {
 			if c == '.' || c == 'e' || c == 'E' {
-				return 0, 0, ErrBadNumber
+				return 0, ErrBadNumber
 			}
 			break
 		}
 		d := uint64(c - '0')
 		if u > limit/10 || (u == limit/10 && d > limit%10) {
-			return 0, 0, ErrNumberOverflow
+			return 0, ErrNumberOverflow
 		}
 		u = u*10 + d
 		i++
 	}
+	s.Pos = i
 	if neg {
 		if u == SignedNeg {
-			return math.MinInt64, i, nil
+			return math.MinInt64, nil
 		}
-		return -int64(u), i, nil
+		return -int64(u), nil
 	}
-	return int64(u), i, nil
+	return int64(u), nil
 }
 
 // Uint64 scans an unsigned integer with overflow detection. Returns
 // ErrNumberOverflow when the magnitude exceeds MaxUint64.
-func (s *Stream) Uint64(i int) (uint64, int, error) {
+func (s *Stream) Uint64() (uint64, error) {
+	i := s.Pos
 	if i >= len(s.buf) {
 		if err := s.ReadMore(i); err != nil {
-			return 0, 0, err
+			return 0, err
 		}
 		if s.Shift {
 			i = 0
 		}
 	}
 	if s.buf[i] < '0' || s.buf[i] > '9' {
-		return 0, 0, ErrBadNumber
+		return 0, ErrBadNumber
 	}
 	var n uint64
 	for {
@@ -600,19 +626,21 @@ func (s *Stream) Uint64(i int) (uint64, int, error) {
 		}
 		d := uint64(c - '0')
 		if n > Uint64Limit/10 || (n == Uint64Limit/10 && d > Uint64Limit%10) {
-			return 0, 0, ErrNumberOverflow
+			return 0, ErrNumberOverflow
 		}
 		n = n*10 + d
 		i++
 	}
-	return n, i, nil
+	s.Pos = i
+	return n, nil
 }
 
 // Float64 scans a JSON number span then delegates to strconv.ParseFloat.
-func (s *Stream) Float64(i int) (float64, int, error) {
+func (s *Stream) Float64() (float64, error) {
+	i := s.Pos
 	if i >= len(s.buf) {
 		if err := s.ReadMore(0); err != nil {
-			return 0, 0, err
+			return 0, err
 		}
 	}
 	start := i
@@ -633,14 +661,15 @@ func (s *Stream) Float64(i int) (float64, int, error) {
 		break
 	}
 	if i == start {
-		return 0, 0, ErrBadNumber
+		return 0, ErrBadNumber
 	}
 	raw := unsafe.String(unsafe.SliceData(s.buf[start:]), i-start)
 	v, err := strconv.ParseFloat(raw, 64)
 	if err != nil {
-		return 0, 0, err
+		return 0, err
 	}
-	return v, i, nil
+	s.Pos = i
+	return v, nil
 }
 
 // Bool scans a true/false literal byte-by-byte: each char is
@@ -648,10 +677,11 @@ func (s *Stream) Float64(i int) (float64, int, error) {
 // the buffer is exhausted at that position. Mismatch fails fast
 // without fetching the remaining chars. The first byte is captured
 // up-front so later compactions can discard s.buf[i] safely.
-func (s *Stream) Bool(i int) (bool, int, error) {
+func (s *Stream) Bool() (bool, error) {
+	i := s.Pos
 	if i >= len(s.buf) {
 		if err := s.ReadMore(i); err != nil {
-			return false, 0, err
+			return false, err
 		}
 		if s.Shift {
 			i = 0
@@ -665,335 +695,326 @@ func (s *Stream) Bool(i int) (bool, int, error) {
 	case 'f':
 		want = "alse"
 	default:
-		return false, 0, ErrBadBool
+		return false, ErrBadBool
 	}
 	for k := 0; k < len(want); k++ {
 		pos := i + 1 + k
 		if pos >= len(s.buf) {
 			if err := s.ReadMore(0); err != nil {
-				return false, 0, ErrBadBool
+				return false, ErrBadBool
 			}
 		}
 		if s.buf[pos] != want[k] {
-			return false, 0, ErrBadBool
+			return false, ErrBadBool
 		}
 	}
-	return first == 't', i + 1 + len(want), nil
+	s.Pos = i + 1 + len(want)
+	return first == 't', nil
 }
 
 // SkipValue skips an arbitrary JSON value (literal/number/string/array/object).
-func (s *Stream) SkipValue(i int) (int, error) {
-	j, err := s.SkipSpace(i)
-	if err != nil {
-		return 0, err
+func (s *Stream) SkipValue() error {
+	if err := s.SkipSpace(); err != nil {
+		return err
 	}
-	if j >= len(s.buf) {
+	if s.Pos >= len(s.buf) {
 		if err := s.ReadMore(0); err != nil {
-			return 0, ErrUnexpectedEnd
+			return ErrUnexpectedEnd
 		}
-		j = 0
 	}
-	switch s.buf[j] {
+	switch s.buf[s.Pos] {
 	case '"':
-		return s.skipString(j)
+		return s.skipString()
 	case 't', 'f':
-		_, k, err := s.Bool(j)
-		return k, err
+		_, err := s.Bool()
+		return err
 	case 'n':
+		j := s.Pos
 		for k := range 3 {
 			pos := j + 1 + k
 			if pos >= len(s.buf) {
 				if err := s.ReadMore(0); err != nil {
-					return 0, ErrBadLiteral
+					return ErrBadLiteral
 				}
 			}
 			if s.buf[pos] != "ull"[k] {
-				return 0, ErrBadLiteral
+				return ErrBadLiteral
 			}
 		}
-		return j + 4, nil
+		s.Pos = j + 4
+		return nil
 	case '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
-		_, k, err := s.Float64(j)
-		return k, err
+		_, err := s.Float64()
+		return err
 	case '[':
-		return s.skipArray(j + 1)
+		s.Pos++
+		return s.skipArray()
 	case '{':
-		return s.skipObject(j + 1)
+		s.Pos++
+		return s.skipObject()
 	}
-	return 0, ErrBadValue
+	return ErrBadValue
 }
 
-func (s *Stream) skipArray(i int) (int, error) {
-	j, err := s.SkipSpace(i)
-	if err != nil {
-		return 0, err
+func (s *Stream) skipArray() error {
+	if err := s.SkipSpace(); err != nil {
+		return err
 	}
-	if j >= len(s.buf) {
+	if s.Pos >= len(s.buf) {
 		if err := s.ReadMore(0); err != nil {
-			return 0, ErrBadArray
+			return ErrBadArray
 		}
-		j = 0
 	}
-	if s.buf[j] == ']' {
-		return j + 1, nil
+	if s.buf[s.Pos] == ']' {
+		s.Pos++
+		return nil
 	}
 	for {
-		k, err := s.SkipValue(j)
-		if err != nil {
-			return 0, err
+		if err := s.SkipValue(); err != nil {
+			return err
 		}
-		j, err = s.SkipSpace(k)
-		if err != nil {
-			return 0, err
+		if err := s.SkipSpace(); err != nil {
+			return err
 		}
-		if j >= len(s.buf) {
+		if s.Pos >= len(s.buf) {
 			if err := s.ReadMore(0); err != nil {
-				return 0, ErrBadArray
+				return ErrBadArray
 			}
-			j = 0
 		}
-		if s.buf[j] == ',' {
-			j++
+		if s.buf[s.Pos] == ',' {
+			s.Pos++
 			continue
 		}
-		if s.buf[j] == ']' {
-			return j + 1, nil
+		if s.buf[s.Pos] == ']' {
+			s.Pos++
+			return nil
 		}
-		return 0, ErrBadArray
+		return ErrBadArray
 	}
 }
 
-func (s *Stream) skipObject(i int) (int, error) {
-	j, err := s.SkipSpace(i)
-	if err != nil {
-		return 0, err
+func (s *Stream) skipObject() error {
+	if err := s.SkipSpace(); err != nil {
+		return err
 	}
-	if j >= len(s.buf) {
+	if s.Pos >= len(s.buf) {
 		if err := s.ReadMore(0); err != nil {
-			return 0, ErrBadObject
+			return ErrBadObject
 		}
-		j = 0
 	}
-	if s.buf[j] == '}' {
-		return j + 1, nil
+	if s.buf[s.Pos] == '}' {
+		s.Pos++
+		return nil
 	}
 	for {
-		k, err := s.skipString(j)
-		if err != nil {
-			return 0, err
+		if err := s.skipString(); err != nil {
+			return err
 		}
-		j, err = s.SkipSpace(k)
-		if err != nil {
-			return 0, err
+		if err := s.SkipSpace(); err != nil {
+			return err
 		}
-		if j >= len(s.buf) {
+		if s.Pos >= len(s.buf) {
 			if err := s.ReadMore(0); err != nil {
-				return 0, ErrBadObject
+				return ErrBadObject
 			}
-			j = 0
 		}
-		if s.buf[j] != ':' {
-			return 0, ErrBadObject
+		if s.buf[s.Pos] != ':' {
+			return ErrBadObject
 		}
-		j++
-		k, err = s.SkipValue(j)
-		if err != nil {
-			return 0, err
+		s.Pos++
+		if err := s.SkipValue(); err != nil {
+			return err
 		}
-		j, err = s.SkipSpace(k)
-		if err != nil {
-			return 0, err
+		if err := s.SkipSpace(); err != nil {
+			return err
 		}
-		if j >= len(s.buf) {
+		if s.Pos >= len(s.buf) {
 			if err := s.ReadMore(0); err != nil {
-				return 0, ErrBadObject
+				return ErrBadObject
 			}
-			j = 0
 		}
-		if s.buf[j] == ',' {
-			j++
+		if s.buf[s.Pos] == ',' {
+			s.Pos++
 			continue
 		}
-		if s.buf[j] == '}' {
-			return j + 1, nil
+		if s.buf[s.Pos] == '}' {
+			s.Pos++
+			return nil
 		}
-		return 0, ErrBadObject
+		return ErrBadObject
 	}
 }
 
 // Any is the stream-buffered counterpart of [Any]. Mirrors stdlib
 // encoding/json defaults for the JSON-to-any mapping.
-func (s *Stream) Any(i int) (any, int, error) {
-	i, err := s.SkipSpace(i)
-	if err != nil {
-		return nil, 0, err
+func (s *Stream) Any() (any, error) {
+	if err := s.SkipSpace(); err != nil {
+		return nil, err
 	}
-	if i >= len(s.buf) {
-		if err := s.ReadMore(i); err != nil {
-			return nil, 0, err
+	if s.Pos >= len(s.buf) {
+		if err := s.ReadMore(s.Pos); err != nil {
+			return nil, err
 		}
 		if s.Shift {
-			i = 0
+			s.Pos = 0
 		}
 	}
-	switch c := s.buf[i]; {
+	switch c := s.buf[s.Pos]; {
 	case c == 'n':
+		j := s.Pos
 		for k := range 3 {
-			pos := i + 1 + k
+			pos := j + 1 + k
 			if pos >= len(s.buf) {
 				if err := s.ReadMore(0); err != nil {
-					return nil, 0, err
+					return nil, err
 				}
 			}
 			if s.buf[pos] != "ull"[k] {
-				return nil, 0, ErrBadLiteral
+				return nil, ErrBadLiteral
 			}
 		}
-		return nil, i + 4, nil
+		s.Pos = j + 4
+		return nil, nil
 	case c == 't' || c == 'f':
-		v, j, err := s.Bool(i)
-		return v, j, err
+		return s.Bool()
 	case c == '"':
-		v, j, err := s.String(i)
-		return v, j, err
+		return s.String()
 	case c == '-' || (c >= '0' && c <= '9'):
-		v, j, err := s.Float64(i)
-		return v, j, err
+		return s.Float64()
 	case c == '[':
-		return s.anyArray(i)
+		return s.anyArray()
 	case c == '{':
-		return s.anyObject(i)
+		return s.anyObject()
 	}
-	return nil, 0, ErrBadLiteral
+	return nil, ErrBadLiteral
 }
 
-func (s *Stream) anyArray(i int) ([]any, int, error) {
-	i++ // consume '['
-	i, err := s.SkipSpace(i)
-	if err != nil {
-		return nil, 0, err
+func (s *Stream) anyArray() ([]any, error) {
+	s.Pos++ // consume '['
+	if err := s.SkipSpace(); err != nil {
+		return nil, err
 	}
-	if i >= len(s.buf) {
-		if err := s.ReadMore(i); err != nil {
-			return nil, 0, err
+	if s.Pos >= len(s.buf) {
+		if err := s.ReadMore(s.Pos); err != nil {
+			return nil, err
 		}
 		if s.Shift {
-			i = 0
+			s.Pos = 0
 		}
 	}
-	if s.buf[i] == ']' {
-		return []any{}, i + 1, nil
+	if s.buf[s.Pos] == ']' {
+		s.Pos++
+		return []any{}, nil
 	}
 	out := make([]any, 0, 4)
 	for {
-		v, j, err := s.Any(i)
+		v, err := s.Any()
 		if err != nil {
-			return nil, 0, err
+			return nil, err
 		}
 		out = append(out, v)
-		i, err = s.SkipSpace(j)
-		if err != nil {
-			return nil, 0, err
+		if err := s.SkipSpace(); err != nil {
+			return nil, err
 		}
-		if i >= len(s.buf) {
-			if err := s.ReadMore(i); err != nil {
-				return nil, 0, err
+		if s.Pos >= len(s.buf) {
+			if err := s.ReadMore(s.Pos); err != nil {
+				return nil, err
 			}
 			if s.Shift {
-				i = 0
+				s.Pos = 0
 			}
 		}
-		if s.buf[i] == ',' {
-			i, err = s.SkipSpace(i + 1)
-			if err != nil {
-				return nil, 0, err
+		if s.buf[s.Pos] == ',' {
+			s.Pos++
+			if err := s.SkipSpace(); err != nil {
+				return nil, err
 			}
 			continue
 		}
-		if s.buf[i] == ']' {
-			return out, i + 1, nil
+		if s.buf[s.Pos] == ']' {
+			s.Pos++
+			return out, nil
 		}
-		return nil, 0, ErrBadArray
+		return nil, ErrBadArray
 	}
 }
 
-func (s *Stream) anyObject(i int) (map[string]any, int, error) {
-	i++ // consume '{'
-	i, err := s.SkipSpace(i)
-	if err != nil {
-		return nil, 0, err
+func (s *Stream) anyObject() (map[string]any, error) {
+	s.Pos++ // consume '{'
+	if err := s.SkipSpace(); err != nil {
+		return nil, err
 	}
-	if i >= len(s.buf) {
-		if err := s.ReadMore(i); err != nil {
-			return nil, 0, err
+	if s.Pos >= len(s.buf) {
+		if err := s.ReadMore(s.Pos); err != nil {
+			return nil, err
 		}
 		if s.Shift {
-			i = 0
+			s.Pos = 0
 		}
 	}
-	if s.buf[i] == '}' {
-		return map[string]any{}, i + 1, nil
+	if s.buf[s.Pos] == '}' {
+		s.Pos++
+		return map[string]any{}, nil
 	}
 	out := make(map[string]any, 4)
 	for {
-		key, j, err := s.String(i)
+		key, err := s.String()
 		if err != nil {
-			return nil, 0, err
+			return nil, err
 		}
-		j, err = s.SkipSpace(j)
-		if err != nil {
-			return nil, 0, err
+		if err := s.SkipSpace(); err != nil {
+			return nil, err
 		}
-		if j >= len(s.buf) {
+		if s.Pos >= len(s.buf) {
 			if err := s.ReadMore(0); err != nil {
-				return nil, 0, err
+				return nil, err
 			}
-			j = 0
 		}
-		if s.buf[j] != ':' {
-			return nil, 0, ErrBadObject
+		if s.buf[s.Pos] != ':' {
+			return nil, ErrBadObject
 		}
-		j, err = s.SkipSpace(j + 1)
+		s.Pos++
+		if err := s.SkipSpace(); err != nil {
+			return nil, err
+		}
+		v, err := s.Any()
 		if err != nil {
-			return nil, 0, err
-		}
-		v, k, err := s.Any(j)
-		if err != nil {
-			return nil, 0, err
+			return nil, err
 		}
 		out[key] = v
-		i, err = s.SkipSpace(k)
-		if err != nil {
-			return nil, 0, err
+		if err := s.SkipSpace(); err != nil {
+			return nil, err
 		}
-		if i >= len(s.buf) {
-			if err := s.ReadMore(i); err != nil {
-				return nil, 0, err
+		if s.Pos >= len(s.buf) {
+			if err := s.ReadMore(s.Pos); err != nil {
+				return nil, err
 			}
 			if s.Shift {
-				i = 0
+				s.Pos = 0
 			}
 		}
-		if s.buf[i] == ',' {
-			i, err = s.SkipSpace(i + 1)
-			if err != nil {
-				return nil, 0, err
+		if s.buf[s.Pos] == ',' {
+			s.Pos++
+			if err := s.SkipSpace(); err != nil {
+				return nil, err
 			}
 			continue
 		}
-		if s.buf[i] == '}' {
-			return out, i + 1, nil
+		if s.buf[s.Pos] == '}' {
+			s.Pos++
+			return out, nil
 		}
-		return nil, 0, ErrBadObject
+		return nil, ErrBadObject
 	}
 }
 
 // Number is the stream-buffered counterpart of [Number]: scans a JSON
 // number span and returns it as json.Number copied out of the buffer.
-func (s *Stream) Number(i int) (json.Number, int, error) {
+func (s *Stream) Number() (json.Number, error) {
+	i := s.Pos
 	if i >= len(s.buf) {
 		if err := s.ReadMore(i); err != nil {
-			return "", 0, err
+			return "", err
 		}
 		if s.Shift {
 			i = 0
@@ -1017,174 +1038,171 @@ func (s *Stream) Number(i int) (json.Number, int, error) {
 		break
 	}
 	if i == start || (i == start+1 && s.buf[start] == '-') {
-		return "", 0, ErrBadNumber
+		return "", ErrBadNumber
 	}
-	return json.Number(string(s.buf[start:i])), i, nil
+	s.Pos = i
+	return json.Number(string(s.buf[start:i])), nil
 }
 
 // AnyNumber is the [Stream.Any] variant that decodes JSON numbers as
 // json.Number instead of float64.
-func (s *Stream) AnyNumber(i int) (any, int, error) {
-	i, err := s.SkipSpace(i)
-	if err != nil {
-		return nil, 0, err
+func (s *Stream) AnyNumber() (any, error) {
+	if err := s.SkipSpace(); err != nil {
+		return nil, err
 	}
-	if i >= len(s.buf) {
-		if err := s.ReadMore(i); err != nil {
-			return nil, 0, err
+	if s.Pos >= len(s.buf) {
+		if err := s.ReadMore(s.Pos); err != nil {
+			return nil, err
 		}
 		if s.Shift {
-			i = 0
+			s.Pos = 0
 		}
 	}
-	switch c := s.buf[i]; {
+	switch c := s.buf[s.Pos]; {
 	case c == 'n':
+		j := s.Pos
 		for k := range 3 {
-			pos := i + 1 + k
+			pos := j + 1 + k
 			if pos >= len(s.buf) {
 				if err := s.ReadMore(0); err != nil {
-					return nil, 0, err
+					return nil, err
 				}
 			}
 			if s.buf[pos] != "ull"[k] {
-				return nil, 0, ErrBadLiteral
+				return nil, ErrBadLiteral
 			}
 		}
-		return nil, i + 4, nil
+		s.Pos = j + 4
+		return nil, nil
 	case c == 't' || c == 'f':
-		v, j, err := s.Bool(i)
-		return v, j, err
+		return s.Bool()
 	case c == '"':
-		v, j, err := s.String(i)
-		return v, j, err
+		return s.String()
 	case c == '-' || (c >= '0' && c <= '9'):
-		v, j, err := s.Number(i)
-		return v, j, err
+		return s.Number()
 	case c == '[':
-		return s.anyNumberArray(i)
+		return s.anyNumberArray()
 	case c == '{':
-		return s.anyNumberObject(i)
+		return s.anyNumberObject()
 	}
-	return nil, 0, ErrBadLiteral
+	return nil, ErrBadLiteral
 }
 
-func (s *Stream) anyNumberArray(i int) ([]any, int, error) {
-	i++
-	i, err := s.SkipSpace(i)
-	if err != nil {
-		return nil, 0, err
+func (s *Stream) anyNumberArray() ([]any, error) {
+	s.Pos++
+	if err := s.SkipSpace(); err != nil {
+		return nil, err
 	}
-	if i >= len(s.buf) {
-		if err := s.ReadMore(i); err != nil {
-			return nil, 0, err
+	if s.Pos >= len(s.buf) {
+		if err := s.ReadMore(s.Pos); err != nil {
+			return nil, err
 		}
 		if s.Shift {
-			i = 0
+			s.Pos = 0
 		}
 	}
-	if s.buf[i] == ']' {
-		return []any{}, i + 1, nil
+	if s.buf[s.Pos] == ']' {
+		s.Pos++
+		return []any{}, nil
 	}
 	out := make([]any, 0, 4)
 	for {
-		v, j, err := s.AnyNumber(i)
+		v, err := s.AnyNumber()
 		if err != nil {
-			return nil, 0, err
+			return nil, err
 		}
 		out = append(out, v)
-		i, err = s.SkipSpace(j)
-		if err != nil {
-			return nil, 0, err
+		if err := s.SkipSpace(); err != nil {
+			return nil, err
 		}
-		if i >= len(s.buf) {
-			if err := s.ReadMore(i); err != nil {
-				return nil, 0, err
+		if s.Pos >= len(s.buf) {
+			if err := s.ReadMore(s.Pos); err != nil {
+				return nil, err
 			}
 			if s.Shift {
-				i = 0
+				s.Pos = 0
 			}
 		}
-		if s.buf[i] == ',' {
-			i, err = s.SkipSpace(i + 1)
-			if err != nil {
-				return nil, 0, err
+		if s.buf[s.Pos] == ',' {
+			s.Pos++
+			if err := s.SkipSpace(); err != nil {
+				return nil, err
 			}
 			continue
 		}
-		if s.buf[i] == ']' {
-			return out, i + 1, nil
+		if s.buf[s.Pos] == ']' {
+			s.Pos++
+			return out, nil
 		}
-		return nil, 0, ErrBadArray
+		return nil, ErrBadArray
 	}
 }
 
-func (s *Stream) anyNumberObject(i int) (map[string]any, int, error) {
-	i++
-	i, err := s.SkipSpace(i)
-	if err != nil {
-		return nil, 0, err
+func (s *Stream) anyNumberObject() (map[string]any, error) {
+	s.Pos++
+	if err := s.SkipSpace(); err != nil {
+		return nil, err
 	}
-	if i >= len(s.buf) {
-		if err := s.ReadMore(i); err != nil {
-			return nil, 0, err
+	if s.Pos >= len(s.buf) {
+		if err := s.ReadMore(s.Pos); err != nil {
+			return nil, err
 		}
 		if s.Shift {
-			i = 0
+			s.Pos = 0
 		}
 	}
-	if s.buf[i] == '}' {
-		return map[string]any{}, i + 1, nil
+	if s.buf[s.Pos] == '}' {
+		s.Pos++
+		return map[string]any{}, nil
 	}
 	out := make(map[string]any, 4)
 	for {
-		key, j, err := s.String(i)
+		key, err := s.String()
 		if err != nil {
-			return nil, 0, err
+			return nil, err
 		}
-		j, err = s.SkipSpace(j)
-		if err != nil {
-			return nil, 0, err
+		if err := s.SkipSpace(); err != nil {
+			return nil, err
 		}
-		if j >= len(s.buf) {
+		if s.Pos >= len(s.buf) {
 			if err := s.ReadMore(0); err != nil {
-				return nil, 0, err
+				return nil, err
 			}
-			j = 0
 		}
-		if s.buf[j] != ':' {
-			return nil, 0, ErrBadObject
+		if s.buf[s.Pos] != ':' {
+			return nil, ErrBadObject
 		}
-		j, err = s.SkipSpace(j + 1)
+		s.Pos++
+		if err := s.SkipSpace(); err != nil {
+			return nil, err
+		}
+		v, err := s.AnyNumber()
 		if err != nil {
-			return nil, 0, err
-		}
-		v, k, err := s.AnyNumber(j)
-		if err != nil {
-			return nil, 0, err
+			return nil, err
 		}
 		out[key] = v
-		i, err = s.SkipSpace(k)
-		if err != nil {
-			return nil, 0, err
+		if err := s.SkipSpace(); err != nil {
+			return nil, err
 		}
-		if i >= len(s.buf) {
-			if err := s.ReadMore(i); err != nil {
-				return nil, 0, err
+		if s.Pos >= len(s.buf) {
+			if err := s.ReadMore(s.Pos); err != nil {
+				return nil, err
 			}
 			if s.Shift {
-				i = 0
+				s.Pos = 0
 			}
 		}
-		if s.buf[i] == ',' {
-			i, err = s.SkipSpace(i + 1)
-			if err != nil {
-				return nil, 0, err
+		if s.buf[s.Pos] == ',' {
+			s.Pos++
+			if err := s.SkipSpace(); err != nil {
+				return nil, err
 			}
 			continue
 		}
-		if s.buf[i] == '}' {
-			return out, i + 1, nil
+		if s.buf[s.Pos] == '}' {
+			s.Pos++
+			return out, nil
 		}
-		return nil, 0, ErrBadObject
+		return nil, ErrBadObject
 	}
 }

@@ -1227,7 +1227,7 @@ type Msg struct {
 		if got := strings.Count(body, "json.Unmarshal(data[start:i], &result.Tag)"); got != 1 {
 			t.Errorf("expected 1 json.Unmarshal on &result.Tag in DecodeFrom, got %d:\n%s", got, body)
 		}
-		if got := strings.Count(body, "json.Unmarshal(s.Bytes()[start:i], &result.Tag)"); got != 1 {
+		if got := strings.Count(body, "json.Unmarshal(s.Bytes()[start:s.Pos], &result.Tag)"); got != 1 {
 			t.Errorf("expected 1 json.Unmarshal on &result.Tag in DecodeStreamFrom, got %d:\n%s", got, body)
 		}
 		if !strings.Contains(body, "json.Marshal(s.Tag)") {
@@ -1560,11 +1560,11 @@ type Tuple [3]int
 		}
 		body := mustReadOutput(t, filepath.Join(dir, "msg_ggen.go"))
 		for _, want := range []string{
-			") DecodeFrom(data []byte, i int) (Tags",
+			") DecodeFrom(data []byte) (Tags",
 			"s Tags) AppendJSON",
-			") DecodeFrom(data []byte, i int) (Lookup",
+			") DecodeFrom(data []byte) (Lookup",
 			"s Lookup) AppendJSON",
-			") DecodeFrom(data []byte, i int) (Tuple",
+			") DecodeFrom(data []byte) (Tuple",
 			"s Tuple) AppendJSON",
 		} {
 			if !strings.Contains(body, want) {

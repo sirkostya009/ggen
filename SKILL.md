@@ -322,8 +322,8 @@ generate time.
 ## Generated method surface
 
 ```go
-func (result T) DecodeFrom(data []byte, i int) (T, int, error)
-func (result T) DecodeStreamFrom(s *scan.Stream, i int) (T, int, error)
+func (result T) DecodeFrom(data []byte) (T, int, error)
+func (result T) DecodeStreamFrom(s *scan.Stream) (T, error)
 func (s T) JSONSize() int
 func (s T) AppendJSON(dst []byte) ([]byte, error)
 ```
@@ -362,7 +362,7 @@ the same object is reused for multiple (not necessarily _different_)
 paylods.
 
 ```go
-u, _, err := existing.DecodeFrom(payload, 0)
+u, _, err := existing.DecodeFrom(payload)
 ```
 
 Generic helper functions in `decode` package do not have merge

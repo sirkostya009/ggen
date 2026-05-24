@@ -13,16 +13,22 @@ import (
 )
 
 // Decoder is the interface satisfied by every ggen-generated struct.
-// DecodeFrom reads one value out of the caller's byte slice at position i
-// and returns the decoded value, the position past the last consumed byte,
-// and any error. Unmarshal is the top-level wrapper. DecodeStreamFrom is
-// the streaming counterpart that pulls bytes from a *scan.Stream.
+// DecodeFrom reads one value out of the caller's byte slice and returns
+// the decoded value, the number of bytes consumed, and any error.
+// Callers chaining multiple values advance their own cursor:
+//
+//	v1, n, err := zero.DecodeFrom(data)
+//	// data[n:] is what remains
+//
+// Unmarshal is the top-level wrapper. DecodeStreamFrom is the streaming
+// counterpart that pulls bytes from a *scan.Stream; the Stream owns
+// the cursor (s.Pos), so the method returns only (T, error).
 //
 // Strings inside the returned value alias the caller's bytes via unsafe.String
 // — callers MUST NOT mutate the input buffer while the value is in use.
 type Decoder[T any] interface {
-	DecodeFrom(data []byte, i int) (T, int, error)
-	DecodeStreamFrom(s *scan.Stream, i int) (T, int, error)
+	DecodeFrom(data []byte) (T, int, error)
+	DecodeStreamFrom(s *scan.Stream) (T, error)
 }
 
 // Unmarshal is the top-level entry: decode one T out of data using the
@@ -30,7 +36,7 @@ type Decoder[T any] interface {
 // caller MUST NOT mutate the buffer while the value is in use.
 func Unmarshal[T Decoder[T]](data []byte) (T, error) {
 	var zero T
-	v, _, err := zero.DecodeFrom(data, 0)
+	v, _, err := zero.DecodeFrom(data)
 	return v, err
 }
 
@@ -61,12 +67,12 @@ func UnmarshalSlice[T Decoder[T]](data []byte) ([]T, error) {
 	}
 	var zero T
 	for {
-		v, j, err := zero.DecodeFrom(data, i)
+		v, n, err := zero.DecodeFrom(data[i:])
 		if err != nil {
 			return nil, err
 		}
 		result = append(result, v)
-		i = scan.SkipSpace(data, j)
+		i = scan.SkipSpace(data, i+n)
 		if i >= len(data) {
 			return nil, scan.ErrBadArray
 		}
@@ -100,7 +106,7 @@ func UnmarshalStream[T Decoder[T]](r io.Reader, buf []byte) (T, []byte, error) {
 	var s scan.Stream
 	s.Reset(r, buf)
 	var zero T
-	v, _, err := zero.DecodeStreamFrom(&s, 0)
+	v, err := zero.DecodeStreamFrom(&s)
 	return v, s.Bytes(), err
 }
 
@@ -123,47 +129,46 @@ func UnmarshalStreamResponse[T Decoder[T]](resp *http.Response) (T, []byte, erro
 func UnmarshalSliceStream[T Decoder[T]](r io.Reader, buf []byte) ([]T, []byte, error) {
 	var s scan.Stream
 	s.Reset(r, buf)
-	i, err := s.ArrayOpen(0)
-	if err != nil {
+	if err := s.ArrayOpen(); err != nil {
 		return nil, s.Bytes(), err
 	}
-	i, err = s.SkipSpace(i)
-	if err != nil {
+	if err := s.SkipSpace(); err != nil {
 		return nil, s.Bytes(), err
 	}
-	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
+	if s.Pos >= len(s.Bytes()) {
+		if err := s.ReadMore(s.Pos); err != nil {
 			return nil, s.Bytes(), err
 		}
-		i = 0
+		s.Pos = 0
 	}
 	var result []T
-	if s.Bytes()[i] == ']' {
+	if s.Bytes()[s.Pos] == ']' {
+		s.Pos++
 		return result, s.Bytes(), nil
 	}
 	var zero T
 	for {
-		v, j, err := zero.DecodeStreamFrom(&s, i)
+		v, err := zero.DecodeStreamFrom(&s)
 		if err != nil {
 			return nil, s.Bytes(), err
 		}
 		result = append(result, v)
-		i, err = s.SkipSpace(j)
-		if err != nil {
+		if err := s.SkipSpace(); err != nil {
 			return nil, s.Bytes(), err
 		}
-		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
+		if s.Pos >= len(s.Bytes()) {
+			if err := s.ReadMore(s.Pos); err != nil {
 				return nil, s.Bytes(), err
 			}
-			i = 0
+			s.Pos = 0
 		}
-		c := s.Bytes()[i]
+		c := s.Bytes()[s.Pos]
 		if c == ',' {
-			i++
+			s.Pos++
 			continue
 		}
 		if c == ']' {
+			s.Pos++
 			return result, s.Bytes(), nil
 		}
 		return nil, s.Bytes(), scan.ErrBadArray

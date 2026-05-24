@@ -443,7 +443,7 @@ func TestStdlibVsGgen_MapReplaceDivergence(t *testing.T) {
 	// so the pre-pop state is dropped on reassignment regardless of
 	// whether the caller used decode.Unmarshal or Node.DecodeFrom.
 	ggGot := Node{ID: 1, Name: "n", Props: map[string]string{"old": "kept"}}
-	ggGot, _, err := ggGot.DecodeFrom(in, 0)
+	ggGot, _, err := ggGot.DecodeFrom(in)
 	if err != nil {
 		t.Fatalf("ggen: %v", err)
 	}

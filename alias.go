@@ -48,17 +48,17 @@ func renderAliasStreamDecode(b *bytes.Buffer, s StructInfo) {
 	b.WriteString("var err error\n_ = err\n")
 	switch s.AliasKind {
 	case KindString:
-		fmt.Fprintf(b, "var v string\nv, i, err = s.String(i)\nif err != nil { return result, i, err }\nresult = %s(v)\n", s.Name)
+		fmt.Fprintf(b, "var v string\nv, err = s.String()\nif err != nil { return result, err }\nresult = %s(v)\n", s.Name)
 	case KindBool:
-		fmt.Fprintf(b, "var v bool\nv, i, err = s.Bool(i)\nif err != nil { return result, i, err }\nresult = %s(v)\n", s.Name)
+		fmt.Fprintf(b, "var v bool\nv, err = s.Bool()\nif err != nil { return result, err }\nresult = %s(v)\n", s.Name)
 	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
-		fmt.Fprintf(b, "var v int64\nv, i, err = s.Int64(i)\nif err != nil { return result, i, err }\nresult = %s(v)\n", s.Name)
+		fmt.Fprintf(b, "var v int64\nv, err = s.Int64()\nif err != nil { return result, err }\nresult = %s(v)\n", s.Name)
 	case KindUint, KindUint8, KindUint16, KindUint32, KindUint64:
-		fmt.Fprintf(b, "var v uint64\nv, i, err = s.Uint64(i)\nif err != nil { return result, i, err }\nresult = %s(v)\n", s.Name)
+		fmt.Fprintf(b, "var v uint64\nv, err = s.Uint64()\nif err != nil { return result, err }\nresult = %s(v)\n", s.Name)
 	case KindFloat32, KindFloat64:
-		fmt.Fprintf(b, "var v float64\nv, i, err = s.Float64(i)\nif err != nil { return result, i, err }\nresult = %s(v)\n", s.Name)
+		fmt.Fprintf(b, "var v float64\nv, err = s.Float64()\nif err != nil { return result, err }\nresult = %s(v)\n", s.Name)
 	}
-	b.WriteString("return result, i, nil\n")
+	b.WriteString("return result, nil\n")
 }
 
 // renderAliasSize returns an upper-bound JSONSize body for the alias.
@@ -137,30 +137,31 @@ func renderAliasStructDecode(b *bytes.Buffer, s StructInfo, stream bool) {
 	switch {
 	case s.AliasIface.ByteDecoder && !stream:
 		fmt.Fprintf(b, `var u %[1]s
-v, k, err := u.DecodeFrom(data, i)
+v, _n, err := u.DecodeFrom(data[i:])
+i += _n
 if err != nil { return result, i, err }
 result = %[2]s(v)
-return result, k, nil
+return result, i, nil
 `, s.AliasUnderlying, s.Name)
 	case s.AliasIface.StreamDecoder && stream:
 		fmt.Fprintf(b, `var u %[1]s
-v, k, err := u.DecodeStreamFrom(s, i)
-if err != nil { return result, i, err }
+v, err := u.DecodeStreamFrom(s)
+if err != nil { return result, err }
 result = %[2]s(v)
-return result, k, nil
+return result, nil
 `, s.AliasUnderlying, s.Name)
 	case s.AliasIface.JSONUnmarshaler:
 		if stream {
-			fmt.Fprintf(b, `start := i
+			fmt.Fprintf(b, `start := s.Pos
 prevPin := s.Shift
-	s.Shift = false
-k, err := s.SkipValue(start)
+s.Shift = false
+err := s.SkipValue()
 s.Shift = prevPin
-if err != nil { return result, i, err }
+if err != nil { return result, err }
 var u %[1]s
-if err := u.UnmarshalJSON(s.Bytes()[start:k]); err != nil { return result, i, err }
+if err := u.UnmarshalJSON(s.Bytes()[start:s.Pos]); err != nil { return result, err }
 result = %[2]s(u)
-return result, k, nil
+return result, nil
 `, s.AliasUnderlying, s.Name)
 		} else {
 			fmt.Fprintf(b, `start := i
@@ -173,20 +174,30 @@ return result, k, nil
 `, s.AliasUnderlying, s.Name)
 		}
 	case s.AliasIface.TextUnmarshaler:
-		scanCall := "scan.String(data, i)"
 		if stream {
-			scanCall = "s.String(i)"
-		}
-		fmt.Fprintf(b, `ts, tj, err := %[1]s
+			fmt.Fprintf(b, `ts, err := s.String()
+if err != nil { return result, err }
+var u %[1]s
+if err := u.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts))); err != nil { return result, err }
+result = %[2]s(u)
+return result, nil
+`, s.AliasUnderlying, s.Name)
+		} else {
+			fmt.Fprintf(b, `ts, tj, err := scan.String(data, i)
 if err != nil { return result, i, err }
-var u %[2]s
+var u %[1]s
 if err := u.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts))); err != nil { return result, i, err }
-result = %[3]s(u)
+result = %[2]s(u)
 return result, tj, nil
-`, scanCall, s.AliasUnderlying, s.Name)
+`, s.AliasUnderlying, s.Name)
+		}
 	default:
 		// extractAlias should have rejected this case via aliasCanDelegate.
-		b.WriteString("// no decode path — ggen could not find a Marshal/Unmarshal pair\nreturn result, i, nil\n")
+		if stream {
+			b.WriteString("// no decode path — ggen could not find a Marshal/Unmarshal pair\nreturn result, nil\n")
+		} else {
+			b.WriteString("// no decode path — ggen could not find a Marshal/Unmarshal pair\nreturn result, i, nil\n")
+		}
 	}
 }
 
@@ -245,35 +256,45 @@ func renderAliasContainerDecode(b *bytes.Buffer, s StructInfo, stream bool) {
 	}
 	f := s.AliasField
 	f.GoType = s.Name
+	// Stream-path cursor is s.Pos (no separate `i` local); bytes-path uses
+	// the function-arg `i`.
+	posVar := "i"
+	if stream {
+		posVar = "s.Pos"
+	}
 	switch s.AliasKind {
 	case KindSlice:
 		if stream {
-			renderStreamSlice(b, f, "result", "i")
+			renderStreamSlice(b, f, "result", posVar)
 		} else {
-			renderSlice(b, f, "result", "i")
+			renderSlice(b, f, "result", posVar)
 		}
 	case KindArray:
 		// emit{Byte,Stream}SliceRead handle both KindSlice and
 		// KindArray internally via f.Kind / f.ArrayLen.
 		if stream {
-			emitStreamSliceRead(b, f, "result", "i", 0)
+			emitStreamSliceRead(b, f, "result", posVar, 0)
 		} else {
-			emitByteArrayRead(b, f, "result", "i", 0)
+			emitByteArrayRead(b, f, "result", posVar, 0)
 		}
 	case KindMap:
 		if stream {
-			renderStreamMap(b, f, "result", "i")
+			renderStreamMap(b, f, "result", posVar)
 		} else {
-			renderMap(b, f, "result", "i")
+			renderMap(b, f, "result", posVar)
 		}
 	case KindBytes:
 		if stream {
-			renderStreamBytes(b, f, "result", "i")
+			renderStreamBytes(b, f, "result", posVar)
 		} else {
-			renderBytes(b, f, "result", "i")
+			renderBytes(b, f, "result", posVar)
 		}
 	}
-	b.WriteString("return result, i, nil\n")
+	if stream {
+		b.WriteString("return result, nil\n")
+	} else {
+		b.WriteString("return result, i, nil\n")
+	}
 }
 
 // renderAliasContainerAppendJSON emits the encode body for slice/map/

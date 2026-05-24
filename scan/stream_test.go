@@ -34,7 +34,7 @@ func readStreamAny(t *testing.T, in string) any {
 	t.Helper()
 	var s Stream
 	s.Reset(&chunkedReader{data: []byte(in)}, nil)
-	v, _, err := s.Any(0)
+	v, err := s.Any()
 	if err != nil {
 		t.Fatalf("Stream.Any: %v", err)
 	}
@@ -67,7 +67,7 @@ func TestStream_StringChunked(t *testing.T) {
 			}
 			var s Stream
 			s.Reset(&chunkedReader{data: []byte(tc.in)}, nil)
-			got, _, err := s.String(0)
+			got, err := s.String()
 			if err != nil {
 				t.Fatalf("Stream.String: %v", err)
 			}
@@ -87,7 +87,7 @@ func TestStream_NumberChunked(t *testing.T) {
 			}
 			var s Stream
 			s.Reset(&chunkedReader{data: []byte(in)}, nil)
-			got, _, err := s.Float64(0)
+			got, err := s.Float64()
 			if err != nil {
 				t.Fatalf("Stream.Float64: %v", err)
 			}
@@ -105,7 +105,7 @@ func TestStream_HintEquivalence(t *testing.T) {
 	for _, hint := range []int{0, 1, 4, 16, 1024} {
 		var s Stream
 		s.Reset(bytes.NewReader(in), make([]byte, 0, hint))
-		got, _, err := s.Any(0)
+		got, err := s.Any()
 		if err != nil {
 			t.Fatalf("hint=%d: %v", hint, err)
 		}
@@ -138,7 +138,7 @@ func TestStream_TruncatedInput(t *testing.T) {
 					t.Errorf("panicked: %v", r)
 				}
 			}()
-			_, _, err := s.Any(0)
+			_, err := s.Any()
 			if err == nil {
 				t.Error("expected error on truncated input")
 			}

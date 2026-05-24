@@ -14,7 +14,8 @@ import (
 	"github.com/sirkostya009/ggen/scan"
 )
 
-func (result External2) DecodeFrom(data []byte, i int) (External2, int, error) {
+func (result External2) DecodeFrom(data []byte) (External2, int, error) {
+	i := 0
 	var err error
 	_ = err
 	seenKey := false
@@ -186,106 +187,109 @@ func (result External2) DecodeFrom(data []byte, i int) (External2, int, error) {
 	}
 }
 
-func (result External2) DecodeStreamFrom(s *scan.Stream, i int) (External2, int, error) {
+func (result External2) DecodeStreamFrom(s *scan.Stream) (External2, error) {
 	seenKey := false
 	seenValue := false
-	i, err := s.ObjectOpen(i)
+	err := s.ObjectOpen()
 	if err != nil {
-		return result, i, err
+		return result, err
 	}
-	i, err = s.SkipSpace(i)
+	err = s.SkipSpace()
 	if err != nil {
-		return result, i, err
+		return result, err
 	}
-	if i >= len(s.Bytes()) {
-		if err = s.ReadMore(i); err != nil {
-			return result, i, err
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, err
 		}
-		i = 0
+		s.Pos = 0
 	}
-	if s.Bytes()[i] == '}' {
+	if s.Bytes()[s.Pos] == '}' {
 		if !seenKey {
-			return result, i, &validation.RequiredError{Field: "key"}
+			return result, &validation.RequiredError{Field: "key"}
 		}
-		return result, i + 1, nil
+		s.Pos++
+		return result, nil
 	}
 	for {
 		var key string
-		key, i, err = s.KeyView(i)
+		key, err = s.KeyView()
 		if err != nil {
-			return result, i, err
+			return result, err
 		}
 		switch len(key) {
 		case 3:
 			if key == "key" {
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenKey {
-					return result, i, &validation.DuplicateKeyError{Field: "key"}
+					return result, &validation.DuplicateKeyError{Field: "key"}
 				}
 				seenKey = true
-				result.Key, i, err = s.String(i)
+				result.Key, err = s.String()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if len(result.Key) < 1 {
-					return result, i, &validation.MinLenError{Field: "key", Limit: 1, Got: len(result.Key)}
+					return result, &validation.MinLenError{Field: "key", Limit: 1, Got: len(result.Key)}
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		case 5:
 			if key == "value" {
-				i, err = s.ConsumeColon(i)
+				err = s.ConsumeColon()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				if seenValue {
-					return result, i, &validation.DuplicateKeyError{Field: "value"}
+					return result, &validation.DuplicateKeyError{Field: "value"}
 				}
 				seenValue = true
 				var iv int64
-				iv, i, err = s.Int64(i)
+				iv, err = s.Int64()
 				if err != nil {
-					return result, i, err
+					return result, err
 				}
 				result.Value = int(iv)
 				if result.Value < 0 {
-					return result, i, &validation.GTEError{Field: "value", Limit: 0, Value: result.Value}
+					return result, &validation.GTEError{Field: "value", Limit: 0, Value: result.Value}
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: strings.Clone(key)}
+			return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
 		}
-		i, err = s.SkipSpace(i)
+		err = s.SkipSpace()
 		if err != nil {
-			return result, i, err
+			return result, err
 		}
-		if i >= len(s.Bytes()) {
-			if err = s.ReadMore(i); err != nil {
-				return result, i, err
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, err
 			}
-			i = 0
+			s.Pos = 0
 		}
-		c := s.Bytes()[i]
+		c := s.Bytes()[s.Pos]
 		if c == ',' {
-			i, err = s.SkipSpace(i + 1)
+			s.Pos++
+			err = s.SkipSpace()
 			if err != nil {
-				return result, i, err
+				return result, err
 			}
 			continue
 		}
 		if c == '}' {
 			if !seenKey {
-				return result, i, &validation.RequiredError{Field: "key"}
+				return result, &validation.RequiredError{Field: "key"}
 			}
-			return result, i + 1, nil
+			s.Pos++
+			return result, nil
 		}
-		return result, i, scan.ErrBadObject
+		return result, scan.ErrBadObject
 	}
 }
 

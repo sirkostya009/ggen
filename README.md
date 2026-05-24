@@ -568,8 +568,8 @@ providing custom buffers to Stream instance.
 For every annotated struct `T`:
 
 ```go
-func (T) DecodeFrom(data []byte, i int) (T, int, error)
-func (T) DecodeStreamFrom(s *scan.Stream, i int) (T, int, error)
+func (T) DecodeFrom(data []byte) (T, int, error)      // returns bytes consumed
+func (T) DecodeStreamFrom(s *scan.Stream) (T, error)  // Stream owns cursor via s.Pos
 func (T) JSONSize() int
 func (T) AppendJSON(dst []byte) ([]byte, error)
 ```
