@@ -21,6 +21,8 @@
 
 package integrationtests
 
+//go:generate ../ggen $GOFILE
+
 import (
 	"bytes"
 	"encoding/json"

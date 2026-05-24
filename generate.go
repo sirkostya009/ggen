@@ -103,7 +103,7 @@ func generateTo(w io.Writer, pkg string, structs []StructInfo) error {
 		buf.Reset()
 	}
 
-	stdlib, third := collectImports(structs)
+	stdlib, third := collectImports(structs, bodies)
 
 	// format.Source needs the whole file in one []byte. Build a single
 	// buffer, format it, then write the formatted result to w. Pre-grow
@@ -192,20 +192,13 @@ func renderStructMethods(buf *bytes.Buffer, s StructInfo) {
 // underlyings, custom-func packages) — no body-scan required, so the
 // prelude can be assembled before tmpl.Execute and the body can be
 // appended in place.
-func collectImports(structs []StructInfo) ([]string, []string) {
+func collectImports(structs []StructInfo, bodies [][]byte) ([]string, []string) {
 	need := map[string]struct{}{
 		// scan + encode are emitted by every generated method. They're
 		// always referenced: scan.X (or s.X for stream) in DecodeFrom,
 		// encode.AppendStringNoHTML / encode.AppendAny in AppendJSON.
 		"github.com/sirkostya009/ggen/scan":   {},
 		"github.com/sirkostya009/ggen/encode": {},
-		// strconv: every primitive marshal uses strconv.AppendBool/
-		// AppendInt/AppendUint/AppendFloat. Even a "string only" struct
-		// hits strconv via AppendString helpers internally? No — but
-		// the JSONSize / AppendJSON code path always loads strconv for
-		// `,"":` length and primitive append calls; safer to always
-		// include. format.Source would strip if unused, but we don't
-		// run it for free — keep precise.
 	}
 	add := func(p string) {
 		if p != "" {
@@ -241,6 +234,23 @@ func collectImports(structs []StructInfo) ([]string, []string) {
 		}
 		if s.MultiErr {
 			anyValidation = true
+		}
+		// Non-alias structs emit validation references through paths that
+		// don't go through per-field validation rules:
+		//   - !AllowDups  → validation.DuplicateKeyError on any non-inline
+		//     field (every struct has at least one).
+		//   - !IgnoreUnknown AND no inline catch-all → validation.UnknownKeyError.
+		// Package-mode generation almost always had some other struct with
+		// an explicit rule that pulled in the import; per-file mode needs
+		// the path-aware tracking here.
+		if !s.IsAlias {
+			inline := s.InlineField().Inline
+			if !s.AllowDups {
+				anyValidation = true
+			}
+			if !s.IgnoreUnknown && !inline {
+				anyValidation = true
+			}
 		}
 		// Struct alias delegating to a foreign-package underlying
 		// (e.g. `type Local uuid.UUID`) needs that package's import.
@@ -281,23 +291,16 @@ func collectImports(structs []StructInfo) ([]string, []string) {
 	if anyValidation || anyRequired {
 		add("github.com/sirkostya009/ggen/decode/validation")
 	}
-	// strconv: needed for every primitive append on encode, every
-	// strconv.Parse* on string-tag decode. Treat as always-on since
-	// every realistic struct has at least one numeric or bool field
-	// at AppendJSON time even if no decode-side fields use it. Strictly
-	// precise checks would walk per-kind; the marginal benefit (skipping
-	// strconv for pure-string structs) isn't worth the complexity.
-	add("strconv")
-	// math: the inline signed-int scanner emits math.MinInt64 in the
-	// overflow-handling branch. Always-on for the same reason as strconv —
-	// any realistic struct has at least one int field.
-	add("math")
-	// unsafe: every inline string scan uses unsafe.String + unsafe.SliceData.
-	// Any string field/key triggers it. Also used by big.Int/Float/Rat
-	// SetString paths.
-	if anyString {
-		add("unsafe")
-	}
+	_ = anyString // body-scan picks up unsafe usage too — keep the flag for any future feature gates.
+	// Stdlib-helper imports are emission-driven, not feature-driven:
+	// the precise per-kind walk would have to climb arbitrarily-nested
+	// container types ([][]…[]string, slice of map with string values,
+	// etc.) to know whether the generated body references strconv /
+	// math / unsafe / strings / fmt / utf8 / bytes / time. Scan the
+	// rendered bodies for the import-qualified token instead — one
+	// pass, generated code has no comments or string-literal noise
+	// that would false-positive, and the result is exact.
+	scanBodiesForStdImports(bodies, add)
 	out := make([]string, 0, len(need))
 	third := make([]string, 0, len(need))
 	for p := range need {
@@ -310,6 +313,39 @@ func collectImports(structs []StructInfo) ([]string, []string) {
 	slices.Sort(out)
 	slices.Sort(third)
 	return out, third
+}
+
+// scanBodiesForStdImports inspects the rendered per-struct bodies for
+// stdlib-qualified token prefixes and adds the matching import via add.
+// Tokens are unique enough in generated output (no comments, no
+// non-trivial string literals that could embed them) that a substring
+// match is exact. Each token is removed from the search set after the
+// first match so the worst case is O(bodies * |table|) — small constant.
+func scanBodiesForStdImports(bodies [][]byte, add func(string)) {
+	table := []struct {
+		token []byte
+		path  string
+	}{
+		{[]byte("strconv."), "strconv"},
+		{[]byte("math."), "math"},
+		{[]byte("unsafe."), "unsafe"},
+		{[]byte("strings."), "strings"},
+		{[]byte("utf8."), "unicode/utf8"},
+		{[]byte("bytes."), "bytes"},
+		{[]byte("fmt."), "fmt"},
+		{[]byte("time."), "time"},
+	}
+	for _, body := range bodies {
+		for i := range table {
+			if table[i].path == "" {
+				continue
+			}
+			if bytes.Contains(body, table[i].token) {
+				add(table[i].path)
+				table[i].path = ""
+			}
+		}
+	}
 }
 
 // collectFieldImports adds per-field imports. Flags get flipped for
@@ -419,7 +455,15 @@ func collectFieldImports(f FieldInfo, add func(string), anyString, anyValidation
 	case KindBigInt, KindBigFloat, KindBigRat:
 		*anyString = true
 	case KindStruct:
-		crossPkgStruct(f.GoType, f.Iface)
+		// For *T fields, f.GoType is "*T" — isGenerated() inside
+		// crossPkgStruct only matches bare names. Use PointeeType when
+		// the field is a pointer so the cross-file struct-by-name check
+		// finds an Address seeded by single-file mode.
+		typ := f.GoType
+		if f.Pointer {
+			typ = f.PointeeType
+		}
+		crossPkgStruct(typ, f.Iface)
 	case KindSlice, KindArray:
 		// Slice / array elements may themselves be cross-pkg structs
 		// (json.Marshal / json.Unmarshal fallback in

@@ -2,6 +2,8 @@
 
 package integrationtests
 
+//go:generate ../ggen $GOFILE
+
 import (
 	jsonv1 "encoding/json"
 	jsonv2 "encoding/json/v2"

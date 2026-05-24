@@ -310,6 +310,16 @@ func parseAnnotation(groups ...*ast.CommentGroup) (annotationFlags, bool) {
 // resolve builds StructInfo for the requested structs plus any referenced
 // struct types reachable from them (BFS).
 func (s *structSet) resolve(wanted []string) ([]StructInfo, error) {
+	return s.resolveFiltered(wanted, nil)
+}
+
+// resolveFiltered walks wanted + transitive struct references, but only
+// expands transitive deps whose names pass allowExpand. A nil predicate
+// preserves the legacy behavior (expand everything) used by package-mode
+// generation. Single-file mode passes inFile so sibling-declared deps
+// stay out of this file's output — their own generation pass owns them.
+// The roots in `wanted` are always emitted regardless of allowExpand.
+func (s *structSet) resolveFiltered(wanted []string, allowExpand func(string) bool) ([]StructInfo, error) {
 	gen := make(map[string]struct{}, len(wanted))
 	queue := slices.Clone(wanted)
 	var generated []string
@@ -327,9 +337,13 @@ func (s *structSet) resolve(wanted []string) ([]StructInfo, error) {
 					continue
 				}
 				if ref := referencedStructName(f.Type, s.structs); ref != "" {
-					if _, seen := gen[ref]; !seen {
-						queue = append(queue, ref)
+					if _, seen := gen[ref]; seen {
+						continue
 					}
+					if allowExpand != nil && !allowExpand(ref) {
+						continue
+					}
+					queue = append(queue, ref)
 				}
 			}
 			continue
@@ -386,9 +400,18 @@ func (s *structSet) resolve(wanted []string) ([]StructInfo, error) {
 // Tries the packages-aware loader first (with type info); falls back to
 // AST-only when the file's directory isn't a fully resolvable Go package
 // (e.g., temp files in tests).
-func parseFile(filename string, wanted []string) ([]StructInfo, string, error) {
+//
+// The third return value (siblings) carries every annotated struct/alias
+// name across the WHOLE package — even those declared in other files.
+// Callers in single-file mode use this to seed generatedTypes so a
+// cross-file struct reference routes to a direct DecodeFrom call instead
+// of falling back to encoding/json on the first run (chicken-and-egg
+// before sibling _ggen files exist on disk). Nil when the loader
+// degraded to AST-only — siblings are unknown in that mode.
+func parseFile(filename string, wanted []string) ([]StructInfo, string, map[string]struct{}, error) {
 	dir := filepath.Dir(filename)
 	set, err := loadDirWithTypes(dir)
+	degraded := false
 	// Degrade to AST-only when packages.Load failed OR succeeded but came
 	// back empty (typical for orphan files outside a Go module — temp
 	// dirs in tests, scratch files, etc.). Static interface detection is
@@ -396,8 +419,9 @@ func parseFile(filename string, wanted []string) ([]StructInfo, string, error) {
 	if err != nil || (len(set.structs) == 0 && len(set.aliases) == 0) {
 		set, err = loadStructs([]string{filename})
 		if err != nil {
-			return nil, "", err
+			return nil, "", nil, err
 		}
+		degraded = true
 	}
 	// loadDirWithTypes loads the whole package — single-file mode must
 	// only emit code for types declared in `filename`, not every annotated
@@ -436,25 +460,36 @@ func parseFile(filename string, wanted []string) ([]StructInfo, string, error) {
 			// Note: line with the explicit-name escape hatch. No source
 			// position — this is a file-level error, not tied to any
 			// particular line.
-			return nil, set.pkgName, &richError{
+			return nil, set.pkgName, nil, &richError{
 				Msg:      fmt.Sprintf("%s: no //ggen:generate-annotated struct found in file", relPath(filename)),
 				BotHint:  "missing //ggen:generate directive",
 				UserHint: fmt.Sprintf("Add `//ggen:generate` above each struct you want generated, or pass struct names explicitly: `ggen %s Name1 Name2 ...`.", filepath.Base(filename)),
 			}
 		}
 	}
-	structs, err := set.resolve(wanted)
+	// Gate transitive expansion to types declared in `filename`. Sibling-
+	// declared structs (incl. transitively-referenced ones) get handled by
+	// their own file's generation pass — emitting them here too would
+	// produce duplicate method declarations across the package.
+	structs, err := set.resolveFiltered(wanted, inFile)
 	if err != nil {
 		// Position-carrying errors already include the filename in their
 		// `file:line:col:` prefix; double-prefixing would render as
 		// `temp.go: temp.go:5:2: msg`. Pass them through untouched and
 		// only prefix bare errors that lack source location info.
 		if _, ok := errors.AsType[*richError](err); ok {
-			return nil, "", err
+			return nil, "", nil, err
 		}
-		return nil, "", fmt.Errorf("%s: %w", filename, err)
+		return nil, "", nil, fmt.Errorf("%s: %w", filename, err)
 	}
-	return structs, set.pkgName, nil
+	var siblings map[string]struct{}
+	if !degraded {
+		siblings = make(map[string]struct{}, len(set.annotations))
+		for n := range set.annotations {
+			siblings[n] = struct{}{}
+		}
+	}
+	return structs, set.pkgName, siblings, nil
 }
 
 // parsePackage loads every eligible .go file in dir and generates only for

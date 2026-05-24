@@ -2,6 +2,8 @@
 
 package integrationtests
 
+//go:generate ../ggen $GOFILE
+
 import (
 	"bytes"
 	"errors"

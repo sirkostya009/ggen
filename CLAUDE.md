@@ -1154,10 +1154,18 @@ Root module (`./`):
 
 - `shared_test.go` — shared annotated structs (Address, Node, …) used
   across the feature tests.
-- `integrationtests_ggen_test.go` +
-  `integrationtests_goexperiment_jsonv2_ggen_test.go` — generated
-  methods for every annotated struct in the module; the second file
-  exists because some test structs sit behind a build tag.
+- `<file>_ggen_test.go` — generated methods, one file per annotated
+  source. Each annotated test file carries
+  `//go:generate ../ggen $GOFILE` and produces a sibling
+  `<file>_ggen_test.go` next to it. Build tags on the source
+  propagate to the generated file. To regenerate after editing tags
+  or annotations: `(cd integrationtests && go generate ./...)`.
+  Cross-file struct references (e.g. `pointer_test.go` field of
+  type `Address` declared in `shared_test.go`) work on first run
+  because single-file mode seeds the generator's known-types set
+  with every annotated name in the package, so the codegen emits
+  a direct `Address{}.DecodeFrom(...)` call rather than the
+  encoding/json fallback.
 - `payloads_test.go` — `complexPayload` + `complexValue` (used by
   roundtrip / stdcompat tests) and `megaPayload` / `megaValue` (1 MiB
   generated Node tree, fixed seed 1; used by `stdcompat_test.go` to
@@ -1338,14 +1346,24 @@ agents share the host, and match the path the test harness expects.
 
 ```sh
 go build -o ggen .
-./ggen ./...
+./ggen . ./bench ./integrationtests/thirdparty2
 # easyjson for bench:
 easyjson bench/types.go
+# integrationtests is wired with //go:generate directives; from inside
+# the sub-module, prefer the standard go-tooling entry point:
+(cd integrationtests && GOEXPERIMENT=jsonv2 go generate ./...)
 ```
 
 The walk crosses module boundaries — `./...` from the root visits
 `bench/` and `integrationtests/` even though they are separate
 sub-modules. ggen reads source files, not module manifests.
+
+In `integrationtests/`, each annotated source file carries its own
+`//go:generate ../ggen $GOFILE` directive and emits a sibling
+`<file>_ggen_test.go`. Build tags on the source propagate to the
+generated file. Files behind opt-in tags (e.g.
+`//go:build goexperiment.jsonv2 && ggen_brokencodegen`) are skipped by
+the default `go generate` invocation — pass `-tags=...` to opt in.
 
 `go install github.com/sirkostya009/ggen@latest` gives users the CLI binary.
 The subpackages (`decode`, `decode/validation`, `encode`, `scan`) are importable by

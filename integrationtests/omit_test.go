@@ -1,5 +1,7 @@
 package integrationtests
 
+//go:generate ../ggen $GOFILE
+
 import (
 	"strings"
 	"testing"

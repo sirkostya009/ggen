@@ -2,6 +2,8 @@
 
 package integrationtests
 
+//go:generate ../ggen $GOFILE
+
 // Coverage for the rich built-in type kinds: json.RawMessage / jsontext.Value
 // (passthrough), url.URL, math/big, and google/uuid. One annotated struct
 // hosts every kind so the generator's dispatch matrix is exercised end to end.

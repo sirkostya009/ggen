@@ -4,6 +4,8 @@
 
 package integrationtests
 
+//go:generate ../ggen $GOFILE
+
 //ggen:generate
 type Address struct {
 	Street  string `json:"street" ggen:"required,minlen=1,maxlen=200"`

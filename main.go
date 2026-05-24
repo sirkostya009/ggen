@@ -404,7 +404,7 @@ func slugifyTag(tag string) string {
 }
 
 func generateSingleFile(file string, wanted []string, outFlag, pkgFlag string) error {
-	structs, pkgName, err := parseFile(file, wanted)
+	structs, pkgName, siblings, err := parseFile(file, wanted)
 	if err != nil {
 		return err
 	}
@@ -424,6 +424,31 @@ func generateSingleFile(file string, wanted []string, outFlag, pkgFlag string) e
 			out = strings.TrimSuffix(file, ".go") + genSuffix
 		}
 	}
+	// Seed generatedTypes with every annotated struct in the package
+	// (incl. siblings declared in other files) so a cross-file struct
+	// reference routes to a direct DecodeFrom call rather than the
+	// encoding/json fallback on first run — before sibling _ggen files
+	// exist on disk. AliasKind seeding is local to the structs we're
+	// actually emitting: primitive-alias casting only matters when the
+	// alias's owning file is in the current generation pass.
+	genGlobalsMu.Lock()
+	defer genGlobalsMu.Unlock()
+	generatedTypes = make(map[string]struct{}, len(siblings)+len(structs))
+	generatedAliasKinds = make(map[string]TypeKind)
+	for n := range siblings {
+		generatedTypes[n] = struct{}{}
+	}
+	for _, s := range structs {
+		generatedTypes[s.Name] = struct{}{}
+		if s.IsAlias && kindPrimitiveName(s.AliasKind) != "" {
+			generatedAliasKinds[s.Name] = s.AliasKind
+		}
+	}
+	defer func() {
+		generatedTypes = nil
+		generatedAliasKinds = nil
+	}()
+
 	f, err := os.Create(out)
 	if err != nil {
 		return err

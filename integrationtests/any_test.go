@@ -1,5 +1,7 @@
 package integrationtests
 
+//go:generate ../ggen $GOFILE
+
 // Coverage for the bare `any` / `interface{}` field kind on annotated
 // structs — both stdlib-default float64 numbers and `usenumber` opt-in
 // (json.Number for exact-digit preservation).

@@ -2,6 +2,8 @@
 
 package integrationtests
 
+//go:generate ../ggen $GOFILE
+
 // Tighter wire-format assertions than the round-trip-via-any check in
 // stdcompat_test.go. These probe the marshalled bytes directly:
 //   - omitempty / omitzero must actually drop the key (not emit "k":null/0/[])

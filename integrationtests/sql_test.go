@@ -1,5 +1,7 @@
 package integrationtests
 
+//go:generate ../ggen $GOFILE
+
 // Coverage for the database/sql.Null* family. ggen emits inner-value-or-null
 // on the wire (the convention every driver expects); stdlib v1/v2 serialize
 // these as `{"Field":val,"Valid":true}` plain structs, so cross-compat lives

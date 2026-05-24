@@ -14,6 +14,8 @@
 
 package integrationtests
 
+//go:generate ../ggen $GOFILE
+
 import (
 	"encoding/json"
 	"encoding/json/jsontext"
