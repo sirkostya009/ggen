@@ -3,6 +3,7 @@
 package thirdparty2
 
 import (
+	"math"
 	"strconv"
 	"strings"
 	"unsafe"
@@ -41,11 +42,14 @@ func (result External2) DecodeFrom(data []byte, i int) (External2, int, error) {
 		}
 		{
 			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' {
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 				ke++
 			}
 			if ke >= len(data) {
 				return result, i, scan.ErrUnterminated
+			}
+			if data[ke] < 0x20 {
+				return result, i, scan.ErrBadString
 			}
 			if data[ke] == '"' {
 				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
@@ -79,11 +83,14 @@ func (result External2) DecodeFrom(data []byte, i int) (External2, int, error) {
 				}
 				{
 					ke := i + 1
-					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' {
+					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 						ke++
 					}
 					if ke >= len(data) {
 						return result, i, scan.ErrUnterminated
+					}
+					if data[ke] < 0x20 {
+						return result, i, scan.ErrBadString
 					}
 					if data[ke] == '"' {
 						result.Key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
@@ -116,9 +123,17 @@ func (result External2) DecodeFrom(data []byte, i int) (External2, int, error) {
 					if i >= len(data) || data[i] < '0' || data[i] > '9' {
 						return result, i, scan.ErrBadNumber
 					}
-					var n int64
+					limit := uint64(math.MaxInt64)
+					if neg {
+						limit = scan.SignedNeg
+					}
+					var u uint64
 					for i < len(data) && data[i] >= '0' && data[i] <= '9' {
-						n = n*10 + int64(data[i]-'0')
+						d := uint64(data[i] - '0')
+						if u > limit/10 || (u == limit/10 && d > limit%10) {
+							return result, i, scan.ErrNumberOverflow
+						}
+						u = u*10 + d
 						i++
 					}
 					if i < len(data) {
@@ -127,8 +142,15 @@ func (result External2) DecodeFrom(data []byte, i int) (External2, int, error) {
 							return result, i, scan.ErrBadNumber
 						}
 					}
+					var n int64
 					if neg {
-						n = -n
+						if u == scan.SignedNeg {
+							n = math.MinInt64
+						} else {
+							n = -int64(u)
+						}
+					} else {
+						n = int64(u)
 					}
 					result.Value = int(n)
 				}

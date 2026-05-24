@@ -490,3 +490,11 @@ func TestStdCompat_HTMLRawStruct(t *testing.T) {
 	// Default (literal <>&) is the jsonv2 wire shape; round-trips trivially.
 	crossCompat(t, HTMLRawStruct{Note: `<a href="x">tom & jerry</a>`})
 }
+
+func TestStdCompat_StringTagStruct(t *testing.T) {
+	crossCompat(t, StringTagStruct{
+		I8: -8, I16: 16, I32: -32, I64: 64,
+		U8: 8, U16: 16, U32: 32, U64: 64,
+		F32: 1.25, F64: 2.5, B: true,
+	})
+}

@@ -11,6 +11,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/sirkostya009/ggen/encode"
@@ -407,4 +409,215 @@ func randProps(r *rand.Rand, n int) map[string]string {
 		out[randString(r, 4+r.Intn(8))] = randString(r, 8+r.Intn(24))
 	}
 	return out
+}
+
+// --- Tiny (JWT-claim sized ~150 B) payload --------------------------------
+
+// Claim is the JWT-claim-sized struct used by the tiny-payload benchmarks.
+// Real-world API tokens and auth-probe responses live at this size; mega's
+// 1 MiB dominates per-call overhead too much to see it.
+//
+//ggen:generate
+type Claim struct {
+	Sub string `json:"sub" ggen:"required"`
+	Iss string `json:"iss" ggen:"required"`
+	Exp int64  `json:"exp" ggen:"gte=0"`
+	Iat int64  `json:"iat" ggen:"gte=0"`
+	Nbf int64  `json:"nbf,omitempty"`
+	Aud string `json:"aud,omitempty"`
+	Jti string `json:"jti"`
+}
+
+// EasyClaim mirrors Claim with easyjson-generated MarshalJSON/UnmarshalJSON.
+// Decoupled so sonic/jsonv2/stdlib measuring Claim don't accidentally pick
+// up easyjson methods via the json.Marshaler/Unmarshaler interface check.
+//
+//easyjson:json
+type EasyClaim struct {
+	Sub string `json:"sub"`
+	Iss string `json:"iss"`
+	Exp int64  `json:"exp"`
+	Iat int64  `json:"iat"`
+	Nbf int64  `json:"nbf,omitempty"`
+	Aud string `json:"aud,omitempty"`
+	Jti string `json:"jti"`
+}
+
+var (
+	TinyValue     Claim
+	EasyTinyValue EasyClaim
+	TinyPayload   []byte
+)
+
+// --- Validation-heavy payload ---------------------------------------------
+
+// ValidationHeavy carries enough rules that the per-field check cost
+// shows up against codecs that perform no validation. String length
+// rules are minrunes/maxrunes (full UTF-8 walk) rather than minlen/
+// maxlen (single len() call) so the per-string scan cost is meaningful.
+//
+//ggen:generate
+type ValidationHeavy struct {
+	Email    string  `json:"email" ggen:"required,email,maxrunes=128"`
+	Username string  `json:"username" ggen:"required,minrunes=3,maxrunes=32,alphanum,lower"`
+	Phone    string  `json:"phone" ggen:"minrunes=7,maxrunes=20,numeric"`
+	Age      int     `json:"age" ggen:"gte=0,lte=130"`
+	Score    float64 `json:"score" ggen:"gte=0,lte=100"`
+	Name     string  `json:"name" ggen:"required,minrunes=1,maxrunes=64"`
+	URL      string  `json:"url" ggen:"url"`
+	Country  string  `json:"country" ggen:"runes=2,upper"`
+	Lang     string  `json:"lang" ggen:"oneof=en|es|fr|de|uk"`
+	Role     string  `json:"role" ggen:"oneof=admin|user|guest"`
+}
+
+// NoValidationHeavy mirrors ValidationHeavy's wire shape but skips every
+// ggen validation rule (via `novalidate`). Lets the bench isolate the
+// pure decode cost from the per-rule check cost — ggen_novalidated row
+// vs ggen_validated row.
+//
+//ggen:generate novalidate
+type NoValidationHeavy struct {
+	Email    string  `json:"email"`
+	Username string  `json:"username"`
+	Phone    string  `json:"phone"`
+	Age      int     `json:"age"`
+	Score    float64 `json:"score"`
+	Name     string  `json:"name"`
+	URL      string  `json:"url"`
+	Country  string  `json:"country"`
+	Lang     string  `json:"lang"`
+	Role     string  `json:"role"`
+}
+
+// EasyValidationHeavy mirrors ValidationHeavy with easyjson-generated
+// methods. Separate so sonic/jsonv2 measuring ValidationHeavy don't
+// pick up easyjson via the json.Marshaler/Unmarshaler interface.
+//
+//easyjson:json
+type EasyValidationHeavy struct {
+	Email    string  `json:"email"`
+	Username string  `json:"username"`
+	Phone    string  `json:"phone"`
+	Age      int     `json:"age"`
+	Score    float64 `json:"score"`
+	Name     string  `json:"name"`
+	URL      string  `json:"url"`
+	Country  string  `json:"country"`
+	Lang     string  `json:"lang"`
+	Role     string  `json:"role"`
+}
+
+var ValidationHeavyPayload []byte
+
+// --- HTML-escape parity payload --------------------------------------------
+
+// HTMLEscape exercises the htmlescape opt-in path on the encoder. Pairs
+// with HTMLPlain (default literal) for the wire-shape parity benchmark.
+//
+//ggen:generate htmlescape
+type HTMLEscape struct {
+	Note string `json:"note"`
+}
+
+// HTMLPlain mirrors HTMLEscape without htmlescape — marshal output
+// matches jsonv2.
+//
+//ggen:generate
+type HTMLPlain struct {
+	Note string `json:"note"`
+}
+
+// EasyHTMLPlain mirrors HTMLPlain with easyjson-generated methods.
+// Same isolation rationale as EasyClaim.
+//
+//easyjson:json
+type EasyHTMLPlain struct {
+	Note string `json:"note"`
+}
+
+var (
+	HTMLEscapeValue    HTMLEscape
+	HTMLPlainValue     HTMLPlain
+	EasyHTMLPlainValue EasyHTMLPlain
+)
+
+// --- Deep-nested payload (50-level Node chain) ----------------------------
+
+var DeepNestedPayload []byte
+
+// --- Map-heavy payload (1K-entry string→string map) ----------------------
+
+// MapHeavy holds a single big string-keyed map. At 1K+ entries map
+// allocation, hash fill, and iteration dominate decode/encode — a
+// different bottleneck from mega's tree-walk cost.
+//
+//ggen:generate
+type MapHeavy struct {
+	Labels map[string]string `json:"labels"`
+}
+
+var MapHeavyPayload []byte
+
+func init() {
+	// Tiny / Claim.
+	now := time.Now().Unix()
+	TinyValue = Claim{
+		Sub: "user-12345",
+		Iss: "https://auth.example.com",
+		Exp: now + 3600,
+		Iat: now,
+		Aud: "api",
+		Jti: "abc123def456",
+	}
+	EasyTinyValue = EasyClaim{
+		Sub: TinyValue.Sub, Iss: TinyValue.Iss, Exp: TinyValue.Exp,
+		Iat: TinyValue.Iat, Aud: TinyValue.Aud, Jti: TinyValue.Jti,
+	}
+	var err error
+	TinyPayload, err = encode.Marshal(TinyValue)
+	if err != nil {
+		panic(err)
+	}
+
+	// Validation-heavy.
+	v := ValidationHeavy{
+		Email: "user@example.com", Username: "alice42", Phone: "1234567890",
+		Age: 30, Score: 99.5, Name: "Alice",
+		URL: "https://example.com", Country: "UA", Lang: "en", Role: "user",
+	}
+	ValidationHeavyPayload, err = encode.Marshal(v)
+	if err != nil {
+		panic(err)
+	}
+
+	// HTML-escape parity.
+	HTMLEscapeValue = HTMLEscape{Note: strings.Repeat("<a>&", 200)}
+	HTMLPlainValue = HTMLPlain{Note: strings.Repeat("<a>&", 200)}
+	EasyHTMLPlainValue = EasyHTMLPlain(HTMLPlainValue)
+
+	// Deep-nested 50-level chain.
+	var deep Node
+	deep.ID = 1
+	deep.Name = "leaf"
+	for i := 0; i < 50; i++ {
+		deep = Node{
+			ID:       int64(i + 1),
+			Name:     "level-" + strconv.Itoa(i),
+			Children: []Node{deep},
+		}
+	}
+	DeepNestedPayload, err = encode.Marshal(deep)
+	if err != nil {
+		panic(err)
+	}
+
+	// Map-heavy 1024-entry string map.
+	m := make(map[string]string, 1024)
+	for i := range 1024 {
+		m["key"+strconv.Itoa(i)] = "value" + strconv.Itoa(i)
+	}
+	MapHeavyPayload, err = encode.Marshal(MapHeavy{Labels: m})
+	if err != nil {
+		panic(err)
+	}
 }

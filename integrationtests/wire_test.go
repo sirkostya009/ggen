@@ -17,9 +17,11 @@ import (
 	"encoding/hex"
 	"encoding/json/jsontext"
 	jsonv2 "encoding/json/v2"
+	"math"
 	"net"
 	"net/netip"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -727,5 +729,147 @@ func timeFormatsAll() TimeFormatsStruct {
 		TimeStampNano:        TimeStampNano{StampNano: when},
 		TimeCustomTiny:       TimeCustomTiny{CustomTiny: when},
 		TimeCustomLong:       TimeCustomLong{CustomLong: when},
+	}
+}
+
+// --- Boundary edges --------------------------------------------------------
+
+// BoundaryStruct collects the edge cases that the stdlib v1/v2 specs
+// either explicitly reject or quietly do something with: NaN/Inf floats,
+// integer overflow, string content that's hostile to escape tables
+// (every short-escape + raw control char + lone surrogate).
+//
+//ggen:generate
+type BoundaryStruct struct {
+	F   float64 `json:"f"`
+	I   int64   `json:"i"`
+	Str string  `json:"str"`
+}
+
+// TestBoundary_FloatNaN: ggen's behavior on NaN marshal — stdlib v1+v2
+// both error. Either error or "null"-encoded NaN is acceptable; what we
+// check is "no silent success that produces an invalid JSON like `NaN`".
+func TestBoundary_FloatNaN_marshal(t *testing.T) {
+	in := BoundaryStruct{F: math.NaN()}
+	out, err := encode.Marshal(in)
+	if err == nil {
+		if bytes.Contains(out, []byte("NaN")) {
+			t.Errorf("NaN leaked to wire as bare literal: %s", out)
+		}
+	}
+}
+
+func TestBoundary_FloatInf_marshal(t *testing.T) {
+	for _, v := range []float64{math.Inf(1), math.Inf(-1)} {
+		in := BoundaryStruct{F: v}
+		out, err := encode.Marshal(in)
+		if err == nil {
+			if bytes.Contains(out, []byte("Inf")) || bytes.Contains(out, []byte("inf")) {
+				t.Errorf("Inf leaked to wire as bare literal: %s", out)
+			}
+		}
+	}
+}
+
+// TestBoundary_IntegerOverflow: a JSON number that exceeds int64 range
+// must surface an error, not silent truncation. 9999999999999999999 (19
+// nines) is above 2^63-1 ≈ 9.22e18.
+func TestBoundary_IntegerOverflow_unmarshal(t *testing.T) {
+	in := []byte(`{"i":9999999999999999999,"f":0,"str":""}`)
+	got, err := decode.Unmarshal[BoundaryStruct](in)
+	if err == nil {
+		// MaxInt64 = 9223372036854775807. Saturation/clamping at MaxInt64
+		// is acceptable; arbitrary truncation isn't.
+		if got.I < 0 {
+			t.Errorf("silent overflow to negative: I = %d", got.I)
+		}
+	}
+}
+
+// TestBoundary_FloatPrecision_unmarshal: 1e308 fits in float64; 1e309
+// overflows to +Inf. The decoder must distinguish and never panic.
+func TestBoundary_FloatPrecision_unmarshal(t *testing.T) {
+	ok := []byte(`{"f":1e308,"i":0,"str":""}`)
+	if got, err := decode.Unmarshal[BoundaryStruct](ok); err == nil {
+		if math.IsInf(got.F, 0) || math.IsNaN(got.F) {
+			t.Errorf("1e308 → %v, want finite", got.F)
+		}
+	}
+	overflow := []byte(`{"f":1e309,"i":0,"str":""}`)
+	_, err := decode.Unmarshal[BoundaryStruct](overflow)
+	_ = err // either error or +Inf is documented stdlib behavior
+}
+
+// TestBoundary_EveryEscapeAtOnce: a string with every short-escape char
+// hits the slow path on every byte. Round-trip must preserve content;
+// JSONSize must absorb the worst-case 2× expansion.
+func TestBoundary_EveryEscapeAtOnce(t *testing.T) {
+	str := "\b\f\n\r\t\"\\"
+	in := BoundaryStruct{Str: str}
+	out, err := encode.Marshal(in)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	got, err := decode.Unmarshal[BoundaryStruct](out)
+	if err != nil {
+		t.Fatalf("unmarshal: %v\nwire: %s", err, out)
+	}
+	if got.Str != str {
+		t.Errorf("escape roundtrip mismatch:\n got: %q\nwant: %q\nwire: %s", got.Str, str, out)
+	}
+	size := in.JSONSize()
+	got2, err := in.AppendJSON(make([]byte, 0, size))
+	if err != nil {
+		t.Fatalf("AppendJSON: %v", err)
+	}
+	if cap(got2) != size {
+		t.Errorf("realloc on every-escape input: JSONSize=%d cap=%d", size, cap(got2))
+	}
+}
+
+// TestBoundary_LoneSurrogate: \uD800 alone is invalid UTF-16. The decoder
+// must surface an error or substitute U+FFFD, never panic.
+func TestBoundary_LoneSurrogate_unmarshal(t *testing.T) {
+	in := []byte(`{"f":0,"i":0,"str":"\uD800"}`)
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("panic on lone surrogate: %v", r)
+		}
+	}()
+	_, _ = decode.Unmarshal[BoundaryStruct](in)
+}
+
+// TestBoundary_RawControlChar: a literal \x01 inside a JSON string is
+// invalid per RFC 8259 — the scanner must reject it as ErrBadString,
+// not silently include it. Sonic accepts; stdlib v1+v2 reject; ggen
+// follows stdlib.
+func TestBoundary_RawControlChar_unmarshal(t *testing.T) {
+	in := []byte("{\"f\":0,\"i\":0,\"str\":\"a\x01b\"}")
+	_, err := decode.Unmarshal[BoundaryStruct](in)
+	if err == nil {
+		t.Errorf("expected error on raw control char")
+	}
+}
+
+// TestJSONSize_PtrSliceStruct: cap-guard for []*T slab-allocated pointer
+// slices. Mix of nil + non-nil elements exercises both branches.
+func TestJSONSize_PtrSliceStruct_NoRealloc(t *testing.T) {
+	a := Address{Street: "Main 1", City: "Lviv", ZipCode: "79000"}
+	b := Address{Street: strings.Repeat("x", 200), City: strings.Repeat("y", 200), ZipCode: "00000"}
+	in := PtrSliceStruct{
+		Items: []*Address{&a, nil, &b},
+		Tuple: [3]*Address{&a, nil, &b},
+		Nodes: []*Node{{ID: 1, Name: strings.Repeat("z", 100)}, nil},
+	}
+	size := in.JSONSize()
+	got, err := in.AppendJSON(make([]byte, 0, size))
+	if err != nil {
+		t.Fatalf("AppendJSON: %v", err)
+	}
+	if cap(got) != size {
+		t.Errorf("realloc: JSONSize=%d cap=%d len=%d", size, cap(got), len(got))
+	}
+	if len(got) > size {
+		t.Errorf("undersized: len=%d > size=%d", len(got), size)
 	}
 }

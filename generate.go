@@ -291,6 +291,10 @@ func collectImports(structs []StructInfo) ([]string, []string) {
 	// precise checks would walk per-kind; the marginal benefit (skipping
 	// strconv for pure-string structs) isn't worth the complexity.
 	add("strconv")
+	// math: the inline signed-int scanner emits math.MinInt64 in the
+	// overflow-handling branch. Always-on for the same reason as strconv —
+	// any realistic struct has at least one int field.
+	add("math")
 	// unsafe: every inline string scan uses unsafe.String + unsafe.SliceData.
 	// Any string field/key triggers it. Also used by big.Int/Float/Rat
 	// SetString paths.
@@ -1162,19 +1166,26 @@ func renderAppendValue(b *bytes.Buffer, f FieldInfo, ref string) {
 	if f.String {
 		switch f.Kind {
 		case KindBool:
-			fmt.Fprintf(b, "if %s { dst = append(dst, '\"', 't', 'r', 'u', 'e', '\"') } else { dst = append(dst, '\"', 'f', 'a', 'l', 's', 'e', '\"') }\n", ref)
-			return
-		case KindInt:
+			// jsonv2 dropped `,string` for bool — wire shape stays bare
+			// `true`/`false`. Fall through to the default emit below for
+			// stdcompat with encoding/json/v2.
+		case KindInt, KindInt8, KindInt16, KindInt32:
 			fmt.Fprintf(b, "dst = append(dst, '\"')\ndst = strconv.AppendInt(dst, int64(%s), 10)\ndst = append(dst, '\"')\n", ref)
 			return
 		case KindInt64:
 			fmt.Fprintf(b, "dst = append(dst, '\"')\ndst = strconv.AppendInt(dst, %s, 10)\ndst = append(dst, '\"')\n", ref)
 			return
+		case KindUint, KindUint8, KindUint16, KindUint32:
+			fmt.Fprintf(b, "dst = append(dst, '\"')\ndst = strconv.AppendUint(dst, uint64(%s), 10)\ndst = append(dst, '\"')\n", ref)
+			return
 		case KindUint64:
 			fmt.Fprintf(b, "dst = append(dst, '\"')\ndst = strconv.AppendUint(dst, %s, 10)\ndst = append(dst, '\"')\n", ref)
 			return
+		case KindFloat32:
+			fmt.Fprintf(b, "dst = append(dst, '\"')\nif dst, err = encode.AppendFloat(dst, float64(%s), 32); err != nil { return dst, err }\ndst = append(dst, '\"')\n", ref)
+			return
 		case KindFloat64:
-			fmt.Fprintf(b, "dst = append(dst, '\"')\ndst = strconv.AppendFloat(dst, %s, 'g', -1, 64)\ndst = append(dst, '\"')\n", ref)
+			fmt.Fprintf(b, "dst = append(dst, '\"')\nif dst, err = encode.AppendFloat(dst, %s, 64); err != nil { return dst, err }\ndst = append(dst, '\"')\n", ref)
 			return
 		}
 		// unknown/invalid combo — fall through to default
@@ -1193,9 +1204,9 @@ func renderAppendValue(b *bytes.Buffer, f FieldInfo, ref string) {
 	case KindUint64:
 		fmt.Fprintf(b, "dst = strconv.AppendUint(dst, %s, 10)\n", ref)
 	case KindFloat32:
-		fmt.Fprintf(b, "dst = strconv.AppendFloat(dst, float64(%s), 'g', -1, 64)\n", ref)
+		fmt.Fprintf(b, "if dst, err = encode.AppendFloat(dst, float64(%s), 32); err != nil { return dst, err }\n", ref)
 	case KindFloat64:
-		fmt.Fprintf(b, "dst = strconv.AppendFloat(dst, %s, 'g', -1, 64)\n", ref)
+		fmt.Fprintf(b, "if dst, err = encode.AppendFloat(dst, %s, 64); err != nil { return dst, err }\n", ref)
 	case KindStruct:
 		if isGenerated(f.GoType) {
 			fmt.Fprintf(b, "if dst, err = %s.AppendJSON(dst); err != nil { return dst, err }\n", ref)
@@ -1593,10 +1604,23 @@ const (
 	sizeUint    = 20 // "18446744073709551615"
 	sizeFloat   = 24 // IEEE-754 shortest round-trip printing
 	sizeStrMult = 2  // 2× covers short escapes (\n, \", \\, …). Control
-	// chars expand to \uXXXX (6×) but are rare in real payloads; we
-	// accept the one-time realloc on pathological input.
-	sizeStrPad = 2 // surrounding quotes
+	// chars expand to \uXXXX (6×) but are rejected by the decoder (RFC 8259),
+	// so they can't survive a round-trip — the 2× bound is tight for legal
+	// JSON. Marshal of non-RFC-compliant user input still overshoots but
+	// users get the one-time realloc only on pathological input.
+	sizeStrMultHTML = 6 // htmlescape opt-in expands <, >, & to \uXXXX (6×).
+	sizeStrPad      = 2 // surrounding quotes
 )
+
+// strMult returns the per-byte string size multiplier for the given
+// HTML-escape mode. Used by every site that needs a string size budget
+// (top-level field, slice/array element, map value, etc.).
+func strMult(htmlEscape bool) int {
+	if htmlEscape {
+		return sizeStrMultHTML
+	}
+	return sizeStrMult
+}
 
 // sizeContrib returns (constN, runtimeCode) — the constant byte count
 // known at codegen time, and the runtime statements that compute the
@@ -1620,9 +1644,27 @@ func sizeContrib(f FieldInfo, ref string) (int, string) {
 		b.WriteString("}\n")
 		return 0, b.String()
 	}
+	// json:",string" wraps the value in two quote bytes the inner Kind
+	// budget doesn't account for. Add them here so every numeric width
+	// gets the right upper bound regardless of which Kind branch below
+	// runs. KindBool is excluded: jsonv2 emits bare bool even with
+	// `,string`, and ggen follows.
+	if f.String {
+		switch f.Kind {
+		case KindInt, KindInt8, KindInt16, KindInt32, KindInt64,
+			KindUint, KindUint8, KindUint16, KindUint32, KindUint64,
+			KindFloat32, KindFloat64:
+			n, code := sizeContribKind(f, ref)
+			return n + 2, code
+		}
+	}
+	return sizeContribKind(f, ref)
+}
+
+func sizeContribKind(f FieldInfo, ref string) (int, string) {
 	switch f.Kind {
 	case KindString:
-		return sizeStrPad, fmt.Sprintf("size += len(%s)*%d\n", ref, sizeStrMult)
+		return sizeStrPad, fmt.Sprintf("size += len(%s)*%d\n", ref, strMult(f.HTMLEscape))
 	case KindBool:
 		return sizeBool, ""
 	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
@@ -1721,7 +1763,7 @@ func sizeSliceContrib(f FieldInfo, ref string, depth int) (int, string) {
 	switch f.ElemKind {
 	case KindString:
 		fmt.Fprintf(b, "for %s := range %s { size += len(%s[%s])*%d + %d }\n",
-			ivar, ref, ref, ivar, sizeStrMult, sizeStrPad)
+			ivar, ref, ref, ivar, strMult(f.HTMLEscape), sizeStrPad)
 	case KindBool:
 		fmt.Fprintf(b, "size += len(%s) * %d\n", ref, sizeBool)
 	case KindInt, KindInt64, KindInt8, KindInt16, KindInt32:
@@ -1766,21 +1808,22 @@ func sizeMapContrib(f FieldInfo, ref string) (int, string) {
 	defer putSmall(b)
 	const perEntryFixed = 4
 
+	mult := strMult(f.HTMLEscape)
 	// Try to lift the value contribution out of the loop when it's a
 	// constant per-entry size — saves one map iteration over keys-only.
 	if v, ok := constSizePerEntry(f.ElemKind, f.Format); ok {
 		fmt.Fprintf(b, "size += len(%s) * %d\n", ref, perEntryFixed+v)
-		fmt.Fprintf(b, "for k := range %s { size += len(k) * %d }\n", ref, sizeStrMult)
+		fmt.Fprintf(b, "for k := range %s { size += len(k) * %d }\n", ref, mult)
 		return 2, b.String()
 	}
 
 	// Variable per-entry: one combined loop over k,v.
 	fmt.Fprintf(b, "size += len(%s) * %d\n", ref, perEntryFixed)
 	fmt.Fprintf(b, "for k, v := range %s {\n", ref)
-	fmt.Fprintf(b, "size += len(k) * %d\n", sizeStrMult)
+	fmt.Fprintf(b, "size += len(k) * %d\n", mult)
 	switch f.ElemKind {
 	case KindString:
-		fmt.Fprintf(b, "size += len(v)*%d + %d\n", sizeStrMult, sizeStrPad)
+		fmt.Fprintf(b, "size += len(v)*%d + %d\n", mult, sizeStrPad)
 	case KindStruct:
 		if isGenerated(f.ElemType) || f.ElemIface.JSONSize {
 			b.WriteString("size += v.JSONSize()\n")
@@ -1901,9 +1944,9 @@ func emitSliceElement(b *bytes.Buffer, f FieldInfo, vref string, depth int) {
 	case KindUint64:
 		fmt.Fprintf(b, "dst = strconv.AppendUint(dst, %s, 10)\n", vref)
 	case KindFloat32:
-		fmt.Fprintf(b, "dst = strconv.AppendFloat(dst, float64(%s), 'g', -1, 32)\n", vref)
+		fmt.Fprintf(b, "if dst, err = encode.AppendFloat(dst, float64(%s), 32); err != nil { return dst, err }\n", vref)
 	case KindFloat64:
-		fmt.Fprintf(b, "dst = strconv.AppendFloat(dst, %s, 'g', -1, 64)\n", vref)
+		fmt.Fprintf(b, "if dst, err = encode.AppendFloat(dst, %s, 64); err != nil { return dst, err }\n", vref)
 	case KindStruct:
 		if isGenerated(f.ElemType) {
 			fmt.Fprintf(b, "if dst, err = %s.AppendJSON(dst); err != nil { return dst, err }\n", vref)
@@ -1957,7 +2000,7 @@ dst = append(dst, ':')
 	case KindUint64:
 		b.WriteString("dst = strconv.AppendUint(dst, v, 10)\n")
 	case KindFloat64:
-		b.WriteString("dst = strconv.AppendFloat(dst, v, 'g', -1, 64)\n")
+		b.WriteString("if dst, err = encode.AppendFloat(dst, v, 64); err != nil { return dst, err }\n")
 	case KindStruct:
 		if isGenerated(f.ElemType) {
 			b.WriteString("if dst, err = v.AppendJSON(dst); err != nil { return dst, err }\n")
@@ -2133,7 +2176,9 @@ func zeroLit(elemType string, kind TypeKind) string {
 
 // inlineScanInt64 emits an inline signed-int scanner that assigns into dst
 // (via castFn if non-empty, e.g. "int") and advances posVar. Avoids the
-// scan.Int64 call for the hot int fields.
+// scan.Int64 call for the hot int fields. Accumulates as uint64 with
+// per-digit overflow detection so out-of-range inputs surface
+// scan.ErrNumberOverflow instead of silently wrapping.
 func inlineScanInt64(b *bytes.Buffer, posVar, dst, castFn string) {
 	assign := ""
 	switch {
@@ -2146,16 +2191,27 @@ func inlineScanInt64(b *bytes.Buffer, posVar, dst, castFn string) {
 	neg := false
 	if %s < len(data) && data[%s] == '-' { neg = true; %s++ }
 	if %s >= len(data) || data[%s] < '0' || data[%s] > '9' { return result, i, scan.ErrBadNumber }
-	var n int64
+	limit := uint64(math.MaxInt64)
+	if neg { limit = scan.SignedNeg }
+	var u uint64
 	for %s < len(data) && data[%s] >= '0' && data[%s] <= '9' {
-		n = n*10 + int64(data[%s]-'0')
+		d := uint64(data[%s]-'0')
+		if u > limit/10 || (u == limit/10 && d > limit%%10) {
+			return result, i, scan.ErrNumberOverflow
+		}
+		u = u*10 + d
 		%s++
 	}
 	if %s < len(data) {
 		c := data[%s]
 		if c == '.' || c == 'e' || c == 'E' { return result, i, scan.ErrBadNumber }
 	}
-	if neg { n = -n }
+	var n int64
+	if neg {
+		if u == scan.SignedNeg { n = math.MinInt64 } else { n = -int64(u) }
+	} else {
+		n = int64(u)
+	}
 	%s
 }
 `, posVar, posVar, posVar,
@@ -2166,6 +2222,8 @@ func inlineScanInt64(b *bytes.Buffer, posVar, dst, castFn string) {
 }
 
 // inlineScanUint64 is the unsigned counterpart of inlineScanInt64.
+// Accumulates with overflow detection so digits past MaxUint64 surface
+// scan.ErrNumberOverflow.
 func inlineScanUint64(b *bytes.Buffer, posVar, dst, castFn string) {
 	assign := ""
 	switch {
@@ -2178,7 +2236,11 @@ func inlineScanUint64(b *bytes.Buffer, posVar, dst, castFn string) {
 	if %s >= len(data) || data[%s] < '0' || data[%s] > '9' { return result, i, scan.ErrBadNumber }
 	var n uint64
 	for %s < len(data) && data[%s] >= '0' && data[%s] <= '9' {
-		n = n*10 + uint64(data[%s]-'0')
+		d := uint64(data[%s]-'0')
+		if n > scan.Uint64Limit/10 || (n == scan.Uint64Limit/10 && d > scan.Uint64Limit%%10) {
+			return result, i, scan.ErrNumberOverflow
+		}
+		n = n*10 + d
 		%s++
 	}
 	%s
@@ -2200,11 +2262,20 @@ func inlineScanUint64(b *bytes.Buffer, posVar, dst, castFn string) {
 // only update `posOut` once the result is known. Slow path reuses the
 // function-scope `err` from renderDecode's hoist — no local `iserr`.
 func inlineScanString(b *bytes.Buffer, posIn, dst, posOut string) {
+	// Loop stops at the closing `"`, an escape `\`, OR any control byte
+	// (< 0x20). RFC 8259 forbids unescaped control characters in JSON
+	// strings; both stdlib v1 and v2 reject. The fast path used to scan
+	// only for `"`/`\\`, silently passing raw \x01-\x1f through —
+	// matches sonic's behavior but not jsonv2's. ggen targets jsonv2,
+	// so reject. The slow path (scan.String) already rejects, so the
+	// `data[ke] < 0x20` branch returns ErrBadString directly without
+	// falling through.
 	fmt.Fprintf(b, `if %s >= len(data) || data[%s] != '"' { return result, i, scan.ErrExpectString }
 {
 	ke := %s + 1
-	for ke < len(data) && data[ke] != '"' && data[ke] != '\\' { ke++ }
+	for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 { ke++ }
 	if ke >= len(data) { return result, i, scan.ErrUnterminated }
+	if data[ke] < 0x20 { return result, i, scan.ErrBadString }
 	if data[ke] == '"' {
 		%s = unsafe.String(unsafe.SliceData(data[%s+1:]), ke-%s-1)
 		%s = ke + 1
@@ -3300,7 +3371,9 @@ func renderField(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 		}
 		return
 	}
-	if f.String {
+	// jsonv2 dropped `,string` for bool; ggen follows. Fall through to
+	// the normal bool decode path so the wire stays bare `true`/`false`.
+	if f.String && f.Kind != KindBool {
 		renderStringTag(b, f, ref, posVar)
 		if !f.NoValidate {
 			validateAndMod(b, f, ref)
@@ -4360,7 +4433,8 @@ default: return result, i, scan.ErrBadBool
 }
 
 func renderStreamField(f FieldInfo, ref, posVar string) string {
-	if f.String {
+	// See renderField — `,string` on bool is a no-op to match jsonv2.
+	if f.String && f.Kind != KindBool {
 		var out bytes.Buffer
 		renderStreamStringTag(&out, f, ref, posVar)
 		if !f.NoValidate {

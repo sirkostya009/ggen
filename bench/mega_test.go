@@ -202,6 +202,26 @@ func BenchmarkMega_Marshal(b *testing.B) {
 			)
 		})
 	}
+
+	// ggen_presized: cheapest possible ggen marshal — caller reuses a
+	// pre-grown buffer across calls. Companion to ggen above (allocates
+	// a fresh buffer per call via encode.Marshal); the delta is the
+	// one-shot allocator cost users save by pooling. Lives here as a
+	// subbench because every other codec table row has no concept of
+	// caller-owned buffer reuse.
+	b.Run("ggen_presized", func(b *testing.B) {
+		buf := make([]byte, 0, MegaValue.JSONSize())
+		runBench(b, int64(len(MegaPayload)),
+			func() []byte { return buf },
+			func(buf *[]byte) {
+				out, err := MegaValue.AppendJSON((*buf)[:0])
+				if err != nil {
+					b.Fatal(err)
+				}
+				*buf = out[:0]
+			},
+		)
+	})
 }
 
 // BenchmarkRetention measures retained heap per held output across
@@ -427,6 +447,59 @@ func BenchmarkMega_Reader(b *testing.B) {
 				func() readerState { return readerState{buf: make([]byte, 0, 4196)} },
 				func(s *readerState) {
 					if err := c.fn(s); err != nil {
+						b.Fatal(err)
+					}
+				},
+			)
+		})
+	}
+}
+
+// BenchmarkDeepNested_Unmarshal — single 50-level chain. Each codec's
+// stack-frame / recursion cost shows up here without being drowned out
+// by the fanout work mega does.
+func BenchmarkDeepNested_Unmarshal(b *testing.B) {
+	var codecs = []struct {
+		name string
+		fn   func([]byte) error
+	}{
+		{"jsonv2", func(p []byte) error { var v NodePlain; return jsonv2.Unmarshal(p, &v) }},
+		{"sonic", func(p []byte) error { var v NodePlain; return sonic.Unmarshal(p, &v) }},
+		{"easyjson", func(p []byte) error { var v Node; return v.UnmarshalJSON(p) }},
+		{"ggen", func(p []byte) error { _, err := decode.Unmarshal[Node](p); return err }},
+	}
+	for _, c := range codecs {
+		b.Run(c.name, func(b *testing.B) {
+			runBench(b, int64(len(DeepNestedPayload)),
+				func() struct{} { return struct{}{} },
+				func(_ *struct{}) {
+					if err := c.fn(DeepNestedPayload); err != nil {
+						b.Fatal(err)
+					}
+				},
+			)
+		})
+	}
+}
+
+// BenchmarkMapHeavy_Unmarshal — 1024-entry string→string map. Tests the
+// map decoder's prealloc heuristic vs every codec's runtime map growth
+// chain. Each codec's per-entry hash + alloc + insert cost shows up.
+func BenchmarkMapHeavy_Unmarshal(b *testing.B) {
+	var codecs = []struct {
+		name string
+		fn   func([]byte) error
+	}{
+		{"jsonv2", func(p []byte) error { var v MapHeavy; return jsonv2.Unmarshal(p, &v) }},
+		{"sonic", func(p []byte) error { var v MapHeavy; return sonic.Unmarshal(p, &v) }},
+		{"ggen", func(p []byte) error { _, err := decode.Unmarshal[MapHeavy](p); return err }},
+	}
+	for _, c := range codecs {
+		b.Run(c.name, func(b *testing.B) {
+			runBench(b, int64(len(MapHeavyPayload)),
+				func() struct{} { return struct{}{} },
+				func(_ *struct{}) {
+					if err := c.fn(MapHeavyPayload); err != nil {
 						b.Fatal(err)
 					}
 				},

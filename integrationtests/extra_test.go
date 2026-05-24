@@ -304,3 +304,5 @@ func TestNestedMarshalRoundtrip(t *testing.T) {
 		t.Errorf("Triple roundtrip: got %v, want %v", back.Triple, in.Triple)
 	}
 }
+
+// TestJSONSize_TupleStruct lives in jsonsize_test.go.

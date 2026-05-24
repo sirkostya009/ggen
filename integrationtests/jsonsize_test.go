@@ -414,3 +414,91 @@ func richTypesWorst() RichTypes {
 		GofrsID: gofrsID,
 	}
 }
+
+// TestJSONSize_TupleStruct: cap-guard for fixed-array [N]T fields. Worst
+// case is the per-element max times N — verifies the array emitter folds
+// the constant correctly.
+func TestJSONSize_TupleStruct_NoRealloc(t *testing.T) {
+	in := TupleStruct{
+		Point:    [2]float64{-math.MaxFloat64, math.MaxFloat64},
+		RGB:      [3]int{255, 0, 128},
+		Segments: [][2]int{{math.MaxInt, math.MinInt}, {0, 0}, {7, -7}},
+		Pair:     [2][]string{{"aaaa", "bbbb"}, {"cccc"}},
+	}
+	size := in.JSONSize()
+	got, err := in.AppendJSON(make([]byte, 0, size))
+	if err != nil {
+		t.Fatalf("AppendJSON: %v", err)
+	}
+	if cap(got) != size {
+		t.Errorf("realloc: JSONSize=%d cap=%d len=%d\nout=%s", size, cap(got), len(got), got)
+	}
+	if len(got) > size {
+		t.Errorf("undersized: len=%d > size=%d", len(got), size)
+	}
+}
+
+// TestJSONSize_HTMLEscapeStruct: htmlescape opt-in expands < > & to 6×
+// (\uXXXX) on marshal. Worst case is a string consisting entirely of
+// these chars — every byte expands 6× while the no-htmlescape budget
+// only reserves 2× (short-escape). The bound must cover the htmlescape
+// case when the opt-in is set.
+func TestJSONSize_HTMLEscapeStruct_NoRealloc(t *testing.T) {
+	in := HTMLEscapeStruct{Note: strings.Repeat("<>&", 50)}
+	size := in.JSONSize()
+	got, err := in.AppendJSON(make([]byte, 0, size))
+	if err != nil {
+		t.Fatalf("AppendJSON: %v", err)
+	}
+	if cap(got) != size {
+		t.Errorf("htmlescape realloc: JSONSize=%d cap=%d len=%d\nout=%s", size, cap(got), len(got), got)
+	}
+	if len(got) > size {
+		t.Errorf("htmlescape undersized: len=%d > size=%d", len(got), size)
+	}
+}
+
+// TestJSONSize_InlineStruct: catch-all map (json:",inline") splices entries
+// at the top level. JSONSize must cover both the fixed field AND every
+// inline map entry's worst case.
+func TestJSONSize_InlineStruct_NoRealloc(t *testing.T) {
+	in := InlineStruct{
+		Name: strings.Repeat("n", 30),
+		Extra: map[string]any{
+			"long":   strings.Repeat("v", 80),
+			"num":    float64(2147483647),
+			"escape": "\"\\\n\t",
+			"nested": map[string]any{"a": float64(1), "b": "c"},
+			"array":  []any{float64(1), float64(2), "abc"},
+		},
+	}
+	size := in.JSONSize()
+	got, err := in.AppendJSON(make([]byte, 0, size))
+	if err != nil {
+		t.Fatalf("AppendJSON: %v", err)
+	}
+	if cap(got) != size {
+		t.Errorf("inline realloc: JSONSize=%d cap=%d len=%d\nout=%s", size, cap(got), len(got), got)
+	}
+}
+
+// TestJSONSize_StringTagStruct: numeric `,string` wrap adds two `"` chars
+// over the bare-number budget. Each width variant must include those.
+func TestJSONSize_StringTagStruct_NoRealloc(t *testing.T) {
+	in := StringTagStruct{
+		I8: math.MinInt8, I16: math.MinInt16, I32: math.MinInt32, I64: math.MinInt64,
+		U8: math.MaxUint8, U16: math.MaxUint16, U32: math.MaxUint32, U64: math.MaxUint64,
+		F32: -math.MaxFloat32, F64: math.MaxFloat64, B: false,
+	}
+	size := in.JSONSize()
+	got, err := in.AppendJSON(make([]byte, 0, size))
+	if err != nil {
+		t.Fatalf("AppendJSON: %v", err)
+	}
+	if cap(got) != size {
+		t.Errorf(",string realloc: JSONSize=%d cap=%d len=%d\nout=%s", size, cap(got), len(got), got)
+	}
+	if len(got) > size {
+		t.Errorf(",string undersized: len=%d > size=%d", len(got), size)
+	}
+}

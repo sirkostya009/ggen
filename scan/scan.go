@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 	"unicode/utf16"
 	"unicode/utf8"
@@ -24,6 +25,7 @@ var (
 	ErrBadString     = errors.New("scan: invalid string")
 	ErrUnterminated  = errors.New("scan: unterminated string")
 	ErrBadNumber     = errors.New("scan: invalid number")
+	ErrNumberOverflow = errors.New("scan: integer overflow")
 	ErrBadBool       = errors.New("scan: invalid bool")
 	ErrBadLiteral    = errors.New("scan: invalid literal")
 	ErrBadValue      = errors.New("scan: invalid value")
@@ -186,7 +188,19 @@ func parseHex4(b []byte) (rune, bool) {
 	return r, true
 }
 
+// Limits for safe int64/uint64 accumulation. SignedNeg is the magnitude
+// of the smallest int64 (|MinInt64| = 1<<63); positive int64 results
+// are bounded by SignedPos (MaxInt64). Exported because ggen-generated
+// code references them in the inlined scan loops.
+const (
+	Uint64Limit = ^uint64(0)        // MaxUint64
+	SignedNeg   = uint64(1) << 63   // |MinInt64|
+)
+
 // Int64 scans an integer JSON number. Floats/exponent notation error out.
+// Accumulates as uint64 with per-digit overflow detection so out-of-range
+// inputs (e.g. 9999999999999999999) surface ErrNumberOverflow instead of
+// silently wrapping. Matches encoding/json/v2 behavior.
 func Int64(data []byte, i int) (int64, int, error) {
 	neg := false
 	if i < len(data) && data[i] == '-' {
@@ -196,9 +210,17 @@ func Int64(data []byte, i int) (int64, int, error) {
 	if i >= len(data) || data[i] < '0' || data[i] > '9' {
 		return 0, 0, ErrBadNumber
 	}
-	var n int64
+	limit := uint64(math.MaxInt64)
+	if neg {
+		limit = SignedNeg
+	}
+	var u uint64
 	for i < len(data) && data[i] >= '0' && data[i] <= '9' {
-		n = n*10 + int64(data[i]-'0')
+		d := uint64(data[i] - '0')
+		if u > limit/10 || (u == limit/10 && d > limit%10) {
+			return 0, 0, ErrNumberOverflow
+		}
+		u = u*10 + d
 		i++
 	}
 	if i < len(data) {
@@ -208,19 +230,29 @@ func Int64(data []byte, i int) (int64, int, error) {
 		}
 	}
 	if neg {
-		n = -n
+		// |MinInt64| fits in uint64 but -|MinInt64| in int64 needs the
+		// special MinInt64 literal — `-int64(u)` would overflow at u==1<<63.
+		if u == SignedNeg {
+			return math.MinInt64, i, nil
+		}
+		return -int64(u), i, nil
 	}
-	return n, i, nil
+	return int64(u), i, nil
 }
 
-// Uint64 scans an unsigned integer JSON number.
+// Uint64 scans an unsigned integer JSON number. Returns ErrNumberOverflow
+// when the magnitude exceeds MaxUint64.
 func Uint64(data []byte, i int) (uint64, int, error) {
 	if i >= len(data) || data[i] < '0' || data[i] > '9' {
 		return 0, 0, ErrBadNumber
 	}
 	var n uint64
 	for i < len(data) && data[i] >= '0' && data[i] <= '9' {
-		n = n*10 + uint64(data[i]-'0')
+		d := uint64(data[i] - '0')
+		if n > Uint64Limit/10 || (n == Uint64Limit/10 && d > Uint64Limit%10) {
+			return 0, 0, ErrNumberOverflow
+		}
+		n = n*10 + d
 		i++
 	}
 	return n, i, nil

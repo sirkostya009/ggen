@@ -485,7 +485,367 @@ func (v *Node) UnmarshalJSON(data []byte) error {
 func (v *Node) UnmarshalEasyJSON(l *jlexer.Lexer) {
 	easyjson6601e8cdDecodeGithubComSirkostya009GgenBench(l, v)
 }
-func easyjson6601e8cdDecodeGithubComSirkostya009GgenBench1(in *jlexer.Lexer, out *Addr) {
+func easyjson6601e8cdDecodeGithubComSirkostya009GgenBench1(in *jlexer.Lexer, out *EasyValidationHeavy) {
+	isTopLevel := in.IsStart()
+	if in.IsNull() {
+		if isTopLevel {
+			in.Consumed()
+		}
+		in.Skip()
+		return
+	}
+	in.Delim('{')
+	for !in.IsDelim('}') {
+		key := in.UnsafeFieldName(false)
+		in.WantColon()
+		switch key {
+		case "email":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.Email = string(in.String())
+			}
+		case "username":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.Username = string(in.String())
+			}
+		case "phone":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.Phone = string(in.String())
+			}
+		case "age":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.Age = int(in.Int())
+			}
+		case "score":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.Score = float64(in.Float64())
+			}
+		case "name":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.Name = string(in.String())
+			}
+		case "url":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.URL = string(in.String())
+			}
+		case "country":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.Country = string(in.String())
+			}
+		case "lang":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.Lang = string(in.String())
+			}
+		case "role":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.Role = string(in.String())
+			}
+		default:
+			in.SkipRecursive()
+		}
+		in.WantComma()
+	}
+	in.Delim('}')
+	if isTopLevel {
+		in.Consumed()
+	}
+}
+func easyjson6601e8cdEncodeGithubComSirkostya009GgenBench1(out *jwriter.Writer, in EasyValidationHeavy) {
+	out.RawByte('{')
+	first := true
+	_ = first
+	{
+		const prefix string = ",\"email\":"
+		out.RawString(prefix[1:])
+		out.String(string(in.Email))
+	}
+	{
+		const prefix string = ",\"username\":"
+		out.RawString(prefix)
+		out.String(string(in.Username))
+	}
+	{
+		const prefix string = ",\"phone\":"
+		out.RawString(prefix)
+		out.String(string(in.Phone))
+	}
+	{
+		const prefix string = ",\"age\":"
+		out.RawString(prefix)
+		out.Int(int(in.Age))
+	}
+	{
+		const prefix string = ",\"score\":"
+		out.RawString(prefix)
+		out.Float64(float64(in.Score))
+	}
+	{
+		const prefix string = ",\"name\":"
+		out.RawString(prefix)
+		out.String(string(in.Name))
+	}
+	{
+		const prefix string = ",\"url\":"
+		out.RawString(prefix)
+		out.String(string(in.URL))
+	}
+	{
+		const prefix string = ",\"country\":"
+		out.RawString(prefix)
+		out.String(string(in.Country))
+	}
+	{
+		const prefix string = ",\"lang\":"
+		out.RawString(prefix)
+		out.String(string(in.Lang))
+	}
+	{
+		const prefix string = ",\"role\":"
+		out.RawString(prefix)
+		out.String(string(in.Role))
+	}
+	out.RawByte('}')
+}
+
+// MarshalJSON supports json.Marshaler interface
+func (v EasyValidationHeavy) MarshalJSON() ([]byte, error) {
+	w := jwriter.Writer{}
+	easyjson6601e8cdEncodeGithubComSirkostya009GgenBench1(&w, v)
+	return w.Buffer.BuildBytes(), w.Error
+}
+
+// MarshalEasyJSON supports easyjson.Marshaler interface
+func (v EasyValidationHeavy) MarshalEasyJSON(w *jwriter.Writer) {
+	easyjson6601e8cdEncodeGithubComSirkostya009GgenBench1(w, v)
+}
+
+// UnmarshalJSON supports json.Unmarshaler interface
+func (v *EasyValidationHeavy) UnmarshalJSON(data []byte) error {
+	r := jlexer.Lexer{Data: data}
+	easyjson6601e8cdDecodeGithubComSirkostya009GgenBench1(&r, v)
+	return r.Error()
+}
+
+// UnmarshalEasyJSON supports easyjson.Unmarshaler interface
+func (v *EasyValidationHeavy) UnmarshalEasyJSON(l *jlexer.Lexer) {
+	easyjson6601e8cdDecodeGithubComSirkostya009GgenBench1(l, v)
+}
+func easyjson6601e8cdDecodeGithubComSirkostya009GgenBench2(in *jlexer.Lexer, out *EasyHTMLPlain) {
+	isTopLevel := in.IsStart()
+	if in.IsNull() {
+		if isTopLevel {
+			in.Consumed()
+		}
+		in.Skip()
+		return
+	}
+	in.Delim('{')
+	for !in.IsDelim('}') {
+		key := in.UnsafeFieldName(false)
+		in.WantColon()
+		switch key {
+		case "note":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.Note = string(in.String())
+			}
+		default:
+			in.SkipRecursive()
+		}
+		in.WantComma()
+	}
+	in.Delim('}')
+	if isTopLevel {
+		in.Consumed()
+	}
+}
+func easyjson6601e8cdEncodeGithubComSirkostya009GgenBench2(out *jwriter.Writer, in EasyHTMLPlain) {
+	out.RawByte('{')
+	first := true
+	_ = first
+	{
+		const prefix string = ",\"note\":"
+		out.RawString(prefix[1:])
+		out.String(string(in.Note))
+	}
+	out.RawByte('}')
+}
+
+// MarshalJSON supports json.Marshaler interface
+func (v EasyHTMLPlain) MarshalJSON() ([]byte, error) {
+	w := jwriter.Writer{}
+	easyjson6601e8cdEncodeGithubComSirkostya009GgenBench2(&w, v)
+	return w.Buffer.BuildBytes(), w.Error
+}
+
+// MarshalEasyJSON supports easyjson.Marshaler interface
+func (v EasyHTMLPlain) MarshalEasyJSON(w *jwriter.Writer) {
+	easyjson6601e8cdEncodeGithubComSirkostya009GgenBench2(w, v)
+}
+
+// UnmarshalJSON supports json.Unmarshaler interface
+func (v *EasyHTMLPlain) UnmarshalJSON(data []byte) error {
+	r := jlexer.Lexer{Data: data}
+	easyjson6601e8cdDecodeGithubComSirkostya009GgenBench2(&r, v)
+	return r.Error()
+}
+
+// UnmarshalEasyJSON supports easyjson.Unmarshaler interface
+func (v *EasyHTMLPlain) UnmarshalEasyJSON(l *jlexer.Lexer) {
+	easyjson6601e8cdDecodeGithubComSirkostya009GgenBench2(l, v)
+}
+func easyjson6601e8cdDecodeGithubComSirkostya009GgenBench3(in *jlexer.Lexer, out *EasyClaim) {
+	isTopLevel := in.IsStart()
+	if in.IsNull() {
+		if isTopLevel {
+			in.Consumed()
+		}
+		in.Skip()
+		return
+	}
+	in.Delim('{')
+	for !in.IsDelim('}') {
+		key := in.UnsafeFieldName(false)
+		in.WantColon()
+		switch key {
+		case "sub":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.Sub = string(in.String())
+			}
+		case "iss":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.Iss = string(in.String())
+			}
+		case "exp":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.Exp = int64(in.Int64())
+			}
+		case "iat":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.Iat = int64(in.Int64())
+			}
+		case "nbf":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.Nbf = int64(in.Int64())
+			}
+		case "aud":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.Aud = string(in.String())
+			}
+		case "jti":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.Jti = string(in.String())
+			}
+		default:
+			in.SkipRecursive()
+		}
+		in.WantComma()
+	}
+	in.Delim('}')
+	if isTopLevel {
+		in.Consumed()
+	}
+}
+func easyjson6601e8cdEncodeGithubComSirkostya009GgenBench3(out *jwriter.Writer, in EasyClaim) {
+	out.RawByte('{')
+	first := true
+	_ = first
+	{
+		const prefix string = ",\"sub\":"
+		out.RawString(prefix[1:])
+		out.String(string(in.Sub))
+	}
+	{
+		const prefix string = ",\"iss\":"
+		out.RawString(prefix)
+		out.String(string(in.Iss))
+	}
+	{
+		const prefix string = ",\"exp\":"
+		out.RawString(prefix)
+		out.Int64(int64(in.Exp))
+	}
+	{
+		const prefix string = ",\"iat\":"
+		out.RawString(prefix)
+		out.Int64(int64(in.Iat))
+	}
+	if in.Nbf != 0 {
+		const prefix string = ",\"nbf\":"
+		out.RawString(prefix)
+		out.Int64(int64(in.Nbf))
+	}
+	if in.Aud != "" {
+		const prefix string = ",\"aud\":"
+		out.RawString(prefix)
+		out.String(string(in.Aud))
+	}
+	{
+		const prefix string = ",\"jti\":"
+		out.RawString(prefix)
+		out.String(string(in.Jti))
+	}
+	out.RawByte('}')
+}
+
+// MarshalJSON supports json.Marshaler interface
+func (v EasyClaim) MarshalJSON() ([]byte, error) {
+	w := jwriter.Writer{}
+	easyjson6601e8cdEncodeGithubComSirkostya009GgenBench3(&w, v)
+	return w.Buffer.BuildBytes(), w.Error
+}
+
+// MarshalEasyJSON supports easyjson.Marshaler interface
+func (v EasyClaim) MarshalEasyJSON(w *jwriter.Writer) {
+	easyjson6601e8cdEncodeGithubComSirkostya009GgenBench3(w, v)
+}
+
+// UnmarshalJSON supports json.Unmarshaler interface
+func (v *EasyClaim) UnmarshalJSON(data []byte) error {
+	r := jlexer.Lexer{Data: data}
+	easyjson6601e8cdDecodeGithubComSirkostya009GgenBench3(&r, v)
+	return r.Error()
+}
+
+// UnmarshalEasyJSON supports easyjson.Unmarshaler interface
+func (v *EasyClaim) UnmarshalEasyJSON(l *jlexer.Lexer) {
+	easyjson6601e8cdDecodeGithubComSirkostya009GgenBench3(l, v)
+}
+func easyjson6601e8cdDecodeGithubComSirkostya009GgenBench4(in *jlexer.Lexer, out *Addr) {
 	isTopLevel := in.IsStart()
 	if in.IsNull() {
 		if isTopLevel {
@@ -521,7 +881,7 @@ func easyjson6601e8cdDecodeGithubComSirkostya009GgenBench1(in *jlexer.Lexer, out
 		in.Consumed()
 	}
 }
-func easyjson6601e8cdEncodeGithubComSirkostya009GgenBench1(out *jwriter.Writer, in Addr) {
+func easyjson6601e8cdEncodeGithubComSirkostya009GgenBench4(out *jwriter.Writer, in Addr) {
 	out.RawByte('{')
 	first := true
 	_ = first
@@ -541,23 +901,23 @@ func easyjson6601e8cdEncodeGithubComSirkostya009GgenBench1(out *jwriter.Writer, 
 // MarshalJSON supports json.Marshaler interface
 func (v Addr) MarshalJSON() ([]byte, error) {
 	w := jwriter.Writer{}
-	easyjson6601e8cdEncodeGithubComSirkostya009GgenBench1(&w, v)
+	easyjson6601e8cdEncodeGithubComSirkostya009GgenBench4(&w, v)
 	return w.Buffer.BuildBytes(), w.Error
 }
 
 // MarshalEasyJSON supports easyjson.Marshaler interface
 func (v Addr) MarshalEasyJSON(w *jwriter.Writer) {
-	easyjson6601e8cdEncodeGithubComSirkostya009GgenBench1(w, v)
+	easyjson6601e8cdEncodeGithubComSirkostya009GgenBench4(w, v)
 }
 
 // UnmarshalJSON supports json.Unmarshaler interface
 func (v *Addr) UnmarshalJSON(data []byte) error {
 	r := jlexer.Lexer{Data: data}
-	easyjson6601e8cdDecodeGithubComSirkostya009GgenBench1(&r, v)
+	easyjson6601e8cdDecodeGithubComSirkostya009GgenBench4(&r, v)
 	return r.Error()
 }
 
 // UnmarshalEasyJSON supports easyjson.Unmarshaler interface
 func (v *Addr) UnmarshalEasyJSON(l *jlexer.Lexer) {
-	easyjson6601e8cdDecodeGithubComSirkostya009GgenBench1(l, v)
+	easyjson6601e8cdDecodeGithubComSirkostya009GgenBench4(l, v)
 }

@@ -7,7 +7,9 @@ import (
 	"encoding"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"io"
+	"math"
 	"reflect"
 	"strconv"
 	"strings"
@@ -36,6 +38,31 @@ var bufPool = sync.Pool{
 // Marshal returns the JSON encoding of v as a freshly owned []byte.
 func Marshal(v Marshaler) ([]byte, error) {
 	return v.AppendJSON(make([]byte, 0, v.JSONSize()))
+}
+
+// errNaN / errInf*: returned by AppendFloat when v is non-finite. JSON
+// has no representation for NaN / ±Inf and stdlib v1 + v2 both reject
+// these values on marshal; ggen follows.
+var (
+	errNaN  = errors.New("ggen: unsupported value: NaN")
+	errPInf = errors.New("ggen: unsupported value: +Inf")
+	errNInf = errors.New("ggen: unsupported value: -Inf")
+)
+
+// AppendFloat appends v to dst as a JSON number, or returns an error
+// when v is NaN / ±Inf (matching encoding/json/v2). bitSize selects the
+// strconv precision — 32 for float32 source, 64 for float64.
+func AppendFloat(dst []byte, v float64, bitSize int) ([]byte, error) {
+	if math.IsNaN(v) {
+		return dst, errNaN
+	}
+	if math.IsInf(v, 1) {
+		return dst, errPInf
+	}
+	if math.IsInf(v, -1) {
+		return dst, errNInf
+	}
+	return strconv.AppendFloat(dst, v, 'g', -1, bitSize), nil
 }
 
 // MarshalString returns the JSON encoding of v as a string. The returned
@@ -187,9 +214,9 @@ func AppendAny(dst []byte, v any) ([]byte, error) {
 		dst = append(dst, '"')
 		return AppendString(dst, x), nil
 	case float64:
-		return strconv.AppendFloat(dst, x, 'g', -1, 64), nil
+		return AppendFloat(dst, x, 64)
 	case float32:
-		return strconv.AppendFloat(dst, float64(x), 'g', -1, 32), nil
+		return AppendFloat(dst, float64(x), 32)
 	case int:
 		return strconv.AppendInt(dst, int64(x), 10), nil
 	case int8:
@@ -213,6 +240,69 @@ func AppendAny(dst []byte, v any) ([]byte, error) {
 	case json.Number:
 		// Already a valid JSON numeric literal — emit unquoted.
 		return append(dst, x...), nil
+	// Concrete container types — type-assert before reflect to avoid the
+	// reflect.MapIter / Value boxing that allocates per entry. These
+	// shapes (`[]any`, `map[string]any`, plus string→string and []string
+	// which are common metadata-bag shapes) dominate the alloc count
+	// when an `any` field holds a nested collection.
+	case []any:
+		dst = append(dst, '[')
+		for i, e := range x {
+			if i > 0 {
+				dst = append(dst, ',')
+			}
+			var err error
+			dst, err = AppendAny(dst, e)
+			if err != nil {
+				return dst, err
+			}
+		}
+		return append(dst, ']'), nil
+	case []string:
+		dst = append(dst, '[')
+		for i, s := range x {
+			if i > 0 {
+				dst = append(dst, ',')
+			}
+			dst = append(dst, '"')
+			dst = AppendString(dst, s)
+		}
+		return append(dst, ']'), nil
+	case map[string]any:
+		dst = append(dst, '{')
+		first := true
+		for k, val := range x {
+			if !first {
+				dst = append(dst, ',')
+			}
+			first = false
+			dst = append(dst, '"')
+			dst = AppendString(dst, k)
+			dst = append(dst, ':')
+			var err error
+			dst, err = AppendAny(dst, val)
+			if err != nil {
+				return dst, err
+			}
+		}
+		return append(dst, '}'), nil
+	case map[string]string:
+		dst = append(dst, '{')
+		first := true
+		for k, val := range x {
+			if !first {
+				dst = append(dst, ',')
+			}
+			first = false
+			// AppendString writes <body>"<closing-quote> — caller writes
+			// the opening `"`. So key emits as `"k"` then we append
+			// `:"` to start the value, AppendString closes value with `"`.
+			dst = append(dst, '"')
+			dst = AppendString(dst, k)
+			dst = append(dst, ':', '"')
+			dst = AppendString(dst, val)
+		}
+		return append(dst, '}'), nil
 	// Interfaces, in cross-pkg-dispatch priority order.
 	case Marshaler:
 		return x.AppendJSON(dst)
@@ -263,9 +353,9 @@ func AppendAny(dst []byte, v any) ([]byte, error) {
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
 		return strconv.AppendUint(dst, rv.Uint(), 10), nil
 	case reflect.Float32:
-		return strconv.AppendFloat(dst, rv.Float(), 'g', -1, 32), nil
+		return AppendFloat(dst, rv.Float(), 32)
 	case reflect.Float64:
-		return strconv.AppendFloat(dst, rv.Float(), 'g', -1, 64), nil
+		return AppendFloat(dst, rv.Float(), 64)
 	case reflect.Struct:
 		return appendStruct(dst, rv)
 	case reflect.Slice, reflect.Array:
@@ -281,12 +371,13 @@ func AppendAny(dst []byte, v any) ([]byte, error) {
 			return append(dst, '"'), nil
 		}
 		dst = append(dst, '[')
+		elemKind := rv.Type().Elem().Kind()
 		for i := range rv.Len() {
 			if i > 0 {
 				dst = append(dst, ',')
 			}
 			var err error
-			dst, err = AppendAny(dst, rv.Index(i).Interface())
+			dst, err = appendReflectValue(dst, rv.Index(i), elemKind)
 			if err != nil {
 				return dst, err
 			}
@@ -297,6 +388,7 @@ func AppendAny(dst []byte, v any) ([]byte, error) {
 			return dst, &json.UnsupportedTypeError{Type: rv.Type()}
 		}
 		dst = append(dst, '{')
+		elemKind := rv.Type().Elem().Kind()
 		iter := rv.MapRange()
 		first := true
 		for iter.Next() {
@@ -308,7 +400,7 @@ func AppendAny(dst []byte, v any) ([]byte, error) {
 			dst = AppendString(dst, iter.Key().String())
 			dst = append(dst, ':')
 			var err error
-			dst, err = AppendAny(dst, iter.Value().Interface())
+			dst, err = appendReflectValue(dst, iter.Value(), elemKind)
 			if err != nil {
 				return dst, err
 			}
@@ -316,6 +408,35 @@ func AppendAny(dst []byte, v any) ([]byte, error) {
 		return append(dst, '}'), nil
 	}
 	return dst, &json.UnsupportedTypeError{Type: rv.Type()}
+}
+
+// appendReflectValue emits rv to dst when the value's Kind is already
+// known to the caller. Fast-paths primitive kinds (string/bool/numeric)
+// by reading directly from the reflect.Value without going through the
+// interface-boxing detour `rv.Interface()` would take — `reflect.Value
+// .Interface()` allocates a fresh interface header for every value,
+// which is the dominant alloc cost when iterating string→string maps,
+// []int slices, etc.
+//
+// Non-primitive kinds fall back to AppendAny via the Interface() path —
+// they need full dispatch (Marshaler / TextAppender / nested any).
+func appendReflectValue(dst []byte, rv reflect.Value, kind reflect.Kind) ([]byte, error) {
+	switch kind {
+	case reflect.String:
+		dst = append(dst, '"')
+		return AppendString(dst, rv.String()), nil
+	case reflect.Bool:
+		return strconv.AppendBool(dst, rv.Bool()), nil
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return strconv.AppendInt(dst, rv.Int(), 10), nil
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		return strconv.AppendUint(dst, rv.Uint(), 10), nil
+	case reflect.Float32:
+		return AppendFloat(dst, rv.Float(), 32)
+	case reflect.Float64:
+		return AppendFloat(dst, rv.Float(), 64)
+	}
+	return AppendAny(dst, rv.Interface())
 }
 
 // fieldInfo describes one JSON-visible field of a struct type, with its

@@ -59,3 +59,5 @@ func TestHTMLEscape_OptIn(t *testing.T) {
 		}
 	}
 }
+
+// TestJSONSize_HTMLEscapeStruct lives in jsonsize_test.go.

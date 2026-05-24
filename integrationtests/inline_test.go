@@ -118,3 +118,19 @@ func TestInline_marshalOnlyExtras(t *testing.T) {
 		t.Errorf("bad framing: %q", out)
 	}
 }
+
+// TestInline_FixedFieldOrderStable: when an inline map is present alongside
+// fixed fields, the fixed field MUST appear in every marshal regardless of
+// map iteration order (which is random in Go).
+func TestInline_FixedFieldOrderStable(t *testing.T) {
+	s := InlineStruct{
+		Name:  "alice",
+		Extra: map[string]any{"age": 30, "city": "Lviv", "active": true, "score": 9.5},
+	}
+	for i := range 20 {
+		out, _ := encode.Marshal(s)
+		if !strings.Contains(string(out), `"name":"alice"`) {
+			t.Errorf("iter %d: missing name field: %s", i, out)
+		}
+	}
+}

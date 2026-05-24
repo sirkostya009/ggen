@@ -16,6 +16,7 @@ import (
 
 	"github.com/bytedance/sonic"
 	"github.com/sirkostya009/ggen/decode"
+	"github.com/sirkostya009/ggen/encode"
 )
 
 // BenchmarkSmall_Unmarshal — bytes-path decode of ValidPayload into a
@@ -105,6 +106,119 @@ func BenchmarkSmall_Reader(b *testing.B) {
 				func() readerState { return readerState{buf: make([]byte, 0, cap)} },
 				func(s *readerState) {
 					if err := c.fn(s); err != nil {
+						b.Fatal(err)
+					}
+				},
+			)
+		})
+	}
+}
+
+// BenchmarkTiny_Unmarshal — overhead floor of the dispatch path at a
+// payload size where per-call setup costs dominate the actual scan work.
+func BenchmarkTiny_Unmarshal(b *testing.B) {
+	var codecs = []struct {
+		name string
+		fn   func([]byte) error
+	}{
+		{"jsonv2", func(p []byte) error { var v Claim; return jsonv2.Unmarshal(p, &v) }},
+		{"sonic", func(p []byte) error { var v Claim; return sonic.Unmarshal(p, &v) }},
+		{"sonic_fast", func(p []byte) error { var v Claim; return sonic.ConfigFastest.Unmarshal(p, &v) }},
+		{"easyjson", func(p []byte) error { var v EasyClaim; return v.UnmarshalJSON(p) }},
+		{"ggen", func(p []byte) error { _, err := decode.Unmarshal[Claim](p); return err }},
+	}
+	for _, c := range codecs {
+		b.Run(c.name, func(b *testing.B) {
+			runBench(b, int64(len(TinyPayload)),
+				func() struct{} { return struct{}{} },
+				func(_ *struct{}) {
+					if err := c.fn(TinyPayload); err != nil {
+						b.Fatal(err)
+					}
+				},
+			)
+		})
+	}
+}
+
+// BenchmarkTiny_Marshal — encode-side analogue. At ~150 B output, the
+// per-call buffer alloc is a larger fraction of total cost than at mega
+// scale.
+func BenchmarkTiny_Marshal(b *testing.B) {
+	var codecs = []struct {
+		name string
+		fn   func() ([]byte, error)
+	}{
+		{"jsonv2", func() ([]byte, error) { return jsonv2.Marshal(TinyValue) }},
+		{"sonic", func() ([]byte, error) { return sonic.Marshal(TinyValue) }},
+		{"sonic_fast", func() ([]byte, error) { return sonic.ConfigFastest.Marshal(TinyValue) }},
+		{"easyjson", func() ([]byte, error) { return EasyTinyValue.MarshalJSON() }},
+		{"ggen", func() ([]byte, error) { return encode.Marshal(TinyValue) }},
+	}
+	for _, c := range codecs {
+		b.Run(c.name, func(b *testing.B) {
+			out, _ := c.fn()
+			runBench(b, int64(len(out)),
+				func() struct{} { return struct{}{} },
+				func(_ *struct{}) {
+					if _, err := c.fn(); err != nil {
+						b.Fatal(err)
+					}
+				},
+			)
+		})
+	}
+}
+
+// BenchmarkValidationHeavy_Unmarshal — decode + per-field rule check on
+// every field. ggen runs ~25 validation checks per payload (vs jsonv2/
+// sonic which do zero). The per-check cost is the headline number.
+func BenchmarkValidationHeavy_Unmarshal(b *testing.B) {
+	var codecs = []struct {
+		name string
+		fn   func([]byte) error
+	}{
+		{"jsonv2_noval", func(p []byte) error { var v ValidationHeavy; return jsonv2.Unmarshal(p, &v) }},
+		{"sonic_noval", func(p []byte) error { var v ValidationHeavy; return sonic.Unmarshal(p, &v) }},
+		{"easyjson_noval", func(p []byte) error { var v EasyValidationHeavy; return v.UnmarshalJSON(p) }},
+		{"ggen_noval", func(p []byte) error { _, err := decode.Unmarshal[NoValidationHeavy](p); return err }},
+		{"ggen_validated", func(p []byte) error { _, err := decode.Unmarshal[ValidationHeavy](p); return err }},
+	}
+	for _, c := range codecs {
+		b.Run(c.name, func(b *testing.B) {
+			runBench(b, int64(len(ValidationHeavyPayload)),
+				func() struct{} { return struct{}{} },
+				func(_ *struct{}) {
+					if err := c.fn(ValidationHeavyPayload); err != nil {
+						b.Fatal(err)
+					}
+				},
+			)
+		})
+	}
+}
+
+// BenchmarkHTMLEscape_MarshalParity — htmlescape opt-in vs default literal.
+// The opt-in pays 6× per `<` / `>` / `&` (the \uXXXX expansion); the
+// default emits them literally and matches jsonv2's wire shape.
+func BenchmarkHTMLEscape_MarshalParity(b *testing.B) {
+	var codecs = []struct {
+		name string
+		fn   func() ([]byte, error)
+	}{
+		{"ggen_noescape", func() ([]byte, error) { return encode.Marshal(HTMLPlainValue) }},
+		{"ggen_htmlescape", func() ([]byte, error) { return encode.Marshal(HTMLEscapeValue) }},
+		{"jsonv2", func() ([]byte, error) { return jsonv2.Marshal(HTMLPlainValue) }},
+		{"sonic", func() ([]byte, error) { return sonic.Marshal(HTMLPlainValue) }},
+		{"easyjson", func() ([]byte, error) { return EasyHTMLPlainValue.MarshalJSON() }},
+	}
+	for _, c := range codecs {
+		b.Run(c.name, func(b *testing.B) {
+			out, _ := c.fn()
+			runBench(b, int64(len(out)),
+				func() struct{} { return struct{}{} },
+				func(_ *struct{}) {
+					if _, err := c.fn(); err != nil {
 						b.Fatal(err)
 					}
 				},

@@ -938,30 +938,44 @@ real-world API response shapes.
 
 **Unmarshal:**
 
-| path     | ns/op       | B/op    | allocs     | MB/s     |
-| -------- | ----------- | ------- | ---------- | -------- |
-| jsonv2   | 3962 K      | 17.7 MB | 316830     | 1480     |
-| sonic    | 2131 K      | 20.8 MB | 137770     | 2751     |
-| easyjson | 3337 K      | 17.0 MB | 245856     | 1758     |
-| **ggen** | **2310 K**  | 14.4 MB | **101927** | **2539** |
+| path       | ns/op       | B/op    | allocs     | MB/s     |
+| ---------- | ----------- | ------- | ---------- | -------- |
+| jsonv2     | 4042 K      | 17.7 MB | 316832     | 1451     |
+| sonic      | 2038 K      | 20.8 MB | 137770     | 2878     |
+| sonic_fast | 1971 K      | 20.8 MB | 137770     | 2976     |
+| easyjson   | 3158 K      | 17.0 MB | 245856     | 1857     |
+| **ggen**   | **2245 K**  | 14.4 MB | **101927** | **2612** |
 
 **Marshal:**
 
-| path     | ns/op      | B/op    | allocs   | MB/s     |
-| -------- | ---------- | ------- | -------- | -------- |
-| jsonv2   | 1477 K     | 6.5 MB  | 7408     | 3968     |
-| sonic    | 1110 K     | 33.6 MB | 5115     | 5285     |
-| easyjson | 1112 K     | 6.2 MB  | 7597     | 5275     |
-| **ggen** | **756 K**  | 11.9 MB | **2185** | **7762** |
+| path              | ns/op      | B/op    | allocs   | MB/s      |
+| ----------------- | ---------- | ------- | -------- | --------- |
+| jsonv2            | 1286 K     | 6.7 MB  | 7409     | 4559      |
+| sonic             | 989 K      | 33.6 MB | 5116     | 5927      |
+| sonic_fast        | 952 K      | 33.6 MB | 5113     | 6161      |
+| easyjson          | 962 K      | 6.2 MB  | 7597     | 6095      |
+| **ggen**          | 655 K      | 11.8 MB | **2**    | 8951      |
+| **ggen_presized** | **564 K**  | **1 B** | **0**    | **10393** |
+
+`ggen_presized` is the same `AppendJSON` codepath but the caller reuses
+a pre-sized buffer across calls (`make([]byte, 0, v.JSONSize())` once
+outside the hot loop) — zero allocs, zero GC pressure, ~14% faster
+than the convenience `encode.Marshal(v)` path. The 2 allocs on the
+plain `ggen` row are the per-call output buffer + 1 misc; everything
+else is appended in place. At Mega scale (~5.6 MiB) this beats the
+nearest competitor (sonic_fast) by ~1.7× on wall clock and by
+~33000× on allocated bytes.
 
 **Reader input (streaming):**
 
 | path                         | ns/op  | B/op    | allocs |
 | ---------------------------- | ------ | ------- | ------ |
-| jsonv2.UnmarshalRead         | 4365 K | 17.7 MB | 316828 |
-| easyjson.UnmarshalFromReader | 3237 K | 31.5 MB | 245886 |
-| **ggen UnmarshalStream**     | 8866 K | 17.8 MB | 256589 |
-| **ggen ReadAllUnmarshal**    | 2297 K | 29.0 MB | 101956 |
+| jsonv2.UnmarshalRead         | 4237 K | 17.7 MB | 316834 |
+| sonic.NewDecoder             | 2358 K | 39.0 MB | 137791 |
+| sonic_fast.NewDecoder        | 2311 K | 39.0 MB | 137790 |
+| easyjson.UnmarshalFromReader | 3204 K | 31.5 MB | 245886 |
+| **ggen UnmarshalStream**     | 8094 K | 17.8 MB | 256589 |
+| **ggen ReadAllUnmarshal**    | 2274 K | 29.0 MB | 101956 |
 
 ggen Stream copies strings during parse (each scanned string is its
 own heap alloc), which is why it loses ground on alloc count. The win
@@ -977,14 +991,17 @@ payload after reading just enough bytes to decode the bad field
 to consume the whole body first (~78 ms). That ~11 ms gap is real;
 on bigger payloads or slower readers it grows linearly.
 
-**Residency (retained heap per decoded item, 1000 alive):**
+**Residency (retained heap per decoded item, slowPayload ~36 KiB):**
 
-| codec           | per-item | factor over JSON payload |
-| --------------- | -------- | ------------------------ |
-| **ggen bytes**  | 66.2 KiB | 1.89× (lowest)           |
-| easyjson        | 74.7 KiB | 2.13×                    |
-| stdjson         | 80.1 KiB | 2.28×                    |
-| **ggen stream** | 90.3 KiB | 2.58× (highest)          |
+| codec            | per-item   | factor over JSON payload |
+| ---------------- | ---------- | ------------------------ |
+| **ggen_bytes**   | 66.1 KiB   | 1.89× (lowest)           |
+| easyjson         | 78.3 KiB   | 2.23×                    |
+| stdjson          | 79.5 KiB   | 2.27×                    |
+| **ggen_stream**  | 87.0 KiB   | 2.48×                    |
+| ggen_readall     | 107.1 KiB  | 3.05×                    |
+| sonic            | 111.3 KiB  | 3.17×                    |
+| sonic_fast       | 112.0 KiB  | 3.19×                    |
 
 The single biggest residency win was **dropping `maxlen=N` as a
 prealloc hint** — it cut bytes-path retention from 163 → 65 KiB/item.
@@ -997,10 +1014,17 @@ On the tiny complex payload (~440 bytes): Unmarshal ~415 ns, 2 allocs,
 
 `B/op` notes:
 
-- **Marshal:** ggen overshoots easyjson by ~58% because `JSONSize()` is
-  an upper bound: per map entry costs `4 + 2*len(k) + value-bound` (kind-
-  derived), or a flat 128-byte fallback for nested/struct values. Down
-  from a flat `128 * len` (~2.4× overshoot pre-tighten).
+- **Marshal (`ggen` row):** B/op ≈ output buffer size (~11.8 MB =
+  the marshalled wire bytes themselves). Only 2 allocs/op — the
+  output buffer + 1 misc. The `JSONSize()` upper bound is what sizes
+  that one allocation; per map entry costs `4 + 2*len(k) +
+  value-bound`, or a flat 128-byte fallback for nested/struct values.
+  Down from a flat `128 * len` (~2.4× overshoot pre-tighten). For
+  the truly-zero-alloc shape see `ggen_presized` (4 B/op, 0 allocs).
+- **Marshal (`ggen_presized` row):** caller-owned buffer + ggen's
+  AppendAny fast-paths for `[]any` / `[]string` / `map[string]any` /
+  `map[string]string` (concrete-type cases that bypass reflect.MapIter
+  boxing) — net zero allocations per marshal, zero GC pressure.
 - **Unmarshal:** ggen reports higher B/op than easyjson (6.1 MB vs 3.3 MB
   for ~970 KB input) because `unsafe.String` aliases keep the entire
   input buffer alive — the GC accounts the input as a live allocation
@@ -1155,6 +1179,47 @@ Root module (`./`):
   process-global so the technique works in parallel. Best run with
   a fixed iter count (`-benchtime=1000x`) for comparable per-codec
   numbers.
+
+### Cross-codec bench hygiene: easyjson method leakage
+
+`//easyjson:json` generates `MarshalJSON` / `UnmarshalJSON` on the
+target type. The standard library's reflection-based codecs (`jsonv2`,
+stdlib `encoding/json`) and sonic ALL check the
+`json.Marshaler` / `json.Unmarshaler` interfaces before falling back to
+reflection — so any type carrying easyjson methods silently routes
+every "reflection" codec through easyjson's hand-rolled fast path.
+The bench row labelled `jsonv2` or `sonic` ends up measuring easyjson,
+not the codec it claims to.
+
+**Pattern:** keep ggen and easyjson on SEPARATE types that share the
+wire shape. The bench feeds the "Plain" (ggen-only) struct to the
+reflection codecs and the "Easy" struct to the easyjson row.
+
+```go
+//ggen:generate
+type Claim struct { Sub string `json:"sub"`; ... }
+
+//easyjson:json
+type EasyClaim struct { Sub string `json:"sub"`; ... }   // same fields
+```
+
+`NodePlain` / `AddrPlain` exist for the same reason at the mega level
+(self-referential field types meant the simpler `type AddrPlain Addr`
+pattern wasn't enough — see the existing comments in `bench/types.go`).
+For non-recursive structs (Claim, ValidationHeavy, HTMLPlain) a parallel
+struct declaration is the cleanest approach.
+
+Symptom when this is forgotten: the supposedly-reflection bench row
+matches easyjson's allocs and ns/op almost exactly, when it should be
+3-10× slower. Anything similar in a new bench → check the type doesn't
+carry easyjson methods.
+
+ggen's own `AppendJSON` / `DecodeFrom` methods do NOT trip the same
+hazard — they're not `json.Marshaler` / `json.Unmarshaler`. Only the
+stdlib-interface methods (which easyjson emits, and which ggen's
+`//ggen:generate marshal` / `unmarshal` opt-ins also emit) cause
+cross-codec pickup. If a struct opts into ggen's marshal/unmarshal
+hooks, the same isolation pattern applies.
 
 Running tests — each sub-module is reached by `cd`-ing into it since
 `./...` from the root does not cross module boundaries:

@@ -279,7 +279,7 @@ func parseAnnotation(groups ...*ast.CommentGroup) (annotationFlags, bool) {
 			}
 			rest = strings.TrimLeft(rest, " \t")
 			var flags annotationFlags
-			for _, tok := range strings.Fields(rest) {
+			for tok := range strings.FieldsSeq(rest) {
 				switch tok {
 				case "marshal":
 					flags.marshal = true

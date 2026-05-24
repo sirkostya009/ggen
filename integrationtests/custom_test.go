@@ -74,3 +74,32 @@ func TestAggregate_pass(t *testing.T) {
 		t.Errorf("Name = %q", got.Name)
 	}
 }
+
+// CustomBothStruct exercises a single field carrying BOTH a custom @Func
+// validator AND a custom @Func mod. They must both run, mod first
+// (transforms the input) then validator (checks the transformed value).
+//
+//ggen:generate
+type CustomBothStruct struct {
+	Tags []string `json:"tags" mod:"dive:@TrimSpace" ggen:"dive:@NotBlank"`
+}
+
+// TestCustomBoth_modThenValidator: mod runs first (trims), then validator
+// checks the result. Input `"  ok  "` → trim → `"ok"` → passes NotBlank.
+// Input `"   "` → trim → `""` → fails NotBlank.
+func TestCustomBoth_modThenValidator(t *testing.T) {
+	good := []byte(`{"tags":["  hello  ","  world  "]}`)
+	got, err := decode.Unmarshal[CustomBothStruct](good)
+	if err != nil {
+		t.Fatalf("unmarshal good: %v", err)
+	}
+	want := []string{"hello", "world"}
+	if len(got.Tags) != len(want) || got.Tags[0] != want[0] || got.Tags[1] != want[1] {
+		t.Errorf("Tags = %v, want trimmed %v", got.Tags, want)
+	}
+
+	bad := []byte(`{"tags":["ok","     "]}`)
+	if _, err := decode.Unmarshal[CustomBothStruct](bad); err == nil {
+		t.Fatal("expected blank-after-trim error")
+	}
+}

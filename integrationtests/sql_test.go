@@ -7,6 +7,7 @@ package integrationtests
 
 import (
 	"database/sql"
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -124,5 +125,53 @@ func TestSQLNull_Roundtrip(t *testing.T) {
 	}
 	if !got.T.Time.Equal(in.T.Time) || got.T.Valid != in.T.Valid {
 		t.Errorf("T roundtrip: got %+v want %+v", got.T, in.T)
+	}
+}
+
+// populatedSQLNull builds an SQLNullStruct with every flavor set to a
+// non-trivial Valid=true value — used by the JSONSize cap-guard test
+// for the present branch.
+func populatedSQLNull() SQLNullStruct {
+	return populatedSQLNullAt(time.Unix(1700000000, 0).UTC())
+}
+
+func populatedSQLNullAt(when time.Time) SQLNullStruct {
+	out := SQLNullStruct{}
+	out.S.String, out.S.Valid = strings.Repeat("a", 100), true
+	out.I.Int64, out.I.Valid = math.MinInt64, true
+	out.I32.Int32, out.I32.Valid = math.MinInt32, true
+	out.I16.Int16, out.I16.Valid = math.MinInt16, true
+	out.B.Byte, out.B.Valid = math.MaxUint8, true
+	out.BL.Bool, out.BL.Valid = true, true
+	out.F.Float64, out.F.Valid = math.MaxFloat64, true
+	out.T.Time, out.T.Valid = when, true
+	return out
+}
+
+// TestJSONSize_SQLNullStruct: cap-guard for every database/sql.NullX flavor.
+// Both Valid=true and Valid=false branches because the size code chooses
+// max(innerSize, len("null")) — both arms must absorb without realloc.
+func TestJSONSize_SQLNullStruct_NoRealloc(t *testing.T) {
+	cases := []struct {
+		name string
+		v    SQLNullStruct
+	}{
+		{"all_null", SQLNullStruct{}},
+		{"all_present", populatedSQLNull()},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			size := c.v.JSONSize()
+			got, err := c.v.AppendJSON(make([]byte, 0, size))
+			if err != nil {
+				t.Fatalf("AppendJSON: %v", err)
+			}
+			if cap(got) != size {
+				t.Errorf("realloc: JSONSize=%d cap=%d len=%d\nout=%s", size, cap(got), len(got), got)
+			}
+			if len(got) > size {
+				t.Errorf("undersized: len=%d > size=%d", len(got), size)
+			}
+		})
 	}
 }

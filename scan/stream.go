@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"math"
 	"strconv"
 	"unicode/utf16"
 	"unicode/utf8"
@@ -504,9 +505,11 @@ func (s *Stream) stringSlow(start, j int) (string, int, error) {
 	}
 }
 
-// Int64 scans an integer. Accumulates digits into n; no buffer span
-// preserved, so the loop's ReadMore passes i as keep — bytes < i are
-// discarded and i resets to 0.
+// Int64 scans an integer. Accumulates digits into u (uint64) with
+// per-digit overflow detection; the sign is applied at the end. No
+// buffer span preserved, so the loop's ReadMore passes i as keep —
+// bytes < i are discarded and i resets to 0. Matches Int64 in scan.go
+// for out-of-range error reporting.
 func (s *Stream) Int64(i int) (int64, int, error) {
 	if i >= len(s.buf) {
 		if err := s.ReadMore(i); err != nil {
@@ -532,7 +535,11 @@ func (s *Stream) Int64(i int) (int64, int, error) {
 	if s.buf[i] < '0' || s.buf[i] > '9' {
 		return 0, 0, ErrBadNumber
 	}
-	var n int64
+	limit := uint64(math.MaxInt64)
+	if neg {
+		limit = SignedNeg
+	}
+	var u uint64
 	for {
 		if i >= len(s.buf) {
 			err := s.ReadMore(i)
@@ -548,16 +555,24 @@ func (s *Stream) Int64(i int) (int64, int, error) {
 			}
 			break
 		}
-		n = n*10 + int64(c-'0')
+		d := uint64(c - '0')
+		if u > limit/10 || (u == limit/10 && d > limit%10) {
+			return 0, 0, ErrNumberOverflow
+		}
+		u = u*10 + d
 		i++
 	}
 	if neg {
-		n = -n
+		if u == SignedNeg {
+			return math.MinInt64, i, nil
+		}
+		return -int64(u), i, nil
 	}
-	return n, i, nil
+	return int64(u), i, nil
 }
 
-// Uint64 scans an unsigned integer.
+// Uint64 scans an unsigned integer with overflow detection. Returns
+// ErrNumberOverflow when the magnitude exceeds MaxUint64.
 func (s *Stream) Uint64(i int) (uint64, int, error) {
 	if i >= len(s.buf) {
 		if err := s.ReadMore(i); err != nil {
@@ -583,7 +598,11 @@ func (s *Stream) Uint64(i int) (uint64, int, error) {
 		if c < '0' || c > '9' {
 			break
 		}
-		n = n*10 + uint64(c-'0')
+		d := uint64(c - '0')
+		if n > Uint64Limit/10 || (n == Uint64Limit/10 && d > Uint64Limit%10) {
+			return 0, 0, ErrNumberOverflow
+		}
+		n = n*10 + d
 		i++
 	}
 	return n, i, nil
