@@ -1428,17 +1428,6 @@ their generated code.
   parse layer (`packages.Load` + the tag parser) so checks stay in
   sync with codegen rules.
 
-- **Ship a `SKILL.md` for the ggen CLI.** Claude Code Skills format —
-  a single markdown file that briefs an AI agent on how to drive ggen
-  from the shell: when to invoke it, which flags map to which user
-  intents, the annotation surface, the regen-after-edit workflow, and
-  the common pitfalls (zero-copy aliasing, build-tag bucketing, AST-only
-  fallback when no `go.mod`). Distribution shape: drop `SKILL.md` at the
-  repo root (mirrors how other tools ship). Most of the content can be
-  distilled from this CLAUDE.md's "Generator CLI" + "Flags" + "Struct
-  tags" sections; the skill version trims internal-implementation
-  asides and focuses on the user-facing decision tree.
-
 - **Revisit `validation.CustomError` shape.** Today it carries
   `{Field, Name string, Cause error}` and exposes `Unwrap()`. Specifics
   TBD, but the current shape has rough edges worth a pass:
