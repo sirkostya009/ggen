@@ -1428,6 +1428,29 @@ their generated code.
       `errors.As` shape more useful.
   Pick the angle when there's a concrete report-shape ask.
 
+- **Drop eager directory walk in `./...` mode; rely on module
+  declarations + work files instead.** Today `ggen ./...` from the
+  repo root walks the filesystem depth-first to discover every
+  directory containing `.go` files, then calls `packages.Load` on
+  each. Cross-module boundaries are crossed implicitly — the walker
+  doesn't know about `go.mod` / `go.work`, it just sees directories.
+  That works but has two costs: (1) `.gitignore`d / vendored /
+  tooling directories that happen to contain Go files get loaded for
+  nothing; (2) the parent-after-children ordering needed for cross-
+  pkg ggen-method detection (see "Walk mode" in this doc) is enforced
+  by a depth-keyed wg fan-out instead of being derivable from module
+  topology. Replace the walker with: parse the nearest `go.mod` (or
+  `go.work` if present), enumerate its `module`/`use` declarations,
+  and load each package via its import path. Modules outside the
+  declaration set are skipped; the walker's "depth" becomes the
+  module graph's reverse-topological order. Pros: matches what `go
+  build ./...` actually does, no surprise hits on vendored Go, faster
+  startup on big trees. Cons: a sub-tree that lacks a `go.mod` /
+  isn't `use`d from a `go.work` becomes invisible to `./...` — users
+  with multi-module repos that aren't workspaced lose the implicit
+  cross-walk. Probably want a `-walk` opt-out flag to restore the
+  current filesystem walk for those holdouts.
+
 ## Tried and rejected (don't re-attempt without new evidence)
 
 - **Generator emitting `go/ast` nodes instead of text.** Full rewrite
