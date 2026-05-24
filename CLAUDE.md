@@ -16,6 +16,7 @@ schema/
 ├── alias.go                                            ← alias-type code emitters (decode + AppendJSON)
 ├── applicability.go                                    ← parse-time rule/kind compatibility matrix
 ├── customfunc.go                                       ← @Func resolution for custom validators / mods
+├── check.go                                            ← `-dry` / future-ggenvet parse-only entry points
 ├── log.go                                              ← cliLog: leveled logger with deferred flush
 ├── parse_test.go, tags_test.go                         ← CLI tests
 ├── shared_test.go (in integrationtests/)               ← shared demo structs (Address, Node, …) used across feature tests
@@ -316,6 +317,14 @@ the post-NeedDeps memory budget makes unbounded NumCPU fanout fine.
   (which dropped HTML escaping as a default). Set this when the JSON
   payload is being embedded directly in HTML and the consumer doesn't
   escape on its own.
+- `-dry` — dry run: parse and validate every annotated struct, surface
+  every error, emit no file. Routes through `check.go`'s `checkPackage`
+  / `checkFile` (parse-only entry points designed to be reused by a
+  future `ggenvet` static-analysis binary — no codegen, no internal
+  buffer, no I/O beyond what the parser already does). Composes with
+  verbosity: `ggen -dry -v ./...` prints `ok <path> (N structs)` per
+  package on success. Rejects `-o` / `-pkg` (neither has meaning when
+  nothing is written).
 
 ### Per-struct annotations
 
@@ -1390,11 +1399,12 @@ their generated code.
 - **Add more CLI flags.** Specifically what's missing is TBD —
   candidates to consider when revisiting: a `-out-dir` for shared
   output (vs the current next-to-source layout), per-struct selectors
-  beyond the trailing-name filter (`-only=Foo,Bar` style), an explicit
-  `-tag <tag>` to scope generation to one build-tag bucket, and a
-  `-dry-run` that prints what would be written without touching the
-  filesystem. None are urgent; pick the ones that map to a real
-  workflow before adding.
+  beyond the trailing-name filter (`-only=Foo,Bar` style), and an
+  explicit `-tag <tag>` to scope generation to one build-tag bucket.
+  None are urgent; pick the ones that map to a real workflow before
+  adding. (`-dry` shipped — parse + validate without writing any
+  file; entry points in `check.go` are factored for the future
+  `ggenvet` tool to reuse.)
 
 - **Custom vet tool.** Ship a `ggenvet` (`go vet -vettool=ggenvet`)
   binary that catches misuses the compiler can't see. The biggest one
@@ -1695,6 +1705,37 @@ top-level `null`, trailing garbage, invalid UTF-8 inside strings.
 - **Behaviour**
 - **Usage**
 - And so on...
+
+### Sibling docs that MUST also be kept current
+
+Every change that touches a user-visible surface must propagate to
+**both** `README.md` and `SKILL.md` in the same PR — they're the user
+and agent front doors respectively, and stale entries become bug
+reports. Specifically:
+
+- **CLI flag added / removed / renamed** → update the flag table in
+  `README.md` (`### flags and annotations`) AND in `SKILL.md`
+  (`## Flags (global) and per-struct annotations (local)`). For
+  `SKILL.md`, also consider the `## Common user intents → flags`
+  table — if there's a phrase a user would say to reach for the new
+  flag, add it there.
+- **Annotation token added / removed / renamed** → same two tables;
+  the annotation column lives next to the CLI flag column.
+- **Field tag syntax change** (`json:`, `ggen:`, `mod:`) → update
+  `README.md`'s `## struct tags` section AND `SKILL.md`'s field-tag
+  walkthrough.
+- **New supported Go kind / wire-shape change** → README's
+  `## supported kinds` AND SKILL's kind list.
+- **New runtime API** in `decode` / `encode` / `scan` → README's
+  `## generated methods` AND the relevant SKILL section.
+
+When in doubt: if a future user could be confused by reading only the
+README/SKILL and not seeing the new feature, the doc is stale. Do not
+defer "I'll update the docs in a follow-up" — the follow-up never
+ships. Bundle the doc update in the same commit as the code.
+
+CLAUDE.md is the implementation log (the *why*); README and SKILL are
+the surface (the *what* and *how*). All three move together.
 
 ## README.md authoring rules
 

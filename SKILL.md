@@ -113,6 +113,7 @@ Annotations are space-separated after `//ggen:generate`.
 | `-nosortkeys`    | `nosortkeys`    | emit struct fields in declaration order (default: alphabetical, compresses better)                     |
 | `-usenumber`     | `usenumber`     | decode JSON numbers in `any` fields as `json.Number` instead of `float64`                              |
 | `-htmlescape`    | `htmlescape`    | escape `<`, `>`, `&` to `\uXXXX` (default: literal, matches `encoding/json` v2)                        |
+| `-dry`           | —               | parse + validate every annotated struct, surface all errors, emit no file. Rejects `-o`/`-pkg`         |
 | `-v`             | —               | info-level progress (e.g. `wrote <file>`)                                                              |
 | `-vv`            | —               | debug-level: per-package / per-struct diagnostics                                                      |
 | `-vvv`           | —               | trace-level diagnostics                                                                                |
@@ -456,15 +457,16 @@ builds aren't broken.
 
 ## Common user intents → flags
 
-| User says                                                 | Reach for                                                          |
-| --------------------------------------------------------- | ------------------------------------------------------------------ |
-| "still want `json.Marshal(u)` to work"                    | `-marshal` (and/or `-unmarshal`)                                   |
-| "collect all errors, not just the first"                  | `-multierr`                                                        |
-| "skip unknown keys silently"                              | `-ignoreunknown` or a `json:",inline"` catch-all map               |
-| "fastest possible decode, I trust the input"              | `-novalidate`                                                      |
-| "wire output embedded directly in HTML"                   | `-htmlescape` (or per-type via alias `//ggen:generate htmlescape`) |
-| "exact-precision numbers (big ints, no float64)"          | `-usenumber` for `any` fields; or use `math/big.Int`               |
-| "duplicate keys should be accepted (first wins)"          | `-allowdups`                                                       |
-| "keep field order matching declaration"                   | `-nosortkeys`                                                      |
-| "i want only some strings to have html escaping"          | `//ggen:generate htmlescape` `type HTMLString string`              |
-| "this struct has json tags but I want it to parse faster" | `//ggen:generate` `type Alias OtherStruct`                         |
+| User says                                                 | Reach for                                                                           |
+| --------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| "still want `json.Marshal(u)` to work"                    | `-marshal` (and/or `-unmarshal`)                                                    |
+| "collect all errors, not just the first"                  | `-multierr`                                                                         |
+| "skip unknown keys silently"                              | `-ignoreunknown` or a `json:",inline"` catch-all map                                |
+| "fastest possible decode, I trust the input"              | `-novalidate`                                                                       |
+| "wire output embedded directly in HTML"                   | `-htmlescape` (or per-type via alias `//ggen:generate htmlescape`)                  |
+| "exact-precision numbers (big ints, no float64)"          | `-usenumber` for `any` fields; or use `math/big.Int`                                |
+| "duplicate keys should be accepted (first wins)"          | `-allowdups`                                                                        |
+| "keep field order matching declaration"                   | `-nosortkeys`                                                                       |
+| "i want only some strings to have html escaping"          | `//ggen:generate htmlescape` `type HTMLString string`                               |
+| "this struct has json tags but I want it to parse faster" | `//ggen:generate` `type Alias OtherStruct`                                          |
+| "validate annotations in CI without writing files"        | `-dry` (parse + validate every annotated struct, surface every error, emit no file) |

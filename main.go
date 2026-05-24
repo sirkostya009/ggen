@@ -20,6 +20,7 @@ const (
 
 var (
 	cliFlags annotationFlags
+	cliDry   bool
 	cliLog   Logger
 )
 
@@ -42,6 +43,7 @@ func main() {
 	flag.BoolVar(&cliFlags.nosortkeys, "nosortkeys", false, "emit struct fields in declaration order (default: sorted by JSON name at codegen time)")
 	flag.BoolVar(&cliFlags.usenumber, "usenumber", false, "decode JSON numbers into `any` fields as json.Number instead of float64 (mirrors json.Decoder.UseNumber)")
 	flag.BoolVar(&cliFlags.htmlescape, "htmlescape", false, "HTML-safe escape <, >, & in emitted strings (default: literal, matches stdlib jsonv2)")
+	flag.BoolVar(&cliDry, "dry", false, "dry run: parse and validate every annotated struct, surface all errors, emit no file")
 	flag.BoolVar(&v, "v", false, "\nverbose: info-level progress (wrote <file>)")
 	flag.BoolVar(&vv, "vv", false, "more verbose: per-package / per-struct debug")
 	flag.BoolVar(&vvv, "vvv", false, "trace-level diagnostics")
@@ -90,6 +92,14 @@ func main() {
 	}
 	target := positional[0]
 
+	// -dry routes through the parse-only entry points in check.go. -o
+	// (single-file output) and -pkg (package-name override) are dead in
+	// that mode — nothing is written — so reject both up front instead
+	// of silently dropping them. Parallels the walk's -o rejection.
+	if cliDry && (outFlag != "" || pkgFlag != "") {
+		cliLog.Fatal(errors.New("-o / -pkg cannot be used with -dry (dry run emits no file)"))
+	}
+
 	if root, ok := strings.CutSuffix(target, "/..."); ok {
 		if outFlag != "" {
 			cliLog.Fatal(errors.New("-o cannot be used with ./... (walk visits multiple directories; each writes its own output)"))
@@ -98,17 +108,35 @@ func main() {
 		// on the first: a single bad rule in pkg/a shouldn't hide
 		// problems in pkg/b. Filesystem-walk errors are fatal — we
 		// can't recover from a permissions failure mid-walk.
-		if err := walkAndGenerate(root); err != nil {
+		act := func(dir string) error { return generateDir(dir, "", "") }
+		if cliDry {
+			act = checkPackage
+		}
+		if err := walkPackages(root, act); err != nil {
 			cliLog.Fatal(err)
 		}
 	} else if info, err := os.Stat(target); err != nil {
 		cliLog.Fatal(err)
 	} else if info.IsDir() {
-		if err := generateDir(target, outFlag, pkgFlag); err != nil {
+		var err error
+		if cliDry {
+			err = checkPackage(target)
+		} else {
+			err = generateDir(target, outFlag, pkgFlag)
+		}
+		if err != nil {
 			cliLog.Error(err)
 		}
-	} else if err := generateSingleFile(target, positional[1:], outFlag, pkgFlag); err != nil {
-		cliLog.Error(err)
+	} else {
+		var err error
+		if cliDry {
+			err = checkFile(target, positional[1:])
+		} else {
+			err = generateSingleFile(target, positional[1:], outFlag, pkgFlag)
+		}
+		if err != nil {
+			cliLog.Error(err)
+		}
 	}
 
 	// Drain any errors collected during the run, then exit non-zero
@@ -162,7 +190,13 @@ func applyCLIFlags(structs []StructInfo) {
 	}
 }
 
-func walkAndGenerate(root string) error {
+// walkPackages descends `root` recursively, depth-first, and invokes
+// `act` on every directory containing Go source. Used by both the
+// codegen walk (act = generateDir) and the dry-run check walk
+// (act = checkPackage) — every per-package processing path goes through
+// here so traversal semantics (skip rules, parent-after-children
+// ordering, per-level concurrency, error accumulation) stay in lockstep.
+func walkPackages(root string, act func(dir string) error) error {
 	// Collect directories first, then process deepest-first so a
 	// parent package that depends on a child package (e.g. a struct
 	// field of type child.Foo) sees the child's already-generated
@@ -209,7 +243,7 @@ func walkAndGenerate(root string) error {
 		level := byDepth[d]
 		if len(level) == 1 {
 			// One package at this depth — skip the goroutine overhead.
-			if err := generateDir(level[0], "", ""); err != nil {
+			if err := act(level[0]); err != nil {
 				cliLog.Error(fmt.Errorf("in %s: %w", level[0], err))
 			}
 			continue
@@ -217,7 +251,7 @@ func walkAndGenerate(root string) error {
 		var wg sync.WaitGroup
 		for _, path := range level {
 			wg.Go(func() {
-				if err := generateDir(path, "", ""); err != nil {
+				if err := act(path); err != nil {
 					cliLog.Error(fmt.Errorf("in %s: %w", path, err))
 				}
 			})

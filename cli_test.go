@@ -819,6 +819,167 @@ type C struct {
 		}
 	})
 
+	// --- -dry: parse-only validation, no file emission ---
+
+	t.Run("Dry_NoFileWritten", func(t *testing.T) {
+		t.Parallel()
+		// Three dispatch modes — single-file, directory, walk — each
+		// must exit zero on a clean fixture and leave NO _ggen.go on
+		// disk. One table per mode so a regression in any single
+		// dispatch branch surfaces in isolation.
+		cases := []struct {
+			name  string
+			setup func(t *testing.T) (runDir string, args []string, mustAbsent []string)
+		}{
+			{
+				name: "SingleFile",
+				setup: func(t *testing.T) (string, []string, []string) {
+					dir := t.TempDir()
+					writeFixture(t, filepath.Join(dir, "msg.go"), minimalStruct)
+					return dir, []string{"-dry", "msg.go"}, []string{filepath.Join(dir, "msg_ggen.go")}
+				},
+			},
+			{
+				name: "Directory",
+				setup: func(t *testing.T) (string, []string, []string) {
+					base := t.TempDir()
+					dir := filepath.Join(base, "fixture")
+					writeFixture(t, filepath.Join(dir, "msg.go"), minimalStruct)
+					return dir, []string{"-dry", "."}, []string{filepath.Join(dir, "fixture_ggen.go")}
+				},
+			},
+			{
+				name: "Walk",
+				setup: func(t *testing.T) (string, []string, []string) {
+					base := t.TempDir()
+					a := filepath.Join(base, "a")
+					b := filepath.Join(base, "b")
+					writeFixture(t, filepath.Join(a, "msg.go"),
+						strings.ReplaceAll(minimalStruct, "fixture", "a"))
+					writeFixture(t, filepath.Join(b, "msg.go"),
+						strings.ReplaceAll(strings.ReplaceAll(minimalStruct, "fixture", "b"), "Msg", "MsgB"))
+					return base, []string{"-dry", "./..."}, []string{
+						filepath.Join(a, "a_ggen.go"),
+						filepath.Join(b, "b_ggen.go"),
+					}
+				},
+			},
+		}
+		for _, c := range cases {
+			t.Run(c.name, func(t *testing.T) {
+				t.Parallel()
+				runDir, args, absent := c.setup(t)
+				if out, err := runCLI(t, bin, runDir, args...); err != nil {
+					t.Fatalf("ggen %v: %v\n%s", args, err, out)
+				}
+				for _, p := range absent {
+					mustNotHaveFile(t, p)
+				}
+			})
+		}
+	})
+
+	t.Run("Dry_SurfacesAllErrors", func(t *testing.T) {
+		t.Parallel()
+		// Dry mode must surface every parse-time diagnostic the codegen
+		// path would have caught, exit non-zero, and leave nothing on
+		// disk. Two dispatches — single-file accumulates errors across
+		// fields in one struct; walk accumulates errors across multiple
+		// packages — exercised side-by-side so a regression in either
+		// the per-field or the per-package collection path stays
+		// localized.
+		cases := []struct {
+			name  string
+			setup func(t *testing.T) (runDir string, args, wantSubs, mustAbsent []string)
+		}{
+			{
+				name: "SingleFile_AcrossFields",
+				setup: func(t *testing.T) (string, []string, []string, []string) {
+					dir := t.TempDir()
+					writeFixture(t, filepath.Join(dir, "multi.go"), `package fixture
+
+//ggen:generate
+type Multi struct {
+	A int `+"`"+`json:"a" ggen:"ascii"`+"`"+`
+	B int `+"`"+`json:"b" ggen:"email"`+"`"+`
+	C string `+"`"+`json:"c" ggen:"gt=0"`+"`"+`
+}
+`)
+					return dir, []string{"-dry", "multi.go"},
+						[]string{"`ascii`", "`email`", "`gt`"},
+						[]string{filepath.Join(dir, "multi_ggen.go")}
+				},
+			},
+			{
+				name: "Walk_AcrossPackages",
+				setup: func(t *testing.T) (string, []string, []string, []string) {
+					base := t.TempDir()
+					writeFixture(t, filepath.Join(base, "a", "msg.go"), `package a
+
+//ggen:generate
+type A struct {
+	N int `+"`"+`json:"n" ggen:"ascii"`+"`"+`
+}
+`)
+					writeFixture(t, filepath.Join(base, "b", "msg.go"), `package b
+
+//ggen:generate
+type B struct {
+	N int `+"`"+`json:"n" ggen:"email"`+"`"+`
+}
+`)
+					return base, []string{"-dry", "./..."},
+						[]string{"`ascii`", "`email`"},
+						[]string{
+							filepath.Join(base, "a", "a_ggen.go"),
+							filepath.Join(base, "b", "b_ggen.go"),
+						}
+				},
+			},
+		}
+		for _, c := range cases {
+			t.Run(c.name, func(t *testing.T) {
+				t.Parallel()
+				runDir, args, wantSubs, absent := c.setup(t)
+				out, err := runCLI(t, bin, runDir, args...)
+				if err == nil {
+					t.Fatalf("expected non-zero exit, got:\n%s", out)
+				}
+				for _, want := range wantSubs {
+					if !strings.Contains(out, want) {
+						t.Errorf("missing diagnostic %s, got:\n%s", want, out)
+					}
+				}
+				for _, p := range absent {
+					mustNotHaveFile(t, p)
+				}
+			})
+		}
+	})
+
+	t.Run("Dry_RejectsOutputOverride", func(t *testing.T) {
+		t.Parallel()
+		// -o and -pkg are dead in dry mode (nothing is written) — reject
+		// up front instead of silently dropping them. Parallels the
+		// walk's -o rejection.
+		dir := t.TempDir()
+		writeFixture(t, filepath.Join(dir, "msg.go"), minimalStruct)
+		for _, args := range [][]string{
+			{"-dry", "-o", filepath.Join(dir, "out.go"), "msg.go"},
+			{"-dry", "-pkg", "renamed", "msg.go"},
+		} {
+			out, err := runCLI(t, bin, dir, args...)
+			if err == nil {
+				t.Fatalf("expected non-zero exit for %v, got:\n%s", args, out)
+			}
+			if !strings.Contains(out, "-dry") {
+				t.Errorf("expected -dry rejection diagnostic for %v, got:\n%s", args, out)
+			}
+			mustNotHaveFile(t, filepath.Join(dir, "out.go"))
+			mustNotHaveFile(t, filepath.Join(dir, "msg_ggen.go"))
+		}
+	})
+
 	t.Run("WalkSkipsDotAndUnderscoreDirs", func(t *testing.T) {
 		t.Parallel()
 		base := t.TempDir()
