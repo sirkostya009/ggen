@@ -600,9 +600,18 @@ takes care of any methods on those types.
   `json.Number` aliased over the input via `unsafe.String` (zero-alloc,
   zero-copy on the happy path; same fast path as `String`). Encode goes
   through `encode.AppendAny` — type-switches over runtime primitives,
-  falls into reflection for slices/arrays/maps/pointers/structs (with
-  json-tag parsing for struct walking), keeping nested ggen `Marshaler`
-  / `TextAppender` types on the fast path with no `json.Marshal` cliff.
+  homogeneous primitive slices (`[]int*`, `[]uint16/32/64`, `[]float*`,
+  `[]bool`, `[]string`, `[]any`), homogeneous string-keyed primitive
+  maps (`map[string]int*`, `map[string]uint*`, `map[string]float*`,
+  `map[string]bool`, `map[string]string`, `map[string]any`),
+  `json.RawMessage` (verbatim passthrough), `time.Time` (AppendText),
+  and pointer-to-primitive (`*string`, `*bool`, `*int*`, `*uint*`,
+  `*float*` — nil → `null`) before falling into reflection for
+  slices/arrays/maps/pointers/structs (with json-tag parsing for
+  struct walking), keeping nested ggen `Marshaler` / `TextAppender`
+  types on the fast path with no `json.Marshal` cliff. Skips
+  `[]uint8` from the slice fast path so `[]byte` routes through the
+  reflect.Slice base64 emitter.
 - `[N]T` (fixed-length array) — JSON tuple with **strict count**: decode
   errors with `validation.LenError{Want: N}` when the JSON array
   has more or fewer than N elements. Combines freely with slices: `[N]T`,
@@ -1002,6 +1011,48 @@ func (s *T) UnmarshalJSON(data []byte) error                     // inlines `var
     original" var is needed. Slice expression becomes
     `data[posIn+1:]` with length `_ke - posIn - 1`; equivalent to
     `data[_ks:]` with `_ke - _ks`. Compiler folds the arithmetic.
+34. **Concrete-type fast paths in `AppendAny` for typed primitive
+    slices/maps.** The type switch in `encode.AppendAny` previously
+    only matched `[]any` / `[]string` / `map[string]any` /
+    `map[string]string`; anything else (`[]int`, `[]float64`,
+    `map[string]int64`, `map[string]bool`, …) fell through to the
+    reflect.Slice / reflect.Map path. The reflect path is alloc-free
+    on the *value* (appendReflectValue uses `rv.Int()` / `rv.Float()`
+    directly), but `reflect.MapRange` boxes per entry — ~2 allocs/
+    entry → 64 allocs on a 32-entry map. Added cases for every
+    primitive map shape (`map[string]int8/16/32/64`, `uint*`,
+    `float32/float64`, `bool`) and every typed slice shape (`[]int*`,
+    `[]uint16/32/64`, `[]float*`, `[]bool`). Each case dispatches to a
+    generic helper (`appendMapInt[V]`, `appendSliceFloat[V]`, …) so
+    the body is one strconv call per entry, no reflect overhead.
+    Skipped `[]uint8` — that's `[]byte`, which must stay on the
+    base64 reflect.Slice path. Measured on 32-entry shapes,
+    encode/appendany_test.go: `map[string]int` 4403 → 1579 ns/op
+    (2.8×), 71 → 7 allocs; `map[string]bool` 3449 → 944 ns/op
+    (3.7×), 71 → 7 allocs; `map[string]float64` 6459 → 3417 ns/op
+    (1.9×), 72 → 8 allocs. Outpaces both stdjson v1 and jsonv2 on
+    every map shape after the fix.
+35. **`AppendAny` concrete cases for `json.RawMessage`, `time.Time`,
+    and pointer-to-primitive.** All three would otherwise route via
+    the `case json.Marshaler:` branch (RawMessage and time.Time both
+    implement `MarshalJSON`; pointer-to-primitive falls into
+    `reflect.Pointer` → recurse-on-Elem). The interface dispatch
+    costs a `MarshalJSON() ([]byte, error)` heap alloc per call;
+    `reflect.Pointer` adds a `rv.Elem().Interface()` box per
+    dereference. Concrete cases pre-empt both:
+      - `json.RawMessage`: nil/empty → `null`, otherwise `append(dst,
+        x...)` (bytes are assumed valid JSON, pass through verbatim).
+      - `time.Time`: opens `"`, calls `x.AppendText(dst)` (Go 1.24+
+        TextAppender — same RFC3339Nano wire shape as MarshalJSON),
+        closes `"`.
+      - `*string` / `*bool` / `*int*` / `*uint*` / `*float*`: nil →
+        `null`, otherwise inline-emit. Int/uint variants share a
+        generic `appendPtrInt[V]` / `appendPtrUint[V]` helper.
+    Cases sit before the `case Marshaler` block so they win the type
+    switch over the interface dispatches. Measured wins (vs jsonv2,
+    32-byte shapes): `json.RawMessage` 227 → 28 ns/op (8.1×, 2 → 1
+    alloc); `time.Time` 181 → 117 ns/op (1.55×); `*int` 70 → 26
+    ns/op (2.7×); `*bool` 83 → 19 ns/op (4.4×).
 
 ## Benchmarks (~5.6 MiB deep Node tree, full validation)
 
@@ -1099,9 +1150,11 @@ On the tiny complex payload (~440 bytes): Unmarshal ~415 ns, 2 allocs,
   Down from a flat `128 * len` (~2.4× overshoot pre-tighten). For
   the truly-zero-alloc shape see `ggen_presized` (4 B/op, 0 allocs).
 - **Marshal (`ggen_presized` row):** caller-owned buffer + ggen's
-  AppendAny fast-paths for `[]any` / `[]string` / `map[string]any` /
-  `map[string]string` (concrete-type cases that bypass reflect.MapIter
-  boxing) — net zero allocations per marshal, zero GC pressure.
+  AppendAny concrete-type fast paths for every primitive shape — `[]any`
+  / `[]string` / `[]int*` / `[]uint16/32/64` / `[]float*` / `[]bool`,
+  plus `map[string]any` / `string` / `int*` / `uint*` / `float*` / `bool`
+  (concrete-type cases that bypass reflect.MapIter boxing) — net zero
+  allocations per marshal, zero GC pressure.
 - **Unmarshal:** ggen reports higher B/op than easyjson (6.1 MB vs 3.3 MB
   for ~970 KB input) because `unsafe.String` aliases keep the entire
   input buffer alive — the GC accounts the input as a live allocation
@@ -1178,6 +1231,13 @@ Root module (`./`):
 - `bench_test.go` — `BenchmarkGenerate` cycles `generate()` over a
   representative fixture to track allocs/op across generator refactors.
 - `log_test.go` — Logger level + sink behaviour.
+- `encode/appendany_test.go` — `AppendAny` correctness + per-shape
+  `BenchmarkAppendAny` / `BenchmarkAppendAny_Presized`. Lives next to
+  the implementation, not in `integrationtests/`, so it has direct
+  unexported-symbol access and runs without the integrationtests
+  module setup.
+- `scan/any_test.go` — `Any` / `AnyNumber` stdlib parity tests plus
+  per-shape `BenchmarkAny_Shapes` across the same input mix.
 
 `integrationtests/` (own module, imports root packages as a consumer):
 
@@ -1216,7 +1276,7 @@ Root module (`./`):
   map `clear()` reuse, JSON `null` → nil container, JSON `[]` / `{}`
   on non-nil vs nil receiver. Test pins the user-facing contract;
   changes to the reset/merge codegen MUST keep these passing.
-- `alias_test.go`, `any_test.go`, `appendany_test.go`, `custom_test.go`,
+- `alias_test.go`, `any_test.go`, `custom_test.go`,
   `decode_dups_test.go`, `dive_test.go`, `extra_test.go`,
   `fallback_test.go`, `hooks_test.go`, `inline_test.go`,
   `jsonsize_test.go`, `maps_test.go`, `mods_test.go`, `native_test.go`,

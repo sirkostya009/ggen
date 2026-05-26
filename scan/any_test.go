@@ -2,6 +2,7 @@ package scan
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -131,3 +132,189 @@ func BenchmarkAny_scanNumber(b *testing.B) {
 		}
 	}
 }
+
+// BenchmarkAny_Shapes — per-shape decode benches. Same shape table the
+// encode side benches (encode/appendany_test.go) marshals from; here
+// we feed the marshalled bytes back through Any/AnyNumber and compare
+// to stdlib v1's reflective `json.Unmarshal` into `*any`. Surfaces
+// per-shape parsing cost across (scalar, slice, map, nested).
+//
+// Payloads come from the inline anyShapeInputs table; values are the
+// same shapes the AppendAny bench covers (32-entry primitive slices,
+// 32-entry primitive maps, scalars) so the comparison is symmetric.
+func BenchmarkAny_Shapes(b *testing.B) {
+	codecs := []struct {
+		name string
+		fn   func([]byte) error
+	}{
+		{"stdjson", func(p []byte) error { var v any; return json.Unmarshal(p, &v) }},
+		{"ggen", func(p []byte) error { _, _, err := Any(p, 0); return err }},
+		{"ggen_number", func(p []byte) error { _, _, err := AnyNumber(p, 0); return err }},
+	}
+	for _, sh := range anyShapeInputs {
+		b.Run(sh.name, func(b *testing.B) {
+			for _, c := range codecs {
+				b.Run(c.name, func(b *testing.B) {
+					b.SetBytes(int64(len(sh.payload)))
+					b.ReportAllocs()
+					for b.Loop() {
+						if err := c.fn(sh.payload); err != nil {
+							b.Fatal(err)
+						}
+					}
+				})
+			}
+		})
+	}
+}
+
+// anyShapeInputs is the per-shape input table for BenchmarkAny_Shapes.
+// Strings are inlined so the scan benches are independent of the
+// encode package's bench fixtures — same shape mix, locally generated.
+var anyShapeInputs = func() []struct {
+	name    string
+	payload []byte
+} {
+	out := []struct {
+		name    string
+		payload []byte
+	}{
+		{"null", []byte(`null`)},
+		{"bool", []byte(`true`)},
+		{"string", []byte(`"hello, ggen benchmark world!"`)},
+		{"int", []byte(`42`)},
+		{"int64", []byte(`1125899906842624`)},
+		{"float64", []byte(`3.14159`)},
+		// 30-digit number — beyond float64 precision (15-17 digits). Any
+		// parses to float64 with silent precision loss; AnyNumber
+		// preserves the exact digits via zero-copy alias, so the
+		// stdjson-vs-ggen-vs-ggen_number row spread is meaningful here.
+		{"large_number", []byte(`123456789012345.678901234567890123`)},
+	}
+	// 32-element typed-slice payloads. Plain digits / floats / bools
+	// keep the parser on its happy path (no escapes, no whitespace).
+	var sb strings.Builder
+	sb.WriteByte('[')
+	for i := range 32 {
+		if i > 0 {
+			sb.WriteByte(',')
+		}
+		sb.WriteString("1234567890") // 10-digit positive int
+	}
+	sb.WriteByte(']')
+	out = append(out, struct {
+		name    string
+		payload []byte
+	}{"[]int_32", []byte(sb.String())})
+
+	sb.Reset()
+	sb.WriteByte('[')
+	for i := range 32 {
+		if i > 0 {
+			sb.WriteByte(',')
+		}
+		sb.WriteString("3.141592653589793")
+	}
+	sb.WriteByte(']')
+	out = append(out, struct {
+		name    string
+		payload []byte
+	}{"[]float_32", []byte(sb.String())})
+
+	sb.Reset()
+	sb.WriteByte('[')
+	for i := range 32 {
+		if i > 0 {
+			sb.WriteByte(',')
+		}
+		if i%2 == 0 {
+			sb.WriteString("true")
+		} else {
+			sb.WriteString("false")
+		}
+	}
+	sb.WriteByte(']')
+	out = append(out, struct {
+		name    string
+		payload []byte
+	}{"[]bool_32", []byte(sb.String())})
+
+	sb.Reset()
+	sb.WriteByte('[')
+	for i := range 32 {
+		if i > 0 {
+			sb.WriteByte(',')
+		}
+		sb.WriteString(`"sampleString0123"`)
+	}
+	sb.WriteByte(']')
+	out = append(out, struct {
+		name    string
+		payload []byte
+	}{"[]string_32", []byte(sb.String())})
+
+	// Object shape with 32 string-keyed entries — exercise the
+	// per-key path under the same map-construction cost as the
+	// AppendAny side.
+	sb.Reset()
+	sb.WriteByte('{')
+	for i := range 32 {
+		if i > 0 {
+			sb.WriteByte(',')
+		}
+		fmt.Fprintf(&sb, `"key%d":%d`, i, 1234567890+i)
+	}
+	sb.WriteByte('}')
+	out = append(out, struct {
+		name    string
+		payload []byte
+	}{"map[string]int_32", []byte(sb.String())})
+
+	sb.Reset()
+	sb.WriteByte('{')
+	for i := range 32 {
+		if i > 0 {
+			sb.WriteByte(',')
+		}
+		fmt.Fprintf(&sb, `"key%d":%f`, i, 3.14159+float64(i))
+	}
+	sb.WriteByte('}')
+	out = append(out, struct {
+		name    string
+		payload []byte
+	}{"map[string]float_32", []byte(sb.String())})
+
+	sb.Reset()
+	sb.WriteByte('{')
+	for i := range 32 {
+		if i > 0 {
+			sb.WriteByte(',')
+		}
+		if i%2 == 0 {
+			fmt.Fprintf(&sb, `"key%d":true`, i)
+		} else {
+			fmt.Fprintf(&sb, `"key%d":false`, i)
+		}
+	}
+	sb.WriteByte('}')
+	out = append(out, struct {
+		name    string
+		payload []byte
+	}{"map[string]bool_32", []byte(sb.String())})
+
+	sb.Reset()
+	sb.WriteByte('{')
+	for i := range 32 {
+		if i > 0 {
+			sb.WriteByte(',')
+		}
+		fmt.Fprintf(&sb, `"key%d":"sampleString0123"`, i)
+	}
+	sb.WriteByte('}')
+	out = append(out, struct {
+		name    string
+		payload []byte
+	}{"map[string]string_32", []byte(sb.String())})
+
+	return out
+}()

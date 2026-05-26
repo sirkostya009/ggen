@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 	"unsafe"
 )
 
@@ -268,6 +269,36 @@ func AppendAny(dst []byte, v any) ([]byte, error) {
 			dst = AppendString(dst, s)
 		}
 		return append(dst, ']'), nil
+	// Homogeneous primitive slices. The reflect.Slice path would box
+	// the element type for every iteration via reflect.Value; native
+	// range over the typed slice is one strconv call per element with
+	// no per-element alloc.
+	case []int:
+		return appendSliceInt(dst, x), nil
+	case []int8:
+		return appendSliceInt(dst, x), nil
+	case []int16:
+		return appendSliceInt(dst, x), nil
+	case []int32:
+		return appendSliceInt(dst, x), nil
+	case []int64:
+		return appendSliceInt(dst, x), nil
+	case []uint:
+		return appendSliceUint(dst, x), nil
+	// Skip `case []uint8`: that's `[]byte`, which routes through the
+	// base64 path in reflect.Slice further down — keep the wire shape.
+	case []uint16:
+		return appendSliceUint(dst, x), nil
+	case []uint32:
+		return appendSliceUint(dst, x), nil
+	case []uint64:
+		return appendSliceUint(dst, x), nil
+	case []float32:
+		return appendSliceFloat(dst, x, 32)
+	case []float64:
+		return appendSliceFloat(dst, x, 64)
+	case []bool:
+		return appendSliceBool(dst, x), nil
 	case map[string]any:
 		dst = append(dst, '{')
 		first := true
@@ -303,15 +334,111 @@ func AppendAny(dst []byte, v any) ([]byte, error) {
 			dst = AppendString(dst, val)
 		}
 		return append(dst, '}'), nil
-	// Interfaces, in cross-pkg-dispatch priority order.
+	// Homogeneous primitive maps. Same rationale as the typed-slice
+	// cases above: reflect.MapIter on a map[string]V allocates per
+	// iteration in practice (key+value boxing, even when V is a
+	// primitive); native range yields zero-alloc per entry.
+	case map[string]int:
+		return appendMapInt(dst, x), nil
+	case map[string]int8:
+		return appendMapInt(dst, x), nil
+	case map[string]int16:
+		return appendMapInt(dst, x), nil
+	case map[string]int32:
+		return appendMapInt(dst, x), nil
+	case map[string]int64:
+		return appendMapInt(dst, x), nil
+	case map[string]uint:
+		return appendMapUint(dst, x), nil
+	case map[string]uint8:
+		return appendMapUint(dst, x), nil
+	case map[string]uint16:
+		return appendMapUint(dst, x), nil
+	case map[string]uint32:
+		return appendMapUint(dst, x), nil
+	case map[string]uint64:
+		return appendMapUint(dst, x), nil
+	case map[string]float32:
+		return appendMapFloat(dst, x, 32)
+	case map[string]float64:
+		return appendMapFloat(dst, x, 64)
+	case map[string]bool:
+		return appendMapBool(dst, x), nil
+	// Pre-empt the json.Marshaler / TextAppender interface dispatches
+	// for two common stdlib types. Both implement json.Marshaler so
+	// they'd otherwise hit `case json.Marshaler` and pay the
+	// `MarshalJSON() ([]byte, error)` alloc; the concrete cases write
+	// straight into dst with no intermediate buffer.
+	case json.RawMessage:
+		// json.RawMessage is `type RawMessage []byte`. Nil / empty
+		// becomes `null` (matches encoding/json v1 behavior); otherwise
+		// the bytes are assumed valid JSON and pass through verbatim.
+		if len(x) == 0 {
+			return append(dst, 'n', 'u', 'l', 'l'), nil
+		}
+		return append(dst, x...), nil
+	case time.Time:
+		// Use AppendText (Go 1.24+ TextAppender) — same RFC3339Nano
+		// wire shape as MarshalJSON, no intermediate alloc.
+		return appendTime(dst, x)
+	case *time.Time:
+		if x == nil {
+			return append(dst, 'n', 'u', 'l', 'l'), nil
+		}
+		return appendTime(dst, *x)
+	// Pointer-to-primitive shortcuts. The reflect.Pointer path below
+	// derefs via rv.Elem().Interface() which boxes the pointee — one
+	// alloc per pointer dispatch. Concrete cases skip that. nil → null.
+	case *string:
+		if x == nil {
+			return append(dst, 'n', 'u', 'l', 'l'), nil
+		}
+		dst = append(dst, '"')
+		return AppendString(dst, *x), nil
+	case *bool:
+		if x == nil {
+			return append(dst, 'n', 'u', 'l', 'l'), nil
+		}
+		return strconv.AppendBool(dst, *x), nil
+	case *int:
+		return appendPtrInt(dst, x), nil
+	case *int8:
+		return appendPtrInt(dst, x), nil
+	case *int16:
+		return appendPtrInt(dst, x), nil
+	case *int32:
+		return appendPtrInt(dst, x), nil
+	case *int64:
+		return appendPtrInt(dst, x), nil
+	case *uint:
+		return appendPtrUint(dst, x), nil
+	case *uint8:
+		return appendPtrUint(dst, x), nil
+	case *uint16:
+		return appendPtrUint(dst, x), nil
+	case *uint32:
+		return appendPtrUint(dst, x), nil
+	case *uint64:
+		return appendPtrUint(dst, x), nil
+	case *float32:
+		if x == nil {
+			return append(dst, 'n', 'u', 'l', 'l'), nil
+		}
+		return AppendFloat(dst, float64(*x), 32)
+	case *float64:
+		if x == nil {
+			return append(dst, 'n', 'u', 'l', 'l'), nil
+		}
+		return AppendFloat(dst, *x, 64)
+	// Interfaces, in cross-pkg-dispatch priority order. Text encoders
+	// outrank json.Marshaler so types that implement both route via
+	// AppendText (zero alloc, writes straight into dst) instead of
+	// paying the `MarshalJSON() ([]byte, error)` heap alloc. Types
+	// whose MarshalJSON shape differs from `"<AppendText body>"`
+	// must be pre-empted with a concrete case above this block (see
+	// `case time.Time:`).
 	case Marshaler:
 		return x.AppendJSON(dst)
-	case json.Marshaler:
-		b, err := x.MarshalJSON()
-		if err != nil {
-			return dst, err
-		}
-		return append(dst, b...), nil
 	case encoding.TextAppender:
 		dst = append(dst, '"')
 		var err error
@@ -328,6 +455,12 @@ func AppendAny(dst []byte, v any) ([]byte, error) {
 		dst = append(dst, '"')
 		dst = AppendString(dst, BytesToString(t))
 		return dst, nil
+	case json.Marshaler:
+		b, err := x.MarshalJSON()
+		if err != nil {
+			return dst, err
+		}
+		return append(dst, b...), nil
 	}
 	// Reflection-driven path for slices, arrays, maps, pointers, and
 	// structs. Recursing through AppendAny on each element keeps nested
@@ -408,6 +541,149 @@ func AppendAny(dst []byte, v any) ([]byte, error) {
 		return append(dst, '}'), nil
 	}
 	return dst, &json.UnsupportedTypeError{Type: rv.Type()}
+}
+
+// Primitive slice/map fast-path helpers, parameterized by element type
+// so all int / uint / float sizes share one body. Reached from the
+// concrete-type cases in AppendAny — never via reflect.
+
+func appendSliceInt[V int | int8 | int16 | int32 | int64](dst []byte, s []V) []byte {
+	dst = append(dst, '[')
+	for i, v := range s {
+		if i > 0 {
+			dst = append(dst, ',')
+		}
+		dst = strconv.AppendInt(dst, int64(v), 10)
+	}
+	return append(dst, ']')
+}
+
+func appendSliceUint[V uint | uint16 | uint32 | uint64](dst []byte, s []V) []byte {
+	dst = append(dst, '[')
+	for i, v := range s {
+		if i > 0 {
+			dst = append(dst, ',')
+		}
+		dst = strconv.AppendUint(dst, uint64(v), 10)
+	}
+	return append(dst, ']')
+}
+
+func appendSliceFloat[V float32 | float64](dst []byte, s []V, bitSize int) ([]byte, error) {
+	dst = append(dst, '[')
+	for i, v := range s {
+		if i > 0 {
+			dst = append(dst, ',')
+		}
+		var err error
+		dst, err = AppendFloat(dst, float64(v), bitSize)
+		if err != nil {
+			return dst, err
+		}
+	}
+	return append(dst, ']'), nil
+}
+
+func appendSliceBool(dst []byte, s []bool) []byte {
+	dst = append(dst, '[')
+	for i, v := range s {
+		if i > 0 {
+			dst = append(dst, ',')
+		}
+		dst = strconv.AppendBool(dst, v)
+	}
+	return append(dst, ']')
+}
+
+func appendMapInt[V int | int8 | int16 | int32 | int64](dst []byte, m map[string]V) []byte {
+	dst = append(dst, '{')
+	first := true
+	for k, v := range m {
+		if !first {
+			dst = append(dst, ',')
+		}
+		first = false
+		dst = append(dst, '"')
+		dst = AppendString(dst, k)
+		dst = append(dst, ':')
+		dst = strconv.AppendInt(dst, int64(v), 10)
+	}
+	return append(dst, '}')
+}
+
+func appendMapUint[V uint | uint8 | uint16 | uint32 | uint64](dst []byte, m map[string]V) []byte {
+	dst = append(dst, '{')
+	first := true
+	for k, v := range m {
+		if !first {
+			dst = append(dst, ',')
+		}
+		first = false
+		dst = append(dst, '"')
+		dst = AppendString(dst, k)
+		dst = append(dst, ':')
+		dst = strconv.AppendUint(dst, uint64(v), 10)
+	}
+	return append(dst, '}')
+}
+
+func appendMapFloat[V float32 | float64](dst []byte, m map[string]V, bitSize int) ([]byte, error) {
+	dst = append(dst, '{')
+	first := true
+	for k, v := range m {
+		if !first {
+			dst = append(dst, ',')
+		}
+		first = false
+		dst = append(dst, '"')
+		dst = AppendString(dst, k)
+		dst = append(dst, ':')
+		var err error
+		dst, err = AppendFloat(dst, float64(v), bitSize)
+		if err != nil {
+			return dst, err
+		}
+	}
+	return append(dst, '}'), nil
+}
+
+func appendTime(dst []byte, t time.Time) ([]byte, error) {
+	dst = append(dst, '"')
+	dst, err := t.AppendText(dst)
+	if err != nil {
+		return dst, err
+	}
+	return append(dst, '"'), nil
+}
+
+func appendPtrInt[V int | int8 | int16 | int32 | int64](dst []byte, p *V) []byte {
+	if p == nil {
+		return append(dst, 'n', 'u', 'l', 'l')
+	}
+	return strconv.AppendInt(dst, int64(*p), 10)
+}
+
+func appendPtrUint[V uint | uint8 | uint16 | uint32 | uint64](dst []byte, p *V) []byte {
+	if p == nil {
+		return append(dst, 'n', 'u', 'l', 'l')
+	}
+	return strconv.AppendUint(dst, uint64(*p), 10)
+}
+
+func appendMapBool(dst []byte, m map[string]bool) []byte {
+	dst = append(dst, '{')
+	first := true
+	for k, v := range m {
+		if !first {
+			dst = append(dst, ',')
+		}
+		first = false
+		dst = append(dst, '"')
+		dst = AppendString(dst, k)
+		dst = append(dst, ':')
+		dst = strconv.AppendBool(dst, v)
+	}
+	return append(dst, '}')
 }
 
 // appendReflectValue emits rv to dst when the value's Kind is already
