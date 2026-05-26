@@ -1604,6 +1604,65 @@ their generated code.
       `errors.As` shape more useful.
   Pick the angle when there's a concrete report-shape ask.
 
+- **Minimize root CLAUDE.md / split per package.** Single file is now
+  ~1700 lines covering CLI, codegen, runtime decode/encode/scan,
+  validation, benchmarks, design rationale, optimization log,
+  backlog, tried-and-rejected. Claude Code loads CLAUDE.md from the
+  cwd at session start; one large file means every session pays the
+  full context cost regardless of what's being touched. Split shape:
+    - Root `CLAUDE.md` — module overview, repo layout, sibling-doc
+      rules, agent etiquette. Thin index linking out to package
+      docs. Aim ~200 lines.
+    - `encode/CLAUDE.md` — Marshaler interface contract, AppendAny
+      type-switch order rules, concrete-case extension policy,
+      AppendString HTML-escape variants, base64 wire shape.
+    - `decode/CLAUDE.md` — Decoder[T] interface, generic walker
+      semantics (UnmarshalSlice etc.), validators.go predicates.
+    - `decode/validation/CLAUDE.md` — typed-error shapes, the
+      `validation.Error` interface contract, frozen OneOf slice
+      pattern, CustomError rough edges (already a backlog entry).
+    - `scan/CLAUDE.md` — bytes-path primitives, Stream cursor
+      conventions, KeyView aliasing, ReadMore/keep semantics.
+    - `integrationtests/CLAUDE.md` — `//go:generate ../ggen
+      $GOFILE` workflow, shared_test.go fixtures, when to add a
+      new file vs extend.
+    - `bench/CLAUDE.md` — runBench harness, easyjson method
+      leakage hazard, parallel-safe retention pattern.
+    - Codegen-internal docs (parse.go / generate.go / alias.go /
+      applicability.go rationale, the optimization log) stay at
+      the root since those files live there.
+  Cross-cutting topics (annotations, struct tag syntax, supported
+  Go kinds) currently sit in one place — split would force
+  duplication. Mitigation: pick a canonical home (root for
+  user-facing surface, per-package for implementation detail) and
+  link out from the other docs. Risk: cross-package consistency
+  drift — sibling-doc-rules section already flags this for the
+  README/SKILL pair; same hygiene applies to per-package
+  CLAUDE.md splits. Pick when context-window pressure during
+  sessions becomes a real problem; not urgent today.
+
+- **Decode-into-receiver merge on `*T` pointee.** Today every pointer
+  field always allocates a fresh pointee via `var v T; ... result.X =
+  &v` — the receiver's existing `*T` is discarded. The other field
+  kinds (scalar, slice, map, nested struct) already honor the
+  receiver-as-merge-source contract (`scalars persist`, `slices
+  re-use backing via [:0]`, `maps clear()` and reuse buckets,
+  `nested struct value-receivers carry the existing value`). Pointer
+  fields are the one hole: re-decoding into the same `*T` allocates
+  a brand-new pointee every time instead of writing into the
+  existing one. Fix shape: in renderField's pointer block, emit
+  something like `if result.X == nil { var v T; result.X = &v };
+  *result.X, _, _ = (*result.X).DecodeFrom(data)` for ggen-typed
+  pointee, with the equivalent for primitive pointees (read scan
+  value, write through `*result.X`). Trade-off: JSON `null` still
+  must set `result.X = nil`, so the pre-existing pointee gets
+  dropped — caller's `*T` lifetime becomes load-bearing on whether
+  the input contained the field. Probably the right default
+  anyway (matches stdlib merge semantics) but worth pinning a
+  test case in integrationtests/merge_test.go before shipping.
+  Pick when someone shows up with a real receiver-reuse hot path
+  where the per-decode pointee alloc is a problem.
+
 ## Tried and rejected (don't re-attempt without new evidence)
 
 - **Generator emitting `go/ast` nodes instead of text.** Full rewrite
