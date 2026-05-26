@@ -1470,7 +1470,7 @@ their generated code.
   (encode → decode fixed-point after one round), and `FuzzCompat`
   (ggen ↔ jsonv2 agreement when both accept). Gaps worth closing:
   per-feature fuzzers covering the corners `Node` doesn't reach —
-  alias types (primitive, struct, container variants), every
+`  alias types (primitive, struct, container variants), every
   validation rule (oneof, runes, ascii, email, …) with rule-specific
   generators, the streaming path (`UnmarshalStream` over a chunked
   reader with varied chunk sizes), `[N]T` strict-length arrays,
@@ -1511,6 +1511,81 @@ their generated code.
   `main.go` so users can `go install …/ggenvet@latest`. Reuses ggen's
   parse layer (`packages.Load` + the tag parser) so checks stay in
   sync with codegen rules.
+
+- **`AppendAny` output prealloc via size precalc.** Bench data shows
+  ggen ties or barely beats jsonv2/stdjson on typed slice marshal
+  ([]int 712 vs 745 ns/op, []float64 2875 vs 2873 ns/op) despite
+  beating them 2-4× on every map shape. Root cause: bench passes
+  `nil` dst, so `AppendAny` runs the `append` growth chain (0 → 8 →
+  16 → … → 1024), paying 7-8 allocs for output bytes that total
+  ~330 B. stdjson hides this with a sync-pooled `encodeState`
+  buffer; jsonv2 similarly pre-sizes via its own pool. Presized
+  caller-owned buffer benchmarks (`BenchmarkAppendAny_Presized`)
+  drop to 0 allocs and ggen wins by 1.85× on `[]int`. Options:
+    - **Pre-walk for size**, like ggen-generated code does via
+      `JSONSize()`. AppendAny has no compile-time type info so the
+      walk is reflect-driven — fine for primitive maps/slices
+      (typed range, no boxing), expensive for arbitrarily-nested
+      `[]any` / `map[string]any` (recursive reflect descent).
+      Heuristic: walk only when `cap(dst) == 0` AND the input is a
+      concrete homogeneous container we already have a fast path
+      for (typed slice/map); skip the walk for `[]any` /
+      `map[string]any` / opaque interfaces where the bound is
+      unbounded anyway. ~12 fast-path cases × ~5 lines each =
+      cheap to add.
+    - **Internal `sync.Pool` inside the encode package's `Marshal`**
+      (NOT `AppendAny` itself — caller-owned `dst` semantics stay
+      intact). Same trick stdlib uses. Wins on the implicit-buffer
+      `Marshal(v)` shape, no change for callers who already pass
+      a sized dst.
+    - **Explicit hint API** `AppendAnySized(dst, v, hint)` — honest,
+      no hidden state, caller picks the bound. Pairs naturally
+      with ggen-codegen sites that already know the size.
+  Pick when there's a real workload pinning slice marshal as a
+  hotspot. Today the map wins dominate; slice tie is acceptable.
+
+- **Wrap parse errors in `decode.ParseError` with position context.**
+  Today `scan.ErrBadString` / `ErrBadObject` / `ErrBadNumber` /
+  `ErrUnexpectedEnd` are bare sentinels with no `where` and no
+  `what`. A user gets `"ggen: bad string"` and has to bisect the
+  payload by hand. Wrap them at the call site with:
+    - **byte offset** — `pos int` from the scanner state at the
+      moment of failure. Cheap; already in scope.
+    - **field path** — `field string` (or `[]string` for nested
+      struct/slice positions) accumulated as the generated
+      dispatch loop descends. Codegen emits the field name in
+      each case body; would need to thread a path-stack
+      argument through `DecodeFrom` recursion (cost: extra
+      param on the hot path — measure carefully).
+    - **nearby bytes window** — `snippet []byte` around `pos`
+      (e.g. ±32 B), aliased into the input via `unsafe.String`
+      so no copy. Lets the error message render `... abc <here>
+      def ...` style.
+    - **rule** — which scan primitive failed (`"string"`,
+      `"object-close"`, `"number"`). Maps 1:1 to the existing
+      sentinel; just promote it from package-level var to a
+      field on the wrapper.
+  Shape: `type ParseError struct { Field, Rule string; Pos int;
+  Snippet []byte; Err error }` with `Unwrap()` returning `Err` so
+  `errors.Is(err, scan.ErrBadString)` keeps working. Field-path
+  threading is the cost driver; if measurements show a regression
+  on the hot path, keep the path optional (zero-cost when nil) and
+  let users opt in via a build tag or runtime flag.
+
+- **Position context on `validation.*` errors.** Same idea, one
+  layer up. Today `MinLenError{Field, Limit, Got}` etc. carry
+  the logical field name but not the byte offset where the
+  bad value was scanned. Adding `Pos int` (and maybe `Snippet
+  []byte`) would let consumers underline the offending region
+  the same way the parse-error wrap above does for scanner
+  failures. Generated code already has `pos`/`s.Pos` in scope
+  when it raises the error — threading it into the literal
+  struct is one extra field per call site. Wire-shape
+  implication: the validation.Error interface grows or gets a
+  sibling `PositionedError interface { error; Pos() int }` so
+  consumers can probe without breaking existing match patterns.
+  Pair with the parse-error wrap above so a single fail-site
+  logging format covers both error kinds.
 
 - **Revisit `validation.CustomError` shape.** Today it carries
   `{Field, Name string, Cause error}` and exposes `Unwrap()`. Specifics
