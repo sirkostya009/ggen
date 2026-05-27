@@ -1146,7 +1146,7 @@ func (s OmitStruct) JSONSize() int {
 		size += len(s.Bio) * 2
 	}
 	if s.Extra != nil {
-		size += 11
+		size += 13
 		if n := len(s.Extra); n > 0 {
 			size += n - 1
 		}
@@ -1155,7 +1155,7 @@ func (s OmitStruct) JSONSize() int {
 		}
 	}
 	if len(s.Labels) > 0 {
-		size += 12
+		size += 14
 		size += len(s.Labels) * 4
 		for k, v := range s.Labels {
 			size += len(k) * 2
@@ -1163,7 +1163,7 @@ func (s OmitStruct) JSONSize() int {
 		}
 	}
 	if s.Meta != nil {
-		size += 10
+		size += 12
 		size += len(s.Meta) * 4
 		for k, v := range s.Meta {
 			size += len(k) * 2
@@ -1175,7 +1175,7 @@ func (s OmitStruct) JSONSize() int {
 		size += 33
 	}
 	if len(s.Tags) > 0 {
-		size += 10
+		size += 12
 		if n := len(s.Tags); n > 0 {
 			size += n - 1
 		}

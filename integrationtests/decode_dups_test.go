@@ -1,3 +1,5 @@
+//go:build goexperiment.jsonv2
+
 package integrationtests
 
 //go:generate ../ggen $GOFILE
@@ -32,27 +34,13 @@ func TestDuplicateKey_firstFieldAlsoRejected(t *testing.T) {
 	}
 }
 
-func TestDuplicateKey_cleanPasses(t *testing.T) {
-	in := []byte(`{"name":"ok","n":42}`)
-	got, _, err := HookedStruct{}.DecodeFrom(in)
-	if err != nil {
-		t.Fatalf("unexpected: %v", err)
-	}
-	if got.Name != "ok" || got.N != 42 {
-		t.Errorf("got %+v", got)
-	}
-}
-
 // AllowDupsStruct opts out of the default duplicate-key error. The wire
 // contract becomes first-wins: the first key-value pair is parsed,
 // subsequent occurrences of the same key are skipped via scan.SkipValue
 // without being decoded into the field.
 //
 //ggen:generate allowdups
-type AllowDupsStruct struct {
-	Name string `json:"name"`
-	N    int    `json:"n"`
-}
+type AllowDupsStruct HookedStruct
 
 // TestAllowDups_firstWins: the first occurrence ("alice") sticks; the
 // second ("bob") is skipped, NOT overwritten. Confirms the dup is

@@ -1426,7 +1426,7 @@ func (result ExtraStruct) DecodeStreamFrom(s *scan.Stream) (ExtraStruct, error) 
 }
 
 func (s ExtraStruct) JSONSize() int {
-	size := 95
+	size := 103
 	if n := len(s.HintedTags); n > 0 {
 		size += n - 1
 	}
@@ -1441,7 +1441,7 @@ func (s ExtraStruct) JSONSize() int {
 		size += n - 1
 	}
 	for i0 := range s.NestedInts {
-		size += 2
+		size += 4
 		if n := len(s.NestedInts[i0]); n > 0 {
 			size += n - 1
 		}
@@ -1451,12 +1451,12 @@ func (s ExtraStruct) JSONSize() int {
 		size += n - 1
 	}
 	for i0 := range s.Triple {
-		size += 2
+		size += 4
 		if n := len(s.Triple[i0]); n > 0 {
 			size += n - 1
 		}
 		for i1 := range s.Triple[i0] {
-			size += 2
+			size += 4
 			if n := len(s.Triple[i0][i1]); n > 0 {
 				size += n - 1
 			}
@@ -2598,12 +2598,12 @@ func (result TupleStruct) DecodeStreamFrom(s *scan.Stream) (TupleStruct, error) 
 }
 
 func (s TupleStruct) JSONSize() int {
-	size := 45
+	size := 47
 	if n := len(s.Pair); n > 0 {
 		size += n - 1
 	}
 	for i0 := range s.Pair {
-		size += 2
+		size += 4
 		if n := len(s.Pair[i0]); n > 0 {
 			size += n - 1
 		}

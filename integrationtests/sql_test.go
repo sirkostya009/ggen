@@ -9,170 +9,260 @@ package integrationtests
 
 import (
 	"database/sql"
-	"math"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/sirkostya009/ggen/decode"
 	"github.com/sirkostya009/ggen/encode"
 )
 
-// SQLNullStruct exercises every database/sql.NullX flavor in one shot.
+// Each database/sql.NullX flavor as its own single-field struct so per-type
+// JSONSize cap-guards and decode paths can be exercised in isolation. Mirrors
+// the time-suite split (TimeDefault / TimeUnix / … in stdcompat_test.go) so
+// regressions in one Null* size class don't get buried inside a composite.
+
+//ggen:generate
+type SQLNullStringStruct struct {
+	S sql.NullString `json:"s"`
+}
+
+//ggen:generate
+type SQLNullInt64Struct struct {
+	I sql.NullInt64 `json:"i"`
+}
+
+//ggen:generate
+type SQLNullInt32Struct struct {
+	I32 sql.NullInt32 `json:"i32"`
+}
+
+//ggen:generate
+type SQLNullInt16Struct struct {
+	I16 sql.NullInt16 `json:"i16"`
+}
+
+//ggen:generate
+type SQLNullByteStruct struct {
+	B sql.NullByte `json:"b"`
+}
+
+//ggen:generate
+type SQLNullBoolStruct struct {
+	BL sql.NullBool `json:"bl"`
+}
+
+//ggen:generate
+type SQLNullFloat64Struct struct {
+	F sql.NullFloat64 `json:"f"`
+}
+
+//ggen:generate
+type SQLNullTimeStruct struct {
+	T sql.NullTime `json:"t"`
+}
+
+// SQLNullStruct keeps the composite shape so the existing roundtrip /
+// marshal / JSONSize-composite tests still exercise the full set together.
 //
 //ggen:generate
 type SQLNullStruct struct {
-	S   sql.NullString  `json:"s"`
-	I   sql.NullInt64   `json:"i"`
-	I32 sql.NullInt32   `json:"i32"`
-	I16 sql.NullInt16   `json:"i16"`
-	B   sql.NullByte    `json:"b"`
-	BL  sql.NullBool    `json:"bl"`
-	F   sql.NullFloat64 `json:"f"`
-	T   sql.NullTime    `json:"t"`
+	SQLNullStringStruct
+	SQLNullInt64Struct
+	SQLNullInt32Struct
+	SQLNullInt16Struct
+	SQLNullByteStruct
+	SQLNullBoolStruct
+	SQLNullFloat64Struct
+	SQLNullTimeStruct
 }
 
-func TestSQLNull_NullValues(t *testing.T) {
-	in := []byte(`{"s":null,"i":null,"i32":null,"i16":null,"b":null,"bl":null,"f":null,"t":null}`)
-	got, _, err := SQLNullStruct{}.DecodeFrom(in)
-	if err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
-	if got.S.Valid || got.I.Valid || got.I32.Valid || got.I16.Valid ||
-		got.B.Valid || got.BL.Valid || got.F.Valid || got.T.Valid {
-		t.Errorf("expected all Valid=false, got %+v", got)
-	}
-}
+// sqlWhen is the fixed timestamp used across the sql.Null* tests.
+// time.Unix(1700000000,0).UTC() == 2023-11-14T22:13:20Z (RFC3339).
+var sqlWhen = time.Unix(1700000000, 0).UTC()
 
-func TestSQLNull_PresentValues(t *testing.T) {
-	in := []byte(`{"s":"hello","i":42,"i32":33,"i16":7,"b":255,"bl":true,"f":3.14,"t":"2023-11-14T22:13:20Z"}`)
-	got, _, err := SQLNullStruct{}.DecodeFrom(in)
-	if err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
-	if !got.S.Valid || got.S.String != "hello" {
-		t.Errorf("S = %+v", got.S)
-	}
-	if !got.I.Valid || got.I.Int64 != 42 {
-		t.Errorf("I = %+v", got.I)
-	}
-	if !got.I32.Valid || got.I32.Int32 != 33 {
-		t.Errorf("I32 = %+v", got.I32)
-	}
-	if !got.I16.Valid || got.I16.Int16 != 7 {
-		t.Errorf("I16 = %+v", got.I16)
-	}
-	if !got.B.Valid || got.B.Byte != 255 {
-		t.Errorf("B = %+v", got.B)
-	}
-	if !got.BL.Valid || got.BL.Bool != true {
-		t.Errorf("BL = %+v", got.BL)
-	}
-	if !got.F.Valid || got.F.Float64 != 3.14 {
-		t.Errorf("F = %+v", got.F)
-	}
-	if !got.T.Valid {
-		t.Errorf("T not valid")
-	}
-}
-
-func TestSQLNull_MarshalNullEmitsNull(t *testing.T) {
-	in := SQLNullStruct{} // all zero → all !Valid → all "null"
-	out, _ := encode.MarshalString(in)
-	// Each field key must be present with `null` value.
-	for _, k := range []string{"s", "i", "i32", "i16", "b", "bl", "f", "t"} {
-		needle := `"` + k + `":null`
-		if !strings.Contains(out, needle) {
-			t.Errorf("missing %q in %s", needle, out)
+// runSQLNullPerType drives one single-field sql.Null* struct end-to-end
+// purely through the wire, no per-type field access:
+//   - marshal-zero must equal {"key":null} (the !Valid arm)
+//   - marshal-present must equal {"key":presentVal} (the inner-value arm)
+//   - decode of each, then re-marshal, must reproduce the same bytes
+//     (a roundtrip fixed point — proves the value survived decode without
+//     reading the typed inner field)
+//
+// `presentVal` is the raw JSON value text for the set field (e.g. `"hello"`,
+// `42`); the full object wire is built locally from `key`, same as nullWire.
+// Single-field structs marshal to exactly `{"key":value}`, so byte equality
+// is a tight check. T is inferred from `present`.
+func runSQLNullPerType[T interface {
+	encode.Marshaler
+	decode.Decoder[T]
+}](t *testing.T, name, key, presentVal string, present T) {
+	t.Helper()
+	nullWire := `{"` + key + `":null}`
+	presentWire := `{"` + key + `":` + presentVal + `}`
+	var zero T
+	roundtrip := func(t *testing.T, in string) {
+		t.Helper()
+		got, _, err := zero.DecodeFrom([]byte(in))
+		if err != nil {
+			t.Fatalf("decode %s: %v", in, err)
+		}
+		out, err := encode.MarshalString(got)
+		if err != nil {
+			t.Fatalf("remarshal: %v", err)
+		}
+		if out != in {
+			t.Errorf("roundtrip = %s, want %s", out, in)
 		}
 	}
+	t.Run(name+"/marshal_null", func(t *testing.T) {
+		out, err := encode.MarshalString(zero)
+		if err != nil {
+			t.Fatalf("marshal zero: %v", err)
+		}
+		if out != nullWire {
+			t.Errorf("marshal zero = %s, want %s", out, nullWire)
+		}
+	})
+	t.Run(name+"/marshal_present", func(t *testing.T) {
+		out, err := encode.MarshalString(present)
+		if err != nil {
+			t.Fatalf("marshal present: %v", err)
+		}
+		if out != presentWire {
+			t.Errorf("marshal present = %s, want %s", out, presentWire)
+		}
+	})
+	t.Run(name+"/decode_null", func(t *testing.T) { roundtrip(t, nullWire) })
+	t.Run(name+"/decode_present", func(t *testing.T) { roundtrip(t, presentWire) })
 }
 
-func TestSQLNull_MarshalPresentEmitsValue(t *testing.T) {
-	when := time.Unix(1700000000, 0).UTC()
-	in := SQLNullStruct{
-		S:   sql.NullString{String: "x", Valid: true},
-		I:   sql.NullInt64{Int64: 9, Valid: true},
-		I32: sql.NullInt32{Int32: 5, Valid: true},
-		BL:  sql.NullBool{Bool: true, Valid: true},
-		F:   sql.NullFloat64{Float64: 1.5, Valid: true},
-		T:   sql.NullTime{Time: when, Valid: true},
-	}
-	out, _ := encode.MarshalString(in)
-	if !strings.Contains(out, `"s":"x"`) {
-		t.Errorf("s missing: %s", out)
-	}
-	if !strings.Contains(out, `"i":9`) {
-		t.Errorf("i missing: %s", out)
-	}
-	if !strings.Contains(out, `"bl":true`) {
-		t.Errorf("bl missing: %s", out)
-	}
+// TestSQLNull_PerType exercises each single-field sql.Null* struct through
+// the full matrix (marshal-null / marshal-present / decode-null /
+// decode-present, all via wire round-trip equality) so every inner kind is
+// asserted on its own. Pure-data invocations — the type-specific decode
+// lives in the generic helper, not in a table of closures.
+func TestSQLNull_PerType(t *testing.T) {
+	runSQLNullPerType(t, "NullString", "s", `"hello"`,
+		SQLNullStringStruct{S: sql.NullString{String: "hello", Valid: true}})
+	runSQLNullPerType(t, "NullInt64", "i", `42`,
+		SQLNullInt64Struct{I: sql.NullInt64{Int64: 42, Valid: true}})
+	runSQLNullPerType(t, "NullInt32", "i32", `33`,
+		SQLNullInt32Struct{I32: sql.NullInt32{Int32: 33, Valid: true}})
+	runSQLNullPerType(t, "NullInt16", "i16", `7`,
+		SQLNullInt16Struct{I16: sql.NullInt16{Int16: 7, Valid: true}})
+	runSQLNullPerType(t, "NullByte", "b", `255`,
+		SQLNullByteStruct{B: sql.NullByte{Byte: 255, Valid: true}})
+	runSQLNullPerType(t, "NullBool", "bl", `true`,
+		SQLNullBoolStruct{BL: sql.NullBool{Bool: true, Valid: true}})
+	runSQLNullPerType(t, "NullFloat64", "f", `3.14`,
+		SQLNullFloat64Struct{F: sql.NullFloat64{Float64: 3.14, Valid: true}})
+	runSQLNullPerType(t, "NullTime", "t", `"2023-11-14T22:13:20Z"`,
+		SQLNullTimeStruct{T: sql.NullTime{Time: sqlWhen, Valid: true}})
 }
 
-func TestSQLNull_Roundtrip(t *testing.T) {
-	when := time.Unix(1700000000, 0).UTC()
-	in := SQLNullStruct{
-		S: sql.NullString{String: "abc", Valid: true},
-		I: sql.NullInt64{Int64: -42, Valid: true},
-		T: sql.NullTime{Time: when, Valid: true},
+// TestSQLNull_Composite exercises the embedded composite all together:
+// every field set, every field null, in both directions. Complements
+// the per-type table above (which isolates each flavor).
+func TestSQLNull_Composite(t *testing.T) {
+	full := SQLNullStruct{
+		SQLNullStringStruct:  SQLNullStringStruct{S: sql.NullString{String: "hello", Valid: true}},
+		SQLNullInt64Struct:   SQLNullInt64Struct{I: sql.NullInt64{Int64: 42, Valid: true}},
+		SQLNullInt32Struct:   SQLNullInt32Struct{I32: sql.NullInt32{Int32: 33, Valid: true}},
+		SQLNullInt16Struct:   SQLNullInt16Struct{I16: sql.NullInt16{Int16: 7, Valid: true}},
+		SQLNullByteStruct:    SQLNullByteStruct{B: sql.NullByte{Byte: 255, Valid: true}},
+		SQLNullBoolStruct:    SQLNullBoolStruct{BL: sql.NullBool{Bool: true, Valid: true}},
+		SQLNullFloat64Struct: SQLNullFloat64Struct{F: sql.NullFloat64{Float64: 3.14, Valid: true}},
+		SQLNullTimeStruct:    SQLNullTimeStruct{T: sql.NullTime{Time: sqlWhen, Valid: true}},
 	}
-	bs, _ := encode.Marshal(in)
-	got, _, err := SQLNullStruct{}.DecodeFrom(bs)
-	if err != nil {
-		t.Fatalf("unmarshal: %v\n%s", err, bs)
-	}
-	if got.S != in.S || got.I != in.I {
-		t.Errorf("roundtrip mismatch:\n in:  %+v\n out: %+v", in, got)
-	}
-	if !got.T.Time.Equal(in.T.Time) || got.T.Valid != in.T.Valid {
-		t.Errorf("T roundtrip: got %+v want %+v", got.T, in.T)
-	}
-}
 
-// populatedSQLNull builds an SQLNullStruct with every flavor set to a
-// non-trivial Valid=true value — used by the JSONSize cap-guard test
-// for the present branch.
-func populatedSQLNull() SQLNullStruct {
-	return populatedSQLNullAt(time.Unix(1700000000, 0).UTC())
-}
-
-func populatedSQLNullAt(when time.Time) SQLNullStruct {
-	out := SQLNullStruct{}
-	out.S.String, out.S.Valid = strings.Repeat("a", 100), true
-	out.I.Int64, out.I.Valid = math.MinInt64, true
-	out.I32.Int32, out.I32.Valid = math.MinInt32, true
-	out.I16.Int16, out.I16.Valid = math.MinInt16, true
-	out.B.Byte, out.B.Valid = math.MaxUint8, true
-	out.BL.Bool, out.BL.Valid = true, true
-	out.F.Float64, out.F.Valid = math.MaxFloat64, true
-	out.T.Time, out.T.Valid = when, true
-	return out
-}
-
-// TestJSONSize_SQLNullStruct: cap-guard for every database/sql.NullX flavor.
-// Both Valid=true and Valid=false branches because the size code chooses
-// max(innerSize, len("null")) — both arms must absorb without realloc.
-func TestJSONSize_SQLNullStruct_NoRealloc(t *testing.T) {
-	cases := []struct {
-		name string
-		v    SQLNullStruct
-	}{
-		{"all_null", SQLNullStruct{}},
-		{"all_present", populatedSQLNull()},
+	// assertFullSQLNull fails the test for any field that doesn't match the
+	// fullSQLNull() fixture. NullTime compares via Time.Equal (== on
+	// time.Time is location/monotonic-sensitive); the rest are comparable.
+	assertFullSQLNull := func(t *testing.T, got SQLNullStruct) {
+		t.Helper()
+		want := full
+		if got.S != want.S {
+			t.Errorf("S = %+v, want %+v", got.S, want.S)
+		}
+		if got.I != want.I {
+			t.Errorf("I = %+v, want %+v", got.I, want.I)
+		}
+		if got.I32 != want.I32 {
+			t.Errorf("I32 = %+v, want %+v", got.I32, want.I32)
+		}
+		if got.I16 != want.I16 {
+			t.Errorf("I16 = %+v, want %+v", got.I16, want.I16)
+		}
+		if got.B != want.B {
+			t.Errorf("B = %+v, want %+v", got.B, want.B)
+		}
+		if got.BL != want.BL {
+			t.Errorf("BL = %+v, want %+v", got.BL, want.BL)
+		}
+		if got.F != want.F {
+			t.Errorf("F = %+v, want %+v", got.F, want.F)
+		}
+		if got.T.Valid != want.T.Valid || !got.T.Time.Equal(want.T.Time) {
+			t.Errorf("T = %+v, want %+v", got.T, want.T)
+		}
 	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			size := c.v.JSONSize()
-			got, err := c.v.AppendJSON(make([]byte, 0, size))
-			if err != nil {
-				t.Fatalf("AppendJSON: %v", err)
+
+	t.Run("decode_all_null", func(t *testing.T) {
+		in := []byte(`{"s":null,"i":null,"i32":null,"i16":null,"b":null,"bl":null,"f":null,"t":null}`)
+		got, _, err := SQLNullStruct{}.DecodeFrom(in)
+		if err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if got.S.Valid || got.I.Valid || got.I32.Valid || got.I16.Valid ||
+			got.B.Valid || got.BL.Valid || got.F.Valid || got.T.Valid {
+			t.Errorf("expected all Valid=false, got %+v", got)
+		}
+	})
+
+	t.Run("decode_all_present", func(t *testing.T) {
+		in := []byte(`{"s":"hello","i":42,"i32":33,"i16":7,"b":255,"bl":true,"f":3.14,"t":"2023-11-14T22:13:20Z"}`)
+		got, _, err := SQLNullStruct{}.DecodeFrom(in)
+		if err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		assertFullSQLNull(t, got)
+	})
+
+	t.Run("marshal_all_null", func(t *testing.T) {
+		out, err := encode.MarshalString(SQLNullStruct{})
+		if err != nil {
+			t.Fatalf("marshal: %v", err)
+		}
+		for _, k := range []string{"s", "i", "i32", "i16", "b", "bl", "f", "t"} {
+			needle := `"` + k + `":null`
+			if !strings.Contains(out, needle) {
+				t.Errorf("missing %q in %s", needle, out)
 			}
-			if cap(got) != size {
-				t.Errorf("realloc: JSONSize=%d cap=%d len=%d\nout=%s", size, cap(got), len(got), got)
+		}
+	})
+
+	t.Run("marshal_all_present", func(t *testing.T) {
+		out, err := encode.MarshalString(full)
+		if err != nil {
+			t.Fatalf("marshal: %v", err)
+		}
+		for _, want := range []string{
+			`"s":"hello"`, `"i":42`, `"i32":33`, `"i16":7`,
+			`"b":255`, `"bl":true`, `"f":3.14`, `"t":"2023-11-14T22:13:20Z"`,
+		} {
+			if !strings.Contains(out, want) {
+				t.Errorf("missing %q in %s", want, out)
 			}
-			if len(got) > size {
-				t.Errorf("undersized: len=%d > size=%d", len(got), size)
-			}
-		})
-	}
+		}
+	})
+
+	t.Run("roundtrip_all_present", func(t *testing.T) {
+		bs, _ := encode.Marshal(full)
+		got, _, err := SQLNullStruct{}.DecodeFrom(bs)
+		if err != nil {
+			t.Fatalf("unmarshal: %v\n%s", err, bs)
+		}
+		assertFullSQLNull(t, got)
+	})
 }

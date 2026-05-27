@@ -15,6 +15,1921 @@ import (
 	"github.com/sirkostya009/ggen/scan"
 )
 
+func (result SQLNullStringStruct) DecodeFrom(data []byte) (SQLNullStringStruct, int, error) {
+	i := 0
+	var err error
+	_ = err
+	seenS := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, scan.ErrBadObject
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, scan.ErrExpectString
+		}
+		{
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, scan.ErrUnterminated
+			}
+			if data[ke] < 0x20 {
+				return result, i, scan.ErrBadString
+			}
+			if data[ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				key, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, err
+				}
+			}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, scan.ErrBadObject
+		}
+		i++
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch len(key) {
+		case 1:
+			if key == "s" {
+				if seenS {
+					return result, i, &validation.DuplicateKeyError{Field: "s"}
+				}
+				seenS = true
+				{
+					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+						result.S = sql.NullString{}
+						i += 4
+					} else {
+						var nv string
+						if i >= len(data) || data[i] != '"' {
+							return result, i, scan.ErrExpectString
+						}
+						{
+							ke := i + 1
+							for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+								ke++
+							}
+							if ke >= len(data) {
+								return result, i, scan.ErrUnterminated
+							}
+							if data[ke] < 0x20 {
+								return result, i, scan.ErrBadString
+							}
+							if data[ke] == '"' {
+								nv = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+								i = ke + 1
+							} else {
+								nv, i, err = scan.String(data, i)
+								if err != nil {
+									return result, i, err
+								}
+							}
+						}
+
+						result.S = sql.NullString{String: nv, Valid: true}
+					}
+				}
+			} else {
+				return result, i, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, i, &validation.UnknownKeyError{Field: key}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, scan.ErrBadObject
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			return result, i + 1, nil
+		}
+		return result, i, scan.ErrBadObject
+	}
+}
+
+func (result SQLNullStringStruct) DecodeStreamFrom(s *scan.Stream) (SQLNullStringStruct, error) {
+	seenS := false
+	err := s.ObjectOpen()
+	if err != nil {
+		return result, err
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, err
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, err
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView()
+		if err != nil {
+			return result, err
+		}
+		switch len(key) {
+		case 1:
+			if key == "s" {
+				err = s.ConsumeColon()
+				if err != nil {
+					return result, err
+				}
+				if seenS {
+					return result, &validation.DuplicateKeyError{Field: "s"}
+				}
+				seenS = true
+				{
+					if s.Pos >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, err
+						}
+					}
+					if s.Bytes()[s.Pos] == 'n' {
+						for ki := 1; ki < 4; ki++ {
+							if s.Pos+ki >= len(s.Bytes()) {
+								if err = s.ReadMore(0); err != nil {
+									return result, err
+								}
+							}
+							if s.Bytes()[s.Pos+ki] != "null"[ki] {
+								return result, scan.ErrBadLiteral
+							}
+						}
+						result.S = sql.NullString{}
+						s.Pos += 4
+					} else {
+						var nv string
+						nv, err = s.String()
+						if err != nil {
+							return result, err
+						}
+
+						result.S = sql.NullString{String: nv, Valid: true}
+					}
+				}
+			} else {
+				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+			}
+		default:
+			return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+		}
+		err = s.SkipSpace()
+		if err != nil {
+			return result, err
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, err
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, err
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			return result, nil
+		}
+		return result, scan.ErrBadObject
+	}
+}
+
+func (s SQLNullStringStruct) JSONSize() int {
+	size := 10
+	size += len(s.S.String) * 2
+	return size
+}
+
+func (s SQLNullStringStruct) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"s\":"...)
+	if !s.S.Valid {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '"')
+		dst = encode.AppendStringNoHTML(dst, s.S.String)
+	}
+	return append(dst, '}'), nil
+}
+
+func (result SQLNullInt64Struct) DecodeFrom(data []byte) (SQLNullInt64Struct, int, error) {
+	i := 0
+	var err error
+	_ = err
+	seenI := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, scan.ErrBadObject
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, scan.ErrExpectString
+		}
+		{
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, scan.ErrUnterminated
+			}
+			if data[ke] < 0x20 {
+				return result, i, scan.ErrBadString
+			}
+			if data[ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				key, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, err
+				}
+			}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, scan.ErrBadObject
+		}
+		i++
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch len(key) {
+		case 1:
+			if key == "i" {
+				if seenI {
+					return result, i, &validation.DuplicateKeyError{Field: "i"}
+				}
+				seenI = true
+				{
+					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+						result.I = sql.NullInt64{}
+						i += 4
+					} else {
+						var nv int64
+						{
+							neg := false
+							if i < len(data) && data[i] == '-' {
+								neg = true
+								i++
+							}
+							if i >= len(data) || data[i] < '0' || data[i] > '9' {
+								return result, i, scan.ErrBadNumber
+							}
+							limit := uint64(math.MaxInt64)
+							if neg {
+								limit = scan.SignedNeg
+							}
+							var u uint64
+							for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+								d := uint64(data[i] - '0')
+								if u > limit/10 || (u == limit/10 && d > limit%10) {
+									return result, i, scan.ErrNumberOverflow
+								}
+								u = u*10 + d
+								i++
+							}
+							if i < len(data) {
+								c := data[i]
+								if c == '.' || c == 'e' || c == 'E' {
+									return result, i, scan.ErrBadNumber
+								}
+							}
+							var n int64
+							if neg {
+								if u == scan.SignedNeg {
+									n = math.MinInt64
+								} else {
+									n = -int64(u)
+								}
+							} else {
+								n = int64(u)
+							}
+							nv = n
+						}
+
+						result.I = sql.NullInt64{Int64: nv, Valid: true}
+					}
+				}
+			} else {
+				return result, i, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, i, &validation.UnknownKeyError{Field: key}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, scan.ErrBadObject
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			return result, i + 1, nil
+		}
+		return result, i, scan.ErrBadObject
+	}
+}
+
+func (result SQLNullInt64Struct) DecodeStreamFrom(s *scan.Stream) (SQLNullInt64Struct, error) {
+	seenI := false
+	err := s.ObjectOpen()
+	if err != nil {
+		return result, err
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, err
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, err
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView()
+		if err != nil {
+			return result, err
+		}
+		switch len(key) {
+		case 1:
+			if key == "i" {
+				err = s.ConsumeColon()
+				if err != nil {
+					return result, err
+				}
+				if seenI {
+					return result, &validation.DuplicateKeyError{Field: "i"}
+				}
+				seenI = true
+				{
+					if s.Pos >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, err
+						}
+					}
+					if s.Bytes()[s.Pos] == 'n' {
+						for ki := 1; ki < 4; ki++ {
+							if s.Pos+ki >= len(s.Bytes()) {
+								if err = s.ReadMore(0); err != nil {
+									return result, err
+								}
+							}
+							if s.Bytes()[s.Pos+ki] != "null"[ki] {
+								return result, scan.ErrBadLiteral
+							}
+						}
+						result.I = sql.NullInt64{}
+						s.Pos += 4
+					} else {
+						var nv int64
+						nv, err = s.Int64()
+						if err != nil {
+							return result, err
+						}
+
+						result.I = sql.NullInt64{Int64: nv, Valid: true}
+					}
+				}
+			} else {
+				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+			}
+		default:
+			return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+		}
+		err = s.SkipSpace()
+		if err != nil {
+			return result, err
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, err
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, err
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			return result, nil
+		}
+		return result, scan.ErrBadObject
+	}
+}
+
+func (s SQLNullInt64Struct) JSONSize() int {
+	size := 26
+	return size
+}
+
+func (s SQLNullInt64Struct) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"i\":"...)
+	if !s.I.Valid {
+		dst = append(dst, "null"...)
+	} else {
+		dst = strconv.AppendInt(dst, s.I.Int64, 10)
+	}
+	return append(dst, '}'), nil
+}
+
+func (result SQLNullInt32Struct) DecodeFrom(data []byte) (SQLNullInt32Struct, int, error) {
+	i := 0
+	var err error
+	_ = err
+	seenI32 := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, scan.ErrBadObject
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, scan.ErrExpectString
+		}
+		{
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, scan.ErrUnterminated
+			}
+			if data[ke] < 0x20 {
+				return result, i, scan.ErrBadString
+			}
+			if data[ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				key, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, err
+				}
+			}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, scan.ErrBadObject
+		}
+		i++
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch len(key) {
+		case 3:
+			if key == "i32" {
+				if seenI32 {
+					return result, i, &validation.DuplicateKeyError{Field: "i32"}
+				}
+				seenI32 = true
+				{
+					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+						result.I32 = sql.NullInt32{}
+						i += 4
+					} else {
+						var nv int32
+						{
+							neg := false
+							if i < len(data) && data[i] == '-' {
+								neg = true
+								i++
+							}
+							if i >= len(data) || data[i] < '0' || data[i] > '9' {
+								return result, i, scan.ErrBadNumber
+							}
+							limit := uint64(math.MaxInt64)
+							if neg {
+								limit = scan.SignedNeg
+							}
+							var u uint64
+							for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+								d := uint64(data[i] - '0')
+								if u > limit/10 || (u == limit/10 && d > limit%10) {
+									return result, i, scan.ErrNumberOverflow
+								}
+								u = u*10 + d
+								i++
+							}
+							if i < len(data) {
+								c := data[i]
+								if c == '.' || c == 'e' || c == 'E' {
+									return result, i, scan.ErrBadNumber
+								}
+							}
+							var n int64
+							if neg {
+								if u == scan.SignedNeg {
+									n = math.MinInt64
+								} else {
+									n = -int64(u)
+								}
+							} else {
+								n = int64(u)
+							}
+							nv = int32(n)
+						}
+
+						result.I32 = sql.NullInt32{Int32: nv, Valid: true}
+					}
+				}
+			} else {
+				return result, i, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, i, &validation.UnknownKeyError{Field: key}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, scan.ErrBadObject
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			return result, i + 1, nil
+		}
+		return result, i, scan.ErrBadObject
+	}
+}
+
+func (result SQLNullInt32Struct) DecodeStreamFrom(s *scan.Stream) (SQLNullInt32Struct, error) {
+	seenI32 := false
+	err := s.ObjectOpen()
+	if err != nil {
+		return result, err
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, err
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, err
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView()
+		if err != nil {
+			return result, err
+		}
+		switch len(key) {
+		case 3:
+			if key == "i32" {
+				err = s.ConsumeColon()
+				if err != nil {
+					return result, err
+				}
+				if seenI32 {
+					return result, &validation.DuplicateKeyError{Field: "i32"}
+				}
+				seenI32 = true
+				{
+					if s.Pos >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, err
+						}
+					}
+					if s.Bytes()[s.Pos] == 'n' {
+						for ki := 1; ki < 4; ki++ {
+							if s.Pos+ki >= len(s.Bytes()) {
+								if err = s.ReadMore(0); err != nil {
+									return result, err
+								}
+							}
+							if s.Bytes()[s.Pos+ki] != "null"[ki] {
+								return result, scan.ErrBadLiteral
+							}
+						}
+						result.I32 = sql.NullInt32{}
+						s.Pos += 4
+					} else {
+						var nv int64
+						nv, err = s.Int64()
+						if err != nil {
+							return result, err
+						}
+
+						result.I32 = sql.NullInt32{Int32: int32(nv), Valid: true}
+					}
+				}
+			} else {
+				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+			}
+		default:
+			return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+		}
+		err = s.SkipSpace()
+		if err != nil {
+			return result, err
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, err
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, err
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			return result, nil
+		}
+		return result, scan.ErrBadObject
+	}
+}
+
+func (s SQLNullInt32Struct) JSONSize() int {
+	size := 28
+	return size
+}
+
+func (s SQLNullInt32Struct) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"i32\":"...)
+	if !s.I32.Valid {
+		dst = append(dst, "null"...)
+	} else {
+		dst = strconv.AppendInt(dst, int64(s.I32.Int32), 10)
+	}
+	return append(dst, '}'), nil
+}
+
+func (result SQLNullInt16Struct) DecodeFrom(data []byte) (SQLNullInt16Struct, int, error) {
+	i := 0
+	var err error
+	_ = err
+	seenI16 := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, scan.ErrBadObject
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, scan.ErrExpectString
+		}
+		{
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, scan.ErrUnterminated
+			}
+			if data[ke] < 0x20 {
+				return result, i, scan.ErrBadString
+			}
+			if data[ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				key, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, err
+				}
+			}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, scan.ErrBadObject
+		}
+		i++
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch len(key) {
+		case 3:
+			if key == "i16" {
+				if seenI16 {
+					return result, i, &validation.DuplicateKeyError{Field: "i16"}
+				}
+				seenI16 = true
+				{
+					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+						result.I16 = sql.NullInt16{}
+						i += 4
+					} else {
+						var nv int16
+						{
+							neg := false
+							if i < len(data) && data[i] == '-' {
+								neg = true
+								i++
+							}
+							if i >= len(data) || data[i] < '0' || data[i] > '9' {
+								return result, i, scan.ErrBadNumber
+							}
+							limit := uint64(math.MaxInt64)
+							if neg {
+								limit = scan.SignedNeg
+							}
+							var u uint64
+							for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+								d := uint64(data[i] - '0')
+								if u > limit/10 || (u == limit/10 && d > limit%10) {
+									return result, i, scan.ErrNumberOverflow
+								}
+								u = u*10 + d
+								i++
+							}
+							if i < len(data) {
+								c := data[i]
+								if c == '.' || c == 'e' || c == 'E' {
+									return result, i, scan.ErrBadNumber
+								}
+							}
+							var n int64
+							if neg {
+								if u == scan.SignedNeg {
+									n = math.MinInt64
+								} else {
+									n = -int64(u)
+								}
+							} else {
+								n = int64(u)
+							}
+							nv = int16(n)
+						}
+
+						result.I16 = sql.NullInt16{Int16: nv, Valid: true}
+					}
+				}
+			} else {
+				return result, i, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, i, &validation.UnknownKeyError{Field: key}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, scan.ErrBadObject
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			return result, i + 1, nil
+		}
+		return result, i, scan.ErrBadObject
+	}
+}
+
+func (result SQLNullInt16Struct) DecodeStreamFrom(s *scan.Stream) (SQLNullInt16Struct, error) {
+	seenI16 := false
+	err := s.ObjectOpen()
+	if err != nil {
+		return result, err
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, err
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, err
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView()
+		if err != nil {
+			return result, err
+		}
+		switch len(key) {
+		case 3:
+			if key == "i16" {
+				err = s.ConsumeColon()
+				if err != nil {
+					return result, err
+				}
+				if seenI16 {
+					return result, &validation.DuplicateKeyError{Field: "i16"}
+				}
+				seenI16 = true
+				{
+					if s.Pos >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, err
+						}
+					}
+					if s.Bytes()[s.Pos] == 'n' {
+						for ki := 1; ki < 4; ki++ {
+							if s.Pos+ki >= len(s.Bytes()) {
+								if err = s.ReadMore(0); err != nil {
+									return result, err
+								}
+							}
+							if s.Bytes()[s.Pos+ki] != "null"[ki] {
+								return result, scan.ErrBadLiteral
+							}
+						}
+						result.I16 = sql.NullInt16{}
+						s.Pos += 4
+					} else {
+						var nv int64
+						nv, err = s.Int64()
+						if err != nil {
+							return result, err
+						}
+
+						result.I16 = sql.NullInt16{Int16: int16(nv), Valid: true}
+					}
+				}
+			} else {
+				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+			}
+		default:
+			return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+		}
+		err = s.SkipSpace()
+		if err != nil {
+			return result, err
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, err
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, err
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			return result, nil
+		}
+		return result, scan.ErrBadObject
+	}
+}
+
+func (s SQLNullInt16Struct) JSONSize() int {
+	size := 28
+	return size
+}
+
+func (s SQLNullInt16Struct) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"i16\":"...)
+	if !s.I16.Valid {
+		dst = append(dst, "null"...)
+	} else {
+		dst = strconv.AppendInt(dst, int64(s.I16.Int16), 10)
+	}
+	return append(dst, '}'), nil
+}
+
+func (result SQLNullByteStruct) DecodeFrom(data []byte) (SQLNullByteStruct, int, error) {
+	i := 0
+	var err error
+	_ = err
+	seenB := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, scan.ErrBadObject
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, scan.ErrExpectString
+		}
+		{
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, scan.ErrUnterminated
+			}
+			if data[ke] < 0x20 {
+				return result, i, scan.ErrBadString
+			}
+			if data[ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				key, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, err
+				}
+			}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, scan.ErrBadObject
+		}
+		i++
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch len(key) {
+		case 1:
+			if key == "b" {
+				if seenB {
+					return result, i, &validation.DuplicateKeyError{Field: "b"}
+				}
+				seenB = true
+				{
+					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+						result.B = sql.NullByte{}
+						i += 4
+					} else {
+						var nv byte
+						{
+							if i >= len(data) || data[i] < '0' || data[i] > '9' {
+								return result, i, scan.ErrBadNumber
+							}
+							var n uint64
+							for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+								d := uint64(data[i] - '0')
+								if n > scan.Uint64Limit/10 || (n == scan.Uint64Limit/10 && d > scan.Uint64Limit%10) {
+									return result, i, scan.ErrNumberOverflow
+								}
+								n = n*10 + d
+								i++
+							}
+							nv = byte(n)
+						}
+
+						result.B = sql.NullByte{Byte: nv, Valid: true}
+					}
+				}
+			} else {
+				return result, i, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, i, &validation.UnknownKeyError{Field: key}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, scan.ErrBadObject
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			return result, i + 1, nil
+		}
+		return result, i, scan.ErrBadObject
+	}
+}
+
+func (result SQLNullByteStruct) DecodeStreamFrom(s *scan.Stream) (SQLNullByteStruct, error) {
+	seenB := false
+	err := s.ObjectOpen()
+	if err != nil {
+		return result, err
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, err
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, err
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView()
+		if err != nil {
+			return result, err
+		}
+		switch len(key) {
+		case 1:
+			if key == "b" {
+				err = s.ConsumeColon()
+				if err != nil {
+					return result, err
+				}
+				if seenB {
+					return result, &validation.DuplicateKeyError{Field: "b"}
+				}
+				seenB = true
+				{
+					if s.Pos >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, err
+						}
+					}
+					if s.Bytes()[s.Pos] == 'n' {
+						for ki := 1; ki < 4; ki++ {
+							if s.Pos+ki >= len(s.Bytes()) {
+								if err = s.ReadMore(0); err != nil {
+									return result, err
+								}
+							}
+							if s.Bytes()[s.Pos+ki] != "null"[ki] {
+								return result, scan.ErrBadLiteral
+							}
+						}
+						result.B = sql.NullByte{}
+						s.Pos += 4
+					} else {
+						var nv uint64
+						nv, err = s.Uint64()
+						if err != nil {
+							return result, err
+						}
+
+						result.B = sql.NullByte{Byte: byte(nv), Valid: true}
+					}
+				}
+			} else {
+				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+			}
+		default:
+			return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+		}
+		err = s.SkipSpace()
+		if err != nil {
+			return result, err
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, err
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, err
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			return result, nil
+		}
+		return result, scan.ErrBadObject
+	}
+}
+
+func (s SQLNullByteStruct) JSONSize() int {
+	size := 26
+	return size
+}
+
+func (s SQLNullByteStruct) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"b\":"...)
+	if !s.B.Valid {
+		dst = append(dst, "null"...)
+	} else {
+		dst = strconv.AppendUint(dst, uint64(s.B.Byte), 10)
+	}
+	return append(dst, '}'), nil
+}
+
+func (result SQLNullBoolStruct) DecodeFrom(data []byte) (SQLNullBoolStruct, int, error) {
+	i := 0
+	var err error
+	_ = err
+	seenBL := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, scan.ErrBadObject
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, scan.ErrExpectString
+		}
+		{
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, scan.ErrUnterminated
+			}
+			if data[ke] < 0x20 {
+				return result, i, scan.ErrBadString
+			}
+			if data[ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				key, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, err
+				}
+			}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, scan.ErrBadObject
+		}
+		i++
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch len(key) {
+		case 2:
+			if key == "bl" {
+				if seenBL {
+					return result, i, &validation.DuplicateKeyError{Field: "bl"}
+				}
+				seenBL = true
+				{
+					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+						result.BL = sql.NullBool{}
+						i += 4
+					} else {
+						var nv bool
+						nv, i, err = scan.Bool(data, i)
+						if err != nil {
+							return result, i, err
+						}
+
+						result.BL = sql.NullBool{Bool: nv, Valid: true}
+					}
+				}
+			} else {
+				return result, i, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, i, &validation.UnknownKeyError{Field: key}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, scan.ErrBadObject
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			return result, i + 1, nil
+		}
+		return result, i, scan.ErrBadObject
+	}
+}
+
+func (result SQLNullBoolStruct) DecodeStreamFrom(s *scan.Stream) (SQLNullBoolStruct, error) {
+	seenBL := false
+	err := s.ObjectOpen()
+	if err != nil {
+		return result, err
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, err
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, err
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView()
+		if err != nil {
+			return result, err
+		}
+		switch len(key) {
+		case 2:
+			if key == "bl" {
+				err = s.ConsumeColon()
+				if err != nil {
+					return result, err
+				}
+				if seenBL {
+					return result, &validation.DuplicateKeyError{Field: "bl"}
+				}
+				seenBL = true
+				{
+					if s.Pos >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, err
+						}
+					}
+					if s.Bytes()[s.Pos] == 'n' {
+						for ki := 1; ki < 4; ki++ {
+							if s.Pos+ki >= len(s.Bytes()) {
+								if err = s.ReadMore(0); err != nil {
+									return result, err
+								}
+							}
+							if s.Bytes()[s.Pos+ki] != "null"[ki] {
+								return result, scan.ErrBadLiteral
+							}
+						}
+						result.BL = sql.NullBool{}
+						s.Pos += 4
+					} else {
+						var nv bool
+						nv, err = s.Bool()
+						if err != nil {
+							return result, err
+						}
+
+						result.BL = sql.NullBool{Bool: nv, Valid: true}
+					}
+				}
+			} else {
+				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+			}
+		default:
+			return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+		}
+		err = s.SkipSpace()
+		if err != nil {
+			return result, err
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, err
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, err
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			return result, nil
+		}
+		return result, scan.ErrBadObject
+	}
+}
+
+func (s SQLNullBoolStruct) JSONSize() int {
+	size := 12
+	return size
+}
+
+func (s SQLNullBoolStruct) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"bl\":"...)
+	if !s.BL.Valid {
+		dst = append(dst, "null"...)
+	} else {
+		dst = strconv.AppendBool(dst, s.BL.Bool)
+	}
+	return append(dst, '}'), nil
+}
+
+func (result SQLNullFloat64Struct) DecodeFrom(data []byte) (SQLNullFloat64Struct, int, error) {
+	i := 0
+	var err error
+	_ = err
+	seenF := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, scan.ErrBadObject
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, scan.ErrExpectString
+		}
+		{
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, scan.ErrUnterminated
+			}
+			if data[ke] < 0x20 {
+				return result, i, scan.ErrBadString
+			}
+			if data[ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				key, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, err
+				}
+			}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, scan.ErrBadObject
+		}
+		i++
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch len(key) {
+		case 1:
+			if key == "f" {
+				if seenF {
+					return result, i, &validation.DuplicateKeyError{Field: "f"}
+				}
+				seenF = true
+				{
+					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+						result.F = sql.NullFloat64{}
+						i += 4
+					} else {
+						var nv float64
+						nv, i, err = scan.Float64(data, i)
+						if err != nil {
+							return result, i, err
+						}
+
+						result.F = sql.NullFloat64{Float64: nv, Valid: true}
+					}
+				}
+			} else {
+				return result, i, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, i, &validation.UnknownKeyError{Field: key}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, scan.ErrBadObject
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			return result, i + 1, nil
+		}
+		return result, i, scan.ErrBadObject
+	}
+}
+
+func (result SQLNullFloat64Struct) DecodeStreamFrom(s *scan.Stream) (SQLNullFloat64Struct, error) {
+	seenF := false
+	err := s.ObjectOpen()
+	if err != nil {
+		return result, err
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, err
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, err
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView()
+		if err != nil {
+			return result, err
+		}
+		switch len(key) {
+		case 1:
+			if key == "f" {
+				err = s.ConsumeColon()
+				if err != nil {
+					return result, err
+				}
+				if seenF {
+					return result, &validation.DuplicateKeyError{Field: "f"}
+				}
+				seenF = true
+				{
+					if s.Pos >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, err
+						}
+					}
+					if s.Bytes()[s.Pos] == 'n' {
+						for ki := 1; ki < 4; ki++ {
+							if s.Pos+ki >= len(s.Bytes()) {
+								if err = s.ReadMore(0); err != nil {
+									return result, err
+								}
+							}
+							if s.Bytes()[s.Pos+ki] != "null"[ki] {
+								return result, scan.ErrBadLiteral
+							}
+						}
+						result.F = sql.NullFloat64{}
+						s.Pos += 4
+					} else {
+						var nv float64
+						nv, err = s.Float64()
+						if err != nil {
+							return result, err
+						}
+
+						result.F = sql.NullFloat64{Float64: nv, Valid: true}
+					}
+				}
+			} else {
+				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+			}
+		default:
+			return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+		}
+		err = s.SkipSpace()
+		if err != nil {
+			return result, err
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, err
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, err
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			return result, nil
+		}
+		return result, scan.ErrBadObject
+	}
+}
+
+func (s SQLNullFloat64Struct) JSONSize() int {
+	size := 30
+	return size
+}
+
+func (s SQLNullFloat64Struct) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"f\":"...)
+	if !s.F.Valid {
+		dst = append(dst, "null"...)
+	} else {
+		if dst, err = encode.AppendFloat(dst, s.F.Float64, 64); err != nil {
+			return dst, err
+		}
+	}
+	return append(dst, '}'), nil
+}
+
+func (result SQLNullTimeStruct) DecodeFrom(data []byte) (SQLNullTimeStruct, int, error) {
+	i := 0
+	var err error
+	_ = err
+	seenT := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, scan.ErrBadObject
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, scan.ErrExpectString
+		}
+		{
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, scan.ErrUnterminated
+			}
+			if data[ke] < 0x20 {
+				return result, i, scan.ErrBadString
+			}
+			if data[ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				key, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, err
+				}
+			}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, scan.ErrBadObject
+		}
+		i++
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch len(key) {
+		case 1:
+			if key == "t" {
+				if seenT {
+					return result, i, &validation.DuplicateKeyError{Field: "t"}
+				}
+				seenT = true
+				{
+					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+						result.T = sql.NullTime{}
+						i += 4
+					} else {
+						var nv time.Time
+						{
+							var s string
+							if i >= len(data) || data[i] != '"' {
+								return result, i, scan.ErrExpectString
+							}
+							{
+								ke := i + 1
+								for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+									ke++
+								}
+								if ke >= len(data) {
+									return result, i, scan.ErrUnterminated
+								}
+								if data[ke] < 0x20 {
+									return result, i, scan.ErrBadString
+								}
+								if data[ke] == '"' {
+									s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+									i = ke + 1
+								} else {
+									s, i, err = scan.String(data, i)
+									if err != nil {
+										return result, i, err
+									}
+								}
+							}
+							nv, err = time.Parse(time.RFC3339Nano, s)
+							if err != nil {
+								return result, i, err
+							}
+						}
+
+						result.T = sql.NullTime{Time: nv, Valid: true}
+					}
+				}
+			} else {
+				return result, i, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, i, &validation.UnknownKeyError{Field: key}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, scan.ErrBadObject
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			return result, i + 1, nil
+		}
+		return result, i, scan.ErrBadObject
+	}
+}
+
+func (result SQLNullTimeStruct) DecodeStreamFrom(s *scan.Stream) (SQLNullTimeStruct, error) {
+	seenT := false
+	err := s.ObjectOpen()
+	if err != nil {
+		return result, err
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, err
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, err
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView()
+		if err != nil {
+			return result, err
+		}
+		switch len(key) {
+		case 1:
+			if key == "t" {
+				err = s.ConsumeColon()
+				if err != nil {
+					return result, err
+				}
+				if seenT {
+					return result, &validation.DuplicateKeyError{Field: "t"}
+				}
+				seenT = true
+				{
+					if s.Pos >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, err
+						}
+					}
+					if s.Bytes()[s.Pos] == 'n' {
+						for ki := 1; ki < 4; ki++ {
+							if s.Pos+ki >= len(s.Bytes()) {
+								if err = s.ReadMore(0); err != nil {
+									return result, err
+								}
+							}
+							if s.Bytes()[s.Pos+ki] != "null"[ki] {
+								return result, scan.ErrBadLiteral
+							}
+						}
+						result.T = sql.NullTime{}
+						s.Pos += 4
+					} else {
+						var nv time.Time
+						{
+							var v string
+							v, err = s.String()
+							if err != nil {
+								return result, err
+							}
+							nv, err = time.Parse(time.RFC3339Nano, v)
+							if err != nil {
+								return result, err
+							}
+						}
+
+						result.T = sql.NullTime{Time: nv, Valid: true}
+					}
+				}
+			} else {
+				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+			}
+		default:
+			return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+		}
+		err = s.SkipSpace()
+		if err != nil {
+			return result, err
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, err
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, err
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			return result, nil
+		}
+		return result, scan.ErrBadObject
+	}
+}
+
+func (s SQLNullTimeStruct) JSONSize() int {
+	size := 43
+	return size
+}
+
+func (s SQLNullTimeStruct) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"t\":"...)
+	if !s.T.Valid {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '"')
+		dst = s.T.Time.AppendFormat(dst, time.RFC3339Nano)
+		dst = append(dst, '"')
+	}
+	return append(dst, '}'), nil
+}
+
 func (result SQLNullStruct) DecodeFrom(data []byte) (SQLNullStruct, int, error) {
 	i := 0
 	var err error
@@ -822,7 +2737,7 @@ func (result SQLNullStruct) DecodeStreamFrom(s *scan.Stream) (SQLNullStruct, err
 }
 
 func (s SQLNullStruct) JSONSize() int {
-	size := 194
+	size := 196
 	size += len(s.S.String) * 2
 	return size
 }

@@ -2137,7 +2137,7 @@ func (result Node) DecodeStreamFrom(s *scan.Stream) (Node, error) {
 }
 
 func (s Node) JSONSize() int {
-	size := 550
+	size := 560
 	size += ((len(s.Blob) + 2) / 3) * 4
 	if n := len(s.Children); n > 0 {
 		size += n - 1
@@ -2153,7 +2153,7 @@ func (s Node) JSONSize() int {
 		size += n - 1
 	}
 	for i0 := range s.Matrix {
-		size += 2
+		size += 4
 		if n := len(s.Matrix[i0]); n > 0 {
 			size += n - 1
 		}
@@ -3014,7 +3014,7 @@ func (result Validated) DecodeStreamFrom(s *scan.Stream) (Validated, error) {
 }
 
 func (s Validated) JSONSize() int {
-	size := 68
+	size := 70
 	size += len(s.Bio) * 2
 	size += len(s.Email) * 2
 	size += len(s.Name) * 2
@@ -5894,7 +5894,7 @@ func (result MapHeavy) DecodeStreamFrom(s *scan.Stream) (MapHeavy, error) {
 }
 
 func (s MapHeavy) JSONSize() int {
-	size := 13
+	size := 15
 	size += len(s.Labels) * 4
 	for k, v := range s.Labels {
 		size += len(k) * 2

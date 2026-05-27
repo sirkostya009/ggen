@@ -23,7 +23,6 @@ import (
 	"net"
 	"net/netip"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -530,9 +529,9 @@ func TestPtrSlice_RoundTrip(t *testing.T) {
 	a := Address{Street: "S1", City: "C1", ZipCode: "11111"}
 	b := Address{Street: "S2", City: "C2", ZipCode: "22222"}
 	in := PtrSliceStruct{
-		Items: []*Address{&a, &b},
-		Tuple: [3]*Address{&a, nil, &b},
-		Nodes: []*Node{{ID: 1, Name: "x"}, nil, {ID: 2, Name: "y"}},
+		PtrSliceItemsStruct: PtrSliceItemsStruct{Items: []*Address{&a, &b}},
+		PtrSliceTupleStruct: PtrSliceTupleStruct{Tuple: [3]*Address{&a, nil, &b}},
+		PtrSliceNodesStruct: PtrSliceNodesStruct{Nodes: []*Node{{ID: 1, Name: "x"}, nil, {ID: 2, Name: "y"}}},
 	}
 	out, err := encode.Marshal(in)
 	if err != nil {
@@ -849,28 +848,5 @@ func TestBoundary_RawControlChar_unmarshal(t *testing.T) {
 	_, _, err := BoundaryStruct{}.DecodeFrom(in)
 	if err == nil {
 		t.Errorf("expected error on raw control char")
-	}
-}
-
-// TestJSONSize_PtrSliceStruct: cap-guard for []*T slab-allocated pointer
-// slices. Mix of nil + non-nil elements exercises both branches.
-func TestJSONSize_PtrSliceStruct_NoRealloc(t *testing.T) {
-	a := Address{Street: "Main 1", City: "Lviv", ZipCode: "79000"}
-	b := Address{Street: strings.Repeat("x", 200), City: strings.Repeat("y", 200), ZipCode: "00000"}
-	in := PtrSliceStruct{
-		Items: []*Address{&a, nil, &b},
-		Tuple: [3]*Address{&a, nil, &b},
-		Nodes: []*Node{{ID: 1, Name: strings.Repeat("z", 100)}, nil},
-	}
-	size := in.JSONSize()
-	got, err := in.AppendJSON(make([]byte, 0, size))
-	if err != nil {
-		t.Fatalf("AppendJSON: %v", err)
-	}
-	if cap(got) != size {
-		t.Errorf("realloc: JSONSize=%d cap=%d len=%d", size, cap(got), len(got))
-	}
-	if len(got) > size {
-		t.Errorf("undersized: len=%d > size=%d", len(got), size)
 	}
 }

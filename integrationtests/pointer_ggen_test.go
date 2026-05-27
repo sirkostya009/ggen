@@ -3,6 +3,7 @@
 package integrationtests
 
 import (
+	"encoding/json"
 	"math"
 	"strconv"
 	"strings"
@@ -675,4 +676,2512 @@ func (s PointerStruct) AppendJSON(dst []byte) ([]byte, error) {
 		}
 	}
 	return append(dst, '}'), nil
+}
+
+func (result NPtrStruct) DecodeFrom(data []byte) (NPtrStruct, int, error) {
+	i := 0
+	var err error
+	_ = err
+	seenAddr := false
+	seenPP := false
+	seenPPP := false
+	seenPPPP := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, scan.ErrBadObject
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, scan.ErrExpectString
+		}
+		{
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, scan.ErrUnterminated
+			}
+			if data[ke] < 0x20 {
+				return result, i, scan.ErrBadString
+			}
+			if data[ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				key, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, err
+				}
+			}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, scan.ErrBadObject
+		}
+		i++
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch len(key) {
+		case 2:
+			if key == "pp" {
+				if seenPP {
+					return result, i, &validation.DuplicateKeyError{Field: "pp"}
+				}
+				seenPP = true
+				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+					i = 4 + i
+					result.PP = nil
+				} else {
+					var v *int
+					{
+						start := i
+						i, err = scan.SkipValue(data, start)
+						if err != nil {
+							return result, i, err
+						}
+						if err = json.Unmarshal(data[start:i], &v); err != nil {
+							return result, i, err
+						}
+					}
+					result.PP = &v
+				}
+			} else {
+				return result, i, &validation.UnknownKeyError{Field: key}
+			}
+		case 3:
+			if key == "ppp" {
+				if seenPPP {
+					return result, i, &validation.DuplicateKeyError{Field: "ppp"}
+				}
+				seenPPP = true
+				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+					i = 4 + i
+					result.PPP = nil
+				} else {
+					var v **int
+					{
+						start := i
+						i, err = scan.SkipValue(data, start)
+						if err != nil {
+							return result, i, err
+						}
+						if err = json.Unmarshal(data[start:i], &v); err != nil {
+							return result, i, err
+						}
+					}
+					result.PPP = &v
+				}
+			} else {
+				return result, i, &validation.UnknownKeyError{Field: key}
+			}
+		case 4:
+			switch key {
+			case "addr":
+				if seenAddr {
+					return result, i, &validation.DuplicateKeyError{Field: "addr"}
+				}
+				seenAddr = true
+				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+					i = 4 + i
+					result.Addr = nil
+				} else {
+					var v *Address
+					{
+						start := i
+						i, err = scan.SkipValue(data, start)
+						if err != nil {
+							return result, i, err
+						}
+						if err = json.Unmarshal(data[start:i], &v); err != nil {
+							return result, i, err
+						}
+					}
+					result.Addr = &v
+				}
+			case "pppp":
+				if seenPPPP {
+					return result, i, &validation.DuplicateKeyError{Field: "pppp"}
+				}
+				seenPPPP = true
+				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+					i = 4 + i
+					result.PPPP = nil
+				} else {
+					var v ***string
+					{
+						start := i
+						i, err = scan.SkipValue(data, start)
+						if err != nil {
+							return result, i, err
+						}
+						if err = json.Unmarshal(data[start:i], &v); err != nil {
+							return result, i, err
+						}
+					}
+					result.PPPP = &v
+				}
+			default:
+				return result, i, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, i, &validation.UnknownKeyError{Field: key}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, scan.ErrBadObject
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			return result, i + 1, nil
+		}
+		return result, i, scan.ErrBadObject
+	}
+}
+
+func (result NPtrStruct) DecodeStreamFrom(s *scan.Stream) (NPtrStruct, error) {
+	seenAddr := false
+	seenPP := false
+	seenPPP := false
+	seenPPPP := false
+	err := s.ObjectOpen()
+	if err != nil {
+		return result, err
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, err
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, err
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView()
+		if err != nil {
+			return result, err
+		}
+		switch len(key) {
+		case 2:
+			if key == "pp" {
+				err = s.ConsumeColon()
+				if err != nil {
+					return result, err
+				}
+				if seenPP {
+					return result, &validation.DuplicateKeyError{Field: "pp"}
+				}
+				seenPP = true
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, err
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, err
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, scan.ErrBadLiteral
+						}
+					}
+					s.Pos += 4
+					result.PP = nil
+				} else {
+					var v *int
+					{
+						start := s.Pos
+						prevPin := s.Shift
+						s.Shift = false
+						err = s.SkipValue()
+						s.Shift = prevPin
+						if err != nil {
+							return result, err
+						}
+						if err = json.Unmarshal(s.Bytes()[start:s.Pos], &v); err != nil {
+							return result, err
+						}
+					}
+
+					result.PP = &v
+				}
+			} else {
+				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+			}
+		case 3:
+			if key == "ppp" {
+				err = s.ConsumeColon()
+				if err != nil {
+					return result, err
+				}
+				if seenPPP {
+					return result, &validation.DuplicateKeyError{Field: "ppp"}
+				}
+				seenPPP = true
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, err
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, err
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, scan.ErrBadLiteral
+						}
+					}
+					s.Pos += 4
+					result.PPP = nil
+				} else {
+					var v **int
+					{
+						start := s.Pos
+						prevPin := s.Shift
+						s.Shift = false
+						err = s.SkipValue()
+						s.Shift = prevPin
+						if err != nil {
+							return result, err
+						}
+						if err = json.Unmarshal(s.Bytes()[start:s.Pos], &v); err != nil {
+							return result, err
+						}
+					}
+
+					result.PPP = &v
+				}
+			} else {
+				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+			}
+		case 4:
+			switch key {
+			case "addr":
+				err = s.ConsumeColon()
+				if err != nil {
+					return result, err
+				}
+				if seenAddr {
+					return result, &validation.DuplicateKeyError{Field: "addr"}
+				}
+				seenAddr = true
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, err
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, err
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, scan.ErrBadLiteral
+						}
+					}
+					s.Pos += 4
+					result.Addr = nil
+				} else {
+					var v *Address
+					{
+						start := s.Pos
+						prevPin := s.Shift
+						s.Shift = false
+						err = s.SkipValue()
+						s.Shift = prevPin
+						if err != nil {
+							return result, err
+						}
+						if err = json.Unmarshal(s.Bytes()[start:s.Pos], &v); err != nil {
+							return result, err
+						}
+					}
+
+					result.Addr = &v
+				}
+			case "pppp":
+				err = s.ConsumeColon()
+				if err != nil {
+					return result, err
+				}
+				if seenPPPP {
+					return result, &validation.DuplicateKeyError{Field: "pppp"}
+				}
+				seenPPPP = true
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, err
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, err
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, scan.ErrBadLiteral
+						}
+					}
+					s.Pos += 4
+					result.PPPP = nil
+				} else {
+					var v ***string
+					{
+						start := s.Pos
+						prevPin := s.Shift
+						s.Shift = false
+						err = s.SkipValue()
+						s.Shift = prevPin
+						if err != nil {
+							return result, err
+						}
+						if err = json.Unmarshal(s.Bytes()[start:s.Pos], &v); err != nil {
+							return result, err
+						}
+					}
+
+					result.PPPP = &v
+				}
+			default:
+				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+			}
+		default:
+			return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+		}
+		err = s.SkipSpace()
+		if err != nil {
+			return result, err
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, err
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, err
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			return result, nil
+		}
+		return result, scan.ErrBadObject
+	}
+}
+
+func (s NPtrStruct) JSONSize() int {
+	size := 30
+	if s.Addr == nil {
+		size += 4
+	} else {
+		size += 128
+	}
+	if s.PP == nil {
+		size += 4
+	} else {
+		size += 128
+	}
+	if s.PPP == nil {
+		size += 4
+	} else {
+		size += 128
+	}
+	if s.PPPP == nil {
+		size += 4
+	} else {
+		size += 128
+	}
+	return size
+}
+
+func (s NPtrStruct) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"addr\":"...)
+	if s.Addr == nil {
+		dst = append(dst, "null"...)
+	} else {
+		{
+			var b []byte
+			b, err = json.Marshal((*s.Addr))
+			if err != nil {
+				return dst, err
+			}
+			dst = append(dst, b...)
+		}
+	}
+	dst = append(dst, ",\"pp\":"...)
+	if s.PP == nil {
+		dst = append(dst, "null"...)
+	} else {
+		{
+			var b []byte
+			b, err = json.Marshal((*s.PP))
+			if err != nil {
+				return dst, err
+			}
+			dst = append(dst, b...)
+		}
+	}
+	dst = append(dst, ",\"ppp\":"...)
+	if s.PPP == nil {
+		dst = append(dst, "null"...)
+	} else {
+		{
+			var b []byte
+			b, err = json.Marshal((*s.PPP))
+			if err != nil {
+				return dst, err
+			}
+			dst = append(dst, b...)
+		}
+	}
+	dst = append(dst, ",\"pppp\":"...)
+	if s.PPPP == nil {
+		dst = append(dst, "null"...)
+	} else {
+		{
+			var b []byte
+			b, err = json.Marshal((*s.PPPP))
+			if err != nil {
+				return dst, err
+			}
+			dst = append(dst, b...)
+		}
+	}
+	return append(dst, '}'), nil
+}
+
+func (result PtrSliceItemsStruct) DecodeFrom(data []byte) (PtrSliceItemsStruct, int, error) {
+	i := 0
+	if result.Items != nil {
+		result.Items = result.Items[:0]
+	}
+	var err error
+	_ = err
+	seenItems := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, scan.ErrBadObject
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, scan.ErrExpectString
+		}
+		{
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, scan.ErrUnterminated
+			}
+			if data[ke] < 0x20 {
+				return result, i, scan.ErrBadString
+			}
+			if data[ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				key, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, err
+				}
+			}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, scan.ErrBadObject
+		}
+		i++
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch len(key) {
+		case 5:
+			if key == "items" {
+				if seenItems {
+					return result, i, &validation.DuplicateKeyError{Field: "items"}
+				}
+				seenItems = true
+				{
+					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+						i += 4
+						result.Items = nil
+					} else {
+						if i >= len(data) || data[i] != '[' {
+							return result, i, scan.ErrBadArray
+						}
+						i++
+						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						var slab0 []Address
+						if i < len(data) && data[i] == ']' {
+							if result.Items == nil {
+								result.Items = []*Address{}
+							}
+						} else {
+							if result.Items == nil {
+								result.Items = make([]*Address, 0, 4)
+							}
+							slab0 = make([]Address, 0, 4)
+						}
+						for i < len(data) && data[i] != ']' {
+							if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+								i += 4
+								result.Items = append(result.Items, nil)
+								for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+									i++
+								}
+								if i < len(data) && data[i] == ',' {
+									i++
+									for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+										i++
+									}
+									continue
+								}
+								break
+							}
+							slab0 = append(slab0, Address{})
+							{
+								var _n int
+								slab0[len(slab0)-1], _n, err = slab0[len(slab0)-1].DecodeFrom(data[i:])
+								i += _n
+							}
+							if err != nil {
+								return result, i, err
+							}
+							result.Items = append(result.Items, &slab0[len(slab0)-1])
+							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
+							}
+							if i < len(data) && data[i] == ',' {
+								i++
+								for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+									i++
+								}
+								continue
+							}
+							break
+						}
+						if i >= len(data) || data[i] != ']' {
+							return result, i, scan.ErrBadArray
+						}
+						i++
+					}
+				}
+			} else {
+				return result, i, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, i, &validation.UnknownKeyError{Field: key}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, scan.ErrBadObject
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			return result, i + 1, nil
+		}
+		return result, i, scan.ErrBadObject
+	}
+}
+
+func (result PtrSliceItemsStruct) DecodeStreamFrom(s *scan.Stream) (PtrSliceItemsStruct, error) {
+	if result.Items != nil {
+		result.Items = result.Items[:0]
+	}
+	seenItems := false
+	err := s.ObjectOpen()
+	if err != nil {
+		return result, err
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, err
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, err
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView()
+		if err != nil {
+			return result, err
+		}
+		switch len(key) {
+		case 5:
+			if key == "items" {
+				err = s.ConsumeColon()
+				if err != nil {
+					return result, err
+				}
+				if seenItems {
+					return result, &validation.DuplicateKeyError{Field: "items"}
+				}
+				seenItems = true
+				{
+					err = s.SkipSpace()
+					if err != nil {
+						return result, err
+					}
+					if s.Pos >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, err
+						}
+					}
+					if s.Bytes()[s.Pos] == 'n' {
+						for ki := 1; ki < 4; ki++ {
+							if s.Pos+ki >= len(s.Bytes()) {
+								if err = s.ReadMore(0); err != nil {
+									return result, err
+								}
+							}
+							if s.Bytes()[s.Pos+ki] != "null"[ki] {
+								return result, scan.ErrBadLiteral
+							}
+						}
+						s.Pos += 4
+						result.Items = nil
+					} else {
+						err = s.ArrayOpen()
+						if err != nil {
+							return result, err
+						}
+						err = s.SkipSpace()
+						if err != nil {
+							return result, err
+						}
+						if s.Pos >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, err
+							}
+						}
+						var slab0 []Address
+						if s.Bytes()[s.Pos] == ']' {
+							if result.Items == nil {
+								result.Items = []*Address{}
+							}
+						} else {
+							if result.Items == nil {
+								result.Items = make([]*Address, 0, 4)
+							}
+							slab0 = make([]Address, 0, 4)
+						}
+						for s.Bytes()[s.Pos] != ']' {
+							if s.Pos >= len(s.Bytes()) {
+								if err = s.ReadMore(0); err != nil {
+									return result, err
+								}
+							}
+							if s.Bytes()[s.Pos] == 'n' {
+								for ki := 1; ki < 4; ki++ {
+									if s.Pos+ki >= len(s.Bytes()) {
+										if err = s.ReadMore(0); err != nil {
+											return result, err
+										}
+									}
+									if s.Bytes()[s.Pos+ki] != "null"[ki] {
+										return result, scan.ErrBadLiteral
+									}
+								}
+								s.Pos += 4
+								result.Items = append(result.Items, nil)
+								err = s.SkipSpace()
+								if err != nil {
+									return result, err
+								}
+								if s.Pos >= len(s.Bytes()) {
+									if err = s.ReadMore(0); err != nil {
+										return result, err
+									}
+								}
+								if s.Bytes()[s.Pos] == ',' {
+									s.Pos++
+									err = s.SkipSpace()
+									if err != nil {
+										return result, err
+									}
+									continue
+								}
+								break
+							}
+							slab0 = append(slab0, Address{})
+							slab0[len(slab0)-1], err = slab0[len(slab0)-1].DecodeStreamFrom(s)
+							if err != nil {
+								return result, err
+							}
+							result.Items = append(result.Items, &slab0[len(slab0)-1])
+							err = s.SkipSpace()
+							if err != nil {
+								return result, err
+							}
+							if s.Pos >= len(s.Bytes()) {
+								if err = s.ReadMore(0); err != nil {
+									return result, err
+								}
+							}
+							if s.Bytes()[s.Pos] == ',' {
+								s.Pos++
+								err = s.SkipSpace()
+								if err != nil {
+									return result, err
+								}
+								continue
+							}
+							break
+						}
+						if s.Bytes()[s.Pos] != ']' {
+							return result, scan.ErrBadArray
+						}
+						s.Pos++
+					}
+				}
+			} else {
+				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+			}
+		default:
+			return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+		}
+		err = s.SkipSpace()
+		if err != nil {
+			return result, err
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, err
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, err
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			return result, nil
+		}
+		return result, scan.ErrBadObject
+	}
+}
+
+func (s PtrSliceItemsStruct) JSONSize() int {
+	size := 14
+	if n := len(s.Items); n > 0 {
+		size += n - 1
+	}
+	for i0 := range s.Items {
+		if s.Items[i0] == nil {
+			size += 4
+		} else {
+			size += (*s.Items[i0]).JSONSize()
+		}
+	}
+	return size
+}
+
+func (s PtrSliceItemsStruct) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"items\":"...)
+	if s.Items == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '[')
+		if len(s.Items) > 0 {
+			if s.Items[0] == nil {
+				dst = append(dst, "null"...)
+			} else {
+				if dst, err = (*s.Items[0]).AppendJSON(dst); err != nil {
+					return dst, err
+				}
+			}
+			for _, v0 := range s.Items[1:] {
+				dst = append(dst, ',')
+				if v0 == nil {
+					dst = append(dst, "null"...)
+				} else {
+					if dst, err = (*v0).AppendJSON(dst); err != nil {
+						return dst, err
+					}
+				}
+			}
+		}
+		dst = append(dst, ']')
+	}
+	return append(dst, '}'), nil
+}
+
+func (result PtrSliceTupleStruct) DecodeFrom(data []byte) (PtrSliceTupleStruct, int, error) {
+	i := 0
+	var err error
+	_ = err
+	seenTuple := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, scan.ErrBadObject
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, scan.ErrExpectString
+		}
+		{
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, scan.ErrUnterminated
+			}
+			if data[ke] < 0x20 {
+				return result, i, scan.ErrBadString
+			}
+			if data[ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				key, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, err
+				}
+			}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, scan.ErrBadObject
+		}
+		i++
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch len(key) {
+		case 5:
+			if key == "tuple" {
+				if seenTuple {
+					return result, i, &validation.DuplicateKeyError{Field: "tuple"}
+				}
+				seenTuple = true
+				{
+					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i >= len(data) || data[i] != '[' {
+						return result, i, scan.ErrBadArray
+					}
+					i++
+					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					var idx0 int
+					slab0 := make([]Address, 3)
+					for i < len(data) && data[i] != ']' {
+						if idx0 >= 3 {
+							return result, i, &validation.LenError{Field: "tuple", Want: 3, Got: idx0}
+						}
+						if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+							i += 4
+							result.Tuple[idx0] = nil
+							idx0++
+							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
+							}
+							if i < len(data) && data[i] == ',' {
+								i++
+								for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+									i++
+								}
+								continue
+							}
+							break
+						}
+						{
+							var _n int
+							slab0[idx0], _n, err = slab0[idx0].DecodeFrom(data[i:])
+							i += _n
+						}
+						if err != nil {
+							return result, i, err
+						}
+						result.Tuple[idx0] = &slab0[idx0]
+						idx0++
+						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i < len(data) && data[i] == ',' {
+							i++
+							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
+							}
+							continue
+						}
+						break
+					}
+					if i >= len(data) || data[i] != ']' {
+						return result, i, scan.ErrBadArray
+					}
+					if idx0 != 3 {
+						return result, i, &validation.LenError{Field: "tuple", Want: 3, Got: idx0}
+					}
+					i++
+				}
+			} else {
+				return result, i, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, i, &validation.UnknownKeyError{Field: key}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, scan.ErrBadObject
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			return result, i + 1, nil
+		}
+		return result, i, scan.ErrBadObject
+	}
+}
+
+func (result PtrSliceTupleStruct) DecodeStreamFrom(s *scan.Stream) (PtrSliceTupleStruct, error) {
+	seenTuple := false
+	err := s.ObjectOpen()
+	if err != nil {
+		return result, err
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, err
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, err
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView()
+		if err != nil {
+			return result, err
+		}
+		switch len(key) {
+		case 5:
+			if key == "tuple" {
+				err = s.ConsumeColon()
+				if err != nil {
+					return result, err
+				}
+				if seenTuple {
+					return result, &validation.DuplicateKeyError{Field: "tuple"}
+				}
+				seenTuple = true
+				{
+					err = s.ArrayOpen()
+					if err != nil {
+						return result, err
+					}
+					err = s.SkipSpace()
+					if err != nil {
+						return result, err
+					}
+					if s.Pos >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, err
+						}
+					}
+					var idx0 int
+					slab0 := make([]Address, 3)
+					for s.Bytes()[s.Pos] != ']' {
+						if idx0 >= 3 {
+							return result, &validation.LenError{Field: "tuple", Want: 3, Got: idx0}
+						}
+						if s.Pos >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, err
+							}
+						}
+						if s.Bytes()[s.Pos] == 'n' {
+							for ki := 1; ki < 4; ki++ {
+								if s.Pos+ki >= len(s.Bytes()) {
+									if err = s.ReadMore(0); err != nil {
+										return result, err
+									}
+								}
+								if s.Bytes()[s.Pos+ki] != "null"[ki] {
+									return result, scan.ErrBadLiteral
+								}
+							}
+							s.Pos += 4
+							result.Tuple[idx0] = nil
+							idx0++
+							err = s.SkipSpace()
+							if err != nil {
+								return result, err
+							}
+							if s.Pos >= len(s.Bytes()) {
+								if err = s.ReadMore(0); err != nil {
+									return result, err
+								}
+							}
+							if s.Bytes()[s.Pos] == ',' {
+								s.Pos++
+								err = s.SkipSpace()
+								if err != nil {
+									return result, err
+								}
+								continue
+							}
+							break
+						}
+						slab0[idx0], err = slab0[idx0].DecodeStreamFrom(s)
+						if err != nil {
+							return result, err
+						}
+						result.Tuple[idx0] = &slab0[idx0]
+						idx0++
+						err = s.SkipSpace()
+						if err != nil {
+							return result, err
+						}
+						if s.Pos >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, err
+							}
+						}
+						if s.Bytes()[s.Pos] == ',' {
+							s.Pos++
+							err = s.SkipSpace()
+							if err != nil {
+								return result, err
+							}
+							continue
+						}
+						break
+					}
+					if s.Bytes()[s.Pos] != ']' {
+						return result, scan.ErrBadArray
+					}
+					if idx0 != 3 {
+						return result, &validation.LenError{Field: "tuple", Want: 3, Got: idx0}
+					}
+					s.Pos++
+				}
+			} else {
+				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+			}
+		default:
+			return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+		}
+		err = s.SkipSpace()
+		if err != nil {
+			return result, err
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, err
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, err
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			return result, nil
+		}
+		return result, scan.ErrBadObject
+	}
+}
+
+func (s PtrSliceTupleStruct) JSONSize() int {
+	size := 12
+	if n := len(s.Tuple); n > 0 {
+		size += n - 1
+	}
+	for i0 := range s.Tuple {
+		if s.Tuple[i0] == nil {
+			size += 4
+		} else {
+			size += (*s.Tuple[i0]).JSONSize()
+		}
+	}
+	return size
+}
+
+func (s PtrSliceTupleStruct) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"tuple\":["...)
+	if len(s.Tuple) > 0 {
+		if s.Tuple[0] == nil {
+			dst = append(dst, "null"...)
+		} else {
+			if dst, err = (*s.Tuple[0]).AppendJSON(dst); err != nil {
+				return dst, err
+			}
+		}
+		for _, v0 := range s.Tuple[1:] {
+			dst = append(dst, ',')
+			if v0 == nil {
+				dst = append(dst, "null"...)
+			} else {
+				if dst, err = (*v0).AppendJSON(dst); err != nil {
+					return dst, err
+				}
+			}
+		}
+	}
+	return append(dst, "]}"...), nil
+}
+
+func (result PtrSliceNodesStruct) DecodeFrom(data []byte) (PtrSliceNodesStruct, int, error) {
+	i := 0
+	if result.Nodes != nil {
+		result.Nodes = result.Nodes[:0]
+	}
+	var err error
+	_ = err
+	seenNodes := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, scan.ErrBadObject
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, scan.ErrExpectString
+		}
+		{
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, scan.ErrUnterminated
+			}
+			if data[ke] < 0x20 {
+				return result, i, scan.ErrBadString
+			}
+			if data[ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				key, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, err
+				}
+			}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, scan.ErrBadObject
+		}
+		i++
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch len(key) {
+		case 5:
+			if key == "nodes" {
+				if seenNodes {
+					return result, i, &validation.DuplicateKeyError{Field: "nodes"}
+				}
+				seenNodes = true
+				{
+					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+						i += 4
+						result.Nodes = nil
+					} else {
+						if i >= len(data) || data[i] != '[' {
+							return result, i, scan.ErrBadArray
+						}
+						i++
+						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						var slab0 []Node
+						if i < len(data) && data[i] == ']' {
+							if result.Nodes == nil {
+								result.Nodes = []*Node{}
+							}
+						} else {
+							if result.Nodes == nil {
+								result.Nodes = make([]*Node, 0, 4)
+							}
+							slab0 = make([]Node, 0, 4)
+						}
+						for i < len(data) && data[i] != ']' {
+							if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+								i += 4
+								result.Nodes = append(result.Nodes, nil)
+								for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+									i++
+								}
+								if i < len(data) && data[i] == ',' {
+									i++
+									for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+										i++
+									}
+									continue
+								}
+								break
+							}
+							slab0 = append(slab0, Node{})
+							{
+								var _n int
+								slab0[len(slab0)-1], _n, err = slab0[len(slab0)-1].DecodeFrom(data[i:])
+								i += _n
+							}
+							if err != nil {
+								return result, i, err
+							}
+							result.Nodes = append(result.Nodes, &slab0[len(slab0)-1])
+							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
+							}
+							if i < len(data) && data[i] == ',' {
+								i++
+								for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+									i++
+								}
+								continue
+							}
+							break
+						}
+						if i >= len(data) || data[i] != ']' {
+							return result, i, scan.ErrBadArray
+						}
+						i++
+					}
+				}
+			} else {
+				return result, i, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, i, &validation.UnknownKeyError{Field: key}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, scan.ErrBadObject
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			return result, i + 1, nil
+		}
+		return result, i, scan.ErrBadObject
+	}
+}
+
+func (result PtrSliceNodesStruct) DecodeStreamFrom(s *scan.Stream) (PtrSliceNodesStruct, error) {
+	if result.Nodes != nil {
+		result.Nodes = result.Nodes[:0]
+	}
+	seenNodes := false
+	err := s.ObjectOpen()
+	if err != nil {
+		return result, err
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, err
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, err
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView()
+		if err != nil {
+			return result, err
+		}
+		switch len(key) {
+		case 5:
+			if key == "nodes" {
+				err = s.ConsumeColon()
+				if err != nil {
+					return result, err
+				}
+				if seenNodes {
+					return result, &validation.DuplicateKeyError{Field: "nodes"}
+				}
+				seenNodes = true
+				{
+					err = s.SkipSpace()
+					if err != nil {
+						return result, err
+					}
+					if s.Pos >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, err
+						}
+					}
+					if s.Bytes()[s.Pos] == 'n' {
+						for ki := 1; ki < 4; ki++ {
+							if s.Pos+ki >= len(s.Bytes()) {
+								if err = s.ReadMore(0); err != nil {
+									return result, err
+								}
+							}
+							if s.Bytes()[s.Pos+ki] != "null"[ki] {
+								return result, scan.ErrBadLiteral
+							}
+						}
+						s.Pos += 4
+						result.Nodes = nil
+					} else {
+						err = s.ArrayOpen()
+						if err != nil {
+							return result, err
+						}
+						err = s.SkipSpace()
+						if err != nil {
+							return result, err
+						}
+						if s.Pos >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, err
+							}
+						}
+						var slab0 []Node
+						if s.Bytes()[s.Pos] == ']' {
+							if result.Nodes == nil {
+								result.Nodes = []*Node{}
+							}
+						} else {
+							if result.Nodes == nil {
+								result.Nodes = make([]*Node, 0, 4)
+							}
+							slab0 = make([]Node, 0, 4)
+						}
+						for s.Bytes()[s.Pos] != ']' {
+							if s.Pos >= len(s.Bytes()) {
+								if err = s.ReadMore(0); err != nil {
+									return result, err
+								}
+							}
+							if s.Bytes()[s.Pos] == 'n' {
+								for ki := 1; ki < 4; ki++ {
+									if s.Pos+ki >= len(s.Bytes()) {
+										if err = s.ReadMore(0); err != nil {
+											return result, err
+										}
+									}
+									if s.Bytes()[s.Pos+ki] != "null"[ki] {
+										return result, scan.ErrBadLiteral
+									}
+								}
+								s.Pos += 4
+								result.Nodes = append(result.Nodes, nil)
+								err = s.SkipSpace()
+								if err != nil {
+									return result, err
+								}
+								if s.Pos >= len(s.Bytes()) {
+									if err = s.ReadMore(0); err != nil {
+										return result, err
+									}
+								}
+								if s.Bytes()[s.Pos] == ',' {
+									s.Pos++
+									err = s.SkipSpace()
+									if err != nil {
+										return result, err
+									}
+									continue
+								}
+								break
+							}
+							slab0 = append(slab0, Node{})
+							slab0[len(slab0)-1], err = slab0[len(slab0)-1].DecodeStreamFrom(s)
+							if err != nil {
+								return result, err
+							}
+							result.Nodes = append(result.Nodes, &slab0[len(slab0)-1])
+							err = s.SkipSpace()
+							if err != nil {
+								return result, err
+							}
+							if s.Pos >= len(s.Bytes()) {
+								if err = s.ReadMore(0); err != nil {
+									return result, err
+								}
+							}
+							if s.Bytes()[s.Pos] == ',' {
+								s.Pos++
+								err = s.SkipSpace()
+								if err != nil {
+									return result, err
+								}
+								continue
+							}
+							break
+						}
+						if s.Bytes()[s.Pos] != ']' {
+							return result, scan.ErrBadArray
+						}
+						s.Pos++
+					}
+				}
+			} else {
+				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+			}
+		default:
+			return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+		}
+		err = s.SkipSpace()
+		if err != nil {
+			return result, err
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, err
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, err
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			return result, nil
+		}
+		return result, scan.ErrBadObject
+	}
+}
+
+func (s PtrSliceNodesStruct) JSONSize() int {
+	size := 14
+	if n := len(s.Nodes); n > 0 {
+		size += n - 1
+	}
+	for i0 := range s.Nodes {
+		if s.Nodes[i0] == nil {
+			size += 4
+		} else {
+			size += (*s.Nodes[i0]).JSONSize()
+		}
+	}
+	return size
+}
+
+func (s PtrSliceNodesStruct) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"nodes\":"...)
+	if s.Nodes == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '[')
+		if len(s.Nodes) > 0 {
+			if s.Nodes[0] == nil {
+				dst = append(dst, "null"...)
+			} else {
+				if dst, err = (*s.Nodes[0]).AppendJSON(dst); err != nil {
+					return dst, err
+				}
+			}
+			for _, v0 := range s.Nodes[1:] {
+				dst = append(dst, ',')
+				if v0 == nil {
+					dst = append(dst, "null"...)
+				} else {
+					if dst, err = (*v0).AppendJSON(dst); err != nil {
+						return dst, err
+					}
+				}
+			}
+		}
+		dst = append(dst, ']')
+	}
+	return append(dst, '}'), nil
+}
+
+func (result PtrSliceStruct) DecodeFrom(data []byte) (PtrSliceStruct, int, error) {
+	i := 0
+	if result.Items != nil {
+		result.Items = result.Items[:0]
+	}
+	if result.Nodes != nil {
+		result.Nodes = result.Nodes[:0]
+	}
+	var err error
+	_ = err
+	seenItems := false
+	seenNodes := false
+	seenTuple := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, scan.ErrBadObject
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, scan.ErrExpectString
+		}
+		{
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, scan.ErrUnterminated
+			}
+			if data[ke] < 0x20 {
+				return result, i, scan.ErrBadString
+			}
+			if data[ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				key, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, err
+				}
+			}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, scan.ErrBadObject
+		}
+		i++
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch len(key) {
+		case 5:
+			switch key {
+			case "items":
+				if seenItems {
+					return result, i, &validation.DuplicateKeyError{Field: "items"}
+				}
+				seenItems = true
+				{
+					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+						i += 4
+						result.Items = nil
+					} else {
+						if i >= len(data) || data[i] != '[' {
+							return result, i, scan.ErrBadArray
+						}
+						i++
+						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						var slab0 []Address
+						if i < len(data) && data[i] == ']' {
+							if result.Items == nil {
+								result.Items = []*Address{}
+							}
+						} else {
+							if result.Items == nil {
+								result.Items = make([]*Address, 0, 4)
+							}
+							slab0 = make([]Address, 0, 4)
+						}
+						for i < len(data) && data[i] != ']' {
+							if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+								i += 4
+								result.Items = append(result.Items, nil)
+								for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+									i++
+								}
+								if i < len(data) && data[i] == ',' {
+									i++
+									for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+										i++
+									}
+									continue
+								}
+								break
+							}
+							slab0 = append(slab0, Address{})
+							{
+								var _n int
+								slab0[len(slab0)-1], _n, err = slab0[len(slab0)-1].DecodeFrom(data[i:])
+								i += _n
+							}
+							if err != nil {
+								return result, i, err
+							}
+							result.Items = append(result.Items, &slab0[len(slab0)-1])
+							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
+							}
+							if i < len(data) && data[i] == ',' {
+								i++
+								for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+									i++
+								}
+								continue
+							}
+							break
+						}
+						if i >= len(data) || data[i] != ']' {
+							return result, i, scan.ErrBadArray
+						}
+						i++
+					}
+				}
+			case "nodes":
+				if seenNodes {
+					return result, i, &validation.DuplicateKeyError{Field: "nodes"}
+				}
+				seenNodes = true
+				{
+					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+						i += 4
+						result.Nodes = nil
+					} else {
+						if i >= len(data) || data[i] != '[' {
+							return result, i, scan.ErrBadArray
+						}
+						i++
+						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						var slab0 []Node
+						if i < len(data) && data[i] == ']' {
+							if result.Nodes == nil {
+								result.Nodes = []*Node{}
+							}
+						} else {
+							if result.Nodes == nil {
+								result.Nodes = make([]*Node, 0, 4)
+							}
+							slab0 = make([]Node, 0, 4)
+						}
+						for i < len(data) && data[i] != ']' {
+							if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+								i += 4
+								result.Nodes = append(result.Nodes, nil)
+								for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+									i++
+								}
+								if i < len(data) && data[i] == ',' {
+									i++
+									for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+										i++
+									}
+									continue
+								}
+								break
+							}
+							slab0 = append(slab0, Node{})
+							{
+								var _n int
+								slab0[len(slab0)-1], _n, err = slab0[len(slab0)-1].DecodeFrom(data[i:])
+								i += _n
+							}
+							if err != nil {
+								return result, i, err
+							}
+							result.Nodes = append(result.Nodes, &slab0[len(slab0)-1])
+							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
+							}
+							if i < len(data) && data[i] == ',' {
+								i++
+								for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+									i++
+								}
+								continue
+							}
+							break
+						}
+						if i >= len(data) || data[i] != ']' {
+							return result, i, scan.ErrBadArray
+						}
+						i++
+					}
+				}
+			case "tuple":
+				if seenTuple {
+					return result, i, &validation.DuplicateKeyError{Field: "tuple"}
+				}
+				seenTuple = true
+				{
+					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i >= len(data) || data[i] != '[' {
+						return result, i, scan.ErrBadArray
+					}
+					i++
+					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					var idx0 int
+					slab0 := make([]Address, 3)
+					for i < len(data) && data[i] != ']' {
+						if idx0 >= 3 {
+							return result, i, &validation.LenError{Field: "tuple", Want: 3, Got: idx0}
+						}
+						if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+							i += 4
+							result.Tuple[idx0] = nil
+							idx0++
+							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
+							}
+							if i < len(data) && data[i] == ',' {
+								i++
+								for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+									i++
+								}
+								continue
+							}
+							break
+						}
+						{
+							var _n int
+							slab0[idx0], _n, err = slab0[idx0].DecodeFrom(data[i:])
+							i += _n
+						}
+						if err != nil {
+							return result, i, err
+						}
+						result.Tuple[idx0] = &slab0[idx0]
+						idx0++
+						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i < len(data) && data[i] == ',' {
+							i++
+							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
+							}
+							continue
+						}
+						break
+					}
+					if i >= len(data) || data[i] != ']' {
+						return result, i, scan.ErrBadArray
+					}
+					if idx0 != 3 {
+						return result, i, &validation.LenError{Field: "tuple", Want: 3, Got: idx0}
+					}
+					i++
+				}
+			default:
+				return result, i, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, i, &validation.UnknownKeyError{Field: key}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, scan.ErrBadObject
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			return result, i + 1, nil
+		}
+		return result, i, scan.ErrBadObject
+	}
+}
+
+func (result PtrSliceStruct) DecodeStreamFrom(s *scan.Stream) (PtrSliceStruct, error) {
+	if result.Items != nil {
+		result.Items = result.Items[:0]
+	}
+	if result.Nodes != nil {
+		result.Nodes = result.Nodes[:0]
+	}
+	seenItems := false
+	seenNodes := false
+	seenTuple := false
+	err := s.ObjectOpen()
+	if err != nil {
+		return result, err
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, err
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, err
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView()
+		if err != nil {
+			return result, err
+		}
+		switch len(key) {
+		case 5:
+			switch key {
+			case "items":
+				err = s.ConsumeColon()
+				if err != nil {
+					return result, err
+				}
+				if seenItems {
+					return result, &validation.DuplicateKeyError{Field: "items"}
+				}
+				seenItems = true
+				{
+					err = s.SkipSpace()
+					if err != nil {
+						return result, err
+					}
+					if s.Pos >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, err
+						}
+					}
+					if s.Bytes()[s.Pos] == 'n' {
+						for ki := 1; ki < 4; ki++ {
+							if s.Pos+ki >= len(s.Bytes()) {
+								if err = s.ReadMore(0); err != nil {
+									return result, err
+								}
+							}
+							if s.Bytes()[s.Pos+ki] != "null"[ki] {
+								return result, scan.ErrBadLiteral
+							}
+						}
+						s.Pos += 4
+						result.Items = nil
+					} else {
+						err = s.ArrayOpen()
+						if err != nil {
+							return result, err
+						}
+						err = s.SkipSpace()
+						if err != nil {
+							return result, err
+						}
+						if s.Pos >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, err
+							}
+						}
+						var slab0 []Address
+						if s.Bytes()[s.Pos] == ']' {
+							if result.Items == nil {
+								result.Items = []*Address{}
+							}
+						} else {
+							if result.Items == nil {
+								result.Items = make([]*Address, 0, 4)
+							}
+							slab0 = make([]Address, 0, 4)
+						}
+						for s.Bytes()[s.Pos] != ']' {
+							if s.Pos >= len(s.Bytes()) {
+								if err = s.ReadMore(0); err != nil {
+									return result, err
+								}
+							}
+							if s.Bytes()[s.Pos] == 'n' {
+								for ki := 1; ki < 4; ki++ {
+									if s.Pos+ki >= len(s.Bytes()) {
+										if err = s.ReadMore(0); err != nil {
+											return result, err
+										}
+									}
+									if s.Bytes()[s.Pos+ki] != "null"[ki] {
+										return result, scan.ErrBadLiteral
+									}
+								}
+								s.Pos += 4
+								result.Items = append(result.Items, nil)
+								err = s.SkipSpace()
+								if err != nil {
+									return result, err
+								}
+								if s.Pos >= len(s.Bytes()) {
+									if err = s.ReadMore(0); err != nil {
+										return result, err
+									}
+								}
+								if s.Bytes()[s.Pos] == ',' {
+									s.Pos++
+									err = s.SkipSpace()
+									if err != nil {
+										return result, err
+									}
+									continue
+								}
+								break
+							}
+							slab0 = append(slab0, Address{})
+							slab0[len(slab0)-1], err = slab0[len(slab0)-1].DecodeStreamFrom(s)
+							if err != nil {
+								return result, err
+							}
+							result.Items = append(result.Items, &slab0[len(slab0)-1])
+							err = s.SkipSpace()
+							if err != nil {
+								return result, err
+							}
+							if s.Pos >= len(s.Bytes()) {
+								if err = s.ReadMore(0); err != nil {
+									return result, err
+								}
+							}
+							if s.Bytes()[s.Pos] == ',' {
+								s.Pos++
+								err = s.SkipSpace()
+								if err != nil {
+									return result, err
+								}
+								continue
+							}
+							break
+						}
+						if s.Bytes()[s.Pos] != ']' {
+							return result, scan.ErrBadArray
+						}
+						s.Pos++
+					}
+				}
+			case "nodes":
+				err = s.ConsumeColon()
+				if err != nil {
+					return result, err
+				}
+				if seenNodes {
+					return result, &validation.DuplicateKeyError{Field: "nodes"}
+				}
+				seenNodes = true
+				{
+					err = s.SkipSpace()
+					if err != nil {
+						return result, err
+					}
+					if s.Pos >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, err
+						}
+					}
+					if s.Bytes()[s.Pos] == 'n' {
+						for ki := 1; ki < 4; ki++ {
+							if s.Pos+ki >= len(s.Bytes()) {
+								if err = s.ReadMore(0); err != nil {
+									return result, err
+								}
+							}
+							if s.Bytes()[s.Pos+ki] != "null"[ki] {
+								return result, scan.ErrBadLiteral
+							}
+						}
+						s.Pos += 4
+						result.Nodes = nil
+					} else {
+						err = s.ArrayOpen()
+						if err != nil {
+							return result, err
+						}
+						err = s.SkipSpace()
+						if err != nil {
+							return result, err
+						}
+						if s.Pos >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, err
+							}
+						}
+						var slab0 []Node
+						if s.Bytes()[s.Pos] == ']' {
+							if result.Nodes == nil {
+								result.Nodes = []*Node{}
+							}
+						} else {
+							if result.Nodes == nil {
+								result.Nodes = make([]*Node, 0, 4)
+							}
+							slab0 = make([]Node, 0, 4)
+						}
+						for s.Bytes()[s.Pos] != ']' {
+							if s.Pos >= len(s.Bytes()) {
+								if err = s.ReadMore(0); err != nil {
+									return result, err
+								}
+							}
+							if s.Bytes()[s.Pos] == 'n' {
+								for ki := 1; ki < 4; ki++ {
+									if s.Pos+ki >= len(s.Bytes()) {
+										if err = s.ReadMore(0); err != nil {
+											return result, err
+										}
+									}
+									if s.Bytes()[s.Pos+ki] != "null"[ki] {
+										return result, scan.ErrBadLiteral
+									}
+								}
+								s.Pos += 4
+								result.Nodes = append(result.Nodes, nil)
+								err = s.SkipSpace()
+								if err != nil {
+									return result, err
+								}
+								if s.Pos >= len(s.Bytes()) {
+									if err = s.ReadMore(0); err != nil {
+										return result, err
+									}
+								}
+								if s.Bytes()[s.Pos] == ',' {
+									s.Pos++
+									err = s.SkipSpace()
+									if err != nil {
+										return result, err
+									}
+									continue
+								}
+								break
+							}
+							slab0 = append(slab0, Node{})
+							slab0[len(slab0)-1], err = slab0[len(slab0)-1].DecodeStreamFrom(s)
+							if err != nil {
+								return result, err
+							}
+							result.Nodes = append(result.Nodes, &slab0[len(slab0)-1])
+							err = s.SkipSpace()
+							if err != nil {
+								return result, err
+							}
+							if s.Pos >= len(s.Bytes()) {
+								if err = s.ReadMore(0); err != nil {
+									return result, err
+								}
+							}
+							if s.Bytes()[s.Pos] == ',' {
+								s.Pos++
+								err = s.SkipSpace()
+								if err != nil {
+									return result, err
+								}
+								continue
+							}
+							break
+						}
+						if s.Bytes()[s.Pos] != ']' {
+							return result, scan.ErrBadArray
+						}
+						s.Pos++
+					}
+				}
+			case "tuple":
+				err = s.ConsumeColon()
+				if err != nil {
+					return result, err
+				}
+				if seenTuple {
+					return result, &validation.DuplicateKeyError{Field: "tuple"}
+				}
+				seenTuple = true
+				{
+					err = s.ArrayOpen()
+					if err != nil {
+						return result, err
+					}
+					err = s.SkipSpace()
+					if err != nil {
+						return result, err
+					}
+					if s.Pos >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, err
+						}
+					}
+					var idx0 int
+					slab0 := make([]Address, 3)
+					for s.Bytes()[s.Pos] != ']' {
+						if idx0 >= 3 {
+							return result, &validation.LenError{Field: "tuple", Want: 3, Got: idx0}
+						}
+						if s.Pos >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, err
+							}
+						}
+						if s.Bytes()[s.Pos] == 'n' {
+							for ki := 1; ki < 4; ki++ {
+								if s.Pos+ki >= len(s.Bytes()) {
+									if err = s.ReadMore(0); err != nil {
+										return result, err
+									}
+								}
+								if s.Bytes()[s.Pos+ki] != "null"[ki] {
+									return result, scan.ErrBadLiteral
+								}
+							}
+							s.Pos += 4
+							result.Tuple[idx0] = nil
+							idx0++
+							err = s.SkipSpace()
+							if err != nil {
+								return result, err
+							}
+							if s.Pos >= len(s.Bytes()) {
+								if err = s.ReadMore(0); err != nil {
+									return result, err
+								}
+							}
+							if s.Bytes()[s.Pos] == ',' {
+								s.Pos++
+								err = s.SkipSpace()
+								if err != nil {
+									return result, err
+								}
+								continue
+							}
+							break
+						}
+						slab0[idx0], err = slab0[idx0].DecodeStreamFrom(s)
+						if err != nil {
+							return result, err
+						}
+						result.Tuple[idx0] = &slab0[idx0]
+						idx0++
+						err = s.SkipSpace()
+						if err != nil {
+							return result, err
+						}
+						if s.Pos >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, err
+							}
+						}
+						if s.Bytes()[s.Pos] == ',' {
+							s.Pos++
+							err = s.SkipSpace()
+							if err != nil {
+								return result, err
+							}
+							continue
+						}
+						break
+					}
+					if s.Bytes()[s.Pos] != ']' {
+						return result, scan.ErrBadArray
+					}
+					if idx0 != 3 {
+						return result, &validation.LenError{Field: "tuple", Want: 3, Got: idx0}
+					}
+					s.Pos++
+				}
+			default:
+				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+			}
+		default:
+			return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+		}
+		err = s.SkipSpace()
+		if err != nil {
+			return result, err
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, err
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, err
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			return result, nil
+		}
+		return result, scan.ErrBadObject
+	}
+}
+
+func (s PtrSliceStruct) JSONSize() int {
+	size := 38
+	if n := len(s.Items); n > 0 {
+		size += n - 1
+	}
+	for i0 := range s.Items {
+		if s.Items[i0] == nil {
+			size += 4
+		} else {
+			size += (*s.Items[i0]).JSONSize()
+		}
+	}
+	if n := len(s.Nodes); n > 0 {
+		size += n - 1
+	}
+	for i0 := range s.Nodes {
+		if s.Nodes[i0] == nil {
+			size += 4
+		} else {
+			size += (*s.Nodes[i0]).JSONSize()
+		}
+	}
+	if n := len(s.Tuple); n > 0 {
+		size += n - 1
+	}
+	for i0 := range s.Tuple {
+		if s.Tuple[i0] == nil {
+			size += 4
+		} else {
+			size += (*s.Tuple[i0]).JSONSize()
+		}
+	}
+	return size
+}
+
+func (s PtrSliceStruct) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"items\":"...)
+	if s.Items == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '[')
+		if len(s.Items) > 0 {
+			if s.Items[0] == nil {
+				dst = append(dst, "null"...)
+			} else {
+				if dst, err = (*s.Items[0]).AppendJSON(dst); err != nil {
+					return dst, err
+				}
+			}
+			for _, v0 := range s.Items[1:] {
+				dst = append(dst, ',')
+				if v0 == nil {
+					dst = append(dst, "null"...)
+				} else {
+					if dst, err = (*v0).AppendJSON(dst); err != nil {
+						return dst, err
+					}
+				}
+			}
+		}
+		dst = append(dst, ']')
+	}
+	dst = append(dst, ",\"nodes\":"...)
+	if s.Nodes == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '[')
+		if len(s.Nodes) > 0 {
+			if s.Nodes[0] == nil {
+				dst = append(dst, "null"...)
+			} else {
+				if dst, err = (*s.Nodes[0]).AppendJSON(dst); err != nil {
+					return dst, err
+				}
+			}
+			for _, v0 := range s.Nodes[1:] {
+				dst = append(dst, ',')
+				if v0 == nil {
+					dst = append(dst, "null"...)
+				} else {
+					if dst, err = (*v0).AppendJSON(dst); err != nil {
+						return dst, err
+					}
+				}
+			}
+		}
+		dst = append(dst, ']')
+	}
+	dst = append(dst, ",\"tuple\":["...)
+	if len(s.Tuple) > 0 {
+		if s.Tuple[0] == nil {
+			dst = append(dst, "null"...)
+		} else {
+			if dst, err = (*s.Tuple[0]).AppendJSON(dst); err != nil {
+				return dst, err
+			}
+		}
+		for _, v0 := range s.Tuple[1:] {
+			dst = append(dst, ',')
+			if v0 == nil {
+				dst = append(dst, "null"...)
+			} else {
+				if dst, err = (*v0).AppendJSON(dst); err != nil {
+					return dst, err
+				}
+			}
+		}
+	}
+	return append(dst, "]}"...), nil
 }

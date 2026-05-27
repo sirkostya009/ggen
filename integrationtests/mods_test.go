@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/sirkostya009/ggen/decode/validation"
+	_ "github.com/sirkostya009/ggen/integrationtests/thirdparty"
 )
 
 // ModStruct exercises the mod tag: input transforms applied after decode and
@@ -139,5 +140,62 @@ func TestFallibleMod_passLetsValidationRun(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "rejected by mod") {
 		t.Errorf("mod ran on already-passing input: %v", err)
+	}
+}
+
+// CrossPkgModStruct exercises `@pkg.Func` resolution for both validators
+// and mods. The functions live in the sibling `thirdparty` package; the
+// codegen-time resolver walks this file's imports, picks up the
+// non-aliased `thirdparty` package, and emits a direct call. Three
+// flavors per direction so a regression in one (pure mod vs fallible
+// mod vs validator) surfaces at that flavor.
+//
+//ggen:generate
+type CrossPkgModStruct struct {
+	// Pure mod: prefixes the input with '#'.
+	Tag string `json:"tag" mod:"@thirdparty.PrefixHash"`
+	// Fallible mod: rejects empty input as a parse error, not validation.
+	NonEmpty string `json:"nonEmpty" mod:"@thirdparty.ParseNonEmpty"`
+	// Validator: requires all-uppercase ASCII.
+	Code string `json:"code" ggen:"@thirdparty.ValidateUpper"`
+}
+
+func TestCrossPkgMod_pureMod(t *testing.T) {
+	got, _, err := CrossPkgModStruct{}.DecodeFrom([]byte(`{"tag":"x","nonEmpty":"y","code":"OK"}`))
+	if err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if got.Tag != "#x" {
+		t.Errorf("Tag = %q, want #x (mod prefix not applied)", got.Tag)
+	}
+}
+
+func TestCrossPkgMod_fallibleModRejects(t *testing.T) {
+	_, _, err := CrossPkgModStruct{}.DecodeFrom([]byte(`{"tag":"x","nonEmpty":"","code":"OK"}`))
+	if err == nil {
+		t.Fatal("expected fallible-mod rejection")
+	}
+	if !strings.Contains(err.Error(), "empty value") {
+		t.Errorf("expected cross-pkg mod error, got: %v", err)
+	}
+}
+
+func TestCrossPkgValidator_rejects(t *testing.T) {
+	_, _, err := CrossPkgModStruct{}.DecodeFrom([]byte(`{"tag":"x","nonEmpty":"y","code":"lowercase"}`))
+	if err == nil {
+		t.Fatal("expected cross-pkg validator rejection")
+	}
+	if !strings.Contains(err.Error(), "must be uppercase") {
+		t.Errorf("expected cross-pkg validator error, got: %v", err)
+	}
+}
+
+func TestCrossPkgValidator_accepts(t *testing.T) {
+	got, _, err := CrossPkgModStruct{}.DecodeFrom([]byte(`{"tag":"x","nonEmpty":"y","code":"OK"}`))
+	if err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if got.Code != "OK" {
+		t.Errorf("Code = %q", got.Code)
 	}
 }

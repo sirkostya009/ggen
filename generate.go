@@ -1801,7 +1801,11 @@ func sizeContribKind(f FieldInfo, ref string) (int, string) {
 			return 0, ""
 		}
 		innerField := FieldInfo{Kind: spec.Inner, GoType: spec.Type, Format: f.Format}
-		return sizeContrib(innerField, ref+"."+spec.Field)
+		innerN, code := sizeContrib(innerField, ref+"."+spec.Field)
+		// !Valid emits the literal "null" (4 bytes). Inner kinds whose
+		// empty/zero-value budget is <4 (notably KindString = 2 for the
+		// surrounding quotes) under-reserve unless we widen here.
+		return max(innerN, 4), code
 	case KindAny:
 		// Conservative — no introspection at codegen time. 256 covers most
 		// scalar/object payloads; deeply nested any[] with many keys can
@@ -1855,7 +1859,14 @@ func sizeSliceContrib(f FieldInfo, ref string, depth int) (int, string) {
 		b.WriteString(innerCode)
 		b.WriteString("}\n")
 	}
-	return 2, b.String() // brackets
+	// Slices can be nil → emitted as "null" (4 bytes) instead of `[]`
+	// (2 bytes); the budget reserves the wider of the two so the !nil
+	// path and the nil-as-null path both fit. Arrays can't be nil so
+	// they keep the bracket-only 2-byte budget.
+	if f.Kind == KindArray {
+		return 2, b.String()
+	}
+	return 4, b.String()
 }
 
 // sizeMapContrib emits the size contribution for a `map[string]V` field.
@@ -1874,7 +1885,8 @@ func sizeMapContrib(f FieldInfo, ref string) (int, string) {
 	if v, ok := constSizePerEntry(f.ElemKind, f.Format); ok {
 		fmt.Fprintf(b, "size += len(%s) * %d\n", ref, perEntryFixed+v)
 		fmt.Fprintf(b, "for k := range %s { size += len(k) * %d }\n", ref, mult)
-		return 2, b.String()
+		// nil-map → "null" (4) is wider than `{}` (2); reserve max.
+		return 4, b.String()
 	}
 
 	// Variable per-entry: one combined loop over k,v.
@@ -1910,7 +1922,8 @@ func sizeMapContrib(f FieldInfo, ref string) (int, string) {
 		b.WriteString("size += 128\n")
 	}
 	b.WriteString("}\n")
-	return 2, b.String()
+	// nil-map → "null" (4); same reservation as the constSize-per-entry arm.
+	return 4, b.String()
 }
 
 // constSizePerEntry reports whether a value of the given kind has a

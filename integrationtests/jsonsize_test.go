@@ -3,6 +3,8 @@ package integrationtests
 //go:generate ../ggen $GOFILE
 
 import (
+	"database/sql"
+	"encoding/json"
 	"math"
 	"math/big"
 	"net"
@@ -502,5 +504,237 @@ func TestJSONSize_StringTagStruct_NoRealloc(t *testing.T) {
 	}
 	if len(got) > size {
 		t.Errorf(",string undersized: len=%d > size=%d", len(got), size)
+	}
+}
+
+// populatedSQLNull builds an SQLNullStruct with every flavor set to a
+// non-trivial Valid=true value — used by the JSONSize cap-guard test
+// for the present branch.
+func populatedSQLNull() SQLNullStruct {
+	return populatedSQLNullAt(time.Unix(1700000000, 0).UTC())
+}
+
+func populatedSQLNullAt(when time.Time) SQLNullStruct {
+	out := SQLNullStruct{}
+	out.S.String, out.S.Valid = strings.Repeat("a", 100), true
+	out.I.Int64, out.I.Valid = math.MinInt64, true
+	out.I32.Int32, out.I32.Valid = math.MinInt32, true
+	out.I16.Int16, out.I16.Valid = math.MinInt16, true
+	out.B.Byte, out.B.Valid = math.MaxUint8, true
+	out.BL.Bool, out.BL.Valid = true, true
+	out.F.Float64, out.F.Valid = math.MaxFloat64, true
+	out.T.Time, out.T.Valid = when, true
+	return out
+}
+
+// TestJSONSize_SQLNullStruct: cap-guard for every database/sql.NullX flavor.
+// Both Valid=true and Valid=false branches because the size code chooses
+// max(innerSize, len("null")) — both arms must absorb without realloc.
+func TestJSONSize_SQLNullStruct_NoRealloc(t *testing.T) {
+	cases := []struct {
+		name string
+		v    SQLNullStruct
+	}{
+		{"all_null", SQLNullStruct{}},
+		{"all_present", populatedSQLNull()},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			size := c.v.JSONSize()
+			got, err := c.v.AppendJSON(make([]byte, 0, size))
+			if err != nil {
+				t.Fatalf("AppendJSON: %v", err)
+			}
+			if cap(got) != size {
+				t.Errorf("realloc: JSONSize=%d cap=%d len=%d\nout=%s", size, cap(got), len(got), got)
+			}
+			if len(got) > size {
+				t.Errorf("undersized: len=%d > size=%d", len(got), size)
+			}
+		})
+	}
+}
+
+// TestJSONSize_SQLNullPerType: per-flavor cap-guard so a regression in a
+// single Null* size class surfaces at that flavor instead of being buried
+// inside the composite test above. Mirrors the TimeFormats per-format
+// table. Each row covers both Valid=false (the "null" arm) and Valid=true
+// (the inner-value arm) — the size code picks max(innerSize, len("null"))
+// so both must absorb without realloc.
+func TestJSONSize_SQLNullPerType_NoRealloc(t *testing.T) {
+	t.Parallel()
+	when := time.Unix(1700000000, 0).UTC()
+	type capGuard interface {
+		JSONSize() int
+		AppendJSON(dst []byte) ([]byte, error)
+	}
+	cases := []struct {
+		name      string
+		nullCase  capGuard
+		validCase capGuard
+	}{
+		{
+			"NullString",
+			SQLNullStringStruct{},
+			SQLNullStringStruct{S: sql.NullString{String: strings.Repeat("a", 100), Valid: true}},
+		},
+		{
+			"NullInt64",
+			SQLNullInt64Struct{},
+			SQLNullInt64Struct{I: sql.NullInt64{Int64: math.MinInt64, Valid: true}},
+		},
+		{
+			"NullInt32",
+			SQLNullInt32Struct{},
+			SQLNullInt32Struct{I32: sql.NullInt32{Int32: math.MinInt32, Valid: true}},
+		},
+		{
+			"NullInt16",
+			SQLNullInt16Struct{},
+			SQLNullInt16Struct{I16: sql.NullInt16{Int16: math.MinInt16, Valid: true}},
+		},
+		{
+			"NullByte",
+			SQLNullByteStruct{},
+			SQLNullByteStruct{B: sql.NullByte{Byte: math.MaxUint8, Valid: true}},
+		},
+		{
+			"NullBool",
+			SQLNullBoolStruct{},
+			SQLNullBoolStruct{BL: sql.NullBool{Bool: true, Valid: true}},
+		},
+		{
+			"NullFloat64",
+			SQLNullFloat64Struct{},
+			SQLNullFloat64Struct{F: sql.NullFloat64{Float64: math.MaxFloat64, Valid: true}},
+		},
+		{
+			"NullTime",
+			SQLNullTimeStruct{},
+			SQLNullTimeStruct{T: sql.NullTime{Time: when, Valid: true}},
+		},
+	}
+	check := func(t *testing.T, v capGuard) {
+		t.Helper()
+		size := v.JSONSize()
+		got, err := v.AppendJSON(make([]byte, 0, size))
+		if err != nil {
+			t.Fatalf("AppendJSON: %v", err)
+		}
+		if cap(got) != size {
+			t.Errorf("realloc: JSONSize=%d cap=%d len=%d\nout=%s", size, cap(got), len(got), got)
+		}
+		if len(got) > size {
+			t.Errorf("undersized: len=%d > size=%d", len(got), size)
+		}
+	}
+	for _, c := range cases {
+		t.Run(c.name+"/null", func(t *testing.T) { check(t, c.nullCase) })
+		t.Run(c.name+"/valid", func(t *testing.T) { check(t, c.validCase) })
+	}
+}
+
+// TestJSONSize_PtrSliceStruct: cap-guard for []*T slab-allocated pointer
+// slices. Mix of nil + non-nil elements exercises both branches.
+func TestJSONSize_PtrSliceStruct_NoRealloc(t *testing.T) {
+	a := Address{Street: "Main 1", City: "Lviv", ZipCode: "79000"}
+	b := Address{Street: strings.Repeat("x", 200), City: strings.Repeat("y", 200), ZipCode: "00000"}
+	in := PtrSliceStruct{
+		PtrSliceItemsStruct: PtrSliceItemsStruct{Items: []*Address{&a, nil, &b}},
+		PtrSliceTupleStruct: PtrSliceTupleStruct{Tuple: [3]*Address{&a, nil, &b}},
+		PtrSliceNodesStruct: PtrSliceNodesStruct{Nodes: []*Node{{ID: 1, Name: strings.Repeat("z", 100)}, nil}},
+	}
+	size := in.JSONSize()
+	got, err := in.AppendJSON(make([]byte, 0, size))
+	if err != nil {
+		t.Fatalf("AppendJSON: %v", err)
+	}
+	if cap(got) != size {
+		t.Errorf("realloc: JSONSize=%d cap=%d len=%d", size, cap(got), len(got))
+	}
+	if len(got) > size {
+		t.Errorf("undersized: len=%d > size=%d", len(got), size)
+	}
+}
+
+// TestJSONSize_PtrSlicePerShape: per-shape cap-guard for the three slab
+// flavors. Slice-of-pointer-struct (Items), array-of-pointer-struct
+// (Tuple), and slice-of-pointer-recursive-struct (Nodes) each exercise
+// a distinct emit path; a regression in one no longer hides behind the
+// other two in the composite test above.
+func TestJSONSize_PtrSlicePerShape_NoRealloc(t *testing.T) {
+	t.Parallel()
+	a := Address{Street: "Main 1", City: "Lviv", ZipCode: "79000"}
+	b := Address{Street: strings.Repeat("x", 200), City: strings.Repeat("y", 200), ZipCode: "00000"}
+	type capGuard interface {
+		JSONSize() int
+		AppendJSON(dst []byte) ([]byte, error)
+	}
+	cases := []struct {
+		name string
+		v    capGuard
+	}{
+		{"Items_mixed", PtrSliceItemsStruct{Items: []*Address{&a, nil, &b}}},
+		{"Items_nil", PtrSliceItemsStruct{}},
+		{"Items_empty", PtrSliceItemsStruct{Items: []*Address{}}},
+		{"Tuple_mixed", PtrSliceTupleStruct{Tuple: [3]*Address{&a, nil, &b}}},
+		{"Tuple_all_nil", PtrSliceTupleStruct{}},
+		{"Nodes_mixed", PtrSliceNodesStruct{Nodes: []*Node{{ID: 1, Name: strings.Repeat("z", 100)}, nil}}},
+		{"Nodes_nil", PtrSliceNodesStruct{}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			size := c.v.JSONSize()
+			got, err := c.v.AppendJSON(make([]byte, 0, size))
+			if err != nil {
+				t.Fatalf("AppendJSON: %v", err)
+			}
+			if cap(got) != size {
+				t.Errorf("realloc: JSONSize=%d cap=%d len=%d\nout=%s",
+					size, cap(got), len(got), got)
+			}
+			if len(got) > size {
+				t.Errorf("undersized: len=%d > size=%d", len(got), size)
+			}
+		})
+	}
+}
+
+// TestJSONSize_AnyStruct: cap-guard for the `any` field — both the
+// default (float64 numbers) and `usenumber` (json.Number) variants.
+// Worst case is a deeply nested map+array+string mix.
+func TestJSONSize_AnyStruct_NoRealloc(t *testing.T) {
+	body := map[string]any{
+		"k":   float64(42),
+		"l":   []any{float64(1), float64(2), "abc", true, nil},
+		"s":   strings.Repeat("x", 100),
+		"sub": map[string]any{"a": float64(1), "b": "y"},
+	}
+	in := AnyStruct{Name: strings.Repeat("n", 50), Body: body}
+	size := in.JSONSize()
+	got, err := in.AppendJSON(make([]byte, 0, size))
+	if err != nil {
+		t.Fatalf("AppendJSON: %v", err)
+	}
+	if cap(got) != size {
+		t.Errorf("realloc: JSONSize=%d cap=%d len=%d\nout=%s", size, cap(got), len(got), got)
+	}
+	if len(got) > size {
+		t.Errorf("undersized: len=%d > size=%d", len(got), size)
+	}
+}
+
+func TestJSONSize_AnyNumberStruct_NoRealloc(t *testing.T) {
+	in := AnyNumberStruct{
+		Name: "n",
+		Body: map[string]any{"big": json.Number("9007199254740993"), "a": json.Number("1.5")},
+	}
+	size := in.JSONSize()
+	got, err := in.AppendJSON(make([]byte, 0, size))
+	if err != nil {
+		t.Fatalf("AppendJSON: %v", err)
+	}
+	if cap(got) != size {
+		t.Errorf("realloc: JSONSize=%d cap=%d len=%d\nout=%s", size, cap(got), len(got), got)
 	}
 }

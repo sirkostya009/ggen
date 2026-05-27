@@ -440,9 +440,9 @@ func TestStdCompat_PtrSliceStruct(t *testing.T) {
 	b := Address{Street: "S2", City: "C2", ZipCode: "22222"}
 	// Mix of present + nil elements exercises the slab path's null branch.
 	crossCompat(t, PtrSliceStruct{
-		Items: []*Address{&a, &b},
-		Tuple: [3]*Address{&a, nil, &b},
-		Nodes: []*Node{{ID: 1, Name: "x"}, nil, {ID: 2, Name: "y"}},
+		PtrSliceItemsStruct: PtrSliceItemsStruct{Items: []*Address{&a, &b}},
+		PtrSliceTupleStruct: PtrSliceTupleStruct{Tuple: [3]*Address{&a, nil, &b}},
+		PtrSliceNodesStruct: PtrSliceNodesStruct{Nodes: []*Node{{ID: 1, Name: "x"}, nil, {ID: 2, Name: "y"}}},
 	})
 }
 

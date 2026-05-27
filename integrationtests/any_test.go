@@ -8,7 +8,6 @@ package integrationtests
 
 import (
 	"encoding/json"
-	"strings"
 	"testing"
 
 	"github.com/sirkostya009/ggen/encode"
@@ -114,44 +113,5 @@ func TestAnyNumber_NestedShape(t *testing.T) {
 	arr := m["k"].([]any)
 	if _, ok := arr[1].(json.Number); !ok {
 		t.Errorf("array elem = %T, want json.Number", arr[1])
-	}
-}
-
-// TestJSONSize_AnyStruct: cap-guard for the `any` field — both the
-// default (float64 numbers) and `usenumber` (json.Number) variants.
-// Worst case is a deeply nested map+array+string mix.
-func TestJSONSize_AnyStruct_NoRealloc(t *testing.T) {
-	body := map[string]any{
-		"k":   float64(42),
-		"l":   []any{float64(1), float64(2), "abc", true, nil},
-		"s":   strings.Repeat("x", 100),
-		"sub": map[string]any{"a": float64(1), "b": "y"},
-	}
-	in := AnyStruct{Name: strings.Repeat("n", 50), Body: body}
-	size := in.JSONSize()
-	got, err := in.AppendJSON(make([]byte, 0, size))
-	if err != nil {
-		t.Fatalf("AppendJSON: %v", err)
-	}
-	if cap(got) != size {
-		t.Errorf("realloc: JSONSize=%d cap=%d len=%d\nout=%s", size, cap(got), len(got), got)
-	}
-	if len(got) > size {
-		t.Errorf("undersized: len=%d > size=%d", len(got), size)
-	}
-}
-
-func TestJSONSize_AnyNumberStruct_NoRealloc(t *testing.T) {
-	in := AnyNumberStruct{
-		Name: "n",
-		Body: map[string]any{"big": json.Number("9007199254740993"), "a": json.Number("1.5")},
-	}
-	size := in.JSONSize()
-	got, err := in.AppendJSON(make([]byte, 0, size))
-	if err != nil {
-		t.Fatalf("AppendJSON: %v", err)
-	}
-	if cap(got) != size {
-		t.Errorf("realloc: JSONSize=%d cap=%d len=%d\nout=%s", size, cap(got), len(got), got)
 	}
 }

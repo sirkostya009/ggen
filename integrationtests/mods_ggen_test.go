@@ -9,6 +9,7 @@ import (
 	"github.com/sirkostya009/ggen/decode"
 	"github.com/sirkostya009/ggen/decode/validation"
 	"github.com/sirkostya009/ggen/encode"
+	"github.com/sirkostya009/ggen/integrationtests/thirdparty"
 	"github.com/sirkostya009/ggen/scan"
 )
 
@@ -441,7 +442,7 @@ func (result ModStruct) DecodeStreamFrom(s *scan.Stream) (ModStruct, error) {
 }
 
 func (s ModStruct) JSONSize() int {
-	size := 31
+	size := 33
 	size += len(s.Email) * 2
 	size += len(s.SKU) * 2
 	if n := len(s.Tags); n > 0 {
@@ -990,5 +991,332 @@ func (s FallibleModMultierrStruct) AppendJSON(dst []byte) ([]byte, error) {
 	_ = err
 	dst = append(dst, "{\"email\":\""...)
 	dst = encode.AppendStringNoHTML(dst, s.Email)
+	return append(dst, '}'), nil
+}
+
+func (result CrossPkgModStruct) DecodeFrom(data []byte) (CrossPkgModStruct, int, error) {
+	i := 0
+	var err error
+	_ = err
+	seenCode := false
+	seenNonEmpty := false
+	seenTag := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, scan.ErrBadObject
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, scan.ErrExpectString
+		}
+		{
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, scan.ErrUnterminated
+			}
+			if data[ke] < 0x20 {
+				return result, i, scan.ErrBadString
+			}
+			if data[ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				key, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, err
+				}
+			}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, scan.ErrBadObject
+		}
+		i++
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch len(key) {
+		case 3:
+			if key == "tag" {
+				if seenTag {
+					return result, i, &validation.DuplicateKeyError{Field: "tag"}
+				}
+				seenTag = true
+				if i >= len(data) || data[i] != '"' {
+					return result, i, scan.ErrExpectString
+				}
+				{
+					ke := i + 1
+					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+						ke++
+					}
+					if ke >= len(data) {
+						return result, i, scan.ErrUnterminated
+					}
+					if data[ke] < 0x20 {
+						return result, i, scan.ErrBadString
+					}
+					if data[ke] == '"' {
+						result.Tag = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						i = ke + 1
+					} else {
+						result.Tag, i, err = scan.String(data, i)
+						if err != nil {
+							return result, i, err
+						}
+					}
+				}
+				result.Tag = thirdparty.PrefixHash(result.Tag)
+			} else {
+				return result, i, &validation.UnknownKeyError{Field: key}
+			}
+		case 4:
+			if key == "code" {
+				if seenCode {
+					return result, i, &validation.DuplicateKeyError{Field: "code"}
+				}
+				seenCode = true
+				if i >= len(data) || data[i] != '"' {
+					return result, i, scan.ErrExpectString
+				}
+				{
+					ke := i + 1
+					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+						ke++
+					}
+					if ke >= len(data) {
+						return result, i, scan.ErrUnterminated
+					}
+					if data[ke] < 0x20 {
+						return result, i, scan.ErrBadString
+					}
+					if data[ke] == '"' {
+						result.Code = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						i = ke + 1
+					} else {
+						result.Code, i, err = scan.String(data, i)
+						if err != nil {
+							return result, i, err
+						}
+					}
+				}
+				if err := thirdparty.ValidateUpper(result.Code); err != nil {
+					return result, i, &validation.CustomError{Field: "code", Name: "@thirdparty.ValidateUpper", Cause: err}
+				}
+			} else {
+				return result, i, &validation.UnknownKeyError{Field: key}
+			}
+		case 8:
+			if key == "nonEmpty" {
+				if seenNonEmpty {
+					return result, i, &validation.DuplicateKeyError{Field: "nonEmpty"}
+				}
+				seenNonEmpty = true
+				if i >= len(data) || data[i] != '"' {
+					return result, i, scan.ErrExpectString
+				}
+				{
+					ke := i + 1
+					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+						ke++
+					}
+					if ke >= len(data) {
+						return result, i, scan.ErrUnterminated
+					}
+					if data[ke] < 0x20 {
+						return result, i, scan.ErrBadString
+					}
+					if data[ke] == '"' {
+						result.NonEmpty = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						i = ke + 1
+					} else {
+						result.NonEmpty, i, err = scan.String(data, i)
+						if err != nil {
+							return result, i, err
+						}
+					}
+				}
+				if v, err := thirdparty.ParseNonEmpty(result.NonEmpty); err != nil {
+					return result, i, err
+				} else {
+					result.NonEmpty = v
+				}
+			} else {
+				return result, i, &validation.UnknownKeyError{Field: key}
+			}
+		default:
+			return result, i, &validation.UnknownKeyError{Field: key}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, scan.ErrBadObject
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			return result, i + 1, nil
+		}
+		return result, i, scan.ErrBadObject
+	}
+}
+
+func (result CrossPkgModStruct) DecodeStreamFrom(s *scan.Stream) (CrossPkgModStruct, error) {
+	seenCode := false
+	seenNonEmpty := false
+	seenTag := false
+	err := s.ObjectOpen()
+	if err != nil {
+		return result, err
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, err
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, err
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView()
+		if err != nil {
+			return result, err
+		}
+		switch len(key) {
+		case 3:
+			if key == "tag" {
+				err = s.ConsumeColon()
+				if err != nil {
+					return result, err
+				}
+				if seenTag {
+					return result, &validation.DuplicateKeyError{Field: "tag"}
+				}
+				seenTag = true
+				result.Tag, err = s.String()
+				if err != nil {
+					return result, err
+				}
+				result.Tag = thirdparty.PrefixHash(result.Tag)
+			} else {
+				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+			}
+		case 4:
+			if key == "code" {
+				err = s.ConsumeColon()
+				if err != nil {
+					return result, err
+				}
+				if seenCode {
+					return result, &validation.DuplicateKeyError{Field: "code"}
+				}
+				seenCode = true
+				result.Code, err = s.String()
+				if err != nil {
+					return result, err
+				}
+				if err := thirdparty.ValidateUpper(result.Code); err != nil {
+					return result, &validation.CustomError{Field: "code", Name: "@thirdparty.ValidateUpper", Cause: err}
+				}
+			} else {
+				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+			}
+		case 8:
+			if key == "nonEmpty" {
+				err = s.ConsumeColon()
+				if err != nil {
+					return result, err
+				}
+				if seenNonEmpty {
+					return result, &validation.DuplicateKeyError{Field: "nonEmpty"}
+				}
+				seenNonEmpty = true
+				result.NonEmpty, err = s.String()
+				if err != nil {
+					return result, err
+				}
+				if v, err := thirdparty.ParseNonEmpty(result.NonEmpty); err != nil {
+					return result, err
+				} else {
+					result.NonEmpty = v
+				}
+			} else {
+				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+			}
+		default:
+			return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+		}
+		err = s.SkipSpace()
+		if err != nil {
+			return result, err
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, err
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, err
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			return result, nil
+		}
+		return result, scan.ErrBadObject
+	}
+}
+
+func (s CrossPkgModStruct) JSONSize() int {
+	size := 34
+	size += len(s.Code) * 2
+	size += len(s.NonEmpty) * 2
+	size += len(s.Tag) * 2
+	return size
+}
+
+func (s CrossPkgModStruct) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"code\":\""...)
+	dst = encode.AppendStringNoHTML(dst, s.Code)
+	dst = append(dst, ",\"nonEmpty\":\""...)
+	dst = encode.AppendStringNoHTML(dst, s.NonEmpty)
+	dst = append(dst, ",\"tag\":\""...)
+	dst = encode.AppendStringNoHTML(dst, s.Tag)
 	return append(dst, '}'), nil
 }

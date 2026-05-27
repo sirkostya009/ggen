@@ -781,7 +781,7 @@ func (result CustomBothStruct) DecodeStreamFrom(s *scan.Stream) (CustomBothStruc
 }
 
 func (s CustomBothStruct) JSONSize() int {
-	size := 11
+	size := 13
 	if n := len(s.Tags); n > 0 {
 		size += n - 1
 	}

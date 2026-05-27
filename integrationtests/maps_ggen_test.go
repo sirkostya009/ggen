@@ -851,7 +851,7 @@ func (result MapStruct) DecodeStreamFrom(s *scan.Stream) (MapStruct, error) {
 }
 
 func (s MapStruct) JSONSize() int {
-	size := 40
+	size := 46
 	size += len(s.Addresses) * 4
 	for k, v := range s.Addresses {
 		size += len(k) * 2
@@ -1844,7 +1844,7 @@ func (result MapDiveStruct) DecodeStreamFrom(s *scan.Stream) (MapDiveStruct, err
 }
 
 func (s MapDiveStruct) JSONSize() int {
-	size := 37
+	size := 43
 	size += len(s.Clamped) * 24
 	for k := range s.Clamped {
 		size += len(k) * 2

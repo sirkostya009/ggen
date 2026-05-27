@@ -76,14 +76,3 @@ type WideStruct struct {
 	F39 string `json:"f39" ggen:"required"`
 	F40 string `json:"f40" ggen:"required"`
 }
-
-// PtrSliceStruct exercises the slab-allocated `[]*T` and `[N]*T` paths:
-// element pointers come from a single backing slab so N allocs collapse
-// to ~log(N). nil elements decode to nil pointers (no slab slot used).
-//
-//ggen:generate
-type PtrSliceStruct struct {
-	Items []*Address  `json:"items"`
-	Tuple [3]*Address `json:"tuple"`
-	Nodes []*Node     `json:"nodes"`
-}

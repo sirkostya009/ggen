@@ -686,7 +686,7 @@ func (result DiveStruct) DecodeStreamFrom(s *scan.Stream) (DiveStruct, error) {
 }
 
 func (s DiveStruct) JSONSize() int {
-	size := 63
+	size := 67
 	if n := len(s.Scores); n > 0 {
 		size += n - 1
 	}
@@ -1840,7 +1840,7 @@ func (result CustomDiveStruct) DecodeStreamFrom(s *scan.Stream) (CustomDiveStruc
 }
 
 func (s CustomDiveStruct) JSONSize() int {
-	size := 51
+	size := 59
 	size += len(s.Lookup) * 24
 	for k := range s.Lookup {
 		size += len(k) * 2
