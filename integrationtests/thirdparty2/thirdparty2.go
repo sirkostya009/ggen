@@ -4,6 +4,8 @@
 // generator's fallback path picks them up at runtime.
 package thirdparty2
 
+//go:generate ../../ggen .
+
 // External2 is reachable from the main package via import, but lives in a
 // different generation pass. The main package's generator can't emit a
 // direct DecodeFrom call for it (isGenerated returns false there), so it

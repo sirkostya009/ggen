@@ -1,3 +1,6 @@
+> [!CAUTION]
+> Project is under active developemnt. No release versions are available. Every new commit changes behaviour.
+
 # ggen
 
 zero-copy, zero-reflection JSON codegen for Go.
@@ -7,23 +10,12 @@ ggen parses structs and generates custom `DecodeFrom`, `DecodeStreamFrom`,
 scanner with no token layer and encoder pre-sizes appends into a single `[]byte`,
 presizing which is also possible using the generated `JSONSize` method.
 
-> [!CAUTION]
-> Project is under active developemnt. No release versions are available. Every new commit changes behaviour.
-
 ## benchmarks
 
-`cd bench && go test -bench=BenchmarkMega -run=^$ -benchtime=500x -cpu=1 .`
-over a ~5.6 MiB deep tree with full validation.
-See [mega_test.go](./bench/mega_test.go).
+Run over a ~5.6 MiB deep tree with full validation. See [mega_test.go](./bench/mega_test.go).
 
-The bench inner loop runs under `b.RunParallel`, so `-cpu=1` measures single-thread
-throughput (the numbers below) and `-cpu=N` measures N-way parallel saturation —
-the same code, just steered by the standard go test flag. Each sub-bench wraps
-`runtime.ReadMemStats` and reports `heap_KB` (live heap at StopTimer),
-`total_KB` (alloc delta), `gc` (NumGC delta), and `gc/op` (per-iter GC rate — reads
-as "fraction of an iter that triggers a GC").
-
-```
+```sh
+$ cd bench; go test -bench=BenchmarkMega -run=^$ -benchtime=500x -cpu=1 .
 goos: linux
 goarch: amd64
 pkg: github.com/sirkostya009/ggen/bench
@@ -63,14 +55,13 @@ current implementation tries to reuse underlying bytes buffer.
 
 ### slow-network streaming
 
-Another use case that needed attempting to tackle was slow network streams.
+Another use case for ggen is slow or long network streams.
 
-Benchmarking against a faked network stream `io.Reader` that simulates a
-connection warming up fast: 1500 → 800 byte chunks (linear over the
-first 20 reads), 52 ms → 1.2 ms per-Read delay (geometric decay — each
-read shaves 75% off the remaining gap, so the floor is hit in 5 reads) yields:
+Benchmarking against a faked `io.Reader` that simulates a network
+connection warming up fast yields:
 
-```
+```sh
+$ cd bench; go test -bench=BenchmarkSlowStream -run=^$ -benchtime=100x .
 BenchmarkSlowStream_Valid/stdjson          100  164793233 ns/op   0.22 MB/s   118973 B/op   1995 allocs/op
 BenchmarkSlowStream_Valid/sonic            100  141190738 ns/op   0.25 MB/s   126977 B/op    830 allocs/op
 BenchmarkSlowStream_Valid/sonic_fast       100  141227775 ns/op   0.25 MB/s   125913 B/op    830 allocs/op
@@ -84,15 +75,9 @@ BenchmarkSlowStream_Invalid/sonic          100   66258555 ns/op   0.04 MB/s     
 BenchmarkSlowStream_Invalid/sonic_fast     100   66264328 ns/op   0.04 MB/s     3421 B/op      6 allocs/op
 ```
 
-`Invalid` benchmarks exercise the fail-fast advantage. `ggen` validation
-works with streams just fine and rejects invalid payloads — parser bails after
-reading just enough bytes to scan it. `ReadAll` variants pay the full read
-latency before validation can begin; `jsonv2` is the baseline (no validation,
-reads the full body). ~12 ms gap between `ggen_stream` and `ggen_readall` —
-on bigger payloads or slower networks it grows linearly.
-
-On multi-core runs the slowstream would scale near-linearly as concurrent slow
-connections overlap their sleeps.
+`Invalid` benchmarks exercise the fail-fast advantage - `ggen` validation
+works with streams and rejects invalid payloads bailing on processing full
+payload on failure.
 
 See [slowstream_test.go](./bench/slowstream_test.go).
 
@@ -106,7 +91,8 @@ parsing and garbage collection has settled - a slightly unrealistic
 picture but its a showcase of how byte-aliasing can help curb memory usage
 avoiding expensive copying of strings and raw bytes all the time.
 
-```
+```sh
+$ cd bench; go test -bench=BenchmarkRetention -run=^$ -benchtime=100x .
 BenchmarkRetention/stdjson         100   270798 ns/op   132.64 MB/s    97.36 retain_KB/op    9.508 retain_MiB    2.776 retain×payload   102551 B/op   1913 allocs/op
 BenchmarkRetention/sonic           100   112227 ns/op   320.06 MB/s   120.20 retain_KB/op   11.740 retain_MiB    3.428 retain×payload   126905 B/op    829 allocs/op
 BenchmarkRetention/sonic_fast      100   111367 ns/op   322.54 MB/s   120.20 retain_KB/op   11.740 retain_MiB    3.428 retain×payload   126904 B/op    829 allocs/op
@@ -116,14 +102,11 @@ BenchmarkRetention/ggen_bytes      100    97557 ns/op   368.19 MB/s    78.88 ret
 BenchmarkRetention/ggen_readall    100   121689 ns/op   295.18 MB/s   119.80 retain_KB/op   11.700 retain_MiB    3.414 retain×payload   171846 B/op    625 allocs/op
 ```
 
-Run with `GGEN_BENCH_TOPALLOCS=1` env var to surface the top-5
-allocation sites for each benchmark.
-
 ## usage
 
 Primary use case that is in mind for ggen is HTTP servers. Current
 Stream implementation is a bit lacking in memory performance but still
-marginally faster strategy for slower networks especially when if you
+a faster strategy for slower networks especially when if you
 get lots of invalid payloads that can be discared in parse-time.
 
 Install the CLI and pull in the runtime subpackages your generated code
@@ -134,7 +117,7 @@ go install github.com/sirkostya009/ggen@latest
 go get github.com/sirkostya009/ggen
 ```
 
-Annotate a struct with `//ggen:generate` and run `ggen` over its package:
+Annotate a struct with `//ggen:generate` and run the cli.
 
 ```go
 package api
@@ -149,19 +132,19 @@ type User struct {
 ```
 
 ```sh
-ggen .                # current package
-ggen ./...            # every package matched by the pattern — module-scoped, same as `go build ./...`
-ggen ./pkg/...        # subtree pattern (relative paths must start with `./`)
-ggen path/to/file.go  # one file; optional struct-name filter as trailing args
+ggen .               # current package
+ggen ./...           # every package matched by the pattern — module-scoped, same as `go build ./...`
+ggen ./pkg/...       # subtree pattern (relative paths must start with `./`)
+ggen path/to/file.go # one file; optional struct-name filter as trailing args
 ```
 
-The generated file lives next to your sources. Output naming follows the
-input: a package gets `<dir>_ggen.go` (and `<dir>_ggen_test.go` if any
-annotated struct was declared in a `_test.go` file); a single file gets
-`<base>_ggen.go`. The `-o` flag overrides the path for single-file or
+The generated file lives next to source. Output naming follows input:
+a package run gets `<dir>_ggen.go` (and `<dir>_ggen_test.go` for any
+annotated structs declared in `_test.go` files). A single file gets
+`<base>_ggen.go`. The `-o` flag overrides path for single-file or
 single-package mode.
 
-If a source file has a `//go:build` constraint, ggen carries that
+For input files that have a `//go:build` constraint, ggen carries that
 constraint into a separate output file: a struct in `tagged.go`
 guarded by `//go:build foo` ends up in `<dir>_foo_ggen.go` with the same
 `//go:build foo` header, so unconstrained builds aren't broken by an
@@ -170,7 +153,7 @@ guarded by `//go:build foo` ends up in `<dir>_foo_ggen.go` with the same
 (`<dir>_foo_bar_ggen.go`) and the original expression preserved verbatim
 in the header.
 
-You can of course use ggen along wuth `go generate` — one `//go:generate`
+You can of course use ggen along with `go generate` — one `//go:generate`
 directive per package is enough, no need to put one above every annotated
 struct:
 
@@ -178,10 +161,9 @@ struct:
 //go:generate ggen .
 ```
 
-Or, if you'd rather scope generated output per file, put a `//go:generate`
+Or, if you'd rather scope generated output per file, put a `//go:generate ggen $GOFILE`
 line in every file that has annotated structs and let single-file mode
-handle the naming. `go generate` exposes the source file's basename
-via `$GOFILE`, so the same line works in every file:
+handle the naming:
 
 ```go
 //go:generate ggen $GOFILE
@@ -189,6 +171,49 @@ via `$GOFILE`, so the same line works in every file:
 // can of course override default naming as well:
 //go:generate ggen $GOFILE -o file_ggen.go
 ```
+
+### generated methods
+
+For every annotated struct `T`:
+
+```go
+func (T) DecodeFrom(data []byte) (T, int, error)      // returns bytes consumed
+func (T) DecodeStreamFrom(s *scan.Stream) (T, error)  // Stream owns cursor via s.Pos
+func (T) JSONSize() int
+func (T) AppendJSON(dst []byte) ([]byte, error)
+```
+
+Additional methods generated with `marshal` and `unmarshal` annotations set,
+respectively:
+
+```go
+func (T)  MarshalJSON() ([]byte, error)
+func (*T) UnmarshalJSON([]byte) error
+```
+
+Use generated methods directly on values or in-place values.
+
+```go
+// parse from []byte
+u, _, err := User{}.DecodeFrom(payload)
+
+// prealocate a []byte buf
+buf := make([]byte, 0, u.JSONSize())
+// write to []byte
+buf, err = u.AppendJSON(buf)
+
+// wrap an io.Reader in a stream with a preallocated intermediate buf
+s := scan.NewStream(r, buf)
+// lazily decode from stream
+u, err = u.DecodeFromStream(s)
+// once finished you can reutilize buf for another stream
+```
+
+ggen supports merge semantics, similar to stdlib: non-nil slices and maps are reused
+which can be used as an optimization on paths where you need to repeatedly parse
+same object shape.
+
+### runtime packages
 
 Apart from the byte-scan and append primitives, the runtime packages
 also expose a small set of helpers in `encode` / `decode` for the
@@ -202,17 +227,11 @@ import (
 )
 
 // single value
-u, _, err := User{}.DecodeFrom(payload)
 out, err := encode.Marshal(u)
 
 // JSON array of T → []T
 users, err := decode.UnmarshalSlice[User](payload)
 out, err := encode.MarshalSlice(users)
-
-// streaming single value — caller owns the buf
-s := scan.NewStream(req.Body, nil)
-u, err := User{}.DecodeStreamFrom(s)    // recycle s.Bytes() afterwards
-// (or `var s scan.Stream; s.Reset(...)` to stack-allocate)
 
 // streaming array
 users, buf, err := decode.UnmarshalSliceStream[User](req.Body, buf[:0])
@@ -220,8 +239,8 @@ users, buf, err := decode.UnmarshalSliceStream[User](req.Body, buf[:0])
 
 ### flags and annotations
 
-Every flag has a matching per-struct annotation token (no leading dash).
-Flags apply globally to the whole pass, annotations apply locally.
+Most CLI flags have matching per-struct annotation token (no leading dash).
+Flags apply globally to the whole pass, annotations apply locally to the struct.
 Multiple annotation tokens are space-separated: `//ggen:generate marshal
 unmarshal multierr`.
 
@@ -257,26 +276,8 @@ output) — same as `encoding/json`. Extras worth knowing:
 
 ### `ggen:"..."` — validation rules
 
-Comma-separated rules, with three optional mode prefixes:
-
-- `(no prefix)` applies the rule to the field itself, or to the whole
-  slice/map/array when the field is a container.
-- `dive:` applies subsequent rules to the next nested level. Each extra
-  `dive:` peels another layer — for `[][]T`, the first dive targets each
-  `[]T`, the second targets each `T`.
-- `keys:` applies rules to map keys only.
-
-For example:
-
-```go
-Aliases map[string][]Email `json:"aliases" ggen:"keys:minrunes=2,maxrunes=32,minlen=1,dive:maxlen=10,dive:@CheckEmail"`
-```
-
-Reads as: keys must have character (rune) count from 2 to 32, the map
-itself must have at least one entry, each value slice may be at most 10
-elements and each `Email` is checked by a user-defined `CheckEmail` func.
-
-Each rule maps to a typed error in `decode/validation`:
+Validation rules run right after a value has been parsed and reshaped by
+mods.
 
 | rule                                  | error                                          | what it checks                                                                        |
 | ------------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------- |
@@ -360,6 +361,24 @@ through the source file's import block, so file-scoped aliases
 resolve a name. The package's declared name is honored when it differs
 from its directory basename.
 
+#### `dive:` and `keys:`
+
+You can apply validation to containers' inner elements using either
+`dive:` or `keys:`.
+
+`keys:` only applies to map keys, while `dive:` applies to slices, arrays
+and maps as well. Same applicability rules apply.
+
+#### example
+
+```go
+Aliases map[string][]Email `json:"aliases" ggen:"keys:minrunes=2,maxrunes=32,minlen=1,dive:maxlen=10,dive:@CheckEmail"`
+```
+
+Reads as: keys must have character (rune) count from 2 to 32, the map
+itself must have at least one entry, each value slice may be at most 10
+elements and each `Email` is checked by a user-defined `CheckEmail` func.
+
 ### `mod:"..."` — input transforms
 
 Mods run after the value is decoded but before validation, so validation
@@ -376,14 +395,13 @@ options of what to provide:
 
 - pure functions: `func(T) T`, emitted as `field = Func(field)`
 - "errorable" functions: `func(T) (T, error)`. A non-nil error propagates
-  immediately as a parse error (early return), even in `-multierr` mode.
-  Validation never runs after a mod failure on the same field — mods
-  guard the value, validators evaluate it.
+  immediately as a parse error (early return), even in `-multierr` mode -
+  validators never get to run.
 
 ```go
 //ggen:generate
 type Profile struct {
-    Email string `json:"email" mod:"@Squash,trim,lower"`
+    Email string `json:"email" mod:"@Squash,lower"`
 }
 
 func Squash(s string) string { return strings.ReplaceAll(s, " ", "") }
@@ -409,24 +427,20 @@ The same cross-package lookup rules apply as for custom validators.
 
 ### cross-package interfaces
 
-For any field whose type is defined outside the package being
-generated, ggen probes the method set at codegen time via
-`go/types` and emits a direct call. No runtime reflection, no itab
-lookups. The picked method is the first one available in each
-direction:
+For any field whose type is defined outside the package being generated,
+ggen probes the method set at codegen time via and emits a direct call.
+No runtime probing. Picked method is the first one available in order:
 
 | direction | ladder                                                                                |
 | --------- | ------------------------------------------------------------------------------------- |
-| decode    | `DecodeFrom` → `UnmarshalJSON` → `UnmarshalText` → `encoding/json.Unmarshal`          |
-| encode    | `AppendJSON` → `MarshalJSON` → `AppendText` → `MarshalText` → `encoding/json.Marshal` |
+| decode    | `DecodeFrom` → `UnmarshalText` → `UnmarshalJSON` → `encoding/json.Unmarshal`          |
+| encode    | `AppendJSON` → `AppendText` → `MarshalText` → `MarshalJSON` → `encoding/json.Marshal` |
 
-This is what picks up `google/uuid`, `gofrs/uuid/v5`,
-`shopspring/decimal`, `oklog/ulid`, `segmentio/ksuid`, `rs/xid`,
-`net/mail.Address` — they all implement `TextMarshaler`/`TextUnmarshaler`
-(some also `encoding.TextAppender` for zero-alloc encode), so the ladder
-routes them through the text path automatically. Decode goes through
-`unsafe.Slice` so `UnmarshalText` doesn't allocate the input.
-`AppendText` is preferred on encode whenever the type exposes it.
+Types like `google/uuid` implement `TextMarshaler`/`TextUnmarshaler`,
+so the ladder would route them through the text path automatically.
+This means that even though a type might have JSON marshalling methods,
+their wire shape would still be that of a JSON string if serialized via
+ggen methods. `AppendText` is preferred over `MarshalText`.
 
 `encoding/json.Unmarshal` and `json.Marshal` are used only as fallback
 if none of the aforementioned methods are present on the custom type.
@@ -502,53 +516,26 @@ ggen treats a bunch of stdlib types as first-class with special encoding and dec
 | `math/big.Rat`       | JSON string         | `"22/7"`                                                                                            |
 | `database/sql.NullX` | inner value or null | `NullString`, `NullInt64`/`32`/`16`, `NullByte`, `NullBool`, `NullFloat64`, `NullTime`              |
 
-`any` (`interface{}`) also works and is similar to how standard json treats it.
+`any` also works and is similar to how standard json treats it.
 
 #### divergences from stdlib
 
 The `net/url.URL` and `sql.NullX` rows above ship a different wire shape
-from `encoding/json` v1/v2 — ggen serializes them the way consumers
-actually expect, not the way Go's struct-dump default produces:
+from `encoding/json` v1/v2 — ggen serializes them the way consumers would
+usually expect, diverging from stdlib's exported-field struct dump:
 
 | type          | ggen wire             | stdlib wire (v1 + v2)                          |
 | ------------- | --------------------- | ---------------------------------------------- |
 | `net/url.URL` | `"https://x/p?q=1"`   | `{"Scheme":"https","Host":"x", ... 11 fields}` |
 | `sql.NullX`   | inner value or `null` | `{"<Inner>":val,"Valid":true}`                 |
 
-Web services want URL-as-string, database drivers want null-or-value.
-Round-trips through ggen are fine on both sides; piping the output
-through stdlib `encoding/json` reshapes the value back to the
-struct-dump form.
+## examples
 
-Another decode-side divergence worth flagging: **ggen has no
-decode-into mode**. Stdlib's `Unmarshal(data, &dst)` merges JSON into
-the existing `dst` — pre-existing map entries survive, slice contents
-extend, nested struct fields keep prior state unless overwritten by
-JSON. ggen's `T.DecodeFrom` (and the wrappers around it) ignores its
-receiver and returns a fresh `T` — there's no shape of call that asks
-ggen to layer JSON over a caller-supplied value.
+### streaming
 
-The map case is the easiest to observe:
-
-| destination | incoming  | stdlib                   | ggen              |
-| ----------- | --------- | ------------------------ | ----------------- |
-| nil         | `{}`      | nil                      | empty non-nil map |
-| nil         | `{"a":1}` | `{"a":1}`                | `{"a":1}`         |
-| `{"x":9}`   | `{}`      | `{"x":9}` (preserved)    | empty (fresh)     |
-| `{"x":9}`   | `{"a":1}` | `{"x":9,"a":1}` (merged) | `{"a":1}`         |
-| any         | `null`    | nil                      | nil               |
-
-## streaming
-
-The streaming entry point is `(T).DecodeStreamFrom(s *scan.Stream)`.
-Callers own the `scan.Stream` — `Reset(r, buf)` it once and the parser
-feeds the reader chunk-by-chunk into the supplied buf. Combined with
-per-field validation (default, no `-multierr`), an invalid request
-errors out after a few fields' worth of bytes — the client doesn't
-waste bandwidth finishing the upload, the server doesn't buffer the
-rest. See [slow-network streaming](#slow-network-streaming) and
-[memory residency](#memory-residency) above for when this actually
-pays off vs `T{}.DecodeFrom` over a `ReadAll` buffer.
+As mentioned previous `DecodeFromStream` paths are meant to be used
+in cases where you expect invalid payloads and dont want to waste time
+parsing them in full as well as parsing potentially slower network streams.
 
 ```go
 //ggen:generate
@@ -582,27 +569,6 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 ```
-
-## generated methods
-
-For every annotated struct `T`:
-
-```go
-func (T) DecodeFrom(data []byte) (T, int, error)      // returns bytes consumed
-func (T) DecodeStreamFrom(s *scan.Stream) (T, error)  // Stream owns cursor via s.Pos
-func (T) JSONSize() int
-func (T) AppendJSON(dst []byte) ([]byte, error)
-```
-
-Additional methods generated with `marshal` and `unmarshal` annotations set,
-respectively:
-
-```go
-func (T)  MarshalJSON() ([]byte, error)
-func (*T) UnmarshalJSON([]byte) error
-```
-
-## examples
 
 ### nested validation
 
