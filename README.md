@@ -7,6 +7,9 @@ ggen parses structs and generates custom `DecodeFrom`, `DecodeStreamFrom`,
 scanner with no token layer and encoder pre-sizes appends into a single `[]byte`,
 presizing which is also possible using the generated `JSONSize` method.
 
+> [!CAUTION]
+> Project is under active developemnt. No release versions are available. Every new commit changes behaviour.
+
 ## benchmarks
 
 `cd bench && go test -bench=BenchmarkMega -run=^$ -benchtime=500x -cpu=1 .`
