@@ -269,8 +269,12 @@ fields are skipped silently (no decode wiring, never appear in marshal
 output) — same as `encoding/json`. Extras worth knowing:
 
 - `json:",inline"` — the field becomes a catch-all map for unknown keys.
-  The Go type must be `map[string]any`. This overrides `-ignoreunknown`,
-  and on marshal the entries are spliced into the parent object.
+  The Go type must be a string-keyed map (`map[string]V`); V can be `any`,
+  a primitive, a ggen-annotated struct, or any other concrete type.
+  Typed values are decoded directly through the elem's fast path when one
+  exists (string scan, generated `DecodeFrom`), or via `encoding/json`
+  unmarshal of the captured span otherwise. Overrides `-ignoreunknown`;
+  on marshal the entries are spliced into the parent object.
 - `format:X` — type-specific format hint (see _supported kinds_ below).
   Per jsonv2, this MUST be the last option in the tag.
 

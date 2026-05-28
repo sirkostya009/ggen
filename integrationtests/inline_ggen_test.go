@@ -271,3 +271,561 @@ func (s InlineStruct) AppendJSON(dst []byte) ([]byte, error) {
 	}
 	return append(dst, '}'), nil
 }
+
+func (result InlineStringsStruct) DecodeFrom(data []byte) (InlineStringsStruct, int, error) {
+	i := 0
+	if result.Extra != nil {
+		clear(result.Extra)
+	}
+	var err error
+	_ = err
+	seenName := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, scan.ErrBadObject
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, scan.ErrExpectString
+		}
+		{
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, scan.ErrUnterminated
+			}
+			if data[ke] < 0x20 {
+				return result, i, scan.ErrBadString
+			}
+			if data[ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				key, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, err
+				}
+			}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, scan.ErrBadObject
+		}
+		i++
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch len(key) {
+		case 4:
+			if key == "name" {
+				if seenName {
+					return result, i, &validation.DuplicateKeyError{Field: "name"}
+				}
+				seenName = true
+				if i >= len(data) || data[i] != '"' {
+					return result, i, scan.ErrExpectString
+				}
+				{
+					ke := i + 1
+					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+						ke++
+					}
+					if ke >= len(data) {
+						return result, i, scan.ErrUnterminated
+					}
+					if data[ke] < 0x20 {
+						return result, i, scan.ErrBadString
+					}
+					if data[ke] == '"' {
+						result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						i = ke + 1
+					} else {
+						result.Name, i, err = scan.String(data, i)
+						if err != nil {
+							return result, i, err
+						}
+					}
+				}
+			} else {
+				if result.Extra == nil {
+					result.Extra = make(map[string]string)
+				}
+				{
+					var _iv string
+					_iv, i, err = scan.String(data, i)
+					if err != nil {
+						return result, i, err
+					}
+					result.Extra[key] = _iv
+				}
+			}
+		default:
+			if result.Extra == nil {
+				result.Extra = make(map[string]string)
+			}
+			{
+				var _iv string
+				_iv, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, err
+				}
+				result.Extra[key] = _iv
+			}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, scan.ErrBadObject
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			return result, i + 1, nil
+		}
+		return result, i, scan.ErrBadObject
+	}
+}
+
+func (result InlineStringsStruct) DecodeFromStream(s *scan.Stream) (InlineStringsStruct, error) {
+	if result.Extra != nil {
+		clear(result.Extra)
+	}
+	seenName := false
+	err := s.ObjectOpen()
+	if err != nil {
+		return result, err
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, err
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, err
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView()
+		if err != nil {
+			return result, err
+		}
+		switch len(key) {
+		case 4:
+			if key == "name" {
+				err = s.ConsumeColon()
+				if err != nil {
+					return result, err
+				}
+				if seenName {
+					return result, &validation.DuplicateKeyError{Field: "name"}
+				}
+				seenName = true
+				result.Name, err = s.String()
+				if err != nil {
+					return result, err
+				}
+			} else {
+				ownKey := strings.Clone(key)
+				err = s.ConsumeColon()
+				if err != nil {
+					return result, err
+				}
+				if result.Extra == nil {
+					result.Extra = make(map[string]string)
+				}
+				{
+					var _iv string
+					_iv, err = s.String()
+					if err != nil {
+						return result, err
+					}
+					result.Extra[ownKey] = _iv
+				}
+			}
+		default:
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, err
+			}
+			if result.Extra == nil {
+				result.Extra = make(map[string]string)
+			}
+			{
+				var _iv string
+				_iv, err = s.String()
+				if err != nil {
+					return result, err
+				}
+				result.Extra[ownKey] = _iv
+			}
+		}
+		err = s.SkipSpace()
+		if err != nil {
+			return result, err
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, err
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, err
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			return result, nil
+		}
+		return result, scan.ErrBadObject
+	}
+}
+
+func (s InlineStringsStruct) JSONSize() int {
+	size := 11
+	size += len(s.Name) * 2
+	size += len(s.Extra) * 4
+	for k, v := range s.Extra {
+		size += len(k) * 2
+		size += len(v)*2 + 2
+	}
+	return size
+}
+
+func (s InlineStringsStruct) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, '{')
+	start := len(dst)
+	if len(dst) > start {
+		dst = append(dst, ',')
+	}
+	dst = append(dst, "\"name\":\""...)
+	dst = encode.AppendStringNoHTML(dst, s.Name)
+	{
+		for k, v := range s.Extra {
+			if len(dst) > start {
+				dst = append(dst, ',')
+			}
+			dst = append(dst, '"')
+			dst = encode.AppendStringNoHTML(dst, k)
+			dst = append(dst, ":\""...)
+			dst = encode.AppendStringNoHTML(dst, v)
+		}
+	}
+	return append(dst, '}'), nil
+}
+
+func (result InlineStructsStruct) DecodeFrom(data []byte) (InlineStructsStruct, int, error) {
+	i := 0
+	if result.Extra != nil {
+		clear(result.Extra)
+	}
+	var err error
+	_ = err
+	seenName := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, scan.ErrBadObject
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		return result, i + 1, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, scan.ErrExpectString
+		}
+		{
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, scan.ErrUnterminated
+			}
+			if data[ke] < 0x20 {
+				return result, i, scan.ErrBadString
+			}
+			if data[ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				key, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, err
+				}
+			}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, scan.ErrBadObject
+		}
+		i++
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch len(key) {
+		case 4:
+			if key == "name" {
+				if seenName {
+					return result, i, &validation.DuplicateKeyError{Field: "name"}
+				}
+				seenName = true
+				if i >= len(data) || data[i] != '"' {
+					return result, i, scan.ErrExpectString
+				}
+				{
+					ke := i + 1
+					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+						ke++
+					}
+					if ke >= len(data) {
+						return result, i, scan.ErrUnterminated
+					}
+					if data[ke] < 0x20 {
+						return result, i, scan.ErrBadString
+					}
+					if data[ke] == '"' {
+						result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						i = ke + 1
+					} else {
+						result.Name, i, err = scan.String(data, i)
+						if err != nil {
+							return result, i, err
+						}
+					}
+				}
+			} else {
+				if result.Extra == nil {
+					result.Extra = make(map[string]InlineStruct)
+				}
+				{
+					var _iv InlineStruct
+					var _in int
+					_iv, _in, err = _iv.DecodeFrom(data[i:])
+					i += _in
+					if err != nil {
+						return result, i, err
+					}
+					result.Extra[key] = _iv
+				}
+			}
+		default:
+			if result.Extra == nil {
+				result.Extra = make(map[string]InlineStruct)
+			}
+			{
+				var _iv InlineStruct
+				var _in int
+				_iv, _in, err = _iv.DecodeFrom(data[i:])
+				i += _in
+				if err != nil {
+					return result, i, err
+				}
+				result.Extra[key] = _iv
+			}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, scan.ErrBadObject
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			return result, i + 1, nil
+		}
+		return result, i, scan.ErrBadObject
+	}
+}
+
+func (result InlineStructsStruct) DecodeFromStream(s *scan.Stream) (InlineStructsStruct, error) {
+	if result.Extra != nil {
+		clear(result.Extra)
+	}
+	seenName := false
+	err := s.ObjectOpen()
+	if err != nil {
+		return result, err
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, err
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, err
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView()
+		if err != nil {
+			return result, err
+		}
+		switch len(key) {
+		case 4:
+			if key == "name" {
+				err = s.ConsumeColon()
+				if err != nil {
+					return result, err
+				}
+				if seenName {
+					return result, &validation.DuplicateKeyError{Field: "name"}
+				}
+				seenName = true
+				result.Name, err = s.String()
+				if err != nil {
+					return result, err
+				}
+			} else {
+				ownKey := strings.Clone(key)
+				err = s.ConsumeColon()
+				if err != nil {
+					return result, err
+				}
+				if result.Extra == nil {
+					result.Extra = make(map[string]InlineStruct)
+				}
+				{
+					var _iv InlineStruct
+					_iv, err = _iv.DecodeFromStream(s)
+					if err != nil {
+						return result, err
+					}
+					result.Extra[ownKey] = _iv
+				}
+			}
+		default:
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, err
+			}
+			if result.Extra == nil {
+				result.Extra = make(map[string]InlineStruct)
+			}
+			{
+				var _iv InlineStruct
+				_iv, err = _iv.DecodeFromStream(s)
+				if err != nil {
+					return result, err
+				}
+				result.Extra[ownKey] = _iv
+			}
+		}
+		err = s.SkipSpace()
+		if err != nil {
+			return result, err
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, err
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, err
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			return result, nil
+		}
+		return result, scan.ErrBadObject
+	}
+}
+
+func (s InlineStructsStruct) JSONSize() int {
+	size := 11
+	size += len(s.Name) * 2
+	size += len(s.Extra) * 4
+	for k, v := range s.Extra {
+		size += len(k) * 2
+		size += v.JSONSize()
+	}
+	return size
+}
+
+func (s InlineStructsStruct) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, '{')
+	start := len(dst)
+	if len(dst) > start {
+		dst = append(dst, ',')
+	}
+	dst = append(dst, "\"name\":\""...)
+	dst = encode.AppendStringNoHTML(dst, s.Name)
+	{
+		for k, v := range s.Extra {
+			if len(dst) > start {
+				dst = append(dst, ',')
+			}
+			dst = append(dst, '"')
+			dst = encode.AppendStringNoHTML(dst, k)
+			dst = append(dst, ':')
+			if dst, err = v.AppendJSON(dst); err != nil {
+				return dst, err
+			}
+		}
+	}
+	return append(dst, '}'), nil
+}

@@ -973,9 +973,6 @@ func (s *structSet) extractFieldFromTypes(structName string, field *types.Var, t
 		if fi.Kind != KindMap {
 			return fi, fmt.Errorf("json:\",inline\" requires a map[string]T field, got %s", fi.GoType)
 		}
-		if fi.ElemType != "any" && fi.ElemType != "interface{}" {
-			return fi, fmt.Errorf("json:\",inline\" map value must be any, got %s", fi.ElemType)
-		}
 	}
 
 	fi.Iface = inspectType(field.Type(), s.stdIfaces)
@@ -1283,9 +1280,6 @@ func extractField(structName, goName string, field *ast.Field) (FieldInfo, error
 	if fi.Inline {
 		if fi.Kind != KindMap {
 			return fi, fmt.Errorf("json:\",inline\" requires a map[string]T field, got %s", goType)
-		}
-		if fi.ElemType != "any" && fi.ElemType != "interface{}" {
-			return fi, fmt.Errorf("json:\",inline\" map value must be any, got %s", fi.ElemType)
 		}
 	}
 

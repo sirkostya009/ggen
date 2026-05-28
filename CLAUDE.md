@@ -110,7 +110,10 @@ Annotations apply only to a struct.
 - `json:"name"` — JSON key name (field ignored otherwise)
 - `json:"-"` — field set ignored explicitly
 - `json:",inline"` — catch-all map for unknown keys. Type must be
-  `map[string]any`. Overrides `ignoreunknown`. Entries spliced out on marshal
+  `map[string]V` (string-keyed); V may be `any`, a primitive, a ggen-annotated
+  struct, or any other type (typed elems decode via the elem's fast path when
+  available, else fall back to `encoding/json.Unmarshal` over the captured
+  span). Overrides `ignoreunknown`. Entries spliced out on marshal
 - `json:"name,omitempty"` — not marshaled when JSON-empty (null, "", [], {})
 - `json:"name,omitzero"` — not marshaled when Go-zero value
 - `json:"name,string"` — wrap primitive as JSON string on marshal, unwrap on
@@ -406,8 +409,11 @@ single underscores: `goexperiment.jsonv2` → `goexperiment_jsonv2`,
    `AppendJSON` → `MarshalJSON` → `AppendText` (Go 1.24+, zero alloc) →
    `MarshalText` → `encoding/json`. When type info unavailable (AST-only
    loader, bare temp dirs in tests), emits plain `encoding/json` fallback.
-8. **Inline map catch-all.** Unknown keys absorbed via
-   `encoding/json.Unmarshal` over captured raw span. Value type must be `any`.
+8. **Inline map catch-all.** Unknown keys absorbed into a `map[string]V`. V
+   dispatches: `any` → `scan.Any`/`s.Any`; `string` → `scan.String`/`s.String`
+   (alias-mode on bytes); ggen-annotated struct → `T{}.DecodeFrom`/
+   `T{}.DecodeFromStream`; anything else → `scan.SkipValue` + `json.Unmarshal`
+   over the captured span.
 9. **Marshal output cap.** `JSONSize()` upper bound → single
    `make([]byte,0,cap)` + `AppendJSON`. 1 alloc per top-level Marshal.
 10. **Recursive nested-container emitter.** `emitByteSliceRead` /

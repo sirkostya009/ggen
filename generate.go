@@ -1174,10 +1174,7 @@ func renderAppendJSONBody(b *bytes.Buffer, s StructInfo) {
 	for _, f := range s.Fields {
 		ref := "s." + f.GoName
 		if f.Inline {
-			valEmit := "if dst, err = encode.AppendAny(dst, v); err != nil { return dst, err }\n"
-			if f.ElemType == "jsontext.Value" {
-				valEmit = "dst = append(dst, v...)\n"
-			}
+			valEmit := inlineValueEmit(f)
 			fmt.Fprintf(b, `{
 for k, v := range %[1]s {
 if len(dst) > start { dst = append(dst, ',') }
@@ -1207,6 +1204,29 @@ dst = append(dst, ':')
 		}
 	}
 	b.WriteString("return append(dst, '}'), nil")
+}
+
+// inlineValueEmit returns the inline-catch-all marshal code for one map
+// entry's value, assuming the loop variable is `v`. Specializes a couple of
+// elem kinds to skip the `any` boxing AppendAny does; everything else
+// (including cross-pkg structs, slices/maps as values, native types)
+// goes through AppendAny's reflection path.
+func inlineValueEmit(f FieldInfo) string {
+	switch f.ElemKind {
+	case KindString:
+		return fmt.Sprintf("dst = append(dst, '\"')\ndst = %s(dst, v)\n", appendStrFn(f.HTMLEscape))
+	case KindStruct:
+		if isGenerated(f.ElemType) {
+			return "if dst, err = v.AppendJSON(dst); err != nil { return dst, err }\n"
+		}
+	case KindRawJSON:
+		// jsontext.Value / json.RawMessage: passthrough.
+		return "dst = append(dst, v...)\n"
+	}
+	if f.ElemType == "jsontext.Value" {
+		return "dst = append(dst, v...)\n"
+	}
+	return "if dst, err = encode.AppendAny(dst, v); err != nil { return dst, err }\n"
 }
 
 func renderAppendValue(b *bytes.Buffer, f FieldInfo, ref string) {
@@ -3356,14 +3376,50 @@ func seenSet(s StructInfo, f FieldInfo) string {
 // `key` must already be populated by inlineScanString.
 func unknownKey(s StructInfo, posVar string) string {
 	if inline := s.InlineField(); inline.Inline {
-		anyFn := "scan.Any"
-		if s.UseNumber {
-			anyFn = "scan.AnyNumber"
-		}
-		return fmt.Sprintf(`if result.%s == nil { result.%s = make(%s) }
-result.%s[key], %s, err = %s(data, %s)
+		initMap := fmt.Sprintf("if result.%s == nil { result.%s = make(%s) }\n",
+			inline.GoName, inline.GoName, inline.GoType)
+		switch inline.ElemKind {
+		case KindAny:
+			anyFn := "scan.Any"
+			if s.UseNumber {
+				anyFn = "scan.AnyNumber"
+			}
+			return initMap + fmt.Sprintf(`result.%s[key], %s, err = %s(data, %s)
 if err != nil { return result, i, err }
-`, inline.GoName, inline.GoName, inline.GoType, inline.GoName, posVar, anyFn, posVar)
+`, inline.GoName, posVar, anyFn, posVar)
+		case KindString:
+			return initMap + fmt.Sprintf(`{
+var _iv string
+_iv, %[1]s, err = scan.String(data, %[1]s)
+if err != nil { return result, %[1]s, err }
+result.%[2]s[key] = _iv
+}
+`, posVar, inline.GoName)
+		case KindStruct:
+			if isGenerated(inline.ElemType) {
+				return initMap + fmt.Sprintf(`{
+var _iv %[1]s
+var _in int
+_iv, _in, err = _iv.DecodeFrom(data[%[2]s:])
+%[2]s += _in
+if err != nil { return result, %[2]s, err }
+result.%[3]s[key] = _iv
+}
+`, inline.ElemType, posVar, inline.GoName)
+			}
+		}
+		// Fallback: capture raw span, decode via encoding/json. Covers
+		// cross-pkg structs and any other elem kind not handled above
+		// (slice/map/numeric/native — usable, but not zero-alloc).
+		return initMap + fmt.Sprintf(`{
+_vstart := %[1]s
+%[1]s, err = scan.SkipValue(data, %[1]s)
+if err != nil { return result, %[1]s, err }
+var _iv %[2]s
+if err = json.Unmarshal(data[_vstart:%[1]s], &_iv); err != nil { return result, %[1]s, err }
+result.%[3]s[key] = _iv
+}
+`, posVar, inline.ElemType, inline.GoName)
 	}
 	if s.IgnoreUnknown {
 		return fmt.Sprintf(`%s, err = scan.SkipValue(data, %s)
@@ -4508,17 +4564,54 @@ func renderStreamAny(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 func streamUnknownKey(s StructInfo, posVar string) string {
 	_ = posVar
 	if inline := s.InlineField(); inline.Inline {
-		anyFn := "s.Any"
-		if s.UseNumber {
-			anyFn = "s.AnyNumber"
-		}
-		return fmt.Sprintf(`ownKey := strings.Clone(key)
+		prelude := fmt.Sprintf(`ownKey := strings.Clone(key)
 err = s.ConsumeColon()
 if err != nil { return result, err }
 if result.%[1]s == nil { result.%[1]s = make(%[2]s) }
-result.%[1]s[ownKey], err = %[3]s()
+`, inline.GoName, inline.GoType)
+		switch inline.ElemKind {
+		case KindAny:
+			anyFn := "s.Any"
+			if s.UseNumber {
+				anyFn = "s.AnyNumber"
+			}
+			return prelude + fmt.Sprintf(`result.%s[ownKey], err = %s()
 if err != nil { return result, err }
-`, inline.GoName, inline.GoType, anyFn)
+`, inline.GoName, anyFn)
+		case KindString:
+			return prelude + fmt.Sprintf(`{
+var _iv string
+_iv, err = s.String()
+if err != nil { return result, err }
+result.%s[ownKey] = _iv
+}
+`, inline.GoName)
+		case KindStruct:
+			if isGenerated(inline.ElemType) {
+				return prelude + fmt.Sprintf(`{
+var _iv %[1]s
+_iv, err = _iv.DecodeFromStream(s)
+if err != nil { return result, err }
+result.%[2]s[ownKey] = _iv
+}
+`, inline.ElemType, inline.GoName)
+			}
+		}
+		// Fallback: capture raw span via SkipValue + json.Unmarshal. Pins
+		// the buffer (Shift=false) so the absolute offset stays valid
+		// across any internal ReadMore inside SkipValue.
+		return prelude + fmt.Sprintf(`{
+start := s.Pos
+prevPin := s.Shift
+s.Shift = false
+err = s.SkipValue()
+s.Shift = prevPin
+if err != nil { return result, err }
+var _iv %s
+if err = json.Unmarshal(s.Bytes()[start:s.Pos], &_iv); err != nil { return result, err }
+result.%s[ownKey] = _iv
+}
+`, inline.ElemType, inline.GoName)
 	}
 	if s.IgnoreUnknown {
 		return `err = s.ConsumeColon()

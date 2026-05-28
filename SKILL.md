@@ -118,7 +118,7 @@ type Order struct { /* ... */ }
 
 ### `json:"..."` — same as stdlib, plus
 
-- `json:",inline"` — field = catch-all map for unknown keys. Type MUST be `map[string]any`. Override `-ignoreunknown`.
+- `json:",inline"` — field = catch-all map for unknown keys. Type must be a string-keyed map (`map[string]V`); V may be `any`, a primitive, a ggen-annotated struct, or any other type (typed elems dispatch through the elem's fast path or `encoding/json.Unmarshal` over the captured span). Overrides `-ignoreunknown`.
 - `json:"name,omitempty"` — skip on marshal when JSON-empty.
 - `json:"name,omitzero"` — skip on marshal when Go-zero.
 - `json:"name,string"` — wrap primitive as JSON string (unwrap on decode).
