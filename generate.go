@@ -165,7 +165,7 @@ func writePrelude(buf *bytes.Buffer, pkg, buildTag string, stdlib, third []strin
 }
 
 // renderStructMethods writes the full method set for a single struct
-// directly to buf. The set is fixed (DecodeFrom + DecodeStreamFrom +
+// directly to buf. The set is fixed (DecodeFrom + DecodeFromStream +
 // JSONSize + AppendJSON, plus optional MarshalJSON / UnmarshalJSON
 // hooks) so a hand-rolled write is cheaper than the prior text/template
 // dispatch through reflect.Value.Call.
@@ -2361,7 +2361,7 @@ func inlineScanString(b *bytes.Buffer, posIn, dst, posOut string) {
 }
 
 // emitReceiverReset emits the per-container reset block at the top of
-// DecodeFrom / DecodeStreamFrom. The decoder is decode-into-receiver:
+// DecodeFrom / DecodeFromStream. The decoder is decode-into-receiver:
 // `result` IS the value the caller passed in. Scalars / structs merge
 // naturally (recursive DecodeFrom on a nested struct passes the existing
 // value as the receiver of the next call); containers MUST be reset so
@@ -2459,7 +2459,7 @@ func renderDecode(b *bytes.Buffer, s StructInfo) {
 
 // renderPostLoop emits end-of-parse bookkeeping: required-field checks
 // (when validation is on) and the multierr flush (when MultiErr is on).
-// Called at every success exit inside DecodeFrom / DecodeStreamFrom.
+// Called at every success exit inside DecodeFrom / DecodeFromStream.
 func renderPostLoop(b *bytes.Buffer, s StructInfo) {
 	renderPostLoopShape(b, s, false)
 }
@@ -3049,7 +3049,7 @@ func renderCrossPkgStructStreamDecode(f FieldInfo, ref, posVar string) string {
 		switch {
 		case f.Iface.StreamDecoder:
 			return fmt.Sprintf(`{
-	%[1]s, err = %[1]s.DecodeStreamFrom(s)
+	%[1]s, err = %[1]s.DecodeFromStream(s)
 	if err != nil { return result, err }
 }
 `, ref)
@@ -3874,7 +3874,7 @@ var _n int
 // array is fixed-capacity and never reallocates — zero-copy string aliases
 // stay valid for the lifetime of the Stream.
 func renderStreamDecode(b *bytes.Buffer, s StructInfo) {
-	fmt.Fprintf(b, "func (result %s) DecodeStreamFrom(s *scan.Stream) (%s, error) {\n", s.Name, s.Name)
+	fmt.Fprintf(b, "func (result %s) DecodeFromStream(s *scan.Stream) (%s, error) {\n", s.Name, s.Name)
 	if s.IsAlias {
 		renderAliasStreamDecode(b, s)
 		b.WriteString("}\n\n")
@@ -4024,7 +4024,7 @@ func renderStreamDispatch(s StructInfo) string {
 
 // renderStreamMap emits map decode for the stream path.
 // err comes from the function-body scope (ObjectOpen at the top of the
-// regular DecodeStreamFrom, or the synthetic decl in
+// regular DecodeFromStream, or the synthetic decl in
 // renderAliasContainerDecode for alias containers). `null` -> leave nil
 // and consume the literal. Empty `{}` -> non-nil empty; else fresh
 // make(). Map keys must be detached copies (the map holds the string
@@ -4120,7 +4120,7 @@ if err != nil { return result, err }
 	case KindStruct:
 		if isGenerated(f.ElemType) {
 			fmt.Fprintf(b, `var mv %s
-mv, err = mv.DecodeStreamFrom(s)
+mv, err = mv.DecodeFromStream(s)
 if err != nil { return result, err }
 %s = mv
 `, f.ElemType, mapTarget)
@@ -4670,7 +4670,7 @@ if err != nil { return result, err }
 		primScan("Float64")
 	case KindStruct:
 		if isGenerated(f.GoType) {
-			fmt.Fprintf(b, `%[1]s, err = %[1]s.DecodeStreamFrom(s)
+			fmt.Fprintf(b, `%[1]s, err = %[1]s.DecodeFromStream(s)
 if err != nil { return result, err }
 `, ref)
 		} else {
@@ -4766,7 +4766,7 @@ if s.Pos >= len(s.Bytes()) { if err = s.ReadMore(0); err != nil { return result,
 	} else {
 		sCap, slCap := preallocCap(f)
 		// dst is decode-into-receiver: either nil (fresh) or already [:0]'d
-		// at the top of DecodeStreamFrom (existing backing kept for reuse).
+		// at the top of DecodeFromStream (existing backing kept for reuse).
 		// Only allocate when nil; otherwise the [:0]'d slice serves as the
 		// append target and re-uses the caller's backing array.
 		if f.ElemPointer {
@@ -4878,7 +4878,7 @@ if err != nil { return result, err }
 		}
 	case KindStruct:
 		if directStruct {
-			fmt.Fprintf(b, `%[1]s, err = %[1]s.DecodeStreamFrom(s)
+			fmt.Fprintf(b, `%[1]s, err = %[1]s.DecodeFromStream(s)
 if err != nil { return result, err }
 `, target)
 		}

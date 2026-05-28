@@ -124,7 +124,7 @@ func (result HugeStringStruct) DecodeFrom(data []byte) (HugeStringStruct, int, e
 	}
 }
 
-func (result HugeStringStruct) DecodeStreamFrom(s *scan.Stream) (HugeStringStruct, error) {
+func (result HugeStringStruct) DecodeFromStream(s *scan.Stream) (HugeStringStruct, error) {
 	seenBig := false
 	err := s.ObjectOpen()
 	if err != nil {
@@ -534,7 +534,7 @@ func (result SequentialStringsStruct) DecodeFrom(data []byte) (SequentialStrings
 	}
 }
 
-func (result SequentialStringsStruct) DecodeStreamFrom(s *scan.Stream) (SequentialStringsStruct, error) {
+func (result SequentialStringsStruct) DecodeFromStream(s *scan.Stream) (SequentialStringsStruct, error) {
 	seenA := false
 	seenB := false
 	seenC := false
@@ -853,7 +853,7 @@ func (result UnknownErrorStruct) DecodeFrom(data []byte) (UnknownErrorStruct, in
 	}
 }
 
-func (result UnknownErrorStruct) DecodeStreamFrom(s *scan.Stream) (UnknownErrorStruct, error) {
+func (result UnknownErrorStruct) DecodeFromStream(s *scan.Stream) (UnknownErrorStruct, error) {
 	seenName := false
 	err := s.ObjectOpen()
 	if err != nil {

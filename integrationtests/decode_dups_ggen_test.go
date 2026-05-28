@@ -202,7 +202,7 @@ func (result AllowDupsStruct) DecodeFrom(data []byte) (AllowDupsStruct, int, err
 	}
 }
 
-func (result AllowDupsStruct) DecodeStreamFrom(s *scan.Stream) (AllowDupsStruct, error) {
+func (result AllowDupsStruct) DecodeFromStream(s *scan.Stream) (AllowDupsStruct, error) {
 	seenN := false
 	seenName := false
 	err := s.ObjectOpen()

@@ -132,7 +132,7 @@ func (result URLStruct) DecodeFrom(data []byte) (URLStruct, int, error) {
 	}
 }
 
-func (result URLStruct) DecodeStreamFrom(s *scan.Stream) (URLStruct, error) {
+func (result URLStruct) DecodeFromStream(s *scan.Stream) (URLStruct, error) {
 	seenSite := false
 	err := s.ObjectOpen()
 	if err != nil {

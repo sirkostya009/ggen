@@ -377,7 +377,7 @@ func (result DiveStruct) DecodeFrom(data []byte) (DiveStruct, int, error) {
 	}
 }
 
-func (result DiveStruct) DecodeStreamFrom(s *scan.Stream) (DiveStruct, error) {
+func (result DiveStruct) DecodeFromStream(s *scan.Stream) (DiveStruct, error) {
 	if result.Scores != nil {
 		result.Scores = result.Scores[:0]
 	}
@@ -1310,7 +1310,7 @@ func (result CustomDiveStruct) DecodeFrom(data []byte) (CustomDiveStruct, int, e
 	}
 }
 
-func (result CustomDiveStruct) DecodeStreamFrom(s *scan.Stream) (CustomDiveStruct, error) {
+func (result CustomDiveStruct) DecodeFromStream(s *scan.Stream) (CustomDiveStruct, error) {
 	if result.Lookup != nil {
 		clear(result.Lookup)
 	}

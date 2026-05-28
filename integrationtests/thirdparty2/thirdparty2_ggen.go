@@ -186,7 +186,7 @@ func (result External2) DecodeFrom(data []byte) (External2, int, error) {
 	}
 }
 
-func (result External2) DecodeStreamFrom(s *scan.Stream) (External2, error) {
+func (result External2) DecodeFromStream(s *scan.Stream) (External2, error) {
 	seenKey := false
 	seenValue := false
 	err := s.ObjectOpen()

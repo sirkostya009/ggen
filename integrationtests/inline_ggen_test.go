@@ -137,7 +137,7 @@ func (result InlineStruct) DecodeFrom(data []byte) (InlineStruct, int, error) {
 	}
 }
 
-func (result InlineStruct) DecodeStreamFrom(s *scan.Stream) (InlineStruct, error) {
+func (result InlineStruct) DecodeFromStream(s *scan.Stream) (InlineStruct, error) {
 	if result.Extra != nil {
 		clear(result.Extra)
 	}

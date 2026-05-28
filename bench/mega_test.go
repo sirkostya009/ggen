@@ -282,7 +282,7 @@ func BenchmarkRetention(b *testing.B) {
 			var err error
 			var _st scan.Stream
 			_st.Reset(bytes.NewReader(slowPayload), (*buf)[:0])
-			n, err = Node{}.DecodeStreamFrom(&_st)
+			n, err = Node{}.DecodeFromStream(&_st)
 			*buf = _st.Bytes()
 			if err != nil {
 				b.Fatal(err)
@@ -432,7 +432,7 @@ func BenchmarkMega_Reader(b *testing.B) {
 			var err error
 			var _st scan.Stream
 			_st.Reset(&s.r, s.buf[:0])
-			_, err = Node{}.DecodeStreamFrom(&_st)
+			_, err = Node{}.DecodeFromStream(&_st)
 			s.buf = _st.Bytes()
 			return err
 		}},

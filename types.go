@@ -125,7 +125,7 @@ type StructInfo struct {
 	// IsAlias marks a top-level named type that aliases a primitive or
 	// (with type info) a struct, e.g. `type HtmlString string`,
 	// `type Count int`, `type LocalUUID uuid.UUID`. Aliases generate the
-	// same method surface as structs (DecodeFrom / DecodeStreamFrom /
+	// same method surface as structs (DecodeFrom / DecodeFromStream /
 	// JSONSize / AppendJSON) but the bodies are specialized:
 	//
 	//   - Primitive alias: AliasKind ∈ {KindString, KindBool, KindIntN,

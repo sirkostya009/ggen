@@ -697,7 +697,7 @@ func (result ExtraStruct) DecodeFrom(data []byte) (ExtraStruct, int, error) {
 	}
 }
 
-func (result ExtraStruct) DecodeStreamFrom(s *scan.Stream) (ExtraStruct, error) {
+func (result ExtraStruct) DecodeFromStream(s *scan.Stream) (ExtraStruct, error) {
 	if result.HintedTags != nil {
 		result.HintedTags = result.HintedTags[:0]
 	}
@@ -2116,7 +2116,7 @@ func (result TupleStruct) DecodeFrom(data []byte) (TupleStruct, int, error) {
 	}
 }
 
-func (result TupleStruct) DecodeStreamFrom(s *scan.Stream) (TupleStruct, error) {
+func (result TupleStruct) DecodeFromStream(s *scan.Stream) (TupleStruct, error) {
 	if result.Segments != nil {
 		result.Segments = result.Segments[:0]
 	}

@@ -9,7 +9,7 @@ reimplement at every call site.
 ```go
 type Decoder[T any] interface {
     DecodeFrom(data []byte) (T, int, error)             // returns bytes consumed
-    DecodeStreamFrom(s *scan.Stream) (T, error)         // Stream owns cursor via s.Pos
+    DecodeFromStream(s *scan.Stream) (T, error)         // Stream owns cursor via s.Pos
 }
 
 // Array walkers — callers would otherwise reimplement the bracket/comma/

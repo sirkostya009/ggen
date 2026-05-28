@@ -222,7 +222,7 @@ func (result Address) DecodeFrom(data []byte) (Address, int, error) {
 	}
 }
 
-func (result Address) DecodeStreamFrom(s *scan.Stream) (Address, error) {
+func (result Address) DecodeFromStream(s *scan.Stream) (Address, error) {
 	seenCity := false
 	seenStreet := false
 	seenZipCode := false
@@ -828,7 +828,7 @@ func (result Node) DecodeFrom(data []byte) (Node, int, error) {
 	}
 }
 
-func (result Node) DecodeStreamFrom(s *scan.Stream) (Node, error) {
+func (result Node) DecodeFromStream(s *scan.Stream) (Node, error) {
 	if result.Children != nil {
 		result.Children = result.Children[:0]
 	}
@@ -1193,7 +1193,7 @@ func (result Node) DecodeStreamFrom(s *scan.Stream) (Node, error) {
 						}
 						for s.Bytes()[s.Pos] != ']' {
 							result.Children = append(result.Children, Node{})
-							result.Children[len(result.Children)-1], err = result.Children[len(result.Children)-1].DecodeStreamFrom(s)
+							result.Children[len(result.Children)-1], err = result.Children[len(result.Children)-1].DecodeFromStream(s)
 							if err != nil {
 								return result, err
 							}
@@ -2836,7 +2836,7 @@ func (result WideStruct) DecodeFrom(data []byte) (WideStruct, int, error) {
 	}
 }
 
-func (result WideStruct) DecodeStreamFrom(s *scan.Stream) (WideStruct, error) {
+func (result WideStruct) DecodeFromStream(s *scan.Stream) (WideStruct, error) {
 	var seen uint64
 	err := s.ObjectOpen()
 	if err != nil {

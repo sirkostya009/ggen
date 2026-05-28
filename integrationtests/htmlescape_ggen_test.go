@@ -122,7 +122,7 @@ func (result HTMLRawStruct) DecodeFrom(data []byte) (HTMLRawStruct, int, error) 
 	}
 }
 
-func (result HTMLRawStruct) DecodeStreamFrom(s *scan.Stream) (HTMLRawStruct, error) {
+func (result HTMLRawStruct) DecodeFromStream(s *scan.Stream) (HTMLRawStruct, error) {
 	seenNote := false
 	err := s.ObjectOpen()
 	if err != nil {
@@ -321,7 +321,7 @@ func (result HTMLEscapeStruct) DecodeFrom(data []byte) (HTMLEscapeStruct, int, e
 	}
 }
 
-func (result HTMLEscapeStruct) DecodeStreamFrom(s *scan.Stream) (HTMLEscapeStruct, error) {
+func (result HTMLEscapeStruct) DecodeFromStream(s *scan.Stream) (HTMLEscapeStruct, error) {
 	seenNote := false
 	err := s.ObjectOpen()
 	if err != nil {

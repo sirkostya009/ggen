@@ -1197,10 +1197,10 @@ type Msg struct {
 		// receiver of the call is exactly result.Tag / s.Tag, not some
 		// random other call site).
 		// DecodeFrom bytes-path: result.Tag.UnmarshalText(...)
-		// DecodeStreamFrom: same call, distinguished by surrounding _s.String.
+		// DecodeFromStream: same call, distinguished by surrounding _s.String.
 		// AppendJSON: s.Tag.AppendText(dst).
 		if got := strings.Count(body, "result.Tag.UnmarshalText("); got != 2 {
-			t.Errorf("expected 2 result.Tag.UnmarshalText calls (DecodeFrom + DecodeStreamFrom), got %d:\n%s", got, body)
+			t.Errorf("expected 2 result.Tag.UnmarshalText calls (DecodeFrom + DecodeFromStream), got %d:\n%s", got, body)
 		}
 		if !strings.Contains(body, "s.Tag.AppendText(dst)") {
 			t.Errorf("expected s.Tag.AppendText(dst) in AppendJSON, got:\n%s", body)
@@ -1279,7 +1279,7 @@ go 1.26
 		// Tagged has MarshalText (value receiver) + UnmarshalText (pointer
 		// receiver). No AppendText — encode side picks TextMarshaler branch.
 		if got := strings.Count(body, "result.Tag.UnmarshalText("); got != 2 {
-			t.Errorf("expected 2 result.Tag.UnmarshalText calls (DecodeFrom + DecodeStreamFrom), got %d:\n%s", got, body)
+			t.Errorf("expected 2 result.Tag.UnmarshalText calls (DecodeFrom + DecodeFromStream), got %d:\n%s", got, body)
 		}
 		if !strings.Contains(body, "s.Tag.MarshalText()") {
 			t.Errorf("expected s.Tag.MarshalText() in AppendJSON, got:\n%s", body)
@@ -1372,7 +1372,7 @@ type Msg struct {
 			t.Errorf("expected 1 json.Unmarshal on &result.Tag in DecodeFrom, got %d:\n%s", got, body)
 		}
 		if got := strings.Count(body, "json.Unmarshal(s.Bytes()[start:s.Pos], &result.Tag)"); got != 1 {
-			t.Errorf("expected 1 json.Unmarshal on &result.Tag in DecodeStreamFrom, got %d:\n%s", got, body)
+			t.Errorf("expected 1 json.Unmarshal on &result.Tag in DecodeFromStream, got %d:\n%s", got, body)
 		}
 		if !strings.Contains(body, "json.Marshal(s.Tag)") {
 			t.Errorf("expected json.Marshal(s.Tag) in AppendJSON, got:\n%s", body)

@@ -178,7 +178,7 @@ func TestNestedDive_Stream(t *testing.T) {
 	in := []byte(`{"nestedInts":[[1,2],[3,4,5]],"triple":[[["a"]]]}`)
 	var s scan.Stream
 	s.Reset(bytes.NewReader(in), make([]byte, 0, len(in)))
-	got, err := ExtraStruct{}.DecodeStreamFrom(&s)
+	got, err := ExtraStruct{}.DecodeFromStream(&s)
 	if err != nil {
 		t.Fatalf("UnmarshalStream: %v", err)
 	}
@@ -276,7 +276,7 @@ func TestTuple_Stream(t *testing.T) {
 	in := []byte(`{"point":[1.25,2.5],"rgb":[0,0,0],"segments":[[1,2]],"pair":[["a"],["b","c"]]}`)
 	var s scan.Stream
 	s.Reset(bytes.NewReader(in), make([]byte, 0, len(in)))
-	got, err := TupleStruct{}.DecodeStreamFrom(&s)
+	got, err := TupleStruct{}.DecodeFromStream(&s)
 	if err != nil {
 		t.Fatalf("stream: %v", err)
 	}

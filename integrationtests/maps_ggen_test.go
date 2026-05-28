@@ -441,7 +441,7 @@ func (result MapStruct) DecodeFrom(data []byte) (MapStruct, int, error) {
 	}
 }
 
-func (result MapStruct) DecodeStreamFrom(s *scan.Stream) (MapStruct, error) {
+func (result MapStruct) DecodeFromStream(s *scan.Stream) (MapStruct, error) {
 	if result.Addresses != nil {
 		clear(result.Addresses)
 	}
@@ -787,7 +787,7 @@ func (result MapStruct) DecodeStreamFrom(s *scan.Stream) (MapStruct, error) {
 								return result, err
 							}
 							var mv Address
-							mv, err = mv.DecodeStreamFrom(s)
+							mv, err = mv.DecodeFromStream(s)
 							if err != nil {
 								return result, err
 							}
@@ -1418,7 +1418,7 @@ func (result MapDiveStruct) DecodeFrom(data []byte) (MapDiveStruct, int, error) 
 	}
 }
 
-func (result MapDiveStruct) DecodeStreamFrom(s *scan.Stream) (MapDiveStruct, error) {
+func (result MapDiveStruct) DecodeFromStream(s *scan.Stream) (MapDiveStruct, error) {
 	if result.Clamped != nil {
 		clear(result.Clamped)
 	}
@@ -2121,7 +2121,7 @@ func (result Derived) DecodeFrom(data []byte) (Derived, int, error) {
 	}
 }
 
-func (result Derived) DecodeStreamFrom(s *scan.Stream) (Derived, error) {
+func (result Derived) DecodeFromStream(s *scan.Stream) (Derived, error) {
 	seenID := false
 	seenMeta := false
 	seenName := false

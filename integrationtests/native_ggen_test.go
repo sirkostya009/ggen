@@ -502,7 +502,7 @@ func (result NativeTypes) DecodeFrom(data []byte) (NativeTypes, int, error) {
 	}
 }
 
-func (result NativeTypes) DecodeStreamFrom(s *scan.Stream) (NativeTypes, error) {
+func (result NativeTypes) DecodeFromStream(s *scan.Stream) (NativeTypes, error) {
 	if result.Blob != nil {
 		result.Blob = result.Blob[:0]
 	}

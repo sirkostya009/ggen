@@ -194,7 +194,7 @@ func (result HookedStruct) DecodeFrom(data []byte) (HookedStruct, int, error) {
 	}
 }
 
-func (result HookedStruct) DecodeStreamFrom(s *scan.Stream) (HookedStruct, error) {
+func (result HookedStruct) DecodeFromStream(s *scan.Stream) (HookedStruct, error) {
 	seenN := false
 	seenName := false
 	err := s.ObjectOpen()

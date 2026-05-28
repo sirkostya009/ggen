@@ -143,7 +143,7 @@ func (result FallbackStruct) DecodeFrom(data []byte) (FallbackStruct, int, error
 	}
 }
 
-func (result FallbackStruct) DecodeStreamFrom(s *scan.Stream) (FallbackStruct, error) {
+func (result FallbackStruct) DecodeFromStream(s *scan.Stream) (FallbackStruct, error) {
 	seenExtra := false
 	seenID := false
 	err := s.ObjectOpen()
@@ -396,7 +396,7 @@ func (result FastFallbackStruct) DecodeFrom(data []byte) (FastFallbackStruct, in
 	}
 }
 
-func (result FastFallbackStruct) DecodeStreamFrom(s *scan.Stream) (FastFallbackStruct, error) {
+func (result FastFallbackStruct) DecodeFromStream(s *scan.Stream) (FastFallbackStruct, error) {
 	seenExtra := false
 	seenID := false
 	err := s.ObjectOpen()
@@ -452,7 +452,7 @@ func (result FastFallbackStruct) DecodeStreamFrom(s *scan.Stream) (FastFallbackS
 				}
 				seenExtra = true
 				{
-					result.Extra, err = result.Extra.DecodeStreamFrom(s)
+					result.Extra, err = result.Extra.DecodeFromStream(s)
 					if err != nil {
 						return result, err
 					}
@@ -645,7 +645,7 @@ func (result TextFallbackStruct) DecodeFrom(data []byte) (TextFallbackStruct, in
 	}
 }
 
-func (result TextFallbackStruct) DecodeStreamFrom(s *scan.Stream) (TextFallbackStruct, error) {
+func (result TextFallbackStruct) DecodeFromStream(s *scan.Stream) (TextFallbackStruct, error) {
 	seenID := false
 	seenTag := false
 	err := s.ObjectOpen()

@@ -274,7 +274,7 @@ func (result PointerStruct) DecodeFrom(data []byte) (PointerStruct, int, error) 
 	}
 }
 
-func (result PointerStruct) DecodeStreamFrom(s *scan.Stream) (PointerStruct, error) {
+func (result PointerStruct) DecodeFromStream(s *scan.Stream) (PointerStruct, error) {
 	seenAddr := false
 	seenCount := false
 	seenEnabled := false
@@ -337,7 +337,7 @@ func (result PointerStruct) DecodeStreamFrom(s *scan.Stream) (PointerStruct, err
 					result.Addr = nil
 				} else {
 					var v Address
-					v, err = v.DecodeStreamFrom(s)
+					v, err = v.DecodeFromStream(s)
 					if err != nil {
 						return result, err
 					}
@@ -860,7 +860,7 @@ func (result NPtrStruct) DecodeFrom(data []byte) (NPtrStruct, int, error) {
 	}
 }
 
-func (result NPtrStruct) DecodeStreamFrom(s *scan.Stream) (NPtrStruct, error) {
+func (result NPtrStruct) DecodeFromStream(s *scan.Stream) (NPtrStruct, error) {
 	seenAddr := false
 	seenPP := false
 	seenPPP := false
@@ -1356,7 +1356,7 @@ func (result PtrSliceItemsStruct) DecodeFrom(data []byte) (PtrSliceItemsStruct, 
 	}
 }
 
-func (result PtrSliceItemsStruct) DecodeStreamFrom(s *scan.Stream) (PtrSliceItemsStruct, error) {
+func (result PtrSliceItemsStruct) DecodeFromStream(s *scan.Stream) (PtrSliceItemsStruct, error) {
 	if result.Items != nil {
 		result.Items = result.Items[:0]
 	}
@@ -1483,7 +1483,7 @@ func (result PtrSliceItemsStruct) DecodeStreamFrom(s *scan.Stream) (PtrSliceItem
 								break
 							}
 							slab0 = append(slab0, Address{})
-							slab0[len(slab0)-1], err = slab0[len(slab0)-1].DecodeStreamFrom(s)
+							slab0[len(slab0)-1], err = slab0[len(slab0)-1].DecodeFromStream(s)
 							if err != nil {
 								return result, err
 							}
@@ -1743,7 +1743,7 @@ func (result PtrSliceTupleStruct) DecodeFrom(data []byte) (PtrSliceTupleStruct, 
 	}
 }
 
-func (result PtrSliceTupleStruct) DecodeStreamFrom(s *scan.Stream) (PtrSliceTupleStruct, error) {
+func (result PtrSliceTupleStruct) DecodeFromStream(s *scan.Stream) (PtrSliceTupleStruct, error) {
 	seenTuple := false
 	err := s.ObjectOpen()
 	if err != nil {
@@ -1838,7 +1838,7 @@ func (result PtrSliceTupleStruct) DecodeStreamFrom(s *scan.Stream) (PtrSliceTupl
 							}
 							break
 						}
-						slab0[idx0], err = slab0[idx0].DecodeStreamFrom(s)
+						slab0[idx0], err = slab0[idx0].DecodeFromStream(s)
 						if err != nil {
 							return result, err
 						}
@@ -2105,7 +2105,7 @@ func (result PtrSliceNodesStruct) DecodeFrom(data []byte) (PtrSliceNodesStruct, 
 	}
 }
 
-func (result PtrSliceNodesStruct) DecodeStreamFrom(s *scan.Stream) (PtrSliceNodesStruct, error) {
+func (result PtrSliceNodesStruct) DecodeFromStream(s *scan.Stream) (PtrSliceNodesStruct, error) {
 	if result.Nodes != nil {
 		result.Nodes = result.Nodes[:0]
 	}
@@ -2232,7 +2232,7 @@ func (result PtrSliceNodesStruct) DecodeStreamFrom(s *scan.Stream) (PtrSliceNode
 								break
 							}
 							slab0 = append(slab0, Node{})
-							slab0[len(slab0)-1], err = slab0[len(slab0)-1].DecodeStreamFrom(s)
+							slab0[len(slab0)-1], err = slab0[len(slab0)-1].DecodeFromStream(s)
 							if err != nil {
 								return result, err
 							}
@@ -2651,7 +2651,7 @@ func (result PtrSliceStruct) DecodeFrom(data []byte) (PtrSliceStruct, int, error
 	}
 }
 
-func (result PtrSliceStruct) DecodeStreamFrom(s *scan.Stream) (PtrSliceStruct, error) {
+func (result PtrSliceStruct) DecodeFromStream(s *scan.Stream) (PtrSliceStruct, error) {
 	if result.Items != nil {
 		result.Items = result.Items[:0]
 	}
@@ -2784,7 +2784,7 @@ func (result PtrSliceStruct) DecodeStreamFrom(s *scan.Stream) (PtrSliceStruct, e
 								break
 							}
 							slab0 = append(slab0, Address{})
-							slab0[len(slab0)-1], err = slab0[len(slab0)-1].DecodeStreamFrom(s)
+							slab0[len(slab0)-1], err = slab0[len(slab0)-1].DecodeFromStream(s)
 							if err != nil {
 								return result, err
 							}
@@ -2910,7 +2910,7 @@ func (result PtrSliceStruct) DecodeStreamFrom(s *scan.Stream) (PtrSliceStruct, e
 								break
 							}
 							slab0 = append(slab0, Node{})
-							slab0[len(slab0)-1], err = slab0[len(slab0)-1].DecodeStreamFrom(s)
+							slab0[len(slab0)-1], err = slab0[len(slab0)-1].DecodeFromStream(s)
 							if err != nil {
 								return result, err
 							}
@@ -3007,7 +3007,7 @@ func (result PtrSliceStruct) DecodeStreamFrom(s *scan.Stream) (PtrSliceStruct, e
 							}
 							break
 						}
-						slab0[idx0], err = slab0[idx0].DecodeStreamFrom(s)
+						slab0[idx0], err = slab0[idx0].DecodeFromStream(s)
 						if err != nil {
 							return result, err
 						}

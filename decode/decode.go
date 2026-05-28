@@ -25,7 +25,7 @@ import (
 //	v1, n, err := zero.DecodeFrom(data)
 //	// data[n:] is what remains
 //
-// DecodeStreamFrom is the streaming counterpart that pulls bytes from a
+// DecodeFromStream is the streaming counterpart that pulls bytes from a
 // *scan.Stream; the Stream owns the cursor (s.Pos), so the method
 // returns only (T, error).
 //
@@ -33,7 +33,7 @@ import (
 // — callers MUST NOT mutate the input buffer while the value is in use.
 type Decoder[T any] interface {
 	DecodeFrom(data []byte) (T, int, error)
-	DecodeStreamFrom(s *scan.Stream) (T, error)
+	DecodeFromStream(s *scan.Stream) (T, error)
 }
 
 // UnmarshalSlice decodes a JSON array of T by walking the array with scan
@@ -107,7 +107,7 @@ func UnmarshalSliceStream[T Decoder[T]](r io.Reader, buf []byte) ([]T, []byte, e
 	}
 	var zero T
 	for {
-		v, err := zero.DecodeStreamFrom(&s)
+		v, err := zero.DecodeFromStream(&s)
 		if err != nil {
 			return nil, s.Bytes(), err
 		}

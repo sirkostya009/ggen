@@ -133,7 +133,7 @@ func (result TimeDefault) DecodeFrom(data []byte) (TimeDefault, int, error) {
 	}
 }
 
-func (result TimeDefault) DecodeStreamFrom(s *scan.Stream) (TimeDefault, error) {
+func (result TimeDefault) DecodeFromStream(s *scan.Stream) (TimeDefault, error) {
 	seenDefault := false
 	err := s.ObjectOpen()
 	if err != nil {
@@ -324,7 +324,7 @@ func (result TimeUnix) DecodeFrom(data []byte) (TimeUnix, int, error) {
 	}
 }
 
-func (result TimeUnix) DecodeStreamFrom(s *scan.Stream) (TimeUnix, error) {
+func (result TimeUnix) DecodeFromStream(s *scan.Stream) (TimeUnix, error) {
 	seenUnix := false
 	err := s.ObjectOpen()
 	if err != nil {
@@ -512,7 +512,7 @@ func (result TimeUnixMilli) DecodeFrom(data []byte) (TimeUnixMilli, int, error) 
 	}
 }
 
-func (result TimeUnixMilli) DecodeStreamFrom(s *scan.Stream) (TimeUnixMilli, error) {
+func (result TimeUnixMilli) DecodeFromStream(s *scan.Stream) (TimeUnixMilli, error) {
 	seenUnixMilli := false
 	err := s.ObjectOpen()
 	if err != nil {
@@ -698,7 +698,7 @@ func (result TimeUnixMicro) DecodeFrom(data []byte) (TimeUnixMicro, int, error) 
 	}
 }
 
-func (result TimeUnixMicro) DecodeStreamFrom(s *scan.Stream) (TimeUnixMicro, error) {
+func (result TimeUnixMicro) DecodeFromStream(s *scan.Stream) (TimeUnixMicro, error) {
 	seenUnixMicro := false
 	err := s.ObjectOpen()
 	if err != nil {
@@ -884,7 +884,7 @@ func (result TimeUnixNano) DecodeFrom(data []byte) (TimeUnixNano, int, error) {
 	}
 }
 
-func (result TimeUnixNano) DecodeStreamFrom(s *scan.Stream) (TimeUnixNano, error) {
+func (result TimeUnixNano) DecodeFromStream(s *scan.Stream) (TimeUnixNano, error) {
 	seenUnixNano := false
 	err := s.ObjectOpen()
 	if err != nil {
@@ -1093,7 +1093,7 @@ func (result TimeANSIC) DecodeFrom(data []byte) (TimeANSIC, int, error) {
 	}
 }
 
-func (result TimeANSIC) DecodeStreamFrom(s *scan.Stream) (TimeANSIC, error) {
+func (result TimeANSIC) DecodeFromStream(s *scan.Stream) (TimeANSIC, error) {
 	seenANSIC := false
 	err := s.ObjectOpen()
 	if err != nil {
@@ -1305,7 +1305,7 @@ func (result TimeUnixDate) DecodeFrom(data []byte) (TimeUnixDate, int, error) {
 	}
 }
 
-func (result TimeUnixDate) DecodeStreamFrom(s *scan.Stream) (TimeUnixDate, error) {
+func (result TimeUnixDate) DecodeFromStream(s *scan.Stream) (TimeUnixDate, error) {
 	seenUnixDate := false
 	err := s.ObjectOpen()
 	if err != nil {
@@ -1517,7 +1517,7 @@ func (result TimeRubyDate) DecodeFrom(data []byte) (TimeRubyDate, int, error) {
 	}
 }
 
-func (result TimeRubyDate) DecodeStreamFrom(s *scan.Stream) (TimeRubyDate, error) {
+func (result TimeRubyDate) DecodeFromStream(s *scan.Stream) (TimeRubyDate, error) {
 	seenRubyDate := false
 	err := s.ObjectOpen()
 	if err != nil {
@@ -1729,7 +1729,7 @@ func (result TimeRFC822) DecodeFrom(data []byte) (TimeRFC822, int, error) {
 	}
 }
 
-func (result TimeRFC822) DecodeStreamFrom(s *scan.Stream) (TimeRFC822, error) {
+func (result TimeRFC822) DecodeFromStream(s *scan.Stream) (TimeRFC822, error) {
 	seenRFC822 := false
 	err := s.ObjectOpen()
 	if err != nil {
@@ -1941,7 +1941,7 @@ func (result TimeRFC822Z) DecodeFrom(data []byte) (TimeRFC822Z, int, error) {
 	}
 }
 
-func (result TimeRFC822Z) DecodeStreamFrom(s *scan.Stream) (TimeRFC822Z, error) {
+func (result TimeRFC822Z) DecodeFromStream(s *scan.Stream) (TimeRFC822Z, error) {
 	seenRFC822Z := false
 	err := s.ObjectOpen()
 	if err != nil {
@@ -2153,7 +2153,7 @@ func (result TimeRFC850) DecodeFrom(data []byte) (TimeRFC850, int, error) {
 	}
 }
 
-func (result TimeRFC850) DecodeStreamFrom(s *scan.Stream) (TimeRFC850, error) {
+func (result TimeRFC850) DecodeFromStream(s *scan.Stream) (TimeRFC850, error) {
 	seenRFC850 := false
 	err := s.ObjectOpen()
 	if err != nil {
@@ -2365,7 +2365,7 @@ func (result TimeRFC1123) DecodeFrom(data []byte) (TimeRFC1123, int, error) {
 	}
 }
 
-func (result TimeRFC1123) DecodeStreamFrom(s *scan.Stream) (TimeRFC1123, error) {
+func (result TimeRFC1123) DecodeFromStream(s *scan.Stream) (TimeRFC1123, error) {
 	seenRFC1123 := false
 	err := s.ObjectOpen()
 	if err != nil {
@@ -2577,7 +2577,7 @@ func (result TimeRFC1123Z) DecodeFrom(data []byte) (TimeRFC1123Z, int, error) {
 	}
 }
 
-func (result TimeRFC1123Z) DecodeStreamFrom(s *scan.Stream) (TimeRFC1123Z, error) {
+func (result TimeRFC1123Z) DecodeFromStream(s *scan.Stream) (TimeRFC1123Z, error) {
 	seenRFC1123Z := false
 	err := s.ObjectOpen()
 	if err != nil {
@@ -2789,7 +2789,7 @@ func (result TimeRFC3339) DecodeFrom(data []byte) (TimeRFC3339, int, error) {
 	}
 }
 
-func (result TimeRFC3339) DecodeStreamFrom(s *scan.Stream) (TimeRFC3339, error) {
+func (result TimeRFC3339) DecodeFromStream(s *scan.Stream) (TimeRFC3339, error) {
 	seenRFC3339 := false
 	err := s.ObjectOpen()
 	if err != nil {
@@ -3001,7 +3001,7 @@ func (result TimeRFC3339Nano) DecodeFrom(data []byte) (TimeRFC3339Nano, int, err
 	}
 }
 
-func (result TimeRFC3339Nano) DecodeStreamFrom(s *scan.Stream) (TimeRFC3339Nano, error) {
+func (result TimeRFC3339Nano) DecodeFromStream(s *scan.Stream) (TimeRFC3339Nano, error) {
 	seenRFC3339Nano := false
 	err := s.ObjectOpen()
 	if err != nil {
@@ -3213,7 +3213,7 @@ func (result TimeKitchen) DecodeFrom(data []byte) (TimeKitchen, int, error) {
 	}
 }
 
-func (result TimeKitchen) DecodeStreamFrom(s *scan.Stream) (TimeKitchen, error) {
+func (result TimeKitchen) DecodeFromStream(s *scan.Stream) (TimeKitchen, error) {
 	seenKitchen := false
 	err := s.ObjectOpen()
 	if err != nil {
@@ -3425,7 +3425,7 @@ func (result TimeDateTime) DecodeFrom(data []byte) (TimeDateTime, int, error) {
 	}
 }
 
-func (result TimeDateTime) DecodeStreamFrom(s *scan.Stream) (TimeDateTime, error) {
+func (result TimeDateTime) DecodeFromStream(s *scan.Stream) (TimeDateTime, error) {
 	seenDateTime := false
 	err := s.ObjectOpen()
 	if err != nil {
@@ -3637,7 +3637,7 @@ func (result TimeDateOnly) DecodeFrom(data []byte) (TimeDateOnly, int, error) {
 	}
 }
 
-func (result TimeDateOnly) DecodeStreamFrom(s *scan.Stream) (TimeDateOnly, error) {
+func (result TimeDateOnly) DecodeFromStream(s *scan.Stream) (TimeDateOnly, error) {
 	seenDateOnly := false
 	err := s.ObjectOpen()
 	if err != nil {
@@ -3849,7 +3849,7 @@ func (result TimeTimeOnly) DecodeFrom(data []byte) (TimeTimeOnly, int, error) {
 	}
 }
 
-func (result TimeTimeOnly) DecodeStreamFrom(s *scan.Stream) (TimeTimeOnly, error) {
+func (result TimeTimeOnly) DecodeFromStream(s *scan.Stream) (TimeTimeOnly, error) {
 	seenTimeOnly := false
 	err := s.ObjectOpen()
 	if err != nil {
@@ -4665,7 +4665,7 @@ func (result TimeFormatsStdCompat) DecodeFrom(data []byte) (TimeFormatsStdCompat
 	}
 }
 
-func (result TimeFormatsStdCompat) DecodeStreamFrom(s *scan.Stream) (TimeFormatsStdCompat, error) {
+func (result TimeFormatsStdCompat) DecodeFromStream(s *scan.Stream) (TimeFormatsStdCompat, error) {
 	seenANSIC := false
 	seenDateOnly := false
 	seenDateTime := false
@@ -5433,7 +5433,7 @@ func (result richSubset) DecodeFrom(data []byte) (richSubset, int, error) {
 	}
 }
 
-func (result richSubset) DecodeStreamFrom(s *scan.Stream) (richSubset, error) {
+func (result richSubset) DecodeFromStream(s *scan.Stream) (richSubset, error) {
 	seenBig := false
 	seenBigF := false
 	seenBigR := false

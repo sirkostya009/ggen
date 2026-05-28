@@ -5,7 +5,7 @@
 
 zero-copy, zero-reflection JSON codegen for Go.
 
-ggen parses structs and generates custom `DecodeFrom`, `DecodeStreamFrom`,
+ggen parses structs and generates custom `DecodeFrom`, `DecodeFromStream`,
 `JSONSize`, and `AppendJSON` methods. Decoder is a zero-copy byte
 scanner with no token layer and encoder pre-sizes appends into a single `[]byte`,
 presizing which is also possible using the generated `JSONSize` method.
@@ -178,7 +178,7 @@ For every annotated struct `T`:
 
 ```go
 func (T) DecodeFrom(data []byte) (T, int, error)      // returns bytes consumed
-func (T) DecodeStreamFrom(s *scan.Stream) (T, error)  // Stream owns cursor via s.Pos
+func (T) DecodeFromStream(s *scan.Stream) (T, error)  // Stream owns cursor via s.Pos
 func (T) JSONSize() int
 func (T) AppendJSON(dst []byte) ([]byte, error)
 ```
@@ -448,7 +448,7 @@ if none of the aforementioned methods are present on the custom type.
 ### type aliases
 
 `//ggen:generate` on a named top-level type generates the full method
-surface (`DecodeFrom`, `DecodeStreamFrom`, `JSONSize`, `AppendJSON`)
+surface (`DecodeFrom`, `DecodeFromStream`, `JSONSize`, `AppendJSON`)
 so the alias is decoded the same way as any other ggen type. The codegen
 strategy is picked automatically from the underlying type's shape and
 method set:
@@ -557,7 +557,7 @@ func parseRequest[T decode.Decoder[T]](r *http.Request) (T, error) {
 	s.Reset(io.LimitReader(r.Body, 10<<20), b)
 	// recycle the buf with stream
 	defer bufPool.Put(s)
-	return zero.DecodeStreamFrom(s)
+	return zero.DecodeFromStream(s)
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {

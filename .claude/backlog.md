@@ -165,7 +165,7 @@
 - **`[512]byte` inline scratch in `Stream`.** Avoid the buffer heap alloc for
   small payloads via a stack-resident scratch array. Failed in the original
   tests: escape analysis couldn't prove `&s` safe across
-  `zero.DecodeStreamFrom(&s)` inside the then-generic `decode.UnmarshalStream[T]`
+  `zero.DecodeFromStream(&s)` inside the then-generic `decode.UnmarshalStream[T]`
   wrapper, so the whole Stream (incl. the array) heap-escaped. The wrapper is
   now gone and the call site is direct, so the constraint may no longer apply —
   worth re-measuring if a residency push needs small-payload alloc back.

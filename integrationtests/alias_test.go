@@ -4,7 +4,7 @@ package integrationtests
 
 // Top-level primitive aliases — `type X <primitive>` annotated with
 // //ggen:generate. Each alias gets the same method surface as a struct
-// (DecodeFrom / DecodeStreamFrom / JSONSize / AppendJSON) so it can be
+// (DecodeFrom / DecodeFromStream / JSONSize / AppendJSON) so it can be
 // fed to decode.Unmarshal / encode.Marshal directly.
 
 import (

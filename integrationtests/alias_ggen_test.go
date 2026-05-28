@@ -26,7 +26,7 @@ func (result AliasString) DecodeFrom(data []byte) (AliasString, int, error) {
 	return result, i, nil
 }
 
-func (result AliasString) DecodeStreamFrom(s *scan.Stream) (AliasString, error) {
+func (result AliasString) DecodeFromStream(s *scan.Stream) (AliasString, error) {
 	var err error
 	_ = err
 	var v string
@@ -61,7 +61,7 @@ func (result AliasHTML) DecodeFrom(data []byte) (AliasHTML, int, error) {
 	return result, i, nil
 }
 
-func (result AliasHTML) DecodeStreamFrom(s *scan.Stream) (AliasHTML, error) {
+func (result AliasHTML) DecodeFromStream(s *scan.Stream) (AliasHTML, error) {
 	var err error
 	_ = err
 	var v string
@@ -96,7 +96,7 @@ func (result AliasInt) DecodeFrom(data []byte) (AliasInt, int, error) {
 	return result, i, nil
 }
 
-func (result AliasInt) DecodeStreamFrom(s *scan.Stream) (AliasInt, error) {
+func (result AliasInt) DecodeFromStream(s *scan.Stream) (AliasInt, error) {
 	var err error
 	_ = err
 	var v int64
@@ -129,7 +129,7 @@ func (result AliasUint64) DecodeFrom(data []byte) (AliasUint64, int, error) {
 	return result, i, nil
 }
 
-func (result AliasUint64) DecodeStreamFrom(s *scan.Stream) (AliasUint64, error) {
+func (result AliasUint64) DecodeFromStream(s *scan.Stream) (AliasUint64, error) {
 	var err error
 	_ = err
 	var v uint64
@@ -162,7 +162,7 @@ func (result AliasFloat64) DecodeFrom(data []byte) (AliasFloat64, int, error) {
 	return result, i, nil
 }
 
-func (result AliasFloat64) DecodeStreamFrom(s *scan.Stream) (AliasFloat64, error) {
+func (result AliasFloat64) DecodeFromStream(s *scan.Stream) (AliasFloat64, error) {
 	var err error
 	_ = err
 	var v float64
@@ -195,7 +195,7 @@ func (result AliasBool) DecodeFrom(data []byte) (AliasBool, int, error) {
 	return result, i, nil
 }
 
-func (result AliasBool) DecodeStreamFrom(s *scan.Stream) (AliasBool, error) {
+func (result AliasBool) DecodeFromStream(s *scan.Stream) (AliasBool, error) {
 	var err error
 	_ = err
 	var v bool
@@ -373,7 +373,7 @@ func (result PlainAlias) DecodeFrom(data []byte) (PlainAlias, int, error) {
 	}
 }
 
-func (result PlainAlias) DecodeStreamFrom(s *scan.Stream) (PlainAlias, error) {
+func (result PlainAlias) DecodeFromStream(s *scan.Stream) (PlainAlias, error) {
 	seenCount := false
 	seenTitle := false
 	err := s.ObjectOpen()
@@ -638,7 +638,7 @@ func (result SamePkgAlias) DecodeFrom(data []byte) (SamePkgAlias, int, error) {
 	}
 }
 
-func (result SamePkgAlias) DecodeStreamFrom(s *scan.Stream) (SamePkgAlias, error) {
+func (result SamePkgAlias) DecodeFromStream(s *scan.Stream) (SamePkgAlias, error) {
 	seenX := false
 	seenY := false
 	err := s.ObjectOpen()
@@ -890,7 +890,7 @@ func (result CrossPkgTaggedAlias) DecodeFrom(data []byte) (CrossPkgTaggedAlias, 
 	}
 }
 
-func (result CrossPkgTaggedAlias) DecodeStreamFrom(s *scan.Stream) (CrossPkgTaggedAlias, error) {
+func (result CrossPkgTaggedAlias) DecodeFromStream(s *scan.Stream) (CrossPkgTaggedAlias, error) {
 	seenName := false
 	seenTag := false
 	err := s.ObjectOpen()
@@ -1014,7 +1014,7 @@ func (result OpaqueAlias) DecodeFrom(data []byte) (OpaqueAlias, int, error) {
 	return result, k, nil
 }
 
-func (result OpaqueAlias) DecodeStreamFrom(s *scan.Stream) (OpaqueAlias, error) {
+func (result OpaqueAlias) DecodeFromStream(s *scan.Stream) (OpaqueAlias, error) {
 	start := s.Pos
 	prevPin := s.Shift
 	s.Shift = false
@@ -1117,7 +1117,7 @@ func (result AliasTags) DecodeFrom(data []byte) (AliasTags, int, error) {
 	return result, i, nil
 }
 
-func (result AliasTags) DecodeStreamFrom(s *scan.Stream) (AliasTags, error) {
+func (result AliasTags) DecodeFromStream(s *scan.Stream) (AliasTags, error) {
 	var err error
 	_ = err
 	if result != nil {
@@ -1356,7 +1356,7 @@ func (result AliasLookup) DecodeFrom(data []byte) (AliasLookup, int, error) {
 	return result, i, nil
 }
 
-func (result AliasLookup) DecodeStreamFrom(s *scan.Stream) (AliasLookup, error) {
+func (result AliasLookup) DecodeFromStream(s *scan.Stream) (AliasLookup, error) {
 	var err error
 	_ = err
 	if result != nil {
@@ -1577,7 +1577,7 @@ func (result AliasTuple) DecodeFrom(data []byte) (AliasTuple, int, error) {
 	return result, i, nil
 }
 
-func (result AliasTuple) DecodeStreamFrom(s *scan.Stream) (AliasTuple, error) {
+func (result AliasTuple) DecodeFromStream(s *scan.Stream) (AliasTuple, error) {
 	var err error
 	_ = err
 	{
@@ -1792,7 +1792,7 @@ func (result AliasFieldExample) DecodeFrom(data []byte) (AliasFieldExample, int,
 	}
 }
 
-func (result AliasFieldExample) DecodeStreamFrom(s *scan.Stream) (AliasFieldExample, error) {
+func (result AliasFieldExample) DecodeFromStream(s *scan.Stream) (AliasFieldExample, error) {
 	seenBody := false
 	seenCount := false
 	err := s.ObjectOpen()
@@ -1833,7 +1833,7 @@ func (result AliasFieldExample) DecodeStreamFrom(s *scan.Stream) (AliasFieldExam
 					return result, &validation.DuplicateKeyError{Field: "body"}
 				}
 				seenBody = true
-				result.Body, err = result.Body.DecodeStreamFrom(s)
+				result.Body, err = result.Body.DecodeFromStream(s)
 				if err != nil {
 					return result, err
 				}
@@ -1858,7 +1858,7 @@ func (result AliasFieldExample) DecodeStreamFrom(s *scan.Stream) (AliasFieldExam
 					return result, &validation.DuplicateKeyError{Field: "count"}
 				}
 				seenCount = true
-				result.Count, err = result.Count.DecodeStreamFrom(s)
+				result.Count, err = result.Count.DecodeFromStream(s)
 				if err != nil {
 					return result, err
 				}

@@ -6,11 +6,11 @@ description: Drive the ggen CLI to generate zero-copy, zero-reflection JSON enco
 # ggen — JSON codegen for Go
 
 ggen parses annotated Go structs and emits `DecodeFrom`,
-`DecodeStreamFrom`, `JSONSize`, and `AppendJSON` methods. Generated
+`DecodeFromStream`, `JSONSize`, and `AppendJSON` methods. Generated
 code is hand-rolled byte scanning, no reflection, no token layer. On
 the bytes path (`DecodeFrom` over the caller's `[]byte`) strings alias
 the input via `unsafe.String` — zero-copy. The stream path
-(`DecodeStreamFrom` over `*scan.Stream`) copies strings out of an
+(`DecodeFromStream` over `*scan.Stream`) copies strings out of an
 intermediate buffer so the buffer can compact safely; see _Stream is
 not zero-copy_ below.
 
@@ -326,7 +326,7 @@ generate time.
 
 ```go
 func (result T) DecodeFrom(data []byte) (T, int, error)
-func (result T) DecodeStreamFrom(s *scan.Stream) (T, error)
+func (result T) DecodeFromStream(s *scan.Stream) (T, error)
 func (s T) JSONSize() int
 func (s T) AppendJSON(dst []byte) ([]byte, error)
 ```
@@ -340,7 +340,7 @@ func (s *T) UnmarshalJSON(data []byte) error
 
 ### Stream is not zero-copy
 
-`DecodeStreamFrom` takes a `*scan.Stream` that wraps an `io.Reader`
+`DecodeFromStream` takes a `*scan.Stream` that wraps an `io.Reader`
 behind a user-provided `[]byte` buffer. The buffer sits between the
 reader and the parser — chunks land there via `Read`, the parser
 scans out of it, and compaction recycles space mid-decode so the
@@ -393,7 +393,7 @@ out, err = encode.AppendSlice(out[:0], users) // can use just AppendSlice to reu
 
 // streaming single value — caller owns the scan.Stream
 s := scan.NewStream(req.Body, nil)  // or pre-sized buf, e.g. make([]byte, 0, hint)
-u, err = User{}.DecodeStreamFrom(s)
+u, err = User{}.DecodeFromStream(s)
 // s.Bytes() is now recyclable
 // (use `var s scan.Stream; s.Reset(...)` to stack-allocate)
 

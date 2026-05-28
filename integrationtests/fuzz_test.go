@@ -129,7 +129,7 @@ func FuzzStreamEqualsBytes(f *testing.F) {
 		r := &chunkReader{data: data, max: int(chunkSize)}
 		var s scan.Stream
 		s.Reset(r, make([]byte, 0, 8))
-		got, errStream := Node{}.DecodeStreamFrom(&s)
+		got, errStream := Node{}.DecodeFromStream(&s)
 		if errStream != nil {
 			t.Fatalf("bytes accepted but stream rejected (chunk=%d):\n bytes: %s\n err:   %v",
 				chunkSize, data, errStream)
@@ -191,7 +191,7 @@ func FuzzStreamHugeStringNoPanic(f *testing.F) {
 		r := &chunkReader{data: payload, max: int(chunk)}
 		var s scan.Stream
 		s.Reset(r, make([]byte, 0, 16))
-		got, err := HugeStringStruct{}.DecodeStreamFrom(&s)
+		got, err := HugeStringStruct{}.DecodeFromStream(&s)
 		if err != nil {
 			t.Fatalf("err chunk=%d repeat=%d: %v", chunk, repeat, err)
 		}

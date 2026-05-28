@@ -122,7 +122,7 @@ func renderAliasAppendJSON(b *bytes.Buffer, s StructInfo) {
 	}
 }
 
-// renderAliasStructDecode emits DecodeFrom (or DecodeStreamFrom when
+// renderAliasStructDecode emits DecodeFrom (or DecodeFromStream when
 // stream==true) for a struct alias. Picks the cheapest delegation path
 // the underlying type's method set supports:
 //   - ggen-shaped DecodeFrom on the underlying → call directly
@@ -145,7 +145,7 @@ return result, i, nil
 `, s.AliasUnderlying, s.Name)
 	case s.AliasIface.StreamDecoder && stream:
 		fmt.Fprintf(b, `var u %[1]s
-v, err := u.DecodeStreamFrom(s)
+v, err := u.DecodeFromStream(s)
 if err != nil { return result, err }
 result = %[2]s(v)
 return result, nil

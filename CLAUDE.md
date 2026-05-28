@@ -176,10 +176,10 @@ entry there when a new rule lands.
 ```go
 // DecodeFrom is a zero-copy parser. Strings and RawMessage are alised into data
 func (result T) DecodeFrom(data []byte) (T, int, error)
-// DecodeStreamFrom is a buffered io.Reader wrapper with an intermediate buffer.
+// DecodeFromStream is a buffered io.Reader wrapper with an intermediate buffer.
 // Useful for slow streams or lower memory usage. Break zero-copying - all strings
 // and json.RawMessage are copied from payload.
-func (result T) DecodeStreamFrom(s *scan.Stream) (T, error)
+func (result T) DecodeFromStream(s *scan.Stream) (T, error)
 // JSONSize precalulcates size of JSON payload of T in bytes
 func (s T) JSONSize() int
 // AppendJSON appends a payload string to dst. Errors on invalid numbers (like NaN)
@@ -188,7 +188,7 @@ func (s T) AppendJSON(dst []byte) ([]byte, error)
 
 **Cursor convention.** Bytes-path `DecodeFrom` takes a slice starting at the
 value's first byte and returns bytes consumed; the caller advances its own
-cursor (`i += n` after reslicing `data[i:]`). Stream-path `DecodeStreamFrom`
+cursor (`i += n` after reslicing `data[i:]`). Stream-path `DecodeFromStream`
 takes/returns no cursor — the cursor is `s.Pos`, owned by the Stream and
 advanced in-place by every scan primitive. To capture a raw span:
 `start := s.Pos; s.SkipValue(); raw := s.Bytes()[start:s.Pos]`.
@@ -227,7 +227,7 @@ T{}.DecodeFrom(data)                       // (T, int, error)
 // stream path — single value
 var s scan.Stream
 s.Reset(r, buf)
-T{}.DecodeStreamFrom(&s)                   // (T, error); recycle s.Bytes()
+T{}.DecodeFromStream(&s)                   // (T, error); recycle s.Bytes()
 
 // array walkers
 decode.UnmarshalSlice[T](data)             // ([]T, error)
@@ -250,7 +250,7 @@ func (s *T) UnmarshalJSON(data []byte) error // inlines var zero T; zero.DecodeF
 ## Top-level type aliases
 
 Annotated named types (`//ggen:generate type T <underlying>`) get the same
-method surface as a struct (DecodeFrom, DecodeStreamFrom, JSONSize,
+method surface as a struct (DecodeFrom, DecodeFromStream, JSONSize,
 AppendJSON), driven by `renderAlias*` helpers in `alias.go`. Top-level
 renderers dispatch to alias paths when `s.IsAlias` is set (except struct
 aliases that fall back to field introspection, which set `IsAlias=false` and
@@ -497,7 +497,7 @@ nil`). Single-byte → `'X'`, multi-byte → `"…"...`. ~5% on struct-heavy
     `[]*T` → pre-grow `append(_slab, zero(T))`, target `_slab[len-1]`; `[]T` →
     pre-grow `append(dst, zero(T))`, target `dst[len-1]`. Structs: bytes path
     `var _n int; slot, _n, err = slot.DecodeFrom(data[k:]); k += _n`; stream
-    path `slot, err = slot.DecodeStreamFrom(s)`. Primitives: slot is the assign
+    path `slot, err = slot.DecodeFromStream(s)`. Primitives: slot is the assign
     target (`slot = _bv`, `slot = int(_n)`). No `var ev0`/`_z`/`_sv`, no
     post-decode `dst[ivar] = ev0`. `inlineScanInt64`/`Uint64` receive
     `target`+`castFn`. Pre-grow uses `zeroLit` (`""`/`false`/`0`/`T{}`).

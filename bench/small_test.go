@@ -81,7 +81,7 @@ func BenchmarkSmall_Reader(b *testing.B) {
 			var err error
 			var _st scan.Stream
 			_st.Reset(&s.r, s.buf[:0])
-			_, err = Validated{}.DecodeStreamFrom(&_st)
+			_, err = Validated{}.DecodeFromStream(&_st)
 			s.buf = _st.Bytes()
 			return err
 		}},
@@ -90,7 +90,7 @@ func BenchmarkSmall_Reader(b *testing.B) {
 			var err error
 			var _st scan.Stream
 			_st.Reset(&s.r, s.buf[:0])
-			_, err = Validated{}.DecodeStreamFrom(&_st)
+			_, err = Validated{}.DecodeFromStream(&_st)
 			s.buf = _st.Bytes()
 			return err
 		}},

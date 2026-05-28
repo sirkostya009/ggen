@@ -135,7 +135,7 @@ func (result AnyStruct) DecodeFrom(data []byte) (AnyStruct, int, error) {
 	}
 }
 
-func (result AnyStruct) DecodeStreamFrom(s *scan.Stream) (AnyStruct, error) {
+func (result AnyStruct) DecodeFromStream(s *scan.Stream) (AnyStruct, error) {
 	seenBody := false
 	seenName := false
 	err := s.ObjectOpen()
@@ -368,7 +368,7 @@ func (result AnyNumberStruct) DecodeFrom(data []byte) (AnyNumberStruct, int, err
 	}
 }
 
-func (result AnyNumberStruct) DecodeStreamFrom(s *scan.Stream) (AnyNumberStruct, error) {
+func (result AnyNumberStruct) DecodeFromStream(s *scan.Stream) (AnyNumberStruct, error) {
 	seenBody := false
 	seenName := false
 	err := s.ObjectOpen()

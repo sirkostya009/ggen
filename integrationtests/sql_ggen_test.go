@@ -136,7 +136,7 @@ func (result SQLNullStringStruct) DecodeFrom(data []byte) (SQLNullStringStruct, 
 	}
 }
 
-func (result SQLNullStringStruct) DecodeStreamFrom(s *scan.Stream) (SQLNullStringStruct, error) {
+func (result SQLNullStringStruct) DecodeFromStream(s *scan.Stream) (SQLNullStringStruct, error) {
 	seenS := false
 	err := s.ObjectOpen()
 	if err != nil {
@@ -391,7 +391,7 @@ func (result SQLNullInt64Struct) DecodeFrom(data []byte) (SQLNullInt64Struct, in
 	}
 }
 
-func (result SQLNullInt64Struct) DecodeStreamFrom(s *scan.Stream) (SQLNullInt64Struct, error) {
+func (result SQLNullInt64Struct) DecodeFromStream(s *scan.Stream) (SQLNullInt64Struct, error) {
 	seenI := false
 	err := s.ObjectOpen()
 	if err != nil {
@@ -644,7 +644,7 @@ func (result SQLNullInt32Struct) DecodeFrom(data []byte) (SQLNullInt32Struct, in
 	}
 }
 
-func (result SQLNullInt32Struct) DecodeStreamFrom(s *scan.Stream) (SQLNullInt32Struct, error) {
+func (result SQLNullInt32Struct) DecodeFromStream(s *scan.Stream) (SQLNullInt32Struct, error) {
 	seenI32 := false
 	err := s.ObjectOpen()
 	if err != nil {
@@ -897,7 +897,7 @@ func (result SQLNullInt16Struct) DecodeFrom(data []byte) (SQLNullInt16Struct, in
 	}
 }
 
-func (result SQLNullInt16Struct) DecodeStreamFrom(s *scan.Stream) (SQLNullInt16Struct, error) {
+func (result SQLNullInt16Struct) DecodeFromStream(s *scan.Stream) (SQLNullInt16Struct, error) {
 	seenI16 := false
 	err := s.ObjectOpen()
 	if err != nil {
@@ -1125,7 +1125,7 @@ func (result SQLNullByteStruct) DecodeFrom(data []byte) (SQLNullByteStruct, int,
 	}
 }
 
-func (result SQLNullByteStruct) DecodeStreamFrom(s *scan.Stream) (SQLNullByteStruct, error) {
+func (result SQLNullByteStruct) DecodeFromStream(s *scan.Stream) (SQLNullByteStruct, error) {
 	seenB := false
 	err := s.ObjectOpen()
 	if err != nil {
@@ -1342,7 +1342,7 @@ func (result SQLNullBoolStruct) DecodeFrom(data []byte) (SQLNullBoolStruct, int,
 	}
 }
 
-func (result SQLNullBoolStruct) DecodeStreamFrom(s *scan.Stream) (SQLNullBoolStruct, error) {
+func (result SQLNullBoolStruct) DecodeFromStream(s *scan.Stream) (SQLNullBoolStruct, error) {
 	seenBL := false
 	err := s.ObjectOpen()
 	if err != nil {
@@ -1559,7 +1559,7 @@ func (result SQLNullFloat64Struct) DecodeFrom(data []byte) (SQLNullFloat64Struct
 	}
 }
 
-func (result SQLNullFloat64Struct) DecodeStreamFrom(s *scan.Stream) (SQLNullFloat64Struct, error) {
+func (result SQLNullFloat64Struct) DecodeFromStream(s *scan.Stream) (SQLNullFloat64Struct, error) {
 	seenF := false
 	err := s.ObjectOpen()
 	if err != nil {
@@ -1805,7 +1805,7 @@ func (result SQLNullTimeStruct) DecodeFrom(data []byte) (SQLNullTimeStruct, int,
 	}
 }
 
-func (result SQLNullTimeStruct) DecodeStreamFrom(s *scan.Stream) (SQLNullTimeStruct, error) {
+func (result SQLNullTimeStruct) DecodeFromStream(s *scan.Stream) (SQLNullTimeStruct, error) {
 	seenT := false
 	err := s.ObjectOpen()
 	if err != nil {
@@ -2347,7 +2347,7 @@ func (result SQLNullStruct) DecodeFrom(data []byte) (SQLNullStruct, int, error) 
 	}
 }
 
-func (result SQLNullStruct) DecodeStreamFrom(s *scan.Stream) (SQLNullStruct, error) {
+func (result SQLNullStruct) DecodeFromStream(s *scan.Stream) (SQLNullStruct, error) {
 	seenB := false
 	seenBL := false
 	seenF := false

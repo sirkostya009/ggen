@@ -247,7 +247,7 @@ func (result ModStruct) DecodeFrom(data []byte) (ModStruct, int, error) {
 	}
 }
 
-func (result ModStruct) DecodeStreamFrom(s *scan.Stream) (ModStruct, error) {
+func (result ModStruct) DecodeFromStream(s *scan.Stream) (ModStruct, error) {
 	if result.Tags != nil {
 		result.Tags = result.Tags[:0]
 	}
@@ -607,7 +607,7 @@ func (result FallibleModStruct) DecodeFrom(data []byte) (FallibleModStruct, int,
 	}
 }
 
-func (result FallibleModStruct) DecodeStreamFrom(s *scan.Stream) (FallibleModStruct, error) {
+func (result FallibleModStruct) DecodeFromStream(s *scan.Stream) (FallibleModStruct, error) {
 	seenEmail := false
 	err := s.ObjectOpen()
 	if err != nil {
@@ -860,7 +860,7 @@ func (result FallibleModMultierrStruct) DecodeFrom(data []byte) (FallibleModMult
 	}
 }
 
-func (result FallibleModMultierrStruct) DecodeStreamFrom(s *scan.Stream) (FallibleModMultierrStruct, error) {
+func (result FallibleModMultierrStruct) DecodeFromStream(s *scan.Stream) (FallibleModMultierrStruct, error) {
 	var errs validation.Errors
 	seenEmail := false
 	err := s.ObjectOpen()
@@ -1182,7 +1182,7 @@ func (result CrossPkgModStruct) DecodeFrom(data []byte) (CrossPkgModStruct, int,
 	}
 }
 
-func (result CrossPkgModStruct) DecodeStreamFrom(s *scan.Stream) (CrossPkgModStruct, error) {
+func (result CrossPkgModStruct) DecodeFromStream(s *scan.Stream) (CrossPkgModStruct, error) {
 	seenCode := false
 	seenNonEmpty := false
 	seenTag := false

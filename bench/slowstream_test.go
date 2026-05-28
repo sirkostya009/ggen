@@ -141,7 +141,7 @@ func BenchmarkSlowStream_Valid(b *testing.B) {
 			var err error
 			var _st scan.Stream
 			_st.Reset(s.r, s.buf[:0])
-			_, err = Node{}.DecodeStreamFrom(&_st)
+			_, err = Node{}.DecodeFromStream(&_st)
 			s.buf = _st.Bytes()
 			return err
 		}},
@@ -189,7 +189,7 @@ func BenchmarkSlowStream_Invalid(b *testing.B) {
 			var err error
 			var _st scan.Stream
 			_st.Reset(s.r, s.buf[:0])
-			_, err = Validated{}.DecodeStreamFrom(&_st)
+			_, err = Validated{}.DecodeFromStream(&_st)
 			s.buf = _st.Bytes()
 			return err
 		}, true},

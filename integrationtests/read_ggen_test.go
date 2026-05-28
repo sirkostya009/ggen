@@ -127,7 +127,7 @@ func (result IgnoreUnknownStruct) DecodeFrom(data []byte) (IgnoreUnknownStruct, 
 	}
 }
 
-func (result IgnoreUnknownStruct) DecodeStreamFrom(s *scan.Stream) (IgnoreUnknownStruct, error) {
+func (result IgnoreUnknownStruct) DecodeFromStream(s *scan.Stream) (IgnoreUnknownStruct, error) {
 	seenName := false
 	err := s.ObjectOpen()
 	if err != nil {

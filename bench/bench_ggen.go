@@ -165,7 +165,7 @@ func (result Addr) DecodeFrom(data []byte) (Addr, int, error) {
 	}
 }
 
-func (result Addr) DecodeStreamFrom(s *scan.Stream) (Addr, error) {
+func (result Addr) DecodeFromStream(s *scan.Stream) (Addr, error) {
 	seenCity := false
 	seenStreet := false
 	err := s.ObjectOpen()
@@ -1170,7 +1170,7 @@ func (result Node) DecodeFrom(data []byte) (Node, int, error) {
 	}
 }
 
-func (result Node) DecodeStreamFrom(s *scan.Stream) (Node, error) {
+func (result Node) DecodeFromStream(s *scan.Stream) (Node, error) {
 	if result.Blob != nil {
 		result.Blob = result.Blob[:0]
 	}
@@ -1420,7 +1420,7 @@ func (result Node) DecodeStreamFrom(s *scan.Stream) (Node, error) {
 								break
 							}
 							slab0 = append(slab0, Addr{})
-							slab0[len(slab0)-1], err = slab0[len(slab0)-1].DecodeStreamFrom(s)
+							slab0[len(slab0)-1], err = slab0[len(slab0)-1].DecodeFromStream(s)
 							if err != nil {
 								return result, err
 							}
@@ -1973,7 +1973,7 @@ func (result Node) DecodeStreamFrom(s *scan.Stream) (Node, error) {
 					result.Parent = nil
 				} else {
 					var v Addr
-					v, err = v.DecodeStreamFrom(s)
+					v, err = v.DecodeFromStream(s)
 					if err != nil {
 						return result, err
 					}
@@ -2041,7 +2041,7 @@ func (result Node) DecodeStreamFrom(s *scan.Stream) (Node, error) {
 						}
 						for s.Bytes()[s.Pos] != ']' {
 							result.Children = append(result.Children, Node{})
-							result.Children[len(result.Children)-1], err = result.Children[len(result.Children)-1].DecodeStreamFrom(s)
+							result.Children[len(result.Children)-1], err = result.Children[len(result.Children)-1].DecodeFromStream(s)
 							if err != nil {
 								return result, err
 							}
@@ -2756,7 +2756,7 @@ func (result Validated) DecodeFrom(data []byte) (Validated, int, error) {
 	}
 }
 
-func (result Validated) DecodeStreamFrom(s *scan.Stream) (Validated, error) {
+func (result Validated) DecodeFromStream(s *scan.Stream) (Validated, error) {
 	if result.Tags != nil {
 		result.Tags = result.Tags[:0]
 	}
@@ -3414,7 +3414,7 @@ func (result Claim) DecodeFrom(data []byte) (Claim, int, error) {
 	}
 }
 
-func (result Claim) DecodeStreamFrom(s *scan.Stream) (Claim, error) {
+func (result Claim) DecodeFromStream(s *scan.Stream) (Claim, error) {
 	seenAud := false
 	seenExp := false
 	seenIat := false
@@ -4126,7 +4126,7 @@ func (result ValidationHeavy) DecodeFrom(data []byte) (ValidationHeavy, int, err
 	}
 }
 
-func (result ValidationHeavy) DecodeStreamFrom(s *scan.Stream) (ValidationHeavy, error) {
+func (result ValidationHeavy) DecodeFromStream(s *scan.Stream) (ValidationHeavy, error) {
 	seenAge := false
 	seenCountry := false
 	seenEmail := false
@@ -4866,7 +4866,7 @@ func (result NoValidationHeavy) DecodeFrom(data []byte) (NoValidationHeavy, int,
 	}
 }
 
-func (result NoValidationHeavy) DecodeStreamFrom(s *scan.Stream) (NoValidationHeavy, error) {
+func (result NoValidationHeavy) DecodeFromStream(s *scan.Stream) (NoValidationHeavy, error) {
 	seenAge := false
 	seenCountry := false
 	seenEmail := false
@@ -5239,7 +5239,7 @@ func (result HTMLEscape) DecodeFrom(data []byte) (HTMLEscape, int, error) {
 	}
 }
 
-func (result HTMLEscape) DecodeStreamFrom(s *scan.Stream) (HTMLEscape, error) {
+func (result HTMLEscape) DecodeFromStream(s *scan.Stream) (HTMLEscape, error) {
 	seenNote := false
 	err := s.ObjectOpen()
 	if err != nil {
@@ -5438,7 +5438,7 @@ func (result HTMLPlain) DecodeFrom(data []byte) (HTMLPlain, int, error) {
 	}
 }
 
-func (result HTMLPlain) DecodeStreamFrom(s *scan.Stream) (HTMLPlain, error) {
+func (result HTMLPlain) DecodeFromStream(s *scan.Stream) (HTMLPlain, error) {
 	seenNote := false
 	err := s.ObjectOpen()
 	if err != nil {
@@ -5720,7 +5720,7 @@ func (result MapHeavy) DecodeFrom(data []byte) (MapHeavy, int, error) {
 	}
 }
 
-func (result MapHeavy) DecodeStreamFrom(s *scan.Stream) (MapHeavy, error) {
+func (result MapHeavy) DecodeFromStream(s *scan.Stream) (MapHeavy, error) {
 	if result.Labels != nil {
 		clear(result.Labels)
 	}

@@ -264,7 +264,7 @@ func (result MultiErrStruct) DecodeFrom(data []byte) (MultiErrStruct, int, error
 	}
 }
 
-func (result MultiErrStruct) DecodeStreamFrom(s *scan.Stream) (MultiErrStruct, error) {
+func (result MultiErrStruct) DecodeFromStream(s *scan.Stream) (MultiErrStruct, error) {
 	var errs validation.Errors
 	seenAge := false
 	seenName := false
@@ -626,7 +626,7 @@ func (result CustomBothStruct) DecodeFrom(data []byte) (CustomBothStruct, int, e
 	}
 }
 
-func (result CustomBothStruct) DecodeStreamFrom(s *scan.Stream) (CustomBothStruct, error) {
+func (result CustomBothStruct) DecodeFromStream(s *scan.Stream) (CustomBothStruct, error) {
 	if result.Tags != nil {
 		result.Tags = result.Tags[:0]
 	}

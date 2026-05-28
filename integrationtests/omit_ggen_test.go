@@ -595,7 +595,7 @@ func (result OmitStruct) DecodeFrom(data []byte) (OmitStruct, int, error) {
 	}
 }
 
-func (result OmitStruct) DecodeStreamFrom(s *scan.Stream) (OmitStruct, error) {
+func (result OmitStruct) DecodeFromStream(s *scan.Stream) (OmitStruct, error) {
 	if result.Extra != nil {
 		result.Extra = result.Extra[:0]
 	}
@@ -1794,7 +1794,7 @@ func (result StringTagStruct) DecodeFrom(data []byte) (StringTagStruct, int, err
 	}
 }
 
-func (result StringTagStruct) DecodeStreamFrom(s *scan.Stream) (StringTagStruct, error) {
+func (result StringTagStruct) DecodeFromStream(s *scan.Stream) (StringTagStruct, error) {
 	seenB := false
 	seenF32 := false
 	seenF64 := false

@@ -37,7 +37,7 @@ import (
 
 // ggenCompat is the subset of generated methods this file needs: each
 // generated struct implements both encode.Marshaler (AppendJSON +
-// JSONSize) and decode.Decoder[T] (DecodeFrom + DecodeStreamFrom).
+// JSONSize) and decode.Decoder[T] (DecodeFrom + DecodeFromStream).
 type ggenCompat[T any] interface {
 	encode.Marshaler
 	decode.Decoder[T]

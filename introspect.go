@@ -23,7 +23,7 @@ type FieldInterfaces struct {
 	JSONUnmarshaler bool // *T has UnmarshalJSON([]byte) error
 	JSONMarshaler   bool // T or *T has MarshalJSON() ([]byte, error)
 	ByteDecoder     bool // T has DecodeFrom(data []byte) (T, int, error)
-	StreamDecoder   bool // T has DecodeStreamFrom(s *scan.Stream) (T, error)
+	StreamDecoder   bool // T has DecodeFromStream(s *scan.Stream) (T, error)
 	AppendJSON      bool // T has AppendJSON(dst []byte) ([]byte, error)
 	JSONSize        bool // T has JSONSize() int — used to call the real
 	// upper bound instead of falling back to a flat 128/256 guess when
@@ -175,7 +175,7 @@ func inspectType(t types.Type, std stdInterfaces) FieldInterfaces {
 		iface.JSONUnmarshaler = types.Implements(ptr, std.jsonUnmarshaler)
 	}
 
-	// ggen-shaped methods: DecodeFrom / DecodeStreamFrom / AppendJSON.
+	// ggen-shaped methods: DecodeFrom / DecodeFromStream / AppendJSON.
 	// The first two return T (the receiver), so we can't construct a
 	// clean stdlib interface to test against. Walk the method set and
 	// shape-match the signatures.
@@ -194,7 +194,7 @@ func inspectType(t types.Type, std stdInterfaces) FieldInterfaces {
 			if matchByteDecoder(sig, t) {
 				iface.ByteDecoder = true
 			}
-		case "DecodeStreamFrom":
+		case "DecodeFromStream":
 			if matchStreamDecoder(sig, t) {
 				iface.StreamDecoder = true
 			}

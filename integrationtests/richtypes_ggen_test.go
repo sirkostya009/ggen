@@ -295,7 +295,7 @@ func (result RichTypes) DecodeFrom(data []byte) (RichTypes, int, error) {
 	}
 }
 
-func (result RichTypes) DecodeStreamFrom(s *scan.Stream) (RichTypes, error) {
+func (result RichTypes) DecodeFromStream(s *scan.Stream) (RichTypes, error) {
 	seenBig := false
 	seenBigF := false
 	seenBigR := false
