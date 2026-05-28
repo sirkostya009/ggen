@@ -19,50 +19,28 @@ Three table-driven benches: `BenchmarkMega_Unmarshal`, `BenchmarkMega_Marshal`,
 `BenchmarkMega_Reader` (includes `ggen_ReadAllUnmarshal` — `io.ReadAll` then
 bytes-path decode, cheapest "I have an io.Reader" pattern).
 
-Inner loop runs under `b.RunParallel` so `-cpu=1` is serial and `-cpu=N` is
-N-way parallel on same code path. Stateful codecs (Reader, Stream buf) get
-per-goroutine state via a `setup` closure in `runBench`. Each sub-bench wraps
-`runtime.ReadMemStats` and reports `heap_KB` (live heap at StopTimer),
-`total_KB` (alloc delta over the timed region), `gc` (NumGC delta), `gc/op`
-(per-iter GC rate) on top of standard `ns/op` + `B/op` + `allocs/op`.
+Inner loop runs under `b.RunParallel`. `-cpu=1` serial, `-cpu=N` N-way parallel, same code path. Stateful codecs (Reader, Stream buf) get per-goroutine state via `setup` closure in `runBench`. Each sub-bench wraps `runtime.ReadMemStats`, reports `heap_KB` (live heap at StopTimer), `total_KB` (alloc delta over timed region), `gc` (NumGC delta), `gc/op` (per-iter GC rate) on top of standard `ns/op` + `B/op` + `allocs/op`.
 
 ## BenchmarkSmall
 
-At ~2.9 KiB the decoded value is small enough that per-call buffer
-management/streaming overhead is visible rather than drowned by tree-walk cost.
-Two ggen-stream Reader rows (512-byte initial buf vs payload-sized buf) isolate
-the buffer-grow chain from steady-state throughput.
+At ~2.9 KiB decoded value small enough that per-call buffer management/streaming overhead visible, not drowned by tree-walk cost. Two ggen-stream Reader rows (512-byte initial buf vs payload-sized buf) isolate buffer-grow chain from steady-state throughput.
 
 ## BenchmarkSlowStream
 
 Slow-reader benches (`slowReader`, geometric-decay delays). Two tables:
 `BenchmarkSlowStream_Valid` (stdjson, easyjson, ggen_stream, ggen_readall) and
-`BenchmarkSlowStream_Invalid` (ggen_stream, ggen_readall, jsonv2-baseline on a
-payload that **fails ggen validation early**). Same `runBench` harness, so
-`-cpu=N` scales near-linearly (concurrent slow connections overlap their
-sleeps). The **Invalid** group is where streaming pays off: fail-fast bails as
-soon as the bad field is seen, ReadAll must drain the body first — ~67 ms
-(stream) vs ~78 ms (readall) on the malformed payload.
+`BenchmarkSlowStream_Invalid` (ggen_stream, ggen_readall, jsonv2-baseline on payload that **fails ggen validation early**). Same `runBench` harness, so
+`-cpu=N` scales near-linearly (concurrent slow connections overlap sleeps). **Invalid** group = where streaming pays off: fail-fast bails as soon as bad field seen, ReadAll must drain body first — ~67 ms (stream) vs ~78 ms (readall) on malformed payload.
 
 ## BenchmarkRetention
 
-Each goroutine holds its produced `*Node` in a local sink;
-sinks merge after `b.RunParallel`; GC ×2; snapshot
-`runtime.MemStats.HeapInuse` delta / `b.N` = `retain_KB/op`. `HeapInuse` is
-process-global so works in parallel. Best run with a fixed iter count
-(`-benchtime=1000x`) for comparable numbers.
+Each goroutine holds produced `*Node` in local sink; sinks merge after `b.RunParallel`; GC ×2; snapshot `runtime.MemStats.HeapInuse` delta / `b.N` = `retain_KB/op`. `HeapInuse` process-global, works in parallel. Best run with fixed iter count (`-benchtime=1000x`) for comparable numbers.
 
 ## easyjson method leakage
 
-`//easyjson:json` generates `MarshalJSON`/`UnmarshalJSON` on the target type.
-The stdlib reflection codecs (`jsonv2`, `encoding/json`) AND **sonic** all check
-`json.Marshaler`/`json.Unmarshaler` before reflecting — so any type carrying
-easyjson methods silently routes every "reflection" codec through easyjson's
-fast path, and the row labelled `jsonv2`/`sonic` ends up measuring easyjson.
+`//easyjson:json` generates `MarshalJSON`/`UnmarshalJSON` on target type. Stdlib reflection codecs (`jsonv2`, `encoding/json`) AND **sonic** all check `json.Marshaler`/`json.Unmarshaler` before reflecting — any type carrying easyjson methods silently routes every "reflection" codec through easyjson fast path, row labelled `jsonv2`/`sonic` ends up measuring easyjson.
 
-**Pattern:** keep ggen and easyjson on SEPARATE types sharing the wire shape.
-Feed the "Plain" (ggen-only) struct to reflection codecs, the "Easy" struct to
-the easyjson row.
+**Pattern:** keep ggen and easyjson on SEPARATE types sharing wire shape. Feed "Plain" (ggen-only) struct to reflection codecs, "Easy" struct to easyjson row.
 
 ```go
 //ggen:generate
@@ -72,23 +50,13 @@ type Claim struct { Sub string `json:"sub"`; ... }
 type EasyClaim struct { Sub string `json:"sub"`; ... }   // same fields
 ```
 
-`NodePlain`/`AddrPlain` exist for the same reason at the mega level
-(self-referential field types meant `type AddrPlain Addr` wasn't enough — see
-`bench/types.go`). For non-recursive structs a parallel struct declaration is
-cleanest.
+`NodePlain`/`AddrPlain` exist for same reason at mega level (self-referential field types meant `type AddrPlain Addr` not enough — see `bench/types.go`). For non-recursive structs, parallel struct declaration cleanest.
 
-**Symptom when forgotten**: the supposedly-reflection row matches easyjson's
-allocs and ns/op almost exactly when it should be 3-10× slower. ggen's own
-`AppendJSON`/`DecodeFrom` do NOT trip this — they're not `json.Marshaler`/
-`Unmarshaler`. Only stdlib-interface methods cause cross-codec pickup; if a
-struct opts into ggen's `marshal`/`unmarshal` hooks, the same isolation applies.
+**Symptom when forgotten**: supposedly-reflection row matches easyjson allocs and ns/op almost exactly when should be 3-10× slower. ggen's own `AppendJSON`/`DecodeFrom` do NOT trip this — not `json.Marshaler`/`Unmarshaler`. Only stdlib-interface methods cause cross-codec pickup; if struct opts into ggen `marshal`/`unmarshal` hooks, same isolation applies.
 
 ## Benchmarks (~5.6 MiB deep Node tree, full validation)
 
-AMD Ryzen AI MAX+ 395, Go 1.26, GOEXPERIMENT=jsonv2. Node carries scalars,
-slices, string-keyed maps, fixed-length tuples, slices of pointers
-(slab path), nested slices, pointer fields, time, bytes (base64), `any`,
-and `json.RawMessage`.
+AMD Ryzen AI MAX+ 395, Go 1.26, GOEXPERIMENT=jsonv2. Node carries scalars, slices, string-keyed maps, fixed-length tuples, slices of pointers (slab path), nested slices, pointer fields, time, bytes (base64), `any`, `json.RawMessage`.
 
 Numbers after running all, no cpu limit (32 threads):
 
@@ -113,10 +81,7 @@ Numbers after running all, no cpu limit (32 threads):
 | **ggen**          | 655 K     | 11.8 MB | **2**  | 8951      |
 | **ggen_presized** | **564 K** | **1 B** | **0**  | **10393** |
 
-`ggen_presized` is the same `AppendJSON` codepath with a once pre-sized buffer
-— zero allocs, zero GC, ~14% faster than `encode.Marshal(v)`. The 2 allocs on
-plain `ggen` are the per-call output buffer + 1 misc.
-At Mega scale this beats sonic_fast ~1.7× on wall clock and ~33000× on allocated bytes.
+`ggen_presized` = same `AppendJSON` codepath with once pre-sized buffer — zero allocs, zero GC, ~14% faster than `encode.Marshal(v)`. 2 allocs on plain `ggen` = per-call output buffer + 1 misc. At Mega scale beats sonic_fast ~1.7× wall clock, ~33000× allocated bytes.
 
 ### Reader input (streaming)
 
@@ -129,11 +94,7 @@ At Mega scale this beats sonic_fast ~1.7× on wall clock and ~33000× on allocat
 | **ggen UnmarshalStream**     | 8094 K | 17.8 MB | 256589 |
 | **ggen ReadAllUnmarshal**    | 2274 K | 29.0 MB | 101956 |
 
-ggen Stream copies strings during parse (each scanned string is its own heap
-alloc), which is why it loses on alloc count. The win returns on **Marshal**
-(1.47× faster than easyjson) and the **bytes-only path** (1.45× faster). The
-cleanest "I have an io.Reader" pattern is `ReadAllUnmarshal` — same shape as the
-bytes path, comparable wall clock at the cost of one `io.ReadAll` buffer.
+ggen Stream copies strings during parse (each scanned string own heap alloc), why loses on alloc count. Win returns on **Marshal** (1.47× faster than easyjson) and **bytes-only path** (1.45× faster). Cleanest "I have an io.Reader" pattern = `ReadAllUnmarshal` — same shape as bytes path, comparable wall clock at cost of one `io.ReadAll` buffer.
 
 ### Residency (retained heap per decoded item, slowPayload ~36 KiB)
 
@@ -147,23 +108,14 @@ bytes path, comparable wall clock at the cost of one `io.ReadAll` buffer.
 | sonic           | 111.3 KiB | 3.17×                    |
 | sonic_fast      | 112.0 KiB | 3.19×                    |
 
-Run with `GGEN_BENCH_TOPALLOCS=1` to surface top-5 allocation sites.
+Run `GGEN_BENCH_TOPALLOCS=1` to surface top-5 allocation sites.
 
 ### `B/op` notes
 
-- **Marshal (`ggen`):** B/op ≈ output buffer size (~11.8 MB = the marshalled
-  wire bytes). Only 2 allocs/op (output buffer + 1 misc); `JSONSize()` sizes
-  that one allocation (per map entry `4 + 2*len(k) + value-bound`, or flat 128
-  for nested/struct). Down from a flat `128 * len` (~2.4× overshoot
-  pre-tighten). For zero-alloc see `ggen_presized`.
-- **Marshal (`ggen_presized`):** caller-owned buffer + AppendAny concrete-type
-  fast paths for every primitive shape (`[]any`/`[]string`/`[]int*`/`[]uint16/
-32/64`/`[]float*`/`[]bool`, `map[string]any/string/int*/uint*/float*/bool` —
-  bypass reflect.MapIter boxing) → zero allocations, zero GC.
-- **Unmarshal:** ggen reports higher B/op than easyjson (6.1 MB vs 3.3 MB for
-  ~970 KB input) because `unsafe.String` aliases keep the entire input buffer
-  alive (GC accounts it as a live allocation per iteration). Allocs still ~3.4×
-  lower than easyjson (18 K vs 61 K).
+- **Marshal (`ggen`):** B/op ≈ output buffer size (~11.8 MB = marshalled wire bytes). Only 2 allocs/op (output buffer + 1 misc); `JSONSize()` sizes that one allocation (per map entry `4 + 2*len(k) + value-bound`, or flat 128 for nested/struct). Down from flat `128 * len` (~2.4× overshoot pre-tighten). Zero-alloc → see `ggen_presized`.
+- **Marshal (`ggen_presized`):** caller-owned buffer + AppendAny concrete-type fast paths for every primitive shape (`[]any`/`[]string`/`[]int*`/`[]uint16/
+32/64`/`[]float*`/`[]bool`, `map[string]any/string/int*/uint*/float*/bool` — bypass reflect.MapIter boxing) → zero allocations, zero GC.
+- **Unmarshal:** ggen reports higher B/op than easyjson (6.1 MB vs 3.3 MB for ~970 KB input) because `unsafe.String` aliases keep entire input buffer alive (GC accounts as live allocation per iteration). Allocs still ~3.4× lower than easyjson (18 K vs 61 K).
 
 ## Running benchmarks
 

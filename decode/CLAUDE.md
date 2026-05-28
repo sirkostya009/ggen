@@ -1,8 +1,6 @@
 # decode — Decoder[T] interface + generic array walkers
 
-Runtime package. Defines the `Decoder[T]` interface every generated struct
-satisfies, plus generic slice walkers that would otherwise be toil to
-reimplement at every call site.
+Runtime package. Defines `Decoder[T]` interface every generated struct satisfies, plus generic slice walkers — otherwise toil to reimplement per call site.
 
 ## `decode/decode.go`
 
@@ -21,5 +19,4 @@ func UnmarshalSliceStream[T Decoder[T]](r io.Reader, buf []byte) ([]T, []byte, e
 
 ## `decode/validators.go`
 
-Helper predicates used in generated validation branches, each mapping 1:1 to a
-rule name (`isASCII`, `isAlphanum`, `isHexadecimal`, …).
+Helper predicates for generated validation branches. Each maps 1:1 to rule name (`isASCII`, `isAlphanum`, `isHexadecimal`, …).

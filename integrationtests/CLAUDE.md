@@ -1,33 +1,23 @@
 # integrationtests — feature / roundtrip / compat / fuzz tests
 
 Separate Go module (own `go.mod` with `replace github.com/sirkostya009/ggen =>
-../`). Imports the root packages as an external consumer would, so the test
-surface exercises the public API at the boundary users hit.
+../`). Imports root packages as external consumer, so test surface exercises public API at boundary users hit.
 
 ## Generated files & the `//go:generate` workflow
 
-Each annotated source carries `//go:generate ../ggen $GOFILE` and produces a
-sibling `<file>_ggen_test.go`. Build tags propagate to the generated file.
-Files behind opt-in tags (e.g. `//go:build goexperiment.jsonv2 &&
-ggen_brokencodegen`) are skipped by default `go generate` — pass `-tags=…` to
-opt in. Regenerate:
+Each annotated source carries `//go:generate ../ggen $GOFILE`, produces sibling `<file>_ggen_test.go`. Build tags propagate to generated file. Files behind opt-in tags (e.g. `//go:build goexperiment.jsonv2 &&
+ggen_brokencodegen`) skipped by default `go generate` — pass `-tags=…` to opt in. Regenerate:
 
 ```sh
 (cd integrationtests && GOEXPERIMENT=jsonv2 go generate ./...)
 ```
 
-Cross-file struct references (e.g. a `pointer_test.go` field of type `Address`
-declared in `shared_test.go`) work on first run because single-file mode seeds
-the known-types set with every annotated name in the package, so codegen emits
-a direct `Address{}.DecodeFrom(...)` rather than the encoding/json fallback.
+Cross-file struct refs (e.g. `pointer_test.go` field of type `Address` declared in `shared_test.go`) work first run because single-file mode seeds known-types set with every annotated name in package, so codegen emits direct `Address{}.DecodeFrom(...)` not encoding/json fallback.
 
 ## Test files
 
-- `shared_test.go` — shared annotated structs (Address, Node, …) used across
-  feature tests.
-- `payloads_test.go` — `complexPayload`/`complexValue` (roundtrip/stdcompat) and
-  `megaPayload`/`megaValue` (1 MiB generated Node tree, fixed seed 1; used by
-  `stdcompat_test.go` at scale).
+- `shared_test.go` — shared annotated structs (Address, Node, …) used across feature tests.
+- `payloads_test.go` — `complexPayload`/`complexValue` (roundtrip/stdcompat), `megaPayload`/`megaValue` (1 MiB generated Node tree, fixed seed 1; used by `stdcompat_test.go` at scale).
 - `<file>_ggen_test.go` — generated methods, one per annotated source.
 
 Per-feature coverage files:
@@ -39,7 +29,7 @@ Per-feature coverage files:
 | `custom_test.go`        | `@FuncName` / `@pkg.FuncName` validators and mods.                                                                                                                                     |
 | `decode_dups_test.go`   | `allowdups`: first-wins, `SkipValue` advance for later occurrences vs default `DuplicateKeyError`.                                                                                     |
 | `dive_test.go`          | `dive:` / `keys:` tag prefixes on slices / arrays / maps.                                                                                                                              |
-| `extra_test.go`         | Misc edge cases that don't fit elsewhere.                                                                                                                                              |
+| `extra_test.go`         | Misc edge cases not fit elsewhere.                                                                                                                                              |
 | `fallback_test.go`      | `encoding/json` fallback for cross-package non-annotated types.                                                                                                                        |
 | `hooks_test.go`         | Opt-in `MarshalJSON` / `UnmarshalJSON` hooks (`-marshal` / `-unmarshal`).                                                                                                              |
 | `htmlescape_test.go`    | Literal default (jsonv2-shaped) + `htmlescape` opt-in (v1-shaped).                                                                                                                     |
@@ -50,7 +40,7 @@ Per-feature coverage files:
 | `mods_test.go`          | `mod:"…"` transforms — trim/lower/upper/trimleft/trimright/replace/clamp/`@Func`.                                                                                                      |
 | `native_test.go`        | `time.Time`, `time.Duration`, `net.IP`, `netip.Addr`/`Prefix`, `[]byte` encodings.                                                                                                     |
 | `omit_test.go`          | `omitempty` / `omitzero`.                                                                                                                                                              |
-| `pointer_test.go`       | `*T` — null ↔ nil, primitive + struct pointees, `[]*T` slab. `NPtrStruct` exercises `**T`/`***T`/… scalar via json fallback; slice/array variants gated on the n-pointer backlog item. |
+| `pointer_test.go`       | `*T` — null ↔ nil, primitive + struct pointees, `[]*T` slab. `NPtrStruct` exercises `**T`/`***T`/… scalar via json fallback; slice/array variants gated on n-pointer backlog item. |
 | `read_test.go`          | Basic Read + unknown-key error & ignoreunknown opt-in.                                                                                                                                 |
 | `richtypes_test.go`     | UUID, decimal, big.Int/Float/Rat, sql.Null\*, json.RawMessage, jsontext.Value, url.URL.                                                                                                |
 | `roundtrip_test.go`     | Symmetric marshal → unmarshal → marshal stability.                                                                                                                                     |
@@ -63,18 +53,12 @@ Per-feature coverage files:
 
 ### `thirdparty/` and `thirdparty2/`
 
-- `thirdparty/` — non-annotated external type. Exercises `encoding/json`
-  fallback for cross-package types ggen can't see.
-- `thirdparty2/` — annotated external type. Exercises static-analyzer pickup of
-  a cross-package generated decoder. Regenerated with `go generate`.
+- `thirdparty/` — non-annotated external type. Exercises `encoding/json` fallback for cross-package types ggen can't see.
+- `thirdparty2/` — annotated external type. Exercises static-analyzer pickup of cross-package generated decoder. Regenerated with `go generate`.
 
 ## Fuzz
 
-Three fuzzers over `Node` in `fuzz_test.go`: `FuzzScanNoPanic` (panic safety on
-random bytes), `FuzzRoundtrip` (encode → decode fixed point after one round),
-`FuzzCompat` (when both ggen and jsonv2 accept, decoded values agree via
-`sameWire`). Compat deliberately ignores accept/reject drift on:
-top-level `null`, trailing garbage, invalid UTF-8 inside strings.
+Three fuzzers over `Node` in `fuzz_test.go`: `FuzzScanNoPanic` (panic safety on random bytes), `FuzzRoundtrip` (encode → decode fixed point after one round), `FuzzCompat` (when both ggen and jsonv2 accept, decoded values agree via `sameWire`). Compat deliberately ignores accept/reject drift on: top-level `null`, trailing garbage, invalid UTF-8 inside strings.
 
 ## Running tests
 
@@ -84,47 +68,23 @@ top-level `null`, trailing garbage, invalid UTF-8 inside strings.
 (cd integrationtests && GOEXPERIMENT=jsonv2 go test ./...)
 ```
 
-`GOEXPERIMENT=jsonv2` is required — annotated structs use `encoding/json/v2`
-import paths and stdcompat compares against jsonv2.
+`GOEXPERIMENT=jsonv2` required — annotated structs use `encoding/json/v2` import paths, stdcompat compares against jsonv2.
 
 ## Adding new tests
 
 In order:
 
-1. **Audit existing tests** — `grep` for similar assertions / annotations / feature names;
-   the table above is the first stop. Common cases (Address, Node, slice/map shapes) are covered.
-2. **Extend, don't duplicate** — prefer modifying a related test, even refactoring it into
-   a table-driven loop (single assertion → `cases := []struct{…}{}`; inline subtest body → helper
-   called from `for _, c := range cases { t.Run(c.name, …) }`; copy-pasted `t.Run` blocks →
-   same loop). The big `InvalidRuleApplication` table in root `cli_test.go` is the reference shape
-   (one slice of `{name, input, wantSubstring}`, one `t.Run` per row, ~80 cases under one parent).
-3. **Avoid new helpers** unless the same setup recurs ≥3 times — `runCLI`, `writeFixture`,
-   `captured`, `mustHaveFile`, `writeGoFile` already exist in the root module; check the matching
-   `_test.go` for in-package helpers first.
-4. **Pick the host file** by feature area; don't fragment.
-5. **Only create a new `*_test.go`** when the feature has no existing home
-   (rare — new files duplicate boilerplate, dilutegrep).
-6. **Pick the host struct** — `Address`, `Node`, `WideStruct`, `Multi`,`Bad`
-   cover most combinations; reuse or extend before adding.
-7. **Only add a new struct** when none carries the right field-kind/tag combination
-   — annotated test structs go in the same file as the test, `shared_test.go` only when ≥2
-   files need it.
+1. **Audit existing tests** — `grep` for similar assertions / annotations / feature names; table above is first stop. Common cases (Address, Node, slice/map shapes) covered.
+2. **Extend, don't duplicate** — prefer modifying related test, even refactoring it into table-driven loop (single assertion → `cases := []struct{…}{}`; inline subtest body → helper called from `for _, c := range cases { t.Run(c.name, …) }`; copy-pasted `t.Run` blocks → same loop). Big `InvalidRuleApplication` table in root `cli_test.go` is reference shape (one slice of `{name, input, wantSubstring}`, one `t.Run` per row, ~80 cases under one parent).
+3. **Avoid new helpers** unless same setup recurs ≥3 times — `runCLI`, `writeFixture`, `captured`, `mustHaveFile`, `writeGoFile` already exist in root module; check matching `_test.go` for in-package helpers first.
+4. **Pick host file** by feature area; don't fragment.
+5. **Only create new `*_test.go`** when feature has no existing home (rare — new files duplicate boilerplate, dilute grep).
+6. **Pick host struct** — `Address`, `Node`, `WideStruct`, `Multi`, `Bad` cover most combinations; reuse or extend before adding.
+7. **Only add new struct** when none carries right field-kind/tag combination — annotated test structs go in same file as test, `shared_test.go` only when ≥2 files need it.
 
 ## JSONSize tests live in jsonsize_test.go
 
-**ALL `JSONSize` cap-guard tests belong in `jsonsize_test.go`**, not in the
-feature file where the struct is declared. The struct stays next to its feature
-tests (e.g. `SQLNullStringStruct` in `sql_test.go`), but every
-`TestJSONSize_*_NoRealloc` / `TestJSONSize_*PerType_*` table sits in
-`jsonsize_test.go` alongside the existing `TimeFormats`/`URLStruct`/
-`TupleStruct`/`HTMLEscapeStruct`/`InlineStruct`/`StringTagStruct`/`SQLNull*`
-tables.
+**ALL `JSONSize` cap-guard tests belong in `jsonsize_test.go`**, not in feature file where struct declared. Struct stays next to its feature tests (e.g. `SQLNullStringStruct` in `sql_test.go`), but every `TestJSONSize_*_NoRealloc` / `TestJSONSize_*PerType_*` table sits in `jsonsize_test.go` alongside existing `TimeFormats`/`URLStruct`/`TupleStruct`/`HTMLEscapeStruct`/`InlineStruct`/`StringTagStruct`/`SQLNull*` tables.
 
-Why: `JSONSize` is a single contract — "AppendJSON never grows beyond the cap I
-reserved." Regressions in one kind usually break the budget for several structs
-at once. Keeping every cap-guard in one file means `go test -run TestJSONSize
-./...` covers the contract, the table stays grep-discoverable, and budget
-helpers (`populatedSQLNull`, `richTypesWorst`, `wideStructAllShort`, …) live next
-to the tests that consume them. Helpers that ONLY exist for JSONSize testing
-follow the test into `jsonsize_test.go`; helpers used by both JSONSize AND a
-roundtrip test live in the feature file (or `shared_test.go`).
+Why: `JSONSize` is single contract — "AppendJSON never grows beyond cap I reserved." Regressions in one kind usually break budget for several structs at once. Keeping every cap-guard in one file means `go test -run TestJSONSize
+./...` covers contract, table stays grep-discoverable, budget helpers (`populatedSQLNull`, `richTypesWorst`, `wideStructAllShort`, …) live next to tests that consume them. Helpers that ONLY exist for JSONSize testing follow test into `jsonsize_test.go`; helpers used by both JSONSize AND roundtrip test live in feature file (or `shared_test.go`).

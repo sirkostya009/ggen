@@ -1,9 +1,8 @@
 # decode/validation — typed validation error structs
 
-Runtime subpackage. One concrete error struct per validation rule (plus the
-`Error` interface and `Errors` slice). Generated code emits typed literals
-directly at the failure site — no field-stuffed generic error, no per-error
-rule-name comparison at use sites.
+Runtime subpackage. One concrete error struct per validation rule (plus
+`Error` interface + `Errors` slice). Codegen emits typed literals at failure
+site — no field-stuffed generic error, no per-error rule-name compare at use site.
 
 ## Surface
 
@@ -21,7 +20,7 @@ type Errors []Error                           // multierr return; Unwrap() []err
 
 ## Concrete error structs (one per rule)
 
-Pointer-receiver structs, all implementing `validation.Error`:
+Pointer-receiver structs, all implement `validation.Error`:
 
 - **presence**: `RequiredError{Field}`, `NotEmptyError{Field}`
 - **length**: `LenError{Field,Want,Got int}`, `MinLenError`/`MaxLenError
@@ -31,7 +30,7 @@ Pointer-receiver structs, all implementing `validation.Error`:
   float64, Value any}`
 - **equality**: `EqError`/`NeqError{Field, Want any, Value any}` (string + numeric)
 - **oneof**: `OneOfError{Field, Allowed []string, Value any}` — `Allowed`
-  always points to a frozen package-level slice emitted by codegen (no per-error
+  points to frozen package-level slice from codegen (no per-error
   alloc; see root CLAUDE.md optimization #16)
 - **patterns**: `EmailError`/`URLError`/`ASCIIError`/`PrintableError`/
   `AlphanumError`/`NumericError`/`LowerError`/`UpperError`/`HexadecimalError
@@ -52,12 +51,12 @@ if errors.As(err, &minlen) {
 }
 ```
 
-Use the typed pointer struct, or `err.(validation.Error).Rule()` to get name.
-`Errors` (returned in `multierr`) and `CustomError` implement Unwrap().
+Use typed pointer struct, or `err.(validation.Error).Rule()` for name.
+`Errors` (from `multierr`) + `CustomError` implement Unwrap().
 
 ## Frozen OneOf slices
 
-`OneOfError.Allowed` always points to a deduped package-level frozen `[]string`
+`OneOfError.Allowed` points to deduped package-level frozen `[]string`
 (`var _oneof_N = []string{...}`) emitted once per unique allowed-set. Error
-construction never allocates the allowed slice — important for hot-path
+construction never allocates allowed slice — critical for hot-path
 validation failures.
