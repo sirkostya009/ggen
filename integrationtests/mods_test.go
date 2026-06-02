@@ -199,3 +199,91 @@ func TestCrossPkgValidator_accepts(t *testing.T) {
 		t.Errorf("Code = %q", got.Code)
 	}
 }
+
+// NestedMultierrStruct wraps another multierr struct (FallibleModMultierrStruct)
+// as a field, plus its own validation rules. When DecodeFrom hits inner's
+// validation errors, the outer must drain them into its own errs slice
+// instead of short-circuiting — so the caller sees ALL failures in one
+// validation.Errors aggregate (outer + inner).
+//
+//ggen:generate multierr
+type NestedMultierrStruct struct {
+	Inner FallibleModMultierrStruct `json:"inner"`
+	Name  string                    `json:"name" ggen:"required,minlen=2"`
+	Code  int                       `json:"code" ggen:"gte=0,lte=100"`
+}
+
+func TestNestedMultierr_drainsInnerValidationErrors(t *testing.T) {
+	// inner.email = "x" -> mod accepts (len>=3? no, len==1 — wait RejectShort
+	// rejects len<3 as a parse error). Use a value that passes the mod but
+	// fails validation, so the inner returns a validation.Errors aggregate
+	// rather than a single parse error.
+	// "abcdef" passes RejectShort (len>=3), fails minlen=10 (len=6) AND fails
+	// email pattern → inner returns validation.Errors{minlen, email}.
+	// Outer also fails: name = "" (required + minlen=2), code = 200 (lte=100).
+	in := []byte(`{"inner":{"email":"abcdef"},"name":"","code":200}`)
+	_, _, err := NestedMultierrStruct{}.DecodeFrom(in)
+	if err == nil {
+		t.Fatal("expected aggregated errors")
+	}
+	leaves, ok := err.(validation.Errors)
+	if !ok {
+		t.Fatalf("err = %T, want validation.Errors; got: %v", err, err)
+	}
+	if len(leaves) < 4 {
+		t.Errorf("got %d leaves, want >= 4 (inner+outer combined): %v", len(leaves), leaves)
+	}
+	// Nested-struct decodes prepend the outer field segment via
+	// validation.Append; inner's email leaves surface with Path
+	// ["inner","email"], outer leaves stay one segment deep.
+	buckets := map[string]int{}
+	for _, e := range leaves {
+		buckets[strings.Join(pathOf(e), ".")]++
+	}
+	for _, want := range []string{"inner.email", "name", "code"} {
+		if buckets[want] == 0 {
+			t.Errorf("missing %q leaf (chaining/grouping broken): %v", want, leaves)
+		}
+	}
+}
+
+// pathOf reads the Path slice off any concrete validation error via a
+// shared shape — every leaf in the package embeds {Path []string} so a
+// reflect-free type switch over the open set is too noisy; the
+// errors.As fast path returns a pointer with the field we need.
+func pathOf(e validation.Error) []string {
+	type pathed interface{ pathSegments() []string }
+	if p, ok := e.(pathed); ok {
+		return p.pathSegments()
+	}
+	// Fallback: dig via the public Path field on every leaf type by
+	// covering the ones used in this test.
+	switch v := e.(type) {
+	case *validation.EmailError:
+		return v.Path
+	case *validation.MinLenError:
+		return v.Path
+	case *validation.LTEError:
+		return v.Path
+	case *validation.GTEError:
+		return v.Path
+	case *validation.RequiredError:
+		return v.Path
+	}
+	return nil
+}
+
+// TestNestedMultierr_innerParseErrorReturnsEarly: when the inner decode hits
+// a true parse error (malformed JSON), the outer should NOT drain it — it
+// returns immediately, wrapped in *decode.ParseError.
+func TestNestedMultierr_innerParseErrorReturnsEarly(t *testing.T) {
+	// Inner email value is a number, not a string — scan.ErrExpectString.
+	in := []byte(`{"inner":{"email":123},"name":"valid","code":50}`)
+	_, _, err := NestedMultierrStruct{}.DecodeFrom(in)
+	if err == nil {
+		t.Fatal("expected parse error")
+	}
+	if _, ok := err.(validation.Errors); ok {
+		t.Errorf("parse error wrapped in validation.Errors: %v", err)
+	}
+}

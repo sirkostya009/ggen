@@ -304,8 +304,9 @@ func TestUnmarshalStream_UnknownKeyErrorClone(t *testing.T) {
 	if !errors.As(err, &ue) {
 		t.Fatalf("got %T (%v), want *UnknownKeyError", err, err)
 	}
-	if ue.Field != "SomeUnknownKeyHere" {
-		t.Errorf("Field = %q, want %q (cloning broken)", ue.Field, "SomeUnknownKeyHere")
+	got := strings.Join(ue.Path, ".")
+	if got != "SomeUnknownKeyHere" {
+		t.Errorf("Path = %q, want %q (cloning broken)", got, "SomeUnknownKeyHere")
 	}
 }
 
@@ -460,5 +461,27 @@ func TestUnmarshalStream_AcceptedByBytes_AlsoAcceptedByStream(t *testing.T) {
 				t.Errorf("seed %q ch=%d drift", seed, ch)
 			}
 		}
+	}
+}
+
+// TestStream_parseErrorFieldName: the stream-path defer threads field-name
+// context the same way as the bytes path; the helper reads &s.Pos as the
+// pos source.
+func TestStream_parseErrorFieldName(t *testing.T) {
+	var s scan.Stream
+	s.Reset(bytes.NewReader([]byte(`{"street":123,"city":"C","zipCode":"12345"}`)), nil)
+	_, err := (Address{}).DecodeFromStream(&s)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	var pe *decode.ParseError
+	if !errors.As(err, &pe) {
+		t.Fatalf("err = %T, want *decode.ParseError", err)
+	}
+	if strings.Join(pe.Path, ".") != "street" {
+		t.Fatalf("Path = %v; want [street]", pe.Path)
+	}
+	if !errors.Is(err, scan.ErrExpectString) {
+		t.Fatalf("errors.Is sentinel mismatch: %v", err)
 	}
 }

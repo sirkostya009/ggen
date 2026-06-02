@@ -1489,7 +1489,7 @@ func Reject(s string) (string, error) {
 		if !strings.Contains(body, "if v, err := Reject(result.S); err != nil") {
 			t.Errorf("expected fallible mod with err-prop branch, got:\n%s", body)
 		}
-		if !strings.Contains(body, "return result, i, err") {
+		if !strings.Contains(body, `return result, i, decode.NewParseErr("s", i, err)`) {
 			t.Errorf("expected parse-error return on fallible mod, got:\n%s", body)
 		}
 	})

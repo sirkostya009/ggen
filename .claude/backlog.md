@@ -41,18 +41,6 @@
   explicit `AppendAnySized(dst, v, hint)`. Pick when real workload pins slice
   marshal as hotspot — map wins dominate today, slice tie acceptable.
 
-- **Wrap parse errors in `decode.ParseError` with position context.** Today
-  `scan.ErrBadString`/`ErrBadObject`/`ErrBadNumber`/`ErrUnexpectedEnd` bare
-  sentinels — user gets `"ggen: bad string"` and bisects by hand. Wrap at
-  call site with: byte offset (`pos` from scanner state, already in scope);
-  field path (accumulated as dispatch loop descends — needs path-stack
-  arg threaded through `DecodeFrom`, measure hot-path cost); nearby-bytes
-  window (`±32 B` aliased via `unsafe.String`); rule (which primitive failed).
-  Shape: `type ParseError struct { Field, Rule string; Pos int; Snippet
-  []byte; Err error }` with `Unwrap()` so `errors.Is(err, scan.ErrBadString)`
-  keeps working. Field-path threading is cost driver — keep optional
-  (zero-cost when nil) if it regresses.
-
 - **Position context on `validation.*` errors.** Same idea one layer up. Add
   `Pos int` (maybe `Snippet []byte`) to `MinLenError` etc. — generated code
   already has `pos`/`s.Pos` in scope at failure site. Either grow

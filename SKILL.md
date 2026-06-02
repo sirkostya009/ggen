@@ -181,6 +181,8 @@ if errors.As(err, &e) {
 
 In `multierr` mode generated code return `validation.Errors` (`[]validation.Error`). Implement `Unwrap() []error`.
 
+Parse failures (malformed JSON, wrong primitive type) wrap in `*decode.ParseError` carrying `Field` (dotted JSON path), `Pos` (byte offset), `Err` (underlying `scan.ErrX` sentinel). `errors.Is(err, scan.ErrBadString)` keeps working through the wrap. Validation errors NOT wrapped — typed pointers stay reachable. `ParseError.Error()` only renders the `parse error at <field> (pos <n>)` prefix; `errors.Unwrap` for the underlying message.
+
 #### Custom rules
 
 `@FuncName` look up `func(T) error` at codegen. `T` must be field exact Go type (including `*T` for pointer fields). No runtime registry. Non-nil return wraps as `validation.CustomError{Name: "@FuncName", Cause: err}`.

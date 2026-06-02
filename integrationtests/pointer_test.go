@@ -3,12 +3,37 @@ package integrationtests
 //go:generate ../ggen $GOFILE
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/sirkostya009/ggen/decode"
 	"github.com/sirkostya009/ggen/encode"
+	"github.com/sirkostya009/ggen/scan"
 )
+
+// TestPointer_parseErrorChainsThroughPointee: when a wrong-type value
+// trips inside *Address.DecodeFrom, the outer PointerStruct.DecodeFrom
+// prefixes its own field name onto the inner ParseError's Field path —
+// chaining "addr.street" rather than reporting only the deepest field.
+func TestPointer_parseErrorChainsThroughPointee(t *testing.T) {
+	_, _, err := (PointerStruct{}).DecodeFrom([]byte(
+		`{"name":"x","enabled":true,"addr":{"street":123,"city":"C","zipCode":"12345"}}`))
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	var pe *decode.ParseError
+	if !errors.As(err, &pe) {
+		t.Fatalf("err = %T %v, want *decode.ParseError", err, err)
+	}
+	if strings.Join(pe.Path, ".") != "addr.street" {
+		t.Fatalf("Path = %v; want [addr street]", pe.Path)
+	}
+	if !errors.Is(err, scan.ErrExpectString) {
+		t.Fatalf("errors.Is sentinel mismatch: %v", err)
+	}
+}
 
 // PointerStruct exercises optional fields via Go pointers. Each nil pointer
 // encodes as JSON null and decodes back to nil.

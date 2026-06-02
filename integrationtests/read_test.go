@@ -3,8 +3,13 @@ package integrationtests
 //go:generate ../ggen $GOFILE
 
 import (
+	"errors"
 	"strings"
 	"testing"
+
+	"github.com/sirkostya009/ggen/decode"
+	"github.com/sirkostya009/ggen/decode/validation"
+	"github.com/sirkostya009/ggen/scan"
 )
 
 // IgnoreUnknownStruct tests that `//ggen:generate ignoreunknown` suppresses
@@ -101,5 +106,61 @@ func TestRead_notObject(t *testing.T) {
 	_, _, err := Address{}.DecodeFrom([]byte(`[1,2,3]`))
 	if err == nil {
 		t.Fatal("expected not-object error")
+	}
+}
+
+// TestRead_parseErrorTopLevel: malformed JSON at the top of a struct surfaces
+// a *decode.ParseError carrying the underlying scan sentinel (errors.Is
+// keeps working) but no Field path.
+func TestRead_parseErrorTopLevel(t *testing.T) {
+	_, _, err := (Address{}).DecodeFrom([]byte(`not-an-object`))
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	var pe *decode.ParseError
+	if !errors.As(err, &pe) {
+		t.Fatalf("err = %T %v, want *decode.ParseError", err, err)
+	}
+	if !errors.Is(err, scan.ErrBadObject) {
+		t.Fatalf("errors.Is(err, scan.ErrBadObject) = false; got %v", err)
+	}
+	if len(pe.Path) != 0 {
+		t.Fatalf("Path = %v; want empty for top-level error", pe.Path)
+	}
+}
+
+// TestRead_parseErrorFieldName: wrong field type populates ParseError.Field
+// with the JSON key that was being decoded.
+func TestRead_parseErrorFieldName(t *testing.T) {
+	_, _, err := (Address{}).DecodeFrom([]byte(`{"street":123,"city":"C","zipCode":"12345"}`))
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	var pe *decode.ParseError
+	if !errors.As(err, &pe) {
+		t.Fatalf("err = %T, want *decode.ParseError", err)
+	}
+	if strings.Join(pe.Path, ".") != "street" {
+		t.Fatalf("Path = %v; want [street]", pe.Path)
+	}
+	if pe.Pos <= 0 {
+		t.Fatalf("Pos = %d; want > 0", pe.Pos)
+	}
+}
+
+// TestRead_validationNotWrapped: validation.* errors must remain typed and
+// reachable via errors.As without traversing a ParseError.
+func TestRead_validationNotWrapped(t *testing.T) {
+	_, _, err := (Address{}).DecodeFrom([]byte(`{"street":"","city":"C","zipCode":"12345"}`))
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	var minlen *validation.MinLenError
+	if !errors.As(err, &minlen) {
+		t.Fatalf("err = %T %v, want *validation.MinLenError", err, err)
+	}
+	var pe *decode.ParseError
+	if errors.As(err, &pe) {
+		t.Fatalf("validation error wrapped in ParseError: %v", err)
 	}
 }

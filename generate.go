@@ -244,6 +244,9 @@ func collectImports(structs []StructInfo, bodies [][]byte) ([]string, []string) 
 		// an explicit rule that pulled in the import; per-file mode needs
 		// the path-aware tracking here.
 		if !s.IsAlias {
+			// Non-alias structs always emit the decode.WrapParseErr defer
+			// at the top of DecodeFrom / DecodeFromStream.
+			add("github.com/sirkostya009/ggen/decode")
 			inline := s.InlineField().Inline
 			if !s.AllowDups {
 				anyValidation = true
@@ -421,7 +424,6 @@ func collectFieldImports(f FieldInfo, add func(string), anyString, anyValidation
 		add("time")
 	case KindNetIP:
 		add("net")
-		add("fmt")
 		*anyString = true
 	case KindNetipAddr, KindNetipPrefix:
 		add("net/netip")
@@ -678,12 +680,12 @@ func kindPrimitiveName(k TypeKind) string {
 // arrayLenErr builds a typed *validation.LenError literal for the strict
 // fixed-array element-count check.
 func arrayLenErr(field string, want int, gotExpr string) string {
-	return fmt.Sprintf("&validation.LenError{Field: %q, Want: %d, Got: %s}", field, want, gotExpr)
+	return fmt.Sprintf("&validation.LenError{Path: []string{%q}, Want: %d, Got: %s}", field, want, gotExpr)
 }
 
 // requiredErr builds a typed *validation.RequiredError literal.
 func requiredErr(field string) string {
-	return fmt.Sprintf("&validation.RequiredError{Field: %q}", field)
+	return fmt.Sprintf("&validation.RequiredError{Path: []string{%q}}", field)
 }
 
 // oneofRegistry collects unique allowed-string sets emitted as
@@ -724,7 +726,10 @@ func registerOneOf(parts []string) string {
 // stream callers (slice/map element readers).
 func renderValidationOn(b *bytes.Buffer, rules []ValidationRule, ref, jsonName string, kind TypeKind, multiErr bool, posVar string) {
 	// onErr wraps a `&validation.XError{...}` literal into the appropriate
-	// failure action: append in multierr mode, early return otherwise.
+	// failure action: append to the flat `errs` slice in multierr mode,
+	// or an early return otherwise. The leaf carries its own
+	// root-relative Path; nested struct decodes prepend their outer
+	// segment via [validation.Append] when bubbling up.
 	onErr := func(errExpr string) string {
 		if multiErr {
 			return "errs = append(errs, " + errExpr + ")"
@@ -747,60 +752,60 @@ func renderValidationOn(b *bytes.Buffer, rules []ValidationRule, ref, jsonName s
 
 		case "notempty":
 			fmt.Fprintf(b, "if len(%s) == 0 {\n\t%s\n}\n", ref,
-				onErr(fmt.Sprintf("&validation.NotEmptyError{Field: %q}", jsonName)))
+				onErr(fmt.Sprintf("&validation.NotEmptyError{Path: []string{%q}}", jsonName)))
 
 		case "len":
 			fmt.Fprintf(b, "if len(%s) != %s {\n\t%s\n}\n", ref, v.Value,
-				onErr(fmt.Sprintf("&validation.LenError{Field: %q, Want: %s, Got: len(%s)}", jsonName, v.Value, ref)))
+				onErr(fmt.Sprintf("&validation.LenError{Path: []string{%q}, Want: %s, Got: len(%s)}", jsonName, v.Value, ref)))
 		case "minlen":
 			fmt.Fprintf(b, "if len(%s) < %s {\n\t%s\n}\n", ref, v.Value,
-				onErr(fmt.Sprintf("&validation.MinLenError{Field: %q, Limit: %s, Got: len(%s)}", jsonName, v.Value, ref)))
+				onErr(fmt.Sprintf("&validation.MinLenError{Path: []string{%q}, Limit: %s, Got: len(%s)}", jsonName, v.Value, ref)))
 		case "maxlen":
 			fmt.Fprintf(b, "if len(%s) > %s {\n\t%s\n}\n", ref, v.Value,
-				onErr(fmt.Sprintf("&validation.MaxLenError{Field: %q, Limit: %s, Got: len(%s)}", jsonName, v.Value, ref)))
+				onErr(fmt.Sprintf("&validation.MaxLenError{Path: []string{%q}, Limit: %s, Got: len(%s)}", jsonName, v.Value, ref)))
 
 		case "runes":
 			fmt.Fprintf(b, "if utf8.RuneCountInString(%s) != %s {\n\t%s\n}\n", ref, v.Value,
-				onErr(fmt.Sprintf("&validation.RunesError{Field: %q, Want: %s, Got: utf8.RuneCountInString(%s)}", jsonName, v.Value, ref)))
+				onErr(fmt.Sprintf("&validation.RunesError{Path: []string{%q}, Want: %s, Got: utf8.RuneCountInString(%s)}", jsonName, v.Value, ref)))
 		case "minrunes":
 			fmt.Fprintf(b, "if utf8.RuneCountInString(%s) < %s {\n\t%s\n}\n", ref, v.Value,
-				onErr(fmt.Sprintf("&validation.MinRunesError{Field: %q, Limit: %s, Got: utf8.RuneCountInString(%s)}", jsonName, v.Value, ref)))
+				onErr(fmt.Sprintf("&validation.MinRunesError{Path: []string{%q}, Limit: %s, Got: utf8.RuneCountInString(%s)}", jsonName, v.Value, ref)))
 		case "maxrunes":
 			fmt.Fprintf(b, "if utf8.RuneCountInString(%s) > %s {\n\t%s\n}\n", ref, v.Value,
-				onErr(fmt.Sprintf("&validation.MaxRunesError{Field: %q, Limit: %s, Got: utf8.RuneCountInString(%s)}", jsonName, v.Value, ref)))
+				onErr(fmt.Sprintf("&validation.MaxRunesError{Path: []string{%q}, Limit: %s, Got: utf8.RuneCountInString(%s)}", jsonName, v.Value, ref)))
 
 		case "gt":
 			fmt.Fprintf(b, "if %s <= %s {\n\t%s\n}\n", ref, v.Value,
-				onErr(fmt.Sprintf("&validation.GTError{Field: %q, Limit: %s, Value: %s}", jsonName, v.Value, ref)))
+				onErr(fmt.Sprintf("&validation.GTError{Path: []string{%q}, Limit: %s, Value: %s}", jsonName, v.Value, ref)))
 		case "gte":
 			fmt.Fprintf(b, "if %s < %s {\n\t%s\n}\n", ref, v.Value,
-				onErr(fmt.Sprintf("&validation.GTEError{Field: %q, Limit: %s, Value: %s}", jsonName, v.Value, ref)))
+				onErr(fmt.Sprintf("&validation.GTEError{Path: []string{%q}, Limit: %s, Value: %s}", jsonName, v.Value, ref)))
 		case "lt":
 			fmt.Fprintf(b, "if %s >= %s {\n\t%s\n}\n", ref, v.Value,
-				onErr(fmt.Sprintf("&validation.LTError{Field: %q, Limit: %s, Value: %s}", jsonName, v.Value, ref)))
+				onErr(fmt.Sprintf("&validation.LTError{Path: []string{%q}, Limit: %s, Value: %s}", jsonName, v.Value, ref)))
 		case "lte":
 			fmt.Fprintf(b, "if %s > %s {\n\t%s\n}\n", ref, v.Value,
-				onErr(fmt.Sprintf("&validation.LTEError{Field: %q, Limit: %s, Value: %s}", jsonName, v.Value, ref)))
+				onErr(fmt.Sprintf("&validation.LTEError{Path: []string{%q}, Limit: %s, Value: %s}", jsonName, v.Value, ref)))
 
 		case "eq":
 			if kind == KindString {
 				fmt.Fprintf(b, "if %s != %q {\n\t%s\n}\n",
 					ref, v.Value,
-					onErr(fmt.Sprintf("&validation.EqError{Field: %q, Want: %q, Value: %s}", jsonName, v.Value, ref)))
+					onErr(fmt.Sprintf("&validation.EqError{Path: []string{%q}, Want: %q, Value: %s}", jsonName, v.Value, ref)))
 			} else if isNumeric(kind) {
 				fmt.Fprintf(b, "if %s != %s {\n\t%s\n}\n",
 					ref, v.Value,
-					onErr(fmt.Sprintf("&validation.EqError{Field: %q, Want: %s, Value: %s}", jsonName, v.Value, ref)))
+					onErr(fmt.Sprintf("&validation.EqError{Path: []string{%q}, Want: %s, Value: %s}", jsonName, v.Value, ref)))
 			}
 		case "neq":
 			if kind == KindString {
 				fmt.Fprintf(b, "if %s == %q {\n\t%s\n}\n",
 					ref, v.Value,
-					onErr(fmt.Sprintf("&validation.NeqError{Field: %q, Want: %q, Value: %s}", jsonName, v.Value, ref)))
+					onErr(fmt.Sprintf("&validation.NeqError{Path: []string{%q}, Want: %q, Value: %s}", jsonName, v.Value, ref)))
 			} else if isNumeric(kind) {
 				fmt.Fprintf(b, "if %s == %s {\n\t%s\n}\n",
 					ref, v.Value,
-					onErr(fmt.Sprintf("&validation.NeqError{Field: %q, Want: %s, Value: %s}", jsonName, v.Value, ref)))
+					onErr(fmt.Sprintf("&validation.NeqError{Path: []string{%q}, Want: %s, Value: %s}", jsonName, v.Value, ref)))
 			}
 
 		case "oneof":
@@ -809,53 +814,53 @@ func renderValidationOn(b *bytes.Buffer, rules []ValidationRule, ref, jsonName s
 			varName := registerOneOf(parts)
 			fmt.Fprintf(b, "switch %s {\ncase %s:\ndefault:\n\t%s\n}\n",
 				ref, cases,
-				onErr(fmt.Sprintf("&validation.OneOfError{Field: %q, Allowed: %s, Value: %s}", jsonName, varName, ref)))
+				onErr(fmt.Sprintf("&validation.OneOfError{Path: []string{%q}, Allowed: %s, Value: %s}", jsonName, varName, ref)))
 
 		case "email":
 			fmt.Fprintf(b, "if !decode.IsEmail(%s) {\n\t%s\n}\n", ref,
-				onErr(fmt.Sprintf("&validation.EmailError{Field: %q, Value: %s}", jsonName, ref)))
+				onErr(fmt.Sprintf("&validation.EmailError{Path: []string{%q}, Value: %s}", jsonName, ref)))
 		case "url":
 			fmt.Fprintf(b, "if !decode.IsURL(%s) {\n\t%s\n}\n", ref,
-				onErr(fmt.Sprintf("&validation.URLError{Field: %q, Value: %s}", jsonName, ref)))
+				onErr(fmt.Sprintf("&validation.URLError{Path: []string{%q}, Value: %s}", jsonName, ref)))
 
 		case "ascii":
 			fmt.Fprintf(b, "if !decode.IsASCII(%s) {\n\t%s\n}\n", ref,
-				onErr(fmt.Sprintf("&validation.ASCIIError{Field: %q, Value: %s}", jsonName, ref)))
+				onErr(fmt.Sprintf("&validation.ASCIIError{Path: []string{%q}, Value: %s}", jsonName, ref)))
 		case "printable":
 			fmt.Fprintf(b, "if !decode.IsPrintable(%s) {\n\t%s\n}\n", ref,
-				onErr(fmt.Sprintf("&validation.PrintableError{Field: %q, Value: %s}", jsonName, ref)))
+				onErr(fmt.Sprintf("&validation.PrintableError{Path: []string{%q}, Value: %s}", jsonName, ref)))
 		case "alphanum":
 			fmt.Fprintf(b, "if !decode.IsAlphanum(%s) {\n\t%s\n}\n", ref,
-				onErr(fmt.Sprintf("&validation.AlphanumError{Field: %q, Value: %s}", jsonName, ref)))
+				onErr(fmt.Sprintf("&validation.AlphanumError{Path: []string{%q}, Value: %s}", jsonName, ref)))
 		case "numeric":
 			fmt.Fprintf(b, "if !decode.IsNumeric(%s) {\n\t%s\n}\n", ref,
-				onErr(fmt.Sprintf("&validation.NumericError{Field: %q, Value: %s}", jsonName, ref)))
+				onErr(fmt.Sprintf("&validation.NumericError{Path: []string{%q}, Value: %s}", jsonName, ref)))
 		case "lower":
 			fmt.Fprintf(b, "if !decode.IsLower(%s) {\n\t%s\n}\n", ref,
-				onErr(fmt.Sprintf("&validation.LowerError{Field: %q, Value: %s}", jsonName, ref)))
+				onErr(fmt.Sprintf("&validation.LowerError{Path: []string{%q}, Value: %s}", jsonName, ref)))
 		case "upper":
 			fmt.Fprintf(b, "if !decode.IsUpper(%s) {\n\t%s\n}\n", ref,
-				onErr(fmt.Sprintf("&validation.UpperError{Field: %q, Value: %s}", jsonName, ref)))
+				onErr(fmt.Sprintf("&validation.UpperError{Path: []string{%q}, Value: %s}", jsonName, ref)))
 		case "hexadecimal":
 			fmt.Fprintf(b, "if !decode.IsHex(%s) {\n\t%s\n}\n", ref,
-				onErr(fmt.Sprintf("&validation.HexadecimalError{Field: %q, Value: %s}", jsonName, ref)))
+				onErr(fmt.Sprintf("&validation.HexadecimalError{Path: []string{%q}, Value: %s}", jsonName, ref)))
 
 		case "starts":
 			fmt.Fprintf(b, "if !strings.HasPrefix(%s, %q) {\n\t%s\n}\n",
 				ref, v.Value,
-				onErr(fmt.Sprintf("&validation.StartsError{Field: %q, Want: %q, Value: %s}", jsonName, v.Value, ref)))
+				onErr(fmt.Sprintf("&validation.StartsError{Path: []string{%q}, Want: %q, Value: %s}", jsonName, v.Value, ref)))
 		case "ends":
 			fmt.Fprintf(b, "if !strings.HasSuffix(%s, %q) {\n\t%s\n}\n",
 				ref, v.Value,
-				onErr(fmt.Sprintf("&validation.EndsError{Field: %q, Want: %q, Value: %s}", jsonName, v.Value, ref)))
+				onErr(fmt.Sprintf("&validation.EndsError{Path: []string{%q}, Want: %q, Value: %s}", jsonName, v.Value, ref)))
 		case "contains":
 			fmt.Fprintf(b, "if !strings.Contains(%s, %q) {\n\t%s\n}\n",
 				ref, v.Value,
-				onErr(fmt.Sprintf("&validation.ContainsError{Field: %q, Want: %q, Value: %s}", jsonName, v.Value, ref)))
+				onErr(fmt.Sprintf("&validation.ContainsError{Path: []string{%q}, Want: %q, Value: %s}", jsonName, v.Value, ref)))
 
 		case "multiple":
 			fmt.Fprintf(b, "if %s %% %s != 0 {\n\t%s\n}\n", ref, v.Value,
-				onErr(fmt.Sprintf("&validation.MultipleError{Field: %q, Of: %s, Value: %s}", jsonName, v.Value, ref)))
+				onErr(fmt.Sprintf("&validation.MultipleError{Path: []string{%q}, Of: %s, Value: %s}", jsonName, v.Value, ref)))
 
 		default:
 			// `@FuncName` (or `@pkg.FuncName`) — user-defined validator
@@ -868,7 +873,7 @@ func renderValidationOn(b *bytes.Buffer, rules []ValidationRule, ref, jsonName s
 				}
 				fmt.Fprintf(b, "if err := %s(%s); err != nil {\n\t%s\n}\n",
 					call, ref,
-					onErr(fmt.Sprintf("&validation.CustomError{Field: %q, Name: %q, Cause: err}", jsonName, v.Name)))
+					onErr(fmt.Sprintf("&validation.CustomError{Path: []string{%q}, Name: %q, Cause: err}", jsonName, v.Name)))
 			}
 			// Unknown non-custom names are silently ignored — keeps the
 			// parser tolerant of forward-compatible rule additions.
@@ -2228,6 +2233,11 @@ func preallocCap(f FieldInfo) (slice, slab int) {
 // inlineSkipWS emits an inline whitespace-skipping loop that mutates posVar
 // directly. Avoids the function-call overhead of scan.SkipSpace, which shows
 // up heavily in profiles (>5× hits per field) once other work is tight.
+// fieldLit returns the JSON name of f as a Go string literal — used as
+// the `field` argument to inline scanners / renderers that embed it into
+// decode.NewParseErr at every error-return site.
+func fieldLit(f FieldInfo) string { return strconv.Quote(f.JSONName) }
+
 func inlineSkipWS(b *bytes.Buffer, posVar string) {
 	fmt.Fprintf(b,
 		"for %s < len(data) && (data[%s] == ' ' || data[%s] == '\\t' || data[%s] == '\\n' || data[%s] == '\\r') { %s++ }\n",
@@ -2271,8 +2281,12 @@ func zeroLit(elemType string, kind TypeKind) string {
 // (via castFn if non-empty, e.g. "int") and advances posVar. Avoids the
 // scan.Int64 call for the hot int fields. Accumulates as uint64 with
 // per-digit overflow detection so out-of-range inputs surface
-// scan.ErrNumberOverflow instead of silently wrapping.
-func inlineScanInt64(b *bytes.Buffer, posVar, dst, castFn string) {
+// scan.ErrNumberOverflow instead of silently wrapping. field is the Go
+// expression embedded as the JSON path in decode.NewParseErr — a quoted
+// literal like `"name"` for field-level callers, `""` for boundaries,
+// or a runtime expression like `key` / `strings.Clone(key)` / `ownKey`
+// for unknown-key handlers.
+func inlineScanInt64(b *bytes.Buffer, posVar, dst, castFn, field string) {
 	assign := ""
 	switch {
 	case castFn != "":
@@ -2282,22 +2296,22 @@ func inlineScanInt64(b *bytes.Buffer, posVar, dst, castFn string) {
 	}
 	fmt.Fprintf(b, `{
 	neg := false
-	if %s < len(data) && data[%s] == '-' { neg = true; %s++ }
-	if %s >= len(data) || data[%s] < '0' || data[%s] > '9' { return result, i, scan.ErrBadNumber }
+	if %[1]s < len(data) && data[%[1]s] == '-' { neg = true; %[1]s++ }
+	if %[1]s >= len(data) || data[%[1]s] < '0' || data[%[1]s] > '9' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrBadNumber) }
 	limit := uint64(math.MaxInt64)
 	if neg { limit = scan.SignedNeg }
 	var u uint64
-	for %s < len(data) && data[%s] >= '0' && data[%s] <= '9' {
-		d := uint64(data[%s]-'0')
+	for %[1]s < len(data) && data[%[1]s] >= '0' && data[%[1]s] <= '9' {
+		d := uint64(data[%[1]s]-'0')
 		if u > limit/10 || (u == limit/10 && d > limit%%10) {
-			return result, i, scan.ErrNumberOverflow
+			return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrNumberOverflow)
 		}
 		u = u*10 + d
-		%s++
+		%[1]s++
 	}
-	if %s < len(data) {
-		c := data[%s]
-		if c == '.' || c == 'e' || c == 'E' { return result, i, scan.ErrBadNumber }
+	if %[1]s < len(data) {
+		c := data[%[1]s]
+		if c == '.' || c == 'e' || c == 'E' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrBadNumber) }
 	}
 	var n int64
 	if neg {
@@ -2305,19 +2319,15 @@ func inlineScanInt64(b *bytes.Buffer, posVar, dst, castFn string) {
 	} else {
 		n = int64(u)
 	}
-	%s
+	%[3]s
 }
-`, posVar, posVar, posVar,
-		posVar, posVar, posVar,
-		posVar, posVar, posVar, posVar, posVar,
-		posVar, posVar,
-		assign)
+`, posVar, field, assign)
 }
 
 // inlineScanUint64 is the unsigned counterpart of inlineScanInt64.
 // Accumulates with overflow detection so digits past MaxUint64 surface
-// scan.ErrNumberOverflow.
-func inlineScanUint64(b *bytes.Buffer, posVar, dst, castFn string) {
+// scan.ErrNumberOverflow. See inlineScanInt64 for `field` semantics.
+func inlineScanUint64(b *bytes.Buffer, posVar, dst, castFn, field string) {
 	assign := ""
 	switch {
 	case castFn != "":
@@ -2326,35 +2336,27 @@ func inlineScanUint64(b *bytes.Buffer, posVar, dst, castFn string) {
 		assign = dst + " = n"
 	}
 	fmt.Fprintf(b, `{
-	if %s >= len(data) || data[%s] < '0' || data[%s] > '9' { return result, i, scan.ErrBadNumber }
+	if %[1]s >= len(data) || data[%[1]s] < '0' || data[%[1]s] > '9' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrBadNumber) }
 	var n uint64
-	for %s < len(data) && data[%s] >= '0' && data[%s] <= '9' {
-		d := uint64(data[%s]-'0')
+	for %[1]s < len(data) && data[%[1]s] >= '0' && data[%[1]s] <= '9' {
+		d := uint64(data[%[1]s]-'0')
 		if n > scan.Uint64Limit/10 || (n == scan.Uint64Limit/10 && d > scan.Uint64Limit%%10) {
-			return result, i, scan.ErrNumberOverflow
+			return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrNumberOverflow)
 		}
 		n = n*10 + d
-		%s++
+		%[1]s++
 	}
-	%s
+	%[3]s
 }
-`, posVar, posVar, posVar,
-		posVar, posVar, posVar, posVar, posVar,
-		assign)
+`, posVar, field, assign)
 }
 
 // inlineScanString emits a zero-copy string reader that assigns into dst and
 // advances posOut past the closing quote. The hot path aliases the input via
 // unsafe.String; escape sequences fall back to scan.String (allocates).
 // Used for both keys and value fields — in typical payloads neither have
-// escapes so the loop stays tight.
-//
-// Only one local (`ke`, the scan cursor) is kept; the string start is
-// `posIn + 1` inline. posIn must not be mutated before the slow path runs
-// (it falls back via `scan.String(data, posIn)`), so we scan with `ke` and
-// only update `posOut` once the result is known. Slow path reuses the
-// function-scope `err` from renderDecode's hoist — no local `iserr`.
-func inlineScanString(b *bytes.Buffer, posIn, dst, posOut string) {
+// escapes so the loop stays tight. See inlineScanInt64 for `field` semantics.
+func inlineScanString(b *bytes.Buffer, posIn, dst, posOut, field string) {
 	// Loop stops at the closing `"`, an escape `\`, OR any control byte
 	// (< 0x20). RFC 8259 forbids unescaped control characters in JSON
 	// strings; both stdlib v1 and v2 reject. The fast path used to scan
@@ -2363,21 +2365,21 @@ func inlineScanString(b *bytes.Buffer, posIn, dst, posOut string) {
 	// so reject. The slow path (scan.String) already rejects, so the
 	// `data[ke] < 0x20` branch returns ErrBadString directly without
 	// falling through.
-	fmt.Fprintf(b, `if %s >= len(data) || data[%s] != '"' { return result, i, scan.ErrExpectString }
+	fmt.Fprintf(b, `if %[1]s >= len(data) || data[%[1]s] != '"' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrExpectString) }
 {
-	ke := %s + 1
+	ke := %[1]s + 1
 	for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 { ke++ }
-	if ke >= len(data) { return result, i, scan.ErrUnterminated }
-	if data[ke] < 0x20 { return result, i, scan.ErrBadString }
+	if ke >= len(data) { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrUnterminated) }
+	if data[ke] < 0x20 { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrBadString) }
 	if data[ke] == '"' {
-		%s = unsafe.String(unsafe.SliceData(data[%s+1:]), ke-%s-1)
-		%s = ke + 1
+		%[3]s = unsafe.String(unsafe.SliceData(data[%[1]s+1:]), ke-%[1]s-1)
+		%[4]s = ke + 1
 	} else {
-		%s, %s, err = scan.String(data, %s)
-		if err != nil { return result, i, err }
+		%[3]s, %[4]s, err = scan.String(data, %[1]s)
+		if err != nil { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, err) }
 	}
 }
-`, posIn, posIn, posIn, dst, posIn, posIn, posOut, dst, posOut, posIn)
+`, posIn, field, dst, posOut)
 }
 
 // emitReceiverReset emits the per-container reset block at the top of
@@ -2458,22 +2460,30 @@ func renderDecode(b *bytes.Buffer, s StructInfo) {
 	}
 
 	inlineSkipWS(b, "i")
-	b.WriteString("if i >= len(data) || data[i] != '{' { return result, i, scan.ErrBadObject }\ni++\n")
+	b.WriteString(`if i >= len(data) || data[i] != '{' { return result, i, decode.NewParseErr("", i, scan.ErrBadObject) }
+i++
+`)
 	inlineSkipWS(b, "i")
-	b.WriteString("if i < len(data) && data[i] == '}' {\n")
+	b.WriteString("if i < len(data) && data[i] == '}' {\ni++\n")
 	renderPostLoop(b, s)
-	b.WriteString("return result, i + 1, nil\n}\nfor {\nvar key string\n")
-	inlineScanString(b, "i", "key", "i")
+	b.WriteString("return result, i, nil\n}\nfor {\nvar key string\n")
+	inlineScanString(b, "i", "key", "i", `""`)
 	inlineSkipWS(b, "i")
-	b.WriteString("if i >= len(data) || data[i] != ':' { return result, i, scan.ErrBadObject }\ni++\n")
+	b.WriteString(`if i >= len(data) || data[i] != ':' { return result, i, decode.NewParseErr("", i, scan.ErrBadObject) }
+i++
+`)
 	inlineSkipWS(b, "i")
 	renderDispatch(b, s)
 	inlineSkipWS(b, "i")
-	b.WriteString("if i >= len(data) { return result, i, scan.ErrBadObject }\nif data[i] == ',' { i++; ")
+	b.WriteString(`if i >= len(data) { return result, i, decode.NewParseErr("", i, scan.ErrBadObject) }
+if data[i] == ',' { i++; `)
 	inlineSkipWS(b, "i")
-	b.WriteString("continue }\nif data[i] == '}' {\n")
+	b.WriteString("continue }\nif data[i] == '}' {\ni++\n")
 	renderPostLoop(b, s)
-	b.WriteString("return result, i + 1, nil\n}\nreturn result, i, scan.ErrBadObject\n}")
+	b.WriteString(`return result, i, nil
+}
+return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+}`)
 	b.WriteString("}\n\n")
 }
 
@@ -2552,28 +2562,27 @@ func renderDispatch(b *bytes.Buffer, s StructInfo) {
 		}
 		set := seenSet(s, f)
 		seen := seenAccess(s, f)
+		chk := bytesErrCheck(fieldLit(f), "i")
 		if s.AllowDups {
 			fmt.Fprintf(b, `if %s {
 	i, err = scan.SkipValue(data, i)
-	if err != nil { return result, i, err }
-} else {
-	%s`, seen, set)
+	%s} else {
+	%s`, seen, chk, set)
 			renderField(b, f, "result."+f.GoName, "i")
 			b.WriteString("}\n")
 			return
 		}
 		if s.MultiErr {
-			fmt.Fprintf(b, `if %s {
-	errs = append(errs, &validation.DuplicateKeyError{Field: %q})
+			fmt.Fprintf(b, `if %[1]s {
+	errs = append(errs, &validation.DuplicateKeyError{Path: []string{%[2]q}})
 	i, err = scan.SkipValue(data, i)
-	if err != nil { return result, i, err }
-} else {
-	%s`, seen, f.JSONName, set)
+	%[3]s} else {
+	%[4]s`, seen, f.JSONName, chk, set)
 			renderField(b, f, "result."+f.GoName, "i")
 			b.WriteString("}\n")
 			return
 		}
-		fmt.Fprintf(b, `if %s { return result, i, &validation.DuplicateKeyError{Field: %q} }
+		fmt.Fprintf(b, `if %s { return result, i, &validation.DuplicateKeyError{Path: []string{%q}} }
 %s`, seen, f.JSONName, set)
 		renderField(b, f, "result."+f.GoName, "i")
 	}
@@ -2646,6 +2655,7 @@ func keyValidateAndModStream(b *bytes.Buffer, f FieldInfo, keyRef string) {
 // `mv` (or the inline scanner's `mn` for primitives) and assign at the
 // end.
 func renderMap(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+	field := fieldLit(f)
 	makeExpr := fmt.Sprintf("make(%s)", f.GoType)
 	if cap := mapPreallocCap(f); cap > 0 {
 		makeExpr = fmt.Sprintf("make(%s, %d)", f.GoType, cap)
@@ -2655,9 +2665,9 @@ func renderMap(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	inlineNullPeek(b, posVar)
 	fmt.Fprintf(b, "%s = nil\n", ref)
 	fmt.Fprintf(b, `} else {
-	if %[1]s >= len(data) || data[%[1]s] != '{' { return result, i, scan.ErrBadObject }
+	if %[1]s >= len(data) || data[%[1]s] != '{' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrBadObject) }
 	%[1]s++
-`, posVar)
+`, posVar, field)
 	inlineSkipWS(b, posVar)
 	// ref is decode-into-receiver: either nil (fresh) or already cleared
 	// at the top of DecodeFrom (existing map kept for reuse). Allocate only
@@ -2670,33 +2680,33 @@ func renderMap(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	for %[1]s < len(data) && data[%[1]s] != '}' {
 		var mk string
 `, posVar, ref, f.GoType, makeExpr)
-	inlineScanString(b, posVar, "mk", posVar)
+	inlineScanString(b, posVar, "mk", posVar, field)
 	keyValidateAndMod(b, f, "mk")
 	inlineSkipWS(b, posVar)
-	fmt.Fprintf(b, `		if %[1]s >= len(data) || data[%[1]s] != ':' { return result, i, scan.ErrBadObject }
+	fmt.Fprintf(b, `		if %[1]s >= len(data) || data[%[1]s] != ':' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrBadObject) }
 		%[1]s++
-`, posVar)
+`, posVar, field)
 	inlineSkipWS(b, posVar)
 
 	mapTarget := fmt.Sprintf("%s[mk]", ref)
 	switch f.ElemKind {
 	case KindString:
 		b.WriteString("var mv string\n")
-		inlineScanString(b, posVar, "mv", posVar)
+		inlineScanString(b, posVar, "mv", posVar, field)
 		fmt.Fprintf(b, "%s = mv\n", mapTarget)
 	case KindBool:
-		fmt.Fprintf(b, `mv, mk2, err := scan.Bool(data, %s)
-if err != nil { return result, i, err }
-%s = mv
-%s = mk2
-`, posVar, mapTarget, posVar)
+		fmt.Fprintf(b, `mv, mk2, err := scan.Bool(data, %[1]s)
+if err != nil { return result, %[1]s, decode.NewParseErr(%[4]s, %[1]s, err) }
+%[2]s = mv
+%[3]s = mk2
+`, posVar, mapTarget, posVar, field)
 	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
 		assign := fmt.Sprintf("%s = mn", mapTarget)
 		if f.ElemType != "int64" {
 			assign = fmt.Sprintf("%s = %s(mn)", mapTarget, f.ElemType)
 		}
 		b.WriteString("var mn int64\n")
-		inlineScanInt64(b, posVar, "mn", "")
+		inlineScanInt64(b, posVar, "mn", "", field)
 		fmt.Fprintf(b, "%s\n", assign)
 	case KindUint, KindUint8, KindUint16, KindUint32, KindUint64:
 		assign := fmt.Sprintf("%s = mn", mapTarget)
@@ -2704,18 +2714,18 @@ if err != nil { return result, i, err }
 			assign = fmt.Sprintf("%s = %s(mn)", mapTarget, f.ElemType)
 		}
 		b.WriteString("var mn uint64\n")
-		inlineScanUint64(b, posVar, "mn", "")
+		inlineScanUint64(b, posVar, "mn", "", field)
 		fmt.Fprintf(b, "%s\n", assign)
 	case KindFloat32, KindFloat64:
 		assign := fmt.Sprintf("%s = mv", mapTarget)
 		if f.ElemKind == KindFloat32 {
 			assign = fmt.Sprintf("%s = float32(mv)", mapTarget)
 		}
-		fmt.Fprintf(b, `mv, mk2, err := scan.Float64(data, %s)
-if err != nil { return result, i, err }
-%s
-%s = mk2
-`, posVar, assign, posVar)
+		fmt.Fprintf(b, `mv, mk2, err := scan.Float64(data, %[1]s)
+if err != nil { return result, %[1]s, decode.NewParseErr(%[4]s, %[1]s, err) }
+%[2]s
+%[3]s = mk2
+`, posVar, assign, posVar, field)
 	case KindStruct:
 		if isGenerated(f.ElemType) {
 			// `var mv` doubles as the value-receiver source and the
@@ -2726,24 +2736,23 @@ if err != nil { return result, i, err }
 var _n int
 mv, _n, err = mv.DecodeFrom(data[%[2]s:])
 %[2]s += _n
-if err != nil { return result, i, err }
-%[3]s = mv
-`, f.ElemType, posVar, mapTarget)
+%[4]s%[3]s = mv
+`, f.ElemType, posVar, mapTarget, nestedDecodeErrCheck(fieldLit(f), f.MultiErr, true))
 		} else {
-			fmt.Fprintf(b, `start := %s
+			fmt.Fprintf(b, `start := %[1]s
 mk2, err := scan.SkipValue(data, start)
-if err != nil { return result, i, err }
-var mv %s
-if err := json.Unmarshal(data[start:mk2], &mv); err != nil { return result, i, err }
-%s = mv
-%s = mk2
-`, posVar, f.ElemType, mapTarget, posVar)
+if err != nil { return result, %[1]s, decode.NewParseErr(%[5]s, %[1]s, err) }
+var mv %[2]s
+if err := json.Unmarshal(data[start:mk2], &mv); err != nil { return result, %[1]s, decode.NewParseErr(%[5]s, %[1]s, err) }
+%[3]s = mv
+%[4]s = mk2
+`, posVar, f.ElemType, mapTarget, posVar, field)
 		}
 	default:
-		fmt.Fprintf(b, `mk2, err := scan.SkipValue(data, %s)
-if err != nil { return result, i, err }
-%s = mk2
-`, posVar, posVar)
+		fmt.Fprintf(b, `mk2, err := scan.SkipValue(data, %[1]s)
+if err != nil { return result, %[1]s, decode.NewParseErr(%[3]s, %[1]s, err) }
+%[2]s = mk2
+`, posVar, posVar, field)
 	}
 	// dive-mods on mv — only for string elem; patch ref in the mod output.
 	if len(f.ElemMods) > 0 {
@@ -2758,38 +2767,39 @@ if err != nil { return result, i, err }
 	fmt.Fprintf(b, `			continue }
 		break
 	}
-	if %[1]s >= len(data) || data[%[1]s] != '}' { return result, i, scan.ErrBadObject }
+	if %[1]s >= len(data) || data[%[1]s] != '}' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrBadObject) }
 	%[1]s++
 }
 }
-`, posVar)
+`, posVar, field)
 }
 
 // renderBytes emits bytes decode for (base64/hex/array).
 func renderBytes(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+	field := fieldLit(f)
 	if f.Format == "array" {
 		b.WriteString("{\n")
 		inlineSkipWS(b, posVar)
-		fmt.Fprintf(b, `if %[1]s >= len(data) || data[%[1]s] != '[' { return result, i, scan.ErrBadArray }
+		fmt.Fprintf(b, `if %[1]s >= len(data) || data[%[1]s] != '[' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrBadArray) }
 %[1]s++
-`, posVar)
+`, posVar, field)
 		inlineSkipWS(b, posVar)
 		fmt.Fprintf(b, `var v uint64
 for %[1]s < len(data) && data[%[1]s] != ']' {
 	v, %[1]s, err = scan.Uint64(data, %[1]s)
-	if err != nil { return result, i, err }
+	if err != nil { return result, %[1]s, decode.NewParseErr(%[3]s, %[1]s, err) }
 	%[2]s = append(%[2]s, byte(v))
-`, posVar, ref)
+`, posVar, ref, field)
 		inlineSkipWS(b, posVar)
 		fmt.Fprintf(b, `	if %[1]s < len(data) && data[%[1]s] == ',' { %[1]s++; `, posVar)
 		inlineSkipWS(b, posVar)
 		fmt.Fprintf(b, ` continue }
 	break
 }
-if %[1]s >= len(data) || data[%[1]s] != ']' { return result, i, scan.ErrBadArray }
+if %[1]s >= len(data) || data[%[1]s] != ']' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrBadArray) }
 %[1]s++
 }
-`, posVar)
+`, posVar, field)
 		return
 	}
 	// AppendDecode form skips the `[]byte(s)` copy DecodeString does
@@ -2814,25 +2824,26 @@ if %[1]s >= len(data) || data[%[1]s] != ']' { return result, i, scan.ErrBadArray
 		// hex.AppendDecode + hex.DecodedLen. ref was pre-reset to [:0] at
 		// DecodeFrom's top; only realloc when cap is insufficient.
 		b.WriteString("{\n\tvar s string\n\t")
-		inlineScanString(b, posVar, "s", posVar)
-		fmt.Fprintf(b, `	if cap(%s) < hex.DecodedLen(len(s)) { %s = make([]byte, 0, hex.DecodedLen(len(s))) }
-	%s, err = hex.AppendDecode(%s, unsafe.Slice(unsafe.StringData(s), len(s)))
-	if err != nil { return result, i, err }
+		inlineScanString(b, posVar, "s", posVar, field)
+		fmt.Fprintf(b, `	if cap(%[1]s) < hex.DecodedLen(len(s)) { %[1]s = make([]byte, 0, hex.DecodedLen(len(s))) }
+	%[1]s, err = hex.AppendDecode(%[1]s, unsafe.Slice(unsafe.StringData(s), len(s)))
+	if err != nil { return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, err) }
 }
-`, ref, ref, ref, ref)
+`, ref, posVar, field)
 		return
 	}
 	b.WriteString("{\n\tvar s string\n\t")
-	inlineScanString(b, posVar, "s", posVar)
-	fmt.Fprintf(b, `	if cap(%s) < %s(len(s)) { %s = make([]byte, 0, %s(len(s))) }
-	%s, err = %s.AppendDecode(%s, unsafe.Slice(unsafe.StringData(s), len(s)))
-	if err != nil { return result, i, err }
+	inlineScanString(b, posVar, "s", posVar, field)
+	fmt.Fprintf(b, `	if cap(%[1]s) < %[2]s(len(s)) { %[1]s = make([]byte, 0, %[2]s(len(s))) }
+	%[1]s, err = %[3]s.AppendDecode(%[1]s, unsafe.Slice(unsafe.StringData(s), len(s)))
+	if err != nil { return result, %[4]s, decode.NewParseErr(%[5]s, %[4]s, err) }
 }
-`, ref, dlen, ref, dlen, ref, enc, ref)
+`, ref, dlen, enc, posVar, field)
 }
 
 // renderTime emits time.Time decode decode.
 func renderTime(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+	field := fieldLit(f)
 	layout, numeric := timeLayoutExpr(f.Format)
 	if numeric != "" {
 		// `format:unix` reads a JSON number that may carry fractional
@@ -2842,13 +2853,13 @@ func renderTime(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 		if numeric == "Unix" {
 			fmt.Fprintf(b, `{
 	var f float64
-	f, %s, err = scan.Float64(data, %s)
-	if err != nil { return result, i, err }
+	f, %[1]s, err = scan.Float64(data, %[1]s)
+	if err != nil { return result, %[1]s, decode.NewParseErr(%[3]s, %[1]s, err) }
 	sec := int64(f)
 	nsec := int64((f - float64(sec)) * 1e9)
-	%s = time.Unix(sec, nsec)
+	%[2]s = time.Unix(sec, nsec)
 }
-`, posVar, posVar, ref)
+`, posVar, ref, field)
 			return
 		}
 		ctor := map[string]string{
@@ -2858,32 +2869,33 @@ func renderTime(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 		}[numeric]
 		fmt.Fprintf(b, `{
 	var n int64
-	n, %s, err = scan.Int64(data, %s)
-	if err != nil { return result, i, err }
-	%s = %s
+	n, %[1]s, err = scan.Int64(data, %[1]s)
+	if err != nil { return result, %[1]s, decode.NewParseErr(%[4]s, %[1]s, err) }
+	%[2]s = %[3]s
 }
-`, posVar, posVar, ref, ctor)
+`, posVar, ref, ctor, field)
 		return
 	}
 	b.WriteString("{\nvar s string\n")
-	inlineScanString(b, posVar, "s", posVar)
-	fmt.Fprintf(b, `%s, err = time.Parse(%s, s)
-if err != nil { return result, i, err }
+	inlineScanString(b, posVar, "s", posVar, field)
+	fmt.Fprintf(b, `%[1]s, err = time.Parse(%[2]s, s)
+if err != nil { return result, %[3]s, decode.NewParseErr(%[4]s, %[3]s, err) }
 }
-`, ref, layout)
+`, ref, layout, posVar, field)
 }
 
 // renderDuration emits time.Duration decode decode.
 func renderDuration(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+	field := fieldLit(f)
 	switch f.Format {
 	case "sec":
 		fmt.Fprintf(b, `{
 	var v float64
-	v, %s, err = scan.Float64(data, %s)
-	if err != nil { return result, i, err }
-	%s = time.Duration(v * float64(time.Second))
+	v, %[1]s, err = scan.Float64(data, %[1]s)
+	if err != nil { return result, %[1]s, decode.NewParseErr(%[3]s, %[1]s, err) }
+	%[2]s = time.Duration(v * float64(time.Second))
 }
-`, posVar, posVar, ref)
+`, posVar, ref, field)
 		return
 	case "milli", "micro", "nano":
 		unit := map[string]string{
@@ -2893,47 +2905,50 @@ func renderDuration(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 		}[f.Format]
 		fmt.Fprintf(b, `{
 	var n int64
-	n, %s, err = scan.Int64(data, %s)
-	if err != nil { return result, i, err }
-	%s = time.Duration(n) * %s
+	n, %[1]s, err = scan.Int64(data, %[1]s)
+	if err != nil { return result, %[1]s, decode.NewParseErr(%[4]s, %[1]s, err) }
+	%[2]s = time.Duration(n) * %[3]s
 }
-`, posVar, posVar, ref, unit)
+`, posVar, ref, unit, field)
 		return
 	}
 	b.WriteString("{\nvar s string\n")
-	inlineScanString(b, posVar, "s", posVar)
-	fmt.Fprintf(b, `%s, err = time.ParseDuration(s)
-if err != nil { return result, i, err }
+	inlineScanString(b, posVar, "s", posVar, field)
+	fmt.Fprintf(b, `%[1]s, err = time.ParseDuration(s)
+if err != nil { return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, err) }
 }
-`, ref)
+`, ref, posVar, field)
 }
 
 // renderNetIP / renderNetipAddr / renderNetipPrefix.
-func renderNetIP(b *bytes.Buffer, ref, posVar string) {
+func renderNetIP(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+	field := fieldLit(f)
 	b.WriteString("{\nvar s string\n")
-	inlineScanString(b, posVar, "s", posVar)
+	inlineScanString(b, posVar, "s", posVar, field)
 	fmt.Fprintf(b, `%[1]s = net.ParseIP(s)
-if %[1]s == nil { return result, i, fmt.Errorf("invalid IP") }
+if %[1]s == nil { return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, &net.ParseError{Type: "IP address", Text: s}) }
 }
-`, ref)
-}
-
-func renderNetipAddr(b *bytes.Buffer, ref, posVar string) {
-	b.WriteString("{\nvar s string\n")
-	inlineScanString(b, posVar, "s", posVar)
-	fmt.Fprintf(b, `%s, err = netip.ParseAddr(s)
-if err != nil { return result, i, err }
-}
-`, ref)
+`, ref, posVar, field)
 }
 
-func renderNetipPrefix(b *bytes.Buffer, ref, posVar string) {
+func renderNetipAddr(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+	field := fieldLit(f)
 	b.WriteString("{\nvar s string\n")
-	inlineScanString(b, posVar, "s", posVar)
-	fmt.Fprintf(b, `%s, err = netip.ParsePrefix(s)
-if err != nil { return result, i, err }
+	inlineScanString(b, posVar, "s", posVar, field)
+	fmt.Fprintf(b, `%[1]s, err = netip.ParseAddr(s)
+if err != nil { return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, err) }
 }
-`, ref)
+`, ref, posVar, field)
+}
+
+func renderNetipPrefix(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+	field := fieldLit(f)
+	b.WriteString("{\nvar s string\n")
+	inlineScanString(b, posVar, "s", posVar, field)
+	fmt.Fprintf(b, `%[1]s, err = netip.ParsePrefix(s)
+if err != nil { return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, err) }
+}
+`, ref, posVar, field)
 }
 
 // renderCrossPkgStructDecode emits the decode body for a cross-package /
@@ -2953,55 +2968,44 @@ func renderCrossPkgStructDecode(f FieldInfo, ref, posVar string) string {
 	var _n int
 	%[1]s, _n, err = %[1]s.DecodeFrom(data[%[2]s:])
 	%[2]s += _n
-	if err != nil { return result, i, err }
-}
-`, ref, posVar)
+	%[3]s}
+`, ref, posVar, nestedDecodeErrCheck(fieldLit(f), f.MultiErr, true))
 
 		case f.Iface.JSONUnmarshaler:
-			// Has UnmarshalJSON — capture raw JSON span and call it.
-			// Avoids reflection-based json.Unmarshal setup.
+			chk := bytesErrCheck(fieldLit(f), posVar)
 			return fmt.Sprintf(`{
-	start := %s
-	%s, err = scan.SkipValue(data, start)
-	if err != nil { return result, i, err }
-	if err = %s.UnmarshalJSON(data[start:%s]); err != nil { return result, i, err }
-}
-`, posVar, posVar, ref, posVar)
+	start := %[1]s
+	%[1]s, err = scan.SkipValue(data, start)
+	%[3]serr = %[2]s.UnmarshalJSON(data[start:%[1]s])
+	%[3]s}
+`, posVar, ref, chk)
 
 		case f.Iface.TextUnmarshaler:
-			// Type encodes as a JSON string — scan it, alias into []byte
-			// without copying, hand to UnmarshalText.
+			chk := bytesErrCheck(fieldLit(f), posVar)
 			return fmt.Sprintf(`{
 	var ts string
-	ts, %s, err = scan.String(data, %s)
-	if err != nil { return result, i, err }
-	if err = %s.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts))); err != nil { return result, i, err }
-}
-`, posVar, posVar, ref)
+	ts, %[1]s, err = scan.String(data, %[1]s)
+	%[3]serr = %[2]s.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts)))
+	%[3]s}
+`, posVar, ref, chk)
 
 		default:
-			// Static analysis says: implements none of our hot paths.
-			// Skip all runtime probes; go straight to encoding/json.
+			chk := bytesErrCheck(fieldLit(f), posVar)
 			return fmt.Sprintf(`{
-	start := %s
-	%s, err = scan.SkipValue(data, start)
-	if err != nil { return result, i, err }
-	if err = json.Unmarshal(data[start:%s], &%s); err != nil { return result, i, err }
-}
-`, posVar, posVar, posVar, ref)
+	start := %[1]s
+	%[1]s, err = scan.SkipValue(data, start)
+	%[3]serr = json.Unmarshal(data[start:%[1]s], &%[2]s)
+	%[3]s}
+`, posVar, ref, chk)
 		}
 	}
-	// Unresolved (AST-only path, e.g. tests with temp dirs lacking go.mod)
-	// — generator can't tell what the type implements, so just emit a
-	// plain encoding/json fallback. Stdlib's reflective decoder handles
-	// MarshalJSON / UnmarshalText hooks on its own.
+	chk := bytesErrCheck(fieldLit(f), posVar)
 	return fmt.Sprintf(`{
-	start := %s
-	%s, err = scan.SkipValue(data, start)
-	if err != nil { return result, i, err }
-	if err = json.Unmarshal(data[start:%s], &%s); err != nil { return result, i, err }
-}
-`, posVar, posVar, posVar, ref)
+	start := %[1]s
+	%[1]s, err = scan.SkipValue(data, start)
+	%[3]serr = json.Unmarshal(data[start:%[1]s], &%[2]s)
+	%[3]s}
+`, posVar, ref, chk)
 }
 
 // renderCrossPkgStructAppend is the marshal counterpart for cross-package
@@ -3065,14 +3069,14 @@ dst = append(dst, '"')
 // renderCrossPkgStructDecode. Same static-vs-runtime branching.
 func renderCrossPkgStructStreamDecode(f FieldInfo, ref, posVar string) string {
 	_ = posVar
+	chk := streamErrCheck(fieldLit(f))
 	if f.Iface.Resolved {
 		switch {
 		case f.Iface.StreamDecoder:
 			return fmt.Sprintf(`{
 	%[1]s, err = %[1]s.DecodeFromStream(s)
-	if err != nil { return result, err }
-}
-`, ref)
+	%[2]s}
+`, ref, nestedDecodeErrCheck(fieldLit(f), f.MultiErr, false))
 
 		case f.Iface.JSONUnmarshaler:
 			return fmt.Sprintf(`{
@@ -3081,19 +3085,17 @@ func renderCrossPkgStructStreamDecode(f FieldInfo, ref, posVar string) string {
 	s.Shift = false
 	err = s.SkipValue()
 	s.Shift = prevPin
-	if err != nil { return result, err }
-	if err = %s.UnmarshalJSON(s.Bytes()[start:s.Pos]); err != nil { return result, err }
-}
-`, ref)
+	%[2]serr = %[1]s.UnmarshalJSON(s.Bytes()[start:s.Pos])
+	%[2]s}
+`, ref, chk)
 
 		case f.Iface.TextUnmarshaler:
 			return fmt.Sprintf(`{
 	var ts string
 	ts, err = s.String()
-	if err != nil { return result, err }
-	if err = %s.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts))); err != nil { return result, err }
-}
-`, ref)
+	%[2]serr = %[1]s.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts)))
+	%[2]s}
+`, ref, chk)
 
 		default:
 			return fmt.Sprintf(`{
@@ -3102,10 +3104,9 @@ func renderCrossPkgStructStreamDecode(f FieldInfo, ref, posVar string) string {
 	s.Shift = false
 	err = s.SkipValue()
 	s.Shift = prevPin
-	if err != nil { return result, err }
-	if err = json.Unmarshal(s.Bytes()[start:s.Pos], &%s); err != nil { return result, err }
-}
-`, ref)
+	%[2]serr = json.Unmarshal(s.Bytes()[start:s.Pos], &%[1]s)
+	%[2]s}
+`, ref, chk)
 		}
 	}
 	// Unresolved (AST-only) — plain encoding/json fallback.
@@ -3115,36 +3116,36 @@ func renderCrossPkgStructStreamDecode(f FieldInfo, ref, posVar string) string {
 	s.Shift = false
 	err = s.SkipValue()
 	s.Shift = prevPin
-	if err != nil { return result, err }
-	if err = json.Unmarshal(s.Bytes()[start:s.Pos], &%s); err != nil { return result, err }
-}
-`, ref)
+	%[2]serr = json.Unmarshal(s.Bytes()[start:s.Pos], &%[1]s)
+	%[2]s}
+`, ref, chk)
 }
 
 // renderRawJSON aliases data[start:end] into the field — zero copy.
 // Works for both json.RawMessage and jsontext.Value because both have
 // underlying type []byte.
-func renderRawJSON(b *bytes.Buffer, ref, posVar string) {
+func renderRawJSON(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+	chk := bytesErrCheck(fieldLit(f), posVar)
 	fmt.Fprintf(b, `{
-	start := %s
-	%s, err = scan.SkipValue(data, start)
-	if err != nil { return result, i, err }
-	%s = data[start:%s]
+	start := %[1]s
+	%[1]s, err = scan.SkipValue(data, start)
+	%[3]s%[2]s = data[start:%[1]s]
 }
-`, posVar, posVar, ref, posVar)
+`, posVar, ref, chk)
 }
 
 // renderURL parses a JSON string via url.Parse. The dereference is
 // safe because Parse returns a non-nil *URL on success.
-func renderURL(b *bytes.Buffer, ref, posVar string) {
+func renderURL(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+	field := fieldLit(f)
 	b.WriteString("{\nvar s string\n")
-	inlineScanString(b, posVar, "s", posVar)
+	inlineScanString(b, posVar, "s", posVar, field)
 	fmt.Fprintf(b, `var u *url.URL
 u, err = url.Parse(s)
-if err != nil { return result, i, err }
-%s = *u
+if err != nil { return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, err) }
+%[1]s = *u
 }
-`, ref)
+`, ref, posVar, field)
 }
 
 // renderBigInt reads a bare JSON number, hands the raw bytes to
@@ -3152,41 +3153,44 @@ if err != nil { return result, i, err }
 // The literal is aliased through unsafe.String — SetString reads it left
 // to right and copies the digits into its own internal storage, so the
 // alias is dead by the time data could be mutated.
-func renderBigInt(b *bytes.Buffer, ref, posVar string) {
+func renderBigInt(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+	field := fieldLit(f)
 	fmt.Fprintf(b, `{
-	start := %s
-	%s, err = scan.SkipValue(data, start)
-	if err != nil { return result, i, err }
-	if _, ok := (&%s).SetString(unsafe.String(unsafe.SliceData(data[start:]), %s-start), 10); !ok {
-		return result, i, scan.ErrBadNumber
+	start := %[1]s
+	%[1]s, err = scan.SkipValue(data, start)
+	if err != nil { return result, %[1]s, decode.NewParseErr(%[3]s, %[1]s, err) }
+	if _, ok := (&%[2]s).SetString(unsafe.String(unsafe.SliceData(data[start:]), %[1]s-start), 10); !ok {
+		return result, %[1]s, decode.NewParseErr(%[3]s, %[1]s, scan.ErrBadNumber)
 	}
 }
-`, posVar, posVar, ref, posVar)
+`, posVar, ref, field)
 }
 
 // renderBigFloat reads a JSON-string-wrapped numeric literal into big.Float
 // at the default precision. Wrapping matches jsonv2's wire format for
 // big.Float; bare numbers are not accepted (use big.Int or float64 for those).
-func renderBigFloat(b *bytes.Buffer, ref, posVar string) {
+func renderBigFloat(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+	field := fieldLit(f)
 	b.WriteString("{\nvar s string\n")
-	inlineScanString(b, posVar, "s", posVar)
-	fmt.Fprintf(b, `if _, _, err := (&%s).Parse(s, 10); err != nil {
-	return result, i, err
+	inlineScanString(b, posVar, "s", posVar, field)
+	fmt.Fprintf(b, `if _, _, err := (&%[1]s).Parse(s, 10); err != nil {
+	return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, err)
 }
 }
-`, ref)
+`, ref, posVar, field)
 }
 
 // renderBigRat reads a JSON string of the form "num" or "num/denom"
 // and feeds it to big.Rat.SetString. Lossless — fractions stay exact.
-func renderBigRat(b *bytes.Buffer, ref, posVar string) {
+func renderBigRat(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+	field := fieldLit(f)
 	b.WriteString("{\nvar s string\n")
-	inlineScanString(b, posVar, "s", posVar)
-	fmt.Fprintf(b, `if _, ok := (&%s).SetString(s); !ok {
-	return result, i, scan.ErrBadNumber
+	inlineScanString(b, posVar, "s", posVar, field)
+	fmt.Fprintf(b, `if _, ok := (&%[1]s).SetString(s); !ok {
+	return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, scan.ErrBadNumber)
 }
 }
-`, ref)
+`, ref, posVar, field)
 }
 
 // renderSQLNull emits decode for a database/sql.NullX field. Probes for
@@ -3199,30 +3203,31 @@ func renderSQLNull(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	if !ok {
 		return
 	}
+	field := fieldLit(f)
 	var inner bytes.Buffer
 	switch spec.Inner {
 	case KindString:
 		inner.WriteString("var nv string\n")
-		inlineScanString(&inner, posVar, "nv", posVar)
+		inlineScanString(&inner, posVar, "nv", posVar, field)
 	case KindBool:
 		inner.WriteString("var nv bool\n")
-		fmt.Fprintf(&inner, "nv, %s, err = scan.Bool(data, %s)\n", posVar, posVar)
-		inner.WriteString("if err != nil { return result, i, err }\n")
+		fmt.Fprintf(&inner, "nv, %[1]s, err = scan.Bool(data, %[1]s)\n", posVar)
+		fmt.Fprintf(&inner, "if err != nil { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, err) }\n", posVar, field)
 	case KindInt64:
 		inner.WriteString("var nv int64\n")
-		inlineScanInt64(&inner, posVar, "nv", "")
+		inlineScanInt64(&inner, posVar, "nv", "", field)
 	case KindInt32, KindInt16:
 		fmt.Fprintf(&inner, "var nv %s\n", spec.Type)
-		inlineScanInt64(&inner, posVar, "nv", spec.Type)
+		inlineScanInt64(&inner, posVar, "nv", spec.Type, field)
 	case KindUint8:
 		fmt.Fprintf(&inner, "var nv %s\n", spec.Type)
-		inlineScanUint64(&inner, posVar, "nv", spec.Type)
+		inlineScanUint64(&inner, posVar, "nv", spec.Type, field)
 	case KindFloat64:
 		inner.WriteString("var nv float64\n")
-		fmt.Fprintf(&inner, "nv, %s, err = scan.Float64(data, %s)\n", posVar, posVar)
-		inner.WriteString("if err != nil { return result, i, err }\n")
+		fmt.Fprintf(&inner, "nv, %[1]s, err = scan.Float64(data, %[1]s)\n", posVar)
+		fmt.Fprintf(&inner, "if err != nil { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, err) }\n", posVar, field)
 	case KindTime:
-		tf := FieldInfo{Format: f.Format}
+		tf := FieldInfo{JSONName: f.JSONName, Format: f.Format}
 		inner.WriteString("var nv time.Time\n")
 		renderTime(&inner, tf, "nv", posVar)
 	}
@@ -3257,11 +3262,11 @@ func renderAny(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	if f.UseNumber {
 		fn = "scan.AnyNumber"
 	}
+	chk := bytesErrCheck(fieldLit(f), posVar)
 	fmt.Fprintf(b, `{
-	%s, %s, err = %s(data, %s)
-	if err != nil { return result, i, err }
-}
-`, ref, posVar, fn, posVar)
+	%[1]s, %[2]s, err = %[3]s(data, %[2]s)
+	%[4]s}
+`, ref, posVar, fn, chk)
 }
 
 // needsSeen reports whether a seen<Field> bool is required for f inside
@@ -3373,8 +3378,12 @@ func seenSet(s StructInfo, f FieldInfo) string {
 //  2. s.IgnoreUnknown — SkipValue and continue.
 //  3. Default — return a validation.Error{UnknownKey}.
 //
-// `key` must already be populated by inlineScanString.
+// `key` must already be populated by inlineScanString. The bytes-path
+// `key` is aliased into the caller's data slice and stays valid for the
+// duration of the function, so it can be embedded directly as the field
+// expression in decode.NewParseErr calls (no clone needed).
 func unknownKey(s StructInfo, posVar string) string {
+	chk := bytesErrCheck("key", posVar)
 	if inline := s.InlineField(); inline.Inline {
 		initMap := fmt.Sprintf("if result.%s == nil { result.%s = make(%s) }\n",
 			inline.GoName, inline.GoName, inline.GoType)
@@ -3384,17 +3393,15 @@ func unknownKey(s StructInfo, posVar string) string {
 			if s.UseNumber {
 				anyFn = "scan.AnyNumber"
 			}
-			return initMap + fmt.Sprintf(`result.%s[key], %s, err = %s(data, %s)
-if err != nil { return result, i, err }
-`, inline.GoName, posVar, anyFn, posVar)
+			return initMap + fmt.Sprintf(`result.%[1]s[key], %[2]s, err = %[3]s(data, %[2]s)
+%[4]s`, inline.GoName, posVar, anyFn, chk)
 		case KindString:
 			return initMap + fmt.Sprintf(`{
 var _iv string
 _iv, %[1]s, err = scan.String(data, %[1]s)
-if err != nil { return result, %[1]s, err }
-result.%[2]s[key] = _iv
+%[3]sresult.%[2]s[key] = _iv
 }
-`, posVar, inline.GoName)
+`, posVar, inline.GoName, chk)
 		case KindStruct:
 			if isGenerated(inline.ElemType) {
 				return initMap + fmt.Sprintf(`{
@@ -3402,37 +3409,30 @@ var _iv %[1]s
 var _in int
 _iv, _in, err = _iv.DecodeFrom(data[%[2]s:])
 %[2]s += _in
-if err != nil { return result, %[2]s, err }
-result.%[3]s[key] = _iv
+%[4]sresult.%[3]s[key] = _iv
 }
-`, inline.ElemType, posVar, inline.GoName)
+`, inline.ElemType, posVar, inline.GoName, nestedDecodeErrCheck("key", s.MultiErr, true))
 			}
 		}
-		// Fallback: capture raw span, decode via encoding/json. Covers
-		// cross-pkg structs and any other elem kind not handled above
-		// (slice/map/numeric/native — usable, but not zero-alloc).
 		return initMap + fmt.Sprintf(`{
 _vstart := %[1]s
 %[1]s, err = scan.SkipValue(data, %[1]s)
-if err != nil { return result, %[1]s, err }
-var _iv %[2]s
-if err = json.Unmarshal(data[_vstart:%[1]s], &_iv); err != nil { return result, %[1]s, err }
+%[4]svar _iv %[2]s
+if err = json.Unmarshal(data[_vstart:%[1]s], &_iv); err != nil { return result, %[1]s, decode.NewParseErr(key, %[1]s, err) }
 result.%[3]s[key] = _iv
 }
-`, posVar, inline.ElemType, inline.GoName)
+`, posVar, inline.ElemType, inline.GoName, chk)
 	}
 	if s.IgnoreUnknown {
-		return fmt.Sprintf(`%s, err = scan.SkipValue(data, %s)
-if err != nil { return result, i, err }
-`, posVar, posVar)
+		return fmt.Sprintf(`%[1]s, err = scan.SkipValue(data, %[1]s)
+%[2]s`, posVar, chk)
 	}
 	if s.MultiErr {
-		return fmt.Sprintf(`errs = append(errs, &validation.UnknownKeyError{Field: key})
-%s, err = scan.SkipValue(data, %s)
-if err != nil { return result, i, err }
-`, posVar, posVar)
+		return fmt.Sprintf(`errs = append(errs, &validation.UnknownKeyError{Path: []string{key}})
+%[1]s, err = scan.SkipValue(data, %[1]s)
+%[2]s`, posVar, chk)
 	}
-	return "return result, i, &validation.UnknownKeyError{Field: key}\n"
+	return "return result, i, &validation.UnknownKeyError{Path: []string{key}}\n"
 }
 
 // validateAndMod emits mods + validation for a field inline in the decoder
@@ -3466,32 +3466,34 @@ func validateAndModStream(b *bytes.Buffer, f FieldInfo, ref string) {
 // and parses its textual contents via strconv into the field's numeric /
 // bool type.
 func renderStringTag(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+	field := fieldLit(f)
 	b.WriteString("{\nvar sv string\n")
-	inlineScanString(b, posVar, "sv", posVar)
+	inlineScanString(b, posVar, "sv", posVar, field)
+	errCheck := fmt.Sprintf("if err != nil { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, err) }\n", posVar, field)
 	switch f.Kind {
 	case KindBool:
 		fmt.Fprintf(b, `switch sv {
-case "true": %s = true
-case "false": %s = false
-default: return result, i, scan.ErrBadBool
+case "true": %[1]s = true
+case "false": %[1]s = false
+default: return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, scan.ErrBadBool)
 }
-`, ref, ref)
+`, ref, posVar, field)
 	case KindFloat32, KindFloat64:
-		b.WriteString("f, err := strconv.ParseFloat(sv, 64)\nif err != nil { return result, i, err }\n")
+		b.WriteString("f, err := strconv.ParseFloat(sv, 64)\n" + errCheck)
 		if f.Kind == KindFloat32 {
 			fmt.Fprintf(b, "%s = float32(f)\n", ref)
 		} else {
 			fmt.Fprintf(b, "%s = f\n", ref)
 		}
 	case KindUint, KindUint8, KindUint16, KindUint32, KindUint64:
-		b.WriteString("u, err := strconv.ParseUint(sv, 10, 64)\nif err != nil { return result, i, err }\n")
+		b.WriteString("u, err := strconv.ParseUint(sv, 10, 64)\n" + errCheck)
 		if f.Kind == KindUint64 {
 			fmt.Fprintf(b, "%s = u\n", ref)
 		} else {
 			fmt.Fprintf(b, "%s = %s(u)\n", ref, f.GoType)
 		}
 	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
-		b.WriteString("n, err := strconv.ParseInt(sv, 10, 64)\nif err != nil { return result, i, err }\n")
+		b.WriteString("n, err := strconv.ParseInt(sv, 10, 64)\n" + errCheck)
 		if f.Kind == KindInt64 {
 			fmt.Fprintf(b, "%s = n\n", ref)
 		} else {
@@ -3557,30 +3559,31 @@ func renderField(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 		}
 		return
 	}
+	field := fieldLit(f)
 	switch f.Kind {
 	case KindString:
-		inlineScanString(b, posVar, ref, posVar)
+		inlineScanString(b, posVar, ref, posVar, field)
 	case KindBool:
-		fmt.Fprintf(b, "%s, %s, err = scan.Bool(data, %s)\n", ref, posVar, posVar)
-		b.WriteString("if err != nil { return result, i, err }\n")
+		fmt.Fprintf(b, "%[1]s, %[2]s, err = scan.Bool(data, %[2]s)\n", ref, posVar)
+		fmt.Fprintf(b, "if err != nil { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, err) }\n", posVar, field)
 	case KindInt, KindInt8, KindInt16, KindInt32:
-		inlineScanInt64(b, posVar, ref, f.GoType)
+		inlineScanInt64(b, posVar, ref, f.GoType, field)
 	case KindInt64:
-		inlineScanInt64(b, posVar, ref, "")
+		inlineScanInt64(b, posVar, ref, "", field)
 	case KindUint, KindUint8, KindUint16, KindUint32:
-		inlineScanUint64(b, posVar, ref, f.GoType)
+		inlineScanUint64(b, posVar, ref, f.GoType, field)
 	case KindUint64:
-		inlineScanUint64(b, posVar, ref, "")
+		inlineScanUint64(b, posVar, ref, "", field)
 	case KindFloat32:
 		fmt.Fprintf(b, `var fv float64
-fv, %s, err = scan.Float64(data, %s)
-if err != nil { return result, i, err }
-%s = float32(fv)
-`, posVar, posVar, ref)
+fv, %[1]s, err = scan.Float64(data, %[1]s)
+if err != nil { return result, %[1]s, decode.NewParseErr(%[3]s, %[1]s, err) }
+%[2]s = float32(fv)
+`, posVar, ref, field)
 	case KindFloat64:
-		fmt.Fprintf(b, `%s, %s, err = scan.Float64(data, %s)
-if err != nil { return result, i, err }
-`, ref, posVar, posVar)
+		fmt.Fprintf(b, `%[1]s, %[2]s, err = scan.Float64(data, %[2]s)
+if err != nil { return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, err) }
+`, ref, posVar, field)
 	case KindStruct:
 		if isGenerated(f.GoType) {
 			// Receiver is the existing field — value-receiver method
@@ -3592,9 +3595,8 @@ if err != nil { return result, i, err }
 var _n int
 %[1]s, _n, err = %[1]s.DecodeFrom(data[%[2]s:])
 %[2]s += _n
-if err != nil { return result, i, err }
-}
-`, ref, posVar)
+%[3]s}
+`, ref, posVar, nestedDecodeErrCheck(fieldLit(f), f.MultiErr, true))
 		} else {
 			b.WriteString(renderCrossPkgStructDecode(f, ref, posVar))
 		}
@@ -3611,30 +3613,29 @@ if err != nil { return result, i, err }
 	case KindDuration:
 		renderDuration(b, f, ref, posVar)
 	case KindNetIP:
-		renderNetIP(b, ref, posVar)
+		renderNetIP(b, f, ref, posVar)
 	case KindNetipAddr:
-		renderNetipAddr(b, ref, posVar)
+		renderNetipAddr(b, f, ref, posVar)
 	case KindNetipPrefix:
-		renderNetipPrefix(b, ref, posVar)
+		renderNetipPrefix(b, f, ref, posVar)
 	case KindRawJSON:
-		renderRawJSON(b, ref, posVar)
+		renderRawJSON(b, f, ref, posVar)
 	case KindURL:
-		renderURL(b, ref, posVar)
+		renderURL(b, f, ref, posVar)
 	case KindBigInt:
-		renderBigInt(b, ref, posVar)
+		renderBigInt(b, f, ref, posVar)
 	case KindBigFloat:
-		renderBigFloat(b, ref, posVar)
+		renderBigFloat(b, f, ref, posVar)
 	case KindBigRat:
-		renderBigRat(b, ref, posVar)
+		renderBigRat(b, f, ref, posVar)
 	case KindSQLNull:
 		renderSQLNull(b, f, ref, posVar)
 	case KindAny:
 		renderAny(b, f, ref, posVar)
 	default:
-		fmt.Fprintf(b, `k, err := scan.SkipValue(data, %s)
-if err != nil { return result, i, err }
-%s = k
-`, posVar, posVar)
+		fmt.Fprintf(b, `k, err := scan.SkipValue(data, %[1]s)
+%[2]s%[1]s = k
+`, posVar, bytesErrCheck(fieldLit(f), posVar))
 	}
 	// Post-decode: mods then validation. The `seen<GoName>` bool is set
 	// by the caller (renderDispatch emits it), not here.
@@ -3838,32 +3839,34 @@ func emitByteSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth i
 		fmt.Fprintf(b, "%s = append(%s, %s)\n", dst, dst, zeroLit(f.ElemType, f.ElemKind))
 		target = fmt.Sprintf("%s[len(%s)-1]", dst, dst)
 	}
+	field := fieldLit(f)
+	errCheck := fmt.Sprintf("if err != nil { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, err) }\n", kvar, field)
 	switch f.ElemKind {
 	case KindString:
-		inlineScanString(b, kvar, target, kvar)
+		inlineScanString(b, kvar, target, kvar, field)
 	case KindBool:
 		fmt.Fprintf(b, "%s, %s, err = scan.Bool(data, %s)\n", target, kvar, kvar)
-		b.WriteString("if err != nil { return result, i, err }\n")
+		b.WriteString(errCheck)
 	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
 		castFn := ""
 		if f.ElemType != "int64" {
 			castFn = f.ElemType
 		}
-		inlineScanInt64(b, kvar, target, castFn)
+		inlineScanInt64(b, kvar, target, castFn, field)
 	case KindUint, KindUint8, KindUint16, KindUint32, KindUint64:
 		castFn := ""
 		if f.ElemType != "uint64" {
 			castFn = f.ElemType
 		}
-		inlineScanUint64(b, kvar, target, castFn)
+		inlineScanUint64(b, kvar, target, castFn, field)
 	case KindFloat32, KindFloat64:
 		if f.ElemKind == KindFloat64 {
 			fmt.Fprintf(b, "%s, %s, err = scan.Float64(data, %s)\n", target, kvar, kvar)
-			b.WriteString("if err != nil { return result, i, err }\n")
+			b.WriteString(errCheck)
 		} else {
 			b.WriteString("var fv float64\n")
 			fmt.Fprintf(b, "fv, %s, err = scan.Float64(data, %s)\n", kvar, kvar)
-			b.WriteString("if err != nil { return result, i, err }\n")
+			b.WriteString(errCheck)
 			fmt.Fprintf(b, "%s = float32(fv)\n", target)
 		}
 	case KindStruct:
@@ -3875,10 +3878,10 @@ var _n int
 %[2]s += _n
 }
 `, target, kvar)
-			b.WriteString("if err != nil { return result, i, err }\n")
+			b.WriteString(nestedDecodeErrCheck(fieldLit(f), f.MultiErr, true))
 		} else {
 			fmt.Fprintf(b, "%s, err = scan.SkipValue(data, %s)\n", kvar, kvar)
-			b.WriteString("if err != nil { return result, i, err }\n")
+			b.WriteString(bytesErrCheck(fieldLit(f), kvar))
 		}
 	case KindSlice, KindArray:
 		// Nested container — recurse, peeling one outer [] / [N] off.
@@ -3967,35 +3970,33 @@ func renderStreamDecodeStruct(b *bytes.Buffer, s StructInfo) {
 	// dies. Cases that capture key (inline catch-all, UnknownKeyError
 	// in multierr/immediate-return paths) must clone BEFORE
 	// ConsumeColon.
+	chk := streamErrCheck(`""`)
+	rmore := `if s.Pos >= len(s.Bytes()) { if err = s.ReadMore(s.Pos); err != nil { return result, decode.NewParseErr("", s.Pos, err) }; s.Pos = 0 }
+`
+	badObj := `return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)`
 	fmt.Fprintf(b, `err := s.ObjectOpen()
-if err != nil { return result, err }
-err = s.SkipSpace()
-if err != nil { return result, err }
-if s.Pos >= len(s.Bytes()) { if err = s.ReadMore(s.Pos); err != nil { return result, err }; s.Pos = 0 }
-if s.Bytes()[s.Pos] == '}' {
-%ss.Pos++
-return result, nil
+%[1]serr = s.SkipSpace()
+%[1]s%[5]sif s.Bytes()[s.Pos] == '}' {
+s.Pos++
+%[2]sreturn result, nil
 }
 for {
 	var key string
 	key, err = s.KeyView()
-	if err != nil { return result, err }
-	%s	err = s.SkipSpace()
-	if err != nil { return result, err }
-	if s.Pos >= len(s.Bytes()) { if err = s.ReadMore(s.Pos); err != nil { return result, err }; s.Pos = 0 }
-	c := s.Bytes()[s.Pos]
+	%[1]s%[3]s
+	err = s.SkipSpace()
+	%[1]s%[5]sc := s.Bytes()[s.Pos]
 	if c == ',' {
 		s.Pos++
 		err = s.SkipSpace()
-		if err != nil { return result, err }
-		continue
+		%[1]scontinue
 	}
 	if c == '}' {
-%s		s.Pos++
-		return result, nil
+		s.Pos++
+%[2]s		return result, nil
 	}
-	return result, scan.ErrBadObject
-}`, plStr, renderStreamDispatch(s), plStr)
+	%[4]s
+}`, chk, plStr, renderStreamDispatch(s), badObj, rmore)
 }
 
 func renderStreamDispatch(s StructInfo) string {
@@ -4016,7 +4017,9 @@ func renderStreamDispatch(s StructInfo) string {
 	// Each known-key case opens with s.ConsumeColon — the alias is no
 	// longer needed past this point, so the shift it triggers is safe.
 	emitField := func(b *bytes.Buffer, f FieldInfo, parse string) {
-		b.WriteString("err = s.ConsumeColon()\nif err != nil { return result, err }\n")
+		field := fieldLit(f)
+		chk := streamErrCheck(field)
+		fmt.Fprintf(b, "err = s.ConsumeColon()\n%s", chk)
 		if f.Inline || !needsSeen(f) {
 			b.WriteString(parse)
 			return
@@ -4024,27 +4027,25 @@ func renderStreamDispatch(s StructInfo) string {
 		set := seenSet(s, f)
 		seen := seenAccess(s, f)
 		if s.AllowDups {
-			fmt.Fprintf(b, `if %s {
+			fmt.Fprintf(b, `if %[1]s {
 	err = s.SkipValue()
-	if err != nil { return result, err }
-} else {
-	%s%s
+	%[4]s} else {
+	%[2]s%[3]s
 }
-`, seen, set, parse)
+`, seen, set, parse, chk)
 			return
 		}
 		if s.MultiErr {
-			fmt.Fprintf(b, `if %s {
-	errs = append(errs, &validation.DuplicateKeyError{Field: %q})
+			fmt.Fprintf(b, `if %[1]s {
+	errs = append(errs, &validation.DuplicateKeyError{Path: []string{%[2]q}})
 	err = s.SkipValue()
-	if err != nil { return result, err }
-} else {
-	%s%s
+	%[5]s} else {
+	%[3]s%[4]s
 }
-`, seen, f.JSONName, set, parse)
+`, seen, f.JSONName, set, parse, chk)
 			return
 		}
-		fmt.Fprintf(b, `if %s { return result, &validation.DuplicateKeyError{Field: %q} }
+		fmt.Fprintf(b, `if %s { return result, &validation.DuplicateKeyError{Path: []string{%q}} }
 %s%s`, seen, f.JSONName, set, parse)
 	}
 
@@ -4087,28 +4088,28 @@ func renderStreamDispatch(s StructInfo) string {
 // header; the buffer can be overwritten on next ReadMore), so we use
 // s.String which copies.
 func renderStreamMap(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+	field := fieldLit(f)
+	chk := streamErrCheck(field)
+	rm := streamReadMore(field, "0", false)
+	rmKi := strings.Replace(rm, "if s.Pos >=", "if s.Pos+ki >=", 1)
+	badLit := fmt.Sprintf("return result, decode.NewParseErr(%s, s.Pos, scan.ErrBadLiteral)", field)
+	badObj := fmt.Sprintf("return result, decode.NewParseErr(%s, s.Pos, scan.ErrBadObject)", field)
 	makeExpr := fmt.Sprintf("make(%s)", f.GoType)
 	if cap := mapPreallocCap(f); cap > 0 {
 		makeExpr = fmt.Sprintf("make(%s, %d)", f.GoType, cap)
 	}
 	fmt.Fprintf(b, `{
 err = s.SkipSpace()
-if err != nil { return result, err }
-if s.Pos >= len(s.Bytes()) { if err = s.ReadMore(0); err != nil { return result, err } }
-if s.Bytes()[s.Pos] == 'n' {
+%[4]s%[6]sif s.Bytes()[s.Pos] == 'n' {
 	for ki := 1; ki < 4; ki++ {
-		if s.Pos+ki >= len(s.Bytes()) { if err = s.ReadMore(0); err != nil { return result, err } }
-		if s.Bytes()[s.Pos+ki] != "null"[ki] { return result, scan.ErrBadLiteral }
+		%[7]sif s.Bytes()[s.Pos+ki] != "null"[ki] { %[5]s }
 	}
 	s.Pos += 4
 	%[1]s = nil
 } else {
 	err = s.ObjectOpen()
-	if err != nil { return result, err }
-	err = s.SkipSpace()
-	if err != nil { return result, err }
-	if s.Pos >= len(s.Bytes()) { if err = s.ReadMore(0); err != nil { return result, err } }
-	if s.Bytes()[s.Pos] == '}' {
+	%[4]serr = s.SkipSpace()
+	%[4]s%[6]sif s.Bytes()[s.Pos] == '}' {
 		if %[1]s == nil { %[1]s = %[2]s{} }
 	} else {
 		if %[1]s == nil { %[1]s = %[3]s }
@@ -4116,33 +4117,27 @@ if s.Bytes()[s.Pos] == 'n' {
 	for s.Bytes()[s.Pos] != '}' {
 		var mk string
 		mk, err = s.String()
-		if err != nil { return result, err }
-`, ref, f.GoType, makeExpr)
+		%[4]s`, ref, f.GoType, makeExpr, chk, badLit, rm, rmKi)
 	keyValidateAndModStream(b, f, "mk")
-	b.WriteString(`		err = s.SkipSpace()
-		if err != nil { return result, err }
-		if s.Pos >= len(s.Bytes()) { if err = s.ReadMore(0); err != nil { return result, err } }
-		if s.Bytes()[s.Pos] != ':' { return result, scan.ErrBadObject }
+	fmt.Fprintf(b, `		err = s.SkipSpace()
+		%[1]s%[3]sif s.Bytes()[s.Pos] != ':' { %[2]s }
 		s.Pos++
 		err = s.SkipSpace()
-		if err != nil { return result, err }
-`)
-	_ = posVar // stream-path uses s.Pos directly; posVar arg is retained for signature compatibility
+		%[1]s`, chk, badObj, rm)
+	_ = posVar
 
 	mapTarget := fmt.Sprintf("%s[mk]", ref)
 	switch f.ElemKind {
 	case KindString:
 		fmt.Fprintf(b, `var mv string
 mv, err = s.String()
-if err != nil { return result, err }
-%s = mv
-`, mapTarget)
+%s%s = mv
+`, chk, mapTarget)
 	case KindBool:
 		fmt.Fprintf(b, `var mv bool
 mv, err = s.Bool()
-if err != nil { return result, err }
-%s = mv
-`, mapTarget)
+%s%s = mv
+`, chk, mapTarget)
 	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
 		assign := fmt.Sprintf("%s = mn", mapTarget)
 		if f.ElemType != "int64" {
@@ -4150,9 +4145,8 @@ if err != nil { return result, err }
 		}
 		fmt.Fprintf(b, `var mn int64
 mn, err = s.Int64()
-if err != nil { return result, err }
-%s
-`, assign)
+%s%s
+`, chk, assign)
 	case KindUint, KindUint8, KindUint16, KindUint32, KindUint64:
 		assign := fmt.Sprintf("%s = mn", mapTarget)
 		if f.ElemType != "uint64" {
@@ -4160,9 +4154,8 @@ if err != nil { return result, err }
 		}
 		fmt.Fprintf(b, `var mn uint64
 mn, err = s.Uint64()
-if err != nil { return result, err }
-%s
-`, assign)
+%s%s
+`, chk, assign)
 	case KindFloat32, KindFloat64:
 		assign := fmt.Sprintf("%s = mv", mapTarget)
 		if f.ElemKind == KindFloat32 {
@@ -4170,32 +4163,28 @@ if err != nil { return result, err }
 		}
 		fmt.Fprintf(b, `var mv float64
 mv, err = s.Float64()
-if err != nil { return result, err }
-%s
-`, assign)
+%s%s
+`, chk, assign)
 	case KindStruct:
 		if isGenerated(f.ElemType) {
 			fmt.Fprintf(b, `var mv %s
 mv, err = mv.DecodeFromStream(s)
-if err != nil { return result, err }
-%s = mv
-`, f.ElemType, mapTarget)
+%s%s = mv
+`, f.ElemType, nestedDecodeErrCheck(fieldLit(f), f.MultiErr, false), mapTarget)
 		} else {
 			fmt.Fprintf(b, `start := s.Pos
 prevPin := s.Shift
 s.Shift = false
 err = s.SkipValue()
 s.Shift = prevPin
-if err != nil { return result, err }
-var mv %s
-if err := json.Unmarshal(s.Bytes()[start:s.Pos], &mv); err != nil { return result, err }
-%s = mv
-`, f.ElemType, mapTarget)
+%[3]svar mv %[1]s
+if err := json.Unmarshal(s.Bytes()[start:s.Pos], &mv); err != nil { return result, decode.NewParseErr(%[4]s, s.Pos, err) }
+%[2]s = mv
+`, f.ElemType, mapTarget, chk, field)
 		}
 	default:
-		b.WriteString(`err = s.SkipValue()
-if err != nil { return result, err }
-`)
+		fmt.Fprintf(b, `err = s.SkipValue()
+%s`, chk)
 	}
 	if len(f.ElemMods) > 0 {
 		renderStreamMods(b, f.ElemMods, mapTarget, f.ElemType, f.ElemKind)
@@ -4203,51 +4192,102 @@ if err != nil { return result, err }
 	if len(f.ElemValidation) > 0 {
 		renderValidationOn(b, f.ElemValidation, mapTarget, f.JSONName+".value", f.ElemKind, f.MultiErr, "")
 	}
-	b.WriteString(`		err = s.SkipSpace()
-		if err != nil { return result, err }
-		if s.Pos >= len(s.Bytes()) { if err = s.ReadMore(0); err != nil { return result, err } }
-		if s.Bytes()[s.Pos] == ',' { s.Pos++; err = s.SkipSpace(); if err != nil { return result, err }; continue }
+	fmt.Fprintf(b, `		err = s.SkipSpace()
+		%[1]s%[3]sif s.Bytes()[s.Pos] == ',' { s.Pos++; err = s.SkipSpace(); %[1]scontinue }
 		break
 	}
-	if s.Bytes()[s.Pos] != '}' { return result, scan.ErrBadObject }
+	if s.Bytes()[s.Pos] != '}' { %[2]s }
 	s.Pos++
 }
 }
-`)
+`, chk, badObj, rm)
+}
+
+// streamErrCheck returns the canonical `if err != nil { return ... }` tail
+// emitted after a stream-side scan call. The field literal is embedded
+// directly so no post-pass wrap is needed.
+func streamErrCheck(field string) string {
+	return fmt.Sprintf("if err != nil { return result, decode.NewParseErr(%s, s.Pos, err) }\n", field)
+}
+
+// bytesErrCheck is the bytes-path equivalent of streamErrCheck, with the
+// 3-tuple `return result, pos, err` shape.
+func bytesErrCheck(field, posVar string) string {
+	return fmt.Sprintf("if err != nil { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, err) }\n", posVar, field)
+}
+
+// streamReadMore emits the canonical "buffer exhausted? pull more"
+// guard for the stream path. keep controls compaction (`0` = grow
+// without shift; `s.Pos` = discard consumed prefix); resetPos appends
+// `s.Pos = 0` after a non-zero keep. The err is wrapped with field at
+// emit time — no post-pass.
+func streamReadMore(field, keep string, resetPos bool) string {
+	reset := ""
+	if resetPos {
+		reset = "; s.Pos = 0"
+	}
+	return fmt.Sprintf("if s.Pos >= len(s.Bytes()) { if err = s.ReadMore(%s); err != nil { return result, decode.NewParseErr(%s, s.Pos, err) }%s }\n", keep, field, reset)
+}
+
+// nestedDecodeErrCheck emits the `if err != nil { … }` tail after a
+// nested DecodeFrom / DecodeFromStream call. The outer field literal
+// is woven into the decode.NewParseErr wrap so the inner *ParseError's
+// Field path gets prepended (chaining "addr" + inner "street" →
+// "addr.street").
+//
+// In multierr mode any validation failure (single leaf or aggregate)
+// is merged into the outer's flat slice via Errors.Append, which
+// prepends the outer field name onto every leaf's Path. Only true
+// parse errors return early.
+//
+// bytesPath=true emits the 3-tuple `return result, pos, …` shape;
+// false emits the 2-tuple stream shape.
+func nestedDecodeErrCheck(field string, multierr, bytesPath bool) string {
+	wrap := fmt.Sprintf("decode.NewParseErr(%s, s.Pos, err)", field)
+	ret := fmt.Sprintf("return result, %s", wrap)
+	if bytesPath {
+		wrap = fmt.Sprintf("decode.NewParseErr(%s, i, err)", field)
+		ret = fmt.Sprintf("return result, i, %s", wrap)
+	}
+	if !multierr {
+		return fmt.Sprintf("if err != nil { %s }\n", ret)
+	}
+	return fmt.Sprintf(`if err != nil {
+	if verr, ok := err.(validation.Error); ok {
+		errs.Append(%[1]s, verr)
+	} else {
+		%[2]s
+	}
+}
+`, field, ret)
 }
 
 // --- stream native-type renderers ---
 
 func renderStreamBytes(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	_ = posVar // stream-path uses s.Pos directly
+	field := fieldLit(f)
+	chk := streamErrCheck(field)
+	rm := streamReadMore(field, "0", false)
+	badArr := fmt.Sprintf("return result, decode.NewParseErr(%s, s.Pos, scan.ErrBadArray)", field)
 	if f.Format == "array" {
 		fmt.Fprintf(b, `{
 	err = s.ArrayOpen()
-	if err != nil { return result, err }
-	err = s.SkipSpace()
-	if err != nil { return result, err }
-	if s.Pos >= len(s.Bytes()) { if err = s.ReadMore(0); err != nil { return result, err } }
-	for s.Bytes()[s.Pos] != ']' {
+	%[2]serr = s.SkipSpace()
+	%[2]s%[4]sfor s.Bytes()[s.Pos] != ']' {
 		var v uint64
 		v, err = s.Uint64()
-		if err != nil { return result, err }
-		%[1]s = append(%[1]s, byte(v))
+		%[2]s%[1]s = append(%[1]s, byte(v))
 		err = s.SkipSpace()
-		if err != nil { return result, err }
-		if s.Pos >= len(s.Bytes()) { if err = s.ReadMore(0); err != nil { return result, err } }
-		if s.Bytes()[s.Pos] == ',' { s.Pos++; err = s.SkipSpace(); if err != nil { return result, err }; continue }
+		%[2]s%[4]sif s.Bytes()[s.Pos] == ',' { s.Pos++; err = s.SkipSpace(); %[2]scontinue }
 		break
 	}
-	if s.Bytes()[s.Pos] != ']' { return result, scan.ErrBadArray }
+	if s.Bytes()[s.Pos] != ']' { %[3]s }
 	s.Pos++
 }
-`, ref)
+`, ref, chk, badArr, rm)
 		return
 	}
-	// AppendDecode path: skips the `[]byte(v)` copy DecodeString does.
-	// v is already a copied string owned by the decoder (stream path
-	// can't alias), so converting back to []byte via unsafe is sound
-	// for the duration of the decode call.
 	enc := "base64.StdEncoding"
 	dlen := "base64.StdEncoding.DecodedLen"
 	switch f.Format {
@@ -4267,34 +4307,32 @@ func renderStreamBytes(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 		fmt.Fprintf(b, `{
 	var v string
 	v, err = s.String()
-	if err != nil { return result, err }
-	if cap(%[1]s) < hex.DecodedLen(len(v)) { %[1]s = make([]byte, 0, hex.DecodedLen(len(v))) }
+	%[2]sif cap(%[1]s) < hex.DecodedLen(len(v)) { %[1]s = make([]byte, 0, hex.DecodedLen(len(v))) }
 	%[1]s, err = hex.AppendDecode(%[1]s, unsafe.Slice(unsafe.StringData(v), len(v)))
-	if err != nil { return result, err }
-}
-`, ref)
+	%[2]s}
+`, ref, chk)
 		return
 	}
 	fmt.Fprintf(b, `{
 	var v string
 	v, err = s.String()
-	if err != nil { return result, err }
-	if cap(%[1]s) < %[2]s(len(v)) { %[1]s = make([]byte, 0, %[2]s(len(v))) }
+	%[4]sif cap(%[1]s) < %[2]s(len(v)) { %[1]s = make([]byte, 0, %[2]s(len(v))) }
 	%[1]s, err = %[3]s.AppendDecode(%[1]s, unsafe.Slice(unsafe.StringData(v), len(v)))
-	if err != nil { return result, err }
-}
-`, ref, dlen, enc)
+	%[4]s}
+`, ref, dlen, enc, chk)
 }
 
 func renderStreamTime(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	_ = posVar
+	field := fieldLit(f)
+	chk := streamErrCheck(field)
 	layout, numeric := timeLayoutExpr(f.Format)
 	if numeric != "" {
 		if numeric == "Unix" {
 			fmt.Fprintf(b, `{
 	var f float64
 	f, err = s.Float64()
-	if err != nil { return result, err }
+	`+chk+`
 	sec := int64(f)
 	nsec := int64((f - float64(sec)) * 1e9)
 	%s = time.Unix(sec, nsec)
@@ -4310,33 +4348,31 @@ func renderStreamTime(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 		fmt.Fprintf(b, `{
 	var n int64
 	n, err = s.Int64()
-	if err != nil { return result, err }
-	%s = %s
+	%[3]s%[1]s = %[2]s
 }
-`, ref, ctor)
+`, ref, ctor, chk)
 		return
 	}
 	fmt.Fprintf(b, `{
 	var v string
 	v, err = s.String()
-	if err != nil { return result, err }
-	%s, err = time.Parse(%s, v)
-	if err != nil { return result, err }
-}
-`, ref, layout)
+	%[3]s%[1]s, err = time.Parse(%[2]s, v)
+	%[3]s}
+`, ref, layout, chk)
 }
 
 func renderStreamDuration(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	_ = posVar
+	field := fieldLit(f)
+	chk := streamErrCheck(field)
 	switch f.Format {
 	case "sec":
 		fmt.Fprintf(b, `{
 	var v float64
 	v, err = s.Float64()
-	if err != nil { return result, err }
-	%s = time.Duration(v * float64(time.Second))
+	%[2]s%[1]s = time.Duration(v * float64(time.Second))
 }
-`, ref)
+`, ref, chk)
 		return
 	case "milli", "micro", "nano":
 		unit := map[string]string{
@@ -4347,56 +4383,52 @@ func renderStreamDuration(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 		fmt.Fprintf(b, `{
 	var n int64
 	n, err = s.Int64()
-	if err != nil { return result, err }
-	%s = time.Duration(n) * %s
+	%[3]s%[1]s = time.Duration(n) * %[2]s
 }
-`, ref, unit)
+`, ref, unit, chk)
 		return
 	}
 	fmt.Fprintf(b, `{
 	var v string
 	v, err = s.String()
-	if err != nil { return result, err }
-	%s, err = time.ParseDuration(v)
-	if err != nil { return result, err }
-}
-`, ref)
+	%[2]s%[1]s, err = time.ParseDuration(v)
+	%[2]s}
+`, ref, chk)
 }
 
-func renderStreamNetIP(b *bytes.Buffer, ref, posVar string) {
+func renderStreamNetIP(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	_ = posVar
+	field := fieldLit(f)
+	chk := streamErrCheck(field)
 	fmt.Fprintf(b, `{
 	var v string
 	v, err = s.String()
-	if err != nil { return result, err }
-	%[1]s = net.ParseIP(v)
-	if %[1]s == nil { return result, fmt.Errorf("invalid IP") }
+	%[2]s%[1]s = net.ParseIP(v)
+	if %[1]s == nil { return result, decode.NewParseErr(%[3]s, s.Pos, &net.ParseError{Type: "IP address", Text: v}) }
 }
-`, ref)
+`, ref, chk, field)
 }
 
-func renderStreamNetipAddr(b *bytes.Buffer, ref, posVar string) {
+func renderStreamNetipAddr(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	_ = posVar
+	chk := streamErrCheck(fieldLit(f))
 	fmt.Fprintf(b, `{
 	var v string
 	v, err = s.String()
-	if err != nil { return result, err }
-	%s, err = netip.ParseAddr(v)
-	if err != nil { return result, err }
-}
-`, ref)
+	%[2]s%[1]s, err = netip.ParseAddr(v)
+	%[2]s}
+`, ref, chk)
 }
 
-func renderStreamNetipPrefix(b *bytes.Buffer, ref, posVar string) {
+func renderStreamNetipPrefix(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	_ = posVar
+	chk := streamErrCheck(fieldLit(f))
 	fmt.Fprintf(b, `{
 	var v string
 	v, err = s.String()
-	if err != nil { return result, err }
-	%s, err = netip.ParsePrefix(v)
-	if err != nil { return result, err }
-}
-`, ref)
+	%[2]s%[1]s, err = netip.ParsePrefix(v)
+	%[2]s}
+`, ref, chk)
 }
 
 // renderStreamRawJSON copies the stream's buffer span into the
@@ -4404,75 +4436,77 @@ func renderStreamNetipPrefix(b *bytes.Buffer, ref, posVar string) {
 // would invalidate the absolute `start` offset — pin the buffer with
 // s.Shift = false for the duration of SkipValue so the captured
 // span stays valid.
-func renderStreamRawJSON(b *bytes.Buffer, ref, posVar string) {
+func renderStreamRawJSON(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	_ = posVar
+	chk := streamErrCheck(fieldLit(f))
 	fmt.Fprintf(b, `{
 	start := s.Pos
 	prevPin := s.Shift
 	s.Shift = false
 	err = s.SkipValue()
 	s.Shift = prevPin
-	if err != nil { return result, err }
-	raw := s.Bytes()[start:s.Pos]
-	%s = append(make([]byte, 0, len(raw)), raw...)
+	%[2]sraw := s.Bytes()[start:s.Pos]
+	%[1]s = append(make([]byte, 0, len(raw)), raw...)
 }
-`, ref)
+`, ref, chk)
 }
 
-func renderStreamURL(b *bytes.Buffer, ref, posVar string) {
+func renderStreamURL(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	_ = posVar
+	chk := streamErrCheck(fieldLit(f))
 	fmt.Fprintf(b, `{
 	var v string
 	v, err = s.String()
-	if err != nil { return result, err }
-	u, err := url.Parse(v)
-	if err != nil { return result, err }
-	%s = *u
+	%[2]su, err := url.Parse(v)
+	%[2]s%[1]s = *u
 }
-`, ref)
+`, ref, chk)
 }
 
-func renderStreamBigInt(b *bytes.Buffer, ref, posVar string) {
+func renderStreamBigInt(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	_ = posVar
+	field := fieldLit(f)
+	chk := streamErrCheck(field)
 	fmt.Fprintf(b, `{
 	start := s.Pos
 	prevPin := s.Shift
 	s.Shift = false
 	err = s.SkipValue()
 	s.Shift = prevPin
-	if err != nil { return result, err }
-	buf := s.Bytes()
-	if _, ok := (&%s).SetString(unsafe.String(unsafe.SliceData(buf[start:]), s.Pos-start), 10); !ok {
-		return result, scan.ErrBadNumber
+	%[2]sbuf := s.Bytes()
+	if _, ok := (&%[1]s).SetString(unsafe.String(unsafe.SliceData(buf[start:]), s.Pos-start), 10); !ok {
+		return result, decode.NewParseErr(%[3]s, s.Pos, scan.ErrBadNumber)
 	}
 }
-`, ref)
+`, ref, chk, field)
 }
 
-func renderStreamBigFloat(b *bytes.Buffer, ref, posVar string) {
+func renderStreamBigFloat(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	_ = posVar
+	field := fieldLit(f)
+	chk := streamErrCheck(field)
 	fmt.Fprintf(b, `{
 	var v string
 	v, err = s.String()
-	if err != nil { return result, err }
-	if _, _, err := (&%s).Parse(v, 10); err != nil {
-		return result, err
+	%[2]sif _, _, err := (&%[1]s).Parse(v, 10); err != nil {
+		return result, decode.NewParseErr(%[3]s, s.Pos, err)
 	}
 }
-`, ref)
+`, ref, chk, field)
 }
 
-func renderStreamBigRat(b *bytes.Buffer, ref, posVar string) {
+func renderStreamBigRat(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	_ = posVar
+	field := fieldLit(f)
+	chk := streamErrCheck(field)
 	fmt.Fprintf(b, `{
 	var v string
 	v, err = s.String()
-	if err != nil { return result, err }
-	if _, ok := (&%s).SetString(v); !ok {
-		return result, scan.ErrBadNumber
+	%[2]sif _, ok := (&%[1]s).SetString(v); !ok {
+		return result, decode.NewParseErr(%[3]s, s.Pos, scan.ErrBadNumber)
 	}
 }
-`, ref)
+`, ref, chk, field)
 }
 
 // renderStreamSQLNull is the streaming counterpart of renderSQLNull.
@@ -4486,17 +4520,14 @@ func renderStreamSQLNull(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	if !ok {
 		return
 	}
+	field := fieldLit(f)
+	chk := streamErrCheck(field)
 	var inner bytes.Buffer
-	// valExpr is the value placed in the NullX literal — usually just
-	// the intermediate name, possibly wrapped in a cast.
 	var valExpr string
-	// scanTmpl: declare nv, call the right scan method, check err. Each
-	// branch differs only by the inner type and the s.Method() called.
 	scanTmpl := func(typ, method string) {
 		fmt.Fprintf(&inner, `var nv %[1]s
 nv, err = s.%[2]s()
-if err != nil { return result, err }
-`, typ, method)
+%[3]s`, typ, method, chk)
 	}
 	switch spec.Inner {
 	case KindString:
@@ -4518,17 +4549,17 @@ if err != nil { return result, err }
 		scanTmpl("float64", "Float64")
 		valExpr = "nv"
 	case KindTime:
-		tf := FieldInfo{Format: f.Format}
+		tf := FieldInfo{JSONName: f.JSONName, Format: f.Format}
 		inner.WriteString("var nv time.Time\n")
 		renderStreamTime(&inner, tf, "nv", posVar)
 		valExpr = "nv"
 	}
+	rm := streamReadMore(field, "0", false)
+	rmKi := strings.Replace(rm, "if s.Pos >=", "if s.Pos+ki >=", 1)
 	fmt.Fprintf(b, `{
-	if s.Pos >= len(s.Bytes()) { if err = s.ReadMore(0); err != nil { return result, err } }
-	if s.Bytes()[s.Pos] == 'n' {
+	%[6]sif s.Bytes()[s.Pos] == 'n' {
 		for ki := 1; ki < 4; ki++ {
-			if s.Pos+ki >= len(s.Bytes()) { if err = s.ReadMore(0); err != nil { return result, err } }
-			if s.Bytes()[s.Pos+ki] != "null"[ki] { return result, scan.ErrBadLiteral }
+			%[8]sif s.Bytes()[s.Pos+ki] != "null"[ki] { return result, decode.NewParseErr(%[7]s, s.Pos, scan.ErrBadLiteral) }
 		}
 		%[1]s = sql.%[2]s{}
 		s.Pos += 4
@@ -4537,20 +4568,21 @@ if err != nil { return result, err }
 		%[1]s = sql.%[2]s{%[4]s: %[5]s, Valid: true}
 	}
 }
-`, ref, sqlTypeName(f.GoType), inner.String(), spec.Field, valExpr)
+`, ref, sqlTypeName(f.GoType), inner.String(), spec.Field, valExpr, rm, field, rmKi)
+	_ = chk
 }
 
 func renderStreamAny(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	_ = posVar
+	chk := streamErrCheck(fieldLit(f))
 	fn := "s.Any"
 	if f.UseNumber {
 		fn = "s.AnyNumber"
 	}
 	fmt.Fprintf(b, `{
 	%[1]s, err = %[2]s()
-	if err != nil { return result, err }
-}
-`, ref, fn)
+	%[3]s}
+`, ref, fn, chk)
 }
 
 // streamUnknownKey is the stream-scanner counterpart of unknownKey.
@@ -4564,115 +4596,105 @@ func renderStreamAny(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 func streamUnknownKey(s StructInfo, posVar string) string {
 	_ = posVar
 	if inline := s.InlineField(); inline.Inline {
+		// Set the field marker once ownKey has been cloned — the alias
+		// from KeyView is unsafe across compaction inside the value
+		// decode.
+		chk := streamErrCheck("ownKey")
 		prelude := fmt.Sprintf(`ownKey := strings.Clone(key)
 err = s.ConsumeColon()
-if err != nil { return result, err }
-if result.%[1]s == nil { result.%[1]s = make(%[2]s) }
-`, inline.GoName, inline.GoType)
+%[3]sif result.%[1]s == nil { result.%[1]s = make(%[2]s) }
+`, inline.GoName, inline.GoType, chk)
 		switch inline.ElemKind {
 		case KindAny:
 			anyFn := "s.Any"
 			if s.UseNumber {
 				anyFn = "s.AnyNumber"
 			}
-			return prelude + fmt.Sprintf(`result.%s[ownKey], err = %s()
-if err != nil { return result, err }
-`, inline.GoName, anyFn)
+			return prelude + fmt.Sprintf(`result.%[1]s[ownKey], err = %[2]s()
+%[3]s`, inline.GoName, anyFn, chk)
 		case KindString:
 			return prelude + fmt.Sprintf(`{
 var _iv string
 _iv, err = s.String()
-if err != nil { return result, err }
-result.%s[ownKey] = _iv
+%[2]sresult.%[1]s[ownKey] = _iv
 }
-`, inline.GoName)
+`, inline.GoName, chk)
 		case KindStruct:
 			if isGenerated(inline.ElemType) {
 				return prelude + fmt.Sprintf(`{
 var _iv %[1]s
 _iv, err = _iv.DecodeFromStream(s)
-if err != nil { return result, err }
-result.%[2]s[ownKey] = _iv
+%[3]sresult.%[2]s[ownKey] = _iv
 }
-`, inline.ElemType, inline.GoName)
+`, inline.ElemType, inline.GoName, nestedDecodeErrCheck("ownKey", s.MultiErr, false))
 			}
 		}
-		// Fallback: capture raw span via SkipValue + json.Unmarshal. Pins
-		// the buffer (Shift=false) so the absolute offset stays valid
-		// across any internal ReadMore inside SkipValue.
 		return prelude + fmt.Sprintf(`{
 start := s.Pos
 prevPin := s.Shift
 s.Shift = false
 err = s.SkipValue()
 s.Shift = prevPin
-if err != nil { return result, err }
-var _iv %s
-if err = json.Unmarshal(s.Bytes()[start:s.Pos], &_iv); err != nil { return result, err }
-result.%s[ownKey] = _iv
+%[3]svar _iv %[1]s
+if err = json.Unmarshal(s.Bytes()[start:s.Pos], &_iv); err != nil { return result, decode.NewParseErr(ownKey, s.Pos, err) }
+result.%[2]s[ownKey] = _iv
 }
-`, inline.ElemType, inline.GoName)
+`, inline.ElemType, inline.GoName, chk)
 	}
 	if s.IgnoreUnknown {
-		return `err = s.ConsumeColon()
-if err != nil { return result, err }
-err = s.SkipValue()
-if err != nil { return result, err }
-`
+		chk := streamErrCheck("strings.Clone(key)")
+		return fmt.Sprintf(`err = s.ConsumeColon()
+%[1]serr = s.SkipValue()
+%[1]s`, chk)
 	}
 	if s.MultiErr {
-		return `errs = append(errs, &validation.UnknownKeyError{Field: strings.Clone(key)})
+		chk := streamErrCheck("strings.Clone(key)")
+		return fmt.Sprintf(`errs = append(errs, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}})
 err = s.ConsumeColon()
-if err != nil { return result, err }
-err = s.SkipValue()
-if err != nil { return result, err }
-`
+%[1]serr = s.SkipValue()
+%[1]s`, chk)
 	}
-	return "return result, &validation.UnknownKeyError{Field: strings.Clone(key)}\n"
+	return "return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}\n"
 }
 
 func renderStreamStringTag(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	_ = posVar // stream-path uses s.Pos directly
+	field := fieldLit(f)
+	chk := streamErrCheck(field)
 	b.WriteString("{\n")
-	// Use KeyView (alias into the stream buffer) instead of String
-	// (allocating copy). The aliased string only needs to outlive the
-	// strconv.ParseX / switch below — no caller dependency afterward.
-	// For KindString we DO need a copy since `ref` is stored in the
-	// decoded value: explicit `string(sv)` before assignment.
 	b.WriteString("var sv string\n")
 	b.WriteString("sv, err = s.KeyView()\n")
-	b.WriteString("if err != nil { return result, err }\n")
+	b.WriteString(chk)
 	switch f.Kind {
 	case KindBool:
 		fmt.Fprintf(b, `switch sv {
-case "true": %s = true
-case "false": %s = false
-default: return result, scan.ErrBadBool
+case "true": %[1]s = true
+case "false": %[1]s = false
+default: return result, decode.NewParseErr(%[2]s, s.Pos, scan.ErrBadBool)
 }
-`, ref, ref)
+`, ref, field)
 	case KindFloat32, KindFloat64:
-		b.WriteString("f, err := strconv.ParseFloat(sv, 64)\nif err != nil { return result, err }\n")
+		b.WriteString("f, err := strconv.ParseFloat(sv, 64)\n" + chk)
 		if f.Kind == KindFloat32 {
 			fmt.Fprintf(b, "%s = float32(f)\n", ref)
 		} else {
 			fmt.Fprintf(b, "%s = f\n", ref)
 		}
 	case KindUint, KindUint8, KindUint16, KindUint32, KindUint64:
-		b.WriteString("u, err := strconv.ParseUint(sv, 10, 64)\nif err != nil { return result, err }\n")
+		b.WriteString("u, err := strconv.ParseUint(sv, 10, 64)\n" + chk)
 		if f.Kind == KindUint64 {
 			fmt.Fprintf(b, "%s = u\n", ref)
 		} else {
 			fmt.Fprintf(b, "%s = %s(u)\n", ref, f.GoType)
 		}
 	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
-		b.WriteString("n, err := strconv.ParseInt(sv, 10, 64)\nif err != nil { return result, err }\n")
+		b.WriteString("n, err := strconv.ParseInt(sv, 10, 64)\n" + chk)
 		if f.Kind == KindInt64 {
 			fmt.Fprintf(b, "%s = n\n", ref)
 		} else {
 			fmt.Fprintf(b, "%s = %s(n)\n", ref, f.GoType)
 		}
 	case KindString:
-		// KeyView aliases the buffer; copy to detach.
 		fmt.Fprintf(b, "%s = string(sv)\n", ref)
 	}
 	b.WriteString("}\n")
@@ -4690,6 +4712,8 @@ func renderStreamField(f FieldInfo, ref, posVar string) string {
 	}
 	b := getSmall()
 	defer putSmall(b)
+	field := fieldLit(f)
+	chk := streamErrCheck(field)
 	if f.Pointer {
 		inner := f
 		inner.Pointer = false
@@ -4702,11 +4726,11 @@ func renderStreamField(f FieldInfo, ref, posVar string) string {
 		builtinM, customM := partitionCustomMods(f.Mods)
 		inner.Validation = builtinV
 		inner.Mods = builtinM
-		fmt.Fprintf(b, `if s.Pos >= len(s.Bytes()) { if err = s.ReadMore(0); err != nil { return result, err } }
-if s.Bytes()[s.Pos] == 'n' {
+		rm := streamReadMore(field, "0", false)
+		rmKi := strings.Replace(rm, "if s.Pos >=", "if s.Pos+ki >=", 1)
+		fmt.Fprintf(b, `%[4]sif s.Bytes()[s.Pos] == 'n' {
 	for ki := 1; ki < 4; ki++ {
-		if s.Pos+ki >= len(s.Bytes()) { if err = s.ReadMore(0); err != nil { return result, err } }
-		if s.Bytes()[s.Pos+ki] != "null"[ki] { return result, scan.ErrBadLiteral }
+		%[6]sif s.Bytes()[s.Pos+ki] != "null"[ki] { return result, decode.NewParseErr(%[5]s, s.Pos, scan.ErrBadLiteral) }
 	}
 	s.Pos += 4
 	%[1]s = nil
@@ -4715,7 +4739,7 @@ if s.Bytes()[s.Pos] == 'n' {
 	%[3]s
 	%[1]s = &v
 }
-`, ref, inner.GoType, renderStreamField(inner, "v", posVar))
+`, ref, inner.GoType, renderStreamField(inner, "v", posVar), rm, field, rmKi)
 		if !f.NoValidate && (len(customV) > 0 || len(customM) > 0) {
 			outer := f
 			outer.Validation = customV
@@ -4724,25 +4748,15 @@ if s.Bytes()[s.Pos] == 'n' {
 		}
 		return b.String()
 	}
-	// primScan: direct LHS multi-assign + err check. Shape is identical
-	// across String/Bool/Int64/Uint64/Float64 — only the s.X method name
-	// differs. Stream methods take no params, Stream owns s.Pos.
 	primScan := func(method string) {
 		fmt.Fprintf(b, `%[1]s, err = s.%[2]s()
-if err != nil { return result, err }
-`, ref, method)
+%[3]s`, ref, method, chk)
 	}
-	// widenedScan: read a wide intermediate (`iv`/`uv`/`fv`) and cast
-	// down. Used for narrow ints, narrow uints, and float32. wideType is
-	// the wide scan return type (int64/uint64/float64), wideVar is the
-	// local name, method is the s.X call, castTo is the destination type
-	// (or "float32" for the Float32 case).
 	widenedScan := func(wideType, wideVar, method, castTo string) {
 		fmt.Fprintf(b, `var %[1]s %[2]s
 %[1]s, err = s.%[3]s()
-if err != nil { return result, err }
-%[4]s = %[5]s(%[1]s)
-`, wideVar, wideType, method, ref, castTo)
+%[6]s%[4]s = %[5]s(%[1]s)
+`, wideVar, wideType, method, ref, castTo, chk)
 	}
 	switch f.Kind {
 	case KindString:
@@ -4764,8 +4778,7 @@ if err != nil { return result, err }
 	case KindStruct:
 		if isGenerated(f.GoType) {
 			fmt.Fprintf(b, `%[1]s, err = %[1]s.DecodeFromStream(s)
-if err != nil { return result, err }
-`, ref)
+%[2]s`, ref, nestedDecodeErrCheck(fieldLit(f), f.MultiErr, false))
 		} else {
 			b.WriteString(renderCrossPkgStructStreamDecode(f, ref, posVar))
 		}
@@ -4782,29 +4795,28 @@ if err != nil { return result, err }
 	case KindDuration:
 		renderStreamDuration(b, f, ref, posVar)
 	case KindNetIP:
-		renderStreamNetIP(b, ref, posVar)
+		renderStreamNetIP(b, f, ref, posVar)
 	case KindNetipAddr:
-		renderStreamNetipAddr(b, ref, posVar)
+		renderStreamNetipAddr(b, f, ref, posVar)
 	case KindNetipPrefix:
-		renderStreamNetipPrefix(b, ref, posVar)
+		renderStreamNetipPrefix(b, f, ref, posVar)
 	case KindRawJSON:
-		renderStreamRawJSON(b, ref, posVar)
+		renderStreamRawJSON(b, f, ref, posVar)
 	case KindURL:
-		renderStreamURL(b, ref, posVar)
+		renderStreamURL(b, f, ref, posVar)
 	case KindBigInt:
-		renderStreamBigInt(b, ref, posVar)
+		renderStreamBigInt(b, f, ref, posVar)
 	case KindBigFloat:
-		renderStreamBigFloat(b, ref, posVar)
+		renderStreamBigFloat(b, f, ref, posVar)
 	case KindBigRat:
-		renderStreamBigRat(b, ref, posVar)
+		renderStreamBigRat(b, f, ref, posVar)
 	case KindSQLNull:
 		renderStreamSQLNull(b, f, ref, posVar)
 	case KindAny:
 		renderStreamAny(b, f, ref, posVar)
 	default:
-		b.WriteString(`err = s.SkipValue()
-if err != nil { return result, err }
-`)
+		fmt.Fprintf(b, `err = s.SkipValue()
+%s`, chk)
 	}
 	if !f.NoValidate {
 		validateAndModStream(b, f, ref)
@@ -4827,30 +4839,25 @@ func emitStreamSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth
 	arrayN := f.ArrayLen
 	ivar := fmt.Sprintf("idx%d", depth)
 	slabVar := fmt.Sprintf("slab%d", depth)
+	field := fieldLit(f)
+	chk := streamErrCheck(field)
+	rm := streamReadMore(field, "0", false)
+	rmKi := strings.Replace(rm, "if s.Pos >=", "if s.Pos+ki >=", 1)
 	b.WriteString("{\n")
-	// err comes from the function-body scope (ObjectOpen / alias-container
-	// synthetic decl). No per-depth declaration needed.
 	if !isArray {
-		// `null` → nil out the slice and consume the literal.
 		fmt.Fprintf(b, `err = s.SkipSpace()
-if err != nil { return result, err }
-if s.Pos >= len(s.Bytes()) { if err = s.ReadMore(0); err != nil { return result, err } }
-if s.Bytes()[s.Pos] == 'n' {
+%[2]s%[4]sif s.Bytes()[s.Pos] == 'n' {
 	for ki := 1; ki < 4; ki++ {
-		if s.Pos+ki >= len(s.Bytes()) { if err = s.ReadMore(0); err != nil { return result, err } }
-		if s.Bytes()[s.Pos+ki] != "null"[ki] { return result, scan.ErrBadLiteral }
+		%[5]sif s.Bytes()[s.Pos+ki] != "null"[ki] { return result, decode.NewParseErr(%[3]s, s.Pos, scan.ErrBadLiteral) }
 	}
 	s.Pos += 4
-	%s = nil
+	%[1]s = nil
 } else {
-`, dst)
+`, dst, chk, field, rm, rmKi)
 	}
-	b.WriteString(`err = s.ArrayOpen()
-if err != nil { return result, err }
-err = s.SkipSpace()
-if err != nil { return result, err }
-if s.Pos >= len(s.Bytes()) { if err = s.ReadMore(0); err != nil { return result, err } }
-`)
+	fmt.Fprintf(b, `err = s.ArrayOpen()
+%[1]serr = s.SkipSpace()
+%[1]s%[2]s`, chk, rm)
 	if isArray {
 		fmt.Fprintf(b, "var %s int\n", ivar)
 		if f.ElemPointer {
@@ -4894,20 +4901,16 @@ if s.Pos >= len(s.Bytes()) { if err = s.ReadMore(0); err != nil { return result,
 		if isArray {
 			nilAssign = fmt.Sprintf("%s[%s] = nil\n%s++\n", dst, ivar, ivar)
 		}
-		fmt.Fprintf(b, `if s.Pos >= len(s.Bytes()) { if err = s.ReadMore(0); err != nil { return result, err } }
-if s.Bytes()[s.Pos] == 'n' {
+		fmt.Fprintf(b, `%[4]sif s.Bytes()[s.Pos] == 'n' {
 	for ki := 1; ki < 4; ki++ {
-		if s.Pos+ki >= len(s.Bytes()) { if err = s.ReadMore(0); err != nil { return result, err } }
-		if s.Bytes()[s.Pos+ki] != "null"[ki] { return result, scan.ErrBadLiteral }
+		%[5]sif s.Bytes()[s.Pos+ki] != "null"[ki] { return result, decode.NewParseErr(%[3]s, s.Pos, scan.ErrBadLiteral) }
 	}
 	s.Pos += 4
-	%s	err = s.SkipSpace()
-	if err != nil { return result, err }
-	if s.Pos >= len(s.Bytes()) { if err = s.ReadMore(0); err != nil { return result, err } }
-	if s.Bytes()[s.Pos] == ',' { s.Pos++; err = s.SkipSpace(); if err != nil { return result, err }; continue }
+	%[1]s	err = s.SkipSpace()
+	%[2]s%[4]sif s.Bytes()[s.Pos] == ',' { s.Pos++; err = s.SkipSpace(); %[2]scontinue }
 	break
 }
-`, nilAssign)
+`, nilAssign, chk, field, rm, rmKi)
 	}
 	// Compute the in-place target. For slice cases we pre-grow the
 	// slice/slab here so the slot exists before scan writes into it.
@@ -4927,53 +4930,44 @@ if s.Bytes()[s.Pos] == 'n' {
 	switch f.ElemKind {
 	case KindString:
 		fmt.Fprintf(b, `%s, err = s.String()
-if err != nil { return result, err }
-`, target)
+%s`, target, chk)
 	case KindBool:
 		fmt.Fprintf(b, `%s, err = s.Bool()
-if err != nil { return result, err }
-`, target)
+%s`, target, chk)
 	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
 		if f.ElemType == "int64" {
 			fmt.Fprintf(b, `%s, err = s.Int64()
-if err != nil { return result, err }
-`, target)
+%s`, target, chk)
 		} else {
 			fmt.Fprintf(b, `var iv int64
 iv, err = s.Int64()
-if err != nil { return result, err }
-%s = %s(iv)
-`, target, f.ElemType)
+%[3]s%[1]s = %[2]s(iv)
+`, target, f.ElemType, chk)
 		}
 	case KindUint, KindUint8, KindUint16, KindUint32, KindUint64:
 		if f.ElemType == "uint64" {
 			fmt.Fprintf(b, `%s, err = s.Uint64()
-if err != nil { return result, err }
-`, target)
+%s`, target, chk)
 		} else {
 			fmt.Fprintf(b, `var uv uint64
 uv, err = s.Uint64()
-if err != nil { return result, err }
-%s = %s(uv)
-`, target, f.ElemType)
+%[3]s%[1]s = %[2]s(uv)
+`, target, f.ElemType, chk)
 		}
 	case KindFloat32, KindFloat64:
 		if f.ElemKind == KindFloat64 {
 			fmt.Fprintf(b, `%s, err = s.Float64()
-if err != nil { return result, err }
-`, target)
+%s`, target, chk)
 		} else {
 			fmt.Fprintf(b, `var fv float64
 fv, err = s.Float64()
-if err != nil { return result, err }
-%s = float32(fv)
-`, target)
+%[2]s%[1]s = float32(fv)
+`, target, chk)
 		}
 	case KindStruct:
 		if directStruct {
 			fmt.Fprintf(b, `%[1]s, err = %[1]s.DecodeFromStream(s)
-if err != nil { return result, err }
-`, target)
+%[2]s`, target, nestedDecodeErrCheck(fieldLit(f), f.MultiErr, false))
 		}
 	case KindSlice, KindArray:
 		emitStreamSliceRead(b, peelSliceField(f), target, "s.Pos", depth+1)
@@ -4997,14 +4991,12 @@ if err != nil { return result, err }
 	default:
 		// dst tail already decoded in-place via append+index above.
 	}
-	b.WriteString(`err = s.SkipSpace()
-if err != nil { return result, err }
-if s.Pos >= len(s.Bytes()) { if err = s.ReadMore(0); err != nil { return result, err } }
-if s.Bytes()[s.Pos] == ',' { s.Pos++; err = s.SkipSpace(); if err != nil { return result, err }; continue }
+	fmt.Fprintf(b, `err = s.SkipSpace()
+%[1]s%[3]sif s.Bytes()[s.Pos] == ',' { s.Pos++; err = s.SkipSpace(); %[1]scontinue }
 break
 }
-if s.Bytes()[s.Pos] != ']' { return result, scan.ErrBadArray }
-`)
+if s.Bytes()[s.Pos] != ']' { return result, decode.NewParseErr(%[2]s, s.Pos, scan.ErrBadArray) }
+`, chk, field, rm)
 	if isArray {
 		fmt.Fprintf(b, "if %s != %d { return result, %s }\n",
 			ivar, arrayN,

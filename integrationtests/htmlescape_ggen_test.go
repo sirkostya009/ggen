@@ -6,6 +6,7 @@ import (
 	"strings"
 	"unsafe"
 
+	"github.com/sirkostya009/ggen/decode"
 	"github.com/sirkostya009/ggen/decode/validation"
 	"github.com/sirkostya009/ggen/encode"
 	"github.com/sirkostya009/ggen/scan"
@@ -20,19 +21,20 @@ func (result HTMLRawStruct) DecodeFrom(data []byte) (HTMLRawStruct, int, error) 
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
-		return result, i, scan.ErrBadObject
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 	i++
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i < len(data) && data[i] == '}' {
-		return result, i + 1, nil
+		i++
+		return result, i, nil
 	}
 	for {
 		var key string
 		if i >= len(data) || data[i] != '"' {
-			return result, i, scan.ErrExpectString
+			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		{
 			ke := i + 1
@@ -40,10 +42,10 @@ func (result HTMLRawStruct) DecodeFrom(data []byte) (HTMLRawStruct, int, error) 
 				ke++
 			}
 			if ke >= len(data) {
-				return result, i, scan.ErrUnterminated
+				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
 			}
 			if data[ke] < 0x20 {
-				return result, i, scan.ErrBadString
+				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
 			}
 			if data[ke] == '"' {
 				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
@@ -51,7 +53,7 @@ func (result HTMLRawStruct) DecodeFrom(data []byte) (HTMLRawStruct, int, error) 
 			} else {
 				key, i, err = scan.String(data, i)
 				if err != nil {
-					return result, i, err
+					return result, i, decode.NewParseErr("", i, err)
 				}
 			}
 		}
@@ -59,7 +61,7 @@ func (result HTMLRawStruct) DecodeFrom(data []byte) (HTMLRawStruct, int, error) 
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
-			return result, i, scan.ErrBadObject
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		i++
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -69,11 +71,11 @@ func (result HTMLRawStruct) DecodeFrom(data []byte) (HTMLRawStruct, int, error) 
 		case 4:
 			if key == "note" {
 				if seenNote {
-					return result, i, &validation.DuplicateKeyError{Field: "note"}
+					return result, i, &validation.DuplicateKeyError{Path: []string{"note"}}
 				}
 				seenNote = true
 				if i >= len(data) || data[i] != '"' {
-					return result, i, scan.ErrExpectString
+					return result, i, decode.NewParseErr("note", i, scan.ErrExpectString)
 				}
 				{
 					ke := i + 1
@@ -81,10 +83,10 @@ func (result HTMLRawStruct) DecodeFrom(data []byte) (HTMLRawStruct, int, error) 
 						ke++
 					}
 					if ke >= len(data) {
-						return result, i, scan.ErrUnterminated
+						return result, i, decode.NewParseErr("note", i, scan.ErrUnterminated)
 					}
 					if data[ke] < 0x20 {
-						return result, i, scan.ErrBadString
+						return result, i, decode.NewParseErr("note", i, scan.ErrBadString)
 					}
 					if data[ke] == '"' {
 						result.Note = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
@@ -92,21 +94,21 @@ func (result HTMLRawStruct) DecodeFrom(data []byte) (HTMLRawStruct, int, error) 
 					} else {
 						result.Note, i, err = scan.String(data, i)
 						if err != nil {
-							return result, i, err
+							return result, i, decode.NewParseErr("note", i, err)
 						}
 					}
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Path: []string{key}}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: key}
+			return result, i, &validation.UnknownKeyError{Path: []string{key}}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
-			return result, i, scan.ErrBadObject
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		if data[i] == ',' {
 			i++
@@ -116,9 +118,10 @@ func (result HTMLRawStruct) DecodeFrom(data []byte) (HTMLRawStruct, int, error) 
 			continue
 		}
 		if data[i] == '}' {
-			return result, i + 1, nil
+			i++
+			return result, i, nil
 		}
-		return result, i, scan.ErrBadObject
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 }
 
@@ -126,15 +129,15 @@ func (result HTMLRawStruct) DecodeFromStream(s *scan.Stream) (HTMLRawStruct, err
 	seenNote := false
 	err := s.ObjectOpen()
 	if err != nil {
-		return result, err
+		return result, decode.NewParseErr("", s.Pos, err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, err
+		return result, decode.NewParseErr("", s.Pos, err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, err
+			return result, decode.NewParseErr("", s.Pos, err)
 		}
 		s.Pos = 0
 	}
@@ -146,36 +149,37 @@ func (result HTMLRawStruct) DecodeFromStream(s *scan.Stream) (HTMLRawStruct, err
 		var key string
 		key, err = s.KeyView()
 		if err != nil {
-			return result, err
+			return result, decode.NewParseErr("", s.Pos, err)
 		}
 		switch len(key) {
 		case 4:
 			if key == "note" {
 				err = s.ConsumeColon()
 				if err != nil {
-					return result, err
+					return result, decode.NewParseErr("note", s.Pos, err)
 				}
 				if seenNote {
-					return result, &validation.DuplicateKeyError{Field: "note"}
+					return result, &validation.DuplicateKeyError{Path: []string{"note"}}
 				}
 				seenNote = true
 				result.Note, err = s.String()
 				if err != nil {
-					return result, err
+					return result, decode.NewParseErr("note", s.Pos, err)
 				}
 			} else {
-				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
 			}
 		default:
-			return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
 		}
+
 		err = s.SkipSpace()
 		if err != nil {
-			return result, err
+			return result, decode.NewParseErr("", s.Pos, err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, err
+				return result, decode.NewParseErr("", s.Pos, err)
 			}
 			s.Pos = 0
 		}
@@ -184,7 +188,7 @@ func (result HTMLRawStruct) DecodeFromStream(s *scan.Stream) (HTMLRawStruct, err
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, err
+				return result, decode.NewParseErr("", s.Pos, err)
 			}
 			continue
 		}
@@ -192,7 +196,7 @@ func (result HTMLRawStruct) DecodeFromStream(s *scan.Stream) (HTMLRawStruct, err
 			s.Pos++
 			return result, nil
 		}
-		return result, scan.ErrBadObject
+		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
 	}
 }
 
@@ -219,19 +223,20 @@ func (result HTMLEscapeStruct) DecodeFrom(data []byte) (HTMLEscapeStruct, int, e
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
-		return result, i, scan.ErrBadObject
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 	i++
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i < len(data) && data[i] == '}' {
-		return result, i + 1, nil
+		i++
+		return result, i, nil
 	}
 	for {
 		var key string
 		if i >= len(data) || data[i] != '"' {
-			return result, i, scan.ErrExpectString
+			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		{
 			ke := i + 1
@@ -239,10 +244,10 @@ func (result HTMLEscapeStruct) DecodeFrom(data []byte) (HTMLEscapeStruct, int, e
 				ke++
 			}
 			if ke >= len(data) {
-				return result, i, scan.ErrUnterminated
+				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
 			}
 			if data[ke] < 0x20 {
-				return result, i, scan.ErrBadString
+				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
 			}
 			if data[ke] == '"' {
 				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
@@ -250,7 +255,7 @@ func (result HTMLEscapeStruct) DecodeFrom(data []byte) (HTMLEscapeStruct, int, e
 			} else {
 				key, i, err = scan.String(data, i)
 				if err != nil {
-					return result, i, err
+					return result, i, decode.NewParseErr("", i, err)
 				}
 			}
 		}
@@ -258,7 +263,7 @@ func (result HTMLEscapeStruct) DecodeFrom(data []byte) (HTMLEscapeStruct, int, e
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
-			return result, i, scan.ErrBadObject
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		i++
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -268,11 +273,11 @@ func (result HTMLEscapeStruct) DecodeFrom(data []byte) (HTMLEscapeStruct, int, e
 		case 4:
 			if key == "note" {
 				if seenNote {
-					return result, i, &validation.DuplicateKeyError{Field: "note"}
+					return result, i, &validation.DuplicateKeyError{Path: []string{"note"}}
 				}
 				seenNote = true
 				if i >= len(data) || data[i] != '"' {
-					return result, i, scan.ErrExpectString
+					return result, i, decode.NewParseErr("note", i, scan.ErrExpectString)
 				}
 				{
 					ke := i + 1
@@ -280,10 +285,10 @@ func (result HTMLEscapeStruct) DecodeFrom(data []byte) (HTMLEscapeStruct, int, e
 						ke++
 					}
 					if ke >= len(data) {
-						return result, i, scan.ErrUnterminated
+						return result, i, decode.NewParseErr("note", i, scan.ErrUnterminated)
 					}
 					if data[ke] < 0x20 {
-						return result, i, scan.ErrBadString
+						return result, i, decode.NewParseErr("note", i, scan.ErrBadString)
 					}
 					if data[ke] == '"' {
 						result.Note = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
@@ -291,21 +296,21 @@ func (result HTMLEscapeStruct) DecodeFrom(data []byte) (HTMLEscapeStruct, int, e
 					} else {
 						result.Note, i, err = scan.String(data, i)
 						if err != nil {
-							return result, i, err
+							return result, i, decode.NewParseErr("note", i, err)
 						}
 					}
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Path: []string{key}}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: key}
+			return result, i, &validation.UnknownKeyError{Path: []string{key}}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
-			return result, i, scan.ErrBadObject
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		if data[i] == ',' {
 			i++
@@ -315,9 +320,10 @@ func (result HTMLEscapeStruct) DecodeFrom(data []byte) (HTMLEscapeStruct, int, e
 			continue
 		}
 		if data[i] == '}' {
-			return result, i + 1, nil
+			i++
+			return result, i, nil
 		}
-		return result, i, scan.ErrBadObject
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 }
 
@@ -325,15 +331,15 @@ func (result HTMLEscapeStruct) DecodeFromStream(s *scan.Stream) (HTMLEscapeStruc
 	seenNote := false
 	err := s.ObjectOpen()
 	if err != nil {
-		return result, err
+		return result, decode.NewParseErr("", s.Pos, err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, err
+		return result, decode.NewParseErr("", s.Pos, err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, err
+			return result, decode.NewParseErr("", s.Pos, err)
 		}
 		s.Pos = 0
 	}
@@ -345,36 +351,37 @@ func (result HTMLEscapeStruct) DecodeFromStream(s *scan.Stream) (HTMLEscapeStruc
 		var key string
 		key, err = s.KeyView()
 		if err != nil {
-			return result, err
+			return result, decode.NewParseErr("", s.Pos, err)
 		}
 		switch len(key) {
 		case 4:
 			if key == "note" {
 				err = s.ConsumeColon()
 				if err != nil {
-					return result, err
+					return result, decode.NewParseErr("note", s.Pos, err)
 				}
 				if seenNote {
-					return result, &validation.DuplicateKeyError{Field: "note"}
+					return result, &validation.DuplicateKeyError{Path: []string{"note"}}
 				}
 				seenNote = true
 				result.Note, err = s.String()
 				if err != nil {
-					return result, err
+					return result, decode.NewParseErr("note", s.Pos, err)
 				}
 			} else {
-				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
 			}
 		default:
-			return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
 		}
+
 		err = s.SkipSpace()
 		if err != nil {
-			return result, err
+			return result, decode.NewParseErr("", s.Pos, err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, err
+				return result, decode.NewParseErr("", s.Pos, err)
 			}
 			s.Pos = 0
 		}
@@ -383,7 +390,7 @@ func (result HTMLEscapeStruct) DecodeFromStream(s *scan.Stream) (HTMLEscapeStruc
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, err
+				return result, decode.NewParseErr("", s.Pos, err)
 			}
 			continue
 		}
@@ -391,7 +398,7 @@ func (result HTMLEscapeStruct) DecodeFromStream(s *scan.Stream) (HTMLEscapeStruc
 			s.Pos++
 			return result, nil
 		}
-		return result, scan.ErrBadObject
+		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
 	}
 }
 

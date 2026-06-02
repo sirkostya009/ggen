@@ -6,6 +6,7 @@ import (
 	"strings"
 	"unsafe"
 
+	"github.com/sirkostya009/ggen/decode"
 	"github.com/sirkostya009/ggen/decode/validation"
 	"github.com/sirkostya009/ggen/encode"
 	"github.com/sirkostya009/ggen/scan"
@@ -23,19 +24,20 @@ func (result InlineStruct) DecodeFrom(data []byte) (InlineStruct, int, error) {
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
-		return result, i, scan.ErrBadObject
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 	i++
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i < len(data) && data[i] == '}' {
-		return result, i + 1, nil
+		i++
+		return result, i, nil
 	}
 	for {
 		var key string
 		if i >= len(data) || data[i] != '"' {
-			return result, i, scan.ErrExpectString
+			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		{
 			ke := i + 1
@@ -43,10 +45,10 @@ func (result InlineStruct) DecodeFrom(data []byte) (InlineStruct, int, error) {
 				ke++
 			}
 			if ke >= len(data) {
-				return result, i, scan.ErrUnterminated
+				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
 			}
 			if data[ke] < 0x20 {
-				return result, i, scan.ErrBadString
+				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
 			}
 			if data[ke] == '"' {
 				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
@@ -54,7 +56,7 @@ func (result InlineStruct) DecodeFrom(data []byte) (InlineStruct, int, error) {
 			} else {
 				key, i, err = scan.String(data, i)
 				if err != nil {
-					return result, i, err
+					return result, i, decode.NewParseErr("", i, err)
 				}
 			}
 		}
@@ -62,7 +64,7 @@ func (result InlineStruct) DecodeFrom(data []byte) (InlineStruct, int, error) {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
-			return result, i, scan.ErrBadObject
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		i++
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -72,11 +74,11 @@ func (result InlineStruct) DecodeFrom(data []byte) (InlineStruct, int, error) {
 		case 4:
 			if key == "name" {
 				if seenName {
-					return result, i, &validation.DuplicateKeyError{Field: "name"}
+					return result, i, &validation.DuplicateKeyError{Path: []string{"name"}}
 				}
 				seenName = true
 				if i >= len(data) || data[i] != '"' {
-					return result, i, scan.ErrExpectString
+					return result, i, decode.NewParseErr("name", i, scan.ErrExpectString)
 				}
 				{
 					ke := i + 1
@@ -84,10 +86,10 @@ func (result InlineStruct) DecodeFrom(data []byte) (InlineStruct, int, error) {
 						ke++
 					}
 					if ke >= len(data) {
-						return result, i, scan.ErrUnterminated
+						return result, i, decode.NewParseErr("name", i, scan.ErrUnterminated)
 					}
 					if data[ke] < 0x20 {
-						return result, i, scan.ErrBadString
+						return result, i, decode.NewParseErr("name", i, scan.ErrBadString)
 					}
 					if data[ke] == '"' {
 						result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
@@ -95,7 +97,7 @@ func (result InlineStruct) DecodeFrom(data []byte) (InlineStruct, int, error) {
 					} else {
 						result.Name, i, err = scan.String(data, i)
 						if err != nil {
-							return result, i, err
+							return result, i, decode.NewParseErr("name", i, err)
 						}
 					}
 				}
@@ -105,7 +107,7 @@ func (result InlineStruct) DecodeFrom(data []byte) (InlineStruct, int, error) {
 				}
 				result.Extra[key], i, err = scan.Any(data, i)
 				if err != nil {
-					return result, i, err
+					return result, i, decode.NewParseErr(key, i, err)
 				}
 			}
 		default:
@@ -114,14 +116,14 @@ func (result InlineStruct) DecodeFrom(data []byte) (InlineStruct, int, error) {
 			}
 			result.Extra[key], i, err = scan.Any(data, i)
 			if err != nil {
-				return result, i, err
+				return result, i, decode.NewParseErr(key, i, err)
 			}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
-			return result, i, scan.ErrBadObject
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		if data[i] == ',' {
 			i++
@@ -131,9 +133,10 @@ func (result InlineStruct) DecodeFrom(data []byte) (InlineStruct, int, error) {
 			continue
 		}
 		if data[i] == '}' {
-			return result, i + 1, nil
+			i++
+			return result, i, nil
 		}
-		return result, i, scan.ErrBadObject
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 }
 
@@ -144,15 +147,15 @@ func (result InlineStruct) DecodeFromStream(s *scan.Stream) (InlineStruct, error
 	seenName := false
 	err := s.ObjectOpen()
 	if err != nil {
-		return result, err
+		return result, decode.NewParseErr("", s.Pos, err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, err
+		return result, decode.NewParseErr("", s.Pos, err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, err
+			return result, decode.NewParseErr("", s.Pos, err)
 		}
 		s.Pos = 0
 	}
@@ -164,58 +167,59 @@ func (result InlineStruct) DecodeFromStream(s *scan.Stream) (InlineStruct, error
 		var key string
 		key, err = s.KeyView()
 		if err != nil {
-			return result, err
+			return result, decode.NewParseErr("", s.Pos, err)
 		}
 		switch len(key) {
 		case 4:
 			if key == "name" {
 				err = s.ConsumeColon()
 				if err != nil {
-					return result, err
+					return result, decode.NewParseErr("name", s.Pos, err)
 				}
 				if seenName {
-					return result, &validation.DuplicateKeyError{Field: "name"}
+					return result, &validation.DuplicateKeyError{Path: []string{"name"}}
 				}
 				seenName = true
 				result.Name, err = s.String()
 				if err != nil {
-					return result, err
+					return result, decode.NewParseErr("name", s.Pos, err)
 				}
 			} else {
 				ownKey := strings.Clone(key)
 				err = s.ConsumeColon()
 				if err != nil {
-					return result, err
+					return result, decode.NewParseErr(ownKey, s.Pos, err)
 				}
 				if result.Extra == nil {
 					result.Extra = make(map[string]any)
 				}
 				result.Extra[ownKey], err = s.Any()
 				if err != nil {
-					return result, err
+					return result, decode.NewParseErr(ownKey, s.Pos, err)
 				}
 			}
 		default:
 			ownKey := strings.Clone(key)
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, err
+				return result, decode.NewParseErr(ownKey, s.Pos, err)
 			}
 			if result.Extra == nil {
 				result.Extra = make(map[string]any)
 			}
 			result.Extra[ownKey], err = s.Any()
 			if err != nil {
-				return result, err
+				return result, decode.NewParseErr(ownKey, s.Pos, err)
 			}
 		}
+
 		err = s.SkipSpace()
 		if err != nil {
-			return result, err
+			return result, decode.NewParseErr("", s.Pos, err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, err
+				return result, decode.NewParseErr("", s.Pos, err)
 			}
 			s.Pos = 0
 		}
@@ -224,7 +228,7 @@ func (result InlineStruct) DecodeFromStream(s *scan.Stream) (InlineStruct, error
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, err
+				return result, decode.NewParseErr("", s.Pos, err)
 			}
 			continue
 		}
@@ -232,7 +236,7 @@ func (result InlineStruct) DecodeFromStream(s *scan.Stream) (InlineStruct, error
 			s.Pos++
 			return result, nil
 		}
-		return result, scan.ErrBadObject
+		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
 	}
 }
 
@@ -284,19 +288,20 @@ func (result InlineStringsStruct) DecodeFrom(data []byte) (InlineStringsStruct, 
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
-		return result, i, scan.ErrBadObject
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 	i++
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i < len(data) && data[i] == '}' {
-		return result, i + 1, nil
+		i++
+		return result, i, nil
 	}
 	for {
 		var key string
 		if i >= len(data) || data[i] != '"' {
-			return result, i, scan.ErrExpectString
+			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		{
 			ke := i + 1
@@ -304,10 +309,10 @@ func (result InlineStringsStruct) DecodeFrom(data []byte) (InlineStringsStruct, 
 				ke++
 			}
 			if ke >= len(data) {
-				return result, i, scan.ErrUnterminated
+				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
 			}
 			if data[ke] < 0x20 {
-				return result, i, scan.ErrBadString
+				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
 			}
 			if data[ke] == '"' {
 				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
@@ -315,7 +320,7 @@ func (result InlineStringsStruct) DecodeFrom(data []byte) (InlineStringsStruct, 
 			} else {
 				key, i, err = scan.String(data, i)
 				if err != nil {
-					return result, i, err
+					return result, i, decode.NewParseErr("", i, err)
 				}
 			}
 		}
@@ -323,7 +328,7 @@ func (result InlineStringsStruct) DecodeFrom(data []byte) (InlineStringsStruct, 
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
-			return result, i, scan.ErrBadObject
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		i++
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -333,11 +338,11 @@ func (result InlineStringsStruct) DecodeFrom(data []byte) (InlineStringsStruct, 
 		case 4:
 			if key == "name" {
 				if seenName {
-					return result, i, &validation.DuplicateKeyError{Field: "name"}
+					return result, i, &validation.DuplicateKeyError{Path: []string{"name"}}
 				}
 				seenName = true
 				if i >= len(data) || data[i] != '"' {
-					return result, i, scan.ErrExpectString
+					return result, i, decode.NewParseErr("name", i, scan.ErrExpectString)
 				}
 				{
 					ke := i + 1
@@ -345,10 +350,10 @@ func (result InlineStringsStruct) DecodeFrom(data []byte) (InlineStringsStruct, 
 						ke++
 					}
 					if ke >= len(data) {
-						return result, i, scan.ErrUnterminated
+						return result, i, decode.NewParseErr("name", i, scan.ErrUnterminated)
 					}
 					if data[ke] < 0x20 {
-						return result, i, scan.ErrBadString
+						return result, i, decode.NewParseErr("name", i, scan.ErrBadString)
 					}
 					if data[ke] == '"' {
 						result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
@@ -356,7 +361,7 @@ func (result InlineStringsStruct) DecodeFrom(data []byte) (InlineStringsStruct, 
 					} else {
 						result.Name, i, err = scan.String(data, i)
 						if err != nil {
-							return result, i, err
+							return result, i, decode.NewParseErr("name", i, err)
 						}
 					}
 				}
@@ -368,7 +373,7 @@ func (result InlineStringsStruct) DecodeFrom(data []byte) (InlineStringsStruct, 
 					var _iv string
 					_iv, i, err = scan.String(data, i)
 					if err != nil {
-						return result, i, err
+						return result, i, decode.NewParseErr(key, i, err)
 					}
 					result.Extra[key] = _iv
 				}
@@ -381,7 +386,7 @@ func (result InlineStringsStruct) DecodeFrom(data []byte) (InlineStringsStruct, 
 				var _iv string
 				_iv, i, err = scan.String(data, i)
 				if err != nil {
-					return result, i, err
+					return result, i, decode.NewParseErr(key, i, err)
 				}
 				result.Extra[key] = _iv
 			}
@@ -390,7 +395,7 @@ func (result InlineStringsStruct) DecodeFrom(data []byte) (InlineStringsStruct, 
 			i++
 		}
 		if i >= len(data) {
-			return result, i, scan.ErrBadObject
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		if data[i] == ',' {
 			i++
@@ -400,9 +405,10 @@ func (result InlineStringsStruct) DecodeFrom(data []byte) (InlineStringsStruct, 
 			continue
 		}
 		if data[i] == '}' {
-			return result, i + 1, nil
+			i++
+			return result, i, nil
 		}
-		return result, i, scan.ErrBadObject
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 }
 
@@ -413,15 +419,15 @@ func (result InlineStringsStruct) DecodeFromStream(s *scan.Stream) (InlineString
 	seenName := false
 	err := s.ObjectOpen()
 	if err != nil {
-		return result, err
+		return result, decode.NewParseErr("", s.Pos, err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, err
+		return result, decode.NewParseErr("", s.Pos, err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, err
+			return result, decode.NewParseErr("", s.Pos, err)
 		}
 		s.Pos = 0
 	}
@@ -433,28 +439,28 @@ func (result InlineStringsStruct) DecodeFromStream(s *scan.Stream) (InlineString
 		var key string
 		key, err = s.KeyView()
 		if err != nil {
-			return result, err
+			return result, decode.NewParseErr("", s.Pos, err)
 		}
 		switch len(key) {
 		case 4:
 			if key == "name" {
 				err = s.ConsumeColon()
 				if err != nil {
-					return result, err
+					return result, decode.NewParseErr("name", s.Pos, err)
 				}
 				if seenName {
-					return result, &validation.DuplicateKeyError{Field: "name"}
+					return result, &validation.DuplicateKeyError{Path: []string{"name"}}
 				}
 				seenName = true
 				result.Name, err = s.String()
 				if err != nil {
-					return result, err
+					return result, decode.NewParseErr("name", s.Pos, err)
 				}
 			} else {
 				ownKey := strings.Clone(key)
 				err = s.ConsumeColon()
 				if err != nil {
-					return result, err
+					return result, decode.NewParseErr(ownKey, s.Pos, err)
 				}
 				if result.Extra == nil {
 					result.Extra = make(map[string]string)
@@ -463,7 +469,7 @@ func (result InlineStringsStruct) DecodeFromStream(s *scan.Stream) (InlineString
 					var _iv string
 					_iv, err = s.String()
 					if err != nil {
-						return result, err
+						return result, decode.NewParseErr(ownKey, s.Pos, err)
 					}
 					result.Extra[ownKey] = _iv
 				}
@@ -472,7 +478,7 @@ func (result InlineStringsStruct) DecodeFromStream(s *scan.Stream) (InlineString
 			ownKey := strings.Clone(key)
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, err
+				return result, decode.NewParseErr(ownKey, s.Pos, err)
 			}
 			if result.Extra == nil {
 				result.Extra = make(map[string]string)
@@ -481,18 +487,19 @@ func (result InlineStringsStruct) DecodeFromStream(s *scan.Stream) (InlineString
 				var _iv string
 				_iv, err = s.String()
 				if err != nil {
-					return result, err
+					return result, decode.NewParseErr(ownKey, s.Pos, err)
 				}
 				result.Extra[ownKey] = _iv
 			}
 		}
+
 		err = s.SkipSpace()
 		if err != nil {
-			return result, err
+			return result, decode.NewParseErr("", s.Pos, err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, err
+				return result, decode.NewParseErr("", s.Pos, err)
 			}
 			s.Pos = 0
 		}
@@ -501,7 +508,7 @@ func (result InlineStringsStruct) DecodeFromStream(s *scan.Stream) (InlineString
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, err
+				return result, decode.NewParseErr("", s.Pos, err)
 			}
 			continue
 		}
@@ -509,7 +516,7 @@ func (result InlineStringsStruct) DecodeFromStream(s *scan.Stream) (InlineString
 			s.Pos++
 			return result, nil
 		}
-		return result, scan.ErrBadObject
+		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
 	}
 }
 
@@ -560,19 +567,20 @@ func (result InlineStructsStruct) DecodeFrom(data []byte) (InlineStructsStruct, 
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
-		return result, i, scan.ErrBadObject
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 	i++
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i < len(data) && data[i] == '}' {
-		return result, i + 1, nil
+		i++
+		return result, i, nil
 	}
 	for {
 		var key string
 		if i >= len(data) || data[i] != '"' {
-			return result, i, scan.ErrExpectString
+			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		{
 			ke := i + 1
@@ -580,10 +588,10 @@ func (result InlineStructsStruct) DecodeFrom(data []byte) (InlineStructsStruct, 
 				ke++
 			}
 			if ke >= len(data) {
-				return result, i, scan.ErrUnterminated
+				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
 			}
 			if data[ke] < 0x20 {
-				return result, i, scan.ErrBadString
+				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
 			}
 			if data[ke] == '"' {
 				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
@@ -591,7 +599,7 @@ func (result InlineStructsStruct) DecodeFrom(data []byte) (InlineStructsStruct, 
 			} else {
 				key, i, err = scan.String(data, i)
 				if err != nil {
-					return result, i, err
+					return result, i, decode.NewParseErr("", i, err)
 				}
 			}
 		}
@@ -599,7 +607,7 @@ func (result InlineStructsStruct) DecodeFrom(data []byte) (InlineStructsStruct, 
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
-			return result, i, scan.ErrBadObject
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		i++
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -609,11 +617,11 @@ func (result InlineStructsStruct) DecodeFrom(data []byte) (InlineStructsStruct, 
 		case 4:
 			if key == "name" {
 				if seenName {
-					return result, i, &validation.DuplicateKeyError{Field: "name"}
+					return result, i, &validation.DuplicateKeyError{Path: []string{"name"}}
 				}
 				seenName = true
 				if i >= len(data) || data[i] != '"' {
-					return result, i, scan.ErrExpectString
+					return result, i, decode.NewParseErr("name", i, scan.ErrExpectString)
 				}
 				{
 					ke := i + 1
@@ -621,10 +629,10 @@ func (result InlineStructsStruct) DecodeFrom(data []byte) (InlineStructsStruct, 
 						ke++
 					}
 					if ke >= len(data) {
-						return result, i, scan.ErrUnterminated
+						return result, i, decode.NewParseErr("name", i, scan.ErrUnterminated)
 					}
 					if data[ke] < 0x20 {
-						return result, i, scan.ErrBadString
+						return result, i, decode.NewParseErr("name", i, scan.ErrBadString)
 					}
 					if data[ke] == '"' {
 						result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
@@ -632,7 +640,7 @@ func (result InlineStructsStruct) DecodeFrom(data []byte) (InlineStructsStruct, 
 					} else {
 						result.Name, i, err = scan.String(data, i)
 						if err != nil {
-							return result, i, err
+							return result, i, decode.NewParseErr("name", i, err)
 						}
 					}
 				}
@@ -646,7 +654,7 @@ func (result InlineStructsStruct) DecodeFrom(data []byte) (InlineStructsStruct, 
 					_iv, _in, err = _iv.DecodeFrom(data[i:])
 					i += _in
 					if err != nil {
-						return result, i, err
+						return result, i, decode.NewParseErr(key, i, err)
 					}
 					result.Extra[key] = _iv
 				}
@@ -661,7 +669,7 @@ func (result InlineStructsStruct) DecodeFrom(data []byte) (InlineStructsStruct, 
 				_iv, _in, err = _iv.DecodeFrom(data[i:])
 				i += _in
 				if err != nil {
-					return result, i, err
+					return result, i, decode.NewParseErr(key, i, err)
 				}
 				result.Extra[key] = _iv
 			}
@@ -670,7 +678,7 @@ func (result InlineStructsStruct) DecodeFrom(data []byte) (InlineStructsStruct, 
 			i++
 		}
 		if i >= len(data) {
-			return result, i, scan.ErrBadObject
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		if data[i] == ',' {
 			i++
@@ -680,9 +688,10 @@ func (result InlineStructsStruct) DecodeFrom(data []byte) (InlineStructsStruct, 
 			continue
 		}
 		if data[i] == '}' {
-			return result, i + 1, nil
+			i++
+			return result, i, nil
 		}
-		return result, i, scan.ErrBadObject
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 }
 
@@ -693,15 +702,15 @@ func (result InlineStructsStruct) DecodeFromStream(s *scan.Stream) (InlineStruct
 	seenName := false
 	err := s.ObjectOpen()
 	if err != nil {
-		return result, err
+		return result, decode.NewParseErr("", s.Pos, err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, err
+		return result, decode.NewParseErr("", s.Pos, err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, err
+			return result, decode.NewParseErr("", s.Pos, err)
 		}
 		s.Pos = 0
 	}
@@ -713,28 +722,28 @@ func (result InlineStructsStruct) DecodeFromStream(s *scan.Stream) (InlineStruct
 		var key string
 		key, err = s.KeyView()
 		if err != nil {
-			return result, err
+			return result, decode.NewParseErr("", s.Pos, err)
 		}
 		switch len(key) {
 		case 4:
 			if key == "name" {
 				err = s.ConsumeColon()
 				if err != nil {
-					return result, err
+					return result, decode.NewParseErr("name", s.Pos, err)
 				}
 				if seenName {
-					return result, &validation.DuplicateKeyError{Field: "name"}
+					return result, &validation.DuplicateKeyError{Path: []string{"name"}}
 				}
 				seenName = true
 				result.Name, err = s.String()
 				if err != nil {
-					return result, err
+					return result, decode.NewParseErr("name", s.Pos, err)
 				}
 			} else {
 				ownKey := strings.Clone(key)
 				err = s.ConsumeColon()
 				if err != nil {
-					return result, err
+					return result, decode.NewParseErr(ownKey, s.Pos, err)
 				}
 				if result.Extra == nil {
 					result.Extra = make(map[string]InlineStruct)
@@ -743,7 +752,7 @@ func (result InlineStructsStruct) DecodeFromStream(s *scan.Stream) (InlineStruct
 					var _iv InlineStruct
 					_iv, err = _iv.DecodeFromStream(s)
 					if err != nil {
-						return result, err
+						return result, decode.NewParseErr(ownKey, s.Pos, err)
 					}
 					result.Extra[ownKey] = _iv
 				}
@@ -752,7 +761,7 @@ func (result InlineStructsStruct) DecodeFromStream(s *scan.Stream) (InlineStruct
 			ownKey := strings.Clone(key)
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, err
+				return result, decode.NewParseErr(ownKey, s.Pos, err)
 			}
 			if result.Extra == nil {
 				result.Extra = make(map[string]InlineStruct)
@@ -761,18 +770,19 @@ func (result InlineStructsStruct) DecodeFromStream(s *scan.Stream) (InlineStruct
 				var _iv InlineStruct
 				_iv, err = _iv.DecodeFromStream(s)
 				if err != nil {
-					return result, err
+					return result, decode.NewParseErr(ownKey, s.Pos, err)
 				}
 				result.Extra[ownKey] = _iv
 			}
 		}
+
 		err = s.SkipSpace()
 		if err != nil {
-			return result, err
+			return result, decode.NewParseErr("", s.Pos, err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, err
+				return result, decode.NewParseErr("", s.Pos, err)
 			}
 			s.Pos = 0
 		}
@@ -781,7 +791,7 @@ func (result InlineStructsStruct) DecodeFromStream(s *scan.Stream) (InlineStruct
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, err
+				return result, decode.NewParseErr("", s.Pos, err)
 			}
 			continue
 		}
@@ -789,7 +799,7 @@ func (result InlineStructsStruct) DecodeFromStream(s *scan.Stream) (InlineStruct
 			s.Pos++
 			return result, nil
 		}
-		return result, scan.ErrBadObject
+		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
 	}
 }
 

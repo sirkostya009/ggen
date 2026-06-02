@@ -335,6 +335,28 @@ if errors.As(err, &minlen) {
 > implements `Unwrap() []error` so `errors.Is` / `errors.As` walk every
 > accumulated error.
 
+Low-level parse failures (malformed JSON, wrong primitive type) come back
+wrapped in `*decode.ParseError`, which carries the JSON field path the
+decoder was working on and a byte offset:
+
+```go
+var pe *decode.ParseError
+if errors.As(err, &pe) {
+    // pe.Field — dotted JSON path, e.g. "addr.street"
+    // pe.Pos   — byte offset within the data slice passed to DecodeFrom
+    // pe.Err   — underlying sentinel (scan.ErrBadString, scan.ErrBadObject, …)
+}
+
+// The wrap is transparent to errors.Is — the underlying scan sentinel
+// is still reachable:
+if errors.Is(err, scan.ErrBadString) { ... }
+```
+
+Validation errors are NOT wrapped: their typed pointers (`*validation.MinLenError`
+etc.) remain directly reachable via `errors.As`. `ParseError.Error()` only
+prints the `parse error at <field> (pos <n>)` prefix — call `errors.Unwrap`
+to get the underlying message.
+
 #### custom rules
 
 `@FuncName` references a function that ggen looks up at codegen. The

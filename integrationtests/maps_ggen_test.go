@@ -8,6 +8,7 @@ import (
 	"strings"
 	"unsafe"
 
+	"github.com/sirkostya009/ggen/decode"
 	"github.com/sirkostya009/ggen/decode/validation"
 	"github.com/sirkostya009/ggen/encode"
 	"github.com/sirkostya009/ggen/scan"
@@ -33,19 +34,20 @@ func (result MapStruct) DecodeFrom(data []byte) (MapStruct, int, error) {
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
-		return result, i, scan.ErrBadObject
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 	i++
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i < len(data) && data[i] == '}' {
-		return result, i + 1, nil
+		i++
+		return result, i, nil
 	}
 	for {
 		var key string
 		if i >= len(data) || data[i] != '"' {
-			return result, i, scan.ErrExpectString
+			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		{
 			ke := i + 1
@@ -53,10 +55,10 @@ func (result MapStruct) DecodeFrom(data []byte) (MapStruct, int, error) {
 				ke++
 			}
 			if ke >= len(data) {
-				return result, i, scan.ErrUnterminated
+				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
 			}
 			if data[ke] < 0x20 {
-				return result, i, scan.ErrBadString
+				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
 			}
 			if data[ke] == '"' {
 				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
@@ -64,7 +66,7 @@ func (result MapStruct) DecodeFrom(data []byte) (MapStruct, int, error) {
 			} else {
 				key, i, err = scan.String(data, i)
 				if err != nil {
-					return result, i, err
+					return result, i, decode.NewParseErr("", i, err)
 				}
 			}
 		}
@@ -72,7 +74,7 @@ func (result MapStruct) DecodeFrom(data []byte) (MapStruct, int, error) {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
-			return result, i, scan.ErrBadObject
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		i++
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -83,7 +85,7 @@ func (result MapStruct) DecodeFrom(data []byte) (MapStruct, int, error) {
 			switch key {
 			case "counts":
 				if seenCounts {
-					return result, i, &validation.DuplicateKeyError{Field: "counts"}
+					return result, i, &validation.DuplicateKeyError{Path: []string{"counts"}}
 				}
 				seenCounts = true
 				{
@@ -95,7 +97,7 @@ func (result MapStruct) DecodeFrom(data []byte) (MapStruct, int, error) {
 						result.Counts = nil
 					} else {
 						if i >= len(data) || data[i] != '{' {
-							return result, i, scan.ErrBadObject
+							return result, i, decode.NewParseErr("counts", i, scan.ErrBadObject)
 						}
 						i++
 						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -113,7 +115,7 @@ func (result MapStruct) DecodeFrom(data []byte) (MapStruct, int, error) {
 						for i < len(data) && data[i] != '}' {
 							var mk string
 							if i >= len(data) || data[i] != '"' {
-								return result, i, scan.ErrExpectString
+								return result, i, decode.NewParseErr("counts", i, scan.ErrExpectString)
 							}
 							{
 								ke := i + 1
@@ -121,10 +123,10 @@ func (result MapStruct) DecodeFrom(data []byte) (MapStruct, int, error) {
 									ke++
 								}
 								if ke >= len(data) {
-									return result, i, scan.ErrUnterminated
+									return result, i, decode.NewParseErr("counts", i, scan.ErrUnterminated)
 								}
 								if data[ke] < 0x20 {
-									return result, i, scan.ErrBadString
+									return result, i, decode.NewParseErr("counts", i, scan.ErrBadString)
 								}
 								if data[ke] == '"' {
 									mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
@@ -132,7 +134,7 @@ func (result MapStruct) DecodeFrom(data []byte) (MapStruct, int, error) {
 								} else {
 									mk, i, err = scan.String(data, i)
 									if err != nil {
-										return result, i, err
+										return result, i, decode.NewParseErr("counts", i, err)
 									}
 								}
 							}
@@ -140,7 +142,7 @@ func (result MapStruct) DecodeFrom(data []byte) (MapStruct, int, error) {
 								i++
 							}
 							if i >= len(data) || data[i] != ':' {
-								return result, i, scan.ErrBadObject
+								return result, i, decode.NewParseErr("counts", i, scan.ErrBadObject)
 							}
 							i++
 							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -154,7 +156,7 @@ func (result MapStruct) DecodeFrom(data []byte) (MapStruct, int, error) {
 									i++
 								}
 								if i >= len(data) || data[i] < '0' || data[i] > '9' {
-									return result, i, scan.ErrBadNumber
+									return result, i, decode.NewParseErr("counts", i, scan.ErrBadNumber)
 								}
 								limit := uint64(math.MaxInt64)
 								if neg {
@@ -164,7 +166,7 @@ func (result MapStruct) DecodeFrom(data []byte) (MapStruct, int, error) {
 								for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 									d := uint64(data[i] - '0')
 									if u > limit/10 || (u == limit/10 && d > limit%10) {
-										return result, i, scan.ErrNumberOverflow
+										return result, i, decode.NewParseErr("counts", i, scan.ErrNumberOverflow)
 									}
 									u = u*10 + d
 									i++
@@ -172,7 +174,7 @@ func (result MapStruct) DecodeFrom(data []byte) (MapStruct, int, error) {
 								if i < len(data) {
 									c := data[i]
 									if c == '.' || c == 'e' || c == 'E' {
-										return result, i, scan.ErrBadNumber
+										return result, i, decode.NewParseErr("counts", i, scan.ErrBadNumber)
 									}
 								}
 								var n int64
@@ -201,17 +203,17 @@ func (result MapStruct) DecodeFrom(data []byte) (MapStruct, int, error) {
 							break
 						}
 						if i >= len(data) || data[i] != '}' {
-							return result, i, scan.ErrBadObject
+							return result, i, decode.NewParseErr("counts", i, scan.ErrBadObject)
 						}
 						i++
 					}
 				}
 				if len(result.Counts) > 10 {
-					return result, i, &validation.MaxLenError{Field: "counts", Limit: 10, Got: len(result.Counts)}
+					return result, i, &validation.MaxLenError{Path: []string{"counts"}, Limit: 10, Got: len(result.Counts)}
 				}
 			case "labels":
 				if seenLabels {
-					return result, i, &validation.DuplicateKeyError{Field: "labels"}
+					return result, i, &validation.DuplicateKeyError{Path: []string{"labels"}}
 				}
 				seenLabels = true
 				{
@@ -223,7 +225,7 @@ func (result MapStruct) DecodeFrom(data []byte) (MapStruct, int, error) {
 						result.Labels = nil
 					} else {
 						if i >= len(data) || data[i] != '{' {
-							return result, i, scan.ErrBadObject
+							return result, i, decode.NewParseErr("labels", i, scan.ErrBadObject)
 						}
 						i++
 						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -241,7 +243,7 @@ func (result MapStruct) DecodeFrom(data []byte) (MapStruct, int, error) {
 						for i < len(data) && data[i] != '}' {
 							var mk string
 							if i >= len(data) || data[i] != '"' {
-								return result, i, scan.ErrExpectString
+								return result, i, decode.NewParseErr("labels", i, scan.ErrExpectString)
 							}
 							{
 								ke := i + 1
@@ -249,10 +251,10 @@ func (result MapStruct) DecodeFrom(data []byte) (MapStruct, int, error) {
 									ke++
 								}
 								if ke >= len(data) {
-									return result, i, scan.ErrUnterminated
+									return result, i, decode.NewParseErr("labels", i, scan.ErrUnterminated)
 								}
 								if data[ke] < 0x20 {
-									return result, i, scan.ErrBadString
+									return result, i, decode.NewParseErr("labels", i, scan.ErrBadString)
 								}
 								if data[ke] == '"' {
 									mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
@@ -260,7 +262,7 @@ func (result MapStruct) DecodeFrom(data []byte) (MapStruct, int, error) {
 								} else {
 									mk, i, err = scan.String(data, i)
 									if err != nil {
-										return result, i, err
+										return result, i, decode.NewParseErr("labels", i, err)
 									}
 								}
 							}
@@ -268,7 +270,7 @@ func (result MapStruct) DecodeFrom(data []byte) (MapStruct, int, error) {
 								i++
 							}
 							if i >= len(data) || data[i] != ':' {
-								return result, i, scan.ErrBadObject
+								return result, i, decode.NewParseErr("labels", i, scan.ErrBadObject)
 							}
 							i++
 							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -276,7 +278,7 @@ func (result MapStruct) DecodeFrom(data []byte) (MapStruct, int, error) {
 							}
 							var mv string
 							if i >= len(data) || data[i] != '"' {
-								return result, i, scan.ErrExpectString
+								return result, i, decode.NewParseErr("labels", i, scan.ErrExpectString)
 							}
 							{
 								ke := i + 1
@@ -284,10 +286,10 @@ func (result MapStruct) DecodeFrom(data []byte) (MapStruct, int, error) {
 									ke++
 								}
 								if ke >= len(data) {
-									return result, i, scan.ErrUnterminated
+									return result, i, decode.NewParseErr("labels", i, scan.ErrUnterminated)
 								}
 								if data[ke] < 0x20 {
-									return result, i, scan.ErrBadString
+									return result, i, decode.NewParseErr("labels", i, scan.ErrBadString)
 								}
 								if data[ke] == '"' {
 									mv = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
@@ -295,7 +297,7 @@ func (result MapStruct) DecodeFrom(data []byte) (MapStruct, int, error) {
 								} else {
 									mv, i, err = scan.String(data, i)
 									if err != nil {
-										return result, i, err
+										return result, i, decode.NewParseErr("labels", i, err)
 									}
 								}
 							}
@@ -315,18 +317,18 @@ func (result MapStruct) DecodeFrom(data []byte) (MapStruct, int, error) {
 							break
 						}
 						if i >= len(data) || data[i] != '}' {
-							return result, i, scan.ErrBadObject
+							return result, i, decode.NewParseErr("labels", i, scan.ErrBadObject)
 						}
 						i++
 					}
 				}
 			default:
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Path: []string{key}}
 			}
 		case 9:
 			if key == "addresses" {
 				if seenAddresses {
-					return result, i, &validation.DuplicateKeyError{Field: "addresses"}
+					return result, i, &validation.DuplicateKeyError{Path: []string{"addresses"}}
 				}
 				seenAddresses = true
 				{
@@ -338,7 +340,7 @@ func (result MapStruct) DecodeFrom(data []byte) (MapStruct, int, error) {
 						result.Addresses = nil
 					} else {
 						if i >= len(data) || data[i] != '{' {
-							return result, i, scan.ErrBadObject
+							return result, i, decode.NewParseErr("addresses", i, scan.ErrBadObject)
 						}
 						i++
 						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -356,7 +358,7 @@ func (result MapStruct) DecodeFrom(data []byte) (MapStruct, int, error) {
 						for i < len(data) && data[i] != '}' {
 							var mk string
 							if i >= len(data) || data[i] != '"' {
-								return result, i, scan.ErrExpectString
+								return result, i, decode.NewParseErr("addresses", i, scan.ErrExpectString)
 							}
 							{
 								ke := i + 1
@@ -364,10 +366,10 @@ func (result MapStruct) DecodeFrom(data []byte) (MapStruct, int, error) {
 									ke++
 								}
 								if ke >= len(data) {
-									return result, i, scan.ErrUnterminated
+									return result, i, decode.NewParseErr("addresses", i, scan.ErrUnterminated)
 								}
 								if data[ke] < 0x20 {
-									return result, i, scan.ErrBadString
+									return result, i, decode.NewParseErr("addresses", i, scan.ErrBadString)
 								}
 								if data[ke] == '"' {
 									mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
@@ -375,7 +377,7 @@ func (result MapStruct) DecodeFrom(data []byte) (MapStruct, int, error) {
 								} else {
 									mk, i, err = scan.String(data, i)
 									if err != nil {
-										return result, i, err
+										return result, i, decode.NewParseErr("addresses", i, err)
 									}
 								}
 							}
@@ -383,7 +385,7 @@ func (result MapStruct) DecodeFrom(data []byte) (MapStruct, int, error) {
 								i++
 							}
 							if i >= len(data) || data[i] != ':' {
-								return result, i, scan.ErrBadObject
+								return result, i, decode.NewParseErr("addresses", i, scan.ErrBadObject)
 							}
 							i++
 							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -394,7 +396,7 @@ func (result MapStruct) DecodeFrom(data []byte) (MapStruct, int, error) {
 							mv, _n, err = mv.DecodeFrom(data[i:])
 							i += _n
 							if err != nil {
-								return result, i, err
+								return result, i, decode.NewParseErr("addresses", i, err)
 							}
 							result.Addresses[mk] = mv
 							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -410,22 +412,22 @@ func (result MapStruct) DecodeFrom(data []byte) (MapStruct, int, error) {
 							break
 						}
 						if i >= len(data) || data[i] != '}' {
-							return result, i, scan.ErrBadObject
+							return result, i, decode.NewParseErr("addresses", i, scan.ErrBadObject)
 						}
 						i++
 					}
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Path: []string{key}}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: key}
+			return result, i, &validation.UnknownKeyError{Path: []string{key}}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
-			return result, i, scan.ErrBadObject
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		if data[i] == ',' {
 			i++
@@ -435,9 +437,10 @@ func (result MapStruct) DecodeFrom(data []byte) (MapStruct, int, error) {
 			continue
 		}
 		if data[i] == '}' {
-			return result, i + 1, nil
+			i++
+			return result, i, nil
 		}
-		return result, i, scan.ErrBadObject
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 }
 
@@ -456,15 +459,15 @@ func (result MapStruct) DecodeFromStream(s *scan.Stream) (MapStruct, error) {
 	seenLabels := false
 	err := s.ObjectOpen()
 	if err != nil {
-		return result, err
+		return result, decode.NewParseErr("", s.Pos, err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, err
+		return result, decode.NewParseErr("", s.Pos, err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, err
+			return result, decode.NewParseErr("", s.Pos, err)
 		}
 		s.Pos = 0
 	}
@@ -476,7 +479,7 @@ func (result MapStruct) DecodeFromStream(s *scan.Stream) (MapStruct, error) {
 		var key string
 		key, err = s.KeyView()
 		if err != nil {
-			return result, err
+			return result, decode.NewParseErr("", s.Pos, err)
 		}
 		switch len(key) {
 		case 6:
@@ -484,31 +487,31 @@ func (result MapStruct) DecodeFromStream(s *scan.Stream) (MapStruct, error) {
 			case "counts":
 				err = s.ConsumeColon()
 				if err != nil {
-					return result, err
+					return result, decode.NewParseErr("counts", s.Pos, err)
 				}
 				if seenCounts {
-					return result, &validation.DuplicateKeyError{Field: "counts"}
+					return result, &validation.DuplicateKeyError{Path: []string{"counts"}}
 				}
 				seenCounts = true
 				{
 					err = s.SkipSpace()
 					if err != nil {
-						return result, err
+						return result, decode.NewParseErr("counts", s.Pos, err)
 					}
 					if s.Pos >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, err
+							return result, decode.NewParseErr("counts", s.Pos, err)
 						}
 					}
 					if s.Bytes()[s.Pos] == 'n' {
 						for ki := 1; ki < 4; ki++ {
 							if s.Pos+ki >= len(s.Bytes()) {
 								if err = s.ReadMore(0); err != nil {
-									return result, err
+									return result, decode.NewParseErr("counts", s.Pos, err)
 								}
 							}
 							if s.Bytes()[s.Pos+ki] != "null"[ki] {
-								return result, scan.ErrBadLiteral
+								return result, decode.NewParseErr("counts", s.Pos, scan.ErrBadLiteral)
 							}
 						}
 						s.Pos += 4
@@ -516,15 +519,15 @@ func (result MapStruct) DecodeFromStream(s *scan.Stream) (MapStruct, error) {
 					} else {
 						err = s.ObjectOpen()
 						if err != nil {
-							return result, err
+							return result, decode.NewParseErr("counts", s.Pos, err)
 						}
 						err = s.SkipSpace()
 						if err != nil {
-							return result, err
+							return result, decode.NewParseErr("counts", s.Pos, err)
 						}
 						if s.Pos >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, err
+								return result, decode.NewParseErr("counts", s.Pos, err)
 							}
 						}
 						if s.Bytes()[s.Pos] == '}' {
@@ -540,87 +543,87 @@ func (result MapStruct) DecodeFromStream(s *scan.Stream) (MapStruct, error) {
 							var mk string
 							mk, err = s.String()
 							if err != nil {
-								return result, err
+								return result, decode.NewParseErr("counts", s.Pos, err)
 							}
 							err = s.SkipSpace()
 							if err != nil {
-								return result, err
+								return result, decode.NewParseErr("counts", s.Pos, err)
 							}
 							if s.Pos >= len(s.Bytes()) {
 								if err = s.ReadMore(0); err != nil {
-									return result, err
+									return result, decode.NewParseErr("counts", s.Pos, err)
 								}
 							}
 							if s.Bytes()[s.Pos] != ':' {
-								return result, scan.ErrBadObject
+								return result, decode.NewParseErr("counts", s.Pos, scan.ErrBadObject)
 							}
 							s.Pos++
 							err = s.SkipSpace()
 							if err != nil {
-								return result, err
+								return result, decode.NewParseErr("counts", s.Pos, err)
 							}
 							var mn int64
 							mn, err = s.Int64()
 							if err != nil {
-								return result, err
+								return result, decode.NewParseErr("counts", s.Pos, err)
 							}
 							result.Counts[mk] = int(mn)
 							err = s.SkipSpace()
 							if err != nil {
-								return result, err
+								return result, decode.NewParseErr("counts", s.Pos, err)
 							}
 							if s.Pos >= len(s.Bytes()) {
 								if err = s.ReadMore(0); err != nil {
-									return result, err
+									return result, decode.NewParseErr("counts", s.Pos, err)
 								}
 							}
 							if s.Bytes()[s.Pos] == ',' {
 								s.Pos++
 								err = s.SkipSpace()
 								if err != nil {
-									return result, err
+									return result, decode.NewParseErr("counts", s.Pos, err)
 								}
 								continue
 							}
 							break
 						}
 						if s.Bytes()[s.Pos] != '}' {
-							return result, scan.ErrBadObject
+							return result, decode.NewParseErr("counts", s.Pos, scan.ErrBadObject)
 						}
 						s.Pos++
 					}
 				}
 				if len(result.Counts) > 10 {
-					return result, &validation.MaxLenError{Field: "counts", Limit: 10, Got: len(result.Counts)}
+					return result, &validation.MaxLenError{Path: []string{"counts"}, Limit: 10, Got: len(result.Counts)}
 				}
 			case "labels":
 				err = s.ConsumeColon()
 				if err != nil {
-					return result, err
+					return result, decode.NewParseErr("labels", s.Pos, err)
 				}
 				if seenLabels {
-					return result, &validation.DuplicateKeyError{Field: "labels"}
+					return result, &validation.DuplicateKeyError{Path: []string{"labels"}}
 				}
 				seenLabels = true
 				{
 					err = s.SkipSpace()
 					if err != nil {
-						return result, err
+						return result, decode.NewParseErr("labels", s.Pos, err)
 					}
 					if s.Pos >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, err
+							return result, decode.NewParseErr("labels", s.Pos, err)
 						}
 					}
 					if s.Bytes()[s.Pos] == 'n' {
 						for ki := 1; ki < 4; ki++ {
 							if s.Pos+ki >= len(s.Bytes()) {
 								if err = s.ReadMore(0); err != nil {
-									return result, err
+									return result, decode.NewParseErr("labels", s.Pos, err)
 								}
 							}
 							if s.Bytes()[s.Pos+ki] != "null"[ki] {
-								return result, scan.ErrBadLiteral
+								return result, decode.NewParseErr("labels", s.Pos, scan.ErrBadLiteral)
 							}
 						}
 						s.Pos += 4
@@ -628,15 +631,15 @@ func (result MapStruct) DecodeFromStream(s *scan.Stream) (MapStruct, error) {
 					} else {
 						err = s.ObjectOpen()
 						if err != nil {
-							return result, err
+							return result, decode.NewParseErr("labels", s.Pos, err)
 						}
 						err = s.SkipSpace()
 						if err != nil {
-							return result, err
+							return result, decode.NewParseErr("labels", s.Pos, err)
 						}
 						if s.Pos >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, err
+								return result, decode.NewParseErr("labels", s.Pos, err)
 							}
 						}
 						if s.Bytes()[s.Pos] == '}' {
@@ -652,90 +655,90 @@ func (result MapStruct) DecodeFromStream(s *scan.Stream) (MapStruct, error) {
 							var mk string
 							mk, err = s.String()
 							if err != nil {
-								return result, err
+								return result, decode.NewParseErr("labels", s.Pos, err)
 							}
 							err = s.SkipSpace()
 							if err != nil {
-								return result, err
+								return result, decode.NewParseErr("labels", s.Pos, err)
 							}
 							if s.Pos >= len(s.Bytes()) {
 								if err = s.ReadMore(0); err != nil {
-									return result, err
+									return result, decode.NewParseErr("labels", s.Pos, err)
 								}
 							}
 							if s.Bytes()[s.Pos] != ':' {
-								return result, scan.ErrBadObject
+								return result, decode.NewParseErr("labels", s.Pos, scan.ErrBadObject)
 							}
 							s.Pos++
 							err = s.SkipSpace()
 							if err != nil {
-								return result, err
+								return result, decode.NewParseErr("labels", s.Pos, err)
 							}
 							var mv string
 							mv, err = s.String()
 							if err != nil {
-								return result, err
+								return result, decode.NewParseErr("labels", s.Pos, err)
 							}
 							result.Labels[mk] = mv
 							result.Labels[mk] = strings.TrimSpace(result.Labels[mk])
 							result.Labels[mk] = strings.ToLower(result.Labels[mk])
 							err = s.SkipSpace()
 							if err != nil {
-								return result, err
+								return result, decode.NewParseErr("labels", s.Pos, err)
 							}
 							if s.Pos >= len(s.Bytes()) {
 								if err = s.ReadMore(0); err != nil {
-									return result, err
+									return result, decode.NewParseErr("labels", s.Pos, err)
 								}
 							}
 							if s.Bytes()[s.Pos] == ',' {
 								s.Pos++
 								err = s.SkipSpace()
 								if err != nil {
-									return result, err
+									return result, decode.NewParseErr("labels", s.Pos, err)
 								}
 								continue
 							}
 							break
 						}
 						if s.Bytes()[s.Pos] != '}' {
-							return result, scan.ErrBadObject
+							return result, decode.NewParseErr("labels", s.Pos, scan.ErrBadObject)
 						}
 						s.Pos++
 					}
 				}
 			default:
-				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
 			}
 		case 9:
 			if key == "addresses" {
 				err = s.ConsumeColon()
 				if err != nil {
-					return result, err
+					return result, decode.NewParseErr("addresses", s.Pos, err)
 				}
 				if seenAddresses {
-					return result, &validation.DuplicateKeyError{Field: "addresses"}
+					return result, &validation.DuplicateKeyError{Path: []string{"addresses"}}
 				}
 				seenAddresses = true
 				{
 					err = s.SkipSpace()
 					if err != nil {
-						return result, err
+						return result, decode.NewParseErr("addresses", s.Pos, err)
 					}
 					if s.Pos >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, err
+							return result, decode.NewParseErr("addresses", s.Pos, err)
 						}
 					}
 					if s.Bytes()[s.Pos] == 'n' {
 						for ki := 1; ki < 4; ki++ {
 							if s.Pos+ki >= len(s.Bytes()) {
 								if err = s.ReadMore(0); err != nil {
-									return result, err
+									return result, decode.NewParseErr("addresses", s.Pos, err)
 								}
 							}
 							if s.Bytes()[s.Pos+ki] != "null"[ki] {
-								return result, scan.ErrBadLiteral
+								return result, decode.NewParseErr("addresses", s.Pos, scan.ErrBadLiteral)
 							}
 						}
 						s.Pos += 4
@@ -743,15 +746,15 @@ func (result MapStruct) DecodeFromStream(s *scan.Stream) (MapStruct, error) {
 					} else {
 						err = s.ObjectOpen()
 						if err != nil {
-							return result, err
+							return result, decode.NewParseErr("addresses", s.Pos, err)
 						}
 						err = s.SkipSpace()
 						if err != nil {
-							return result, err
+							return result, decode.NewParseErr("addresses", s.Pos, err)
 						}
 						if s.Pos >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, err
+								return result, decode.NewParseErr("addresses", s.Pos, err)
 							}
 						}
 						if s.Bytes()[s.Pos] == '}' {
@@ -767,69 +770,70 @@ func (result MapStruct) DecodeFromStream(s *scan.Stream) (MapStruct, error) {
 							var mk string
 							mk, err = s.String()
 							if err != nil {
-								return result, err
+								return result, decode.NewParseErr("addresses", s.Pos, err)
 							}
 							err = s.SkipSpace()
 							if err != nil {
-								return result, err
+								return result, decode.NewParseErr("addresses", s.Pos, err)
 							}
 							if s.Pos >= len(s.Bytes()) {
 								if err = s.ReadMore(0); err != nil {
-									return result, err
+									return result, decode.NewParseErr("addresses", s.Pos, err)
 								}
 							}
 							if s.Bytes()[s.Pos] != ':' {
-								return result, scan.ErrBadObject
+								return result, decode.NewParseErr("addresses", s.Pos, scan.ErrBadObject)
 							}
 							s.Pos++
 							err = s.SkipSpace()
 							if err != nil {
-								return result, err
+								return result, decode.NewParseErr("addresses", s.Pos, err)
 							}
 							var mv Address
 							mv, err = mv.DecodeFromStream(s)
 							if err != nil {
-								return result, err
+								return result, decode.NewParseErr("addresses", s.Pos, err)
 							}
 							result.Addresses[mk] = mv
 							err = s.SkipSpace()
 							if err != nil {
-								return result, err
+								return result, decode.NewParseErr("addresses", s.Pos, err)
 							}
 							if s.Pos >= len(s.Bytes()) {
 								if err = s.ReadMore(0); err != nil {
-									return result, err
+									return result, decode.NewParseErr("addresses", s.Pos, err)
 								}
 							}
 							if s.Bytes()[s.Pos] == ',' {
 								s.Pos++
 								err = s.SkipSpace()
 								if err != nil {
-									return result, err
+									return result, decode.NewParseErr("addresses", s.Pos, err)
 								}
 								continue
 							}
 							break
 						}
 						if s.Bytes()[s.Pos] != '}' {
-							return result, scan.ErrBadObject
+							return result, decode.NewParseErr("addresses", s.Pos, scan.ErrBadObject)
 						}
 						s.Pos++
 					}
 				}
 			} else {
-				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
 			}
 		default:
-			return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
 		}
+
 		err = s.SkipSpace()
 		if err != nil {
-			return result, err
+			return result, decode.NewParseErr("", s.Pos, err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, err
+				return result, decode.NewParseErr("", s.Pos, err)
 			}
 			s.Pos = 0
 		}
@@ -838,7 +842,7 @@ func (result MapStruct) DecodeFromStream(s *scan.Stream) (MapStruct, error) {
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, err
+				return result, decode.NewParseErr("", s.Pos, err)
 			}
 			continue
 		}
@@ -846,7 +850,7 @@ func (result MapStruct) DecodeFromStream(s *scan.Stream) (MapStruct, error) {
 			s.Pos++
 			return result, nil
 		}
-		return result, scan.ErrBadObject
+		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
 	}
 }
 
@@ -960,19 +964,20 @@ func (result MapDiveStruct) DecodeFrom(data []byte) (MapDiveStruct, int, error) 
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
-		return result, i, scan.ErrBadObject
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 	i++
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i < len(data) && data[i] == '}' {
-		return result, i + 1, nil
+		i++
+		return result, i, nil
 	}
 	for {
 		var key string
 		if i >= len(data) || data[i] != '"' {
-			return result, i, scan.ErrExpectString
+			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		{
 			ke := i + 1
@@ -980,10 +985,10 @@ func (result MapDiveStruct) DecodeFrom(data []byte) (MapDiveStruct, int, error) 
 				ke++
 			}
 			if ke >= len(data) {
-				return result, i, scan.ErrUnterminated
+				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
 			}
 			if data[ke] < 0x20 {
-				return result, i, scan.ErrBadString
+				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
 			}
 			if data[ke] == '"' {
 				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
@@ -991,7 +996,7 @@ func (result MapDiveStruct) DecodeFrom(data []byte) (MapDiveStruct, int, error) 
 			} else {
 				key, i, err = scan.String(data, i)
 				if err != nil {
-					return result, i, err
+					return result, i, decode.NewParseErr("", i, err)
 				}
 			}
 		}
@@ -999,7 +1004,7 @@ func (result MapDiveStruct) DecodeFrom(data []byte) (MapDiveStruct, int, error) 
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
-			return result, i, scan.ErrBadObject
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		i++
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -1009,7 +1014,7 @@ func (result MapDiveStruct) DecodeFrom(data []byte) (MapDiveStruct, int, error) 
 		case 5:
 			if key == "names" {
 				if seenNames {
-					return result, i, &validation.DuplicateKeyError{Field: "names"}
+					return result, i, &validation.DuplicateKeyError{Path: []string{"names"}}
 				}
 				seenNames = true
 				{
@@ -1021,7 +1026,7 @@ func (result MapDiveStruct) DecodeFrom(data []byte) (MapDiveStruct, int, error) 
 						result.Names = nil
 					} else {
 						if i >= len(data) || data[i] != '{' {
-							return result, i, scan.ErrBadObject
+							return result, i, decode.NewParseErr("names", i, scan.ErrBadObject)
 						}
 						i++
 						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -1039,7 +1044,7 @@ func (result MapDiveStruct) DecodeFrom(data []byte) (MapDiveStruct, int, error) 
 						for i < len(data) && data[i] != '}' {
 							var mk string
 							if i >= len(data) || data[i] != '"' {
-								return result, i, scan.ErrExpectString
+								return result, i, decode.NewParseErr("names", i, scan.ErrExpectString)
 							}
 							{
 								ke := i + 1
@@ -1047,10 +1052,10 @@ func (result MapDiveStruct) DecodeFrom(data []byte) (MapDiveStruct, int, error) 
 									ke++
 								}
 								if ke >= len(data) {
-									return result, i, scan.ErrUnterminated
+									return result, i, decode.NewParseErr("names", i, scan.ErrUnterminated)
 								}
 								if data[ke] < 0x20 {
-									return result, i, scan.ErrBadString
+									return result, i, decode.NewParseErr("names", i, scan.ErrBadString)
 								}
 								if data[ke] == '"' {
 									mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
@@ -1058,7 +1063,7 @@ func (result MapDiveStruct) DecodeFrom(data []byte) (MapDiveStruct, int, error) 
 								} else {
 									mk, i, err = scan.String(data, i)
 									if err != nil {
-										return result, i, err
+										return result, i, decode.NewParseErr("names", i, err)
 									}
 								}
 							}
@@ -1066,7 +1071,7 @@ func (result MapDiveStruct) DecodeFrom(data []byte) (MapDiveStruct, int, error) 
 								i++
 							}
 							if i >= len(data) || data[i] != ':' {
-								return result, i, scan.ErrBadObject
+								return result, i, decode.NewParseErr("names", i, scan.ErrBadObject)
 							}
 							i++
 							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -1074,7 +1079,7 @@ func (result MapDiveStruct) DecodeFrom(data []byte) (MapDiveStruct, int, error) 
 							}
 							var mv string
 							if i >= len(data) || data[i] != '"' {
-								return result, i, scan.ErrExpectString
+								return result, i, decode.NewParseErr("names", i, scan.ErrExpectString)
 							}
 							{
 								ke := i + 1
@@ -1082,10 +1087,10 @@ func (result MapDiveStruct) DecodeFrom(data []byte) (MapDiveStruct, int, error) 
 									ke++
 								}
 								if ke >= len(data) {
-									return result, i, scan.ErrUnterminated
+									return result, i, decode.NewParseErr("names", i, scan.ErrUnterminated)
 								}
 								if data[ke] < 0x20 {
-									return result, i, scan.ErrBadString
+									return result, i, decode.NewParseErr("names", i, scan.ErrBadString)
 								}
 								if data[ke] == '"' {
 									mv = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
@@ -1093,16 +1098,16 @@ func (result MapDiveStruct) DecodeFrom(data []byte) (MapDiveStruct, int, error) 
 								} else {
 									mv, i, err = scan.String(data, i)
 									if err != nil {
-										return result, i, err
+										return result, i, decode.NewParseErr("names", i, err)
 									}
 								}
 							}
 							result.Names[mk] = mv
 							if len(result.Names[mk]) < 1 {
-								return result, i, &validation.MinLenError{Field: "names.value", Limit: 1, Got: len(result.Names[mk])}
+								return result, i, &validation.MinLenError{Path: []string{"names.value"}, Limit: 1, Got: len(result.Names[mk])}
 							}
 							if len(result.Names[mk]) > 5 {
-								return result, i, &validation.MaxLenError{Field: "names.value", Limit: 5, Got: len(result.Names[mk])}
+								return result, i, &validation.MaxLenError{Path: []string{"names.value"}, Limit: 5, Got: len(result.Names[mk])}
 							}
 							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 								i++
@@ -1117,18 +1122,18 @@ func (result MapDiveStruct) DecodeFrom(data []byte) (MapDiveStruct, int, error) 
 							break
 						}
 						if i >= len(data) || data[i] != '}' {
-							return result, i, scan.ErrBadObject
+							return result, i, decode.NewParseErr("names", i, scan.ErrBadObject)
 						}
 						i++
 					}
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Path: []string{key}}
 			}
 		case 6:
 			if key == "counts" {
 				if seenCounts {
-					return result, i, &validation.DuplicateKeyError{Field: "counts"}
+					return result, i, &validation.DuplicateKeyError{Path: []string{"counts"}}
 				}
 				seenCounts = true
 				{
@@ -1140,7 +1145,7 @@ func (result MapDiveStruct) DecodeFrom(data []byte) (MapDiveStruct, int, error) 
 						result.Counts = nil
 					} else {
 						if i >= len(data) || data[i] != '{' {
-							return result, i, scan.ErrBadObject
+							return result, i, decode.NewParseErr("counts", i, scan.ErrBadObject)
 						}
 						i++
 						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -1158,7 +1163,7 @@ func (result MapDiveStruct) DecodeFrom(data []byte) (MapDiveStruct, int, error) 
 						for i < len(data) && data[i] != '}' {
 							var mk string
 							if i >= len(data) || data[i] != '"' {
-								return result, i, scan.ErrExpectString
+								return result, i, decode.NewParseErr("counts", i, scan.ErrExpectString)
 							}
 							{
 								ke := i + 1
@@ -1166,10 +1171,10 @@ func (result MapDiveStruct) DecodeFrom(data []byte) (MapDiveStruct, int, error) 
 									ke++
 								}
 								if ke >= len(data) {
-									return result, i, scan.ErrUnterminated
+									return result, i, decode.NewParseErr("counts", i, scan.ErrUnterminated)
 								}
 								if data[ke] < 0x20 {
-									return result, i, scan.ErrBadString
+									return result, i, decode.NewParseErr("counts", i, scan.ErrBadString)
 								}
 								if data[ke] == '"' {
 									mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
@@ -1177,7 +1182,7 @@ func (result MapDiveStruct) DecodeFrom(data []byte) (MapDiveStruct, int, error) 
 								} else {
 									mk, i, err = scan.String(data, i)
 									if err != nil {
-										return result, i, err
+										return result, i, decode.NewParseErr("counts", i, err)
 									}
 								}
 							}
@@ -1185,7 +1190,7 @@ func (result MapDiveStruct) DecodeFrom(data []byte) (MapDiveStruct, int, error) 
 								i++
 							}
 							if i >= len(data) || data[i] != ':' {
-								return result, i, scan.ErrBadObject
+								return result, i, decode.NewParseErr("counts", i, scan.ErrBadObject)
 							}
 							i++
 							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -1199,7 +1204,7 @@ func (result MapDiveStruct) DecodeFrom(data []byte) (MapDiveStruct, int, error) 
 									i++
 								}
 								if i >= len(data) || data[i] < '0' || data[i] > '9' {
-									return result, i, scan.ErrBadNumber
+									return result, i, decode.NewParseErr("counts", i, scan.ErrBadNumber)
 								}
 								limit := uint64(math.MaxInt64)
 								if neg {
@@ -1209,7 +1214,7 @@ func (result MapDiveStruct) DecodeFrom(data []byte) (MapDiveStruct, int, error) 
 								for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 									d := uint64(data[i] - '0')
 									if u > limit/10 || (u == limit/10 && d > limit%10) {
-										return result, i, scan.ErrNumberOverflow
+										return result, i, decode.NewParseErr("counts", i, scan.ErrNumberOverflow)
 									}
 									u = u*10 + d
 									i++
@@ -1217,7 +1222,7 @@ func (result MapDiveStruct) DecodeFrom(data []byte) (MapDiveStruct, int, error) 
 								if i < len(data) {
 									c := data[i]
 									if c == '.' || c == 'e' || c == 'E' {
-										return result, i, scan.ErrBadNumber
+										return result, i, decode.NewParseErr("counts", i, scan.ErrBadNumber)
 									}
 								}
 								var n int64
@@ -1234,10 +1239,10 @@ func (result MapDiveStruct) DecodeFrom(data []byte) (MapDiveStruct, int, error) 
 							}
 							result.Counts[mk] = int(mn)
 							if result.Counts[mk] < 0 {
-								return result, i, &validation.GTEError{Field: "counts.value", Limit: 0, Value: result.Counts[mk]}
+								return result, i, &validation.GTEError{Path: []string{"counts.value"}, Limit: 0, Value: result.Counts[mk]}
 							}
 							if result.Counts[mk] > 100 {
-								return result, i, &validation.LTEError{Field: "counts.value", Limit: 100, Value: result.Counts[mk]}
+								return result, i, &validation.LTEError{Path: []string{"counts.value"}, Limit: 100, Value: result.Counts[mk]}
 							}
 							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 								i++
@@ -1252,18 +1257,18 @@ func (result MapDiveStruct) DecodeFrom(data []byte) (MapDiveStruct, int, error) 
 							break
 						}
 						if i >= len(data) || data[i] != '}' {
-							return result, i, scan.ErrBadObject
+							return result, i, decode.NewParseErr("counts", i, scan.ErrBadObject)
 						}
 						i++
 					}
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Path: []string{key}}
 			}
 		case 7:
 			if key == "clamped" {
 				if seenClamped {
-					return result, i, &validation.DuplicateKeyError{Field: "clamped"}
+					return result, i, &validation.DuplicateKeyError{Path: []string{"clamped"}}
 				}
 				seenClamped = true
 				{
@@ -1275,7 +1280,7 @@ func (result MapDiveStruct) DecodeFrom(data []byte) (MapDiveStruct, int, error) 
 						result.Clamped = nil
 					} else {
 						if i >= len(data) || data[i] != '{' {
-							return result, i, scan.ErrBadObject
+							return result, i, decode.NewParseErr("clamped", i, scan.ErrBadObject)
 						}
 						i++
 						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -1293,7 +1298,7 @@ func (result MapDiveStruct) DecodeFrom(data []byte) (MapDiveStruct, int, error) 
 						for i < len(data) && data[i] != '}' {
 							var mk string
 							if i >= len(data) || data[i] != '"' {
-								return result, i, scan.ErrExpectString
+								return result, i, decode.NewParseErr("clamped", i, scan.ErrExpectString)
 							}
 							{
 								ke := i + 1
@@ -1301,10 +1306,10 @@ func (result MapDiveStruct) DecodeFrom(data []byte) (MapDiveStruct, int, error) 
 									ke++
 								}
 								if ke >= len(data) {
-									return result, i, scan.ErrUnterminated
+									return result, i, decode.NewParseErr("clamped", i, scan.ErrUnterminated)
 								}
 								if data[ke] < 0x20 {
-									return result, i, scan.ErrBadString
+									return result, i, decode.NewParseErr("clamped", i, scan.ErrBadString)
 								}
 								if data[ke] == '"' {
 									mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
@@ -1312,7 +1317,7 @@ func (result MapDiveStruct) DecodeFrom(data []byte) (MapDiveStruct, int, error) 
 								} else {
 									mk, i, err = scan.String(data, i)
 									if err != nil {
-										return result, i, err
+										return result, i, decode.NewParseErr("clamped", i, err)
 									}
 								}
 							}
@@ -1320,7 +1325,7 @@ func (result MapDiveStruct) DecodeFrom(data []byte) (MapDiveStruct, int, error) 
 								i++
 							}
 							if i >= len(data) || data[i] != ':' {
-								return result, i, scan.ErrBadObject
+								return result, i, decode.NewParseErr("clamped", i, scan.ErrBadObject)
 							}
 							i++
 							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -1334,7 +1339,7 @@ func (result MapDiveStruct) DecodeFrom(data []byte) (MapDiveStruct, int, error) 
 									i++
 								}
 								if i >= len(data) || data[i] < '0' || data[i] > '9' {
-									return result, i, scan.ErrBadNumber
+									return result, i, decode.NewParseErr("clamped", i, scan.ErrBadNumber)
 								}
 								limit := uint64(math.MaxInt64)
 								if neg {
@@ -1344,7 +1349,7 @@ func (result MapDiveStruct) DecodeFrom(data []byte) (MapDiveStruct, int, error) 
 								for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 									d := uint64(data[i] - '0')
 									if u > limit/10 || (u == limit/10 && d > limit%10) {
-										return result, i, scan.ErrNumberOverflow
+										return result, i, decode.NewParseErr("clamped", i, scan.ErrNumberOverflow)
 									}
 									u = u*10 + d
 									i++
@@ -1352,7 +1357,7 @@ func (result MapDiveStruct) DecodeFrom(data []byte) (MapDiveStruct, int, error) 
 								if i < len(data) {
 									c := data[i]
 									if c == '.' || c == 'e' || c == 'E' {
-										return result, i, scan.ErrBadNumber
+										return result, i, decode.NewParseErr("clamped", i, scan.ErrBadNumber)
 									}
 								}
 								var n int64
@@ -1387,22 +1392,22 @@ func (result MapDiveStruct) DecodeFrom(data []byte) (MapDiveStruct, int, error) 
 							break
 						}
 						if i >= len(data) || data[i] != '}' {
-							return result, i, scan.ErrBadObject
+							return result, i, decode.NewParseErr("clamped", i, scan.ErrBadObject)
 						}
 						i++
 					}
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Path: []string{key}}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: key}
+			return result, i, &validation.UnknownKeyError{Path: []string{key}}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
-			return result, i, scan.ErrBadObject
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		if data[i] == ',' {
 			i++
@@ -1412,9 +1417,10 @@ func (result MapDiveStruct) DecodeFrom(data []byte) (MapDiveStruct, int, error) 
 			continue
 		}
 		if data[i] == '}' {
-			return result, i + 1, nil
+			i++
+			return result, i, nil
 		}
-		return result, i, scan.ErrBadObject
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 }
 
@@ -1433,15 +1439,15 @@ func (result MapDiveStruct) DecodeFromStream(s *scan.Stream) (MapDiveStruct, err
 	seenNames := false
 	err := s.ObjectOpen()
 	if err != nil {
-		return result, err
+		return result, decode.NewParseErr("", s.Pos, err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, err
+		return result, decode.NewParseErr("", s.Pos, err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, err
+			return result, decode.NewParseErr("", s.Pos, err)
 		}
 		s.Pos = 0
 	}
@@ -1453,38 +1459,38 @@ func (result MapDiveStruct) DecodeFromStream(s *scan.Stream) (MapDiveStruct, err
 		var key string
 		key, err = s.KeyView()
 		if err != nil {
-			return result, err
+			return result, decode.NewParseErr("", s.Pos, err)
 		}
 		switch len(key) {
 		case 5:
 			if key == "names" {
 				err = s.ConsumeColon()
 				if err != nil {
-					return result, err
+					return result, decode.NewParseErr("names", s.Pos, err)
 				}
 				if seenNames {
-					return result, &validation.DuplicateKeyError{Field: "names"}
+					return result, &validation.DuplicateKeyError{Path: []string{"names"}}
 				}
 				seenNames = true
 				{
 					err = s.SkipSpace()
 					if err != nil {
-						return result, err
+						return result, decode.NewParseErr("names", s.Pos, err)
 					}
 					if s.Pos >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, err
+							return result, decode.NewParseErr("names", s.Pos, err)
 						}
 					}
 					if s.Bytes()[s.Pos] == 'n' {
 						for ki := 1; ki < 4; ki++ {
 							if s.Pos+ki >= len(s.Bytes()) {
 								if err = s.ReadMore(0); err != nil {
-									return result, err
+									return result, decode.NewParseErr("names", s.Pos, err)
 								}
 							}
 							if s.Bytes()[s.Pos+ki] != "null"[ki] {
-								return result, scan.ErrBadLiteral
+								return result, decode.NewParseErr("names", s.Pos, scan.ErrBadLiteral)
 							}
 						}
 						s.Pos += 4
@@ -1492,15 +1498,15 @@ func (result MapDiveStruct) DecodeFromStream(s *scan.Stream) (MapDiveStruct, err
 					} else {
 						err = s.ObjectOpen()
 						if err != nil {
-							return result, err
+							return result, decode.NewParseErr("names", s.Pos, err)
 						}
 						err = s.SkipSpace()
 						if err != nil {
-							return result, err
+							return result, decode.NewParseErr("names", s.Pos, err)
 						}
 						if s.Pos >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, err
+								return result, decode.NewParseErr("names", s.Pos, err)
 							}
 						}
 						if s.Bytes()[s.Pos] == '}' {
@@ -1516,94 +1522,94 @@ func (result MapDiveStruct) DecodeFromStream(s *scan.Stream) (MapDiveStruct, err
 							var mk string
 							mk, err = s.String()
 							if err != nil {
-								return result, err
+								return result, decode.NewParseErr("names", s.Pos, err)
 							}
 							err = s.SkipSpace()
 							if err != nil {
-								return result, err
+								return result, decode.NewParseErr("names", s.Pos, err)
 							}
 							if s.Pos >= len(s.Bytes()) {
 								if err = s.ReadMore(0); err != nil {
-									return result, err
+									return result, decode.NewParseErr("names", s.Pos, err)
 								}
 							}
 							if s.Bytes()[s.Pos] != ':' {
-								return result, scan.ErrBadObject
+								return result, decode.NewParseErr("names", s.Pos, scan.ErrBadObject)
 							}
 							s.Pos++
 							err = s.SkipSpace()
 							if err != nil {
-								return result, err
+								return result, decode.NewParseErr("names", s.Pos, err)
 							}
 							var mv string
 							mv, err = s.String()
 							if err != nil {
-								return result, err
+								return result, decode.NewParseErr("names", s.Pos, err)
 							}
 							result.Names[mk] = mv
 							if len(result.Names[mk]) < 1 {
-								return result, &validation.MinLenError{Field: "names.value", Limit: 1, Got: len(result.Names[mk])}
+								return result, &validation.MinLenError{Path: []string{"names.value"}, Limit: 1, Got: len(result.Names[mk])}
 							}
 							if len(result.Names[mk]) > 5 {
-								return result, &validation.MaxLenError{Field: "names.value", Limit: 5, Got: len(result.Names[mk])}
+								return result, &validation.MaxLenError{Path: []string{"names.value"}, Limit: 5, Got: len(result.Names[mk])}
 							}
 							err = s.SkipSpace()
 							if err != nil {
-								return result, err
+								return result, decode.NewParseErr("names", s.Pos, err)
 							}
 							if s.Pos >= len(s.Bytes()) {
 								if err = s.ReadMore(0); err != nil {
-									return result, err
+									return result, decode.NewParseErr("names", s.Pos, err)
 								}
 							}
 							if s.Bytes()[s.Pos] == ',' {
 								s.Pos++
 								err = s.SkipSpace()
 								if err != nil {
-									return result, err
+									return result, decode.NewParseErr("names", s.Pos, err)
 								}
 								continue
 							}
 							break
 						}
 						if s.Bytes()[s.Pos] != '}' {
-							return result, scan.ErrBadObject
+							return result, decode.NewParseErr("names", s.Pos, scan.ErrBadObject)
 						}
 						s.Pos++
 					}
 				}
 			} else {
-				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
 			}
 		case 6:
 			if key == "counts" {
 				err = s.ConsumeColon()
 				if err != nil {
-					return result, err
+					return result, decode.NewParseErr("counts", s.Pos, err)
 				}
 				if seenCounts {
-					return result, &validation.DuplicateKeyError{Field: "counts"}
+					return result, &validation.DuplicateKeyError{Path: []string{"counts"}}
 				}
 				seenCounts = true
 				{
 					err = s.SkipSpace()
 					if err != nil {
-						return result, err
+						return result, decode.NewParseErr("counts", s.Pos, err)
 					}
 					if s.Pos >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, err
+							return result, decode.NewParseErr("counts", s.Pos, err)
 						}
 					}
 					if s.Bytes()[s.Pos] == 'n' {
 						for ki := 1; ki < 4; ki++ {
 							if s.Pos+ki >= len(s.Bytes()) {
 								if err = s.ReadMore(0); err != nil {
-									return result, err
+									return result, decode.NewParseErr("counts", s.Pos, err)
 								}
 							}
 							if s.Bytes()[s.Pos+ki] != "null"[ki] {
-								return result, scan.ErrBadLiteral
+								return result, decode.NewParseErr("counts", s.Pos, scan.ErrBadLiteral)
 							}
 						}
 						s.Pos += 4
@@ -1611,15 +1617,15 @@ func (result MapDiveStruct) DecodeFromStream(s *scan.Stream) (MapDiveStruct, err
 					} else {
 						err = s.ObjectOpen()
 						if err != nil {
-							return result, err
+							return result, decode.NewParseErr("counts", s.Pos, err)
 						}
 						err = s.SkipSpace()
 						if err != nil {
-							return result, err
+							return result, decode.NewParseErr("counts", s.Pos, err)
 						}
 						if s.Pos >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, err
+								return result, decode.NewParseErr("counts", s.Pos, err)
 							}
 						}
 						if s.Bytes()[s.Pos] == '}' {
@@ -1635,94 +1641,94 @@ func (result MapDiveStruct) DecodeFromStream(s *scan.Stream) (MapDiveStruct, err
 							var mk string
 							mk, err = s.String()
 							if err != nil {
-								return result, err
+								return result, decode.NewParseErr("counts", s.Pos, err)
 							}
 							err = s.SkipSpace()
 							if err != nil {
-								return result, err
+								return result, decode.NewParseErr("counts", s.Pos, err)
 							}
 							if s.Pos >= len(s.Bytes()) {
 								if err = s.ReadMore(0); err != nil {
-									return result, err
+									return result, decode.NewParseErr("counts", s.Pos, err)
 								}
 							}
 							if s.Bytes()[s.Pos] != ':' {
-								return result, scan.ErrBadObject
+								return result, decode.NewParseErr("counts", s.Pos, scan.ErrBadObject)
 							}
 							s.Pos++
 							err = s.SkipSpace()
 							if err != nil {
-								return result, err
+								return result, decode.NewParseErr("counts", s.Pos, err)
 							}
 							var mn int64
 							mn, err = s.Int64()
 							if err != nil {
-								return result, err
+								return result, decode.NewParseErr("counts", s.Pos, err)
 							}
 							result.Counts[mk] = int(mn)
 							if result.Counts[mk] < 0 {
-								return result, &validation.GTEError{Field: "counts.value", Limit: 0, Value: result.Counts[mk]}
+								return result, &validation.GTEError{Path: []string{"counts.value"}, Limit: 0, Value: result.Counts[mk]}
 							}
 							if result.Counts[mk] > 100 {
-								return result, &validation.LTEError{Field: "counts.value", Limit: 100, Value: result.Counts[mk]}
+								return result, &validation.LTEError{Path: []string{"counts.value"}, Limit: 100, Value: result.Counts[mk]}
 							}
 							err = s.SkipSpace()
 							if err != nil {
-								return result, err
+								return result, decode.NewParseErr("counts", s.Pos, err)
 							}
 							if s.Pos >= len(s.Bytes()) {
 								if err = s.ReadMore(0); err != nil {
-									return result, err
+									return result, decode.NewParseErr("counts", s.Pos, err)
 								}
 							}
 							if s.Bytes()[s.Pos] == ',' {
 								s.Pos++
 								err = s.SkipSpace()
 								if err != nil {
-									return result, err
+									return result, decode.NewParseErr("counts", s.Pos, err)
 								}
 								continue
 							}
 							break
 						}
 						if s.Bytes()[s.Pos] != '}' {
-							return result, scan.ErrBadObject
+							return result, decode.NewParseErr("counts", s.Pos, scan.ErrBadObject)
 						}
 						s.Pos++
 					}
 				}
 			} else {
-				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
 			}
 		case 7:
 			if key == "clamped" {
 				err = s.ConsumeColon()
 				if err != nil {
-					return result, err
+					return result, decode.NewParseErr("clamped", s.Pos, err)
 				}
 				if seenClamped {
-					return result, &validation.DuplicateKeyError{Field: "clamped"}
+					return result, &validation.DuplicateKeyError{Path: []string{"clamped"}}
 				}
 				seenClamped = true
 				{
 					err = s.SkipSpace()
 					if err != nil {
-						return result, err
+						return result, decode.NewParseErr("clamped", s.Pos, err)
 					}
 					if s.Pos >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, err
+							return result, decode.NewParseErr("clamped", s.Pos, err)
 						}
 					}
 					if s.Bytes()[s.Pos] == 'n' {
 						for ki := 1; ki < 4; ki++ {
 							if s.Pos+ki >= len(s.Bytes()) {
 								if err = s.ReadMore(0); err != nil {
-									return result, err
+									return result, decode.NewParseErr("clamped", s.Pos, err)
 								}
 							}
 							if s.Bytes()[s.Pos+ki] != "null"[ki] {
-								return result, scan.ErrBadLiteral
+								return result, decode.NewParseErr("clamped", s.Pos, scan.ErrBadLiteral)
 							}
 						}
 						s.Pos += 4
@@ -1730,15 +1736,15 @@ func (result MapDiveStruct) DecodeFromStream(s *scan.Stream) (MapDiveStruct, err
 					} else {
 						err = s.ObjectOpen()
 						if err != nil {
-							return result, err
+							return result, decode.NewParseErr("clamped", s.Pos, err)
 						}
 						err = s.SkipSpace()
 						if err != nil {
-							return result, err
+							return result, decode.NewParseErr("clamped", s.Pos, err)
 						}
 						if s.Pos >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, err
+								return result, decode.NewParseErr("clamped", s.Pos, err)
 							}
 						}
 						if s.Bytes()[s.Pos] == '}' {
@@ -1754,29 +1760,29 @@ func (result MapDiveStruct) DecodeFromStream(s *scan.Stream) (MapDiveStruct, err
 							var mk string
 							mk, err = s.String()
 							if err != nil {
-								return result, err
+								return result, decode.NewParseErr("clamped", s.Pos, err)
 							}
 							err = s.SkipSpace()
 							if err != nil {
-								return result, err
+								return result, decode.NewParseErr("clamped", s.Pos, err)
 							}
 							if s.Pos >= len(s.Bytes()) {
 								if err = s.ReadMore(0); err != nil {
-									return result, err
+									return result, decode.NewParseErr("clamped", s.Pos, err)
 								}
 							}
 							if s.Bytes()[s.Pos] != ':' {
-								return result, scan.ErrBadObject
+								return result, decode.NewParseErr("clamped", s.Pos, scan.ErrBadObject)
 							}
 							s.Pos++
 							err = s.SkipSpace()
 							if err != nil {
-								return result, err
+								return result, decode.NewParseErr("clamped", s.Pos, err)
 							}
 							var mn int64
 							mn, err = s.Int64()
 							if err != nil {
-								return result, err
+								return result, decode.NewParseErr("clamped", s.Pos, err)
 							}
 							result.Clamped[mk] = int(mn)
 							if result.Clamped[mk] < 0 {
@@ -1787,42 +1793,43 @@ func (result MapDiveStruct) DecodeFromStream(s *scan.Stream) (MapDiveStruct, err
 							}
 							err = s.SkipSpace()
 							if err != nil {
-								return result, err
+								return result, decode.NewParseErr("clamped", s.Pos, err)
 							}
 							if s.Pos >= len(s.Bytes()) {
 								if err = s.ReadMore(0); err != nil {
-									return result, err
+									return result, decode.NewParseErr("clamped", s.Pos, err)
 								}
 							}
 							if s.Bytes()[s.Pos] == ',' {
 								s.Pos++
 								err = s.SkipSpace()
 								if err != nil {
-									return result, err
+									return result, decode.NewParseErr("clamped", s.Pos, err)
 								}
 								continue
 							}
 							break
 						}
 						if s.Bytes()[s.Pos] != '}' {
-							return result, scan.ErrBadObject
+							return result, decode.NewParseErr("clamped", s.Pos, scan.ErrBadObject)
 						}
 						s.Pos++
 					}
 				}
 			} else {
-				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
 			}
 		default:
-			return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
 		}
+
 		err = s.SkipSpace()
 		if err != nil {
-			return result, err
+			return result, decode.NewParseErr("", s.Pos, err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, err
+				return result, decode.NewParseErr("", s.Pos, err)
 			}
 			s.Pos = 0
 		}
@@ -1831,7 +1838,7 @@ func (result MapDiveStruct) DecodeFromStream(s *scan.Stream) (MapDiveStruct, err
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, err
+				return result, decode.NewParseErr("", s.Pos, err)
 			}
 			continue
 		}
@@ -1839,7 +1846,7 @@ func (result MapDiveStruct) DecodeFromStream(s *scan.Stream) (MapDiveStruct, err
 			s.Pos++
 			return result, nil
 		}
-		return result, scan.ErrBadObject
+		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
 	}
 }
 
@@ -1941,25 +1948,26 @@ func (result Derived) DecodeFrom(data []byte) (Derived, int, error) {
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
-		return result, i, scan.ErrBadObject
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 	i++
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i < len(data) && data[i] == '}' {
+		i++
 		if !seenID {
-			return result, i, &validation.RequiredError{Field: "id"}
+			return result, i, &validation.RequiredError{Path: []string{"id"}}
 		}
 		if !seenName {
-			return result, i, &validation.RequiredError{Field: "name"}
+			return result, i, &validation.RequiredError{Path: []string{"name"}}
 		}
-		return result, i + 1, nil
+		return result, i, nil
 	}
 	for {
 		var key string
 		if i >= len(data) || data[i] != '"' {
-			return result, i, scan.ErrExpectString
+			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		{
 			ke := i + 1
@@ -1967,10 +1975,10 @@ func (result Derived) DecodeFrom(data []byte) (Derived, int, error) {
 				ke++
 			}
 			if ke >= len(data) {
-				return result, i, scan.ErrUnterminated
+				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
 			}
 			if data[ke] < 0x20 {
-				return result, i, scan.ErrBadString
+				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
 			}
 			if data[ke] == '"' {
 				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
@@ -1978,7 +1986,7 @@ func (result Derived) DecodeFrom(data []byte) (Derived, int, error) {
 			} else {
 				key, i, err = scan.String(data, i)
 				if err != nil {
-					return result, i, err
+					return result, i, decode.NewParseErr("", i, err)
 				}
 			}
 		}
@@ -1986,7 +1994,7 @@ func (result Derived) DecodeFrom(data []byte) (Derived, int, error) {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
-			return result, i, scan.ErrBadObject
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		i++
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -1996,11 +2004,11 @@ func (result Derived) DecodeFrom(data []byte) (Derived, int, error) {
 		case 2:
 			if key == "id" {
 				if seenID {
-					return result, i, &validation.DuplicateKeyError{Field: "id"}
+					return result, i, &validation.DuplicateKeyError{Path: []string{"id"}}
 				}
 				seenID = true
 				if i >= len(data) || data[i] != '"' {
-					return result, i, scan.ErrExpectString
+					return result, i, decode.NewParseErr("id", i, scan.ErrExpectString)
 				}
 				{
 					ke := i + 1
@@ -2008,10 +2016,10 @@ func (result Derived) DecodeFrom(data []byte) (Derived, int, error) {
 						ke++
 					}
 					if ke >= len(data) {
-						return result, i, scan.ErrUnterminated
+						return result, i, decode.NewParseErr("id", i, scan.ErrUnterminated)
 					}
 					if data[ke] < 0x20 {
-						return result, i, scan.ErrBadString
+						return result, i, decode.NewParseErr("id", i, scan.ErrBadString)
 					}
 					if data[ke] == '"' {
 						result.ID = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
@@ -2019,22 +2027,22 @@ func (result Derived) DecodeFrom(data []byte) (Derived, int, error) {
 					} else {
 						result.ID, i, err = scan.String(data, i)
 						if err != nil {
-							return result, i, err
+							return result, i, decode.NewParseErr("id", i, err)
 						}
 					}
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Path: []string{key}}
 			}
 		case 4:
 			switch key {
 			case "meta":
 				if seenMeta {
-					return result, i, &validation.DuplicateKeyError{Field: "meta"}
+					return result, i, &validation.DuplicateKeyError{Path: []string{"meta"}}
 				}
 				seenMeta = true
 				if i >= len(data) || data[i] != '"' {
-					return result, i, scan.ErrExpectString
+					return result, i, decode.NewParseErr("meta", i, scan.ErrExpectString)
 				}
 				{
 					ke := i + 1
@@ -2042,10 +2050,10 @@ func (result Derived) DecodeFrom(data []byte) (Derived, int, error) {
 						ke++
 					}
 					if ke >= len(data) {
-						return result, i, scan.ErrUnterminated
+						return result, i, decode.NewParseErr("meta", i, scan.ErrUnterminated)
 					}
 					if data[ke] < 0x20 {
-						return result, i, scan.ErrBadString
+						return result, i, decode.NewParseErr("meta", i, scan.ErrBadString)
 					}
 					if data[ke] == '"' {
 						result.Meta = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
@@ -2053,17 +2061,17 @@ func (result Derived) DecodeFrom(data []byte) (Derived, int, error) {
 					} else {
 						result.Meta, i, err = scan.String(data, i)
 						if err != nil {
-							return result, i, err
+							return result, i, decode.NewParseErr("meta", i, err)
 						}
 					}
 				}
 			case "name":
 				if seenName {
-					return result, i, &validation.DuplicateKeyError{Field: "name"}
+					return result, i, &validation.DuplicateKeyError{Path: []string{"name"}}
 				}
 				seenName = true
 				if i >= len(data) || data[i] != '"' {
-					return result, i, scan.ErrExpectString
+					return result, i, decode.NewParseErr("name", i, scan.ErrExpectString)
 				}
 				{
 					ke := i + 1
@@ -2071,10 +2079,10 @@ func (result Derived) DecodeFrom(data []byte) (Derived, int, error) {
 						ke++
 					}
 					if ke >= len(data) {
-						return result, i, scan.ErrUnterminated
+						return result, i, decode.NewParseErr("name", i, scan.ErrUnterminated)
 					}
 					if data[ke] < 0x20 {
-						return result, i, scan.ErrBadString
+						return result, i, decode.NewParseErr("name", i, scan.ErrBadString)
 					}
 					if data[ke] == '"' {
 						result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
@@ -2082,24 +2090,24 @@ func (result Derived) DecodeFrom(data []byte) (Derived, int, error) {
 					} else {
 						result.Name, i, err = scan.String(data, i)
 						if err != nil {
-							return result, i, err
+							return result, i, decode.NewParseErr("name", i, err)
 						}
 					}
 				}
 				if len(result.Name) < 1 {
-					return result, i, &validation.MinLenError{Field: "name", Limit: 1, Got: len(result.Name)}
+					return result, i, &validation.MinLenError{Path: []string{"name"}, Limit: 1, Got: len(result.Name)}
 				}
 			default:
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Path: []string{key}}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: key}
+			return result, i, &validation.UnknownKeyError{Path: []string{key}}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
-			return result, i, scan.ErrBadObject
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		if data[i] == ',' {
 			i++
@@ -2109,15 +2117,16 @@ func (result Derived) DecodeFrom(data []byte) (Derived, int, error) {
 			continue
 		}
 		if data[i] == '}' {
+			i++
 			if !seenID {
-				return result, i, &validation.RequiredError{Field: "id"}
+				return result, i, &validation.RequiredError{Path: []string{"id"}}
 			}
 			if !seenName {
-				return result, i, &validation.RequiredError{Field: "name"}
+				return result, i, &validation.RequiredError{Path: []string{"name"}}
 			}
-			return result, i + 1, nil
+			return result, i, nil
 		}
-		return result, i, scan.ErrBadObject
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 }
 
@@ -2127,96 +2136,97 @@ func (result Derived) DecodeFromStream(s *scan.Stream) (Derived, error) {
 	seenName := false
 	err := s.ObjectOpen()
 	if err != nil {
-		return result, err
+		return result, decode.NewParseErr("", s.Pos, err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, err
+		return result, decode.NewParseErr("", s.Pos, err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, err
+			return result, decode.NewParseErr("", s.Pos, err)
 		}
 		s.Pos = 0
 	}
 	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
 		if !seenID {
-			return result, &validation.RequiredError{Field: "id"}
+			return result, &validation.RequiredError{Path: []string{"id"}}
 		}
 		if !seenName {
-			return result, &validation.RequiredError{Field: "name"}
+			return result, &validation.RequiredError{Path: []string{"name"}}
 		}
-		s.Pos++
 		return result, nil
 	}
 	for {
 		var key string
 		key, err = s.KeyView()
 		if err != nil {
-			return result, err
+			return result, decode.NewParseErr("", s.Pos, err)
 		}
 		switch len(key) {
 		case 2:
 			if key == "id" {
 				err = s.ConsumeColon()
 				if err != nil {
-					return result, err
+					return result, decode.NewParseErr("id", s.Pos, err)
 				}
 				if seenID {
-					return result, &validation.DuplicateKeyError{Field: "id"}
+					return result, &validation.DuplicateKeyError{Path: []string{"id"}}
 				}
 				seenID = true
 				result.ID, err = s.String()
 				if err != nil {
-					return result, err
+					return result, decode.NewParseErr("id", s.Pos, err)
 				}
 			} else {
-				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
 			}
 		case 4:
 			switch key {
 			case "meta":
 				err = s.ConsumeColon()
 				if err != nil {
-					return result, err
+					return result, decode.NewParseErr("meta", s.Pos, err)
 				}
 				if seenMeta {
-					return result, &validation.DuplicateKeyError{Field: "meta"}
+					return result, &validation.DuplicateKeyError{Path: []string{"meta"}}
 				}
 				seenMeta = true
 				result.Meta, err = s.String()
 				if err != nil {
-					return result, err
+					return result, decode.NewParseErr("meta", s.Pos, err)
 				}
 			case "name":
 				err = s.ConsumeColon()
 				if err != nil {
-					return result, err
+					return result, decode.NewParseErr("name", s.Pos, err)
 				}
 				if seenName {
-					return result, &validation.DuplicateKeyError{Field: "name"}
+					return result, &validation.DuplicateKeyError{Path: []string{"name"}}
 				}
 				seenName = true
 				result.Name, err = s.String()
 				if err != nil {
-					return result, err
+					return result, decode.NewParseErr("name", s.Pos, err)
 				}
 				if len(result.Name) < 1 {
-					return result, &validation.MinLenError{Field: "name", Limit: 1, Got: len(result.Name)}
+					return result, &validation.MinLenError{Path: []string{"name"}, Limit: 1, Got: len(result.Name)}
 				}
 			default:
-				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
 			}
 		default:
-			return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
 		}
+
 		err = s.SkipSpace()
 		if err != nil {
-			return result, err
+			return result, decode.NewParseErr("", s.Pos, err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, err
+				return result, decode.NewParseErr("", s.Pos, err)
 			}
 			s.Pos = 0
 		}
@@ -2225,21 +2235,21 @@ func (result Derived) DecodeFromStream(s *scan.Stream) (Derived, error) {
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, err
+				return result, decode.NewParseErr("", s.Pos, err)
 			}
 			continue
 		}
 		if c == '}' {
+			s.Pos++
 			if !seenID {
-				return result, &validation.RequiredError{Field: "id"}
+				return result, &validation.RequiredError{Path: []string{"id"}}
 			}
 			if !seenName {
-				return result, &validation.RequiredError{Field: "name"}
+				return result, &validation.RequiredError{Path: []string{"name"}}
 			}
-			s.Pos++
 			return result, nil
 		}
-		return result, scan.ErrBadObject
+		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
 	}
 }
 

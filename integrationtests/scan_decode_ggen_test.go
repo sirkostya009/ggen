@@ -8,6 +8,7 @@ import (
 	"strings"
 	"unsafe"
 
+	"github.com/sirkostya009/ggen/decode"
 	"github.com/sirkostya009/ggen/decode/validation"
 	"github.com/sirkostya009/ggen/encode"
 	"github.com/sirkostya009/ggen/scan"
@@ -22,19 +23,20 @@ func (result HugeStringStruct) DecodeFrom(data []byte) (HugeStringStruct, int, e
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
-		return result, i, scan.ErrBadObject
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 	i++
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i < len(data) && data[i] == '}' {
-		return result, i + 1, nil
+		i++
+		return result, i, nil
 	}
 	for {
 		var key string
 		if i >= len(data) || data[i] != '"' {
-			return result, i, scan.ErrExpectString
+			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		{
 			ke := i + 1
@@ -42,10 +44,10 @@ func (result HugeStringStruct) DecodeFrom(data []byte) (HugeStringStruct, int, e
 				ke++
 			}
 			if ke >= len(data) {
-				return result, i, scan.ErrUnterminated
+				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
 			}
 			if data[ke] < 0x20 {
-				return result, i, scan.ErrBadString
+				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
 			}
 			if data[ke] == '"' {
 				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
@@ -53,7 +55,7 @@ func (result HugeStringStruct) DecodeFrom(data []byte) (HugeStringStruct, int, e
 			} else {
 				key, i, err = scan.String(data, i)
 				if err != nil {
-					return result, i, err
+					return result, i, decode.NewParseErr("", i, err)
 				}
 			}
 		}
@@ -61,7 +63,7 @@ func (result HugeStringStruct) DecodeFrom(data []byte) (HugeStringStruct, int, e
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
-			return result, i, scan.ErrBadObject
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		i++
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -71,11 +73,11 @@ func (result HugeStringStruct) DecodeFrom(data []byte) (HugeStringStruct, int, e
 		case 3:
 			if key == "big" {
 				if seenBig {
-					return result, i, &validation.DuplicateKeyError{Field: "big"}
+					return result, i, &validation.DuplicateKeyError{Path: []string{"big"}}
 				}
 				seenBig = true
 				if i >= len(data) || data[i] != '"' {
-					return result, i, scan.ErrExpectString
+					return result, i, decode.NewParseErr("big", i, scan.ErrExpectString)
 				}
 				{
 					ke := i + 1
@@ -83,10 +85,10 @@ func (result HugeStringStruct) DecodeFrom(data []byte) (HugeStringStruct, int, e
 						ke++
 					}
 					if ke >= len(data) {
-						return result, i, scan.ErrUnterminated
+						return result, i, decode.NewParseErr("big", i, scan.ErrUnterminated)
 					}
 					if data[ke] < 0x20 {
-						return result, i, scan.ErrBadString
+						return result, i, decode.NewParseErr("big", i, scan.ErrBadString)
 					}
 					if data[ke] == '"' {
 						result.Big = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
@@ -94,21 +96,21 @@ func (result HugeStringStruct) DecodeFrom(data []byte) (HugeStringStruct, int, e
 					} else {
 						result.Big, i, err = scan.String(data, i)
 						if err != nil {
-							return result, i, err
+							return result, i, decode.NewParseErr("big", i, err)
 						}
 					}
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Path: []string{key}}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: key}
+			return result, i, &validation.UnknownKeyError{Path: []string{key}}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
-			return result, i, scan.ErrBadObject
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		if data[i] == ',' {
 			i++
@@ -118,9 +120,10 @@ func (result HugeStringStruct) DecodeFrom(data []byte) (HugeStringStruct, int, e
 			continue
 		}
 		if data[i] == '}' {
-			return result, i + 1, nil
+			i++
+			return result, i, nil
 		}
-		return result, i, scan.ErrBadObject
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 }
 
@@ -128,15 +131,15 @@ func (result HugeStringStruct) DecodeFromStream(s *scan.Stream) (HugeStringStruc
 	seenBig := false
 	err := s.ObjectOpen()
 	if err != nil {
-		return result, err
+		return result, decode.NewParseErr("", s.Pos, err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, err
+		return result, decode.NewParseErr("", s.Pos, err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, err
+			return result, decode.NewParseErr("", s.Pos, err)
 		}
 		s.Pos = 0
 	}
@@ -148,36 +151,37 @@ func (result HugeStringStruct) DecodeFromStream(s *scan.Stream) (HugeStringStruc
 		var key string
 		key, err = s.KeyView()
 		if err != nil {
-			return result, err
+			return result, decode.NewParseErr("", s.Pos, err)
 		}
 		switch len(key) {
 		case 3:
 			if key == "big" {
 				err = s.ConsumeColon()
 				if err != nil {
-					return result, err
+					return result, decode.NewParseErr("big", s.Pos, err)
 				}
 				if seenBig {
-					return result, &validation.DuplicateKeyError{Field: "big"}
+					return result, &validation.DuplicateKeyError{Path: []string{"big"}}
 				}
 				seenBig = true
 				result.Big, err = s.String()
 				if err != nil {
-					return result, err
+					return result, decode.NewParseErr("big", s.Pos, err)
 				}
 			} else {
-				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
 			}
 		default:
-			return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
 		}
+
 		err = s.SkipSpace()
 		if err != nil {
-			return result, err
+			return result, decode.NewParseErr("", s.Pos, err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, err
+				return result, decode.NewParseErr("", s.Pos, err)
 			}
 			s.Pos = 0
 		}
@@ -186,7 +190,7 @@ func (result HugeStringStruct) DecodeFromStream(s *scan.Stream) (HugeStringStruc
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, err
+				return result, decode.NewParseErr("", s.Pos, err)
 			}
 			continue
 		}
@@ -194,7 +198,7 @@ func (result HugeStringStruct) DecodeFromStream(s *scan.Stream) (HugeStringStruc
 			s.Pos++
 			return result, nil
 		}
-		return result, scan.ErrBadObject
+		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
 	}
 }
 
@@ -228,19 +232,20 @@ func (result SequentialStringsStruct) DecodeFrom(data []byte) (SequentialStrings
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
-		return result, i, scan.ErrBadObject
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 	i++
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i < len(data) && data[i] == '}' {
-		return result, i + 1, nil
+		i++
+		return result, i, nil
 	}
 	for {
 		var key string
 		if i >= len(data) || data[i] != '"' {
-			return result, i, scan.ErrExpectString
+			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		{
 			ke := i + 1
@@ -248,10 +253,10 @@ func (result SequentialStringsStruct) DecodeFrom(data []byte) (SequentialStrings
 				ke++
 			}
 			if ke >= len(data) {
-				return result, i, scan.ErrUnterminated
+				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
 			}
 			if data[ke] < 0x20 {
-				return result, i, scan.ErrBadString
+				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
 			}
 			if data[ke] == '"' {
 				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
@@ -259,7 +264,7 @@ func (result SequentialStringsStruct) DecodeFrom(data []byte) (SequentialStrings
 			} else {
 				key, i, err = scan.String(data, i)
 				if err != nil {
-					return result, i, err
+					return result, i, decode.NewParseErr("", i, err)
 				}
 			}
 		}
@@ -267,7 +272,7 @@ func (result SequentialStringsStruct) DecodeFrom(data []byte) (SequentialStrings
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
-			return result, i, scan.ErrBadObject
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		i++
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -278,11 +283,11 @@ func (result SequentialStringsStruct) DecodeFrom(data []byte) (SequentialStrings
 			switch key {
 			case "a":
 				if seenA {
-					return result, i, &validation.DuplicateKeyError{Field: "a"}
+					return result, i, &validation.DuplicateKeyError{Path: []string{"a"}}
 				}
 				seenA = true
 				if i >= len(data) || data[i] != '"' {
-					return result, i, scan.ErrExpectString
+					return result, i, decode.NewParseErr("a", i, scan.ErrExpectString)
 				}
 				{
 					ke := i + 1
@@ -290,10 +295,10 @@ func (result SequentialStringsStruct) DecodeFrom(data []byte) (SequentialStrings
 						ke++
 					}
 					if ke >= len(data) {
-						return result, i, scan.ErrUnterminated
+						return result, i, decode.NewParseErr("a", i, scan.ErrUnterminated)
 					}
 					if data[ke] < 0x20 {
-						return result, i, scan.ErrBadString
+						return result, i, decode.NewParseErr("a", i, scan.ErrBadString)
 					}
 					if data[ke] == '"' {
 						result.A = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
@@ -301,17 +306,17 @@ func (result SequentialStringsStruct) DecodeFrom(data []byte) (SequentialStrings
 					} else {
 						result.A, i, err = scan.String(data, i)
 						if err != nil {
-							return result, i, err
+							return result, i, decode.NewParseErr("a", i, err)
 						}
 					}
 				}
 			case "b":
 				if seenB {
-					return result, i, &validation.DuplicateKeyError{Field: "b"}
+					return result, i, &validation.DuplicateKeyError{Path: []string{"b"}}
 				}
 				seenB = true
 				if i >= len(data) || data[i] != '"' {
-					return result, i, scan.ErrExpectString
+					return result, i, decode.NewParseErr("b", i, scan.ErrExpectString)
 				}
 				{
 					ke := i + 1
@@ -319,10 +324,10 @@ func (result SequentialStringsStruct) DecodeFrom(data []byte) (SequentialStrings
 						ke++
 					}
 					if ke >= len(data) {
-						return result, i, scan.ErrUnterminated
+						return result, i, decode.NewParseErr("b", i, scan.ErrUnterminated)
 					}
 					if data[ke] < 0x20 {
-						return result, i, scan.ErrBadString
+						return result, i, decode.NewParseErr("b", i, scan.ErrBadString)
 					}
 					if data[ke] == '"' {
 						result.B = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
@@ -330,17 +335,17 @@ func (result SequentialStringsStruct) DecodeFrom(data []byte) (SequentialStrings
 					} else {
 						result.B, i, err = scan.String(data, i)
 						if err != nil {
-							return result, i, err
+							return result, i, decode.NewParseErr("b", i, err)
 						}
 					}
 				}
 			case "c":
 				if seenC {
-					return result, i, &validation.DuplicateKeyError{Field: "c"}
+					return result, i, &validation.DuplicateKeyError{Path: []string{"c"}}
 				}
 				seenC = true
 				if i >= len(data) || data[i] != '"' {
-					return result, i, scan.ErrExpectString
+					return result, i, decode.NewParseErr("c", i, scan.ErrExpectString)
 				}
 				{
 					ke := i + 1
@@ -348,10 +353,10 @@ func (result SequentialStringsStruct) DecodeFrom(data []byte) (SequentialStrings
 						ke++
 					}
 					if ke >= len(data) {
-						return result, i, scan.ErrUnterminated
+						return result, i, decode.NewParseErr("c", i, scan.ErrUnterminated)
 					}
 					if data[ke] < 0x20 {
-						return result, i, scan.ErrBadString
+						return result, i, decode.NewParseErr("c", i, scan.ErrBadString)
 					}
 					if data[ke] == '"' {
 						result.C = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
@@ -359,17 +364,17 @@ func (result SequentialStringsStruct) DecodeFrom(data []byte) (SequentialStrings
 					} else {
 						result.C, i, err = scan.String(data, i)
 						if err != nil {
-							return result, i, err
+							return result, i, decode.NewParseErr("c", i, err)
 						}
 					}
 				}
 			case "d":
 				if seenD {
-					return result, i, &validation.DuplicateKeyError{Field: "d"}
+					return result, i, &validation.DuplicateKeyError{Path: []string{"d"}}
 				}
 				seenD = true
 				if i >= len(data) || data[i] != '"' {
-					return result, i, scan.ErrExpectString
+					return result, i, decode.NewParseErr("d", i, scan.ErrExpectString)
 				}
 				{
 					ke := i + 1
@@ -377,10 +382,10 @@ func (result SequentialStringsStruct) DecodeFrom(data []byte) (SequentialStrings
 						ke++
 					}
 					if ke >= len(data) {
-						return result, i, scan.ErrUnterminated
+						return result, i, decode.NewParseErr("d", i, scan.ErrUnterminated)
 					}
 					if data[ke] < 0x20 {
-						return result, i, scan.ErrBadString
+						return result, i, decode.NewParseErr("d", i, scan.ErrBadString)
 					}
 					if data[ke] == '"' {
 						result.D = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
@@ -388,17 +393,17 @@ func (result SequentialStringsStruct) DecodeFrom(data []byte) (SequentialStrings
 					} else {
 						result.D, i, err = scan.String(data, i)
 						if err != nil {
-							return result, i, err
+							return result, i, decode.NewParseErr("d", i, err)
 						}
 					}
 				}
 			case "e":
 				if seenE {
-					return result, i, &validation.DuplicateKeyError{Field: "e"}
+					return result, i, &validation.DuplicateKeyError{Path: []string{"e"}}
 				}
 				seenE = true
 				if i >= len(data) || data[i] != '"' {
-					return result, i, scan.ErrExpectString
+					return result, i, decode.NewParseErr("e", i, scan.ErrExpectString)
 				}
 				{
 					ke := i + 1
@@ -406,10 +411,10 @@ func (result SequentialStringsStruct) DecodeFrom(data []byte) (SequentialStrings
 						ke++
 					}
 					if ke >= len(data) {
-						return result, i, scan.ErrUnterminated
+						return result, i, decode.NewParseErr("e", i, scan.ErrUnterminated)
 					}
 					if data[ke] < 0x20 {
-						return result, i, scan.ErrBadString
+						return result, i, decode.NewParseErr("e", i, scan.ErrBadString)
 					}
 					if data[ke] == '"' {
 						result.E = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
@@ -417,17 +422,17 @@ func (result SequentialStringsStruct) DecodeFrom(data []byte) (SequentialStrings
 					} else {
 						result.E, i, err = scan.String(data, i)
 						if err != nil {
-							return result, i, err
+							return result, i, decode.NewParseErr("e", i, err)
 						}
 					}
 				}
 			case "f":
 				if seenF {
-					return result, i, &validation.DuplicateKeyError{Field: "f"}
+					return result, i, &validation.DuplicateKeyError{Path: []string{"f"}}
 				}
 				seenF = true
 				if i >= len(data) || data[i] != '"' {
-					return result, i, scan.ErrExpectString
+					return result, i, decode.NewParseErr("f", i, scan.ErrExpectString)
 				}
 				{
 					ke := i + 1
@@ -435,10 +440,10 @@ func (result SequentialStringsStruct) DecodeFrom(data []byte) (SequentialStrings
 						ke++
 					}
 					if ke >= len(data) {
-						return result, i, scan.ErrUnterminated
+						return result, i, decode.NewParseErr("f", i, scan.ErrUnterminated)
 					}
 					if data[ke] < 0x20 {
-						return result, i, scan.ErrBadString
+						return result, i, decode.NewParseErr("f", i, scan.ErrBadString)
 					}
 					if data[ke] == '"' {
 						result.F = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
@@ -446,17 +451,17 @@ func (result SequentialStringsStruct) DecodeFrom(data []byte) (SequentialStrings
 					} else {
 						result.F, i, err = scan.String(data, i)
 						if err != nil {
-							return result, i, err
+							return result, i, decode.NewParseErr("f", i, err)
 						}
 					}
 				}
 			case "g":
 				if seenG {
-					return result, i, &validation.DuplicateKeyError{Field: "g"}
+					return result, i, &validation.DuplicateKeyError{Path: []string{"g"}}
 				}
 				seenG = true
 				if i >= len(data) || data[i] != '"' {
-					return result, i, scan.ErrExpectString
+					return result, i, decode.NewParseErr("g", i, scan.ErrExpectString)
 				}
 				{
 					ke := i + 1
@@ -464,10 +469,10 @@ func (result SequentialStringsStruct) DecodeFrom(data []byte) (SequentialStrings
 						ke++
 					}
 					if ke >= len(data) {
-						return result, i, scan.ErrUnterminated
+						return result, i, decode.NewParseErr("g", i, scan.ErrUnterminated)
 					}
 					if data[ke] < 0x20 {
-						return result, i, scan.ErrBadString
+						return result, i, decode.NewParseErr("g", i, scan.ErrBadString)
 					}
 					if data[ke] == '"' {
 						result.G = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
@@ -475,17 +480,17 @@ func (result SequentialStringsStruct) DecodeFrom(data []byte) (SequentialStrings
 					} else {
 						result.G, i, err = scan.String(data, i)
 						if err != nil {
-							return result, i, err
+							return result, i, decode.NewParseErr("g", i, err)
 						}
 					}
 				}
 			case "h":
 				if seenH {
-					return result, i, &validation.DuplicateKeyError{Field: "h"}
+					return result, i, &validation.DuplicateKeyError{Path: []string{"h"}}
 				}
 				seenH = true
 				if i >= len(data) || data[i] != '"' {
-					return result, i, scan.ErrExpectString
+					return result, i, decode.NewParseErr("h", i, scan.ErrExpectString)
 				}
 				{
 					ke := i + 1
@@ -493,10 +498,10 @@ func (result SequentialStringsStruct) DecodeFrom(data []byte) (SequentialStrings
 						ke++
 					}
 					if ke >= len(data) {
-						return result, i, scan.ErrUnterminated
+						return result, i, decode.NewParseErr("h", i, scan.ErrUnterminated)
 					}
 					if data[ke] < 0x20 {
-						return result, i, scan.ErrBadString
+						return result, i, decode.NewParseErr("h", i, scan.ErrBadString)
 					}
 					if data[ke] == '"' {
 						result.H = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
@@ -504,21 +509,21 @@ func (result SequentialStringsStruct) DecodeFrom(data []byte) (SequentialStrings
 					} else {
 						result.H, i, err = scan.String(data, i)
 						if err != nil {
-							return result, i, err
+							return result, i, decode.NewParseErr("h", i, err)
 						}
 					}
 				}
 			default:
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Path: []string{key}}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: key}
+			return result, i, &validation.UnknownKeyError{Path: []string{key}}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
-			return result, i, scan.ErrBadObject
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		if data[i] == ',' {
 			i++
@@ -528,9 +533,10 @@ func (result SequentialStringsStruct) DecodeFrom(data []byte) (SequentialStrings
 			continue
 		}
 		if data[i] == '}' {
-			return result, i + 1, nil
+			i++
+			return result, i, nil
 		}
-		return result, i, scan.ErrBadObject
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 }
 
@@ -545,15 +551,15 @@ func (result SequentialStringsStruct) DecodeFromStream(s *scan.Stream) (Sequenti
 	seenH := false
 	err := s.ObjectOpen()
 	if err != nil {
-		return result, err
+		return result, decode.NewParseErr("", s.Pos, err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, err
+		return result, decode.NewParseErr("", s.Pos, err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, err
+			return result, decode.NewParseErr("", s.Pos, err)
 		}
 		s.Pos = 0
 	}
@@ -565,7 +571,7 @@ func (result SequentialStringsStruct) DecodeFromStream(s *scan.Stream) (Sequenti
 		var key string
 		key, err = s.KeyView()
 		if err != nil {
-			return result, err
+			return result, decode.NewParseErr("", s.Pos, err)
 		}
 		switch len(key) {
 		case 1:
@@ -573,120 +579,121 @@ func (result SequentialStringsStruct) DecodeFromStream(s *scan.Stream) (Sequenti
 			case "a":
 				err = s.ConsumeColon()
 				if err != nil {
-					return result, err
+					return result, decode.NewParseErr("a", s.Pos, err)
 				}
 				if seenA {
-					return result, &validation.DuplicateKeyError{Field: "a"}
+					return result, &validation.DuplicateKeyError{Path: []string{"a"}}
 				}
 				seenA = true
 				result.A, err = s.String()
 				if err != nil {
-					return result, err
+					return result, decode.NewParseErr("a", s.Pos, err)
 				}
 			case "b":
 				err = s.ConsumeColon()
 				if err != nil {
-					return result, err
+					return result, decode.NewParseErr("b", s.Pos, err)
 				}
 				if seenB {
-					return result, &validation.DuplicateKeyError{Field: "b"}
+					return result, &validation.DuplicateKeyError{Path: []string{"b"}}
 				}
 				seenB = true
 				result.B, err = s.String()
 				if err != nil {
-					return result, err
+					return result, decode.NewParseErr("b", s.Pos, err)
 				}
 			case "c":
 				err = s.ConsumeColon()
 				if err != nil {
-					return result, err
+					return result, decode.NewParseErr("c", s.Pos, err)
 				}
 				if seenC {
-					return result, &validation.DuplicateKeyError{Field: "c"}
+					return result, &validation.DuplicateKeyError{Path: []string{"c"}}
 				}
 				seenC = true
 				result.C, err = s.String()
 				if err != nil {
-					return result, err
+					return result, decode.NewParseErr("c", s.Pos, err)
 				}
 			case "d":
 				err = s.ConsumeColon()
 				if err != nil {
-					return result, err
+					return result, decode.NewParseErr("d", s.Pos, err)
 				}
 				if seenD {
-					return result, &validation.DuplicateKeyError{Field: "d"}
+					return result, &validation.DuplicateKeyError{Path: []string{"d"}}
 				}
 				seenD = true
 				result.D, err = s.String()
 				if err != nil {
-					return result, err
+					return result, decode.NewParseErr("d", s.Pos, err)
 				}
 			case "e":
 				err = s.ConsumeColon()
 				if err != nil {
-					return result, err
+					return result, decode.NewParseErr("e", s.Pos, err)
 				}
 				if seenE {
-					return result, &validation.DuplicateKeyError{Field: "e"}
+					return result, &validation.DuplicateKeyError{Path: []string{"e"}}
 				}
 				seenE = true
 				result.E, err = s.String()
 				if err != nil {
-					return result, err
+					return result, decode.NewParseErr("e", s.Pos, err)
 				}
 			case "f":
 				err = s.ConsumeColon()
 				if err != nil {
-					return result, err
+					return result, decode.NewParseErr("f", s.Pos, err)
 				}
 				if seenF {
-					return result, &validation.DuplicateKeyError{Field: "f"}
+					return result, &validation.DuplicateKeyError{Path: []string{"f"}}
 				}
 				seenF = true
 				result.F, err = s.String()
 				if err != nil {
-					return result, err
+					return result, decode.NewParseErr("f", s.Pos, err)
 				}
 			case "g":
 				err = s.ConsumeColon()
 				if err != nil {
-					return result, err
+					return result, decode.NewParseErr("g", s.Pos, err)
 				}
 				if seenG {
-					return result, &validation.DuplicateKeyError{Field: "g"}
+					return result, &validation.DuplicateKeyError{Path: []string{"g"}}
 				}
 				seenG = true
 				result.G, err = s.String()
 				if err != nil {
-					return result, err
+					return result, decode.NewParseErr("g", s.Pos, err)
 				}
 			case "h":
 				err = s.ConsumeColon()
 				if err != nil {
-					return result, err
+					return result, decode.NewParseErr("h", s.Pos, err)
 				}
 				if seenH {
-					return result, &validation.DuplicateKeyError{Field: "h"}
+					return result, &validation.DuplicateKeyError{Path: []string{"h"}}
 				}
 				seenH = true
 				result.H, err = s.String()
 				if err != nil {
-					return result, err
+					return result, decode.NewParseErr("h", s.Pos, err)
 				}
 			default:
-				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
 			}
 		default:
-			return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
 		}
+
 		err = s.SkipSpace()
 		if err != nil {
-			return result, err
+			return result, decode.NewParseErr("", s.Pos, err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, err
+				return result, decode.NewParseErr("", s.Pos, err)
 			}
 			s.Pos = 0
 		}
@@ -695,7 +702,7 @@ func (result SequentialStringsStruct) DecodeFromStream(s *scan.Stream) (Sequenti
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, err
+				return result, decode.NewParseErr("", s.Pos, err)
 			}
 			continue
 		}
@@ -703,7 +710,7 @@ func (result SequentialStringsStruct) DecodeFromStream(s *scan.Stream) (Sequenti
 			s.Pos++
 			return result, nil
 		}
-		return result, scan.ErrBadObject
+		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
 	}
 }
 
@@ -751,19 +758,20 @@ func (result UnknownErrorStruct) DecodeFrom(data []byte) (UnknownErrorStruct, in
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
-		return result, i, scan.ErrBadObject
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 	i++
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i < len(data) && data[i] == '}' {
-		return result, i + 1, nil
+		i++
+		return result, i, nil
 	}
 	for {
 		var key string
 		if i >= len(data) || data[i] != '"' {
-			return result, i, scan.ErrExpectString
+			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		{
 			ke := i + 1
@@ -771,10 +779,10 @@ func (result UnknownErrorStruct) DecodeFrom(data []byte) (UnknownErrorStruct, in
 				ke++
 			}
 			if ke >= len(data) {
-				return result, i, scan.ErrUnterminated
+				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
 			}
 			if data[ke] < 0x20 {
-				return result, i, scan.ErrBadString
+				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
 			}
 			if data[ke] == '"' {
 				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
@@ -782,7 +790,7 @@ func (result UnknownErrorStruct) DecodeFrom(data []byte) (UnknownErrorStruct, in
 			} else {
 				key, i, err = scan.String(data, i)
 				if err != nil {
-					return result, i, err
+					return result, i, decode.NewParseErr("", i, err)
 				}
 			}
 		}
@@ -790,7 +798,7 @@ func (result UnknownErrorStruct) DecodeFrom(data []byte) (UnknownErrorStruct, in
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
-			return result, i, scan.ErrBadObject
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		i++
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -800,11 +808,11 @@ func (result UnknownErrorStruct) DecodeFrom(data []byte) (UnknownErrorStruct, in
 		case 4:
 			if key == "name" {
 				if seenName {
-					return result, i, &validation.DuplicateKeyError{Field: "name"}
+					return result, i, &validation.DuplicateKeyError{Path: []string{"name"}}
 				}
 				seenName = true
 				if i >= len(data) || data[i] != '"' {
-					return result, i, scan.ErrExpectString
+					return result, i, decode.NewParseErr("name", i, scan.ErrExpectString)
 				}
 				{
 					ke := i + 1
@@ -812,10 +820,10 @@ func (result UnknownErrorStruct) DecodeFrom(data []byte) (UnknownErrorStruct, in
 						ke++
 					}
 					if ke >= len(data) {
-						return result, i, scan.ErrUnterminated
+						return result, i, decode.NewParseErr("name", i, scan.ErrUnterminated)
 					}
 					if data[ke] < 0x20 {
-						return result, i, scan.ErrBadString
+						return result, i, decode.NewParseErr("name", i, scan.ErrBadString)
 					}
 					if data[ke] == '"' {
 						result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
@@ -823,21 +831,21 @@ func (result UnknownErrorStruct) DecodeFrom(data []byte) (UnknownErrorStruct, in
 					} else {
 						result.Name, i, err = scan.String(data, i)
 						if err != nil {
-							return result, i, err
+							return result, i, decode.NewParseErr("name", i, err)
 						}
 					}
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Path: []string{key}}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: key}
+			return result, i, &validation.UnknownKeyError{Path: []string{key}}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
-			return result, i, scan.ErrBadObject
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		if data[i] == ',' {
 			i++
@@ -847,9 +855,10 @@ func (result UnknownErrorStruct) DecodeFrom(data []byte) (UnknownErrorStruct, in
 			continue
 		}
 		if data[i] == '}' {
-			return result, i + 1, nil
+			i++
+			return result, i, nil
 		}
-		return result, i, scan.ErrBadObject
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 }
 
@@ -857,15 +866,15 @@ func (result UnknownErrorStruct) DecodeFromStream(s *scan.Stream) (UnknownErrorS
 	seenName := false
 	err := s.ObjectOpen()
 	if err != nil {
-		return result, err
+		return result, decode.NewParseErr("", s.Pos, err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, err
+		return result, decode.NewParseErr("", s.Pos, err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, err
+			return result, decode.NewParseErr("", s.Pos, err)
 		}
 		s.Pos = 0
 	}
@@ -877,36 +886,37 @@ func (result UnknownErrorStruct) DecodeFromStream(s *scan.Stream) (UnknownErrorS
 		var key string
 		key, err = s.KeyView()
 		if err != nil {
-			return result, err
+			return result, decode.NewParseErr("", s.Pos, err)
 		}
 		switch len(key) {
 		case 4:
 			if key == "name" {
 				err = s.ConsumeColon()
 				if err != nil {
-					return result, err
+					return result, decode.NewParseErr("name", s.Pos, err)
 				}
 				if seenName {
-					return result, &validation.DuplicateKeyError{Field: "name"}
+					return result, &validation.DuplicateKeyError{Path: []string{"name"}}
 				}
 				seenName = true
 				result.Name, err = s.String()
 				if err != nil {
-					return result, err
+					return result, decode.NewParseErr("name", s.Pos, err)
 				}
 			} else {
-				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
 			}
 		default:
-			return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
 		}
+
 		err = s.SkipSpace()
 		if err != nil {
-			return result, err
+			return result, decode.NewParseErr("", s.Pos, err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, err
+				return result, decode.NewParseErr("", s.Pos, err)
 			}
 			s.Pos = 0
 		}
@@ -915,7 +925,7 @@ func (result UnknownErrorStruct) DecodeFromStream(s *scan.Stream) (UnknownErrorS
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, err
+				return result, decode.NewParseErr("", s.Pos, err)
 			}
 			continue
 		}
@@ -923,7 +933,7 @@ func (result UnknownErrorStruct) DecodeFromStream(s *scan.Stream) (UnknownErrorS
 			s.Pos++
 			return result, nil
 		}
-		return result, scan.ErrBadObject
+		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
 	}
 }
 

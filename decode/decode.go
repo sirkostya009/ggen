@@ -11,8 +11,9 @@
 package decode
 
 import (
-	"fmt"
 	"io"
+	"strconv"
+	"unsafe"
 
 	"github.com/sirkostya009/ggen/scan"
 )
@@ -37,11 +38,14 @@ type Decoder[T any] interface {
 }
 
 // UnmarshalSlice decodes a JSON array of T by walking the array with scan
-// primitives and delegating each element to T.DecodeFrom.
+// primitives and delegating each element to T.DecodeFrom. Every error
+// return is routed through [NewParseErr]: raw scan sentinels get wrapped
+// with the current cursor position, element-level errors that already
+// arrive as *ParseError pass through unchanged.
 func UnmarshalSlice[T Decoder[T]](data []byte) ([]T, error) {
 	i := scan.SkipSpace(data, 0)
 	if i >= len(data) || data[i] != '[' {
-		return nil, fmt.Errorf("expected '[': %w", scan.ErrBadArray)
+		return nil, NewParseErr("[]", i, scan.ErrBadArray)
 	}
 	i++
 	i = scan.SkipSpace(data, i)
@@ -49,16 +53,16 @@ func UnmarshalSlice[T Decoder[T]](data []byte) ([]T, error) {
 	if i < len(data) && data[i] == ']' {
 		return result, nil
 	}
-	var zero T
 	for {
+		var zero T
 		v, n, err := zero.DecodeFrom(data[i:])
 		if err != nil {
-			return nil, err
+			return nil, NewParseErr(arrField(len(result)), i, err)
 		}
 		result = append(result, v)
 		i = scan.SkipSpace(data, i+n)
 		if i >= len(data) {
-			return nil, scan.ErrBadArray
+			return nil, NewParseErr(arrField(len(result)-1), i, scan.ErrBadArray)
 		}
 		if data[i] == ',' {
 			i = scan.SkipSpace(data, i+1)
@@ -67,11 +71,13 @@ func UnmarshalSlice[T Decoder[T]](data []byte) ([]T, error) {
 		if data[i] == ']' {
 			return result, nil
 		}
-		return nil, scan.ErrBadArray
+		return nil, NewParseErr(arrField(len(result)-1), i, scan.ErrBadArray)
 	}
 }
 
 // ReadSlice reads an array from r then decodes it via UnmarshalSlice.
+// io.ReadAll failures are surfaced as-is (transport errors, not parse
+// errors); decode failures keep their UnmarshalSlice wrap.
 func ReadSlice[T Decoder[T]](r io.Reader) ([]T, error) {
 	data, err := io.ReadAll(r)
 	if err != nil {
@@ -84,19 +90,20 @@ func ReadSlice[T Decoder[T]](r io.Reader) ([]T, error) {
 // reusable working area; pass nil to allocate fresh, or a pre-sized /
 // pooled slice. The returned []byte is the (possibly grown) buffer —
 // caller can recycle it immediately, the decoded values own their
-// string content and have no dependency on the buffer.
+// string content and have no dependency on the buffer. Every error
+// return is routed through [NewParseErr] (see [UnmarshalSlice]).
 func UnmarshalSliceStream[T Decoder[T]](r io.Reader, buf []byte) ([]T, []byte, error) {
 	var s scan.Stream
 	s.Reset(r, buf)
 	if err := s.ArrayOpen(); err != nil {
-		return nil, s.Bytes(), err
+		return nil, s.Bytes(), NewParseErr("[]", s.Pos, err)
 	}
 	if err := s.SkipSpace(); err != nil {
-		return nil, s.Bytes(), err
+		return nil, s.Bytes(), NewParseErr("[]", s.Pos, err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err := s.ReadMore(s.Pos); err != nil {
-			return nil, s.Bytes(), err
+			return nil, s.Bytes(), NewParseErr("[]", s.Pos, err)
 		}
 		s.Pos = 0
 	}
@@ -105,19 +112,19 @@ func UnmarshalSliceStream[T Decoder[T]](r io.Reader, buf []byte) ([]T, []byte, e
 		s.Pos++
 		return result, s.Bytes(), nil
 	}
-	var zero T
 	for {
+		var zero T
 		v, err := zero.DecodeFromStream(&s)
 		if err != nil {
-			return nil, s.Bytes(), err
+			return nil, s.Bytes(), NewParseErr(arrField(len(result)), s.Pos, err)
 		}
 		result = append(result, v)
 		if err := s.SkipSpace(); err != nil {
-			return nil, s.Bytes(), err
+			return nil, s.Bytes(), NewParseErr(arrField(len(result)-1), s.Pos, err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err := s.ReadMore(s.Pos); err != nil {
-				return nil, s.Bytes(), err
+				return nil, s.Bytes(), NewParseErr(arrField(len(result)-1), s.Pos, err)
 			}
 			s.Pos = 0
 		}
@@ -130,6 +137,19 @@ func UnmarshalSliceStream[T Decoder[T]](r io.Reader, buf []byte) ([]T, []byte, e
 			s.Pos++
 			return result, s.Bytes(), nil
 		}
-		return nil, s.Bytes(), scan.ErrBadArray
+		return nil, s.Bytes(), NewParseErr(arrField(len(result)-1), s.Pos, scan.ErrBadArray)
 	}
+}
+
+// arrField renders "[N]" — used as the Field component on slice-walker
+// errors so a wrapped path like "[5].street" pinpoints the failing
+// element. Called only on the error path; no fmt dependency. The
+// returned string aliases the local buf; safe because buf is freshly
+// allocated each call and isn't mutated afterwards.
+func arrField(n int) string {
+	buf := make([]byte, 0, 12)
+	buf = append(buf, '[')
+	buf = strconv.AppendInt(buf, int64(n), 10)
+	buf = append(buf, ']')
+	return unsafe.String(unsafe.SliceData(buf), len(buf))
 }

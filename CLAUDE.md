@@ -437,43 +437,62 @@ single underscores: `goexperiment.jsonv2` → `goexperiment_jsonv2`,
     deduped package-level frozen `[]string` (`var _oneof_N = []string{...}`)
     emitted once per unique allowed-set. `EqError`/`NeqError` use `Want any`
     (one struct for string + numeric). See `decode/validation/CLAUDE.md`.
-14. **Constant-folded `JSONSize()`.** Each field size splits into
+14. **Parse-error wrapping at every error return.** Codegen embeds the
+    JSON field name as a compile-time literal in each `return result, …`
+    site: `return result, i, decode.NewParseErr("street", i, err)`. The
+    field literal comes from `/*ggen-field:EXPR*/` marker comments
+    emitted by the dispatch (one per known-field branch, `key` /
+    `strings.Clone(key)` for unknown-key handlers, empty reset at
+    dispatch-loop boundaries). After full-body rendering, a textual
+    post-pass (`wrapErrReturns` /
+    `rewriteErrReturnsBody` in `parseerr_postpass.go`) walks the body,
+    tracks the active marker, wraps every non-nil error return, and
+    strips the markers. Zero runtime cost on the happy path — no defer,
+    no `_field` state var, no extra call when err is nil. `NewParseErr`
+    constructs `*decode.ParseError{Field, Pos, Err}` for raw sentinels,
+    passes `validation.Error` / `Errors` through untouched, and
+    **chains** when err is already a `*ParseError` — prepending the
+    outer field so a nested struct surface ends up with paths like
+    `addr.street`. `errors.Is(err, scan.ErrBadString)` keeps working
+    via `Unwrap()`. `ParseError.Error()` sizes off the fixed prefix and
+    calls `e.Err.Error()` exactly once so chained prints stay linear.
+15. **Constant-folded `JSONSize()`.** Each field size splits into
     compile-time constant (folded into `size := N`) and runtime expression
     (loops, len(), recursive calls). Pure-primitive structs collapse to
     `return N`.
-15. **Opening-quote folding.** At struct-field top level, when value emit
+16. **Opening-quote folding.** At struct-field top level, when value emit
     begins with `"` (string, URL, big.Rat, time/RFC3339, duration/units,
     base64/hex bytes, net.IP/netip), opening quote folds into constant
     `"key":` → `"key":"`; value emitter writes only body + closing `"`.
-16. **First-element-then-rest slice loop.** First element emitted directly (no
+17. **First-element-then-rest slice loop.** First element emitted directly (no
     leading comma), iterate `slice[1:]` with comma-prepend — lifts per-iter
     `if i > 0` out of loop.
-17. **`bytes.IndexByte` string scan.** `scan.String` / `(*Stream).String`
+18. **`bytes.IndexByte` string scan.** `scan.String` / `(*Stream).String`
     locate closing `"` via `bytes.IndexByte` (SIMD), then second
     IndexByte detects any preceding `\`. Wins on long strings; truncated
     `\u…`/trailing `\` falls through to `stringSlow` → `ErrBadString`.
-18. **Empty-container peek bypass.** Slice/map decode peek for `]`/`}` before
+19. **Empty-container peek bypass.** Slice/map decode peek for `]`/`}` before
     allocating — empty `[]`/`{}` keep field nil, skip `make`.
-19. **Adjacent-constant-append coalescing.** Post-render peephole over
+20. **Adjacent-constant-append coalescing.** Post-render peephole over
     `renderAppendJSON` merges adjacent `dst = append(dst, ...)` lines whose args
     are all compile-time byte literals into one append (`,"key":` + `[` →
     `,"key":[`; trailing `]` + return `'}'` → `return append(dst, "]}"...),
 nil`). Single-byte → `'X'`, multi-byte → `"…"...`. ~5% on struct-heavy
     Marshal.
-20. **nil slice/map → JSON `null`** (accepted on decode). Stdlib v1/v2 parity:
+21. **nil slice/map → JSON `null`** (accepted on decode). Stdlib v1/v2 parity:
     nil → `null`, empty non-nil → `[]`/`{}`. Decode accepts `null`, leaves nil.
     Fixed arrays don't accept `null`. JSONSize budgets nil-as-null case
     directly — slice/map reserve 4 bytes (`null`) not 2; `sql.Null*` widens its
     inner constant to `max(inner, 4)`; arrays keep 2 (can't be nil). ~4% on
     Marshal but required for parity.
-21. **Slab-allocated `[]*T` / `[N]*T` decode.** Slices: one backing slab
+22. **Slab-allocated `[]*T` / `[N]*T` decode.** Slices: one backing slab
     `make([]T,0,cap)`, append element pointers as `&_slab[len-1]`. Arrays:
     `make([]T,N)` (heap, exact-sized — stack `[N]T` would escape via
     `&_slab[i]`). N per-element heap allocs → ~log(N) (slice) / 1 (array). When
     slice slab grows past cap, prior `*T` keep orphan backing alive
     (~2× worst-case memory, no per-element alloc storm). Null elements skip
     slab (nil pointer).
-22. **`preallocCap` returns `(slice, slab int)`** — one switch over `f.ElemKind`
+23. **`preallocCap` returns `(slice, slab int)`** — one switch over `f.ElemKind`
     decides both `make([]E,0,slice)` and `make([]T,0,slab)`. Defaults absent
     explicit hint: `[]*T` both `defaultPreallocCap` (slab slot = sizeof(T) —
     avoids orphan-trail growth); `[][]T`/`[]map` slice=default, slab=0 (bounded
@@ -481,22 +500,22 @@ nil`). Single-byte → `'X'`, multi-byte → `"…"...`. ~5% on struct-heavy
     elemsize would explode heap); primitive slice=default clamped by maxlen,
     slab=0. Empty `[]` always emits `result.X = []T{}`; prealloc only in
     non-empty arm.
-23. **Stream key dispatch via `Stream.KeyView`.** Object-field keys read once,
+24. **Stream key dispatch via `Stream.KeyView`.** Object-field keys read once,
     matched, discarded. Old `_s.String()` allocated heap string per key
     (~200 throwaway allocs/value); `KeyView` aliases on happy path (alias
     stays valid through buf growth — GC pins old backing). Falls back to
     `stringSlow` for escapes. Keys never escape dispatch frame. See
     `scan/CLAUDE.md`.
-24. **`peelSliceField` initializes `HintLen=-1`.** Nested-slice recursion used
+25. **`peelSliceField` initializes `HintLen=-1`.** Nested-slice recursion used
     to inherit Go's zero `HintLen=0`, which `preallocCap` reads as "opt-out",
     so every nested row started cap=0 and walked the 1→2→4→8 chain. Now `-1`
     ("unset") falls through to kind defaults. Biggest alloc cut in residency
     work — Matrix `[][]int` inner rows 494k → 274k allocs/1000 iters.
-25. **Bitmask seen-flag tracking for wide structs.** Per-field `bool` locals
+26. **Bitmask seen-flag tracking for wide structs.** Per-field `bool` locals
     for ≤32 fields (default threshold); above that `var _seen uint64`
     (or `[N]uint64` for >64) cuts frame from N bytes to 8/⌈N/64⌉. Wins only
     on wide + recursive structs; below threshold, bools stay.
-26. **In-place decode for every elem kind.** Slice/array elem decode writes
+27. **In-place decode for every elem kind.** Slice/array elem decode writes
     directly into final slot: `[N]*T` → `_slab[ivar]`; `[N]T` → `dst[ivar]`;
     `[]*T` → pre-grow `append(_slab, zero(T))`, target `_slab[len-1]`; `[]T` →
     pre-grow `append(dst, zero(T))`, target `dst[len-1]`. Structs: bytes path
@@ -505,24 +524,24 @@ nil`). Single-byte → `'X'`, multi-byte → `"…"...`. ~5% on struct-heavy
     target (`slot = _bv`, `slot = int(_n)`). No `var ev0`/`_z`/`_sv`, no
     post-decode `dst[ivar] = ev0`. `inlineScanInt64`/`Uint64` receive
     `target`+`castFn`. Pre-grow uses `zeroLit` (`""`/`false`/`0`/`T{}`).
-27. **Position-var pass-through; no `kN := posVar` alias.** Slice/array decoders
+28. **Position-var pass-through; no `kN := posVar` alias.** Slice/array decoders
     thread caller's position var directly (top-level `j`, parent's `k`).
     Each inner advances SAME counter; outer continues from it. Only data
     locals (`evN`, `_idxN`, `_slabN`) keep depth suffixes.
-28. **Inline `null` peek; no `_np`/`_ok` locals.** 4-byte `null` check emitted
+29. **Inline `null` peek; no `_np`/`_ok` locals.** 4-byte `null` check emitted
     byte-by-byte inline at call site. Via `inlineNullPeek(posVar)` in
     `generate.go`.
-29. **Single position cursor in dispatch loop.** No separate `j := i` cursor —
+30. **Single position cursor in dispatch loop.** No separate `j := i` cursor —
     every step (key scan, colon, value decode, comma/`}`) advances `i` directly.
     Stream path mirrors via `s.Pos`.
-30. **Single local in `inlineScanString` (`_ke` only).** Start = `posIn+1`
+31. **Single local in `inlineScanString` (`_ke` only).** Start = `posIn+1`
     inline; slow-path fallback reads from unchanged `posIn`. Slice expr
     `data[posIn+1:]` len `_ke - posIn - 1`.
-31. **Concrete-type fast paths in `AppendAny` for typed primitive slices/maps.**
+32. **Concrete-type fast paths in `AppendAny` for typed primitive slices/maps.**
     See `encode/CLAUDE.md` for ordering. 32-entry wins: `map[string]int`
     4403→1579 ns/op (71→7 allocs); `map[string]bool` 3449→944; `map[string]
 float64` 6459→3417. Outpaces stdjson v1 and jsonv2 on every map shape.
-32. **`AppendAny` concrete cases for `json.RawMessage`, `time.Time`,
+33. **`AppendAny` concrete cases for `json.RawMessage`, `time.Time`,
     pointer-to-primitive.** Concrete cases pre-empt `json.Marshaler` branch
     / `reflect.Pointer` fallback. Wins vs jsonv2, 32-byte shapes:
     `json.RawMessage` 227→28 ns/op (8.1×); `time.Time` 181→117; `*int` 70→26;

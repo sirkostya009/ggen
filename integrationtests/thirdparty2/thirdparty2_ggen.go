@@ -8,6 +8,7 @@ import (
 	"strings"
 	"unsafe"
 
+	"github.com/sirkostya009/ggen/decode"
 	"github.com/sirkostya009/ggen/decode/validation"
 	"github.com/sirkostya009/ggen/encode"
 	"github.com/sirkostya009/ggen/scan"
@@ -23,22 +24,23 @@ func (result External2) DecodeFrom(data []byte) (External2, int, error) {
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
-		return result, i, scan.ErrBadObject
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 	i++
 	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i < len(data) && data[i] == '}' {
+		i++
 		if !seenKey {
-			return result, i, &validation.RequiredError{Field: "key"}
+			return result, i, &validation.RequiredError{Path: []string{"key"}}
 		}
-		return result, i + 1, nil
+		return result, i, nil
 	}
 	for {
 		var key string
 		if i >= len(data) || data[i] != '"' {
-			return result, i, scan.ErrExpectString
+			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		{
 			ke := i + 1
@@ -46,10 +48,10 @@ func (result External2) DecodeFrom(data []byte) (External2, int, error) {
 				ke++
 			}
 			if ke >= len(data) {
-				return result, i, scan.ErrUnterminated
+				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
 			}
 			if data[ke] < 0x20 {
-				return result, i, scan.ErrBadString
+				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
 			}
 			if data[ke] == '"' {
 				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
@@ -57,7 +59,7 @@ func (result External2) DecodeFrom(data []byte) (External2, int, error) {
 			} else {
 				key, i, err = scan.String(data, i)
 				if err != nil {
-					return result, i, err
+					return result, i, decode.NewParseErr("", i, err)
 				}
 			}
 		}
@@ -65,7 +67,7 @@ func (result External2) DecodeFrom(data []byte) (External2, int, error) {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
-			return result, i, scan.ErrBadObject
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		i++
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -75,11 +77,11 @@ func (result External2) DecodeFrom(data []byte) (External2, int, error) {
 		case 3:
 			if key == "key" {
 				if seenKey {
-					return result, i, &validation.DuplicateKeyError{Field: "key"}
+					return result, i, &validation.DuplicateKeyError{Path: []string{"key"}}
 				}
 				seenKey = true
 				if i >= len(data) || data[i] != '"' {
-					return result, i, scan.ErrExpectString
+					return result, i, decode.NewParseErr("key", i, scan.ErrExpectString)
 				}
 				{
 					ke := i + 1
@@ -87,10 +89,10 @@ func (result External2) DecodeFrom(data []byte) (External2, int, error) {
 						ke++
 					}
 					if ke >= len(data) {
-						return result, i, scan.ErrUnterminated
+						return result, i, decode.NewParseErr("key", i, scan.ErrUnterminated)
 					}
 					if data[ke] < 0x20 {
-						return result, i, scan.ErrBadString
+						return result, i, decode.NewParseErr("key", i, scan.ErrBadString)
 					}
 					if data[ke] == '"' {
 						result.Key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
@@ -98,20 +100,20 @@ func (result External2) DecodeFrom(data []byte) (External2, int, error) {
 					} else {
 						result.Key, i, err = scan.String(data, i)
 						if err != nil {
-							return result, i, err
+							return result, i, decode.NewParseErr("key", i, err)
 						}
 					}
 				}
 				if len(result.Key) < 1 {
-					return result, i, &validation.MinLenError{Field: "key", Limit: 1, Got: len(result.Key)}
+					return result, i, &validation.MinLenError{Path: []string{"key"}, Limit: 1, Got: len(result.Key)}
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Path: []string{key}}
 			}
 		case 5:
 			if key == "value" {
 				if seenValue {
-					return result, i, &validation.DuplicateKeyError{Field: "value"}
+					return result, i, &validation.DuplicateKeyError{Path: []string{"value"}}
 				}
 				seenValue = true
 				{
@@ -121,7 +123,7 @@ func (result External2) DecodeFrom(data []byte) (External2, int, error) {
 						i++
 					}
 					if i >= len(data) || data[i] < '0' || data[i] > '9' {
-						return result, i, scan.ErrBadNumber
+						return result, i, decode.NewParseErr("value", i, scan.ErrBadNumber)
 					}
 					limit := uint64(math.MaxInt64)
 					if neg {
@@ -131,7 +133,7 @@ func (result External2) DecodeFrom(data []byte) (External2, int, error) {
 					for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 						d := uint64(data[i] - '0')
 						if u > limit/10 || (u == limit/10 && d > limit%10) {
-							return result, i, scan.ErrNumberOverflow
+							return result, i, decode.NewParseErr("value", i, scan.ErrNumberOverflow)
 						}
 						u = u*10 + d
 						i++
@@ -139,7 +141,7 @@ func (result External2) DecodeFrom(data []byte) (External2, int, error) {
 					if i < len(data) {
 						c := data[i]
 						if c == '.' || c == 'e' || c == 'E' {
-							return result, i, scan.ErrBadNumber
+							return result, i, decode.NewParseErr("value", i, scan.ErrBadNumber)
 						}
 					}
 					var n int64
@@ -155,19 +157,19 @@ func (result External2) DecodeFrom(data []byte) (External2, int, error) {
 					result.Value = int(n)
 				}
 				if result.Value < 0 {
-					return result, i, &validation.GTEError{Field: "value", Limit: 0, Value: result.Value}
+					return result, i, &validation.GTEError{Path: []string{"value"}, Limit: 0, Value: result.Value}
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Field: key}
+				return result, i, &validation.UnknownKeyError{Path: []string{key}}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Field: key}
+			return result, i, &validation.UnknownKeyError{Path: []string{key}}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
-			return result, i, scan.ErrBadObject
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		if data[i] == ',' {
 			i++
@@ -177,12 +179,13 @@ func (result External2) DecodeFrom(data []byte) (External2, int, error) {
 			continue
 		}
 		if data[i] == '}' {
+			i++
 			if !seenKey {
-				return result, i, &validation.RequiredError{Field: "key"}
+				return result, i, &validation.RequiredError{Path: []string{"key"}}
 			}
-			return result, i + 1, nil
+			return result, i, nil
 		}
-		return result, i, scan.ErrBadObject
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 }
 
@@ -191,84 +194,85 @@ func (result External2) DecodeFromStream(s *scan.Stream) (External2, error) {
 	seenValue := false
 	err := s.ObjectOpen()
 	if err != nil {
-		return result, err
+		return result, decode.NewParseErr("", s.Pos, err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, err
+		return result, decode.NewParseErr("", s.Pos, err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, err
+			return result, decode.NewParseErr("", s.Pos, err)
 		}
 		s.Pos = 0
 	}
 	if s.Bytes()[s.Pos] == '}' {
-		if !seenKey {
-			return result, &validation.RequiredError{Field: "key"}
-		}
 		s.Pos++
+		if !seenKey {
+			return result, &validation.RequiredError{Path: []string{"key"}}
+		}
 		return result, nil
 	}
 	for {
 		var key string
 		key, err = s.KeyView()
 		if err != nil {
-			return result, err
+			return result, decode.NewParseErr("", s.Pos, err)
 		}
 		switch len(key) {
 		case 3:
 			if key == "key" {
 				err = s.ConsumeColon()
 				if err != nil {
-					return result, err
+					return result, decode.NewParseErr("key", s.Pos, err)
 				}
 				if seenKey {
-					return result, &validation.DuplicateKeyError{Field: "key"}
+					return result, &validation.DuplicateKeyError{Path: []string{"key"}}
 				}
 				seenKey = true
 				result.Key, err = s.String()
 				if err != nil {
-					return result, err
+					return result, decode.NewParseErr("key", s.Pos, err)
 				}
 				if len(result.Key) < 1 {
-					return result, &validation.MinLenError{Field: "key", Limit: 1, Got: len(result.Key)}
+					return result, &validation.MinLenError{Path: []string{"key"}, Limit: 1, Got: len(result.Key)}
 				}
 			} else {
-				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
 			}
 		case 5:
 			if key == "value" {
 				err = s.ConsumeColon()
 				if err != nil {
-					return result, err
+					return result, decode.NewParseErr("value", s.Pos, err)
 				}
 				if seenValue {
-					return result, &validation.DuplicateKeyError{Field: "value"}
+					return result, &validation.DuplicateKeyError{Path: []string{"value"}}
 				}
 				seenValue = true
 				var iv int64
 				iv, err = s.Int64()
 				if err != nil {
-					return result, err
+					return result, decode.NewParseErr("value", s.Pos, err)
 				}
 				result.Value = int(iv)
 				if result.Value < 0 {
-					return result, &validation.GTEError{Field: "value", Limit: 0, Value: result.Value}
+					return result, &validation.GTEError{Path: []string{"value"}, Limit: 0, Value: result.Value}
 				}
 			} else {
-				return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
 			}
 		default:
-			return result, &validation.UnknownKeyError{Field: strings.Clone(key)}
+			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
 		}
+
 		err = s.SkipSpace()
 		if err != nil {
-			return result, err
+			return result, decode.NewParseErr("", s.Pos, err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, err
+				return result, decode.NewParseErr("", s.Pos, err)
 			}
 			s.Pos = 0
 		}
@@ -277,18 +281,18 @@ func (result External2) DecodeFromStream(s *scan.Stream) (External2, error) {
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, err
+				return result, decode.NewParseErr("", s.Pos, err)
 			}
 			continue
 		}
 		if c == '}' {
-			if !seenKey {
-				return result, &validation.RequiredError{Field: "key"}
-			}
 			s.Pos++
+			if !seenKey {
+				return result, &validation.RequiredError{Path: []string{"key"}}
+			}
 			return result, nil
 		}
-		return result, scan.ErrBadObject
+		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
 	}
 }
 
