@@ -301,8 +301,8 @@ func (s *Stream) String() (string, error) {
 // as long as any string aliases into it.
 //
 // USE ONLY for short-lived dispatch where the string never escapes
-// the call frame — e.g. object-key matching in `switch len(key)` /
-// `if key == "X"` chains. For values that go into the decoded struct,
+// the call frame — e.g. object-key matching in `switch key`
+// dispatch. For values that go into the decoded struct,
 // use [Stream.String] (which copies).
 //
 // On escape sequences in the key, falls back to the copy path

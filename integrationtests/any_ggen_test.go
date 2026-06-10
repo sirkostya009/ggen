@@ -66,47 +66,42 @@ func (result AnyStruct) DecodeFrom(data []byte) (AnyStruct, int, error) {
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
-		switch len(key) {
-		case 4:
-			switch key {
-			case "body":
-				if seenBody {
-					return result, i, &validation.DuplicateKeyError{Path: []string{"body"}}
-				}
-				seenBody = true
-				result.Body, i, err = scan.Any(data, i)
+		switch key {
+		case "body":
+			if seenBody {
+				return result, i, &validation.DuplicateKeyError{Path: []string{"body"}}
+			}
+			seenBody = true
+			result.Body, i, err = scan.Any(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("body", i, err)
+			}
+		case "name":
+			if seenName {
+				return result, i, &validation.DuplicateKeyError{Path: []string{"name"}}
+			}
+			seenName = true
+			if i >= len(data) || data[i] != '"' {
+				return result, i, decode.NewParseErr("name", i, scan.ErrExpectString)
+			}
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, decode.NewParseErr("name", i, scan.ErrUnterminated)
+			}
+			if data[ke] < 0x20 {
+				return result, i, decode.NewParseErr("name", i, scan.ErrBadString)
+			}
+			if data[ke] == '"' {
+				result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				result.Name, i, err = scan.String(data, i)
 				if err != nil {
-					return result, i, decode.NewParseErr("body", i, err)
+					return result, i, decode.NewParseErr("name", i, err)
 				}
-			case "name":
-				if seenName {
-					return result, i, &validation.DuplicateKeyError{Path: []string{"name"}}
-				}
-				seenName = true
-				if i >= len(data) || data[i] != '"' {
-					return result, i, decode.NewParseErr("name", i, scan.ErrExpectString)
-				}
-				ke := i + 1
-				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-					ke++
-				}
-				if ke >= len(data) {
-					return result, i, decode.NewParseErr("name", i, scan.ErrUnterminated)
-				}
-				if data[ke] < 0x20 {
-					return result, i, decode.NewParseErr("name", i, scan.ErrBadString)
-				}
-				if data[ke] == '"' {
-					result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-					i = ke + 1
-				} else {
-					result.Name, i, err = scan.String(data, i)
-					if err != nil {
-						return result, i, decode.NewParseErr("name", i, err)
-					}
-				}
-			default:
-				return result, i, &validation.UnknownKeyError{Path: []string{key}}
 			}
 		default:
 			return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -159,37 +154,32 @@ func (result AnyStruct) DecodeFromStream(s *scan.Stream) (AnyStruct, error) {
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
-		switch len(key) {
-		case 4:
-			switch key {
-			case "body":
-				err = s.ConsumeColon()
-				if err != nil {
-					return result, decode.NewParseErr("body", s.Pos, err)
-				}
-				if seenBody {
-					return result, &validation.DuplicateKeyError{Path: []string{"body"}}
-				}
-				seenBody = true
-				result.Body, err = s.Any()
-				if err != nil {
-					return result, decode.NewParseErr("body", s.Pos, err)
-				}
-			case "name":
-				err = s.ConsumeColon()
-				if err != nil {
-					return result, decode.NewParseErr("name", s.Pos, err)
-				}
-				if seenName {
-					return result, &validation.DuplicateKeyError{Path: []string{"name"}}
-				}
-				seenName = true
-				result.Name, err = s.String()
-				if err != nil {
-					return result, decode.NewParseErr("name", s.Pos, err)
-				}
-			default:
-				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+		switch key {
+		case "body":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("body", s.Pos, err)
+			}
+			if seenBody {
+				return result, &validation.DuplicateKeyError{Path: []string{"body"}}
+			}
+			seenBody = true
+			result.Body, err = s.Any()
+			if err != nil {
+				return result, decode.NewParseErr("body", s.Pos, err)
+			}
+		case "name":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("name", s.Pos, err)
+			}
+			if seenName {
+				return result, &validation.DuplicateKeyError{Path: []string{"name"}}
+			}
+			seenName = true
+			result.Name, err = s.String()
+			if err != nil {
+				return result, decode.NewParseErr("name", s.Pos, err)
 			}
 		default:
 			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
@@ -294,47 +284,42 @@ func (result AnyNumberStruct) DecodeFrom(data []byte) (AnyNumberStruct, int, err
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
-		switch len(key) {
-		case 4:
-			switch key {
-			case "body":
-				if seenBody {
-					return result, i, &validation.DuplicateKeyError{Path: []string{"body"}}
-				}
-				seenBody = true
-				result.Body, i, err = scan.AnyNumber(data, i)
+		switch key {
+		case "body":
+			if seenBody {
+				return result, i, &validation.DuplicateKeyError{Path: []string{"body"}}
+			}
+			seenBody = true
+			result.Body, i, err = scan.AnyNumber(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("body", i, err)
+			}
+		case "name":
+			if seenName {
+				return result, i, &validation.DuplicateKeyError{Path: []string{"name"}}
+			}
+			seenName = true
+			if i >= len(data) || data[i] != '"' {
+				return result, i, decode.NewParseErr("name", i, scan.ErrExpectString)
+			}
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, decode.NewParseErr("name", i, scan.ErrUnterminated)
+			}
+			if data[ke] < 0x20 {
+				return result, i, decode.NewParseErr("name", i, scan.ErrBadString)
+			}
+			if data[ke] == '"' {
+				result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				result.Name, i, err = scan.String(data, i)
 				if err != nil {
-					return result, i, decode.NewParseErr("body", i, err)
+					return result, i, decode.NewParseErr("name", i, err)
 				}
-			case "name":
-				if seenName {
-					return result, i, &validation.DuplicateKeyError{Path: []string{"name"}}
-				}
-				seenName = true
-				if i >= len(data) || data[i] != '"' {
-					return result, i, decode.NewParseErr("name", i, scan.ErrExpectString)
-				}
-				ke := i + 1
-				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-					ke++
-				}
-				if ke >= len(data) {
-					return result, i, decode.NewParseErr("name", i, scan.ErrUnterminated)
-				}
-				if data[ke] < 0x20 {
-					return result, i, decode.NewParseErr("name", i, scan.ErrBadString)
-				}
-				if data[ke] == '"' {
-					result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-					i = ke + 1
-				} else {
-					result.Name, i, err = scan.String(data, i)
-					if err != nil {
-						return result, i, decode.NewParseErr("name", i, err)
-					}
-				}
-			default:
-				return result, i, &validation.UnknownKeyError{Path: []string{key}}
 			}
 		default:
 			return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -387,37 +372,32 @@ func (result AnyNumberStruct) DecodeFromStream(s *scan.Stream) (AnyNumberStruct,
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
-		switch len(key) {
-		case 4:
-			switch key {
-			case "body":
-				err = s.ConsumeColon()
-				if err != nil {
-					return result, decode.NewParseErr("body", s.Pos, err)
-				}
-				if seenBody {
-					return result, &validation.DuplicateKeyError{Path: []string{"body"}}
-				}
-				seenBody = true
-				result.Body, err = s.AnyNumber()
-				if err != nil {
-					return result, decode.NewParseErr("body", s.Pos, err)
-				}
-			case "name":
-				err = s.ConsumeColon()
-				if err != nil {
-					return result, decode.NewParseErr("name", s.Pos, err)
-				}
-				if seenName {
-					return result, &validation.DuplicateKeyError{Path: []string{"name"}}
-				}
-				seenName = true
-				result.Name, err = s.String()
-				if err != nil {
-					return result, decode.NewParseErr("name", s.Pos, err)
-				}
-			default:
-				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+		switch key {
+		case "body":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("body", s.Pos, err)
+			}
+			if seenBody {
+				return result, &validation.DuplicateKeyError{Path: []string{"body"}}
+			}
+			seenBody = true
+			result.Body, err = s.AnyNumber()
+			if err != nil {
+				return result, decode.NewParseErr("body", s.Pos, err)
+			}
+		case "name":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("name", s.Pos, err)
+			}
+			if seenName {
+				return result, &validation.DuplicateKeyError{Path: []string{"name"}}
+			}
+			seenName = true
+			result.Name, err = s.String()
+			if err != nil {
+				return result, decode.NewParseErr("name", s.Pos, err)
 			}
 		default:
 			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}

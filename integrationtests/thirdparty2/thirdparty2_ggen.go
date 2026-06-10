@@ -71,90 +71,82 @@ func (result External2) DecodeFrom(data []byte) (External2, int, error) {
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
-		switch len(key) {
-		case 3:
-			if key == "key" {
-				if seenKey {
-					return result, i, &validation.DuplicateKeyError{Path: []string{"key"}}
-				}
-				seenKey = true
-				if i >= len(data) || data[i] != '"' {
-					return result, i, decode.NewParseErr("key", i, scan.ErrExpectString)
-				}
-				ke := i + 1
-				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-					ke++
-				}
-				if ke >= len(data) {
-					return result, i, decode.NewParseErr("key", i, scan.ErrUnterminated)
-				}
-				if data[ke] < 0x20 {
-					return result, i, decode.NewParseErr("key", i, scan.ErrBadString)
-				}
-				if data[ke] == '"' {
-					result.Key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-					i = ke + 1
-				} else {
-					result.Key, i, err = scan.String(data, i)
-					if err != nil {
-						return result, i, decode.NewParseErr("key", i, err)
-					}
-				}
-				if len(result.Key) < 1 {
-					return result, i, &validation.MinLenError{Path: []string{"key"}, Limit: 1, Got: len(result.Key)}
-				}
-			} else {
-				return result, i, &validation.UnknownKeyError{Path: []string{key}}
+		switch key {
+		case "key":
+			if seenKey {
+				return result, i, &validation.DuplicateKeyError{Path: []string{"key"}}
 			}
-		case 5:
-			if key == "value" {
-				if seenValue {
-					return result, i, &validation.DuplicateKeyError{Path: []string{"value"}}
+			seenKey = true
+			if i >= len(data) || data[i] != '"' {
+				return result, i, decode.NewParseErr("key", i, scan.ErrExpectString)
+			}
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, decode.NewParseErr("key", i, scan.ErrUnterminated)
+			}
+			if data[ke] < 0x20 {
+				return result, i, decode.NewParseErr("key", i, scan.ErrBadString)
+			}
+			if data[ke] == '"' {
+				result.Key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				result.Key, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("key", i, err)
 				}
-				seenValue = true
-				neg := false
-				if i < len(data) && data[i] == '-' {
-					neg = true
-					i++
+			}
+			if len(result.Key) < 1 {
+				return result, i, &validation.MinLenError{Path: []string{"key"}, Limit: 1, Got: len(result.Key)}
+			}
+		case "value":
+			if seenValue {
+				return result, i, &validation.DuplicateKeyError{Path: []string{"value"}}
+			}
+			seenValue = true
+			neg := false
+			if i < len(data) && data[i] == '-' {
+				neg = true
+				i++
+			}
+			if i >= len(data) || data[i] < '0' || data[i] > '9' {
+				return result, i, decode.NewParseErr("value", i, scan.ErrBadNumber)
+			}
+			limit := uint64(math.MaxInt64)
+			if neg {
+				limit = scan.SignedNeg
+			}
+			var u uint64
+			for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+				d := uint64(data[i] - '0')
+				if u > limit/10 || (u == limit/10 && d > limit%10) {
+					return result, i, decode.NewParseErr("value", i, scan.ErrNumberOverflow)
 				}
-				if i >= len(data) || data[i] < '0' || data[i] > '9' {
+				u = u*10 + d
+				i++
+			}
+			if i < len(data) {
+				c := data[i]
+				if c == '.' || c == 'e' || c == 'E' {
 					return result, i, decode.NewParseErr("value", i, scan.ErrBadNumber)
 				}
-				limit := uint64(math.MaxInt64)
-				if neg {
-					limit = scan.SignedNeg
-				}
-				var u uint64
-				for i < len(data) && data[i] >= '0' && data[i] <= '9' {
-					d := uint64(data[i] - '0')
-					if u > limit/10 || (u == limit/10 && d > limit%10) {
-						return result, i, decode.NewParseErr("value", i, scan.ErrNumberOverflow)
-					}
-					u = u*10 + d
-					i++
-				}
-				if i < len(data) {
-					c := data[i]
-					if c == '.' || c == 'e' || c == 'E' {
-						return result, i, decode.NewParseErr("value", i, scan.ErrBadNumber)
-					}
-				}
-				var n int64
-				if neg {
-					if u == scan.SignedNeg {
-						n = math.MinInt64
-					} else {
-						n = -int64(u)
-					}
+			}
+			var n int64
+			if neg {
+				if u == scan.SignedNeg {
+					n = math.MinInt64
 				} else {
-					n = int64(u)
-				}
-				result.Value = int(n)
-				if result.Value < 0 {
-					return result, i, &validation.GTEError{Path: []string{"value"}, Limit: 0, Value: result.Value}
+					n = -int64(u)
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Path: []string{key}}
+				n = int64(u)
+			}
+			result.Value = int(n)
+			if result.Value < 0 {
+				return result, i, &validation.GTEError{Path: []string{"value"}, Limit: 0, Value: result.Value}
 			}
 		default:
 			return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -213,48 +205,40 @@ func (result External2) DecodeFromStream(s *scan.Stream) (External2, error) {
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
-		switch len(key) {
-		case 3:
-			if key == "key" {
-				err = s.ConsumeColon()
-				if err != nil {
-					return result, decode.NewParseErr("key", s.Pos, err)
-				}
-				if seenKey {
-					return result, &validation.DuplicateKeyError{Path: []string{"key"}}
-				}
-				seenKey = true
-				result.Key, err = s.String()
-				if err != nil {
-					return result, decode.NewParseErr("key", s.Pos, err)
-				}
-				if len(result.Key) < 1 {
-					return result, &validation.MinLenError{Path: []string{"key"}, Limit: 1, Got: len(result.Key)}
-				}
-			} else {
-				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+		switch key {
+		case "key":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("key", s.Pos, err)
 			}
-		case 5:
-			if key == "value" {
-				err = s.ConsumeColon()
-				if err != nil {
-					return result, decode.NewParseErr("value", s.Pos, err)
-				}
-				if seenValue {
-					return result, &validation.DuplicateKeyError{Path: []string{"value"}}
-				}
-				seenValue = true
-				var iv int64
-				iv, err = s.Int64()
-				if err != nil {
-					return result, decode.NewParseErr("value", s.Pos, err)
-				}
-				result.Value = int(iv)
-				if result.Value < 0 {
-					return result, &validation.GTEError{Path: []string{"value"}, Limit: 0, Value: result.Value}
-				}
-			} else {
-				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			if seenKey {
+				return result, &validation.DuplicateKeyError{Path: []string{"key"}}
+			}
+			seenKey = true
+			result.Key, err = s.String()
+			if err != nil {
+				return result, decode.NewParseErr("key", s.Pos, err)
+			}
+			if len(result.Key) < 1 {
+				return result, &validation.MinLenError{Path: []string{"key"}, Limit: 1, Got: len(result.Key)}
+			}
+		case "value":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("value", s.Pos, err)
+			}
+			if seenValue {
+				return result, &validation.DuplicateKeyError{Path: []string{"value"}}
+			}
+			seenValue = true
+			var iv int64
+			iv, err = s.Int64()
+			if err != nil {
+				return result, decode.NewParseErr("value", s.Pos, err)
+			}
+			result.Value = int(iv)
+			if result.Value < 0 {
+				return result, &validation.GTEError{Path: []string{"value"}, Limit: 0, Value: result.Value}
 			}
 		default:
 			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}

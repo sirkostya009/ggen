@@ -99,6 +99,18 @@
   is explicitly not a goal. Divergence stays pinned in
   `TestStdCompatMerge_IntentionalDivergences/omitted_container_reset_vs_retain`.
 
+- **Length-first key dispatch (`switch len(key)` + nested `switch key`).**
+  Shipped as original optimization #1, removed 2026-06: A/B vs flat
+  `switch key` on 100-field mixed-name-length struct showed flat **-5.7%
+  ns/op** (samelen-64 -1.4%), narrow structs (Node Mega, Claim Small)
+  statistically equal (p>0.6, n=10). gc already lowers string switches to
+  length-grouped binary search / jump tables — the manual outer switch only
+  added a redundant layer the compiler can't see through. Resolves former
+  Future item "Hybrid key-dispatch at codegen" (flat won outright; no
+  per-struct hybrid needed). Bench fixture (deleted after decision):
+  100-field struct, name lengths 3-13, ~10 fields per length bucket, all-keys
+  payload, bytes-path DecodeFrom. Don't reintroduce without re-running it.
+
 - **Generator emitting `go/ast` nodes instead of text.** Full rewrite on
   `ast-conversion` branch (commit `feadbba`); output byte-identical. Rejected:
   (1) less readable — every `fmt.Fprintf(b, "if %s == nil {…", ref)` becomes
@@ -181,12 +193,6 @@
   opt-in mechanism (see `hintlen`).
 
 # Future
-
-- **Hybrid key-dispatch at codegen.** Current length-first switch + if-chain
-  wins for narrow structs. For wide structs where length groups balloon (>5
-  candidates), emit `switch key` so Go's compiler auto-hashes (≥7 cases).
-  Picking per-struct/per-length-group could squeeze few % on wide structs
-  without regressing narrow. Postponed until 50+ field schema shows up.
 
 - **Validation-derived encode hints.** Use `ggen` tags for encode shortcuts:
   `ascii` → skip escape table; `lte=N` → fixed-width digit formatter instead of

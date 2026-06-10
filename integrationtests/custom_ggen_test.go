@@ -78,151 +78,134 @@ func (result MultiErrStruct) DecodeFrom(data []byte) (MultiErrStruct, int, error
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
-		switch len(key) {
-		case 3:
-			if key == "age" {
-				if seenAge {
-					errs = append(errs, &validation.DuplicateKeyError{Path: []string{"age"}})
-					i, err = scan.SkipValue(data, i)
-					if err != nil {
-						return result, i, decode.NewParseErr("age", i, err)
-					}
-				} else {
-					seenAge = true
-					neg := false
-					if i < len(data) && data[i] == '-' {
-						neg = true
-						i++
-					}
-					if i >= len(data) || data[i] < '0' || data[i] > '9' {
-						return result, i, decode.NewParseErr("age", i, scan.ErrBadNumber)
-					}
-					limit := uint64(math.MaxInt64)
-					if neg {
-						limit = scan.SignedNeg
-					}
-					var u uint64
-					for i < len(data) && data[i] >= '0' && data[i] <= '9' {
-						d := uint64(data[i] - '0')
-						if u > limit/10 || (u == limit/10 && d > limit%10) {
-							return result, i, decode.NewParseErr("age", i, scan.ErrNumberOverflow)
-						}
-						u = u*10 + d
-						i++
-					}
-					if i < len(data) {
-						c := data[i]
-						if c == '.' || c == 'e' || c == 'E' {
-							return result, i, decode.NewParseErr("age", i, scan.ErrBadNumber)
-						}
-					}
-					var n int64
-					if neg {
-						if u == scan.SignedNeg {
-							n = math.MinInt64
-						} else {
-							n = -int64(u)
-						}
-					} else {
-						n = int64(u)
-					}
-					result.Age = int(n)
-					if result.Age < 0 {
-						errs = append(errs, &validation.GTEError{Path: []string{"age"}, Limit: 0, Value: result.Age})
-					}
-					if result.Age > 100 {
-						errs = append(errs, &validation.LTEError{Path: []string{"age"}, Limit: 100, Value: result.Age})
-					}
-				}
-			} else {
-				errs = append(errs, &validation.UnknownKeyError{Path: []string{key}})
+		switch key {
+		case "age":
+			if seenAge {
+				errs = append(errs, &validation.DuplicateKeyError{Path: []string{"age"}})
 				i, err = scan.SkipValue(data, i)
 				if err != nil {
-					return result, i, decode.NewParseErr(key, i, err)
+					return result, i, decode.NewParseErr("age", i, err)
+				}
+			} else {
+				seenAge = true
+				neg := false
+				if i < len(data) && data[i] == '-' {
+					neg = true
+					i++
+				}
+				if i >= len(data) || data[i] < '0' || data[i] > '9' {
+					return result, i, decode.NewParseErr("age", i, scan.ErrBadNumber)
+				}
+				limit := uint64(math.MaxInt64)
+				if neg {
+					limit = scan.SignedNeg
+				}
+				var u uint64
+				for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+					d := uint64(data[i] - '0')
+					if u > limit/10 || (u == limit/10 && d > limit%10) {
+						return result, i, decode.NewParseErr("age", i, scan.ErrNumberOverflow)
+					}
+					u = u*10 + d
+					i++
+				}
+				if i < len(data) {
+					c := data[i]
+					if c == '.' || c == 'e' || c == 'E' {
+						return result, i, decode.NewParseErr("age", i, scan.ErrBadNumber)
+					}
+				}
+				var n int64
+				if neg {
+					if u == scan.SignedNeg {
+						n = math.MinInt64
+					} else {
+						n = -int64(u)
+					}
+				} else {
+					n = int64(u)
+				}
+				result.Age = int(n)
+				if result.Age < 0 {
+					errs = append(errs, &validation.GTEError{Path: []string{"age"}, Limit: 0, Value: result.Age})
+				}
+				if result.Age > 100 {
+					errs = append(errs, &validation.LTEError{Path: []string{"age"}, Limit: 100, Value: result.Age})
 				}
 			}
-		case 4:
-			switch key {
-			case "name":
-				if seenName {
-					errs = append(errs, &validation.DuplicateKeyError{Path: []string{"name"}})
-					i, err = scan.SkipValue(data, i)
+		case "name":
+			if seenName {
+				errs = append(errs, &validation.DuplicateKeyError{Path: []string{"name"}})
+				i, err = scan.SkipValue(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("name", i, err)
+				}
+			} else {
+				seenName = true
+				if i >= len(data) || data[i] != '"' {
+					return result, i, decode.NewParseErr("name", i, scan.ErrExpectString)
+				}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("name", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("name", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					result.Name, i, err = scan.String(data, i)
 					if err != nil {
 						return result, i, decode.NewParseErr("name", i, err)
 					}
-				} else {
-					seenName = true
-					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("name", i, scan.ErrExpectString)
-					}
-					ke := i + 1
-					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-						ke++
-					}
-					if ke >= len(data) {
-						return result, i, decode.NewParseErr("name", i, scan.ErrUnterminated)
-					}
-					if data[ke] < 0x20 {
-						return result, i, decode.NewParseErr("name", i, scan.ErrBadString)
-					}
-					if data[ke] == '"' {
-						result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-						i = ke + 1
-					} else {
-						result.Name, i, err = scan.String(data, i)
-						if err != nil {
-							return result, i, decode.NewParseErr("name", i, err)
-						}
-					}
-					if len(result.Name) < 1 {
-						errs = append(errs, &validation.MinLenError{Path: []string{"name"}, Limit: 1, Got: len(result.Name)})
-					}
-					if len(result.Name) > 5 {
-						errs = append(errs, &validation.MaxLenError{Path: []string{"name"}, Limit: 5, Got: len(result.Name)})
-					}
 				}
-			case "role":
-				if seenRole {
-					errs = append(errs, &validation.DuplicateKeyError{Path: []string{"role"}})
-					i, err = scan.SkipValue(data, i)
+				if len(result.Name) < 1 {
+					errs = append(errs, &validation.MinLenError{Path: []string{"name"}, Limit: 1, Got: len(result.Name)})
+				}
+				if len(result.Name) > 5 {
+					errs = append(errs, &validation.MaxLenError{Path: []string{"name"}, Limit: 5, Got: len(result.Name)})
+				}
+			}
+		case "role":
+			if seenRole {
+				errs = append(errs, &validation.DuplicateKeyError{Path: []string{"role"}})
+				i, err = scan.SkipValue(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("role", i, err)
+				}
+			} else {
+				seenRole = true
+				if i >= len(data) || data[i] != '"' {
+					return result, i, decode.NewParseErr("role", i, scan.ErrExpectString)
+				}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("role", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("role", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					result.Role = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					result.Role, i, err = scan.String(data, i)
 					if err != nil {
 						return result, i, decode.NewParseErr("role", i, err)
 					}
-				} else {
-					seenRole = true
-					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("role", i, scan.ErrExpectString)
-					}
-					ke := i + 1
-					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-						ke++
-					}
-					if ke >= len(data) {
-						return result, i, decode.NewParseErr("role", i, scan.ErrUnterminated)
-					}
-					if data[ke] < 0x20 {
-						return result, i, decode.NewParseErr("role", i, scan.ErrBadString)
-					}
-					if data[ke] == '"' {
-						result.Role = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-						i = ke + 1
-					} else {
-						result.Role, i, err = scan.String(data, i)
-						if err != nil {
-							return result, i, decode.NewParseErr("role", i, err)
-						}
-					}
-					switch result.Role {
-					case "admin", "user", "guest":
-					default:
-						errs = append(errs, &validation.OneOfError{Path: []string{"role"}, Allowed: ggenOneof0, Value: result.Role})
-					}
 				}
-			default:
-				errs = append(errs, &validation.UnknownKeyError{Path: []string{key}})
-				i, err = scan.SkipValue(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr(key, i, err)
+				switch result.Role {
+				case "admin", "user", "guest":
+				default:
+					errs = append(errs, &validation.OneOfError{Path: []string{"role"}, Allowed: ggenOneof0, Value: result.Role})
 				}
 			}
 		default:
@@ -294,107 +277,82 @@ func (result MultiErrStruct) DecodeFromStream(s *scan.Stream) (MultiErrStruct, e
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
-		switch len(key) {
-		case 3:
-			if key == "age" {
-				err = s.ConsumeColon()
+		switch key {
+		case "age":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("age", s.Pos, err)
+			}
+			if seenAge {
+				errs = append(errs, &validation.DuplicateKeyError{Path: []string{"age"}})
+				err = s.SkipValue()
 				if err != nil {
 					return result, decode.NewParseErr("age", s.Pos, err)
 				}
-				if seenAge {
-					errs = append(errs, &validation.DuplicateKeyError{Path: []string{"age"}})
-					err = s.SkipValue()
-					if err != nil {
-						return result, decode.NewParseErr("age", s.Pos, err)
-					}
-				} else {
-					seenAge = true
-					var iv int64
-					iv, err = s.Int64()
-					if err != nil {
-						return result, decode.NewParseErr("age", s.Pos, err)
-					}
-					result.Age = int(iv)
-					if result.Age < 0 {
-						errs = append(errs, &validation.GTEError{Path: []string{"age"}, Limit: 0, Value: result.Age})
-					}
-					if result.Age > 100 {
-						errs = append(errs, &validation.LTEError{Path: []string{"age"}, Limit: 100, Value: result.Age})
-					}
-
-				}
 			} else {
-				errs = append(errs, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}})
-				err = s.ConsumeColon()
+				seenAge = true
+				var iv int64
+				iv, err = s.Int64()
 				if err != nil {
-					return result, decode.NewParseErr(strings.Clone(key), s.Pos, err)
+					return result, decode.NewParseErr("age", s.Pos, err)
 				}
-				err = s.SkipValue()
-				if err != nil {
-					return result, decode.NewParseErr(strings.Clone(key), s.Pos, err)
+				result.Age = int(iv)
+				if result.Age < 0 {
+					errs = append(errs, &validation.GTEError{Path: []string{"age"}, Limit: 0, Value: result.Age})
 				}
+				if result.Age > 100 {
+					errs = append(errs, &validation.LTEError{Path: []string{"age"}, Limit: 100, Value: result.Age})
+				}
+
 			}
-		case 4:
-			switch key {
-			case "name":
-				err = s.ConsumeColon()
+		case "name":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("name", s.Pos, err)
+			}
+			if seenName {
+				errs = append(errs, &validation.DuplicateKeyError{Path: []string{"name"}})
+				err = s.SkipValue()
 				if err != nil {
 					return result, decode.NewParseErr("name", s.Pos, err)
 				}
-				if seenName {
-					errs = append(errs, &validation.DuplicateKeyError{Path: []string{"name"}})
-					err = s.SkipValue()
-					if err != nil {
-						return result, decode.NewParseErr("name", s.Pos, err)
-					}
-				} else {
-					seenName = true
-					result.Name, err = s.String()
-					if err != nil {
-						return result, decode.NewParseErr("name", s.Pos, err)
-					}
-					if len(result.Name) < 1 {
-						errs = append(errs, &validation.MinLenError{Path: []string{"name"}, Limit: 1, Got: len(result.Name)})
-					}
-					if len(result.Name) > 5 {
-						errs = append(errs, &validation.MaxLenError{Path: []string{"name"}, Limit: 5, Got: len(result.Name)})
-					}
-
+			} else {
+				seenName = true
+				result.Name, err = s.String()
+				if err != nil {
+					return result, decode.NewParseErr("name", s.Pos, err)
 				}
-			case "role":
-				err = s.ConsumeColon()
+				if len(result.Name) < 1 {
+					errs = append(errs, &validation.MinLenError{Path: []string{"name"}, Limit: 1, Got: len(result.Name)})
+				}
+				if len(result.Name) > 5 {
+					errs = append(errs, &validation.MaxLenError{Path: []string{"name"}, Limit: 5, Got: len(result.Name)})
+				}
+
+			}
+		case "role":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("role", s.Pos, err)
+			}
+			if seenRole {
+				errs = append(errs, &validation.DuplicateKeyError{Path: []string{"role"}})
+				err = s.SkipValue()
 				if err != nil {
 					return result, decode.NewParseErr("role", s.Pos, err)
 				}
-				if seenRole {
-					errs = append(errs, &validation.DuplicateKeyError{Path: []string{"role"}})
-					err = s.SkipValue()
-					if err != nil {
-						return result, decode.NewParseErr("role", s.Pos, err)
-					}
-				} else {
-					seenRole = true
-					result.Role, err = s.String()
-					if err != nil {
-						return result, decode.NewParseErr("role", s.Pos, err)
-					}
-					switch result.Role {
-					case "admin", "user", "guest":
-					default:
-						errs = append(errs, &validation.OneOfError{Path: []string{"role"}, Allowed: ggenOneof0, Value: result.Role})
-					}
+			} else {
+				seenRole = true
+				result.Role, err = s.String()
+				if err != nil {
+					return result, decode.NewParseErr("role", s.Pos, err)
+				}
+				switch result.Role {
+				case "admin", "user", "guest":
+				default:
+					errs = append(errs, &validation.OneOfError{Path: []string{"role"}, Allowed: ggenOneof0, Value: result.Role})
+				}
 
-				}
-			default:
-				errs = append(errs, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}})
-				err = s.ConsumeColon()
-				if err != nil {
-					return result, decode.NewParseErr(strings.Clone(key), s.Pos, err)
-				}
-				err = s.SkipValue()
-				if err != nil {
-					return result, decode.NewParseErr(strings.Clone(key), s.Pos, err)
-				}
 			}
 		default:
 			errs = append(errs, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}})
@@ -516,84 +474,80 @@ func (result CustomBothStruct) DecodeFrom(data []byte) (CustomBothStruct, int, e
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
-		switch len(key) {
-		case 4:
-			if key == "tags" {
-				if seenTags {
-					return result, i, &validation.DuplicateKeyError{Path: []string{"tags"}}
-				}
-				seenTags = true
-				for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-					i++
-				}
-				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-					i += 4
-					result.Tags = nil
-					break
-				}
-				if i >= len(data) || data[i] != '[' {
-					return result, i, scan.ErrBadArray
-				}
+		switch key {
+		case "tags":
+			if seenTags {
+				return result, i, &validation.DuplicateKeyError{Path: []string{"tags"}}
+			}
+			seenTags = true
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
+			}
+			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+				i += 4
+				result.Tags = nil
+				break
+			}
+			if i >= len(data) || data[i] != '[' {
+				return result, i, scan.ErrBadArray
+			}
+			i++
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			if i < len(data) && data[i] == ']' {
+				if result.Tags == nil {
+					result.Tags = []string{}
+				}
+			} else {
+				if result.Tags == nil {
+					result.Tags = make([]string, 0, 4)
+				}
+			}
+			for i < len(data) && data[i] != ']' {
+				result.Tags = append(result.Tags, "")
+				if i >= len(data) || data[i] != '"' {
+					return result, i, decode.NewParseErr("tags", i, scan.ErrExpectString)
+				}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("tags", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("tags", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					result.Tags[len(result.Tags)-1] = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					result.Tags[len(result.Tags)-1], i, err = scan.String(data, i)
+					if err != nil {
+						return result, i, decode.NewParseErr("tags", i, err)
+					}
+				}
+				result.Tags[len(result.Tags)-1] = TrimSpace(result.Tags[len(result.Tags)-1])
+				if err := NotBlank(result.Tags[len(result.Tags)-1]); err != nil {
+					return result, i, &validation.CustomError{Path: []string{"tags[]"}, Name: "@NotBlank", Cause: err}
+				}
 				for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 					i++
 				}
-				if i < len(data) && data[i] == ']' {
-					if result.Tags == nil {
-						result.Tags = []string{}
-					}
-				} else {
-					if result.Tags == nil {
-						result.Tags = make([]string, 0, 4)
-					}
-				}
-				for i < len(data) && data[i] != ']' {
-					result.Tags = append(result.Tags, "")
-					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("tags", i, scan.ErrExpectString)
-					}
-					ke := i + 1
-					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-						ke++
-					}
-					if ke >= len(data) {
-						return result, i, decode.NewParseErr("tags", i, scan.ErrUnterminated)
-					}
-					if data[ke] < 0x20 {
-						return result, i, decode.NewParseErr("tags", i, scan.ErrBadString)
-					}
-					if data[ke] == '"' {
-						result.Tags[len(result.Tags)-1] = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-						i = ke + 1
-					} else {
-						result.Tags[len(result.Tags)-1], i, err = scan.String(data, i)
-						if err != nil {
-							return result, i, decode.NewParseErr("tags", i, err)
-						}
-					}
-					result.Tags[len(result.Tags)-1] = TrimSpace(result.Tags[len(result.Tags)-1])
-					if err := NotBlank(result.Tags[len(result.Tags)-1]); err != nil {
-						return result, i, &validation.CustomError{Path: []string{"tags[]"}, Name: "@NotBlank", Cause: err}
-					}
+				if i < len(data) && data[i] == ',' {
+					i++
 					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
-					if i < len(data) && data[i] == ',' {
-						i++
-						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-							i++
-						}
-						continue
-					}
-					break
+					continue
 				}
-				if i >= len(data) || data[i] != ']' {
-					return result, i, scan.ErrBadArray
-				}
-				i++
-			} else {
-				return result, i, &validation.UnknownKeyError{Path: []string{key}}
+				break
 			}
+			if i >= len(data) || data[i] != ']' {
+				return result, i, scan.ErrBadArray
+			}
+			i++
 		default:
 			return result, i, &validation.UnknownKeyError{Path: []string{key}}
 		}
@@ -647,99 +601,95 @@ func (result CustomBothStruct) DecodeFromStream(s *scan.Stream) (CustomBothStruc
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
-		switch len(key) {
-		case 4:
-			if key == "tags" {
-				err = s.ConsumeColon()
-				if err != nil {
+		switch key {
+		case "tags":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("tags", s.Pos, err)
+			}
+			if seenTags {
+				return result, &validation.DuplicateKeyError{Path: []string{"tags"}}
+			}
+			seenTags = true
+			err = s.SkipSpace()
+			if err != nil {
+				return result, decode.NewParseErr("tags", s.Pos, err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
 					return result, decode.NewParseErr("tags", s.Pos, err)
 				}
-				if seenTags {
-					return result, &validation.DuplicateKeyError{Path: []string{"tags"}}
-				}
-				seenTags = true
-				err = s.SkipSpace()
-				if err != nil {
-					return result, decode.NewParseErr("tags", s.Pos, err)
-				}
-				if s.Pos >= len(s.Bytes()) {
-					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("tags", s.Pos, err)
-					}
-				}
-				if s.Bytes()[s.Pos] == 'n' {
-					for ki := 1; ki < 4; ki++ {
-						if s.Pos+ki >= len(s.Bytes()) {
-							if err = s.ReadMore(0); err != nil {
-								return result, decode.NewParseErr("tags", s.Pos, err)
-							}
-						}
-						if s.Bytes()[s.Pos+ki] != "null"[ki] {
-							return result, decode.NewParseErr("tags", s.Pos, scan.ErrBadLiteral)
-						}
-					}
-					s.Pos += 4
-					result.Tags = nil
-					break
-				}
-				err = s.ArrayOpen()
-				if err != nil {
-					return result, decode.NewParseErr("tags", s.Pos, err)
-				}
-				err = s.SkipSpace()
-				if err != nil {
-					return result, decode.NewParseErr("tags", s.Pos, err)
-				}
-				if s.Pos >= len(s.Bytes()) {
-					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("tags", s.Pos, err)
-					}
-				}
-				if s.Bytes()[s.Pos] == ']' {
-					if result.Tags == nil {
-						result.Tags = []string{}
-					}
-				} else {
-					if result.Tags == nil {
-						result.Tags = make([]string, 0, 4)
-					}
-				}
-				for s.Bytes()[s.Pos] != ']' {
-					result.Tags = append(result.Tags, "")
-					result.Tags[len(result.Tags)-1], err = s.String()
-					if err != nil {
-						return result, decode.NewParseErr("tags", s.Pos, err)
-					}
-					result.Tags[len(result.Tags)-1] = TrimSpace(result.Tags[len(result.Tags)-1])
-					if err := NotBlank(result.Tags[len(result.Tags)-1]); err != nil {
-						return result, &validation.CustomError{Path: []string{"tags[]"}, Name: "@NotBlank", Cause: err}
-					}
-					err = s.SkipSpace()
-					if err != nil {
-						return result, decode.NewParseErr("tags", s.Pos, err)
-					}
-					if s.Pos >= len(s.Bytes()) {
+			}
+			if s.Bytes()[s.Pos] == 'n' {
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
 							return result, decode.NewParseErr("tags", s.Pos, err)
 						}
 					}
-					if s.Bytes()[s.Pos] == ',' {
-						s.Pos++
-						err = s.SkipSpace()
-						if err != nil {
-							return result, decode.NewParseErr("tags", s.Pos, err)
-						}
-						continue
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, decode.NewParseErr("tags", s.Pos, scan.ErrBadLiteral)
 					}
-					break
 				}
-				if s.Bytes()[s.Pos] != ']' {
-					return result, decode.NewParseErr("tags", s.Pos, scan.ErrBadArray)
-				}
-				s.Pos++
-			} else {
-				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+				s.Pos += 4
+				result.Tags = nil
+				break
 			}
+			err = s.ArrayOpen()
+			if err != nil {
+				return result, decode.NewParseErr("tags", s.Pos, err)
+			}
+			err = s.SkipSpace()
+			if err != nil {
+				return result, decode.NewParseErr("tags", s.Pos, err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, decode.NewParseErr("tags", s.Pos, err)
+				}
+			}
+			if s.Bytes()[s.Pos] == ']' {
+				if result.Tags == nil {
+					result.Tags = []string{}
+				}
+			} else {
+				if result.Tags == nil {
+					result.Tags = make([]string, 0, 4)
+				}
+			}
+			for s.Bytes()[s.Pos] != ']' {
+				result.Tags = append(result.Tags, "")
+				result.Tags[len(result.Tags)-1], err = s.String()
+				if err != nil {
+					return result, decode.NewParseErr("tags", s.Pos, err)
+				}
+				result.Tags[len(result.Tags)-1] = TrimSpace(result.Tags[len(result.Tags)-1])
+				if err := NotBlank(result.Tags[len(result.Tags)-1]); err != nil {
+					return result, &validation.CustomError{Path: []string{"tags[]"}, Name: "@NotBlank", Cause: err}
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, decode.NewParseErr("tags", s.Pos, err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("tags", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == ',' {
+					s.Pos++
+					err = s.SkipSpace()
+					if err != nil {
+						return result, decode.NewParseErr("tags", s.Pos, err)
+					}
+					continue
+				}
+				break
+			}
+			if s.Bytes()[s.Pos] != ']' {
+				return result, decode.NewParseErr("tags", s.Pos, scan.ErrBadArray)
+			}
+			s.Pos++
 		default:
 			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
 		}

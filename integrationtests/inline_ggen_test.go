@@ -68,42 +68,32 @@ func (result InlineStruct) DecodeFrom(data []byte) (InlineStruct, int, error) {
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
-		switch len(key) {
-		case 4:
-			if key == "name" {
-				if seenName {
-					return result, i, &validation.DuplicateKeyError{Path: []string{"name"}}
-				}
-				seenName = true
-				if i >= len(data) || data[i] != '"' {
-					return result, i, decode.NewParseErr("name", i, scan.ErrExpectString)
-				}
-				ke := i + 1
-				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-					ke++
-				}
-				if ke >= len(data) {
-					return result, i, decode.NewParseErr("name", i, scan.ErrUnterminated)
-				}
-				if data[ke] < 0x20 {
-					return result, i, decode.NewParseErr("name", i, scan.ErrBadString)
-				}
-				if data[ke] == '"' {
-					result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-					i = ke + 1
-				} else {
-					result.Name, i, err = scan.String(data, i)
-					if err != nil {
-						return result, i, decode.NewParseErr("name", i, err)
-					}
-				}
+		switch key {
+		case "name":
+			if seenName {
+				return result, i, &validation.DuplicateKeyError{Path: []string{"name"}}
+			}
+			seenName = true
+			if i >= len(data) || data[i] != '"' {
+				return result, i, decode.NewParseErr("name", i, scan.ErrExpectString)
+			}
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, decode.NewParseErr("name", i, scan.ErrUnterminated)
+			}
+			if data[ke] < 0x20 {
+				return result, i, decode.NewParseErr("name", i, scan.ErrBadString)
+			}
+			if data[ke] == '"' {
+				result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
 			} else {
-				if result.Extra == nil {
-					result.Extra = make(map[string]any)
-				}
-				result.Extra[key], i, err = scan.Any(data, i)
+				result.Name, i, err = scan.String(data, i)
 				if err != nil {
-					return result, i, decode.NewParseErr(key, i, err)
+					return result, i, decode.NewParseErr("name", i, err)
 				}
 			}
 		default:
@@ -165,34 +155,19 @@ func (result InlineStruct) DecodeFromStream(s *scan.Stream) (InlineStruct, error
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
-		switch len(key) {
-		case 4:
-			if key == "name" {
-				err = s.ConsumeColon()
-				if err != nil {
-					return result, decode.NewParseErr("name", s.Pos, err)
-				}
-				if seenName {
-					return result, &validation.DuplicateKeyError{Path: []string{"name"}}
-				}
-				seenName = true
-				result.Name, err = s.String()
-				if err != nil {
-					return result, decode.NewParseErr("name", s.Pos, err)
-				}
-			} else {
-				ownKey := strings.Clone(key)
-				err = s.ConsumeColon()
-				if err != nil {
-					return result, decode.NewParseErr(ownKey, s.Pos, err)
-				}
-				if result.Extra == nil {
-					result.Extra = make(map[string]any)
-				}
-				result.Extra[ownKey], err = s.Any()
-				if err != nil {
-					return result, decode.NewParseErr(ownKey, s.Pos, err)
-				}
+		switch key {
+		case "name":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("name", s.Pos, err)
+			}
+			if seenName {
+				return result, &validation.DuplicateKeyError{Path: []string{"name"}}
+			}
+			seenName = true
+			result.Name, err = s.String()
+			if err != nil {
+				return result, decode.NewParseErr("name", s.Pos, err)
 			}
 		default:
 			ownKey := strings.Clone(key)
@@ -326,42 +301,32 @@ func (result InlineStringsStruct) DecodeFrom(data []byte) (InlineStringsStruct, 
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
-		switch len(key) {
-		case 4:
-			if key == "name" {
-				if seenName {
-					return result, i, &validation.DuplicateKeyError{Path: []string{"name"}}
-				}
-				seenName = true
-				if i >= len(data) || data[i] != '"' {
-					return result, i, decode.NewParseErr("name", i, scan.ErrExpectString)
-				}
-				ke := i + 1
-				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-					ke++
-				}
-				if ke >= len(data) {
-					return result, i, decode.NewParseErr("name", i, scan.ErrUnterminated)
-				}
-				if data[ke] < 0x20 {
-					return result, i, decode.NewParseErr("name", i, scan.ErrBadString)
-				}
-				if data[ke] == '"' {
-					result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-					i = ke + 1
-				} else {
-					result.Name, i, err = scan.String(data, i)
-					if err != nil {
-						return result, i, decode.NewParseErr("name", i, err)
-					}
-				}
+		switch key {
+		case "name":
+			if seenName {
+				return result, i, &validation.DuplicateKeyError{Path: []string{"name"}}
+			}
+			seenName = true
+			if i >= len(data) || data[i] != '"' {
+				return result, i, decode.NewParseErr("name", i, scan.ErrExpectString)
+			}
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, decode.NewParseErr("name", i, scan.ErrUnterminated)
+			}
+			if data[ke] < 0x20 {
+				return result, i, decode.NewParseErr("name", i, scan.ErrBadString)
+			}
+			if data[ke] == '"' {
+				result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
 			} else {
-				if result.Extra == nil {
-					result.Extra = make(map[string]string)
-				}
-				result.Extra[key], i, err = scan.String(data, i)
+				result.Name, i, err = scan.String(data, i)
 				if err != nil {
-					return result, i, decode.NewParseErr(key, i, err)
+					return result, i, decode.NewParseErr("name", i, err)
 				}
 			}
 		default:
@@ -423,34 +388,19 @@ func (result InlineStringsStruct) DecodeFromStream(s *scan.Stream) (InlineString
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
-		switch len(key) {
-		case 4:
-			if key == "name" {
-				err = s.ConsumeColon()
-				if err != nil {
-					return result, decode.NewParseErr("name", s.Pos, err)
-				}
-				if seenName {
-					return result, &validation.DuplicateKeyError{Path: []string{"name"}}
-				}
-				seenName = true
-				result.Name, err = s.String()
-				if err != nil {
-					return result, decode.NewParseErr("name", s.Pos, err)
-				}
-			} else {
-				ownKey := strings.Clone(key)
-				err = s.ConsumeColon()
-				if err != nil {
-					return result, decode.NewParseErr(ownKey, s.Pos, err)
-				}
-				if result.Extra == nil {
-					result.Extra = make(map[string]string)
-				}
-				result.Extra[ownKey], err = s.String()
-				if err != nil {
-					return result, decode.NewParseErr(ownKey, s.Pos, err)
-				}
+		switch key {
+		case "name":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("name", s.Pos, err)
+			}
+			if seenName {
+				return result, &validation.DuplicateKeyError{Path: []string{"name"}}
+			}
+			seenName = true
+			result.Name, err = s.String()
+			if err != nil {
+				return result, decode.NewParseErr("name", s.Pos, err)
 			}
 		default:
 			ownKey := strings.Clone(key)
@@ -583,47 +533,33 @@ func (result InlineStructsStruct) DecodeFrom(data []byte) (InlineStructsStruct, 
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
-		switch len(key) {
-		case 4:
-			if key == "name" {
-				if seenName {
-					return result, i, &validation.DuplicateKeyError{Path: []string{"name"}}
-				}
-				seenName = true
-				if i >= len(data) || data[i] != '"' {
-					return result, i, decode.NewParseErr("name", i, scan.ErrExpectString)
-				}
-				ke := i + 1
-				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-					ke++
-				}
-				if ke >= len(data) {
-					return result, i, decode.NewParseErr("name", i, scan.ErrUnterminated)
-				}
-				if data[ke] < 0x20 {
-					return result, i, decode.NewParseErr("name", i, scan.ErrBadString)
-				}
-				if data[ke] == '"' {
-					result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-					i = ke + 1
-				} else {
-					result.Name, i, err = scan.String(data, i)
-					if err != nil {
-						return result, i, decode.NewParseErr("name", i, err)
-					}
-				}
+		switch key {
+		case "name":
+			if seenName {
+				return result, i, &validation.DuplicateKeyError{Path: []string{"name"}}
+			}
+			seenName = true
+			if i >= len(data) || data[i] != '"' {
+				return result, i, decode.NewParseErr("name", i, scan.ErrExpectString)
+			}
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, decode.NewParseErr("name", i, scan.ErrUnterminated)
+			}
+			if data[ke] < 0x20 {
+				return result, i, decode.NewParseErr("name", i, scan.ErrBadString)
+			}
+			if data[ke] == '"' {
+				result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
 			} else {
-				if result.Extra == nil {
-					result.Extra = make(map[string]InlineStruct)
-				}
-				var _iv InlineStruct
-				var _in int
-				_iv, _in, err = _iv.DecodeFrom(data[i:])
-				i += _in
+				result.Name, i, err = scan.String(data, i)
 				if err != nil {
-					return result, i, decode.NewParseErr(key, i, err)
+					return result, i, decode.NewParseErr("name", i, err)
 				}
-				result.Extra[key] = _iv
 			}
 		default:
 			if result.Extra == nil {
@@ -688,36 +624,19 @@ func (result InlineStructsStruct) DecodeFromStream(s *scan.Stream) (InlineStruct
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
-		switch len(key) {
-		case 4:
-			if key == "name" {
-				err = s.ConsumeColon()
-				if err != nil {
-					return result, decode.NewParseErr("name", s.Pos, err)
-				}
-				if seenName {
-					return result, &validation.DuplicateKeyError{Path: []string{"name"}}
-				}
-				seenName = true
-				result.Name, err = s.String()
-				if err != nil {
-					return result, decode.NewParseErr("name", s.Pos, err)
-				}
-			} else {
-				ownKey := strings.Clone(key)
-				err = s.ConsumeColon()
-				if err != nil {
-					return result, decode.NewParseErr(ownKey, s.Pos, err)
-				}
-				if result.Extra == nil {
-					result.Extra = make(map[string]InlineStruct)
-				}
-				var _iv InlineStruct
-				_iv, err = _iv.DecodeFromStream(s)
-				if err != nil {
-					return result, decode.NewParseErr(ownKey, s.Pos, err)
-				}
-				result.Extra[ownKey] = _iv
+		switch key {
+		case "name":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("name", s.Pos, err)
+			}
+			if seenName {
+				return result, &validation.DuplicateKeyError{Path: []string{"name"}}
+			}
+			seenName = true
+			result.Name, err = s.String()
+			if err != nil {
+				return result, decode.NewParseErr("name", s.Pos, err)
 			}
 		default:
 			ownKey := strings.Clone(key)

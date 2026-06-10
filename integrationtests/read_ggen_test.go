@@ -65,39 +65,32 @@ func (result IgnoreUnknownStruct) DecodeFrom(data []byte) (IgnoreUnknownStruct, 
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
-		switch len(key) {
-		case 4:
-			if key == "name" {
-				if seenName {
-					return result, i, &validation.DuplicateKeyError{Path: []string{"name"}}
-				}
-				seenName = true
-				if i >= len(data) || data[i] != '"' {
-					return result, i, decode.NewParseErr("name", i, scan.ErrExpectString)
-				}
-				ke := i + 1
-				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-					ke++
-				}
-				if ke >= len(data) {
-					return result, i, decode.NewParseErr("name", i, scan.ErrUnterminated)
-				}
-				if data[ke] < 0x20 {
-					return result, i, decode.NewParseErr("name", i, scan.ErrBadString)
-				}
-				if data[ke] == '"' {
-					result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-					i = ke + 1
-				} else {
-					result.Name, i, err = scan.String(data, i)
-					if err != nil {
-						return result, i, decode.NewParseErr("name", i, err)
-					}
-				}
+		switch key {
+		case "name":
+			if seenName {
+				return result, i, &validation.DuplicateKeyError{Path: []string{"name"}}
+			}
+			seenName = true
+			if i >= len(data) || data[i] != '"' {
+				return result, i, decode.NewParseErr("name", i, scan.ErrExpectString)
+			}
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, decode.NewParseErr("name", i, scan.ErrUnterminated)
+			}
+			if data[ke] < 0x20 {
+				return result, i, decode.NewParseErr("name", i, scan.ErrBadString)
+			}
+			if data[ke] == '"' {
+				result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
 			} else {
-				i, err = scan.SkipValue(data, i)
+				result.Name, i, err = scan.String(data, i)
 				if err != nil {
-					return result, i, decode.NewParseErr(key, i, err)
+					return result, i, decode.NewParseErr("name", i, err)
 				}
 			}
 		default:
@@ -153,30 +146,19 @@ func (result IgnoreUnknownStruct) DecodeFromStream(s *scan.Stream) (IgnoreUnknow
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
-		switch len(key) {
-		case 4:
-			if key == "name" {
-				err = s.ConsumeColon()
-				if err != nil {
-					return result, decode.NewParseErr("name", s.Pos, err)
-				}
-				if seenName {
-					return result, &validation.DuplicateKeyError{Path: []string{"name"}}
-				}
-				seenName = true
-				result.Name, err = s.String()
-				if err != nil {
-					return result, decode.NewParseErr("name", s.Pos, err)
-				}
-			} else {
-				err = s.ConsumeColon()
-				if err != nil {
-					return result, decode.NewParseErr(strings.Clone(key), s.Pos, err)
-				}
-				err = s.SkipValue()
-				if err != nil {
-					return result, decode.NewParseErr(strings.Clone(key), s.Pos, err)
-				}
+		switch key {
+		case "name":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("name", s.Pos, err)
+			}
+			if seenName {
+				return result, &validation.DuplicateKeyError{Path: []string{"name"}}
+			}
+			seenName = true
+			result.Name, err = s.String()
+			if err != nil {
+				return result, decode.NewParseErr("name", s.Pos, err)
 			}
 		default:
 			err = s.ConsumeColon()

@@ -67,55 +67,47 @@ func (result FallbackStruct) DecodeFrom(data []byte) (FallbackStruct, int, error
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
-		switch len(key) {
-		case 2:
-			if key == "id" {
-				if seenID {
-					return result, i, &validation.DuplicateKeyError{Path: []string{"id"}}
-				}
-				seenID = true
-				if i >= len(data) || data[i] != '"' {
-					return result, i, decode.NewParseErr("id", i, scan.ErrExpectString)
-				}
-				ke := i + 1
-				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-					ke++
-				}
-				if ke >= len(data) {
-					return result, i, decode.NewParseErr("id", i, scan.ErrUnterminated)
-				}
-				if data[ke] < 0x20 {
-					return result, i, decode.NewParseErr("id", i, scan.ErrBadString)
-				}
-				if data[ke] == '"' {
-					result.ID = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-					i = ke + 1
-				} else {
-					result.ID, i, err = scan.String(data, i)
-					if err != nil {
-						return result, i, decode.NewParseErr("id", i, err)
-					}
-				}
-			} else {
-				return result, i, &validation.UnknownKeyError{Path: []string{key}}
+		switch key {
+		case "extra":
+			if seenExtra {
+				return result, i, &validation.DuplicateKeyError{Path: []string{"extra"}}
 			}
-		case 5:
-			if key == "extra" {
-				if seenExtra {
-					return result, i, &validation.DuplicateKeyError{Path: []string{"extra"}}
-				}
-				seenExtra = true
-				start := i
-				i, err = scan.SkipValue(data, start)
-				if err != nil {
-					return result, i, decode.NewParseErr("extra", i, err)
-				}
-				err = json.Unmarshal(data[start:i], &result.Extra)
-				if err != nil {
-					return result, i, decode.NewParseErr("extra", i, err)
-				}
+			seenExtra = true
+			start := i
+			i, err = scan.SkipValue(data, start)
+			if err != nil {
+				return result, i, decode.NewParseErr("extra", i, err)
+			}
+			err = json.Unmarshal(data[start:i], &result.Extra)
+			if err != nil {
+				return result, i, decode.NewParseErr("extra", i, err)
+			}
+		case "id":
+			if seenID {
+				return result, i, &validation.DuplicateKeyError{Path: []string{"id"}}
+			}
+			seenID = true
+			if i >= len(data) || data[i] != '"' {
+				return result, i, decode.NewParseErr("id", i, scan.ErrExpectString)
+			}
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, decode.NewParseErr("id", i, scan.ErrUnterminated)
+			}
+			if data[ke] < 0x20 {
+				return result, i, decode.NewParseErr("id", i, scan.ErrBadString)
+			}
+			if data[ke] == '"' {
+				result.ID = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
 			} else {
-				return result, i, &validation.UnknownKeyError{Path: []string{key}}
+				result.ID, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("id", i, err)
+				}
 			}
 		default:
 			return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -168,48 +160,40 @@ func (result FallbackStruct) DecodeFromStream(s *scan.Stream) (FallbackStruct, e
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
-		switch len(key) {
-		case 2:
-			if key == "id" {
-				err = s.ConsumeColon()
-				if err != nil {
-					return result, decode.NewParseErr("id", s.Pos, err)
-				}
-				if seenID {
-					return result, &validation.DuplicateKeyError{Path: []string{"id"}}
-				}
-				seenID = true
-				result.ID, err = s.String()
-				if err != nil {
-					return result, decode.NewParseErr("id", s.Pos, err)
-				}
-			} else {
-				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+		switch key {
+		case "extra":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("extra", s.Pos, err)
 			}
-		case 5:
-			if key == "extra" {
-				err = s.ConsumeColon()
-				if err != nil {
-					return result, decode.NewParseErr("extra", s.Pos, err)
-				}
-				if seenExtra {
-					return result, &validation.DuplicateKeyError{Path: []string{"extra"}}
-				}
-				seenExtra = true
-				start := s.Pos
-				prevPin := s.Shift
-				s.Shift = false
-				err = s.SkipValue()
-				s.Shift = prevPin
-				if err != nil {
-					return result, decode.NewParseErr("extra", s.Pos, err)
-				}
-				err = json.Unmarshal(s.Bytes()[start:s.Pos], &result.Extra)
-				if err != nil {
-					return result, decode.NewParseErr("extra", s.Pos, err)
-				}
-			} else {
-				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			if seenExtra {
+				return result, &validation.DuplicateKeyError{Path: []string{"extra"}}
+			}
+			seenExtra = true
+			start := s.Pos
+			prevPin := s.Shift
+			s.Shift = false
+			err = s.SkipValue()
+			s.Shift = prevPin
+			if err != nil {
+				return result, decode.NewParseErr("extra", s.Pos, err)
+			}
+			err = json.Unmarshal(s.Bytes()[start:s.Pos], &result.Extra)
+			if err != nil {
+				return result, decode.NewParseErr("extra", s.Pos, err)
+			}
+		case "id":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("id", s.Pos, err)
+			}
+			if seenID {
+				return result, &validation.DuplicateKeyError{Path: []string{"id"}}
+			}
+			seenID = true
+			result.ID, err = s.String()
+			if err != nil {
+				return result, decode.NewParseErr("id", s.Pos, err)
 			}
 		default:
 			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
@@ -317,52 +301,44 @@ func (result FastFallbackStruct) DecodeFrom(data []byte) (FastFallbackStruct, in
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
-		switch len(key) {
-		case 2:
-			if key == "id" {
-				if seenID {
-					return result, i, &validation.DuplicateKeyError{Path: []string{"id"}}
-				}
-				seenID = true
-				if i >= len(data) || data[i] != '"' {
-					return result, i, decode.NewParseErr("id", i, scan.ErrExpectString)
-				}
-				ke := i + 1
-				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-					ke++
-				}
-				if ke >= len(data) {
-					return result, i, decode.NewParseErr("id", i, scan.ErrUnterminated)
-				}
-				if data[ke] < 0x20 {
-					return result, i, decode.NewParseErr("id", i, scan.ErrBadString)
-				}
-				if data[ke] == '"' {
-					result.ID = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-					i = ke + 1
-				} else {
-					result.ID, i, err = scan.String(data, i)
-					if err != nil {
-						return result, i, decode.NewParseErr("id", i, err)
-					}
-				}
-			} else {
-				return result, i, &validation.UnknownKeyError{Path: []string{key}}
+		switch key {
+		case "extra":
+			if seenExtra {
+				return result, i, &validation.DuplicateKeyError{Path: []string{"extra"}}
 			}
-		case 5:
-			if key == "extra" {
-				if seenExtra {
-					return result, i, &validation.DuplicateKeyError{Path: []string{"extra"}}
-				}
-				seenExtra = true
-				var _n int
-				result.Extra, _n, err = result.Extra.DecodeFrom(data[i:])
-				i += _n
-				if err != nil {
-					return result, i, decode.NewParseErr("extra", i, err)
-				}
+			seenExtra = true
+			var _n int
+			result.Extra, _n, err = result.Extra.DecodeFrom(data[i:])
+			i += _n
+			if err != nil {
+				return result, i, decode.NewParseErr("extra", i, err)
+			}
+		case "id":
+			if seenID {
+				return result, i, &validation.DuplicateKeyError{Path: []string{"id"}}
+			}
+			seenID = true
+			if i >= len(data) || data[i] != '"' {
+				return result, i, decode.NewParseErr("id", i, scan.ErrExpectString)
+			}
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, decode.NewParseErr("id", i, scan.ErrUnterminated)
+			}
+			if data[ke] < 0x20 {
+				return result, i, decode.NewParseErr("id", i, scan.ErrBadString)
+			}
+			if data[ke] == '"' {
+				result.ID = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
 			} else {
-				return result, i, &validation.UnknownKeyError{Path: []string{key}}
+				result.ID, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("id", i, err)
+				}
 			}
 		default:
 			return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -415,40 +391,32 @@ func (result FastFallbackStruct) DecodeFromStream(s *scan.Stream) (FastFallbackS
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
-		switch len(key) {
-		case 2:
-			if key == "id" {
-				err = s.ConsumeColon()
-				if err != nil {
-					return result, decode.NewParseErr("id", s.Pos, err)
-				}
-				if seenID {
-					return result, &validation.DuplicateKeyError{Path: []string{"id"}}
-				}
-				seenID = true
-				result.ID, err = s.String()
-				if err != nil {
-					return result, decode.NewParseErr("id", s.Pos, err)
-				}
-			} else {
-				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+		switch key {
+		case "extra":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("extra", s.Pos, err)
 			}
-		case 5:
-			if key == "extra" {
-				err = s.ConsumeColon()
-				if err != nil {
-					return result, decode.NewParseErr("extra", s.Pos, err)
-				}
-				if seenExtra {
-					return result, &validation.DuplicateKeyError{Path: []string{"extra"}}
-				}
-				seenExtra = true
-				result.Extra, err = result.Extra.DecodeFromStream(s)
-				if err != nil {
-					return result, decode.NewParseErr("extra", s.Pos, err)
-				}
-			} else {
-				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			if seenExtra {
+				return result, &validation.DuplicateKeyError{Path: []string{"extra"}}
+			}
+			seenExtra = true
+			result.Extra, err = result.Extra.DecodeFromStream(s)
+			if err != nil {
+				return result, decode.NewParseErr("extra", s.Pos, err)
+			}
+		case "id":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("id", s.Pos, err)
+			}
+			if seenID {
+				return result, &validation.DuplicateKeyError{Path: []string{"id"}}
+			}
+			seenID = true
+			result.ID, err = s.String()
+			if err != nil {
+				return result, decode.NewParseErr("id", s.Pos, err)
 			}
 		default:
 			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
@@ -557,55 +525,47 @@ func (result TextFallbackStruct) DecodeFrom(data []byte) (TextFallbackStruct, in
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
-		switch len(key) {
-		case 2:
-			if key == "id" {
-				if seenID {
-					return result, i, &validation.DuplicateKeyError{Path: []string{"id"}}
-				}
-				seenID = true
-				if i >= len(data) || data[i] != '"' {
-					return result, i, decode.NewParseErr("id", i, scan.ErrExpectString)
-				}
-				ke := i + 1
-				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-					ke++
-				}
-				if ke >= len(data) {
-					return result, i, decode.NewParseErr("id", i, scan.ErrUnterminated)
-				}
-				if data[ke] < 0x20 {
-					return result, i, decode.NewParseErr("id", i, scan.ErrBadString)
-				}
-				if data[ke] == '"' {
-					result.ID = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-					i = ke + 1
-				} else {
-					result.ID, i, err = scan.String(data, i)
-					if err != nil {
-						return result, i, decode.NewParseErr("id", i, err)
-					}
-				}
-			} else {
-				return result, i, &validation.UnknownKeyError{Path: []string{key}}
+		switch key {
+		case "id":
+			if seenID {
+				return result, i, &validation.DuplicateKeyError{Path: []string{"id"}}
 			}
-		case 3:
-			if key == "tag" {
-				if seenTag {
-					return result, i, &validation.DuplicateKeyError{Path: []string{"tag"}}
-				}
-				seenTag = true
-				var ts string
-				ts, i, err = scan.String(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr("tag", i, err)
-				}
-				err = result.Tag.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts)))
-				if err != nil {
-					return result, i, decode.NewParseErr("tag", i, err)
-				}
+			seenID = true
+			if i >= len(data) || data[i] != '"' {
+				return result, i, decode.NewParseErr("id", i, scan.ErrExpectString)
+			}
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, decode.NewParseErr("id", i, scan.ErrUnterminated)
+			}
+			if data[ke] < 0x20 {
+				return result, i, decode.NewParseErr("id", i, scan.ErrBadString)
+			}
+			if data[ke] == '"' {
+				result.ID = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
 			} else {
-				return result, i, &validation.UnknownKeyError{Path: []string{key}}
+				result.ID, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("id", i, err)
+				}
+			}
+		case "tag":
+			if seenTag {
+				return result, i, &validation.DuplicateKeyError{Path: []string{"tag"}}
+			}
+			seenTag = true
+			var ts string
+			ts, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("tag", i, err)
+			}
+			err = result.Tag.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts)))
+			if err != nil {
+				return result, i, decode.NewParseErr("tag", i, err)
 			}
 		default:
 			return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -658,45 +618,37 @@ func (result TextFallbackStruct) DecodeFromStream(s *scan.Stream) (TextFallbackS
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
-		switch len(key) {
-		case 2:
-			if key == "id" {
-				err = s.ConsumeColon()
-				if err != nil {
-					return result, decode.NewParseErr("id", s.Pos, err)
-				}
-				if seenID {
-					return result, &validation.DuplicateKeyError{Path: []string{"id"}}
-				}
-				seenID = true
-				result.ID, err = s.String()
-				if err != nil {
-					return result, decode.NewParseErr("id", s.Pos, err)
-				}
-			} else {
-				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+		switch key {
+		case "id":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("id", s.Pos, err)
 			}
-		case 3:
-			if key == "tag" {
-				err = s.ConsumeColon()
-				if err != nil {
-					return result, decode.NewParseErr("tag", s.Pos, err)
-				}
-				if seenTag {
-					return result, &validation.DuplicateKeyError{Path: []string{"tag"}}
-				}
-				seenTag = true
-				var ts string
-				ts, err = s.String()
-				if err != nil {
-					return result, decode.NewParseErr("tag", s.Pos, err)
-				}
-				err = result.Tag.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts)))
-				if err != nil {
-					return result, decode.NewParseErr("tag", s.Pos, err)
-				}
-			} else {
-				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			if seenID {
+				return result, &validation.DuplicateKeyError{Path: []string{"id"}}
+			}
+			seenID = true
+			result.ID, err = s.String()
+			if err != nil {
+				return result, decode.NewParseErr("id", s.Pos, err)
+			}
+		case "tag":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("tag", s.Pos, err)
+			}
+			if seenTag {
+				return result, &validation.DuplicateKeyError{Path: []string{"tag"}}
+			}
+			seenTag = true
+			var ts string
+			ts, err = s.String()
+			if err != nil {
+				return result, decode.NewParseErr("tag", s.Pos, err)
+			}
+			err = result.Tag.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts)))
+			if err != nil {
+				return result, decode.NewParseErr("tag", s.Pos, err)
 			}
 		default:
 			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}

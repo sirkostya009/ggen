@@ -73,96 +73,88 @@ func (result HookedStruct) DecodeFrom(data []byte) (HookedStruct, int, error) {
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
-		switch len(key) {
-		case 1:
-			if key == "n" {
-				if seenN {
-					return result, i, &validation.DuplicateKeyError{Path: []string{"n"}}
+		switch key {
+		case "n":
+			if seenN {
+				return result, i, &validation.DuplicateKeyError{Path: []string{"n"}}
+			}
+			seenN = true
+			neg := false
+			if i < len(data) && data[i] == '-' {
+				neg = true
+				i++
+			}
+			if i >= len(data) || data[i] < '0' || data[i] > '9' {
+				return result, i, decode.NewParseErr("n", i, scan.ErrBadNumber)
+			}
+			limit := uint64(math.MaxInt64)
+			if neg {
+				limit = scan.SignedNeg
+			}
+			var u uint64
+			for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+				d := uint64(data[i] - '0')
+				if u > limit/10 || (u == limit/10 && d > limit%10) {
+					return result, i, decode.NewParseErr("n", i, scan.ErrNumberOverflow)
 				}
-				seenN = true
-				neg := false
-				if i < len(data) && data[i] == '-' {
-					neg = true
-					i++
-				}
-				if i >= len(data) || data[i] < '0' || data[i] > '9' {
+				u = u*10 + d
+				i++
+			}
+			if i < len(data) {
+				c := data[i]
+				if c == '.' || c == 'e' || c == 'E' {
 					return result, i, decode.NewParseErr("n", i, scan.ErrBadNumber)
 				}
-				limit := uint64(math.MaxInt64)
-				if neg {
-					limit = scan.SignedNeg
-				}
-				var u uint64
-				for i < len(data) && data[i] >= '0' && data[i] <= '9' {
-					d := uint64(data[i] - '0')
-					if u > limit/10 || (u == limit/10 && d > limit%10) {
-						return result, i, decode.NewParseErr("n", i, scan.ErrNumberOverflow)
-					}
-					u = u*10 + d
-					i++
-				}
-				if i < len(data) {
-					c := data[i]
-					if c == '.' || c == 'e' || c == 'E' {
-						return result, i, decode.NewParseErr("n", i, scan.ErrBadNumber)
-					}
-				}
-				var n int64
-				if neg {
-					if u == scan.SignedNeg {
-						n = math.MinInt64
-					} else {
-						n = -int64(u)
-					}
-				} else {
-					n = int64(u)
-				}
-				result.N = int(n)
-				if result.N < 0 {
-					return result, i, &validation.GTEError{Path: []string{"n"}, Limit: 0, Value: result.N}
-				}
-				if result.N > 100 {
-					return result, i, &validation.LTEError{Path: []string{"n"}, Limit: 100, Value: result.N}
-				}
-			} else {
-				return result, i, &validation.UnknownKeyError{Path: []string{key}}
 			}
-		case 4:
-			if key == "name" {
-				if seenName {
-					return result, i, &validation.DuplicateKeyError{Path: []string{"name"}}
-				}
-				seenName = true
-				if i >= len(data) || data[i] != '"' {
-					return result, i, decode.NewParseErr("name", i, scan.ErrExpectString)
-				}
-				ke := i + 1
-				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-					ke++
-				}
-				if ke >= len(data) {
-					return result, i, decode.NewParseErr("name", i, scan.ErrUnterminated)
-				}
-				if data[ke] < 0x20 {
-					return result, i, decode.NewParseErr("name", i, scan.ErrBadString)
-				}
-				if data[ke] == '"' {
-					result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-					i = ke + 1
+			var n int64
+			if neg {
+				if u == scan.SignedNeg {
+					n = math.MinInt64
 				} else {
-					result.Name, i, err = scan.String(data, i)
-					if err != nil {
-						return result, i, decode.NewParseErr("name", i, err)
-					}
-				}
-				if len(result.Name) < 1 {
-					return result, i, &validation.MinLenError{Path: []string{"name"}, Limit: 1, Got: len(result.Name)}
-				}
-				if len(result.Name) > 20 {
-					return result, i, &validation.MaxLenError{Path: []string{"name"}, Limit: 20, Got: len(result.Name)}
+					n = -int64(u)
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Path: []string{key}}
+				n = int64(u)
+			}
+			result.N = int(n)
+			if result.N < 0 {
+				return result, i, &validation.GTEError{Path: []string{"n"}, Limit: 0, Value: result.N}
+			}
+			if result.N > 100 {
+				return result, i, &validation.LTEError{Path: []string{"n"}, Limit: 100, Value: result.N}
+			}
+		case "name":
+			if seenName {
+				return result, i, &validation.DuplicateKeyError{Path: []string{"name"}}
+			}
+			seenName = true
+			if i >= len(data) || data[i] != '"' {
+				return result, i, decode.NewParseErr("name", i, scan.ErrExpectString)
+			}
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, decode.NewParseErr("name", i, scan.ErrUnterminated)
+			}
+			if data[ke] < 0x20 {
+				return result, i, decode.NewParseErr("name", i, scan.ErrBadString)
+			}
+			if data[ke] == '"' {
+				result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				result.Name, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("name", i, err)
+				}
+			}
+			if len(result.Name) < 1 {
+				return result, i, &validation.MinLenError{Path: []string{"name"}, Limit: 1, Got: len(result.Name)}
+			}
+			if len(result.Name) > 20 {
+				return result, i, &validation.MaxLenError{Path: []string{"name"}, Limit: 20, Got: len(result.Name)}
 			}
 		default:
 			return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -221,54 +213,46 @@ func (result HookedStruct) DecodeFromStream(s *scan.Stream) (HookedStruct, error
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
-		switch len(key) {
-		case 1:
-			if key == "n" {
-				err = s.ConsumeColon()
-				if err != nil {
-					return result, decode.NewParseErr("n", s.Pos, err)
-				}
-				if seenN {
-					return result, &validation.DuplicateKeyError{Path: []string{"n"}}
-				}
-				seenN = true
-				var iv int64
-				iv, err = s.Int64()
-				if err != nil {
-					return result, decode.NewParseErr("n", s.Pos, err)
-				}
-				result.N = int(iv)
-				if result.N < 0 {
-					return result, &validation.GTEError{Path: []string{"n"}, Limit: 0, Value: result.N}
-				}
-				if result.N > 100 {
-					return result, &validation.LTEError{Path: []string{"n"}, Limit: 100, Value: result.N}
-				}
-			} else {
-				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+		switch key {
+		case "n":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("n", s.Pos, err)
 			}
-		case 4:
-			if key == "name" {
-				err = s.ConsumeColon()
-				if err != nil {
-					return result, decode.NewParseErr("name", s.Pos, err)
-				}
-				if seenName {
-					return result, &validation.DuplicateKeyError{Path: []string{"name"}}
-				}
-				seenName = true
-				result.Name, err = s.String()
-				if err != nil {
-					return result, decode.NewParseErr("name", s.Pos, err)
-				}
-				if len(result.Name) < 1 {
-					return result, &validation.MinLenError{Path: []string{"name"}, Limit: 1, Got: len(result.Name)}
-				}
-				if len(result.Name) > 20 {
-					return result, &validation.MaxLenError{Path: []string{"name"}, Limit: 20, Got: len(result.Name)}
-				}
-			} else {
-				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			if seenN {
+				return result, &validation.DuplicateKeyError{Path: []string{"n"}}
+			}
+			seenN = true
+			var iv int64
+			iv, err = s.Int64()
+			if err != nil {
+				return result, decode.NewParseErr("n", s.Pos, err)
+			}
+			result.N = int(iv)
+			if result.N < 0 {
+				return result, &validation.GTEError{Path: []string{"n"}, Limit: 0, Value: result.N}
+			}
+			if result.N > 100 {
+				return result, &validation.LTEError{Path: []string{"n"}, Limit: 100, Value: result.N}
+			}
+		case "name":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("name", s.Pos, err)
+			}
+			if seenName {
+				return result, &validation.DuplicateKeyError{Path: []string{"name"}}
+			}
+			seenName = true
+			result.Name, err = s.String()
+			if err != nil {
+				return result, decode.NewParseErr("name", s.Pos, err)
+			}
+			if len(result.Name) < 1 {
+				return result, &validation.MinLenError{Path: []string{"name"}, Limit: 1, Got: len(result.Name)}
+			}
+			if len(result.Name) > 20 {
+				return result, &validation.MaxLenError{Path: []string{"name"}, Limit: 20, Got: len(result.Name)}
 			}
 		default:
 			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}

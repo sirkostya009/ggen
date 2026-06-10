@@ -2656,24 +2656,10 @@ func renderPostLoopShape(b *bytes.Buffer, s StructInfo, stream bool) {
 	}
 }
 
-// renderDispatch emits a length-first switch on len(key). For each length
-// with ≥1 field, emits a nested string switch. Single-field lengths skip the
-// nested switch and go direct to the field handler.
+// renderDispatch emits a flat string switch on key. The compiler lowers it
+// to length-grouped binary search / jump tables itself — a manual
+// length-first outer switch benched equal-or-slower at every width.
 func renderDispatch(b *bytes.Buffer, s StructInfo) {
-	byLen := make(map[int][]FieldInfo, len(s.Fields))
-	lens := make([]int, 0, len(s.Fields))
-	for _, f := range s.Fields {
-		if f.Inline {
-			continue
-		}
-		n := len(f.JSONName)
-		if _, seen := byLen[n]; !seen {
-			lens = append(lens, n)
-		}
-		byLen[n] = append(byLen[n], f)
-	}
-	slices.Sort(lens)
-
 	// emitField wraps the per-field parse code with seen-tracking and dup
 	// handling. Three shapes share the same `if seen { … } else { set;
 	// render }` skeleton — what changes is the seen-branch:
@@ -2718,27 +2704,13 @@ func renderDispatch(b *bytes.Buffer, s StructInfo) {
 		renderField(b, f, "result."+f.GoName, "i")
 	}
 
-	b.WriteString("switch len(key) {\n")
-	for _, n := range lens {
-		fs := byLen[n]
-		fmt.Fprintf(b, "case %d:\n", n)
-		if len(fs) == 1 {
-			f := fs[0]
-			fmt.Fprintf(b, "if key == %q {\n", f.JSONName)
-			emitField(b, f)
-			b.WriteString("} else {\n")
-			b.WriteString(unknownKey(s, "i"))
-			b.WriteString("}\n")
+	b.WriteString("switch key {\n")
+	for _, f := range s.Fields {
+		if f.Inline {
 			continue
 		}
-		b.WriteString("switch key {\n")
-		for _, f := range fs {
-			fmt.Fprintf(b, "case %q:\n", f.JSONName)
-			emitField(b, f)
-		}
-		b.WriteString("default:\n")
-		b.WriteString(unknownKey(s, "i"))
-		b.WriteString("}\n")
+		fmt.Fprintf(b, "case %q:\n", f.JSONName)
+		emitField(b, f)
 	}
 	b.WriteString("default:\n")
 	b.WriteString(unknownKey(s, "i"))
@@ -4407,20 +4379,6 @@ for {
 }
 
 func renderStreamDispatch(s StructInfo) string {
-	byLen := make(map[int][]FieldInfo, len(s.Fields))
-	lens := make([]int, 0, len(s.Fields))
-	for _, f := range s.Fields {
-		if f.Inline {
-			continue
-		}
-		n := len(f.JSONName)
-		if _, seen := byLen[n]; !seen {
-			lens = append(lens, n)
-		}
-		byLen[n] = append(byLen[n], f)
-	}
-	slices.Sort(lens)
-
 	// Each known-key case opens with s.ConsumeColon — the alias is no
 	// longer needed past this point, so the shift it triggers is safe.
 	emitField := func(b *bytes.Buffer, f FieldInfo, parse string) {
@@ -4458,29 +4416,14 @@ func renderStreamDispatch(s StructInfo) string {
 
 	b := getSmall()
 	defer putSmall(b)
-	b.WriteString("switch len(key) {\n")
-	for _, n := range lens {
-		fs := byLen[n]
-		fmt.Fprintf(b, "case %d:\n", n)
-		if len(fs) == 1 {
-			f := fs[0]
-			f.AtDispatch = true
-			fmt.Fprintf(b, "if key == %q {\n", f.JSONName)
-			emitField(b, f, renderStreamField(f, "result."+f.GoName, "s.Pos"))
-			b.WriteString("} else {\n")
-			b.WriteString(streamUnknownKey(s, "s.Pos"))
-			b.WriteString("}\n")
+	b.WriteString("switch key {\n")
+	for _, f := range s.Fields {
+		if f.Inline {
 			continue
 		}
-		b.WriteString("switch key {\n")
-		for _, f := range fs {
-			f.AtDispatch = true
-			fmt.Fprintf(b, "case %q:\n", f.JSONName)
-			emitField(b, f, renderStreamField(f, "result."+f.GoName, "s.Pos"))
-		}
-		b.WriteString("default:\n")
-		b.WriteString(streamUnknownKey(s, "s.Pos"))
-		b.WriteString("}\n")
+		f.AtDispatch = true
+		fmt.Fprintf(b, "case %q:\n", f.JSONName)
+		emitField(b, f, renderStreamField(f, "result."+f.GoName, "s.Pos"))
 	}
 	b.WriteString("default:\n")
 	b.WriteString(streamUnknownKey(s, "s.Pos"))

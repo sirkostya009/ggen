@@ -73,104 +73,96 @@ func (result AllowDupsStruct) DecodeFrom(data []byte) (AllowDupsStruct, int, err
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
-		switch len(key) {
-		case 1:
-			if key == "n" {
-				if seenN {
-					i, err = scan.SkipValue(data, i)
-					if err != nil {
-						return result, i, decode.NewParseErr("n", i, err)
-					}
-				} else {
-					seenN = true
-					neg := false
-					if i < len(data) && data[i] == '-' {
-						neg = true
-						i++
-					}
-					if i >= len(data) || data[i] < '0' || data[i] > '9' {
-						return result, i, decode.NewParseErr("n", i, scan.ErrBadNumber)
-					}
-					limit := uint64(math.MaxInt64)
-					if neg {
-						limit = scan.SignedNeg
-					}
-					var u uint64
-					for i < len(data) && data[i] >= '0' && data[i] <= '9' {
-						d := uint64(data[i] - '0')
-						if u > limit/10 || (u == limit/10 && d > limit%10) {
-							return result, i, decode.NewParseErr("n", i, scan.ErrNumberOverflow)
-						}
-						u = u*10 + d
-						i++
-					}
-					if i < len(data) {
-						c := data[i]
-						if c == '.' || c == 'e' || c == 'E' {
-							return result, i, decode.NewParseErr("n", i, scan.ErrBadNumber)
-						}
-					}
-					var n int64
-					if neg {
-						if u == scan.SignedNeg {
-							n = math.MinInt64
-						} else {
-							n = -int64(u)
-						}
-					} else {
-						n = int64(u)
-					}
-					result.N = int(n)
-					if result.N < 0 {
-						return result, i, &validation.GTEError{Path: []string{"n"}, Limit: 0, Value: result.N}
-					}
-					if result.N > 100 {
-						return result, i, &validation.LTEError{Path: []string{"n"}, Limit: 100, Value: result.N}
-					}
+		switch key {
+		case "n":
+			if seenN {
+				i, err = scan.SkipValue(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("n", i, err)
 				}
 			} else {
-				return result, i, &validation.UnknownKeyError{Path: []string{key}}
+				seenN = true
+				neg := false
+				if i < len(data) && data[i] == '-' {
+					neg = true
+					i++
+				}
+				if i >= len(data) || data[i] < '0' || data[i] > '9' {
+					return result, i, decode.NewParseErr("n", i, scan.ErrBadNumber)
+				}
+				limit := uint64(math.MaxInt64)
+				if neg {
+					limit = scan.SignedNeg
+				}
+				var u uint64
+				for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+					d := uint64(data[i] - '0')
+					if u > limit/10 || (u == limit/10 && d > limit%10) {
+						return result, i, decode.NewParseErr("n", i, scan.ErrNumberOverflow)
+					}
+					u = u*10 + d
+					i++
+				}
+				if i < len(data) {
+					c := data[i]
+					if c == '.' || c == 'e' || c == 'E' {
+						return result, i, decode.NewParseErr("n", i, scan.ErrBadNumber)
+					}
+				}
+				var n int64
+				if neg {
+					if u == scan.SignedNeg {
+						n = math.MinInt64
+					} else {
+						n = -int64(u)
+					}
+				} else {
+					n = int64(u)
+				}
+				result.N = int(n)
+				if result.N < 0 {
+					return result, i, &validation.GTEError{Path: []string{"n"}, Limit: 0, Value: result.N}
+				}
+				if result.N > 100 {
+					return result, i, &validation.LTEError{Path: []string{"n"}, Limit: 100, Value: result.N}
+				}
 			}
-		case 4:
-			if key == "name" {
-				if seenName {
-					i, err = scan.SkipValue(data, i)
+		case "name":
+			if seenName {
+				i, err = scan.SkipValue(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("name", i, err)
+				}
+			} else {
+				seenName = true
+				if i >= len(data) || data[i] != '"' {
+					return result, i, decode.NewParseErr("name", i, scan.ErrExpectString)
+				}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("name", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("name", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					result.Name, i, err = scan.String(data, i)
 					if err != nil {
 						return result, i, decode.NewParseErr("name", i, err)
 					}
-				} else {
-					seenName = true
-					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("name", i, scan.ErrExpectString)
-					}
-					ke := i + 1
-					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-						ke++
-					}
-					if ke >= len(data) {
-						return result, i, decode.NewParseErr("name", i, scan.ErrUnterminated)
-					}
-					if data[ke] < 0x20 {
-						return result, i, decode.NewParseErr("name", i, scan.ErrBadString)
-					}
-					if data[ke] == '"' {
-						result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-						i = ke + 1
-					} else {
-						result.Name, i, err = scan.String(data, i)
-						if err != nil {
-							return result, i, decode.NewParseErr("name", i, err)
-						}
-					}
-					if len(result.Name) < 1 {
-						return result, i, &validation.MinLenError{Path: []string{"name"}, Limit: 1, Got: len(result.Name)}
-					}
-					if len(result.Name) > 20 {
-						return result, i, &validation.MaxLenError{Path: []string{"name"}, Limit: 20, Got: len(result.Name)}
-					}
 				}
-			} else {
-				return result, i, &validation.UnknownKeyError{Path: []string{key}}
+				if len(result.Name) < 1 {
+					return result, i, &validation.MinLenError{Path: []string{"name"}, Limit: 1, Got: len(result.Name)}
+				}
+				if len(result.Name) > 20 {
+					return result, i, &validation.MaxLenError{Path: []string{"name"}, Limit: 20, Got: len(result.Name)}
+				}
 			}
 		default:
 			return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -229,64 +221,56 @@ func (result AllowDupsStruct) DecodeFromStream(s *scan.Stream) (AllowDupsStruct,
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
-		switch len(key) {
-		case 1:
-			if key == "n" {
-				err = s.ConsumeColon()
+		switch key {
+		case "n":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("n", s.Pos, err)
+			}
+			if seenN {
+				err = s.SkipValue()
 				if err != nil {
 					return result, decode.NewParseErr("n", s.Pos, err)
 				}
-				if seenN {
-					err = s.SkipValue()
-					if err != nil {
-						return result, decode.NewParseErr("n", s.Pos, err)
-					}
-				} else {
-					seenN = true
-					var iv int64
-					iv, err = s.Int64()
-					if err != nil {
-						return result, decode.NewParseErr("n", s.Pos, err)
-					}
-					result.N = int(iv)
-					if result.N < 0 {
-						return result, &validation.GTEError{Path: []string{"n"}, Limit: 0, Value: result.N}
-					}
-					if result.N > 100 {
-						return result, &validation.LTEError{Path: []string{"n"}, Limit: 100, Value: result.N}
-					}
-
-				}
 			} else {
-				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+				seenN = true
+				var iv int64
+				iv, err = s.Int64()
+				if err != nil {
+					return result, decode.NewParseErr("n", s.Pos, err)
+				}
+				result.N = int(iv)
+				if result.N < 0 {
+					return result, &validation.GTEError{Path: []string{"n"}, Limit: 0, Value: result.N}
+				}
+				if result.N > 100 {
+					return result, &validation.LTEError{Path: []string{"n"}, Limit: 100, Value: result.N}
+				}
+
 			}
-		case 4:
-			if key == "name" {
-				err = s.ConsumeColon()
+		case "name":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("name", s.Pos, err)
+			}
+			if seenName {
+				err = s.SkipValue()
 				if err != nil {
 					return result, decode.NewParseErr("name", s.Pos, err)
 				}
-				if seenName {
-					err = s.SkipValue()
-					if err != nil {
-						return result, decode.NewParseErr("name", s.Pos, err)
-					}
-				} else {
-					seenName = true
-					result.Name, err = s.String()
-					if err != nil {
-						return result, decode.NewParseErr("name", s.Pos, err)
-					}
-					if len(result.Name) < 1 {
-						return result, &validation.MinLenError{Path: []string{"name"}, Limit: 1, Got: len(result.Name)}
-					}
-					if len(result.Name) > 20 {
-						return result, &validation.MaxLenError{Path: []string{"name"}, Limit: 20, Got: len(result.Name)}
-					}
-
-				}
 			} else {
-				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+				seenName = true
+				result.Name, err = s.String()
+				if err != nil {
+					return result, decode.NewParseErr("name", s.Pos, err)
+				}
+				if len(result.Name) < 1 {
+					return result, &validation.MinLenError{Path: []string{"name"}, Limit: 1, Got: len(result.Name)}
+				}
+				if len(result.Name) > 20 {
+					return result, &validation.MaxLenError{Path: []string{"name"}, Limit: 20, Got: len(result.Name)}
+				}
+
 			}
 		default:
 			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}

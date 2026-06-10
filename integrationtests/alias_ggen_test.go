@@ -270,81 +270,76 @@ func (result PlainAlias) DecodeFrom(data []byte) (PlainAlias, int, error) {
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
-		switch len(key) {
-		case 5:
-			switch key {
-			case "count":
-				if seenCount {
-					return result, i, &validation.DuplicateKeyError{Path: []string{"count"}}
+		switch key {
+		case "count":
+			if seenCount {
+				return result, i, &validation.DuplicateKeyError{Path: []string{"count"}}
+			}
+			seenCount = true
+			neg := false
+			if i < len(data) && data[i] == '-' {
+				neg = true
+				i++
+			}
+			if i >= len(data) || data[i] < '0' || data[i] > '9' {
+				return result, i, decode.NewParseErr("count", i, scan.ErrBadNumber)
+			}
+			limit := uint64(math.MaxInt64)
+			if neg {
+				limit = scan.SignedNeg
+			}
+			var u uint64
+			for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+				d := uint64(data[i] - '0')
+				if u > limit/10 || (u == limit/10 && d > limit%10) {
+					return result, i, decode.NewParseErr("count", i, scan.ErrNumberOverflow)
 				}
-				seenCount = true
-				neg := false
-				if i < len(data) && data[i] == '-' {
-					neg = true
-					i++
-				}
-				if i >= len(data) || data[i] < '0' || data[i] > '9' {
+				u = u*10 + d
+				i++
+			}
+			if i < len(data) {
+				c := data[i]
+				if c == '.' || c == 'e' || c == 'E' {
 					return result, i, decode.NewParseErr("count", i, scan.ErrBadNumber)
 				}
-				limit := uint64(math.MaxInt64)
-				if neg {
-					limit = scan.SignedNeg
-				}
-				var u uint64
-				for i < len(data) && data[i] >= '0' && data[i] <= '9' {
-					d := uint64(data[i] - '0')
-					if u > limit/10 || (u == limit/10 && d > limit%10) {
-						return result, i, decode.NewParseErr("count", i, scan.ErrNumberOverflow)
-					}
-					u = u*10 + d
-					i++
-				}
-				if i < len(data) {
-					c := data[i]
-					if c == '.' || c == 'e' || c == 'E' {
-						return result, i, decode.NewParseErr("count", i, scan.ErrBadNumber)
-					}
-				}
-				var n int64
-				if neg {
-					if u == scan.SignedNeg {
-						n = math.MinInt64
-					} else {
-						n = -int64(u)
-					}
+			}
+			var n int64
+			if neg {
+				if u == scan.SignedNeg {
+					n = math.MinInt64
 				} else {
-					n = int64(u)
+					n = -int64(u)
 				}
-				result.Count = int(n)
-			case "title":
-				if seenTitle {
-					return result, i, &validation.DuplicateKeyError{Path: []string{"title"}}
+			} else {
+				n = int64(u)
+			}
+			result.Count = int(n)
+		case "title":
+			if seenTitle {
+				return result, i, &validation.DuplicateKeyError{Path: []string{"title"}}
+			}
+			seenTitle = true
+			if i >= len(data) || data[i] != '"' {
+				return result, i, decode.NewParseErr("title", i, scan.ErrExpectString)
+			}
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, decode.NewParseErr("title", i, scan.ErrUnterminated)
+			}
+			if data[ke] < 0x20 {
+				return result, i, decode.NewParseErr("title", i, scan.ErrBadString)
+			}
+			if data[ke] == '"' {
+				result.Title = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				result.Title, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("title", i, err)
 				}
-				seenTitle = true
-				if i >= len(data) || data[i] != '"' {
-					return result, i, decode.NewParseErr("title", i, scan.ErrExpectString)
-				}
-				ke := i + 1
-				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-					ke++
-				}
-				if ke >= len(data) {
-					return result, i, decode.NewParseErr("title", i, scan.ErrUnterminated)
-				}
-				if data[ke] < 0x20 {
-					return result, i, decode.NewParseErr("title", i, scan.ErrBadString)
-				}
-				if data[ke] == '"' {
-					result.Title = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-					i = ke + 1
-				} else {
-					result.Title, i, err = scan.String(data, i)
-					if err != nil {
-						return result, i, decode.NewParseErr("title", i, err)
-					}
-				}
-			default:
-				return result, i, &validation.UnknownKeyError{Path: []string{key}}
 			}
 		default:
 			return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -397,39 +392,34 @@ func (result PlainAlias) DecodeFromStream(s *scan.Stream) (PlainAlias, error) {
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
-		switch len(key) {
-		case 5:
-			switch key {
-			case "count":
-				err = s.ConsumeColon()
-				if err != nil {
-					return result, decode.NewParseErr("count", s.Pos, err)
-				}
-				if seenCount {
-					return result, &validation.DuplicateKeyError{Path: []string{"count"}}
-				}
-				seenCount = true
-				var iv int64
-				iv, err = s.Int64()
-				if err != nil {
-					return result, decode.NewParseErr("count", s.Pos, err)
-				}
-				result.Count = int(iv)
-			case "title":
-				err = s.ConsumeColon()
-				if err != nil {
-					return result, decode.NewParseErr("title", s.Pos, err)
-				}
-				if seenTitle {
-					return result, &validation.DuplicateKeyError{Path: []string{"title"}}
-				}
-				seenTitle = true
-				result.Title, err = s.String()
-				if err != nil {
-					return result, decode.NewParseErr("title", s.Pos, err)
-				}
-			default:
-				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+		switch key {
+		case "count":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("count", s.Pos, err)
+			}
+			if seenCount {
+				return result, &validation.DuplicateKeyError{Path: []string{"count"}}
+			}
+			seenCount = true
+			var iv int64
+			iv, err = s.Int64()
+			if err != nil {
+				return result, decode.NewParseErr("count", s.Pos, err)
+			}
+			result.Count = int(iv)
+		case "title":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("title", s.Pos, err)
+			}
+			if seenTitle {
+				return result, &validation.DuplicateKeyError{Path: []string{"title"}}
+			}
+			seenTitle = true
+			result.Title, err = s.String()
+			if err != nil {
+				return result, decode.NewParseErr("title", s.Pos, err)
 			}
 		default:
 			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
@@ -532,81 +522,76 @@ func (result SamePkgAlias) DecodeFrom(data []byte) (SamePkgAlias, int, error) {
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
-		switch len(key) {
-		case 1:
-			switch key {
-			case "X":
-				if seenX {
-					return result, i, &validation.DuplicateKeyError{Path: []string{"X"}}
+		switch key {
+		case "X":
+			if seenX {
+				return result, i, &validation.DuplicateKeyError{Path: []string{"X"}}
+			}
+			seenX = true
+			neg := false
+			if i < len(data) && data[i] == '-' {
+				neg = true
+				i++
+			}
+			if i >= len(data) || data[i] < '0' || data[i] > '9' {
+				return result, i, decode.NewParseErr("X", i, scan.ErrBadNumber)
+			}
+			limit := uint64(math.MaxInt64)
+			if neg {
+				limit = scan.SignedNeg
+			}
+			var u uint64
+			for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+				d := uint64(data[i] - '0')
+				if u > limit/10 || (u == limit/10 && d > limit%10) {
+					return result, i, decode.NewParseErr("X", i, scan.ErrNumberOverflow)
 				}
-				seenX = true
-				neg := false
-				if i < len(data) && data[i] == '-' {
-					neg = true
-					i++
-				}
-				if i >= len(data) || data[i] < '0' || data[i] > '9' {
+				u = u*10 + d
+				i++
+			}
+			if i < len(data) {
+				c := data[i]
+				if c == '.' || c == 'e' || c == 'E' {
 					return result, i, decode.NewParseErr("X", i, scan.ErrBadNumber)
 				}
-				limit := uint64(math.MaxInt64)
-				if neg {
-					limit = scan.SignedNeg
-				}
-				var u uint64
-				for i < len(data) && data[i] >= '0' && data[i] <= '9' {
-					d := uint64(data[i] - '0')
-					if u > limit/10 || (u == limit/10 && d > limit%10) {
-						return result, i, decode.NewParseErr("X", i, scan.ErrNumberOverflow)
-					}
-					u = u*10 + d
-					i++
-				}
-				if i < len(data) {
-					c := data[i]
-					if c == '.' || c == 'e' || c == 'E' {
-						return result, i, decode.NewParseErr("X", i, scan.ErrBadNumber)
-					}
-				}
-				var n int64
-				if neg {
-					if u == scan.SignedNeg {
-						n = math.MinInt64
-					} else {
-						n = -int64(u)
-					}
+			}
+			var n int64
+			if neg {
+				if u == scan.SignedNeg {
+					n = math.MinInt64
 				} else {
-					n = int64(u)
+					n = -int64(u)
 				}
-				result.X = int(n)
-			case "Y":
-				if seenY {
-					return result, i, &validation.DuplicateKeyError{Path: []string{"Y"}}
+			} else {
+				n = int64(u)
+			}
+			result.X = int(n)
+		case "Y":
+			if seenY {
+				return result, i, &validation.DuplicateKeyError{Path: []string{"Y"}}
+			}
+			seenY = true
+			if i >= len(data) || data[i] != '"' {
+				return result, i, decode.NewParseErr("Y", i, scan.ErrExpectString)
+			}
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, decode.NewParseErr("Y", i, scan.ErrUnterminated)
+			}
+			if data[ke] < 0x20 {
+				return result, i, decode.NewParseErr("Y", i, scan.ErrBadString)
+			}
+			if data[ke] == '"' {
+				result.Y = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				result.Y, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("Y", i, err)
 				}
-				seenY = true
-				if i >= len(data) || data[i] != '"' {
-					return result, i, decode.NewParseErr("Y", i, scan.ErrExpectString)
-				}
-				ke := i + 1
-				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-					ke++
-				}
-				if ke >= len(data) {
-					return result, i, decode.NewParseErr("Y", i, scan.ErrUnterminated)
-				}
-				if data[ke] < 0x20 {
-					return result, i, decode.NewParseErr("Y", i, scan.ErrBadString)
-				}
-				if data[ke] == '"' {
-					result.Y = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-					i = ke + 1
-				} else {
-					result.Y, i, err = scan.String(data, i)
-					if err != nil {
-						return result, i, decode.NewParseErr("Y", i, err)
-					}
-				}
-			default:
-				return result, i, &validation.UnknownKeyError{Path: []string{key}}
 			}
 		default:
 			return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -659,39 +644,34 @@ func (result SamePkgAlias) DecodeFromStream(s *scan.Stream) (SamePkgAlias, error
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
-		switch len(key) {
-		case 1:
-			switch key {
-			case "X":
-				err = s.ConsumeColon()
-				if err != nil {
-					return result, decode.NewParseErr("X", s.Pos, err)
-				}
-				if seenX {
-					return result, &validation.DuplicateKeyError{Path: []string{"X"}}
-				}
-				seenX = true
-				var iv int64
-				iv, err = s.Int64()
-				if err != nil {
-					return result, decode.NewParseErr("X", s.Pos, err)
-				}
-				result.X = int(iv)
-			case "Y":
-				err = s.ConsumeColon()
-				if err != nil {
-					return result, decode.NewParseErr("Y", s.Pos, err)
-				}
-				if seenY {
-					return result, &validation.DuplicateKeyError{Path: []string{"Y"}}
-				}
-				seenY = true
-				result.Y, err = s.String()
-				if err != nil {
-					return result, decode.NewParseErr("Y", s.Pos, err)
-				}
-			default:
-				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+		switch key {
+		case "X":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("X", s.Pos, err)
+			}
+			if seenX {
+				return result, &validation.DuplicateKeyError{Path: []string{"X"}}
+			}
+			seenX = true
+			var iv int64
+			iv, err = s.Int64()
+			if err != nil {
+				return result, decode.NewParseErr("X", s.Pos, err)
+			}
+			result.X = int(iv)
+		case "Y":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("Y", s.Pos, err)
+			}
+			if seenY {
+				return result, &validation.DuplicateKeyError{Path: []string{"Y"}}
+			}
+			seenY = true
+			result.Y, err = s.String()
+			if err != nil {
+				return result, decode.NewParseErr("Y", s.Pos, err)
 			}
 		default:
 			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
@@ -794,68 +774,60 @@ func (result CrossPkgTaggedAlias) DecodeFrom(data []byte) (CrossPkgTaggedAlias, 
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
-		switch len(key) {
-		case 3:
-			if key == "Tag" {
-				if seenTag {
-					return result, i, &validation.DuplicateKeyError{Path: []string{"Tag"}}
-				}
-				seenTag = true
-				if i >= len(data) || data[i] != '"' {
-					return result, i, decode.NewParseErr("Tag", i, scan.ErrExpectString)
-				}
-				ke := i + 1
-				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-					ke++
-				}
-				if ke >= len(data) {
-					return result, i, decode.NewParseErr("Tag", i, scan.ErrUnterminated)
-				}
-				if data[ke] < 0x20 {
-					return result, i, decode.NewParseErr("Tag", i, scan.ErrBadString)
-				}
-				if data[ke] == '"' {
-					result.Tag = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-					i = ke + 1
-				} else {
-					result.Tag, i, err = scan.String(data, i)
-					if err != nil {
-						return result, i, decode.NewParseErr("Tag", i, err)
-					}
-				}
-			} else {
-				return result, i, &validation.UnknownKeyError{Path: []string{key}}
+		switch key {
+		case "Name":
+			if seenName {
+				return result, i, &validation.DuplicateKeyError{Path: []string{"Name"}}
 			}
-		case 4:
-			if key == "Name" {
-				if seenName {
-					return result, i, &validation.DuplicateKeyError{Path: []string{"Name"}}
-				}
-				seenName = true
-				if i >= len(data) || data[i] != '"' {
-					return result, i, decode.NewParseErr("Name", i, scan.ErrExpectString)
-				}
-				ke := i + 1
-				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-					ke++
-				}
-				if ke >= len(data) {
-					return result, i, decode.NewParseErr("Name", i, scan.ErrUnterminated)
-				}
-				if data[ke] < 0x20 {
-					return result, i, decode.NewParseErr("Name", i, scan.ErrBadString)
-				}
-				if data[ke] == '"' {
-					result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-					i = ke + 1
-				} else {
-					result.Name, i, err = scan.String(data, i)
-					if err != nil {
-						return result, i, decode.NewParseErr("Name", i, err)
-					}
-				}
+			seenName = true
+			if i >= len(data) || data[i] != '"' {
+				return result, i, decode.NewParseErr("Name", i, scan.ErrExpectString)
+			}
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, decode.NewParseErr("Name", i, scan.ErrUnterminated)
+			}
+			if data[ke] < 0x20 {
+				return result, i, decode.NewParseErr("Name", i, scan.ErrBadString)
+			}
+			if data[ke] == '"' {
+				result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
 			} else {
-				return result, i, &validation.UnknownKeyError{Path: []string{key}}
+				result.Name, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("Name", i, err)
+				}
+			}
+		case "Tag":
+			if seenTag {
+				return result, i, &validation.DuplicateKeyError{Path: []string{"Tag"}}
+			}
+			seenTag = true
+			if i >= len(data) || data[i] != '"' {
+				return result, i, decode.NewParseErr("Tag", i, scan.ErrExpectString)
+			}
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, decode.NewParseErr("Tag", i, scan.ErrUnterminated)
+			}
+			if data[ke] < 0x20 {
+				return result, i, decode.NewParseErr("Tag", i, scan.ErrBadString)
+			}
+			if data[ke] == '"' {
+				result.Tag = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				result.Tag, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("Tag", i, err)
+				}
 			}
 		default:
 			return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -908,40 +880,32 @@ func (result CrossPkgTaggedAlias) DecodeFromStream(s *scan.Stream) (CrossPkgTagg
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
-		switch len(key) {
-		case 3:
-			if key == "Tag" {
-				err = s.ConsumeColon()
-				if err != nil {
-					return result, decode.NewParseErr("Tag", s.Pos, err)
-				}
-				if seenTag {
-					return result, &validation.DuplicateKeyError{Path: []string{"Tag"}}
-				}
-				seenTag = true
-				result.Tag, err = s.String()
-				if err != nil {
-					return result, decode.NewParseErr("Tag", s.Pos, err)
-				}
-			} else {
-				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+		switch key {
+		case "Name":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("Name", s.Pos, err)
 			}
-		case 4:
-			if key == "Name" {
-				err = s.ConsumeColon()
-				if err != nil {
-					return result, decode.NewParseErr("Name", s.Pos, err)
-				}
-				if seenName {
-					return result, &validation.DuplicateKeyError{Path: []string{"Name"}}
-				}
-				seenName = true
-				result.Name, err = s.String()
-				if err != nil {
-					return result, decode.NewParseErr("Name", s.Pos, err)
-				}
-			} else {
-				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			if seenName {
+				return result, &validation.DuplicateKeyError{Path: []string{"Name"}}
+			}
+			seenName = true
+			result.Name, err = s.String()
+			if err != nil {
+				return result, decode.NewParseErr("Name", s.Pos, err)
+			}
+		case "Tag":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("Tag", s.Pos, err)
+			}
+			if seenTag {
+				return result, &validation.DuplicateKeyError{Path: []string{"Tag"}}
+			}
+			seenTag = true
+			result.Tag, err = s.String()
+			if err != nil {
+				return result, decode.NewParseErr("Tag", s.Pos, err)
 			}
 		default:
 			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
@@ -1678,56 +1642,48 @@ func (result AliasFieldExample) DecodeFrom(data []byte) (AliasFieldExample, int,
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
-		switch len(key) {
-		case 4:
-			if key == "body" {
-				if seenBody {
-					return result, i, &validation.DuplicateKeyError{Path: []string{"body"}}
-				}
-				seenBody = true
-				var _n int
-				result.Body, _n, err = result.Body.DecodeFrom(data[i:])
-				i += _n
-				if err != nil {
-					return result, i, decode.NewParseErr("body", i, err)
-				}
-				result.Body = AliasString(strings.TrimSpace(string(result.Body)))
-				result.Body = AliasString(strings.ToLower(string(result.Body)))
-				if len(result.Body) < 2 {
-					return result, i, &validation.MinLenError{Path: []string{"body"}, Limit: 2, Got: len(result.Body)}
-				}
-				if len(result.Body) > 10 {
-					return result, i, &validation.MaxLenError{Path: []string{"body"}, Limit: 10, Got: len(result.Body)}
-				}
-			} else {
-				return result, i, &validation.UnknownKeyError{Path: []string{key}}
+		switch key {
+		case "body":
+			if seenBody {
+				return result, i, &validation.DuplicateKeyError{Path: []string{"body"}}
 			}
-		case 5:
-			if key == "count" {
-				if seenCount {
-					return result, i, &validation.DuplicateKeyError{Path: []string{"count"}}
-				}
-				seenCount = true
-				var _n int
-				result.Count, _n, err = result.Count.DecodeFrom(data[i:])
-				i += _n
-				if err != nil {
-					return result, i, decode.NewParseErr("count", i, err)
-				}
-				if result.Count < AliasInt(1) {
-					result.Count = AliasInt(1)
-				}
-				if result.Count > AliasInt(100) {
-					result.Count = AliasInt(100)
-				}
-				if result.Count < 1 {
-					return result, i, &validation.GTEError{Path: []string{"count"}, Limit: 1, Value: result.Count}
-				}
-				if result.Count > 100 {
-					return result, i, &validation.LTEError{Path: []string{"count"}, Limit: 100, Value: result.Count}
-				}
-			} else {
-				return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			seenBody = true
+			var _n int
+			result.Body, _n, err = result.Body.DecodeFrom(data[i:])
+			i += _n
+			if err != nil {
+				return result, i, decode.NewParseErr("body", i, err)
+			}
+			result.Body = AliasString(strings.TrimSpace(string(result.Body)))
+			result.Body = AliasString(strings.ToLower(string(result.Body)))
+			if len(result.Body) < 2 {
+				return result, i, &validation.MinLenError{Path: []string{"body"}, Limit: 2, Got: len(result.Body)}
+			}
+			if len(result.Body) > 10 {
+				return result, i, &validation.MaxLenError{Path: []string{"body"}, Limit: 10, Got: len(result.Body)}
+			}
+		case "count":
+			if seenCount {
+				return result, i, &validation.DuplicateKeyError{Path: []string{"count"}}
+			}
+			seenCount = true
+			var _n int
+			result.Count, _n, err = result.Count.DecodeFrom(data[i:])
+			i += _n
+			if err != nil {
+				return result, i, decode.NewParseErr("count", i, err)
+			}
+			if result.Count < AliasInt(1) {
+				result.Count = AliasInt(1)
+			}
+			if result.Count > AliasInt(100) {
+				result.Count = AliasInt(100)
+			}
+			if result.Count < 1 {
+				return result, i, &validation.GTEError{Path: []string{"count"}, Limit: 1, Value: result.Count}
+			}
+			if result.Count > 100 {
+				return result, i, &validation.LTEError{Path: []string{"count"}, Limit: 100, Value: result.Count}
 			}
 		default:
 			return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -1786,60 +1742,52 @@ func (result AliasFieldExample) DecodeFromStream(s *scan.Stream) (AliasFieldExam
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
-		switch len(key) {
-		case 4:
-			if key == "body" {
-				err = s.ConsumeColon()
-				if err != nil {
-					return result, decode.NewParseErr("body", s.Pos, err)
-				}
-				if seenBody {
-					return result, &validation.DuplicateKeyError{Path: []string{"body"}}
-				}
-				seenBody = true
-				result.Body, err = result.Body.DecodeFromStream(s)
-				if err != nil {
-					return result, decode.NewParseErr("body", s.Pos, err)
-				}
-				result.Body = AliasString(strings.TrimSpace(string(result.Body)))
-				result.Body = AliasString(strings.ToLower(string(result.Body)))
-				if len(result.Body) < 2 {
-					return result, &validation.MinLenError{Path: []string{"body"}, Limit: 2, Got: len(result.Body)}
-				}
-				if len(result.Body) > 10 {
-					return result, &validation.MaxLenError{Path: []string{"body"}, Limit: 10, Got: len(result.Body)}
-				}
-			} else {
-				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+		switch key {
+		case "body":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("body", s.Pos, err)
 			}
-		case 5:
-			if key == "count" {
-				err = s.ConsumeColon()
-				if err != nil {
-					return result, decode.NewParseErr("count", s.Pos, err)
-				}
-				if seenCount {
-					return result, &validation.DuplicateKeyError{Path: []string{"count"}}
-				}
-				seenCount = true
-				result.Count, err = result.Count.DecodeFromStream(s)
-				if err != nil {
-					return result, decode.NewParseErr("count", s.Pos, err)
-				}
-				if result.Count < AliasInt(1) {
-					result.Count = AliasInt(1)
-				}
-				if result.Count > AliasInt(100) {
-					result.Count = AliasInt(100)
-				}
-				if result.Count < 1 {
-					return result, &validation.GTEError{Path: []string{"count"}, Limit: 1, Value: result.Count}
-				}
-				if result.Count > 100 {
-					return result, &validation.LTEError{Path: []string{"count"}, Limit: 100, Value: result.Count}
-				}
-			} else {
-				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			if seenBody {
+				return result, &validation.DuplicateKeyError{Path: []string{"body"}}
+			}
+			seenBody = true
+			result.Body, err = result.Body.DecodeFromStream(s)
+			if err != nil {
+				return result, decode.NewParseErr("body", s.Pos, err)
+			}
+			result.Body = AliasString(strings.TrimSpace(string(result.Body)))
+			result.Body = AliasString(strings.ToLower(string(result.Body)))
+			if len(result.Body) < 2 {
+				return result, &validation.MinLenError{Path: []string{"body"}, Limit: 2, Got: len(result.Body)}
+			}
+			if len(result.Body) > 10 {
+				return result, &validation.MaxLenError{Path: []string{"body"}, Limit: 10, Got: len(result.Body)}
+			}
+		case "count":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("count", s.Pos, err)
+			}
+			if seenCount {
+				return result, &validation.DuplicateKeyError{Path: []string{"count"}}
+			}
+			seenCount = true
+			result.Count, err = result.Count.DecodeFromStream(s)
+			if err != nil {
+				return result, decode.NewParseErr("count", s.Pos, err)
+			}
+			if result.Count < AliasInt(1) {
+				result.Count = AliasInt(1)
+			}
+			if result.Count > AliasInt(100) {
+				result.Count = AliasInt(100)
+			}
+			if result.Count < 1 {
+				return result, &validation.GTEError{Path: []string{"count"}, Limit: 1, Value: result.Count}
+			}
+			if result.Count > 100 {
+				return result, &validation.LTEError{Path: []string{"count"}, Limit: 100, Value: result.Count}
 			}
 		default:
 			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}

@@ -66,45 +66,41 @@ func (result URLStruct) DecodeFrom(data []byte) (URLStruct, int, error) {
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
-		switch len(key) {
-		case 4:
-			if key == "site" {
-				if seenSite {
-					return result, i, &validation.DuplicateKeyError{Path: []string{"site"}}
-				}
-				seenSite = true
-				var s string
-				if i >= len(data) || data[i] != '"' {
-					return result, i, decode.NewParseErr("site", i, scan.ErrExpectString)
-				}
-				ke := i + 1
-				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-					ke++
-				}
-				if ke >= len(data) {
-					return result, i, decode.NewParseErr("site", i, scan.ErrUnterminated)
-				}
-				if data[ke] < 0x20 {
-					return result, i, decode.NewParseErr("site", i, scan.ErrBadString)
-				}
-				if data[ke] == '"' {
-					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-					i = ke + 1
-				} else {
-					s, i, err = scan.String(data, i)
-					if err != nil {
-						return result, i, decode.NewParseErr("site", i, err)
-					}
-				}
-				var u *url.URL
-				u, err = url.Parse(s)
+		switch key {
+		case "site":
+			if seenSite {
+				return result, i, &validation.DuplicateKeyError{Path: []string{"site"}}
+			}
+			seenSite = true
+			var s string
+			if i >= len(data) || data[i] != '"' {
+				return result, i, decode.NewParseErr("site", i, scan.ErrExpectString)
+			}
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, decode.NewParseErr("site", i, scan.ErrUnterminated)
+			}
+			if data[ke] < 0x20 {
+				return result, i, decode.NewParseErr("site", i, scan.ErrBadString)
+			}
+			if data[ke] == '"' {
+				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				s, i, err = scan.String(data, i)
 				if err != nil {
 					return result, i, decode.NewParseErr("site", i, err)
 				}
-				result.Site = *u
-			} else {
-				return result, i, &validation.UnknownKeyError{Path: []string{key}}
 			}
+			var u *url.URL
+			u, err = url.Parse(s)
+			if err != nil {
+				return result, i, decode.NewParseErr("site", i, err)
+			}
+			result.Site = *u
 		default:
 			return result, i, &validation.UnknownKeyError{Path: []string{key}}
 		}
@@ -155,30 +151,26 @@ func (result URLStruct) DecodeFromStream(s *scan.Stream) (URLStruct, error) {
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
-		switch len(key) {
-		case 4:
-			if key == "site" {
-				err = s.ConsumeColon()
-				if err != nil {
-					return result, decode.NewParseErr("site", s.Pos, err)
-				}
-				if seenSite {
-					return result, &validation.DuplicateKeyError{Path: []string{"site"}}
-				}
-				seenSite = true
-				var sv string
-				sv, err = s.String()
-				if err != nil {
-					return result, decode.NewParseErr("site", s.Pos, err)
-				}
-				u, err := url.Parse(sv)
-				if err != nil {
-					return result, decode.NewParseErr("site", s.Pos, err)
-				}
-				result.Site = *u
-			} else {
-				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+		switch key {
+		case "site":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("site", s.Pos, err)
 			}
+			if seenSite {
+				return result, &validation.DuplicateKeyError{Path: []string{"site"}}
+			}
+			seenSite = true
+			var sv string
+			sv, err = s.String()
+			if err != nil {
+				return result, decode.NewParseErr("site", s.Pos, err)
+			}
+			u, err := url.Parse(sv)
+			if err != nil {
+				return result, decode.NewParseErr("site", s.Pos, err)
+			}
+			result.Site = *u
 		default:
 			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
 		}

@@ -90,371 +90,346 @@ func (result NativeTypes) DecodeFrom(data []byte) (NativeTypes, int, error) {
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
-		switch len(key) {
-		case 4:
-			switch key {
-			case "addr":
-				if seenAddr {
-					return result, i, &validation.DuplicateKeyError{Path: []string{"addr"}}
-				}
-				seenAddr = true
-				var s string
-				if i >= len(data) || data[i] != '"' {
-					return result, i, decode.NewParseErr("addr", i, scan.ErrExpectString)
-				}
-				ke := i + 1
-				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-					ke++
-				}
-				if ke >= len(data) {
-					return result, i, decode.NewParseErr("addr", i, scan.ErrUnterminated)
-				}
-				if data[ke] < 0x20 {
-					return result, i, decode.NewParseErr("addr", i, scan.ErrBadString)
-				}
-				if data[ke] == '"' {
-					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-					i = ke + 1
-				} else {
-					s, i, err = scan.String(data, i)
-					if err != nil {
-						return result, i, decode.NewParseErr("addr", i, err)
-					}
-				}
-				result.Addr, err = netip.ParseAddr(s)
+		switch key {
+		case "addr":
+			if seenAddr {
+				return result, i, &validation.DuplicateKeyError{Path: []string{"addr"}}
+			}
+			seenAddr = true
+			var s string
+			if i >= len(data) || data[i] != '"' {
+				return result, i, decode.NewParseErr("addr", i, scan.ErrExpectString)
+			}
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, decode.NewParseErr("addr", i, scan.ErrUnterminated)
+			}
+			if data[ke] < 0x20 {
+				return result, i, decode.NewParseErr("addr", i, scan.ErrBadString)
+			}
+			if data[ke] == '"' {
+				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				s, i, err = scan.String(data, i)
 				if err != nil {
 					return result, i, decode.NewParseErr("addr", i, err)
 				}
-			case "blob":
-				if seenBlob {
-					return result, i, &validation.DuplicateKeyError{Path: []string{"blob"}}
-				}
-				seenBlob = true
-				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-					i += 4
-					result.Blob = nil
-					break
-				}
-				var s string
-				if i >= len(data) || data[i] != '"' {
-					return result, i, decode.NewParseErr("blob", i, scan.ErrExpectString)
-				}
-				ke := i + 1
-				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-					ke++
-				}
-				if ke >= len(data) {
-					return result, i, decode.NewParseErr("blob", i, scan.ErrUnterminated)
-				}
-				if data[ke] < 0x20 {
-					return result, i, decode.NewParseErr("blob", i, scan.ErrBadString)
-				}
-				if data[ke] == '"' {
-					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-					i = ke + 1
-				} else {
-					s, i, err = scan.String(data, i)
-					if err != nil {
-						return result, i, decode.NewParseErr("blob", i, err)
-					}
-				}
-				if cap(result.Blob) < base64.StdEncoding.DecodedLen(len(s)) {
-					result.Blob = make([]byte, 0, base64.StdEncoding.DecodedLen(len(s)))
-				}
-				result.Blob, err = base64.StdEncoding.AppendDecode(result.Blob, unsafe.Slice(unsafe.StringData(s), len(s)))
+			}
+			result.Addr, err = netip.ParseAddr(s)
+			if err != nil {
+				return result, i, decode.NewParseErr("addr", i, err)
+			}
+		case "blob":
+			if seenBlob {
+				return result, i, &validation.DuplicateKeyError{Path: []string{"blob"}}
+			}
+			seenBlob = true
+			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+				i += 4
+				result.Blob = nil
+				break
+			}
+			var s string
+			if i >= len(data) || data[i] != '"' {
+				return result, i, decode.NewParseErr("blob", i, scan.ErrExpectString)
+			}
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, decode.NewParseErr("blob", i, scan.ErrUnterminated)
+			}
+			if data[ke] < 0x20 {
+				return result, i, decode.NewParseErr("blob", i, scan.ErrBadString)
+			}
+			if data[ke] == '"' {
+				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				s, i, err = scan.String(data, i)
 				if err != nil {
 					return result, i, decode.NewParseErr("blob", i, err)
 				}
-			case "cidr":
-				if seenCidr {
-					return result, i, &validation.DuplicateKeyError{Path: []string{"cidr"}}
-				}
-				seenCidr = true
-				var s string
-				if i >= len(data) || data[i] != '"' {
-					return result, i, decode.NewParseErr("cidr", i, scan.ErrExpectString)
-				}
-				ke := i + 1
-				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-					ke++
-				}
-				if ke >= len(data) {
-					return result, i, decode.NewParseErr("cidr", i, scan.ErrUnterminated)
-				}
-				if data[ke] < 0x20 {
-					return result, i, decode.NewParseErr("cidr", i, scan.ErrBadString)
-				}
-				if data[ke] == '"' {
-					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-					i = ke + 1
-				} else {
-					s, i, err = scan.String(data, i)
-					if err != nil {
-						return result, i, decode.NewParseErr("cidr", i, err)
-					}
-				}
-				result.Cidr, err = netip.ParsePrefix(s)
-				if err != nil {
-					return result, i, decode.NewParseErr("cidr", i, err)
-				}
-			default:
-				return result, i, &validation.UnknownKeyError{Path: []string{key}}
 			}
-		case 6:
-			switch key {
-			case "secDur":
-				if seenSecDur {
-					return result, i, &validation.DuplicateKeyError{Path: []string{"secDur"}}
-				}
-				seenSecDur = true
-				var f float64
-				f, i, err = scan.Float64(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr("secDur", i, err)
-				}
-				result.SecDur = time.Duration(f * float64(time.Second))
-			case "unixAt":
-				if seenUnixAt {
-					return result, i, &validation.DuplicateKeyError{Path: []string{"unixAt"}}
-				}
-				seenUnixAt = true
-				var f float64
-				f, i, err = scan.Float64(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr("unixAt", i, err)
-				}
-				sec := int64(f)
-				nsec := int64((f - float64(sec)) * 1e9)
-				result.UnixAt = time.Unix(sec, nsec)
-			default:
-				return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			if cap(result.Blob) < base64.StdEncoding.DecodedLen(len(s)) {
+				result.Blob = make([]byte, 0, base64.StdEncoding.DecodedLen(len(s)))
 			}
-		case 7:
-			switch key {
-			case "hexBlob":
-				if seenHexBlob {
-					return result, i, &validation.DuplicateKeyError{Path: []string{"hexBlob"}}
-				}
-				seenHexBlob = true
-				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-					i += 4
-					result.HexBlob = nil
-					break
-				}
-				var s string
-				if i >= len(data) || data[i] != '"' {
-					return result, i, decode.NewParseErr("hexBlob", i, scan.ErrExpectString)
-				}
-				ke := i + 1
-				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-					ke++
-				}
-				if ke >= len(data) {
-					return result, i, decode.NewParseErr("hexBlob", i, scan.ErrUnterminated)
-				}
-				if data[ke] < 0x20 {
-					return result, i, decode.NewParseErr("hexBlob", i, scan.ErrBadString)
-				}
-				if data[ke] == '"' {
-					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-					i = ke + 1
-				} else {
-					s, i, err = scan.String(data, i)
-					if err != nil {
-						return result, i, decode.NewParseErr("hexBlob", i, err)
-					}
-				}
-				if cap(result.HexBlob) < hex.DecodedLen(len(s)) {
-					result.HexBlob = make([]byte, 0, hex.DecodedLen(len(s)))
-				}
-				result.HexBlob, err = hex.AppendDecode(result.HexBlob, unsafe.Slice(unsafe.StringData(s), len(s)))
-				if err != nil {
-					return result, i, decode.NewParseErr("hexBlob", i, err)
-				}
-			case "unitDur":
-				if seenUnitDur {
-					return result, i, &validation.DuplicateKeyError{Path: []string{"unitDur"}}
-				}
-				seenUnitDur = true
-				var s string
-				if i >= len(data) || data[i] != '"' {
-					return result, i, decode.NewParseErr("unitDur", i, scan.ErrExpectString)
-				}
-				ke := i + 1
-				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-					ke++
-				}
-				if ke >= len(data) {
-					return result, i, decode.NewParseErr("unitDur", i, scan.ErrUnterminated)
-				}
-				if data[ke] < 0x20 {
-					return result, i, decode.NewParseErr("unitDur", i, scan.ErrBadString)
-				}
-				if data[ke] == '"' {
-					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-					i = ke + 1
-				} else {
-					s, i, err = scan.String(data, i)
-					if err != nil {
-						return result, i, decode.NewParseErr("unitDur", i, err)
-					}
-				}
-				result.UnitDur, err = time.ParseDuration(s)
-				if err != nil {
-					return result, i, decode.NewParseErr("unitDur", i, err)
-				}
-			default:
-				return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			result.Blob, err = base64.StdEncoding.AppendDecode(result.Blob, unsafe.Slice(unsafe.StringData(s), len(s)))
+			if err != nil {
+				return result, i, decode.NewParseErr("blob", i, err)
 			}
-		case 8:
-			switch key {
-			case "issuedAt":
-				if seenIssuedAt {
-					return result, i, &validation.DuplicateKeyError{Path: []string{"issuedAt"}}
-				}
-				seenIssuedAt = true
-				var s string
-				if i >= len(data) || data[i] != '"' {
-					return result, i, decode.NewParseErr("issuedAt", i, scan.ErrExpectString)
-				}
-				ke := i + 1
-				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-					ke++
-				}
-				if ke >= len(data) {
-					return result, i, decode.NewParseErr("issuedAt", i, scan.ErrUnterminated)
-				}
-				if data[ke] < 0x20 {
-					return result, i, decode.NewParseErr("issuedAt", i, scan.ErrBadString)
-				}
-				if data[ke] == '"' {
-					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-					i = ke + 1
-				} else {
-					s, i, err = scan.String(data, i)
-					if err != nil {
-						return result, i, decode.NewParseErr("issuedAt", i, err)
-					}
-				}
-				result.IssuedAt, err = time.Parse(time.RFC3339, s)
-				if err != nil {
-					return result, i, decode.NewParseErr("issuedAt", i, err)
-				}
-			case "legacyIP":
-				if seenLegacyIP {
-					return result, i, &validation.DuplicateKeyError{Path: []string{"legacyIP"}}
-				}
-				seenLegacyIP = true
-				var s string
-				if i >= len(data) || data[i] != '"' {
-					return result, i, decode.NewParseErr("legacyIP", i, scan.ErrExpectString)
-				}
-				ke := i + 1
-				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-					ke++
-				}
-				if ke >= len(data) {
-					return result, i, decode.NewParseErr("legacyIP", i, scan.ErrUnterminated)
-				}
-				if data[ke] < 0x20 {
-					return result, i, decode.NewParseErr("legacyIP", i, scan.ErrBadString)
-				}
-				if data[ke] == '"' {
-					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-					i = ke + 1
-				} else {
-					s, i, err = scan.String(data, i)
-					if err != nil {
-						return result, i, decode.NewParseErr("legacyIP", i, err)
-					}
-				}
-				result.LegacyIP = net.ParseIP(s)
-				if result.LegacyIP == nil {
-					return result, i, decode.NewParseErr("legacyIP", i, &net.ParseError{Type: "IP address", Text: s})
-				}
-			default:
-				return result, i, &validation.UnknownKeyError{Path: []string{key}}
+		case "byteArray":
+			if seenByteArray {
+				return result, i, &validation.DuplicateKeyError{Path: []string{"byteArray"}}
 			}
-		case 9:
-			switch key {
-			case "byteArray":
-				if seenByteArray {
-					return result, i, &validation.DuplicateKeyError{Path: []string{"byteArray"}}
-				}
-				seenByteArray = true
-				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-					i += 4
-					result.ByteArray = nil
-					break
-				}
-				for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-					i++
-				}
-				if i >= len(data) || data[i] != '[' {
-					return result, i, decode.NewParseErr("byteArray", i, scan.ErrBadArray)
-				}
+			seenByteArray = true
+			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+				i += 4
+				result.ByteArray = nil
+				break
+			}
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
+			}
+			if i >= len(data) || data[i] != '[' {
+				return result, i, decode.NewParseErr("byteArray", i, scan.ErrBadArray)
+			}
+			i++
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			var u uint64
+			for i < len(data) && data[i] != ']' {
+				u, i, err = scan.Uint64(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("byteArray", i, err)
+				}
+				result.ByteArray = append(result.ByteArray, byte(u))
 				for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 					i++
 				}
-				var u uint64
-				for i < len(data) && data[i] != ']' {
-					u, i, err = scan.Uint64(data, i)
-					if err != nil {
-						return result, i, decode.NewParseErr("byteArray", i, err)
-					}
-					result.ByteArray = append(result.ByteArray, byte(u))
+				if i < len(data) && data[i] == ',' {
+					i++
 					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
-					if i < len(data) && data[i] == ',' {
-						i++
-						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-							i++
-						}
-						continue
-					}
-					break
+					continue
 				}
-				if i >= len(data) || data[i] != ']' {
-					return result, i, decode.NewParseErr("byteArray", i, scan.ErrBadArray)
+				break
+			}
+			if i >= len(data) || data[i] != ']' {
+				return result, i, decode.NewParseErr("byteArray", i, scan.ErrBadArray)
+			}
+			i++
+		case "cidr":
+			if seenCidr {
+				return result, i, &validation.DuplicateKeyError{Path: []string{"cidr"}}
+			}
+			seenCidr = true
+			var s string
+			if i >= len(data) || data[i] != '"' {
+				return result, i, decode.NewParseErr("cidr", i, scan.ErrExpectString)
+			}
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, decode.NewParseErr("cidr", i, scan.ErrUnterminated)
+			}
+			if data[ke] < 0x20 {
+				return result, i, decode.NewParseErr("cidr", i, scan.ErrBadString)
+			}
+			if data[ke] == '"' {
+				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				s, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("cidr", i, err)
 				}
-				i++
-			case "createdAt":
-				if seenCreatedAt {
-					return result, i, &validation.DuplicateKeyError{Path: []string{"createdAt"}}
-				}
-				seenCreatedAt = true
-				var s string
-				if i >= len(data) || data[i] != '"' {
-					return result, i, decode.NewParseErr("createdAt", i, scan.ErrExpectString)
-				}
-				ke := i + 1
-				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-					ke++
-				}
-				if ke >= len(data) {
-					return result, i, decode.NewParseErr("createdAt", i, scan.ErrUnterminated)
-				}
-				if data[ke] < 0x20 {
-					return result, i, decode.NewParseErr("createdAt", i, scan.ErrBadString)
-				}
-				if data[ke] == '"' {
-					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-					i = ke + 1
-				} else {
-					s, i, err = scan.String(data, i)
-					if err != nil {
-						return result, i, decode.NewParseErr("createdAt", i, err)
-					}
-				}
-				result.CreatedAt, err = time.Parse(time.RFC3339Nano, s)
+			}
+			result.Cidr, err = netip.ParsePrefix(s)
+			if err != nil {
+				return result, i, decode.NewParseErr("cidr", i, err)
+			}
+		case "createdAt":
+			if seenCreatedAt {
+				return result, i, &validation.DuplicateKeyError{Path: []string{"createdAt"}}
+			}
+			seenCreatedAt = true
+			var s string
+			if i >= len(data) || data[i] != '"' {
+				return result, i, decode.NewParseErr("createdAt", i, scan.ErrExpectString)
+			}
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, decode.NewParseErr("createdAt", i, scan.ErrUnterminated)
+			}
+			if data[ke] < 0x20 {
+				return result, i, decode.NewParseErr("createdAt", i, scan.ErrBadString)
+			}
+			if data[ke] == '"' {
+				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				s, i, err = scan.String(data, i)
 				if err != nil {
 					return result, i, decode.NewParseErr("createdAt", i, err)
 				}
-			default:
-				return result, i, &validation.UnknownKeyError{Path: []string{key}}
 			}
+			result.CreatedAt, err = time.Parse(time.RFC3339Nano, s)
+			if err != nil {
+				return result, i, decode.NewParseErr("createdAt", i, err)
+			}
+		case "hexBlob":
+			if seenHexBlob {
+				return result, i, &validation.DuplicateKeyError{Path: []string{"hexBlob"}}
+			}
+			seenHexBlob = true
+			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+				i += 4
+				result.HexBlob = nil
+				break
+			}
+			var s string
+			if i >= len(data) || data[i] != '"' {
+				return result, i, decode.NewParseErr("hexBlob", i, scan.ErrExpectString)
+			}
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, decode.NewParseErr("hexBlob", i, scan.ErrUnterminated)
+			}
+			if data[ke] < 0x20 {
+				return result, i, decode.NewParseErr("hexBlob", i, scan.ErrBadString)
+			}
+			if data[ke] == '"' {
+				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				s, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("hexBlob", i, err)
+				}
+			}
+			if cap(result.HexBlob) < hex.DecodedLen(len(s)) {
+				result.HexBlob = make([]byte, 0, hex.DecodedLen(len(s)))
+			}
+			result.HexBlob, err = hex.AppendDecode(result.HexBlob, unsafe.Slice(unsafe.StringData(s), len(s)))
+			if err != nil {
+				return result, i, decode.NewParseErr("hexBlob", i, err)
+			}
+		case "issuedAt":
+			if seenIssuedAt {
+				return result, i, &validation.DuplicateKeyError{Path: []string{"issuedAt"}}
+			}
+			seenIssuedAt = true
+			var s string
+			if i >= len(data) || data[i] != '"' {
+				return result, i, decode.NewParseErr("issuedAt", i, scan.ErrExpectString)
+			}
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, decode.NewParseErr("issuedAt", i, scan.ErrUnterminated)
+			}
+			if data[ke] < 0x20 {
+				return result, i, decode.NewParseErr("issuedAt", i, scan.ErrBadString)
+			}
+			if data[ke] == '"' {
+				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				s, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("issuedAt", i, err)
+				}
+			}
+			result.IssuedAt, err = time.Parse(time.RFC3339, s)
+			if err != nil {
+				return result, i, decode.NewParseErr("issuedAt", i, err)
+			}
+		case "legacyIP":
+			if seenLegacyIP {
+				return result, i, &validation.DuplicateKeyError{Path: []string{"legacyIP"}}
+			}
+			seenLegacyIP = true
+			var s string
+			if i >= len(data) || data[i] != '"' {
+				return result, i, decode.NewParseErr("legacyIP", i, scan.ErrExpectString)
+			}
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, decode.NewParseErr("legacyIP", i, scan.ErrUnterminated)
+			}
+			if data[ke] < 0x20 {
+				return result, i, decode.NewParseErr("legacyIP", i, scan.ErrBadString)
+			}
+			if data[ke] == '"' {
+				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				s, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("legacyIP", i, err)
+				}
+			}
+			result.LegacyIP = net.ParseIP(s)
+			if result.LegacyIP == nil {
+				return result, i, decode.NewParseErr("legacyIP", i, &net.ParseError{Type: "IP address", Text: s})
+			}
+		case "secDur":
+			if seenSecDur {
+				return result, i, &validation.DuplicateKeyError{Path: []string{"secDur"}}
+			}
+			seenSecDur = true
+			var f float64
+			f, i, err = scan.Float64(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("secDur", i, err)
+			}
+			result.SecDur = time.Duration(f * float64(time.Second))
+		case "unitDur":
+			if seenUnitDur {
+				return result, i, &validation.DuplicateKeyError{Path: []string{"unitDur"}}
+			}
+			seenUnitDur = true
+			var s string
+			if i >= len(data) || data[i] != '"' {
+				return result, i, decode.NewParseErr("unitDur", i, scan.ErrExpectString)
+			}
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, decode.NewParseErr("unitDur", i, scan.ErrUnterminated)
+			}
+			if data[ke] < 0x20 {
+				return result, i, decode.NewParseErr("unitDur", i, scan.ErrBadString)
+			}
+			if data[ke] == '"' {
+				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				s, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("unitDur", i, err)
+				}
+			}
+			result.UnitDur, err = time.ParseDuration(s)
+			if err != nil {
+				return result, i, decode.NewParseErr("unitDur", i, err)
+			}
+		case "unixAt":
+			if seenUnixAt {
+				return result, i, &validation.DuplicateKeyError{Path: []string{"unixAt"}}
+			}
+			seenUnixAt = true
+			var f float64
+			f, i, err = scan.Float64(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("unixAt", i, err)
+			}
+			sec := int64(f)
+			nsec := int64((f - float64(sec)) * 1e9)
+			result.UnixAt = time.Unix(sec, nsec)
 		default:
 			return result, i, &validation.UnknownKeyError{Path: []string{key}}
 		}
@@ -524,267 +499,115 @@ func (result NativeTypes) DecodeFromStream(s *scan.Stream) (NativeTypes, error) 
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
-		switch len(key) {
-		case 4:
-			switch key {
-			case "addr":
-				err = s.ConsumeColon()
-				if err != nil {
-					return result, decode.NewParseErr("addr", s.Pos, err)
-				}
-				if seenAddr {
-					return result, &validation.DuplicateKeyError{Path: []string{"addr"}}
-				}
-				seenAddr = true
-				var sv string
-				sv, err = s.String()
-				if err != nil {
-					return result, decode.NewParseErr("addr", s.Pos, err)
-				}
-				result.Addr, err = netip.ParseAddr(sv)
-				if err != nil {
-					return result, decode.NewParseErr("addr", s.Pos, err)
-				}
-			case "blob":
-				err = s.ConsumeColon()
-				if err != nil {
+		switch key {
+		case "addr":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("addr", s.Pos, err)
+			}
+			if seenAddr {
+				return result, &validation.DuplicateKeyError{Path: []string{"addr"}}
+			}
+			seenAddr = true
+			var sv string
+			sv, err = s.String()
+			if err != nil {
+				return result, decode.NewParseErr("addr", s.Pos, err)
+			}
+			result.Addr, err = netip.ParseAddr(sv)
+			if err != nil {
+				return result, decode.NewParseErr("addr", s.Pos, err)
+			}
+		case "blob":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("blob", s.Pos, err)
+			}
+			if seenBlob {
+				return result, &validation.DuplicateKeyError{Path: []string{"blob"}}
+			}
+			seenBlob = true
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
 					return result, decode.NewParseErr("blob", s.Pos, err)
 				}
-				if seenBlob {
-					return result, &validation.DuplicateKeyError{Path: []string{"blob"}}
-				}
-				seenBlob = true
-				if s.Pos >= len(s.Bytes()) {
-					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("blob", s.Pos, err)
-					}
-				}
-				if s.Bytes()[s.Pos] == 'n' {
-					for ki := 1; ki < 4; ki++ {
-						if s.Pos+ki >= len(s.Bytes()) {
-							if err = s.ReadMore(0); err != nil {
-								return result, decode.NewParseErr("blob", s.Pos, err)
-							}
-						}
-						if s.Bytes()[s.Pos+ki] != "null"[ki] {
-							return result, decode.NewParseErr("blob", s.Pos, scan.ErrBadLiteral)
+			}
+			if s.Bytes()[s.Pos] == 'n' {
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, decode.NewParseErr("blob", s.Pos, err)
 						}
 					}
-					s.Pos += 4
-					result.Blob = nil
-					break
-				}
-				var sv string
-				sv, err = s.String()
-				if err != nil {
-					return result, decode.NewParseErr("blob", s.Pos, err)
-				}
-				if cap(result.Blob) < base64.StdEncoding.DecodedLen(len(sv)) {
-					result.Blob = make([]byte, 0, base64.StdEncoding.DecodedLen(len(sv)))
-				}
-				result.Blob, err = base64.StdEncoding.AppendDecode(result.Blob, unsafe.Slice(unsafe.StringData(sv), len(sv)))
-				if err != nil {
-					return result, decode.NewParseErr("blob", s.Pos, err)
-				}
-			case "cidr":
-				err = s.ConsumeColon()
-				if err != nil {
-					return result, decode.NewParseErr("cidr", s.Pos, err)
-				}
-				if seenCidr {
-					return result, &validation.DuplicateKeyError{Path: []string{"cidr"}}
-				}
-				seenCidr = true
-				var sv string
-				sv, err = s.String()
-				if err != nil {
-					return result, decode.NewParseErr("cidr", s.Pos, err)
-				}
-				result.Cidr, err = netip.ParsePrefix(sv)
-				if err != nil {
-					return result, decode.NewParseErr("cidr", s.Pos, err)
-				}
-			default:
-				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
-			}
-		case 6:
-			switch key {
-			case "secDur":
-				err = s.ConsumeColon()
-				if err != nil {
-					return result, decode.NewParseErr("secDur", s.Pos, err)
-				}
-				if seenSecDur {
-					return result, &validation.DuplicateKeyError{Path: []string{"secDur"}}
-				}
-				seenSecDur = true
-				var f float64
-				f, err = s.Float64()
-				if err != nil {
-					return result, decode.NewParseErr("secDur", s.Pos, err)
-				}
-				result.SecDur = time.Duration(f * float64(time.Second))
-			case "unixAt":
-				err = s.ConsumeColon()
-				if err != nil {
-					return result, decode.NewParseErr("unixAt", s.Pos, err)
-				}
-				if seenUnixAt {
-					return result, &validation.DuplicateKeyError{Path: []string{"unixAt"}}
-				}
-				seenUnixAt = true
-				var f float64
-				f, err = s.Float64()
-				if err != nil {
-					return result, decode.NewParseErr("unixAt", s.Pos, err)
-				}
-
-				sec := int64(f)
-				nsec := int64((f - float64(sec)) * 1e9)
-				result.UnixAt = time.Unix(sec, nsec)
-			default:
-				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
-			}
-		case 7:
-			switch key {
-			case "hexBlob":
-				err = s.ConsumeColon()
-				if err != nil {
-					return result, decode.NewParseErr("hexBlob", s.Pos, err)
-				}
-				if seenHexBlob {
-					return result, &validation.DuplicateKeyError{Path: []string{"hexBlob"}}
-				}
-				seenHexBlob = true
-				if s.Pos >= len(s.Bytes()) {
-					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("hexBlob", s.Pos, err)
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, decode.NewParseErr("blob", s.Pos, scan.ErrBadLiteral)
 					}
 				}
-				if s.Bytes()[s.Pos] == 'n' {
-					for ki := 1; ki < 4; ki++ {
-						if s.Pos+ki >= len(s.Bytes()) {
-							if err = s.ReadMore(0); err != nil {
-								return result, decode.NewParseErr("hexBlob", s.Pos, err)
-							}
-						}
-						if s.Bytes()[s.Pos+ki] != "null"[ki] {
-							return result, decode.NewParseErr("hexBlob", s.Pos, scan.ErrBadLiteral)
+				s.Pos += 4
+				result.Blob = nil
+				break
+			}
+			var sv string
+			sv, err = s.String()
+			if err != nil {
+				return result, decode.NewParseErr("blob", s.Pos, err)
+			}
+			if cap(result.Blob) < base64.StdEncoding.DecodedLen(len(sv)) {
+				result.Blob = make([]byte, 0, base64.StdEncoding.DecodedLen(len(sv)))
+			}
+			result.Blob, err = base64.StdEncoding.AppendDecode(result.Blob, unsafe.Slice(unsafe.StringData(sv), len(sv)))
+			if err != nil {
+				return result, decode.NewParseErr("blob", s.Pos, err)
+			}
+		case "byteArray":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("byteArray", s.Pos, err)
+			}
+			if seenByteArray {
+				return result, &validation.DuplicateKeyError{Path: []string{"byteArray"}}
+			}
+			seenByteArray = true
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, decode.NewParseErr("byteArray", s.Pos, err)
+				}
+			}
+			if s.Bytes()[s.Pos] == 'n' {
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, decode.NewParseErr("byteArray", s.Pos, err)
 						}
 					}
-					s.Pos += 4
-					result.HexBlob = nil
-					break
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, decode.NewParseErr("byteArray", s.Pos, scan.ErrBadLiteral)
+					}
 				}
-				var sv string
-				sv, err = s.String()
-				if err != nil {
-					return result, decode.NewParseErr("hexBlob", s.Pos, err)
-				}
-				if cap(result.HexBlob) < hex.DecodedLen(len(sv)) {
-					result.HexBlob = make([]byte, 0, hex.DecodedLen(len(sv)))
-				}
-				result.HexBlob, err = hex.AppendDecode(result.HexBlob, unsafe.Slice(unsafe.StringData(sv), len(sv)))
-				if err != nil {
-					return result, decode.NewParseErr("hexBlob", s.Pos, err)
-				}
-			case "unitDur":
-				err = s.ConsumeColon()
-				if err != nil {
-					return result, decode.NewParseErr("unitDur", s.Pos, err)
-				}
-				if seenUnitDur {
-					return result, &validation.DuplicateKeyError{Path: []string{"unitDur"}}
-				}
-				seenUnitDur = true
-				var sv string
-				sv, err = s.String()
-				if err != nil {
-					return result, decode.NewParseErr("unitDur", s.Pos, err)
-				}
-				result.UnitDur, err = time.ParseDuration(sv)
-				if err != nil {
-					return result, decode.NewParseErr("unitDur", s.Pos, err)
-				}
-			default:
-				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+				s.Pos += 4
+				result.ByteArray = nil
+				break
 			}
-		case 8:
-			switch key {
-			case "issuedAt":
-				err = s.ConsumeColon()
-				if err != nil {
-					return result, decode.NewParseErr("issuedAt", s.Pos, err)
-				}
-				if seenIssuedAt {
-					return result, &validation.DuplicateKeyError{Path: []string{"issuedAt"}}
-				}
-				seenIssuedAt = true
-				var sv string
-				sv, err = s.String()
-				if err != nil {
-					return result, decode.NewParseErr("issuedAt", s.Pos, err)
-				}
-				result.IssuedAt, err = time.Parse(time.RFC3339, sv)
-				if err != nil {
-					return result, decode.NewParseErr("issuedAt", s.Pos, err)
-				}
-			case "legacyIP":
-				err = s.ConsumeColon()
-				if err != nil {
-					return result, decode.NewParseErr("legacyIP", s.Pos, err)
-				}
-				if seenLegacyIP {
-					return result, &validation.DuplicateKeyError{Path: []string{"legacyIP"}}
-				}
-				seenLegacyIP = true
-				var sv string
-				sv, err = s.String()
-				if err != nil {
-					return result, decode.NewParseErr("legacyIP", s.Pos, err)
-				}
-				result.LegacyIP = net.ParseIP(sv)
-				if result.LegacyIP == nil {
-					return result, decode.NewParseErr("legacyIP", s.Pos, &net.ParseError{Type: "IP address", Text: sv})
-				}
-			default:
-				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			err = s.ArrayOpen()
+			if err != nil {
+				return result, decode.NewParseErr("byteArray", s.Pos, err)
 			}
-		case 9:
-			switch key {
-			case "byteArray":
-				err = s.ConsumeColon()
+			err = s.SkipSpace()
+			if err != nil {
+				return result, decode.NewParseErr("byteArray", s.Pos, err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, decode.NewParseErr("byteArray", s.Pos, err)
+				}
+			}
+			for s.Bytes()[s.Pos] != ']' {
+				var u uint64
+				u, err = s.Uint64()
 				if err != nil {
 					return result, decode.NewParseErr("byteArray", s.Pos, err)
 				}
-				if seenByteArray {
-					return result, &validation.DuplicateKeyError{Path: []string{"byteArray"}}
-				}
-				seenByteArray = true
-				if s.Pos >= len(s.Bytes()) {
-					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("byteArray", s.Pos, err)
-					}
-				}
-				if s.Bytes()[s.Pos] == 'n' {
-					for ki := 1; ki < 4; ki++ {
-						if s.Pos+ki >= len(s.Bytes()) {
-							if err = s.ReadMore(0); err != nil {
-								return result, decode.NewParseErr("byteArray", s.Pos, err)
-							}
-						}
-						if s.Bytes()[s.Pos+ki] != "null"[ki] {
-							return result, decode.NewParseErr("byteArray", s.Pos, scan.ErrBadLiteral)
-						}
-					}
-					s.Pos += 4
-					result.ByteArray = nil
-					break
-				}
-				err = s.ArrayOpen()
-				if err != nil {
-					return result, decode.NewParseErr("byteArray", s.Pos, err)
-				}
+				result.ByteArray = append(result.ByteArray, byte(u))
 				err = s.SkipSpace()
 				if err != nil {
 					return result, decode.NewParseErr("byteArray", s.Pos, err)
@@ -794,57 +617,184 @@ func (result NativeTypes) DecodeFromStream(s *scan.Stream) (NativeTypes, error) 
 						return result, decode.NewParseErr("byteArray", s.Pos, err)
 					}
 				}
-				for s.Bytes()[s.Pos] != ']' {
-					var u uint64
-					u, err = s.Uint64()
-					if err != nil {
-						return result, decode.NewParseErr("byteArray", s.Pos, err)
-					}
-					result.ByteArray = append(result.ByteArray, byte(u))
+				if s.Bytes()[s.Pos] == ',' {
+					s.Pos++
 					err = s.SkipSpace()
 					if err != nil {
 						return result, decode.NewParseErr("byteArray", s.Pos, err)
 					}
-					if s.Pos >= len(s.Bytes()) {
-						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("byteArray", s.Pos, err)
-						}
-					}
-					if s.Bytes()[s.Pos] == ',' {
-						s.Pos++
-						err = s.SkipSpace()
-						if err != nil {
-							return result, decode.NewParseErr("byteArray", s.Pos, err)
-						}
-						continue
-					}
-					break
+					continue
 				}
-				if s.Bytes()[s.Pos] != ']' {
-					return result, decode.NewParseErr("byteArray", s.Pos, scan.ErrBadArray)
-				}
-				s.Pos++
-			case "createdAt":
-				err = s.ConsumeColon()
-				if err != nil {
-					return result, decode.NewParseErr("createdAt", s.Pos, err)
-				}
-				if seenCreatedAt {
-					return result, &validation.DuplicateKeyError{Path: []string{"createdAt"}}
-				}
-				seenCreatedAt = true
-				var sv string
-				sv, err = s.String()
-				if err != nil {
-					return result, decode.NewParseErr("createdAt", s.Pos, err)
-				}
-				result.CreatedAt, err = time.Parse(time.RFC3339Nano, sv)
-				if err != nil {
-					return result, decode.NewParseErr("createdAt", s.Pos, err)
-				}
-			default:
-				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+				break
 			}
+			if s.Bytes()[s.Pos] != ']' {
+				return result, decode.NewParseErr("byteArray", s.Pos, scan.ErrBadArray)
+			}
+			s.Pos++
+		case "cidr":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("cidr", s.Pos, err)
+			}
+			if seenCidr {
+				return result, &validation.DuplicateKeyError{Path: []string{"cidr"}}
+			}
+			seenCidr = true
+			var sv string
+			sv, err = s.String()
+			if err != nil {
+				return result, decode.NewParseErr("cidr", s.Pos, err)
+			}
+			result.Cidr, err = netip.ParsePrefix(sv)
+			if err != nil {
+				return result, decode.NewParseErr("cidr", s.Pos, err)
+			}
+		case "createdAt":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("createdAt", s.Pos, err)
+			}
+			if seenCreatedAt {
+				return result, &validation.DuplicateKeyError{Path: []string{"createdAt"}}
+			}
+			seenCreatedAt = true
+			var sv string
+			sv, err = s.String()
+			if err != nil {
+				return result, decode.NewParseErr("createdAt", s.Pos, err)
+			}
+			result.CreatedAt, err = time.Parse(time.RFC3339Nano, sv)
+			if err != nil {
+				return result, decode.NewParseErr("createdAt", s.Pos, err)
+			}
+		case "hexBlob":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("hexBlob", s.Pos, err)
+			}
+			if seenHexBlob {
+				return result, &validation.DuplicateKeyError{Path: []string{"hexBlob"}}
+			}
+			seenHexBlob = true
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, decode.NewParseErr("hexBlob", s.Pos, err)
+				}
+			}
+			if s.Bytes()[s.Pos] == 'n' {
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, decode.NewParseErr("hexBlob", s.Pos, err)
+						}
+					}
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, decode.NewParseErr("hexBlob", s.Pos, scan.ErrBadLiteral)
+					}
+				}
+				s.Pos += 4
+				result.HexBlob = nil
+				break
+			}
+			var sv string
+			sv, err = s.String()
+			if err != nil {
+				return result, decode.NewParseErr("hexBlob", s.Pos, err)
+			}
+			if cap(result.HexBlob) < hex.DecodedLen(len(sv)) {
+				result.HexBlob = make([]byte, 0, hex.DecodedLen(len(sv)))
+			}
+			result.HexBlob, err = hex.AppendDecode(result.HexBlob, unsafe.Slice(unsafe.StringData(sv), len(sv)))
+			if err != nil {
+				return result, decode.NewParseErr("hexBlob", s.Pos, err)
+			}
+		case "issuedAt":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("issuedAt", s.Pos, err)
+			}
+			if seenIssuedAt {
+				return result, &validation.DuplicateKeyError{Path: []string{"issuedAt"}}
+			}
+			seenIssuedAt = true
+			var sv string
+			sv, err = s.String()
+			if err != nil {
+				return result, decode.NewParseErr("issuedAt", s.Pos, err)
+			}
+			result.IssuedAt, err = time.Parse(time.RFC3339, sv)
+			if err != nil {
+				return result, decode.NewParseErr("issuedAt", s.Pos, err)
+			}
+		case "legacyIP":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("legacyIP", s.Pos, err)
+			}
+			if seenLegacyIP {
+				return result, &validation.DuplicateKeyError{Path: []string{"legacyIP"}}
+			}
+			seenLegacyIP = true
+			var sv string
+			sv, err = s.String()
+			if err != nil {
+				return result, decode.NewParseErr("legacyIP", s.Pos, err)
+			}
+			result.LegacyIP = net.ParseIP(sv)
+			if result.LegacyIP == nil {
+				return result, decode.NewParseErr("legacyIP", s.Pos, &net.ParseError{Type: "IP address", Text: sv})
+			}
+		case "secDur":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("secDur", s.Pos, err)
+			}
+			if seenSecDur {
+				return result, &validation.DuplicateKeyError{Path: []string{"secDur"}}
+			}
+			seenSecDur = true
+			var f float64
+			f, err = s.Float64()
+			if err != nil {
+				return result, decode.NewParseErr("secDur", s.Pos, err)
+			}
+			result.SecDur = time.Duration(f * float64(time.Second))
+		case "unitDur":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("unitDur", s.Pos, err)
+			}
+			if seenUnitDur {
+				return result, &validation.DuplicateKeyError{Path: []string{"unitDur"}}
+			}
+			seenUnitDur = true
+			var sv string
+			sv, err = s.String()
+			if err != nil {
+				return result, decode.NewParseErr("unitDur", s.Pos, err)
+			}
+			result.UnitDur, err = time.ParseDuration(sv)
+			if err != nil {
+				return result, decode.NewParseErr("unitDur", s.Pos, err)
+			}
+		case "unixAt":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("unixAt", s.Pos, err)
+			}
+			if seenUnixAt {
+				return result, &validation.DuplicateKeyError{Path: []string{"unixAt"}}
+			}
+			seenUnixAt = true
+			var f float64
+			f, err = s.Float64()
+			if err != nil {
+				return result, decode.NewParseErr("unixAt", s.Pos, err)
+			}
+
+			sec := int64(f)
+			nsec := int64((f - float64(sec)) * 1e9)
+			result.UnixAt = time.Unix(sec, nsec)
 		default:
 			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
 		}

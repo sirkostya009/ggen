@@ -437,9 +437,10 @@ single underscores: `goexperiment.jsonv2` → `goexperiment_jsonv2`,
 
 ## Optimizations applied in codegen (nothing at runtime)
 
-1. **Length-first key dispatch.** Switch on `len(key)` before content — wrong
-   lengths reject with one int compare. Nested switches only for lengths with
-   ≥2 fields.
+1. **Flat `switch key` dispatch.** One string switch over all JSON names —
+   gc lowers it to length-grouped binary search / jump tables itself. Manual
+   length-first outer `switch len(key)` benched equal (narrow) to -5.7%
+   slower (100-field) vs flat; removed (see backlog "Tried Rejected").
 2. **Slice cap from tag hint.** `preallocCap` picks initial cap for
    `make([]T,0,N)`. Precedence: `hintlen=N` > `len=N` >
    `max(minlen, default)` > default (8 primitives, 4 structs). Maps via
