@@ -3,6 +3,7 @@ package integrationtests
 //go:generate ../ggen $GOFILE
 
 import (
+	"bytes"
 	"errors"
 	"strings"
 	"testing"
@@ -150,11 +151,9 @@ func TestPointer_nullRoundtrip(t *testing.T) {
 // and ggen-struct leaves decode natively. Chain-reuse + parse-failure-leaves-
 // -receiver-untouched pinned by `TestMerge_multiLevel*` in merge_test.go.
 //
-// Slice (`[]**T`) and map (`map[string]**T`) variants are intentionally
-// absent: the current codegen has gaps in those paths (slice slab emits
-// `*int{}` zero literal; map JSONSize emits `for k, v` with `v` unused
-// in the generic struct fallback). See the n-pointer backlog entry in
-// CLAUDE.md.
+// Container variants (`[]**T`, `[N]**T`, `map[string]*T`, `map[string]**T`)
+// decode each element/value through the same cascade — see
+// NPtrContainersStruct below. Depth-1 `[]*T` keeps the slab fast path.
 //
 // Each multi-level depth/leaf split into its own struct so the per-field
 // JSONSize cap-guard (jsonsize_test.go) exercises the `else if` nil-ladder at
@@ -286,4 +285,90 @@ type PtrSliceStruct struct {
 	PtrSliceItemsStruct
 	PtrSliceTupleStruct
 	PtrSliceNodesStruct
+}
+
+// NPtrContainersStruct pins multi-level pointers INSIDE containers: slice /
+// fixed-array elements and map values route each element through the same
+// parse-first pointer cascade scalar `**T` fields use (no slab, no
+// encoding/json fallback). Map values cover depth 1 and 2 — `map[string]*T`
+// previously took a reflective fallback that didn't even compile its
+// JSONSize loop.
+//
+//ggen:generate
+type NPtrContainersStruct struct {
+	SPP  []**int             `json:"spp"`
+	APP  [3]**int            `json:"app"`
+	NSPP [][]**int           `json:"nspp"`
+	MP   map[string]*int     `json:"mp"`
+	MPP  map[string]**int    `json:"mpp"`
+	MPA  map[string]*Address `json:"mpa"`
+}
+
+func TestNPtr_containersRoundtrip(t *testing.T) {
+	in := []byte(`{"spp":[1,null,3],"app":[null,5,null],"nspp":[[7,null]],"mp":{"a":1,"b":null},"mpp":{"x":7,"y":null},"mpa":{"k":{"street":"Main 1","city":"Lviv","zipCode":"79000"},"n":null}}`)
+	got, n, err := NPtrContainersStruct{}.DecodeFrom(in)
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if n != len(in) {
+		t.Fatalf("consumed %d of %d", n, len(in))
+	}
+	if len(got.SPP) != 3 || **got.SPP[0] != 1 || got.SPP[1] != nil || **got.SPP[2] != 3 {
+		t.Errorf("SPP = %v", got.SPP)
+	}
+	if got.APP[0] != nil || **got.APP[1] != 5 || got.APP[2] != nil {
+		t.Errorf("APP = %v", got.APP)
+	}
+	if len(got.NSPP) != 1 || **got.NSPP[0][0] != 7 || got.NSPP[0][1] != nil {
+		t.Errorf("NSPP = %v", got.NSPP)
+	}
+	if *got.MP["a"] != 1 || got.MP["b"] != nil {
+		t.Errorf("MP = %v", got.MP)
+	}
+	if **got.MPP["x"] != 7 || got.MPP["y"] != nil {
+		t.Errorf("MPP = %v", got.MPP)
+	}
+	if got.MPA["k"] == nil || got.MPA["k"].City != "Lviv" || got.MPA["n"] != nil {
+		t.Errorf("MPA = %v", got.MPA)
+	}
+
+	// Marshal → decode fixed point, within the JSONSize budget.
+	size := got.JSONSize()
+	out, err := got.AppendJSON(make([]byte, 0, size))
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if len(out) > size {
+		t.Errorf("JSONSize under-budget: emitted %d, reserved %d", len(out), size)
+	}
+	again, _, err := NPtrContainersStruct{}.DecodeFrom(out)
+	if err != nil {
+		t.Fatalf("re-decode: %v\n%s", err, out)
+	}
+	out2, err := again.AppendJSON(nil)
+	if err != nil || string(out) != string(out2) {
+		t.Errorf("roundtrip not a fixed point:\n%s\n%s", out, out2)
+	}
+}
+
+func TestNPtr_containersStream(t *testing.T) {
+	in := []byte(`{"spp":[1,null],"app":[9,null,2],"mp":{"a":4},"mpp":{"z":null}}`)
+	var s scan.Stream
+	s.Reset(bytes.NewReader(in), make([]byte, 16))
+	got, err := NPtrContainersStruct{}.DecodeFromStream(&s)
+	if err != nil {
+		t.Fatalf("stream decode: %v", err)
+	}
+	if len(got.SPP) != 2 || **got.SPP[0] != 1 || got.SPP[1] != nil {
+		t.Errorf("SPP = %v", got.SPP)
+	}
+	if **got.APP[0] != 9 || got.APP[1] != nil || **got.APP[2] != 2 {
+		t.Errorf("APP = %v", got.APP)
+	}
+	if *got.MP["a"] != 4 {
+		t.Errorf("MP = %v", got.MP)
+	}
+	if v, ok := got.MPP["z"]; !ok || v != nil {
+		t.Errorf("MPP = %v", got.MPP)
+	}
 }

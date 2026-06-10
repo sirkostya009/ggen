@@ -137,37 +137,44 @@ func (result NativeTypes) DecodeFrom(data []byte) (NativeTypes, int, error) {
 				}
 				seenBlob = true
 				{
-					var s string
-					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("blob", i, scan.ErrExpectString)
-					}
-					{
-						ke := i + 1
-						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-							ke++
-						}
-						if ke >= len(data) {
-							return result, i, decode.NewParseErr("blob", i, scan.ErrUnterminated)
-						}
-						if data[ke] < 0x20 {
-							return result, i, decode.NewParseErr("blob", i, scan.ErrBadString)
-						}
-						if data[ke] == '"' {
-							s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-							i = ke + 1
-						} else {
-							s, i, err = scan.String(data, i)
+					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+						i += 4
+						result.Blob = nil
+					} else {
+						{
+							var s string
+							if i >= len(data) || data[i] != '"' {
+								return result, i, decode.NewParseErr("blob", i, scan.ErrExpectString)
+							}
+							{
+								ke := i + 1
+								for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+									ke++
+								}
+								if ke >= len(data) {
+									return result, i, decode.NewParseErr("blob", i, scan.ErrUnterminated)
+								}
+								if data[ke] < 0x20 {
+									return result, i, decode.NewParseErr("blob", i, scan.ErrBadString)
+								}
+								if data[ke] == '"' {
+									s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+									i = ke + 1
+								} else {
+									s, i, err = scan.String(data, i)
+									if err != nil {
+										return result, i, decode.NewParseErr("blob", i, err)
+									}
+								}
+							}
+							if cap(result.Blob) < base64.StdEncoding.DecodedLen(len(s)) {
+								result.Blob = make([]byte, 0, base64.StdEncoding.DecodedLen(len(s)))
+							}
+							result.Blob, err = base64.StdEncoding.AppendDecode(result.Blob, unsafe.Slice(unsafe.StringData(s), len(s)))
 							if err != nil {
 								return result, i, decode.NewParseErr("blob", i, err)
 							}
 						}
-					}
-					if cap(result.Blob) < base64.StdEncoding.DecodedLen(len(s)) {
-						result.Blob = make([]byte, 0, base64.StdEncoding.DecodedLen(len(s)))
-					}
-					result.Blob, err = base64.StdEncoding.AppendDecode(result.Blob, unsafe.Slice(unsafe.StringData(s), len(s)))
-					if err != nil {
-						return result, i, decode.NewParseErr("blob", i, err)
 					}
 				}
 			case "cidr":
@@ -250,37 +257,44 @@ func (result NativeTypes) DecodeFrom(data []byte) (NativeTypes, int, error) {
 				}
 				seenHexBlob = true
 				{
-					var s string
-					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("hexBlob", i, scan.ErrExpectString)
-					}
-					{
-						ke := i + 1
-						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-							ke++
-						}
-						if ke >= len(data) {
-							return result, i, decode.NewParseErr("hexBlob", i, scan.ErrUnterminated)
-						}
-						if data[ke] < 0x20 {
-							return result, i, decode.NewParseErr("hexBlob", i, scan.ErrBadString)
-						}
-						if data[ke] == '"' {
-							s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-							i = ke + 1
-						} else {
-							s, i, err = scan.String(data, i)
+					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+						i += 4
+						result.HexBlob = nil
+					} else {
+						{
+							var s string
+							if i >= len(data) || data[i] != '"' {
+								return result, i, decode.NewParseErr("hexBlob", i, scan.ErrExpectString)
+							}
+							{
+								ke := i + 1
+								for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+									ke++
+								}
+								if ke >= len(data) {
+									return result, i, decode.NewParseErr("hexBlob", i, scan.ErrUnterminated)
+								}
+								if data[ke] < 0x20 {
+									return result, i, decode.NewParseErr("hexBlob", i, scan.ErrBadString)
+								}
+								if data[ke] == '"' {
+									s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+									i = ke + 1
+								} else {
+									s, i, err = scan.String(data, i)
+									if err != nil {
+										return result, i, decode.NewParseErr("hexBlob", i, err)
+									}
+								}
+							}
+							if cap(result.HexBlob) < hex.DecodedLen(len(s)) {
+								result.HexBlob = make([]byte, 0, hex.DecodedLen(len(s)))
+							}
+							result.HexBlob, err = hex.AppendDecode(result.HexBlob, unsafe.Slice(unsafe.StringData(s), len(s)))
 							if err != nil {
 								return result, i, decode.NewParseErr("hexBlob", i, err)
 							}
 						}
-					}
-					if cap(result.HexBlob) < hex.DecodedLen(len(s)) {
-						result.HexBlob = make([]byte, 0, hex.DecodedLen(len(s)))
-					}
-					result.HexBlob, err = hex.AppendDecode(result.HexBlob, unsafe.Slice(unsafe.StringData(s), len(s)))
-					if err != nil {
-						return result, i, decode.NewParseErr("hexBlob", i, err)
 					}
 				}
 			case "unitDur":
@@ -407,39 +421,46 @@ func (result NativeTypes) DecodeFrom(data []byte) (NativeTypes, int, error) {
 				}
 				seenByteArray = true
 				{
-					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-						i++
-					}
-					if i >= len(data) || data[i] != '[' {
-						return result, i, decode.NewParseErr("byteArray", i, scan.ErrBadArray)
-					}
-					i++
-					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-						i++
-					}
-					var v uint64
-					for i < len(data) && data[i] != ']' {
-						v, i, err = scan.Uint64(data, i)
-						if err != nil {
-							return result, i, decode.NewParseErr("byteArray", i, err)
-						}
-						result.ByteArray = append(result.ByteArray, byte(v))
-						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-							i++
-						}
-						if i < len(data) && data[i] == ',' {
+					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+						i += 4
+						result.ByteArray = nil
+					} else {
+						{
+							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
+							}
+							if i >= len(data) || data[i] != '[' {
+								return result, i, decode.NewParseErr("byteArray", i, scan.ErrBadArray)
+							}
 							i++
 							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 								i++
 							}
-							continue
+							var v uint64
+							for i < len(data) && data[i] != ']' {
+								v, i, err = scan.Uint64(data, i)
+								if err != nil {
+									return result, i, decode.NewParseErr("byteArray", i, err)
+								}
+								result.ByteArray = append(result.ByteArray, byte(v))
+								for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+									i++
+								}
+								if i < len(data) && data[i] == ',' {
+									i++
+									for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+										i++
+									}
+									continue
+								}
+								break
+							}
+							if i >= len(data) || data[i] != ']' {
+								return result, i, decode.NewParseErr("byteArray", i, scan.ErrBadArray)
+							}
+							i++
 						}
-						break
 					}
-					if i >= len(data) || data[i] != ']' {
-						return result, i, decode.NewParseErr("byteArray", i, scan.ErrBadArray)
-					}
-					i++
 				}
 			case "createdAt":
 				if seenCreatedAt {
@@ -581,18 +602,38 @@ func (result NativeTypes) DecodeFromStream(s *scan.Stream) (NativeTypes, error) 
 					return result, &validation.DuplicateKeyError{Path: []string{"blob"}}
 				}
 				seenBlob = true
-				{
-					var v string
-					v, err = s.String()
-					if err != nil {
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
 						return result, decode.NewParseErr("blob", s.Pos, err)
 					}
-					if cap(result.Blob) < base64.StdEncoding.DecodedLen(len(v)) {
-						result.Blob = make([]byte, 0, base64.StdEncoding.DecodedLen(len(v)))
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, decode.NewParseErr("blob", s.Pos, err)
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, decode.NewParseErr("blob", s.Pos, scan.ErrBadLiteral)
+						}
 					}
-					result.Blob, err = base64.StdEncoding.AppendDecode(result.Blob, unsafe.Slice(unsafe.StringData(v), len(v)))
-					if err != nil {
-						return result, decode.NewParseErr("blob", s.Pos, err)
+					s.Pos += 4
+					result.Blob = nil
+				} else {
+					{
+						var v string
+						v, err = s.String()
+						if err != nil {
+							return result, decode.NewParseErr("blob", s.Pos, err)
+						}
+						if cap(result.Blob) < base64.StdEncoding.DecodedLen(len(v)) {
+							result.Blob = make([]byte, 0, base64.StdEncoding.DecodedLen(len(v)))
+						}
+						result.Blob, err = base64.StdEncoding.AppendDecode(result.Blob, unsafe.Slice(unsafe.StringData(v), len(v)))
+						if err != nil {
+							return result, decode.NewParseErr("blob", s.Pos, err)
+						}
 					}
 				}
 			case "cidr":
@@ -671,18 +712,38 @@ func (result NativeTypes) DecodeFromStream(s *scan.Stream) (NativeTypes, error) 
 					return result, &validation.DuplicateKeyError{Path: []string{"hexBlob"}}
 				}
 				seenHexBlob = true
-				{
-					var v string
-					v, err = s.String()
-					if err != nil {
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
 						return result, decode.NewParseErr("hexBlob", s.Pos, err)
 					}
-					if cap(result.HexBlob) < hex.DecodedLen(len(v)) {
-						result.HexBlob = make([]byte, 0, hex.DecodedLen(len(v)))
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, decode.NewParseErr("hexBlob", s.Pos, err)
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, decode.NewParseErr("hexBlob", s.Pos, scan.ErrBadLiteral)
+						}
 					}
-					result.HexBlob, err = hex.AppendDecode(result.HexBlob, unsafe.Slice(unsafe.StringData(v), len(v)))
-					if err != nil {
-						return result, decode.NewParseErr("hexBlob", s.Pos, err)
+					s.Pos += 4
+					result.HexBlob = nil
+				} else {
+					{
+						var v string
+						v, err = s.String()
+						if err != nil {
+							return result, decode.NewParseErr("hexBlob", s.Pos, err)
+						}
+						if cap(result.HexBlob) < hex.DecodedLen(len(v)) {
+							result.HexBlob = make([]byte, 0, hex.DecodedLen(len(v)))
+						}
+						result.HexBlob, err = hex.AppendDecode(result.HexBlob, unsafe.Slice(unsafe.StringData(v), len(v)))
+						if err != nil {
+							return result, decode.NewParseErr("hexBlob", s.Pos, err)
+						}
 					}
 				}
 			case "unitDur":
@@ -764,27 +825,30 @@ func (result NativeTypes) DecodeFromStream(s *scan.Stream) (NativeTypes, error) 
 					return result, &validation.DuplicateKeyError{Path: []string{"byteArray"}}
 				}
 				seenByteArray = true
-				{
-					err = s.ArrayOpen()
-					if err != nil {
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
 						return result, decode.NewParseErr("byteArray", s.Pos, err)
 					}
-					err = s.SkipSpace()
-					if err != nil {
-						return result, decode.NewParseErr("byteArray", s.Pos, err)
-					}
-					if s.Pos >= len(s.Bytes()) {
-						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("byteArray", s.Pos, err)
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, decode.NewParseErr("byteArray", s.Pos, err)
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, decode.NewParseErr("byteArray", s.Pos, scan.ErrBadLiteral)
 						}
 					}
-					for s.Bytes()[s.Pos] != ']' {
-						var v uint64
-						v, err = s.Uint64()
+					s.Pos += 4
+					result.ByteArray = nil
+				} else {
+					{
+						err = s.ArrayOpen()
 						if err != nil {
 							return result, decode.NewParseErr("byteArray", s.Pos, err)
 						}
-						result.ByteArray = append(result.ByteArray, byte(v))
 						err = s.SkipSpace()
 						if err != nil {
 							return result, decode.NewParseErr("byteArray", s.Pos, err)
@@ -794,20 +858,37 @@ func (result NativeTypes) DecodeFromStream(s *scan.Stream) (NativeTypes, error) 
 								return result, decode.NewParseErr("byteArray", s.Pos, err)
 							}
 						}
-						if s.Bytes()[s.Pos] == ',' {
-							s.Pos++
+						for s.Bytes()[s.Pos] != ']' {
+							var v uint64
+							v, err = s.Uint64()
+							if err != nil {
+								return result, decode.NewParseErr("byteArray", s.Pos, err)
+							}
+							result.ByteArray = append(result.ByteArray, byte(v))
 							err = s.SkipSpace()
 							if err != nil {
 								return result, decode.NewParseErr("byteArray", s.Pos, err)
 							}
-							continue
+							if s.Pos >= len(s.Bytes()) {
+								if err = s.ReadMore(0); err != nil {
+									return result, decode.NewParseErr("byteArray", s.Pos, err)
+								}
+							}
+							if s.Bytes()[s.Pos] == ',' {
+								s.Pos++
+								err = s.SkipSpace()
+								if err != nil {
+									return result, decode.NewParseErr("byteArray", s.Pos, err)
+								}
+								continue
+							}
+							break
 						}
-						break
+						if s.Bytes()[s.Pos] != ']' {
+							return result, decode.NewParseErr("byteArray", s.Pos, scan.ErrBadArray)
+						}
+						s.Pos++
 					}
-					if s.Bytes()[s.Pos] != ']' {
-						return result, decode.NewParseErr("byteArray", s.Pos, scan.ErrBadArray)
-					}
-					s.Pos++
 				}
 			case "createdAt":
 				err = s.ConsumeColon()
@@ -864,7 +945,7 @@ func (result NativeTypes) DecodeFromStream(s *scan.Stream) (NativeTypes, error) 
 }
 
 func (s NativeTypes) JSONSize() int {
-	size := 328
+	size := 334
 	if s.Addr.Is4() {
 		size += 15
 	} else {
@@ -895,25 +976,41 @@ func (s NativeTypes) AppendJSON(dst []byte) ([]byte, error) {
 	if dst, err = s.Addr.AppendText(dst); err != nil {
 		return dst, err
 	}
-	dst = append(dst, "\",\"blob\":\""...)
-	dst = base64.StdEncoding.AppendEncode(dst, s.Blob)
-	dst = append(dst, '"')
-	dst = append(dst, ",\"byteArray\":["...)
-	for i, b := range s.ByteArray {
-		if i > 0 {
-			dst = append(dst, ',')
-		}
-		dst = strconv.AppendUint(dst, uint64(b), 10)
+	dst = append(dst, "\",\"blob\":"...)
+	if s.Blob == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '"')
+		dst = base64.StdEncoding.AppendEncode(dst, s.Blob)
+		dst = append(dst, '"')
 	}
-	dst = append(dst, "],\"cidr\":\""...)
+	dst = append(dst, ",\"byteArray\":"...)
+	if s.ByteArray == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '[')
+		for i, b := range s.ByteArray {
+			if i > 0 {
+				dst = append(dst, ',')
+			}
+			dst = strconv.AppendUint(dst, uint64(b), 10)
+		}
+		dst = append(dst, ']')
+	}
+	dst = append(dst, ",\"cidr\":\""...)
 	if dst, err = s.Cidr.AppendText(dst); err != nil {
 		return dst, err
 	}
 	dst = append(dst, "\",\"createdAt\":\""...)
 	dst = s.CreatedAt.AppendFormat(dst, time.RFC3339Nano)
-	dst = append(dst, "\",\"hexBlob\":\""...)
-	dst = hex.AppendEncode(dst, s.HexBlob)
-	dst = append(dst, '"')
+	dst = append(dst, "\",\"hexBlob\":"...)
+	if s.HexBlob == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '"')
+		dst = hex.AppendEncode(dst, s.HexBlob)
+		dst = append(dst, '"')
+	}
 	dst = append(dst, ",\"issuedAt\":\""...)
 	dst = s.IssuedAt.AppendFormat(dst, time.RFC3339)
 	dst = append(dst, "\",\"legacyIP\":\""...)

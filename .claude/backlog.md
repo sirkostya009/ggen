@@ -70,20 +70,6 @@
   `pkg.Null[T]` probably out of scope. Mirror legacy `SQLNull*Struct` split
   in `integrationtests/sql_test.go`.
 
-- **Multi-level pointer (`**T`, …) inside slice/array elements.** Scalar
-  fields (`*****int`) decode natively (parse-first leaf + reuse/allocate
-  cascade via `pointerDepth`/`emitPointerAssign`, no encoding/json); map values
-  (`map[string]**T`) still take the `encoding/json` fallback. Slice/array
-  elements take slab fast path, assumes peeled element isn't another pointer:
-  `[]**int` → slab typed `[]*int`, pre-grow becomes `append(slab, *int{})`
-  (invalid Go, won't compile); `[3]**int` → compiles but inner scan is bare
-  `SkipValue`, every element silently nil. Fix: in the slab emitter detect
-  "ElemPointer && peeled ElemType still begins with `*`" and route per-element
-  decode through the same parse-first `pointerDepth` cascade the scalar path
-  uses (slab stays for depth-1). Coverage pinned by `TestNPtr_*` in
-  `integrationtests/pointer_test.go` (scalar fields covered; map value +
-  slice/array variants absent until this lands).
-
 - **`null` on non-pointer value kinds — accept-as-zero vs strict-reject.**
   Surfaced by the merge audit (`TestStdCompatMerge_IntentionalDivergences`).
   ggen emits a `null` peek only for pointer / slice / map / `sql.Null*` /
@@ -98,21 +84,20 @@
   value emit in `renderField`/`renderStreamField` that sets the field to its
   zero value and advances 4 — mirrors the existing pointer/slice null branch.
   Decide per ggen's strictness philosophy; (a) is the current default. Pinned as
-  divergence until decided. NOTE: `[]byte` (KindBytes) rejecting null is the
-  least defensible sub-case (sibling `[]string` accepts it) — closest to a bug.
+  divergence until decided. (`[]byte` sub-case RESOLVED — KindBytes now
+  accepts `null` → nil and marshals nil as `null`.)
 
-- **Decode-into-receiver: omitted-container key resets instead of retaining.**
-  ggen resets every container field (`X = X[:0]` / `clear(X)`) at the top of
-  `DecodeFrom`, so a slice/map whose key is ABSENT from the payload is emptied;
-  stdlib merge leaves an omitted-key field untouched. Means you can't ggen-merge
-  a scalar update while preserving a populated slice/map. Documented contract
-  (reset-at-entry, so decode never appends over carried-in data) but a real
-  merge-parity gap, pinned in `TestStdCompatMerge_IntentionalDivergences`. Fix
-  (if wanted): lazy per-key reset — reset a container only on first encounter of
-  its key, not unconditionally at entry. Bigger codegen change (per-field
-  "reset-on-first-touch" flag); weigh against the simplicity of reset-at-entry.
 
 # Tried Rejected
+
+- **Lazy per-key container reset (retain omitted slice/map keys).** Fully
+  implemented (reset emitted at each field's dispatch branch — seen machinery
+  guarantees single entry per decode; inline catch-all via `_inlineReset` flag
+  on first absorbed unknown key) and reverted same day. Reason: reset-at-entry
+  is the WANTED contract — a blank/partial payload must yield a blank slate
+  for containers while keeping their capacity; stdlib's retain-on-omit merge
+  is explicitly not a goal. Divergence stays pinned in
+  `TestStdCompatMerge_IntentionalDivergences/omitted_container_reset_vs_retain`.
 
 - **Generator emitting `go/ast` nodes instead of text.** Full rewrite on
   `ast-conversion` branch (commit `feadbba`); output byte-identical. Rejected:

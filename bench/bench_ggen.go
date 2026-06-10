@@ -448,37 +448,44 @@ func (result Node) DecodeFrom(data []byte) (Node, int, error) {
 				}
 				seenBlob = true
 				{
-					var s string
-					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("blob", i, scan.ErrExpectString)
-					}
-					{
-						ke := i + 1
-						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-							ke++
-						}
-						if ke >= len(data) {
-							return result, i, decode.NewParseErr("blob", i, scan.ErrUnterminated)
-						}
-						if data[ke] < 0x20 {
-							return result, i, decode.NewParseErr("blob", i, scan.ErrBadString)
-						}
-						if data[ke] == '"' {
-							s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-							i = ke + 1
-						} else {
-							s, i, err = scan.String(data, i)
+					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+						i += 4
+						result.Blob = nil
+					} else {
+						{
+							var s string
+							if i >= len(data) || data[i] != '"' {
+								return result, i, decode.NewParseErr("blob", i, scan.ErrExpectString)
+							}
+							{
+								ke := i + 1
+								for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+									ke++
+								}
+								if ke >= len(data) {
+									return result, i, decode.NewParseErr("blob", i, scan.ErrUnterminated)
+								}
+								if data[ke] < 0x20 {
+									return result, i, decode.NewParseErr("blob", i, scan.ErrBadString)
+								}
+								if data[ke] == '"' {
+									s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+									i = ke + 1
+								} else {
+									s, i, err = scan.String(data, i)
+									if err != nil {
+										return result, i, decode.NewParseErr("blob", i, err)
+									}
+								}
+							}
+							if cap(result.Blob) < base64.StdEncoding.DecodedLen(len(s)) {
+								result.Blob = make([]byte, 0, base64.StdEncoding.DecodedLen(len(s)))
+							}
+							result.Blob, err = base64.StdEncoding.AppendDecode(result.Blob, unsafe.Slice(unsafe.StringData(s), len(s)))
 							if err != nil {
 								return result, i, decode.NewParseErr("blob", i, err)
 							}
 						}
-					}
-					if cap(result.Blob) < base64.StdEncoding.DecodedLen(len(s)) {
-						result.Blob = make([]byte, 0, base64.StdEncoding.DecodedLen(len(s)))
-					}
-					result.Blob, err = base64.StdEncoding.AppendDecode(result.Blob, unsafe.Slice(unsafe.StringData(s), len(s)))
-					if err != nil {
-						return result, i, decode.NewParseErr("blob", i, err)
 					}
 				}
 			case "name":
@@ -1303,18 +1310,38 @@ func (result Node) DecodeFromStream(s *scan.Stream) (Node, error) {
 					return result, &validation.DuplicateKeyError{Path: []string{"blob"}}
 				}
 				seenBlob = true
-				{
-					var v string
-					v, err = s.String()
-					if err != nil {
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
 						return result, decode.NewParseErr("blob", s.Pos, err)
 					}
-					if cap(result.Blob) < base64.StdEncoding.DecodedLen(len(v)) {
-						result.Blob = make([]byte, 0, base64.StdEncoding.DecodedLen(len(v)))
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, decode.NewParseErr("blob", s.Pos, err)
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, decode.NewParseErr("blob", s.Pos, scan.ErrBadLiteral)
+						}
 					}
-					result.Blob, err = base64.StdEncoding.AppendDecode(result.Blob, unsafe.Slice(unsafe.StringData(v), len(v)))
-					if err != nil {
-						return result, decode.NewParseErr("blob", s.Pos, err)
+					s.Pos += 4
+					result.Blob = nil
+				} else {
+					{
+						var v string
+						v, err = s.String()
+						if err != nil {
+							return result, decode.NewParseErr("blob", s.Pos, err)
+						}
+						if cap(result.Blob) < base64.StdEncoding.DecodedLen(len(v)) {
+							result.Blob = make([]byte, 0, base64.StdEncoding.DecodedLen(len(v)))
+						}
+						result.Blob, err = base64.StdEncoding.AppendDecode(result.Blob, unsafe.Slice(unsafe.StringData(v), len(v)))
+						if err != nil {
+							return result, decode.NewParseErr("blob", s.Pos, err)
+						}
 					}
 				}
 			case "name":
@@ -2156,7 +2183,7 @@ func (result Node) DecodeFromStream(s *scan.Stream) (Node, error) {
 }
 
 func (s Node) JSONSize() int {
-	size := 560
+	size := 562
 	size += ((len(s.Blob) + 2) / 3) * 4
 	if n := len(s.Children); n > 0 {
 		size += n - 1
@@ -2225,9 +2252,14 @@ func (s Node) AppendJSON(dst []byte) ([]byte, error) {
 	if len(dst) > start {
 		dst = append(dst, ',')
 	}
-	dst = append(dst, "\"blob\":\""...)
-	dst = base64.StdEncoding.AppendEncode(dst, s.Blob)
-	dst = append(dst, '"')
+	dst = append(dst, "\"blob\":"...)
+	if s.Blob == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '"')
+		dst = base64.StdEncoding.AppendEncode(dst, s.Blob)
+		dst = append(dst, '"')
+	}
 	if len(dst) > start {
 		dst = append(dst, ',')
 	}

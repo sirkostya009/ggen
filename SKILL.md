@@ -221,11 +221,11 @@ Mods like `replace` and custom mods may copy string. Break zero-copy for that fi
 - Primitives: `string`, `bool`, `int*`, `uint*`, `float*`, plus `*T` for any (`null` ↔ `nil`).
   Nested ptrs `**T`/`***T`/... also native: `null` → nil outer, otherwise value parse first and missing levels alloc'd.
 - `[]T`, `map[string]V` (string keys only), `[N]T` (strict element count — mismatch → `validation.LenError`).
-- `[]*T` / `[N]*T` of structs — single slab backing, ~log(N) allocs vs N.
+- `[]*T` / `[N]*T` of structs — single slab backing, ~log(N) allocs vs N. Multi-level elements (`[]**T`, `[N]**T`) and pointer map values (`map[string]*V`, `**V`, …) decode natively through the same null/alloc cascade as scalar pointer fields.
 - Nested struct (same package: direct call; cross-package: see below).
 - Embedded struct — fields promoted to parent JSON object.
 - `any` / `interface{}` — full stdlib-compatible decode shape, plus `usenumber` for `json.Number` numbers.
-- `[]byte` — `format:base64` (default), `base64url`, `base32`, `base32hex`, `base16`/`hex`, `array`.
+- `[]byte` — `format:base64` (default), `base64url`, `base32`, `base32hex`, `base16`/`hex`, `array`. `null` ↔ `nil` (nil marshals as `null`, empty non-nil as `""`/`[]`).
 - `time.Time` — `format:RFC3339Nano` (default), `RFC3339`, `unix`, `unixmilli`, `unixmicro`, `unixnano`, other `time.X` constants, or custom layout `format:'2006-01-02'`.
 - `time.Duration` — `format:units` (default, `"1h30m"`), `sec`, `milli`, `micro`, `nano`.
 - `net.IP`, `netip.Addr`, `netip.Prefix` — text form.
@@ -286,7 +286,7 @@ Bytes-path (`DecodeFrom`) still zero-copy via `unsafe.String` into caller `data`
 
 Decoders parse values into method non-pointer receiver. Non-nil slices/maps reuse capacity, values overwritten. Non-nil pointer fields reuse the pointee (struct pointees merge omitted fields; `null` nils the field). Niche, useful for reusing capacity of slice/map/pointer fields when same object reused for multiple (not necessarily _different_) payloads.
 
-NOT 100% compatible with stdlib — ggen diverges in three ways: ALL containers are reset, regardless of presence, and an explicit `null` on a non-pointer scalar/native field ERRORS (stdlib zeroes it — only pointer/slice/map/`sql.Null*`/raw fields accept `null`). Scalars-persist-on-omit, slice-replace, null→nil for slice/map/pointer, nested-struct merge, and `*T`/`**T` reuse all match stdlib.
+NOT 100% compatible with stdlib — ggen diverges in three ways: ALL containers are reset, regardless of presence (blank payload → blank slate, capacity kept), a PRESENT map key replaces the whole map (clear+refill; stdlib merges entries into it), and an explicit `null` on a non-pointer scalar/native field ERRORS (stdlib zeroes it — only pointer/slice/map/`[]byte`/`sql.Null*`/raw fields accept `null`). Scalars-persist-on-omit, slice-replace, null→nil for slice/map/pointer, nested-struct merge, and `*T`/`**T` reuse all match stdlib.
 
 ```go
 u, _, err := existing.DecodeFrom(payload)

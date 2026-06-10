@@ -84,37 +84,44 @@ func (result base32Wrap) DecodeFrom(data []byte) (base32Wrap, int, error) {
 				}
 				seenB = true
 				{
-					var s string
-					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("b", i, scan.ErrExpectString)
-					}
-					{
-						ke := i + 1
-						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-							ke++
-						}
-						if ke >= len(data) {
-							return result, i, decode.NewParseErr("b", i, scan.ErrUnterminated)
-						}
-						if data[ke] < 0x20 {
-							return result, i, decode.NewParseErr("b", i, scan.ErrBadString)
-						}
-						if data[ke] == '"' {
-							s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-							i = ke + 1
-						} else {
-							s, i, err = scan.String(data, i)
+					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+						i += 4
+						result.B = nil
+					} else {
+						{
+							var s string
+							if i >= len(data) || data[i] != '"' {
+								return result, i, decode.NewParseErr("b", i, scan.ErrExpectString)
+							}
+							{
+								ke := i + 1
+								for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+									ke++
+								}
+								if ke >= len(data) {
+									return result, i, decode.NewParseErr("b", i, scan.ErrUnterminated)
+								}
+								if data[ke] < 0x20 {
+									return result, i, decode.NewParseErr("b", i, scan.ErrBadString)
+								}
+								if data[ke] == '"' {
+									s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+									i = ke + 1
+								} else {
+									s, i, err = scan.String(data, i)
+									if err != nil {
+										return result, i, decode.NewParseErr("b", i, err)
+									}
+								}
+							}
+							if cap(result.B) < base32.StdEncoding.DecodedLen(len(s)) {
+								result.B = make([]byte, 0, base32.StdEncoding.DecodedLen(len(s)))
+							}
+							result.B, err = base32.StdEncoding.AppendDecode(result.B, unsafe.Slice(unsafe.StringData(s), len(s)))
 							if err != nil {
 								return result, i, decode.NewParseErr("b", i, err)
 							}
 						}
-					}
-					if cap(result.B) < base32.StdEncoding.DecodedLen(len(s)) {
-						result.B = make([]byte, 0, base32.StdEncoding.DecodedLen(len(s)))
-					}
-					result.B, err = base32.StdEncoding.AppendDecode(result.B, unsafe.Slice(unsafe.StringData(s), len(s)))
-					if err != nil {
-						return result, i, decode.NewParseErr("b", i, err)
 					}
 				}
 			} else {
@@ -184,18 +191,38 @@ func (result base32Wrap) DecodeFromStream(s *scan.Stream) (base32Wrap, error) {
 					return result, &validation.DuplicateKeyError{Path: []string{"b"}}
 				}
 				seenB = true
-				{
-					var v string
-					v, err = s.String()
-					if err != nil {
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
 						return result, decode.NewParseErr("b", s.Pos, err)
 					}
-					if cap(result.B) < base32.StdEncoding.DecodedLen(len(v)) {
-						result.B = make([]byte, 0, base32.StdEncoding.DecodedLen(len(v)))
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, decode.NewParseErr("b", s.Pos, err)
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, decode.NewParseErr("b", s.Pos, scan.ErrBadLiteral)
+						}
 					}
-					result.B, err = base32.StdEncoding.AppendDecode(result.B, unsafe.Slice(unsafe.StringData(v), len(v)))
-					if err != nil {
-						return result, decode.NewParseErr("b", s.Pos, err)
+					s.Pos += 4
+					result.B = nil
+				} else {
+					{
+						var v string
+						v, err = s.String()
+						if err != nil {
+							return result, decode.NewParseErr("b", s.Pos, err)
+						}
+						if cap(result.B) < base32.StdEncoding.DecodedLen(len(v)) {
+							result.B = make([]byte, 0, base32.StdEncoding.DecodedLen(len(v)))
+						}
+						result.B, err = base32.StdEncoding.AppendDecode(result.B, unsafe.Slice(unsafe.StringData(v), len(v)))
+						if err != nil {
+							return result, decode.NewParseErr("b", s.Pos, err)
+						}
 					}
 				}
 			} else {
@@ -233,7 +260,7 @@ func (result base32Wrap) DecodeFromStream(s *scan.Stream) (base32Wrap, error) {
 }
 
 func (s base32Wrap) JSONSize() int {
-	size := 8
+	size := 10
 	size += ((len(s.B) + 4) / 5) * 8
 	return size
 }
@@ -241,9 +268,14 @@ func (s base32Wrap) JSONSize() int {
 func (s base32Wrap) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
-	dst = append(dst, "{\"b\":\""...)
-	dst = base32.StdEncoding.AppendEncode(dst, s.B)
-	dst = append(dst, '"')
+	dst = append(dst, "{\"b\":"...)
+	if s.B == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '"')
+		dst = base32.StdEncoding.AppendEncode(dst, s.B)
+		dst = append(dst, '"')
+	}
 	return append(dst, '}'), nil
 }
 

@@ -197,7 +197,9 @@ advanced in-place by every scan primitive. To capture raw span:
 **Decode-into-receiver semantics.** Receiver passed in IS merge source.
 Scalar fields persist across JSON omission (stdlib-merge shape); container
 fields reset at top of DecodeFrom so decoder never appends over
-carried-in data:
+carried-in data (deliberately unconditional — blank payload → blank slate,
+capacity kept; lazy per-key reset was implemented and reverted, see backlog
+"Tried Rejected"):
 
 - slices and `[]byte`: `if X != nil { X = X[:0] }` at entry (backing array
   reused; `make(...)` only when `X == nil`)
@@ -234,8 +236,9 @@ nil receiver allocates empty non-nil container.
 
 **`null` acceptance is kind-gated (diverges from stdlib).** ggen emits a 4-byte
 `null` peek only for: pointer (`*T`), slice (KindSlice), map (KindMap),
-`sql.Null*`, and raw-message (`json.RawMessage`/`jsontext.Value`) fields. Every
-other kind — non-pointer scalars (`int`/`bool`/`string`/`float`), `[]byte`,
+`[]byte` (KindBytes — null ↔ nil, nil marshals as `null`), `sql.Null*`, and
+raw-message (`json.RawMessage`/`jsontext.Value`) fields. Every
+other kind — non-pointer scalars (`int`/`bool`/`string`/`float`),
 `time.Time`, `time.Duration`, `net.IP`/`netip.*`, `url.URL`, `big.*`, UUID, and
 other text/number kinds — has NO null branch, so an explicit JSON `null`
 hard-errors the parse (`scan: expected string` / `invalid number` / …). stdlib
@@ -343,10 +346,15 @@ Field-introspection types render via `types.RelativeTo(s.typesPkg)`.
   also native: decode parses the leaf first then builds/reuses the chain
   (`new(new(v))` for the nil tail), encode derefs level-by-level (intermediate
   nil → `null`). No reflective fallback
-- `[]T` (slice), `map[string]V` (string-keyed only)
+- `[]T` (slice), `map[string]V` (string-keyed only; pointer values native,
+  any depth)
 - `[]*T` / `[N]*T` (slice/array of pointer-to-struct) — element pointers come
   from single backing slab (`make([]T,0,cap)` slices, `[N]T` arrays) so N
-  allocs collapse to ~log(N). Nil elements → nil pointers; encode nil → `null`
+  allocs collapse to ~log(N). Nil elements → nil pointers; encode nil → `null`.
+  Multi-level elements (`[]**T`, `[N]***T`, nested `[][]**T`) skip the slab and
+  run the scalar pointer cascade per element (`elemPtrField` → `renderField`);
+  pointer map values (`map[string]*V` / `**V` / …) decode the same way into a
+  temp then store — no `encoding/json` fallback at any depth
 - Nested struct (generate-time probing of `DecodeFrom`/`UnmarshalText`/`UnmarshalJSON` and `AppendJSON`/`AppendText`/`MarshalText`/`MarshalJSON` methods; with default-stdlib fallback)
 - Embedded struct (unnamed field) — fields promoted to parent's JSON object
 - `time.Time` — `format:unix`/`unixmilli`/`unixmicro`/`unixnano`/`RFC3339`/
@@ -356,7 +364,9 @@ Field-introspection types render via `types.RelativeTo(s.typesPkg)`.
 - `net.IP`, `netip.Addr`, `netip.Prefix` — text form. Marshal via
   `encoding.TextAppender` decode via `net.ParseIP`/`netip.ParseAddr`/`netip.ParsePrefix`
 - `[]byte` — `format:base64` (default)/`base64url`/`base32`/`base32hex`/
-  `base16`(`hex`)/`array` (JSON array of numbers)
+  `base16`(`hex`)/`array` (JSON array of numbers). `null` ↔ `nil`: decode
+  accepts `null` → nil, nil marshals as `null` (empty non-nil → `""`/`[]`);
+  no opening-quote fold (foldLeadingQuote skips KindBytes)
 - `json.RawMessage` / `jsontext.Value` — opaque span via `scan.SkipValue`,
   aliased into field. Raw passthrough on encode (`null` if empty/nil)
 - `net/url.URL` — JSON string, `url.Parse` / `encode.AppendURL`
@@ -527,7 +537,9 @@ nil`). Single-byte → `'X'`, multi-byte → `"…"...`. ~5% on struct-heavy
     directly — slice/map reserve 4 bytes (`null`) not 2; `sql.Null*` widens its
     inner constant to `max(inner, 4)`; arrays keep 2 (can't be nil). ~4% on
     Marshal but required for parity.
-22. **Slab-allocated `[]*T` / `[N]*T` decode.** Slices: one backing slab
+22. **Slab-allocated `[]*T` / `[N]*T` decode (depth-1 only).** Multi-level
+    pointer elements route through the per-element cascade instead. Slices:
+    one backing slab
     `make([]T,0,cap)`, append element pointers as `&_slab[len-1]`. Arrays:
     `make([]T,N)` (heap, exact-sized — stack `[N]T` would escape via
     `&_slab[i]`). N per-element heap allocs → ~log(N) (slice) / 1 (array). When

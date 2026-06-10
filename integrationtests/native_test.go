@@ -131,3 +131,36 @@ func TestNativeTypes_format(t *testing.T) {
 		t.Errorf("array format missing from: %s", out)
 	}
 }
+
+// JSON null on a []byte field decodes to nil (parity with sibling slice
+// kinds and stdlib), and a nil []byte marshals as `null` (stdlib v1
+// shape); empty non-nil keeps the empty-string / empty-array form.
+func TestBytes_nullRoundtrip(t *testing.T) {
+	got, _, err := NativeTypes{}.DecodeFrom([]byte(`{"blob":null,"hexBlob":null,"byteArray":null}`))
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.Blob != nil || got.HexBlob != nil || got.ByteArray != nil {
+		t.Errorf("null should decode to nil: blob=%v hex=%v arr=%v", got.Blob, got.HexBlob, got.ByteArray)
+	}
+
+	out, err := encode.MarshalString(NativeTypes{})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	for _, want := range []string{`"blob":null`, `"hexBlob":null`, `"byteArray":null`} {
+		if !strings.Contains(out, want) {
+			t.Errorf("nil []byte wire missing %s: %s", want, out)
+		}
+	}
+
+	out, err = encode.MarshalString(NativeTypes{Blob: []byte{}, HexBlob: []byte{}, ByteArray: []byte{}})
+	if err != nil {
+		t.Fatalf("marshal empty: %v", err)
+	}
+	for _, want := range []string{`"blob":""`, `"hexBlob":""`, `"byteArray":[]`} {
+		if !strings.Contains(out, want) {
+			t.Errorf("empty []byte wire missing %s: %s", want, out)
+		}
+	}
+}

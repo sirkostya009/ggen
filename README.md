@@ -214,9 +214,10 @@ non-nil slices, maps and pointer fields are reused, which can be used as an opti
 on paths where you need to repeatedly parse same object shape. A JSON `null` still nils
 a slice/map/pointer field.
 
-It is deliberitely not identical though: all containers are reset regardless of
-presence in payload (stdlib keeps them) and a JSON `null`s aimed at a non-pointer
-scalars or structs are treated as parse errors — use a pointer if you need a
+It is deliberately not identical though: all containers are reset regardless of
+presence in payload (stdlib keeps them) — a blank payload gives you a blank
+slate while keeping capacity — and a JSON `null` aimed at a non-pointer
+scalar or struct is treated as a parse error — use a pointer if you need a
 nullable scalar.
 
 ### runtime packages
@@ -450,9 +451,9 @@ The same cross-package lookup rules apply as for custom validators.
 | category  | go types                                                         | wire   | notes                                                                              |
 | --------- | ---------------------------------------------------------------- | ------ | ---------------------------------------------------------------------------------- |
 | primitive | `string`, `bool`, `int*`, `uint*`, `float*`                      | scalar | `*T` for any of these — `null` ↔ `nil`; multi-level `**T`/… also native            |
-| slice     | `[]T`                                                            | array  | nil → `null`; `[]*T` decodes into a single contiguous slab (N allocs → ~log N)     |
+| slice     | `[]T`                                                            | array  | nil → `null`; `[]*T` decodes into a single contiguous slab (N allocs → ~log N); `[]**T`/… native |
 | array     | `[N]T`                                                           | tuple  | strict element count — mismatch → `validation.LenError`; `[N]*T` uses a fixed slab |
-| map       | `map[string]V`                                                   | object | string keys only                                                                   |
+| map       | `map[string]V`                                                   | object | string keys only; `map[string]*V` / `**V` / … values decode natively, `null` ↔ `nil` |
 | struct    | named / embedded                                                 | object | embedded fields are promoted, same as `encoding/json`                              |
 | cross-pkg | foreign struct / named type                                      | varies | static method-set probe at codegen — see _cross-package interfaces_ below          |
 | alias     | `//ggen:generate type X ...` (see [type aliases](#type-aliases)) | varies | full method surface generated; strategy picked from the underlying type            |

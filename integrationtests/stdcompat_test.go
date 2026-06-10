@@ -658,8 +658,8 @@ func TestStdCompatMerge_IntentionalDivergences(t *testing.T) {
 
 	// 3. Explicit null over a NON-pointer scalar/native field: stdlib accepts it
 	//    (zeroes the field); ggen has no null-peek there and hard-errors. Only
-	//    pointer, slice, and map fields accept JSON null in ggen — for a
-	//    nullable scalar, use a pointer. (Pinned so the strict-reject behavior
+	//    pointer, slice, map, and []byte fields accept JSON null in ggen — for
+	//    a nullable scalar, use a pointer. (Pinned so the strict-reject behavior
 	//    is explicit; revisiting it is a backlog item.)
 	t.Run("scalar_null_error_vs_zero", func(t *testing.T) {
 		const payload = `{"id":null}`

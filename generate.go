@@ -482,17 +482,19 @@ func collectFieldImports(f FieldInfo, add func(string), anyString, anyValidation
 		} else {
 			crossPkgStruct(typ, f.Iface)
 		}
-	case KindSlice, KindArray:
-		// Slice / array elements may themselves be cross-pkg structs
-		// (json.Marshal / json.Unmarshal fallback in
-		// emitSliceElement and emitByteSliceRead).
-		if f.ElemKind == KindStruct {
-			crossPkgStruct(f.ElemType, f.ElemIface)
-		}
-	case KindMap:
-		// map[K]V where V is a cross-pkg struct also takes the
-		// json.Unmarshal fallback (renderMap KindStruct branch).
-		if f.ElemKind == KindStruct {
+	case KindSlice, KindArray, KindMap:
+		// Pointer elements / map values decode through the native cascade —
+		// only the LEAF kind drives imports (mirrors the multi-level scalar
+		// pointer block above). Non-pointer cross-pkg struct elements keep
+		// the json.Marshal / json.Unmarshal fallback in emitSliceElement /
+		// renderMap.
+		if et, eDepth := elemPtrType(f); eDepth > 0 {
+			leaf := elemPtrField(f, f.JSONName)
+			leaf.Pointer = false
+			leaf.PointeeType = ""
+			_, leaf.GoType = pointerDepth(et)
+			collectFieldImports(leaf, add, anyString, anyValidation, anyBytes, anyRequired)
+		} else if f.ElemKind == KindStruct {
 			crossPkgStruct(f.ElemType, f.ElemIface)
 		}
 	case KindAny:
@@ -1386,6 +1388,13 @@ dst = append(dst, '"')
 // Inlines the stdlib AppendEncode call between quote bytes — the
 // previously-helper-wrapped versions saved no work over the inlined form.
 func renderAppendBytes(b *bytes.Buffer, f FieldInfo, ref string) {
+	// nil []byte → null (stdlib v1 parity; decode accepts null → nil).
+	fmt.Fprintf(b, "if %s == nil {\ndst = append(dst, \"null\"...)\n} else {\n", ref)
+	renderAppendBytesValue(b, f, ref)
+	b.WriteString("}\n")
+}
+
+func renderAppendBytesValue(b *bytes.Buffer, f FieldInfo, ref string) {
 	switch f.Format {
 	case "", "base64":
 		fmt.Fprintf(b, "dst = append(dst, '\"')\ndst =base64.StdEncoding.AppendEncode(dst, %s)\ndst =append(dst, '\"')\n", ref)
@@ -1681,18 +1690,7 @@ func foldLeadingQuote(f FieldInfo, ref, prefix string) (newPrefix, code string, 
 dst = append(dst, '"')
 `, ref), true
 	case KindBytes:
-		switch f.Format {
-		case "", "base64":
-			return prefix + `"`, fmt.Sprintf("dst = base64.StdEncoding.AppendEncode(dst, %s)\ndst =append(dst, '\"')\n", ref), true
-		case "base64url":
-			return prefix + `"`, fmt.Sprintf("dst = base64.URLEncoding.AppendEncode(dst, %s)\ndst =append(dst, '\"')\n", ref), true
-		case "base32":
-			return prefix + `"`, fmt.Sprintf("dst = base32.StdEncoding.AppendEncode(dst, %s)\ndst =append(dst, '\"')\n", ref), true
-		case "base32hex":
-			return prefix + `"`, fmt.Sprintf("dst = base32.HexEncoding.AppendEncode(dst, %s)\ndst =append(dst, '\"')\n", ref), true
-		case "base16", "hex":
-			return prefix + `"`, fmt.Sprintf("dst = hex.AppendEncode(dst, %s)\ndst =append(dst, '\"')\n", ref), true
-		}
+		// No fold: a nil []byte emits `null` (no opening quote).
 	case KindURL:
 		// encode.AppendURL replicates url.URL.String semantics with
 		// byte-append — zero alloc (the stdlib AppendBinary internally
@@ -1806,21 +1804,22 @@ func sizeContribKind(f FieldInfo, ref string) (int, string) {
 	case KindMap:
 		return sizeMapContrib(f, ref)
 	case KindBytes:
+		// The 4-byte const covers the brackets/quotes AND the nil-as-null
+		// case (nil []byte marshals as `null`).
 		switch f.Format {
 		case "array":
 			// JSON array of numbers: each byte → up to 3 digits + comma,
-			// minus 1 for missing trailing comma. Upper-bound with *4 and
-			// the +2 const covers `[` + `]`.
-			return 2, fmt.Sprintf("size += len(%s)*4\n", ref)
+			// minus 1 for missing trailing comma. Upper-bound with *4.
+			return 4, fmt.Sprintf("size += len(%s)*4\n", ref)
 		case "base16", "hex":
 			// Exactly 2× input.
-			return 2, fmt.Sprintf("size += len(%s)*2\n", ref)
+			return 4, fmt.Sprintf("size += len(%s)*2\n", ref)
 		case "base32", "base32hex":
 			// 8/5 of input rounded up to a block of 8. ((n+4)/5)*8.
-			return 2, fmt.Sprintf("size += ((len(%s)+4)/5)*8\n", ref)
+			return 4, fmt.Sprintf("size += ((len(%s)+4)/5)*8\n", ref)
 		}
 		// base64 (default) / base64url: ((n+2)/3)*4.
-		return 2, fmt.Sprintf("size += ((len(%s)+2)/3)*4\n", ref)
+		return 4, fmt.Sprintf("size += ((len(%s)+2)/3)*4\n", ref)
 	case KindTime:
 		return timeFormatSize(f.Format), ""
 	case KindDuration:
@@ -1887,33 +1886,37 @@ func sizeSliceContrib(f FieldInfo, ref string, depth int) (int, string) {
 	b := getSmall()
 	defer putSmall(b)
 	fmt.Fprintf(b, "if n := len(%s); n > 0 { size += n - 1 }\n", ref)
-	switch f.ElemKind {
-	case KindString:
+	switch {
+	case f.ElemPointer:
+		// Pointer element (any depth): nil at any level budgets `null`
+		// (4 bytes); a full chain budgets the deref'd leaf. sizeContrib's
+		// Pointer ladder emits both.
+		leafN, leafCode := sizeContrib(elemPtrField(f, f.JSONName+"[]"), fmt.Sprintf("%s[%s]", ref, ivar))
+		fmt.Fprintf(b, "for %s := range %s {\n", ivar, ref)
+		if leafN > 0 {
+			fmt.Fprintf(b, "size += %d\n", leafN)
+		}
+		b.WriteString(leafCode)
+		b.WriteString("}\n")
+	case f.ElemKind == KindString:
 		fmt.Fprintf(b, "for %s := range %s { size += len(%s[%s])*%d + %d }\n",
 			ivar, ref, ref, ivar, strMult(f.HTMLEscape), sizeStrPad)
-	case KindBool:
+	case f.ElemKind == KindBool:
 		fmt.Fprintf(b, "size += len(%s) * %d\n", ref, sizeBool)
-	case KindInt, KindInt64, KindInt8, KindInt16, KindInt32:
+	case f.ElemKind == KindInt, f.ElemKind == KindInt64, f.ElemKind == KindInt8, f.ElemKind == KindInt16, f.ElemKind == KindInt32:
 		fmt.Fprintf(b, "size += len(%s) * %d\n", ref, sizeInt)
-	case KindUint, KindUint64, KindUint8, KindUint16, KindUint32:
+	case f.ElemKind == KindUint, f.ElemKind == KindUint64, f.ElemKind == KindUint8, f.ElemKind == KindUint16, f.ElemKind == KindUint32:
 		fmt.Fprintf(b, "size += len(%s) * %d\n", ref, sizeUint)
-	case KindFloat32, KindFloat64:
+	case f.ElemKind == KindFloat32, f.ElemKind == KindFloat64:
 		fmt.Fprintf(b, "size += len(%s) * %d\n", ref, sizeFloat)
-	case KindStruct:
+	case f.ElemKind == KindStruct:
 		if isGenerated(f.ElemType) || f.ElemIface.JSONSize {
-			if f.ElemPointer {
-				// `[]*T` / `[N]*T`: nil elements contribute `null` (4 bytes),
-				// non-nil deref-and-call.
-				fmt.Fprintf(b, "for %s := range %s {\nif %s[%s] == nil { size += 4 } else { size += (*%s[%s]).JSONSize() }\n}\n",
-					ivar, ref, ref, ivar, ref, ivar)
-			} else {
-				fmt.Fprintf(b, "for %s := range %s { size += %s[%s].JSONSize() }\n",
-					ivar, ref, ref, ivar)
-			}
+			fmt.Fprintf(b, "for %s := range %s { size += %s[%s].JSONSize() }\n",
+				ivar, ref, ref, ivar)
 		} else {
 			fmt.Fprintf(b, "size += len(%s) * 128\n", ref)
 		}
-	case KindSlice, KindArray:
+	case f.ElemKind == KindSlice, f.ElemKind == KindArray:
 		fmt.Fprintf(b, "for %s := range %s {\n", ivar, ref)
 		innerN, innerCode := sizeSliceContrib(peelSliceField(f), fmt.Sprintf("%s[%s]", ref, ivar), depth+1)
 		if innerN > 0 {
@@ -1945,10 +1948,44 @@ func sizeMapContrib(f FieldInfo, ref string) (int, string) {
 	mult := strMult(f.HTMLEscape)
 	// Try to lift the value contribution out of the loop when it's a
 	// constant per-entry size — saves one map iteration over keys-only.
-	if v, ok := constSizePerEntry(f.ElemKind, f.Format); ok {
+	_, eDepth := elemPtrType(f)
+	if v, ok := constSizePerEntry(f.ElemKind, f.Format); ok && eDepth == 0 {
 		fmt.Fprintf(b, "size += len(%s) * %d\n", ref, perEntryFixed+v)
 		fmt.Fprintf(b, "for k := range %s { size += len(k) * %d }\n", ref, mult)
 		// nil-map → "null" (4) is wider than `{}` (2); reserve max.
+		return 4, b.String()
+	}
+
+	if eDepth > 0 {
+		// Pointer value (any depth): sizeContrib's Pointer ladder budgets
+		// `null` per nil level and the deref'd leaf otherwise.
+		leafN, leafCode := sizeContrib(elemPtrField(f, f.JSONName+".value"), "v")
+		fmt.Fprintf(b, "size += len(%s) * %d\n", ref, perEntryFixed)
+		fmt.Fprintf(b, "for k, v := range %s {\n", ref)
+		fmt.Fprintf(b, "size += len(k) * %d\n", mult)
+		if leafN > 0 {
+			fmt.Fprintf(b, "size += %d\n", leafN)
+		}
+		b.WriteString(leafCode)
+		b.WriteString("}\n")
+		return 4, b.String()
+	}
+
+	// Unknown / composite value kinds (nested slice/map, KindBytes,
+	// non-generated structs, …) never read `v` in their flat fallback —
+	// emit a keys-only loop so the generated code compiles (`v` would be
+	// declared and unused).
+	usesV := false
+	switch f.ElemKind {
+	case KindString, KindBigInt, KindBigRat,
+		KindNetIP, KindNetipAddr, KindNetipPrefix, KindURL:
+		usesV = true
+	case KindStruct:
+		usesV = isGenerated(f.ElemType) || f.ElemIface.JSONSize
+	}
+	if !usesV {
+		fmt.Fprintf(b, "size += len(%s) * %d\n", ref, perEntryFixed+128)
+		fmt.Fprintf(b, "for k := range %s { size += len(k) * %d }\n", ref, mult)
 		return 4, b.String()
 	}
 
@@ -2052,14 +2089,27 @@ func emitAppendSlice(b *bytes.Buffer, f FieldInfo, ref string, depth int) {
 // emits in emitAppendSlice so the per-iteration `if i > 0` check is gone.
 func emitSliceElement(b *bytes.Buffer, f FieldInfo, vref string, depth int) {
 	if f.ElemPointer {
-		// nil pointer element → null. Else emit as if it were a value
-		// (Go auto-derefs the pointer for value-receiver method calls).
-		fmt.Fprintf(b, "if %s == nil {\ndst = append(dst, \"null\"...)\n} else {\n", vref)
-		// Recurse with ElemPointer cleared on a copy of f so the nested
-		// emit doesn't re-trigger the nil-check.
+		// nil at any pointer level → null; only a fully-allocated chain
+		// reaches the leaf. One flat `else if` ladder, one rung per level
+		// (depth-1 `[]*T` degenerates to the plain nil-check), then recurse
+		// on the fully-deref'd leaf with the pointer levels cleared.
+		_, ptrDepth := elemPtrType(f)
+		for k := 0; k < ptrDepth; k++ {
+			kw := "if"
+			if k > 0 {
+				kw = "} else if"
+			}
+			fmt.Fprintf(b, "%s %s == nil {\ndst = append(dst, \"null\"...)\n", kw, derefStr(vref, k))
+		}
+		b.WriteString("} else {\n")
 		nf := f
 		nf.ElemPointer = false
-		emitSliceElement(b, nf, "(*"+vref+")", depth)
+		_, nf.ElemType = pointerDepth(f.ElemType)
+		nf.ElemKind = resolveKind(nf.ElemType)
+		if nf.ElemKind == KindArray {
+			nf.ElemArrayLen = arrayLenFromType(nf.ElemType)
+		}
+		emitSliceElement(b, nf, derefStr(vref, ptrDepth), depth)
 		b.WriteString("}\n")
 		return
 	}
@@ -2122,6 +2172,13 @@ dst =append(dst, '"') } else { dst = append(dst, ",\""...) }
 dst = %[2]s(dst, k)
 dst = append(dst, ':')
 `, ref, appendStr)
+	if _, eDepth := elemPtrType(f); eDepth > 0 {
+		// Pointer value (any depth): nil at any level → null, full chain →
+		// leaf emit. renderAppendValue's Pointer ladder handles both.
+		renderAppendValue(b, elemPtrField(f, f.JSONName+".value"), "v")
+		b.WriteString("}\n}\ndst = append(dst, '}')\n}\n")
+		return
+	}
 	switch f.ElemKind {
 	case KindString:
 		// Two separate append lines so coalesce sees the `'"'` and merges
@@ -2440,6 +2497,8 @@ func inlineScanString(b *bytes.Buffer, posIn, dst, posOut, field string) {
 // naturally (recursive DecodeFrom on a nested struct passes the existing
 // value as the receiver of the next call); containers MUST be reset so
 // the new decoder never appends over data carried in from the receiver.
+// Deliberately UNCONDITIONAL (not per-present-key): a blank payload
+// yields a blank slate while keeping container capacity for reuse.
 //
 //   - slices, []byte (KindBytes), and the inline catch-all map all get
 //     `if X != nil { X = X[:0] }` (or `clear(X)` for maps) so existing
@@ -2741,6 +2800,26 @@ func renderMap(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	inlineSkipWS(b, posVar)
 
 	mapTarget := fmt.Sprintf("%s[mk]", ref)
+	if et, eDepth := elemPtrType(f); eDepth > 0 {
+		// Pointer value (any depth) — same parse-first cascade scalar
+		// pointer fields use, decoded into a fresh temp then stored.
+		// Elem rules ride inside the cascade.
+		fmt.Fprintf(b, "var mv %s\n", et)
+		renderField(b, elemPtrField(f, f.JSONName+".value"), "mv", posVar)
+		fmt.Fprintf(b, "%s = mv\n", mapTarget)
+		inlineSkipWS(b, posVar)
+		fmt.Fprintf(b, `		if %[1]s < len(data) && data[%[1]s] == ',' { %[1]s++; `, posVar)
+		inlineSkipWS(b, posVar)
+		fmt.Fprintf(b, `			continue }
+		break
+	}
+	if %[1]s >= len(data) || data[%[1]s] != '}' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrBadObject) }
+	%[1]s++
+}
+}
+`, posVar, field)
+		return
+	}
 	switch f.ElemKind {
 	case KindString:
 		b.WriteString("var mv string\n")
@@ -2826,8 +2905,19 @@ if err != nil { return result, %[1]s, decode.NewParseErr(%[3]s, %[1]s, err) }
 `, posVar, field)
 }
 
-// renderBytes emits bytes decode for (base64/hex/array).
+// renderBytes emits bytes decode for (base64/hex/array). JSON `null` →
+// nil out the field — parity with the sibling slice/map kinds (stdlib
+// v1/v2 accept null here too).
 func renderBytes(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+	b.WriteString("{\n")
+	inlineNullPeek(b, posVar)
+	fmt.Fprintf(b, "%s = nil\n", ref)
+	b.WriteString("} else {\n")
+	renderBytesValue(b, f, ref, posVar)
+	b.WriteString("}\n}\n")
+}
+
+func renderBytesValue(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	field := fieldLit(f)
 	if f.Format == "array" {
 		b.WriteString("{\n")
@@ -3570,6 +3660,69 @@ func pointerDepth(goType string) (int, string) {
 	return depth, goType
 }
 
+// elemPtrType returns the full Go type of a slice/array/map element
+// including every pointer level, plus the total pointer depth. The parse
+// layer unwraps ONE `*` into ElemPointer for slices/arrays (and alias
+// containers); map values and nested-container peels keep all their
+// stars on ElemType. depth==0 means the element is not a pointer.
+func elemPtrType(f FieldInfo) (string, int) {
+	et := f.ElemType
+	if f.ElemPointer {
+		et = "*" + et
+	}
+	depth, _ := pointerDepth(et)
+	return et, depth
+}
+
+// elemPtrField synthesizes the FieldInfo a pointer-typed element decodes
+// through — the same parse-first cascade scalar pointer fields use
+// (renderField / renderStreamField / renderAppendValue / sizeContrib all
+// dispatch on Pointer+GoType). Elem-level rules ride along so built-ins
+// run on the deref'd leaf and `@Func` customs on the pointer itself.
+// jsonName picks the validation-path suffix ("x[]" for elems, "x.value"
+// for map values).
+func elemPtrField(f FieldInfo, jsonName string) FieldInfo {
+	et, _ := elemPtrType(f)
+	_, leafType := pointerDepth(et)
+	pf := FieldInfo{
+		GoType:      et,
+		Pointer:     true,
+		PointeeType: et[1:],
+		Kind:        resolveKind(leafType),
+		JSONName:    jsonName,
+		Format:      f.Format,
+		HTMLEscape:  f.HTMLEscape,
+		MultiErr:    f.MultiErr,
+		NoValidate:  f.NoValidate,
+		AllowDups:   f.AllowDups,
+		UseNumber:   f.UseNumber,
+		Validation:  f.ElemValidation,
+		Mods:        f.ElemMods,
+		Iface:       f.ElemIface,
+	}
+	// A container leaf (`[]**[]int`, `map[string]**[2]T`, …) needs its own
+	// Elem* populated — the parse layer only fills these for the outermost
+	// container.
+	switch pf.Kind {
+	case KindSlice, KindArray:
+		pf.ArrayLen = arrayLenFromType(leafType)
+		elem, kind, _ := stripOneContainer(leafType)
+		if strings.HasPrefix(elem, "*") {
+			pf.ElemPointer = true
+			elem = elem[1:]
+			kind = resolveKind(elem)
+		}
+		pf.ElemType, pf.ElemKind = elem, kind
+		if kind == KindArray {
+			pf.ElemArrayLen = arrayLenFromType(elem)
+		}
+	case KindMap:
+		pf.ElemType = strings.TrimPrefix(leafType, "map[string]")
+		pf.ElemKind = resolveKind(pf.ElemType)
+	}
+	return pf
+}
+
 // derefStr returns ref dereferenced k times, parenthesized:
 // derefStr("x",0)=="x", derefStr("x",1)=="(*x)", derefStr("x",2)=="(*(*x))".
 func derefStr(ref string, k int) string {
@@ -3836,16 +3989,29 @@ func renderSlice(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 func peelSliceField(f FieldInfo) FieldInfo {
 	innerGoType := f.ElemType
 	innerElem, innerKind, innerLen := stripOneContainer(innerGoType)
+	// Mirror the parse layer: one leading `*` on the peeled element type
+	// unwraps into ElemPointer (slab fast path / pointer cascade); any
+	// remaining stars stay on ElemType for the multi-level route.
+	innerPointer := false
+	if strings.HasPrefix(innerElem, "*") {
+		innerPointer = true
+		innerElem = innerElem[1:]
+		innerKind = resolveKind(innerElem)
+		if innerKind == KindArray {
+			innerLen = arrayLenFromType(innerElem)
+		}
+	}
 	inner := FieldInfo{
-		GoType:     innerGoType,
-		Kind:       f.ElemKind, // KindSlice or KindArray — the layer we're now inside
-		ArrayLen:   f.ElemArrayLen,
-		ElemType:   innerElem,
-		ElemKind:   innerKind,
-		JSONName:   f.JSONName + "[]",
-		MultiErr:   f.MultiErr,
-		NoValidate: f.NoValidate,
-		AllowDups:  f.AllowDups,
+		GoType:      innerGoType,
+		Kind:        f.ElemKind, // KindSlice or KindArray — the layer we're now inside
+		ArrayLen:    f.ElemArrayLen,
+		ElemPointer: innerPointer,
+		ElemType:    innerElem,
+		ElemKind:    innerKind,
+		JSONName:    f.JSONName + "[]",
+		MultiErr:    f.MultiErr,
+		NoValidate:  f.NoValidate,
+		AllowDups:   f.AllowDups,
 		// HintLen=-1 means "unset" — preallocCap then falls through to
 		// len/minlen/kind-based default. Without this the zero-value 0
 		// reads as "user opt-out (no prealloc)" and the inner slice gets
@@ -3907,6 +4073,12 @@ func emitByteArrayRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth i
 func emitByteSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth int) {
 	isArray := f.Kind == KindArray
 	arrayN := f.ArrayLen
+	// Multi-level pointer element (`[]**T`, `[N]***T`, …): no slab — each
+	// element runs the same parse-first cascade scalar pointer fields use
+	// (renderField's Pointer branch: null peek, leaf temp, new(…) chain).
+	// Depth-1 `[]*T` keeps the slab fast path.
+	_, elemDepth := elemPtrType(f)
+	mptr := elemDepth >= 2
 	// kvar threads through the caller's position variable directly — no
 	// separate `kN := posVar` alias. The whole nest of slice/array decoders
 	// shares one position counter (typically `j` at the top level), each
@@ -3937,12 +4109,12 @@ func emitByteSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth i
 		// is still a heap alloc, but copied via the stack frame first.
 		// `make([]E, N)` skips the stack hop and avoids the cache-line
 		// thrash for large E.
-		if f.ElemPointer {
+		if f.ElemPointer && !mptr {
 			fmt.Fprintf(b, "%s := make([]%s, %d)\n", slabVar, f.ElemType, arrayN)
 		}
 	} else {
 		sCap, slCap := preallocCap(f)
-		if f.ElemPointer {
+		if f.ElemPointer && !mptr {
 			fmt.Fprintf(b, "var %s []%s\n", slabVar, f.ElemType)
 		}
 		// dst is decode-into-receiver: either nil (fresh) or already [:0]'d
@@ -3957,7 +4129,7 @@ func emitByteSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth i
 		} else {
 			fmt.Fprintf(b, "if %s == nil { %s = %s{} }\n", dst, dst, f.GoType)
 		}
-		if f.ElemPointer {
+		if f.ElemPointer && !mptr {
 			fmt.Fprintf(b, "%s = make([]%s, 0, %d)\n", slabVar, f.ElemType, slCap)
 		}
 		fmt.Fprintf(b, "}\n")
@@ -3985,8 +4157,10 @@ func emitByteSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth i
 			ivar, arrayN,
 			arrayLenErr(f.JSONName, arrayN, ivar))
 	}
-	if f.ElemPointer {
+	if f.ElemPointer && !mptr {
 		// `null` element → nil pointer. Skip the parse + slab work.
+		// (Multi-level elements skip this — the pointer cascade carries
+		// its own null peek.)
 		inlineNullPeek(b, kvar)
 		if isArray {
 			fmt.Fprintf(b, "%s[%s] = nil\n", dst, ivar)
@@ -4003,6 +4177,13 @@ func emitByteSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth i
 	// slice/slab here so the slot exists before scan writes into it.
 	var target string
 	switch {
+	case isArray && mptr:
+		target = fmt.Sprintf("%s[%s]", dst, ivar)
+	case mptr:
+		// Pointer cascade assigns the chain head into the slot directly;
+		// pre-grow with nil.
+		fmt.Fprintf(b, "%s = append(%s, nil)\n", dst, dst)
+		target = fmt.Sprintf("%s[len(%s)-1]", dst, dst)
 	case isArray && f.ElemPointer:
 		target = fmt.Sprintf("%s[%s]", slabVar, ivar)
 	case isArray:
@@ -4018,68 +4199,74 @@ func emitByteSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth i
 	}
 	field := fieldLit(f)
 	errCheck := fmt.Sprintf("if err != nil { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, err) }\n", kvar, field)
-	switch f.ElemKind {
-	case KindString:
-		inlineScanString(b, kvar, target, kvar, field)
-	case KindBool:
-		fmt.Fprintf(b, "%s, %s, err = scan.Bool(data, %s)\n", target, kvar, kvar)
-		b.WriteString(errCheck)
-	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
-		castFn := ""
-		if f.ElemType != "int64" {
-			castFn = f.ElemType
-		}
-		inlineScanInt64(b, kvar, target, castFn, field)
-	case KindUint, KindUint8, KindUint16, KindUint32, KindUint64:
-		castFn := ""
-		if f.ElemType != "uint64" {
-			castFn = f.ElemType
-		}
-		inlineScanUint64(b, kvar, target, castFn, field)
-	case KindFloat32, KindFloat64:
-		if f.ElemKind == KindFloat64 {
-			fmt.Fprintf(b, "%s, %s, err = scan.Float64(data, %s)\n", target, kvar, kvar)
+	if mptr {
+		// Elem rules ride inside the cascade (built-ins on the leaf temp);
+		// no slab, no post-decode mods/validation here.
+		renderField(b, elemPtrField(f, f.JSONName+"[]"), target, kvar)
+	} else {
+		switch f.ElemKind {
+		case KindString:
+			inlineScanString(b, kvar, target, kvar, field)
+		case KindBool:
+			fmt.Fprintf(b, "%s, %s, err = scan.Bool(data, %s)\n", target, kvar, kvar)
 			b.WriteString(errCheck)
-		} else {
-			b.WriteString("var fv float64\n")
-			fmt.Fprintf(b, "fv, %s, err = scan.Float64(data, %s)\n", kvar, kvar)
-			b.WriteString(errCheck)
-			fmt.Fprintf(b, "%s = float32(fv)\n", target)
-		}
-	case KindStruct:
-		if directStruct {
-			// DecodeFrom now takes data[i:] and returns bytes consumed.
-			fmt.Fprintf(b, `{
+		case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
+			castFn := ""
+			if f.ElemType != "int64" {
+				castFn = f.ElemType
+			}
+			inlineScanInt64(b, kvar, target, castFn, field)
+		case KindUint, KindUint8, KindUint16, KindUint32, KindUint64:
+			castFn := ""
+			if f.ElemType != "uint64" {
+				castFn = f.ElemType
+			}
+			inlineScanUint64(b, kvar, target, castFn, field)
+		case KindFloat32, KindFloat64:
+			if f.ElemKind == KindFloat64 {
+				fmt.Fprintf(b, "%s, %s, err = scan.Float64(data, %s)\n", target, kvar, kvar)
+				b.WriteString(errCheck)
+			} else {
+				b.WriteString("var fv float64\n")
+				fmt.Fprintf(b, "fv, %s, err = scan.Float64(data, %s)\n", kvar, kvar)
+				b.WriteString(errCheck)
+				fmt.Fprintf(b, "%s = float32(fv)\n", target)
+			}
+		case KindStruct:
+			if directStruct {
+				// DecodeFrom now takes data[i:] and returns bytes consumed.
+				fmt.Fprintf(b, `{
 var _n int
 %[1]s, _n, err = %[1]s.DecodeFrom(data[%[2]s:])
 %[2]s += _n
 }
 `, target, kvar)
-			b.WriteString(nestedDecodeErrCheck(fieldLit(f), f.MultiErr, true))
-		} else {
-			fmt.Fprintf(b, "%s, err = scan.SkipValue(data, %s)\n", kvar, kvar)
-			b.WriteString(bytesErrCheck(fieldLit(f), kvar))
+				b.WriteString(nestedDecodeErrCheck(fieldLit(f), f.MultiErr, true))
+			} else {
+				fmt.Fprintf(b, "%s, err = scan.SkipValue(data, %s)\n", kvar, kvar)
+				b.WriteString(bytesErrCheck(fieldLit(f), kvar))
+			}
+		case KindSlice, KindArray:
+			// Nested container — recurse, peeling one outer [] / [N] off.
+			// The recursive emit writes into target (the slot itself).
+			emitByteSliceRead(b, peelSliceField(f), target, kvar, depth+1)
 		}
-	case KindSlice, KindArray:
-		// Nested container — recurse, peeling one outer [] / [N] off.
-		// The recursive emit writes into target (the slot itself).
-		emitByteSliceRead(b, peelSliceField(f), target, kvar, depth+1)
-	}
-	if len(f.ElemMods) > 0 {
-		renderMods(b, f.ElemMods, target, f.ElemType, f.ElemKind)
-	}
-	if len(f.ElemValidation) > 0 {
-		renderValidationOn(b, f.ElemValidation, target, f.JSONName+"[]", f.ElemKind, f.MultiErr, "i")
+		if len(f.ElemMods) > 0 {
+			renderMods(b, f.ElemMods, target, f.ElemType, f.ElemKind)
+		}
+		if len(f.ElemValidation) > 0 {
+			renderValidationOn(b, f.ElemValidation, target, f.JSONName+"[]", f.ElemKind, f.MultiErr, "i")
+		}
 	}
 	switch {
-	case isArray && f.ElemPointer:
+	case isArray && f.ElemPointer && !mptr:
 		// Slab slot already decoded in-place; publish its address.
 		fmt.Fprintf(b, "%s[%s] = &%s[%s]\n", dst, ivar, slabVar, ivar)
 		fmt.Fprintf(b, "%s++\n", ivar)
 	case isArray:
-		// dst[ivar] already decoded in-place.
+		// dst[ivar] already decoded in-place (slot decode or pointer cascade).
 		fmt.Fprintf(b, "%s++\n", ivar)
-	case f.ElemPointer:
+	case f.ElemPointer && !mptr:
 		// Slab tail decoded in-place via append+index above; publish addr.
 		fmt.Fprintf(b, "%s = append(%s, &%s[len(%s)-1])\n", dst, dst, slabVar, slabVar)
 	default:
@@ -4304,6 +4491,22 @@ err = s.SkipSpace()
 	_ = posVar
 
 	mapTarget := fmt.Sprintf("%s[mk]", ref)
+	if et, eDepth := elemPtrType(f); eDepth > 0 {
+		// Pointer value (any depth) — same cascade as the bytes path.
+		fmt.Fprintf(b, "var mv %s\n", et)
+		b.WriteString(renderStreamField(elemPtrField(f, f.JSONName+".value"), "mv", posVar))
+		fmt.Fprintf(b, "%s = mv\n", mapTarget)
+		fmt.Fprintf(b, `		err = s.SkipSpace()
+		%[1]s%[3]sif s.Bytes()[s.Pos] == ',' { s.Pos++; err = s.SkipSpace(); %[1]scontinue }
+		break
+	}
+	if s.Bytes()[s.Pos] != '}' { %[2]s }
+	s.Pos++
+}
+}
+`, chk, badObj, rm)
+		return
+	}
 	switch f.ElemKind {
 	case KindString:
 		fmt.Fprintf(b, `var mv string
@@ -4442,6 +4645,23 @@ func nestedDecodeErrCheck(field string, multierr, bytesPath bool) string {
 // --- stream native-type renderers ---
 
 func renderStreamBytes(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+	field := fieldLit(f)
+	rm := streamReadMore(field, "0", false)
+	rmKi := strings.Replace(rm, "if s.Pos >=", "if s.Pos+ki >=", 1)
+	// `null` → nil out the field (see renderBytes).
+	fmt.Fprintf(b, `%[3]sif s.Bytes()[s.Pos] == 'n' {
+	for ki := 1; ki < 4; ki++ {
+		%[4]sif s.Bytes()[s.Pos+ki] != "null"[ki] { return result, decode.NewParseErr(%[2]s, s.Pos, scan.ErrBadLiteral) }
+	}
+	s.Pos += 4
+	%[1]s = nil
+} else {
+`, ref, field, rm, rmKi)
+	renderStreamBytesValue(b, f, ref, posVar)
+	b.WriteString("}\n")
+}
+
+func renderStreamBytesValue(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	_ = posVar // stream-path uses s.Pos directly
 	field := fieldLit(f)
 	chk := streamErrCheck(field)
@@ -5027,6 +5247,10 @@ func emitStreamSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth
 	_ = posVar // stream-path uses s.Pos directly
 	isArray := f.Kind == KindArray
 	arrayN := f.ArrayLen
+	// Multi-level pointer element — same cascade route as the bytes path
+	// (see emitByteSliceRead); slab stays depth-1 only.
+	_, elemDepth := elemPtrType(f)
+	mptr := elemDepth >= 2
 	ivar := fmt.Sprintf("idx%d", depth)
 	slabVar := fmt.Sprintf("slab%d", depth)
 	field := fieldLit(f)
@@ -5050,7 +5274,7 @@ func emitStreamSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth
 %[1]s%[2]s`, chk, rm)
 	if isArray {
 		fmt.Fprintf(b, "var %s int\n", ivar)
-		if f.ElemPointer {
+		if f.ElemPointer && !mptr {
 			fmt.Fprintf(b, "%s := make([]%s, %d)\n", slabVar, f.ElemType, arrayN)
 		}
 	} else {
@@ -5059,7 +5283,7 @@ func emitStreamSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth
 		// at the top of DecodeFromStream (existing backing kept for reuse).
 		// Only allocate when nil; otherwise the [:0]'d slice serves as the
 		// append target and re-uses the caller's backing array.
-		if f.ElemPointer {
+		if f.ElemPointer && !mptr {
 			fmt.Fprintf(b, "var %s []%s\n", slabVar, f.ElemType)
 		}
 		makeExpr := fmt.Sprintf("%s{}", f.GoType)
@@ -5071,7 +5295,7 @@ func emitStreamSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth
 } else {
 	if %[1]s == nil { %[1]s = %[3]s }
 `, dst, f.GoType, makeExpr)
-		if f.ElemPointer {
+		if f.ElemPointer && !mptr {
 			fmt.Fprintf(b, "%s = make([]%s, 0, %d)\n", slabVar, f.ElemType, slCap)
 		}
 		b.WriteString("}\n")
@@ -5085,8 +5309,9 @@ func emitStreamSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth
 			ivar, arrayN,
 			arrayLenErr(f.JSONName, arrayN, ivar))
 	}
-	if f.ElemPointer {
+	if f.ElemPointer && !mptr {
 		// `null` element → nil pointer. Skip the parse + slab work.
+		// (Multi-level elements: the pointer cascade has its own null peek.)
 		nilAssign := fmt.Sprintf("%s = append(%s, nil)\n", dst, dst)
 		if isArray {
 			nilAssign = fmt.Sprintf("%s[%s] = nil\n%s++\n", dst, ivar, ivar)
@@ -5106,6 +5331,11 @@ func emitStreamSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth
 	// slice/slab here so the slot exists before scan writes into it.
 	var target string
 	switch {
+	case isArray && mptr:
+		target = fmt.Sprintf("%s[%s]", dst, ivar)
+	case mptr:
+		fmt.Fprintf(b, "%s = append(%s, nil)\n", dst, dst)
+		target = fmt.Sprintf("%s[len(%s)-1]", dst, dst)
 	case isArray && f.ElemPointer:
 		target = fmt.Sprintf("%s[%s]", slabVar, ivar)
 	case isArray:
@@ -5117,65 +5347,71 @@ func emitStreamSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth
 		fmt.Fprintf(b, "%s = append(%s, %s)\n", dst, dst, zeroLit(f.ElemType, f.ElemKind))
 		target = fmt.Sprintf("%s[len(%s)-1]", dst, dst)
 	}
-	switch f.ElemKind {
-	case KindString:
-		fmt.Fprintf(b, `%s, err = s.String()
+	if mptr {
+		// Elem rules ride inside the cascade; no slab, no post-decode
+		// mods/validation here.
+		b.WriteString(renderStreamField(elemPtrField(f, f.JSONName+"[]"), target, "s.Pos"))
+	} else {
+		switch f.ElemKind {
+		case KindString:
+			fmt.Fprintf(b, `%s, err = s.String()
 %s`, target, chk)
-	case KindBool:
-		fmt.Fprintf(b, `%s, err = s.Bool()
+		case KindBool:
+			fmt.Fprintf(b, `%s, err = s.Bool()
 %s`, target, chk)
-	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
-		if f.ElemType == "int64" {
-			fmt.Fprintf(b, `%s, err = s.Int64()
+		case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
+			if f.ElemType == "int64" {
+				fmt.Fprintf(b, `%s, err = s.Int64()
 %s`, target, chk)
-		} else {
-			fmt.Fprintf(b, `var iv int64
+			} else {
+				fmt.Fprintf(b, `var iv int64
 iv, err = s.Int64()
 %[3]s%[1]s = %[2]s(iv)
 `, target, f.ElemType, chk)
-		}
-	case KindUint, KindUint8, KindUint16, KindUint32, KindUint64:
-		if f.ElemType == "uint64" {
-			fmt.Fprintf(b, `%s, err = s.Uint64()
+			}
+		case KindUint, KindUint8, KindUint16, KindUint32, KindUint64:
+			if f.ElemType == "uint64" {
+				fmt.Fprintf(b, `%s, err = s.Uint64()
 %s`, target, chk)
-		} else {
-			fmt.Fprintf(b, `var uv uint64
+			} else {
+				fmt.Fprintf(b, `var uv uint64
 uv, err = s.Uint64()
 %[3]s%[1]s = %[2]s(uv)
 `, target, f.ElemType, chk)
-		}
-	case KindFloat32, KindFloat64:
-		if f.ElemKind == KindFloat64 {
-			fmt.Fprintf(b, `%s, err = s.Float64()
+			}
+		case KindFloat32, KindFloat64:
+			if f.ElemKind == KindFloat64 {
+				fmt.Fprintf(b, `%s, err = s.Float64()
 %s`, target, chk)
-		} else {
-			fmt.Fprintf(b, `var fv float64
+			} else {
+				fmt.Fprintf(b, `var fv float64
 fv, err = s.Float64()
 %[2]s%[1]s = float32(fv)
 `, target, chk)
-		}
-	case KindStruct:
-		if directStruct {
-			fmt.Fprintf(b, `%[1]s, err = %[1]s.DecodeFromStream(s)
+			}
+		case KindStruct:
+			if directStruct {
+				fmt.Fprintf(b, `%[1]s, err = %[1]s.DecodeFromStream(s)
 %[2]s`, target, nestedDecodeErrCheck(fieldLit(f), f.MultiErr, false))
+			}
+		case KindSlice, KindArray:
+			emitStreamSliceRead(b, peelSliceField(f), target, "s.Pos", depth+1)
 		}
-	case KindSlice, KindArray:
-		emitStreamSliceRead(b, peelSliceField(f), target, "s.Pos", depth+1)
-	}
-	if len(f.ElemMods) > 0 {
-		renderStreamMods(b, f.ElemMods, target, f.ElemType, f.ElemKind)
-	}
-	if len(f.ElemValidation) > 0 {
-		renderValidationOn(b, f.ElemValidation, target, f.JSONName+"[]", f.ElemKind, f.MultiErr, "")
+		if len(f.ElemMods) > 0 {
+			renderStreamMods(b, f.ElemMods, target, f.ElemType, f.ElemKind)
+		}
+		if len(f.ElemValidation) > 0 {
+			renderValidationOn(b, f.ElemValidation, target, f.JSONName+"[]", f.ElemKind, f.MultiErr, "")
+		}
 	}
 	switch {
-	case isArray && f.ElemPointer:
+	case isArray && f.ElemPointer && !mptr:
 		// Slab slot already decoded in-place; publish its address.
 		fmt.Fprintf(b, "%[1]s[%[2]s] = &%[3]s[%[2]s]\n%[2]s++\n", dst, ivar, slabVar)
 	case isArray:
-		// dst[ivar] already decoded in-place.
+		// dst[ivar] already decoded in-place (slot decode or pointer cascade).
 		fmt.Fprintf(b, "%s++\n", ivar)
-	case f.ElemPointer:
+	case f.ElemPointer && !mptr:
 		// Slab tail decoded in-place via append+index above; publish addr.
 		fmt.Fprintf(b, "%[1]s = append(%[1]s, &%[2]s[len(%[2]s)-1])\n", dst, slabVar)
 	default:
