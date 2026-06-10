@@ -40,25 +40,23 @@ func (result SQLNullStringStruct) DecodeFrom(data []byte) (SQLNullStringStruct, 
 		if i >= len(data) || data[i] != '"' {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
-		{
-			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-				ke++
-			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-				i = ke + 1
-			} else {
-				key, i, err = scan.String(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr("", i, err)
-				}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -78,39 +76,35 @@ func (result SQLNullStringStruct) DecodeFrom(data []byte) (SQLNullStringStruct, 
 					return result, i, &validation.DuplicateKeyError{Path: []string{"s"}}
 				}
 				seenS = true
-				{
-					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-						result.S = sql.NullString{}
-						i += 4
-					} else {
-						var nv string
-						if i >= len(data) || data[i] != '"' {
-							return result, i, decode.NewParseErr("s", i, scan.ErrExpectString)
-						}
-						{
-							ke := i + 1
-							for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-								ke++
-							}
-							if ke >= len(data) {
-								return result, i, decode.NewParseErr("s", i, scan.ErrUnterminated)
-							}
-							if data[ke] < 0x20 {
-								return result, i, decode.NewParseErr("s", i, scan.ErrBadString)
-							}
-							if data[ke] == '"' {
-								nv = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-								i = ke + 1
-							} else {
-								nv, i, err = scan.String(data, i)
-								if err != nil {
-									return result, i, decode.NewParseErr("s", i, err)
-								}
-							}
-						}
-
-						result.S = sql.NullString{String: nv, Valid: true}
+				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+					result.S = sql.NullString{}
+					i += 4
+				} else {
+					var nv string
+					if i >= len(data) || data[i] != '"' {
+						return result, i, decode.NewParseErr("s", i, scan.ErrExpectString)
 					}
+					ke := i + 1
+					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+						ke++
+					}
+					if ke >= len(data) {
+						return result, i, decode.NewParseErr("s", i, scan.ErrUnterminated)
+					}
+					if data[ke] < 0x20 {
+						return result, i, decode.NewParseErr("s", i, scan.ErrBadString)
+					}
+					if data[ke] == '"' {
+						nv = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						i = ke + 1
+					} else {
+						nv, i, err = scan.String(data, i)
+						if err != nil {
+							return result, i, decode.NewParseErr("s", i, err)
+						}
+					}
+
+					result.S = sql.NullString{String: nv, Valid: true}
 				}
 			} else {
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -176,34 +170,32 @@ func (result SQLNullStringStruct) DecodeFromStream(s *scan.Stream) (SQLNullStrin
 					return result, &validation.DuplicateKeyError{Path: []string{"s"}}
 				}
 				seenS = true
-				{
-					if s.Pos >= len(s.Bytes()) {
-						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("s", s.Pos, err)
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("s", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, decode.NewParseErr("s", s.Pos, err)
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, decode.NewParseErr("s", s.Pos, scan.ErrBadLiteral)
 						}
 					}
-					if s.Bytes()[s.Pos] == 'n' {
-						for ki := 1; ki < 4; ki++ {
-							if s.Pos+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(0); err != nil {
-									return result, decode.NewParseErr("s", s.Pos, err)
-								}
-							}
-							if s.Bytes()[s.Pos+ki] != "null"[ki] {
-								return result, decode.NewParseErr("s", s.Pos, scan.ErrBadLiteral)
-							}
-						}
-						result.S = sql.NullString{}
-						s.Pos += 4
-					} else {
-						var nv string
-						nv, err = s.String()
-						if err != nil {
-							return result, decode.NewParseErr("s", s.Pos, err)
-						}
+					result.S = sql.NullString{}
+					s.Pos += 4
+				} else {
+					var nv string
+					nv, err = s.String()
+					if err != nil {
+						return result, decode.NewParseErr("s", s.Pos, err)
+					}
 
-						result.S = sql.NullString{String: nv, Valid: true}
-					}
+					result.S = sql.NullString{String: nv, Valid: true}
 				}
 			} else {
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
@@ -282,25 +274,23 @@ func (result SQLNullInt64Struct) DecodeFrom(data []byte) (SQLNullInt64Struct, in
 		if i >= len(data) || data[i] != '"' {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
-		{
-			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-				ke++
-			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-				i = ke + 1
-			} else {
-				key, i, err = scan.String(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr("", i, err)
-				}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -320,55 +310,51 @@ func (result SQLNullInt64Struct) DecodeFrom(data []byte) (SQLNullInt64Struct, in
 					return result, i, &validation.DuplicateKeyError{Path: []string{"i"}}
 				}
 				seenI = true
-				{
-					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-						result.I = sql.NullInt64{}
-						i += 4
-					} else {
-						var nv int64
-						{
-							neg := false
-							if i < len(data) && data[i] == '-' {
-								neg = true
-								i++
-							}
-							if i >= len(data) || data[i] < '0' || data[i] > '9' {
-								return result, i, decode.NewParseErr("i", i, scan.ErrBadNumber)
-							}
-							limit := uint64(math.MaxInt64)
-							if neg {
-								limit = scan.SignedNeg
-							}
-							var u uint64
-							for i < len(data) && data[i] >= '0' && data[i] <= '9' {
-								d := uint64(data[i] - '0')
-								if u > limit/10 || (u == limit/10 && d > limit%10) {
-									return result, i, decode.NewParseErr("i", i, scan.ErrNumberOverflow)
-								}
-								u = u*10 + d
-								i++
-							}
-							if i < len(data) {
-								c := data[i]
-								if c == '.' || c == 'e' || c == 'E' {
-									return result, i, decode.NewParseErr("i", i, scan.ErrBadNumber)
-								}
-							}
-							var n int64
-							if neg {
-								if u == scan.SignedNeg {
-									n = math.MinInt64
-								} else {
-									n = -int64(u)
-								}
-							} else {
-								n = int64(u)
-							}
-							nv = n
-						}
-
-						result.I = sql.NullInt64{Int64: nv, Valid: true}
+				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+					result.I = sql.NullInt64{}
+					i += 4
+				} else {
+					var nv int64
+					neg := false
+					if i < len(data) && data[i] == '-' {
+						neg = true
+						i++
 					}
+					if i >= len(data) || data[i] < '0' || data[i] > '9' {
+						return result, i, decode.NewParseErr("i", i, scan.ErrBadNumber)
+					}
+					limit := uint64(math.MaxInt64)
+					if neg {
+						limit = scan.SignedNeg
+					}
+					var u uint64
+					for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+						d := uint64(data[i] - '0')
+						if u > limit/10 || (u == limit/10 && d > limit%10) {
+							return result, i, decode.NewParseErr("i", i, scan.ErrNumberOverflow)
+						}
+						u = u*10 + d
+						i++
+					}
+					if i < len(data) {
+						c := data[i]
+						if c == '.' || c == 'e' || c == 'E' {
+							return result, i, decode.NewParseErr("i", i, scan.ErrBadNumber)
+						}
+					}
+					var n int64
+					if neg {
+						if u == scan.SignedNeg {
+							n = math.MinInt64
+						} else {
+							n = -int64(u)
+						}
+					} else {
+						n = int64(u)
+					}
+					nv = n
+
+					result.I = sql.NullInt64{Int64: nv, Valid: true}
 				}
 			} else {
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -434,34 +420,32 @@ func (result SQLNullInt64Struct) DecodeFromStream(s *scan.Stream) (SQLNullInt64S
 					return result, &validation.DuplicateKeyError{Path: []string{"i"}}
 				}
 				seenI = true
-				{
-					if s.Pos >= len(s.Bytes()) {
-						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("i", s.Pos, err)
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("i", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, decode.NewParseErr("i", s.Pos, err)
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, decode.NewParseErr("i", s.Pos, scan.ErrBadLiteral)
 						}
 					}
-					if s.Bytes()[s.Pos] == 'n' {
-						for ki := 1; ki < 4; ki++ {
-							if s.Pos+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(0); err != nil {
-									return result, decode.NewParseErr("i", s.Pos, err)
-								}
-							}
-							if s.Bytes()[s.Pos+ki] != "null"[ki] {
-								return result, decode.NewParseErr("i", s.Pos, scan.ErrBadLiteral)
-							}
-						}
-						result.I = sql.NullInt64{}
-						s.Pos += 4
-					} else {
-						var nv int64
-						nv, err = s.Int64()
-						if err != nil {
-							return result, decode.NewParseErr("i", s.Pos, err)
-						}
+					result.I = sql.NullInt64{}
+					s.Pos += 4
+				} else {
+					var nv int64
+					nv, err = s.Int64()
+					if err != nil {
+						return result, decode.NewParseErr("i", s.Pos, err)
+					}
 
-						result.I = sql.NullInt64{Int64: nv, Valid: true}
-					}
+					result.I = sql.NullInt64{Int64: nv, Valid: true}
 				}
 			} else {
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
@@ -538,25 +522,23 @@ func (result SQLNullInt32Struct) DecodeFrom(data []byte) (SQLNullInt32Struct, in
 		if i >= len(data) || data[i] != '"' {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
-		{
-			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-				ke++
-			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-				i = ke + 1
-			} else {
-				key, i, err = scan.String(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr("", i, err)
-				}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -576,55 +558,51 @@ func (result SQLNullInt32Struct) DecodeFrom(data []byte) (SQLNullInt32Struct, in
 					return result, i, &validation.DuplicateKeyError{Path: []string{"i32"}}
 				}
 				seenI32 = true
-				{
-					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-						result.I32 = sql.NullInt32{}
-						i += 4
-					} else {
-						var nv int32
-						{
-							neg := false
-							if i < len(data) && data[i] == '-' {
-								neg = true
-								i++
-							}
-							if i >= len(data) || data[i] < '0' || data[i] > '9' {
-								return result, i, decode.NewParseErr("i32", i, scan.ErrBadNumber)
-							}
-							limit := uint64(math.MaxInt64)
-							if neg {
-								limit = scan.SignedNeg
-							}
-							var u uint64
-							for i < len(data) && data[i] >= '0' && data[i] <= '9' {
-								d := uint64(data[i] - '0')
-								if u > limit/10 || (u == limit/10 && d > limit%10) {
-									return result, i, decode.NewParseErr("i32", i, scan.ErrNumberOverflow)
-								}
-								u = u*10 + d
-								i++
-							}
-							if i < len(data) {
-								c := data[i]
-								if c == '.' || c == 'e' || c == 'E' {
-									return result, i, decode.NewParseErr("i32", i, scan.ErrBadNumber)
-								}
-							}
-							var n int64
-							if neg {
-								if u == scan.SignedNeg {
-									n = math.MinInt64
-								} else {
-									n = -int64(u)
-								}
-							} else {
-								n = int64(u)
-							}
-							nv = int32(n)
-						}
-
-						result.I32 = sql.NullInt32{Int32: nv, Valid: true}
+				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+					result.I32 = sql.NullInt32{}
+					i += 4
+				} else {
+					var nv int32
+					neg := false
+					if i < len(data) && data[i] == '-' {
+						neg = true
+						i++
 					}
+					if i >= len(data) || data[i] < '0' || data[i] > '9' {
+						return result, i, decode.NewParseErr("i32", i, scan.ErrBadNumber)
+					}
+					limit := uint64(math.MaxInt64)
+					if neg {
+						limit = scan.SignedNeg
+					}
+					var u uint64
+					for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+						d := uint64(data[i] - '0')
+						if u > limit/10 || (u == limit/10 && d > limit%10) {
+							return result, i, decode.NewParseErr("i32", i, scan.ErrNumberOverflow)
+						}
+						u = u*10 + d
+						i++
+					}
+					if i < len(data) {
+						c := data[i]
+						if c == '.' || c == 'e' || c == 'E' {
+							return result, i, decode.NewParseErr("i32", i, scan.ErrBadNumber)
+						}
+					}
+					var n int64
+					if neg {
+						if u == scan.SignedNeg {
+							n = math.MinInt64
+						} else {
+							n = -int64(u)
+						}
+					} else {
+						n = int64(u)
+					}
+					nv = int32(n)
+
+					result.I32 = sql.NullInt32{Int32: nv, Valid: true}
 				}
 			} else {
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -690,34 +668,32 @@ func (result SQLNullInt32Struct) DecodeFromStream(s *scan.Stream) (SQLNullInt32S
 					return result, &validation.DuplicateKeyError{Path: []string{"i32"}}
 				}
 				seenI32 = true
-				{
-					if s.Pos >= len(s.Bytes()) {
-						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("i32", s.Pos, err)
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("i32", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, decode.NewParseErr("i32", s.Pos, err)
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, decode.NewParseErr("i32", s.Pos, scan.ErrBadLiteral)
 						}
 					}
-					if s.Bytes()[s.Pos] == 'n' {
-						for ki := 1; ki < 4; ki++ {
-							if s.Pos+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(0); err != nil {
-									return result, decode.NewParseErr("i32", s.Pos, err)
-								}
-							}
-							if s.Bytes()[s.Pos+ki] != "null"[ki] {
-								return result, decode.NewParseErr("i32", s.Pos, scan.ErrBadLiteral)
-							}
-						}
-						result.I32 = sql.NullInt32{}
-						s.Pos += 4
-					} else {
-						var nv int64
-						nv, err = s.Int64()
-						if err != nil {
-							return result, decode.NewParseErr("i32", s.Pos, err)
-						}
+					result.I32 = sql.NullInt32{}
+					s.Pos += 4
+				} else {
+					var nv int64
+					nv, err = s.Int64()
+					if err != nil {
+						return result, decode.NewParseErr("i32", s.Pos, err)
+					}
 
-						result.I32 = sql.NullInt32{Int32: int32(nv), Valid: true}
-					}
+					result.I32 = sql.NullInt32{Int32: int32(nv), Valid: true}
 				}
 			} else {
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
@@ -794,25 +770,23 @@ func (result SQLNullInt16Struct) DecodeFrom(data []byte) (SQLNullInt16Struct, in
 		if i >= len(data) || data[i] != '"' {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
-		{
-			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-				ke++
-			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-				i = ke + 1
-			} else {
-				key, i, err = scan.String(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr("", i, err)
-				}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -832,55 +806,51 @@ func (result SQLNullInt16Struct) DecodeFrom(data []byte) (SQLNullInt16Struct, in
 					return result, i, &validation.DuplicateKeyError{Path: []string{"i16"}}
 				}
 				seenI16 = true
-				{
-					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-						result.I16 = sql.NullInt16{}
-						i += 4
-					} else {
-						var nv int16
-						{
-							neg := false
-							if i < len(data) && data[i] == '-' {
-								neg = true
-								i++
-							}
-							if i >= len(data) || data[i] < '0' || data[i] > '9' {
-								return result, i, decode.NewParseErr("i16", i, scan.ErrBadNumber)
-							}
-							limit := uint64(math.MaxInt64)
-							if neg {
-								limit = scan.SignedNeg
-							}
-							var u uint64
-							for i < len(data) && data[i] >= '0' && data[i] <= '9' {
-								d := uint64(data[i] - '0')
-								if u > limit/10 || (u == limit/10 && d > limit%10) {
-									return result, i, decode.NewParseErr("i16", i, scan.ErrNumberOverflow)
-								}
-								u = u*10 + d
-								i++
-							}
-							if i < len(data) {
-								c := data[i]
-								if c == '.' || c == 'e' || c == 'E' {
-									return result, i, decode.NewParseErr("i16", i, scan.ErrBadNumber)
-								}
-							}
-							var n int64
-							if neg {
-								if u == scan.SignedNeg {
-									n = math.MinInt64
-								} else {
-									n = -int64(u)
-								}
-							} else {
-								n = int64(u)
-							}
-							nv = int16(n)
-						}
-
-						result.I16 = sql.NullInt16{Int16: nv, Valid: true}
+				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+					result.I16 = sql.NullInt16{}
+					i += 4
+				} else {
+					var nv int16
+					neg := false
+					if i < len(data) && data[i] == '-' {
+						neg = true
+						i++
 					}
+					if i >= len(data) || data[i] < '0' || data[i] > '9' {
+						return result, i, decode.NewParseErr("i16", i, scan.ErrBadNumber)
+					}
+					limit := uint64(math.MaxInt64)
+					if neg {
+						limit = scan.SignedNeg
+					}
+					var u uint64
+					for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+						d := uint64(data[i] - '0')
+						if u > limit/10 || (u == limit/10 && d > limit%10) {
+							return result, i, decode.NewParseErr("i16", i, scan.ErrNumberOverflow)
+						}
+						u = u*10 + d
+						i++
+					}
+					if i < len(data) {
+						c := data[i]
+						if c == '.' || c == 'e' || c == 'E' {
+							return result, i, decode.NewParseErr("i16", i, scan.ErrBadNumber)
+						}
+					}
+					var n int64
+					if neg {
+						if u == scan.SignedNeg {
+							n = math.MinInt64
+						} else {
+							n = -int64(u)
+						}
+					} else {
+						n = int64(u)
+					}
+					nv = int16(n)
+
+					result.I16 = sql.NullInt16{Int16: nv, Valid: true}
 				}
 			} else {
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -946,34 +916,32 @@ func (result SQLNullInt16Struct) DecodeFromStream(s *scan.Stream) (SQLNullInt16S
 					return result, &validation.DuplicateKeyError{Path: []string{"i16"}}
 				}
 				seenI16 = true
-				{
-					if s.Pos >= len(s.Bytes()) {
-						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("i16", s.Pos, err)
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("i16", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, decode.NewParseErr("i16", s.Pos, err)
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, decode.NewParseErr("i16", s.Pos, scan.ErrBadLiteral)
 						}
 					}
-					if s.Bytes()[s.Pos] == 'n' {
-						for ki := 1; ki < 4; ki++ {
-							if s.Pos+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(0); err != nil {
-									return result, decode.NewParseErr("i16", s.Pos, err)
-								}
-							}
-							if s.Bytes()[s.Pos+ki] != "null"[ki] {
-								return result, decode.NewParseErr("i16", s.Pos, scan.ErrBadLiteral)
-							}
-						}
-						result.I16 = sql.NullInt16{}
-						s.Pos += 4
-					} else {
-						var nv int64
-						nv, err = s.Int64()
-						if err != nil {
-							return result, decode.NewParseErr("i16", s.Pos, err)
-						}
+					result.I16 = sql.NullInt16{}
+					s.Pos += 4
+				} else {
+					var nv int64
+					nv, err = s.Int64()
+					if err != nil {
+						return result, decode.NewParseErr("i16", s.Pos, err)
+					}
 
-						result.I16 = sql.NullInt16{Int16: int16(nv), Valid: true}
-					}
+					result.I16 = sql.NullInt16{Int16: int16(nv), Valid: true}
 				}
 			} else {
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
@@ -1050,25 +1018,23 @@ func (result SQLNullByteStruct) DecodeFrom(data []byte) (SQLNullByteStruct, int,
 		if i >= len(data) || data[i] != '"' {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
-		{
-			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-				ke++
-			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-				i = ke + 1
-			} else {
-				key, i, err = scan.String(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr("", i, err)
-				}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -1088,30 +1054,26 @@ func (result SQLNullByteStruct) DecodeFrom(data []byte) (SQLNullByteStruct, int,
 					return result, i, &validation.DuplicateKeyError{Path: []string{"b"}}
 				}
 				seenB = true
-				{
-					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-						result.B = sql.NullByte{}
-						i += 4
-					} else {
-						var nv byte
-						{
-							if i >= len(data) || data[i] < '0' || data[i] > '9' {
-								return result, i, decode.NewParseErr("b", i, scan.ErrBadNumber)
-							}
-							var n uint64
-							for i < len(data) && data[i] >= '0' && data[i] <= '9' {
-								d := uint64(data[i] - '0')
-								if n > scan.Uint64Limit/10 || (n == scan.Uint64Limit/10 && d > scan.Uint64Limit%10) {
-									return result, i, decode.NewParseErr("b", i, scan.ErrNumberOverflow)
-								}
-								n = n*10 + d
-								i++
-							}
-							nv = byte(n)
-						}
-
-						result.B = sql.NullByte{Byte: nv, Valid: true}
+				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+					result.B = sql.NullByte{}
+					i += 4
+				} else {
+					var nv byte
+					if i >= len(data) || data[i] < '0' || data[i] > '9' {
+						return result, i, decode.NewParseErr("b", i, scan.ErrBadNumber)
 					}
+					var n uint64
+					for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+						d := uint64(data[i] - '0')
+						if n > scan.Uint64Limit/10 || (n == scan.Uint64Limit/10 && d > scan.Uint64Limit%10) {
+							return result, i, decode.NewParseErr("b", i, scan.ErrNumberOverflow)
+						}
+						n = n*10 + d
+						i++
+					}
+					nv = byte(n)
+
+					result.B = sql.NullByte{Byte: nv, Valid: true}
 				}
 			} else {
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -1177,34 +1139,32 @@ func (result SQLNullByteStruct) DecodeFromStream(s *scan.Stream) (SQLNullByteStr
 					return result, &validation.DuplicateKeyError{Path: []string{"b"}}
 				}
 				seenB = true
-				{
-					if s.Pos >= len(s.Bytes()) {
-						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("b", s.Pos, err)
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("b", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, decode.NewParseErr("b", s.Pos, err)
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, decode.NewParseErr("b", s.Pos, scan.ErrBadLiteral)
 						}
 					}
-					if s.Bytes()[s.Pos] == 'n' {
-						for ki := 1; ki < 4; ki++ {
-							if s.Pos+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(0); err != nil {
-									return result, decode.NewParseErr("b", s.Pos, err)
-								}
-							}
-							if s.Bytes()[s.Pos+ki] != "null"[ki] {
-								return result, decode.NewParseErr("b", s.Pos, scan.ErrBadLiteral)
-							}
-						}
-						result.B = sql.NullByte{}
-						s.Pos += 4
-					} else {
-						var nv uint64
-						nv, err = s.Uint64()
-						if err != nil {
-							return result, decode.NewParseErr("b", s.Pos, err)
-						}
+					result.B = sql.NullByte{}
+					s.Pos += 4
+				} else {
+					var nv uint64
+					nv, err = s.Uint64()
+					if err != nil {
+						return result, decode.NewParseErr("b", s.Pos, err)
+					}
 
-						result.B = sql.NullByte{Byte: byte(nv), Valid: true}
-					}
+					result.B = sql.NullByte{Byte: byte(nv), Valid: true}
 				}
 			} else {
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
@@ -1281,25 +1241,23 @@ func (result SQLNullBoolStruct) DecodeFrom(data []byte) (SQLNullBoolStruct, int,
 		if i >= len(data) || data[i] != '"' {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
-		{
-			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-				ke++
-			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-				i = ke + 1
-			} else {
-				key, i, err = scan.String(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr("", i, err)
-				}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -1319,19 +1277,17 @@ func (result SQLNullBoolStruct) DecodeFrom(data []byte) (SQLNullBoolStruct, int,
 					return result, i, &validation.DuplicateKeyError{Path: []string{"bl"}}
 				}
 				seenBL = true
-				{
-					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-						result.BL = sql.NullBool{}
-						i += 4
-					} else {
-						var nv bool
-						nv, i, err = scan.Bool(data, i)
-						if err != nil {
-							return result, i, decode.NewParseErr("bl", i, err)
-						}
-
-						result.BL = sql.NullBool{Bool: nv, Valid: true}
+				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+					result.BL = sql.NullBool{}
+					i += 4
+				} else {
+					var nv bool
+					nv, i, err = scan.Bool(data, i)
+					if err != nil {
+						return result, i, decode.NewParseErr("bl", i, err)
 					}
+
+					result.BL = sql.NullBool{Bool: nv, Valid: true}
 				}
 			} else {
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -1397,34 +1353,32 @@ func (result SQLNullBoolStruct) DecodeFromStream(s *scan.Stream) (SQLNullBoolStr
 					return result, &validation.DuplicateKeyError{Path: []string{"bl"}}
 				}
 				seenBL = true
-				{
-					if s.Pos >= len(s.Bytes()) {
-						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("bl", s.Pos, err)
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("bl", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, decode.NewParseErr("bl", s.Pos, err)
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, decode.NewParseErr("bl", s.Pos, scan.ErrBadLiteral)
 						}
 					}
-					if s.Bytes()[s.Pos] == 'n' {
-						for ki := 1; ki < 4; ki++ {
-							if s.Pos+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(0); err != nil {
-									return result, decode.NewParseErr("bl", s.Pos, err)
-								}
-							}
-							if s.Bytes()[s.Pos+ki] != "null"[ki] {
-								return result, decode.NewParseErr("bl", s.Pos, scan.ErrBadLiteral)
-							}
-						}
-						result.BL = sql.NullBool{}
-						s.Pos += 4
-					} else {
-						var nv bool
-						nv, err = s.Bool()
-						if err != nil {
-							return result, decode.NewParseErr("bl", s.Pos, err)
-						}
+					result.BL = sql.NullBool{}
+					s.Pos += 4
+				} else {
+					var nv bool
+					nv, err = s.Bool()
+					if err != nil {
+						return result, decode.NewParseErr("bl", s.Pos, err)
+					}
 
-						result.BL = sql.NullBool{Bool: nv, Valid: true}
-					}
+					result.BL = sql.NullBool{Bool: nv, Valid: true}
 				}
 			} else {
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
@@ -1501,25 +1455,23 @@ func (result SQLNullFloat64Struct) DecodeFrom(data []byte) (SQLNullFloat64Struct
 		if i >= len(data) || data[i] != '"' {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
-		{
-			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-				ke++
-			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-				i = ke + 1
-			} else {
-				key, i, err = scan.String(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr("", i, err)
-				}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -1539,19 +1491,17 @@ func (result SQLNullFloat64Struct) DecodeFrom(data []byte) (SQLNullFloat64Struct
 					return result, i, &validation.DuplicateKeyError{Path: []string{"f"}}
 				}
 				seenF = true
-				{
-					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-						result.F = sql.NullFloat64{}
-						i += 4
-					} else {
-						var nv float64
-						nv, i, err = scan.Float64(data, i)
-						if err != nil {
-							return result, i, decode.NewParseErr("f", i, err)
-						}
-
-						result.F = sql.NullFloat64{Float64: nv, Valid: true}
+				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+					result.F = sql.NullFloat64{}
+					i += 4
+				} else {
+					var nv float64
+					nv, i, err = scan.Float64(data, i)
+					if err != nil {
+						return result, i, decode.NewParseErr("f", i, err)
 					}
+
+					result.F = sql.NullFloat64{Float64: nv, Valid: true}
 				}
 			} else {
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -1617,34 +1567,32 @@ func (result SQLNullFloat64Struct) DecodeFromStream(s *scan.Stream) (SQLNullFloa
 					return result, &validation.DuplicateKeyError{Path: []string{"f"}}
 				}
 				seenF = true
-				{
-					if s.Pos >= len(s.Bytes()) {
-						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("f", s.Pos, err)
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("f", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, decode.NewParseErr("f", s.Pos, err)
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, decode.NewParseErr("f", s.Pos, scan.ErrBadLiteral)
 						}
 					}
-					if s.Bytes()[s.Pos] == 'n' {
-						for ki := 1; ki < 4; ki++ {
-							if s.Pos+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(0); err != nil {
-									return result, decode.NewParseErr("f", s.Pos, err)
-								}
-							}
-							if s.Bytes()[s.Pos+ki] != "null"[ki] {
-								return result, decode.NewParseErr("f", s.Pos, scan.ErrBadLiteral)
-							}
-						}
-						result.F = sql.NullFloat64{}
-						s.Pos += 4
-					} else {
-						var nv float64
-						nv, err = s.Float64()
-						if err != nil {
-							return result, decode.NewParseErr("f", s.Pos, err)
-						}
+					result.F = sql.NullFloat64{}
+					s.Pos += 4
+				} else {
+					var nv float64
+					nv, err = s.Float64()
+					if err != nil {
+						return result, decode.NewParseErr("f", s.Pos, err)
+					}
 
-						result.F = sql.NullFloat64{Float64: nv, Valid: true}
-					}
+					result.F = sql.NullFloat64{Float64: nv, Valid: true}
 				}
 			} else {
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
@@ -1723,25 +1671,23 @@ func (result SQLNullTimeStruct) DecodeFrom(data []byte) (SQLNullTimeStruct, int,
 		if i >= len(data) || data[i] != '"' {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
-		{
-			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-				ke++
-			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-				i = ke + 1
-			} else {
-				key, i, err = scan.String(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr("", i, err)
-				}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -1761,46 +1707,40 @@ func (result SQLNullTimeStruct) DecodeFrom(data []byte) (SQLNullTimeStruct, int,
 					return result, i, &validation.DuplicateKeyError{Path: []string{"t"}}
 				}
 				seenT = true
-				{
-					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-						result.T = sql.NullTime{}
-						i += 4
-					} else {
-						var nv time.Time
-						{
-							var s string
-							if i >= len(data) || data[i] != '"' {
-								return result, i, decode.NewParseErr("t", i, scan.ErrExpectString)
-							}
-							{
-								ke := i + 1
-								for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-									ke++
-								}
-								if ke >= len(data) {
-									return result, i, decode.NewParseErr("t", i, scan.ErrUnterminated)
-								}
-								if data[ke] < 0x20 {
-									return result, i, decode.NewParseErr("t", i, scan.ErrBadString)
-								}
-								if data[ke] == '"' {
-									s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-									i = ke + 1
-								} else {
-									s, i, err = scan.String(data, i)
-									if err != nil {
-										return result, i, decode.NewParseErr("t", i, err)
-									}
-								}
-							}
-							nv, err = time.Parse(time.RFC3339Nano, s)
-							if err != nil {
-								return result, i, decode.NewParseErr("t", i, err)
-							}
-						}
-
-						result.T = sql.NullTime{Time: nv, Valid: true}
+				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+					result.T = sql.NullTime{}
+					i += 4
+				} else {
+					var nv time.Time
+					var s string
+					if i >= len(data) || data[i] != '"' {
+						return result, i, decode.NewParseErr("t", i, scan.ErrExpectString)
 					}
+					ke := i + 1
+					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+						ke++
+					}
+					if ke >= len(data) {
+						return result, i, decode.NewParseErr("t", i, scan.ErrUnterminated)
+					}
+					if data[ke] < 0x20 {
+						return result, i, decode.NewParseErr("t", i, scan.ErrBadString)
+					}
+					if data[ke] == '"' {
+						s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						i = ke + 1
+					} else {
+						s, i, err = scan.String(data, i)
+						if err != nil {
+							return result, i, decode.NewParseErr("t", i, err)
+						}
+					}
+					nv, err = time.Parse(time.RFC3339Nano, s)
+					if err != nil {
+						return result, i, decode.NewParseErr("t", i, err)
+					}
+
+					result.T = sql.NullTime{Time: nv, Valid: true}
 				}
 			} else {
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -1866,41 +1806,37 @@ func (result SQLNullTimeStruct) DecodeFromStream(s *scan.Stream) (SQLNullTimeStr
 					return result, &validation.DuplicateKeyError{Path: []string{"t"}}
 				}
 				seenT = true
-				{
-					if s.Pos >= len(s.Bytes()) {
-						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("t", s.Pos, err)
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("t", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, decode.NewParseErr("t", s.Pos, err)
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, decode.NewParseErr("t", s.Pos, scan.ErrBadLiteral)
 						}
 					}
-					if s.Bytes()[s.Pos] == 'n' {
-						for ki := 1; ki < 4; ki++ {
-							if s.Pos+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(0); err != nil {
-									return result, decode.NewParseErr("t", s.Pos, err)
-								}
-							}
-							if s.Bytes()[s.Pos+ki] != "null"[ki] {
-								return result, decode.NewParseErr("t", s.Pos, scan.ErrBadLiteral)
-							}
-						}
-						result.T = sql.NullTime{}
-						s.Pos += 4
-					} else {
-						var nv time.Time
-						{
-							var v string
-							v, err = s.String()
-							if err != nil {
-								return result, decode.NewParseErr("t", s.Pos, err)
-							}
-							nv, err = time.Parse(time.RFC3339Nano, v)
-							if err != nil {
-								return result, decode.NewParseErr("t", s.Pos, err)
-							}
-						}
+					result.T = sql.NullTime{}
+					s.Pos += 4
+				} else {
+					var nv time.Time
+					var sv string
+					sv, err = s.String()
+					if err != nil {
+						return result, decode.NewParseErr("t", s.Pos, err)
+					}
+					nv, err = time.Parse(time.RFC3339Nano, sv)
+					if err != nil {
+						return result, decode.NewParseErr("t", s.Pos, err)
+					}
 
-						result.T = sql.NullTime{Time: nv, Valid: true}
-					}
+					result.T = sql.NullTime{Time: nv, Valid: true}
 				}
 			} else {
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
@@ -1986,25 +1922,23 @@ func (result SQLNullStruct) DecodeFrom(data []byte) (SQLNullStruct, int, error) 
 		if i >= len(data) || data[i] != '"' {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
-		{
-			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-				ke++
-			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-				i = ke + 1
-			} else {
-				key, i, err = scan.String(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr("", i, err)
-				}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -2025,189 +1959,169 @@ func (result SQLNullStruct) DecodeFrom(data []byte) (SQLNullStruct, int, error) 
 					return result, i, &validation.DuplicateKeyError{Path: []string{"b"}}
 				}
 				seenB = true
-				{
-					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-						result.B = sql.NullByte{}
-						i += 4
-					} else {
-						var nv byte
-						{
-							if i >= len(data) || data[i] < '0' || data[i] > '9' {
-								return result, i, decode.NewParseErr("b", i, scan.ErrBadNumber)
-							}
-							var n uint64
-							for i < len(data) && data[i] >= '0' && data[i] <= '9' {
-								d := uint64(data[i] - '0')
-								if n > scan.Uint64Limit/10 || (n == scan.Uint64Limit/10 && d > scan.Uint64Limit%10) {
-									return result, i, decode.NewParseErr("b", i, scan.ErrNumberOverflow)
-								}
-								n = n*10 + d
-								i++
-							}
-							nv = byte(n)
-						}
-
-						result.B = sql.NullByte{Byte: nv, Valid: true}
+				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+					result.B = sql.NullByte{}
+					i += 4
+				} else {
+					var nv byte
+					if i >= len(data) || data[i] < '0' || data[i] > '9' {
+						return result, i, decode.NewParseErr("b", i, scan.ErrBadNumber)
 					}
+					var n uint64
+					for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+						d := uint64(data[i] - '0')
+						if n > scan.Uint64Limit/10 || (n == scan.Uint64Limit/10 && d > scan.Uint64Limit%10) {
+							return result, i, decode.NewParseErr("b", i, scan.ErrNumberOverflow)
+						}
+						n = n*10 + d
+						i++
+					}
+					nv = byte(n)
+
+					result.B = sql.NullByte{Byte: nv, Valid: true}
 				}
 			case "f":
 				if seenF {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"f"}}
 				}
 				seenF = true
-				{
-					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-						result.F = sql.NullFloat64{}
-						i += 4
-					} else {
-						var nv float64
-						nv, i, err = scan.Float64(data, i)
-						if err != nil {
-							return result, i, decode.NewParseErr("f", i, err)
-						}
-
-						result.F = sql.NullFloat64{Float64: nv, Valid: true}
+				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+					result.F = sql.NullFloat64{}
+					i += 4
+				} else {
+					var nv float64
+					nv, i, err = scan.Float64(data, i)
+					if err != nil {
+						return result, i, decode.NewParseErr("f", i, err)
 					}
+
+					result.F = sql.NullFloat64{Float64: nv, Valid: true}
 				}
 			case "i":
 				if seenI {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"i"}}
 				}
 				seenI = true
-				{
-					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-						result.I = sql.NullInt64{}
-						i += 4
-					} else {
-						var nv int64
-						{
-							neg := false
-							if i < len(data) && data[i] == '-' {
-								neg = true
-								i++
-							}
-							if i >= len(data) || data[i] < '0' || data[i] > '9' {
-								return result, i, decode.NewParseErr("i", i, scan.ErrBadNumber)
-							}
-							limit := uint64(math.MaxInt64)
-							if neg {
-								limit = scan.SignedNeg
-							}
-							var u uint64
-							for i < len(data) && data[i] >= '0' && data[i] <= '9' {
-								d := uint64(data[i] - '0')
-								if u > limit/10 || (u == limit/10 && d > limit%10) {
-									return result, i, decode.NewParseErr("i", i, scan.ErrNumberOverflow)
-								}
-								u = u*10 + d
-								i++
-							}
-							if i < len(data) {
-								c := data[i]
-								if c == '.' || c == 'e' || c == 'E' {
-									return result, i, decode.NewParseErr("i", i, scan.ErrBadNumber)
-								}
-							}
-							var n int64
-							if neg {
-								if u == scan.SignedNeg {
-									n = math.MinInt64
-								} else {
-									n = -int64(u)
-								}
-							} else {
-								n = int64(u)
-							}
-							nv = n
-						}
-
-						result.I = sql.NullInt64{Int64: nv, Valid: true}
+				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+					result.I = sql.NullInt64{}
+					i += 4
+				} else {
+					var nv int64
+					neg := false
+					if i < len(data) && data[i] == '-' {
+						neg = true
+						i++
 					}
+					if i >= len(data) || data[i] < '0' || data[i] > '9' {
+						return result, i, decode.NewParseErr("i", i, scan.ErrBadNumber)
+					}
+					limit := uint64(math.MaxInt64)
+					if neg {
+						limit = scan.SignedNeg
+					}
+					var u uint64
+					for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+						d := uint64(data[i] - '0')
+						if u > limit/10 || (u == limit/10 && d > limit%10) {
+							return result, i, decode.NewParseErr("i", i, scan.ErrNumberOverflow)
+						}
+						u = u*10 + d
+						i++
+					}
+					if i < len(data) {
+						c := data[i]
+						if c == '.' || c == 'e' || c == 'E' {
+							return result, i, decode.NewParseErr("i", i, scan.ErrBadNumber)
+						}
+					}
+					var n int64
+					if neg {
+						if u == scan.SignedNeg {
+							n = math.MinInt64
+						} else {
+							n = -int64(u)
+						}
+					} else {
+						n = int64(u)
+					}
+					nv = n
+
+					result.I = sql.NullInt64{Int64: nv, Valid: true}
 				}
 			case "s":
 				if seenS {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"s"}}
 				}
 				seenS = true
-				{
-					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-						result.S = sql.NullString{}
-						i += 4
-					} else {
-						var nv string
-						if i >= len(data) || data[i] != '"' {
-							return result, i, decode.NewParseErr("s", i, scan.ErrExpectString)
-						}
-						{
-							ke := i + 1
-							for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-								ke++
-							}
-							if ke >= len(data) {
-								return result, i, decode.NewParseErr("s", i, scan.ErrUnterminated)
-							}
-							if data[ke] < 0x20 {
-								return result, i, decode.NewParseErr("s", i, scan.ErrBadString)
-							}
-							if data[ke] == '"' {
-								nv = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-								i = ke + 1
-							} else {
-								nv, i, err = scan.String(data, i)
-								if err != nil {
-									return result, i, decode.NewParseErr("s", i, err)
-								}
-							}
-						}
-
-						result.S = sql.NullString{String: nv, Valid: true}
+				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+					result.S = sql.NullString{}
+					i += 4
+				} else {
+					var nv string
+					if i >= len(data) || data[i] != '"' {
+						return result, i, decode.NewParseErr("s", i, scan.ErrExpectString)
 					}
+					ke := i + 1
+					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+						ke++
+					}
+					if ke >= len(data) {
+						return result, i, decode.NewParseErr("s", i, scan.ErrUnterminated)
+					}
+					if data[ke] < 0x20 {
+						return result, i, decode.NewParseErr("s", i, scan.ErrBadString)
+					}
+					if data[ke] == '"' {
+						nv = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						i = ke + 1
+					} else {
+						nv, i, err = scan.String(data, i)
+						if err != nil {
+							return result, i, decode.NewParseErr("s", i, err)
+						}
+					}
+
+					result.S = sql.NullString{String: nv, Valid: true}
 				}
 			case "t":
 				if seenT {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"t"}}
 				}
 				seenT = true
-				{
-					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-						result.T = sql.NullTime{}
-						i += 4
-					} else {
-						var nv time.Time
-						{
-							var s string
-							if i >= len(data) || data[i] != '"' {
-								return result, i, decode.NewParseErr("t", i, scan.ErrExpectString)
-							}
-							{
-								ke := i + 1
-								for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-									ke++
-								}
-								if ke >= len(data) {
-									return result, i, decode.NewParseErr("t", i, scan.ErrUnterminated)
-								}
-								if data[ke] < 0x20 {
-									return result, i, decode.NewParseErr("t", i, scan.ErrBadString)
-								}
-								if data[ke] == '"' {
-									s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-									i = ke + 1
-								} else {
-									s, i, err = scan.String(data, i)
-									if err != nil {
-										return result, i, decode.NewParseErr("t", i, err)
-									}
-								}
-							}
-							nv, err = time.Parse(time.RFC3339Nano, s)
-							if err != nil {
-								return result, i, decode.NewParseErr("t", i, err)
-							}
-						}
-
-						result.T = sql.NullTime{Time: nv, Valid: true}
+				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+					result.T = sql.NullTime{}
+					i += 4
+				} else {
+					var nv time.Time
+					var s string
+					if i >= len(data) || data[i] != '"' {
+						return result, i, decode.NewParseErr("t", i, scan.ErrExpectString)
 					}
+					ke := i + 1
+					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+						ke++
+					}
+					if ke >= len(data) {
+						return result, i, decode.NewParseErr("t", i, scan.ErrUnterminated)
+					}
+					if data[ke] < 0x20 {
+						return result, i, decode.NewParseErr("t", i, scan.ErrBadString)
+					}
+					if data[ke] == '"' {
+						s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						i = ke + 1
+					} else {
+						s, i, err = scan.String(data, i)
+						if err != nil {
+							return result, i, decode.NewParseErr("t", i, err)
+						}
+					}
+					nv, err = time.Parse(time.RFC3339Nano, s)
+					if err != nil {
+						return result, i, decode.NewParseErr("t", i, err)
+					}
+
+					result.T = sql.NullTime{Time: nv, Valid: true}
 				}
 			default:
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -2218,19 +2132,17 @@ func (result SQLNullStruct) DecodeFrom(data []byte) (SQLNullStruct, int, error) 
 					return result, i, &validation.DuplicateKeyError{Path: []string{"bl"}}
 				}
 				seenBL = true
-				{
-					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-						result.BL = sql.NullBool{}
-						i += 4
-					} else {
-						var nv bool
-						nv, i, err = scan.Bool(data, i)
-						if err != nil {
-							return result, i, decode.NewParseErr("bl", i, err)
-						}
-
-						result.BL = sql.NullBool{Bool: nv, Valid: true}
+				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+					result.BL = sql.NullBool{}
+					i += 4
+				} else {
+					var nv bool
+					nv, i, err = scan.Bool(data, i)
+					if err != nil {
+						return result, i, decode.NewParseErr("bl", i, err)
 					}
+
+					result.BL = sql.NullBool{Bool: nv, Valid: true}
 				}
 			} else {
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -2242,110 +2154,102 @@ func (result SQLNullStruct) DecodeFrom(data []byte) (SQLNullStruct, int, error) 
 					return result, i, &validation.DuplicateKeyError{Path: []string{"i16"}}
 				}
 				seenI16 = true
-				{
-					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-						result.I16 = sql.NullInt16{}
-						i += 4
-					} else {
-						var nv int16
-						{
-							neg := false
-							if i < len(data) && data[i] == '-' {
-								neg = true
-								i++
-							}
-							if i >= len(data) || data[i] < '0' || data[i] > '9' {
-								return result, i, decode.NewParseErr("i16", i, scan.ErrBadNumber)
-							}
-							limit := uint64(math.MaxInt64)
-							if neg {
-								limit = scan.SignedNeg
-							}
-							var u uint64
-							for i < len(data) && data[i] >= '0' && data[i] <= '9' {
-								d := uint64(data[i] - '0')
-								if u > limit/10 || (u == limit/10 && d > limit%10) {
-									return result, i, decode.NewParseErr("i16", i, scan.ErrNumberOverflow)
-								}
-								u = u*10 + d
-								i++
-							}
-							if i < len(data) {
-								c := data[i]
-								if c == '.' || c == 'e' || c == 'E' {
-									return result, i, decode.NewParseErr("i16", i, scan.ErrBadNumber)
-								}
-							}
-							var n int64
-							if neg {
-								if u == scan.SignedNeg {
-									n = math.MinInt64
-								} else {
-									n = -int64(u)
-								}
-							} else {
-								n = int64(u)
-							}
-							nv = int16(n)
-						}
-
-						result.I16 = sql.NullInt16{Int16: nv, Valid: true}
+				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+					result.I16 = sql.NullInt16{}
+					i += 4
+				} else {
+					var nv int16
+					neg := false
+					if i < len(data) && data[i] == '-' {
+						neg = true
+						i++
 					}
+					if i >= len(data) || data[i] < '0' || data[i] > '9' {
+						return result, i, decode.NewParseErr("i16", i, scan.ErrBadNumber)
+					}
+					limit := uint64(math.MaxInt64)
+					if neg {
+						limit = scan.SignedNeg
+					}
+					var u uint64
+					for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+						d := uint64(data[i] - '0')
+						if u > limit/10 || (u == limit/10 && d > limit%10) {
+							return result, i, decode.NewParseErr("i16", i, scan.ErrNumberOverflow)
+						}
+						u = u*10 + d
+						i++
+					}
+					if i < len(data) {
+						c := data[i]
+						if c == '.' || c == 'e' || c == 'E' {
+							return result, i, decode.NewParseErr("i16", i, scan.ErrBadNumber)
+						}
+					}
+					var n int64
+					if neg {
+						if u == scan.SignedNeg {
+							n = math.MinInt64
+						} else {
+							n = -int64(u)
+						}
+					} else {
+						n = int64(u)
+					}
+					nv = int16(n)
+
+					result.I16 = sql.NullInt16{Int16: nv, Valid: true}
 				}
 			case "i32":
 				if seenI32 {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"i32"}}
 				}
 				seenI32 = true
-				{
-					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-						result.I32 = sql.NullInt32{}
-						i += 4
-					} else {
-						var nv int32
-						{
-							neg := false
-							if i < len(data) && data[i] == '-' {
-								neg = true
-								i++
-							}
-							if i >= len(data) || data[i] < '0' || data[i] > '9' {
-								return result, i, decode.NewParseErr("i32", i, scan.ErrBadNumber)
-							}
-							limit := uint64(math.MaxInt64)
-							if neg {
-								limit = scan.SignedNeg
-							}
-							var u uint64
-							for i < len(data) && data[i] >= '0' && data[i] <= '9' {
-								d := uint64(data[i] - '0')
-								if u > limit/10 || (u == limit/10 && d > limit%10) {
-									return result, i, decode.NewParseErr("i32", i, scan.ErrNumberOverflow)
-								}
-								u = u*10 + d
-								i++
-							}
-							if i < len(data) {
-								c := data[i]
-								if c == '.' || c == 'e' || c == 'E' {
-									return result, i, decode.NewParseErr("i32", i, scan.ErrBadNumber)
-								}
-							}
-							var n int64
-							if neg {
-								if u == scan.SignedNeg {
-									n = math.MinInt64
-								} else {
-									n = -int64(u)
-								}
-							} else {
-								n = int64(u)
-							}
-							nv = int32(n)
-						}
-
-						result.I32 = sql.NullInt32{Int32: nv, Valid: true}
+				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+					result.I32 = sql.NullInt32{}
+					i += 4
+				} else {
+					var nv int32
+					neg := false
+					if i < len(data) && data[i] == '-' {
+						neg = true
+						i++
 					}
+					if i >= len(data) || data[i] < '0' || data[i] > '9' {
+						return result, i, decode.NewParseErr("i32", i, scan.ErrBadNumber)
+					}
+					limit := uint64(math.MaxInt64)
+					if neg {
+						limit = scan.SignedNeg
+					}
+					var u uint64
+					for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+						d := uint64(data[i] - '0')
+						if u > limit/10 || (u == limit/10 && d > limit%10) {
+							return result, i, decode.NewParseErr("i32", i, scan.ErrNumberOverflow)
+						}
+						u = u*10 + d
+						i++
+					}
+					if i < len(data) {
+						c := data[i]
+						if c == '.' || c == 'e' || c == 'E' {
+							return result, i, decode.NewParseErr("i32", i, scan.ErrBadNumber)
+						}
+					}
+					var n int64
+					if neg {
+						if u == scan.SignedNeg {
+							n = math.MinInt64
+						} else {
+							n = -int64(u)
+						}
+					} else {
+						n = int64(u)
+					}
+					nv = int32(n)
+
+					result.I32 = sql.NullInt32{Int32: nv, Valid: true}
 				}
 			default:
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -2419,34 +2323,32 @@ func (result SQLNullStruct) DecodeFromStream(s *scan.Stream) (SQLNullStruct, err
 					return result, &validation.DuplicateKeyError{Path: []string{"b"}}
 				}
 				seenB = true
-				{
-					if s.Pos >= len(s.Bytes()) {
-						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("b", s.Pos, err)
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("b", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, decode.NewParseErr("b", s.Pos, err)
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, decode.NewParseErr("b", s.Pos, scan.ErrBadLiteral)
 						}
 					}
-					if s.Bytes()[s.Pos] == 'n' {
-						for ki := 1; ki < 4; ki++ {
-							if s.Pos+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(0); err != nil {
-									return result, decode.NewParseErr("b", s.Pos, err)
-								}
-							}
-							if s.Bytes()[s.Pos+ki] != "null"[ki] {
-								return result, decode.NewParseErr("b", s.Pos, scan.ErrBadLiteral)
-							}
-						}
-						result.B = sql.NullByte{}
-						s.Pos += 4
-					} else {
-						var nv uint64
-						nv, err = s.Uint64()
-						if err != nil {
-							return result, decode.NewParseErr("b", s.Pos, err)
-						}
+					result.B = sql.NullByte{}
+					s.Pos += 4
+				} else {
+					var nv uint64
+					nv, err = s.Uint64()
+					if err != nil {
+						return result, decode.NewParseErr("b", s.Pos, err)
+					}
 
-						result.B = sql.NullByte{Byte: byte(nv), Valid: true}
-					}
+					result.B = sql.NullByte{Byte: byte(nv), Valid: true}
 				}
 			case "f":
 				err = s.ConsumeColon()
@@ -2457,34 +2359,32 @@ func (result SQLNullStruct) DecodeFromStream(s *scan.Stream) (SQLNullStruct, err
 					return result, &validation.DuplicateKeyError{Path: []string{"f"}}
 				}
 				seenF = true
-				{
-					if s.Pos >= len(s.Bytes()) {
-						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("f", s.Pos, err)
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("f", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, decode.NewParseErr("f", s.Pos, err)
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, decode.NewParseErr("f", s.Pos, scan.ErrBadLiteral)
 						}
 					}
-					if s.Bytes()[s.Pos] == 'n' {
-						for ki := 1; ki < 4; ki++ {
-							if s.Pos+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(0); err != nil {
-									return result, decode.NewParseErr("f", s.Pos, err)
-								}
-							}
-							if s.Bytes()[s.Pos+ki] != "null"[ki] {
-								return result, decode.NewParseErr("f", s.Pos, scan.ErrBadLiteral)
-							}
-						}
-						result.F = sql.NullFloat64{}
-						s.Pos += 4
-					} else {
-						var nv float64
-						nv, err = s.Float64()
-						if err != nil {
-							return result, decode.NewParseErr("f", s.Pos, err)
-						}
+					result.F = sql.NullFloat64{}
+					s.Pos += 4
+				} else {
+					var nv float64
+					nv, err = s.Float64()
+					if err != nil {
+						return result, decode.NewParseErr("f", s.Pos, err)
+					}
 
-						result.F = sql.NullFloat64{Float64: nv, Valid: true}
-					}
+					result.F = sql.NullFloat64{Float64: nv, Valid: true}
 				}
 			case "i":
 				err = s.ConsumeColon()
@@ -2495,34 +2395,32 @@ func (result SQLNullStruct) DecodeFromStream(s *scan.Stream) (SQLNullStruct, err
 					return result, &validation.DuplicateKeyError{Path: []string{"i"}}
 				}
 				seenI = true
-				{
-					if s.Pos >= len(s.Bytes()) {
-						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("i", s.Pos, err)
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("i", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, decode.NewParseErr("i", s.Pos, err)
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, decode.NewParseErr("i", s.Pos, scan.ErrBadLiteral)
 						}
 					}
-					if s.Bytes()[s.Pos] == 'n' {
-						for ki := 1; ki < 4; ki++ {
-							if s.Pos+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(0); err != nil {
-									return result, decode.NewParseErr("i", s.Pos, err)
-								}
-							}
-							if s.Bytes()[s.Pos+ki] != "null"[ki] {
-								return result, decode.NewParseErr("i", s.Pos, scan.ErrBadLiteral)
-							}
-						}
-						result.I = sql.NullInt64{}
-						s.Pos += 4
-					} else {
-						var nv int64
-						nv, err = s.Int64()
-						if err != nil {
-							return result, decode.NewParseErr("i", s.Pos, err)
-						}
+					result.I = sql.NullInt64{}
+					s.Pos += 4
+				} else {
+					var nv int64
+					nv, err = s.Int64()
+					if err != nil {
+						return result, decode.NewParseErr("i", s.Pos, err)
+					}
 
-						result.I = sql.NullInt64{Int64: nv, Valid: true}
-					}
+					result.I = sql.NullInt64{Int64: nv, Valid: true}
 				}
 			case "s":
 				err = s.ConsumeColon()
@@ -2533,34 +2431,32 @@ func (result SQLNullStruct) DecodeFromStream(s *scan.Stream) (SQLNullStruct, err
 					return result, &validation.DuplicateKeyError{Path: []string{"s"}}
 				}
 				seenS = true
-				{
-					if s.Pos >= len(s.Bytes()) {
-						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("s", s.Pos, err)
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("s", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, decode.NewParseErr("s", s.Pos, err)
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, decode.NewParseErr("s", s.Pos, scan.ErrBadLiteral)
 						}
 					}
-					if s.Bytes()[s.Pos] == 'n' {
-						for ki := 1; ki < 4; ki++ {
-							if s.Pos+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(0); err != nil {
-									return result, decode.NewParseErr("s", s.Pos, err)
-								}
-							}
-							if s.Bytes()[s.Pos+ki] != "null"[ki] {
-								return result, decode.NewParseErr("s", s.Pos, scan.ErrBadLiteral)
-							}
-						}
-						result.S = sql.NullString{}
-						s.Pos += 4
-					} else {
-						var nv string
-						nv, err = s.String()
-						if err != nil {
-							return result, decode.NewParseErr("s", s.Pos, err)
-						}
+					result.S = sql.NullString{}
+					s.Pos += 4
+				} else {
+					var nv string
+					nv, err = s.String()
+					if err != nil {
+						return result, decode.NewParseErr("s", s.Pos, err)
+					}
 
-						result.S = sql.NullString{String: nv, Valid: true}
-					}
+					result.S = sql.NullString{String: nv, Valid: true}
 				}
 			case "t":
 				err = s.ConsumeColon()
@@ -2571,41 +2467,37 @@ func (result SQLNullStruct) DecodeFromStream(s *scan.Stream) (SQLNullStruct, err
 					return result, &validation.DuplicateKeyError{Path: []string{"t"}}
 				}
 				seenT = true
-				{
-					if s.Pos >= len(s.Bytes()) {
-						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("t", s.Pos, err)
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("t", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, decode.NewParseErr("t", s.Pos, err)
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, decode.NewParseErr("t", s.Pos, scan.ErrBadLiteral)
 						}
 					}
-					if s.Bytes()[s.Pos] == 'n' {
-						for ki := 1; ki < 4; ki++ {
-							if s.Pos+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(0); err != nil {
-									return result, decode.NewParseErr("t", s.Pos, err)
-								}
-							}
-							if s.Bytes()[s.Pos+ki] != "null"[ki] {
-								return result, decode.NewParseErr("t", s.Pos, scan.ErrBadLiteral)
-							}
-						}
-						result.T = sql.NullTime{}
-						s.Pos += 4
-					} else {
-						var nv time.Time
-						{
-							var v string
-							v, err = s.String()
-							if err != nil {
-								return result, decode.NewParseErr("t", s.Pos, err)
-							}
-							nv, err = time.Parse(time.RFC3339Nano, v)
-							if err != nil {
-								return result, decode.NewParseErr("t", s.Pos, err)
-							}
-						}
+					result.T = sql.NullTime{}
+					s.Pos += 4
+				} else {
+					var nv time.Time
+					var sv string
+					sv, err = s.String()
+					if err != nil {
+						return result, decode.NewParseErr("t", s.Pos, err)
+					}
+					nv, err = time.Parse(time.RFC3339Nano, sv)
+					if err != nil {
+						return result, decode.NewParseErr("t", s.Pos, err)
+					}
 
-						result.T = sql.NullTime{Time: nv, Valid: true}
-					}
+					result.T = sql.NullTime{Time: nv, Valid: true}
 				}
 			default:
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
@@ -2620,34 +2512,32 @@ func (result SQLNullStruct) DecodeFromStream(s *scan.Stream) (SQLNullStruct, err
 					return result, &validation.DuplicateKeyError{Path: []string{"bl"}}
 				}
 				seenBL = true
-				{
-					if s.Pos >= len(s.Bytes()) {
-						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("bl", s.Pos, err)
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("bl", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, decode.NewParseErr("bl", s.Pos, err)
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, decode.NewParseErr("bl", s.Pos, scan.ErrBadLiteral)
 						}
 					}
-					if s.Bytes()[s.Pos] == 'n' {
-						for ki := 1; ki < 4; ki++ {
-							if s.Pos+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(0); err != nil {
-									return result, decode.NewParseErr("bl", s.Pos, err)
-								}
-							}
-							if s.Bytes()[s.Pos+ki] != "null"[ki] {
-								return result, decode.NewParseErr("bl", s.Pos, scan.ErrBadLiteral)
-							}
-						}
-						result.BL = sql.NullBool{}
-						s.Pos += 4
-					} else {
-						var nv bool
-						nv, err = s.Bool()
-						if err != nil {
-							return result, decode.NewParseErr("bl", s.Pos, err)
-						}
+					result.BL = sql.NullBool{}
+					s.Pos += 4
+				} else {
+					var nv bool
+					nv, err = s.Bool()
+					if err != nil {
+						return result, decode.NewParseErr("bl", s.Pos, err)
+					}
 
-						result.BL = sql.NullBool{Bool: nv, Valid: true}
-					}
+					result.BL = sql.NullBool{Bool: nv, Valid: true}
 				}
 			} else {
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
@@ -2663,34 +2553,32 @@ func (result SQLNullStruct) DecodeFromStream(s *scan.Stream) (SQLNullStruct, err
 					return result, &validation.DuplicateKeyError{Path: []string{"i16"}}
 				}
 				seenI16 = true
-				{
-					if s.Pos >= len(s.Bytes()) {
-						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("i16", s.Pos, err)
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("i16", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, decode.NewParseErr("i16", s.Pos, err)
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, decode.NewParseErr("i16", s.Pos, scan.ErrBadLiteral)
 						}
 					}
-					if s.Bytes()[s.Pos] == 'n' {
-						for ki := 1; ki < 4; ki++ {
-							if s.Pos+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(0); err != nil {
-									return result, decode.NewParseErr("i16", s.Pos, err)
-								}
-							}
-							if s.Bytes()[s.Pos+ki] != "null"[ki] {
-								return result, decode.NewParseErr("i16", s.Pos, scan.ErrBadLiteral)
-							}
-						}
-						result.I16 = sql.NullInt16{}
-						s.Pos += 4
-					} else {
-						var nv int64
-						nv, err = s.Int64()
-						if err != nil {
-							return result, decode.NewParseErr("i16", s.Pos, err)
-						}
+					result.I16 = sql.NullInt16{}
+					s.Pos += 4
+				} else {
+					var nv int64
+					nv, err = s.Int64()
+					if err != nil {
+						return result, decode.NewParseErr("i16", s.Pos, err)
+					}
 
-						result.I16 = sql.NullInt16{Int16: int16(nv), Valid: true}
-					}
+					result.I16 = sql.NullInt16{Int16: int16(nv), Valid: true}
 				}
 			case "i32":
 				err = s.ConsumeColon()
@@ -2701,34 +2589,32 @@ func (result SQLNullStruct) DecodeFromStream(s *scan.Stream) (SQLNullStruct, err
 					return result, &validation.DuplicateKeyError{Path: []string{"i32"}}
 				}
 				seenI32 = true
-				{
-					if s.Pos >= len(s.Bytes()) {
-						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("i32", s.Pos, err)
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("i32", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, decode.NewParseErr("i32", s.Pos, err)
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, decode.NewParseErr("i32", s.Pos, scan.ErrBadLiteral)
 						}
 					}
-					if s.Bytes()[s.Pos] == 'n' {
-						for ki := 1; ki < 4; ki++ {
-							if s.Pos+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(0); err != nil {
-									return result, decode.NewParseErr("i32", s.Pos, err)
-								}
-							}
-							if s.Bytes()[s.Pos+ki] != "null"[ki] {
-								return result, decode.NewParseErr("i32", s.Pos, scan.ErrBadLiteral)
-							}
-						}
-						result.I32 = sql.NullInt32{}
-						s.Pos += 4
-					} else {
-						var nv int64
-						nv, err = s.Int64()
-						if err != nil {
-							return result, decode.NewParseErr("i32", s.Pos, err)
-						}
+					result.I32 = sql.NullInt32{}
+					s.Pos += 4
+				} else {
+					var nv int64
+					nv, err = s.Int64()
+					if err != nil {
+						return result, decode.NewParseErr("i32", s.Pos, err)
+					}
 
-						result.I32 = sql.NullInt32{Int32: int32(nv), Valid: true}
-					}
+					result.I32 = sql.NullInt32{Int32: int32(nv), Valid: true}
 				}
 			default:
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}

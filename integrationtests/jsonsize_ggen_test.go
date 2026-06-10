@@ -37,25 +37,23 @@ func (result URLStruct) DecodeFrom(data []byte) (URLStruct, int, error) {
 		if i >= len(data) || data[i] != '"' {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
-		{
-			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-				ke++
-			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-				i = ke + 1
-			} else {
-				key, i, err = scan.String(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr("", i, err)
-				}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -75,39 +73,35 @@ func (result URLStruct) DecodeFrom(data []byte) (URLStruct, int, error) {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"site"}}
 				}
 				seenSite = true
-				{
-					var s string
-					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("site", i, scan.ErrExpectString)
-					}
-					{
-						ke := i + 1
-						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-							ke++
-						}
-						if ke >= len(data) {
-							return result, i, decode.NewParseErr("site", i, scan.ErrUnterminated)
-						}
-						if data[ke] < 0x20 {
-							return result, i, decode.NewParseErr("site", i, scan.ErrBadString)
-						}
-						if data[ke] == '"' {
-							s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-							i = ke + 1
-						} else {
-							s, i, err = scan.String(data, i)
-							if err != nil {
-								return result, i, decode.NewParseErr("site", i, err)
-							}
-						}
-					}
-					var u *url.URL
-					u, err = url.Parse(s)
+				var s string
+				if i >= len(data) || data[i] != '"' {
+					return result, i, decode.NewParseErr("site", i, scan.ErrExpectString)
+				}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("site", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("site", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					s, i, err = scan.String(data, i)
 					if err != nil {
 						return result, i, decode.NewParseErr("site", i, err)
 					}
-					result.Site = *u
 				}
+				var u *url.URL
+				u, err = url.Parse(s)
+				if err != nil {
+					return result, i, decode.NewParseErr("site", i, err)
+				}
+				result.Site = *u
 			} else {
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
 			}
@@ -172,18 +166,16 @@ func (result URLStruct) DecodeFromStream(s *scan.Stream) (URLStruct, error) {
 					return result, &validation.DuplicateKeyError{Path: []string{"site"}}
 				}
 				seenSite = true
-				{
-					var v string
-					v, err = s.String()
-					if err != nil {
-						return result, decode.NewParseErr("site", s.Pos, err)
-					}
-					u, err := url.Parse(v)
-					if err != nil {
-						return result, decode.NewParseErr("site", s.Pos, err)
-					}
-					result.Site = *u
+				var sv string
+				sv, err = s.String()
+				if err != nil {
+					return result, decode.NewParseErr("site", s.Pos, err)
 				}
+				u, err := url.Parse(sv)
+				if err != nil {
+					return result, decode.NewParseErr("site", s.Pos, err)
+				}
+				result.Site = *u
 			} else {
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
 			}

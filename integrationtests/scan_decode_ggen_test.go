@@ -38,25 +38,23 @@ func (result HugeStringStruct) DecodeFrom(data []byte) (HugeStringStruct, int, e
 		if i >= len(data) || data[i] != '"' {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
-		{
-			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-				ke++
-			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-				i = ke + 1
-			} else {
-				key, i, err = scan.String(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr("", i, err)
-				}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -79,25 +77,23 @@ func (result HugeStringStruct) DecodeFrom(data []byte) (HugeStringStruct, int, e
 				if i >= len(data) || data[i] != '"' {
 					return result, i, decode.NewParseErr("big", i, scan.ErrExpectString)
 				}
-				{
-					ke := i + 1
-					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-						ke++
-					}
-					if ke >= len(data) {
-						return result, i, decode.NewParseErr("big", i, scan.ErrUnterminated)
-					}
-					if data[ke] < 0x20 {
-						return result, i, decode.NewParseErr("big", i, scan.ErrBadString)
-					}
-					if data[ke] == '"' {
-						result.Big = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-						i = ke + 1
-					} else {
-						result.Big, i, err = scan.String(data, i)
-						if err != nil {
-							return result, i, decode.NewParseErr("big", i, err)
-						}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("big", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("big", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					result.Big = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					result.Big, i, err = scan.String(data, i)
+					if err != nil {
+						return result, i, decode.NewParseErr("big", i, err)
 					}
 				}
 			} else {
@@ -247,25 +243,23 @@ func (result SequentialStringsStruct) DecodeFrom(data []byte) (SequentialStrings
 		if i >= len(data) || data[i] != '"' {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
-		{
-			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-				ke++
-			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-				i = ke + 1
-			} else {
-				key, i, err = scan.String(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr("", i, err)
-				}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -289,25 +283,23 @@ func (result SequentialStringsStruct) DecodeFrom(data []byte) (SequentialStrings
 				if i >= len(data) || data[i] != '"' {
 					return result, i, decode.NewParseErr("a", i, scan.ErrExpectString)
 				}
-				{
-					ke := i + 1
-					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-						ke++
-					}
-					if ke >= len(data) {
-						return result, i, decode.NewParseErr("a", i, scan.ErrUnterminated)
-					}
-					if data[ke] < 0x20 {
-						return result, i, decode.NewParseErr("a", i, scan.ErrBadString)
-					}
-					if data[ke] == '"' {
-						result.A = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-						i = ke + 1
-					} else {
-						result.A, i, err = scan.String(data, i)
-						if err != nil {
-							return result, i, decode.NewParseErr("a", i, err)
-						}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("a", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("a", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					result.A = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					result.A, i, err = scan.String(data, i)
+					if err != nil {
+						return result, i, decode.NewParseErr("a", i, err)
 					}
 				}
 			case "b":
@@ -318,25 +310,23 @@ func (result SequentialStringsStruct) DecodeFrom(data []byte) (SequentialStrings
 				if i >= len(data) || data[i] != '"' {
 					return result, i, decode.NewParseErr("b", i, scan.ErrExpectString)
 				}
-				{
-					ke := i + 1
-					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-						ke++
-					}
-					if ke >= len(data) {
-						return result, i, decode.NewParseErr("b", i, scan.ErrUnterminated)
-					}
-					if data[ke] < 0x20 {
-						return result, i, decode.NewParseErr("b", i, scan.ErrBadString)
-					}
-					if data[ke] == '"' {
-						result.B = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-						i = ke + 1
-					} else {
-						result.B, i, err = scan.String(data, i)
-						if err != nil {
-							return result, i, decode.NewParseErr("b", i, err)
-						}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("b", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("b", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					result.B = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					result.B, i, err = scan.String(data, i)
+					if err != nil {
+						return result, i, decode.NewParseErr("b", i, err)
 					}
 				}
 			case "c":
@@ -347,25 +337,23 @@ func (result SequentialStringsStruct) DecodeFrom(data []byte) (SequentialStrings
 				if i >= len(data) || data[i] != '"' {
 					return result, i, decode.NewParseErr("c", i, scan.ErrExpectString)
 				}
-				{
-					ke := i + 1
-					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-						ke++
-					}
-					if ke >= len(data) {
-						return result, i, decode.NewParseErr("c", i, scan.ErrUnterminated)
-					}
-					if data[ke] < 0x20 {
-						return result, i, decode.NewParseErr("c", i, scan.ErrBadString)
-					}
-					if data[ke] == '"' {
-						result.C = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-						i = ke + 1
-					} else {
-						result.C, i, err = scan.String(data, i)
-						if err != nil {
-							return result, i, decode.NewParseErr("c", i, err)
-						}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("c", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("c", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					result.C = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					result.C, i, err = scan.String(data, i)
+					if err != nil {
+						return result, i, decode.NewParseErr("c", i, err)
 					}
 				}
 			case "d":
@@ -376,25 +364,23 @@ func (result SequentialStringsStruct) DecodeFrom(data []byte) (SequentialStrings
 				if i >= len(data) || data[i] != '"' {
 					return result, i, decode.NewParseErr("d", i, scan.ErrExpectString)
 				}
-				{
-					ke := i + 1
-					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-						ke++
-					}
-					if ke >= len(data) {
-						return result, i, decode.NewParseErr("d", i, scan.ErrUnterminated)
-					}
-					if data[ke] < 0x20 {
-						return result, i, decode.NewParseErr("d", i, scan.ErrBadString)
-					}
-					if data[ke] == '"' {
-						result.D = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-						i = ke + 1
-					} else {
-						result.D, i, err = scan.String(data, i)
-						if err != nil {
-							return result, i, decode.NewParseErr("d", i, err)
-						}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("d", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("d", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					result.D = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					result.D, i, err = scan.String(data, i)
+					if err != nil {
+						return result, i, decode.NewParseErr("d", i, err)
 					}
 				}
 			case "e":
@@ -405,25 +391,23 @@ func (result SequentialStringsStruct) DecodeFrom(data []byte) (SequentialStrings
 				if i >= len(data) || data[i] != '"' {
 					return result, i, decode.NewParseErr("e", i, scan.ErrExpectString)
 				}
-				{
-					ke := i + 1
-					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-						ke++
-					}
-					if ke >= len(data) {
-						return result, i, decode.NewParseErr("e", i, scan.ErrUnterminated)
-					}
-					if data[ke] < 0x20 {
-						return result, i, decode.NewParseErr("e", i, scan.ErrBadString)
-					}
-					if data[ke] == '"' {
-						result.E = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-						i = ke + 1
-					} else {
-						result.E, i, err = scan.String(data, i)
-						if err != nil {
-							return result, i, decode.NewParseErr("e", i, err)
-						}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("e", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("e", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					result.E = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					result.E, i, err = scan.String(data, i)
+					if err != nil {
+						return result, i, decode.NewParseErr("e", i, err)
 					}
 				}
 			case "f":
@@ -434,25 +418,23 @@ func (result SequentialStringsStruct) DecodeFrom(data []byte) (SequentialStrings
 				if i >= len(data) || data[i] != '"' {
 					return result, i, decode.NewParseErr("f", i, scan.ErrExpectString)
 				}
-				{
-					ke := i + 1
-					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-						ke++
-					}
-					if ke >= len(data) {
-						return result, i, decode.NewParseErr("f", i, scan.ErrUnterminated)
-					}
-					if data[ke] < 0x20 {
-						return result, i, decode.NewParseErr("f", i, scan.ErrBadString)
-					}
-					if data[ke] == '"' {
-						result.F = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-						i = ke + 1
-					} else {
-						result.F, i, err = scan.String(data, i)
-						if err != nil {
-							return result, i, decode.NewParseErr("f", i, err)
-						}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("f", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("f", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					result.F = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					result.F, i, err = scan.String(data, i)
+					if err != nil {
+						return result, i, decode.NewParseErr("f", i, err)
 					}
 				}
 			case "g":
@@ -463,25 +445,23 @@ func (result SequentialStringsStruct) DecodeFrom(data []byte) (SequentialStrings
 				if i >= len(data) || data[i] != '"' {
 					return result, i, decode.NewParseErr("g", i, scan.ErrExpectString)
 				}
-				{
-					ke := i + 1
-					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-						ke++
-					}
-					if ke >= len(data) {
-						return result, i, decode.NewParseErr("g", i, scan.ErrUnterminated)
-					}
-					if data[ke] < 0x20 {
-						return result, i, decode.NewParseErr("g", i, scan.ErrBadString)
-					}
-					if data[ke] == '"' {
-						result.G = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-						i = ke + 1
-					} else {
-						result.G, i, err = scan.String(data, i)
-						if err != nil {
-							return result, i, decode.NewParseErr("g", i, err)
-						}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("g", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("g", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					result.G = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					result.G, i, err = scan.String(data, i)
+					if err != nil {
+						return result, i, decode.NewParseErr("g", i, err)
 					}
 				}
 			case "h":
@@ -492,25 +472,23 @@ func (result SequentialStringsStruct) DecodeFrom(data []byte) (SequentialStrings
 				if i >= len(data) || data[i] != '"' {
 					return result, i, decode.NewParseErr("h", i, scan.ErrExpectString)
 				}
-				{
-					ke := i + 1
-					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-						ke++
-					}
-					if ke >= len(data) {
-						return result, i, decode.NewParseErr("h", i, scan.ErrUnterminated)
-					}
-					if data[ke] < 0x20 {
-						return result, i, decode.NewParseErr("h", i, scan.ErrBadString)
-					}
-					if data[ke] == '"' {
-						result.H = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-						i = ke + 1
-					} else {
-						result.H, i, err = scan.String(data, i)
-						if err != nil {
-							return result, i, decode.NewParseErr("h", i, err)
-						}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("h", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("h", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					result.H = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					result.H, i, err = scan.String(data, i)
+					if err != nil {
+						return result, i, decode.NewParseErr("h", i, err)
 					}
 				}
 			default:
@@ -773,25 +751,23 @@ func (result UnknownErrorStruct) DecodeFrom(data []byte) (UnknownErrorStruct, in
 		if i >= len(data) || data[i] != '"' {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
-		{
-			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-				ke++
-			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-				i = ke + 1
-			} else {
-				key, i, err = scan.String(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr("", i, err)
-				}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -814,25 +790,23 @@ func (result UnknownErrorStruct) DecodeFrom(data []byte) (UnknownErrorStruct, in
 				if i >= len(data) || data[i] != '"' {
 					return result, i, decode.NewParseErr("name", i, scan.ErrExpectString)
 				}
-				{
-					ke := i + 1
-					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-						ke++
-					}
-					if ke >= len(data) {
-						return result, i, decode.NewParseErr("name", i, scan.ErrUnterminated)
-					}
-					if data[ke] < 0x20 {
-						return result, i, decode.NewParseErr("name", i, scan.ErrBadString)
-					}
-					if data[ke] == '"' {
-						result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-						i = ke + 1
-					} else {
-						result.Name, i, err = scan.String(data, i)
-						if err != nil {
-							return result, i, decode.NewParseErr("name", i, err)
-						}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("name", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("name", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					result.Name, i, err = scan.String(data, i)
+					if err != nil {
+						return result, i, decode.NewParseErr("name", i, err)
 					}
 				}
 			} else {

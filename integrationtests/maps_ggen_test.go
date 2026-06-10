@@ -49,25 +49,23 @@ func (result MapStruct) DecodeFrom(data []byte) (MapStruct, int, error) {
 		if i >= len(data) || data[i] != '"' {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
-		{
-			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-				ke++
-			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-				i = ke + 1
-			} else {
-				key, i, err = scan.String(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr("", i, err)
-				}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -88,125 +86,117 @@ func (result MapStruct) DecodeFrom(data []byte) (MapStruct, int, error) {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"counts"}}
 				}
 				seenCounts = true
-				{
+				for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+					i++
+				}
+				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+					i += 4
+					result.Counts = nil
+				} else {
+					if i >= len(data) || data[i] != '{' {
+						return result, i, decode.NewParseErr("counts", i, scan.ErrBadObject)
+					}
+					i++
 					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
-					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-						i += 4
-						result.Counts = nil
+					if i < len(data) && data[i] == '}' {
+						if result.Counts == nil {
+							result.Counts = map[string]int{}
+						}
 					} else {
-						if i >= len(data) || data[i] != '{' {
+						if result.Counts == nil {
+							result.Counts = make(map[string]int)
+						}
+					}
+					for i < len(data) && data[i] != '}' {
+						var mk string
+						if i >= len(data) || data[i] != '"' {
+							return result, i, decode.NewParseErr("counts", i, scan.ErrExpectString)
+						}
+						ke := i + 1
+						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+							ke++
+						}
+						if ke >= len(data) {
+							return result, i, decode.NewParseErr("counts", i, scan.ErrUnterminated)
+						}
+						if data[ke] < 0x20 {
+							return result, i, decode.NewParseErr("counts", i, scan.ErrBadString)
+						}
+						if data[ke] == '"' {
+							mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+							i = ke + 1
+						} else {
+							mk, i, err = scan.String(data, i)
+							if err != nil {
+								return result, i, decode.NewParseErr("counts", i, err)
+							}
+						}
+						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i >= len(data) || data[i] != ':' {
 							return result, i, decode.NewParseErr("counts", i, scan.ErrBadObject)
 						}
 						i++
 						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
 						}
-						if i < len(data) && data[i] == '}' {
-							if result.Counts == nil {
-								result.Counts = map[string]int{}
+						neg := false
+						if i < len(data) && data[i] == '-' {
+							neg = true
+							i++
+						}
+						if i >= len(data) || data[i] < '0' || data[i] > '9' {
+							return result, i, decode.NewParseErr("counts", i, scan.ErrBadNumber)
+						}
+						limit := uint64(math.MaxInt64)
+						if neg {
+							limit = scan.SignedNeg
+						}
+						var u uint64
+						for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+							d := uint64(data[i] - '0')
+							if u > limit/10 || (u == limit/10 && d > limit%10) {
+								return result, i, decode.NewParseErr("counts", i, scan.ErrNumberOverflow)
 							}
-						} else {
-							if result.Counts == nil {
-								result.Counts = make(map[string]int)
+							u = u*10 + d
+							i++
+						}
+						if i < len(data) {
+							c := data[i]
+							if c == '.' || c == 'e' || c == 'E' {
+								return result, i, decode.NewParseErr("counts", i, scan.ErrBadNumber)
 							}
 						}
-						for i < len(data) && data[i] != '}' {
-							var mk string
-							if i >= len(data) || data[i] != '"' {
-								return result, i, decode.NewParseErr("counts", i, scan.ErrExpectString)
+						var n int64
+						if neg {
+							if u == scan.SignedNeg {
+								n = math.MinInt64
+							} else {
+								n = -int64(u)
 							}
-							{
-								ke := i + 1
-								for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-									ke++
-								}
-								if ke >= len(data) {
-									return result, i, decode.NewParseErr("counts", i, scan.ErrUnterminated)
-								}
-								if data[ke] < 0x20 {
-									return result, i, decode.NewParseErr("counts", i, scan.ErrBadString)
-								}
-								if data[ke] == '"' {
-									mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-									i = ke + 1
-								} else {
-									mk, i, err = scan.String(data, i)
-									if err != nil {
-										return result, i, decode.NewParseErr("counts", i, err)
-									}
-								}
-							}
-							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-								i++
-							}
-							if i >= len(data) || data[i] != ':' {
-								return result, i, decode.NewParseErr("counts", i, scan.ErrBadObject)
-							}
+						} else {
+							n = int64(u)
+						}
+						result.Counts[mk] = int(n)
+						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i < len(data) && data[i] == ',' {
 							i++
 							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 								i++
 							}
-							var mn int64
-							{
-								neg := false
-								if i < len(data) && data[i] == '-' {
-									neg = true
-									i++
-								}
-								if i >= len(data) || data[i] < '0' || data[i] > '9' {
-									return result, i, decode.NewParseErr("counts", i, scan.ErrBadNumber)
-								}
-								limit := uint64(math.MaxInt64)
-								if neg {
-									limit = scan.SignedNeg
-								}
-								var u uint64
-								for i < len(data) && data[i] >= '0' && data[i] <= '9' {
-									d := uint64(data[i] - '0')
-									if u > limit/10 || (u == limit/10 && d > limit%10) {
-										return result, i, decode.NewParseErr("counts", i, scan.ErrNumberOverflow)
-									}
-									u = u*10 + d
-									i++
-								}
-								if i < len(data) {
-									c := data[i]
-									if c == '.' || c == 'e' || c == 'E' {
-										return result, i, decode.NewParseErr("counts", i, scan.ErrBadNumber)
-									}
-								}
-								var n int64
-								if neg {
-									if u == scan.SignedNeg {
-										n = math.MinInt64
-									} else {
-										n = -int64(u)
-									}
-								} else {
-									n = int64(u)
-								}
-								mn = n
-							}
-							result.Counts[mk] = int(mn)
-							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-								i++
-							}
-							if i < len(data) && data[i] == ',' {
-								i++
-								for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-									i++
-								}
-								continue
-							}
-							break
+							continue
 						}
-						if i >= len(data) || data[i] != '}' {
-							return result, i, decode.NewParseErr("counts", i, scan.ErrBadObject)
-						}
-						i++
+						break
 					}
+					if i >= len(data) || data[i] != '}' {
+						return result, i, decode.NewParseErr("counts", i, scan.ErrBadObject)
+					}
+					i++
 				}
 				if len(result.Counts) > 10 {
 					return result, i, &validation.MaxLenError{Path: []string{"counts"}, Limit: 10, Got: len(result.Counts)}
@@ -216,112 +206,104 @@ func (result MapStruct) DecodeFrom(data []byte) (MapStruct, int, error) {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"labels"}}
 				}
 				seenLabels = true
-				{
+				for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+					i++
+				}
+				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+					i += 4
+					result.Labels = nil
+					break
+				}
+				if i >= len(data) || data[i] != '{' {
+					return result, i, decode.NewParseErr("labels", i, scan.ErrBadObject)
+				}
+				i++
+				for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+					i++
+				}
+				if i < len(data) && data[i] == '}' {
+					if result.Labels == nil {
+						result.Labels = map[string]string{}
+					}
+				} else {
+					if result.Labels == nil {
+						result.Labels = make(map[string]string)
+					}
+				}
+				for i < len(data) && data[i] != '}' {
+					var mk string
+					if i >= len(data) || data[i] != '"' {
+						return result, i, decode.NewParseErr("labels", i, scan.ErrExpectString)
+					}
+					ke := i + 1
+					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+						ke++
+					}
+					if ke >= len(data) {
+						return result, i, decode.NewParseErr("labels", i, scan.ErrUnterminated)
+					}
+					if data[ke] < 0x20 {
+						return result, i, decode.NewParseErr("labels", i, scan.ErrBadString)
+					}
+					if data[ke] == '"' {
+						mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						i = ke + 1
+					} else {
+						mk, i, err = scan.String(data, i)
+						if err != nil {
+							return result, i, decode.NewParseErr("labels", i, err)
+						}
+					}
 					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
-					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-						i += 4
-						result.Labels = nil
+					if i >= len(data) || data[i] != ':' {
+						return result, i, decode.NewParseErr("labels", i, scan.ErrBadObject)
+					}
+					i++
+					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i >= len(data) || data[i] != '"' {
+						return result, i, decode.NewParseErr("labels", i, scan.ErrExpectString)
+					}
+					ve := i + 1
+					for ve < len(data) && data[ve] != '"' && data[ve] != '\\' && data[ve] >= 0x20 {
+						ve++
+					}
+					if ve >= len(data) {
+						return result, i, decode.NewParseErr("labels", i, scan.ErrUnterminated)
+					}
+					if data[ve] < 0x20 {
+						return result, i, decode.NewParseErr("labels", i, scan.ErrBadString)
+					}
+					if data[ve] == '"' {
+						result.Labels[mk] = unsafe.String(unsafe.SliceData(data[i+1:]), ve-i-1)
+						i = ve + 1
 					} else {
-						if i >= len(data) || data[i] != '{' {
-							return result, i, decode.NewParseErr("labels", i, scan.ErrBadObject)
+						result.Labels[mk], i, err = scan.String(data, i)
+						if err != nil {
+							return result, i, decode.NewParseErr("labels", i, err)
 						}
+					}
+					result.Labels[mk] = strings.TrimSpace(result.Labels[mk])
+					result.Labels[mk] = strings.ToLower(result.Labels[mk])
+					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i < len(data) && data[i] == ',' {
 						i++
 						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
 						}
-						if i < len(data) && data[i] == '}' {
-							if result.Labels == nil {
-								result.Labels = map[string]string{}
-							}
-						} else {
-							if result.Labels == nil {
-								result.Labels = make(map[string]string)
-							}
-						}
-						for i < len(data) && data[i] != '}' {
-							var mk string
-							if i >= len(data) || data[i] != '"' {
-								return result, i, decode.NewParseErr("labels", i, scan.ErrExpectString)
-							}
-							{
-								ke := i + 1
-								for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-									ke++
-								}
-								if ke >= len(data) {
-									return result, i, decode.NewParseErr("labels", i, scan.ErrUnterminated)
-								}
-								if data[ke] < 0x20 {
-									return result, i, decode.NewParseErr("labels", i, scan.ErrBadString)
-								}
-								if data[ke] == '"' {
-									mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-									i = ke + 1
-								} else {
-									mk, i, err = scan.String(data, i)
-									if err != nil {
-										return result, i, decode.NewParseErr("labels", i, err)
-									}
-								}
-							}
-							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-								i++
-							}
-							if i >= len(data) || data[i] != ':' {
-								return result, i, decode.NewParseErr("labels", i, scan.ErrBadObject)
-							}
-							i++
-							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-								i++
-							}
-							var mv string
-							if i >= len(data) || data[i] != '"' {
-								return result, i, decode.NewParseErr("labels", i, scan.ErrExpectString)
-							}
-							{
-								ke := i + 1
-								for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-									ke++
-								}
-								if ke >= len(data) {
-									return result, i, decode.NewParseErr("labels", i, scan.ErrUnterminated)
-								}
-								if data[ke] < 0x20 {
-									return result, i, decode.NewParseErr("labels", i, scan.ErrBadString)
-								}
-								if data[ke] == '"' {
-									mv = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-									i = ke + 1
-								} else {
-									mv, i, err = scan.String(data, i)
-									if err != nil {
-										return result, i, decode.NewParseErr("labels", i, err)
-									}
-								}
-							}
-							result.Labels[mk] = mv
-							result.Labels[mk] = strings.TrimSpace(result.Labels[mk])
-							result.Labels[mk] = strings.ToLower(result.Labels[mk])
-							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-								i++
-							}
-							if i < len(data) && data[i] == ',' {
-								i++
-								for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-									i++
-								}
-								continue
-							}
-							break
-						}
-						if i >= len(data) || data[i] != '}' {
-							return result, i, decode.NewParseErr("labels", i, scan.ErrBadObject)
-						}
-						i++
+						continue
 					}
+					break
 				}
+				if i >= len(data) || data[i] != '}' {
+					return result, i, decode.NewParseErr("labels", i, scan.ErrBadObject)
+				}
+				i++
 			default:
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
 			}
@@ -331,92 +313,88 @@ func (result MapStruct) DecodeFrom(data []byte) (MapStruct, int, error) {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"addresses"}}
 				}
 				seenAddresses = true
-				{
+				for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+					i++
+				}
+				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+					i += 4
+					result.Addresses = nil
+					break
+				}
+				if i >= len(data) || data[i] != '{' {
+					return result, i, decode.NewParseErr("addresses", i, scan.ErrBadObject)
+				}
+				i++
+				for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+					i++
+				}
+				if i < len(data) && data[i] == '}' {
+					if result.Addresses == nil {
+						result.Addresses = map[string]Address{}
+					}
+				} else {
+					if result.Addresses == nil {
+						result.Addresses = make(map[string]Address)
+					}
+				}
+				for i < len(data) && data[i] != '}' {
+					var mk string
+					if i >= len(data) || data[i] != '"' {
+						return result, i, decode.NewParseErr("addresses", i, scan.ErrExpectString)
+					}
+					ke := i + 1
+					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+						ke++
+					}
+					if ke >= len(data) {
+						return result, i, decode.NewParseErr("addresses", i, scan.ErrUnterminated)
+					}
+					if data[ke] < 0x20 {
+						return result, i, decode.NewParseErr("addresses", i, scan.ErrBadString)
+					}
+					if data[ke] == '"' {
+						mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						i = ke + 1
+					} else {
+						mk, i, err = scan.String(data, i)
+						if err != nil {
+							return result, i, decode.NewParseErr("addresses", i, err)
+						}
+					}
 					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
-					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-						i += 4
-						result.Addresses = nil
-					} else {
-						if i >= len(data) || data[i] != '{' {
-							return result, i, decode.NewParseErr("addresses", i, scan.ErrBadObject)
-						}
+					if i >= len(data) || data[i] != ':' {
+						return result, i, decode.NewParseErr("addresses", i, scan.ErrBadObject)
+					}
+					i++
+					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					var mv Address
+					var _n int
+					mv, _n, err = mv.DecodeFrom(data[i:])
+					i += _n
+					if err != nil {
+						return result, i, decode.NewParseErr("addresses", i, err)
+					}
+					result.Addresses[mk] = mv
+					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i < len(data) && data[i] == ',' {
 						i++
 						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
 						}
-						if i < len(data) && data[i] == '}' {
-							if result.Addresses == nil {
-								result.Addresses = map[string]Address{}
-							}
-						} else {
-							if result.Addresses == nil {
-								result.Addresses = make(map[string]Address)
-							}
-						}
-						for i < len(data) && data[i] != '}' {
-							var mk string
-							if i >= len(data) || data[i] != '"' {
-								return result, i, decode.NewParseErr("addresses", i, scan.ErrExpectString)
-							}
-							{
-								ke := i + 1
-								for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-									ke++
-								}
-								if ke >= len(data) {
-									return result, i, decode.NewParseErr("addresses", i, scan.ErrUnterminated)
-								}
-								if data[ke] < 0x20 {
-									return result, i, decode.NewParseErr("addresses", i, scan.ErrBadString)
-								}
-								if data[ke] == '"' {
-									mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-									i = ke + 1
-								} else {
-									mk, i, err = scan.String(data, i)
-									if err != nil {
-										return result, i, decode.NewParseErr("addresses", i, err)
-									}
-								}
-							}
-							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-								i++
-							}
-							if i >= len(data) || data[i] != ':' {
-								return result, i, decode.NewParseErr("addresses", i, scan.ErrBadObject)
-							}
-							i++
-							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-								i++
-							}
-							var mv Address
-							var _n int
-							mv, _n, err = mv.DecodeFrom(data[i:])
-							i += _n
-							if err != nil {
-								return result, i, decode.NewParseErr("addresses", i, err)
-							}
-							result.Addresses[mk] = mv
-							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-								i++
-							}
-							if i < len(data) && data[i] == ',' {
-								i++
-								for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-									i++
-								}
-								continue
-							}
-							break
-						}
-						if i >= len(data) || data[i] != '}' {
-							return result, i, decode.NewParseErr("addresses", i, scan.ErrBadObject)
-						}
-						i++
+						continue
 					}
+					break
 				}
+				if i >= len(data) || data[i] != '}' {
+					return result, i, decode.NewParseErr("addresses", i, scan.ErrBadObject)
+				}
+				i++
 			} else {
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
 			}
@@ -493,7 +471,33 @@ func (result MapStruct) DecodeFromStream(s *scan.Stream) (MapStruct, error) {
 					return result, &validation.DuplicateKeyError{Path: []string{"counts"}}
 				}
 				seenCounts = true
-				{
+				err = s.SkipSpace()
+				if err != nil {
+					return result, decode.NewParseErr("counts", s.Pos, err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("counts", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, decode.NewParseErr("counts", s.Pos, err)
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, decode.NewParseErr("counts", s.Pos, scan.ErrBadLiteral)
+						}
+					}
+					s.Pos += 4
+					result.Counts = nil
+				} else {
+					err = s.ObjectOpen()
+					if err != nil {
+						return result, decode.NewParseErr("counts", s.Pos, err)
+					}
 					err = s.SkipSpace()
 					if err != nil {
 						return result, decode.NewParseErr("counts", s.Pos, err)
@@ -503,21 +507,18 @@ func (result MapStruct) DecodeFromStream(s *scan.Stream) (MapStruct, error) {
 							return result, decode.NewParseErr("counts", s.Pos, err)
 						}
 					}
-					if s.Bytes()[s.Pos] == 'n' {
-						for ki := 1; ki < 4; ki++ {
-							if s.Pos+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(0); err != nil {
-									return result, decode.NewParseErr("counts", s.Pos, err)
-								}
-							}
-							if s.Bytes()[s.Pos+ki] != "null"[ki] {
-								return result, decode.NewParseErr("counts", s.Pos, scan.ErrBadLiteral)
-							}
+					if s.Bytes()[s.Pos] == '}' {
+						if result.Counts == nil {
+							result.Counts = map[string]int{}
 						}
-						s.Pos += 4
-						result.Counts = nil
 					} else {
-						err = s.ObjectOpen()
+						if result.Counts == nil {
+							result.Counts = make(map[string]int)
+						}
+					}
+					for s.Bytes()[s.Pos] != '}' {
+						var mk string
+						mk, err = s.String()
 						if err != nil {
 							return result, decode.NewParseErr("counts", s.Pos, err)
 						}
@@ -530,68 +531,43 @@ func (result MapStruct) DecodeFromStream(s *scan.Stream) (MapStruct, error) {
 								return result, decode.NewParseErr("counts", s.Pos, err)
 							}
 						}
-						if s.Bytes()[s.Pos] == '}' {
-							if result.Counts == nil {
-								result.Counts = map[string]int{}
-							}
-						} else {
-							if result.Counts == nil {
-								result.Counts = make(map[string]int)
+						if s.Bytes()[s.Pos] != ':' {
+							return result, decode.NewParseErr("counts", s.Pos, scan.ErrBadObject)
+						}
+						s.Pos++
+						err = s.SkipSpace()
+						if err != nil {
+							return result, decode.NewParseErr("counts", s.Pos, err)
+						}
+						var iv int64
+						iv, err = s.Int64()
+						if err != nil {
+							return result, decode.NewParseErr("counts", s.Pos, err)
+						}
+						result.Counts[mk] = int(iv)
+						err = s.SkipSpace()
+						if err != nil {
+							return result, decode.NewParseErr("counts", s.Pos, err)
+						}
+						if s.Pos >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, decode.NewParseErr("counts", s.Pos, err)
 							}
 						}
-						for s.Bytes()[s.Pos] != '}' {
-							var mk string
-							mk, err = s.String()
-							if err != nil {
-								return result, decode.NewParseErr("counts", s.Pos, err)
-							}
-							err = s.SkipSpace()
-							if err != nil {
-								return result, decode.NewParseErr("counts", s.Pos, err)
-							}
-							if s.Pos >= len(s.Bytes()) {
-								if err = s.ReadMore(0); err != nil {
-									return result, decode.NewParseErr("counts", s.Pos, err)
-								}
-							}
-							if s.Bytes()[s.Pos] != ':' {
-								return result, decode.NewParseErr("counts", s.Pos, scan.ErrBadObject)
-							}
+						if s.Bytes()[s.Pos] == ',' {
 							s.Pos++
 							err = s.SkipSpace()
 							if err != nil {
 								return result, decode.NewParseErr("counts", s.Pos, err)
 							}
-							var mn int64
-							mn, err = s.Int64()
-							if err != nil {
-								return result, decode.NewParseErr("counts", s.Pos, err)
-							}
-							result.Counts[mk] = int(mn)
-							err = s.SkipSpace()
-							if err != nil {
-								return result, decode.NewParseErr("counts", s.Pos, err)
-							}
-							if s.Pos >= len(s.Bytes()) {
-								if err = s.ReadMore(0); err != nil {
-									return result, decode.NewParseErr("counts", s.Pos, err)
-								}
-							}
-							if s.Bytes()[s.Pos] == ',' {
-								s.Pos++
-								err = s.SkipSpace()
-								if err != nil {
-									return result, decode.NewParseErr("counts", s.Pos, err)
-								}
-								continue
-							}
-							break
+							continue
 						}
-						if s.Bytes()[s.Pos] != '}' {
-							return result, decode.NewParseErr("counts", s.Pos, scan.ErrBadObject)
-						}
-						s.Pos++
+						break
 					}
+					if s.Bytes()[s.Pos] != '}' {
+						return result, decode.NewParseErr("counts", s.Pos, scan.ErrBadObject)
+					}
+					s.Pos++
 				}
 				if len(result.Counts) > 10 {
 					return result, &validation.MaxLenError{Path: []string{"counts"}, Limit: 10, Got: len(result.Counts)}
@@ -605,7 +581,58 @@ func (result MapStruct) DecodeFromStream(s *scan.Stream) (MapStruct, error) {
 					return result, &validation.DuplicateKeyError{Path: []string{"labels"}}
 				}
 				seenLabels = true
-				{
+				err = s.SkipSpace()
+				if err != nil {
+					return result, decode.NewParseErr("labels", s.Pos, err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("labels", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, decode.NewParseErr("labels", s.Pos, err)
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, decode.NewParseErr("labels", s.Pos, scan.ErrBadLiteral)
+						}
+					}
+					s.Pos += 4
+					result.Labels = nil
+					break
+				}
+				err = s.ObjectOpen()
+				if err != nil {
+					return result, decode.NewParseErr("labels", s.Pos, err)
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, decode.NewParseErr("labels", s.Pos, err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("labels", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == '}' {
+					if result.Labels == nil {
+						result.Labels = map[string]string{}
+					}
+				} else {
+					if result.Labels == nil {
+						result.Labels = make(map[string]string)
+					}
+				}
+				for s.Bytes()[s.Pos] != '}' {
+					var mk string
+					mk, err = s.String()
+					if err != nil {
+						return result, decode.NewParseErr("labels", s.Pos, err)
+					}
 					err = s.SkipSpace()
 					if err != nil {
 						return result, decode.NewParseErr("labels", s.Pos, err)
@@ -615,98 +642,43 @@ func (result MapStruct) DecodeFromStream(s *scan.Stream) (MapStruct, error) {
 							return result, decode.NewParseErr("labels", s.Pos, err)
 						}
 					}
-					if s.Bytes()[s.Pos] == 'n' {
-						for ki := 1; ki < 4; ki++ {
-							if s.Pos+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(0); err != nil {
-									return result, decode.NewParseErr("labels", s.Pos, err)
-								}
-							}
-							if s.Bytes()[s.Pos+ki] != "null"[ki] {
-								return result, decode.NewParseErr("labels", s.Pos, scan.ErrBadLiteral)
-							}
-						}
-						s.Pos += 4
-						result.Labels = nil
-					} else {
-						err = s.ObjectOpen()
-						if err != nil {
+					if s.Bytes()[s.Pos] != ':' {
+						return result, decode.NewParseErr("labels", s.Pos, scan.ErrBadObject)
+					}
+					s.Pos++
+					err = s.SkipSpace()
+					if err != nil {
+						return result, decode.NewParseErr("labels", s.Pos, err)
+					}
+					result.Labels[mk], err = s.String()
+					if err != nil {
+						return result, decode.NewParseErr("labels", s.Pos, err)
+					}
+					result.Labels[mk] = strings.TrimSpace(result.Labels[mk])
+					result.Labels[mk] = strings.ToLower(result.Labels[mk])
+					err = s.SkipSpace()
+					if err != nil {
+						return result, decode.NewParseErr("labels", s.Pos, err)
+					}
+					if s.Pos >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
 							return result, decode.NewParseErr("labels", s.Pos, err)
 						}
+					}
+					if s.Bytes()[s.Pos] == ',' {
+						s.Pos++
 						err = s.SkipSpace()
 						if err != nil {
 							return result, decode.NewParseErr("labels", s.Pos, err)
 						}
-						if s.Pos >= len(s.Bytes()) {
-							if err = s.ReadMore(0); err != nil {
-								return result, decode.NewParseErr("labels", s.Pos, err)
-							}
-						}
-						if s.Bytes()[s.Pos] == '}' {
-							if result.Labels == nil {
-								result.Labels = map[string]string{}
-							}
-						} else {
-							if result.Labels == nil {
-								result.Labels = make(map[string]string)
-							}
-						}
-						for s.Bytes()[s.Pos] != '}' {
-							var mk string
-							mk, err = s.String()
-							if err != nil {
-								return result, decode.NewParseErr("labels", s.Pos, err)
-							}
-							err = s.SkipSpace()
-							if err != nil {
-								return result, decode.NewParseErr("labels", s.Pos, err)
-							}
-							if s.Pos >= len(s.Bytes()) {
-								if err = s.ReadMore(0); err != nil {
-									return result, decode.NewParseErr("labels", s.Pos, err)
-								}
-							}
-							if s.Bytes()[s.Pos] != ':' {
-								return result, decode.NewParseErr("labels", s.Pos, scan.ErrBadObject)
-							}
-							s.Pos++
-							err = s.SkipSpace()
-							if err != nil {
-								return result, decode.NewParseErr("labels", s.Pos, err)
-							}
-							var mv string
-							mv, err = s.String()
-							if err != nil {
-								return result, decode.NewParseErr("labels", s.Pos, err)
-							}
-							result.Labels[mk] = mv
-							result.Labels[mk] = strings.TrimSpace(result.Labels[mk])
-							result.Labels[mk] = strings.ToLower(result.Labels[mk])
-							err = s.SkipSpace()
-							if err != nil {
-								return result, decode.NewParseErr("labels", s.Pos, err)
-							}
-							if s.Pos >= len(s.Bytes()) {
-								if err = s.ReadMore(0); err != nil {
-									return result, decode.NewParseErr("labels", s.Pos, err)
-								}
-							}
-							if s.Bytes()[s.Pos] == ',' {
-								s.Pos++
-								err = s.SkipSpace()
-								if err != nil {
-									return result, decode.NewParseErr("labels", s.Pos, err)
-								}
-								continue
-							}
-							break
-						}
-						if s.Bytes()[s.Pos] != '}' {
-							return result, decode.NewParseErr("labels", s.Pos, scan.ErrBadObject)
-						}
-						s.Pos++
+						continue
 					}
+					break
 				}
+				if s.Bytes()[s.Pos] != '}' {
+					return result, decode.NewParseErr("labels", s.Pos, scan.ErrBadObject)
+				}
+				s.Pos++
 			default:
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
 			}
@@ -720,7 +692,58 @@ func (result MapStruct) DecodeFromStream(s *scan.Stream) (MapStruct, error) {
 					return result, &validation.DuplicateKeyError{Path: []string{"addresses"}}
 				}
 				seenAddresses = true
-				{
+				err = s.SkipSpace()
+				if err != nil {
+					return result, decode.NewParseErr("addresses", s.Pos, err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("addresses", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, decode.NewParseErr("addresses", s.Pos, err)
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, decode.NewParseErr("addresses", s.Pos, scan.ErrBadLiteral)
+						}
+					}
+					s.Pos += 4
+					result.Addresses = nil
+					break
+				}
+				err = s.ObjectOpen()
+				if err != nil {
+					return result, decode.NewParseErr("addresses", s.Pos, err)
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, decode.NewParseErr("addresses", s.Pos, err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("addresses", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == '}' {
+					if result.Addresses == nil {
+						result.Addresses = map[string]Address{}
+					}
+				} else {
+					if result.Addresses == nil {
+						result.Addresses = make(map[string]Address)
+					}
+				}
+				for s.Bytes()[s.Pos] != '}' {
+					var mk string
+					mk, err = s.String()
+					if err != nil {
+						return result, decode.NewParseErr("addresses", s.Pos, err)
+					}
 					err = s.SkipSpace()
 					if err != nil {
 						return result, decode.NewParseErr("addresses", s.Pos, err)
@@ -730,96 +753,43 @@ func (result MapStruct) DecodeFromStream(s *scan.Stream) (MapStruct, error) {
 							return result, decode.NewParseErr("addresses", s.Pos, err)
 						}
 					}
-					if s.Bytes()[s.Pos] == 'n' {
-						for ki := 1; ki < 4; ki++ {
-							if s.Pos+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(0); err != nil {
-									return result, decode.NewParseErr("addresses", s.Pos, err)
-								}
-							}
-							if s.Bytes()[s.Pos+ki] != "null"[ki] {
-								return result, decode.NewParseErr("addresses", s.Pos, scan.ErrBadLiteral)
-							}
-						}
-						s.Pos += 4
-						result.Addresses = nil
-					} else {
-						err = s.ObjectOpen()
-						if err != nil {
+					if s.Bytes()[s.Pos] != ':' {
+						return result, decode.NewParseErr("addresses", s.Pos, scan.ErrBadObject)
+					}
+					s.Pos++
+					err = s.SkipSpace()
+					if err != nil {
+						return result, decode.NewParseErr("addresses", s.Pos, err)
+					}
+					var mv Address
+					mv, err = mv.DecodeFromStream(s)
+					if err != nil {
+						return result, decode.NewParseErr("addresses", s.Pos, err)
+					}
+					result.Addresses[mk] = mv
+					err = s.SkipSpace()
+					if err != nil {
+						return result, decode.NewParseErr("addresses", s.Pos, err)
+					}
+					if s.Pos >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
 							return result, decode.NewParseErr("addresses", s.Pos, err)
 						}
+					}
+					if s.Bytes()[s.Pos] == ',' {
+						s.Pos++
 						err = s.SkipSpace()
 						if err != nil {
 							return result, decode.NewParseErr("addresses", s.Pos, err)
 						}
-						if s.Pos >= len(s.Bytes()) {
-							if err = s.ReadMore(0); err != nil {
-								return result, decode.NewParseErr("addresses", s.Pos, err)
-							}
-						}
-						if s.Bytes()[s.Pos] == '}' {
-							if result.Addresses == nil {
-								result.Addresses = map[string]Address{}
-							}
-						} else {
-							if result.Addresses == nil {
-								result.Addresses = make(map[string]Address)
-							}
-						}
-						for s.Bytes()[s.Pos] != '}' {
-							var mk string
-							mk, err = s.String()
-							if err != nil {
-								return result, decode.NewParseErr("addresses", s.Pos, err)
-							}
-							err = s.SkipSpace()
-							if err != nil {
-								return result, decode.NewParseErr("addresses", s.Pos, err)
-							}
-							if s.Pos >= len(s.Bytes()) {
-								if err = s.ReadMore(0); err != nil {
-									return result, decode.NewParseErr("addresses", s.Pos, err)
-								}
-							}
-							if s.Bytes()[s.Pos] != ':' {
-								return result, decode.NewParseErr("addresses", s.Pos, scan.ErrBadObject)
-							}
-							s.Pos++
-							err = s.SkipSpace()
-							if err != nil {
-								return result, decode.NewParseErr("addresses", s.Pos, err)
-							}
-							var mv Address
-							mv, err = mv.DecodeFromStream(s)
-							if err != nil {
-								return result, decode.NewParseErr("addresses", s.Pos, err)
-							}
-							result.Addresses[mk] = mv
-							err = s.SkipSpace()
-							if err != nil {
-								return result, decode.NewParseErr("addresses", s.Pos, err)
-							}
-							if s.Pos >= len(s.Bytes()) {
-								if err = s.ReadMore(0); err != nil {
-									return result, decode.NewParseErr("addresses", s.Pos, err)
-								}
-							}
-							if s.Bytes()[s.Pos] == ',' {
-								s.Pos++
-								err = s.SkipSpace()
-								if err != nil {
-									return result, decode.NewParseErr("addresses", s.Pos, err)
-								}
-								continue
-							}
-							break
-						}
-						if s.Bytes()[s.Pos] != '}' {
-							return result, decode.NewParseErr("addresses", s.Pos, scan.ErrBadObject)
-						}
-						s.Pos++
+						continue
 					}
+					break
 				}
+				if s.Bytes()[s.Pos] != '}' {
+					return result, decode.NewParseErr("addresses", s.Pos, scan.ErrBadObject)
+				}
+				s.Pos++
 			} else {
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
 			}
@@ -881,20 +851,18 @@ func (s MapStruct) AppendJSON(dst []byte) ([]byte, error) {
 		dst = append(dst, "null"...)
 	} else {
 		dst = append(dst, '{')
-		{
-			first := true
-			for k, v := range s.Addresses {
-				if first {
-					first = false
-					dst = append(dst, '"')
-				} else {
-					dst = append(dst, ",\""...)
-				}
-				dst = encode.AppendStringNoHTML(dst, k)
-				dst = append(dst, ':')
-				if dst, err = v.AppendJSON(dst); err != nil {
-					return dst, err
-				}
+		firstAddresses := true
+		for k, v := range s.Addresses {
+			if firstAddresses {
+				firstAddresses = false
+				dst = append(dst, '"')
+			} else {
+				dst = append(dst, ",\""...)
+			}
+			dst = encode.AppendStringNoHTML(dst, k)
+			dst = append(dst, ':')
+			if dst, err = v.AppendJSON(dst); err != nil {
+				return dst, err
 			}
 		}
 		dst = append(dst, '}')
@@ -904,19 +872,17 @@ func (s MapStruct) AppendJSON(dst []byte) ([]byte, error) {
 		dst = append(dst, "null"...)
 	} else {
 		dst = append(dst, '{')
-		{
-			first := true
-			for k, v := range s.Counts {
-				if first {
-					first = false
-					dst = append(dst, '"')
-				} else {
-					dst = append(dst, ",\""...)
-				}
-				dst = encode.AppendStringNoHTML(dst, k)
-				dst = append(dst, ':')
-				dst = strconv.AppendInt(dst, int64(v), 10)
+		firstCounts := true
+		for k, v := range s.Counts {
+			if firstCounts {
+				firstCounts = false
+				dst = append(dst, '"')
+			} else {
+				dst = append(dst, ",\""...)
 			}
+			dst = encode.AppendStringNoHTML(dst, k)
+			dst = append(dst, ':')
+			dst = strconv.AppendInt(dst, int64(v), 10)
 		}
 		dst = append(dst, '}')
 	}
@@ -925,19 +891,17 @@ func (s MapStruct) AppendJSON(dst []byte) ([]byte, error) {
 		dst = append(dst, "null"...)
 	} else {
 		dst = append(dst, '{')
-		{
-			first := true
-			for k, v := range s.Labels {
-				if first {
-					first = false
-					dst = append(dst, '"')
-				} else {
-					dst = append(dst, ",\""...)
-				}
-				dst = encode.AppendStringNoHTML(dst, k)
-				dst = append(dst, ":\""...)
-				dst = encode.AppendStringNoHTML(dst, v)
+		firstLabels := true
+		for k, v := range s.Labels {
+			if firstLabels {
+				firstLabels = false
+				dst = append(dst, '"')
+			} else {
+				dst = append(dst, ",\""...)
 			}
+			dst = encode.AppendStringNoHTML(dst, k)
+			dst = append(dst, ":\""...)
+			dst = encode.AppendStringNoHTML(dst, v)
 		}
 		dst = append(dst, '}')
 	}
@@ -979,25 +943,23 @@ func (result MapDiveStruct) DecodeFrom(data []byte) (MapDiveStruct, int, error) 
 		if i >= len(data) || data[i] != '"' {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
-		{
-			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-				ke++
-			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-				i = ke + 1
-			} else {
-				key, i, err = scan.String(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr("", i, err)
-				}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -1017,116 +979,108 @@ func (result MapDiveStruct) DecodeFrom(data []byte) (MapDiveStruct, int, error) 
 					return result, i, &validation.DuplicateKeyError{Path: []string{"names"}}
 				}
 				seenNames = true
-				{
+				for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+					i++
+				}
+				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+					i += 4
+					result.Names = nil
+					break
+				}
+				if i >= len(data) || data[i] != '{' {
+					return result, i, decode.NewParseErr("names", i, scan.ErrBadObject)
+				}
+				i++
+				for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+					i++
+				}
+				if i < len(data) && data[i] == '}' {
+					if result.Names == nil {
+						result.Names = map[string]string{}
+					}
+				} else {
+					if result.Names == nil {
+						result.Names = make(map[string]string)
+					}
+				}
+				for i < len(data) && data[i] != '}' {
+					var mk string
+					if i >= len(data) || data[i] != '"' {
+						return result, i, decode.NewParseErr("names", i, scan.ErrExpectString)
+					}
+					ke := i + 1
+					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+						ke++
+					}
+					if ke >= len(data) {
+						return result, i, decode.NewParseErr("names", i, scan.ErrUnterminated)
+					}
+					if data[ke] < 0x20 {
+						return result, i, decode.NewParseErr("names", i, scan.ErrBadString)
+					}
+					if data[ke] == '"' {
+						mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						i = ke + 1
+					} else {
+						mk, i, err = scan.String(data, i)
+						if err != nil {
+							return result, i, decode.NewParseErr("names", i, err)
+						}
+					}
 					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
-					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-						i += 4
-						result.Names = nil
+					if i >= len(data) || data[i] != ':' {
+						return result, i, decode.NewParseErr("names", i, scan.ErrBadObject)
+					}
+					i++
+					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i >= len(data) || data[i] != '"' {
+						return result, i, decode.NewParseErr("names", i, scan.ErrExpectString)
+					}
+					ve := i + 1
+					for ve < len(data) && data[ve] != '"' && data[ve] != '\\' && data[ve] >= 0x20 {
+						ve++
+					}
+					if ve >= len(data) {
+						return result, i, decode.NewParseErr("names", i, scan.ErrUnterminated)
+					}
+					if data[ve] < 0x20 {
+						return result, i, decode.NewParseErr("names", i, scan.ErrBadString)
+					}
+					if data[ve] == '"' {
+						result.Names[mk] = unsafe.String(unsafe.SliceData(data[i+1:]), ve-i-1)
+						i = ve + 1
 					} else {
-						if i >= len(data) || data[i] != '{' {
-							return result, i, decode.NewParseErr("names", i, scan.ErrBadObject)
+						result.Names[mk], i, err = scan.String(data, i)
+						if err != nil {
+							return result, i, decode.NewParseErr("names", i, err)
 						}
+					}
+					if len(result.Names[mk]) < 1 {
+						return result, i, &validation.MinLenError{Path: []string{"names.value"}, Limit: 1, Got: len(result.Names[mk])}
+					}
+					if len(result.Names[mk]) > 5 {
+						return result, i, &validation.MaxLenError{Path: []string{"names.value"}, Limit: 5, Got: len(result.Names[mk])}
+					}
+					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i < len(data) && data[i] == ',' {
 						i++
 						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
 						}
-						if i < len(data) && data[i] == '}' {
-							if result.Names == nil {
-								result.Names = map[string]string{}
-							}
-						} else {
-							if result.Names == nil {
-								result.Names = make(map[string]string)
-							}
-						}
-						for i < len(data) && data[i] != '}' {
-							var mk string
-							if i >= len(data) || data[i] != '"' {
-								return result, i, decode.NewParseErr("names", i, scan.ErrExpectString)
-							}
-							{
-								ke := i + 1
-								for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-									ke++
-								}
-								if ke >= len(data) {
-									return result, i, decode.NewParseErr("names", i, scan.ErrUnterminated)
-								}
-								if data[ke] < 0x20 {
-									return result, i, decode.NewParseErr("names", i, scan.ErrBadString)
-								}
-								if data[ke] == '"' {
-									mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-									i = ke + 1
-								} else {
-									mk, i, err = scan.String(data, i)
-									if err != nil {
-										return result, i, decode.NewParseErr("names", i, err)
-									}
-								}
-							}
-							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-								i++
-							}
-							if i >= len(data) || data[i] != ':' {
-								return result, i, decode.NewParseErr("names", i, scan.ErrBadObject)
-							}
-							i++
-							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-								i++
-							}
-							var mv string
-							if i >= len(data) || data[i] != '"' {
-								return result, i, decode.NewParseErr("names", i, scan.ErrExpectString)
-							}
-							{
-								ke := i + 1
-								for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-									ke++
-								}
-								if ke >= len(data) {
-									return result, i, decode.NewParseErr("names", i, scan.ErrUnterminated)
-								}
-								if data[ke] < 0x20 {
-									return result, i, decode.NewParseErr("names", i, scan.ErrBadString)
-								}
-								if data[ke] == '"' {
-									mv = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-									i = ke + 1
-								} else {
-									mv, i, err = scan.String(data, i)
-									if err != nil {
-										return result, i, decode.NewParseErr("names", i, err)
-									}
-								}
-							}
-							result.Names[mk] = mv
-							if len(result.Names[mk]) < 1 {
-								return result, i, &validation.MinLenError{Path: []string{"names.value"}, Limit: 1, Got: len(result.Names[mk])}
-							}
-							if len(result.Names[mk]) > 5 {
-								return result, i, &validation.MaxLenError{Path: []string{"names.value"}, Limit: 5, Got: len(result.Names[mk])}
-							}
-							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-								i++
-							}
-							if i < len(data) && data[i] == ',' {
-								i++
-								for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-									i++
-								}
-								continue
-							}
-							break
-						}
-						if i >= len(data) || data[i] != '}' {
-							return result, i, decode.NewParseErr("names", i, scan.ErrBadObject)
-						}
-						i++
+						continue
 					}
+					break
 				}
+				if i >= len(data) || data[i] != '}' {
+					return result, i, decode.NewParseErr("names", i, scan.ErrBadObject)
+				}
+				i++
 			} else {
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
 			}
@@ -1136,132 +1090,124 @@ func (result MapDiveStruct) DecodeFrom(data []byte) (MapDiveStruct, int, error) 
 					return result, i, &validation.DuplicateKeyError{Path: []string{"counts"}}
 				}
 				seenCounts = true
-				{
+				for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+					i++
+				}
+				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+					i += 4
+					result.Counts = nil
+					break
+				}
+				if i >= len(data) || data[i] != '{' {
+					return result, i, decode.NewParseErr("counts", i, scan.ErrBadObject)
+				}
+				i++
+				for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+					i++
+				}
+				if i < len(data) && data[i] == '}' {
+					if result.Counts == nil {
+						result.Counts = map[string]int{}
+					}
+				} else {
+					if result.Counts == nil {
+						result.Counts = make(map[string]int)
+					}
+				}
+				for i < len(data) && data[i] != '}' {
+					var mk string
+					if i >= len(data) || data[i] != '"' {
+						return result, i, decode.NewParseErr("counts", i, scan.ErrExpectString)
+					}
+					ke := i + 1
+					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+						ke++
+					}
+					if ke >= len(data) {
+						return result, i, decode.NewParseErr("counts", i, scan.ErrUnterminated)
+					}
+					if data[ke] < 0x20 {
+						return result, i, decode.NewParseErr("counts", i, scan.ErrBadString)
+					}
+					if data[ke] == '"' {
+						mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						i = ke + 1
+					} else {
+						mk, i, err = scan.String(data, i)
+						if err != nil {
+							return result, i, decode.NewParseErr("counts", i, err)
+						}
+					}
 					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
-					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-						i += 4
-						result.Counts = nil
-					} else {
-						if i >= len(data) || data[i] != '{' {
-							return result, i, decode.NewParseErr("counts", i, scan.ErrBadObject)
+					if i >= len(data) || data[i] != ':' {
+						return result, i, decode.NewParseErr("counts", i, scan.ErrBadObject)
+					}
+					i++
+					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					neg := false
+					if i < len(data) && data[i] == '-' {
+						neg = true
+						i++
+					}
+					if i >= len(data) || data[i] < '0' || data[i] > '9' {
+						return result, i, decode.NewParseErr("counts", i, scan.ErrBadNumber)
+					}
+					limit := uint64(math.MaxInt64)
+					if neg {
+						limit = scan.SignedNeg
+					}
+					var u uint64
+					for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+						d := uint64(data[i] - '0')
+						if u > limit/10 || (u == limit/10 && d > limit%10) {
+							return result, i, decode.NewParseErr("counts", i, scan.ErrNumberOverflow)
 						}
+						u = u*10 + d
+						i++
+					}
+					if i < len(data) {
+						c := data[i]
+						if c == '.' || c == 'e' || c == 'E' {
+							return result, i, decode.NewParseErr("counts", i, scan.ErrBadNumber)
+						}
+					}
+					var n int64
+					if neg {
+						if u == scan.SignedNeg {
+							n = math.MinInt64
+						} else {
+							n = -int64(u)
+						}
+					} else {
+						n = int64(u)
+					}
+					result.Counts[mk] = int(n)
+					if result.Counts[mk] < 0 {
+						return result, i, &validation.GTEError{Path: []string{"counts.value"}, Limit: 0, Value: result.Counts[mk]}
+					}
+					if result.Counts[mk] > 100 {
+						return result, i, &validation.LTEError{Path: []string{"counts.value"}, Limit: 100, Value: result.Counts[mk]}
+					}
+					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i < len(data) && data[i] == ',' {
 						i++
 						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
 						}
-						if i < len(data) && data[i] == '}' {
-							if result.Counts == nil {
-								result.Counts = map[string]int{}
-							}
-						} else {
-							if result.Counts == nil {
-								result.Counts = make(map[string]int)
-							}
-						}
-						for i < len(data) && data[i] != '}' {
-							var mk string
-							if i >= len(data) || data[i] != '"' {
-								return result, i, decode.NewParseErr("counts", i, scan.ErrExpectString)
-							}
-							{
-								ke := i + 1
-								for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-									ke++
-								}
-								if ke >= len(data) {
-									return result, i, decode.NewParseErr("counts", i, scan.ErrUnterminated)
-								}
-								if data[ke] < 0x20 {
-									return result, i, decode.NewParseErr("counts", i, scan.ErrBadString)
-								}
-								if data[ke] == '"' {
-									mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-									i = ke + 1
-								} else {
-									mk, i, err = scan.String(data, i)
-									if err != nil {
-										return result, i, decode.NewParseErr("counts", i, err)
-									}
-								}
-							}
-							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-								i++
-							}
-							if i >= len(data) || data[i] != ':' {
-								return result, i, decode.NewParseErr("counts", i, scan.ErrBadObject)
-							}
-							i++
-							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-								i++
-							}
-							var mn int64
-							{
-								neg := false
-								if i < len(data) && data[i] == '-' {
-									neg = true
-									i++
-								}
-								if i >= len(data) || data[i] < '0' || data[i] > '9' {
-									return result, i, decode.NewParseErr("counts", i, scan.ErrBadNumber)
-								}
-								limit := uint64(math.MaxInt64)
-								if neg {
-									limit = scan.SignedNeg
-								}
-								var u uint64
-								for i < len(data) && data[i] >= '0' && data[i] <= '9' {
-									d := uint64(data[i] - '0')
-									if u > limit/10 || (u == limit/10 && d > limit%10) {
-										return result, i, decode.NewParseErr("counts", i, scan.ErrNumberOverflow)
-									}
-									u = u*10 + d
-									i++
-								}
-								if i < len(data) {
-									c := data[i]
-									if c == '.' || c == 'e' || c == 'E' {
-										return result, i, decode.NewParseErr("counts", i, scan.ErrBadNumber)
-									}
-								}
-								var n int64
-								if neg {
-									if u == scan.SignedNeg {
-										n = math.MinInt64
-									} else {
-										n = -int64(u)
-									}
-								} else {
-									n = int64(u)
-								}
-								mn = n
-							}
-							result.Counts[mk] = int(mn)
-							if result.Counts[mk] < 0 {
-								return result, i, &validation.GTEError{Path: []string{"counts.value"}, Limit: 0, Value: result.Counts[mk]}
-							}
-							if result.Counts[mk] > 100 {
-								return result, i, &validation.LTEError{Path: []string{"counts.value"}, Limit: 100, Value: result.Counts[mk]}
-							}
-							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-								i++
-							}
-							if i < len(data) && data[i] == ',' {
-								i++
-								for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-									i++
-								}
-								continue
-							}
-							break
-						}
-						if i >= len(data) || data[i] != '}' {
-							return result, i, decode.NewParseErr("counts", i, scan.ErrBadObject)
-						}
-						i++
+						continue
 					}
+					break
 				}
+				if i >= len(data) || data[i] != '}' {
+					return result, i, decode.NewParseErr("counts", i, scan.ErrBadObject)
+				}
+				i++
 			} else {
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
 			}
@@ -1271,132 +1217,124 @@ func (result MapDiveStruct) DecodeFrom(data []byte) (MapDiveStruct, int, error) 
 					return result, i, &validation.DuplicateKeyError{Path: []string{"clamped"}}
 				}
 				seenClamped = true
-				{
+				for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+					i++
+				}
+				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+					i += 4
+					result.Clamped = nil
+					break
+				}
+				if i >= len(data) || data[i] != '{' {
+					return result, i, decode.NewParseErr("clamped", i, scan.ErrBadObject)
+				}
+				i++
+				for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+					i++
+				}
+				if i < len(data) && data[i] == '}' {
+					if result.Clamped == nil {
+						result.Clamped = map[string]int{}
+					}
+				} else {
+					if result.Clamped == nil {
+						result.Clamped = make(map[string]int)
+					}
+				}
+				for i < len(data) && data[i] != '}' {
+					var mk string
+					if i >= len(data) || data[i] != '"' {
+						return result, i, decode.NewParseErr("clamped", i, scan.ErrExpectString)
+					}
+					ke := i + 1
+					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+						ke++
+					}
+					if ke >= len(data) {
+						return result, i, decode.NewParseErr("clamped", i, scan.ErrUnterminated)
+					}
+					if data[ke] < 0x20 {
+						return result, i, decode.NewParseErr("clamped", i, scan.ErrBadString)
+					}
+					if data[ke] == '"' {
+						mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						i = ke + 1
+					} else {
+						mk, i, err = scan.String(data, i)
+						if err != nil {
+							return result, i, decode.NewParseErr("clamped", i, err)
+						}
+					}
 					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
-					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-						i += 4
-						result.Clamped = nil
-					} else {
-						if i >= len(data) || data[i] != '{' {
-							return result, i, decode.NewParseErr("clamped", i, scan.ErrBadObject)
+					if i >= len(data) || data[i] != ':' {
+						return result, i, decode.NewParseErr("clamped", i, scan.ErrBadObject)
+					}
+					i++
+					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					neg := false
+					if i < len(data) && data[i] == '-' {
+						neg = true
+						i++
+					}
+					if i >= len(data) || data[i] < '0' || data[i] > '9' {
+						return result, i, decode.NewParseErr("clamped", i, scan.ErrBadNumber)
+					}
+					limit := uint64(math.MaxInt64)
+					if neg {
+						limit = scan.SignedNeg
+					}
+					var u uint64
+					for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+						d := uint64(data[i] - '0')
+						if u > limit/10 || (u == limit/10 && d > limit%10) {
+							return result, i, decode.NewParseErr("clamped", i, scan.ErrNumberOverflow)
 						}
+						u = u*10 + d
+						i++
+					}
+					if i < len(data) {
+						c := data[i]
+						if c == '.' || c == 'e' || c == 'E' {
+							return result, i, decode.NewParseErr("clamped", i, scan.ErrBadNumber)
+						}
+					}
+					var n int64
+					if neg {
+						if u == scan.SignedNeg {
+							n = math.MinInt64
+						} else {
+							n = -int64(u)
+						}
+					} else {
+						n = int64(u)
+					}
+					result.Clamped[mk] = int(n)
+					if result.Clamped[mk] < 0 {
+						result.Clamped[mk] = 0
+					}
+					if result.Clamped[mk] > 100 {
+						result.Clamped[mk] = 100
+					}
+					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i < len(data) && data[i] == ',' {
 						i++
 						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
 						}
-						if i < len(data) && data[i] == '}' {
-							if result.Clamped == nil {
-								result.Clamped = map[string]int{}
-							}
-						} else {
-							if result.Clamped == nil {
-								result.Clamped = make(map[string]int)
-							}
-						}
-						for i < len(data) && data[i] != '}' {
-							var mk string
-							if i >= len(data) || data[i] != '"' {
-								return result, i, decode.NewParseErr("clamped", i, scan.ErrExpectString)
-							}
-							{
-								ke := i + 1
-								for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-									ke++
-								}
-								if ke >= len(data) {
-									return result, i, decode.NewParseErr("clamped", i, scan.ErrUnterminated)
-								}
-								if data[ke] < 0x20 {
-									return result, i, decode.NewParseErr("clamped", i, scan.ErrBadString)
-								}
-								if data[ke] == '"' {
-									mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-									i = ke + 1
-								} else {
-									mk, i, err = scan.String(data, i)
-									if err != nil {
-										return result, i, decode.NewParseErr("clamped", i, err)
-									}
-								}
-							}
-							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-								i++
-							}
-							if i >= len(data) || data[i] != ':' {
-								return result, i, decode.NewParseErr("clamped", i, scan.ErrBadObject)
-							}
-							i++
-							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-								i++
-							}
-							var mn int64
-							{
-								neg := false
-								if i < len(data) && data[i] == '-' {
-									neg = true
-									i++
-								}
-								if i >= len(data) || data[i] < '0' || data[i] > '9' {
-									return result, i, decode.NewParseErr("clamped", i, scan.ErrBadNumber)
-								}
-								limit := uint64(math.MaxInt64)
-								if neg {
-									limit = scan.SignedNeg
-								}
-								var u uint64
-								for i < len(data) && data[i] >= '0' && data[i] <= '9' {
-									d := uint64(data[i] - '0')
-									if u > limit/10 || (u == limit/10 && d > limit%10) {
-										return result, i, decode.NewParseErr("clamped", i, scan.ErrNumberOverflow)
-									}
-									u = u*10 + d
-									i++
-								}
-								if i < len(data) {
-									c := data[i]
-									if c == '.' || c == 'e' || c == 'E' {
-										return result, i, decode.NewParseErr("clamped", i, scan.ErrBadNumber)
-									}
-								}
-								var n int64
-								if neg {
-									if u == scan.SignedNeg {
-										n = math.MinInt64
-									} else {
-										n = -int64(u)
-									}
-								} else {
-									n = int64(u)
-								}
-								mn = n
-							}
-							result.Clamped[mk] = int(mn)
-							if result.Clamped[mk] < 0 {
-								result.Clamped[mk] = 0
-							}
-							if result.Clamped[mk] > 100 {
-								result.Clamped[mk] = 100
-							}
-							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-								i++
-							}
-							if i < len(data) && data[i] == ',' {
-								i++
-								for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-									i++
-								}
-								continue
-							}
-							break
-						}
-						if i >= len(data) || data[i] != '}' {
-							return result, i, decode.NewParseErr("clamped", i, scan.ErrBadObject)
-						}
-						i++
+						continue
 					}
+					break
 				}
+				if i >= len(data) || data[i] != '}' {
+					return result, i, decode.NewParseErr("clamped", i, scan.ErrBadObject)
+				}
+				i++
 			} else {
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
 			}
@@ -1472,7 +1410,58 @@ func (result MapDiveStruct) DecodeFromStream(s *scan.Stream) (MapDiveStruct, err
 					return result, &validation.DuplicateKeyError{Path: []string{"names"}}
 				}
 				seenNames = true
-				{
+				err = s.SkipSpace()
+				if err != nil {
+					return result, decode.NewParseErr("names", s.Pos, err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("names", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, decode.NewParseErr("names", s.Pos, err)
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, decode.NewParseErr("names", s.Pos, scan.ErrBadLiteral)
+						}
+					}
+					s.Pos += 4
+					result.Names = nil
+					break
+				}
+				err = s.ObjectOpen()
+				if err != nil {
+					return result, decode.NewParseErr("names", s.Pos, err)
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, decode.NewParseErr("names", s.Pos, err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("names", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == '}' {
+					if result.Names == nil {
+						result.Names = map[string]string{}
+					}
+				} else {
+					if result.Names == nil {
+						result.Names = make(map[string]string)
+					}
+				}
+				for s.Bytes()[s.Pos] != '}' {
+					var mk string
+					mk, err = s.String()
+					if err != nil {
+						return result, decode.NewParseErr("names", s.Pos, err)
+					}
 					err = s.SkipSpace()
 					if err != nil {
 						return result, decode.NewParseErr("names", s.Pos, err)
@@ -1482,102 +1471,47 @@ func (result MapDiveStruct) DecodeFromStream(s *scan.Stream) (MapDiveStruct, err
 							return result, decode.NewParseErr("names", s.Pos, err)
 						}
 					}
-					if s.Bytes()[s.Pos] == 'n' {
-						for ki := 1; ki < 4; ki++ {
-							if s.Pos+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(0); err != nil {
-									return result, decode.NewParseErr("names", s.Pos, err)
-								}
-							}
-							if s.Bytes()[s.Pos+ki] != "null"[ki] {
-								return result, decode.NewParseErr("names", s.Pos, scan.ErrBadLiteral)
-							}
-						}
-						s.Pos += 4
-						result.Names = nil
-					} else {
-						err = s.ObjectOpen()
-						if err != nil {
+					if s.Bytes()[s.Pos] != ':' {
+						return result, decode.NewParseErr("names", s.Pos, scan.ErrBadObject)
+					}
+					s.Pos++
+					err = s.SkipSpace()
+					if err != nil {
+						return result, decode.NewParseErr("names", s.Pos, err)
+					}
+					result.Names[mk], err = s.String()
+					if err != nil {
+						return result, decode.NewParseErr("names", s.Pos, err)
+					}
+					if len(result.Names[mk]) < 1 {
+						return result, &validation.MinLenError{Path: []string{"names.value"}, Limit: 1, Got: len(result.Names[mk])}
+					}
+					if len(result.Names[mk]) > 5 {
+						return result, &validation.MaxLenError{Path: []string{"names.value"}, Limit: 5, Got: len(result.Names[mk])}
+					}
+					err = s.SkipSpace()
+					if err != nil {
+						return result, decode.NewParseErr("names", s.Pos, err)
+					}
+					if s.Pos >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
 							return result, decode.NewParseErr("names", s.Pos, err)
 						}
+					}
+					if s.Bytes()[s.Pos] == ',' {
+						s.Pos++
 						err = s.SkipSpace()
 						if err != nil {
 							return result, decode.NewParseErr("names", s.Pos, err)
 						}
-						if s.Pos >= len(s.Bytes()) {
-							if err = s.ReadMore(0); err != nil {
-								return result, decode.NewParseErr("names", s.Pos, err)
-							}
-						}
-						if s.Bytes()[s.Pos] == '}' {
-							if result.Names == nil {
-								result.Names = map[string]string{}
-							}
-						} else {
-							if result.Names == nil {
-								result.Names = make(map[string]string)
-							}
-						}
-						for s.Bytes()[s.Pos] != '}' {
-							var mk string
-							mk, err = s.String()
-							if err != nil {
-								return result, decode.NewParseErr("names", s.Pos, err)
-							}
-							err = s.SkipSpace()
-							if err != nil {
-								return result, decode.NewParseErr("names", s.Pos, err)
-							}
-							if s.Pos >= len(s.Bytes()) {
-								if err = s.ReadMore(0); err != nil {
-									return result, decode.NewParseErr("names", s.Pos, err)
-								}
-							}
-							if s.Bytes()[s.Pos] != ':' {
-								return result, decode.NewParseErr("names", s.Pos, scan.ErrBadObject)
-							}
-							s.Pos++
-							err = s.SkipSpace()
-							if err != nil {
-								return result, decode.NewParseErr("names", s.Pos, err)
-							}
-							var mv string
-							mv, err = s.String()
-							if err != nil {
-								return result, decode.NewParseErr("names", s.Pos, err)
-							}
-							result.Names[mk] = mv
-							if len(result.Names[mk]) < 1 {
-								return result, &validation.MinLenError{Path: []string{"names.value"}, Limit: 1, Got: len(result.Names[mk])}
-							}
-							if len(result.Names[mk]) > 5 {
-								return result, &validation.MaxLenError{Path: []string{"names.value"}, Limit: 5, Got: len(result.Names[mk])}
-							}
-							err = s.SkipSpace()
-							if err != nil {
-								return result, decode.NewParseErr("names", s.Pos, err)
-							}
-							if s.Pos >= len(s.Bytes()) {
-								if err = s.ReadMore(0); err != nil {
-									return result, decode.NewParseErr("names", s.Pos, err)
-								}
-							}
-							if s.Bytes()[s.Pos] == ',' {
-								s.Pos++
-								err = s.SkipSpace()
-								if err != nil {
-									return result, decode.NewParseErr("names", s.Pos, err)
-								}
-								continue
-							}
-							break
-						}
-						if s.Bytes()[s.Pos] != '}' {
-							return result, decode.NewParseErr("names", s.Pos, scan.ErrBadObject)
-						}
-						s.Pos++
+						continue
 					}
+					break
 				}
+				if s.Bytes()[s.Pos] != '}' {
+					return result, decode.NewParseErr("names", s.Pos, scan.ErrBadObject)
+				}
+				s.Pos++
 			} else {
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
 			}
@@ -1591,7 +1525,58 @@ func (result MapDiveStruct) DecodeFromStream(s *scan.Stream) (MapDiveStruct, err
 					return result, &validation.DuplicateKeyError{Path: []string{"counts"}}
 				}
 				seenCounts = true
-				{
+				err = s.SkipSpace()
+				if err != nil {
+					return result, decode.NewParseErr("counts", s.Pos, err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("counts", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, decode.NewParseErr("counts", s.Pos, err)
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, decode.NewParseErr("counts", s.Pos, scan.ErrBadLiteral)
+						}
+					}
+					s.Pos += 4
+					result.Counts = nil
+					break
+				}
+				err = s.ObjectOpen()
+				if err != nil {
+					return result, decode.NewParseErr("counts", s.Pos, err)
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, decode.NewParseErr("counts", s.Pos, err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("counts", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == '}' {
+					if result.Counts == nil {
+						result.Counts = map[string]int{}
+					}
+				} else {
+					if result.Counts == nil {
+						result.Counts = make(map[string]int)
+					}
+				}
+				for s.Bytes()[s.Pos] != '}' {
+					var mk string
+					mk, err = s.String()
+					if err != nil {
+						return result, decode.NewParseErr("counts", s.Pos, err)
+					}
 					err = s.SkipSpace()
 					if err != nil {
 						return result, decode.NewParseErr("counts", s.Pos, err)
@@ -1601,102 +1586,49 @@ func (result MapDiveStruct) DecodeFromStream(s *scan.Stream) (MapDiveStruct, err
 							return result, decode.NewParseErr("counts", s.Pos, err)
 						}
 					}
-					if s.Bytes()[s.Pos] == 'n' {
-						for ki := 1; ki < 4; ki++ {
-							if s.Pos+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(0); err != nil {
-									return result, decode.NewParseErr("counts", s.Pos, err)
-								}
-							}
-							if s.Bytes()[s.Pos+ki] != "null"[ki] {
-								return result, decode.NewParseErr("counts", s.Pos, scan.ErrBadLiteral)
-							}
-						}
-						s.Pos += 4
-						result.Counts = nil
-					} else {
-						err = s.ObjectOpen()
-						if err != nil {
+					if s.Bytes()[s.Pos] != ':' {
+						return result, decode.NewParseErr("counts", s.Pos, scan.ErrBadObject)
+					}
+					s.Pos++
+					err = s.SkipSpace()
+					if err != nil {
+						return result, decode.NewParseErr("counts", s.Pos, err)
+					}
+					var iv int64
+					iv, err = s.Int64()
+					if err != nil {
+						return result, decode.NewParseErr("counts", s.Pos, err)
+					}
+					result.Counts[mk] = int(iv)
+					if result.Counts[mk] < 0 {
+						return result, &validation.GTEError{Path: []string{"counts.value"}, Limit: 0, Value: result.Counts[mk]}
+					}
+					if result.Counts[mk] > 100 {
+						return result, &validation.LTEError{Path: []string{"counts.value"}, Limit: 100, Value: result.Counts[mk]}
+					}
+					err = s.SkipSpace()
+					if err != nil {
+						return result, decode.NewParseErr("counts", s.Pos, err)
+					}
+					if s.Pos >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
 							return result, decode.NewParseErr("counts", s.Pos, err)
 						}
+					}
+					if s.Bytes()[s.Pos] == ',' {
+						s.Pos++
 						err = s.SkipSpace()
 						if err != nil {
 							return result, decode.NewParseErr("counts", s.Pos, err)
 						}
-						if s.Pos >= len(s.Bytes()) {
-							if err = s.ReadMore(0); err != nil {
-								return result, decode.NewParseErr("counts", s.Pos, err)
-							}
-						}
-						if s.Bytes()[s.Pos] == '}' {
-							if result.Counts == nil {
-								result.Counts = map[string]int{}
-							}
-						} else {
-							if result.Counts == nil {
-								result.Counts = make(map[string]int)
-							}
-						}
-						for s.Bytes()[s.Pos] != '}' {
-							var mk string
-							mk, err = s.String()
-							if err != nil {
-								return result, decode.NewParseErr("counts", s.Pos, err)
-							}
-							err = s.SkipSpace()
-							if err != nil {
-								return result, decode.NewParseErr("counts", s.Pos, err)
-							}
-							if s.Pos >= len(s.Bytes()) {
-								if err = s.ReadMore(0); err != nil {
-									return result, decode.NewParseErr("counts", s.Pos, err)
-								}
-							}
-							if s.Bytes()[s.Pos] != ':' {
-								return result, decode.NewParseErr("counts", s.Pos, scan.ErrBadObject)
-							}
-							s.Pos++
-							err = s.SkipSpace()
-							if err != nil {
-								return result, decode.NewParseErr("counts", s.Pos, err)
-							}
-							var mn int64
-							mn, err = s.Int64()
-							if err != nil {
-								return result, decode.NewParseErr("counts", s.Pos, err)
-							}
-							result.Counts[mk] = int(mn)
-							if result.Counts[mk] < 0 {
-								return result, &validation.GTEError{Path: []string{"counts.value"}, Limit: 0, Value: result.Counts[mk]}
-							}
-							if result.Counts[mk] > 100 {
-								return result, &validation.LTEError{Path: []string{"counts.value"}, Limit: 100, Value: result.Counts[mk]}
-							}
-							err = s.SkipSpace()
-							if err != nil {
-								return result, decode.NewParseErr("counts", s.Pos, err)
-							}
-							if s.Pos >= len(s.Bytes()) {
-								if err = s.ReadMore(0); err != nil {
-									return result, decode.NewParseErr("counts", s.Pos, err)
-								}
-							}
-							if s.Bytes()[s.Pos] == ',' {
-								s.Pos++
-								err = s.SkipSpace()
-								if err != nil {
-									return result, decode.NewParseErr("counts", s.Pos, err)
-								}
-								continue
-							}
-							break
-						}
-						if s.Bytes()[s.Pos] != '}' {
-							return result, decode.NewParseErr("counts", s.Pos, scan.ErrBadObject)
-						}
-						s.Pos++
+						continue
 					}
+					break
 				}
+				if s.Bytes()[s.Pos] != '}' {
+					return result, decode.NewParseErr("counts", s.Pos, scan.ErrBadObject)
+				}
+				s.Pos++
 			} else {
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
 			}
@@ -1710,7 +1642,58 @@ func (result MapDiveStruct) DecodeFromStream(s *scan.Stream) (MapDiveStruct, err
 					return result, &validation.DuplicateKeyError{Path: []string{"clamped"}}
 				}
 				seenClamped = true
-				{
+				err = s.SkipSpace()
+				if err != nil {
+					return result, decode.NewParseErr("clamped", s.Pos, err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("clamped", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, decode.NewParseErr("clamped", s.Pos, err)
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, decode.NewParseErr("clamped", s.Pos, scan.ErrBadLiteral)
+						}
+					}
+					s.Pos += 4
+					result.Clamped = nil
+					break
+				}
+				err = s.ObjectOpen()
+				if err != nil {
+					return result, decode.NewParseErr("clamped", s.Pos, err)
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, decode.NewParseErr("clamped", s.Pos, err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("clamped", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == '}' {
+					if result.Clamped == nil {
+						result.Clamped = map[string]int{}
+					}
+				} else {
+					if result.Clamped == nil {
+						result.Clamped = make(map[string]int)
+					}
+				}
+				for s.Bytes()[s.Pos] != '}' {
+					var mk string
+					mk, err = s.String()
+					if err != nil {
+						return result, decode.NewParseErr("clamped", s.Pos, err)
+					}
 					err = s.SkipSpace()
 					if err != nil {
 						return result, decode.NewParseErr("clamped", s.Pos, err)
@@ -1720,102 +1703,49 @@ func (result MapDiveStruct) DecodeFromStream(s *scan.Stream) (MapDiveStruct, err
 							return result, decode.NewParseErr("clamped", s.Pos, err)
 						}
 					}
-					if s.Bytes()[s.Pos] == 'n' {
-						for ki := 1; ki < 4; ki++ {
-							if s.Pos+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(0); err != nil {
-									return result, decode.NewParseErr("clamped", s.Pos, err)
-								}
-							}
-							if s.Bytes()[s.Pos+ki] != "null"[ki] {
-								return result, decode.NewParseErr("clamped", s.Pos, scan.ErrBadLiteral)
-							}
-						}
-						s.Pos += 4
-						result.Clamped = nil
-					} else {
-						err = s.ObjectOpen()
-						if err != nil {
+					if s.Bytes()[s.Pos] != ':' {
+						return result, decode.NewParseErr("clamped", s.Pos, scan.ErrBadObject)
+					}
+					s.Pos++
+					err = s.SkipSpace()
+					if err != nil {
+						return result, decode.NewParseErr("clamped", s.Pos, err)
+					}
+					var iv int64
+					iv, err = s.Int64()
+					if err != nil {
+						return result, decode.NewParseErr("clamped", s.Pos, err)
+					}
+					result.Clamped[mk] = int(iv)
+					if result.Clamped[mk] < 0 {
+						result.Clamped[mk] = 0
+					}
+					if result.Clamped[mk] > 100 {
+						result.Clamped[mk] = 100
+					}
+					err = s.SkipSpace()
+					if err != nil {
+						return result, decode.NewParseErr("clamped", s.Pos, err)
+					}
+					if s.Pos >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
 							return result, decode.NewParseErr("clamped", s.Pos, err)
 						}
+					}
+					if s.Bytes()[s.Pos] == ',' {
+						s.Pos++
 						err = s.SkipSpace()
 						if err != nil {
 							return result, decode.NewParseErr("clamped", s.Pos, err)
 						}
-						if s.Pos >= len(s.Bytes()) {
-							if err = s.ReadMore(0); err != nil {
-								return result, decode.NewParseErr("clamped", s.Pos, err)
-							}
-						}
-						if s.Bytes()[s.Pos] == '}' {
-							if result.Clamped == nil {
-								result.Clamped = map[string]int{}
-							}
-						} else {
-							if result.Clamped == nil {
-								result.Clamped = make(map[string]int)
-							}
-						}
-						for s.Bytes()[s.Pos] != '}' {
-							var mk string
-							mk, err = s.String()
-							if err != nil {
-								return result, decode.NewParseErr("clamped", s.Pos, err)
-							}
-							err = s.SkipSpace()
-							if err != nil {
-								return result, decode.NewParseErr("clamped", s.Pos, err)
-							}
-							if s.Pos >= len(s.Bytes()) {
-								if err = s.ReadMore(0); err != nil {
-									return result, decode.NewParseErr("clamped", s.Pos, err)
-								}
-							}
-							if s.Bytes()[s.Pos] != ':' {
-								return result, decode.NewParseErr("clamped", s.Pos, scan.ErrBadObject)
-							}
-							s.Pos++
-							err = s.SkipSpace()
-							if err != nil {
-								return result, decode.NewParseErr("clamped", s.Pos, err)
-							}
-							var mn int64
-							mn, err = s.Int64()
-							if err != nil {
-								return result, decode.NewParseErr("clamped", s.Pos, err)
-							}
-							result.Clamped[mk] = int(mn)
-							if result.Clamped[mk] < 0 {
-								result.Clamped[mk] = 0
-							}
-							if result.Clamped[mk] > 100 {
-								result.Clamped[mk] = 100
-							}
-							err = s.SkipSpace()
-							if err != nil {
-								return result, decode.NewParseErr("clamped", s.Pos, err)
-							}
-							if s.Pos >= len(s.Bytes()) {
-								if err = s.ReadMore(0); err != nil {
-									return result, decode.NewParseErr("clamped", s.Pos, err)
-								}
-							}
-							if s.Bytes()[s.Pos] == ',' {
-								s.Pos++
-								err = s.SkipSpace()
-								if err != nil {
-									return result, decode.NewParseErr("clamped", s.Pos, err)
-								}
-								continue
-							}
-							break
-						}
-						if s.Bytes()[s.Pos] != '}' {
-							return result, decode.NewParseErr("clamped", s.Pos, scan.ErrBadObject)
-						}
-						s.Pos++
+						continue
 					}
+					break
 				}
+				if s.Bytes()[s.Pos] != '}' {
+					return result, decode.NewParseErr("clamped", s.Pos, scan.ErrBadObject)
+				}
+				s.Pos++
 			} else {
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
 			}
@@ -1876,19 +1806,17 @@ func (s MapDiveStruct) AppendJSON(dst []byte) ([]byte, error) {
 		dst = append(dst, "null"...)
 	} else {
 		dst = append(dst, '{')
-		{
-			first := true
-			for k, v := range s.Clamped {
-				if first {
-					first = false
-					dst = append(dst, '"')
-				} else {
-					dst = append(dst, ",\""...)
-				}
-				dst = encode.AppendStringNoHTML(dst, k)
-				dst = append(dst, ':')
-				dst = strconv.AppendInt(dst, int64(v), 10)
+		firstClamped := true
+		for k, v := range s.Clamped {
+			if firstClamped {
+				firstClamped = false
+				dst = append(dst, '"')
+			} else {
+				dst = append(dst, ",\""...)
 			}
+			dst = encode.AppendStringNoHTML(dst, k)
+			dst = append(dst, ':')
+			dst = strconv.AppendInt(dst, int64(v), 10)
 		}
 		dst = append(dst, '}')
 	}
@@ -1897,19 +1825,17 @@ func (s MapDiveStruct) AppendJSON(dst []byte) ([]byte, error) {
 		dst = append(dst, "null"...)
 	} else {
 		dst = append(dst, '{')
-		{
-			first := true
-			for k, v := range s.Counts {
-				if first {
-					first = false
-					dst = append(dst, '"')
-				} else {
-					dst = append(dst, ",\""...)
-				}
-				dst = encode.AppendStringNoHTML(dst, k)
-				dst = append(dst, ':')
-				dst = strconv.AppendInt(dst, int64(v), 10)
+		firstCounts := true
+		for k, v := range s.Counts {
+			if firstCounts {
+				firstCounts = false
+				dst = append(dst, '"')
+			} else {
+				dst = append(dst, ",\""...)
 			}
+			dst = encode.AppendStringNoHTML(dst, k)
+			dst = append(dst, ':')
+			dst = strconv.AppendInt(dst, int64(v), 10)
 		}
 		dst = append(dst, '}')
 	}
@@ -1918,19 +1844,17 @@ func (s MapDiveStruct) AppendJSON(dst []byte) ([]byte, error) {
 		dst = append(dst, "null"...)
 	} else {
 		dst = append(dst, '{')
-		{
-			first := true
-			for k, v := range s.Names {
-				if first {
-					first = false
-					dst = append(dst, '"')
-				} else {
-					dst = append(dst, ",\""...)
-				}
-				dst = encode.AppendStringNoHTML(dst, k)
-				dst = append(dst, ":\""...)
-				dst = encode.AppendStringNoHTML(dst, v)
+		firstNames := true
+		for k, v := range s.Names {
+			if firstNames {
+				firstNames = false
+				dst = append(dst, '"')
+			} else {
+				dst = append(dst, ",\""...)
 			}
+			dst = encode.AppendStringNoHTML(dst, k)
+			dst = append(dst, ":\""...)
+			dst = encode.AppendStringNoHTML(dst, v)
 		}
 		dst = append(dst, '}')
 	}
@@ -1969,25 +1893,23 @@ func (result Derived) DecodeFrom(data []byte) (Derived, int, error) {
 		if i >= len(data) || data[i] != '"' {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
-		{
-			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-				ke++
-			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-				i = ke + 1
-			} else {
-				key, i, err = scan.String(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr("", i, err)
-				}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -2010,25 +1932,23 @@ func (result Derived) DecodeFrom(data []byte) (Derived, int, error) {
 				if i >= len(data) || data[i] != '"' {
 					return result, i, decode.NewParseErr("id", i, scan.ErrExpectString)
 				}
-				{
-					ke := i + 1
-					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-						ke++
-					}
-					if ke >= len(data) {
-						return result, i, decode.NewParseErr("id", i, scan.ErrUnterminated)
-					}
-					if data[ke] < 0x20 {
-						return result, i, decode.NewParseErr("id", i, scan.ErrBadString)
-					}
-					if data[ke] == '"' {
-						result.ID = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-						i = ke + 1
-					} else {
-						result.ID, i, err = scan.String(data, i)
-						if err != nil {
-							return result, i, decode.NewParseErr("id", i, err)
-						}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("id", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("id", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					result.ID = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					result.ID, i, err = scan.String(data, i)
+					if err != nil {
+						return result, i, decode.NewParseErr("id", i, err)
 					}
 				}
 			} else {
@@ -2044,25 +1964,23 @@ func (result Derived) DecodeFrom(data []byte) (Derived, int, error) {
 				if i >= len(data) || data[i] != '"' {
 					return result, i, decode.NewParseErr("meta", i, scan.ErrExpectString)
 				}
-				{
-					ke := i + 1
-					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-						ke++
-					}
-					if ke >= len(data) {
-						return result, i, decode.NewParseErr("meta", i, scan.ErrUnterminated)
-					}
-					if data[ke] < 0x20 {
-						return result, i, decode.NewParseErr("meta", i, scan.ErrBadString)
-					}
-					if data[ke] == '"' {
-						result.Meta = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-						i = ke + 1
-					} else {
-						result.Meta, i, err = scan.String(data, i)
-						if err != nil {
-							return result, i, decode.NewParseErr("meta", i, err)
-						}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("meta", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("meta", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					result.Meta = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					result.Meta, i, err = scan.String(data, i)
+					if err != nil {
+						return result, i, decode.NewParseErr("meta", i, err)
 					}
 				}
 			case "name":
@@ -2073,25 +1991,23 @@ func (result Derived) DecodeFrom(data []byte) (Derived, int, error) {
 				if i >= len(data) || data[i] != '"' {
 					return result, i, decode.NewParseErr("name", i, scan.ErrExpectString)
 				}
-				{
-					ke := i + 1
-					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-						ke++
-					}
-					if ke >= len(data) {
-						return result, i, decode.NewParseErr("name", i, scan.ErrUnterminated)
-					}
-					if data[ke] < 0x20 {
-						return result, i, decode.NewParseErr("name", i, scan.ErrBadString)
-					}
-					if data[ke] == '"' {
-						result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-						i = ke + 1
-					} else {
-						result.Name, i, err = scan.String(data, i)
-						if err != nil {
-							return result, i, decode.NewParseErr("name", i, err)
-						}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("name", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("name", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					result.Name, i, err = scan.String(data, i)
+					if err != nil {
+						return result, i, decode.NewParseErr("name", i, err)
 					}
 				}
 				if len(result.Name) < 1 {

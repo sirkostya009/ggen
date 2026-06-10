@@ -55,25 +55,23 @@ func (result ExtraStruct) DecodeFrom(data []byte) (ExtraStruct, int, error) {
 		if i >= len(data) || data[i] != '"' {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
-		{
-			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-				ke++
-			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-				i = ke + 1
-			} else {
-				key, i, err = scan.String(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr("", i, err)
-				}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -93,14 +91,90 @@ func (result ExtraStruct) DecodeFrom(data []byte) (ExtraStruct, int, error) {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"triple"}}
 				}
 				seenTriple = true
-				{
+				for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+					i++
+				}
+				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+					i += 4
+					result.Triple = nil
+					break
+				}
+				if i >= len(data) || data[i] != '[' {
+					return result, i, scan.ErrBadArray
+				}
+				i++
+				for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+					i++
+				}
+				if i < len(data) && data[i] == ']' {
+					if result.Triple == nil {
+						result.Triple = [][][]string{}
+					}
+				} else {
+					if result.Triple == nil {
+						result.Triple = make([][][]string, 0, 4)
+					}
+				}
+				for i < len(data) && data[i] != ']' {
+					result.Triple = append(result.Triple, nil)
+					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+						i += 4
+						if len(result.Triple[len(result.Triple)-1]) < 1 {
+							return result, i, &validation.MinLenError{Path: []string{"triple[]"}, Limit: 1, Got: len(result.Triple[len(result.Triple)-1])}
+						}
+						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i < len(data) && data[i] == ',' {
+							i++
+							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
+							}
+							continue
+						}
+						break
+					}
 					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
-					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-						i += 4
-						result.Triple = nil
+					if i >= len(data) || data[i] != '[' {
+						return result, i, scan.ErrBadArray
+					}
+					i++
+					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i < len(data) && data[i] == ']' {
+						if result.Triple[len(result.Triple)-1] == nil {
+							result.Triple[len(result.Triple)-1] = [][]string{}
+						}
 					} else {
+						if result.Triple[len(result.Triple)-1] == nil {
+							result.Triple[len(result.Triple)-1] = make([][]string, 0, 4)
+						}
+					}
+					for i < len(data) && data[i] != ']' {
+						result.Triple[len(result.Triple)-1] = append(result.Triple[len(result.Triple)-1], nil)
+						if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+							i += 4
+							if len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1]) < 1 {
+								return result, i, &validation.MinLenError{Path: []string{"triple[][]"}, Limit: 1, Got: len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1])}
+							}
+							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
+							}
+							if i < len(data) && data[i] == ',' {
+								i++
+								for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+									i++
+								}
+								continue
+							}
+							break
+						}
+						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
 						if i >= len(data) || data[i] != '[' {
 							return result, i, scan.ErrBadArray
 						}
@@ -109,136 +183,40 @@ func (result ExtraStruct) DecodeFrom(data []byte) (ExtraStruct, int, error) {
 							i++
 						}
 						if i < len(data) && data[i] == ']' {
-							if result.Triple == nil {
-								result.Triple = [][][]string{}
+							if result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1] == nil {
+								result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1] = []string{}
 							}
 						} else {
-							if result.Triple == nil {
-								result.Triple = make([][][]string, 0, 4)
+							if result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1] == nil {
+								result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1] = make([]string, 0, 4)
 							}
 						}
 						for i < len(data) && data[i] != ']' {
-							result.Triple = append(result.Triple, nil)
-							{
-								for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-									i++
-								}
-								if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-									i += 4
-									result.Triple[len(result.Triple)-1] = nil
-								} else {
-									if i >= len(data) || data[i] != '[' {
-										return result, i, scan.ErrBadArray
-									}
-									i++
-									for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-										i++
-									}
-									if i < len(data) && data[i] == ']' {
-										if result.Triple[len(result.Triple)-1] == nil {
-											result.Triple[len(result.Triple)-1] = [][]string{}
-										}
-									} else {
-										if result.Triple[len(result.Triple)-1] == nil {
-											result.Triple[len(result.Triple)-1] = make([][]string, 0, 4)
-										}
-									}
-									for i < len(data) && data[i] != ']' {
-										result.Triple[len(result.Triple)-1] = append(result.Triple[len(result.Triple)-1], nil)
-										{
-											for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-												i++
-											}
-											if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-												i += 4
-												result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1] = nil
-											} else {
-												if i >= len(data) || data[i] != '[' {
-													return result, i, scan.ErrBadArray
-												}
-												i++
-												for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-													i++
-												}
-												if i < len(data) && data[i] == ']' {
-													if result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1] == nil {
-														result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1] = []string{}
-													}
-												} else {
-													if result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1] == nil {
-														result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1] = make([]string, 0, 4)
-													}
-												}
-												for i < len(data) && data[i] != ']' {
-													result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1] = append(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1], "")
-													if i >= len(data) || data[i] != '"' {
-														return result, i, decode.NewParseErr("triple[][]", i, scan.ErrExpectString)
-													}
-													{
-														ke := i + 1
-														for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-															ke++
-														}
-														if ke >= len(data) {
-															return result, i, decode.NewParseErr("triple[][]", i, scan.ErrUnterminated)
-														}
-														if data[ke] < 0x20 {
-															return result, i, decode.NewParseErr("triple[][]", i, scan.ErrBadString)
-														}
-														if data[ke] == '"' {
-															result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1][len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1])-1] = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-															i = ke + 1
-														} else {
-															result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1][len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1])-1], i, err = scan.String(data, i)
-															if err != nil {
-																return result, i, decode.NewParseErr("triple[][]", i, err)
-															}
-														}
-													}
-													if len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1][len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1])-1]) < 1 {
-														return result, i, &validation.MinLenError{Path: []string{"triple[][][]"}, Limit: 1, Got: len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1][len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1])-1])}
-													}
-													for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-														i++
-													}
-													if i < len(data) && data[i] == ',' {
-														i++
-														for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-															i++
-														}
-														continue
-													}
-													break
-												}
-												if i >= len(data) || data[i] != ']' {
-													return result, i, scan.ErrBadArray
-												}
-												i++
-											}
-										}
-										if len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1]) < 1 {
-											return result, i, &validation.MinLenError{Path: []string{"triple[][]"}, Limit: 1, Got: len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1])}
-										}
-										for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-											i++
-										}
-										if i < len(data) && data[i] == ',' {
-											i++
-											for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-												i++
-											}
-											continue
-										}
-										break
-									}
-									if i >= len(data) || data[i] != ']' {
-										return result, i, scan.ErrBadArray
-									}
-									i++
+							result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1] = append(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1], "")
+							if i >= len(data) || data[i] != '"' {
+								return result, i, decode.NewParseErr("triple[][]", i, scan.ErrExpectString)
+							}
+							ke := i + 1
+							for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+								ke++
+							}
+							if ke >= len(data) {
+								return result, i, decode.NewParseErr("triple[][]", i, scan.ErrUnterminated)
+							}
+							if data[ke] < 0x20 {
+								return result, i, decode.NewParseErr("triple[][]", i, scan.ErrBadString)
+							}
+							if data[ke] == '"' {
+								result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1][len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1])-1] = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+								i = ke + 1
+							} else {
+								result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1][len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1])-1], i, err = scan.String(data, i)
+								if err != nil {
+									return result, i, decode.NewParseErr("triple[][]", i, err)
 								}
 							}
-							if len(result.Triple[len(result.Triple)-1]) < 1 {
-								return result, i, &validation.MinLenError{Path: []string{"triple[]"}, Limit: 1, Got: len(result.Triple[len(result.Triple)-1])}
+							if len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1][len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1])-1]) < 1 {
+								return result, i, &validation.MinLenError{Path: []string{"triple[][][]"}, Limit: 1, Got: len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1][len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1])-1])}
 							}
 							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 								i++
@@ -256,8 +234,44 @@ func (result ExtraStruct) DecodeFrom(data []byte) (ExtraStruct, int, error) {
 							return result, i, scan.ErrBadArray
 						}
 						i++
+						if len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1]) < 1 {
+							return result, i, &validation.MinLenError{Path: []string{"triple[][]"}, Limit: 1, Got: len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1])}
+						}
+						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i < len(data) && data[i] == ',' {
+							i++
+							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
+							}
+							continue
+						}
+						break
 					}
+					if i >= len(data) || data[i] != ']' {
+						return result, i, scan.ErrBadArray
+					}
+					i++
+					if len(result.Triple[len(result.Triple)-1]) < 1 {
+						return result, i, &validation.MinLenError{Path: []string{"triple[]"}, Limit: 1, Got: len(result.Triple[len(result.Triple)-1])}
+					}
+					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i < len(data) && data[i] == ',' {
+						i++
+						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						continue
+					}
+					break
 				}
+				if i >= len(data) || data[i] != ']' {
+					return result, i, scan.ErrBadArray
+				}
+				i++
 			} else {
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
 			}
@@ -267,374 +281,79 @@ func (result ExtraStruct) DecodeFrom(data []byte) (ExtraStruct, int, error) {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"keyedMap"}}
 				}
 				seenKeyedMap = true
-				{
+				for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+					i++
+				}
+				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+					i += 4
+					result.KeyedMap = nil
+					break
+				}
+				if i >= len(data) || data[i] != '{' {
+					return result, i, decode.NewParseErr("keyedMap", i, scan.ErrBadObject)
+				}
+				i++
+				for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+					i++
+				}
+				if i < len(data) && data[i] == '}' {
+					if result.KeyedMap == nil {
+						result.KeyedMap = map[string]int{}
+					}
+				} else {
+					if result.KeyedMap == nil {
+						result.KeyedMap = make(map[string]int)
+					}
+				}
+				for i < len(data) && data[i] != '}' {
+					var mk string
+					if i >= len(data) || data[i] != '"' {
+						return result, i, decode.NewParseErr("keyedMap", i, scan.ErrExpectString)
+					}
+					ke := i + 1
+					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+						ke++
+					}
+					if ke >= len(data) {
+						return result, i, decode.NewParseErr("keyedMap", i, scan.ErrUnterminated)
+					}
+					if data[ke] < 0x20 {
+						return result, i, decode.NewParseErr("keyedMap", i, scan.ErrBadString)
+					}
+					if data[ke] == '"' {
+						mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						i = ke + 1
+					} else {
+						mk, i, err = scan.String(data, i)
+						if err != nil {
+							return result, i, decode.NewParseErr("keyedMap", i, err)
+						}
+					}
+					mk = strings.TrimSpace(mk)
+					mk = strings.ToLower(mk)
+					if utf8.RuneCountInString(mk) < 2 {
+						return result, i, &validation.MinRunesError{Path: []string{"keyedMap.key"}, Limit: 2, Got: utf8.RuneCountInString(mk)}
+					}
+					if utf8.RuneCountInString(mk) > 16 {
+						return result, i, &validation.MaxRunesError{Path: []string{"keyedMap.key"}, Limit: 16, Got: utf8.RuneCountInString(mk)}
+					}
 					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
-					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-						i += 4
-						result.KeyedMap = nil
-					} else {
-						if i >= len(data) || data[i] != '{' {
-							return result, i, decode.NewParseErr("keyedMap", i, scan.ErrBadObject)
-						}
-						i++
-						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-							i++
-						}
-						if i < len(data) && data[i] == '}' {
-							if result.KeyedMap == nil {
-								result.KeyedMap = map[string]int{}
-							}
-						} else {
-							if result.KeyedMap == nil {
-								result.KeyedMap = make(map[string]int)
-							}
-						}
-						for i < len(data) && data[i] != '}' {
-							var mk string
-							if i >= len(data) || data[i] != '"' {
-								return result, i, decode.NewParseErr("keyedMap", i, scan.ErrExpectString)
-							}
-							{
-								ke := i + 1
-								for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-									ke++
-								}
-								if ke >= len(data) {
-									return result, i, decode.NewParseErr("keyedMap", i, scan.ErrUnterminated)
-								}
-								if data[ke] < 0x20 {
-									return result, i, decode.NewParseErr("keyedMap", i, scan.ErrBadString)
-								}
-								if data[ke] == '"' {
-									mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-									i = ke + 1
-								} else {
-									mk, i, err = scan.String(data, i)
-									if err != nil {
-										return result, i, decode.NewParseErr("keyedMap", i, err)
-									}
-								}
-							}
-							mk = strings.TrimSpace(mk)
-							mk = strings.ToLower(mk)
-							if utf8.RuneCountInString(mk) < 2 {
-								return result, i, &validation.MinRunesError{Path: []string{"keyedMap.key"}, Limit: 2, Got: utf8.RuneCountInString(mk)}
-							}
-							if utf8.RuneCountInString(mk) > 16 {
-								return result, i, &validation.MaxRunesError{Path: []string{"keyedMap.key"}, Limit: 16, Got: utf8.RuneCountInString(mk)}
-							}
-							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-								i++
-							}
-							if i >= len(data) || data[i] != ':' {
-								return result, i, decode.NewParseErr("keyedMap", i, scan.ErrBadObject)
-							}
-							i++
-							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-								i++
-							}
-							var mn int64
-							{
-								neg := false
-								if i < len(data) && data[i] == '-' {
-									neg = true
-									i++
-								}
-								if i >= len(data) || data[i] < '0' || data[i] > '9' {
-									return result, i, decode.NewParseErr("keyedMap", i, scan.ErrBadNumber)
-								}
-								limit := uint64(math.MaxInt64)
-								if neg {
-									limit = scan.SignedNeg
-								}
-								var u uint64
-								for i < len(data) && data[i] >= '0' && data[i] <= '9' {
-									d := uint64(data[i] - '0')
-									if u > limit/10 || (u == limit/10 && d > limit%10) {
-										return result, i, decode.NewParseErr("keyedMap", i, scan.ErrNumberOverflow)
-									}
-									u = u*10 + d
-									i++
-								}
-								if i < len(data) {
-									c := data[i]
-									if c == '.' || c == 'e' || c == 'E' {
-										return result, i, decode.NewParseErr("keyedMap", i, scan.ErrBadNumber)
-									}
-								}
-								var n int64
-								if neg {
-									if u == scan.SignedNeg {
-										n = math.MinInt64
-									} else {
-										n = -int64(u)
-									}
-								} else {
-									n = int64(u)
-								}
-								mn = n
-							}
-							result.KeyedMap[mk] = int(mn)
-							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-								i++
-							}
-							if i < len(data) && data[i] == ',' {
-								i++
-								for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-									i++
-								}
-								continue
-							}
-							break
-						}
-						if i >= len(data) || data[i] != '}' {
-							return result, i, decode.NewParseErr("keyedMap", i, scan.ErrBadObject)
-						}
-						i++
+					if i >= len(data) || data[i] != ':' {
+						return result, i, decode.NewParseErr("keyedMap", i, scan.ErrBadObject)
 					}
-				}
-			} else {
-				return result, i, &validation.UnknownKeyError{Path: []string{key}}
-			}
-		case 10:
-			switch key {
-			case "hintedTags":
-				if seenHintedTags {
-					return result, i, &validation.DuplicateKeyError{Path: []string{"hintedTags"}}
-				}
-				seenHintedTags = true
-				{
+					i++
 					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
-					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-						i += 4
-						result.HintedTags = nil
-					} else {
-						if i >= len(data) || data[i] != '[' {
-							return result, i, scan.ErrBadArray
-						}
-						i++
-						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-							i++
-						}
-						if i < len(data) && data[i] == ']' {
-							if result.HintedTags == nil {
-								result.HintedTags = []string{}
-							}
-						} else {
-							if result.HintedTags == nil {
-								result.HintedTags = make([]string, 0, 4)
-							}
-						}
-						for i < len(data) && data[i] != ']' {
-							result.HintedTags = append(result.HintedTags, "")
-							if i >= len(data) || data[i] != '"' {
-								return result, i, decode.NewParseErr("hintedTags", i, scan.ErrExpectString)
-							}
-							{
-								ke := i + 1
-								for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-									ke++
-								}
-								if ke >= len(data) {
-									return result, i, decode.NewParseErr("hintedTags", i, scan.ErrUnterminated)
-								}
-								if data[ke] < 0x20 {
-									return result, i, decode.NewParseErr("hintedTags", i, scan.ErrBadString)
-								}
-								if data[ke] == '"' {
-									result.HintedTags[len(result.HintedTags)-1] = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-									i = ke + 1
-								} else {
-									result.HintedTags[len(result.HintedTags)-1], i, err = scan.String(data, i)
-									if err != nil {
-										return result, i, decode.NewParseErr("hintedTags", i, err)
-									}
-								}
-							}
-							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-								i++
-							}
-							if i < len(data) && data[i] == ',' {
-								i++
-								for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-									i++
-								}
-								continue
-							}
-							break
-						}
-						if i >= len(data) || data[i] != ']' {
-							return result, i, scan.ErrBadArray
-						}
-						i++
-					}
-				}
-				if len(result.HintedTags) > 1000 {
-					return result, i, &validation.MaxLenError{Path: []string{"hintedTags"}, Limit: 1000, Got: len(result.HintedTags)}
-				}
-			case "nestedInts":
-				if seenNestedInts {
-					return result, i, &validation.DuplicateKeyError{Path: []string{"nestedInts"}}
-				}
-				seenNestedInts = true
-				{
-					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-						i++
-					}
-					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-						i += 4
-						result.NestedInts = nil
-					} else {
-						if i >= len(data) || data[i] != '[' {
-							return result, i, scan.ErrBadArray
-						}
-						i++
-						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-							i++
-						}
-						if i < len(data) && data[i] == ']' {
-							if result.NestedInts == nil {
-								result.NestedInts = [][]int{}
-							}
-						} else {
-							if result.NestedInts == nil {
-								result.NestedInts = make([][]int, 0, 4)
-							}
-						}
-						for i < len(data) && data[i] != ']' {
-							result.NestedInts = append(result.NestedInts, nil)
-							{
-								for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-									i++
-								}
-								if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-									i += 4
-									result.NestedInts[len(result.NestedInts)-1] = nil
-								} else {
-									if i >= len(data) || data[i] != '[' {
-										return result, i, scan.ErrBadArray
-									}
-									i++
-									for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-										i++
-									}
-									if i < len(data) && data[i] == ']' {
-										if result.NestedInts[len(result.NestedInts)-1] == nil {
-											result.NestedInts[len(result.NestedInts)-1] = []int{}
-										}
-									} else {
-										if result.NestedInts[len(result.NestedInts)-1] == nil {
-											result.NestedInts[len(result.NestedInts)-1] = make([]int, 0, 4)
-										}
-									}
-									for i < len(data) && data[i] != ']' {
-										result.NestedInts[len(result.NestedInts)-1] = append(result.NestedInts[len(result.NestedInts)-1], 0)
-										{
-											neg := false
-											if i < len(data) && data[i] == '-' {
-												neg = true
-												i++
-											}
-											if i >= len(data) || data[i] < '0' || data[i] > '9' {
-												return result, i, decode.NewParseErr("nestedInts[]", i, scan.ErrBadNumber)
-											}
-											limit := uint64(math.MaxInt64)
-											if neg {
-												limit = scan.SignedNeg
-											}
-											var u uint64
-											for i < len(data) && data[i] >= '0' && data[i] <= '9' {
-												d := uint64(data[i] - '0')
-												if u > limit/10 || (u == limit/10 && d > limit%10) {
-													return result, i, decode.NewParseErr("nestedInts[]", i, scan.ErrNumberOverflow)
-												}
-												u = u*10 + d
-												i++
-											}
-											if i < len(data) {
-												c := data[i]
-												if c == '.' || c == 'e' || c == 'E' {
-													return result, i, decode.NewParseErr("nestedInts[]", i, scan.ErrBadNumber)
-												}
-											}
-											var n int64
-											if neg {
-												if u == scan.SignedNeg {
-													n = math.MinInt64
-												} else {
-													n = -int64(u)
-												}
-											} else {
-												n = int64(u)
-											}
-											result.NestedInts[len(result.NestedInts)-1][len(result.NestedInts[len(result.NestedInts)-1])-1] = int(n)
-										}
-										if result.NestedInts[len(result.NestedInts)-1][len(result.NestedInts[len(result.NestedInts)-1])-1] < 0 {
-											return result, i, &validation.GTEError{Path: []string{"nestedInts[][]"}, Limit: 0, Value: result.NestedInts[len(result.NestedInts)-1][len(result.NestedInts[len(result.NestedInts)-1])-1]}
-										}
-										if result.NestedInts[len(result.NestedInts)-1][len(result.NestedInts[len(result.NestedInts)-1])-1] > 100 {
-											return result, i, &validation.LTEError{Path: []string{"nestedInts[][]"}, Limit: 100, Value: result.NestedInts[len(result.NestedInts)-1][len(result.NestedInts[len(result.NestedInts)-1])-1]}
-										}
-										for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-											i++
-										}
-										if i < len(data) && data[i] == ',' {
-											i++
-											for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-												i++
-											}
-											continue
-										}
-										break
-									}
-									if i >= len(data) || data[i] != ']' {
-										return result, i, scan.ErrBadArray
-									}
-									i++
-								}
-							}
-							if len(result.NestedInts[len(result.NestedInts)-1]) < 1 {
-								return result, i, &validation.MinLenError{Path: []string{"nestedInts[]"}, Limit: 1, Got: len(result.NestedInts[len(result.NestedInts)-1])}
-							}
-							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-								i++
-							}
-							if i < len(data) && data[i] == ',' {
-								i++
-								for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-									i++
-								}
-								continue
-							}
-							break
-						}
-						if i >= len(data) || data[i] != ']' {
-							return result, i, scan.ErrBadArray
-						}
-						i++
-					}
-				}
-			default:
-				return result, i, &validation.UnknownKeyError{Path: []string{key}}
-			}
-		case 12:
-			if key == "clampedScore" {
-				if seenClampedScore {
-					return result, i, &validation.DuplicateKeyError{Path: []string{"clampedScore"}}
-				}
-				seenClampedScore = true
-				{
 					neg := false
 					if i < len(data) && data[i] == '-' {
 						neg = true
 						i++
 					}
 					if i >= len(data) || data[i] < '0' || data[i] > '9' {
-						return result, i, decode.NewParseErr("clampedScore", i, scan.ErrBadNumber)
+						return result, i, decode.NewParseErr("keyedMap", i, scan.ErrBadNumber)
 					}
 					limit := uint64(math.MaxInt64)
 					if neg {
@@ -644,7 +363,7 @@ func (result ExtraStruct) DecodeFrom(data []byte) (ExtraStruct, int, error) {
 					for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 						d := uint64(data[i] - '0')
 						if u > limit/10 || (u == limit/10 && d > limit%10) {
-							return result, i, decode.NewParseErr("clampedScore", i, scan.ErrNumberOverflow)
+							return result, i, decode.NewParseErr("keyedMap", i, scan.ErrNumberOverflow)
 						}
 						u = u*10 + d
 						i++
@@ -652,7 +371,7 @@ func (result ExtraStruct) DecodeFrom(data []byte) (ExtraStruct, int, error) {
 					if i < len(data) {
 						c := data[i]
 						if c == '.' || c == 'e' || c == 'E' {
-							return result, i, decode.NewParseErr("clampedScore", i, scan.ErrBadNumber)
+							return result, i, decode.NewParseErr("keyedMap", i, scan.ErrBadNumber)
 						}
 					}
 					var n int64
@@ -665,8 +384,295 @@ func (result ExtraStruct) DecodeFrom(data []byte) (ExtraStruct, int, error) {
 					} else {
 						n = int64(u)
 					}
-					result.ClampedScore = int(n)
+					result.KeyedMap[mk] = int(n)
+					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i < len(data) && data[i] == ',' {
+						i++
+						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						continue
+					}
+					break
 				}
+				if i >= len(data) || data[i] != '}' {
+					return result, i, decode.NewParseErr("keyedMap", i, scan.ErrBadObject)
+				}
+				i++
+			} else {
+				return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			}
+		case 10:
+			switch key {
+			case "hintedTags":
+				if seenHintedTags {
+					return result, i, &validation.DuplicateKeyError{Path: []string{"hintedTags"}}
+				}
+				seenHintedTags = true
+				for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+					i++
+				}
+				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+					i += 4
+					result.HintedTags = nil
+				} else {
+					if i >= len(data) || data[i] != '[' {
+						return result, i, scan.ErrBadArray
+					}
+					i++
+					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i < len(data) && data[i] == ']' {
+						if result.HintedTags == nil {
+							result.HintedTags = []string{}
+						}
+					} else {
+						if result.HintedTags == nil {
+							result.HintedTags = make([]string, 0, 4)
+						}
+					}
+					for i < len(data) && data[i] != ']' {
+						result.HintedTags = append(result.HintedTags, "")
+						if i >= len(data) || data[i] != '"' {
+							return result, i, decode.NewParseErr("hintedTags", i, scan.ErrExpectString)
+						}
+						ke := i + 1
+						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+							ke++
+						}
+						if ke >= len(data) {
+							return result, i, decode.NewParseErr("hintedTags", i, scan.ErrUnterminated)
+						}
+						if data[ke] < 0x20 {
+							return result, i, decode.NewParseErr("hintedTags", i, scan.ErrBadString)
+						}
+						if data[ke] == '"' {
+							result.HintedTags[len(result.HintedTags)-1] = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+							i = ke + 1
+						} else {
+							result.HintedTags[len(result.HintedTags)-1], i, err = scan.String(data, i)
+							if err != nil {
+								return result, i, decode.NewParseErr("hintedTags", i, err)
+							}
+						}
+						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i < len(data) && data[i] == ',' {
+							i++
+							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
+							}
+							continue
+						}
+						break
+					}
+					if i >= len(data) || data[i] != ']' {
+						return result, i, scan.ErrBadArray
+					}
+					i++
+				}
+				if len(result.HintedTags) > 1000 {
+					return result, i, &validation.MaxLenError{Path: []string{"hintedTags"}, Limit: 1000, Got: len(result.HintedTags)}
+				}
+			case "nestedInts":
+				if seenNestedInts {
+					return result, i, &validation.DuplicateKeyError{Path: []string{"nestedInts"}}
+				}
+				seenNestedInts = true
+				for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+					i++
+				}
+				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+					i += 4
+					result.NestedInts = nil
+					break
+				}
+				if i >= len(data) || data[i] != '[' {
+					return result, i, scan.ErrBadArray
+				}
+				i++
+				for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+					i++
+				}
+				if i < len(data) && data[i] == ']' {
+					if result.NestedInts == nil {
+						result.NestedInts = [][]int{}
+					}
+				} else {
+					if result.NestedInts == nil {
+						result.NestedInts = make([][]int, 0, 4)
+					}
+				}
+				for i < len(data) && data[i] != ']' {
+					result.NestedInts = append(result.NestedInts, nil)
+					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+						i += 4
+						if len(result.NestedInts[len(result.NestedInts)-1]) < 1 {
+							return result, i, &validation.MinLenError{Path: []string{"nestedInts[]"}, Limit: 1, Got: len(result.NestedInts[len(result.NestedInts)-1])}
+						}
+						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i < len(data) && data[i] == ',' {
+							i++
+							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
+							}
+							continue
+						}
+						break
+					}
+					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i >= len(data) || data[i] != '[' {
+						return result, i, scan.ErrBadArray
+					}
+					i++
+					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i < len(data) && data[i] == ']' {
+						if result.NestedInts[len(result.NestedInts)-1] == nil {
+							result.NestedInts[len(result.NestedInts)-1] = []int{}
+						}
+					} else {
+						if result.NestedInts[len(result.NestedInts)-1] == nil {
+							result.NestedInts[len(result.NestedInts)-1] = make([]int, 0, 4)
+						}
+					}
+					for i < len(data) && data[i] != ']' {
+						result.NestedInts[len(result.NestedInts)-1] = append(result.NestedInts[len(result.NestedInts)-1], 0)
+						neg := false
+						if i < len(data) && data[i] == '-' {
+							neg = true
+							i++
+						}
+						if i >= len(data) || data[i] < '0' || data[i] > '9' {
+							return result, i, decode.NewParseErr("nestedInts[]", i, scan.ErrBadNumber)
+						}
+						limit := uint64(math.MaxInt64)
+						if neg {
+							limit = scan.SignedNeg
+						}
+						var u uint64
+						for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+							d := uint64(data[i] - '0')
+							if u > limit/10 || (u == limit/10 && d > limit%10) {
+								return result, i, decode.NewParseErr("nestedInts[]", i, scan.ErrNumberOverflow)
+							}
+							u = u*10 + d
+							i++
+						}
+						if i < len(data) {
+							c := data[i]
+							if c == '.' || c == 'e' || c == 'E' {
+								return result, i, decode.NewParseErr("nestedInts[]", i, scan.ErrBadNumber)
+							}
+						}
+						var n int64
+						if neg {
+							if u == scan.SignedNeg {
+								n = math.MinInt64
+							} else {
+								n = -int64(u)
+							}
+						} else {
+							n = int64(u)
+						}
+						result.NestedInts[len(result.NestedInts)-1][len(result.NestedInts[len(result.NestedInts)-1])-1] = int(n)
+						if result.NestedInts[len(result.NestedInts)-1][len(result.NestedInts[len(result.NestedInts)-1])-1] < 0 {
+							return result, i, &validation.GTEError{Path: []string{"nestedInts[][]"}, Limit: 0, Value: result.NestedInts[len(result.NestedInts)-1][len(result.NestedInts[len(result.NestedInts)-1])-1]}
+						}
+						if result.NestedInts[len(result.NestedInts)-1][len(result.NestedInts[len(result.NestedInts)-1])-1] > 100 {
+							return result, i, &validation.LTEError{Path: []string{"nestedInts[][]"}, Limit: 100, Value: result.NestedInts[len(result.NestedInts)-1][len(result.NestedInts[len(result.NestedInts)-1])-1]}
+						}
+						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i < len(data) && data[i] == ',' {
+							i++
+							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
+							}
+							continue
+						}
+						break
+					}
+					if i >= len(data) || data[i] != ']' {
+						return result, i, scan.ErrBadArray
+					}
+					i++
+					if len(result.NestedInts[len(result.NestedInts)-1]) < 1 {
+						return result, i, &validation.MinLenError{Path: []string{"nestedInts[]"}, Limit: 1, Got: len(result.NestedInts[len(result.NestedInts)-1])}
+					}
+					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i < len(data) && data[i] == ',' {
+						i++
+						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						continue
+					}
+					break
+				}
+				if i >= len(data) || data[i] != ']' {
+					return result, i, scan.ErrBadArray
+				}
+				i++
+			default:
+				return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			}
+		case 12:
+			if key == "clampedScore" {
+				if seenClampedScore {
+					return result, i, &validation.DuplicateKeyError{Path: []string{"clampedScore"}}
+				}
+				seenClampedScore = true
+				neg := false
+				if i < len(data) && data[i] == '-' {
+					neg = true
+					i++
+				}
+				if i >= len(data) || data[i] < '0' || data[i] > '9' {
+					return result, i, decode.NewParseErr("clampedScore", i, scan.ErrBadNumber)
+				}
+				limit := uint64(math.MaxInt64)
+				if neg {
+					limit = scan.SignedNeg
+				}
+				var u uint64
+				for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+					d := uint64(data[i] - '0')
+					if u > limit/10 || (u == limit/10 && d > limit%10) {
+						return result, i, decode.NewParseErr("clampedScore", i, scan.ErrNumberOverflow)
+					}
+					u = u*10 + d
+					i++
+				}
+				if i < len(data) {
+					c := data[i]
+					if c == '.' || c == 'e' || c == 'E' {
+						return result, i, decode.NewParseErr("clampedScore", i, scan.ErrBadNumber)
+					}
+				}
+				var n int64
+				if neg {
+					if u == scan.SignedNeg {
+						n = math.MinInt64
+					} else {
+						n = -int64(u)
+					}
+				} else {
+					n = int64(u)
+				}
+				result.ClampedScore = int(n)
 				if result.ClampedScore < 0 {
 					result.ClampedScore = 0
 				}
@@ -753,11 +759,54 @@ func (result ExtraStruct) DecodeFromStream(s *scan.Stream) (ExtraStruct, error) 
 					return result, &validation.DuplicateKeyError{Path: []string{"triple"}}
 				}
 				seenTriple = true
-				{
-					err = s.SkipSpace()
-					if err != nil {
+				err = s.SkipSpace()
+				if err != nil {
+					return result, decode.NewParseErr("triple", s.Pos, err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
 						return result, decode.NewParseErr("triple", s.Pos, err)
 					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, decode.NewParseErr("triple", s.Pos, err)
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, decode.NewParseErr("triple", s.Pos, scan.ErrBadLiteral)
+						}
+					}
+					s.Pos += 4
+					result.Triple = nil
+					break
+				}
+				err = s.ArrayOpen()
+				if err != nil {
+					return result, decode.NewParseErr("triple", s.Pos, err)
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, decode.NewParseErr("triple", s.Pos, err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("triple", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == ']' {
+					if result.Triple == nil {
+						result.Triple = [][][]string{}
+					}
+				} else {
+					if result.Triple == nil {
+						result.Triple = make([][][]string, 0, 4)
+					}
+				}
+				for s.Bytes()[s.Pos] != ']' {
+					result.Triple = append(result.Triple, nil)
 					if s.Pos >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
 							return result, decode.NewParseErr("triple", s.Pos, err)
@@ -775,11 +824,8 @@ func (result ExtraStruct) DecodeFromStream(s *scan.Stream) (ExtraStruct, error) 
 							}
 						}
 						s.Pos += 4
-						result.Triple = nil
-					} else {
-						err = s.ArrayOpen()
-						if err != nil {
-							return result, decode.NewParseErr("triple", s.Pos, err)
+						if len(result.Triple[len(result.Triple)-1]) < 1 {
+							return result, &validation.MinLenError{Path: []string{"triple[]"}, Limit: 1, Got: len(result.Triple[len(result.Triple)-1])}
 						}
 						err = s.SkipSpace()
 						if err != nil {
@@ -790,201 +836,185 @@ func (result ExtraStruct) DecodeFromStream(s *scan.Stream) (ExtraStruct, error) 
 								return result, decode.NewParseErr("triple", s.Pos, err)
 							}
 						}
-						if s.Bytes()[s.Pos] == ']' {
-							if result.Triple == nil {
-								result.Triple = [][][]string{}
-							}
-						} else {
-							if result.Triple == nil {
-								result.Triple = make([][][]string, 0, 4)
-							}
-						}
-						for s.Bytes()[s.Pos] != ']' {
-							result.Triple = append(result.Triple, nil)
-							{
-								err = s.SkipSpace()
-								if err != nil {
-									return result, decode.NewParseErr("triple[]", s.Pos, err)
-								}
-								if s.Pos >= len(s.Bytes()) {
-									if err = s.ReadMore(0); err != nil {
-										return result, decode.NewParseErr("triple[]", s.Pos, err)
-									}
-								}
-								if s.Bytes()[s.Pos] == 'n' {
-									for ki := 1; ki < 4; ki++ {
-										if s.Pos+ki >= len(s.Bytes()) {
-											if err = s.ReadMore(0); err != nil {
-												return result, decode.NewParseErr("triple[]", s.Pos, err)
-											}
-										}
-										if s.Bytes()[s.Pos+ki] != "null"[ki] {
-											return result, decode.NewParseErr("triple[]", s.Pos, scan.ErrBadLiteral)
-										}
-									}
-									s.Pos += 4
-									result.Triple[len(result.Triple)-1] = nil
-								} else {
-									err = s.ArrayOpen()
-									if err != nil {
-										return result, decode.NewParseErr("triple[]", s.Pos, err)
-									}
-									err = s.SkipSpace()
-									if err != nil {
-										return result, decode.NewParseErr("triple[]", s.Pos, err)
-									}
-									if s.Pos >= len(s.Bytes()) {
-										if err = s.ReadMore(0); err != nil {
-											return result, decode.NewParseErr("triple[]", s.Pos, err)
-										}
-									}
-									if s.Bytes()[s.Pos] == ']' {
-										if result.Triple[len(result.Triple)-1] == nil {
-											result.Triple[len(result.Triple)-1] = [][]string{}
-										}
-									} else {
-										if result.Triple[len(result.Triple)-1] == nil {
-											result.Triple[len(result.Triple)-1] = make([][]string, 0, 4)
-										}
-									}
-									for s.Bytes()[s.Pos] != ']' {
-										result.Triple[len(result.Triple)-1] = append(result.Triple[len(result.Triple)-1], nil)
-										{
-											err = s.SkipSpace()
-											if err != nil {
-												return result, decode.NewParseErr("triple[][]", s.Pos, err)
-											}
-											if s.Pos >= len(s.Bytes()) {
-												if err = s.ReadMore(0); err != nil {
-													return result, decode.NewParseErr("triple[][]", s.Pos, err)
-												}
-											}
-											if s.Bytes()[s.Pos] == 'n' {
-												for ki := 1; ki < 4; ki++ {
-													if s.Pos+ki >= len(s.Bytes()) {
-														if err = s.ReadMore(0); err != nil {
-															return result, decode.NewParseErr("triple[][]", s.Pos, err)
-														}
-													}
-													if s.Bytes()[s.Pos+ki] != "null"[ki] {
-														return result, decode.NewParseErr("triple[][]", s.Pos, scan.ErrBadLiteral)
-													}
-												}
-												s.Pos += 4
-												result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1] = nil
-											} else {
-												err = s.ArrayOpen()
-												if err != nil {
-													return result, decode.NewParseErr("triple[][]", s.Pos, err)
-												}
-												err = s.SkipSpace()
-												if err != nil {
-													return result, decode.NewParseErr("triple[][]", s.Pos, err)
-												}
-												if s.Pos >= len(s.Bytes()) {
-													if err = s.ReadMore(0); err != nil {
-														return result, decode.NewParseErr("triple[][]", s.Pos, err)
-													}
-												}
-												if s.Bytes()[s.Pos] == ']' {
-													if result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1] == nil {
-														result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1] = []string{}
-													}
-												} else {
-													if result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1] == nil {
-														result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1] = make([]string, 0, 4)
-													}
-												}
-												for s.Bytes()[s.Pos] != ']' {
-													result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1] = append(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1], "")
-													result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1][len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1])-1], err = s.String()
-													if err != nil {
-														return result, decode.NewParseErr("triple[][]", s.Pos, err)
-													}
-													if len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1][len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1])-1]) < 1 {
-														return result, &validation.MinLenError{Path: []string{"triple[][][]"}, Limit: 1, Got: len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1][len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1])-1])}
-													}
-													err = s.SkipSpace()
-													if err != nil {
-														return result, decode.NewParseErr("triple[][]", s.Pos, err)
-													}
-													if s.Pos >= len(s.Bytes()) {
-														if err = s.ReadMore(0); err != nil {
-															return result, decode.NewParseErr("triple[][]", s.Pos, err)
-														}
-													}
-													if s.Bytes()[s.Pos] == ',' {
-														s.Pos++
-														err = s.SkipSpace()
-														if err != nil {
-															return result, decode.NewParseErr("triple[][]", s.Pos, err)
-														}
-														continue
-													}
-													break
-												}
-												if s.Bytes()[s.Pos] != ']' {
-													return result, decode.NewParseErr("triple[][]", s.Pos, scan.ErrBadArray)
-												}
-												s.Pos++
-											}
-										}
-										if len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1]) < 1 {
-											return result, &validation.MinLenError{Path: []string{"triple[][]"}, Limit: 1, Got: len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1])}
-										}
-										err = s.SkipSpace()
-										if err != nil {
-											return result, decode.NewParseErr("triple[]", s.Pos, err)
-										}
-										if s.Pos >= len(s.Bytes()) {
-											if err = s.ReadMore(0); err != nil {
-												return result, decode.NewParseErr("triple[]", s.Pos, err)
-											}
-										}
-										if s.Bytes()[s.Pos] == ',' {
-											s.Pos++
-											err = s.SkipSpace()
-											if err != nil {
-												return result, decode.NewParseErr("triple[]", s.Pos, err)
-											}
-											continue
-										}
-										break
-									}
-									if s.Bytes()[s.Pos] != ']' {
-										return result, decode.NewParseErr("triple[]", s.Pos, scan.ErrBadArray)
-									}
-									s.Pos++
-								}
-							}
-							if len(result.Triple[len(result.Triple)-1]) < 1 {
-								return result, &validation.MinLenError{Path: []string{"triple[]"}, Limit: 1, Got: len(result.Triple[len(result.Triple)-1])}
-							}
+						if s.Bytes()[s.Pos] == ',' {
+							s.Pos++
 							err = s.SkipSpace()
 							if err != nil {
 								return result, decode.NewParseErr("triple", s.Pos, err)
 							}
+							continue
+						}
+						break
+					}
+					err = s.ArrayOpen()
+					if err != nil {
+						return result, decode.NewParseErr("triple[]", s.Pos, err)
+					}
+					err = s.SkipSpace()
+					if err != nil {
+						return result, decode.NewParseErr("triple[]", s.Pos, err)
+					}
+					if s.Pos >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, decode.NewParseErr("triple[]", s.Pos, err)
+						}
+					}
+					if s.Bytes()[s.Pos] == ']' {
+						if result.Triple[len(result.Triple)-1] == nil {
+							result.Triple[len(result.Triple)-1] = [][]string{}
+						}
+					} else {
+						if result.Triple[len(result.Triple)-1] == nil {
+							result.Triple[len(result.Triple)-1] = make([][]string, 0, 4)
+						}
+					}
+					for s.Bytes()[s.Pos] != ']' {
+						result.Triple[len(result.Triple)-1] = append(result.Triple[len(result.Triple)-1], nil)
+						if s.Pos >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, decode.NewParseErr("triple[]", s.Pos, err)
+							}
+						}
+						if s.Bytes()[s.Pos] == 'n' {
+							for ki := 1; ki < 4; ki++ {
+								if s.Pos+ki >= len(s.Bytes()) {
+									if err = s.ReadMore(0); err != nil {
+										return result, decode.NewParseErr("triple[]", s.Pos, err)
+									}
+								}
+								if s.Bytes()[s.Pos+ki] != "null"[ki] {
+									return result, decode.NewParseErr("triple[]", s.Pos, scan.ErrBadLiteral)
+								}
+							}
+							s.Pos += 4
+							if len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1]) < 1 {
+								return result, &validation.MinLenError{Path: []string{"triple[][]"}, Limit: 1, Got: len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1])}
+							}
+							err = s.SkipSpace()
+							if err != nil {
+								return result, decode.NewParseErr("triple[]", s.Pos, err)
+							}
 							if s.Pos >= len(s.Bytes()) {
 								if err = s.ReadMore(0); err != nil {
-									return result, decode.NewParseErr("triple", s.Pos, err)
+									return result, decode.NewParseErr("triple[]", s.Pos, err)
 								}
 							}
 							if s.Bytes()[s.Pos] == ',' {
 								s.Pos++
 								err = s.SkipSpace()
 								if err != nil {
-									return result, decode.NewParseErr("triple", s.Pos, err)
+									return result, decode.NewParseErr("triple[]", s.Pos, err)
+								}
+								continue
+							}
+							break
+						}
+						err = s.ArrayOpen()
+						if err != nil {
+							return result, decode.NewParseErr("triple[][]", s.Pos, err)
+						}
+						err = s.SkipSpace()
+						if err != nil {
+							return result, decode.NewParseErr("triple[][]", s.Pos, err)
+						}
+						if s.Pos >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, decode.NewParseErr("triple[][]", s.Pos, err)
+							}
+						}
+						if s.Bytes()[s.Pos] == ']' {
+							if result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1] == nil {
+								result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1] = []string{}
+							}
+						} else {
+							if result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1] == nil {
+								result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1] = make([]string, 0, 4)
+							}
+						}
+						for s.Bytes()[s.Pos] != ']' {
+							result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1] = append(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1], "")
+							result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1][len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1])-1], err = s.String()
+							if err != nil {
+								return result, decode.NewParseErr("triple[][]", s.Pos, err)
+							}
+							if len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1][len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1])-1]) < 1 {
+								return result, &validation.MinLenError{Path: []string{"triple[][][]"}, Limit: 1, Got: len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1][len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1])-1])}
+							}
+							err = s.SkipSpace()
+							if err != nil {
+								return result, decode.NewParseErr("triple[][]", s.Pos, err)
+							}
+							if s.Pos >= len(s.Bytes()) {
+								if err = s.ReadMore(0); err != nil {
+									return result, decode.NewParseErr("triple[][]", s.Pos, err)
+								}
+							}
+							if s.Bytes()[s.Pos] == ',' {
+								s.Pos++
+								err = s.SkipSpace()
+								if err != nil {
+									return result, decode.NewParseErr("triple[][]", s.Pos, err)
 								}
 								continue
 							}
 							break
 						}
 						if s.Bytes()[s.Pos] != ']' {
-							return result, decode.NewParseErr("triple", s.Pos, scan.ErrBadArray)
+							return result, decode.NewParseErr("triple[][]", s.Pos, scan.ErrBadArray)
 						}
 						s.Pos++
+						if len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1]) < 1 {
+							return result, &validation.MinLenError{Path: []string{"triple[][]"}, Limit: 1, Got: len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1])}
+						}
+						err = s.SkipSpace()
+						if err != nil {
+							return result, decode.NewParseErr("triple[]", s.Pos, err)
+						}
+						if s.Pos >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, decode.NewParseErr("triple[]", s.Pos, err)
+							}
+						}
+						if s.Bytes()[s.Pos] == ',' {
+							s.Pos++
+							err = s.SkipSpace()
+							if err != nil {
+								return result, decode.NewParseErr("triple[]", s.Pos, err)
+							}
+							continue
+						}
+						break
 					}
+					if s.Bytes()[s.Pos] != ']' {
+						return result, decode.NewParseErr("triple[]", s.Pos, scan.ErrBadArray)
+					}
+					s.Pos++
+					if len(result.Triple[len(result.Triple)-1]) < 1 {
+						return result, &validation.MinLenError{Path: []string{"triple[]"}, Limit: 1, Got: len(result.Triple[len(result.Triple)-1])}
+					}
+					err = s.SkipSpace()
+					if err != nil {
+						return result, decode.NewParseErr("triple", s.Pos, err)
+					}
+					if s.Pos >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, decode.NewParseErr("triple", s.Pos, err)
+						}
+					}
+					if s.Bytes()[s.Pos] == ',' {
+						s.Pos++
+						err = s.SkipSpace()
+						if err != nil {
+							return result, decode.NewParseErr("triple", s.Pos, err)
+						}
+						continue
+					}
+					break
 				}
+				if s.Bytes()[s.Pos] != ']' {
+					return result, decode.NewParseErr("triple", s.Pos, scan.ErrBadArray)
+				}
+				s.Pos++
 			} else {
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
 			}
@@ -998,7 +1028,66 @@ func (result ExtraStruct) DecodeFromStream(s *scan.Stream) (ExtraStruct, error) 
 					return result, &validation.DuplicateKeyError{Path: []string{"keyedMap"}}
 				}
 				seenKeyedMap = true
-				{
+				err = s.SkipSpace()
+				if err != nil {
+					return result, decode.NewParseErr("keyedMap", s.Pos, err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("keyedMap", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, decode.NewParseErr("keyedMap", s.Pos, err)
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, decode.NewParseErr("keyedMap", s.Pos, scan.ErrBadLiteral)
+						}
+					}
+					s.Pos += 4
+					result.KeyedMap = nil
+					break
+				}
+				err = s.ObjectOpen()
+				if err != nil {
+					return result, decode.NewParseErr("keyedMap", s.Pos, err)
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, decode.NewParseErr("keyedMap", s.Pos, err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("keyedMap", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == '}' {
+					if result.KeyedMap == nil {
+						result.KeyedMap = map[string]int{}
+					}
+				} else {
+					if result.KeyedMap == nil {
+						result.KeyedMap = make(map[string]int)
+					}
+				}
+				for s.Bytes()[s.Pos] != '}' {
+					var mk string
+					mk, err = s.String()
+					if err != nil {
+						return result, decode.NewParseErr("keyedMap", s.Pos, err)
+					}
+					mk = strings.TrimSpace(mk)
+					mk = strings.ToLower(mk)
+					if utf8.RuneCountInString(mk) < 2 {
+						return result, &validation.MinRunesError{Path: []string{"keyedMap.key"}, Limit: 2, Got: utf8.RuneCountInString(mk)}
+					}
+					if utf8.RuneCountInString(mk) > 16 {
+						return result, &validation.MaxRunesError{Path: []string{"keyedMap.key"}, Limit: 16, Got: utf8.RuneCountInString(mk)}
+					}
 					err = s.SkipSpace()
 					if err != nil {
 						return result, decode.NewParseErr("keyedMap", s.Pos, err)
@@ -1008,104 +1097,43 @@ func (result ExtraStruct) DecodeFromStream(s *scan.Stream) (ExtraStruct, error) 
 							return result, decode.NewParseErr("keyedMap", s.Pos, err)
 						}
 					}
-					if s.Bytes()[s.Pos] == 'n' {
-						for ki := 1; ki < 4; ki++ {
-							if s.Pos+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(0); err != nil {
-									return result, decode.NewParseErr("keyedMap", s.Pos, err)
-								}
-							}
-							if s.Bytes()[s.Pos+ki] != "null"[ki] {
-								return result, decode.NewParseErr("keyedMap", s.Pos, scan.ErrBadLiteral)
-							}
-						}
-						s.Pos += 4
-						result.KeyedMap = nil
-					} else {
-						err = s.ObjectOpen()
-						if err != nil {
+					if s.Bytes()[s.Pos] != ':' {
+						return result, decode.NewParseErr("keyedMap", s.Pos, scan.ErrBadObject)
+					}
+					s.Pos++
+					err = s.SkipSpace()
+					if err != nil {
+						return result, decode.NewParseErr("keyedMap", s.Pos, err)
+					}
+					var iv int64
+					iv, err = s.Int64()
+					if err != nil {
+						return result, decode.NewParseErr("keyedMap", s.Pos, err)
+					}
+					result.KeyedMap[mk] = int(iv)
+					err = s.SkipSpace()
+					if err != nil {
+						return result, decode.NewParseErr("keyedMap", s.Pos, err)
+					}
+					if s.Pos >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
 							return result, decode.NewParseErr("keyedMap", s.Pos, err)
 						}
+					}
+					if s.Bytes()[s.Pos] == ',' {
+						s.Pos++
 						err = s.SkipSpace()
 						if err != nil {
 							return result, decode.NewParseErr("keyedMap", s.Pos, err)
 						}
-						if s.Pos >= len(s.Bytes()) {
-							if err = s.ReadMore(0); err != nil {
-								return result, decode.NewParseErr("keyedMap", s.Pos, err)
-							}
-						}
-						if s.Bytes()[s.Pos] == '}' {
-							if result.KeyedMap == nil {
-								result.KeyedMap = map[string]int{}
-							}
-						} else {
-							if result.KeyedMap == nil {
-								result.KeyedMap = make(map[string]int)
-							}
-						}
-						for s.Bytes()[s.Pos] != '}' {
-							var mk string
-							mk, err = s.String()
-							if err != nil {
-								return result, decode.NewParseErr("keyedMap", s.Pos, err)
-							}
-							mk = strings.TrimSpace(mk)
-							mk = strings.ToLower(mk)
-							if utf8.RuneCountInString(mk) < 2 {
-								return result, &validation.MinRunesError{Path: []string{"keyedMap.key"}, Limit: 2, Got: utf8.RuneCountInString(mk)}
-							}
-							if utf8.RuneCountInString(mk) > 16 {
-								return result, &validation.MaxRunesError{Path: []string{"keyedMap.key"}, Limit: 16, Got: utf8.RuneCountInString(mk)}
-							}
-							err = s.SkipSpace()
-							if err != nil {
-								return result, decode.NewParseErr("keyedMap", s.Pos, err)
-							}
-							if s.Pos >= len(s.Bytes()) {
-								if err = s.ReadMore(0); err != nil {
-									return result, decode.NewParseErr("keyedMap", s.Pos, err)
-								}
-							}
-							if s.Bytes()[s.Pos] != ':' {
-								return result, decode.NewParseErr("keyedMap", s.Pos, scan.ErrBadObject)
-							}
-							s.Pos++
-							err = s.SkipSpace()
-							if err != nil {
-								return result, decode.NewParseErr("keyedMap", s.Pos, err)
-							}
-							var mn int64
-							mn, err = s.Int64()
-							if err != nil {
-								return result, decode.NewParseErr("keyedMap", s.Pos, err)
-							}
-							result.KeyedMap[mk] = int(mn)
-							err = s.SkipSpace()
-							if err != nil {
-								return result, decode.NewParseErr("keyedMap", s.Pos, err)
-							}
-							if s.Pos >= len(s.Bytes()) {
-								if err = s.ReadMore(0); err != nil {
-									return result, decode.NewParseErr("keyedMap", s.Pos, err)
-								}
-							}
-							if s.Bytes()[s.Pos] == ',' {
-								s.Pos++
-								err = s.SkipSpace()
-								if err != nil {
-									return result, decode.NewParseErr("keyedMap", s.Pos, err)
-								}
-								continue
-							}
-							break
-						}
-						if s.Bytes()[s.Pos] != '}' {
-							return result, decode.NewParseErr("keyedMap", s.Pos, scan.ErrBadObject)
-						}
-						s.Pos++
+						continue
 					}
+					break
 				}
+				if s.Bytes()[s.Pos] != '}' {
+					return result, decode.NewParseErr("keyedMap", s.Pos, scan.ErrBadObject)
+				}
+				s.Pos++
 			} else {
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
 			}
@@ -1120,7 +1148,33 @@ func (result ExtraStruct) DecodeFromStream(s *scan.Stream) (ExtraStruct, error) 
 					return result, &validation.DuplicateKeyError{Path: []string{"hintedTags"}}
 				}
 				seenHintedTags = true
-				{
+				err = s.SkipSpace()
+				if err != nil {
+					return result, decode.NewParseErr("hintedTags", s.Pos, err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("hintedTags", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, decode.NewParseErr("hintedTags", s.Pos, err)
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, decode.NewParseErr("hintedTags", s.Pos, scan.ErrBadLiteral)
+						}
+					}
+					s.Pos += 4
+					result.HintedTags = nil
+				} else {
+					err = s.ArrayOpen()
+					if err != nil {
+						return result, decode.NewParseErr("hintedTags", s.Pos, err)
+					}
 					err = s.SkipSpace()
 					if err != nil {
 						return result, decode.NewParseErr("hintedTags", s.Pos, err)
@@ -1130,21 +1184,18 @@ func (result ExtraStruct) DecodeFromStream(s *scan.Stream) (ExtraStruct, error) 
 							return result, decode.NewParseErr("hintedTags", s.Pos, err)
 						}
 					}
-					if s.Bytes()[s.Pos] == 'n' {
-						for ki := 1; ki < 4; ki++ {
-							if s.Pos+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(0); err != nil {
-									return result, decode.NewParseErr("hintedTags", s.Pos, err)
-								}
-							}
-							if s.Bytes()[s.Pos+ki] != "null"[ki] {
-								return result, decode.NewParseErr("hintedTags", s.Pos, scan.ErrBadLiteral)
-							}
+					if s.Bytes()[s.Pos] == ']' {
+						if result.HintedTags == nil {
+							result.HintedTags = []string{}
 						}
-						s.Pos += 4
-						result.HintedTags = nil
 					} else {
-						err = s.ArrayOpen()
+						if result.HintedTags == nil {
+							result.HintedTags = make([]string, 0, 4)
+						}
+					}
+					for s.Bytes()[s.Pos] != ']' {
+						result.HintedTags = append(result.HintedTags, "")
+						result.HintedTags[len(result.HintedTags)-1], err = s.String()
 						if err != nil {
 							return result, decode.NewParseErr("hintedTags", s.Pos, err)
 						}
@@ -1157,45 +1208,20 @@ func (result ExtraStruct) DecodeFromStream(s *scan.Stream) (ExtraStruct, error) 
 								return result, decode.NewParseErr("hintedTags", s.Pos, err)
 							}
 						}
-						if s.Bytes()[s.Pos] == ']' {
-							if result.HintedTags == nil {
-								result.HintedTags = []string{}
-							}
-						} else {
-							if result.HintedTags == nil {
-								result.HintedTags = make([]string, 0, 4)
-							}
-						}
-						for s.Bytes()[s.Pos] != ']' {
-							result.HintedTags = append(result.HintedTags, "")
-							result.HintedTags[len(result.HintedTags)-1], err = s.String()
-							if err != nil {
-								return result, decode.NewParseErr("hintedTags", s.Pos, err)
-							}
+						if s.Bytes()[s.Pos] == ',' {
+							s.Pos++
 							err = s.SkipSpace()
 							if err != nil {
 								return result, decode.NewParseErr("hintedTags", s.Pos, err)
 							}
-							if s.Pos >= len(s.Bytes()) {
-								if err = s.ReadMore(0); err != nil {
-									return result, decode.NewParseErr("hintedTags", s.Pos, err)
-								}
-							}
-							if s.Bytes()[s.Pos] == ',' {
-								s.Pos++
-								err = s.SkipSpace()
-								if err != nil {
-									return result, decode.NewParseErr("hintedTags", s.Pos, err)
-								}
-								continue
-							}
-							break
+							continue
 						}
-						if s.Bytes()[s.Pos] != ']' {
-							return result, decode.NewParseErr("hintedTags", s.Pos, scan.ErrBadArray)
-						}
-						s.Pos++
+						break
 					}
+					if s.Bytes()[s.Pos] != ']' {
+						return result, decode.NewParseErr("hintedTags", s.Pos, scan.ErrBadArray)
+					}
+					s.Pos++
 				}
 				if len(result.HintedTags) > 1000 {
 					return result, &validation.MaxLenError{Path: []string{"hintedTags"}, Limit: 1000, Got: len(result.HintedTags)}
@@ -1209,11 +1235,54 @@ func (result ExtraStruct) DecodeFromStream(s *scan.Stream) (ExtraStruct, error) 
 					return result, &validation.DuplicateKeyError{Path: []string{"nestedInts"}}
 				}
 				seenNestedInts = true
-				{
-					err = s.SkipSpace()
-					if err != nil {
+				err = s.SkipSpace()
+				if err != nil {
+					return result, decode.NewParseErr("nestedInts", s.Pos, err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
 						return result, decode.NewParseErr("nestedInts", s.Pos, err)
 					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, decode.NewParseErr("nestedInts", s.Pos, err)
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, decode.NewParseErr("nestedInts", s.Pos, scan.ErrBadLiteral)
+						}
+					}
+					s.Pos += 4
+					result.NestedInts = nil
+					break
+				}
+				err = s.ArrayOpen()
+				if err != nil {
+					return result, decode.NewParseErr("nestedInts", s.Pos, err)
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, decode.NewParseErr("nestedInts", s.Pos, err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("nestedInts", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == ']' {
+					if result.NestedInts == nil {
+						result.NestedInts = [][]int{}
+					}
+				} else {
+					if result.NestedInts == nil {
+						result.NestedInts = make([][]int, 0, 4)
+					}
+				}
+				for s.Bytes()[s.Pos] != ']' {
+					result.NestedInts = append(result.NestedInts, nil)
 					if s.Pos >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
 							return result, decode.NewParseErr("nestedInts", s.Pos, err)
@@ -1231,11 +1300,8 @@ func (result ExtraStruct) DecodeFromStream(s *scan.Stream) (ExtraStruct, error) 
 							}
 						}
 						s.Pos += 4
-						result.NestedInts = nil
-					} else {
-						err = s.ArrayOpen()
-						if err != nil {
-							return result, decode.NewParseErr("nestedInts", s.Pos, err)
+						if len(result.NestedInts[len(result.NestedInts)-1]) < 1 {
+							return result, &validation.MinLenError{Path: []string{"nestedInts[]"}, Limit: 1, Got: len(result.NestedInts[len(result.NestedInts)-1])}
 						}
 						err = s.SkipSpace()
 						if err != nil {
@@ -1246,130 +1312,101 @@ func (result ExtraStruct) DecodeFromStream(s *scan.Stream) (ExtraStruct, error) 
 								return result, decode.NewParseErr("nestedInts", s.Pos, err)
 							}
 						}
-						if s.Bytes()[s.Pos] == ']' {
-							if result.NestedInts == nil {
-								result.NestedInts = [][]int{}
-							}
-						} else {
-							if result.NestedInts == nil {
-								result.NestedInts = make([][]int, 0, 4)
-							}
-						}
-						for s.Bytes()[s.Pos] != ']' {
-							result.NestedInts = append(result.NestedInts, nil)
-							{
-								err = s.SkipSpace()
-								if err != nil {
-									return result, decode.NewParseErr("nestedInts[]", s.Pos, err)
-								}
-								if s.Pos >= len(s.Bytes()) {
-									if err = s.ReadMore(0); err != nil {
-										return result, decode.NewParseErr("nestedInts[]", s.Pos, err)
-									}
-								}
-								if s.Bytes()[s.Pos] == 'n' {
-									for ki := 1; ki < 4; ki++ {
-										if s.Pos+ki >= len(s.Bytes()) {
-											if err = s.ReadMore(0); err != nil {
-												return result, decode.NewParseErr("nestedInts[]", s.Pos, err)
-											}
-										}
-										if s.Bytes()[s.Pos+ki] != "null"[ki] {
-											return result, decode.NewParseErr("nestedInts[]", s.Pos, scan.ErrBadLiteral)
-										}
-									}
-									s.Pos += 4
-									result.NestedInts[len(result.NestedInts)-1] = nil
-								} else {
-									err = s.ArrayOpen()
-									if err != nil {
-										return result, decode.NewParseErr("nestedInts[]", s.Pos, err)
-									}
-									err = s.SkipSpace()
-									if err != nil {
-										return result, decode.NewParseErr("nestedInts[]", s.Pos, err)
-									}
-									if s.Pos >= len(s.Bytes()) {
-										if err = s.ReadMore(0); err != nil {
-											return result, decode.NewParseErr("nestedInts[]", s.Pos, err)
-										}
-									}
-									if s.Bytes()[s.Pos] == ']' {
-										if result.NestedInts[len(result.NestedInts)-1] == nil {
-											result.NestedInts[len(result.NestedInts)-1] = []int{}
-										}
-									} else {
-										if result.NestedInts[len(result.NestedInts)-1] == nil {
-											result.NestedInts[len(result.NestedInts)-1] = make([]int, 0, 4)
-										}
-									}
-									for s.Bytes()[s.Pos] != ']' {
-										result.NestedInts[len(result.NestedInts)-1] = append(result.NestedInts[len(result.NestedInts)-1], 0)
-										var iv int64
-										iv, err = s.Int64()
-										if err != nil {
-											return result, decode.NewParseErr("nestedInts[]", s.Pos, err)
-										}
-										result.NestedInts[len(result.NestedInts)-1][len(result.NestedInts[len(result.NestedInts)-1])-1] = int(iv)
-										if result.NestedInts[len(result.NestedInts)-1][len(result.NestedInts[len(result.NestedInts)-1])-1] < 0 {
-											return result, &validation.GTEError{Path: []string{"nestedInts[][]"}, Limit: 0, Value: result.NestedInts[len(result.NestedInts)-1][len(result.NestedInts[len(result.NestedInts)-1])-1]}
-										}
-										if result.NestedInts[len(result.NestedInts)-1][len(result.NestedInts[len(result.NestedInts)-1])-1] > 100 {
-											return result, &validation.LTEError{Path: []string{"nestedInts[][]"}, Limit: 100, Value: result.NestedInts[len(result.NestedInts)-1][len(result.NestedInts[len(result.NestedInts)-1])-1]}
-										}
-										err = s.SkipSpace()
-										if err != nil {
-											return result, decode.NewParseErr("nestedInts[]", s.Pos, err)
-										}
-										if s.Pos >= len(s.Bytes()) {
-											if err = s.ReadMore(0); err != nil {
-												return result, decode.NewParseErr("nestedInts[]", s.Pos, err)
-											}
-										}
-										if s.Bytes()[s.Pos] == ',' {
-											s.Pos++
-											err = s.SkipSpace()
-											if err != nil {
-												return result, decode.NewParseErr("nestedInts[]", s.Pos, err)
-											}
-											continue
-										}
-										break
-									}
-									if s.Bytes()[s.Pos] != ']' {
-										return result, decode.NewParseErr("nestedInts[]", s.Pos, scan.ErrBadArray)
-									}
-									s.Pos++
-								}
-							}
-							if len(result.NestedInts[len(result.NestedInts)-1]) < 1 {
-								return result, &validation.MinLenError{Path: []string{"nestedInts[]"}, Limit: 1, Got: len(result.NestedInts[len(result.NestedInts)-1])}
-							}
+						if s.Bytes()[s.Pos] == ',' {
+							s.Pos++
 							err = s.SkipSpace()
 							if err != nil {
 								return result, decode.NewParseErr("nestedInts", s.Pos, err)
 							}
-							if s.Pos >= len(s.Bytes()) {
-								if err = s.ReadMore(0); err != nil {
-									return result, decode.NewParseErr("nestedInts", s.Pos, err)
-								}
-							}
-							if s.Bytes()[s.Pos] == ',' {
-								s.Pos++
-								err = s.SkipSpace()
-								if err != nil {
-									return result, decode.NewParseErr("nestedInts", s.Pos, err)
-								}
-								continue
-							}
-							break
+							continue
 						}
-						if s.Bytes()[s.Pos] != ']' {
-							return result, decode.NewParseErr("nestedInts", s.Pos, scan.ErrBadArray)
-						}
-						s.Pos++
+						break
 					}
+					err = s.ArrayOpen()
+					if err != nil {
+						return result, decode.NewParseErr("nestedInts[]", s.Pos, err)
+					}
+					err = s.SkipSpace()
+					if err != nil {
+						return result, decode.NewParseErr("nestedInts[]", s.Pos, err)
+					}
+					if s.Pos >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, decode.NewParseErr("nestedInts[]", s.Pos, err)
+						}
+					}
+					if s.Bytes()[s.Pos] == ']' {
+						if result.NestedInts[len(result.NestedInts)-1] == nil {
+							result.NestedInts[len(result.NestedInts)-1] = []int{}
+						}
+					} else {
+						if result.NestedInts[len(result.NestedInts)-1] == nil {
+							result.NestedInts[len(result.NestedInts)-1] = make([]int, 0, 4)
+						}
+					}
+					for s.Bytes()[s.Pos] != ']' {
+						result.NestedInts[len(result.NestedInts)-1] = append(result.NestedInts[len(result.NestedInts)-1], 0)
+						var iv int64
+						iv, err = s.Int64()
+						if err != nil {
+							return result, decode.NewParseErr("nestedInts[]", s.Pos, err)
+						}
+						result.NestedInts[len(result.NestedInts)-1][len(result.NestedInts[len(result.NestedInts)-1])-1] = int(iv)
+						if result.NestedInts[len(result.NestedInts)-1][len(result.NestedInts[len(result.NestedInts)-1])-1] < 0 {
+							return result, &validation.GTEError{Path: []string{"nestedInts[][]"}, Limit: 0, Value: result.NestedInts[len(result.NestedInts)-1][len(result.NestedInts[len(result.NestedInts)-1])-1]}
+						}
+						if result.NestedInts[len(result.NestedInts)-1][len(result.NestedInts[len(result.NestedInts)-1])-1] > 100 {
+							return result, &validation.LTEError{Path: []string{"nestedInts[][]"}, Limit: 100, Value: result.NestedInts[len(result.NestedInts)-1][len(result.NestedInts[len(result.NestedInts)-1])-1]}
+						}
+						err = s.SkipSpace()
+						if err != nil {
+							return result, decode.NewParseErr("nestedInts[]", s.Pos, err)
+						}
+						if s.Pos >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, decode.NewParseErr("nestedInts[]", s.Pos, err)
+							}
+						}
+						if s.Bytes()[s.Pos] == ',' {
+							s.Pos++
+							err = s.SkipSpace()
+							if err != nil {
+								return result, decode.NewParseErr("nestedInts[]", s.Pos, err)
+							}
+							continue
+						}
+						break
+					}
+					if s.Bytes()[s.Pos] != ']' {
+						return result, decode.NewParseErr("nestedInts[]", s.Pos, scan.ErrBadArray)
+					}
+					s.Pos++
+					if len(result.NestedInts[len(result.NestedInts)-1]) < 1 {
+						return result, &validation.MinLenError{Path: []string{"nestedInts[]"}, Limit: 1, Got: len(result.NestedInts[len(result.NestedInts)-1])}
+					}
+					err = s.SkipSpace()
+					if err != nil {
+						return result, decode.NewParseErr("nestedInts", s.Pos, err)
+					}
+					if s.Pos >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, decode.NewParseErr("nestedInts", s.Pos, err)
+						}
+					}
+					if s.Bytes()[s.Pos] == ',' {
+						s.Pos++
+						err = s.SkipSpace()
+						if err != nil {
+							return result, decode.NewParseErr("nestedInts", s.Pos, err)
+						}
+						continue
+					}
+					break
 				}
+				if s.Bytes()[s.Pos] != ']' {
+					return result, decode.NewParseErr("nestedInts", s.Pos, scan.ErrBadArray)
+				}
+				s.Pos++
 			default:
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
 			}
@@ -1497,19 +1534,17 @@ func (s ExtraStruct) AppendJSON(dst []byte) ([]byte, error) {
 		dst = append(dst, "null"...)
 	} else {
 		dst = append(dst, '{')
-		{
-			first := true
-			for k, v := range s.KeyedMap {
-				if first {
-					first = false
-					dst = append(dst, '"')
-				} else {
-					dst = append(dst, ",\""...)
-				}
-				dst = encode.AppendStringNoHTML(dst, k)
-				dst = append(dst, ':')
-				dst = strconv.AppendInt(dst, int64(v), 10)
+		firstKeyedMap := true
+		for k, v := range s.KeyedMap {
+			if firstKeyedMap {
+				firstKeyedMap = false
+				dst = append(dst, '"')
+			} else {
+				dst = append(dst, ",\""...)
 			}
+			dst = encode.AppendStringNoHTML(dst, k)
+			dst = append(dst, ':')
+			dst = strconv.AppendInt(dst, int64(v), 10)
 		}
 		dst = append(dst, '}')
 	}
@@ -1674,25 +1709,23 @@ func (result TupleStruct) DecodeFrom(data []byte) (TupleStruct, int, error) {
 		if i >= len(data) || data[i] != '"' {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
-		{
-			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-				ke++
-			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-				i = ke + 1
-			} else {
-				key, i, err = scan.String(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr("", i, err)
-				}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -1712,95 +1745,91 @@ func (result TupleStruct) DecodeFrom(data []byte) (TupleStruct, int, error) {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"rgb"}}
 				}
 				seenRGB = true
-				{
-					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-						i++
-					}
-					if i >= len(data) || data[i] != '[' {
-						return result, i, scan.ErrBadArray
-					}
+				for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 					i++
+				}
+				if i >= len(data) || data[i] != '[' {
+					return result, i, scan.ErrBadArray
+				}
+				i++
+				for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+					i++
+				}
+				var idx0 int
+				for i < len(data) && data[i] != ']' {
+					if idx0 >= 3 {
+						return result, i, &validation.LenError{Path: []string{"rgb"}, Want: 3, Got: idx0}
+					}
+					neg := false
+					if i < len(data) && data[i] == '-' {
+						neg = true
+						i++
+					}
+					if i >= len(data) || data[i] < '0' || data[i] > '9' {
+						return result, i, decode.NewParseErr("rgb", i, scan.ErrBadNumber)
+					}
+					limit := uint64(math.MaxInt64)
+					if neg {
+						limit = scan.SignedNeg
+					}
+					var u uint64
+					for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+						d := uint64(data[i] - '0')
+						if u > limit/10 || (u == limit/10 && d > limit%10) {
+							return result, i, decode.NewParseErr("rgb", i, scan.ErrNumberOverflow)
+						}
+						u = u*10 + d
+						i++
+					}
+					if i < len(data) {
+						c := data[i]
+						if c == '.' || c == 'e' || c == 'E' {
+							return result, i, decode.NewParseErr("rgb", i, scan.ErrBadNumber)
+						}
+					}
+					var n int64
+					if neg {
+						if u == scan.SignedNeg {
+							n = math.MinInt64
+						} else {
+							n = -int64(u)
+						}
+					} else {
+						n = int64(u)
+					}
+					result.RGB[idx0] = int(n)
+					if result.RGB[idx0] < 0 {
+						result.RGB[idx0] = 0
+					}
+					if result.RGB[idx0] > 255 {
+						result.RGB[idx0] = 255
+					}
+					if result.RGB[idx0] < 0 {
+						return result, i, &validation.GTEError{Path: []string{"rgb[]"}, Limit: 0, Value: result.RGB[idx0]}
+					}
+					if result.RGB[idx0] > 255 {
+						return result, i, &validation.LTEError{Path: []string{"rgb[]"}, Limit: 255, Value: result.RGB[idx0]}
+					}
+					idx0++
 					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
-					var idx0 int
-					for i < len(data) && data[i] != ']' {
-						if idx0 >= 3 {
-							return result, i, &validation.LenError{Path: []string{"rgb"}, Want: 3, Got: idx0}
-						}
-						{
-							neg := false
-							if i < len(data) && data[i] == '-' {
-								neg = true
-								i++
-							}
-							if i >= len(data) || data[i] < '0' || data[i] > '9' {
-								return result, i, decode.NewParseErr("rgb", i, scan.ErrBadNumber)
-							}
-							limit := uint64(math.MaxInt64)
-							if neg {
-								limit = scan.SignedNeg
-							}
-							var u uint64
-							for i < len(data) && data[i] >= '0' && data[i] <= '9' {
-								d := uint64(data[i] - '0')
-								if u > limit/10 || (u == limit/10 && d > limit%10) {
-									return result, i, decode.NewParseErr("rgb", i, scan.ErrNumberOverflow)
-								}
-								u = u*10 + d
-								i++
-							}
-							if i < len(data) {
-								c := data[i]
-								if c == '.' || c == 'e' || c == 'E' {
-									return result, i, decode.NewParseErr("rgb", i, scan.ErrBadNumber)
-								}
-							}
-							var n int64
-							if neg {
-								if u == scan.SignedNeg {
-									n = math.MinInt64
-								} else {
-									n = -int64(u)
-								}
-							} else {
-								n = int64(u)
-							}
-							result.RGB[idx0] = int(n)
-						}
-						if result.RGB[idx0] < 0 {
-							result.RGB[idx0] = 0
-						}
-						if result.RGB[idx0] > 255 {
-							result.RGB[idx0] = 255
-						}
-						if result.RGB[idx0] < 0 {
-							return result, i, &validation.GTEError{Path: []string{"rgb[]"}, Limit: 0, Value: result.RGB[idx0]}
-						}
-						if result.RGB[idx0] > 255 {
-							return result, i, &validation.LTEError{Path: []string{"rgb[]"}, Limit: 255, Value: result.RGB[idx0]}
-						}
-						idx0++
+					if i < len(data) && data[i] == ',' {
+						i++
 						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
 						}
-						if i < len(data) && data[i] == ',' {
-							i++
-							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-								i++
-							}
-							continue
-						}
-						break
+						continue
 					}
-					if i >= len(data) || data[i] != ']' {
-						return result, i, scan.ErrBadArray
-					}
-					if idx0 != 3 {
-						return result, i, &validation.LenError{Path: []string{"rgb"}, Want: 3, Got: idx0}
-					}
-					i++
+					break
 				}
+				if i >= len(data) || data[i] != ']' {
+					return result, i, scan.ErrBadArray
+				}
+				if idx0 != 3 {
+					return result, i, &validation.LenError{Path: []string{"rgb"}, Want: 3, Got: idx0}
+				}
+				i++
 			} else {
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
 			}
@@ -1810,7 +1839,37 @@ func (result TupleStruct) DecodeFrom(data []byte) (TupleStruct, int, error) {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"pair"}}
 				}
 				seenPair = true
-				{
+				for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+					i++
+				}
+				if i >= len(data) || data[i] != '[' {
+					return result, i, scan.ErrBadArray
+				}
+				i++
+				for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+					i++
+				}
+				var idx0 int
+				for i < len(data) && data[i] != ']' {
+					if idx0 >= 2 {
+						return result, i, &validation.LenError{Path: []string{"pair"}, Want: 2, Got: idx0}
+					}
+					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+						i += 4
+						result.Pair[idx0] = nil
+						idx0++
+						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i < len(data) && data[i] == ',' {
+							i++
+							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
+							}
+							continue
+						}
+						break
+					}
 					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
@@ -1821,80 +1880,39 @@ func (result TupleStruct) DecodeFrom(data []byte) (TupleStruct, int, error) {
 					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
-					var idx0 int
+					if i < len(data) && data[i] == ']' {
+						if result.Pair[idx0] == nil {
+							result.Pair[idx0] = []string{}
+						}
+					} else {
+						if result.Pair[idx0] == nil {
+							result.Pair[idx0] = make([]string, 0, 4)
+						}
+					}
 					for i < len(data) && data[i] != ']' {
-						if idx0 >= 2 {
-							return result, i, &validation.LenError{Path: []string{"pair"}, Want: 2, Got: idx0}
+						result.Pair[idx0] = append(result.Pair[idx0], "")
+						if i >= len(data) || data[i] != '"' {
+							return result, i, decode.NewParseErr("pair[]", i, scan.ErrExpectString)
 						}
-						{
-							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-								i++
-							}
-							if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-								i += 4
-								result.Pair[idx0] = nil
-							} else {
-								if i >= len(data) || data[i] != '[' {
-									return result, i, scan.ErrBadArray
-								}
-								i++
-								for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-									i++
-								}
-								if i < len(data) && data[i] == ']' {
-									if result.Pair[idx0] == nil {
-										result.Pair[idx0] = []string{}
-									}
-								} else {
-									if result.Pair[idx0] == nil {
-										result.Pair[idx0] = make([]string, 0, 4)
-									}
-								}
-								for i < len(data) && data[i] != ']' {
-									result.Pair[idx0] = append(result.Pair[idx0], "")
-									if i >= len(data) || data[i] != '"' {
-										return result, i, decode.NewParseErr("pair[]", i, scan.ErrExpectString)
-									}
-									{
-										ke := i + 1
-										for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-											ke++
-										}
-										if ke >= len(data) {
-											return result, i, decode.NewParseErr("pair[]", i, scan.ErrUnterminated)
-										}
-										if data[ke] < 0x20 {
-											return result, i, decode.NewParseErr("pair[]", i, scan.ErrBadString)
-										}
-										if data[ke] == '"' {
-											result.Pair[idx0][len(result.Pair[idx0])-1] = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-											i = ke + 1
-										} else {
-											result.Pair[idx0][len(result.Pair[idx0])-1], i, err = scan.String(data, i)
-											if err != nil {
-												return result, i, decode.NewParseErr("pair[]", i, err)
-											}
-										}
-									}
-									for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-										i++
-									}
-									if i < len(data) && data[i] == ',' {
-										i++
-										for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-											i++
-										}
-										continue
-									}
-									break
-								}
-								if i >= len(data) || data[i] != ']' {
-									return result, i, scan.ErrBadArray
-								}
-								i++
+						ke := i + 1
+						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+							ke++
+						}
+						if ke >= len(data) {
+							return result, i, decode.NewParseErr("pair[]", i, scan.ErrUnterminated)
+						}
+						if data[ke] < 0x20 {
+							return result, i, decode.NewParseErr("pair[]", i, scan.ErrBadString)
+						}
+						if data[ke] == '"' {
+							result.Pair[idx0][len(result.Pair[idx0])-1] = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+							i = ke + 1
+						} else {
+							result.Pair[idx0][len(result.Pair[idx0])-1], i, err = scan.String(data, i)
+							if err != nil {
+								return result, i, decode.NewParseErr("pair[]", i, err)
 							}
 						}
-						idx0++
 						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
 						}
@@ -1910,11 +1928,27 @@ func (result TupleStruct) DecodeFrom(data []byte) (TupleStruct, int, error) {
 					if i >= len(data) || data[i] != ']' {
 						return result, i, scan.ErrBadArray
 					}
-					if idx0 != 2 {
-						return result, i, &validation.LenError{Path: []string{"pair"}, Want: 2, Got: idx0}
-					}
 					i++
+					idx0++
+					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i < len(data) && data[i] == ',' {
+						i++
+						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						continue
+					}
+					break
 				}
+				if i >= len(data) || data[i] != ']' {
+					return result, i, scan.ErrBadArray
+				}
+				if idx0 != 2 {
+					return result, i, &validation.LenError{Path: []string{"pair"}, Want: 2, Got: idx0}
+				}
+				i++
 			} else {
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
 			}
@@ -1924,7 +1958,80 @@ func (result TupleStruct) DecodeFrom(data []byte) (TupleStruct, int, error) {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"point"}}
 				}
 				seenPoint = true
-				{
+				for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+					i++
+				}
+				if i >= len(data) || data[i] != '[' {
+					return result, i, scan.ErrBadArray
+				}
+				i++
+				for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+					i++
+				}
+				var idx0 int
+				for i < len(data) && data[i] != ']' {
+					if idx0 >= 2 {
+						return result, i, &validation.LenError{Path: []string{"point"}, Want: 2, Got: idx0}
+					}
+					result.Point[idx0], i, err = scan.Float64(data, i)
+					if err != nil {
+						return result, i, decode.NewParseErr("point", i, err)
+					}
+					idx0++
+					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i < len(data) && data[i] == ',' {
+						i++
+						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						continue
+					}
+					break
+				}
+				if i >= len(data) || data[i] != ']' {
+					return result, i, scan.ErrBadArray
+				}
+				if idx0 != 2 {
+					return result, i, &validation.LenError{Path: []string{"point"}, Want: 2, Got: idx0}
+				}
+				i++
+			} else {
+				return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			}
+		case 8:
+			if key == "segments" {
+				if seenSegments {
+					return result, i, &validation.DuplicateKeyError{Path: []string{"segments"}}
+				}
+				seenSegments = true
+				for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+					i++
+				}
+				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+					i += 4
+					result.Segments = nil
+					break
+				}
+				if i >= len(data) || data[i] != '[' {
+					return result, i, scan.ErrBadArray
+				}
+				i++
+				for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+					i++
+				}
+				if i < len(data) && data[i] == ']' {
+					if result.Segments == nil {
+						result.Segments = [][2]int{}
+					}
+				} else {
+					if result.Segments == nil {
+						result.Segments = [][2]int{}
+					}
+				}
+				for i < len(data) && data[i] != ']' {
+					result.Segments = append(result.Segments, [2]int{})
 					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
@@ -1935,16 +2042,50 @@ func (result TupleStruct) DecodeFrom(data []byte) (TupleStruct, int, error) {
 					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
-					var idx0 int
+					var idx1 int
 					for i < len(data) && data[i] != ']' {
-						if idx0 >= 2 {
-							return result, i, &validation.LenError{Path: []string{"point"}, Want: 2, Got: idx0}
+						if idx1 >= 2 {
+							return result, i, &validation.LenError{Path: []string{"segments[]"}, Want: 2, Got: idx1}
 						}
-						result.Point[idx0], i, err = scan.Float64(data, i)
-						if err != nil {
-							return result, i, decode.NewParseErr("point", i, err)
+						neg := false
+						if i < len(data) && data[i] == '-' {
+							neg = true
+							i++
 						}
-						idx0++
+						if i >= len(data) || data[i] < '0' || data[i] > '9' {
+							return result, i, decode.NewParseErr("segments[]", i, scan.ErrBadNumber)
+						}
+						limit := uint64(math.MaxInt64)
+						if neg {
+							limit = scan.SignedNeg
+						}
+						var u uint64
+						for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+							d := uint64(data[i] - '0')
+							if u > limit/10 || (u == limit/10 && d > limit%10) {
+								return result, i, decode.NewParseErr("segments[]", i, scan.ErrNumberOverflow)
+							}
+							u = u*10 + d
+							i++
+						}
+						if i < len(data) {
+							c := data[i]
+							if c == '.' || c == 'e' || c == 'E' {
+								return result, i, decode.NewParseErr("segments[]", i, scan.ErrBadNumber)
+							}
+						}
+						var n int64
+						if neg {
+							if u == scan.SignedNeg {
+								n = math.MinInt64
+							} else {
+								n = -int64(u)
+							}
+						} else {
+							n = int64(u)
+						}
+						result.Segments[len(result.Segments)-1][idx1] = int(n)
+						idx1++
 						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
 						}
@@ -1960,141 +2101,26 @@ func (result TupleStruct) DecodeFrom(data []byte) (TupleStruct, int, error) {
 					if i >= len(data) || data[i] != ']' {
 						return result, i, scan.ErrBadArray
 					}
-					if idx0 != 2 {
-						return result, i, &validation.LenError{Path: []string{"point"}, Want: 2, Got: idx0}
+					if idx1 != 2 {
+						return result, i, &validation.LenError{Path: []string{"segments[]"}, Want: 2, Got: idx1}
 					}
 					i++
-				}
-			} else {
-				return result, i, &validation.UnknownKeyError{Path: []string{key}}
-			}
-		case 8:
-			if key == "segments" {
-				if seenSegments {
-					return result, i, &validation.DuplicateKeyError{Path: []string{"segments"}}
-				}
-				seenSegments = true
-				{
 					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
-					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-						i += 4
-						result.Segments = nil
-					} else {
-						if i >= len(data) || data[i] != '[' {
-							return result, i, scan.ErrBadArray
-						}
+					if i < len(data) && data[i] == ',' {
 						i++
 						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
 						}
-						if i < len(data) && data[i] == ']' {
-							if result.Segments == nil {
-								result.Segments = [][2]int{}
-							}
-						} else {
-							if result.Segments == nil {
-								result.Segments = [][2]int{}
-							}
-						}
-						for i < len(data) && data[i] != ']' {
-							result.Segments = append(result.Segments, [2]int{})
-							{
-								for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-									i++
-								}
-								if i >= len(data) || data[i] != '[' {
-									return result, i, scan.ErrBadArray
-								}
-								i++
-								for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-									i++
-								}
-								var idx1 int
-								for i < len(data) && data[i] != ']' {
-									if idx1 >= 2 {
-										return result, i, &validation.LenError{Path: []string{"segments[]"}, Want: 2, Got: idx1}
-									}
-									{
-										neg := false
-										if i < len(data) && data[i] == '-' {
-											neg = true
-											i++
-										}
-										if i >= len(data) || data[i] < '0' || data[i] > '9' {
-											return result, i, decode.NewParseErr("segments[]", i, scan.ErrBadNumber)
-										}
-										limit := uint64(math.MaxInt64)
-										if neg {
-											limit = scan.SignedNeg
-										}
-										var u uint64
-										for i < len(data) && data[i] >= '0' && data[i] <= '9' {
-											d := uint64(data[i] - '0')
-											if u > limit/10 || (u == limit/10 && d > limit%10) {
-												return result, i, decode.NewParseErr("segments[]", i, scan.ErrNumberOverflow)
-											}
-											u = u*10 + d
-											i++
-										}
-										if i < len(data) {
-											c := data[i]
-											if c == '.' || c == 'e' || c == 'E' {
-												return result, i, decode.NewParseErr("segments[]", i, scan.ErrBadNumber)
-											}
-										}
-										var n int64
-										if neg {
-											if u == scan.SignedNeg {
-												n = math.MinInt64
-											} else {
-												n = -int64(u)
-											}
-										} else {
-											n = int64(u)
-										}
-										result.Segments[len(result.Segments)-1][idx1] = int(n)
-									}
-									idx1++
-									for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-										i++
-									}
-									if i < len(data) && data[i] == ',' {
-										i++
-										for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-											i++
-										}
-										continue
-									}
-									break
-								}
-								if i >= len(data) || data[i] != ']' {
-									return result, i, scan.ErrBadArray
-								}
-								if idx1 != 2 {
-									return result, i, &validation.LenError{Path: []string{"segments[]"}, Want: 2, Got: idx1}
-								}
-								i++
-							}
-							for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-								i++
-							}
-							if i < len(data) && data[i] == ',' {
-								i++
-								for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-									i++
-								}
-								continue
-							}
-							break
-						}
-						if i >= len(data) || data[i] != ']' {
-							return result, i, scan.ErrBadArray
-						}
-						i++
+						continue
 					}
+					break
 				}
+				if i >= len(data) || data[i] != ']' {
+					return result, i, scan.ErrBadArray
+				}
+				i++
 			} else {
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
 			}
@@ -2165,11 +2191,43 @@ func (result TupleStruct) DecodeFromStream(s *scan.Stream) (TupleStruct, error) 
 					return result, &validation.DuplicateKeyError{Path: []string{"rgb"}}
 				}
 				seenRGB = true
-				{
-					err = s.ArrayOpen()
+				err = s.ArrayOpen()
+				if err != nil {
+					return result, decode.NewParseErr("rgb", s.Pos, err)
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, decode.NewParseErr("rgb", s.Pos, err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("rgb", s.Pos, err)
+					}
+				}
+				var idx0 int
+				for s.Bytes()[s.Pos] != ']' {
+					if idx0 >= 3 {
+						return result, &validation.LenError{Path: []string{"rgb"}, Want: 3, Got: idx0}
+					}
+					var iv int64
+					iv, err = s.Int64()
 					if err != nil {
 						return result, decode.NewParseErr("rgb", s.Pos, err)
 					}
+					result.RGB[idx0] = int(iv)
+					if result.RGB[idx0] < 0 {
+						result.RGB[idx0] = 0
+					}
+					if result.RGB[idx0] > 255 {
+						result.RGB[idx0] = 255
+					}
+					if result.RGB[idx0] < 0 {
+						return result, &validation.GTEError{Path: []string{"rgb[]"}, Limit: 0, Value: result.RGB[idx0]}
+					}
+					if result.RGB[idx0] > 255 {
+						return result, &validation.LTEError{Path: []string{"rgb[]"}, Limit: 255, Value: result.RGB[idx0]}
+					}
+					idx0++
 					err = s.SkipSpace()
 					if err != nil {
 						return result, decode.NewParseErr("rgb", s.Pos, err)
@@ -2179,57 +2237,23 @@ func (result TupleStruct) DecodeFromStream(s *scan.Stream) (TupleStruct, error) 
 							return result, decode.NewParseErr("rgb", s.Pos, err)
 						}
 					}
-					var idx0 int
-					for s.Bytes()[s.Pos] != ']' {
-						if idx0 >= 3 {
-							return result, &validation.LenError{Path: []string{"rgb"}, Want: 3, Got: idx0}
-						}
-						var iv int64
-						iv, err = s.Int64()
-						if err != nil {
-							return result, decode.NewParseErr("rgb", s.Pos, err)
-						}
-						result.RGB[idx0] = int(iv)
-						if result.RGB[idx0] < 0 {
-							result.RGB[idx0] = 0
-						}
-						if result.RGB[idx0] > 255 {
-							result.RGB[idx0] = 255
-						}
-						if result.RGB[idx0] < 0 {
-							return result, &validation.GTEError{Path: []string{"rgb[]"}, Limit: 0, Value: result.RGB[idx0]}
-						}
-						if result.RGB[idx0] > 255 {
-							return result, &validation.LTEError{Path: []string{"rgb[]"}, Limit: 255, Value: result.RGB[idx0]}
-						}
-						idx0++
+					if s.Bytes()[s.Pos] == ',' {
+						s.Pos++
 						err = s.SkipSpace()
 						if err != nil {
 							return result, decode.NewParseErr("rgb", s.Pos, err)
 						}
-						if s.Pos >= len(s.Bytes()) {
-							if err = s.ReadMore(0); err != nil {
-								return result, decode.NewParseErr("rgb", s.Pos, err)
-							}
-						}
-						if s.Bytes()[s.Pos] == ',' {
-							s.Pos++
-							err = s.SkipSpace()
-							if err != nil {
-								return result, decode.NewParseErr("rgb", s.Pos, err)
-							}
-							continue
-						}
-						break
+						continue
 					}
-					if s.Bytes()[s.Pos] != ']' {
-						return result, decode.NewParseErr("rgb", s.Pos, scan.ErrBadArray)
-					}
-					if idx0 != 3 {
-						return result, &validation.LenError{Path: []string{"rgb"}, Want: 3, Got: idx0}
-					}
-					s.Pos++
+					break
 				}
+				if s.Bytes()[s.Pos] != ']' {
+					return result, decode.NewParseErr("rgb", s.Pos, scan.ErrBadArray)
+				}
+				if idx0 != 3 {
+					return result, &validation.LenError{Path: []string{"rgb"}, Want: 3, Got: idx0}
+				}
+				s.Pos++
 			} else {
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
 			}
@@ -2243,102 +2267,42 @@ func (result TupleStruct) DecodeFromStream(s *scan.Stream) (TupleStruct, error) 
 					return result, &validation.DuplicateKeyError{Path: []string{"pair"}}
 				}
 				seenPair = true
-				{
-					err = s.ArrayOpen()
-					if err != nil {
+				err = s.ArrayOpen()
+				if err != nil {
+					return result, decode.NewParseErr("pair", s.Pos, err)
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, decode.NewParseErr("pair", s.Pos, err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
 						return result, decode.NewParseErr("pair", s.Pos, err)
 					}
-					err = s.SkipSpace()
-					if err != nil {
-						return result, decode.NewParseErr("pair", s.Pos, err)
+				}
+				var idx0 int
+				for s.Bytes()[s.Pos] != ']' {
+					if idx0 >= 2 {
+						return result, &validation.LenError{Path: []string{"pair"}, Want: 2, Got: idx0}
 					}
 					if s.Pos >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
 							return result, decode.NewParseErr("pair", s.Pos, err)
 						}
 					}
-					var idx0 int
-					for s.Bytes()[s.Pos] != ']' {
-						if idx0 >= 2 {
-							return result, &validation.LenError{Path: []string{"pair"}, Want: 2, Got: idx0}
-						}
-						{
-							err = s.SkipSpace()
-							if err != nil {
-								return result, decode.NewParseErr("pair[]", s.Pos, err)
-							}
-							if s.Pos >= len(s.Bytes()) {
+					if s.Bytes()[s.Pos] == 'n' {
+						for ki := 1; ki < 4; ki++ {
+							if s.Pos+ki >= len(s.Bytes()) {
 								if err = s.ReadMore(0); err != nil {
-									return result, decode.NewParseErr("pair[]", s.Pos, err)
+									return result, decode.NewParseErr("pair", s.Pos, err)
 								}
 							}
-							if s.Bytes()[s.Pos] == 'n' {
-								for ki := 1; ki < 4; ki++ {
-									if s.Pos+ki >= len(s.Bytes()) {
-										if err = s.ReadMore(0); err != nil {
-											return result, decode.NewParseErr("pair[]", s.Pos, err)
-										}
-									}
-									if s.Bytes()[s.Pos+ki] != "null"[ki] {
-										return result, decode.NewParseErr("pair[]", s.Pos, scan.ErrBadLiteral)
-									}
-								}
-								s.Pos += 4
-								result.Pair[idx0] = nil
-							} else {
-								err = s.ArrayOpen()
-								if err != nil {
-									return result, decode.NewParseErr("pair[]", s.Pos, err)
-								}
-								err = s.SkipSpace()
-								if err != nil {
-									return result, decode.NewParseErr("pair[]", s.Pos, err)
-								}
-								if s.Pos >= len(s.Bytes()) {
-									if err = s.ReadMore(0); err != nil {
-										return result, decode.NewParseErr("pair[]", s.Pos, err)
-									}
-								}
-								if s.Bytes()[s.Pos] == ']' {
-									if result.Pair[idx0] == nil {
-										result.Pair[idx0] = []string{}
-									}
-								} else {
-									if result.Pair[idx0] == nil {
-										result.Pair[idx0] = make([]string, 0, 4)
-									}
-								}
-								for s.Bytes()[s.Pos] != ']' {
-									result.Pair[idx0] = append(result.Pair[idx0], "")
-									result.Pair[idx0][len(result.Pair[idx0])-1], err = s.String()
-									if err != nil {
-										return result, decode.NewParseErr("pair[]", s.Pos, err)
-									}
-									err = s.SkipSpace()
-									if err != nil {
-										return result, decode.NewParseErr("pair[]", s.Pos, err)
-									}
-									if s.Pos >= len(s.Bytes()) {
-										if err = s.ReadMore(0); err != nil {
-											return result, decode.NewParseErr("pair[]", s.Pos, err)
-										}
-									}
-									if s.Bytes()[s.Pos] == ',' {
-										s.Pos++
-										err = s.SkipSpace()
-										if err != nil {
-											return result, decode.NewParseErr("pair[]", s.Pos, err)
-										}
-										continue
-									}
-									break
-								}
-								if s.Bytes()[s.Pos] != ']' {
-									return result, decode.NewParseErr("pair[]", s.Pos, scan.ErrBadArray)
-								}
-								s.Pos++
+							if s.Bytes()[s.Pos+ki] != "null"[ki] {
+								return result, decode.NewParseErr("pair", s.Pos, scan.ErrBadLiteral)
 							}
 						}
+						s.Pos += 4
+						result.Pair[idx0] = nil
 						idx0++
 						err = s.SkipSpace()
 						if err != nil {
@@ -2359,14 +2323,84 @@ func (result TupleStruct) DecodeFromStream(s *scan.Stream) (TupleStruct, error) 
 						}
 						break
 					}
-					if s.Bytes()[s.Pos] != ']' {
-						return result, decode.NewParseErr("pair", s.Pos, scan.ErrBadArray)
+					err = s.ArrayOpen()
+					if err != nil {
+						return result, decode.NewParseErr("pair[]", s.Pos, err)
 					}
-					if idx0 != 2 {
-						return result, &validation.LenError{Path: []string{"pair"}, Want: 2, Got: idx0}
+					err = s.SkipSpace()
+					if err != nil {
+						return result, decode.NewParseErr("pair[]", s.Pos, err)
+					}
+					if s.Pos >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, decode.NewParseErr("pair[]", s.Pos, err)
+						}
+					}
+					if s.Bytes()[s.Pos] == ']' {
+						if result.Pair[idx0] == nil {
+							result.Pair[idx0] = []string{}
+						}
+					} else {
+						if result.Pair[idx0] == nil {
+							result.Pair[idx0] = make([]string, 0, 4)
+						}
+					}
+					for s.Bytes()[s.Pos] != ']' {
+						result.Pair[idx0] = append(result.Pair[idx0], "")
+						result.Pair[idx0][len(result.Pair[idx0])-1], err = s.String()
+						if err != nil {
+							return result, decode.NewParseErr("pair[]", s.Pos, err)
+						}
+						err = s.SkipSpace()
+						if err != nil {
+							return result, decode.NewParseErr("pair[]", s.Pos, err)
+						}
+						if s.Pos >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, decode.NewParseErr("pair[]", s.Pos, err)
+							}
+						}
+						if s.Bytes()[s.Pos] == ',' {
+							s.Pos++
+							err = s.SkipSpace()
+							if err != nil {
+								return result, decode.NewParseErr("pair[]", s.Pos, err)
+							}
+							continue
+						}
+						break
+					}
+					if s.Bytes()[s.Pos] != ']' {
+						return result, decode.NewParseErr("pair[]", s.Pos, scan.ErrBadArray)
 					}
 					s.Pos++
+					idx0++
+					err = s.SkipSpace()
+					if err != nil {
+						return result, decode.NewParseErr("pair", s.Pos, err)
+					}
+					if s.Pos >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, decode.NewParseErr("pair", s.Pos, err)
+						}
+					}
+					if s.Bytes()[s.Pos] == ',' {
+						s.Pos++
+						err = s.SkipSpace()
+						if err != nil {
+							return result, decode.NewParseErr("pair", s.Pos, err)
+						}
+						continue
+					}
+					break
 				}
+				if s.Bytes()[s.Pos] != ']' {
+					return result, decode.NewParseErr("pair", s.Pos, scan.ErrBadArray)
+				}
+				if idx0 != 2 {
+					return result, &validation.LenError{Path: []string{"pair"}, Want: 2, Got: idx0}
+				}
+				s.Pos++
 			} else {
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
 			}
@@ -2380,11 +2414,29 @@ func (result TupleStruct) DecodeFromStream(s *scan.Stream) (TupleStruct, error) 
 					return result, &validation.DuplicateKeyError{Path: []string{"point"}}
 				}
 				seenPoint = true
-				{
-					err = s.ArrayOpen()
+				err = s.ArrayOpen()
+				if err != nil {
+					return result, decode.NewParseErr("point", s.Pos, err)
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, decode.NewParseErr("point", s.Pos, err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("point", s.Pos, err)
+					}
+				}
+				var idx0 int
+				for s.Bytes()[s.Pos] != ']' {
+					if idx0 >= 2 {
+						return result, &validation.LenError{Path: []string{"point"}, Want: 2, Got: idx0}
+					}
+					result.Point[idx0], err = s.Float64()
 					if err != nil {
 						return result, decode.NewParseErr("point", s.Pos, err)
 					}
+					idx0++
 					err = s.SkipSpace()
 					if err != nil {
 						return result, decode.NewParseErr("point", s.Pos, err)
@@ -2394,43 +2446,23 @@ func (result TupleStruct) DecodeFromStream(s *scan.Stream) (TupleStruct, error) 
 							return result, decode.NewParseErr("point", s.Pos, err)
 						}
 					}
-					var idx0 int
-					for s.Bytes()[s.Pos] != ']' {
-						if idx0 >= 2 {
-							return result, &validation.LenError{Path: []string{"point"}, Want: 2, Got: idx0}
-						}
-						result.Point[idx0], err = s.Float64()
-						if err != nil {
-							return result, decode.NewParseErr("point", s.Pos, err)
-						}
-						idx0++
+					if s.Bytes()[s.Pos] == ',' {
+						s.Pos++
 						err = s.SkipSpace()
 						if err != nil {
 							return result, decode.NewParseErr("point", s.Pos, err)
 						}
-						if s.Pos >= len(s.Bytes()) {
-							if err = s.ReadMore(0); err != nil {
-								return result, decode.NewParseErr("point", s.Pos, err)
-							}
-						}
-						if s.Bytes()[s.Pos] == ',' {
-							s.Pos++
-							err = s.SkipSpace()
-							if err != nil {
-								return result, decode.NewParseErr("point", s.Pos, err)
-							}
-							continue
-						}
-						break
+						continue
 					}
-					if s.Bytes()[s.Pos] != ']' {
-						return result, decode.NewParseErr("point", s.Pos, scan.ErrBadArray)
-					}
-					if idx0 != 2 {
-						return result, &validation.LenError{Path: []string{"point"}, Want: 2, Got: idx0}
-					}
-					s.Pos++
+					break
 				}
+				if s.Bytes()[s.Pos] != ']' {
+					return result, decode.NewParseErr("point", s.Pos, scan.ErrBadArray)
+				}
+				if idx0 != 2 {
+					return result, &validation.LenError{Path: []string{"point"}, Want: 2, Got: idx0}
+				}
+				s.Pos++
 			} else {
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
 			}
@@ -2444,7 +2476,105 @@ func (result TupleStruct) DecodeFromStream(s *scan.Stream) (TupleStruct, error) 
 					return result, &validation.DuplicateKeyError{Path: []string{"segments"}}
 				}
 				seenSegments = true
-				{
+				err = s.SkipSpace()
+				if err != nil {
+					return result, decode.NewParseErr("segments", s.Pos, err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("segments", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, decode.NewParseErr("segments", s.Pos, err)
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, decode.NewParseErr("segments", s.Pos, scan.ErrBadLiteral)
+						}
+					}
+					s.Pos += 4
+					result.Segments = nil
+					break
+				}
+				err = s.ArrayOpen()
+				if err != nil {
+					return result, decode.NewParseErr("segments", s.Pos, err)
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, decode.NewParseErr("segments", s.Pos, err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("segments", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == ']' {
+					if result.Segments == nil {
+						result.Segments = [][2]int{}
+					}
+				} else {
+					if result.Segments == nil {
+						result.Segments = [][2]int{}
+					}
+				}
+				for s.Bytes()[s.Pos] != ']' {
+					result.Segments = append(result.Segments, [2]int{})
+					err = s.ArrayOpen()
+					if err != nil {
+						return result, decode.NewParseErr("segments[]", s.Pos, err)
+					}
+					err = s.SkipSpace()
+					if err != nil {
+						return result, decode.NewParseErr("segments[]", s.Pos, err)
+					}
+					if s.Pos >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, decode.NewParseErr("segments[]", s.Pos, err)
+						}
+					}
+					var idx1 int
+					for s.Bytes()[s.Pos] != ']' {
+						if idx1 >= 2 {
+							return result, &validation.LenError{Path: []string{"segments[]"}, Want: 2, Got: idx1}
+						}
+						var iv int64
+						iv, err = s.Int64()
+						if err != nil {
+							return result, decode.NewParseErr("segments[]", s.Pos, err)
+						}
+						result.Segments[len(result.Segments)-1][idx1] = int(iv)
+						idx1++
+						err = s.SkipSpace()
+						if err != nil {
+							return result, decode.NewParseErr("segments[]", s.Pos, err)
+						}
+						if s.Pos >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, decode.NewParseErr("segments[]", s.Pos, err)
+							}
+						}
+						if s.Bytes()[s.Pos] == ',' {
+							s.Pos++
+							err = s.SkipSpace()
+							if err != nil {
+								return result, decode.NewParseErr("segments[]", s.Pos, err)
+							}
+							continue
+						}
+						break
+					}
+					if s.Bytes()[s.Pos] != ']' {
+						return result, decode.NewParseErr("segments[]", s.Pos, scan.ErrBadArray)
+					}
+					if idx1 != 2 {
+						return result, &validation.LenError{Path: []string{"segments[]"}, Want: 2, Got: idx1}
+					}
+					s.Pos++
 					err = s.SkipSpace()
 					if err != nil {
 						return result, decode.NewParseErr("segments", s.Pos, err)
@@ -2454,122 +2584,20 @@ func (result TupleStruct) DecodeFromStream(s *scan.Stream) (TupleStruct, error) 
 							return result, decode.NewParseErr("segments", s.Pos, err)
 						}
 					}
-					if s.Bytes()[s.Pos] == 'n' {
-						for ki := 1; ki < 4; ki++ {
-							if s.Pos+ki >= len(s.Bytes()) {
-								if err = s.ReadMore(0); err != nil {
-									return result, decode.NewParseErr("segments", s.Pos, err)
-								}
-							}
-							if s.Bytes()[s.Pos+ki] != "null"[ki] {
-								return result, decode.NewParseErr("segments", s.Pos, scan.ErrBadLiteral)
-							}
-						}
-						s.Pos += 4
-						result.Segments = nil
-					} else {
-						err = s.ArrayOpen()
-						if err != nil {
-							return result, decode.NewParseErr("segments", s.Pos, err)
-						}
+					if s.Bytes()[s.Pos] == ',' {
+						s.Pos++
 						err = s.SkipSpace()
 						if err != nil {
 							return result, decode.NewParseErr("segments", s.Pos, err)
 						}
-						if s.Pos >= len(s.Bytes()) {
-							if err = s.ReadMore(0); err != nil {
-								return result, decode.NewParseErr("segments", s.Pos, err)
-							}
-						}
-						if s.Bytes()[s.Pos] == ']' {
-							if result.Segments == nil {
-								result.Segments = [][2]int{}
-							}
-						} else {
-							if result.Segments == nil {
-								result.Segments = [][2]int{}
-							}
-						}
-						for s.Bytes()[s.Pos] != ']' {
-							result.Segments = append(result.Segments, [2]int{})
-							{
-								err = s.ArrayOpen()
-								if err != nil {
-									return result, decode.NewParseErr("segments[]", s.Pos, err)
-								}
-								err = s.SkipSpace()
-								if err != nil {
-									return result, decode.NewParseErr("segments[]", s.Pos, err)
-								}
-								if s.Pos >= len(s.Bytes()) {
-									if err = s.ReadMore(0); err != nil {
-										return result, decode.NewParseErr("segments[]", s.Pos, err)
-									}
-								}
-								var idx1 int
-								for s.Bytes()[s.Pos] != ']' {
-									if idx1 >= 2 {
-										return result, &validation.LenError{Path: []string{"segments[]"}, Want: 2, Got: idx1}
-									}
-									var iv int64
-									iv, err = s.Int64()
-									if err != nil {
-										return result, decode.NewParseErr("segments[]", s.Pos, err)
-									}
-									result.Segments[len(result.Segments)-1][idx1] = int(iv)
-									idx1++
-									err = s.SkipSpace()
-									if err != nil {
-										return result, decode.NewParseErr("segments[]", s.Pos, err)
-									}
-									if s.Pos >= len(s.Bytes()) {
-										if err = s.ReadMore(0); err != nil {
-											return result, decode.NewParseErr("segments[]", s.Pos, err)
-										}
-									}
-									if s.Bytes()[s.Pos] == ',' {
-										s.Pos++
-										err = s.SkipSpace()
-										if err != nil {
-											return result, decode.NewParseErr("segments[]", s.Pos, err)
-										}
-										continue
-									}
-									break
-								}
-								if s.Bytes()[s.Pos] != ']' {
-									return result, decode.NewParseErr("segments[]", s.Pos, scan.ErrBadArray)
-								}
-								if idx1 != 2 {
-									return result, &validation.LenError{Path: []string{"segments[]"}, Want: 2, Got: idx1}
-								}
-								s.Pos++
-							}
-							err = s.SkipSpace()
-							if err != nil {
-								return result, decode.NewParseErr("segments", s.Pos, err)
-							}
-							if s.Pos >= len(s.Bytes()) {
-								if err = s.ReadMore(0); err != nil {
-									return result, decode.NewParseErr("segments", s.Pos, err)
-								}
-							}
-							if s.Bytes()[s.Pos] == ',' {
-								s.Pos++
-								err = s.SkipSpace()
-								if err != nil {
-									return result, decode.NewParseErr("segments", s.Pos, err)
-								}
-								continue
-							}
-							break
-						}
-						if s.Bytes()[s.Pos] != ']' {
-							return result, decode.NewParseErr("segments", s.Pos, scan.ErrBadArray)
-						}
-						s.Pos++
+						continue
 					}
+					break
 				}
+				if s.Bytes()[s.Pos] != ']' {
+					return result, decode.NewParseErr("segments", s.Pos, scan.ErrBadArray)
+				}
+				s.Pos++
 			} else {
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
 			}

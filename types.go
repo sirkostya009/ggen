@@ -105,6 +105,11 @@ type FieldInfo struct {
 	UseNumber       bool   // propagated from parent struct: scan numbers into json.Number on KindAny fields
 	HTMLEscape      bool   // propagated from parent struct: HTML-safe escape <, >, & when emitting strings (default: literal, matches jsonv2)
 	Ignored         bool
+
+	// Codegen-internal flags — never set by the parse layer.
+	AtDispatch bool // value emit sits directly inside the key-dispatch switch; a `null` match may `break` to the comma handling instead of nesting the whole value decode in an else
+	TargetNil  bool // decode target is a freshly-declared nil local (map-value temp, pre-grown []**T slot) — skip the receiver seed and collapse the pointer assign cascade to a straight new-chain
+	NullDone   bool // the parent element loop already consumed a `null` for this slot (nil-elem fast path) — the nested container emitter skips its own null peek, so its body isn't wrapped in an else
 }
 
 type StructInfo struct {

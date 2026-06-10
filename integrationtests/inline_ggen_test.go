@@ -39,25 +39,23 @@ func (result InlineStruct) DecodeFrom(data []byte) (InlineStruct, int, error) {
 		if i >= len(data) || data[i] != '"' {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
-		{
-			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-				ke++
-			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-				i = ke + 1
-			} else {
-				key, i, err = scan.String(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr("", i, err)
-				}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -80,25 +78,23 @@ func (result InlineStruct) DecodeFrom(data []byte) (InlineStruct, int, error) {
 				if i >= len(data) || data[i] != '"' {
 					return result, i, decode.NewParseErr("name", i, scan.ErrExpectString)
 				}
-				{
-					ke := i + 1
-					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-						ke++
-					}
-					if ke >= len(data) {
-						return result, i, decode.NewParseErr("name", i, scan.ErrUnterminated)
-					}
-					if data[ke] < 0x20 {
-						return result, i, decode.NewParseErr("name", i, scan.ErrBadString)
-					}
-					if data[ke] == '"' {
-						result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-						i = ke + 1
-					} else {
-						result.Name, i, err = scan.String(data, i)
-						if err != nil {
-							return result, i, decode.NewParseErr("name", i, err)
-						}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("name", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("name", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					result.Name, i, err = scan.String(data, i)
+					if err != nil {
+						return result, i, decode.NewParseErr("name", i, err)
 					}
 				}
 			} else {
@@ -260,17 +256,15 @@ func (s InlineStruct) AppendJSON(dst []byte) ([]byte, error) {
 	}
 	dst = append(dst, "\"name\":\""...)
 	dst = encode.AppendStringNoHTML(dst, s.Name)
-	{
-		for k, v := range s.Extra {
-			if len(dst) > start {
-				dst = append(dst, ',')
-			}
-			dst = append(dst, '"')
-			dst = encode.AppendStringNoHTML(dst, k)
-			dst = append(dst, ':')
-			if dst, err = encode.AppendAny(dst, v); err != nil {
-				return dst, err
-			}
+	for k, v := range s.Extra {
+		if len(dst) > start {
+			dst = append(dst, ',')
+		}
+		dst = append(dst, '"')
+		dst = encode.AppendStringNoHTML(dst, k)
+		dst = append(dst, ':')
+		if dst, err = encode.AppendAny(dst, v); err != nil {
+			return dst, err
 		}
 	}
 	return append(dst, '}'), nil
@@ -303,25 +297,23 @@ func (result InlineStringsStruct) DecodeFrom(data []byte) (InlineStringsStruct, 
 		if i >= len(data) || data[i] != '"' {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
-		{
-			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-				ke++
-			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-				i = ke + 1
-			} else {
-				key, i, err = scan.String(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr("", i, err)
-				}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -344,51 +336,41 @@ func (result InlineStringsStruct) DecodeFrom(data []byte) (InlineStringsStruct, 
 				if i >= len(data) || data[i] != '"' {
 					return result, i, decode.NewParseErr("name", i, scan.ErrExpectString)
 				}
-				{
-					ke := i + 1
-					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-						ke++
-					}
-					if ke >= len(data) {
-						return result, i, decode.NewParseErr("name", i, scan.ErrUnterminated)
-					}
-					if data[ke] < 0x20 {
-						return result, i, decode.NewParseErr("name", i, scan.ErrBadString)
-					}
-					if data[ke] == '"' {
-						result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-						i = ke + 1
-					} else {
-						result.Name, i, err = scan.String(data, i)
-						if err != nil {
-							return result, i, decode.NewParseErr("name", i, err)
-						}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("name", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("name", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					result.Name, i, err = scan.String(data, i)
+					if err != nil {
+						return result, i, decode.NewParseErr("name", i, err)
 					}
 				}
 			} else {
 				if result.Extra == nil {
 					result.Extra = make(map[string]string)
 				}
-				{
-					var _iv string
-					_iv, i, err = scan.String(data, i)
-					if err != nil {
-						return result, i, decode.NewParseErr(key, i, err)
-					}
-					result.Extra[key] = _iv
+				result.Extra[key], i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr(key, i, err)
 				}
 			}
 		default:
 			if result.Extra == nil {
 				result.Extra = make(map[string]string)
 			}
-			{
-				var _iv string
-				_iv, i, err = scan.String(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr(key, i, err)
-				}
-				result.Extra[key] = _iv
+			result.Extra[key], i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr(key, i, err)
 			}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -465,13 +447,9 @@ func (result InlineStringsStruct) DecodeFromStream(s *scan.Stream) (InlineString
 				if result.Extra == nil {
 					result.Extra = make(map[string]string)
 				}
-				{
-					var _iv string
-					_iv, err = s.String()
-					if err != nil {
-						return result, decode.NewParseErr(ownKey, s.Pos, err)
-					}
-					result.Extra[ownKey] = _iv
+				result.Extra[ownKey], err = s.String()
+				if err != nil {
+					return result, decode.NewParseErr(ownKey, s.Pos, err)
 				}
 			}
 		default:
@@ -483,13 +461,9 @@ func (result InlineStringsStruct) DecodeFromStream(s *scan.Stream) (InlineString
 			if result.Extra == nil {
 				result.Extra = make(map[string]string)
 			}
-			{
-				var _iv string
-				_iv, err = s.String()
-				if err != nil {
-					return result, decode.NewParseErr(ownKey, s.Pos, err)
-				}
-				result.Extra[ownKey] = _iv
+			result.Extra[ownKey], err = s.String()
+			if err != nil {
+				return result, decode.NewParseErr(ownKey, s.Pos, err)
 			}
 		}
 
@@ -541,16 +515,14 @@ func (s InlineStringsStruct) AppendJSON(dst []byte) ([]byte, error) {
 	}
 	dst = append(dst, "\"name\":\""...)
 	dst = encode.AppendStringNoHTML(dst, s.Name)
-	{
-		for k, v := range s.Extra {
-			if len(dst) > start {
-				dst = append(dst, ',')
-			}
-			dst = append(dst, '"')
-			dst = encode.AppendStringNoHTML(dst, k)
-			dst = append(dst, ":\""...)
-			dst = encode.AppendStringNoHTML(dst, v)
+	for k, v := range s.Extra {
+		if len(dst) > start {
+			dst = append(dst, ',')
 		}
+		dst = append(dst, '"')
+		dst = encode.AppendStringNoHTML(dst, k)
+		dst = append(dst, ":\""...)
+		dst = encode.AppendStringNoHTML(dst, v)
 	}
 	return append(dst, '}'), nil
 }
@@ -582,25 +554,23 @@ func (result InlineStructsStruct) DecodeFrom(data []byte) (InlineStructsStruct, 
 		if i >= len(data) || data[i] != '"' {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
-		{
-			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-				ke++
-			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-				i = ke + 1
-			} else {
-				key, i, err = scan.String(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr("", i, err)
-				}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -623,47 +593,29 @@ func (result InlineStructsStruct) DecodeFrom(data []byte) (InlineStructsStruct, 
 				if i >= len(data) || data[i] != '"' {
 					return result, i, decode.NewParseErr("name", i, scan.ErrExpectString)
 				}
-				{
-					ke := i + 1
-					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-						ke++
-					}
-					if ke >= len(data) {
-						return result, i, decode.NewParseErr("name", i, scan.ErrUnterminated)
-					}
-					if data[ke] < 0x20 {
-						return result, i, decode.NewParseErr("name", i, scan.ErrBadString)
-					}
-					if data[ke] == '"' {
-						result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-						i = ke + 1
-					} else {
-						result.Name, i, err = scan.String(data, i)
-						if err != nil {
-							return result, i, decode.NewParseErr("name", i, err)
-						}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("name", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("name", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					result.Name, i, err = scan.String(data, i)
+					if err != nil {
+						return result, i, decode.NewParseErr("name", i, err)
 					}
 				}
 			} else {
 				if result.Extra == nil {
 					result.Extra = make(map[string]InlineStruct)
 				}
-				{
-					var _iv InlineStruct
-					var _in int
-					_iv, _in, err = _iv.DecodeFrom(data[i:])
-					i += _in
-					if err != nil {
-						return result, i, decode.NewParseErr(key, i, err)
-					}
-					result.Extra[key] = _iv
-				}
-			}
-		default:
-			if result.Extra == nil {
-				result.Extra = make(map[string]InlineStruct)
-			}
-			{
 				var _iv InlineStruct
 				var _in int
 				_iv, _in, err = _iv.DecodeFrom(data[i:])
@@ -673,6 +625,18 @@ func (result InlineStructsStruct) DecodeFrom(data []byte) (InlineStructsStruct, 
 				}
 				result.Extra[key] = _iv
 			}
+		default:
+			if result.Extra == nil {
+				result.Extra = make(map[string]InlineStruct)
+			}
+			var _iv InlineStruct
+			var _in int
+			_iv, _in, err = _iv.DecodeFrom(data[i:])
+			i += _in
+			if err != nil {
+				return result, i, decode.NewParseErr(key, i, err)
+			}
+			result.Extra[key] = _iv
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -748,14 +712,12 @@ func (result InlineStructsStruct) DecodeFromStream(s *scan.Stream) (InlineStruct
 				if result.Extra == nil {
 					result.Extra = make(map[string]InlineStruct)
 				}
-				{
-					var _iv InlineStruct
-					_iv, err = _iv.DecodeFromStream(s)
-					if err != nil {
-						return result, decode.NewParseErr(ownKey, s.Pos, err)
-					}
-					result.Extra[ownKey] = _iv
+				var _iv InlineStruct
+				_iv, err = _iv.DecodeFromStream(s)
+				if err != nil {
+					return result, decode.NewParseErr(ownKey, s.Pos, err)
 				}
+				result.Extra[ownKey] = _iv
 			}
 		default:
 			ownKey := strings.Clone(key)
@@ -766,14 +728,12 @@ func (result InlineStructsStruct) DecodeFromStream(s *scan.Stream) (InlineStruct
 			if result.Extra == nil {
 				result.Extra = make(map[string]InlineStruct)
 			}
-			{
-				var _iv InlineStruct
-				_iv, err = _iv.DecodeFromStream(s)
-				if err != nil {
-					return result, decode.NewParseErr(ownKey, s.Pos, err)
-				}
-				result.Extra[ownKey] = _iv
+			var _iv InlineStruct
+			_iv, err = _iv.DecodeFromStream(s)
+			if err != nil {
+				return result, decode.NewParseErr(ownKey, s.Pos, err)
 			}
+			result.Extra[ownKey] = _iv
 		}
 
 		err = s.SkipSpace()
@@ -824,17 +784,15 @@ func (s InlineStructsStruct) AppendJSON(dst []byte) ([]byte, error) {
 	}
 	dst = append(dst, "\"name\":\""...)
 	dst = encode.AppendStringNoHTML(dst, s.Name)
-	{
-		for k, v := range s.Extra {
-			if len(dst) > start {
-				dst = append(dst, ',')
-			}
-			dst = append(dst, '"')
-			dst = encode.AppendStringNoHTML(dst, k)
-			dst = append(dst, ':')
-			if dst, err = v.AppendJSON(dst); err != nil {
-				return dst, err
-			}
+	for k, v := range s.Extra {
+		if len(dst) > start {
+			dst = append(dst, ',')
+		}
+		dst = append(dst, '"')
+		dst = encode.AppendStringNoHTML(dst, k)
+		dst = append(dst, ':')
+		if dst, err = v.AppendJSON(dst); err != nil {
+			return dst, err
 		}
 	}
 	return append(dst, '}'), nil

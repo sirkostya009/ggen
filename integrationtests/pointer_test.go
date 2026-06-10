@@ -5,6 +5,7 @@ package integrationtests
 import (
 	"bytes"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -345,9 +346,10 @@ func TestNPtr_containersRoundtrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("re-decode: %v\n%s", err, out)
 	}
-	out2, err := again.AppendJSON(nil)
-	if err != nil || string(out) != string(out2) {
-		t.Errorf("roundtrip not a fixed point:\n%s\n%s", out, out2)
+	// Value equality, not byte equality — map fields marshal in random
+	// range order, so two independent marshals of the same value differ.
+	if !reflect.DeepEqual(got, again) {
+		t.Errorf("roundtrip not a fixed point:\n%#v\n%#v", got, again)
 	}
 }
 

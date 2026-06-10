@@ -224,7 +224,11 @@ capacity kept; lazy per-key reset was implemented and reverted, see backlog
   path: an int/uint leaf with no built-in mods/validation skips the temp
   altogether — the inline scanner already materializes `n`, so the assign
   cascade runs in-block off `int(n)` (`inlineScanInt64Stmt`/`…Uint64Stmt`).
-  Leaf decodes natively at every depth — NO encoding/json fallback. Helpers:
+  Fresh-nil targets (map-value temp `mv`, pre-grown `[]**T` slot) set
+  `FieldInfo.TargetNil` — seed skipped, cascade collapses to one straight
+  `ref = new(new(…))`; `[N]**T` slots keep the full cascade (array elems carry
+  the receiver's chain). Leaf decodes natively at every depth — NO
+  encoding/json fallback. Helpers:
   `pointerDepth`, `derefStr`, `newChain`, `widenedLeafCast`, `emitPointerSeed`,
   `emitPointerAssign`. Same emit for bytes + stream paths
 - fixed arrays `[N]T`: every slot overwritten or strict-length-errors, no entry
@@ -588,9 +592,15 @@ nil`). Single-byte → `'X'`, multi-byte → `"…"...`. ~5% on struct-heavy
 30. **Single position cursor in dispatch loop.** No separate `j := i` cursor —
     every step (key scan, colon, value decode, comma/`}`) advances `i` directly.
     Stream path mirrors via `s.Pos`.
-31. **Single local in `inlineScanString` (`_ke` only).** Start = `posIn+1`
-    inline; slow-path fallback reads from unchanged `posIn`. Slice expr
-    `data[posIn+1:]` len `_ke - posIn - 1`.
+31. **Single local in `inlineScanString` (`ke` only), emitted brace-less.**
+    Start = `posIn+1` inline; slow-path fallback reads from unchanged
+    `posIn`. Slice expr `data[posIn+1:]` len `ke - posIn - 1`. `ke` lands in
+    the caller's scope — every call site owns its scope (case body, elem
+    loop, `{ var s … }` wrapper); only renderMap's value scan adds explicit
+    braces (the key scan in the same loop body already declared `ke`;
+    shadowing across nested scopes is fine). renderBytes likewise emits no
+    wrapper block of its own — `renderBytesValue`'s `{ var s … }` is the
+    only layer.
 32. **Concrete-type fast paths in `AppendAny` for typed primitive slices/maps.**
     See `encode/CLAUDE.md` for ordering. 32-entry wins: `map[string]int`
     4403→1579 ns/op (71→7 allocs); `map[string]bool` 3449→944; `map[string]
@@ -600,6 +610,48 @@ float64` 6459→3417. Outpaces stdjson v1 and jsonv2 on every map shape.
     / `reflect.Pointer` fallback. Wins vs jsonv2, 32-byte shapes:
     `json.RawMessage` 227→28 ns/op (8.1×); `time.Time` 181→117; `*int` 70→26;
     `*bool` 83→19. Concrete cases MUST sit before interface dispatches.
+34. **Dispatch-level `null` peek breaks, not nests.** A field-level null match
+    inside the key-dispatch switch ends with `break` (straight to the comma
+    handling) instead of wrapping the whole value decode in an `else` —
+    pointer/slice/map/`[]byte` kinds, bytes + stream paths. Gated by
+    `nullBreakOK` (`FieldInfo.AtDispatch` + no field-level `ggen:`/`mod:`
+    rules — a break would skip the post-value validateAndMod). Nested-slice
+    elements get the same flattening via `FieldInfo.NullDone`: the PARENT
+    element loop consumes the null (nil slot + duplicated elem-validation
+    emit + comma handling + `continue`, mirroring the `[]*T` nil-elem fast
+    path) and the inner emitter skips its own peek, so each recursion level's
+    body sits one indent in, not two. Other nested emits (map values, alias
+    bodies) keep the if/else.
+35. **Omit-guard pointer peel on marshal.** `AppendJSON`'s
+    omitempty/omitzero guard for a pointer field is exactly `X != nil`, so
+    the value emit peels one pointer level (`renderAppendValue` on `(*X)`) —
+    no dead `if X == nil { null }` rung inside `if X != nil`. Mirrors the
+    pre-existing `renderSize` deref.
+36. **Brace-less value emitters.** Decode value emitters write their locals
+    straight into the caller's scope — no `{ … }` wrapper per value. Covers
+    the slice/array/map emitters (locals depth-suffixed or loop-scoped),
+    time/duration/netip/url/big*/raw/sqlnull/any/string-tag/struct/bytes,
+    cross-pkg decode fallbacks, and the inline catch-all. Sound because every
+    call site owns its scope (one field per case body, element loops, the
+    pointer-leaf else); shadowing across nested scopes is legal. Stream
+    emitters renamed their `var v` temps (`sv`/`f`/`u`) — a pointer-leaf
+    caller declares `var v <leaf>` in the same scope, and the old shadowed
+    `v` blocks were broken codegen for `*time.Time format:RFC3339`-style
+    stream fields. Inline int/uint scanners are brace-less too
+    (`neg`/`limit`/`u`/`n` — one numeric scan per scope everywhere). Locals
+    that would collide get unique names instead of a scope: renderMap's
+    value string scan uses end-var `ve` (`inlineScanStringVar`; the key scan
+    owns `ke`), map marshal's first-entry flag is `first<GoName>`, encode
+    cross-pkg temps are `b<GoName>` (fields emit at function scope). The one
+    brace kept: the slice-elem `bs := json.Marshal` encode fallback —
+    first-element-then-rest duplicates it at outer scope.
+37. **Map values decode straight into `m[mk]`.** No `mv`/`mn` temps —
+    string/bool/int/uint/float and pointer values multi-assign the map index
+    directly (`m[mk], i, err = scan.X(data, i)`; pointer cascade is
+    assignment-only under TargetNil, so the unaddressable index is fine).
+    Narrow numerics keep a wide temp for the cast; STRUCT values keep the
+    fresh `var mv T` — direct decode would merge duplicate map keys in one
+    payload instead of fresh-decoding each occurrence (stdlib parity).
 
 ## Design decisions (the why)
 

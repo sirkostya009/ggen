@@ -241,25 +241,23 @@ func (result PlainAlias) DecodeFrom(data []byte) (PlainAlias, int, error) {
 		if i >= len(data) || data[i] != '"' {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
-		{
-			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-				ke++
-			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-				i = ke + 1
-			} else {
-				key, i, err = scan.String(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr("", i, err)
-				}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -280,46 +278,44 @@ func (result PlainAlias) DecodeFrom(data []byte) (PlainAlias, int, error) {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"count"}}
 				}
 				seenCount = true
-				{
-					neg := false
-					if i < len(data) && data[i] == '-' {
-						neg = true
-						i++
+				neg := false
+				if i < len(data) && data[i] == '-' {
+					neg = true
+					i++
+				}
+				if i >= len(data) || data[i] < '0' || data[i] > '9' {
+					return result, i, decode.NewParseErr("count", i, scan.ErrBadNumber)
+				}
+				limit := uint64(math.MaxInt64)
+				if neg {
+					limit = scan.SignedNeg
+				}
+				var u uint64
+				for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+					d := uint64(data[i] - '0')
+					if u > limit/10 || (u == limit/10 && d > limit%10) {
+						return result, i, decode.NewParseErr("count", i, scan.ErrNumberOverflow)
 					}
-					if i >= len(data) || data[i] < '0' || data[i] > '9' {
+					u = u*10 + d
+					i++
+				}
+				if i < len(data) {
+					c := data[i]
+					if c == '.' || c == 'e' || c == 'E' {
 						return result, i, decode.NewParseErr("count", i, scan.ErrBadNumber)
 					}
-					limit := uint64(math.MaxInt64)
-					if neg {
-						limit = scan.SignedNeg
-					}
-					var u uint64
-					for i < len(data) && data[i] >= '0' && data[i] <= '9' {
-						d := uint64(data[i] - '0')
-						if u > limit/10 || (u == limit/10 && d > limit%10) {
-							return result, i, decode.NewParseErr("count", i, scan.ErrNumberOverflow)
-						}
-						u = u*10 + d
-						i++
-					}
-					if i < len(data) {
-						c := data[i]
-						if c == '.' || c == 'e' || c == 'E' {
-							return result, i, decode.NewParseErr("count", i, scan.ErrBadNumber)
-						}
-					}
-					var n int64
-					if neg {
-						if u == scan.SignedNeg {
-							n = math.MinInt64
-						} else {
-							n = -int64(u)
-						}
-					} else {
-						n = int64(u)
-					}
-					result.Count = int(n)
 				}
+				var n int64
+				if neg {
+					if u == scan.SignedNeg {
+						n = math.MinInt64
+					} else {
+						n = -int64(u)
+					}
+				} else {
+					n = int64(u)
+				}
+				result.Count = int(n)
 			case "title":
 				if seenTitle {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"title"}}
@@ -328,25 +324,23 @@ func (result PlainAlias) DecodeFrom(data []byte) (PlainAlias, int, error) {
 				if i >= len(data) || data[i] != '"' {
 					return result, i, decode.NewParseErr("title", i, scan.ErrExpectString)
 				}
-				{
-					ke := i + 1
-					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-						ke++
-					}
-					if ke >= len(data) {
-						return result, i, decode.NewParseErr("title", i, scan.ErrUnterminated)
-					}
-					if data[ke] < 0x20 {
-						return result, i, decode.NewParseErr("title", i, scan.ErrBadString)
-					}
-					if data[ke] == '"' {
-						result.Title = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-						i = ke + 1
-					} else {
-						result.Title, i, err = scan.String(data, i)
-						if err != nil {
-							return result, i, decode.NewParseErr("title", i, err)
-						}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("title", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("title", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					result.Title = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					result.Title, i, err = scan.String(data, i)
+					if err != nil {
+						return result, i, decode.NewParseErr("title", i, err)
 					}
 				}
 			default:
@@ -509,25 +503,23 @@ func (result SamePkgAlias) DecodeFrom(data []byte) (SamePkgAlias, int, error) {
 		if i >= len(data) || data[i] != '"' {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
-		{
-			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-				ke++
-			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-				i = ke + 1
-			} else {
-				key, i, err = scan.String(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr("", i, err)
-				}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -548,46 +540,44 @@ func (result SamePkgAlias) DecodeFrom(data []byte) (SamePkgAlias, int, error) {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"X"}}
 				}
 				seenX = true
-				{
-					neg := false
-					if i < len(data) && data[i] == '-' {
-						neg = true
-						i++
+				neg := false
+				if i < len(data) && data[i] == '-' {
+					neg = true
+					i++
+				}
+				if i >= len(data) || data[i] < '0' || data[i] > '9' {
+					return result, i, decode.NewParseErr("X", i, scan.ErrBadNumber)
+				}
+				limit := uint64(math.MaxInt64)
+				if neg {
+					limit = scan.SignedNeg
+				}
+				var u uint64
+				for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+					d := uint64(data[i] - '0')
+					if u > limit/10 || (u == limit/10 && d > limit%10) {
+						return result, i, decode.NewParseErr("X", i, scan.ErrNumberOverflow)
 					}
-					if i >= len(data) || data[i] < '0' || data[i] > '9' {
+					u = u*10 + d
+					i++
+				}
+				if i < len(data) {
+					c := data[i]
+					if c == '.' || c == 'e' || c == 'E' {
 						return result, i, decode.NewParseErr("X", i, scan.ErrBadNumber)
 					}
-					limit := uint64(math.MaxInt64)
-					if neg {
-						limit = scan.SignedNeg
-					}
-					var u uint64
-					for i < len(data) && data[i] >= '0' && data[i] <= '9' {
-						d := uint64(data[i] - '0')
-						if u > limit/10 || (u == limit/10 && d > limit%10) {
-							return result, i, decode.NewParseErr("X", i, scan.ErrNumberOverflow)
-						}
-						u = u*10 + d
-						i++
-					}
-					if i < len(data) {
-						c := data[i]
-						if c == '.' || c == 'e' || c == 'E' {
-							return result, i, decode.NewParseErr("X", i, scan.ErrBadNumber)
-						}
-					}
-					var n int64
-					if neg {
-						if u == scan.SignedNeg {
-							n = math.MinInt64
-						} else {
-							n = -int64(u)
-						}
-					} else {
-						n = int64(u)
-					}
-					result.X = int(n)
 				}
+				var n int64
+				if neg {
+					if u == scan.SignedNeg {
+						n = math.MinInt64
+					} else {
+						n = -int64(u)
+					}
+				} else {
+					n = int64(u)
+				}
+				result.X = int(n)
 			case "Y":
 				if seenY {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"Y"}}
@@ -596,25 +586,23 @@ func (result SamePkgAlias) DecodeFrom(data []byte) (SamePkgAlias, int, error) {
 				if i >= len(data) || data[i] != '"' {
 					return result, i, decode.NewParseErr("Y", i, scan.ErrExpectString)
 				}
-				{
-					ke := i + 1
-					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-						ke++
-					}
-					if ke >= len(data) {
-						return result, i, decode.NewParseErr("Y", i, scan.ErrUnterminated)
-					}
-					if data[ke] < 0x20 {
-						return result, i, decode.NewParseErr("Y", i, scan.ErrBadString)
-					}
-					if data[ke] == '"' {
-						result.Y = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-						i = ke + 1
-					} else {
-						result.Y, i, err = scan.String(data, i)
-						if err != nil {
-							return result, i, decode.NewParseErr("Y", i, err)
-						}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("Y", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("Y", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					result.Y = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					result.Y, i, err = scan.String(data, i)
+					if err != nil {
+						return result, i, decode.NewParseErr("Y", i, err)
 					}
 				}
 			default:
@@ -777,25 +765,23 @@ func (result CrossPkgTaggedAlias) DecodeFrom(data []byte) (CrossPkgTaggedAlias, 
 		if i >= len(data) || data[i] != '"' {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
-		{
-			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-				ke++
-			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-				i = ke + 1
-			} else {
-				key, i, err = scan.String(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr("", i, err)
-				}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -818,25 +804,23 @@ func (result CrossPkgTaggedAlias) DecodeFrom(data []byte) (CrossPkgTaggedAlias, 
 				if i >= len(data) || data[i] != '"' {
 					return result, i, decode.NewParseErr("Tag", i, scan.ErrExpectString)
 				}
-				{
-					ke := i + 1
-					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-						ke++
-					}
-					if ke >= len(data) {
-						return result, i, decode.NewParseErr("Tag", i, scan.ErrUnterminated)
-					}
-					if data[ke] < 0x20 {
-						return result, i, decode.NewParseErr("Tag", i, scan.ErrBadString)
-					}
-					if data[ke] == '"' {
-						result.Tag = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-						i = ke + 1
-					} else {
-						result.Tag, i, err = scan.String(data, i)
-						if err != nil {
-							return result, i, decode.NewParseErr("Tag", i, err)
-						}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("Tag", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("Tag", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					result.Tag = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					result.Tag, i, err = scan.String(data, i)
+					if err != nil {
+						return result, i, decode.NewParseErr("Tag", i, err)
 					}
 				}
 			} else {
@@ -851,25 +835,23 @@ func (result CrossPkgTaggedAlias) DecodeFrom(data []byte) (CrossPkgTaggedAlias, 
 				if i >= len(data) || data[i] != '"' {
 					return result, i, decode.NewParseErr("Name", i, scan.ErrExpectString)
 				}
-				{
-					ke := i + 1
-					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-						ke++
-					}
-					if ke >= len(data) {
-						return result, i, decode.NewParseErr("Name", i, scan.ErrUnterminated)
-					}
-					if data[ke] < 0x20 {
-						return result, i, decode.NewParseErr("Name", i, scan.ErrBadString)
-					}
-					if data[ke] == '"' {
-						result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-						i = ke + 1
-					} else {
-						result.Name, i, err = scan.String(data, i)
-						if err != nil {
-							return result, i, decode.NewParseErr("Name", i, err)
-						}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("Name", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("Name", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					result.Name, i, err = scan.String(data, i)
+					if err != nil {
+						return result, i, decode.NewParseErr("Name", i, err)
 					}
 				}
 			} else {
@@ -1056,73 +1038,69 @@ func (result AliasTags) DecodeFrom(data []byte) (AliasTags, int, error) {
 	if result != nil {
 		result = result[:0]
 	}
-	{
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+		i += 4
+		result = nil
+	} else {
+		if i >= len(data) || data[i] != '[' {
+			return result, i, scan.ErrBadArray
+		}
+		i++
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
-		if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-			i += 4
-			result = nil
-		} else {
-			if i >= len(data) || data[i] != '[' {
-				return result, i, scan.ErrBadArray
+		if i < len(data) && data[i] == ']' {
+			if result == nil {
+				result = AliasTags{}
 			}
-			i++
+		} else {
+			if result == nil {
+				result = AliasTags{}
+			}
+		}
+		for i < len(data) && data[i] != ']' {
+			result = append(result, "")
+			if i >= len(data) || data[i] != '"' {
+				return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
+			}
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+			}
+			if data[ke] < 0x20 {
+				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+			}
+			if data[ke] == '"' {
+				result[len(result)-1] = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				result[len(result)-1], i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("", i, err)
+				}
+			}
 			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
-			if i < len(data) && data[i] == ']' {
-				if result == nil {
-					result = AliasTags{}
-				}
-			} else {
-				if result == nil {
-					result = AliasTags{}
-				}
-			}
-			for i < len(data) && data[i] != ']' {
-				result = append(result, "")
-				if i >= len(data) || data[i] != '"' {
-					return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
-				}
-				{
-					ke := i + 1
-					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-						ke++
-					}
-					if ke >= len(data) {
-						return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-					}
-					if data[ke] < 0x20 {
-						return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-					}
-					if data[ke] == '"' {
-						result[len(result)-1] = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-						i = ke + 1
-					} else {
-						result[len(result)-1], i, err = scan.String(data, i)
-						if err != nil {
-							return result, i, decode.NewParseErr("", i, err)
-						}
-					}
-				}
+			if i < len(data) && data[i] == ',' {
+				i++
 				for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 					i++
 				}
-				if i < len(data) && data[i] == ',' {
-					i++
-					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-						i++
-					}
-					continue
-				}
-				break
+				continue
 			}
-			if i >= len(data) || data[i] != ']' {
-				return result, i, scan.ErrBadArray
-			}
-			i++
+			break
 		}
+		if i >= len(data) || data[i] != ']' {
+			return result, i, scan.ErrBadArray
+		}
+		i++
 	}
 	return result, i, nil
 }
@@ -1133,7 +1111,33 @@ func (result AliasTags) DecodeFromStream(s *scan.Stream) (AliasTags, error) {
 	if result != nil {
 		result = result[:0]
 	}
-	{
+	err = s.SkipSpace()
+	if err != nil {
+		return result, decode.NewParseErr("", s.Pos, err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(0); err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+	}
+	if s.Bytes()[s.Pos] == 'n' {
+		for ki := 1; ki < 4; ki++ {
+			if s.Pos+ki >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, decode.NewParseErr("", s.Pos, err)
+				}
+			}
+			if s.Bytes()[s.Pos+ki] != "null"[ki] {
+				return result, decode.NewParseErr("", s.Pos, scan.ErrBadLiteral)
+			}
+		}
+		s.Pos += 4
+		result = nil
+	} else {
+		err = s.ArrayOpen()
+		if err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
 		err = s.SkipSpace()
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
@@ -1143,21 +1147,18 @@ func (result AliasTags) DecodeFromStream(s *scan.Stream) (AliasTags, error) {
 				return result, decode.NewParseErr("", s.Pos, err)
 			}
 		}
-		if s.Bytes()[s.Pos] == 'n' {
-			for ki := 1; ki < 4; ki++ {
-				if s.Pos+ki >= len(s.Bytes()) {
-					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("", s.Pos, err)
-					}
-				}
-				if s.Bytes()[s.Pos+ki] != "null"[ki] {
-					return result, decode.NewParseErr("", s.Pos, scan.ErrBadLiteral)
-				}
+		if s.Bytes()[s.Pos] == ']' {
+			if result == nil {
+				result = AliasTags{}
 			}
-			s.Pos += 4
-			result = nil
 		} else {
-			err = s.ArrayOpen()
+			if result == nil {
+				result = AliasTags{}
+			}
+		}
+		for s.Bytes()[s.Pos] != ']' {
+			result = append(result, "")
+			result[len(result)-1], err = s.String()
 			if err != nil {
 				return result, decode.NewParseErr("", s.Pos, err)
 			}
@@ -1170,45 +1171,20 @@ func (result AliasTags) DecodeFromStream(s *scan.Stream) (AliasTags, error) {
 					return result, decode.NewParseErr("", s.Pos, err)
 				}
 			}
-			if s.Bytes()[s.Pos] == ']' {
-				if result == nil {
-					result = AliasTags{}
-				}
-			} else {
-				if result == nil {
-					result = AliasTags{}
-				}
-			}
-			for s.Bytes()[s.Pos] != ']' {
-				result = append(result, "")
-				result[len(result)-1], err = s.String()
-				if err != nil {
-					return result, decode.NewParseErr("", s.Pos, err)
-				}
+			if s.Bytes()[s.Pos] == ',' {
+				s.Pos++
 				err = s.SkipSpace()
 				if err != nil {
 					return result, decode.NewParseErr("", s.Pos, err)
 				}
-				if s.Pos >= len(s.Bytes()) {
-					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("", s.Pos, err)
-					}
-				}
-				if s.Bytes()[s.Pos] == ',' {
-					s.Pos++
-					err = s.SkipSpace()
-					if err != nil {
-						return result, decode.NewParseErr("", s.Pos, err)
-					}
-					continue
-				}
-				break
+				continue
 			}
-			if s.Bytes()[s.Pos] != ']' {
-				return result, decode.NewParseErr("", s.Pos, scan.ErrBadArray)
-			}
-			s.Pos++
+			break
 		}
+		if s.Bytes()[s.Pos] != ']' {
+			return result, decode.NewParseErr("", s.Pos, scan.ErrBadArray)
+		}
+		s.Pos++
 	}
 	return result, nil
 }
@@ -1243,327 +1219,101 @@ func (result AliasLookup) DecodeFrom(data []byte) (AliasLookup, int, error) {
 	if result != nil {
 		clear(result)
 	}
-	{
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+		i += 4
+		result = nil
+	} else {
+		if i >= len(data) || data[i] != '{' {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		}
+		i++
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
-		if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-			i += 4
-			result = nil
+		if i < len(data) && data[i] == '}' {
+			if result == nil {
+				result = AliasLookup{}
+			}
 		} else {
-			if i >= len(data) || data[i] != '{' {
+			if result == nil {
+				result = make(AliasLookup)
+			}
+		}
+		for i < len(data) && data[i] != '}' {
+			var mk string
+			if i >= len(data) || data[i] != '"' {
+				return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
+			}
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+			}
+			if data[ke] < 0x20 {
+				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+			}
+			if data[ke] == '"' {
+				mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				mk, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("", i, err)
+				}
+			}
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			if i >= len(data) || data[i] != ':' {
 				return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 			}
 			i++
 			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
-			if i < len(data) && data[i] == '}' {
-				if result == nil {
-					result = AliasLookup{}
-				}
-			} else {
-				if result == nil {
-					result = make(AliasLookup)
-				}
-			}
-			for i < len(data) && data[i] != '}' {
-				var mk string
-				if i >= len(data) || data[i] != '"' {
-					return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
-				}
-				{
-					ke := i + 1
-					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-						ke++
-					}
-					if ke >= len(data) {
-						return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-					}
-					if data[ke] < 0x20 {
-						return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-					}
-					if data[ke] == '"' {
-						mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-						i = ke + 1
-					} else {
-						mk, i, err = scan.String(data, i)
-						if err != nil {
-							return result, i, decode.NewParseErr("", i, err)
-						}
-					}
-				}
-				for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-					i++
-				}
-				if i >= len(data) || data[i] != ':' {
-					return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
-				}
+			neg := false
+			if i < len(data) && data[i] == '-' {
+				neg = true
 				i++
-				for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-					i++
-				}
-				var mn int64
-				{
-					neg := false
-					if i < len(data) && data[i] == '-' {
-						neg = true
-						i++
-					}
-					if i >= len(data) || data[i] < '0' || data[i] > '9' {
-						return result, i, decode.NewParseErr("", i, scan.ErrBadNumber)
-					}
-					limit := uint64(math.MaxInt64)
-					if neg {
-						limit = scan.SignedNeg
-					}
-					var u uint64
-					for i < len(data) && data[i] >= '0' && data[i] <= '9' {
-						d := uint64(data[i] - '0')
-						if u > limit/10 || (u == limit/10 && d > limit%10) {
-							return result, i, decode.NewParseErr("", i, scan.ErrNumberOverflow)
-						}
-						u = u*10 + d
-						i++
-					}
-					if i < len(data) {
-						c := data[i]
-						if c == '.' || c == 'e' || c == 'E' {
-							return result, i, decode.NewParseErr("", i, scan.ErrBadNumber)
-						}
-					}
-					var n int64
-					if neg {
-						if u == scan.SignedNeg {
-							n = math.MinInt64
-						} else {
-							n = -int64(u)
-						}
-					} else {
-						n = int64(u)
-					}
-					mn = n
-				}
-				result[mk] = int(mn)
-				for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-					i++
-				}
-				if i < len(data) && data[i] == ',' {
-					i++
-					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-						i++
-					}
-					continue
-				}
-				break
 			}
-			if i >= len(data) || data[i] != '}' {
-				return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+			if i >= len(data) || data[i] < '0' || data[i] > '9' {
+				return result, i, decode.NewParseErr("", i, scan.ErrBadNumber)
 			}
-			i++
-		}
-	}
-	return result, i, nil
-}
-
-func (result AliasLookup) DecodeFromStream(s *scan.Stream) (AliasLookup, error) {
-	var err error
-	_ = err
-	if result != nil {
-		clear(result)
-	}
-	{
-		err = s.SkipSpace()
-		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
-		}
-		if s.Pos >= len(s.Bytes()) {
-			if err = s.ReadMore(0); err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+			limit := uint64(math.MaxInt64)
+			if neg {
+				limit = scan.SignedNeg
 			}
-		}
-		if s.Bytes()[s.Pos] == 'n' {
-			for ki := 1; ki < 4; ki++ {
-				if s.Pos+ki >= len(s.Bytes()) {
-					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("", s.Pos, err)
-					}
+			var u uint64
+			for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+				d := uint64(data[i] - '0')
+				if u > limit/10 || (u == limit/10 && d > limit%10) {
+					return result, i, decode.NewParseErr("", i, scan.ErrNumberOverflow)
 				}
-				if s.Bytes()[s.Pos+ki] != "null"[ki] {
-					return result, decode.NewParseErr("", s.Pos, scan.ErrBadLiteral)
-				}
+				u = u*10 + d
+				i++
 			}
-			s.Pos += 4
-			result = nil
-		} else {
-			err = s.ObjectOpen()
-			if err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
-			}
-			err = s.SkipSpace()
-			if err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
-			}
-			if s.Pos >= len(s.Bytes()) {
-				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("", s.Pos, err)
-				}
-			}
-			if s.Bytes()[s.Pos] == '}' {
-				if result == nil {
-					result = AliasLookup{}
-				}
-			} else {
-				if result == nil {
-					result = make(AliasLookup)
-				}
-			}
-			for s.Bytes()[s.Pos] != '}' {
-				var mk string
-				mk, err = s.String()
-				if err != nil {
-					return result, decode.NewParseErr("", s.Pos, err)
-				}
-				err = s.SkipSpace()
-				if err != nil {
-					return result, decode.NewParseErr("", s.Pos, err)
-				}
-				if s.Pos >= len(s.Bytes()) {
-					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("", s.Pos, err)
-					}
-				}
-				if s.Bytes()[s.Pos] != ':' {
-					return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
-				}
-				s.Pos++
-				err = s.SkipSpace()
-				if err != nil {
-					return result, decode.NewParseErr("", s.Pos, err)
-				}
-				var mn int64
-				mn, err = s.Int64()
-				if err != nil {
-					return result, decode.NewParseErr("", s.Pos, err)
-				}
-				result[mk] = int(mn)
-				err = s.SkipSpace()
-				if err != nil {
-					return result, decode.NewParseErr("", s.Pos, err)
-				}
-				if s.Pos >= len(s.Bytes()) {
-					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("", s.Pos, err)
-					}
-				}
-				if s.Bytes()[s.Pos] == ',' {
-					s.Pos++
-					err = s.SkipSpace()
-					if err != nil {
-						return result, decode.NewParseErr("", s.Pos, err)
-					}
-					continue
-				}
-				break
-			}
-			if s.Bytes()[s.Pos] != '}' {
-				return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
-			}
-			s.Pos++
-		}
-	}
-	return result, nil
-}
-
-func (s AliasLookup) JSONSize() int {
-	return 1024
-}
-
-func (s AliasLookup) AppendJSON(dst []byte) ([]byte, error) {
-	if s == nil {
-		dst = append(dst, "null"...)
-	} else {
-		dst = append(dst, '{')
-		{
-			first := true
-			for k, v := range s {
-				if first {
-					first = false
-					dst = append(dst, '"')
-				} else {
-					dst = append(dst, ",\""...)
-				}
-				dst = encode.AppendStringNoHTML(dst, k)
-				dst = append(dst, ':')
-				dst = strconv.AppendInt(dst, int64(v), 10)
-			}
-		}
-		dst = append(dst, '}')
-	}
-	return dst, nil
-}
-
-func (result AliasTuple) DecodeFrom(data []byte) (AliasTuple, int, error) {
-	i := 0
-	var err error
-	_ = err
-	{
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-			i++
-		}
-		if i >= len(data) || data[i] != '[' {
-			return result, i, scan.ErrBadArray
-		}
-		i++
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-			i++
-		}
-		var idx0 int
-		for i < len(data) && data[i] != ']' {
-			if idx0 >= 3 {
-				return result, i, &validation.LenError{Path: []string{""}, Want: 3, Got: idx0}
-			}
-			{
-				neg := false
-				if i < len(data) && data[i] == '-' {
-					neg = true
-					i++
-				}
-				if i >= len(data) || data[i] < '0' || data[i] > '9' {
+			if i < len(data) {
+				c := data[i]
+				if c == '.' || c == 'e' || c == 'E' {
 					return result, i, decode.NewParseErr("", i, scan.ErrBadNumber)
 				}
-				limit := uint64(math.MaxInt64)
-				if neg {
-					limit = scan.SignedNeg
-				}
-				var u uint64
-				for i < len(data) && data[i] >= '0' && data[i] <= '9' {
-					d := uint64(data[i] - '0')
-					if u > limit/10 || (u == limit/10 && d > limit%10) {
-						return result, i, decode.NewParseErr("", i, scan.ErrNumberOverflow)
-					}
-					u = u*10 + d
-					i++
-				}
-				if i < len(data) {
-					c := data[i]
-					if c == '.' || c == 'e' || c == 'E' {
-						return result, i, decode.NewParseErr("", i, scan.ErrBadNumber)
-					}
-				}
-				var n int64
-				if neg {
-					if u == scan.SignedNeg {
-						n = math.MinInt64
-					} else {
-						n = -int64(u)
-					}
-				} else {
-					n = int64(u)
-				}
-				result[idx0] = int(n)
 			}
-			idx0++
+			var n int64
+			if neg {
+				if u == scan.SignedNeg {
+					n = math.MinInt64
+				} else {
+					n = -int64(u)
+				}
+			} else {
+				n = int64(u)
+			}
+			result[mk] = int(n)
 			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
@@ -1576,22 +1326,44 @@ func (result AliasTuple) DecodeFrom(data []byte) (AliasTuple, int, error) {
 			}
 			break
 		}
-		if i >= len(data) || data[i] != ']' {
-			return result, i, scan.ErrBadArray
-		}
-		if idx0 != 3 {
-			return result, i, &validation.LenError{Path: []string{""}, Want: 3, Got: idx0}
+		if i >= len(data) || data[i] != '}' {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		i++
 	}
 	return result, i, nil
 }
 
-func (result AliasTuple) DecodeFromStream(s *scan.Stream) (AliasTuple, error) {
+func (result AliasLookup) DecodeFromStream(s *scan.Stream) (AliasLookup, error) {
 	var err error
 	_ = err
-	{
-		err = s.ArrayOpen()
+	if result != nil {
+		clear(result)
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, decode.NewParseErr("", s.Pos, err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(0); err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+	}
+	if s.Bytes()[s.Pos] == 'n' {
+		for ki := 1; ki < 4; ki++ {
+			if s.Pos+ki >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, decode.NewParseErr("", s.Pos, err)
+				}
+			}
+			if s.Bytes()[s.Pos+ki] != "null"[ki] {
+				return result, decode.NewParseErr("", s.Pos, scan.ErrBadLiteral)
+			}
+		}
+		s.Pos += 4
+		result = nil
+	} else {
+		err = s.ObjectOpen()
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -1604,18 +1376,44 @@ func (result AliasTuple) DecodeFromStream(s *scan.Stream) (AliasTuple, error) {
 				return result, decode.NewParseErr("", s.Pos, err)
 			}
 		}
-		var idx0 int
-		for s.Bytes()[s.Pos] != ']' {
-			if idx0 >= 3 {
-				return result, &validation.LenError{Path: []string{""}, Want: 3, Got: idx0}
+		if s.Bytes()[s.Pos] == '}' {
+			if result == nil {
+				result = AliasLookup{}
+			}
+		} else {
+			if result == nil {
+				result = make(AliasLookup)
+			}
+		}
+		for s.Bytes()[s.Pos] != '}' {
+			var mk string
+			mk, err = s.String()
+			if err != nil {
+				return result, decode.NewParseErr("", s.Pos, err)
+			}
+			err = s.SkipSpace()
+			if err != nil {
+				return result, decode.NewParseErr("", s.Pos, err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, decode.NewParseErr("", s.Pos, err)
+				}
+			}
+			if s.Bytes()[s.Pos] != ':' {
+				return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+			}
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, decode.NewParseErr("", s.Pos, err)
 			}
 			var iv int64
 			iv, err = s.Int64()
 			if err != nil {
 				return result, decode.NewParseErr("", s.Pos, err)
 			}
-			result[idx0] = int(iv)
-			idx0++
+			result[mk] = int(iv)
 			err = s.SkipSpace()
 			if err != nil {
 				return result, decode.NewParseErr("", s.Pos, err)
@@ -1635,14 +1433,174 @@ func (result AliasTuple) DecodeFromStream(s *scan.Stream) (AliasTuple, error) {
 			}
 			break
 		}
-		if s.Bytes()[s.Pos] != ']' {
-			return result, decode.NewParseErr("", s.Pos, scan.ErrBadArray)
-		}
-		if idx0 != 3 {
-			return result, &validation.LenError{Path: []string{""}, Want: 3, Got: idx0}
+		if s.Bytes()[s.Pos] != '}' {
+			return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
 		}
 		s.Pos++
 	}
+	return result, nil
+}
+
+func (s AliasLookup) JSONSize() int {
+	return 1024
+}
+
+func (s AliasLookup) AppendJSON(dst []byte) ([]byte, error) {
+	if s == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '{')
+		first := true
+		for k, v := range s {
+			if first {
+				first = false
+				dst = append(dst, '"')
+			} else {
+				dst = append(dst, ",\""...)
+			}
+			dst = encode.AppendStringNoHTML(dst, k)
+			dst = append(dst, ':')
+			dst = strconv.AppendInt(dst, int64(v), 10)
+		}
+		dst = append(dst, '}')
+	}
+	return dst, nil
+}
+
+func (result AliasTuple) DecodeFrom(data []byte) (AliasTuple, int, error) {
+	i := 0
+	var err error
+	_ = err
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '[' {
+		return result, i, scan.ErrBadArray
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	var idx0 int
+	for i < len(data) && data[i] != ']' {
+		if idx0 >= 3 {
+			return result, i, &validation.LenError{Path: []string{""}, Want: 3, Got: idx0}
+		}
+		neg := false
+		if i < len(data) && data[i] == '-' {
+			neg = true
+			i++
+		}
+		if i >= len(data) || data[i] < '0' || data[i] > '9' {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadNumber)
+		}
+		limit := uint64(math.MaxInt64)
+		if neg {
+			limit = scan.SignedNeg
+		}
+		var u uint64
+		for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+			d := uint64(data[i] - '0')
+			if u > limit/10 || (u == limit/10 && d > limit%10) {
+				return result, i, decode.NewParseErr("", i, scan.ErrNumberOverflow)
+			}
+			u = u*10 + d
+			i++
+		}
+		if i < len(data) {
+			c := data[i]
+			if c == '.' || c == 'e' || c == 'E' {
+				return result, i, decode.NewParseErr("", i, scan.ErrBadNumber)
+			}
+		}
+		var n int64
+		if neg {
+			if u == scan.SignedNeg {
+				n = math.MinInt64
+			} else {
+				n = -int64(u)
+			}
+		} else {
+			n = int64(u)
+		}
+		result[idx0] = int(n)
+		idx0++
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i < len(data) && data[i] == ',' {
+			i++
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		break
+	}
+	if i >= len(data) || data[i] != ']' {
+		return result, i, scan.ErrBadArray
+	}
+	if idx0 != 3 {
+		return result, i, &validation.LenError{Path: []string{""}, Want: 3, Got: idx0}
+	}
+	i++
+	return result, i, nil
+}
+
+func (result AliasTuple) DecodeFromStream(s *scan.Stream) (AliasTuple, error) {
+	var err error
+	_ = err
+	err = s.ArrayOpen()
+	if err != nil {
+		return result, decode.NewParseErr("", s.Pos, err)
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, decode.NewParseErr("", s.Pos, err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(0); err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+	}
+	var idx0 int
+	for s.Bytes()[s.Pos] != ']' {
+		if idx0 >= 3 {
+			return result, &validation.LenError{Path: []string{""}, Want: 3, Got: idx0}
+		}
+		var iv int64
+		iv, err = s.Int64()
+		if err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		result[idx0] = int(iv)
+		idx0++
+		err = s.SkipSpace()
+		if err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(0); err != nil {
+				return result, decode.NewParseErr("", s.Pos, err)
+			}
+		}
+		if s.Bytes()[s.Pos] == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, decode.NewParseErr("", s.Pos, err)
+			}
+			continue
+		}
+		break
+	}
+	if s.Bytes()[s.Pos] != ']' {
+		return result, decode.NewParseErr("", s.Pos, scan.ErrBadArray)
+	}
+	if idx0 != 3 {
+		return result, &validation.LenError{Path: []string{""}, Want: 3, Got: idx0}
+	}
+	s.Pos++
 	return result, nil
 }
 
@@ -1691,25 +1649,23 @@ func (result AliasFieldExample) DecodeFrom(data []byte) (AliasFieldExample, int,
 		if i >= len(data) || data[i] != '"' {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
-		{
-			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-				ke++
-			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-				i = ke + 1
-			} else {
-				key, i, err = scan.String(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr("", i, err)
-				}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -1729,13 +1685,11 @@ func (result AliasFieldExample) DecodeFrom(data []byte) (AliasFieldExample, int,
 					return result, i, &validation.DuplicateKeyError{Path: []string{"body"}}
 				}
 				seenBody = true
-				{
-					var _n int
-					result.Body, _n, err = result.Body.DecodeFrom(data[i:])
-					i += _n
-					if err != nil {
-						return result, i, decode.NewParseErr("body", i, err)
-					}
+				var _n int
+				result.Body, _n, err = result.Body.DecodeFrom(data[i:])
+				i += _n
+				if err != nil {
+					return result, i, decode.NewParseErr("body", i, err)
 				}
 				result.Body = AliasString(strings.TrimSpace(string(result.Body)))
 				result.Body = AliasString(strings.ToLower(string(result.Body)))
@@ -1754,13 +1708,11 @@ func (result AliasFieldExample) DecodeFrom(data []byte) (AliasFieldExample, int,
 					return result, i, &validation.DuplicateKeyError{Path: []string{"count"}}
 				}
 				seenCount = true
-				{
-					var _n int
-					result.Count, _n, err = result.Count.DecodeFrom(data[i:])
-					i += _n
-					if err != nil {
-						return result, i, decode.NewParseErr("count", i, err)
-					}
+				var _n int
+				result.Count, _n, err = result.Count.DecodeFrom(data[i:])
+				i += _n
+				if err != nil {
+					return result, i, decode.NewParseErr("count", i, err)
 				}
 				if result.Count < AliasInt(1) {
 					result.Count = AliasInt(1)

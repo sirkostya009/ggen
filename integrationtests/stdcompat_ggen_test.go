@@ -40,25 +40,23 @@ func (result TimeDefault) DecodeFrom(data []byte) (TimeDefault, int, error) {
 		if i >= len(data) || data[i] != '"' {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
-		{
-			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-				ke++
-			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-				i = ke + 1
-			} else {
-				key, i, err = scan.String(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr("", i, err)
-				}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -78,36 +76,32 @@ func (result TimeDefault) DecodeFrom(data []byte) (TimeDefault, int, error) {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"default"}}
 				}
 				seenDefault = true
-				{
-					var s string
-					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("default", i, scan.ErrExpectString)
-					}
-					{
-						ke := i + 1
-						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-							ke++
-						}
-						if ke >= len(data) {
-							return result, i, decode.NewParseErr("default", i, scan.ErrUnterminated)
-						}
-						if data[ke] < 0x20 {
-							return result, i, decode.NewParseErr("default", i, scan.ErrBadString)
-						}
-						if data[ke] == '"' {
-							s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-							i = ke + 1
-						} else {
-							s, i, err = scan.String(data, i)
-							if err != nil {
-								return result, i, decode.NewParseErr("default", i, err)
-							}
-						}
-					}
-					result.Default, err = time.Parse(time.RFC3339Nano, s)
+				var s string
+				if i >= len(data) || data[i] != '"' {
+					return result, i, decode.NewParseErr("default", i, scan.ErrExpectString)
+				}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("default", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("default", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					s, i, err = scan.String(data, i)
 					if err != nil {
 						return result, i, decode.NewParseErr("default", i, err)
 					}
+				}
+				result.Default, err = time.Parse(time.RFC3339Nano, s)
+				if err != nil {
+					return result, i, decode.NewParseErr("default", i, err)
 				}
 			} else {
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -173,16 +167,14 @@ func (result TimeDefault) DecodeFromStream(s *scan.Stream) (TimeDefault, error) 
 					return result, &validation.DuplicateKeyError{Path: []string{"default"}}
 				}
 				seenDefault = true
-				{
-					var v string
-					v, err = s.String()
-					if err != nil {
-						return result, decode.NewParseErr("default", s.Pos, err)
-					}
-					result.Default, err = time.Parse(time.RFC3339Nano, v)
-					if err != nil {
-						return result, decode.NewParseErr("default", s.Pos, err)
-					}
+				var sv string
+				sv, err = s.String()
+				if err != nil {
+					return result, decode.NewParseErr("default", s.Pos, err)
+				}
+				result.Default, err = time.Parse(time.RFC3339Nano, sv)
+				if err != nil {
+					return result, decode.NewParseErr("default", s.Pos, err)
 				}
 			} else {
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
@@ -255,25 +247,23 @@ func (result TimeUnix) DecodeFrom(data []byte) (TimeUnix, int, error) {
 		if i >= len(data) || data[i] != '"' {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
-		{
-			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-				ke++
-			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-				i = ke + 1
-			} else {
-				key, i, err = scan.String(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr("", i, err)
-				}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -293,16 +283,14 @@ func (result TimeUnix) DecodeFrom(data []byte) (TimeUnix, int, error) {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"unix"}}
 				}
 				seenUnix = true
-				{
-					var f float64
-					f, i, err = scan.Float64(data, i)
-					if err != nil {
-						return result, i, decode.NewParseErr("unix", i, err)
-					}
-					sec := int64(f)
-					nsec := int64((f - float64(sec)) * 1e9)
-					result.Unix = time.Unix(sec, nsec)
+				var f float64
+				f, i, err = scan.Float64(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("unix", i, err)
 				}
+				sec := int64(f)
+				nsec := int64((f - float64(sec)) * 1e9)
+				result.Unix = time.Unix(sec, nsec)
 			} else {
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
 			}
@@ -367,17 +355,15 @@ func (result TimeUnix) DecodeFromStream(s *scan.Stream) (TimeUnix, error) {
 					return result, &validation.DuplicateKeyError{Path: []string{"unix"}}
 				}
 				seenUnix = true
-				{
-					var f float64
-					f, err = s.Float64()
-					if err != nil {
-						return result, decode.NewParseErr("unix", s.Pos, err)
-					}
-
-					sec := int64(f)
-					nsec := int64((f - float64(sec)) * 1e9)
-					result.Unix = time.Unix(sec, nsec)
+				var f float64
+				f, err = s.Float64()
+				if err != nil {
+					return result, decode.NewParseErr("unix", s.Pos, err)
 				}
+
+				sec := int64(f)
+				nsec := int64((f - float64(sec)) * 1e9)
+				result.Unix = time.Unix(sec, nsec)
 			} else {
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
 			}
@@ -449,25 +435,23 @@ func (result TimeUnixMilli) DecodeFrom(data []byte) (TimeUnixMilli, int, error) 
 		if i >= len(data) || data[i] != '"' {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
-		{
-			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-				ke++
-			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-				i = ke + 1
-			} else {
-				key, i, err = scan.String(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr("", i, err)
-				}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -487,14 +471,12 @@ func (result TimeUnixMilli) DecodeFrom(data []byte) (TimeUnixMilli, int, error) 
 					return result, i, &validation.DuplicateKeyError{Path: []string{"unixMilli"}}
 				}
 				seenUnixMilli = true
-				{
-					var n int64
-					n, i, err = scan.Int64(data, i)
-					if err != nil {
-						return result, i, decode.NewParseErr("unixMilli", i, err)
-					}
-					result.UnixMilli = time.UnixMilli(n)
+				var n int64
+				n, i, err = scan.Int64(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("unixMilli", i, err)
 				}
+				result.UnixMilli = time.UnixMilli(n)
 			} else {
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
 			}
@@ -559,14 +541,12 @@ func (result TimeUnixMilli) DecodeFromStream(s *scan.Stream) (TimeUnixMilli, err
 					return result, &validation.DuplicateKeyError{Path: []string{"unixMilli"}}
 				}
 				seenUnixMilli = true
-				{
-					var n int64
-					n, err = s.Int64()
-					if err != nil {
-						return result, decode.NewParseErr("unixMilli", s.Pos, err)
-					}
-					result.UnixMilli = time.UnixMilli(n)
+				var n int64
+				n, err = s.Int64()
+				if err != nil {
+					return result, decode.NewParseErr("unixMilli", s.Pos, err)
 				}
+				result.UnixMilli = time.UnixMilli(n)
 			} else {
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
 			}
@@ -638,25 +618,23 @@ func (result TimeUnixMicro) DecodeFrom(data []byte) (TimeUnixMicro, int, error) 
 		if i >= len(data) || data[i] != '"' {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
-		{
-			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-				ke++
-			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-				i = ke + 1
-			} else {
-				key, i, err = scan.String(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr("", i, err)
-				}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -676,14 +654,12 @@ func (result TimeUnixMicro) DecodeFrom(data []byte) (TimeUnixMicro, int, error) 
 					return result, i, &validation.DuplicateKeyError{Path: []string{"unixMicro"}}
 				}
 				seenUnixMicro = true
-				{
-					var n int64
-					n, i, err = scan.Int64(data, i)
-					if err != nil {
-						return result, i, decode.NewParseErr("unixMicro", i, err)
-					}
-					result.UnixMicro = time.UnixMicro(n)
+				var n int64
+				n, i, err = scan.Int64(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("unixMicro", i, err)
 				}
+				result.UnixMicro = time.UnixMicro(n)
 			} else {
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
 			}
@@ -748,14 +724,12 @@ func (result TimeUnixMicro) DecodeFromStream(s *scan.Stream) (TimeUnixMicro, err
 					return result, &validation.DuplicateKeyError{Path: []string{"unixMicro"}}
 				}
 				seenUnixMicro = true
-				{
-					var n int64
-					n, err = s.Int64()
-					if err != nil {
-						return result, decode.NewParseErr("unixMicro", s.Pos, err)
-					}
-					result.UnixMicro = time.UnixMicro(n)
+				var n int64
+				n, err = s.Int64()
+				if err != nil {
+					return result, decode.NewParseErr("unixMicro", s.Pos, err)
 				}
+				result.UnixMicro = time.UnixMicro(n)
 			} else {
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
 			}
@@ -827,25 +801,23 @@ func (result TimeUnixNano) DecodeFrom(data []byte) (TimeUnixNano, int, error) {
 		if i >= len(data) || data[i] != '"' {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
-		{
-			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-				ke++
-			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-				i = ke + 1
-			} else {
-				key, i, err = scan.String(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr("", i, err)
-				}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -865,14 +837,12 @@ func (result TimeUnixNano) DecodeFrom(data []byte) (TimeUnixNano, int, error) {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"unixNano"}}
 				}
 				seenUnixNano = true
-				{
-					var n int64
-					n, i, err = scan.Int64(data, i)
-					if err != nil {
-						return result, i, decode.NewParseErr("unixNano", i, err)
-					}
-					result.UnixNano = time.Unix(0, n)
+				var n int64
+				n, i, err = scan.Int64(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("unixNano", i, err)
 				}
+				result.UnixNano = time.Unix(0, n)
 			} else {
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
 			}
@@ -937,14 +907,12 @@ func (result TimeUnixNano) DecodeFromStream(s *scan.Stream) (TimeUnixNano, error
 					return result, &validation.DuplicateKeyError{Path: []string{"unixNano"}}
 				}
 				seenUnixNano = true
-				{
-					var n int64
-					n, err = s.Int64()
-					if err != nil {
-						return result, decode.NewParseErr("unixNano", s.Pos, err)
-					}
-					result.UnixNano = time.Unix(0, n)
+				var n int64
+				n, err = s.Int64()
+				if err != nil {
+					return result, decode.NewParseErr("unixNano", s.Pos, err)
 				}
+				result.UnixNano = time.Unix(0, n)
 			} else {
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
 			}
@@ -1016,25 +984,23 @@ func (result TimeANSIC) DecodeFrom(data []byte) (TimeANSIC, int, error) {
 		if i >= len(data) || data[i] != '"' {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
-		{
-			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-				ke++
-			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-				i = ke + 1
-			} else {
-				key, i, err = scan.String(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr("", i, err)
-				}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -1054,36 +1020,32 @@ func (result TimeANSIC) DecodeFrom(data []byte) (TimeANSIC, int, error) {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"ansic"}}
 				}
 				seenANSIC = true
-				{
-					var s string
-					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("ansic", i, scan.ErrExpectString)
-					}
-					{
-						ke := i + 1
-						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-							ke++
-						}
-						if ke >= len(data) {
-							return result, i, decode.NewParseErr("ansic", i, scan.ErrUnterminated)
-						}
-						if data[ke] < 0x20 {
-							return result, i, decode.NewParseErr("ansic", i, scan.ErrBadString)
-						}
-						if data[ke] == '"' {
-							s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-							i = ke + 1
-						} else {
-							s, i, err = scan.String(data, i)
-							if err != nil {
-								return result, i, decode.NewParseErr("ansic", i, err)
-							}
-						}
-					}
-					result.ANSIC, err = time.Parse(time.ANSIC, s)
+				var s string
+				if i >= len(data) || data[i] != '"' {
+					return result, i, decode.NewParseErr("ansic", i, scan.ErrExpectString)
+				}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("ansic", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("ansic", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					s, i, err = scan.String(data, i)
 					if err != nil {
 						return result, i, decode.NewParseErr("ansic", i, err)
 					}
+				}
+				result.ANSIC, err = time.Parse(time.ANSIC, s)
+				if err != nil {
+					return result, i, decode.NewParseErr("ansic", i, err)
 				}
 			} else {
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -1149,16 +1111,14 @@ func (result TimeANSIC) DecodeFromStream(s *scan.Stream) (TimeANSIC, error) {
 					return result, &validation.DuplicateKeyError{Path: []string{"ansic"}}
 				}
 				seenANSIC = true
-				{
-					var v string
-					v, err = s.String()
-					if err != nil {
-						return result, decode.NewParseErr("ansic", s.Pos, err)
-					}
-					result.ANSIC, err = time.Parse(time.ANSIC, v)
-					if err != nil {
-						return result, decode.NewParseErr("ansic", s.Pos, err)
-					}
+				var sv string
+				sv, err = s.String()
+				if err != nil {
+					return result, decode.NewParseErr("ansic", s.Pos, err)
+				}
+				result.ANSIC, err = time.Parse(time.ANSIC, sv)
+				if err != nil {
+					return result, decode.NewParseErr("ansic", s.Pos, err)
 				}
 			} else {
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
@@ -1231,25 +1191,23 @@ func (result TimeUnixDate) DecodeFrom(data []byte) (TimeUnixDate, int, error) {
 		if i >= len(data) || data[i] != '"' {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
-		{
-			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-				ke++
-			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-				i = ke + 1
-			} else {
-				key, i, err = scan.String(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr("", i, err)
-				}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -1269,36 +1227,32 @@ func (result TimeUnixDate) DecodeFrom(data []byte) (TimeUnixDate, int, error) {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"unixDate"}}
 				}
 				seenUnixDate = true
-				{
-					var s string
-					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("unixDate", i, scan.ErrExpectString)
-					}
-					{
-						ke := i + 1
-						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-							ke++
-						}
-						if ke >= len(data) {
-							return result, i, decode.NewParseErr("unixDate", i, scan.ErrUnterminated)
-						}
-						if data[ke] < 0x20 {
-							return result, i, decode.NewParseErr("unixDate", i, scan.ErrBadString)
-						}
-						if data[ke] == '"' {
-							s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-							i = ke + 1
-						} else {
-							s, i, err = scan.String(data, i)
-							if err != nil {
-								return result, i, decode.NewParseErr("unixDate", i, err)
-							}
-						}
-					}
-					result.UnixDate, err = time.Parse(time.UnixDate, s)
+				var s string
+				if i >= len(data) || data[i] != '"' {
+					return result, i, decode.NewParseErr("unixDate", i, scan.ErrExpectString)
+				}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("unixDate", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("unixDate", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					s, i, err = scan.String(data, i)
 					if err != nil {
 						return result, i, decode.NewParseErr("unixDate", i, err)
 					}
+				}
+				result.UnixDate, err = time.Parse(time.UnixDate, s)
+				if err != nil {
+					return result, i, decode.NewParseErr("unixDate", i, err)
 				}
 			} else {
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -1364,16 +1318,14 @@ func (result TimeUnixDate) DecodeFromStream(s *scan.Stream) (TimeUnixDate, error
 					return result, &validation.DuplicateKeyError{Path: []string{"unixDate"}}
 				}
 				seenUnixDate = true
-				{
-					var v string
-					v, err = s.String()
-					if err != nil {
-						return result, decode.NewParseErr("unixDate", s.Pos, err)
-					}
-					result.UnixDate, err = time.Parse(time.UnixDate, v)
-					if err != nil {
-						return result, decode.NewParseErr("unixDate", s.Pos, err)
-					}
+				var sv string
+				sv, err = s.String()
+				if err != nil {
+					return result, decode.NewParseErr("unixDate", s.Pos, err)
+				}
+				result.UnixDate, err = time.Parse(time.UnixDate, sv)
+				if err != nil {
+					return result, decode.NewParseErr("unixDate", s.Pos, err)
 				}
 			} else {
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
@@ -1446,25 +1398,23 @@ func (result TimeRubyDate) DecodeFrom(data []byte) (TimeRubyDate, int, error) {
 		if i >= len(data) || data[i] != '"' {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
-		{
-			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-				ke++
-			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-				i = ke + 1
-			} else {
-				key, i, err = scan.String(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr("", i, err)
-				}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -1484,36 +1434,32 @@ func (result TimeRubyDate) DecodeFrom(data []byte) (TimeRubyDate, int, error) {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"rubyDate"}}
 				}
 				seenRubyDate = true
-				{
-					var s string
-					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("rubyDate", i, scan.ErrExpectString)
-					}
-					{
-						ke := i + 1
-						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-							ke++
-						}
-						if ke >= len(data) {
-							return result, i, decode.NewParseErr("rubyDate", i, scan.ErrUnterminated)
-						}
-						if data[ke] < 0x20 {
-							return result, i, decode.NewParseErr("rubyDate", i, scan.ErrBadString)
-						}
-						if data[ke] == '"' {
-							s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-							i = ke + 1
-						} else {
-							s, i, err = scan.String(data, i)
-							if err != nil {
-								return result, i, decode.NewParseErr("rubyDate", i, err)
-							}
-						}
-					}
-					result.RubyDate, err = time.Parse(time.RubyDate, s)
+				var s string
+				if i >= len(data) || data[i] != '"' {
+					return result, i, decode.NewParseErr("rubyDate", i, scan.ErrExpectString)
+				}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("rubyDate", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("rubyDate", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					s, i, err = scan.String(data, i)
 					if err != nil {
 						return result, i, decode.NewParseErr("rubyDate", i, err)
 					}
+				}
+				result.RubyDate, err = time.Parse(time.RubyDate, s)
+				if err != nil {
+					return result, i, decode.NewParseErr("rubyDate", i, err)
 				}
 			} else {
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -1579,16 +1525,14 @@ func (result TimeRubyDate) DecodeFromStream(s *scan.Stream) (TimeRubyDate, error
 					return result, &validation.DuplicateKeyError{Path: []string{"rubyDate"}}
 				}
 				seenRubyDate = true
-				{
-					var v string
-					v, err = s.String()
-					if err != nil {
-						return result, decode.NewParseErr("rubyDate", s.Pos, err)
-					}
-					result.RubyDate, err = time.Parse(time.RubyDate, v)
-					if err != nil {
-						return result, decode.NewParseErr("rubyDate", s.Pos, err)
-					}
+				var sv string
+				sv, err = s.String()
+				if err != nil {
+					return result, decode.NewParseErr("rubyDate", s.Pos, err)
+				}
+				result.RubyDate, err = time.Parse(time.RubyDate, sv)
+				if err != nil {
+					return result, decode.NewParseErr("rubyDate", s.Pos, err)
 				}
 			} else {
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
@@ -1661,25 +1605,23 @@ func (result TimeRFC822) DecodeFrom(data []byte) (TimeRFC822, int, error) {
 		if i >= len(data) || data[i] != '"' {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
-		{
-			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-				ke++
-			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-				i = ke + 1
-			} else {
-				key, i, err = scan.String(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr("", i, err)
-				}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -1699,36 +1641,32 @@ func (result TimeRFC822) DecodeFrom(data []byte) (TimeRFC822, int, error) {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"rfc822"}}
 				}
 				seenRFC822 = true
-				{
-					var s string
-					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("rfc822", i, scan.ErrExpectString)
-					}
-					{
-						ke := i + 1
-						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-							ke++
-						}
-						if ke >= len(data) {
-							return result, i, decode.NewParseErr("rfc822", i, scan.ErrUnterminated)
-						}
-						if data[ke] < 0x20 {
-							return result, i, decode.NewParseErr("rfc822", i, scan.ErrBadString)
-						}
-						if data[ke] == '"' {
-							s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-							i = ke + 1
-						} else {
-							s, i, err = scan.String(data, i)
-							if err != nil {
-								return result, i, decode.NewParseErr("rfc822", i, err)
-							}
-						}
-					}
-					result.RFC822, err = time.Parse(time.RFC822, s)
+				var s string
+				if i >= len(data) || data[i] != '"' {
+					return result, i, decode.NewParseErr("rfc822", i, scan.ErrExpectString)
+				}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("rfc822", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("rfc822", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					s, i, err = scan.String(data, i)
 					if err != nil {
 						return result, i, decode.NewParseErr("rfc822", i, err)
 					}
+				}
+				result.RFC822, err = time.Parse(time.RFC822, s)
+				if err != nil {
+					return result, i, decode.NewParseErr("rfc822", i, err)
 				}
 			} else {
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -1794,16 +1732,14 @@ func (result TimeRFC822) DecodeFromStream(s *scan.Stream) (TimeRFC822, error) {
 					return result, &validation.DuplicateKeyError{Path: []string{"rfc822"}}
 				}
 				seenRFC822 = true
-				{
-					var v string
-					v, err = s.String()
-					if err != nil {
-						return result, decode.NewParseErr("rfc822", s.Pos, err)
-					}
-					result.RFC822, err = time.Parse(time.RFC822, v)
-					if err != nil {
-						return result, decode.NewParseErr("rfc822", s.Pos, err)
-					}
+				var sv string
+				sv, err = s.String()
+				if err != nil {
+					return result, decode.NewParseErr("rfc822", s.Pos, err)
+				}
+				result.RFC822, err = time.Parse(time.RFC822, sv)
+				if err != nil {
+					return result, decode.NewParseErr("rfc822", s.Pos, err)
 				}
 			} else {
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
@@ -1876,25 +1812,23 @@ func (result TimeRFC822Z) DecodeFrom(data []byte) (TimeRFC822Z, int, error) {
 		if i >= len(data) || data[i] != '"' {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
-		{
-			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-				ke++
-			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-				i = ke + 1
-			} else {
-				key, i, err = scan.String(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr("", i, err)
-				}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -1914,36 +1848,32 @@ func (result TimeRFC822Z) DecodeFrom(data []byte) (TimeRFC822Z, int, error) {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"rfc822Z"}}
 				}
 				seenRFC822Z = true
-				{
-					var s string
-					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("rfc822Z", i, scan.ErrExpectString)
-					}
-					{
-						ke := i + 1
-						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-							ke++
-						}
-						if ke >= len(data) {
-							return result, i, decode.NewParseErr("rfc822Z", i, scan.ErrUnterminated)
-						}
-						if data[ke] < 0x20 {
-							return result, i, decode.NewParseErr("rfc822Z", i, scan.ErrBadString)
-						}
-						if data[ke] == '"' {
-							s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-							i = ke + 1
-						} else {
-							s, i, err = scan.String(data, i)
-							if err != nil {
-								return result, i, decode.NewParseErr("rfc822Z", i, err)
-							}
-						}
-					}
-					result.RFC822Z, err = time.Parse(time.RFC822Z, s)
+				var s string
+				if i >= len(data) || data[i] != '"' {
+					return result, i, decode.NewParseErr("rfc822Z", i, scan.ErrExpectString)
+				}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("rfc822Z", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("rfc822Z", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					s, i, err = scan.String(data, i)
 					if err != nil {
 						return result, i, decode.NewParseErr("rfc822Z", i, err)
 					}
+				}
+				result.RFC822Z, err = time.Parse(time.RFC822Z, s)
+				if err != nil {
+					return result, i, decode.NewParseErr("rfc822Z", i, err)
 				}
 			} else {
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -2009,16 +1939,14 @@ func (result TimeRFC822Z) DecodeFromStream(s *scan.Stream) (TimeRFC822Z, error) 
 					return result, &validation.DuplicateKeyError{Path: []string{"rfc822Z"}}
 				}
 				seenRFC822Z = true
-				{
-					var v string
-					v, err = s.String()
-					if err != nil {
-						return result, decode.NewParseErr("rfc822Z", s.Pos, err)
-					}
-					result.RFC822Z, err = time.Parse(time.RFC822Z, v)
-					if err != nil {
-						return result, decode.NewParseErr("rfc822Z", s.Pos, err)
-					}
+				var sv string
+				sv, err = s.String()
+				if err != nil {
+					return result, decode.NewParseErr("rfc822Z", s.Pos, err)
+				}
+				result.RFC822Z, err = time.Parse(time.RFC822Z, sv)
+				if err != nil {
+					return result, decode.NewParseErr("rfc822Z", s.Pos, err)
 				}
 			} else {
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
@@ -2091,25 +2019,23 @@ func (result TimeRFC850) DecodeFrom(data []byte) (TimeRFC850, int, error) {
 		if i >= len(data) || data[i] != '"' {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
-		{
-			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-				ke++
-			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-				i = ke + 1
-			} else {
-				key, i, err = scan.String(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr("", i, err)
-				}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -2129,36 +2055,32 @@ func (result TimeRFC850) DecodeFrom(data []byte) (TimeRFC850, int, error) {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"rfc850"}}
 				}
 				seenRFC850 = true
-				{
-					var s string
-					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("rfc850", i, scan.ErrExpectString)
-					}
-					{
-						ke := i + 1
-						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-							ke++
-						}
-						if ke >= len(data) {
-							return result, i, decode.NewParseErr("rfc850", i, scan.ErrUnterminated)
-						}
-						if data[ke] < 0x20 {
-							return result, i, decode.NewParseErr("rfc850", i, scan.ErrBadString)
-						}
-						if data[ke] == '"' {
-							s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-							i = ke + 1
-						} else {
-							s, i, err = scan.String(data, i)
-							if err != nil {
-								return result, i, decode.NewParseErr("rfc850", i, err)
-							}
-						}
-					}
-					result.RFC850, err = time.Parse(time.RFC850, s)
+				var s string
+				if i >= len(data) || data[i] != '"' {
+					return result, i, decode.NewParseErr("rfc850", i, scan.ErrExpectString)
+				}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("rfc850", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("rfc850", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					s, i, err = scan.String(data, i)
 					if err != nil {
 						return result, i, decode.NewParseErr("rfc850", i, err)
 					}
+				}
+				result.RFC850, err = time.Parse(time.RFC850, s)
+				if err != nil {
+					return result, i, decode.NewParseErr("rfc850", i, err)
 				}
 			} else {
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -2224,16 +2146,14 @@ func (result TimeRFC850) DecodeFromStream(s *scan.Stream) (TimeRFC850, error) {
 					return result, &validation.DuplicateKeyError{Path: []string{"rfc850"}}
 				}
 				seenRFC850 = true
-				{
-					var v string
-					v, err = s.String()
-					if err != nil {
-						return result, decode.NewParseErr("rfc850", s.Pos, err)
-					}
-					result.RFC850, err = time.Parse(time.RFC850, v)
-					if err != nil {
-						return result, decode.NewParseErr("rfc850", s.Pos, err)
-					}
+				var sv string
+				sv, err = s.String()
+				if err != nil {
+					return result, decode.NewParseErr("rfc850", s.Pos, err)
+				}
+				result.RFC850, err = time.Parse(time.RFC850, sv)
+				if err != nil {
+					return result, decode.NewParseErr("rfc850", s.Pos, err)
 				}
 			} else {
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
@@ -2306,25 +2226,23 @@ func (result TimeRFC1123) DecodeFrom(data []byte) (TimeRFC1123, int, error) {
 		if i >= len(data) || data[i] != '"' {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
-		{
-			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-				ke++
-			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-				i = ke + 1
-			} else {
-				key, i, err = scan.String(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr("", i, err)
-				}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -2344,36 +2262,32 @@ func (result TimeRFC1123) DecodeFrom(data []byte) (TimeRFC1123, int, error) {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"rfc1123"}}
 				}
 				seenRFC1123 = true
-				{
-					var s string
-					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("rfc1123", i, scan.ErrExpectString)
-					}
-					{
-						ke := i + 1
-						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-							ke++
-						}
-						if ke >= len(data) {
-							return result, i, decode.NewParseErr("rfc1123", i, scan.ErrUnterminated)
-						}
-						if data[ke] < 0x20 {
-							return result, i, decode.NewParseErr("rfc1123", i, scan.ErrBadString)
-						}
-						if data[ke] == '"' {
-							s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-							i = ke + 1
-						} else {
-							s, i, err = scan.String(data, i)
-							if err != nil {
-								return result, i, decode.NewParseErr("rfc1123", i, err)
-							}
-						}
-					}
-					result.RFC1123, err = time.Parse(time.RFC1123, s)
+				var s string
+				if i >= len(data) || data[i] != '"' {
+					return result, i, decode.NewParseErr("rfc1123", i, scan.ErrExpectString)
+				}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("rfc1123", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("rfc1123", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					s, i, err = scan.String(data, i)
 					if err != nil {
 						return result, i, decode.NewParseErr("rfc1123", i, err)
 					}
+				}
+				result.RFC1123, err = time.Parse(time.RFC1123, s)
+				if err != nil {
+					return result, i, decode.NewParseErr("rfc1123", i, err)
 				}
 			} else {
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -2439,16 +2353,14 @@ func (result TimeRFC1123) DecodeFromStream(s *scan.Stream) (TimeRFC1123, error) 
 					return result, &validation.DuplicateKeyError{Path: []string{"rfc1123"}}
 				}
 				seenRFC1123 = true
-				{
-					var v string
-					v, err = s.String()
-					if err != nil {
-						return result, decode.NewParseErr("rfc1123", s.Pos, err)
-					}
-					result.RFC1123, err = time.Parse(time.RFC1123, v)
-					if err != nil {
-						return result, decode.NewParseErr("rfc1123", s.Pos, err)
-					}
+				var sv string
+				sv, err = s.String()
+				if err != nil {
+					return result, decode.NewParseErr("rfc1123", s.Pos, err)
+				}
+				result.RFC1123, err = time.Parse(time.RFC1123, sv)
+				if err != nil {
+					return result, decode.NewParseErr("rfc1123", s.Pos, err)
 				}
 			} else {
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
@@ -2521,25 +2433,23 @@ func (result TimeRFC1123Z) DecodeFrom(data []byte) (TimeRFC1123Z, int, error) {
 		if i >= len(data) || data[i] != '"' {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
-		{
-			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-				ke++
-			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-				i = ke + 1
-			} else {
-				key, i, err = scan.String(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr("", i, err)
-				}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -2559,36 +2469,32 @@ func (result TimeRFC1123Z) DecodeFrom(data []byte) (TimeRFC1123Z, int, error) {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"rfc1123Z"}}
 				}
 				seenRFC1123Z = true
-				{
-					var s string
-					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("rfc1123Z", i, scan.ErrExpectString)
-					}
-					{
-						ke := i + 1
-						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-							ke++
-						}
-						if ke >= len(data) {
-							return result, i, decode.NewParseErr("rfc1123Z", i, scan.ErrUnterminated)
-						}
-						if data[ke] < 0x20 {
-							return result, i, decode.NewParseErr("rfc1123Z", i, scan.ErrBadString)
-						}
-						if data[ke] == '"' {
-							s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-							i = ke + 1
-						} else {
-							s, i, err = scan.String(data, i)
-							if err != nil {
-								return result, i, decode.NewParseErr("rfc1123Z", i, err)
-							}
-						}
-					}
-					result.RFC1123Z, err = time.Parse(time.RFC1123Z, s)
+				var s string
+				if i >= len(data) || data[i] != '"' {
+					return result, i, decode.NewParseErr("rfc1123Z", i, scan.ErrExpectString)
+				}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("rfc1123Z", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("rfc1123Z", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					s, i, err = scan.String(data, i)
 					if err != nil {
 						return result, i, decode.NewParseErr("rfc1123Z", i, err)
 					}
+				}
+				result.RFC1123Z, err = time.Parse(time.RFC1123Z, s)
+				if err != nil {
+					return result, i, decode.NewParseErr("rfc1123Z", i, err)
 				}
 			} else {
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -2654,16 +2560,14 @@ func (result TimeRFC1123Z) DecodeFromStream(s *scan.Stream) (TimeRFC1123Z, error
 					return result, &validation.DuplicateKeyError{Path: []string{"rfc1123Z"}}
 				}
 				seenRFC1123Z = true
-				{
-					var v string
-					v, err = s.String()
-					if err != nil {
-						return result, decode.NewParseErr("rfc1123Z", s.Pos, err)
-					}
-					result.RFC1123Z, err = time.Parse(time.RFC1123Z, v)
-					if err != nil {
-						return result, decode.NewParseErr("rfc1123Z", s.Pos, err)
-					}
+				var sv string
+				sv, err = s.String()
+				if err != nil {
+					return result, decode.NewParseErr("rfc1123Z", s.Pos, err)
+				}
+				result.RFC1123Z, err = time.Parse(time.RFC1123Z, sv)
+				if err != nil {
+					return result, decode.NewParseErr("rfc1123Z", s.Pos, err)
 				}
 			} else {
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
@@ -2736,25 +2640,23 @@ func (result TimeRFC3339) DecodeFrom(data []byte) (TimeRFC3339, int, error) {
 		if i >= len(data) || data[i] != '"' {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
-		{
-			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-				ke++
-			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-				i = ke + 1
-			} else {
-				key, i, err = scan.String(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr("", i, err)
-				}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -2774,36 +2676,32 @@ func (result TimeRFC3339) DecodeFrom(data []byte) (TimeRFC3339, int, error) {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"rfc3339"}}
 				}
 				seenRFC3339 = true
-				{
-					var s string
-					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("rfc3339", i, scan.ErrExpectString)
-					}
-					{
-						ke := i + 1
-						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-							ke++
-						}
-						if ke >= len(data) {
-							return result, i, decode.NewParseErr("rfc3339", i, scan.ErrUnterminated)
-						}
-						if data[ke] < 0x20 {
-							return result, i, decode.NewParseErr("rfc3339", i, scan.ErrBadString)
-						}
-						if data[ke] == '"' {
-							s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-							i = ke + 1
-						} else {
-							s, i, err = scan.String(data, i)
-							if err != nil {
-								return result, i, decode.NewParseErr("rfc3339", i, err)
-							}
-						}
-					}
-					result.RFC3339, err = time.Parse(time.RFC3339, s)
+				var s string
+				if i >= len(data) || data[i] != '"' {
+					return result, i, decode.NewParseErr("rfc3339", i, scan.ErrExpectString)
+				}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("rfc3339", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("rfc3339", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					s, i, err = scan.String(data, i)
 					if err != nil {
 						return result, i, decode.NewParseErr("rfc3339", i, err)
 					}
+				}
+				result.RFC3339, err = time.Parse(time.RFC3339, s)
+				if err != nil {
+					return result, i, decode.NewParseErr("rfc3339", i, err)
 				}
 			} else {
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -2869,16 +2767,14 @@ func (result TimeRFC3339) DecodeFromStream(s *scan.Stream) (TimeRFC3339, error) 
 					return result, &validation.DuplicateKeyError{Path: []string{"rfc3339"}}
 				}
 				seenRFC3339 = true
-				{
-					var v string
-					v, err = s.String()
-					if err != nil {
-						return result, decode.NewParseErr("rfc3339", s.Pos, err)
-					}
-					result.RFC3339, err = time.Parse(time.RFC3339, v)
-					if err != nil {
-						return result, decode.NewParseErr("rfc3339", s.Pos, err)
-					}
+				var sv string
+				sv, err = s.String()
+				if err != nil {
+					return result, decode.NewParseErr("rfc3339", s.Pos, err)
+				}
+				result.RFC3339, err = time.Parse(time.RFC3339, sv)
+				if err != nil {
+					return result, decode.NewParseErr("rfc3339", s.Pos, err)
 				}
 			} else {
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
@@ -2951,25 +2847,23 @@ func (result TimeRFC3339Nano) DecodeFrom(data []byte) (TimeRFC3339Nano, int, err
 		if i >= len(data) || data[i] != '"' {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
-		{
-			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-				ke++
-			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-				i = ke + 1
-			} else {
-				key, i, err = scan.String(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr("", i, err)
-				}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -2989,36 +2883,32 @@ func (result TimeRFC3339Nano) DecodeFrom(data []byte) (TimeRFC3339Nano, int, err
 					return result, i, &validation.DuplicateKeyError{Path: []string{"rfc3339Nano"}}
 				}
 				seenRFC3339Nano = true
-				{
-					var s string
-					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("rfc3339Nano", i, scan.ErrExpectString)
-					}
-					{
-						ke := i + 1
-						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-							ke++
-						}
-						if ke >= len(data) {
-							return result, i, decode.NewParseErr("rfc3339Nano", i, scan.ErrUnterminated)
-						}
-						if data[ke] < 0x20 {
-							return result, i, decode.NewParseErr("rfc3339Nano", i, scan.ErrBadString)
-						}
-						if data[ke] == '"' {
-							s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-							i = ke + 1
-						} else {
-							s, i, err = scan.String(data, i)
-							if err != nil {
-								return result, i, decode.NewParseErr("rfc3339Nano", i, err)
-							}
-						}
-					}
-					result.RFC3339Nano, err = time.Parse(time.RFC3339Nano, s)
+				var s string
+				if i >= len(data) || data[i] != '"' {
+					return result, i, decode.NewParseErr("rfc3339Nano", i, scan.ErrExpectString)
+				}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("rfc3339Nano", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("rfc3339Nano", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					s, i, err = scan.String(data, i)
 					if err != nil {
 						return result, i, decode.NewParseErr("rfc3339Nano", i, err)
 					}
+				}
+				result.RFC3339Nano, err = time.Parse(time.RFC3339Nano, s)
+				if err != nil {
+					return result, i, decode.NewParseErr("rfc3339Nano", i, err)
 				}
 			} else {
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -3084,16 +2974,14 @@ func (result TimeRFC3339Nano) DecodeFromStream(s *scan.Stream) (TimeRFC3339Nano,
 					return result, &validation.DuplicateKeyError{Path: []string{"rfc3339Nano"}}
 				}
 				seenRFC3339Nano = true
-				{
-					var v string
-					v, err = s.String()
-					if err != nil {
-						return result, decode.NewParseErr("rfc3339Nano", s.Pos, err)
-					}
-					result.RFC3339Nano, err = time.Parse(time.RFC3339Nano, v)
-					if err != nil {
-						return result, decode.NewParseErr("rfc3339Nano", s.Pos, err)
-					}
+				var sv string
+				sv, err = s.String()
+				if err != nil {
+					return result, decode.NewParseErr("rfc3339Nano", s.Pos, err)
+				}
+				result.RFC3339Nano, err = time.Parse(time.RFC3339Nano, sv)
+				if err != nil {
+					return result, decode.NewParseErr("rfc3339Nano", s.Pos, err)
 				}
 			} else {
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
@@ -3166,25 +3054,23 @@ func (result TimeKitchen) DecodeFrom(data []byte) (TimeKitchen, int, error) {
 		if i >= len(data) || data[i] != '"' {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
-		{
-			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-				ke++
-			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-				i = ke + 1
-			} else {
-				key, i, err = scan.String(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr("", i, err)
-				}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -3204,36 +3090,32 @@ func (result TimeKitchen) DecodeFrom(data []byte) (TimeKitchen, int, error) {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"kitchen"}}
 				}
 				seenKitchen = true
-				{
-					var s string
-					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("kitchen", i, scan.ErrExpectString)
-					}
-					{
-						ke := i + 1
-						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-							ke++
-						}
-						if ke >= len(data) {
-							return result, i, decode.NewParseErr("kitchen", i, scan.ErrUnterminated)
-						}
-						if data[ke] < 0x20 {
-							return result, i, decode.NewParseErr("kitchen", i, scan.ErrBadString)
-						}
-						if data[ke] == '"' {
-							s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-							i = ke + 1
-						} else {
-							s, i, err = scan.String(data, i)
-							if err != nil {
-								return result, i, decode.NewParseErr("kitchen", i, err)
-							}
-						}
-					}
-					result.Kitchen, err = time.Parse(time.Kitchen, s)
+				var s string
+				if i >= len(data) || data[i] != '"' {
+					return result, i, decode.NewParseErr("kitchen", i, scan.ErrExpectString)
+				}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("kitchen", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("kitchen", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					s, i, err = scan.String(data, i)
 					if err != nil {
 						return result, i, decode.NewParseErr("kitchen", i, err)
 					}
+				}
+				result.Kitchen, err = time.Parse(time.Kitchen, s)
+				if err != nil {
+					return result, i, decode.NewParseErr("kitchen", i, err)
 				}
 			} else {
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -3299,16 +3181,14 @@ func (result TimeKitchen) DecodeFromStream(s *scan.Stream) (TimeKitchen, error) 
 					return result, &validation.DuplicateKeyError{Path: []string{"kitchen"}}
 				}
 				seenKitchen = true
-				{
-					var v string
-					v, err = s.String()
-					if err != nil {
-						return result, decode.NewParseErr("kitchen", s.Pos, err)
-					}
-					result.Kitchen, err = time.Parse(time.Kitchen, v)
-					if err != nil {
-						return result, decode.NewParseErr("kitchen", s.Pos, err)
-					}
+				var sv string
+				sv, err = s.String()
+				if err != nil {
+					return result, decode.NewParseErr("kitchen", s.Pos, err)
+				}
+				result.Kitchen, err = time.Parse(time.Kitchen, sv)
+				if err != nil {
+					return result, decode.NewParseErr("kitchen", s.Pos, err)
 				}
 			} else {
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
@@ -3381,25 +3261,23 @@ func (result TimeDateTime) DecodeFrom(data []byte) (TimeDateTime, int, error) {
 		if i >= len(data) || data[i] != '"' {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
-		{
-			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-				ke++
-			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-				i = ke + 1
-			} else {
-				key, i, err = scan.String(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr("", i, err)
-				}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -3419,36 +3297,32 @@ func (result TimeDateTime) DecodeFrom(data []byte) (TimeDateTime, int, error) {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"dateTime"}}
 				}
 				seenDateTime = true
-				{
-					var s string
-					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("dateTime", i, scan.ErrExpectString)
-					}
-					{
-						ke := i + 1
-						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-							ke++
-						}
-						if ke >= len(data) {
-							return result, i, decode.NewParseErr("dateTime", i, scan.ErrUnterminated)
-						}
-						if data[ke] < 0x20 {
-							return result, i, decode.NewParseErr("dateTime", i, scan.ErrBadString)
-						}
-						if data[ke] == '"' {
-							s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-							i = ke + 1
-						} else {
-							s, i, err = scan.String(data, i)
-							if err != nil {
-								return result, i, decode.NewParseErr("dateTime", i, err)
-							}
-						}
-					}
-					result.DateTime, err = time.Parse(time.DateTime, s)
+				var s string
+				if i >= len(data) || data[i] != '"' {
+					return result, i, decode.NewParseErr("dateTime", i, scan.ErrExpectString)
+				}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("dateTime", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("dateTime", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					s, i, err = scan.String(data, i)
 					if err != nil {
 						return result, i, decode.NewParseErr("dateTime", i, err)
 					}
+				}
+				result.DateTime, err = time.Parse(time.DateTime, s)
+				if err != nil {
+					return result, i, decode.NewParseErr("dateTime", i, err)
 				}
 			} else {
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -3514,16 +3388,14 @@ func (result TimeDateTime) DecodeFromStream(s *scan.Stream) (TimeDateTime, error
 					return result, &validation.DuplicateKeyError{Path: []string{"dateTime"}}
 				}
 				seenDateTime = true
-				{
-					var v string
-					v, err = s.String()
-					if err != nil {
-						return result, decode.NewParseErr("dateTime", s.Pos, err)
-					}
-					result.DateTime, err = time.Parse(time.DateTime, v)
-					if err != nil {
-						return result, decode.NewParseErr("dateTime", s.Pos, err)
-					}
+				var sv string
+				sv, err = s.String()
+				if err != nil {
+					return result, decode.NewParseErr("dateTime", s.Pos, err)
+				}
+				result.DateTime, err = time.Parse(time.DateTime, sv)
+				if err != nil {
+					return result, decode.NewParseErr("dateTime", s.Pos, err)
 				}
 			} else {
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
@@ -3596,25 +3468,23 @@ func (result TimeDateOnly) DecodeFrom(data []byte) (TimeDateOnly, int, error) {
 		if i >= len(data) || data[i] != '"' {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
-		{
-			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-				ke++
-			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-				i = ke + 1
-			} else {
-				key, i, err = scan.String(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr("", i, err)
-				}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -3634,36 +3504,32 @@ func (result TimeDateOnly) DecodeFrom(data []byte) (TimeDateOnly, int, error) {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"dateOnly"}}
 				}
 				seenDateOnly = true
-				{
-					var s string
-					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("dateOnly", i, scan.ErrExpectString)
-					}
-					{
-						ke := i + 1
-						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-							ke++
-						}
-						if ke >= len(data) {
-							return result, i, decode.NewParseErr("dateOnly", i, scan.ErrUnterminated)
-						}
-						if data[ke] < 0x20 {
-							return result, i, decode.NewParseErr("dateOnly", i, scan.ErrBadString)
-						}
-						if data[ke] == '"' {
-							s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-							i = ke + 1
-						} else {
-							s, i, err = scan.String(data, i)
-							if err != nil {
-								return result, i, decode.NewParseErr("dateOnly", i, err)
-							}
-						}
-					}
-					result.DateOnly, err = time.Parse(time.DateOnly, s)
+				var s string
+				if i >= len(data) || data[i] != '"' {
+					return result, i, decode.NewParseErr("dateOnly", i, scan.ErrExpectString)
+				}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("dateOnly", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("dateOnly", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					s, i, err = scan.String(data, i)
 					if err != nil {
 						return result, i, decode.NewParseErr("dateOnly", i, err)
 					}
+				}
+				result.DateOnly, err = time.Parse(time.DateOnly, s)
+				if err != nil {
+					return result, i, decode.NewParseErr("dateOnly", i, err)
 				}
 			} else {
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -3729,16 +3595,14 @@ func (result TimeDateOnly) DecodeFromStream(s *scan.Stream) (TimeDateOnly, error
 					return result, &validation.DuplicateKeyError{Path: []string{"dateOnly"}}
 				}
 				seenDateOnly = true
-				{
-					var v string
-					v, err = s.String()
-					if err != nil {
-						return result, decode.NewParseErr("dateOnly", s.Pos, err)
-					}
-					result.DateOnly, err = time.Parse(time.DateOnly, v)
-					if err != nil {
-						return result, decode.NewParseErr("dateOnly", s.Pos, err)
-					}
+				var sv string
+				sv, err = s.String()
+				if err != nil {
+					return result, decode.NewParseErr("dateOnly", s.Pos, err)
+				}
+				result.DateOnly, err = time.Parse(time.DateOnly, sv)
+				if err != nil {
+					return result, decode.NewParseErr("dateOnly", s.Pos, err)
 				}
 			} else {
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
@@ -3811,25 +3675,23 @@ func (result TimeTimeOnly) DecodeFrom(data []byte) (TimeTimeOnly, int, error) {
 		if i >= len(data) || data[i] != '"' {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
-		{
-			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-				ke++
-			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-				i = ke + 1
-			} else {
-				key, i, err = scan.String(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr("", i, err)
-				}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -3849,36 +3711,32 @@ func (result TimeTimeOnly) DecodeFrom(data []byte) (TimeTimeOnly, int, error) {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"timeOnly"}}
 				}
 				seenTimeOnly = true
-				{
-					var s string
-					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("timeOnly", i, scan.ErrExpectString)
-					}
-					{
-						ke := i + 1
-						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-							ke++
-						}
-						if ke >= len(data) {
-							return result, i, decode.NewParseErr("timeOnly", i, scan.ErrUnterminated)
-						}
-						if data[ke] < 0x20 {
-							return result, i, decode.NewParseErr("timeOnly", i, scan.ErrBadString)
-						}
-						if data[ke] == '"' {
-							s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-							i = ke + 1
-						} else {
-							s, i, err = scan.String(data, i)
-							if err != nil {
-								return result, i, decode.NewParseErr("timeOnly", i, err)
-							}
-						}
-					}
-					result.TimeOnly, err = time.Parse(time.TimeOnly, s)
+				var s string
+				if i >= len(data) || data[i] != '"' {
+					return result, i, decode.NewParseErr("timeOnly", i, scan.ErrExpectString)
+				}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("timeOnly", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("timeOnly", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					s, i, err = scan.String(data, i)
 					if err != nil {
 						return result, i, decode.NewParseErr("timeOnly", i, err)
 					}
+				}
+				result.TimeOnly, err = time.Parse(time.TimeOnly, s)
+				if err != nil {
+					return result, i, decode.NewParseErr("timeOnly", i, err)
 				}
 			} else {
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -3944,16 +3802,14 @@ func (result TimeTimeOnly) DecodeFromStream(s *scan.Stream) (TimeTimeOnly, error
 					return result, &validation.DuplicateKeyError{Path: []string{"timeOnly"}}
 				}
 				seenTimeOnly = true
-				{
-					var v string
-					v, err = s.String()
-					if err != nil {
-						return result, decode.NewParseErr("timeOnly", s.Pos, err)
-					}
-					result.TimeOnly, err = time.Parse(time.TimeOnly, v)
-					if err != nil {
-						return result, decode.NewParseErr("timeOnly", s.Pos, err)
-					}
+				var sv string
+				sv, err = s.String()
+				if err != nil {
+					return result, decode.NewParseErr("timeOnly", s.Pos, err)
+				}
+				result.TimeOnly, err = time.Parse(time.TimeOnly, sv)
+				if err != nil {
+					return result, decode.NewParseErr("timeOnly", s.Pos, err)
 				}
 			} else {
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
@@ -4044,25 +3900,23 @@ func (result TimeFormatsStdCompat) DecodeFrom(data []byte) (TimeFormatsStdCompat
 		if i >= len(data) || data[i] != '"' {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
-		{
-			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-				ke++
-			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-				i = ke + 1
-			} else {
-				key, i, err = scan.String(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr("", i, err)
-				}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -4082,16 +3936,14 @@ func (result TimeFormatsStdCompat) DecodeFrom(data []byte) (TimeFormatsStdCompat
 					return result, i, &validation.DuplicateKeyError{Path: []string{"unix"}}
 				}
 				seenUnix = true
-				{
-					var f float64
-					f, i, err = scan.Float64(data, i)
-					if err != nil {
-						return result, i, decode.NewParseErr("unix", i, err)
-					}
-					sec := int64(f)
-					nsec := int64((f - float64(sec)) * 1e9)
-					result.Unix = time.Unix(sec, nsec)
+				var f float64
+				f, i, err = scan.Float64(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("unix", i, err)
 				}
+				sec := int64(f)
+				nsec := int64((f - float64(sec)) * 1e9)
+				result.Unix = time.Unix(sec, nsec)
 			} else {
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
 			}
@@ -4101,36 +3953,32 @@ func (result TimeFormatsStdCompat) DecodeFrom(data []byte) (TimeFormatsStdCompat
 					return result, i, &validation.DuplicateKeyError{Path: []string{"ansic"}}
 				}
 				seenANSIC = true
-				{
-					var s string
-					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("ansic", i, scan.ErrExpectString)
-					}
-					{
-						ke := i + 1
-						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-							ke++
-						}
-						if ke >= len(data) {
-							return result, i, decode.NewParseErr("ansic", i, scan.ErrUnterminated)
-						}
-						if data[ke] < 0x20 {
-							return result, i, decode.NewParseErr("ansic", i, scan.ErrBadString)
-						}
-						if data[ke] == '"' {
-							s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-							i = ke + 1
-						} else {
-							s, i, err = scan.String(data, i)
-							if err != nil {
-								return result, i, decode.NewParseErr("ansic", i, err)
-							}
-						}
-					}
-					result.ANSIC, err = time.Parse(time.ANSIC, s)
+				var s string
+				if i >= len(data) || data[i] != '"' {
+					return result, i, decode.NewParseErr("ansic", i, scan.ErrExpectString)
+				}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("ansic", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("ansic", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					s, i, err = scan.String(data, i)
 					if err != nil {
 						return result, i, decode.NewParseErr("ansic", i, err)
 					}
+				}
+				result.ANSIC, err = time.Parse(time.ANSIC, s)
+				if err != nil {
+					return result, i, decode.NewParseErr("ansic", i, err)
 				}
 			} else {
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -4142,72 +3990,64 @@ func (result TimeFormatsStdCompat) DecodeFrom(data []byte) (TimeFormatsStdCompat
 					return result, i, &validation.DuplicateKeyError{Path: []string{"rfc822"}}
 				}
 				seenRFC822 = true
-				{
-					var s string
-					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("rfc822", i, scan.ErrExpectString)
-					}
-					{
-						ke := i + 1
-						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-							ke++
-						}
-						if ke >= len(data) {
-							return result, i, decode.NewParseErr("rfc822", i, scan.ErrUnterminated)
-						}
-						if data[ke] < 0x20 {
-							return result, i, decode.NewParseErr("rfc822", i, scan.ErrBadString)
-						}
-						if data[ke] == '"' {
-							s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-							i = ke + 1
-						} else {
-							s, i, err = scan.String(data, i)
-							if err != nil {
-								return result, i, decode.NewParseErr("rfc822", i, err)
-							}
-						}
-					}
-					result.RFC822, err = time.Parse(time.RFC822, s)
+				var s string
+				if i >= len(data) || data[i] != '"' {
+					return result, i, decode.NewParseErr("rfc822", i, scan.ErrExpectString)
+				}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("rfc822", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("rfc822", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					s, i, err = scan.String(data, i)
 					if err != nil {
 						return result, i, decode.NewParseErr("rfc822", i, err)
 					}
+				}
+				result.RFC822, err = time.Parse(time.RFC822, s)
+				if err != nil {
+					return result, i, decode.NewParseErr("rfc822", i, err)
 				}
 			case "rfc850":
 				if seenRFC850 {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"rfc850"}}
 				}
 				seenRFC850 = true
-				{
-					var s string
-					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("rfc850", i, scan.ErrExpectString)
-					}
-					{
-						ke := i + 1
-						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-							ke++
-						}
-						if ke >= len(data) {
-							return result, i, decode.NewParseErr("rfc850", i, scan.ErrUnterminated)
-						}
-						if data[ke] < 0x20 {
-							return result, i, decode.NewParseErr("rfc850", i, scan.ErrBadString)
-						}
-						if data[ke] == '"' {
-							s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-							i = ke + 1
-						} else {
-							s, i, err = scan.String(data, i)
-							if err != nil {
-								return result, i, decode.NewParseErr("rfc850", i, err)
-							}
-						}
-					}
-					result.RFC850, err = time.Parse(time.RFC850, s)
+				var s string
+				if i >= len(data) || data[i] != '"' {
+					return result, i, decode.NewParseErr("rfc850", i, scan.ErrExpectString)
+				}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("rfc850", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("rfc850", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					s, i, err = scan.String(data, i)
 					if err != nil {
 						return result, i, decode.NewParseErr("rfc850", i, err)
 					}
+				}
+				result.RFC850, err = time.Parse(time.RFC850, s)
+				if err != nil {
+					return result, i, decode.NewParseErr("rfc850", i, err)
 				}
 			default:
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -4219,180 +4059,160 @@ func (result TimeFormatsStdCompat) DecodeFrom(data []byte) (TimeFormatsStdCompat
 					return result, i, &validation.DuplicateKeyError{Path: []string{"default"}}
 				}
 				seenDefault = true
-				{
-					var s string
-					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("default", i, scan.ErrExpectString)
-					}
-					{
-						ke := i + 1
-						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-							ke++
-						}
-						if ke >= len(data) {
-							return result, i, decode.NewParseErr("default", i, scan.ErrUnterminated)
-						}
-						if data[ke] < 0x20 {
-							return result, i, decode.NewParseErr("default", i, scan.ErrBadString)
-						}
-						if data[ke] == '"' {
-							s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-							i = ke + 1
-						} else {
-							s, i, err = scan.String(data, i)
-							if err != nil {
-								return result, i, decode.NewParseErr("default", i, err)
-							}
-						}
-					}
-					result.Default, err = time.Parse(time.RFC3339Nano, s)
+				var s string
+				if i >= len(data) || data[i] != '"' {
+					return result, i, decode.NewParseErr("default", i, scan.ErrExpectString)
+				}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("default", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("default", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					s, i, err = scan.String(data, i)
 					if err != nil {
 						return result, i, decode.NewParseErr("default", i, err)
 					}
+				}
+				result.Default, err = time.Parse(time.RFC3339Nano, s)
+				if err != nil {
+					return result, i, decode.NewParseErr("default", i, err)
 				}
 			case "kitchen":
 				if seenKitchen {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"kitchen"}}
 				}
 				seenKitchen = true
-				{
-					var s string
-					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("kitchen", i, scan.ErrExpectString)
-					}
-					{
-						ke := i + 1
-						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-							ke++
-						}
-						if ke >= len(data) {
-							return result, i, decode.NewParseErr("kitchen", i, scan.ErrUnterminated)
-						}
-						if data[ke] < 0x20 {
-							return result, i, decode.NewParseErr("kitchen", i, scan.ErrBadString)
-						}
-						if data[ke] == '"' {
-							s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-							i = ke + 1
-						} else {
-							s, i, err = scan.String(data, i)
-							if err != nil {
-								return result, i, decode.NewParseErr("kitchen", i, err)
-							}
-						}
-					}
-					result.Kitchen, err = time.Parse(time.Kitchen, s)
+				var s string
+				if i >= len(data) || data[i] != '"' {
+					return result, i, decode.NewParseErr("kitchen", i, scan.ErrExpectString)
+				}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("kitchen", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("kitchen", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					s, i, err = scan.String(data, i)
 					if err != nil {
 						return result, i, decode.NewParseErr("kitchen", i, err)
 					}
+				}
+				result.Kitchen, err = time.Parse(time.Kitchen, s)
+				if err != nil {
+					return result, i, decode.NewParseErr("kitchen", i, err)
 				}
 			case "rfc1123":
 				if seenRFC1123 {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"rfc1123"}}
 				}
 				seenRFC1123 = true
-				{
-					var s string
-					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("rfc1123", i, scan.ErrExpectString)
-					}
-					{
-						ke := i + 1
-						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-							ke++
-						}
-						if ke >= len(data) {
-							return result, i, decode.NewParseErr("rfc1123", i, scan.ErrUnterminated)
-						}
-						if data[ke] < 0x20 {
-							return result, i, decode.NewParseErr("rfc1123", i, scan.ErrBadString)
-						}
-						if data[ke] == '"' {
-							s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-							i = ke + 1
-						} else {
-							s, i, err = scan.String(data, i)
-							if err != nil {
-								return result, i, decode.NewParseErr("rfc1123", i, err)
-							}
-						}
-					}
-					result.RFC1123, err = time.Parse(time.RFC1123, s)
+				var s string
+				if i >= len(data) || data[i] != '"' {
+					return result, i, decode.NewParseErr("rfc1123", i, scan.ErrExpectString)
+				}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("rfc1123", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("rfc1123", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					s, i, err = scan.String(data, i)
 					if err != nil {
 						return result, i, decode.NewParseErr("rfc1123", i, err)
 					}
+				}
+				result.RFC1123, err = time.Parse(time.RFC1123, s)
+				if err != nil {
+					return result, i, decode.NewParseErr("rfc1123", i, err)
 				}
 			case "rfc3339":
 				if seenRFC3339 {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"rfc3339"}}
 				}
 				seenRFC3339 = true
-				{
-					var s string
-					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("rfc3339", i, scan.ErrExpectString)
-					}
-					{
-						ke := i + 1
-						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-							ke++
-						}
-						if ke >= len(data) {
-							return result, i, decode.NewParseErr("rfc3339", i, scan.ErrUnterminated)
-						}
-						if data[ke] < 0x20 {
-							return result, i, decode.NewParseErr("rfc3339", i, scan.ErrBadString)
-						}
-						if data[ke] == '"' {
-							s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-							i = ke + 1
-						} else {
-							s, i, err = scan.String(data, i)
-							if err != nil {
-								return result, i, decode.NewParseErr("rfc3339", i, err)
-							}
-						}
-					}
-					result.RFC3339, err = time.Parse(time.RFC3339, s)
+				var s string
+				if i >= len(data) || data[i] != '"' {
+					return result, i, decode.NewParseErr("rfc3339", i, scan.ErrExpectString)
+				}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("rfc3339", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("rfc3339", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					s, i, err = scan.String(data, i)
 					if err != nil {
 						return result, i, decode.NewParseErr("rfc3339", i, err)
 					}
+				}
+				result.RFC3339, err = time.Parse(time.RFC3339, s)
+				if err != nil {
+					return result, i, decode.NewParseErr("rfc3339", i, err)
 				}
 			case "rfc822Z":
 				if seenRFC822Z {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"rfc822Z"}}
 				}
 				seenRFC822Z = true
-				{
-					var s string
-					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("rfc822Z", i, scan.ErrExpectString)
-					}
-					{
-						ke := i + 1
-						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-							ke++
-						}
-						if ke >= len(data) {
-							return result, i, decode.NewParseErr("rfc822Z", i, scan.ErrUnterminated)
-						}
-						if data[ke] < 0x20 {
-							return result, i, decode.NewParseErr("rfc822Z", i, scan.ErrBadString)
-						}
-						if data[ke] == '"' {
-							s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-							i = ke + 1
-						} else {
-							s, i, err = scan.String(data, i)
-							if err != nil {
-								return result, i, decode.NewParseErr("rfc822Z", i, err)
-							}
-						}
-					}
-					result.RFC822Z, err = time.Parse(time.RFC822Z, s)
+				var s string
+				if i >= len(data) || data[i] != '"' {
+					return result, i, decode.NewParseErr("rfc822Z", i, scan.ErrExpectString)
+				}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("rfc822Z", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("rfc822Z", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					s, i, err = scan.String(data, i)
 					if err != nil {
 						return result, i, decode.NewParseErr("rfc822Z", i, err)
 					}
+				}
+				result.RFC822Z, err = time.Parse(time.RFC822Z, s)
+				if err != nil {
+					return result, i, decode.NewParseErr("rfc822Z", i, err)
 				}
 			default:
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -4404,230 +4224,204 @@ func (result TimeFormatsStdCompat) DecodeFrom(data []byte) (TimeFormatsStdCompat
 					return result, i, &validation.DuplicateKeyError{Path: []string{"dateOnly"}}
 				}
 				seenDateOnly = true
-				{
-					var s string
-					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("dateOnly", i, scan.ErrExpectString)
-					}
-					{
-						ke := i + 1
-						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-							ke++
-						}
-						if ke >= len(data) {
-							return result, i, decode.NewParseErr("dateOnly", i, scan.ErrUnterminated)
-						}
-						if data[ke] < 0x20 {
-							return result, i, decode.NewParseErr("dateOnly", i, scan.ErrBadString)
-						}
-						if data[ke] == '"' {
-							s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-							i = ke + 1
-						} else {
-							s, i, err = scan.String(data, i)
-							if err != nil {
-								return result, i, decode.NewParseErr("dateOnly", i, err)
-							}
-						}
-					}
-					result.DateOnly, err = time.Parse(time.DateOnly, s)
+				var s string
+				if i >= len(data) || data[i] != '"' {
+					return result, i, decode.NewParseErr("dateOnly", i, scan.ErrExpectString)
+				}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("dateOnly", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("dateOnly", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					s, i, err = scan.String(data, i)
 					if err != nil {
 						return result, i, decode.NewParseErr("dateOnly", i, err)
 					}
+				}
+				result.DateOnly, err = time.Parse(time.DateOnly, s)
+				if err != nil {
+					return result, i, decode.NewParseErr("dateOnly", i, err)
 				}
 			case "dateTime":
 				if seenDateTime {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"dateTime"}}
 				}
 				seenDateTime = true
-				{
-					var s string
-					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("dateTime", i, scan.ErrExpectString)
-					}
-					{
-						ke := i + 1
-						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-							ke++
-						}
-						if ke >= len(data) {
-							return result, i, decode.NewParseErr("dateTime", i, scan.ErrUnterminated)
-						}
-						if data[ke] < 0x20 {
-							return result, i, decode.NewParseErr("dateTime", i, scan.ErrBadString)
-						}
-						if data[ke] == '"' {
-							s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-							i = ke + 1
-						} else {
-							s, i, err = scan.String(data, i)
-							if err != nil {
-								return result, i, decode.NewParseErr("dateTime", i, err)
-							}
-						}
-					}
-					result.DateTime, err = time.Parse(time.DateTime, s)
+				var s string
+				if i >= len(data) || data[i] != '"' {
+					return result, i, decode.NewParseErr("dateTime", i, scan.ErrExpectString)
+				}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("dateTime", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("dateTime", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					s, i, err = scan.String(data, i)
 					if err != nil {
 						return result, i, decode.NewParseErr("dateTime", i, err)
 					}
+				}
+				result.DateTime, err = time.Parse(time.DateTime, s)
+				if err != nil {
+					return result, i, decode.NewParseErr("dateTime", i, err)
 				}
 			case "rfc1123Z":
 				if seenRFC1123Z {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"rfc1123Z"}}
 				}
 				seenRFC1123Z = true
-				{
-					var s string
-					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("rfc1123Z", i, scan.ErrExpectString)
-					}
-					{
-						ke := i + 1
-						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-							ke++
-						}
-						if ke >= len(data) {
-							return result, i, decode.NewParseErr("rfc1123Z", i, scan.ErrUnterminated)
-						}
-						if data[ke] < 0x20 {
-							return result, i, decode.NewParseErr("rfc1123Z", i, scan.ErrBadString)
-						}
-						if data[ke] == '"' {
-							s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-							i = ke + 1
-						} else {
-							s, i, err = scan.String(data, i)
-							if err != nil {
-								return result, i, decode.NewParseErr("rfc1123Z", i, err)
-							}
-						}
-					}
-					result.RFC1123Z, err = time.Parse(time.RFC1123Z, s)
+				var s string
+				if i >= len(data) || data[i] != '"' {
+					return result, i, decode.NewParseErr("rfc1123Z", i, scan.ErrExpectString)
+				}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("rfc1123Z", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("rfc1123Z", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					s, i, err = scan.String(data, i)
 					if err != nil {
 						return result, i, decode.NewParseErr("rfc1123Z", i, err)
 					}
+				}
+				result.RFC1123Z, err = time.Parse(time.RFC1123Z, s)
+				if err != nil {
+					return result, i, decode.NewParseErr("rfc1123Z", i, err)
 				}
 			case "rubyDate":
 				if seenRubyDate {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"rubyDate"}}
 				}
 				seenRubyDate = true
-				{
-					var s string
-					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("rubyDate", i, scan.ErrExpectString)
-					}
-					{
-						ke := i + 1
-						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-							ke++
-						}
-						if ke >= len(data) {
-							return result, i, decode.NewParseErr("rubyDate", i, scan.ErrUnterminated)
-						}
-						if data[ke] < 0x20 {
-							return result, i, decode.NewParseErr("rubyDate", i, scan.ErrBadString)
-						}
-						if data[ke] == '"' {
-							s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-							i = ke + 1
-						} else {
-							s, i, err = scan.String(data, i)
-							if err != nil {
-								return result, i, decode.NewParseErr("rubyDate", i, err)
-							}
-						}
-					}
-					result.RubyDate, err = time.Parse(time.RubyDate, s)
+				var s string
+				if i >= len(data) || data[i] != '"' {
+					return result, i, decode.NewParseErr("rubyDate", i, scan.ErrExpectString)
+				}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("rubyDate", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("rubyDate", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					s, i, err = scan.String(data, i)
 					if err != nil {
 						return result, i, decode.NewParseErr("rubyDate", i, err)
 					}
+				}
+				result.RubyDate, err = time.Parse(time.RubyDate, s)
+				if err != nil {
+					return result, i, decode.NewParseErr("rubyDate", i, err)
 				}
 			case "timeOnly":
 				if seenTimeOnly {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"timeOnly"}}
 				}
 				seenTimeOnly = true
-				{
-					var s string
-					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("timeOnly", i, scan.ErrExpectString)
-					}
-					{
-						ke := i + 1
-						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-							ke++
-						}
-						if ke >= len(data) {
-							return result, i, decode.NewParseErr("timeOnly", i, scan.ErrUnterminated)
-						}
-						if data[ke] < 0x20 {
-							return result, i, decode.NewParseErr("timeOnly", i, scan.ErrBadString)
-						}
-						if data[ke] == '"' {
-							s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-							i = ke + 1
-						} else {
-							s, i, err = scan.String(data, i)
-							if err != nil {
-								return result, i, decode.NewParseErr("timeOnly", i, err)
-							}
-						}
-					}
-					result.TimeOnly, err = time.Parse(time.TimeOnly, s)
+				var s string
+				if i >= len(data) || data[i] != '"' {
+					return result, i, decode.NewParseErr("timeOnly", i, scan.ErrExpectString)
+				}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("timeOnly", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("timeOnly", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					s, i, err = scan.String(data, i)
 					if err != nil {
 						return result, i, decode.NewParseErr("timeOnly", i, err)
 					}
+				}
+				result.TimeOnly, err = time.Parse(time.TimeOnly, s)
+				if err != nil {
+					return result, i, decode.NewParseErr("timeOnly", i, err)
 				}
 			case "unixDate":
 				if seenUnixDate {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"unixDate"}}
 				}
 				seenUnixDate = true
-				{
-					var s string
-					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("unixDate", i, scan.ErrExpectString)
-					}
-					{
-						ke := i + 1
-						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-							ke++
-						}
-						if ke >= len(data) {
-							return result, i, decode.NewParseErr("unixDate", i, scan.ErrUnterminated)
-						}
-						if data[ke] < 0x20 {
-							return result, i, decode.NewParseErr("unixDate", i, scan.ErrBadString)
-						}
-						if data[ke] == '"' {
-							s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-							i = ke + 1
-						} else {
-							s, i, err = scan.String(data, i)
-							if err != nil {
-								return result, i, decode.NewParseErr("unixDate", i, err)
-							}
-						}
-					}
-					result.UnixDate, err = time.Parse(time.UnixDate, s)
+				var s string
+				if i >= len(data) || data[i] != '"' {
+					return result, i, decode.NewParseErr("unixDate", i, scan.ErrExpectString)
+				}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("unixDate", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("unixDate", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					s, i, err = scan.String(data, i)
 					if err != nil {
 						return result, i, decode.NewParseErr("unixDate", i, err)
 					}
+				}
+				result.UnixDate, err = time.Parse(time.UnixDate, s)
+				if err != nil {
+					return result, i, decode.NewParseErr("unixDate", i, err)
 				}
 			case "unixNano":
 				if seenUnixNano {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"unixNano"}}
 				}
 				seenUnixNano = true
-				{
-					var n int64
-					n, i, err = scan.Int64(data, i)
-					if err != nil {
-						return result, i, decode.NewParseErr("unixNano", i, err)
-					}
-					result.UnixNano = time.Unix(0, n)
+				var n int64
+				n, i, err = scan.Int64(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("unixNano", i, err)
 				}
+				result.UnixNano = time.Unix(0, n)
 			default:
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
 			}
@@ -4638,27 +4432,23 @@ func (result TimeFormatsStdCompat) DecodeFrom(data []byte) (TimeFormatsStdCompat
 					return result, i, &validation.DuplicateKeyError{Path: []string{"unixMicro"}}
 				}
 				seenUnixMicro = true
-				{
-					var n int64
-					n, i, err = scan.Int64(data, i)
-					if err != nil {
-						return result, i, decode.NewParseErr("unixMicro", i, err)
-					}
-					result.UnixMicro = time.UnixMicro(n)
+				var n int64
+				n, i, err = scan.Int64(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("unixMicro", i, err)
 				}
+				result.UnixMicro = time.UnixMicro(n)
 			case "unixMilli":
 				if seenUnixMilli {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"unixMilli"}}
 				}
 				seenUnixMilli = true
-				{
-					var n int64
-					n, i, err = scan.Int64(data, i)
-					if err != nil {
-						return result, i, decode.NewParseErr("unixMilli", i, err)
-					}
-					result.UnixMilli = time.UnixMilli(n)
+				var n int64
+				n, i, err = scan.Int64(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("unixMilli", i, err)
 				}
+				result.UnixMilli = time.UnixMilli(n)
 			default:
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
 			}
@@ -4668,36 +4458,32 @@ func (result TimeFormatsStdCompat) DecodeFrom(data []byte) (TimeFormatsStdCompat
 					return result, i, &validation.DuplicateKeyError{Path: []string{"rfc3339Nano"}}
 				}
 				seenRFC3339Nano = true
-				{
-					var s string
-					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("rfc3339Nano", i, scan.ErrExpectString)
-					}
-					{
-						ke := i + 1
-						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-							ke++
-						}
-						if ke >= len(data) {
-							return result, i, decode.NewParseErr("rfc3339Nano", i, scan.ErrUnterminated)
-						}
-						if data[ke] < 0x20 {
-							return result, i, decode.NewParseErr("rfc3339Nano", i, scan.ErrBadString)
-						}
-						if data[ke] == '"' {
-							s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-							i = ke + 1
-						} else {
-							s, i, err = scan.String(data, i)
-							if err != nil {
-								return result, i, decode.NewParseErr("rfc3339Nano", i, err)
-							}
-						}
-					}
-					result.RFC3339Nano, err = time.Parse(time.RFC3339Nano, s)
+				var s string
+				if i >= len(data) || data[i] != '"' {
+					return result, i, decode.NewParseErr("rfc3339Nano", i, scan.ErrExpectString)
+				}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("rfc3339Nano", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("rfc3339Nano", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					s, i, err = scan.String(data, i)
 					if err != nil {
 						return result, i, decode.NewParseErr("rfc3339Nano", i, err)
 					}
+				}
+				result.RFC3339Nano, err = time.Parse(time.RFC3339Nano, s)
+				if err != nil {
+					return result, i, decode.NewParseErr("rfc3339Nano", i, err)
 				}
 			} else {
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -4781,17 +4567,15 @@ func (result TimeFormatsStdCompat) DecodeFromStream(s *scan.Stream) (TimeFormats
 					return result, &validation.DuplicateKeyError{Path: []string{"unix"}}
 				}
 				seenUnix = true
-				{
-					var f float64
-					f, err = s.Float64()
-					if err != nil {
-						return result, decode.NewParseErr("unix", s.Pos, err)
-					}
-
-					sec := int64(f)
-					nsec := int64((f - float64(sec)) * 1e9)
-					result.Unix = time.Unix(sec, nsec)
+				var f float64
+				f, err = s.Float64()
+				if err != nil {
+					return result, decode.NewParseErr("unix", s.Pos, err)
 				}
+
+				sec := int64(f)
+				nsec := int64((f - float64(sec)) * 1e9)
+				result.Unix = time.Unix(sec, nsec)
 			} else {
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
 			}
@@ -4805,16 +4589,14 @@ func (result TimeFormatsStdCompat) DecodeFromStream(s *scan.Stream) (TimeFormats
 					return result, &validation.DuplicateKeyError{Path: []string{"ansic"}}
 				}
 				seenANSIC = true
-				{
-					var v string
-					v, err = s.String()
-					if err != nil {
-						return result, decode.NewParseErr("ansic", s.Pos, err)
-					}
-					result.ANSIC, err = time.Parse(time.ANSIC, v)
-					if err != nil {
-						return result, decode.NewParseErr("ansic", s.Pos, err)
-					}
+				var sv string
+				sv, err = s.String()
+				if err != nil {
+					return result, decode.NewParseErr("ansic", s.Pos, err)
+				}
+				result.ANSIC, err = time.Parse(time.ANSIC, sv)
+				if err != nil {
+					return result, decode.NewParseErr("ansic", s.Pos, err)
 				}
 			} else {
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
@@ -4830,16 +4612,14 @@ func (result TimeFormatsStdCompat) DecodeFromStream(s *scan.Stream) (TimeFormats
 					return result, &validation.DuplicateKeyError{Path: []string{"rfc822"}}
 				}
 				seenRFC822 = true
-				{
-					var v string
-					v, err = s.String()
-					if err != nil {
-						return result, decode.NewParseErr("rfc822", s.Pos, err)
-					}
-					result.RFC822, err = time.Parse(time.RFC822, v)
-					if err != nil {
-						return result, decode.NewParseErr("rfc822", s.Pos, err)
-					}
+				var sv string
+				sv, err = s.String()
+				if err != nil {
+					return result, decode.NewParseErr("rfc822", s.Pos, err)
+				}
+				result.RFC822, err = time.Parse(time.RFC822, sv)
+				if err != nil {
+					return result, decode.NewParseErr("rfc822", s.Pos, err)
 				}
 			case "rfc850":
 				err = s.ConsumeColon()
@@ -4850,16 +4630,14 @@ func (result TimeFormatsStdCompat) DecodeFromStream(s *scan.Stream) (TimeFormats
 					return result, &validation.DuplicateKeyError{Path: []string{"rfc850"}}
 				}
 				seenRFC850 = true
-				{
-					var v string
-					v, err = s.String()
-					if err != nil {
-						return result, decode.NewParseErr("rfc850", s.Pos, err)
-					}
-					result.RFC850, err = time.Parse(time.RFC850, v)
-					if err != nil {
-						return result, decode.NewParseErr("rfc850", s.Pos, err)
-					}
+				var sv string
+				sv, err = s.String()
+				if err != nil {
+					return result, decode.NewParseErr("rfc850", s.Pos, err)
+				}
+				result.RFC850, err = time.Parse(time.RFC850, sv)
+				if err != nil {
+					return result, decode.NewParseErr("rfc850", s.Pos, err)
 				}
 			default:
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
@@ -4875,16 +4653,14 @@ func (result TimeFormatsStdCompat) DecodeFromStream(s *scan.Stream) (TimeFormats
 					return result, &validation.DuplicateKeyError{Path: []string{"default"}}
 				}
 				seenDefault = true
-				{
-					var v string
-					v, err = s.String()
-					if err != nil {
-						return result, decode.NewParseErr("default", s.Pos, err)
-					}
-					result.Default, err = time.Parse(time.RFC3339Nano, v)
-					if err != nil {
-						return result, decode.NewParseErr("default", s.Pos, err)
-					}
+				var sv string
+				sv, err = s.String()
+				if err != nil {
+					return result, decode.NewParseErr("default", s.Pos, err)
+				}
+				result.Default, err = time.Parse(time.RFC3339Nano, sv)
+				if err != nil {
+					return result, decode.NewParseErr("default", s.Pos, err)
 				}
 			case "kitchen":
 				err = s.ConsumeColon()
@@ -4895,16 +4671,14 @@ func (result TimeFormatsStdCompat) DecodeFromStream(s *scan.Stream) (TimeFormats
 					return result, &validation.DuplicateKeyError{Path: []string{"kitchen"}}
 				}
 				seenKitchen = true
-				{
-					var v string
-					v, err = s.String()
-					if err != nil {
-						return result, decode.NewParseErr("kitchen", s.Pos, err)
-					}
-					result.Kitchen, err = time.Parse(time.Kitchen, v)
-					if err != nil {
-						return result, decode.NewParseErr("kitchen", s.Pos, err)
-					}
+				var sv string
+				sv, err = s.String()
+				if err != nil {
+					return result, decode.NewParseErr("kitchen", s.Pos, err)
+				}
+				result.Kitchen, err = time.Parse(time.Kitchen, sv)
+				if err != nil {
+					return result, decode.NewParseErr("kitchen", s.Pos, err)
 				}
 			case "rfc1123":
 				err = s.ConsumeColon()
@@ -4915,16 +4689,14 @@ func (result TimeFormatsStdCompat) DecodeFromStream(s *scan.Stream) (TimeFormats
 					return result, &validation.DuplicateKeyError{Path: []string{"rfc1123"}}
 				}
 				seenRFC1123 = true
-				{
-					var v string
-					v, err = s.String()
-					if err != nil {
-						return result, decode.NewParseErr("rfc1123", s.Pos, err)
-					}
-					result.RFC1123, err = time.Parse(time.RFC1123, v)
-					if err != nil {
-						return result, decode.NewParseErr("rfc1123", s.Pos, err)
-					}
+				var sv string
+				sv, err = s.String()
+				if err != nil {
+					return result, decode.NewParseErr("rfc1123", s.Pos, err)
+				}
+				result.RFC1123, err = time.Parse(time.RFC1123, sv)
+				if err != nil {
+					return result, decode.NewParseErr("rfc1123", s.Pos, err)
 				}
 			case "rfc3339":
 				err = s.ConsumeColon()
@@ -4935,16 +4707,14 @@ func (result TimeFormatsStdCompat) DecodeFromStream(s *scan.Stream) (TimeFormats
 					return result, &validation.DuplicateKeyError{Path: []string{"rfc3339"}}
 				}
 				seenRFC3339 = true
-				{
-					var v string
-					v, err = s.String()
-					if err != nil {
-						return result, decode.NewParseErr("rfc3339", s.Pos, err)
-					}
-					result.RFC3339, err = time.Parse(time.RFC3339, v)
-					if err != nil {
-						return result, decode.NewParseErr("rfc3339", s.Pos, err)
-					}
+				var sv string
+				sv, err = s.String()
+				if err != nil {
+					return result, decode.NewParseErr("rfc3339", s.Pos, err)
+				}
+				result.RFC3339, err = time.Parse(time.RFC3339, sv)
+				if err != nil {
+					return result, decode.NewParseErr("rfc3339", s.Pos, err)
 				}
 			case "rfc822Z":
 				err = s.ConsumeColon()
@@ -4955,16 +4725,14 @@ func (result TimeFormatsStdCompat) DecodeFromStream(s *scan.Stream) (TimeFormats
 					return result, &validation.DuplicateKeyError{Path: []string{"rfc822Z"}}
 				}
 				seenRFC822Z = true
-				{
-					var v string
-					v, err = s.String()
-					if err != nil {
-						return result, decode.NewParseErr("rfc822Z", s.Pos, err)
-					}
-					result.RFC822Z, err = time.Parse(time.RFC822Z, v)
-					if err != nil {
-						return result, decode.NewParseErr("rfc822Z", s.Pos, err)
-					}
+				var sv string
+				sv, err = s.String()
+				if err != nil {
+					return result, decode.NewParseErr("rfc822Z", s.Pos, err)
+				}
+				result.RFC822Z, err = time.Parse(time.RFC822Z, sv)
+				if err != nil {
+					return result, decode.NewParseErr("rfc822Z", s.Pos, err)
 				}
 			default:
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
@@ -4980,16 +4748,14 @@ func (result TimeFormatsStdCompat) DecodeFromStream(s *scan.Stream) (TimeFormats
 					return result, &validation.DuplicateKeyError{Path: []string{"dateOnly"}}
 				}
 				seenDateOnly = true
-				{
-					var v string
-					v, err = s.String()
-					if err != nil {
-						return result, decode.NewParseErr("dateOnly", s.Pos, err)
-					}
-					result.DateOnly, err = time.Parse(time.DateOnly, v)
-					if err != nil {
-						return result, decode.NewParseErr("dateOnly", s.Pos, err)
-					}
+				var sv string
+				sv, err = s.String()
+				if err != nil {
+					return result, decode.NewParseErr("dateOnly", s.Pos, err)
+				}
+				result.DateOnly, err = time.Parse(time.DateOnly, sv)
+				if err != nil {
+					return result, decode.NewParseErr("dateOnly", s.Pos, err)
 				}
 			case "dateTime":
 				err = s.ConsumeColon()
@@ -5000,16 +4766,14 @@ func (result TimeFormatsStdCompat) DecodeFromStream(s *scan.Stream) (TimeFormats
 					return result, &validation.DuplicateKeyError{Path: []string{"dateTime"}}
 				}
 				seenDateTime = true
-				{
-					var v string
-					v, err = s.String()
-					if err != nil {
-						return result, decode.NewParseErr("dateTime", s.Pos, err)
-					}
-					result.DateTime, err = time.Parse(time.DateTime, v)
-					if err != nil {
-						return result, decode.NewParseErr("dateTime", s.Pos, err)
-					}
+				var sv string
+				sv, err = s.String()
+				if err != nil {
+					return result, decode.NewParseErr("dateTime", s.Pos, err)
+				}
+				result.DateTime, err = time.Parse(time.DateTime, sv)
+				if err != nil {
+					return result, decode.NewParseErr("dateTime", s.Pos, err)
 				}
 			case "rfc1123Z":
 				err = s.ConsumeColon()
@@ -5020,16 +4784,14 @@ func (result TimeFormatsStdCompat) DecodeFromStream(s *scan.Stream) (TimeFormats
 					return result, &validation.DuplicateKeyError{Path: []string{"rfc1123Z"}}
 				}
 				seenRFC1123Z = true
-				{
-					var v string
-					v, err = s.String()
-					if err != nil {
-						return result, decode.NewParseErr("rfc1123Z", s.Pos, err)
-					}
-					result.RFC1123Z, err = time.Parse(time.RFC1123Z, v)
-					if err != nil {
-						return result, decode.NewParseErr("rfc1123Z", s.Pos, err)
-					}
+				var sv string
+				sv, err = s.String()
+				if err != nil {
+					return result, decode.NewParseErr("rfc1123Z", s.Pos, err)
+				}
+				result.RFC1123Z, err = time.Parse(time.RFC1123Z, sv)
+				if err != nil {
+					return result, decode.NewParseErr("rfc1123Z", s.Pos, err)
 				}
 			case "rubyDate":
 				err = s.ConsumeColon()
@@ -5040,16 +4802,14 @@ func (result TimeFormatsStdCompat) DecodeFromStream(s *scan.Stream) (TimeFormats
 					return result, &validation.DuplicateKeyError{Path: []string{"rubyDate"}}
 				}
 				seenRubyDate = true
-				{
-					var v string
-					v, err = s.String()
-					if err != nil {
-						return result, decode.NewParseErr("rubyDate", s.Pos, err)
-					}
-					result.RubyDate, err = time.Parse(time.RubyDate, v)
-					if err != nil {
-						return result, decode.NewParseErr("rubyDate", s.Pos, err)
-					}
+				var sv string
+				sv, err = s.String()
+				if err != nil {
+					return result, decode.NewParseErr("rubyDate", s.Pos, err)
+				}
+				result.RubyDate, err = time.Parse(time.RubyDate, sv)
+				if err != nil {
+					return result, decode.NewParseErr("rubyDate", s.Pos, err)
 				}
 			case "timeOnly":
 				err = s.ConsumeColon()
@@ -5060,16 +4820,14 @@ func (result TimeFormatsStdCompat) DecodeFromStream(s *scan.Stream) (TimeFormats
 					return result, &validation.DuplicateKeyError{Path: []string{"timeOnly"}}
 				}
 				seenTimeOnly = true
-				{
-					var v string
-					v, err = s.String()
-					if err != nil {
-						return result, decode.NewParseErr("timeOnly", s.Pos, err)
-					}
-					result.TimeOnly, err = time.Parse(time.TimeOnly, v)
-					if err != nil {
-						return result, decode.NewParseErr("timeOnly", s.Pos, err)
-					}
+				var sv string
+				sv, err = s.String()
+				if err != nil {
+					return result, decode.NewParseErr("timeOnly", s.Pos, err)
+				}
+				result.TimeOnly, err = time.Parse(time.TimeOnly, sv)
+				if err != nil {
+					return result, decode.NewParseErr("timeOnly", s.Pos, err)
 				}
 			case "unixDate":
 				err = s.ConsumeColon()
@@ -5080,16 +4838,14 @@ func (result TimeFormatsStdCompat) DecodeFromStream(s *scan.Stream) (TimeFormats
 					return result, &validation.DuplicateKeyError{Path: []string{"unixDate"}}
 				}
 				seenUnixDate = true
-				{
-					var v string
-					v, err = s.String()
-					if err != nil {
-						return result, decode.NewParseErr("unixDate", s.Pos, err)
-					}
-					result.UnixDate, err = time.Parse(time.UnixDate, v)
-					if err != nil {
-						return result, decode.NewParseErr("unixDate", s.Pos, err)
-					}
+				var sv string
+				sv, err = s.String()
+				if err != nil {
+					return result, decode.NewParseErr("unixDate", s.Pos, err)
+				}
+				result.UnixDate, err = time.Parse(time.UnixDate, sv)
+				if err != nil {
+					return result, decode.NewParseErr("unixDate", s.Pos, err)
 				}
 			case "unixNano":
 				err = s.ConsumeColon()
@@ -5100,14 +4856,12 @@ func (result TimeFormatsStdCompat) DecodeFromStream(s *scan.Stream) (TimeFormats
 					return result, &validation.DuplicateKeyError{Path: []string{"unixNano"}}
 				}
 				seenUnixNano = true
-				{
-					var n int64
-					n, err = s.Int64()
-					if err != nil {
-						return result, decode.NewParseErr("unixNano", s.Pos, err)
-					}
-					result.UnixNano = time.Unix(0, n)
+				var n int64
+				n, err = s.Int64()
+				if err != nil {
+					return result, decode.NewParseErr("unixNano", s.Pos, err)
 				}
+				result.UnixNano = time.Unix(0, n)
 			default:
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
 			}
@@ -5122,14 +4876,12 @@ func (result TimeFormatsStdCompat) DecodeFromStream(s *scan.Stream) (TimeFormats
 					return result, &validation.DuplicateKeyError{Path: []string{"unixMicro"}}
 				}
 				seenUnixMicro = true
-				{
-					var n int64
-					n, err = s.Int64()
-					if err != nil {
-						return result, decode.NewParseErr("unixMicro", s.Pos, err)
-					}
-					result.UnixMicro = time.UnixMicro(n)
+				var n int64
+				n, err = s.Int64()
+				if err != nil {
+					return result, decode.NewParseErr("unixMicro", s.Pos, err)
 				}
+				result.UnixMicro = time.UnixMicro(n)
 			case "unixMilli":
 				err = s.ConsumeColon()
 				if err != nil {
@@ -5139,14 +4891,12 @@ func (result TimeFormatsStdCompat) DecodeFromStream(s *scan.Stream) (TimeFormats
 					return result, &validation.DuplicateKeyError{Path: []string{"unixMilli"}}
 				}
 				seenUnixMilli = true
-				{
-					var n int64
-					n, err = s.Int64()
-					if err != nil {
-						return result, decode.NewParseErr("unixMilli", s.Pos, err)
-					}
-					result.UnixMilli = time.UnixMilli(n)
+				var n int64
+				n, err = s.Int64()
+				if err != nil {
+					return result, decode.NewParseErr("unixMilli", s.Pos, err)
 				}
+				result.UnixMilli = time.UnixMilli(n)
 			default:
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
 			}
@@ -5160,16 +4910,14 @@ func (result TimeFormatsStdCompat) DecodeFromStream(s *scan.Stream) (TimeFormats
 					return result, &validation.DuplicateKeyError{Path: []string{"rfc3339Nano"}}
 				}
 				seenRFC3339Nano = true
-				{
-					var v string
-					v, err = s.String()
-					if err != nil {
-						return result, decode.NewParseErr("rfc3339Nano", s.Pos, err)
-					}
-					result.RFC3339Nano, err = time.Parse(time.RFC3339Nano, v)
-					if err != nil {
-						return result, decode.NewParseErr("rfc3339Nano", s.Pos, err)
-					}
+				var sv string
+				sv, err = s.String()
+				if err != nil {
+					return result, decode.NewParseErr("rfc3339Nano", s.Pos, err)
+				}
+				result.RFC3339Nano, err = time.Parse(time.RFC3339Nano, sv)
+				if err != nil {
+					return result, decode.NewParseErr("rfc3339Nano", s.Pos, err)
 				}
 			} else {
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
@@ -5284,25 +5032,23 @@ func (result richSubset) DecodeFrom(data []byte) (richSubset, int, error) {
 		if i >= len(data) || data[i] != '"' {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
-		{
-			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-				ke++
-			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-				i = ke + 1
-			} else {
-				key, i, err = scan.String(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr("", i, err)
-				}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -5322,16 +5068,14 @@ func (result richSubset) DecodeFrom(data []byte) (richSubset, int, error) {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"id"}}
 				}
 				seenID = true
-				{
-					var ts string
-					ts, i, err = scan.String(data, i)
-					if err != nil {
-						return result, i, decode.NewParseErr("id", i, err)
-					}
-					err = result.ID.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts)))
-					if err != nil {
-						return result, i, decode.NewParseErr("id", i, err)
-					}
+				var ts string
+				ts, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("id", i, err)
+				}
+				err = result.ID.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts)))
+				if err != nil {
+					return result, i, decode.NewParseErr("id", i, err)
 				}
 			} else {
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -5342,15 +5086,13 @@ func (result richSubset) DecodeFrom(data []byte) (richSubset, int, error) {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"big"}}
 				}
 				seenBig = true
-				{
-					start := i
-					i, err = scan.SkipValue(data, start)
-					if err != nil {
-						return result, i, decode.NewParseErr("big", i, err)
-					}
-					if _, ok := (&result.Big).SetString(unsafe.String(unsafe.SliceData(data[start:]), i-start), 10); !ok {
-						return result, i, decode.NewParseErr("big", i, scan.ErrBadNumber)
-					}
+				start := i
+				i, err = scan.SkipValue(data, start)
+				if err != nil {
+					return result, i, decode.NewParseErr("big", i, err)
+				}
+				if _, ok := (&result.Big).SetString(unsafe.String(unsafe.SliceData(data[start:]), i-start), 10); !ok {
+					return result, i, decode.NewParseErr("big", i, scan.ErrBadNumber)
 				}
 			} else {
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -5362,97 +5104,85 @@ func (result richSubset) DecodeFrom(data []byte) (richSubset, int, error) {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"bigF"}}
 				}
 				seenBigF = true
-				{
-					var s string
-					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("bigF", i, scan.ErrExpectString)
-					}
-					{
-						ke := i + 1
-						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-							ke++
-						}
-						if ke >= len(data) {
-							return result, i, decode.NewParseErr("bigF", i, scan.ErrUnterminated)
-						}
-						if data[ke] < 0x20 {
-							return result, i, decode.NewParseErr("bigF", i, scan.ErrBadString)
-						}
-						if data[ke] == '"' {
-							s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-							i = ke + 1
-						} else {
-							s, i, err = scan.String(data, i)
-							if err != nil {
-								return result, i, decode.NewParseErr("bigF", i, err)
-							}
-						}
-					}
-					if _, _, err := (&result.BigF).Parse(s, 10); err != nil {
+				var s string
+				if i >= len(data) || data[i] != '"' {
+					return result, i, decode.NewParseErr("bigF", i, scan.ErrExpectString)
+				}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("bigF", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("bigF", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					s, i, err = scan.String(data, i)
+					if err != nil {
 						return result, i, decode.NewParseErr("bigF", i, err)
 					}
+				}
+				if _, _, err := (&result.BigF).Parse(s, 10); err != nil {
+					return result, i, decode.NewParseErr("bigF", i, err)
 				}
 			case "bigR":
 				if seenBigR {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"bigR"}}
 				}
 				seenBigR = true
-				{
-					var s string
-					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("bigR", i, scan.ErrExpectString)
+				var s string
+				if i >= len(data) || data[i] != '"' {
+					return result, i, decode.NewParseErr("bigR", i, scan.ErrExpectString)
+				}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("bigR", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("bigR", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					s, i, err = scan.String(data, i)
+					if err != nil {
+						return result, i, decode.NewParseErr("bigR", i, err)
 					}
-					{
-						ke := i + 1
-						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-							ke++
-						}
-						if ke >= len(data) {
-							return result, i, decode.NewParseErr("bigR", i, scan.ErrUnterminated)
-						}
-						if data[ke] < 0x20 {
-							return result, i, decode.NewParseErr("bigR", i, scan.ErrBadString)
-						}
-						if data[ke] == '"' {
-							s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-							i = ke + 1
-						} else {
-							s, i, err = scan.String(data, i)
-							if err != nil {
-								return result, i, decode.NewParseErr("bigR", i, err)
-							}
-						}
-					}
-					if _, ok := (&result.BigR).SetString(s); !ok {
-						return result, i, decode.NewParseErr("bigR", i, scan.ErrBadNumber)
-					}
+				}
+				if _, ok := (&result.BigR).SetString(s); !ok {
+					return result, i, decode.NewParseErr("bigR", i, scan.ErrBadNumber)
 				}
 			case "raw1":
 				if seenRaw1 {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"raw1"}}
 				}
 				seenRaw1 = true
-				{
-					start := i
-					i, err = scan.SkipValue(data, start)
-					if err != nil {
-						return result, i, decode.NewParseErr("raw1", i, err)
-					}
-					result.Raw1 = data[start:i]
+				start := i
+				i, err = scan.SkipValue(data, start)
+				if err != nil {
+					return result, i, decode.NewParseErr("raw1", i, err)
 				}
+				result.Raw1 = data[start:i]
 			case "raw2":
 				if seenRaw2 {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"raw2"}}
 				}
 				seenRaw2 = true
-				{
-					start := i
-					i, err = scan.SkipValue(data, start)
-					if err != nil {
-						return result, i, decode.NewParseErr("raw2", i, err)
-					}
-					result.Raw2 = data[start:i]
+				start := i
+				i, err = scan.SkipValue(data, start)
+				if err != nil {
+					return result, i, decode.NewParseErr("raw2", i, err)
 				}
+				result.Raw2 = data[start:i]
 			default:
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
 			}
@@ -5462,16 +5192,14 @@ func (result richSubset) DecodeFrom(data []byte) (richSubset, int, error) {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"gofrsId"}}
 				}
 				seenGofrsID = true
-				{
-					var ts string
-					ts, i, err = scan.String(data, i)
-					if err != nil {
-						return result, i, decode.NewParseErr("gofrsId", i, err)
-					}
-					err = result.GofrsID.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts)))
-					if err != nil {
-						return result, i, decode.NewParseErr("gofrsId", i, err)
-					}
+				var ts string
+				ts, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("gofrsId", i, err)
+				}
+				err = result.GofrsID.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts)))
+				if err != nil {
+					return result, i, decode.NewParseErr("gofrsId", i, err)
 				}
 			} else {
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -5543,16 +5271,14 @@ func (result richSubset) DecodeFromStream(s *scan.Stream) (richSubset, error) {
 					return result, &validation.DuplicateKeyError{Path: []string{"id"}}
 				}
 				seenID = true
-				{
-					var ts string
-					ts, err = s.String()
-					if err != nil {
-						return result, decode.NewParseErr("id", s.Pos, err)
-					}
-					err = result.ID.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts)))
-					if err != nil {
-						return result, decode.NewParseErr("id", s.Pos, err)
-					}
+				var ts string
+				ts, err = s.String()
+				if err != nil {
+					return result, decode.NewParseErr("id", s.Pos, err)
+				}
+				err = result.ID.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts)))
+				if err != nil {
+					return result, decode.NewParseErr("id", s.Pos, err)
 				}
 			} else {
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
@@ -5567,19 +5293,17 @@ func (result richSubset) DecodeFromStream(s *scan.Stream) (richSubset, error) {
 					return result, &validation.DuplicateKeyError{Path: []string{"big"}}
 				}
 				seenBig = true
-				{
-					start := s.Pos
-					prevPin := s.Shift
-					s.Shift = false
-					err = s.SkipValue()
-					s.Shift = prevPin
-					if err != nil {
-						return result, decode.NewParseErr("big", s.Pos, err)
-					}
-					buf := s.Bytes()
-					if _, ok := (&result.Big).SetString(unsafe.String(unsafe.SliceData(buf[start:]), s.Pos-start), 10); !ok {
-						return result, decode.NewParseErr("big", s.Pos, scan.ErrBadNumber)
-					}
+				start := s.Pos
+				prevPin := s.Shift
+				s.Shift = false
+				err = s.SkipValue()
+				s.Shift = prevPin
+				if err != nil {
+					return result, decode.NewParseErr("big", s.Pos, err)
+				}
+				buf := s.Bytes()
+				if _, ok := (&result.Big).SetString(unsafe.String(unsafe.SliceData(buf[start:]), s.Pos-start), 10); !ok {
+					return result, decode.NewParseErr("big", s.Pos, scan.ErrBadNumber)
 				}
 			} else {
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
@@ -5595,15 +5319,13 @@ func (result richSubset) DecodeFromStream(s *scan.Stream) (richSubset, error) {
 					return result, &validation.DuplicateKeyError{Path: []string{"bigF"}}
 				}
 				seenBigF = true
-				{
-					var v string
-					v, err = s.String()
-					if err != nil {
-						return result, decode.NewParseErr("bigF", s.Pos, err)
-					}
-					if _, _, err := (&result.BigF).Parse(v, 10); err != nil {
-						return result, decode.NewParseErr("bigF", s.Pos, err)
-					}
+				var sv string
+				sv, err = s.String()
+				if err != nil {
+					return result, decode.NewParseErr("bigF", s.Pos, err)
+				}
+				if _, _, err := (&result.BigF).Parse(sv, 10); err != nil {
+					return result, decode.NewParseErr("bigF", s.Pos, err)
 				}
 			case "bigR":
 				err = s.ConsumeColon()
@@ -5614,15 +5336,13 @@ func (result richSubset) DecodeFromStream(s *scan.Stream) (richSubset, error) {
 					return result, &validation.DuplicateKeyError{Path: []string{"bigR"}}
 				}
 				seenBigR = true
-				{
-					var v string
-					v, err = s.String()
-					if err != nil {
-						return result, decode.NewParseErr("bigR", s.Pos, err)
-					}
-					if _, ok := (&result.BigR).SetString(v); !ok {
-						return result, decode.NewParseErr("bigR", s.Pos, scan.ErrBadNumber)
-					}
+				var sv string
+				sv, err = s.String()
+				if err != nil {
+					return result, decode.NewParseErr("bigR", s.Pos, err)
+				}
+				if _, ok := (&result.BigR).SetString(sv); !ok {
+					return result, decode.NewParseErr("bigR", s.Pos, scan.ErrBadNumber)
 				}
 			case "raw1":
 				err = s.ConsumeColon()
@@ -5633,18 +5353,16 @@ func (result richSubset) DecodeFromStream(s *scan.Stream) (richSubset, error) {
 					return result, &validation.DuplicateKeyError{Path: []string{"raw1"}}
 				}
 				seenRaw1 = true
-				{
-					start := s.Pos
-					prevPin := s.Shift
-					s.Shift = false
-					err = s.SkipValue()
-					s.Shift = prevPin
-					if err != nil {
-						return result, decode.NewParseErr("raw1", s.Pos, err)
-					}
-					raw := s.Bytes()[start:s.Pos]
-					result.Raw1 = append(make([]byte, 0, len(raw)), raw...)
+				start := s.Pos
+				prevPin := s.Shift
+				s.Shift = false
+				err = s.SkipValue()
+				s.Shift = prevPin
+				if err != nil {
+					return result, decode.NewParseErr("raw1", s.Pos, err)
 				}
+				raw := s.Bytes()[start:s.Pos]
+				result.Raw1 = append(make([]byte, 0, len(raw)), raw...)
 			case "raw2":
 				err = s.ConsumeColon()
 				if err != nil {
@@ -5654,18 +5372,16 @@ func (result richSubset) DecodeFromStream(s *scan.Stream) (richSubset, error) {
 					return result, &validation.DuplicateKeyError{Path: []string{"raw2"}}
 				}
 				seenRaw2 = true
-				{
-					start := s.Pos
-					prevPin := s.Shift
-					s.Shift = false
-					err = s.SkipValue()
-					s.Shift = prevPin
-					if err != nil {
-						return result, decode.NewParseErr("raw2", s.Pos, err)
-					}
-					raw := s.Bytes()[start:s.Pos]
-					result.Raw2 = append(make([]byte, 0, len(raw)), raw...)
+				start := s.Pos
+				prevPin := s.Shift
+				s.Shift = false
+				err = s.SkipValue()
+				s.Shift = prevPin
+				if err != nil {
+					return result, decode.NewParseErr("raw2", s.Pos, err)
 				}
+				raw := s.Bytes()[start:s.Pos]
+				result.Raw2 = append(make([]byte, 0, len(raw)), raw...)
 			default:
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
 			}
@@ -5679,16 +5395,14 @@ func (result richSubset) DecodeFromStream(s *scan.Stream) (richSubset, error) {
 					return result, &validation.DuplicateKeyError{Path: []string{"gofrsId"}}
 				}
 				seenGofrsID = true
-				{
-					var ts string
-					ts, err = s.String()
-					if err != nil {
-						return result, decode.NewParseErr("gofrsId", s.Pos, err)
-					}
-					err = result.GofrsID.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts)))
-					if err != nil {
-						return result, decode.NewParseErr("gofrsId", s.Pos, err)
-					}
+				var ts string
+				ts, err = s.String()
+				if err != nil {
+					return result, decode.NewParseErr("gofrsId", s.Pos, err)
+				}
+				err = result.GofrsID.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts)))
+				if err != nil {
+					return result, decode.NewParseErr("gofrsId", s.Pos, err)
 				}
 			} else {
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
@@ -5753,25 +5467,21 @@ func (s richSubset) AppendJSON(dst []byte) ([]byte, error) {
 		return dst, err
 	}
 	dst = append(dst, "\",\"gofrsId\":"...)
-	{
-		var t []byte
-		t, err = s.GofrsID.MarshalText()
-		if err != nil {
-			return dst, err
-		}
-		dst = append(dst, '"')
-		dst = encode.AppendStringNoHTML(dst, encode.BytesToString(t))
+	var bGofrsID []byte
+	bGofrsID, err = s.GofrsID.MarshalText()
+	if err != nil {
+		return dst, err
 	}
+	dst = append(dst, '"')
+	dst = encode.AppendStringNoHTML(dst, encode.BytesToString(bGofrsID))
 	dst = append(dst, ",\"id\":"...)
-	{
-		var t []byte
-		t, err = s.ID.MarshalText()
-		if err != nil {
-			return dst, err
-		}
-		dst = append(dst, '"')
-		dst = encode.AppendStringNoHTML(dst, encode.BytesToString(t))
+	var bID []byte
+	bID, err = s.ID.MarshalText()
+	if err != nil {
+		return dst, err
 	}
+	dst = append(dst, '"')
+	dst = encode.AppendStringNoHTML(dst, encode.BytesToString(bID))
 	dst = append(dst, ",\"raw1\":"...)
 	if len(s.Raw1) == 0 {
 		dst = append(dst, "null"...)

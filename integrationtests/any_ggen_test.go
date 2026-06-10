@@ -37,25 +37,23 @@ func (result AnyStruct) DecodeFrom(data []byte) (AnyStruct, int, error) {
 		if i >= len(data) || data[i] != '"' {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
-		{
-			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-				ke++
-			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-				i = ke + 1
-			} else {
-				key, i, err = scan.String(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr("", i, err)
-				}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -76,11 +74,9 @@ func (result AnyStruct) DecodeFrom(data []byte) (AnyStruct, int, error) {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"body"}}
 				}
 				seenBody = true
-				{
-					result.Body, i, err = scan.Any(data, i)
-					if err != nil {
-						return result, i, decode.NewParseErr("body", i, err)
-					}
+				result.Body, i, err = scan.Any(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("body", i, err)
 				}
 			case "name":
 				if seenName {
@@ -90,25 +86,23 @@ func (result AnyStruct) DecodeFrom(data []byte) (AnyStruct, int, error) {
 				if i >= len(data) || data[i] != '"' {
 					return result, i, decode.NewParseErr("name", i, scan.ErrExpectString)
 				}
-				{
-					ke := i + 1
-					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-						ke++
-					}
-					if ke >= len(data) {
-						return result, i, decode.NewParseErr("name", i, scan.ErrUnterminated)
-					}
-					if data[ke] < 0x20 {
-						return result, i, decode.NewParseErr("name", i, scan.ErrBadString)
-					}
-					if data[ke] == '"' {
-						result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-						i = ke + 1
-					} else {
-						result.Name, i, err = scan.String(data, i)
-						if err != nil {
-							return result, i, decode.NewParseErr("name", i, err)
-						}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("name", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("name", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					result.Name, i, err = scan.String(data, i)
+					if err != nil {
+						return result, i, decode.NewParseErr("name", i, err)
 					}
 				}
 			default:
@@ -177,11 +171,9 @@ func (result AnyStruct) DecodeFromStream(s *scan.Stream) (AnyStruct, error) {
 					return result, &validation.DuplicateKeyError{Path: []string{"body"}}
 				}
 				seenBody = true
-				{
-					result.Body, err = s.Any()
-					if err != nil {
-						return result, decode.NewParseErr("body", s.Pos, err)
-					}
+				result.Body, err = s.Any()
+				if err != nil {
+					return result, decode.NewParseErr("body", s.Pos, err)
 				}
 			case "name":
 				err = s.ConsumeColon()
@@ -273,25 +265,23 @@ func (result AnyNumberStruct) DecodeFrom(data []byte) (AnyNumberStruct, int, err
 		if i >= len(data) || data[i] != '"' {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
-		{
-			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-				ke++
-			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-				i = ke + 1
-			} else {
-				key, i, err = scan.String(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr("", i, err)
-				}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -312,11 +302,9 @@ func (result AnyNumberStruct) DecodeFrom(data []byte) (AnyNumberStruct, int, err
 					return result, i, &validation.DuplicateKeyError{Path: []string{"body"}}
 				}
 				seenBody = true
-				{
-					result.Body, i, err = scan.AnyNumber(data, i)
-					if err != nil {
-						return result, i, decode.NewParseErr("body", i, err)
-					}
+				result.Body, i, err = scan.AnyNumber(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("body", i, err)
 				}
 			case "name":
 				if seenName {
@@ -326,25 +314,23 @@ func (result AnyNumberStruct) DecodeFrom(data []byte) (AnyNumberStruct, int, err
 				if i >= len(data) || data[i] != '"' {
 					return result, i, decode.NewParseErr("name", i, scan.ErrExpectString)
 				}
-				{
-					ke := i + 1
-					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-						ke++
-					}
-					if ke >= len(data) {
-						return result, i, decode.NewParseErr("name", i, scan.ErrUnterminated)
-					}
-					if data[ke] < 0x20 {
-						return result, i, decode.NewParseErr("name", i, scan.ErrBadString)
-					}
-					if data[ke] == '"' {
-						result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-						i = ke + 1
-					} else {
-						result.Name, i, err = scan.String(data, i)
-						if err != nil {
-							return result, i, decode.NewParseErr("name", i, err)
-						}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("name", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("name", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					result.Name, i, err = scan.String(data, i)
+					if err != nil {
+						return result, i, decode.NewParseErr("name", i, err)
 					}
 				}
 			default:
@@ -413,11 +399,9 @@ func (result AnyNumberStruct) DecodeFromStream(s *scan.Stream) (AnyNumberStruct,
 					return result, &validation.DuplicateKeyError{Path: []string{"body"}}
 				}
 				seenBody = true
-				{
-					result.Body, err = s.AnyNumber()
-					if err != nil {
-						return result, decode.NewParseErr("body", s.Pos, err)
-					}
+				result.Body, err = s.AnyNumber()
+				if err != nil {
+					return result, decode.NewParseErr("body", s.Pos, err)
 				}
 			case "name":
 				err = s.ConsumeColon()

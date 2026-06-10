@@ -46,25 +46,23 @@ func (result RichTypes) DecodeFrom(data []byte) (RichTypes, int, error) {
 		if i >= len(data) || data[i] != '"' {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
-		{
-			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-				ke++
-			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
-				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-				i = ke + 1
-			} else {
-				key, i, err = scan.String(data, i)
-				if err != nil {
-					return result, i, decode.NewParseErr("", i, err)
-				}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -84,16 +82,14 @@ func (result RichTypes) DecodeFrom(data []byte) (RichTypes, int, error) {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"id"}}
 				}
 				seenID = true
-				{
-					var ts string
-					ts, i, err = scan.String(data, i)
-					if err != nil {
-						return result, i, decode.NewParseErr("id", i, err)
-					}
-					err = result.ID.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts)))
-					if err != nil {
-						return result, i, decode.NewParseErr("id", i, err)
-					}
+				var ts string
+				ts, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("id", i, err)
+				}
+				err = result.ID.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts)))
+				if err != nil {
+					return result, i, decode.NewParseErr("id", i, err)
 				}
 			} else {
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -104,15 +100,13 @@ func (result RichTypes) DecodeFrom(data []byte) (RichTypes, int, error) {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"big"}}
 				}
 				seenBig = true
-				{
-					start := i
-					i, err = scan.SkipValue(data, start)
-					if err != nil {
-						return result, i, decode.NewParseErr("big", i, err)
-					}
-					if _, ok := (&result.Big).SetString(unsafe.String(unsafe.SliceData(data[start:]), i-start), 10); !ok {
-						return result, i, decode.NewParseErr("big", i, scan.ErrBadNumber)
-					}
+				start := i
+				i, err = scan.SkipValue(data, start)
+				if err != nil {
+					return result, i, decode.NewParseErr("big", i, err)
+				}
+				if _, ok := (&result.Big).SetString(unsafe.String(unsafe.SliceData(data[start:]), i-start), 10); !ok {
+					return result, i, decode.NewParseErr("big", i, scan.ErrBadNumber)
 				}
 			} else {
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -124,135 +118,119 @@ func (result RichTypes) DecodeFrom(data []byte) (RichTypes, int, error) {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"bigF"}}
 				}
 				seenBigF = true
-				{
-					var s string
-					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("bigF", i, scan.ErrExpectString)
-					}
-					{
-						ke := i + 1
-						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-							ke++
-						}
-						if ke >= len(data) {
-							return result, i, decode.NewParseErr("bigF", i, scan.ErrUnterminated)
-						}
-						if data[ke] < 0x20 {
-							return result, i, decode.NewParseErr("bigF", i, scan.ErrBadString)
-						}
-						if data[ke] == '"' {
-							s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-							i = ke + 1
-						} else {
-							s, i, err = scan.String(data, i)
-							if err != nil {
-								return result, i, decode.NewParseErr("bigF", i, err)
-							}
-						}
-					}
-					if _, _, err := (&result.BigF).Parse(s, 10); err != nil {
+				var s string
+				if i >= len(data) || data[i] != '"' {
+					return result, i, decode.NewParseErr("bigF", i, scan.ErrExpectString)
+				}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("bigF", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("bigF", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					s, i, err = scan.String(data, i)
+					if err != nil {
 						return result, i, decode.NewParseErr("bigF", i, err)
 					}
+				}
+				if _, _, err := (&result.BigF).Parse(s, 10); err != nil {
+					return result, i, decode.NewParseErr("bigF", i, err)
 				}
 			case "bigR":
 				if seenBigR {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"bigR"}}
 				}
 				seenBigR = true
-				{
-					var s string
-					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("bigR", i, scan.ErrExpectString)
+				var s string
+				if i >= len(data) || data[i] != '"' {
+					return result, i, decode.NewParseErr("bigR", i, scan.ErrExpectString)
+				}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("bigR", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("bigR", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					s, i, err = scan.String(data, i)
+					if err != nil {
+						return result, i, decode.NewParseErr("bigR", i, err)
 					}
-					{
-						ke := i + 1
-						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-							ke++
-						}
-						if ke >= len(data) {
-							return result, i, decode.NewParseErr("bigR", i, scan.ErrUnterminated)
-						}
-						if data[ke] < 0x20 {
-							return result, i, decode.NewParseErr("bigR", i, scan.ErrBadString)
-						}
-						if data[ke] == '"' {
-							s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-							i = ke + 1
-						} else {
-							s, i, err = scan.String(data, i)
-							if err != nil {
-								return result, i, decode.NewParseErr("bigR", i, err)
-							}
-						}
-					}
-					if _, ok := (&result.BigR).SetString(s); !ok {
-						return result, i, decode.NewParseErr("bigR", i, scan.ErrBadNumber)
-					}
+				}
+				if _, ok := (&result.BigR).SetString(s); !ok {
+					return result, i, decode.NewParseErr("bigR", i, scan.ErrBadNumber)
 				}
 			case "raw1":
 				if seenRaw1 {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"raw1"}}
 				}
 				seenRaw1 = true
-				{
-					start := i
-					i, err = scan.SkipValue(data, start)
-					if err != nil {
-						return result, i, decode.NewParseErr("raw1", i, err)
-					}
-					result.Raw1 = data[start:i]
+				start := i
+				i, err = scan.SkipValue(data, start)
+				if err != nil {
+					return result, i, decode.NewParseErr("raw1", i, err)
 				}
+				result.Raw1 = data[start:i]
 			case "raw2":
 				if seenRaw2 {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"raw2"}}
 				}
 				seenRaw2 = true
-				{
-					start := i
-					i, err = scan.SkipValue(data, start)
-					if err != nil {
-						return result, i, decode.NewParseErr("raw2", i, err)
-					}
-					result.Raw2 = data[start:i]
+				start := i
+				i, err = scan.SkipValue(data, start)
+				if err != nil {
+					return result, i, decode.NewParseErr("raw2", i, err)
 				}
+				result.Raw2 = data[start:i]
 			case "site":
 				if seenSite {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"site"}}
 				}
 				seenSite = true
-				{
-					var s string
-					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("site", i, scan.ErrExpectString)
-					}
-					{
-						ke := i + 1
-						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-							ke++
-						}
-						if ke >= len(data) {
-							return result, i, decode.NewParseErr("site", i, scan.ErrUnterminated)
-						}
-						if data[ke] < 0x20 {
-							return result, i, decode.NewParseErr("site", i, scan.ErrBadString)
-						}
-						if data[ke] == '"' {
-							s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-							i = ke + 1
-						} else {
-							s, i, err = scan.String(data, i)
-							if err != nil {
-								return result, i, decode.NewParseErr("site", i, err)
-							}
-						}
-					}
-					var u *url.URL
-					u, err = url.Parse(s)
+				var s string
+				if i >= len(data) || data[i] != '"' {
+					return result, i, decode.NewParseErr("site", i, scan.ErrExpectString)
+				}
+				ke := i + 1
+				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					ke++
+				}
+				if ke >= len(data) {
+					return result, i, decode.NewParseErr("site", i, scan.ErrUnterminated)
+				}
+				if data[ke] < 0x20 {
+					return result, i, decode.NewParseErr("site", i, scan.ErrBadString)
+				}
+				if data[ke] == '"' {
+					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					s, i, err = scan.String(data, i)
 					if err != nil {
 						return result, i, decode.NewParseErr("site", i, err)
 					}
-					result.Site = *u
 				}
+				var u *url.URL
+				u, err = url.Parse(s)
+				if err != nil {
+					return result, i, decode.NewParseErr("site", i, err)
+				}
+				result.Site = *u
 			default:
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
 			}
@@ -262,16 +240,14 @@ func (result RichTypes) DecodeFrom(data []byte) (RichTypes, int, error) {
 					return result, i, &validation.DuplicateKeyError{Path: []string{"gofrsId"}}
 				}
 				seenGofrsID = true
-				{
-					var ts string
-					ts, i, err = scan.String(data, i)
-					if err != nil {
-						return result, i, decode.NewParseErr("gofrsId", i, err)
-					}
-					err = result.GofrsID.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts)))
-					if err != nil {
-						return result, i, decode.NewParseErr("gofrsId", i, err)
-					}
+				var ts string
+				ts, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("gofrsId", i, err)
+				}
+				err = result.GofrsID.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts)))
+				if err != nil {
+					return result, i, decode.NewParseErr("gofrsId", i, err)
 				}
 			} else {
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -344,16 +320,14 @@ func (result RichTypes) DecodeFromStream(s *scan.Stream) (RichTypes, error) {
 					return result, &validation.DuplicateKeyError{Path: []string{"id"}}
 				}
 				seenID = true
-				{
-					var ts string
-					ts, err = s.String()
-					if err != nil {
-						return result, decode.NewParseErr("id", s.Pos, err)
-					}
-					err = result.ID.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts)))
-					if err != nil {
-						return result, decode.NewParseErr("id", s.Pos, err)
-					}
+				var ts string
+				ts, err = s.String()
+				if err != nil {
+					return result, decode.NewParseErr("id", s.Pos, err)
+				}
+				err = result.ID.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts)))
+				if err != nil {
+					return result, decode.NewParseErr("id", s.Pos, err)
 				}
 			} else {
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
@@ -368,19 +342,17 @@ func (result RichTypes) DecodeFromStream(s *scan.Stream) (RichTypes, error) {
 					return result, &validation.DuplicateKeyError{Path: []string{"big"}}
 				}
 				seenBig = true
-				{
-					start := s.Pos
-					prevPin := s.Shift
-					s.Shift = false
-					err = s.SkipValue()
-					s.Shift = prevPin
-					if err != nil {
-						return result, decode.NewParseErr("big", s.Pos, err)
-					}
-					buf := s.Bytes()
-					if _, ok := (&result.Big).SetString(unsafe.String(unsafe.SliceData(buf[start:]), s.Pos-start), 10); !ok {
-						return result, decode.NewParseErr("big", s.Pos, scan.ErrBadNumber)
-					}
+				start := s.Pos
+				prevPin := s.Shift
+				s.Shift = false
+				err = s.SkipValue()
+				s.Shift = prevPin
+				if err != nil {
+					return result, decode.NewParseErr("big", s.Pos, err)
+				}
+				buf := s.Bytes()
+				if _, ok := (&result.Big).SetString(unsafe.String(unsafe.SliceData(buf[start:]), s.Pos-start), 10); !ok {
+					return result, decode.NewParseErr("big", s.Pos, scan.ErrBadNumber)
 				}
 			} else {
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
@@ -396,15 +368,13 @@ func (result RichTypes) DecodeFromStream(s *scan.Stream) (RichTypes, error) {
 					return result, &validation.DuplicateKeyError{Path: []string{"bigF"}}
 				}
 				seenBigF = true
-				{
-					var v string
-					v, err = s.String()
-					if err != nil {
-						return result, decode.NewParseErr("bigF", s.Pos, err)
-					}
-					if _, _, err := (&result.BigF).Parse(v, 10); err != nil {
-						return result, decode.NewParseErr("bigF", s.Pos, err)
-					}
+				var sv string
+				sv, err = s.String()
+				if err != nil {
+					return result, decode.NewParseErr("bigF", s.Pos, err)
+				}
+				if _, _, err := (&result.BigF).Parse(sv, 10); err != nil {
+					return result, decode.NewParseErr("bigF", s.Pos, err)
 				}
 			case "bigR":
 				err = s.ConsumeColon()
@@ -415,15 +385,13 @@ func (result RichTypes) DecodeFromStream(s *scan.Stream) (RichTypes, error) {
 					return result, &validation.DuplicateKeyError{Path: []string{"bigR"}}
 				}
 				seenBigR = true
-				{
-					var v string
-					v, err = s.String()
-					if err != nil {
-						return result, decode.NewParseErr("bigR", s.Pos, err)
-					}
-					if _, ok := (&result.BigR).SetString(v); !ok {
-						return result, decode.NewParseErr("bigR", s.Pos, scan.ErrBadNumber)
-					}
+				var sv string
+				sv, err = s.String()
+				if err != nil {
+					return result, decode.NewParseErr("bigR", s.Pos, err)
+				}
+				if _, ok := (&result.BigR).SetString(sv); !ok {
+					return result, decode.NewParseErr("bigR", s.Pos, scan.ErrBadNumber)
 				}
 			case "raw1":
 				err = s.ConsumeColon()
@@ -434,18 +402,16 @@ func (result RichTypes) DecodeFromStream(s *scan.Stream) (RichTypes, error) {
 					return result, &validation.DuplicateKeyError{Path: []string{"raw1"}}
 				}
 				seenRaw1 = true
-				{
-					start := s.Pos
-					prevPin := s.Shift
-					s.Shift = false
-					err = s.SkipValue()
-					s.Shift = prevPin
-					if err != nil {
-						return result, decode.NewParseErr("raw1", s.Pos, err)
-					}
-					raw := s.Bytes()[start:s.Pos]
-					result.Raw1 = append(make([]byte, 0, len(raw)), raw...)
+				start := s.Pos
+				prevPin := s.Shift
+				s.Shift = false
+				err = s.SkipValue()
+				s.Shift = prevPin
+				if err != nil {
+					return result, decode.NewParseErr("raw1", s.Pos, err)
 				}
+				raw := s.Bytes()[start:s.Pos]
+				result.Raw1 = append(make([]byte, 0, len(raw)), raw...)
 			case "raw2":
 				err = s.ConsumeColon()
 				if err != nil {
@@ -455,18 +421,16 @@ func (result RichTypes) DecodeFromStream(s *scan.Stream) (RichTypes, error) {
 					return result, &validation.DuplicateKeyError{Path: []string{"raw2"}}
 				}
 				seenRaw2 = true
-				{
-					start := s.Pos
-					prevPin := s.Shift
-					s.Shift = false
-					err = s.SkipValue()
-					s.Shift = prevPin
-					if err != nil {
-						return result, decode.NewParseErr("raw2", s.Pos, err)
-					}
-					raw := s.Bytes()[start:s.Pos]
-					result.Raw2 = append(make([]byte, 0, len(raw)), raw...)
+				start := s.Pos
+				prevPin := s.Shift
+				s.Shift = false
+				err = s.SkipValue()
+				s.Shift = prevPin
+				if err != nil {
+					return result, decode.NewParseErr("raw2", s.Pos, err)
 				}
+				raw := s.Bytes()[start:s.Pos]
+				result.Raw2 = append(make([]byte, 0, len(raw)), raw...)
 			case "site":
 				err = s.ConsumeColon()
 				if err != nil {
@@ -476,18 +440,16 @@ func (result RichTypes) DecodeFromStream(s *scan.Stream) (RichTypes, error) {
 					return result, &validation.DuplicateKeyError{Path: []string{"site"}}
 				}
 				seenSite = true
-				{
-					var v string
-					v, err = s.String()
-					if err != nil {
-						return result, decode.NewParseErr("site", s.Pos, err)
-					}
-					u, err := url.Parse(v)
-					if err != nil {
-						return result, decode.NewParseErr("site", s.Pos, err)
-					}
-					result.Site = *u
+				var sv string
+				sv, err = s.String()
+				if err != nil {
+					return result, decode.NewParseErr("site", s.Pos, err)
 				}
+				u, err := url.Parse(sv)
+				if err != nil {
+					return result, decode.NewParseErr("site", s.Pos, err)
+				}
+				result.Site = *u
 			default:
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
 			}
@@ -501,16 +463,14 @@ func (result RichTypes) DecodeFromStream(s *scan.Stream) (RichTypes, error) {
 					return result, &validation.DuplicateKeyError{Path: []string{"gofrsId"}}
 				}
 				seenGofrsID = true
-				{
-					var ts string
-					ts, err = s.String()
-					if err != nil {
-						return result, decode.NewParseErr("gofrsId", s.Pos, err)
-					}
-					err = result.GofrsID.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts)))
-					if err != nil {
-						return result, decode.NewParseErr("gofrsId", s.Pos, err)
-					}
+				var ts string
+				ts, err = s.String()
+				if err != nil {
+					return result, decode.NewParseErr("gofrsId", s.Pos, err)
+				}
+				err = result.GofrsID.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts)))
+				if err != nil {
+					return result, decode.NewParseErr("gofrsId", s.Pos, err)
 				}
 			} else {
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
@@ -580,25 +540,21 @@ func (s RichTypes) AppendJSON(dst []byte) ([]byte, error) {
 		return dst, err
 	}
 	dst = append(dst, "\",\"gofrsId\":"...)
-	{
-		var t []byte
-		t, err = s.GofrsID.MarshalText()
-		if err != nil {
-			return dst, err
-		}
-		dst = append(dst, '"')
-		dst = encode.AppendStringNoHTML(dst, encode.BytesToString(t))
+	var bGofrsID []byte
+	bGofrsID, err = s.GofrsID.MarshalText()
+	if err != nil {
+		return dst, err
 	}
+	dst = append(dst, '"')
+	dst = encode.AppendStringNoHTML(dst, encode.BytesToString(bGofrsID))
 	dst = append(dst, ",\"id\":"...)
-	{
-		var t []byte
-		t, err = s.ID.MarshalText()
-		if err != nil {
-			return dst, err
-		}
-		dst = append(dst, '"')
-		dst = encode.AppendStringNoHTML(dst, encode.BytesToString(t))
+	var bID []byte
+	bID, err = s.ID.MarshalText()
+	if err != nil {
+		return dst, err
 	}
+	dst = append(dst, '"')
+	dst = encode.AppendStringNoHTML(dst, encode.BytesToString(bID))
 	dst = append(dst, ",\"raw1\":"...)
 	if len(s.Raw1) == 0 {
 		dst = append(dst, "null"...)
