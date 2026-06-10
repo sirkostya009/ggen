@@ -826,7 +826,6 @@ func (result CustomDiveStruct) DecodeFrom(data []byte) (CustomDiveStruct, int, e
 					i = 4 + i
 					result.Ptr = nil
 				} else {
-					var v int
 					{
 						neg := false
 						if i < len(data) && data[i] == '-' {
@@ -865,9 +864,12 @@ func (result CustomDiveStruct) DecodeFrom(data []byte) (CustomDiveStruct, int, e
 						} else {
 							n = int64(u)
 						}
-						v = int(n)
+						if result.Ptr == nil {
+							result.Ptr = new(int(n))
+						} else {
+							(*result.Ptr) = int(n)
+						}
 					}
-					result.Ptr = &v
 				}
 				if err := PointerCheck(result.Ptr); err != nil {
 					return result, i, &validation.CustomError{Path: []string{"ptr"}, Name: "@PointerCheck", Cause: err}
@@ -1388,15 +1390,16 @@ func (result CustomDiveStruct) DecodeFromStream(s *scan.Stream) (CustomDiveStruc
 					s.Pos += 4
 					result.Ptr = nil
 				} else {
-					var v int
-					var iv int64
-					iv, err = s.Int64()
+					var v int64
+					v, err = s.Int64()
 					if err != nil {
 						return result, decode.NewParseErr("ptr", s.Pos, err)
 					}
-					v = int(iv)
-
-					result.Ptr = &v
+					if result.Ptr == nil {
+						result.Ptr = new(int(v))
+					} else {
+						(*result.Ptr) = int(v)
+					}
 				}
 				if err := PointerCheck(result.Ptr); err != nil {
 					return result, &validation.CustomError{Path: []string{"ptr"}, Name: "@PointerCheck", Cause: err}

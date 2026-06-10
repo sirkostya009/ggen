@@ -194,11 +194,12 @@ func renderStructMethods(buf *bytes.Buffer, s StructInfo) {
 // appended in place.
 func collectImports(structs []StructInfo, bodies [][]byte) ([]string, []string) {
 	need := map[string]struct{}{
-		// scan + encode are emitted by every generated method. They're
-		// always referenced: scan.X (or s.X for stream) in DecodeFrom,
-		// encode.AppendStringNoHTML / encode.AppendAny in AppendJSON.
-		"github.com/sirkostya009/ggen/scan":   {},
-		"github.com/sirkostya009/ggen/encode": {},
+		// scan is emitted by every generated method — scan.X (or s.X for
+		// stream) shows up in every DecodeFrom. encode is NOT universal:
+		// a struct whose AppendJSON only delegates to nested AppendJSON
+		// and appends primitives (e.g. `*T` + `*int` fields) never names
+		// the package, so it's resolved by the body-scan below instead.
+		"github.com/sirkostya009/ggen/scan": {},
 	}
 	add := func(p string) {
 		if p != "" {
@@ -337,6 +338,7 @@ func scanBodiesForStdImports(bodies [][]byte, add func(string)) {
 		{[]byte("bytes."), "bytes"},
 		{[]byte("fmt."), "fmt"},
 		{[]byte("time."), "time"},
+		{[]byte("encode."), "github.com/sirkostya009/ggen/encode"},
 	}
 	for _, body := range bodies {
 		for i := range table {
@@ -465,7 +467,21 @@ func collectFieldImports(f FieldInfo, add func(string), anyString, anyValidation
 		if f.Pointer {
 			typ = f.PointeeType
 		}
-		crossPkgStruct(typ, f.Iface)
+		if f.Pointer && len(typ) > 0 && typ[0] == '*' {
+			// Multi-level pointer (`**T`, …): the intermediate levels decode
+			// natively now (new(new(v)) on the way in, level-by-level deref
+			// on the way out). Only the LEAF kind drives imports, so recurse
+			// on a synthetic leaf field — a primitive leaf pulls in nothing,
+			// a cross-pkg struct leaf still needs encoding/json.
+			leaf := f
+			leaf.Pointer = false
+			leaf.PointeeType = ""
+			_, leaf.GoType = pointerDepth(f.GoType)
+			leaf.Kind = resolveKind(leaf.GoType)
+			collectFieldImports(leaf, add, anyString, anyValidation, anyBytes, anyRequired)
+		} else {
+			crossPkgStruct(typ, f.Iface)
+		}
 	case KindSlice, KindArray:
 		// Slice / array elements may themselves be cross-pkg structs
 		// (json.Marshal / json.Unmarshal fallback in
@@ -1236,15 +1252,25 @@ func inlineValueEmit(f FieldInfo) string {
 
 func renderAppendValue(b *bytes.Buffer, f FieldInfo, ref string) {
 	if f.Pointer {
-		// null when nil; otherwise recurse into the pointee via dereference.
-		inner := f
-		inner.Pointer = false
-		if inner.PointeeType != "" {
-			inner.GoType = inner.PointeeType
+		// A nil at any level of the chain emits `null`; only a fully-allocated
+		// chain reaches the leaf. One flat `else if` ladder (one rung per
+		// pointer level, matching stdlib's intermediate-nil → `null`) rather
+		// than a nested staircase. No json.Marshal fallback at any depth.
+		depth, leafType := pointerDepth(f.GoType)
+		leaf := f
+		leaf.Pointer = false
+		leaf.PointeeType = ""
+		leaf.GoType = leafType
+		leaf.Kind = resolveKind(leafType)
+		for k := 0; k < depth; k++ {
+			kw := "if"
+			if k > 0 {
+				kw = "} else if"
+			}
+			fmt.Fprintf(b, "%s %s == nil {\n\tdst = append(dst, 'n', 'u', 'l', 'l')\n", kw, derefStr(ref, k))
 		}
-		innerRef := "(*" + ref + ")"
-		fmt.Fprintf(b, "if %s == nil {\n\tdst = append(dst, 'n', 'u', 'l', 'l')\n} else {\n\t", ref)
-		renderAppendValue(b, inner, innerRef)
+		b.WriteString("} else {\n\t")
+		renderAppendValue(b, leaf, derefStr(ref, depth))
 		b.WriteString("}\n")
 		return
 	}
@@ -1713,19 +1739,31 @@ func strMult(htmlEscape bool) int {
 // at the top level; runtimeCode is emitted as-is.
 func sizeContrib(f FieldInfo, ref string) (int, string) {
 	if f.Pointer {
-		inner := f
-		inner.Pointer = false
-		if inner.PointeeType != "" {
-			inner.GoType = inner.PointeeType
-		}
-		innerN, innerCode := sizeContrib(inner, "(*"+ref+")")
+		// A nil at any level of the chain budgets `null` (4 bytes); only a
+		// fully-allocated chain reaches the leaf. Emit one flat `else if`
+		// ladder (one rung per pointer level) rather than nesting, so a
+		// `***T` reads as a chain of guards, not a staircase.
+		depth, leafType := pointerDepth(f.GoType)
+		leaf := f
+		leaf.Pointer = false
+		leaf.PointeeType = ""
+		leaf.GoType = leafType
+		leaf.Kind = resolveKind(leafType)
+		leafN, leafCode := sizeContrib(leaf, derefStr(ref, depth))
 		b := getSmall()
 		defer putSmall(b)
-		fmt.Fprintf(b, "if %s == nil { size += 4 } else {\n", ref)
-		if innerN > 0 {
-			fmt.Fprintf(b, "size += %d\n", innerN)
+		for k := range depth {
+			kw := "if"
+			if k > 0 {
+				kw = " else if"
+			}
+			fmt.Fprintf(b, "%s %s == nil { size += 4 }", kw, derefStr(ref, k))
 		}
-		b.WriteString(innerCode)
+		b.WriteString(" else {\n")
+		if leafN > 0 {
+			fmt.Fprintf(b, "size += %d\n", leafN)
+		}
+		b.WriteString(leafCode)
 		b.WriteString("}\n")
 		return 0, b.String()
 	}
@@ -2294,6 +2332,14 @@ func inlineScanInt64(b *bytes.Buffer, posVar, dst, castFn, field string) {
 	case dst != "n":
 		assign = dst + " = n"
 	}
+	inlineScanInt64Stmt(b, posVar, field, assign)
+}
+
+// inlineScanInt64Stmt emits the inline signed-int scan, then `stmt` as the
+// trailing statement with the parsed value available in `n` (int64). Callers
+// that want to consume `n` directly — e.g. a pointer assign cascade with no
+// intermediate temp — pass the consuming statement here.
+func inlineScanInt64Stmt(b *bytes.Buffer, posVar, field, stmt string) {
 	fmt.Fprintf(b, `{
 	neg := false
 	if %[1]s < len(data) && data[%[1]s] == '-' { neg = true; %[1]s++ }
@@ -2321,7 +2367,7 @@ func inlineScanInt64(b *bytes.Buffer, posVar, dst, castFn, field string) {
 	}
 	%[3]s
 }
-`, posVar, field, assign)
+`, posVar, field, stmt)
 }
 
 // inlineScanUint64 is the unsigned counterpart of inlineScanInt64.
@@ -2335,6 +2381,12 @@ func inlineScanUint64(b *bytes.Buffer, posVar, dst, castFn, field string) {
 	case dst != "n":
 		assign = dst + " = n"
 	}
+	inlineScanUint64Stmt(b, posVar, field, assign)
+}
+
+// inlineScanUint64Stmt is the unsigned counterpart of inlineScanInt64Stmt:
+// the parsed value lands in `n` (uint64) before `stmt` runs.
+func inlineScanUint64Stmt(b *bytes.Buffer, posVar, field, stmt string) {
 	fmt.Fprintf(b, `{
 	if %[1]s >= len(data) || data[%[1]s] < '0' || data[%[1]s] > '9' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrBadNumber) }
 	var n uint64
@@ -2348,7 +2400,7 @@ func inlineScanUint64(b *bytes.Buffer, posVar, dst, castFn, field string) {
 	}
 	%[3]s
 }
-`, posVar, field, assign)
+`, posVar, field, stmt)
 }
 
 // inlineScanString emits a zero-copy string reader that assigns into dst and
@@ -2394,10 +2446,10 @@ func inlineScanString(b *bytes.Buffer, posIn, dst, posOut, field string) {
 //     backing is reused but starts at len=0.
 //   - fixed-length arrays (KindArray) need no reset — strict-length
 //     decode overwrites every slot or errors.
-//   - pointer fields are not reset here. Today they always allocate
-//     fresh via `var v T` in the renderField pointer branch; the
-//     receiver pointer is discarded. Decode-into-receiver for the
-//     pointee is future work (see CLAUDE.md backlog).
+//   - pointer fields are not reset here. Single `*T` merges into a non-nil
+//     receiver pointee inside the renderField pointer branch (reuse, not
+//     reset); multi-level `**T` always rebuilds the chain. Either way no
+//     entry-reset is needed or correct.
 func emitReceiverReset(b *bytes.Buffer, s StructInfo) {
 	for _, f := range s.Fields {
 		// Pointer-to-container fields (`*[]T`, `*map[K]V`) are not reset:
@@ -3505,6 +3557,98 @@ default: return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, scan.ErrBadBool)
 	b.WriteString("}\n")
 }
 
+// pointerDepth counts the leading `*` of a pointer field's GoType and
+// returns (depth, leafType). depth==1 is a plain `*T`; depth>=2 is a
+// multi-level pointer (`**T`, `***T`, …) whose leaf is the type left after
+// stripping every `*`.
+func pointerDepth(goType string) (int, string) {
+	depth := 0
+	for len(goType) > 0 && goType[0] == '*' {
+		depth++
+		goType = goType[1:]
+	}
+	return depth, goType
+}
+
+// derefStr returns ref dereferenced k times, parenthesized:
+// derefStr("x",0)=="x", derefStr("x",1)=="(*x)", derefStr("x",2)=="(*(*x))".
+func derefStr(ref string, k int) string {
+	for ; k > 0; k-- {
+		ref = "(*" + ref + ")"
+	}
+	return ref
+}
+
+// newChain returns `new(new(…expr))` with n `new(` calls — wraps expr in n
+// pointer levels via the Go 1.26 `new(expr)` form. n==1 → `new(expr)`.
+func newChain(expr string, n int) string {
+	return strings.Repeat("new(", n) + expr + strings.Repeat(")", n)
+}
+
+// widenedLeafCast maps a narrow numeric leaf kind to the wide type its scanner
+// naturally produces (`int64`/`uint64`/`float64`) plus the cast back to the
+// leaf type. For these the pointer decode scans into a wide temp `v` and casts
+// at the `new(…)`/assign site (`new(int(v))`) — no separate width-conversion
+// variable. Returns ("", 0, "") for kinds that need no widening (the temp is
+// already the leaf type, assigned as-is).
+func widenedLeafCast(k TypeKind, leafGoType string) (wideType string, wideKind TypeKind, cast string) {
+	switch k {
+	case KindInt, KindInt8, KindInt16, KindInt32:
+		return "int64", KindInt64, leafGoType
+	case KindUint, KindUint8, KindUint16, KindUint32:
+		return "uint64", KindUint64, leafGoType
+	case KindFloat32:
+		return "float64", KindFloat64, leafGoType
+	}
+	return "", 0, ""
+}
+
+// leafMerges reports whether a pointer leaf of this kind benefits from being
+// seeded with the receiver's carried-in value before decode (struct fields
+// persist across omission; slice/map backing is reused). Primitives just
+// overwrite, so seeding them is pointless.
+func leafMerges(k TypeKind) bool {
+	switch k {
+	case KindStruct, KindSlice, KindArray, KindMap:
+		return true
+	}
+	return false
+}
+
+// emitPointerSeed copies the receiver's existing leaf into the decode temp
+// `v` when the whole pointer chain is already allocated — so a mergeable leaf
+// merges against its carried-in value. No-op for non-mergeable leaves.
+func emitPointerSeed(b *bytes.Buffer, ref string, depth int, leafKind TypeKind) {
+	if !leafMerges(leafKind) {
+		return
+	}
+	conds := make([]string, depth)
+	for k := 0; k < depth; k++ {
+		conds[k] = derefStr(ref, k) + " != nil"
+	}
+	fmt.Fprintf(b, "if %s {\nv = %s\n}\n", strings.Join(conds, " && "), derefStr(ref, depth))
+}
+
+// emitPointerAssign writes the post-parse assign cascade for a depth-level
+// pointer field: the leaf value has already been decoded into temp `v`
+// (so a parse failure returned WITHOUT touching the receiver — no allocation
+// for a value that never landed). `valExpr` is the value written at the leaf —
+// `v`, or a width cast like `int(v)` for a widened numeric leaf. REUSE the
+// non-nil prefix of the chain, allocating `new(new(…valExpr))` only from the
+// first nil level down; the final else writes straight into a fully-allocated
+// chain. depth==1 is the plain single-pointer merge.
+func emitPointerAssign(b *bytes.Buffer, ref string, depth int, valExpr string) {
+	for k := 0; k < depth; k++ {
+		dk := derefStr(ref, k)
+		kw := "if"
+		if k > 0 {
+			kw = "} else if"
+		}
+		fmt.Fprintf(b, "%s %s == nil {\n%s = %s\n", kw, dk, dk, newChain(valExpr, depth-k))
+	}
+	fmt.Fprintf(b, "} else {\n%s = %s\n}\n", derefStr(ref, depth), valExpr)
+}
+
 func renderField(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	// Pointer FIRST: a pointer-to-T field with json:",string" needs to
 	// decode into the pointee's T and then take its address. Running the
@@ -3513,35 +3657,68 @@ func renderField(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	// inner.String preserved — the string-tag branch then runs on the
 	// inner-of-T type and assigns to the stack-local `v`.
 	if f.Pointer {
-		// null → nil; otherwise decode into a stack-local of the pointee
-		// type and take its address. Strip Pointer for the inner recursion.
-		inner := f
-		inner.Pointer = false
-		if inner.PointeeType != "" {
-			inner.GoType = inner.PointeeType
-		}
-		// Custom `@Func` rules apply to the field's exact type — `*T` for
-		// pointer fields. Built-in rules (gte, minlen, …) operate on the
-		// deref'd value as before, since they're typed against the
-		// underlying kind. Partition here, run @-rules on `ref` (the
-		// pointer) AFTER the if/else.
+		// Custom `@Func` rules apply to the field's exact type — `*T` /
+		// `**T` for pointer fields. Built-in rules (gte, minlen, …) operate
+		// on the deref'd leaf, since they're typed against the underlying
+		// kind. Partition here, run @-rules on `ref` (the pointer) AFTER the
+		// if/else.
 		builtinV, customV := partitionCustomValidation(f.Validation)
 		builtinM, customM := partitionCustomMods(f.Mods)
-		inner.Validation = builtinV
-		inner.Mods = builtinM
-		fmt.Fprintf(b, `if %s+4 <= len(data) && data[%s] == 'n' && data[%s+1] == 'u' && data[%s+2] == 'l' && data[%s+3] == 'l' {
-	%s = 4 + %s
-	%s = nil
+		// Decode-into-receiver, any pointer depth. JSON `null` → nil outer
+		// (drops a pre-existing chain, stdlib merge parity). Otherwise decode
+		// the leaf into a temp `v` FIRST — a parse failure returns before any
+		// mutation, so we never allocate a chain for a value that never
+		// landed. On success the assign cascade REUSES the non-nil prefix of
+		// the receiver's chain, allocating `new(new(…))` only from the first
+		// nil level down. A mergeable leaf is seeded from the carried-in value
+		// so it still merges. No reflective encoding/json fallback at any depth.
+		depth, leafType := pointerDepth(f.GoType)
+		leaf := f
+		leaf.Pointer = false
+		leaf.PointeeType = ""
+		leaf.GoType = leafType
+		leaf.Kind = resolveKind(leafType)
+		leaf.Validation = builtinV
+		leaf.Mods = builtinM
+		// Widened numeric leaf: scan into the wide type and cast at the assign
+		// site (`new(int(v))` / `new(int(n))`) rather than carrying a separate
+		// conversion var. castFn is the cast back to the narrow leaf type.
+		scanType, castFn := leafType, ""
+		if wide, wideKind, cast := widenedLeafCast(leaf.Kind, leafType); wide != "" {
+			leaf.Kind, leaf.GoType, scanType, castFn = wideKind, wide, wide, cast
+		}
+		fmt.Fprintf(b, `if %[1]s+4 <= len(data) && data[%[1]s] == 'n' && data[%[1]s+1] == 'u' && data[%[1]s+2] == 'l' && data[%[1]s+3] == 'l' {
+	%[1]s = 4 + %[1]s
+	%[2]s = nil
 } else {
-	var v %s
-	`, posVar, posVar, posVar, posVar, posVar,
-			posVar, posVar,
-			ref,
-			inner.GoType)
-		renderField(b, inner, "v", posVar)
-		fmt.Fprintf(b, `	%s = &v
-}
-`, ref)
+`, posVar, ref)
+		// Fast path: the inline int/uint scanner already materializes `n`, so
+		// a leaf with no built-in mods/validation skips the temp entirely —
+		// the assign cascade runs in-block straight off `n`.
+		if (leaf.Kind == KindInt64 || leaf.Kind == KindUint64) && len(builtinV) == 0 && len(builtinM) == 0 {
+			valExpr := "n"
+			if castFn != "" {
+				valExpr = castFn + "(n)"
+			}
+			var cascade bytes.Buffer
+			emitPointerAssign(&cascade, ref, depth, valExpr)
+			stmt := strings.TrimRight(cascade.String(), "\n")
+			if leaf.Kind == KindInt64 {
+				inlineScanInt64Stmt(b, posVar, fieldLit(f), stmt)
+			} else {
+				inlineScanUint64Stmt(b, posVar, fieldLit(f), stmt)
+			}
+		} else {
+			valExpr := "v"
+			if castFn != "" {
+				valExpr = castFn + "(v)"
+			}
+			fmt.Fprintf(b, "var v %s\n", scanType)
+			emitPointerSeed(b, ref, depth, leaf.Kind)
+			renderField(b, leaf, "v", posVar)
+			emitPointerAssign(b, ref, depth, valExpr)
+		}
+		b.WriteString("}\n")
 		if !f.NoValidate && (len(customV) > 0 || len(customM) > 0) {
 			outer := f
 			outer.Validation = customV
@@ -4715,31 +4892,44 @@ func renderStreamField(f FieldInfo, ref, posVar string) string {
 	field := fieldLit(f)
 	chk := streamErrCheck(field)
 	if f.Pointer {
-		inner := f
-		inner.Pointer = false
-		if inner.PointeeType != "" {
-			inner.GoType = inner.PointeeType
-		}
-		// See the bytes-path comment: custom `@Func` rules want the `*T`
-		// pointer; built-ins want the deref'd value. Partition both lists.
+		// See the bytes-path comment: custom `@Func` rules want the pointer;
+		// built-ins want the deref'd leaf. Partition both lists.
 		builtinV, customV := partitionCustomValidation(f.Validation)
 		builtinM, customM := partitionCustomMods(f.Mods)
-		inner.Validation = builtinV
-		inner.Mods = builtinM
 		rm := streamReadMore(field, "0", false)
 		rmKi := strings.Replace(rm, "if s.Pos >=", "if s.Pos+ki >=", 1)
-		fmt.Fprintf(b, `%[4]sif s.Bytes()[s.Pos] == 'n' {
+		// Decode-into-receiver, any pointer depth — see renderField. null →
+		// nil outer; otherwise parse the leaf into temp `v` FIRST (no mutation
+		// on parse failure), then the assign cascade reuses the non-nil prefix
+		// of the chain and allocates only the nil tail. Mergeable leaf seeded
+		// from the carried-in value.
+		depth, leafType := pointerDepth(f.GoType)
+		leaf := f
+		leaf.Pointer = false
+		leaf.PointeeType = ""
+		leaf.GoType = leafType
+		leaf.Kind = resolveKind(leafType)
+		leaf.Validation = builtinV
+		leaf.Mods = builtinM
+		// Widened numeric leaf: scan into a wide temp (drops the stream
+		// path's separate widening var) and cast at the assign (`new(int(v))`).
+		scanType, valExpr := leafType, "v"
+		if wide, wideKind, cast := widenedLeafCast(leaf.Kind, leafType); wide != "" {
+			leaf.Kind, leaf.GoType, scanType, valExpr = wideKind, wide, wide, cast+"(v)"
+		}
+		fmt.Fprintf(b, `%[2]sif s.Bytes()[s.Pos] == 'n' {
 	for ki := 1; ki < 4; ki++ {
-		%[6]sif s.Bytes()[s.Pos+ki] != "null"[ki] { return result, decode.NewParseErr(%[5]s, s.Pos, scan.ErrBadLiteral) }
+		%[3]sif s.Bytes()[s.Pos+ki] != "null"[ki] { return result, decode.NewParseErr(%[4]s, s.Pos, scan.ErrBadLiteral) }
 	}
 	s.Pos += 4
 	%[1]s = nil
 } else {
-	var v %[2]s
-	%[3]s
-	%[1]s = &v
-}
-`, ref, inner.GoType, renderStreamField(inner, "v", posVar), rm, field, rmKi)
+	var v %[5]s
+`, ref, rm, rmKi, field, scanType)
+		emitPointerSeed(b, ref, depth, leaf.Kind)
+		b.WriteString(renderStreamField(leaf, "v", posVar))
+		emitPointerAssign(b, ref, depth, valExpr)
+		b.WriteString("}\n")
 		if !f.NoValidate && (len(customV) > 0 || len(customM) > 0) {
 			outer := f
 			outer.Validation = customV

@@ -3,7 +3,6 @@
 package integrationtests
 
 import (
-	"encoding/json"
 	"math"
 	"strconv"
 	"strings"
@@ -15,6 +14,1472 @@ import (
 	"github.com/sirkostya009/ggen/encode"
 	"github.com/sirkostya009/ggen/scan"
 )
+
+func (result PtrNameStruct) DecodeFrom(data []byte) (PtrNameStruct, int, error) {
+	i := 0
+	var err error
+	_ = err
+	seenName := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		i++
+		return result, i, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
+		}
+		{
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+			}
+			if data[ke] < 0x20 {
+				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+			}
+			if data[ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				key, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("", i, err)
+				}
+			}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		}
+		i++
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch len(key) {
+		case 4:
+			if key == "name" {
+				if seenName {
+					return result, i, &validation.DuplicateKeyError{Path: []string{"name"}}
+				}
+				seenName = true
+				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+					i = 4 + i
+					result.Name = nil
+				} else {
+					var v string
+					if i >= len(data) || data[i] != '"' {
+						return result, i, decode.NewParseErr("name", i, scan.ErrExpectString)
+					}
+					{
+						ke := i + 1
+						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+							ke++
+						}
+						if ke >= len(data) {
+							return result, i, decode.NewParseErr("name", i, scan.ErrUnterminated)
+						}
+						if data[ke] < 0x20 {
+							return result, i, decode.NewParseErr("name", i, scan.ErrBadString)
+						}
+						if data[ke] == '"' {
+							v = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+							i = ke + 1
+						} else {
+							v, i, err = scan.String(data, i)
+							if err != nil {
+								return result, i, decode.NewParseErr("name", i, err)
+							}
+						}
+					}
+					if result.Name == nil {
+						result.Name = new(v)
+					} else {
+						(*result.Name) = v
+					}
+				}
+			} else {
+				return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			}
+		default:
+			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			i++
+			return result, i, nil
+		}
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+	}
+}
+
+func (result PtrNameStruct) DecodeFromStream(s *scan.Stream) (PtrNameStruct, error) {
+	seenName := false
+	err := s.ObjectOpen()
+	if err != nil {
+		return result, decode.NewParseErr("", s.Pos, err)
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, decode.NewParseErr("", s.Pos, err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView()
+		if err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		switch len(key) {
+		case 4:
+			if key == "name" {
+				err = s.ConsumeColon()
+				if err != nil {
+					return result, decode.NewParseErr("name", s.Pos, err)
+				}
+				if seenName {
+					return result, &validation.DuplicateKeyError{Path: []string{"name"}}
+				}
+				seenName = true
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("name", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, decode.NewParseErr("name", s.Pos, err)
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, decode.NewParseErr("name", s.Pos, scan.ErrBadLiteral)
+						}
+					}
+					s.Pos += 4
+					result.Name = nil
+				} else {
+					var v string
+					v, err = s.String()
+					if err != nil {
+						return result, decode.NewParseErr("name", s.Pos, err)
+					}
+					if result.Name == nil {
+						result.Name = new(v)
+					} else {
+						(*result.Name) = v
+					}
+				}
+			} else {
+				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			}
+		default:
+			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+		}
+
+		err = s.SkipSpace()
+		if err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, decode.NewParseErr("", s.Pos, err)
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, decode.NewParseErr("", s.Pos, err)
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			return result, nil
+		}
+		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+	}
+}
+
+func (s PtrNameStruct) JSONSize() int {
+	size := 9
+	if s.Name == nil {
+		size += 4
+	} else {
+		size += 2
+		size += len((*s.Name)) * 2
+	}
+	return size
+}
+
+func (s PtrNameStruct) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"name\":"...)
+	if s.Name == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '"')
+		dst = encode.AppendStringNoHTML(dst, (*s.Name))
+	}
+	return append(dst, '}'), nil
+}
+
+func (result PtrCountStruct) DecodeFrom(data []byte) (PtrCountStruct, int, error) {
+	i := 0
+	var err error
+	_ = err
+	seenCount := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		i++
+		return result, i, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
+		}
+		{
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+			}
+			if data[ke] < 0x20 {
+				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+			}
+			if data[ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				key, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("", i, err)
+				}
+			}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		}
+		i++
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch len(key) {
+		case 5:
+			if key == "count" {
+				if seenCount {
+					return result, i, &validation.DuplicateKeyError{Path: []string{"count"}}
+				}
+				seenCount = true
+				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+					i = 4 + i
+					result.Count = nil
+				} else {
+					{
+						neg := false
+						if i < len(data) && data[i] == '-' {
+							neg = true
+							i++
+						}
+						if i >= len(data) || data[i] < '0' || data[i] > '9' {
+							return result, i, decode.NewParseErr("count", i, scan.ErrBadNumber)
+						}
+						limit := uint64(math.MaxInt64)
+						if neg {
+							limit = scan.SignedNeg
+						}
+						var u uint64
+						for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+							d := uint64(data[i] - '0')
+							if u > limit/10 || (u == limit/10 && d > limit%10) {
+								return result, i, decode.NewParseErr("count", i, scan.ErrNumberOverflow)
+							}
+							u = u*10 + d
+							i++
+						}
+						if i < len(data) {
+							c := data[i]
+							if c == '.' || c == 'e' || c == 'E' {
+								return result, i, decode.NewParseErr("count", i, scan.ErrBadNumber)
+							}
+						}
+						var n int64
+						if neg {
+							if u == scan.SignedNeg {
+								n = math.MinInt64
+							} else {
+								n = -int64(u)
+							}
+						} else {
+							n = int64(u)
+						}
+						if result.Count == nil {
+							result.Count = new(int(n))
+						} else {
+							(*result.Count) = int(n)
+						}
+					}
+				}
+			} else {
+				return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			}
+		default:
+			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			i++
+			return result, i, nil
+		}
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+	}
+}
+
+func (result PtrCountStruct) DecodeFromStream(s *scan.Stream) (PtrCountStruct, error) {
+	seenCount := false
+	err := s.ObjectOpen()
+	if err != nil {
+		return result, decode.NewParseErr("", s.Pos, err)
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, decode.NewParseErr("", s.Pos, err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView()
+		if err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		switch len(key) {
+		case 5:
+			if key == "count" {
+				err = s.ConsumeColon()
+				if err != nil {
+					return result, decode.NewParseErr("count", s.Pos, err)
+				}
+				if seenCount {
+					return result, &validation.DuplicateKeyError{Path: []string{"count"}}
+				}
+				seenCount = true
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("count", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, decode.NewParseErr("count", s.Pos, err)
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, decode.NewParseErr("count", s.Pos, scan.ErrBadLiteral)
+						}
+					}
+					s.Pos += 4
+					result.Count = nil
+				} else {
+					var v int64
+					v, err = s.Int64()
+					if err != nil {
+						return result, decode.NewParseErr("count", s.Pos, err)
+					}
+					if result.Count == nil {
+						result.Count = new(int(v))
+					} else {
+						(*result.Count) = int(v)
+					}
+				}
+			} else {
+				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			}
+		default:
+			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+		}
+
+		err = s.SkipSpace()
+		if err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, decode.NewParseErr("", s.Pos, err)
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, decode.NewParseErr("", s.Pos, err)
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			return result, nil
+		}
+		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+	}
+}
+
+func (s PtrCountStruct) JSONSize() int {
+	size := 2
+	if s.Count != nil {
+		size += 29
+	}
+	return size
+}
+
+func (s PtrCountStruct) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, '{')
+	start := len(dst)
+	if s.Count != nil {
+		if len(dst) > start {
+			dst = append(dst, ',')
+		}
+		dst = append(dst, "\"count\":"...)
+		if s.Count == nil {
+			dst = append(dst, "null"...)
+		} else {
+			dst = strconv.AppendInt(dst, int64((*s.Count)), 10)
+		}
+	}
+	return append(dst, '}'), nil
+}
+
+func (result PtrRatioStruct) DecodeFrom(data []byte) (PtrRatioStruct, int, error) {
+	i := 0
+	var err error
+	_ = err
+	seenRatio := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		i++
+		return result, i, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
+		}
+		{
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+			}
+			if data[ke] < 0x20 {
+				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+			}
+			if data[ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				key, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("", i, err)
+				}
+			}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		}
+		i++
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch len(key) {
+		case 5:
+			if key == "ratio" {
+				if seenRatio {
+					return result, i, &validation.DuplicateKeyError{Path: []string{"ratio"}}
+				}
+				seenRatio = true
+				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+					i = 4 + i
+					result.Ratio = nil
+				} else {
+					var v float64
+					v, i, err = scan.Float64(data, i)
+					if err != nil {
+						return result, i, decode.NewParseErr("ratio", i, err)
+					}
+					if result.Ratio == nil {
+						result.Ratio = new(v)
+					} else {
+						(*result.Ratio) = v
+					}
+				}
+			} else {
+				return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			}
+		default:
+			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			i++
+			return result, i, nil
+		}
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+	}
+}
+
+func (result PtrRatioStruct) DecodeFromStream(s *scan.Stream) (PtrRatioStruct, error) {
+	seenRatio := false
+	err := s.ObjectOpen()
+	if err != nil {
+		return result, decode.NewParseErr("", s.Pos, err)
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, decode.NewParseErr("", s.Pos, err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView()
+		if err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		switch len(key) {
+		case 5:
+			if key == "ratio" {
+				err = s.ConsumeColon()
+				if err != nil {
+					return result, decode.NewParseErr("ratio", s.Pos, err)
+				}
+				if seenRatio {
+					return result, &validation.DuplicateKeyError{Path: []string{"ratio"}}
+				}
+				seenRatio = true
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("ratio", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, decode.NewParseErr("ratio", s.Pos, err)
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, decode.NewParseErr("ratio", s.Pos, scan.ErrBadLiteral)
+						}
+					}
+					s.Pos += 4
+					result.Ratio = nil
+				} else {
+					var v float64
+					v, err = s.Float64()
+					if err != nil {
+						return result, decode.NewParseErr("ratio", s.Pos, err)
+					}
+					if result.Ratio == nil {
+						result.Ratio = new(v)
+					} else {
+						(*result.Ratio) = v
+					}
+				}
+			} else {
+				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			}
+		default:
+			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+		}
+
+		err = s.SkipSpace()
+		if err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, decode.NewParseErr("", s.Pos, err)
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, decode.NewParseErr("", s.Pos, err)
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			return result, nil
+		}
+		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+	}
+}
+
+func (s PtrRatioStruct) JSONSize() int {
+	size := 2
+	if s.Ratio != nil {
+		size += 33
+	}
+	return size
+}
+
+func (s PtrRatioStruct) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, '{')
+	start := len(dst)
+	if s.Ratio != nil {
+		if len(dst) > start {
+			dst = append(dst, ',')
+		}
+		dst = append(dst, "\"ratio\":"...)
+		if s.Ratio == nil {
+			dst = append(dst, "null"...)
+		} else {
+			if dst, err = encode.AppendFloat(dst, (*s.Ratio), 64); err != nil {
+				return dst, err
+			}
+		}
+	}
+	return append(dst, '}'), nil
+}
+
+func (result PtrAddrStruct) DecodeFrom(data []byte) (PtrAddrStruct, int, error) {
+	i := 0
+	var err error
+	_ = err
+	seenAddr := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		i++
+		return result, i, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
+		}
+		{
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+			}
+			if data[ke] < 0x20 {
+				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+			}
+			if data[ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				key, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("", i, err)
+				}
+			}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		}
+		i++
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch len(key) {
+		case 4:
+			if key == "addr" {
+				if seenAddr {
+					return result, i, &validation.DuplicateKeyError{Path: []string{"addr"}}
+				}
+				seenAddr = true
+				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+					i = 4 + i
+					result.Addr = nil
+				} else {
+					var v Address
+					if result.Addr != nil {
+						v = (*result.Addr)
+					}
+					{
+						var _n int
+						v, _n, err = v.DecodeFrom(data[i:])
+						i += _n
+						if err != nil {
+							return result, i, decode.NewParseErr("addr", i, err)
+						}
+					}
+					if result.Addr == nil {
+						result.Addr = new(v)
+					} else {
+						(*result.Addr) = v
+					}
+				}
+			} else {
+				return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			}
+		default:
+			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			i++
+			return result, i, nil
+		}
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+	}
+}
+
+func (result PtrAddrStruct) DecodeFromStream(s *scan.Stream) (PtrAddrStruct, error) {
+	seenAddr := false
+	err := s.ObjectOpen()
+	if err != nil {
+		return result, decode.NewParseErr("", s.Pos, err)
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, decode.NewParseErr("", s.Pos, err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView()
+		if err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		switch len(key) {
+		case 4:
+			if key == "addr" {
+				err = s.ConsumeColon()
+				if err != nil {
+					return result, decode.NewParseErr("addr", s.Pos, err)
+				}
+				if seenAddr {
+					return result, &validation.DuplicateKeyError{Path: []string{"addr"}}
+				}
+				seenAddr = true
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("addr", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, decode.NewParseErr("addr", s.Pos, err)
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, decode.NewParseErr("addr", s.Pos, scan.ErrBadLiteral)
+						}
+					}
+					s.Pos += 4
+					result.Addr = nil
+				} else {
+					var v Address
+					if result.Addr != nil {
+						v = (*result.Addr)
+					}
+					v, err = v.DecodeFromStream(s)
+					if err != nil {
+						return result, decode.NewParseErr("addr", s.Pos, err)
+					}
+					if result.Addr == nil {
+						result.Addr = new(v)
+					} else {
+						(*result.Addr) = v
+					}
+				}
+			} else {
+				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			}
+		default:
+			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+		}
+
+		err = s.SkipSpace()
+		if err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, decode.NewParseErr("", s.Pos, err)
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, decode.NewParseErr("", s.Pos, err)
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			return result, nil
+		}
+		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+	}
+}
+
+func (s PtrAddrStruct) JSONSize() int {
+	size := 2
+	if s.Addr != nil {
+		size += 8
+		size += (*s.Addr).JSONSize()
+	}
+	return size
+}
+
+func (s PtrAddrStruct) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, '{')
+	start := len(dst)
+	if s.Addr != nil {
+		if len(dst) > start {
+			dst = append(dst, ',')
+		}
+		dst = append(dst, "\"addr\":"...)
+		if s.Addr == nil {
+			dst = append(dst, "null"...)
+		} else {
+			if dst, err = (*s.Addr).AppendJSON(dst); err != nil {
+				return dst, err
+			}
+		}
+	}
+	return append(dst, '}'), nil
+}
+
+func (result PtrWhenStruct) DecodeFrom(data []byte) (PtrWhenStruct, int, error) {
+	i := 0
+	var err error
+	_ = err
+	seenWhen := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		i++
+		return result, i, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
+		}
+		{
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+			}
+			if data[ke] < 0x20 {
+				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+			}
+			if data[ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				key, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("", i, err)
+				}
+			}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		}
+		i++
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch len(key) {
+		case 4:
+			if key == "when" {
+				if seenWhen {
+					return result, i, &validation.DuplicateKeyError{Path: []string{"when"}}
+				}
+				seenWhen = true
+				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+					i = 4 + i
+					result.When = nil
+				} else {
+					var v time.Time
+					{
+						var f float64
+						f, i, err = scan.Float64(data, i)
+						if err != nil {
+							return result, i, decode.NewParseErr("when", i, err)
+						}
+						sec := int64(f)
+						nsec := int64((f - float64(sec)) * 1e9)
+						v = time.Unix(sec, nsec)
+					}
+					if result.When == nil {
+						result.When = new(v)
+					} else {
+						(*result.When) = v
+					}
+				}
+			} else {
+				return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			}
+		default:
+			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			i++
+			return result, i, nil
+		}
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+	}
+}
+
+func (result PtrWhenStruct) DecodeFromStream(s *scan.Stream) (PtrWhenStruct, error) {
+	seenWhen := false
+	err := s.ObjectOpen()
+	if err != nil {
+		return result, decode.NewParseErr("", s.Pos, err)
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, decode.NewParseErr("", s.Pos, err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView()
+		if err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		switch len(key) {
+		case 4:
+			if key == "when" {
+				err = s.ConsumeColon()
+				if err != nil {
+					return result, decode.NewParseErr("when", s.Pos, err)
+				}
+				if seenWhen {
+					return result, &validation.DuplicateKeyError{Path: []string{"when"}}
+				}
+				seenWhen = true
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("when", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, decode.NewParseErr("when", s.Pos, err)
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, decode.NewParseErr("when", s.Pos, scan.ErrBadLiteral)
+						}
+					}
+					s.Pos += 4
+					result.When = nil
+				} else {
+					var v time.Time
+					{
+						var f float64
+						f, err = s.Float64()
+						if err != nil {
+							return result, decode.NewParseErr("when", s.Pos, err)
+						}
+
+						sec := int64(f)
+						nsec := int64((f - float64(sec)) * 1e9)
+						v = time.Unix(sec, nsec)
+					}
+					if result.When == nil {
+						result.When = new(v)
+					} else {
+						(*result.When) = v
+					}
+				}
+			} else {
+				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			}
+		default:
+			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+		}
+
+		err = s.SkipSpace()
+		if err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, decode.NewParseErr("", s.Pos, err)
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, decode.NewParseErr("", s.Pos, err)
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			return result, nil
+		}
+		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+	}
+}
+
+func (s PtrWhenStruct) JSONSize() int {
+	size := 2
+	if s.When != nil {
+		size += 32
+	}
+	return size
+}
+
+func (s PtrWhenStruct) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, '{')
+	start := len(dst)
+	if s.When != nil {
+		if len(dst) > start {
+			dst = append(dst, ',')
+		}
+		dst = append(dst, "\"when\":"...)
+		if s.When == nil {
+			dst = append(dst, "null"...)
+		} else {
+			dst = strconv.AppendFloat(dst, float64((*s.When).UnixNano())/1e9, 'f', -1, 64)
+		}
+	}
+	return append(dst, '}'), nil
+}
+
+func (result PtrEnabledStruct) DecodeFrom(data []byte) (PtrEnabledStruct, int, error) {
+	i := 0
+	var err error
+	_ = err
+	seenEnabled := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		i++
+		return result, i, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
+		}
+		{
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+			}
+			if data[ke] < 0x20 {
+				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+			}
+			if data[ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				key, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("", i, err)
+				}
+			}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		}
+		i++
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch len(key) {
+		case 7:
+			if key == "enabled" {
+				if seenEnabled {
+					return result, i, &validation.DuplicateKeyError{Path: []string{"enabled"}}
+				}
+				seenEnabled = true
+				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+					i = 4 + i
+					result.Enabled = nil
+				} else {
+					var v bool
+					v, i, err = scan.Bool(data, i)
+					if err != nil {
+						return result, i, decode.NewParseErr("enabled", i, err)
+					}
+					if result.Enabled == nil {
+						result.Enabled = new(v)
+					} else {
+						(*result.Enabled) = v
+					}
+				}
+			} else {
+				return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			}
+		default:
+			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			i++
+			return result, i, nil
+		}
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+	}
+}
+
+func (result PtrEnabledStruct) DecodeFromStream(s *scan.Stream) (PtrEnabledStruct, error) {
+	seenEnabled := false
+	err := s.ObjectOpen()
+	if err != nil {
+		return result, decode.NewParseErr("", s.Pos, err)
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, decode.NewParseErr("", s.Pos, err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView()
+		if err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		switch len(key) {
+		case 7:
+			if key == "enabled" {
+				err = s.ConsumeColon()
+				if err != nil {
+					return result, decode.NewParseErr("enabled", s.Pos, err)
+				}
+				if seenEnabled {
+					return result, &validation.DuplicateKeyError{Path: []string{"enabled"}}
+				}
+				seenEnabled = true
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("enabled", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, decode.NewParseErr("enabled", s.Pos, err)
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, decode.NewParseErr("enabled", s.Pos, scan.ErrBadLiteral)
+						}
+					}
+					s.Pos += 4
+					result.Enabled = nil
+				} else {
+					var v bool
+					v, err = s.Bool()
+					if err != nil {
+						return result, decode.NewParseErr("enabled", s.Pos, err)
+					}
+					if result.Enabled == nil {
+						result.Enabled = new(v)
+					} else {
+						(*result.Enabled) = v
+					}
+				}
+			} else {
+				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			}
+		default:
+			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+		}
+
+		err = s.SkipSpace()
+		if err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, decode.NewParseErr("", s.Pos, err)
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, decode.NewParseErr("", s.Pos, err)
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			return result, nil
+		}
+		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+	}
+}
+
+func (s PtrEnabledStruct) JSONSize() int {
+	size := 12
+	if s.Enabled == nil {
+		size += 4
+	} else {
+		size += 5
+	}
+	return size
+}
+
+func (s PtrEnabledStruct) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"enabled\":"...)
+	if s.Enabled == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = strconv.AppendBool(dst, (*s.Enabled))
+	}
+	return append(dst, '}'), nil
+}
 
 func (result PointerStruct) DecodeFrom(data []byte) (PointerStruct, int, error) {
 	i := 0
@@ -89,6 +1554,9 @@ func (result PointerStruct) DecodeFrom(data []byte) (PointerStruct, int, error) 
 					result.Addr = nil
 				} else {
 					var v Address
+					if result.Addr != nil {
+						v = (*result.Addr)
+					}
 					{
 						var _n int
 						v, _n, err = v.DecodeFrom(data[i:])
@@ -97,7 +1565,11 @@ func (result PointerStruct) DecodeFrom(data []byte) (PointerStruct, int, error) 
 							return result, i, decode.NewParseErr("addr", i, err)
 						}
 					}
-					result.Addr = &v
+					if result.Addr == nil {
+						result.Addr = new(v)
+					} else {
+						(*result.Addr) = v
+					}
 				}
 			case "name":
 				if seenName {
@@ -133,7 +1605,11 @@ func (result PointerStruct) DecodeFrom(data []byte) (PointerStruct, int, error) 
 							}
 						}
 					}
-					result.Name = &v
+					if result.Name == nil {
+						result.Name = new(v)
+					} else {
+						(*result.Name) = v
+					}
 				}
 			case "when":
 				if seenWhen {
@@ -155,7 +1631,11 @@ func (result PointerStruct) DecodeFrom(data []byte) (PointerStruct, int, error) 
 						nsec := int64((f - float64(sec)) * 1e9)
 						v = time.Unix(sec, nsec)
 					}
-					result.When = &v
+					if result.When == nil {
+						result.When = new(v)
+					} else {
+						(*result.When) = v
+					}
 				}
 			default:
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -171,7 +1651,6 @@ func (result PointerStruct) DecodeFrom(data []byte) (PointerStruct, int, error) 
 					i = 4 + i
 					result.Count = nil
 				} else {
-					var v int
 					{
 						neg := false
 						if i < len(data) && data[i] == '-' {
@@ -210,9 +1689,12 @@ func (result PointerStruct) DecodeFrom(data []byte) (PointerStruct, int, error) 
 						} else {
 							n = int64(u)
 						}
-						v = int(n)
+						if result.Count == nil {
+							result.Count = new(int(n))
+						} else {
+							(*result.Count) = int(n)
+						}
 					}
-					result.Count = &v
 				}
 			case "ratio":
 				if seenRatio {
@@ -228,7 +1710,11 @@ func (result PointerStruct) DecodeFrom(data []byte) (PointerStruct, int, error) 
 					if err != nil {
 						return result, i, decode.NewParseErr("ratio", i, err)
 					}
-					result.Ratio = &v
+					if result.Ratio == nil {
+						result.Ratio = new(v)
+					} else {
+						(*result.Ratio) = v
+					}
 				}
 			default:
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -248,7 +1734,11 @@ func (result PointerStruct) DecodeFrom(data []byte) (PointerStruct, int, error) 
 					if err != nil {
 						return result, i, decode.NewParseErr("enabled", i, err)
 					}
-					result.Enabled = &v
+					if result.Enabled == nil {
+						result.Enabled = new(v)
+					} else {
+						(*result.Enabled) = v
+					}
 				}
 			} else {
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -340,12 +1830,18 @@ func (result PointerStruct) DecodeFromStream(s *scan.Stream) (PointerStruct, err
 					result.Addr = nil
 				} else {
 					var v Address
+					if result.Addr != nil {
+						v = (*result.Addr)
+					}
 					v, err = v.DecodeFromStream(s)
 					if err != nil {
 						return result, decode.NewParseErr("addr", s.Pos, err)
 					}
-
-					result.Addr = &v
+					if result.Addr == nil {
+						result.Addr = new(v)
+					} else {
+						(*result.Addr) = v
+					}
 				}
 			case "name":
 				err = s.ConsumeColon()
@@ -380,8 +1876,11 @@ func (result PointerStruct) DecodeFromStream(s *scan.Stream) (PointerStruct, err
 					if err != nil {
 						return result, decode.NewParseErr("name", s.Pos, err)
 					}
-
-					result.Name = &v
+					if result.Name == nil {
+						result.Name = new(v)
+					} else {
+						(*result.Name) = v
+					}
 				}
 			case "when":
 				err = s.ConsumeColon()
@@ -423,8 +1922,11 @@ func (result PointerStruct) DecodeFromStream(s *scan.Stream) (PointerStruct, err
 						nsec := int64((f - float64(sec)) * 1e9)
 						v = time.Unix(sec, nsec)
 					}
-
-					result.When = &v
+					if result.When == nil {
+						result.When = new(v)
+					} else {
+						(*result.When) = v
+					}
 				}
 			default:
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
@@ -459,15 +1961,16 @@ func (result PointerStruct) DecodeFromStream(s *scan.Stream) (PointerStruct, err
 					s.Pos += 4
 					result.Count = nil
 				} else {
-					var v int
-					var iv int64
-					iv, err = s.Int64()
+					var v int64
+					v, err = s.Int64()
 					if err != nil {
 						return result, decode.NewParseErr("count", s.Pos, err)
 					}
-					v = int(iv)
-
-					result.Count = &v
+					if result.Count == nil {
+						result.Count = new(int(v))
+					} else {
+						(*result.Count) = int(v)
+					}
 				}
 			case "ratio":
 				err = s.ConsumeColon()
@@ -502,8 +2005,11 @@ func (result PointerStruct) DecodeFromStream(s *scan.Stream) (PointerStruct, err
 					if err != nil {
 						return result, decode.NewParseErr("ratio", s.Pos, err)
 					}
-
-					result.Ratio = &v
+					if result.Ratio == nil {
+						result.Ratio = new(v)
+					} else {
+						(*result.Ratio) = v
+					}
 				}
 			default:
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
@@ -542,8 +2048,11 @@ func (result PointerStruct) DecodeFromStream(s *scan.Stream) (PointerStruct, err
 					if err != nil {
 						return result, decode.NewParseErr("enabled", s.Pos, err)
 					}
-
-					result.Enabled = &v
+					if result.Enabled == nil {
+						result.Enabled = new(v)
+					} else {
+						(*result.Enabled) = v
+					}
 				}
 			} else {
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
@@ -683,6 +2192,1072 @@ func (s PointerStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
+func (result PtrPPStruct) DecodeFrom(data []byte) (PtrPPStruct, int, error) {
+	i := 0
+	var err error
+	_ = err
+	seenPP := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		i++
+		return result, i, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
+		}
+		{
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+			}
+			if data[ke] < 0x20 {
+				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+			}
+			if data[ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				key, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("", i, err)
+				}
+			}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		}
+		i++
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch len(key) {
+		case 2:
+			if key == "pp" {
+				if seenPP {
+					return result, i, &validation.DuplicateKeyError{Path: []string{"pp"}}
+				}
+				seenPP = true
+				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+					i = 4 + i
+					result.PP = nil
+				} else {
+					{
+						neg := false
+						if i < len(data) && data[i] == '-' {
+							neg = true
+							i++
+						}
+						if i >= len(data) || data[i] < '0' || data[i] > '9' {
+							return result, i, decode.NewParseErr("pp", i, scan.ErrBadNumber)
+						}
+						limit := uint64(math.MaxInt64)
+						if neg {
+							limit = scan.SignedNeg
+						}
+						var u uint64
+						for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+							d := uint64(data[i] - '0')
+							if u > limit/10 || (u == limit/10 && d > limit%10) {
+								return result, i, decode.NewParseErr("pp", i, scan.ErrNumberOverflow)
+							}
+							u = u*10 + d
+							i++
+						}
+						if i < len(data) {
+							c := data[i]
+							if c == '.' || c == 'e' || c == 'E' {
+								return result, i, decode.NewParseErr("pp", i, scan.ErrBadNumber)
+							}
+						}
+						var n int64
+						if neg {
+							if u == scan.SignedNeg {
+								n = math.MinInt64
+							} else {
+								n = -int64(u)
+							}
+						} else {
+							n = int64(u)
+						}
+						if result.PP == nil {
+							result.PP = new(new(int(n)))
+						} else if (*result.PP) == nil {
+							(*result.PP) = new(int(n))
+						} else {
+							(*(*result.PP)) = int(n)
+						}
+					}
+				}
+			} else {
+				return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			}
+		default:
+			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			i++
+			return result, i, nil
+		}
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+	}
+}
+
+func (result PtrPPStruct) DecodeFromStream(s *scan.Stream) (PtrPPStruct, error) {
+	seenPP := false
+	err := s.ObjectOpen()
+	if err != nil {
+		return result, decode.NewParseErr("", s.Pos, err)
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, decode.NewParseErr("", s.Pos, err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView()
+		if err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		switch len(key) {
+		case 2:
+			if key == "pp" {
+				err = s.ConsumeColon()
+				if err != nil {
+					return result, decode.NewParseErr("pp", s.Pos, err)
+				}
+				if seenPP {
+					return result, &validation.DuplicateKeyError{Path: []string{"pp"}}
+				}
+				seenPP = true
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("pp", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, decode.NewParseErr("pp", s.Pos, err)
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, decode.NewParseErr("pp", s.Pos, scan.ErrBadLiteral)
+						}
+					}
+					s.Pos += 4
+					result.PP = nil
+				} else {
+					var v int64
+					v, err = s.Int64()
+					if err != nil {
+						return result, decode.NewParseErr("pp", s.Pos, err)
+					}
+					if result.PP == nil {
+						result.PP = new(new(int(v)))
+					} else if (*result.PP) == nil {
+						(*result.PP) = new(int(v))
+					} else {
+						(*(*result.PP)) = int(v)
+					}
+				}
+			} else {
+				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			}
+		default:
+			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+		}
+
+		err = s.SkipSpace()
+		if err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, decode.NewParseErr("", s.Pos, err)
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, decode.NewParseErr("", s.Pos, err)
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			return result, nil
+		}
+		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+	}
+}
+
+func (s PtrPPStruct) JSONSize() int {
+	size := 7
+	if s.PP == nil {
+		size += 4
+	} else if (*s.PP) == nil {
+		size += 4
+	} else {
+		size += 20
+	}
+	return size
+}
+
+func (s PtrPPStruct) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"pp\":"...)
+	if s.PP == nil {
+		dst = append(dst, "null"...)
+	} else if (*s.PP) == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = strconv.AppendInt(dst, int64((*(*s.PP))), 10)
+	}
+	return append(dst, '}'), nil
+}
+
+func (result PtrPPPStruct) DecodeFrom(data []byte) (PtrPPPStruct, int, error) {
+	i := 0
+	var err error
+	_ = err
+	seenPPP := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		i++
+		return result, i, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
+		}
+		{
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+			}
+			if data[ke] < 0x20 {
+				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+			}
+			if data[ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				key, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("", i, err)
+				}
+			}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		}
+		i++
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch len(key) {
+		case 3:
+			if key == "ppp" {
+				if seenPPP {
+					return result, i, &validation.DuplicateKeyError{Path: []string{"ppp"}}
+				}
+				seenPPP = true
+				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+					i = 4 + i
+					result.PPP = nil
+				} else {
+					{
+						neg := false
+						if i < len(data) && data[i] == '-' {
+							neg = true
+							i++
+						}
+						if i >= len(data) || data[i] < '0' || data[i] > '9' {
+							return result, i, decode.NewParseErr("ppp", i, scan.ErrBadNumber)
+						}
+						limit := uint64(math.MaxInt64)
+						if neg {
+							limit = scan.SignedNeg
+						}
+						var u uint64
+						for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+							d := uint64(data[i] - '0')
+							if u > limit/10 || (u == limit/10 && d > limit%10) {
+								return result, i, decode.NewParseErr("ppp", i, scan.ErrNumberOverflow)
+							}
+							u = u*10 + d
+							i++
+						}
+						if i < len(data) {
+							c := data[i]
+							if c == '.' || c == 'e' || c == 'E' {
+								return result, i, decode.NewParseErr("ppp", i, scan.ErrBadNumber)
+							}
+						}
+						var n int64
+						if neg {
+							if u == scan.SignedNeg {
+								n = math.MinInt64
+							} else {
+								n = -int64(u)
+							}
+						} else {
+							n = int64(u)
+						}
+						if result.PPP == nil {
+							result.PPP = new(new(new(int(n))))
+						} else if (*result.PPP) == nil {
+							(*result.PPP) = new(new(int(n)))
+						} else if (*(*result.PPP)) == nil {
+							(*(*result.PPP)) = new(int(n))
+						} else {
+							(*(*(*result.PPP))) = int(n)
+						}
+					}
+				}
+			} else {
+				return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			}
+		default:
+			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			i++
+			return result, i, nil
+		}
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+	}
+}
+
+func (result PtrPPPStruct) DecodeFromStream(s *scan.Stream) (PtrPPPStruct, error) {
+	seenPPP := false
+	err := s.ObjectOpen()
+	if err != nil {
+		return result, decode.NewParseErr("", s.Pos, err)
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, decode.NewParseErr("", s.Pos, err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView()
+		if err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		switch len(key) {
+		case 3:
+			if key == "ppp" {
+				err = s.ConsumeColon()
+				if err != nil {
+					return result, decode.NewParseErr("ppp", s.Pos, err)
+				}
+				if seenPPP {
+					return result, &validation.DuplicateKeyError{Path: []string{"ppp"}}
+				}
+				seenPPP = true
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("ppp", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, decode.NewParseErr("ppp", s.Pos, err)
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, decode.NewParseErr("ppp", s.Pos, scan.ErrBadLiteral)
+						}
+					}
+					s.Pos += 4
+					result.PPP = nil
+				} else {
+					var v int64
+					v, err = s.Int64()
+					if err != nil {
+						return result, decode.NewParseErr("ppp", s.Pos, err)
+					}
+					if result.PPP == nil {
+						result.PPP = new(new(new(int(v))))
+					} else if (*result.PPP) == nil {
+						(*result.PPP) = new(new(int(v)))
+					} else if (*(*result.PPP)) == nil {
+						(*(*result.PPP)) = new(int(v))
+					} else {
+						(*(*(*result.PPP))) = int(v)
+					}
+				}
+			} else {
+				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			}
+		default:
+			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+		}
+
+		err = s.SkipSpace()
+		if err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, decode.NewParseErr("", s.Pos, err)
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, decode.NewParseErr("", s.Pos, err)
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			return result, nil
+		}
+		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+	}
+}
+
+func (s PtrPPPStruct) JSONSize() int {
+	size := 8
+	if s.PPP == nil {
+		size += 4
+	} else if (*s.PPP) == nil {
+		size += 4
+	} else if (*(*s.PPP)) == nil {
+		size += 4
+	} else {
+		size += 20
+	}
+	return size
+}
+
+func (s PtrPPPStruct) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"ppp\":"...)
+	if s.PPP == nil {
+		dst = append(dst, "null"...)
+	} else if (*s.PPP) == nil {
+		dst = append(dst, "null"...)
+	} else if (*(*s.PPP)) == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = strconv.AppendInt(dst, int64((*(*(*s.PPP)))), 10)
+	}
+	return append(dst, '}'), nil
+}
+
+func (result PtrPPPPStruct) DecodeFrom(data []byte) (PtrPPPPStruct, int, error) {
+	i := 0
+	var err error
+	_ = err
+	seenPPPP := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		i++
+		return result, i, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
+		}
+		{
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+			}
+			if data[ke] < 0x20 {
+				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+			}
+			if data[ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				key, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("", i, err)
+				}
+			}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		}
+		i++
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch len(key) {
+		case 4:
+			if key == "pppp" {
+				if seenPPPP {
+					return result, i, &validation.DuplicateKeyError{Path: []string{"pppp"}}
+				}
+				seenPPPP = true
+				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+					i = 4 + i
+					result.PPPP = nil
+				} else {
+					var v string
+					if i >= len(data) || data[i] != '"' {
+						return result, i, decode.NewParseErr("pppp", i, scan.ErrExpectString)
+					}
+					{
+						ke := i + 1
+						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+							ke++
+						}
+						if ke >= len(data) {
+							return result, i, decode.NewParseErr("pppp", i, scan.ErrUnterminated)
+						}
+						if data[ke] < 0x20 {
+							return result, i, decode.NewParseErr("pppp", i, scan.ErrBadString)
+						}
+						if data[ke] == '"' {
+							v = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+							i = ke + 1
+						} else {
+							v, i, err = scan.String(data, i)
+							if err != nil {
+								return result, i, decode.NewParseErr("pppp", i, err)
+							}
+						}
+					}
+					if result.PPPP == nil {
+						result.PPPP = new(new(new(new(v))))
+					} else if (*result.PPPP) == nil {
+						(*result.PPPP) = new(new(new(v)))
+					} else if (*(*result.PPPP)) == nil {
+						(*(*result.PPPP)) = new(new(v))
+					} else if (*(*(*result.PPPP))) == nil {
+						(*(*(*result.PPPP))) = new(v)
+					} else {
+						(*(*(*(*result.PPPP)))) = v
+					}
+				}
+			} else {
+				return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			}
+		default:
+			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			i++
+			return result, i, nil
+		}
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+	}
+}
+
+func (result PtrPPPPStruct) DecodeFromStream(s *scan.Stream) (PtrPPPPStruct, error) {
+	seenPPPP := false
+	err := s.ObjectOpen()
+	if err != nil {
+		return result, decode.NewParseErr("", s.Pos, err)
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, decode.NewParseErr("", s.Pos, err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView()
+		if err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		switch len(key) {
+		case 4:
+			if key == "pppp" {
+				err = s.ConsumeColon()
+				if err != nil {
+					return result, decode.NewParseErr("pppp", s.Pos, err)
+				}
+				if seenPPPP {
+					return result, &validation.DuplicateKeyError{Path: []string{"pppp"}}
+				}
+				seenPPPP = true
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("pppp", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, decode.NewParseErr("pppp", s.Pos, err)
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, decode.NewParseErr("pppp", s.Pos, scan.ErrBadLiteral)
+						}
+					}
+					s.Pos += 4
+					result.PPPP = nil
+				} else {
+					var v string
+					v, err = s.String()
+					if err != nil {
+						return result, decode.NewParseErr("pppp", s.Pos, err)
+					}
+					if result.PPPP == nil {
+						result.PPPP = new(new(new(new(v))))
+					} else if (*result.PPPP) == nil {
+						(*result.PPPP) = new(new(new(v)))
+					} else if (*(*result.PPPP)) == nil {
+						(*(*result.PPPP)) = new(new(v))
+					} else if (*(*(*result.PPPP))) == nil {
+						(*(*(*result.PPPP))) = new(v)
+					} else {
+						(*(*(*(*result.PPPP)))) = v
+					}
+				}
+			} else {
+				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			}
+		default:
+			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+		}
+
+		err = s.SkipSpace()
+		if err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, decode.NewParseErr("", s.Pos, err)
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, decode.NewParseErr("", s.Pos, err)
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			return result, nil
+		}
+		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+	}
+}
+
+func (s PtrPPPPStruct) JSONSize() int {
+	size := 9
+	if s.PPPP == nil {
+		size += 4
+	} else if (*s.PPPP) == nil {
+		size += 4
+	} else if (*(*s.PPPP)) == nil {
+		size += 4
+	} else if (*(*(*s.PPPP))) == nil {
+		size += 4
+	} else {
+		size += 2
+		size += len((*(*(*(*s.PPPP))))) * 2
+	}
+	return size
+}
+
+func (s PtrPPPPStruct) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"pppp\":"...)
+	if s.PPPP == nil {
+		dst = append(dst, "null"...)
+	} else if (*s.PPPP) == nil {
+		dst = append(dst, "null"...)
+	} else if (*(*s.PPPP)) == nil {
+		dst = append(dst, "null"...)
+	} else if (*(*(*s.PPPP))) == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '"')
+		dst = encode.AppendStringNoHTML(dst, (*(*(*(*s.PPPP)))))
+	}
+	return append(dst, '}'), nil
+}
+
+func (result PtrAddr2Struct) DecodeFrom(data []byte) (PtrAddr2Struct, int, error) {
+	i := 0
+	var err error
+	_ = err
+	seenAddr := false
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		i++
+		return result, i, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
+		}
+		{
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+			}
+			if data[ke] < 0x20 {
+				return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+			}
+			if data[ke] == '"' {
+				key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				key, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("", i, err)
+				}
+			}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		}
+		i++
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch len(key) {
+		case 4:
+			if key == "addr" {
+				if seenAddr {
+					return result, i, &validation.DuplicateKeyError{Path: []string{"addr"}}
+				}
+				seenAddr = true
+				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+					i = 4 + i
+					result.Addr = nil
+				} else {
+					var v Address
+					if result.Addr != nil && (*result.Addr) != nil {
+						v = (*(*result.Addr))
+					}
+					{
+						var _n int
+						v, _n, err = v.DecodeFrom(data[i:])
+						i += _n
+						if err != nil {
+							return result, i, decode.NewParseErr("addr", i, err)
+						}
+					}
+					if result.Addr == nil {
+						result.Addr = new(new(v))
+					} else if (*result.Addr) == nil {
+						(*result.Addr) = new(v)
+					} else {
+						(*(*result.Addr)) = v
+					}
+				}
+			} else {
+				return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			}
+		default:
+			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+		}
+		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			i++
+			return result, i, nil
+		}
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+	}
+}
+
+func (result PtrAddr2Struct) DecodeFromStream(s *scan.Stream) (PtrAddr2Struct, error) {
+	seenAddr := false
+	err := s.ObjectOpen()
+	if err != nil {
+		return result, decode.NewParseErr("", s.Pos, err)
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, decode.NewParseErr("", s.Pos, err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView()
+		if err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		switch len(key) {
+		case 4:
+			if key == "addr" {
+				err = s.ConsumeColon()
+				if err != nil {
+					return result, decode.NewParseErr("addr", s.Pos, err)
+				}
+				if seenAddr {
+					return result, &validation.DuplicateKeyError{Path: []string{"addr"}}
+				}
+				seenAddr = true
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("addr", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, decode.NewParseErr("addr", s.Pos, err)
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, decode.NewParseErr("addr", s.Pos, scan.ErrBadLiteral)
+						}
+					}
+					s.Pos += 4
+					result.Addr = nil
+				} else {
+					var v Address
+					if result.Addr != nil && (*result.Addr) != nil {
+						v = (*(*result.Addr))
+					}
+					v, err = v.DecodeFromStream(s)
+					if err != nil {
+						return result, decode.NewParseErr("addr", s.Pos, err)
+					}
+					if result.Addr == nil {
+						result.Addr = new(new(v))
+					} else if (*result.Addr) == nil {
+						(*result.Addr) = new(v)
+					} else {
+						(*(*result.Addr)) = v
+					}
+				}
+			} else {
+				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			}
+		default:
+			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+		}
+
+		err = s.SkipSpace()
+		if err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, decode.NewParseErr("", s.Pos, err)
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, decode.NewParseErr("", s.Pos, err)
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			return result, nil
+		}
+		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+	}
+}
+
+func (s PtrAddr2Struct) JSONSize() int {
+	size := 9
+	if s.Addr == nil {
+		size += 4
+	} else if (*s.Addr) == nil {
+		size += 4
+	} else {
+		size += (*(*s.Addr)).JSONSize()
+	}
+	return size
+}
+
+func (s PtrAddr2Struct) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"addr\":"...)
+	if s.Addr == nil {
+		dst = append(dst, "null"...)
+	} else if (*s.Addr) == nil {
+		dst = append(dst, "null"...)
+	} else {
+		if dst, err = (*(*s.Addr)).AppendJSON(dst); err != nil {
+			return dst, err
+		}
+	}
+	return append(dst, '}'), nil
+}
+
 func (result NPtrStruct) DecodeFrom(data []byte) (NPtrStruct, int, error) {
 	i := 0
 	var err error
@@ -752,19 +3327,52 @@ func (result NPtrStruct) DecodeFrom(data []byte) (NPtrStruct, int, error) {
 					i = 4 + i
 					result.PP = nil
 				} else {
-					var v *int
 					{
-						start := i
-						i, err = scan.SkipValue(data, start)
-						if err != nil {
-							return result, i, decode.NewParseErr("pp", i, err)
+						neg := false
+						if i < len(data) && data[i] == '-' {
+							neg = true
+							i++
 						}
-						err = json.Unmarshal(data[start:i], &v)
-						if err != nil {
-							return result, i, decode.NewParseErr("pp", i, err)
+						if i >= len(data) || data[i] < '0' || data[i] > '9' {
+							return result, i, decode.NewParseErr("pp", i, scan.ErrBadNumber)
+						}
+						limit := uint64(math.MaxInt64)
+						if neg {
+							limit = scan.SignedNeg
+						}
+						var u uint64
+						for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+							d := uint64(data[i] - '0')
+							if u > limit/10 || (u == limit/10 && d > limit%10) {
+								return result, i, decode.NewParseErr("pp", i, scan.ErrNumberOverflow)
+							}
+							u = u*10 + d
+							i++
+						}
+						if i < len(data) {
+							c := data[i]
+							if c == '.' || c == 'e' || c == 'E' {
+								return result, i, decode.NewParseErr("pp", i, scan.ErrBadNumber)
+							}
+						}
+						var n int64
+						if neg {
+							if u == scan.SignedNeg {
+								n = math.MinInt64
+							} else {
+								n = -int64(u)
+							}
+						} else {
+							n = int64(u)
+						}
+						if result.PP == nil {
+							result.PP = new(new(int(n)))
+						} else if (*result.PP) == nil {
+							(*result.PP) = new(int(n))
+						} else {
+							(*(*result.PP)) = int(n)
 						}
 					}
-					result.PP = &v
 				}
 			} else {
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -779,19 +3387,54 @@ func (result NPtrStruct) DecodeFrom(data []byte) (NPtrStruct, int, error) {
 					i = 4 + i
 					result.PPP = nil
 				} else {
-					var v **int
 					{
-						start := i
-						i, err = scan.SkipValue(data, start)
-						if err != nil {
-							return result, i, decode.NewParseErr("ppp", i, err)
+						neg := false
+						if i < len(data) && data[i] == '-' {
+							neg = true
+							i++
 						}
-						err = json.Unmarshal(data[start:i], &v)
-						if err != nil {
-							return result, i, decode.NewParseErr("ppp", i, err)
+						if i >= len(data) || data[i] < '0' || data[i] > '9' {
+							return result, i, decode.NewParseErr("ppp", i, scan.ErrBadNumber)
+						}
+						limit := uint64(math.MaxInt64)
+						if neg {
+							limit = scan.SignedNeg
+						}
+						var u uint64
+						for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+							d := uint64(data[i] - '0')
+							if u > limit/10 || (u == limit/10 && d > limit%10) {
+								return result, i, decode.NewParseErr("ppp", i, scan.ErrNumberOverflow)
+							}
+							u = u*10 + d
+							i++
+						}
+						if i < len(data) {
+							c := data[i]
+							if c == '.' || c == 'e' || c == 'E' {
+								return result, i, decode.NewParseErr("ppp", i, scan.ErrBadNumber)
+							}
+						}
+						var n int64
+						if neg {
+							if u == scan.SignedNeg {
+								n = math.MinInt64
+							} else {
+								n = -int64(u)
+							}
+						} else {
+							n = int64(u)
+						}
+						if result.PPP == nil {
+							result.PPP = new(new(new(int(n))))
+						} else if (*result.PPP) == nil {
+							(*result.PPP) = new(new(int(n)))
+						} else if (*(*result.PPP)) == nil {
+							(*(*result.PPP)) = new(int(n))
+						} else {
+							(*(*(*result.PPP))) = int(n)
 						}
 					}
-					result.PPP = &v
 				}
 			} else {
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -807,19 +3450,25 @@ func (result NPtrStruct) DecodeFrom(data []byte) (NPtrStruct, int, error) {
 					i = 4 + i
 					result.Addr = nil
 				} else {
-					var v *Address
+					var v Address
+					if result.Addr != nil && (*result.Addr) != nil {
+						v = (*(*result.Addr))
+					}
 					{
-						start := i
-						i, err = scan.SkipValue(data, start)
-						if err != nil {
-							return result, i, decode.NewParseErr("addr", i, err)
-						}
-						err = json.Unmarshal(data[start:i], &v)
+						var _n int
+						v, _n, err = v.DecodeFrom(data[i:])
+						i += _n
 						if err != nil {
 							return result, i, decode.NewParseErr("addr", i, err)
 						}
 					}
-					result.Addr = &v
+					if result.Addr == nil {
+						result.Addr = new(new(v))
+					} else if (*result.Addr) == nil {
+						(*result.Addr) = new(v)
+					} else {
+						(*(*result.Addr)) = v
+					}
 				}
 			case "pppp":
 				if seenPPPP {
@@ -830,19 +3479,42 @@ func (result NPtrStruct) DecodeFrom(data []byte) (NPtrStruct, int, error) {
 					i = 4 + i
 					result.PPPP = nil
 				} else {
-					var v ***string
+					var v string
+					if i >= len(data) || data[i] != '"' {
+						return result, i, decode.NewParseErr("pppp", i, scan.ErrExpectString)
+					}
 					{
-						start := i
-						i, err = scan.SkipValue(data, start)
-						if err != nil {
-							return result, i, decode.NewParseErr("pppp", i, err)
+						ke := i + 1
+						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+							ke++
 						}
-						err = json.Unmarshal(data[start:i], &v)
-						if err != nil {
-							return result, i, decode.NewParseErr("pppp", i, err)
+						if ke >= len(data) {
+							return result, i, decode.NewParseErr("pppp", i, scan.ErrUnterminated)
+						}
+						if data[ke] < 0x20 {
+							return result, i, decode.NewParseErr("pppp", i, scan.ErrBadString)
+						}
+						if data[ke] == '"' {
+							v = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+							i = ke + 1
+						} else {
+							v, i, err = scan.String(data, i)
+							if err != nil {
+								return result, i, decode.NewParseErr("pppp", i, err)
+							}
 						}
 					}
-					result.PPPP = &v
+					if result.PPPP == nil {
+						result.PPPP = new(new(new(new(v))))
+					} else if (*result.PPPP) == nil {
+						(*result.PPPP) = new(new(new(v)))
+					} else if (*(*result.PPPP)) == nil {
+						(*(*result.PPPP)) = new(new(v))
+					} else if (*(*(*result.PPPP))) == nil {
+						(*(*(*result.PPPP))) = new(v)
+					} else {
+						(*(*(*(*result.PPPP)))) = v
+					}
 				}
 			default:
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -930,23 +3602,18 @@ func (result NPtrStruct) DecodeFromStream(s *scan.Stream) (NPtrStruct, error) {
 					s.Pos += 4
 					result.PP = nil
 				} else {
-					var v *int
-					{
-						start := s.Pos
-						prevPin := s.Shift
-						s.Shift = false
-						err = s.SkipValue()
-						s.Shift = prevPin
-						if err != nil {
-							return result, decode.NewParseErr("pp", s.Pos, err)
-						}
-						err = json.Unmarshal(s.Bytes()[start:s.Pos], &v)
-						if err != nil {
-							return result, decode.NewParseErr("pp", s.Pos, err)
-						}
+					var v int64
+					v, err = s.Int64()
+					if err != nil {
+						return result, decode.NewParseErr("pp", s.Pos, err)
 					}
-
-					result.PP = &v
+					if result.PP == nil {
+						result.PP = new(new(int(v)))
+					} else if (*result.PP) == nil {
+						(*result.PP) = new(int(v))
+					} else {
+						(*(*result.PP)) = int(v)
+					}
 				}
 			} else {
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
@@ -980,23 +3647,20 @@ func (result NPtrStruct) DecodeFromStream(s *scan.Stream) (NPtrStruct, error) {
 					s.Pos += 4
 					result.PPP = nil
 				} else {
-					var v **int
-					{
-						start := s.Pos
-						prevPin := s.Shift
-						s.Shift = false
-						err = s.SkipValue()
-						s.Shift = prevPin
-						if err != nil {
-							return result, decode.NewParseErr("ppp", s.Pos, err)
-						}
-						err = json.Unmarshal(s.Bytes()[start:s.Pos], &v)
-						if err != nil {
-							return result, decode.NewParseErr("ppp", s.Pos, err)
-						}
+					var v int64
+					v, err = s.Int64()
+					if err != nil {
+						return result, decode.NewParseErr("ppp", s.Pos, err)
 					}
-
-					result.PPP = &v
+					if result.PPP == nil {
+						result.PPP = new(new(new(int(v))))
+					} else if (*result.PPP) == nil {
+						(*result.PPP) = new(new(int(v)))
+					} else if (*(*result.PPP)) == nil {
+						(*(*result.PPP)) = new(int(v))
+					} else {
+						(*(*(*result.PPP))) = int(v)
+					}
 				}
 			} else {
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
@@ -1031,23 +3695,21 @@ func (result NPtrStruct) DecodeFromStream(s *scan.Stream) (NPtrStruct, error) {
 					s.Pos += 4
 					result.Addr = nil
 				} else {
-					var v *Address
-					{
-						start := s.Pos
-						prevPin := s.Shift
-						s.Shift = false
-						err = s.SkipValue()
-						s.Shift = prevPin
-						if err != nil {
-							return result, decode.NewParseErr("addr", s.Pos, err)
-						}
-						err = json.Unmarshal(s.Bytes()[start:s.Pos], &v)
-						if err != nil {
-							return result, decode.NewParseErr("addr", s.Pos, err)
-						}
+					var v Address
+					if result.Addr != nil && (*result.Addr) != nil {
+						v = (*(*result.Addr))
 					}
-
-					result.Addr = &v
+					v, err = v.DecodeFromStream(s)
+					if err != nil {
+						return result, decode.NewParseErr("addr", s.Pos, err)
+					}
+					if result.Addr == nil {
+						result.Addr = new(new(v))
+					} else if (*result.Addr) == nil {
+						(*result.Addr) = new(v)
+					} else {
+						(*(*result.Addr)) = v
+					}
 				}
 			case "pppp":
 				err = s.ConsumeColon()
@@ -1077,23 +3739,22 @@ func (result NPtrStruct) DecodeFromStream(s *scan.Stream) (NPtrStruct, error) {
 					s.Pos += 4
 					result.PPPP = nil
 				} else {
-					var v ***string
-					{
-						start := s.Pos
-						prevPin := s.Shift
-						s.Shift = false
-						err = s.SkipValue()
-						s.Shift = prevPin
-						if err != nil {
-							return result, decode.NewParseErr("pppp", s.Pos, err)
-						}
-						err = json.Unmarshal(s.Bytes()[start:s.Pos], &v)
-						if err != nil {
-							return result, decode.NewParseErr("pppp", s.Pos, err)
-						}
+					var v string
+					v, err = s.String()
+					if err != nil {
+						return result, decode.NewParseErr("pppp", s.Pos, err)
 					}
-
-					result.PPPP = &v
+					if result.PPPP == nil {
+						result.PPPP = new(new(new(new(v))))
+					} else if (*result.PPPP) == nil {
+						(*result.PPPP) = new(new(new(v)))
+					} else if (*(*result.PPPP)) == nil {
+						(*(*result.PPPP)) = new(new(v))
+					} else if (*(*(*result.PPPP))) == nil {
+						(*(*(*result.PPPP))) = new(v)
+					} else {
+						(*(*(*(*result.PPPP)))) = v
+					}
 				}
 			default:
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
@@ -1133,23 +3794,38 @@ func (s NPtrStruct) JSONSize() int {
 	size := 30
 	if s.Addr == nil {
 		size += 4
+	} else if (*s.Addr) == nil {
+		size += 4
 	} else {
-		size += 128
+		size += (*(*s.Addr)).JSONSize()
 	}
 	if s.PP == nil {
 		size += 4
+	} else if (*s.PP) == nil {
+		size += 4
 	} else {
-		size += 128
+		size += 20
 	}
 	if s.PPP == nil {
 		size += 4
+	} else if (*s.PPP) == nil {
+		size += 4
+	} else if (*(*s.PPP)) == nil {
+		size += 4
 	} else {
-		size += 128
+		size += 20
 	}
 	if s.PPPP == nil {
 		size += 4
+	} else if (*s.PPPP) == nil {
+		size += 4
+	} else if (*(*s.PPPP)) == nil {
+		size += 4
+	} else if (*(*(*s.PPPP))) == nil {
+		size += 4
 	} else {
-		size += 128
+		size += 2
+		size += len((*(*(*(*s.PPPP))))) * 2
 	}
 	return size
 }
@@ -1160,54 +3836,43 @@ func (s NPtrStruct) AppendJSON(dst []byte) ([]byte, error) {
 	dst = append(dst, "{\"addr\":"...)
 	if s.Addr == nil {
 		dst = append(dst, "null"...)
+	} else if (*s.Addr) == nil {
+		dst = append(dst, "null"...)
 	} else {
-		{
-			var b []byte
-			b, err = json.Marshal((*s.Addr))
-			if err != nil {
-				return dst, err
-			}
-			dst = append(dst, b...)
+		if dst, err = (*(*s.Addr)).AppendJSON(dst); err != nil {
+			return dst, err
 		}
 	}
 	dst = append(dst, ",\"pp\":"...)
 	if s.PP == nil {
 		dst = append(dst, "null"...)
+	} else if (*s.PP) == nil {
+		dst = append(dst, "null"...)
 	} else {
-		{
-			var b []byte
-			b, err = json.Marshal((*s.PP))
-			if err != nil {
-				return dst, err
-			}
-			dst = append(dst, b...)
-		}
+		dst = strconv.AppendInt(dst, int64((*(*s.PP))), 10)
 	}
 	dst = append(dst, ",\"ppp\":"...)
 	if s.PPP == nil {
 		dst = append(dst, "null"...)
+	} else if (*s.PPP) == nil {
+		dst = append(dst, "null"...)
+	} else if (*(*s.PPP)) == nil {
+		dst = append(dst, "null"...)
 	} else {
-		{
-			var b []byte
-			b, err = json.Marshal((*s.PPP))
-			if err != nil {
-				return dst, err
-			}
-			dst = append(dst, b...)
-		}
+		dst = strconv.AppendInt(dst, int64((*(*(*s.PPP)))), 10)
 	}
 	dst = append(dst, ",\"pppp\":"...)
 	if s.PPPP == nil {
 		dst = append(dst, "null"...)
+	} else if (*s.PPPP) == nil {
+		dst = append(dst, "null"...)
+	} else if (*(*s.PPPP)) == nil {
+		dst = append(dst, "null"...)
+	} else if (*(*(*s.PPPP))) == nil {
+		dst = append(dst, "null"...)
 	} else {
-		{
-			var b []byte
-			b, err = json.Marshal((*s.PPPP))
-			if err != nil {
-				return dst, err
-			}
-			dst = append(dst, b...)
-		}
+		dst = append(dst, '"')
+		dst = encode.AppendStringNoHTML(dst, (*(*(*(*s.PPPP)))))
 	}
 	return append(dst, '}'), nil
 }

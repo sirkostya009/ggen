@@ -139,10 +139,12 @@ func TestStdCompat_PointerStruct(t *testing.T) {
 	enabled := true
 	// Present values.
 	crossCompat(t, PointerStruct{
-		Name: &name, Count: &count, Ratio: &ratio,
-		Addr:    &Address{Street: "S", City: "C", ZipCode: "12345"},
-		When:    &when,
-		Enabled: &enabled,
+		PtrNameStruct:    PtrNameStruct{Name: &name},
+		PtrCountStruct:   PtrCountStruct{Count: &count},
+		PtrRatioStruct:   PtrRatioStruct{Ratio: &ratio},
+		PtrAddrStruct:    PtrAddrStruct{Addr: &Address{Street: "S", City: "C", ZipCode: "12345"}},
+		PtrWhenStruct:    PtrWhenStruct{When: &when},
+		PtrEnabledStruct: PtrEnabledStruct{Enabled: &enabled},
 	})
 	// All nils — the null path.
 	crossCompat(t, PointerStruct{})
@@ -499,5 +501,177 @@ func TestStdCompat_StringTagStruct(t *testing.T) {
 		I8: -8, I16: 16, I32: -32, I64: 64,
 		U8: 8, U16: 16, U32: 32, U64: 64,
 		F32: 1.25, F64: 2.5, B: true,
+	})
+}
+
+// crossCompatMerge is the decode-into-receiver counterpart of crossCompat:
+// the same JSON payload is merged into a PRE-POPULATED receiver on both
+// sides — jsonv2.Unmarshal into a non-zero value vs ggen DecodeFrom into a
+// non-zero receiver — and the merged results must agree on the wire. `mk`
+// builds a fresh receiver for each side so neither path observes the other's
+// mutations (slice/map/pointer backing is per-call). Use only for dimensions
+// where ggen's merge semantics MATCH stdlib; intentional divergences are
+// pinned separately in TestStdCompatMerge_IntentionalDivergences.
+func crossCompatMerge[T ggenCompat[T]](t *testing.T, name string, mk func() T, payload string) {
+	t.Helper()
+	t.Run(name, func(t *testing.T) {
+		std := mk()
+		if err := jsonv2.Unmarshal([]byte(payload), &std); err != nil {
+			t.Fatalf("jsonv2 merge of %q into %T: %v", payload, std, err)
+		}
+		viaGgen, _, err := mk().DecodeFrom([]byte(payload))
+		if err != nil {
+			t.Fatalf("ggen merge of %q into %T: %v", payload, viaGgen, err)
+		}
+		if !sameWire(t, std, viaGgen) {
+			sb, _ := jsonv2.Marshal(std)
+			gb, _ := jsonv2.Marshal(viaGgen)
+			t.Errorf("merge mismatch for %T\n payload: %s\n jsonv2 : %s\n ggen   : %s", std, payload, sb, gb)
+		}
+	})
+}
+
+// TestStdCompatMerge_Parity pins that ggen's decode-into-receiver merge agrees
+// with jsonv2's merge-into-existing-value for every dimension where they're
+// supposed to match: scalar persistence across omitted keys, slice replace
+// (not append), null → nil for slice/map/pointer, nested-struct field merge,
+// `*T` / `**T` pointer reuse, exact-length array overwrite, and empty `[]` on
+// a non-nil receiver. The two intentional divergences (map merge, short-array
+// strictness) live in TestStdCompatMerge_IntentionalDivergences.
+func TestStdCompatMerge_Parity(t *testing.T) {
+	t.Parallel()
+
+	// Scalars: keys omitted from the payload keep their receiver value;
+	// present keys overwrite. Both sides leave omitted scalar fields alone.
+	crossCompatMerge(t, "scalar_persist",
+		func() Node { return Node{ID: 1, Name: "keep", Score: 2.5, Active: true} },
+		`{"id":99}`)
+
+	// Slice: a non-nil receiver slice is REPLACED by the payload (length reset
+	// then refilled), not appended to. ggen's `[:0]`+refill matches jsonv2.
+	crossCompatMerge(t, "slice_replace",
+		func() Node { return Node{Tags: []string{"a", "b", "c"}} },
+		`{"tags":["x"]}`)
+
+	// Empty array into a non-nil slice → empty slice on both sides.
+	crossCompatMerge(t, "slice_empty_on_nonnil",
+		func() Node { return Node{Tags: []string{"a", "b"}} },
+		`{"tags":[]}`)
+
+	// JSON null nils a carried-in slice / map.
+	crossCompatMerge(t, "slice_null_to_nil",
+		func() Node { return Node{Tags: []string{"a"}} },
+		`{"tags":null}`)
+	crossCompatMerge(t, "map_null_to_nil",
+		func() Node { return Node{Props: map[string]string{"old": "1"}} },
+		`{"props":null}`)
+
+	// Nested struct merges field-by-field: the child's omitted fields persist,
+	// its present fields overwrite.
+	crossCompatMerge(t, "nested_struct_merge",
+		func() Node { return Node{Children: []Node{{ID: 7, Name: "cached"}}} },
+		`{"children":[{"score":1.5}]}`)
+
+	// Pointer `*T`: omitted pointer field keeps its receiver pointee; a present
+	// key decodes into / replaces it; explicit null drops it.
+	crossCompatMerge(t, "ptr_scalar_persist",
+		func() PointerStruct {
+			return PointerStruct{PtrNameStruct: PtrNameStruct{Name: new("keep")}, PtrCountStruct: PtrCountStruct{Count: new(1)}}
+		},
+		`{"count":9}`)
+	crossCompatMerge(t, "ptr_null_drops",
+		func() PointerStruct {
+			return PointerStruct{PtrNameStruct: PtrNameStruct{Name: new("x")}, PtrEnabledStruct: PtrEnabledStruct{Enabled: new(true)}}
+		},
+		`{"name":null,"enabled":null}`)
+
+	// Multi-level pointer `**int`: a present key resolves the whole chain;
+	// other multi-level fields stay nil.
+	crossCompatMerge(t, "multilevel_ptr",
+		func() NPtrStruct { return NPtrStruct{PtrPPStruct: PtrPPStruct{PP: new(new(3))}} },
+		`{"pp":9}`)
+
+	// Fixed array with an exact-length payload: every slot overwritten on both
+	// sides (the short-payload case diverges — see the divergence test).
+	crossCompatMerge(t, "array_exact_len_overwrite",
+		func() TupleStruct { return TupleStruct{RGB: [3]int{9, 9, 9}} },
+		`{"rgb":[1,2,3]}`)
+}
+
+// TestStdCompatMerge_IntentionalDivergences pins the decode-into-receiver
+// behaviors where ggen deliberately differs from stdlib (jsonv2) merge, so each
+// gap stays explicit and a future change is caught. These are consequences of
+// documented ggen contracts (container reset-at-entry + clear-on-decode, strict
+// scalar parsing) rather than the wire-shape parity that crossCompat/
+// crossCompatMerge enforce elsewhere.
+//
+// Verified empirically (see the n-pointer / merge audit). The matched (parity)
+// cases live in TestStdCompatMerge_Parity; this test is the inverse list.
+func TestStdCompatMerge_IntentionalDivergences(t *testing.T) {
+	t.Parallel()
+
+	// 1. Map present-key: stdlib MERGES entries (retains receiver-only keys);
+	//    ggen REPLACES — a non-nil map is clear()ed before refill.
+	t.Run("map_present_key_replace_vs_merge", func(t *testing.T) {
+		const payload = `{"props":{"new":"3"}}`
+		std := Node{Props: map[string]string{"old": "1", "keep": "2"}}
+		if err := jsonv2.Unmarshal([]byte(payload), &std); err != nil {
+			t.Fatalf("jsonv2: %v", err)
+		}
+		if len(std.Props) != 3 || std.Props["old"] != "1" {
+			t.Errorf("stdlib expected to retain receiver keys (merge), got %v", std.Props)
+		}
+		g, _, err := (Node{Props: map[string]string{"old": "1", "keep": "2"}}).DecodeFrom([]byte(payload))
+		if err != nil {
+			t.Fatalf("ggen: %v", err)
+		}
+		if len(g.Props) != 1 || g.Props["new"] != "3" {
+			t.Errorf("ggen expected to replace the map (clear+refill), got %v", g.Props)
+		}
+		if _, ok := g.Props["old"]; ok {
+			t.Errorf("ggen retained receiver-only key 'old' — container-replace contract regressed")
+		}
+	})
+
+	// 2. OMITTED container key: ggen resets every container field at decode
+	//    entry (`X = X[:0]` / `clear(X)`), so a slice/map whose key is ABSENT
+	//    from the payload is emptied — stdlib leaves an omitted-key field
+	//    untouched. The clearest decode-into-receiver gap: you cannot preserve a
+	//    populated slice/map while updating only scalar siblings.
+	t.Run("omitted_container_reset_vs_retain", func(t *testing.T) {
+		const payload = `{"id":5}` // neither "tags" nor "props" present
+		std := Node{Tags: []string{"a", "b"}, Props: map[string]string{"old": "1"}}
+		if err := jsonv2.Unmarshal([]byte(payload), &std); err != nil {
+			t.Fatalf("jsonv2: %v", err)
+		}
+		if len(std.Tags) != 2 || len(std.Props) != 1 {
+			t.Errorf("stdlib expected to retain omitted containers, got tags=%v props=%v", std.Tags, std.Props)
+		}
+		g, _, err := (Node{Tags: []string{"a", "b"}, Props: map[string]string{"old": "1"}}).DecodeFrom([]byte(payload))
+		if err != nil {
+			t.Fatalf("ggen: %v", err)
+		}
+		if len(g.Tags) != 0 || len(g.Props) != 0 {
+			t.Errorf("ggen expected to reset omitted containers (reset-at-entry contract), got tags=%v props=%v", g.Tags, g.Props)
+		}
+	})
+
+	// 3. Explicit null over a NON-pointer scalar/native field: stdlib accepts it
+	//    (zeroes the field); ggen has no null-peek there and hard-errors. Only
+	//    pointer, slice, and map fields accept JSON null in ggen — for a
+	//    nullable scalar, use a pointer. (Pinned so the strict-reject behavior
+	//    is explicit; revisiting it is a backlog item.)
+	t.Run("scalar_null_error_vs_zero", func(t *testing.T) {
+		const payload = `{"id":null}`
+		std := Node{ID: 7}
+		if err := jsonv2.Unmarshal([]byte(payload), &std); err != nil {
+			t.Fatalf("stdlib expected to accept null on a scalar, got %v", err)
+		}
+		if std.ID != 0 {
+			t.Errorf("stdlib expected to zero the field on null, got ID=%d", std.ID)
+		}
+		if _, _, err := (Node{ID: 7}).DecodeFrom([]byte(payload)); err == nil {
+			t.Errorf("ggen expected to reject null on a non-pointer scalar field")
+		}
 	})
 }

@@ -1028,6 +1028,9 @@ func (result Node) DecodeFrom(data []byte) (Node, int, error) {
 					result.Parent = nil
 				} else {
 					var v Addr
+					if result.Parent != nil {
+						v = (*result.Parent)
+					}
 					{
 						var _n int
 						v, _n, err = v.DecodeFrom(data[i:])
@@ -1036,7 +1039,11 @@ func (result Node) DecodeFrom(data []byte) (Node, int, error) {
 							return result, i, decode.NewParseErr("parent", i, err)
 						}
 					}
-					result.Parent = &v
+					if result.Parent == nil {
+						result.Parent = new(v)
+					} else {
+						(*result.Parent) = v
+					}
 				}
 			default:
 				return result, i, &validation.UnknownKeyError{Path: []string{key}}
@@ -1978,12 +1985,18 @@ func (result Node) DecodeFromStream(s *scan.Stream) (Node, error) {
 					result.Parent = nil
 				} else {
 					var v Addr
+					if result.Parent != nil {
+						v = (*result.Parent)
+					}
 					v, err = v.DecodeFromStream(s)
 					if err != nil {
 						return result, decode.NewParseErr("parent", s.Pos, err)
 					}
-
-					result.Parent = &v
+					if result.Parent == nil {
+						result.Parent = new(v)
+					} else {
+						(*result.Parent) = v
+					}
 				}
 			default:
 				return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}

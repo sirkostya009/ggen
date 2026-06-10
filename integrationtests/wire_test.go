@@ -64,7 +64,7 @@ func mustPresent(t *testing.T, data []byte, keys ...string) {
 // even appear in the output when nil. The any-roundtrip check in stdcompat
 // would silently pass `null` through; this asserts the key is gone entirely.
 func TestOmit_NilPointerKeyAbsent(t *testing.T) {
-	out, _ := encode.Marshal(PointerStruct{Name: new("x"), Enabled: new(false)})
+	out, _ := encode.Marshal(PointerStruct{PtrNameStruct: PtrNameStruct{Name: new("x")}, PtrEnabledStruct: PtrEnabledStruct{Enabled: new(false)}})
 	// "name" / "enabled" are not omitempty — those keys MUST be present.
 	mustPresent(t, out, "name", "enabled")
 	// All omitempty pointers must be gone.
@@ -73,7 +73,7 @@ func TestOmit_NilPointerKeyAbsent(t *testing.T) {
 
 func TestOmit_PresentPointerKeyEmitted(t *testing.T) {
 	count := 7
-	out, _ := encode.Marshal(PointerStruct{Name: new(""), Enabled: new(false), Count: &count})
+	out, _ := encode.Marshal(PointerStruct{PtrNameStruct: PtrNameStruct{Name: new("")}, PtrEnabledStruct: PtrEnabledStruct{Enabled: new(false)}, PtrCountStruct: PtrCountStruct{Count: &count}})
 	mustPresent(t, out, "count")
 }
 

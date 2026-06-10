@@ -205,15 +205,54 @@ carried-in data:
   when nil)
 - nested struct: `result.X, _, _ = result.X.DecodeFrom(...)` — value-receiver
   takes existing value as merge source auto
-- pointer `*T`: currently always allocates fresh pointee
-  (`var v T; ... result.X = &v`); receiver pointer discarded.
-  Decode-into-receiver merge on pointee = backlog
+- pointer `*T` / `**T` / `***T` / … (any depth): **parse-first** cascade.
+  `null` → `result.X = nil` (drops a carried-in chain, stdlib merge parity).
+  Otherwise decode the leaf into a stack `var v Leaf` FIRST — a parse failure
+  returns before any mutation, so no chain is ever allocated for a value that
+  never landed. On success an assign cascade REUSES the non-nil prefix of the
+  receiver's pointer chain and allocates `new(new(…v))` (Go-1.26 `new(expr)`,
+  one `new(` per still-nil `*`) only from the first nil level down; a
+  fully-allocated chain takes the final `else` (`(*(*X)) = v`). A mergeable
+  leaf (struct/slice/map/array) is seeded from the carried-in value first
+  (`if X != nil && (*X) != nil { v = (*(*X)) }`) so it still merges; primitive
+  leaves skip the seed. A widened numeric leaf (int/int8/16/32, uint…, float32)
+  scans into a wide temp (`var v int64`) and casts at the assign site
+  (`new(int(v))`) instead of carrying a separate conversion var — drops the
+  stream path's widening temp entirely (`widenedLeafCast`). Bytes-path fast
+  path: an int/uint leaf with no built-in mods/validation skips the temp
+  altogether — the inline scanner already materializes `n`, so the assign
+  cascade runs in-block off `int(n)` (`inlineScanInt64Stmt`/`…Uint64Stmt`).
+  Leaf decodes natively at every depth — NO encoding/json fallback. Helpers:
+  `pointerDepth`, `derefStr`, `newChain`, `widenedLeafCast`, `emitPointerSeed`,
+  `emitPointerAssign`. Same emit for bytes + stream paths
 - fixed arrays `[N]T`: every slot overwritten or strict-length-errors, no entry
   reset needed
 
 JSON `null` for slice/map sets `result.X = nil` (stdlib v1/v2 parity). JSON
 `[]`/`{}` on non-nil receiver keeps `[:0]`'d / cleared container; on
 nil receiver allocates empty non-nil container.
+
+**`null` acceptance is kind-gated (diverges from stdlib).** ggen emits a 4-byte
+`null` peek only for: pointer (`*T`), slice (KindSlice), map (KindMap),
+`sql.Null*`, and raw-message (`json.RawMessage`/`jsontext.Value`) fields. Every
+other kind — non-pointer scalars (`int`/`bool`/`string`/`float`), `[]byte`,
+`time.Time`, `time.Duration`, `net.IP`/`netip.*`, `url.URL`, `big.*`, UUID, and
+other text/number kinds — has NO null branch, so an explicit JSON `null`
+hard-errors the parse (`scan: expected string` / `invalid number` / …). stdlib
+v1/v2 instead accept `null` everywhere (zero the field / no-op). Consistent with
+ggen's other strict defaults (UnknownKeyError, strict array length,
+DuplicateKeyError) — for a nullable scalar, use a pointer. Decode-into-receiver
+divergences are pinned in `integrationtests/stdcompat_test.go`
+(`TestStdCompatMerge_IntentionalDivergences`); revisiting null-on-scalar is a
+backlog item.
+
+**Decode-into-receiver vs stdlib merge — divergences.** ggen's receiver-merge
+is NOT a drop-in for stdlib merge: (1) container fields reset at decode entry,
+so an OMITTED slice/map key is emptied (stdlib retains it); (2) a present map
+key REPLACES (clear+refill) rather than merging entries (stdlib retains
+receiver-only keys); (3) scalar `null` errors (above). Scalars-persist-on-omit,
+slice-replace-on-present, null→nil for slice/map/pointer, nested-struct merge,
+and `*T`/`**T` reuse all MATCH stdlib — pinned in `TestStdCompatMerge_Parity`.
 
 Call with zero-value receiver for fresh decode (`T{}.DecodeFrom(data)` for
 struct/slice/map/array; `var zero T; zero.DecodeFrom(data)` for primitive
@@ -300,7 +339,10 @@ Field-introspection types render via `types.RelativeTo(s.typesPkg)`.
 - `string`, `bool`
 - `int`/`int8`/`int16`/`int32`/`int64`, `uint`/`uint8`/`uint16`/`uint32`/`uint64`
 - `float32`, `float64`
-- Pointer to any of above (`*T`) — null ↔ nil
+- Pointer to any of above (`*T`) — null ↔ nil. Multi-level (`**T`, `***T`, …)
+  also native: decode parses the leaf first then builds/reuses the chain
+  (`new(new(v))` for the nil tail), encode derefs level-by-level (intermediate
+  nil → `null`). No reflective fallback
 - `[]T` (slice), `map[string]V` (string-keyed only)
 - `[]*T` / `[N]*T` (slice/array of pointer-to-struct) — element pointers come
   from single backing slab (`make([]T,0,cap)` slices, `[N]T` arrays) so N

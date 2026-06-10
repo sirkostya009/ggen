@@ -209,9 +209,15 @@ u, err = u.DecodeFromStream(s)
 // once finished you can reutilize buf for another stream
 ```
 
-ggen supports merge semantics, similar to stdlib: non-nil slices and maps are reused
-which can be used as an optimization on paths where you need to repeatedly parse
-same object shape.
+Similar to stdlib, ggen also has merge semantics but they're deliberately made different:
+non-nil slices, maps and pointer fields are reused, which can be used as an optimization
+on paths where you need to repeatedly parse same object shape. A JSON `null` still nils
+a slice/map/pointer field.
+
+It is deliberitely not identical though: all containers are reset regardless of
+presence in payload (stdlib keeps them) and a JSON `null`s aimed at a non-pointer
+scalars or structs are treated as parse errors — use a pointer if you need a
+nullable scalar.
 
 ### runtime packages
 
@@ -443,7 +449,7 @@ The same cross-package lookup rules apply as for custom validators.
 
 | category  | go types                                                         | wire   | notes                                                                              |
 | --------- | ---------------------------------------------------------------- | ------ | ---------------------------------------------------------------------------------- |
-| primitive | `string`, `bool`, `int*`, `uint*`, `float*`                      | scalar | `*T` for any of these — `null` ↔ `nil`                                             |
+| primitive | `string`, `bool`, `int*`, `uint*`, `float*`                      | scalar | `*T` for any of these — `null` ↔ `nil`; multi-level `**T`/… also native            |
 | slice     | `[]T`                                                            | array  | nil → `null`; `[]*T` decodes into a single contiguous slab (N allocs → ~log N)     |
 | array     | `[N]T`                                                           | tuple  | strict element count — mismatch → `validation.LenError`; `[N]*T` uses a fixed slab |
 | map       | `map[string]V`                                                   | object | string keys only                                                                   |

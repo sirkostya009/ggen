@@ -164,3 +164,147 @@ func TestMerge_nestedStructRecursesIntoExisting(t *testing.T) {
 		t.Errorf("Tags=%v want [fresh]", got.Children[0].Tags)
 	}
 }
+
+// Pointer-field merge against the existing PointerStruct (`*T`) and NPtrStruct
+// (`**T`/…), both declared in pointer_test.go: a non-nil pointee is reused in
+// place rather than reallocated, an omitted pointer field keeps its receiver
+// value, JSON null nils the field, multi-level chains reuse their non-nil
+// prefix (allocating only from the first nil level down), and a parse failure
+// leaves the receiver untouched.
+
+func TestMerge_pointerFieldPersistsWhenOmitted(t *testing.T) {
+	keep := new("keep")
+	receiver := PointerStruct{PtrNameStruct: PtrNameStruct{Name: keep}, PtrCountStruct: PtrCountStruct{Count: new(7)}}
+	// Payload omits "name" → its receiver pointer is left untouched.
+	got, _, err := receiver.DecodeFrom([]byte(`{"count":9,"enabled":true}`))
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.Name != keep || *got.Name != "keep" {
+		t.Errorf("omitted Name pointer not preserved: %v", got.Name)
+	}
+	if got.Count == nil || *got.Count != 9 {
+		t.Errorf("Count=%v want 9", got.Count)
+	}
+}
+
+func TestMerge_pointerScalarReusesPointee(t *testing.T) {
+	orig := new(3)
+	receiver := PointerStruct{PtrCountStruct: PtrCountStruct{Count: orig}}
+	got, _, err := receiver.DecodeFrom([]byte(`{"count":9}`))
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.Count != orig {
+		t.Errorf("pointee reallocated: got %p want %p", got.Count, orig)
+	}
+	if *got.Count != 9 {
+		t.Errorf("*Count=%d want 9", *got.Count)
+	}
+}
+
+func TestMerge_pointerStructPointeeReused(t *testing.T) {
+	// Non-nil *Address pointee is decoded in place — same pointer, no realloc.
+	orig := &Address{Street: "Main 1", City: "Lviv", ZipCode: "79000"}
+	receiver := PointerStruct{PtrAddrStruct: PtrAddrStruct{Addr: orig}}
+	got, _, err := receiver.DecodeFrom([]byte(`{"addr":{"street":"Main 2","city":"Kyiv","zipCode":"01001"}}`))
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.Addr != orig {
+		t.Errorf("struct pointee reallocated: got %p want %p", got.Addr, orig)
+	}
+	if got.Addr.City != "Kyiv" {
+		t.Errorf("City=%q want Kyiv", got.Addr.City)
+	}
+}
+
+func TestMerge_pointerNilReceiverAllocates(t *testing.T) {
+	// nil receiver fields → `new` fires, fresh pointees decoded.
+	got, _, err := PointerStruct{}.DecodeFrom([]byte(`{"count":9,"name":"x"}`))
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.Count == nil || *got.Count != 9 {
+		t.Errorf("Count=%v want 9", got.Count)
+	}
+	if got.Name == nil || *got.Name != "x" {
+		t.Errorf("Name=%v want x", got.Name)
+	}
+}
+
+func TestMerge_pointerNullDropsExistingPointee(t *testing.T) {
+	// JSON null nils the field even when the receiver carried a pointee.
+	receiver := PointerStruct{PtrNameStruct: PtrNameStruct{Name: new("x")}, PtrEnabledStruct: PtrEnabledStruct{Enabled: new(true)}}
+	got, _, err := receiver.DecodeFrom([]byte(`{"name":null,"enabled":null}`))
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.Name != nil || got.Enabled != nil {
+		t.Errorf("null should nil pointee: name=%v enabled=%v", got.Name, got.Enabled)
+	}
+}
+
+func TestMerge_multiLevelReusesWholeChain(t *testing.T) {
+	inner := new(3) // *int
+	outer := &inner // **int, both levels allocated
+	receiver := NPtrStruct{PtrPPStruct: PtrPPStruct{PP: outer}}
+	got, _, err := receiver.DecodeFrom([]byte(`{"pp":9}`))
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.PP != outer {
+		t.Errorf("outer pointer reallocated: %p != %p", got.PP, outer)
+	}
+	if *got.PP != inner {
+		t.Errorf("inner pointer reallocated: %p != %p", *got.PP, inner)
+	}
+	if **got.PP != 9 {
+		t.Errorf("**PP=%d want 9", **got.PP)
+	}
+}
+
+func TestMerge_multiLevelAllocatesFromFirstNil(t *testing.T) {
+	var inner *int  // nil *int
+	outer := &inner // **int, outer non-nil, inner nil
+	receiver := NPtrStruct{PtrPPStruct: PtrPPStruct{PP: outer}}
+	got, _, err := receiver.DecodeFrom([]byte(`{"pp":9}`))
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.PP != outer {
+		t.Errorf("outer reallocated despite being non-nil")
+	}
+	if *got.PP == nil || **got.PP != 9 {
+		t.Errorf("inner not allocated/decoded: %v", got.PP)
+	}
+}
+
+func TestMerge_multiLevelStructLeafReused(t *testing.T) {
+	leaf := &Address{Street: "Main 1", City: "Lviv", ZipCode: "79000"}
+	mid := &leaf // **Address, fully allocated
+	receiver := NPtrStruct{PtrAddr2Struct: PtrAddr2Struct{Addr: mid}}
+	got, _, err := receiver.DecodeFrom([]byte(`{"addr":{"street":"Main 2","city":"Kyiv","zipCode":"01001"}}`))
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.Addr != mid || *got.Addr != leaf {
+		t.Errorf("chain not reused")
+	}
+	if (**got.Addr).City != "Kyiv" {
+		t.Errorf("City=%q want Kyiv", (**got.Addr).City)
+	}
+}
+
+func TestMerge_pointerParseFailureLeavesReceiverUntouched(t *testing.T) {
+	// A wrong-typed leaf must NOT leave a freshly-allocated chain behind:
+	// the leaf is parsed into a temp first, so the nil receiver field stays
+	// nil on error.
+	got, _, err := NPtrStruct{}.DecodeFrom([]byte(`{"pp":"not a number"}`))
+	if err == nil {
+		t.Fatal("expected parse error")
+	}
+	if got.PP != nil {
+		t.Errorf("PP allocated for a value that never parsed: %v", got.PP)
+	}
+}

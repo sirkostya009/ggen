@@ -16,6 +16,7 @@ import (
 
 	gofrs "github.com/gofrs/uuid/v5"
 	"github.com/google/uuid"
+	"github.com/sirkostya009/ggen/encode"
 	"github.com/sirkostya009/ggen/integrationtests/thirdparty2"
 )
 
@@ -168,12 +169,12 @@ func TestJSONSize_NoReallocOnWorstCase(t *testing.T) {
 			// non-nil branch through every pointee kind.
 			name: "PointerStruct_all_populated",
 			v: PointerStruct{
-				Name:    new(worstShort),
-				Count:   new(-1 << 62),
-				Ratio:   new(-1.7976931348623157e+308),
-				Addr:    &Address{Street: worstShort, City: worstShort, ZipCode: "00000"},
-				When:    new(time.Unix(math.MaxInt32, 0).UTC()),
-				Enabled: new(false),
+				PtrNameStruct:    PtrNameStruct{Name: new(worstShort)},
+				PtrCountStruct:   PtrCountStruct{Count: new(-1 << 62)},
+				PtrRatioStruct:   PtrRatioStruct{Ratio: new(-1.7976931348623157e+308)},
+				PtrAddrStruct:    PtrAddrStruct{Addr: &Address{Street: worstShort, City: worstShort, ZipCode: "00000"}},
+				PtrWhenStruct:    PtrWhenStruct{When: new(time.Unix(math.MaxInt32, 0).UTC())},
+				PtrEnabledStruct: PtrEnabledStruct{Enabled: new(false)},
 			},
 		},
 		{
@@ -564,14 +565,10 @@ func TestJSONSize_SQLNullStruct_NoRealloc(t *testing.T) {
 func TestJSONSize_SQLNullPerType_NoRealloc(t *testing.T) {
 	t.Parallel()
 	when := time.Unix(1700000000, 0).UTC()
-	type capGuard interface {
-		JSONSize() int
-		AppendJSON(dst []byte) ([]byte, error)
-	}
 	cases := []struct {
 		name      string
-		nullCase  capGuard
-		validCase capGuard
+		nullCase  encode.Marshaler
+		validCase encode.Marshaler
 	}{
 		{
 			"NullString",
@@ -614,7 +611,7 @@ func TestJSONSize_SQLNullPerType_NoRealloc(t *testing.T) {
 			SQLNullTimeStruct{T: sql.NullTime{Time: when, Valid: true}},
 		},
 	}
-	check := func(t *testing.T, v capGuard) {
+	check := func(t *testing.T, v encode.Marshaler) {
 		t.Helper()
 		size := v.JSONSize()
 		got, err := v.AppendJSON(make([]byte, 0, size))
@@ -666,13 +663,9 @@ func TestJSONSize_PtrSlicePerShape_NoRealloc(t *testing.T) {
 	t.Parallel()
 	a := Address{Street: "Main 1", City: "Lviv", ZipCode: "79000"}
 	b := Address{Street: strings.Repeat("x", 200), City: strings.Repeat("y", 200), ZipCode: "00000"}
-	type capGuard interface {
-		JSONSize() int
-		AppendJSON(dst []byte) ([]byte, error)
-	}
 	cases := []struct {
 		name string
-		v    capGuard
+		v    encode.Marshaler
 	}{
 		{"Items_mixed", PtrSliceItemsStruct{Items: []*Address{&a, nil, &b}}},
 		{"Items_nil", PtrSliceItemsStruct{}},
@@ -692,6 +685,87 @@ func TestJSONSize_PtrSlicePerShape_NoRealloc(t *testing.T) {
 			if cap(got) != size {
 				t.Errorf("realloc: JSONSize=%d cap=%d len=%d\nout=%s",
 					size, cap(got), len(got), got)
+			}
+			if len(got) > size {
+				t.Errorf("undersized: len=%d > size=%d", len(got), size)
+			}
+		})
+	}
+}
+
+// TestJSONSize_PtrFieldPerKind: per-pointee-kind cap-guard for single-level
+// `*T` fields, split out of PointerStruct so a regression in (say) the
+// `*time.Time format:unix` size path surfaces at that kind rather than hiding
+// inside the composite PointerStruct_all_populated case. Both the nil arm
+// (4-byte `null`, or 0 for an omitempty field skipped entirely) and the
+// populated worst-case arm must absorb without realloc.
+func TestJSONSize_PtrFieldPerKind_NoRealloc(t *testing.T) {
+	t.Parallel()
+	worst := strings.Repeat(`"\`+"\n\t", 16)
+	cases := []struct {
+		name string
+		v    encode.Marshaler
+	}{
+		{"string/nil", PtrNameStruct{}},
+		{"string/set", PtrNameStruct{Name: new(worst)}},
+		{"int/nil", PtrCountStruct{}},
+		{"int/set", PtrCountStruct{Count: new(-1 << 62)}},
+		{"float/nil", PtrRatioStruct{}},
+		{"float/set", PtrRatioStruct{Ratio: new(-1.7976931348623157e+308)}},
+		{"struct/nil", PtrAddrStruct{}},
+		{"struct/set", PtrAddrStruct{Addr: &Address{Street: worst, City: worst, ZipCode: "00000"}}},
+		{"time/nil", PtrWhenStruct{}},
+		{"time/set", PtrWhenStruct{When: new(time.Unix(math.MaxInt32, 0).UTC())}},
+		{"bool/nil", PtrEnabledStruct{}},
+		{"bool/set", PtrEnabledStruct{Enabled: new(false)}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			size := c.v.JSONSize()
+			got, err := c.v.AppendJSON(make([]byte, 0, size))
+			if err != nil {
+				t.Fatalf("AppendJSON: %v", err)
+			}
+			if cap(got) != size {
+				t.Errorf("realloc: JSONSize=%d cap=%d len=%d\nout=%s", size, cap(got), len(got), got)
+			}
+			if len(got) > size {
+				t.Errorf("undersized: len=%d > size=%d", len(got), size)
+			}
+		})
+	}
+}
+
+// TestJSONSize_NPtrPerDepth: per-depth cap-guard for multi-level pointers,
+// split out of NPtrStruct. The flat `else if` nil-ladder budgets `null` (4) at
+// any nil level and the leaf worst-case only when the whole chain is allocated;
+// each depth/leaf (`**int`, `***int`, `****string`, `**Address`) must absorb
+// both the top-nil arm and the fully-allocated arm without realloc.
+func TestJSONSize_NPtrPerDepth_NoRealloc(t *testing.T) {
+	t.Parallel()
+	worst := strings.Repeat(`"\`+"\n\t", 16)
+	cases := []struct {
+		name string
+		v    encode.Marshaler
+	}{
+		{"pp/nil", PtrPPStruct{}},
+		{"pp/full", PtrPPStruct{PP: new(new(-1 << 62))}},
+		{"ppp/nil", PtrPPPStruct{}},
+		{"ppp/full", PtrPPPStruct{PPP: new(new(new(-1 << 62)))}},
+		{"pppp/nil", PtrPPPPStruct{}},
+		{"pppp/full", PtrPPPPStruct{PPPP: new(new(new(new(worst))))}},
+		{"addr/nil", PtrAddr2Struct{}},
+		{"addr/full", PtrAddr2Struct{Addr: new(&Address{Street: worst, City: worst, ZipCode: "00000"})}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			size := c.v.JSONSize()
+			got, err := c.v.AppendJSON(make([]byte, 0, size))
+			if err != nil {
+				t.Fatalf("AppendJSON: %v", err)
+			}
+			if cap(got) != size {
+				t.Errorf("realloc: JSONSize=%d cap=%d len=%d\nout=%s", size, cap(got), len(got), got)
 			}
 			if len(got) > size {
 				t.Errorf("undersized: len=%d > size=%d", len(got), size)

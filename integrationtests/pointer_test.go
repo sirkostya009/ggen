@@ -35,27 +35,67 @@ func TestPointer_parseErrorChainsThroughPointee(t *testing.T) {
 	}
 }
 
+// The single-level `*T` fields split into one struct per pointee kind so a
+// regression in (say) the `*time.Time format:unix` size path surfaces at that
+// kind rather than buried in the composite. Each carries the same json tag it
+// has in the composite (omitempty / format) so the per-field JSONSize cap-guard
+// (jsonsize_test.go) exercises the exact emit. Pointee kinds: string, int
+// (omitempty), float64 (omitempty), ggen-struct (omitempty), time (omitempty,
+// unix), bool (non-omit).
+
+//ggen:generate
+type PtrNameStruct struct {
+	Name *string `json:"name"`
+}
+
+//ggen:generate
+type PtrCountStruct struct {
+	Count *int `json:"count,omitempty"`
+}
+
+//ggen:generate
+type PtrRatioStruct struct {
+	Ratio *float64 `json:"ratio,omitempty"`
+}
+
+//ggen:generate
+type PtrAddrStruct struct {
+	Addr *Address `json:"addr,omitempty"`
+}
+
+//ggen:generate
+type PtrWhenStruct struct {
+	When *time.Time `json:"when,omitempty,format:unix"`
+}
+
+//ggen:generate
+type PtrEnabledStruct struct {
+	Enabled *bool `json:"enabled"`
+}
+
 // PointerStruct exercises optional fields via Go pointers. Each nil pointer
-// encodes as JSON null and decodes back to nil.
+// encodes as JSON null and decodes back to nil. Keeps the composite shape (via
+// embedding) so the existing roundtrip/null tests still exercise the full mix
+// together, mirroring PtrSliceStruct.
 //
 //ggen:generate
 type PointerStruct struct {
-	Name    *string    `json:"name"`
-	Count   *int       `json:"count,omitempty"`
-	Ratio   *float64   `json:"ratio,omitempty"`
-	Addr    *Address   `json:"addr,omitempty"`
-	When    *time.Time `json:"when,omitempty,format:unix"`
-	Enabled *bool      `json:"enabled"`
+	PtrNameStruct
+	PtrCountStruct
+	PtrRatioStruct
+	PtrAddrStruct
+	PtrWhenStruct
+	PtrEnabledStruct
 }
 
 func TestPointer_roundtripAllSet(t *testing.T) {
 	in := PointerStruct{
-		Name:    new("alice"),
-		Count:   new(7),
-		Ratio:   new(0.5),
-		Addr:    &Address{Street: "Main 1", City: "Lviv", ZipCode: "79000"},
-		When:    new(time.Unix(1_700_000_000, 0).UTC()),
-		Enabled: new(true),
+		PtrNameStruct:    PtrNameStruct{Name: new("alice")},
+		PtrCountStruct:   PtrCountStruct{Count: new(7)},
+		PtrRatioStruct:   PtrRatioStruct{Ratio: new(0.5)},
+		PtrAddrStruct:    PtrAddrStruct{Addr: &Address{Street: "Main 1", City: "Lviv", ZipCode: "79000"}},
+		PtrWhenStruct:    PtrWhenStruct{When: new(time.Unix(1_700_000_000, 0).UTC())},
+		PtrEnabledStruct: PtrEnabledStruct{Enabled: new(true)},
 	}
 	out, _ := encode.MarshalString(in)
 	got, _, err := PointerStruct{}.DecodeFrom([]byte(out))
@@ -69,7 +109,7 @@ func TestPointer_roundtripAllSet(t *testing.T) {
 }
 
 func TestPointer_nilOmitted(t *testing.T) {
-	in := PointerStruct{Name: new("bob"), Enabled: new(false)}
+	in := PointerStruct{PtrNameStruct: PtrNameStruct{Name: new("bob")}, PtrEnabledStruct: PtrEnabledStruct{Enabled: new(false)}}
 	out, _ := encode.MarshalString(in)
 	// omitempty fields (Count/Ratio/Addr/When) are nil → absent.
 	for _, absent := range []string{"count", "ratio", "addr", "when"} {
@@ -102,8 +142,13 @@ func TestPointer_nullRoundtrip(t *testing.T) {
 }
 
 // NPtrStruct exercises multi-level pointer indirection (`**T`, `***T`, …).
-// Scalar fields route through the encoding/json fallback per-element, so
-// the depth doesn't change the codegen shape — verifies parity with `*T`.
+// Decode parses the leaf into a temp FIRST (no allocation for a value that
+// fails to parse), then reuses the receiver's existing pointer prefix and
+// allocates only the nil tail with Go 1.26 `new(expr)` (`new(new(v))`);
+// encode/JSONSize deref level-by-level so an intermediate nil marshals as
+// `null` (stdlib parity). No reflective encoding/json fallback — primitive
+// and ggen-struct leaves decode natively. Chain-reuse + parse-failure-leaves-
+// -receiver-untouched pinned by `TestMerge_multiLevel*` in merge_test.go.
 //
 // Slice (`[]**T`) and map (`map[string]**T`) variants are intentionally
 // absent: the current codegen has gaps in those paths (slice slab emits
@@ -111,12 +156,37 @@ func TestPointer_nullRoundtrip(t *testing.T) {
 // in the generic struct fallback). See the n-pointer backlog entry in
 // CLAUDE.md.
 //
+// Each multi-level depth/leaf split into its own struct so the per-field
+// JSONSize cap-guard (jsonsize_test.go) exercises the `else if` nil-ladder at
+// that exact depth in isolation: `**int` (2-deep primitive), `***int` (3-deep),
+// `****string` (4-deep, string leaf), `**Address` (2-deep ggen-struct leaf).
+
+//ggen:generate
+type PtrPPStruct struct {
+	PP **int `json:"pp"`
+}
+
+//ggen:generate
+type PtrPPPStruct struct {
+	PPP ***int `json:"ppp"`
+}
+
+//ggen:generate
+type PtrPPPPStruct struct {
+	PPPP ****string `json:"pppp"`
+}
+
+//ggen:generate
+type PtrAddr2Struct struct {
+	Addr **Address `json:"addr"`
+}
+
 //ggen:generate
 type NPtrStruct struct {
-	PP   **int      `json:"pp"`
-	PPP  ***int     `json:"ppp"`
-	PPPP ****string `json:"pppp"`
-	Addr **Address  `json:"addr"`
+	PtrPPStruct
+	PtrPPPStruct
+	PtrPPPPStruct
+	PtrAddr2Struct
 }
 
 func TestNPtr_scalarRoundtrip(t *testing.T) {
@@ -132,10 +202,10 @@ func TestNPtr_scalarRoundtrip(t *testing.T) {
 	pps := &ps
 	ppps := &pps
 	in := NPtrStruct{
-		PP:   ppv1,
-		PPP:  pppv2,
-		PPPP: &ppps,
-		Addr: new(&Address{Street: "Main 1", City: "Lviv", ZipCode: "79000"}),
+		PtrPPStruct:    PtrPPStruct{PP: ppv1},
+		PtrPPPStruct:   PtrPPPStruct{PPP: pppv2},
+		PtrPPPPStruct:  PtrPPPPStruct{PPPP: &ppps},
+		PtrAddr2Struct: PtrAddr2Struct{Addr: new(&Address{Street: "Main 1", City: "Lviv", ZipCode: "79000"})},
 	}
 	out, _ := encode.MarshalString(in)
 	got, _, err := NPtrStruct{}.DecodeFrom([]byte(out))
@@ -164,6 +234,22 @@ func TestNPtr_allNull(t *testing.T) {
 	}
 	if got.PP != nil || got.PPP != nil || got.PPPP != nil || got.Addr != nil {
 		t.Errorf("expected all nil, got %+v", got)
+	}
+}
+
+// TestNPtr_intermediateNilMarshalsNull: a non-nil outer pointer whose inner
+// pointer is nil marshals that field as `null` — the encode path derefs
+// level-by-level and short-circuits at the first nil, matching stdlib. Decode
+// can't produce this shape (it allocates the whole chain), but a hand-built
+// value must still encode correctly.
+func TestNPtr_intermediateNilMarshalsNull(t *testing.T) {
+	in := NPtrStruct{PtrPPStruct: PtrPPStruct{PP: new((*int)(nil))}} // **int → non-nil outer, nil inner
+	out, err := encode.MarshalString(in)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if !strings.Contains(out, `"pp":null`) {
+		t.Errorf("expected \"pp\":null for intermediate-nil pointer, got %q", out)
 	}
 }
 
