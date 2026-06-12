@@ -35,12 +35,6 @@
       (`generate.go` bytes + stream emitters). Measured -3.4% serial Mega;
       micro -12% matrix-only, asm-verified (4→2 barrier sites). Composes with
       comma pre-count (both want row local).
-    - **Direct-write `encode.AppendInt/AppendUint`.** strconv int format =
-      36-40% cum of Marshal (backward [24]byte + second memmove). Digit count
-      up front (`bits.Len64` + pow10 correction), extend dst once, fill
-      backward in place. Measured -44%/int micro, **-8.1% serial presized Mega
-      Marshal**. ~15 emit sites + `encode/any.go`. Parity-fuzz MinInt64/
-      MaxInt64/u64>MaxInt64/pow10 boundaries; drop now-unused strconv imports.
     - **Map decode buffer-then-build (fresh-decode arm, primitive/string
       values).** 73% of mapassign time = Swiss-map growth from unsized `make`.
       Buffer `pairs` slice, at `}` emit `make(map, len(pairs))` + fill.
@@ -159,6 +153,15 @@
 
 
 # Tried Rejected
+
+- **Direct-write `encode.AppendInt/AppendUint` replacing strconv.** Fully
+  implemented (digit count via `bits.Len64`+pow10, in-cap `dst[:l+n]` extend,
+  backward two-digit fill; parity-fuzzed 4M+ values incl. MinInt64/pow10
+  boundaries) then dropped: micro re-measure showed -34% on small ints
+  (6.9 vs 10.4 ns) but PAR on large (18.6 vs 19.3) — the review's -44%/-8.1%
+  claim didn't hold across distributions, and ~15 emit sites + a custom
+  formatter to maintain wasn't worth a small-int-only win. strconv keeps
+  base-10 paths.
 
 - **Static comma fusion past one conditional field in `renderAppendJSONBody`**
   (per-field comma state machine so fields after an omitempty/omitzero guard
