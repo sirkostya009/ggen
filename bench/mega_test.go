@@ -79,7 +79,7 @@ func snapshotMemProfile() map[string]memProfileSample {
 // reportTopAllocs diffs two MemProfile snapshots and reports the top-N
 // sites as inline bench metrics — each site contributes one
 // `<name>/op` column, landing in the bench output table next to ns/op
-// / gc/op / etc. Skips when b.N is small (testing.B's warm-up runN(1)
+// / gc / etc. Skips when b.N is small (testing.B's warm-up runN(1)
 // is noise).
 func reportTopAllocs(b *testing.B, pre, post map[string]memProfileSample, top int) {
 	b.Helper()
@@ -117,16 +117,8 @@ func reportTopAllocs(b *testing.B, pre, post map[string]memProfileSample, top in
 
 func reportGC(b *testing.B, pre, post runtime.MemStats) {
 	b.Helper()
-	gcs := float64(post.NumGC - pre.NumGC)
-	// heap_KB is a snapshot of HeapAlloc at b.StopTimer
-	b.ReportMetric(float64(post.HeapAlloc)/1024, "heap_KB")
-	// total_KB and gc are deltas across the timed region
-	b.ReportMetric(float64(post.TotalAlloc-pre.TotalAlloc)/1024, "total_KB")
-	b.ReportMetric(gcs, "gc")
-	if b.N > 0 {
-		// gc/op is per-iteration GC rate, e.g. 0.5 = one GC every two ops
-		b.ReportMetric(gcs/float64(b.N), "gc/op")
-	}
+	// gc is the NumGC delta across the timed region
+	b.ReportMetric(float64(post.NumGC-pre.NumGC), "gc")
 }
 
 func runBench[S any](b *testing.B, bytesPerOp int64, setup func() S, body func(*S)) {

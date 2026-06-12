@@ -19,7 +19,7 @@ Three table-driven benches: `BenchmarkMega_Unmarshal`, `BenchmarkMega_Marshal`,
 `BenchmarkMega_Reader` (includes `ggen_ReadAllUnmarshal` — `io.ReadAll` then
 bytes-path decode, cheapest "I have an io.Reader" pattern).
 
-Inner loop runs under `b.RunParallel`. `-cpu=1` serial, `-cpu=N` N-way parallel, same code path. Stateful codecs (Reader, Stream buf) get per-goroutine state via `setup` closure in `runBench`. Each sub-bench wraps `runtime.ReadMemStats`, reports `heap_KB` (live heap at StopTimer), `total_KB` (alloc delta over timed region), `gc` (NumGC delta), `gc/op` (per-iter GC rate) on top of standard `ns/op` + `B/op` + `allocs/op`.
+Inner loop runs under `b.RunParallel`. `-cpu=1` serial, `-cpu=N` N-way parallel, same code path. Stateful codecs (Reader, Stream buf) get per-goroutine state via `setup` closure in `runBench`. Each sub-bench wraps `runtime.ReadMemStats`, reports `gc` (NumGC delta over timed region) on top of standard `ns/op` + `B/op` + `allocs/op`.
 
 ## BenchmarkSmall
 
