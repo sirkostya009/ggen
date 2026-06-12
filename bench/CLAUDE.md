@@ -91,10 +91,10 @@ Numbers after running all, no cpu limit (32 threads):
 | sonic.NewDecoder             | 2358 K | 39.0 MB | 137791 |
 | sonic_fast.NewDecoder        | 2311 K | 39.0 MB | 137790 |
 | easyjson.UnmarshalFromReader | 3204 K | 31.5 MB | 245886 |
-| **ggen UnmarshalStream**     | 8094 K | 17.8 MB | 256589 |
+| **ggen UnmarshalStream**     | 2900 K | 17.7 MB | 256587 |
 | **ggen ReadAllUnmarshal**    | 2274 K | 29.0 MB | 101956 |
 
-ggen Stream copies strings during parse (each scanned string own heap alloc), why loses on alloc count. Win returns on **Marshal** (1.47× faster than easyjson) and **bytes-only path** (1.45× faster). Cleanest "I have an io.Reader" pattern = `ReadAllUnmarshal` — same shape as bytes path, comparable wall clock at cost of one `io.ReadAll` buffer.
+ggen Stream copies strings during parse (each scanned string own heap alloc), why loses on alloc count; wall clock within ~1.3× of `ReadAllUnmarshal` at ~40% lower B/op (was 3.5× slower before `skipString` bounded its backslash probe — unbounded probe made `SkipValue` quadratic on buffered payloads). Win returns on **Marshal** (1.47× faster than easyjson) and **bytes-only path** (1.45× faster). Cleanest "I have an io.Reader" pattern = `ReadAllUnmarshal` — same shape as bytes path, comparable wall clock at cost of one `io.ReadAll` buffer.
 
 ### Residency (retained heap per decoded item, slowPayload ~36 KiB)
 

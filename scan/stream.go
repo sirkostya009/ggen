@@ -380,9 +380,16 @@ func (s *Stream) skipString() error {
 	j := start
 	for {
 		rel := bytes.IndexByte(s.buf[j:], '"')
-		bsRel := bytes.IndexByte(s.buf[j:], '\\')
-		// Closing quote first (no backslash before it) — fast path.
-		if rel >= 0 && (bsRel < 0 || rel < bsRel) {
+		// Bound the backslash probe to the closing quote — whole-tail
+		// scans per skipped string made SkipValue quadratic on fully
+		// buffered payloads (Shift=false RawJSON capture).
+		bsEnd := len(s.buf)
+		if rel >= 0 {
+			bsEnd = j + rel
+		}
+		bsRel := bytes.IndexByte(s.buf[j:bsEnd], '\\')
+		// Closing quote with no backslash before it — fast path.
+		if rel >= 0 && bsRel < 0 {
 			end := j + rel
 			for k := j; k < end; k++ {
 				if s.buf[k] < 0x20 {

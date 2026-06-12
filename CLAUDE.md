@@ -443,7 +443,7 @@ single underscores: `goexperiment.jsonv2` → `goexperiment_jsonv2`,
    slower (100-field) vs flat; removed (see backlog "Tried Rejected").
 2. **Slice cap from tag hint.** `preallocCap` picks initial cap for
    `make([]T,0,N)`. Precedence: `hintlen=N` > `len=N` >
-   `max(minlen, default)` > default (8 primitives, 4 structs). Maps via
+   `max(minlen, default)` > default (`defaultPreallocCap = 4`). Maps via
    `mapPreallocCap` (no minlen — weak signal on maps).
 3. **Field marshal order sorted by JSON name** at codegen time (alphabetical).
    `-nosortkeys` opts back to declaration order.
@@ -524,9 +524,11 @@ single underscores: `goexperiment.jsonv2` → `goexperiment_jsonv2`,
 17. **First-element-then-rest slice loop.** First element emitted directly (no
     leading comma), iterate `slice[1:]` with comma-prepend — lifts per-iter
     `if i > 0` out of loop.
-18. **`bytes.IndexByte` string scan.** `scan.String` / `(*Stream).String`
-    locate closing `"` via `bytes.IndexByte` (SIMD), then second
-    IndexByte detects any preceding `\`. Wins on long strings; truncated
+18. **`bytes.IndexByte` string scan.** `scan.String` / `(*Stream).String` /
+    `KeyView` / `skipString` locate closing `"` via `bytes.IndexByte`
+    (SIMD), then second IndexByte — bounded to the closing quote — detects
+    any preceding `\` (unbounded probe in `skipString` made `SkipValue`
+    quadratic on buffered payloads; fixed). Wins on long strings; truncated
     `\u…`/trailing `\` falls through to `stringSlow` → `ErrBadString`.
 19. **Empty-container peek bypass.** Slice/map decode peek for `]`/`}` before
     allocating — empty `[]`/`{}` keep field nil, skip `make`.

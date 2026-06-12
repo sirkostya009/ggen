@@ -1,5 +1,75 @@
 # TODO
 
+- **Perf-review findings (2026-06-11 audit) — verified, not yet landed.** All
+  prototyped + A/B'd at Mega scale, then reverted; numbers below are measured,
+  not estimated. (`skipString` bounded backslash probe — the 5.1× stream fix —
+  already landed.) Suggested order: stream pair → decode pair → encode.
+    - **Stream `s.buf` hoist.** In-loop `ReadMore` forces slice-header
+      reload per byte in `SkipSpace`/`Int64`/`Uint64`/`Float64`/`Number`
+      (`scan/stream.go`). Nested-loop restructure (`buf := s.buf; for i <
+      len(buf)`, refill in outer loop) registerizes header. Measured -3.1%
+      stream wall (SkipSpace+Int64 only); extensions ~1-2% more. Distinct from
+      rejected `inlineStreamSkipWS` (that kept Ensure in-loop; Ensure gone).
+    - **Gated stream string slab.** `Stream.String`/`Number` bump-allocate
+      <1024B strings from append-only chunks (`unsafe.String`), fresh chunk on
+      overflow, dropped on Reset, never reused/rewritten — immune to the
+      rejected-pool corruption class, not the rejected 2-walk arena. Measured:
+      allocs 256,588 → 104,641 (readall parity), -3-6% wall;
+      BenchmarkRetention parity (~86 KiB/item both ways). **Chunk-size gating
+      mandatory**: un-gated 8KiB first chunk regresses small payloads 3.5×
+      B/op, +30-90% ns (geometric 512→8KiB or payload-gated first chunk).
+      Update scan/CLAUDE.md "owned copies" wording if landed.
+    - **Exact-cap comma pre-count for flat numeric/bool slice elems, bytes
+      path.** Elem kinds where `,`/`]` can't appear inside elem: `IndexByte(']')`
+      + `bytes.Count(',')+1` before `make` (both SIMD). `generate.go`
+      preallocCap + emitByteSliceRead non-empty arm; every depth via
+      peelSliceField; hintlen/len/minlen keep precedence. Measured (Matrix
+      only): allocs -36.6% (101,927→64,599), ns -7.5%, B/op -21%, residency
+      improves (exact caps — opposite of rejected maxlen-as-prealloc). Bytes
+      path ONLY (stream has no full buffer). Verify small_test no-regress.
+    - **Hoist nested-container slot into depth-suffixed local.** Recursion
+      threads `result.Matrix[len(result.Matrix)-1]` as inner dst → ~30 instr
+      header churn + write barrier per inner elem (barriers ≈10% of decode
+      samples). Emit `var rowN <inner>` / `rowN := target`, recurse on it,
+      `target = rowN` after inner `]` before elem validation
+      (`generate.go` bytes + stream emitters). Measured -3.4% serial Mega;
+      micro -12% matrix-only, asm-verified (4→2 barrier sites). Composes with
+      comma pre-count (both want row local).
+    - **Direct-write `encode.AppendInt/AppendUint`.** strconv int format =
+      36-40% cum of Marshal (backward [24]byte + second memmove). Digit count
+      up front (`bits.Len64` + pow10 correction), extend dst once, fill
+      backward in place. Measured -44%/int micro, **-8.1% serial presized Mega
+      Marshal**. ~15 emit sites + `encode/any.go`. Parity-fuzz MinInt64/
+      MaxInt64/u64>MaxInt64/pow10 boundaries; drop now-unused strconv imports.
+    - **Map decode buffer-then-build (fresh-decode arm, primitive/string
+      values).** 73% of mapassign time = Swiss-map growth from unsized `make`.
+      Buffer `pairs` slice, at `}` emit `make(map, len(pairs))` + fill.
+      Runtime-learned count — not the rejected tag-derived sizing. Measured
+      micro -41-44% map build; ~3-5% Mega, 20-30% map-heavy. Cautions: B/op
+      grows at n≥25 (geometric pairs growth or spill-to-map); ~45ns absolute
+      regression at n=6-8; struct values stay direct (dup-key fresh-decode,
+      opt #37).
+    - **Length-gated SWAR string-span scan, decode.** SWAR prelude
+      (`LittleEndian.Uint64` + escape mask + `TrailingZeros64`) emitted ONLY
+      for provably-long fields (KindBytes base64; large/absent maxlen); keys +
+      short fields keep byte loop. Measured: Small_Unmarshal -37%, Mega
+      neutral. Un-gated all-sites variant regresses Mega +2% (register
+      pressure) — gate is load-bearing.
+    - **Grammar-only `skipNumber`.** SkipValue full-ParseFloats discarded
+      numbers (~4.75% cum decode). Validating one-pass number state machine in
+      SkipValue/skipArray/skipObject + stream mirror. Measured 4.5×/skipped
+      number, ~1-1.5% Mega; multiplies on RawMessage-heavy/ignoreunknown.
+      Decide accept-set edge ("1.", "-.5", 1e400 — ParseFloat hard-errors
+      today, grammar skip would accept); error identity flips *NumError →
+      ErrBadNumber at skip sites. Land with old-vs-new accept-set fuzz.
+    - **Fused span-scan + Eisel-Lemire in `Float64`.** Span walk then
+      ParseFloat re-scans (duplicate classification, ~4.65% cum). Accumulate
+      mantissa+exp10 in existing loop; exact path + pure-Go EL (≤19-digit
+      mantissa, ~60 LOC + 11KB pow10 table), ParseFloat fallback. Measured
+      2-2.7×/number bit-exact over 200K+ values; Mega ~1%. EL variant ONLY —
+      exact-only-without-EL regresses 16% (see Tried Rejected). BSD
+      attribution for vendored EL.
+
 - **Improve fuzz coverage.** Current surface (`integrationtests/fuzz_test.go`):
   three fuzzers over `Node` — `FuzzScanNoPanic` (panic safety),
   `FuzzRoundtrip` (encode→decode fixed-point), `FuzzCompat` (ggen ↔ jsonv2
@@ -89,6 +159,37 @@
 
 
 # Tried Rejected
+
+- **Static comma fusion past one conditional field in `renderAppendJSONBody`**
+  (per-field comma state machine so fields after an omitempty/omitzero guard
+  keep fused `,"key":` constants). Measured n=20 interleaved benchstat:
+  presized Mega Marshal +0.5% p=0.678 — dead flat. ~14 predictable
+  compare+branch+1-byte appends are pipeline-hidden under escape-scan/memmove.
+  Wire bytes verified identical, so not worth doing for cleanliness either.
+  Natural follow-on to optimization #20; don't redo.
+
+- **KindBytes inline string scan → `scan.String` call.** Regressed Mega
+  +0.8% — third independent confirmation that replacing inline scan code with
+  runtime calls loses regalloc/BCE context (generalizes the "removing decode
+  inliners" rejection below).
+
+- **Un-gated SWAR string scan at all decode sites.** Regressed Mega +2.0%
+  (register pressure in the 32.5KB DecodeFrom). Length-gated variant works —
+  see TODO; the gate is the point.
+
+- **Exact-only float fast path (span-fused, no Eisel-Lemire).** Regresses 16%
+  per-number on 17-digit floats: wasted mantissa accumulation + full
+  ParseFloat redo. Half-measures on the number path are worse than nothing —
+  ship fused Float64 only with the EL arm (see TODO).
+
+- **`inlineNullPeek` → uint32 compare.** Mechanism real (`scan.Null` ships
+  it) but ~53K peeks × 0.35ns ≈ 0.07% of decode; never a perf bet. Idiom
+  cleanup at best.
+
+- **Flat-CPU-share ⇒ wall-clock extrapolation** (methodology, from SWAR-in-
+  `AppendStringNoHTML` A/B: 24-28% flat CPU, measured -0.25% ±2.3% wall — the
+  Mega marshal walk is memory-latency-bound on the cold 36MB tree). Profile
+  shares alone don't justify landing; interleaved end-to-end A/Bs only.
 
 - **Lazy per-key container reset (retain omitted slice/map keys).** Fully
   implemented (reset emitted at each field's dispatch branch — seen machinery

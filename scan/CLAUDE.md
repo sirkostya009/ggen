@@ -64,6 +64,10 @@ Sibling of `Stream.String`, aliases via `unsafe.String(unsafe.SliceData
 
 Alias survives buffer growth (GC pins old backing once string header references it), but non-zero `keep` in subsequent `ReadMore` WILL move bytes + corrupt live aliases — see "aggressive compaction". Dispatch sites detach via `strings.Clone` before any shift-triggering path (UnknownKeyError, inline-catch-all map key).
 
+### `skipString` — bounded backslash probe
+
+All three string scanners (`String`, `KeyView`, `skipString`) bound the backslash IndexByte to the closing quote; whole-tail probe only when quote not yet buffered. `skipString` once probed the full tail per skipped string — `SkipValue` went O(payload²) when buffer held whole payload (Shift=false RawJSON capture): bound cut Mega stream wall -67% serial (benchstat p=0.002, n=6; readall control flat), allocs identical.
+
 ## Design rationale
 
 - **`unsafe.String` aliases safe across buffer growth.** Go GC non-moving (mark-and-sweep, no compaction). Alias into OLD backing keeps it live — GC walks string headers. Stream can `append`-grow freely; prior aliases stay valid.
