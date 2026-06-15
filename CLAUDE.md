@@ -248,10 +248,22 @@ other text/number kinds — has NO null branch, so an explicit JSON `null`
 hard-errors the parse (`scan: expected string` / `invalid number` / …). stdlib
 v1/v2 instead accept `null` everywhere (zero the field / no-op). Consistent with
 ggen's other strict defaults (UnknownKeyError, strict array length,
-DuplicateKeyError) — for a nullable scalar, use a pointer. Decode-into-receiver
-divergences are pinned in `integrationtests/stdcompat_test.go`
+DuplicateKeyError, trailing-comma rejection) — for a nullable scalar, use a
+pointer. Decode-into-receiver divergences are pinned in
+`integrationtests/stdcompat_test.go`
 (`TestStdCompatMerge_IntentionalDivergences`); revisiting null-on-scalar is a
 backlog item.
+
+**Trailing commas are rejected (stdlib parity).** Every element-loop comma
+branch (slice / map / tuple / nested / pointer-elem / `[]byte` format:array,
+bytes + stream) emits a guard after the comma's WS skip: container close or
+EOF right after a comma → `scan.ErrBadArray`/`ErrBadObject`
+(`emitNoCloseAfterComma` / `streamNoCloseAfterComma` in `generate.go`). The
+EOF half also fixes a stream-path panic: `(*Stream).SkipSpace` returns nil at
+EOF with `Pos == len(buf)`, and the element loop's top used to index
+`s.Bytes()[s.Pos]` unguarded on input truncated right after a comma. Pinned in
+`integrationtests/scan_decode_test.go` (`TestTrailingCommaRejected`,
+`TestTruncatedAfterComma`).
 
 **Decode-into-receiver vs stdlib merge — divergences.** ggen's receiver-merge
 is NOT a drop-in for stdlib merge: (1) container fields reset at decode entry,

@@ -1573,7 +1573,7 @@ func (result SQLNullFloat64Struct) DecodeFromStream(s *scan.Stream) (SQLNullFloa
 }
 
 func (s SQLNullFloat64Struct) JSONSize() int {
-	size := 30
+	size := 31
 	return size
 }
 
@@ -2559,7 +2559,7 @@ func (result SQLNullStruct) DecodeFromStream(s *scan.Stream) (SQLNullStruct, err
 }
 
 func (s SQLNullStruct) JSONSize() int {
-	size := 196
+	size := 197
 	size += len(s.S.String) * 2
 	return size
 }

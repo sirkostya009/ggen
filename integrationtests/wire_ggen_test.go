@@ -3371,7 +3371,7 @@ func (result BoundaryStruct) DecodeFromStream(s *scan.Stream) (BoundaryStruct, e
 }
 
 func (s BoundaryStruct) JSONSize() int {
-	size := 64
+	size := 65
 	size += len(s.Str) * 2
 	return size
 }

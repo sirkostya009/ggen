@@ -1057,6 +1057,9 @@ func (result AliasTags) DecodeFrom(data []byte) (AliasTags, int, error) {
 				for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 					i++
 				}
+				if i >= len(data) || data[i] == ']' {
+					return result, i, scan.ErrBadArray
+				}
 				continue
 			}
 			break
@@ -1140,6 +1143,9 @@ func (result AliasTags) DecodeFromStream(s *scan.Stream) (AliasTags, error) {
 				err = s.SkipSpace()
 				if err != nil {
 					return result, decode.NewParseErr("", s.Pos, err)
+				}
+				if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+					return result, decode.NewParseErr("", s.Pos, scan.ErrBadArray)
 				}
 				continue
 			}
@@ -1286,6 +1292,9 @@ func (result AliasLookup) DecodeFrom(data []byte) (AliasLookup, int, error) {
 				for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 					i++
 				}
+				if i >= len(data) || data[i] == '}' {
+					return result, i, scan.ErrBadObject
+				}
 				continue
 			}
 			break
@@ -1393,6 +1402,9 @@ func (result AliasLookup) DecodeFromStream(s *scan.Stream) (AliasLookup, error) 
 				if err != nil {
 					return result, decode.NewParseErr("", s.Pos, err)
 				}
+				if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == '}' {
+					return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+				}
 				continue
 			}
 			break
@@ -1497,6 +1509,9 @@ func (result AliasTuple) DecodeFrom(data []byte) (AliasTuple, int, error) {
 			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
+			if i >= len(data) || data[i] == ']' {
+				return result, i, scan.ErrBadArray
+			}
 			continue
 		}
 		break
@@ -1553,6 +1568,9 @@ func (result AliasTuple) DecodeFromStream(s *scan.Stream) (AliasTuple, error) {
 			err = s.SkipSpace()
 			if err != nil {
 				return result, decode.NewParseErr("", s.Pos, err)
+			}
+			if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+				return result, decode.NewParseErr("", s.Pos, scan.ErrBadArray)
 			}
 			continue
 		}

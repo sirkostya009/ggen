@@ -477,6 +477,9 @@ func (result Node) DecodeFrom(data []byte) (Node, int, error) {
 					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
+					if i >= len(data) || data[i] == ']' {
+						return result, i, scan.ErrBadArray
+					}
 					continue
 				}
 				break
@@ -648,6 +651,9 @@ func (result Node) DecodeFrom(data []byte) (Node, int, error) {
 					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
+					if i >= len(data) || data[i] == '}' {
+						return result, i, scan.ErrBadObject
+					}
 					continue
 				}
 				break
@@ -725,6 +731,9 @@ func (result Node) DecodeFrom(data []byte) (Node, int, error) {
 					i++
 					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
+					}
+					if i >= len(data) || data[i] == ']' {
+						return result, i, scan.ErrBadArray
 					}
 					continue
 				}
@@ -889,6 +898,9 @@ func (result Node) DecodeFromStream(s *scan.Stream) (Node, error) {
 					if err != nil {
 						return result, decode.NewParseErr("children", s.Pos, err)
 					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+						return result, decode.NewParseErr("children", s.Pos, scan.ErrBadArray)
+					}
 					continue
 				}
 				break
@@ -1020,6 +1032,9 @@ func (result Node) DecodeFromStream(s *scan.Stream) (Node, error) {
 					if err != nil {
 						return result, decode.NewParseErr("props", s.Pos, err)
 					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == '}' {
+						return result, decode.NewParseErr("props", s.Pos, scan.ErrBadObject)
+					}
 					continue
 				}
 				break
@@ -1117,6 +1132,9 @@ func (result Node) DecodeFromStream(s *scan.Stream) (Node, error) {
 					if err != nil {
 						return result, decode.NewParseErr("tags", s.Pos, err)
 					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+						return result, decode.NewParseErr("tags", s.Pos, scan.ErrBadArray)
+					}
 					continue
 				}
 				break
@@ -1157,7 +1175,7 @@ func (result Node) DecodeFromStream(s *scan.Stream) (Node, error) {
 }
 
 func (s Node) JSONSize() int {
-	size := 126
+	size := 127
 	if n := len(s.Children); n > 0 {
 		size += n - 1
 	}

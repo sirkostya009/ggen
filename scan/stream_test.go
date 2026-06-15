@@ -268,3 +268,52 @@ func TestStream_PathologicalZeroRead(t *testing.T) {
 type zeroReader struct{}
 
 func (zeroReader) Read(p []byte) (int, error) { return 0, nil }
+
+// TestIntegerScanNoShiftRefill: Int64/Uint64 must stay position-correct
+// when a mid-number refill happens in no-shift mode. ReadMore coerces
+// keep to 0 when !s.Shift and moves no bytes, so the local cursor must
+// NOT reset to 0 — resetting re-reads already-consumed digits.
+func TestIntegerScanNoShiftRefill(t *testing.T) {
+	t.Run("int64", func(t *testing.T) {
+		var s Stream
+		s.Reset(strings.NewReader("12345 "), make([]byte, 0, 3))
+		s.Shift = false
+		n, err := s.Int64()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n != 12345 {
+			t.Errorf("Int64 = %d, want 12345", n)
+		}
+		if s.Pos != 5 {
+			t.Errorf("Pos = %d, want 5", s.Pos)
+		}
+	})
+	t.Run("int64 negative", func(t *testing.T) {
+		var s Stream
+		s.Reset(strings.NewReader("-1234 "), make([]byte, 0, 3))
+		s.Shift = false
+		n, err := s.Int64()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n != -1234 {
+			t.Errorf("Int64 = %d, want -1234", n)
+		}
+	})
+	t.Run("uint64", func(t *testing.T) {
+		var s Stream
+		s.Reset(strings.NewReader("67890 "), make([]byte, 0, 3))
+		s.Shift = false
+		n, err := s.Uint64()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n != 67890 {
+			t.Errorf("Uint64 = %d, want 67890", n)
+		}
+		if s.Pos != 5 {
+			t.Errorf("Pos = %d, want 5", s.Pos)
+		}
+	})
+}

@@ -485,3 +485,71 @@ func TestStream_parseErrorFieldName(t *testing.T) {
 		t.Fatalf("errors.Is sentinel mismatch: %v", err)
 	}
 }
+
+// decodeBothPaths runs payload through the bytes-path DecodeFrom and the
+// stream-path DecodeFromStream of T, returning both errors.
+func decodeBothPaths[T decode.Decoder[T]](payload string) (bytesErr, streamErr error) {
+	var zb T
+	_, _, bytesErr = zb.DecodeFrom([]byte(payload))
+	var zs T
+	var s scan.Stream
+	s.Reset(strings.NewReader(payload), nil)
+	_, streamErr = zs.DecodeFromStream(&s)
+	return bytesErr, streamErr
+}
+
+// TestTrailingCommaRejected: a comma immediately followed by the container
+// close is invalid JSON — stdlib v1/v2 reject it; ggen must too, on every
+// container emit shape (slice / map / tuple / nested / pointer-elem /
+// byte-array) and on both paths.
+func TestTrailingCommaRejected(t *testing.T) {
+	cases := []struct {
+		name    string
+		payload string
+		run     func(string) (error, error)
+	}{
+		{"slice", `{"tags":["a","b",]}`, decodeBothPaths[Node]},
+		{"map", `{"props":{"a":"b",}}`, decodeBothPaths[Node]},
+		{"struct slice", `{"children":[{"id":1},]}`, decodeBothPaths[Node]},
+		{"nested slice inner", `{"nestedInts":[[1,2,],[3]]}`, decodeBothPaths[ExtraStruct]},
+		{"nested slice outer", `{"nestedInts":[[1],[2],]}`, decodeBothPaths[ExtraStruct]},
+		{"tuple", `{"point":[1.5,2.5,]}`, decodeBothPaths[TupleStruct]},
+		{"byte array", `{"byteArray":[1,2,]}`, decodeBothPaths[NativeTypes]},
+		{"ptr slice null elem", `{"items":[null,]}`, decodeBothPaths[PtrSliceItemsStruct]},
+		{"ptr map value", `{"mp":{"a":1,}}`, decodeBothPaths[NPtrContainersStruct]},
+		{"top-level object", `{"id":1,}`, decodeBothPaths[Node]},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			bytesErr, streamErr := c.run(c.payload)
+			if bytesErr == nil {
+				t.Errorf("DecodeFrom accepted %s", c.payload)
+			}
+			if streamErr == nil {
+				t.Errorf("DecodeFromStream accepted %s", c.payload)
+			}
+		})
+	}
+}
+
+// TestTruncatedAfterComma: input ending right after an element comma must
+// error on both paths — and must not panic on the stream path (the loop
+// top indexes s.Bytes()[s.Pos] after a SkipSpace that returns nil at EOF).
+func TestTruncatedAfterComma(t *testing.T) {
+	for _, payload := range []string{`{"tags":["a",`, `{"props":{"a":"b",`} {
+		t.Run(payload, func(t *testing.T) {
+			defer func() {
+				if r := recover(); r != nil {
+					t.Fatalf("decode panicked on %q: %v", payload, r)
+				}
+			}()
+			bytesErr, streamErr := decodeBothPaths[Node](payload)
+			if bytesErr == nil {
+				t.Errorf("DecodeFrom accepted truncated %q", payload)
+			}
+			if streamErr == nil {
+				t.Errorf("DecodeFromStream accepted truncated %q", payload)
+			}
+		})
+	}
+}

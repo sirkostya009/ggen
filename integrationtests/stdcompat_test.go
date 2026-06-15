@@ -20,6 +20,8 @@ import (
 	"encoding/json"
 	"encoding/json/jsontext"
 	jsonv2 "encoding/json/v2"
+	"fmt"
+	"math"
 	"math/big"
 	"net"
 	"net/netip"
@@ -97,6 +99,33 @@ func sameWire(t testing.TB, a, b any) bool {
 		t.Fatalf("jsonv2.Unmarshal(b): %v", err)
 	}
 	return reflect.DeepEqual(va, vb)
+}
+
+// exactWire asserts ggen's marshal output is BYTE-IDENTICAL to jsonv2's. It is
+// strictly stronger than crossCompat: crossCompat's sameWire re-marshals both
+// sides through jsonv2 and parses to `any`, which normalizes away wire-level
+// divergences that decode to the same value — float formatting (`1e+06` vs
+// `1000000`) and any-string HTML escaping (`<` vs `<`) both round-trip
+// invisibly there. Only valid for values whose field/element order already
+// matches jsonv2's: single-JSON-field structs, slices, scalars, single-key
+// maps (ggen sorts struct fields alphabetically and ranges maps in random
+// order, jsonv2 keeps declaration order — multi-field/multi-key inputs would
+// differ on ordering alone).
+func exactWire[T ggenCompat[T]](t *testing.T, name string, in T) {
+	t.Helper()
+	t.Run(name, func(t *testing.T) {
+		ggenBytes, err := encode.Marshal(in)
+		if err != nil {
+			t.Fatalf("ggen Marshal for %T: %v", in, err)
+		}
+		stdBytes, err := jsonv2.Marshal(in)
+		if err != nil {
+			t.Fatalf("jsonv2.Marshal for %T: %v", in, err)
+		}
+		if string(ggenBytes) != string(stdBytes) {
+			t.Errorf("wire mismatch for %T\n ggen:   %s\n jsonv2: %s", in, ggenBytes, stdBytes)
+		}
+	})
 }
 
 func TestStdCompat_Address(t *testing.T) {
@@ -469,6 +498,65 @@ func TestStdCompat_AnyStruct(t *testing.T) {
 	// Scalar bodies.
 	crossCompat(t, AnyStruct{Name: "y", Body: "scalar"})
 	crossCompat(t, AnyStruct{Name: "z", Body: nil})
+}
+
+// Single-JSON-field carriers for exactWire: one field means ggen's
+// alphabetical field sort and jsonv2's declaration order can't disagree, so
+// the only thing the byte comparison can catch is the value's own wire form.
+
+//ggen:generate
+type F64Wire struct {
+	V float64 `json:"v"`
+}
+
+//ggen:generate
+type F32Wire struct {
+	V float32 `json:"v"`
+}
+
+//ggen:generate
+type AnyWire struct {
+	V any `json:"v"`
+}
+
+// TestStdCompat_FloatWire pins ggen float output byte-for-byte against jsonv2
+// across magnitude boundaries. ggen used to emit strconv's 'g' verb
+// (`1e+06`, `1.23456789e+08`, `1e-07`) where stdlib v1/v2 use ES6 ToString
+// ('f' within [-6,21), trimmed-exponent 'e' outside). crossCompat masks this —
+// `1e+06` and `1000000` decode to the same float64 — so it needs exact bytes.
+func TestStdCompat_FloatWire(t *testing.T) {
+	for _, v := range []float64{
+		0, 0.1, -2.5, 1e6, 123456789, 1e20, 1e21, 1e-6, 1e-7, 1e-9, -1e-7,
+		1e100, 5e-324, math.MaxFloat64,
+	} {
+		exactWire(t, fmt.Sprintf("f64/%g", v), F64Wire{V: v})
+	}
+	for _, v := range []float32{
+		0, 0.1, -2.5, 1e6, 1e7, 1e-6, 1e-7, 3.4e38,
+	} {
+		exactWire(t, fmt.Sprintf("f32/%g", v), F32Wire{V: v})
+	}
+}
+
+// TestStdCompat_AnyWire pins the encode.AppendAny wire shape against jsonv2:
+// (1) HTML-special bytes (<, >, &) in any-held strings, slice elements, map
+// keys/values must emit literally — ggen's AppendAny used to hardcode the
+// HTML-safe escaper (`<`) while jsonv2 (and ggen's own generated string
+// fields) emit them raw; (2) floats reached through the any reflection path go
+// through the same fixed AppendFloat. Single-key maps keep iteration order
+// deterministic for the byte compare.
+func TestStdCompat_AnyWire(t *testing.T) {
+	cases := []any{
+		`<a href="x">tom & jerry</a>`,
+		[]any{"<e>", "f>g&h", "plain"},
+		map[string]any{"<k>": "<v>"},
+		float64(1e6),
+		float64(1e-7),
+		[]any{float64(1e20), float64(1e21)},
+	}
+	for i, body := range cases {
+		exactWire(t, fmt.Sprintf("case%d", i), AnyWire{V: body})
+	}
 }
 
 func TestStdCompat_TextFallbackStruct(t *testing.T) {

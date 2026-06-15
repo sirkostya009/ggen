@@ -479,7 +479,9 @@ func (s *Stream) stringSlow(start, j int) (string, error) {
 		c := s.buf[j]
 		if c == '"' {
 			s.Pos = j + 1
-			return string(buf), nil
+			// buf is a function-local write-once scratch — aliasing it is
+			// an owned copy, same contract as Stream.String's copies.
+			return unsafe.String(unsafe.SliceData(buf), len(buf)), nil
 		}
 		if c == '\\' {
 			if j+1 >= len(s.buf) {
@@ -584,7 +586,11 @@ func (s *Stream) Int64() (int64, error) {
 	for {
 		if i >= len(s.buf) {
 			err := s.ReadMore(i)
-			i = 0
+			// ReadMore shifts only when s.Shift — in no-shift mode the
+			// bytes stay put and resetting i would re-read consumed digits.
+			if s.Shift {
+				i = 0
+			}
 			if err != nil {
 				break
 			}
@@ -632,7 +638,10 @@ func (s *Stream) Uint64() (uint64, error) {
 	for {
 		if i >= len(s.buf) {
 			err := s.ReadMore(i)
-			i = 0
+			// See Int64: no-shift refills move no bytes; keep the cursor.
+			if s.Shift {
+				i = 0
+			}
 			if err != nil {
 				break
 			}

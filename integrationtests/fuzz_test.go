@@ -33,6 +33,8 @@ var fuzzSeeds = [][]byte{
 	[]byte(`[]`),
 	[]byte(``),
 	[]byte(`{"name":"\""}`),
+	[]byte(`{"tags":["a","b",]}`),
+	[]byte(`{"props":{"k":"v",}}`),
 }
 
 func addSeeds(f *testing.F) {

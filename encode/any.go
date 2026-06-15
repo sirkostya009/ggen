@@ -22,7 +22,26 @@ import (
 // Struct fields honor `json:"name,omitempty,omitzero,string,inline"`
 // tags. Anonymous (embedded) struct fields are promoted at parent level
 // per stdlib semantics.
+//
+// String escaping follows the package default (jsonv2 shape — <, >, &
+// literal), matching sibling generated string fields. AppendAnyHTML is
+// the HTML-safe variant for `htmlescape` structs.
 func AppendAny(dst []byte, v any) ([]byte, error) {
+	return appendAny(dst, v, AppendStringNoHTML)
+}
+
+// AppendAnyHTML is AppendAny with HTML-safe string escaping (<, >, & →
+// \uXXXX, stdlib v1 shape). Generated code routes `any` fields here when
+// the struct opts in via `htmlescape` / `-htmlescape`.
+func AppendAnyHTML(dst []byte, v any) ([]byte, error) {
+	return appendAny(dst, v, AppendString)
+}
+
+// escapeFn is AppendString or AppendStringNoHTML, threaded through the
+// whole any-walk so nested strings and map keys escape consistently.
+type escapeFn = func([]byte, string) []byte
+
+func appendAny(dst []byte, v any, esc escapeFn) ([]byte, error) {
 	switch x := v.(type) {
 	case nil:
 		return append(dst, 'n', 'u', 'l', 'l'), nil
@@ -30,7 +49,7 @@ func AppendAny(dst []byte, v any) ([]byte, error) {
 		return strconv.AppendBool(dst, x), nil
 	case string:
 		dst = append(dst, '"')
-		return AppendString(dst, x), nil
+		return esc(dst, x), nil
 	case float64:
 		return AppendFloat(dst, x, 64)
 	case float32:
@@ -70,7 +89,7 @@ func AppendAny(dst []byte, v any) ([]byte, error) {
 				dst = append(dst, ',')
 			}
 			var err error
-			dst, err = AppendAny(dst, e)
+			dst, err = appendAny(dst, e, esc)
 			if err != nil {
 				return dst, err
 			}
@@ -83,7 +102,7 @@ func AppendAny(dst []byte, v any) ([]byte, error) {
 				dst = append(dst, ',')
 			}
 			dst = append(dst, '"')
-			dst = AppendString(dst, s)
+			dst = esc(dst, s)
 		}
 		return append(dst, ']'), nil
 	// Homogeneous primitive slices. The reflect.Slice path would box
@@ -125,10 +144,10 @@ func AppendAny(dst []byte, v any) ([]byte, error) {
 			}
 			first = false
 			dst = append(dst, '"')
-			dst = AppendString(dst, k)
+			dst = esc(dst, k)
 			dst = append(dst, ':')
 			var err error
-			dst, err = AppendAny(dst, val)
+			dst, err = appendAny(dst, val, esc)
 			if err != nil {
 				return dst, err
 			}
@@ -146,9 +165,9 @@ func AppendAny(dst []byte, v any) ([]byte, error) {
 			// the opening `"`. So key emits as `"k"` then we append
 			// `:"` to start the value, AppendString closes value with `"`.
 			dst = append(dst, '"')
-			dst = AppendString(dst, k)
+			dst = esc(dst, k)
 			dst = append(dst, ':', '"')
-			dst = AppendString(dst, val)
+			dst = esc(dst, val)
 		}
 		return append(dst, '}'), nil
 	// Homogeneous primitive maps. Same rationale as the typed-slice
@@ -156,31 +175,31 @@ func AppendAny(dst []byte, v any) ([]byte, error) {
 	// iteration in practice (key+value boxing, even when V is a
 	// primitive); native range yields zero-alloc per entry.
 	case map[string]int:
-		return appendMapInt(dst, x), nil
+		return appendMapInt(dst, x, esc), nil
 	case map[string]int8:
-		return appendMapInt(dst, x), nil
+		return appendMapInt(dst, x, esc), nil
 	case map[string]int16:
-		return appendMapInt(dst, x), nil
+		return appendMapInt(dst, x, esc), nil
 	case map[string]int32:
-		return appendMapInt(dst, x), nil
+		return appendMapInt(dst, x, esc), nil
 	case map[string]int64:
-		return appendMapInt(dst, x), nil
+		return appendMapInt(dst, x, esc), nil
 	case map[string]uint:
-		return appendMapUint(dst, x), nil
+		return appendMapUint(dst, x, esc), nil
 	case map[string]uint8:
-		return appendMapUint(dst, x), nil
+		return appendMapUint(dst, x, esc), nil
 	case map[string]uint16:
-		return appendMapUint(dst, x), nil
+		return appendMapUint(dst, x, esc), nil
 	case map[string]uint32:
-		return appendMapUint(dst, x), nil
+		return appendMapUint(dst, x, esc), nil
 	case map[string]uint64:
-		return appendMapUint(dst, x), nil
+		return appendMapUint(dst, x, esc), nil
 	case map[string]float32:
-		return appendMapFloat(dst, x, 32)
+		return appendMapFloat(dst, x, 32, esc)
 	case map[string]float64:
-		return appendMapFloat(dst, x, 64)
+		return appendMapFloat(dst, x, 64, esc)
 	case map[string]bool:
-		return appendMapBool(dst, x), nil
+		return appendMapBool(dst, x, esc), nil
 	// Pre-empt the json.Marshaler / TextAppender interface dispatches
 	// for two common stdlib types. Both implement json.Marshaler so
 	// they'd otherwise hit `case json.Marshaler` and pay the
@@ -211,7 +230,7 @@ func AppendAny(dst []byte, v any) ([]byte, error) {
 			return append(dst, 'n', 'u', 'l', 'l'), nil
 		}
 		dst = append(dst, '"')
-		return AppendString(dst, *x), nil
+		return esc(dst, *x), nil
 	case *bool:
 		if x == nil {
 			return append(dst, 'n', 'u', 'l', 'l'), nil
@@ -270,7 +289,7 @@ func AppendAny(dst []byte, v any) ([]byte, error) {
 			return dst, err
 		}
 		dst = append(dst, '"')
-		dst = AppendString(dst, BytesToString(t))
+		dst = esc(dst, BytesToString(t))
 		return dst, nil
 	case json.Marshaler:
 		b, err := x.MarshalJSON()
@@ -289,7 +308,7 @@ func AppendAny(dst []byte, v any) ([]byte, error) {
 		if rv.IsNil() {
 			return append(dst, 'n', 'u', 'l', 'l'), nil
 		}
-		return AppendAny(dst, rv.Elem().Interface())
+		return appendAny(dst, rv.Elem().Interface(), esc)
 	// Named primitives (`type MyEnum int`, `type ID string`, etc.) — the
 	// type switch above only matches predeclared types exactly, so these
 	// cases catch the named-alias variants.
@@ -297,7 +316,7 @@ func AppendAny(dst []byte, v any) ([]byte, error) {
 		return strconv.AppendBool(dst, rv.Bool()), nil
 	case reflect.String:
 		dst = append(dst, '"')
-		return AppendString(dst, rv.String()), nil
+		return esc(dst, rv.String()), nil
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		return strconv.AppendInt(dst, rv.Int(), 10), nil
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
@@ -307,7 +326,7 @@ func AppendAny(dst []byte, v any) ([]byte, error) {
 	case reflect.Float64:
 		return AppendFloat(dst, rv.Float(), 64)
 	case reflect.Struct:
-		return appendStruct(dst, rv)
+		return appendStruct(dst, rv, esc)
 	case reflect.Slice, reflect.Array:
 		// `[]T` where T's underlying kind is uint8 also routes through
 		// base64 — matches stdlib (e.g. `type Bytes []byte`).
@@ -327,7 +346,7 @@ func AppendAny(dst []byte, v any) ([]byte, error) {
 				dst = append(dst, ',')
 			}
 			var err error
-			dst, err = appendReflectValue(dst, rv.Index(i), elemKind)
+			dst, err = appendReflectValue(dst, rv.Index(i), elemKind, esc)
 			if err != nil {
 				return dst, err
 			}
@@ -347,10 +366,10 @@ func AppendAny(dst []byte, v any) ([]byte, error) {
 			}
 			first = false
 			dst = append(dst, '"')
-			dst = AppendString(dst, iter.Key().String())
+			dst = esc(dst, iter.Key().String())
 			dst = append(dst, ':')
 			var err error
-			dst, err = appendReflectValue(dst, iter.Value(), elemKind)
+			dst, err = appendReflectValue(dst, iter.Value(), elemKind, esc)
 			if err != nil {
 				return dst, err
 			}
@@ -412,7 +431,7 @@ func appendSliceBool(dst []byte, s []bool) []byte {
 	return append(dst, ']')
 }
 
-func appendMapInt[V int | int8 | int16 | int32 | int64](dst []byte, m map[string]V) []byte {
+func appendMapInt[V int | int8 | int16 | int32 | int64](dst []byte, m map[string]V, esc escapeFn) []byte {
 	dst = append(dst, '{')
 	first := true
 	for k, v := range m {
@@ -421,14 +440,14 @@ func appendMapInt[V int | int8 | int16 | int32 | int64](dst []byte, m map[string
 		}
 		first = false
 		dst = append(dst, '"')
-		dst = AppendString(dst, k)
+		dst = esc(dst, k)
 		dst = append(dst, ':')
 		dst = strconv.AppendInt(dst, int64(v), 10)
 	}
 	return append(dst, '}')
 }
 
-func appendMapUint[V uint | uint8 | uint16 | uint32 | uint64](dst []byte, m map[string]V) []byte {
+func appendMapUint[V uint | uint8 | uint16 | uint32 | uint64](dst []byte, m map[string]V, esc escapeFn) []byte {
 	dst = append(dst, '{')
 	first := true
 	for k, v := range m {
@@ -437,14 +456,14 @@ func appendMapUint[V uint | uint8 | uint16 | uint32 | uint64](dst []byte, m map[
 		}
 		first = false
 		dst = append(dst, '"')
-		dst = AppendString(dst, k)
+		dst = esc(dst, k)
 		dst = append(dst, ':')
 		dst = strconv.AppendUint(dst, uint64(v), 10)
 	}
 	return append(dst, '}')
 }
 
-func appendMapFloat[V float32 | float64](dst []byte, m map[string]V, bitSize int) ([]byte, error) {
+func appendMapFloat[V float32 | float64](dst []byte, m map[string]V, bitSize int, esc escapeFn) ([]byte, error) {
 	dst = append(dst, '{')
 	first := true
 	for k, v := range m {
@@ -453,7 +472,7 @@ func appendMapFloat[V float32 | float64](dst []byte, m map[string]V, bitSize int
 		}
 		first = false
 		dst = append(dst, '"')
-		dst = AppendString(dst, k)
+		dst = esc(dst, k)
 		dst = append(dst, ':')
 		var err error
 		dst, err = AppendFloat(dst, float64(v), bitSize)
@@ -464,7 +483,7 @@ func appendMapFloat[V float32 | float64](dst []byte, m map[string]V, bitSize int
 	return append(dst, '}'), nil
 }
 
-func appendMapBool(dst []byte, m map[string]bool) []byte {
+func appendMapBool(dst []byte, m map[string]bool, esc escapeFn) []byte {
 	dst = append(dst, '{')
 	first := true
 	for k, v := range m {
@@ -473,7 +492,7 @@ func appendMapBool(dst []byte, m map[string]bool) []byte {
 		}
 		first = false
 		dst = append(dst, '"')
-		dst = AppendString(dst, k)
+		dst = esc(dst, k)
 		dst = append(dst, ':')
 		dst = strconv.AppendBool(dst, v)
 	}
@@ -513,11 +532,11 @@ func appendPtrUint[V uint | uint8 | uint16 | uint32 | uint64](dst []byte, p *V) 
 //
 // Non-primitive kinds fall back to AppendAny via the Interface() path —
 // they need full dispatch (Marshaler / TextAppender / nested any).
-func appendReflectValue(dst []byte, rv reflect.Value, kind reflect.Kind) ([]byte, error) {
+func appendReflectValue(dst []byte, rv reflect.Value, kind reflect.Kind, esc escapeFn) ([]byte, error) {
 	switch kind {
 	case reflect.String:
 		dst = append(dst, '"')
-		return AppendString(dst, rv.String()), nil
+		return esc(dst, rv.String()), nil
 	case reflect.Bool:
 		return strconv.AppendBool(dst, rv.Bool()), nil
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
@@ -529,7 +548,7 @@ func appendReflectValue(dst []byte, rv reflect.Value, kind reflect.Kind) ([]byte
 	case reflect.Float64:
 		return AppendFloat(dst, rv.Float(), 64)
 	}
-	return AppendAny(dst, rv.Interface())
+	return appendAny(dst, rv.Interface(), esc)
 }
 
 // fieldInfo describes one JSON-visible field of a struct type, with its
@@ -630,7 +649,7 @@ func isJSONEmpty(v reflect.Value) bool {
 	return false
 }
 
-func appendStruct(dst []byte, rv reflect.Value) ([]byte, error) {
+func appendStruct(dst []byte, rv reflect.Value, esc escapeFn) ([]byte, error) {
 	info := cachedStructInfo(rv.Type())
 	dst = append(dst, '{')
 	first := true
@@ -651,10 +670,10 @@ func appendStruct(dst []byte, rv reflect.Value) ([]byte, error) {
 				}
 				first = false
 				dst = append(dst, '"')
-				dst = AppendString(dst, iter.Key().String())
+				dst = esc(dst, iter.Key().String())
 				dst = append(dst, ':')
 				var err error
-				dst, err = AppendAny(dst, iter.Value().Interface())
+				dst, err = appendAny(dst, iter.Value().Interface(), esc)
 				if err != nil {
 					return dst, err
 				}
@@ -666,13 +685,13 @@ func appendStruct(dst []byte, rv reflect.Value) ([]byte, error) {
 		}
 		first = false
 		dst = append(dst, '"')
-		dst = AppendString(dst, f.name)
+		dst = esc(dst, f.name)
 		dst = append(dst, ':')
 		if f.quoted {
 			dst = append(dst, '"')
 		}
 		var err error
-		dst, err = AppendAny(dst, fv.Interface())
+		dst, err = appendAny(dst, fv.Interface(), esc)
 		if err != nil {
 			return dst, err
 		}

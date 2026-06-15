@@ -207,6 +207,9 @@ func (result OmitStruct) DecodeFrom(data []byte) (OmitStruct, int, error) {
 					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
+					if i >= len(data) || data[i] == ']' {
+						return result, i, scan.ErrBadArray
+					}
 					continue
 				}
 				break
@@ -308,6 +311,9 @@ func (result OmitStruct) DecodeFrom(data []byte) (OmitStruct, int, error) {
 					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
+					if i >= len(data) || data[i] == '}' {
+						return result, i, scan.ErrBadObject
+					}
 					continue
 				}
 				break
@@ -408,6 +414,9 @@ func (result OmitStruct) DecodeFrom(data []byte) (OmitStruct, int, error) {
 					i++
 					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
+					}
+					if i >= len(data) || data[i] == '}' {
+						return result, i, scan.ErrBadObject
 					}
 					continue
 				}
@@ -513,6 +522,9 @@ func (result OmitStruct) DecodeFrom(data []byte) (OmitStruct, int, error) {
 					i++
 					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
+					}
+					if i >= len(data) || data[i] == ']' {
+						return result, i, scan.ErrBadArray
 					}
 					continue
 				}
@@ -700,6 +712,9 @@ func (result OmitStruct) DecodeFromStream(s *scan.Stream) (OmitStruct, error) {
 					if err != nil {
 						return result, decode.NewParseErr("extra", s.Pos, err)
 					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+						return result, decode.NewParseErr("extra", s.Pos, scan.ErrBadArray)
+					}
 					continue
 				}
 				break
@@ -805,6 +820,9 @@ func (result OmitStruct) DecodeFromStream(s *scan.Stream) (OmitStruct, error) {
 					if err != nil {
 						return result, decode.NewParseErr("labels", s.Pos, err)
 					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == '}' {
+						return result, decode.NewParseErr("labels", s.Pos, scan.ErrBadObject)
+					}
 					continue
 				}
 				break
@@ -909,6 +927,9 @@ func (result OmitStruct) DecodeFromStream(s *scan.Stream) (OmitStruct, error) {
 					err = s.SkipSpace()
 					if err != nil {
 						return result, decode.NewParseErr("meta", s.Pos, err)
+					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == '}' {
+						return result, decode.NewParseErr("meta", s.Pos, scan.ErrBadObject)
 					}
 					continue
 				}
@@ -1020,6 +1041,9 @@ func (result OmitStruct) DecodeFromStream(s *scan.Stream) (OmitStruct, error) {
 					if err != nil {
 						return result, decode.NewParseErr("tags", s.Pos, err)
 					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+						return result, decode.NewParseErr("tags", s.Pos, scan.ErrBadArray)
+					}
 					continue
 				}
 				break
@@ -1092,7 +1116,7 @@ func (s OmitStruct) JSONSize() int {
 	}
 	size += len(s.Name) * 2
 	if s.Score != 0 {
-		size += 33
+		size += 34
 	}
 	if len(s.Tags) > 0 {
 		size += 12
@@ -1928,7 +1952,7 @@ func (result StringTagStruct) DecodeFromStream(s *scan.Stream) (StringTagStruct,
 }
 
 func (s StringTagStruct) JSONSize() int {
-	size := 307
+	size := 309
 	return size
 }
 

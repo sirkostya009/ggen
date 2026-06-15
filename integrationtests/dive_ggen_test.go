@@ -207,6 +207,9 @@ func (result DiveStruct) DecodeFrom(data []byte) (DiveStruct, int, error) {
 					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
+					if i >= len(data) || data[i] == ']' {
+						return result, i, scan.ErrBadArray
+					}
 					continue
 				}
 				break
@@ -280,6 +283,9 @@ func (result DiveStruct) DecodeFrom(data []byte) (DiveStruct, int, error) {
 						i++
 						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
+						}
+						if i >= len(data) || data[i] == ']' {
+							return result, i, scan.ErrBadArray
 						}
 						continue
 					}
@@ -491,6 +497,9 @@ func (result DiveStruct) DecodeFromStream(s *scan.Stream) (DiveStruct, error) {
 					if err != nil {
 						return result, decode.NewParseErr("scores", s.Pos, err)
 					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+						return result, decode.NewParseErr("scores", s.Pos, scan.ErrBadArray)
+					}
 					continue
 				}
 				break
@@ -579,6 +588,9 @@ func (result DiveStruct) DecodeFromStream(s *scan.Stream) (DiveStruct, error) {
 						err = s.SkipSpace()
 						if err != nil {
 							return result, decode.NewParseErr("tags", s.Pos, err)
+						}
+						if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+							return result, decode.NewParseErr("tags", s.Pos, scan.ErrBadArray)
 						}
 						continue
 					}
@@ -882,6 +894,9 @@ func (result CustomDiveStruct) DecodeFrom(data []byte) (CustomDiveStruct, int, e
 					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
+					if i >= len(data) || data[i] == '}' {
+						return result, i, scan.ErrBadObject
+					}
 					continue
 				}
 				break
@@ -999,6 +1014,9 @@ func (result CustomDiveStruct) DecodeFrom(data []byte) (CustomDiveStruct, int, e
 					i++
 					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
+					}
+					if i >= len(data) || data[i] == '}' {
+						return result, i, scan.ErrBadObject
 					}
 					continue
 				}
@@ -1127,6 +1145,9 @@ func (result CustomDiveStruct) DecodeFrom(data []byte) (CustomDiveStruct, int, e
 					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
+					if i >= len(data) || data[i] == ']' {
+						return result, i, scan.ErrBadArray
+					}
 					continue
 				}
 				break
@@ -1196,6 +1217,9 @@ func (result CustomDiveStruct) DecodeFrom(data []byte) (CustomDiveStruct, int, e
 					i++
 					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
+					}
+					if i >= len(data) || data[i] == ']' {
+						return result, i, scan.ErrBadArray
 					}
 					continue
 				}
@@ -1374,6 +1398,9 @@ func (result CustomDiveStruct) DecodeFromStream(s *scan.Stream) (CustomDiveStruc
 					if err != nil {
 						return result, decode.NewParseErr("lookup", s.Pos, err)
 					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == '}' {
+						return result, decode.NewParseErr("lookup", s.Pos, scan.ErrBadObject)
+					}
 					continue
 				}
 				break
@@ -1481,6 +1508,9 @@ func (result CustomDiveStruct) DecodeFromStream(s *scan.Stream) (CustomDiveStruc
 					err = s.SkipSpace()
 					if err != nil {
 						return result, decode.NewParseErr("mixed", s.Pos, err)
+					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == '}' {
+						return result, decode.NewParseErr("mixed", s.Pos, scan.ErrBadObject)
 					}
 					continue
 				}
@@ -1611,6 +1641,9 @@ func (result CustomDiveStruct) DecodeFromStream(s *scan.Stream) (CustomDiveStruc
 					if err != nil {
 						return result, decode.NewParseErr("tags", s.Pos, err)
 					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+						return result, decode.NewParseErr("tags", s.Pos, scan.ErrBadArray)
+					}
 					continue
 				}
 				break
@@ -1695,6 +1728,9 @@ func (result CustomDiveStruct) DecodeFromStream(s *scan.Stream) (CustomDiveStruc
 					err = s.SkipSpace()
 					if err != nil {
 						return result, decode.NewParseErr("trim", s.Pos, err)
+					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+						return result, decode.NewParseErr("trim", s.Pos, scan.ErrBadArray)
 					}
 					continue
 				}

@@ -158,6 +158,9 @@ func (result MapStruct) DecodeFrom(data []byte) (MapStruct, int, error) {
 					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
+					if i >= len(data) || data[i] == '}' {
+						return result, i, scan.ErrBadObject
+					}
 					continue
 				}
 				break
@@ -274,6 +277,9 @@ func (result MapStruct) DecodeFrom(data []byte) (MapStruct, int, error) {
 						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
 						}
+						if i >= len(data) || data[i] == '}' {
+							return result, i, scan.ErrBadObject
+						}
 						continue
 					}
 					break
@@ -380,6 +386,9 @@ func (result MapStruct) DecodeFrom(data []byte) (MapStruct, int, error) {
 					i++
 					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
+					}
+					if i >= len(data) || data[i] == '}' {
+						return result, i, scan.ErrBadObject
 					}
 					continue
 				}
@@ -550,6 +559,9 @@ func (result MapStruct) DecodeFromStream(s *scan.Stream) (MapStruct, error) {
 					if err != nil {
 						return result, decode.NewParseErr("addresses", s.Pos, err)
 					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == '}' {
+						return result, decode.NewParseErr("addresses", s.Pos, scan.ErrBadObject)
+					}
 					continue
 				}
 				break
@@ -655,6 +667,9 @@ func (result MapStruct) DecodeFromStream(s *scan.Stream) (MapStruct, error) {
 						err = s.SkipSpace()
 						if err != nil {
 							return result, decode.NewParseErr("counts", s.Pos, err)
+						}
+						if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == '}' {
+							return result, decode.NewParseErr("counts", s.Pos, scan.ErrBadObject)
 						}
 						continue
 					}
@@ -766,6 +781,9 @@ func (result MapStruct) DecodeFromStream(s *scan.Stream) (MapStruct, error) {
 					err = s.SkipSpace()
 					if err != nil {
 						return result, decode.NewParseErr("labels", s.Pos, err)
+					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == '}' {
+						return result, decode.NewParseErr("labels", s.Pos, scan.ErrBadObject)
 					}
 					continue
 				}
@@ -1070,6 +1088,9 @@ func (result MapDiveStruct) DecodeFrom(data []byte) (MapDiveStruct, int, error) 
 					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
+					if i >= len(data) || data[i] == '}' {
+						return result, i, scan.ErrBadObject
+					}
 					continue
 				}
 				break
@@ -1193,6 +1214,9 @@ func (result MapDiveStruct) DecodeFrom(data []byte) (MapDiveStruct, int, error) 
 					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
+					if i >= len(data) || data[i] == '}' {
+						return result, i, scan.ErrBadObject
+					}
 					continue
 				}
 				break
@@ -1299,6 +1323,9 @@ func (result MapDiveStruct) DecodeFrom(data []byte) (MapDiveStruct, int, error) 
 					i++
 					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
+					}
+					if i >= len(data) || data[i] == '}' {
+						return result, i, scan.ErrBadObject
 					}
 					continue
 				}
@@ -1475,6 +1502,9 @@ func (result MapDiveStruct) DecodeFromStream(s *scan.Stream) (MapDiveStruct, err
 					if err != nil {
 						return result, decode.NewParseErr("clamped", s.Pos, err)
 					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == '}' {
+						return result, decode.NewParseErr("clamped", s.Pos, scan.ErrBadObject)
+					}
 					continue
 				}
 				break
@@ -1588,6 +1618,9 @@ func (result MapDiveStruct) DecodeFromStream(s *scan.Stream) (MapDiveStruct, err
 					if err != nil {
 						return result, decode.NewParseErr("counts", s.Pos, err)
 					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == '}' {
+						return result, decode.NewParseErr("counts", s.Pos, scan.ErrBadObject)
+					}
 					continue
 				}
 				break
@@ -1698,6 +1731,9 @@ func (result MapDiveStruct) DecodeFromStream(s *scan.Stream) (MapDiveStruct, err
 					err = s.SkipSpace()
 					if err != nil {
 						return result, decode.NewParseErr("names", s.Pos, err)
+					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == '}' {
+						return result, decode.NewParseErr("names", s.Pos, scan.ErrBadObject)
 					}
 					continue
 				}

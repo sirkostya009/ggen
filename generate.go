@@ -1261,7 +1261,7 @@ func inlineValueEmit(f FieldInfo) string {
 	if f.ElemType == "jsontext.Value" {
 		return "dst = append(dst, v...)\n"
 	}
-	return "if dst, err = encode.AppendAny(dst, v); err != nil { return dst, err }\n"
+	return fmt.Sprintf("if dst, err = %s(dst, v); err != nil { return dst, err }\n", appendAnyFn(f.HTMLEscape))
 }
 
 func renderAppendValue(b *bytes.Buffer, f FieldInfo, ref string) {
@@ -1276,7 +1276,7 @@ func renderAppendValue(b *bytes.Buffer, f FieldInfo, ref string) {
 		leaf.PointeeType = ""
 		leaf.GoType = leafType
 		leaf.Kind = resolveKind(leafType)
-		for k := 0; k < depth; k++ {
+		for k := range depth {
 			kw := "if"
 			if k > 0 {
 				kw = "} else if"
@@ -1392,7 +1392,7 @@ dst = append(dst, '"')
 	case KindAny:
 		// AppendAny type-switches on common runtime types (primitives,
 		// []any, map[string]any) before falling back to encoding/json.
-		fmt.Fprintf(b, "if dst, err = encode.AppendAny(dst, %s); err != nil { return dst, err }\n", ref)
+		fmt.Fprintf(b, "if dst, err = %s(dst, %s); err != nil { return dst, err }\n", appendAnyFn(f.HTMLEscape), ref)
 	}
 }
 
@@ -1556,7 +1556,10 @@ func renderAppendTime(b *bytes.Buffer, f FieldInfo, ref string) {
 func renderAppendDuration(b *bytes.Buffer, f FieldInfo, ref string) {
 	switch f.Format {
 	case "sec":
-		fmt.Fprintf(b, "dst = strconv.AppendFloat(dst, %s.Seconds(), 'g', -1, 64)\n", ref)
+		// encode.AppendFloat for the stdlib 'f'/'e' format selection —
+		// 'g' flips to scientific at |sec| >= 1e6. Seconds() is always
+		// finite, so the error arm is dead but keeps the emit uniform.
+		fmt.Fprintf(b, "if dst, err = encode.AppendFloat(dst, %s.Seconds(), 64); err != nil { return dst, err }\n", ref)
 	case "milli":
 		fmt.Fprintf(b, "dst = strconv.AppendInt(dst, %s.Milliseconds(), 10)\n", ref)
 	case "micro":
@@ -1685,6 +1688,41 @@ func appendStrFn(htmlEscape bool) string {
 	return "encode.AppendStringNoHTML"
 }
 
+// emitNoCloseAfterComma emits the bytes-path strict-grammar guard inside an
+// element loop's comma branch: a comma promises another element, so the
+// container close (or EOF) right after it is invalid JSON — stdlib v1/v2
+// parity. The plain sentinel return picks up its field wrap from the
+// parse-error post-pass.
+func emitNoCloseAfterComma(b *bytes.Buffer, posVar string, close byte) {
+	sentinel := "scan.ErrBadArray"
+	if close == '}' {
+		sentinel = "scan.ErrBadObject"
+	}
+	fmt.Fprintf(b, "if %[1]s >= len(data) || data[%[1]s] == '%[2]c' { return result, i, %[3]s }\n", posVar, close, sentinel)
+}
+
+// streamNoCloseAfterComma is emitNoCloseAfterComma's stream twin. The
+// `s.Pos >= len(...)` half also catches EOF right after the comma —
+// SkipSpace returns nil at EOF with Pos == len(buf), and the element
+// loop's top would index out of range (panic) without it.
+func streamNoCloseAfterComma(field string, close byte) string {
+	sentinel := "scan.ErrBadArray"
+	if close == '}' {
+		sentinel = "scan.ErrBadObject"
+	}
+	return fmt.Sprintf("if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == '%c' { return result, decode.NewParseErr(%s, s.Pos, %s) }\n", close, field, sentinel)
+}
+
+// appendAnyFn mirrors appendStrFn for `any` values — htmlescape structs
+// route their any-walk through the HTML-safe variant so nested strings
+// escape consistently with sibling string fields.
+func appendAnyFn(htmlEscape bool) string {
+	if htmlEscape {
+		return "encode.AppendAnyHTML"
+	}
+	return "encode.AppendAny"
+}
+
 // foldLeadingQuote checks whether the given field's value emit begins
 // with a JSON `"` byte. If so, it returns the prefix with `"` appended
 // and the value-emit code with the opening quote elided. Caller can
@@ -1723,7 +1761,7 @@ const (
 	sizeBool    = 5  // "false"
 	sizeInt     = 20 // "-9223372036854775808"
 	sizeUint    = 20 // "18446744073709551615"
-	sizeFloat   = 24 // IEEE-754 shortest round-trip printing
+	sizeFloat   = 25 // IEEE-754 shortest round-trip, 'f' form: sign + "0." + 5 zeros + 17 digits
 	sizeStrMult = 2  // 2× covers short escapes (\n, \", \\, …). Control
 	// chars expand to \uXXXX (6×) but are rejected by the decoder (RFC 8259),
 	// so they can't survive a round-trip — the 2× bound is tight for legal
@@ -2217,7 +2255,7 @@ dst = append(dst, bs...)
 `)
 		}
 	case KindAny:
-		b.WriteString("if dst, err = encode.AppendAny(dst, v); err != nil { return dst, err }\n")
+		fmt.Fprintf(b, "if dst, err = %s(dst, v); err != nil { return dst, err }\n", appendAnyFn(f.HTMLEscape))
 	}
 	b.WriteString("}\ndst = append(dst, '}')\n}\n")
 }
@@ -2812,6 +2850,7 @@ func renderMap(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 		inlineSkipWS(b, posVar)
 		fmt.Fprintf(b, `		if %[1]s < len(data) && data[%[1]s] == ',' { %[1]s++; `, posVar)
 		inlineSkipWS(b, posVar)
+		emitNoCloseAfterComma(b, posVar, '}')
 		fmt.Fprintf(b, `			continue }
 		break
 	}
@@ -2894,6 +2933,7 @@ if err != nil { return result, %[1]s, decode.NewParseErr(%[3]s, %[1]s, err) }
 	inlineSkipWS(b, posVar)
 	fmt.Fprintf(b, `		if %[1]s < len(data) && data[%[1]s] == ',' { %[1]s++; `, posVar)
 	inlineSkipWS(b, posVar)
+	emitNoCloseAfterComma(b, posVar, '}')
 	fmt.Fprintf(b, `			continue }
 		break
 	}
@@ -2942,6 +2982,7 @@ for %[1]s < len(data) && data[%[1]s] != ']' {
 		inlineSkipWS(b, posVar)
 		fmt.Fprintf(b, `	if %[1]s < len(data) && data[%[1]s] == ',' { %[1]s++; `, posVar)
 		inlineSkipWS(b, posVar)
+		emitNoCloseAfterComma(b, posVar, ']')
 		fmt.Fprintf(b, ` continue }
 	break
 }
@@ -4161,6 +4202,7 @@ func emitByteSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth i
 		inlineSkipWS(b, kvar)
 		fmt.Fprintf(b, "if %s < len(data) && data[%s] == ',' { %s++; ", kvar, kvar, kvar)
 		inlineSkipWS(b, kvar)
+		emitNoCloseAfterComma(b, kvar, ']')
 		b.WriteString("continue }\nbreak\n}\n")
 	}
 	// Compute the in-place target. For slice cases we pre-grow the
@@ -4262,6 +4304,7 @@ func emitByteSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth i
 				inlineSkipWS(b, kvar)
 				fmt.Fprintf(b, "if %s < len(data) && data[%s] == ',' { %s++; ", kvar, kvar, kvar)
 				inlineSkipWS(b, kvar)
+				emitNoCloseAfterComma(b, kvar, ']')
 				b.WriteString("continue }\nbreak\n}\n")
 				inner.NullDone = true
 			}
@@ -4291,6 +4334,7 @@ func emitByteSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth i
 	inlineSkipWS(b, kvar)
 	fmt.Fprintf(b, "if %s < len(data) && data[%s] == ',' { %s++; ", kvar, kvar, kvar)
 	inlineSkipWS(b, kvar)
+	emitNoCloseAfterComma(b, kvar, ']')
 	b.WriteString("continue }\n")
 	b.WriteString("break\n")
 	b.WriteString("}\n")
@@ -4495,12 +4539,12 @@ func renderStreamMap(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 		pf.TargetNil = true
 		b.WriteString(renderStreamField(pf, mapTarget, posVar))
 		fmt.Fprintf(b, `		err = s.SkipSpace()
-		%[1]s%[3]sif s.Bytes()[s.Pos] == ',' { s.Pos++; err = s.SkipSpace(); %[1]scontinue }
+		%[1]s%[3]sif s.Bytes()[s.Pos] == ',' { s.Pos++; err = s.SkipSpace(); %[1]s%[4]scontinue }
 		break
 	}
 	if s.Bytes()[s.Pos] != '}' { %[2]s }
 	s.Pos++
-`, chk, badObj, rm)
+`, chk, badObj, rm, streamNoCloseAfterComma(field, '}'))
 		if !flat {
 			b.WriteString("}\n") // close else (null-check)
 		}
@@ -4571,12 +4615,12 @@ if err := json.Unmarshal(s.Bytes()[start:s.Pos], &mv); err != nil { return resul
 		renderValidationOn(b, f.ElemValidation, mapTarget, f.JSONName+".value", f.ElemKind, f.MultiErr, "")
 	}
 	fmt.Fprintf(b, `		err = s.SkipSpace()
-		%[1]s%[3]sif s.Bytes()[s.Pos] == ',' { s.Pos++; err = s.SkipSpace(); %[1]scontinue }
+		%[1]s%[3]sif s.Bytes()[s.Pos] == ',' { s.Pos++; err = s.SkipSpace(); %[1]s%[4]scontinue }
 		break
 	}
 	if s.Bytes()[s.Pos] != '}' { %[2]s }
 	s.Pos++
-`, chk, badObj, rm)
+`, chk, badObj, rm, streamNoCloseAfterComma(field, '}'))
 	if !flat {
 		b.WriteString("}\n") // close else (null-check)
 	}
@@ -4681,12 +4725,12 @@ func renderStreamBytesValue(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	u, err = s.Uint64()
 	%[2]s%[1]s = append(%[1]s, byte(u))
 	err = s.SkipSpace()
-	%[2]s%[4]sif s.Bytes()[s.Pos] == ',' { s.Pos++; err = s.SkipSpace(); %[2]scontinue }
+	%[2]s%[4]sif s.Bytes()[s.Pos] == ',' { s.Pos++; err = s.SkipSpace(); %[2]s%[5]scontinue }
 	break
 }
 if s.Bytes()[s.Pos] != ']' { %[3]s }
 s.Pos++
-`, ref, chk, badArr, rm)
+`, ref, chk, badArr, rm, streamNoCloseAfterComma(field, ']'))
 		return
 	}
 	enc := "base64.StdEncoding"
@@ -5315,10 +5359,10 @@ func emitStreamSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth
 	}
 	s.Pos += 4
 	%[1]s	err = s.SkipSpace()
-	%[2]s%[4]sif s.Bytes()[s.Pos] == ',' { s.Pos++; err = s.SkipSpace(); %[2]scontinue }
+	%[2]s%[4]sif s.Bytes()[s.Pos] == ',' { s.Pos++; err = s.SkipSpace(); %[2]s%[6]scontinue }
 	break
 }
-`, nilAssign, chk, field, rm, rmKi)
+`, nilAssign, chk, field, rm, rmKi, streamNoCloseAfterComma(field, ']'))
 	}
 	// Compute the in-place target. For slice cases we pre-grow the
 	// slice/slab here so the slot exists before scan writes into it.
@@ -5416,10 +5460,10 @@ fv, err = s.Float64()
 					fmt.Fprintf(b, "%s++\n", ivar)
 				}
 				fmt.Fprintf(b, `err = s.SkipSpace()
-%[1]s%[2]sif s.Bytes()[s.Pos] == ',' { s.Pos++; err = s.SkipSpace(); %[1]scontinue }
+%[1]s%[2]sif s.Bytes()[s.Pos] == ',' { s.Pos++; err = s.SkipSpace(); %[1]s%[3]scontinue }
 break
 }
-`, chk, rm)
+`, chk, rm, streamNoCloseAfterComma(field, ']'))
 				inner.NullDone = true
 			}
 			emitStreamSliceRead(b, inner, target, "s.Pos", depth+1)
@@ -5445,11 +5489,11 @@ break
 		// dst tail already decoded in-place via append+index above.
 	}
 	fmt.Fprintf(b, `err = s.SkipSpace()
-%[1]s%[3]sif s.Bytes()[s.Pos] == ',' { s.Pos++; err = s.SkipSpace(); %[1]scontinue }
+%[1]s%[3]sif s.Bytes()[s.Pos] == ',' { s.Pos++; err = s.SkipSpace(); %[1]s%[4]scontinue }
 break
 }
 if s.Bytes()[s.Pos] != ']' { return result, decode.NewParseErr(%[2]s, s.Pos, scan.ErrBadArray) }
-`, chk, field, rm)
+`, chk, field, rm, streamNoCloseAfterComma(field, ']'))
 	if isArray {
 		fmt.Fprintf(b, "if %s != %d { return result, %s }\n",
 			ivar, arrayN,

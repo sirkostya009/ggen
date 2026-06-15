@@ -733,3 +733,37 @@ func BenchmarkAppendAny_Presized(b *testing.B) {
 		})
 	}
 }
+
+type namedStr string
+
+// TestAppendAny_NoHTMLEscapeDefault: AppendAny strings must use the package
+// default escaping (jsonv2 shape — <, >, & literal), matching the sibling
+// generated string fields. Raw-byte comparison: checkAny reparses decoded
+// values and would mask escaping differences.
+func TestAppendAny_NoHTMLEscapeDefault(t *testing.T) {
+	cases := []any{
+		`<a href="x">b & c</a>`,
+		[]string{"<&>"},
+		map[string]string{"<k>": "<v>"},
+		map[string]any{"<k>": "<v>"},
+		namedStr("<n>"),
+		[]any{"<e>"},
+		struct {
+			A string `json:"a"`
+		}{A: "<x>"},
+	}
+	for _, v := range cases {
+		got, err := AppendAny(nil, v)
+		if err != nil {
+			t.Errorf("AppendAny(%#v): %v", v, err)
+			continue
+		}
+		want, err := jsonv2.Marshal(v)
+		if err != nil {
+			t.Fatalf("jsonv2.Marshal(%#v): %v", v, err)
+		}
+		if string(got) != string(want) {
+			t.Errorf("AppendAny escaping mismatch\n in:   %#v\n got:  %s\n want: %s", v, got, want)
+		}
+	}
+}

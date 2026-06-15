@@ -540,6 +540,9 @@ func (result CustomBothStruct) DecodeFrom(data []byte) (CustomBothStruct, int, e
 					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
+					if i >= len(data) || data[i] == ']' {
+						return result, i, scan.ErrBadArray
+					}
 					continue
 				}
 				break
@@ -681,6 +684,9 @@ func (result CustomBothStruct) DecodeFromStream(s *scan.Stream) (CustomBothStruc
 					err = s.SkipSpace()
 					if err != nil {
 						return result, decode.NewParseErr("tags", s.Pos, err)
+					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+						return result, decode.NewParseErr("tags", s.Pos, scan.ErrBadArray)
 					}
 					continue
 				}

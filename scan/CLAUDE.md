@@ -10,6 +10,7 @@ Runtime package. Bytes-path primitives + streaming `Stream` type. Generated deco
   `ArrayOpen`, `SkipValue`.
 - `String()` uses `unsafe.String(unsafe.SliceData(data[start:]), len)` zero-copy alias when no escapes. Falls back `stringSlow` w/ `utf8.AppendRune` for `\uXXXX` + surrogates.
 - `bytes.IndexByte` (SIMD) finds closing `"`; second IndexByte over span detects preceding `\`. Truncated `\u…`/trailing `\` → `ErrBadString` via fallthrough to `stringSlow`.
+- `stringSlow` scratch cap = first-quote span (`closeIdx`), NOT the remaining payload — a payload-sized cap made M escaped strings allocate O(N·M) bytes (same hazard class as the fixed `skipString` quadratic probe; an escaped `\"` past the hint just regrows geometrically). Returns `unsafe.String` over the write-once scratch — 1 alloc per escaped string, no exact-size second copy. Stream `stringSlow` mirrors the alias return (its cap was already bounded at 32). Pinned by `TestStringEscapeAllocBounded`.
 
 ## Stream (`scan/stream.go`)
 
@@ -33,7 +34,7 @@ One Read per call, never loops. `keep` = lowest offset caller still needs; bytes
 
 `SkipSpace`, `ConsumeColon`, `Int64`/`Uint64`, `String`/`KeyView` pass non-zero `keep` (current cursor, or value-start `start` for spans outlasting loop) so buffer stays bounded ~`max(chunk_size, value_size)` across long streams. Each updates locals after shift (`i = 0`, or `j -= start; start = 0` for string body), then writes final `s.Pos`.
 
-`Shift` field (defaults true via `Reset`) flips off around `SkipValue` in RawJSON capture + `json.Unmarshal` fallback spans, where generated code needs stable absolute offsets to slice `s.Bytes()[start:s.Pos]`. Bookkeeping branches check `s.Shift` before resetting cursor.
+`Shift` field (defaults true via `Reset`) flips off around `SkipValue` in RawJSON capture + `json.Unmarshal` fallback spans, where generated code needs stable absolute offsets to slice `s.Bytes()[start:s.Pos]`. Bookkeeping branches check `s.Shift` before resetting cursor — including `Int64`/`Uint64`'s mid-digit-loop refill (an ungated `i = 0` there re-read consumed digits under no-shift; latent until something decodes an integer inside a no-shift span — pinned by `TestIntegerScanNoShiftRefill`).
 
 ### Dispatch-loop shift points
 

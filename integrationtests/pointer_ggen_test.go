@@ -700,7 +700,7 @@ func (result PtrRatioStruct) DecodeFromStream(s *scan.Stream) (PtrRatioStruct, e
 func (s PtrRatioStruct) JSONSize() int {
 	size := 2
 	if s.Ratio != nil {
-		size += 33
+		size += 34
 	}
 	return size
 }
@@ -1983,7 +1983,7 @@ func (s PointerStruct) JSONSize() int {
 		size += len((*s.Name)) * 2
 	}
 	if s.Ratio != nil {
-		size += 33
+		size += 34
 	}
 	if s.When != nil {
 		size += 32
@@ -3751,6 +3751,9 @@ func (result PtrSliceItemsStruct) DecodeFrom(data []byte) (PtrSliceItemsStruct, 
 						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
 						}
+						if i >= len(data) || data[i] == ']' {
+							return result, i, scan.ErrBadArray
+						}
 						continue
 					}
 					break
@@ -3770,6 +3773,9 @@ func (result PtrSliceItemsStruct) DecodeFrom(data []byte) (PtrSliceItemsStruct, 
 					i++
 					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
+					}
+					if i >= len(data) || data[i] == ']' {
+						return result, i, scan.ErrBadArray
 					}
 					continue
 				}
@@ -3924,6 +3930,9 @@ func (result PtrSliceItemsStruct) DecodeFromStream(s *scan.Stream) (PtrSliceItem
 						if err != nil {
 							return result, decode.NewParseErr("items", s.Pos, err)
 						}
+						if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+							return result, decode.NewParseErr("items", s.Pos, scan.ErrBadArray)
+						}
 						continue
 					}
 					break
@@ -3948,6 +3957,9 @@ func (result PtrSliceItemsStruct) DecodeFromStream(s *scan.Stream) (PtrSliceItem
 					err = s.SkipSpace()
 					if err != nil {
 						return result, decode.NewParseErr("items", s.Pos, err)
+					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+						return result, decode.NewParseErr("items", s.Pos, scan.ErrBadArray)
 					}
 					continue
 				}
@@ -4122,6 +4134,9 @@ func (result PtrSliceTupleStruct) DecodeFrom(data []byte) (PtrSliceTupleStruct, 
 						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
 						}
+						if i >= len(data) || data[i] == ']' {
+							return result, i, scan.ErrBadArray
+						}
 						continue
 					}
 					break
@@ -4141,6 +4156,9 @@ func (result PtrSliceTupleStruct) DecodeFrom(data []byte) (PtrSliceTupleStruct, 
 					i++
 					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
+					}
+					if i >= len(data) || data[i] == ']' {
+						return result, i, scan.ErrBadArray
 					}
 					continue
 				}
@@ -4266,6 +4284,9 @@ func (result PtrSliceTupleStruct) DecodeFromStream(s *scan.Stream) (PtrSliceTupl
 						if err != nil {
 							return result, decode.NewParseErr("tuple", s.Pos, err)
 						}
+						if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+							return result, decode.NewParseErr("tuple", s.Pos, scan.ErrBadArray)
+						}
 						continue
 					}
 					break
@@ -4290,6 +4311,9 @@ func (result PtrSliceTupleStruct) DecodeFromStream(s *scan.Stream) (PtrSliceTupl
 					err = s.SkipSpace()
 					if err != nil {
 						return result, decode.NewParseErr("tuple", s.Pos, err)
+					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+						return result, decode.NewParseErr("tuple", s.Pos, scan.ErrBadArray)
 					}
 					continue
 				}
@@ -4474,6 +4498,9 @@ func (result PtrSliceNodesStruct) DecodeFrom(data []byte) (PtrSliceNodesStruct, 
 						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
 						}
+						if i >= len(data) || data[i] == ']' {
+							return result, i, scan.ErrBadArray
+						}
 						continue
 					}
 					break
@@ -4493,6 +4520,9 @@ func (result PtrSliceNodesStruct) DecodeFrom(data []byte) (PtrSliceNodesStruct, 
 					i++
 					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
+					}
+					if i >= len(data) || data[i] == ']' {
+						return result, i, scan.ErrBadArray
 					}
 					continue
 				}
@@ -4647,6 +4677,9 @@ func (result PtrSliceNodesStruct) DecodeFromStream(s *scan.Stream) (PtrSliceNode
 						if err != nil {
 							return result, decode.NewParseErr("nodes", s.Pos, err)
 						}
+						if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+							return result, decode.NewParseErr("nodes", s.Pos, scan.ErrBadArray)
+						}
 						continue
 					}
 					break
@@ -4671,6 +4704,9 @@ func (result PtrSliceNodesStruct) DecodeFromStream(s *scan.Stream) (PtrSliceNode
 					err = s.SkipSpace()
 					if err != nil {
 						return result, decode.NewParseErr("nodes", s.Pos, err)
+					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+						return result, decode.NewParseErr("nodes", s.Pos, scan.ErrBadArray)
 					}
 					continue
 				}
@@ -4863,6 +4899,9 @@ func (result PtrSliceStruct) DecodeFrom(data []byte) (PtrSliceStruct, int, error
 						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
 						}
+						if i >= len(data) || data[i] == ']' {
+							return result, i, scan.ErrBadArray
+						}
 						continue
 					}
 					break
@@ -4882,6 +4921,9 @@ func (result PtrSliceStruct) DecodeFrom(data []byte) (PtrSliceStruct, int, error
 					i++
 					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
+					}
+					if i >= len(data) || data[i] == ']' {
+						return result, i, scan.ErrBadArray
 					}
 					continue
 				}
@@ -4934,6 +4976,9 @@ func (result PtrSliceStruct) DecodeFrom(data []byte) (PtrSliceStruct, int, error
 						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
 						}
+						if i >= len(data) || data[i] == ']' {
+							return result, i, scan.ErrBadArray
+						}
 						continue
 					}
 					break
@@ -4953,6 +4998,9 @@ func (result PtrSliceStruct) DecodeFrom(data []byte) (PtrSliceStruct, int, error
 					i++
 					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
+					}
+					if i >= len(data) || data[i] == ']' {
+						return result, i, scan.ErrBadArray
 					}
 					continue
 				}
@@ -4995,6 +5043,9 @@ func (result PtrSliceStruct) DecodeFrom(data []byte) (PtrSliceStruct, int, error
 						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
 						}
+						if i >= len(data) || data[i] == ']' {
+							return result, i, scan.ErrBadArray
+						}
 						continue
 					}
 					break
@@ -5014,6 +5065,9 @@ func (result PtrSliceStruct) DecodeFrom(data []byte) (PtrSliceStruct, int, error
 					i++
 					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
+					}
+					if i >= len(data) || data[i] == ']' {
+						return result, i, scan.ErrBadArray
 					}
 					continue
 				}
@@ -5176,6 +5230,9 @@ func (result PtrSliceStruct) DecodeFromStream(s *scan.Stream) (PtrSliceStruct, e
 						if err != nil {
 							return result, decode.NewParseErr("items", s.Pos, err)
 						}
+						if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+							return result, decode.NewParseErr("items", s.Pos, scan.ErrBadArray)
+						}
 						continue
 					}
 					break
@@ -5200,6 +5257,9 @@ func (result PtrSliceStruct) DecodeFromStream(s *scan.Stream) (PtrSliceStruct, e
 					err = s.SkipSpace()
 					if err != nil {
 						return result, decode.NewParseErr("items", s.Pos, err)
+					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+						return result, decode.NewParseErr("items", s.Pos, scan.ErrBadArray)
 					}
 					continue
 				}
@@ -5300,6 +5360,9 @@ func (result PtrSliceStruct) DecodeFromStream(s *scan.Stream) (PtrSliceStruct, e
 						if err != nil {
 							return result, decode.NewParseErr("nodes", s.Pos, err)
 						}
+						if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+							return result, decode.NewParseErr("nodes", s.Pos, scan.ErrBadArray)
+						}
 						continue
 					}
 					break
@@ -5324,6 +5387,9 @@ func (result PtrSliceStruct) DecodeFromStream(s *scan.Stream) (PtrSliceStruct, e
 					err = s.SkipSpace()
 					if err != nil {
 						return result, decode.NewParseErr("nodes", s.Pos, err)
+					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+						return result, decode.NewParseErr("nodes", s.Pos, scan.ErrBadArray)
 					}
 					continue
 				}
@@ -5395,6 +5461,9 @@ func (result PtrSliceStruct) DecodeFromStream(s *scan.Stream) (PtrSliceStruct, e
 						if err != nil {
 							return result, decode.NewParseErr("tuple", s.Pos, err)
 						}
+						if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+							return result, decode.NewParseErr("tuple", s.Pos, scan.ErrBadArray)
+						}
 						continue
 					}
 					break
@@ -5419,6 +5488,9 @@ func (result PtrSliceStruct) DecodeFromStream(s *scan.Stream) (PtrSliceStruct, e
 					err = s.SkipSpace()
 					if err != nil {
 						return result, decode.NewParseErr("tuple", s.Pos, err)
+					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+						return result, decode.NewParseErr("tuple", s.Pos, scan.ErrBadArray)
 					}
 					continue
 				}
@@ -5727,6 +5799,9 @@ func (result NPtrContainersStruct) DecodeFrom(data []byte) (NPtrContainersStruct
 					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
+					if i >= len(data) || data[i] == ']' {
+						return result, i, scan.ErrBadArray
+					}
 					continue
 				}
 				break
@@ -5852,6 +5927,9 @@ func (result NPtrContainersStruct) DecodeFrom(data []byte) (NPtrContainersStruct
 					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
+					if i >= len(data) || data[i] == '}' {
+						return result, i, scan.ErrBadObject
+					}
 					continue
 				}
 				break
@@ -5943,6 +6021,9 @@ func (result NPtrContainersStruct) DecodeFrom(data []byte) (NPtrContainersStruct
 					i++
 					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
+					}
+					if i >= len(data) || data[i] == '}' {
+						return result, i, scan.ErrBadObject
 					}
 					continue
 				}
@@ -6066,6 +6147,9 @@ func (result NPtrContainersStruct) DecodeFrom(data []byte) (NPtrContainersStruct
 					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
+					if i >= len(data) || data[i] == '}' {
+						return result, i, scan.ErrBadObject
+					}
 					continue
 				}
 				break
@@ -6114,6 +6198,9 @@ func (result NPtrContainersStruct) DecodeFrom(data []byte) (NPtrContainersStruct
 						i++
 						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
+						}
+						if i >= len(data) || data[i] == ']' {
+							return result, i, scan.ErrBadArray
 						}
 						continue
 					}
@@ -6191,6 +6278,9 @@ func (result NPtrContainersStruct) DecodeFrom(data []byte) (NPtrContainersStruct
 						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
 						}
+						if i >= len(data) || data[i] == ']' {
+							return result, i, scan.ErrBadArray
+						}
 						continue
 					}
 					break
@@ -6206,6 +6296,9 @@ func (result NPtrContainersStruct) DecodeFrom(data []byte) (NPtrContainersStruct
 					i++
 					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
+					}
+					if i >= len(data) || data[i] == ']' {
+						return result, i, scan.ErrBadArray
 					}
 					continue
 				}
@@ -6296,6 +6389,9 @@ func (result NPtrContainersStruct) DecodeFrom(data []byte) (NPtrContainersStruct
 					i++
 					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
+					}
+					if i >= len(data) || data[i] == ']' {
+						return result, i, scan.ErrBadArray
 					}
 					continue
 				}
@@ -6451,6 +6547,9 @@ func (result NPtrContainersStruct) DecodeFromStream(s *scan.Stream) (NPtrContain
 					if err != nil {
 						return result, decode.NewParseErr("app", s.Pos, err)
 					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+						return result, decode.NewParseErr("app", s.Pos, scan.ErrBadArray)
+					}
 					continue
 				}
 				break
@@ -6581,6 +6680,9 @@ func (result NPtrContainersStruct) DecodeFromStream(s *scan.Stream) (NPtrContain
 					if err != nil {
 						return result, decode.NewParseErr("mp", s.Pos, err)
 					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == '}' {
+						return result, decode.NewParseErr("mp", s.Pos, scan.ErrBadObject)
+					}
 					continue
 				}
 				break
@@ -6707,6 +6809,9 @@ func (result NPtrContainersStruct) DecodeFromStream(s *scan.Stream) (NPtrContain
 					err = s.SkipSpace()
 					if err != nil {
 						return result, decode.NewParseErr("mpa", s.Pos, err)
+					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == '}' {
+						return result, decode.NewParseErr("mpa", s.Pos, scan.ErrBadObject)
 					}
 					continue
 				}
@@ -6835,6 +6940,9 @@ func (result NPtrContainersStruct) DecodeFromStream(s *scan.Stream) (NPtrContain
 					if err != nil {
 						return result, decode.NewParseErr("mpp", s.Pos, err)
 					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == '}' {
+						return result, decode.NewParseErr("mpp", s.Pos, scan.ErrBadObject)
+					}
 					continue
 				}
 				break
@@ -6932,6 +7040,9 @@ func (result NPtrContainersStruct) DecodeFromStream(s *scan.Stream) (NPtrContain
 						if err != nil {
 							return result, decode.NewParseErr("nspp", s.Pos, err)
 						}
+						if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+							return result, decode.NewParseErr("nspp", s.Pos, scan.ErrBadArray)
+						}
 						continue
 					}
 					break
@@ -7001,6 +7112,9 @@ func (result NPtrContainersStruct) DecodeFromStream(s *scan.Stream) (NPtrContain
 						if err != nil {
 							return result, decode.NewParseErr("nspp[]", s.Pos, err)
 						}
+						if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+							return result, decode.NewParseErr("nspp[]", s.Pos, scan.ErrBadArray)
+						}
 						continue
 					}
 					break
@@ -7023,6 +7137,9 @@ func (result NPtrContainersStruct) DecodeFromStream(s *scan.Stream) (NPtrContain
 					err = s.SkipSpace()
 					if err != nil {
 						return result, decode.NewParseErr("nspp", s.Pos, err)
+					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+						return result, decode.NewParseErr("nspp", s.Pos, scan.ErrBadArray)
 					}
 					continue
 				}
@@ -7129,6 +7246,9 @@ func (result NPtrContainersStruct) DecodeFromStream(s *scan.Stream) (NPtrContain
 					err = s.SkipSpace()
 					if err != nil {
 						return result, decode.NewParseErr("spp", s.Pos, err)
+					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+						return result, decode.NewParseErr("spp", s.Pos, scan.ErrBadArray)
 					}
 					continue
 				}

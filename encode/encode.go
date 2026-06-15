@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"math"
+	"reflect"
 	"strconv"
 	"sync"
 	"unsafe"
@@ -47,6 +48,10 @@ var (
 // AppendFloat appends v to dst as a JSON number, or returns an error
 // when v is NaN / ±Inf (matching encoding/json/v2). bitSize selects the
 // strconv precision — 32 for float32 source, 64 for float64.
+//
+// Format selection matches stdlib v1 and v2 (ES6 ToString semantics):
+// 'f' notation while the decimal exponent sits in [-6, 21), 'e'
+// otherwise, with no zero-padded negative exponent ("1e-7", not "1e-07").
 func AppendFloat(dst []byte, v float64, bitSize int) ([]byte, error) {
 	if math.IsNaN(v) {
 		return dst, errNaN
@@ -57,7 +62,22 @@ func AppendFloat(dst []byte, v float64, bitSize int) ([]byte, error) {
 	if math.IsInf(v, -1) {
 		return dst, errNInf
 	}
-	return strconv.AppendFloat(dst, v, 'g', -1, bitSize), nil
+	format := byte('f')
+	if abs := math.Abs(v); abs != 0 {
+		if bitSize == 64 && (abs < 1e-6 || abs >= 1e21) ||
+			bitSize == 32 && (float32(abs) < 1e-6 || float32(abs) >= 1e21) {
+			format = 'e'
+		}
+	}
+	dst = strconv.AppendFloat(dst, v, format, -1, bitSize)
+	if format == 'e' {
+		// Trim the zero-padded exponent: e-09 → e-9.
+		if n := len(dst); n >= 4 && dst[n-4] == 'e' && dst[n-3] == '-' && dst[n-2] == '0' {
+			dst[n-2] = dst[n-1]
+			dst = dst[:n-1]
+		}
+	}
+	return dst, nil
 }
 
 // MarshalString returns the JSON encoding of v as a string. The returned
@@ -95,13 +115,26 @@ func Write(w io.Writer, v Marshaler) error {
 	return werr
 }
 
+// isPointer reports whether T's dynamic kind is a pointer — pointer-typed
+// items need a nil check before the (value-receiver-promoted) method calls
+// auto-deref them.
+func isPointer[T Marshaler]() bool {
+	return reflect.TypeFor[T]().Kind() == reflect.Pointer
+}
+
 // AppendSlice appends a JSON array of items to dst. Each item emits itself
-// via AppendJSON. Returns the first error encountered along the way.
+// via AppendJSON; nil pointer items emit `null` (stdlib parity). Returns
+// the first error encountered along the way.
 func AppendSlice[T Marshaler](dst []byte, items []T) ([]byte, error) {
 	dst = append(dst, '[')
+	isPtr := isPointer[T]()
 	for i := range items {
 		if i > 0 {
 			dst = append(dst, ',')
+		}
+		if isPtr && reflect.ValueOf(items[i]).IsNil() {
+			dst = append(dst, "null"...)
+			continue
 		}
 		var err error
 		dst, err = items[i].AppendJSON(dst)
@@ -114,14 +147,21 @@ func AppendSlice[T Marshaler](dst []byte, items []T) ([]byte, error) {
 
 // MarshalSlice returns the JSON encoding of items as an array.
 func MarshalSlice[T Marshaler](items []T) ([]byte, error) {
-	var zero T
-	return AppendSlice(make([]byte, 0, 2+len(items)*zero.JSONSize()), items)
+	n := 2 + len(items) // brackets + commas
+	isPtr := isPointer[T]()
+	for i := range items {
+		if isPtr && reflect.ValueOf(items[i]).IsNil() {
+			n += 4 // null
+			continue
+		}
+		n += items[i].JSONSize()
+	}
+	return AppendSlice(make([]byte, 0, n), items)
 }
 
 // MarshalSliceString returns the JSON encoding of items as a string.
 func MarshalSliceString[T Marshaler](items []T) (string, error) {
-	var zero T
-	buf, err := AppendSlice(make([]byte, 0, 2+len(items)*zero.JSONSize()), items)
+	buf, err := MarshalSlice(items)
 	if err != nil {
 		return "", err
 	}

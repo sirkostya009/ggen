@@ -88,12 +88,17 @@ func String(data []byte, i int) (string, int, error) {
 		// have, hand off to stringSlow so a truncated `\u…` or trailing
 		// `\` surfaces as ErrBadString rather than ErrUnterminated.
 		if bsIdx := bytes.IndexByte(rest, '\\'); bsIdx >= 0 {
-			return stringSlow(data, start, start+bsIdx)
+			// Always ends in an error (no closing quote anywhere) — the
+			// hint only needs to cover the escape-free prefix; geometric
+			// append growth absorbs the doomed tail walk.
+			return stringSlow(data, start, start+bsIdx, bsIdx+16)
 		}
 		return "", 0, ErrUnterminated
 	}
 	if bsIdx := bytes.IndexByte(rest[:closeIdx], '\\'); bsIdx >= 0 {
-		return stringSlow(data, start, start+bsIdx)
+		// closeIdx bounds the decoded length from above unless the first
+		// quote is itself escaped (`\"`) — then append regrows.
+		return stringSlow(data, start, start+bsIdx, closeIdx)
 	}
 	for k := range closeIdx {
 		if rest[k] < 0x20 {
@@ -105,13 +110,17 @@ func String(data []byte, i int) (string, int, error) {
 
 // stringSlow handles strings that contain at least one escape sequence.
 // Caller guarantees data[start:j] is escape-free; data[j] is the first '\\'.
-func stringSlow(data []byte, start, j int) (string, int, error) {
-	buf := make([]byte, 0, len(data)-start)
+// capHint sizes the scratch buffer — the span to the first unescaped quote
+// candidate, NOT the remaining payload (a payload-sized cap made M escaped
+// strings allocate O(N*M) bytes). The returned string aliases the
+// function-local scratch via unsafe.String — write-once, never reused.
+func stringSlow(data []byte, start, j, capHint int) (string, int, error) {
+	buf := make([]byte, 0, capHint)
 	buf = append(buf, data[start:j]...)
 	for j < len(data) {
 		c := data[j]
 		if c == '"' {
-			return string(buf), j + 1, nil
+			return unsafe.String(unsafe.SliceData(buf), len(buf)), j + 1, nil
 		}
 		if c == '\\' {
 			if j+1 >= len(data) {

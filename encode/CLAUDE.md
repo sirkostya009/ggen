@@ -32,7 +32,31 @@ func WriteSlice[T Marshaler](w io.Writer, items []T) error
 func BytesToString(buf []byte) string                // unsafe.String over buffer
 func AppendString(dst []byte, s string) []byte       // HTML-safe variant
 func AppendStringNoHTML(dst []byte, s string) []byte // jsonv2-default variant
+func AppendFloat(dst []byte, v float64, bitSize int) ([]byte, error) // stdlib-parity float format
+func AppendAny(dst []byte, v any) ([]byte, error)     // any-walker, NoHTML escaping
+func AppendAnyHTML(dst []byte, v any) ([]byte, error) // any-walker, HTML-safe escaping
 ```
+
+## `AppendFloat` — stdlib-parity format selection
+
+ES6 ToString semantics, matching v1 AND v2 byte-for-byte: `'f'` while the
+decimal exponent sits in [-6, 21), `'e'` otherwise, then the zero-padded
+negative exponent is trimmed in place (`1e-07` → `1e-7`). A bare `'g'` verb
+was a silent wire divergence (`1e6` → `1e+06` vs stdlib `1000000`) — pinned
+by `TestAppendFloatStdlibParity`, every row cross-checked against v1.
+Codegen's `sizeFloat` budget is 25 (longest 'f' form: sign + `0.` + 5 zeros
++ 17 digits). The duration `format:sec` emit routes here too.
+
+## `MarshalSlice` / `AppendSlice` — per-item sizing, nil pointers
+
+The output buffer is presized from `sliceJSONSize` — the SUM of each item's
+`JSONSize()` — not `len(items) * zero.JSONSize()` (the zero value's size is
+only the constant-folded base; populated items undersized massively and ran
+the append growth chain). Pointer-typed `T` gets a one-time
+`reflect.TypeFor[T]().Kind()` probe + per-item `IsNil` check: nil elements
+emit `null` (stdlib parity) — previously `MarshalSlice[*T]` panicked on the
+zero value's promoted `JSONSize()` before writing a single byte. Pinned by
+`TestMarshalSlicePointerElems` / `TestMarshalSliceSingleAlloc`.
 
 ## Error propagation
 
@@ -75,6 +99,19 @@ sites.
 
 Type-switches over runtime primitives, homogeneous primitive slices/maps, and
 small set of concrete stdlib types **before** falling to reflection.
+
+### Escaping
+
+Both entry points share one walker (`appendAny`) parameterized by an
+`escapeFn` (`AppendString` / `AppendStringNoHTML`) threaded through every
+helper, so nested strings AND map keys escape consistently. `AppendAny`
+defaults to NoHTML (jsonv2 parity — matches sibling generated string
+fields; it used to hardcode the HTML-safe variant, a wire inconsistency);
+`AppendAnyHTML` is the v1-shaped variant. Codegen picks via
+`appendAnyFn(f.HTMLEscape)` — `htmlescape` structs route their `any`
+fields/inline maps through `AppendAnyHTML`. Pinned by raw-byte comparison
+in `TestAppendAny_NoHTMLEscapeDefault` (checkAny reparses and would mask
+escaping drift).
 
 ### Switch ordering rules (don't break)
 

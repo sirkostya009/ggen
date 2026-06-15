@@ -198,6 +198,9 @@ func (result NativeTypes) DecodeFrom(data []byte) (NativeTypes, int, error) {
 					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
+					if i >= len(data) || data[i] == ']' {
+						return result, i, scan.ErrBadArray
+					}
 					continue
 				}
 				break
@@ -623,6 +626,9 @@ func (result NativeTypes) DecodeFromStream(s *scan.Stream) (NativeTypes, error) 
 					if err != nil {
 						return result, decode.NewParseErr("byteArray", s.Pos, err)
 					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+						return result, decode.NewParseErr("byteArray", s.Pos, scan.ErrBadArray)
+					}
 					continue
 				}
 				break
@@ -900,7 +906,9 @@ func (s NativeTypes) AppendJSON(dst []byte) ([]byte, error) {
 		return dst, err
 	}
 	dst = append(dst, "\",\"secDur\":"...)
-	dst = strconv.AppendFloat(dst, s.SecDur.Seconds(), 'g', -1, 64)
+	if dst, err = encode.AppendFloat(dst, s.SecDur.Seconds(), 64); err != nil {
+		return dst, err
+	}
 	dst = append(dst, ",\"unitDur\":\""...)
 	dst = encode.AppendStringNoHTML(dst, s.UnitDur.String())
 	dst = append(dst, ",\"unixAt\":"...)
