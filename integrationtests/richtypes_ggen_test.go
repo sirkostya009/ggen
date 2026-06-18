@@ -15,11 +15,8 @@ import (
 	"github.com/sirkostya009/ggen/scan"
 )
 
-func (recv RichTypes) DecodeFrom(data []byte) (result RichTypes, _ int, _ error) {
-	i := 0
+func (recv RichTypes) DecodeFrom(data []byte) (result RichTypes, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenBig := false
 	seenBigF := false
 	seenBigR := false
@@ -260,7 +257,7 @@ func (recv RichTypes) DecodeFrom(data []byte) (result RichTypes, _ int, _ error)
 	}
 }
 
-func (recv RichTypes) DecodeFromStream(s *scan.Stream) (result RichTypes, _ error) {
+func (recv RichTypes) DecodeFromStream(s *scan.Stream) (result RichTypes, err error) {
 	result = recv
 	seenBig := false
 	seenBigF := false
@@ -270,7 +267,7 @@ func (recv RichTypes) DecodeFromStream(s *scan.Stream) (result RichTypes, _ erro
 	seenRaw1 := false
 	seenRaw2 := false
 	seenSite := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}

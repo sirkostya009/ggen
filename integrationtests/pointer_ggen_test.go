@@ -15,11 +15,8 @@ import (
 	"github.com/sirkostya009/ggen/scan"
 )
 
-func (recv PtrNameStruct) DecodeFrom(data []byte) (result PtrNameStruct, _ int, _ error) {
-	i := 0
+func (recv PtrNameStruct) DecodeFrom(data []byte) (result PtrNameStruct, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenName := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
@@ -132,10 +129,10 @@ func (recv PtrNameStruct) DecodeFrom(data []byte) (result PtrNameStruct, _ int, 
 	}
 }
 
-func (recv PtrNameStruct) DecodeFromStream(s *scan.Stream) (result PtrNameStruct, _ error) {
+func (recv PtrNameStruct) DecodeFromStream(s *scan.Stream) (result PtrNameStruct, err error) {
 	result = recv
 	seenName := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -254,11 +251,8 @@ func (s PtrNameStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv PtrCountStruct) DecodeFrom(data []byte) (result PtrCountStruct, _ int, _ error) {
-	i := 0
+func (recv PtrCountStruct) DecodeFrom(data []byte) (result PtrCountStruct, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenCount := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
@@ -393,10 +387,10 @@ func (recv PtrCountStruct) DecodeFrom(data []byte) (result PtrCountStruct, _ int
 	}
 }
 
-func (recv PtrCountStruct) DecodeFromStream(s *scan.Stream) (result PtrCountStruct, _ error) {
+func (recv PtrCountStruct) DecodeFromStream(s *scan.Stream) (result PtrCountStruct, err error) {
 	result = recv
 	seenCount := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -514,11 +508,8 @@ func (s PtrCountStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv PtrRatioStruct) DecodeFrom(data []byte) (result PtrRatioStruct, _ int, _ error) {
-	i := 0
+func (recv PtrRatioStruct) DecodeFrom(data []byte) (result PtrRatioStruct, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenRatio := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
@@ -613,10 +604,10 @@ func (recv PtrRatioStruct) DecodeFrom(data []byte) (result PtrRatioStruct, _ int
 	}
 }
 
-func (recv PtrRatioStruct) DecodeFromStream(s *scan.Stream) (result PtrRatioStruct, _ error) {
+func (recv PtrRatioStruct) DecodeFromStream(s *scan.Stream) (result PtrRatioStruct, err error) {
 	result = recv
 	seenRatio := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -736,11 +727,8 @@ func (s PtrRatioStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv PtrAddrStruct) DecodeFrom(data []byte) (result PtrAddrStruct, _ int, _ error) {
-	i := 0
+func (recv PtrAddrStruct) DecodeFrom(data []byte) (result PtrAddrStruct, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenAddr := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
@@ -840,10 +828,10 @@ func (recv PtrAddrStruct) DecodeFrom(data []byte) (result PtrAddrStruct, _ int, 
 	}
 }
 
-func (recv PtrAddrStruct) DecodeFromStream(s *scan.Stream) (result PtrAddrStruct, _ error) {
+func (recv PtrAddrStruct) DecodeFromStream(s *scan.Stream) (result PtrAddrStruct, err error) {
 	result = recv
 	seenAddr := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -967,11 +955,8 @@ func (s PtrAddrStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv PtrWhenStruct) DecodeFrom(data []byte) (result PtrWhenStruct, _ int, _ error) {
-	i := 0
+func (recv PtrWhenStruct) DecodeFrom(data []byte) (result PtrWhenStruct, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenWhen := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
@@ -1070,10 +1055,10 @@ func (recv PtrWhenStruct) DecodeFrom(data []byte) (result PtrWhenStruct, _ int, 
 	}
 }
 
-func (recv PtrWhenStruct) DecodeFromStream(s *scan.Stream) (result PtrWhenStruct, _ error) {
+func (recv PtrWhenStruct) DecodeFromStream(s *scan.Stream) (result PtrWhenStruct, err error) {
 	result = recv
 	seenWhen := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -1196,11 +1181,8 @@ func (s PtrWhenStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv PtrEnabledStruct) DecodeFrom(data []byte) (result PtrEnabledStruct, _ int, _ error) {
-	i := 0
+func (recv PtrEnabledStruct) DecodeFrom(data []byte) (result PtrEnabledStruct, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenEnabled := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
@@ -1295,10 +1277,10 @@ func (recv PtrEnabledStruct) DecodeFrom(data []byte) (result PtrEnabledStruct, _
 	}
 }
 
-func (recv PtrEnabledStruct) DecodeFromStream(s *scan.Stream) (result PtrEnabledStruct, _ error) {
+func (recv PtrEnabledStruct) DecodeFromStream(s *scan.Stream) (result PtrEnabledStruct, err error) {
 	result = recv
 	seenEnabled := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -1415,11 +1397,8 @@ func (s PtrEnabledStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv PointerStruct) DecodeFrom(data []byte) (result PointerStruct, _ int, _ error) {
-	i := 0
+func (recv PointerStruct) DecodeFrom(data []byte) (result PointerStruct, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenAddr := false
 	seenCount := false
 	seenEnabled := false
@@ -1686,7 +1665,7 @@ func (recv PointerStruct) DecodeFrom(data []byte) (result PointerStruct, _ int, 
 	}
 }
 
-func (recv PointerStruct) DecodeFromStream(s *scan.Stream) (result PointerStruct, _ error) {
+func (recv PointerStruct) DecodeFromStream(s *scan.Stream) (result PointerStruct, err error) {
 	result = recv
 	seenAddr := false
 	seenCount := false
@@ -1694,7 +1673,7 @@ func (recv PointerStruct) DecodeFromStream(s *scan.Stream) (result PointerStruct
 	seenName := false
 	seenRatio := false
 	seenWhen := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -2080,11 +2059,8 @@ func (s PointerStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv PtrPPStruct) DecodeFrom(data []byte) (result PtrPPStruct, _ int, _ error) {
-	i := 0
+func (recv PtrPPStruct) DecodeFrom(data []byte) (result PtrPPStruct, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenPP := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
@@ -2221,10 +2197,10 @@ func (recv PtrPPStruct) DecodeFrom(data []byte) (result PtrPPStruct, _ int, _ er
 	}
 }
 
-func (recv PtrPPStruct) DecodeFromStream(s *scan.Stream) (result PtrPPStruct, _ error) {
+func (recv PtrPPStruct) DecodeFromStream(s *scan.Stream) (result PtrPPStruct, err error) {
 	result = recv
 	seenPP := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -2347,11 +2323,8 @@ func (s PtrPPStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv PtrPPPStruct) DecodeFrom(data []byte) (result PtrPPPStruct, _ int, _ error) {
-	i := 0
+func (recv PtrPPPStruct) DecodeFrom(data []byte) (result PtrPPPStruct, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenPPP := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
@@ -2490,10 +2463,10 @@ func (recv PtrPPPStruct) DecodeFrom(data []byte) (result PtrPPPStruct, _ int, _ 
 	}
 }
 
-func (recv PtrPPPStruct) DecodeFromStream(s *scan.Stream) (result PtrPPPStruct, _ error) {
+func (recv PtrPPPStruct) DecodeFromStream(s *scan.Stream) (result PtrPPPStruct, err error) {
 	result = recv
 	seenPPP := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -2622,11 +2595,8 @@ func (s PtrPPPStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv PtrPPPPStruct) DecodeFrom(data []byte) (result PtrPPPPStruct, _ int, _ error) {
-	i := 0
+func (recv PtrPPPPStruct) DecodeFrom(data []byte) (result PtrPPPPStruct, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenPPPP := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
@@ -2745,10 +2715,10 @@ func (recv PtrPPPPStruct) DecodeFrom(data []byte) (result PtrPPPPStruct, _ int, 
 	}
 }
 
-func (recv PtrPPPPStruct) DecodeFromStream(s *scan.Stream) (result PtrPPPPStruct, _ error) {
+func (recv PtrPPPPStruct) DecodeFromStream(s *scan.Stream) (result PtrPPPPStruct, err error) {
 	result = recv
 	seenPPPP := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -2885,11 +2855,8 @@ func (s PtrPPPPStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv PtrAddr2Struct) DecodeFrom(data []byte) (result PtrAddr2Struct, _ int, _ error) {
-	i := 0
+func (recv PtrAddr2Struct) DecodeFrom(data []byte) (result PtrAddr2Struct, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenAddr := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
@@ -2991,10 +2958,10 @@ func (recv PtrAddr2Struct) DecodeFrom(data []byte) (result PtrAddr2Struct, _ int
 	}
 }
 
-func (recv PtrAddr2Struct) DecodeFromStream(s *scan.Stream) (result PtrAddr2Struct, _ error) {
+func (recv PtrAddr2Struct) DecodeFromStream(s *scan.Stream) (result PtrAddr2Struct, err error) {
 	result = recv
 	seenAddr := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -3122,11 +3089,8 @@ func (s PtrAddr2Struct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv NPtrStruct) DecodeFrom(data []byte) (result NPtrStruct, _ int, _ error) {
-	i := 0
+func (recv NPtrStruct) DecodeFrom(data []byte) (result NPtrStruct, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenAddr := false
 	seenPP := false
 	seenPPP := false
@@ -3401,13 +3365,13 @@ func (recv NPtrStruct) DecodeFrom(data []byte) (result NPtrStruct, _ int, _ erro
 	}
 }
 
-func (recv NPtrStruct) DecodeFromStream(s *scan.Stream) (result NPtrStruct, _ error) {
+func (recv NPtrStruct) DecodeFromStream(s *scan.Stream) (result NPtrStruct, err error) {
 	result = recv
 	seenAddr := false
 	seenPP := false
 	seenPPP := false
 	seenPPPP := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -3723,14 +3687,11 @@ func (s NPtrStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv PtrSliceItemsStruct) DecodeFrom(data []byte) (result PtrSliceItemsStruct, _ int, _ error) {
-	i := 0
+func (recv PtrSliceItemsStruct) DecodeFrom(data []byte) (result PtrSliceItemsStruct, i int, err error) {
 	result = recv
 	if result.Items != nil {
 		result.Items = result.Items[:0]
 	}
-	var err error
-	_ = err
 	seenItems := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
@@ -3882,13 +3843,13 @@ func (recv PtrSliceItemsStruct) DecodeFrom(data []byte) (result PtrSliceItemsStr
 	}
 }
 
-func (recv PtrSliceItemsStruct) DecodeFromStream(s *scan.Stream) (result PtrSliceItemsStruct, _ error) {
+func (recv PtrSliceItemsStruct) DecodeFromStream(s *scan.Stream) (result PtrSliceItemsStruct, err error) {
 	result = recv
 	if result.Items != nil {
 		result.Items = result.Items[:0]
 	}
 	seenItems := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -4121,11 +4082,8 @@ func (s PtrSliceItemsStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv PtrSliceTupleStruct) DecodeFrom(data []byte) (result PtrSliceTupleStruct, _ int, _ error) {
-	i := 0
+func (recv PtrSliceTupleStruct) DecodeFrom(data []byte) (result PtrSliceTupleStruct, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenTuple := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
@@ -4270,10 +4228,10 @@ func (recv PtrSliceTupleStruct) DecodeFrom(data []byte) (result PtrSliceTupleStr
 	}
 }
 
-func (recv PtrSliceTupleStruct) DecodeFromStream(s *scan.Stream) (result PtrSliceTupleStruct, _ error) {
+func (recv PtrSliceTupleStruct) DecodeFromStream(s *scan.Stream) (result PtrSliceTupleStruct, err error) {
 	result = recv
 	seenTuple := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -4474,14 +4432,11 @@ func (s PtrSliceTupleStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, "]}"...), nil
 }
 
-func (recv PtrSliceNodesStruct) DecodeFrom(data []byte) (result PtrSliceNodesStruct, _ int, _ error) {
-	i := 0
+func (recv PtrSliceNodesStruct) DecodeFrom(data []byte) (result PtrSliceNodesStruct, i int, err error) {
 	result = recv
 	if result.Nodes != nil {
 		result.Nodes = result.Nodes[:0]
 	}
-	var err error
-	_ = err
 	seenNodes := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
@@ -4633,13 +4588,13 @@ func (recv PtrSliceNodesStruct) DecodeFrom(data []byte) (result PtrSliceNodesStr
 	}
 }
 
-func (recv PtrSliceNodesStruct) DecodeFromStream(s *scan.Stream) (result PtrSliceNodesStruct, _ error) {
+func (recv PtrSliceNodesStruct) DecodeFromStream(s *scan.Stream) (result PtrSliceNodesStruct, err error) {
 	result = recv
 	if result.Nodes != nil {
 		result.Nodes = result.Nodes[:0]
 	}
 	seenNodes := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -4872,8 +4827,7 @@ func (s PtrSliceNodesStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv PtrSliceStruct) DecodeFrom(data []byte) (result PtrSliceStruct, _ int, _ error) {
-	i := 0
+func (recv PtrSliceStruct) DecodeFrom(data []byte) (result PtrSliceStruct, i int, err error) {
 	result = recv
 	if result.Items != nil {
 		result.Items = result.Items[:0]
@@ -4881,8 +4835,6 @@ func (recv PtrSliceStruct) DecodeFrom(data []byte) (result PtrSliceStruct, _ int
 	if result.Nodes != nil {
 		result.Nodes = result.Nodes[:0]
 	}
-	var err error
-	_ = err
 	seenItems := false
 	seenNodes := false
 	seenTuple := false
@@ -5183,7 +5135,7 @@ func (recv PtrSliceStruct) DecodeFrom(data []byte) (result PtrSliceStruct, _ int
 	}
 }
 
-func (recv PtrSliceStruct) DecodeFromStream(s *scan.Stream) (result PtrSliceStruct, _ error) {
+func (recv PtrSliceStruct) DecodeFromStream(s *scan.Stream) (result PtrSliceStruct, err error) {
 	result = recv
 	if result.Items != nil {
 		result.Items = result.Items[:0]
@@ -5194,7 +5146,7 @@ func (recv PtrSliceStruct) DecodeFromStream(s *scan.Stream) (result PtrSliceStru
 	seenItems := false
 	seenNodes := false
 	seenTuple := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -5727,8 +5679,7 @@ func (s PtrSliceStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, "]}"...), nil
 }
 
-func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersStruct, _ int, _ error) {
-	i := 0
+func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersStruct, i int, err error) {
 	result = recv
 	if result.MP != nil {
 		clear(result.MP)
@@ -5745,8 +5696,6 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 	if result.SPP != nil {
 		result.SPP = result.SPP[:0]
 	}
-	var err error
-	_ = err
 	seenAPP := false
 	seenMP := false
 	seenMPA := false
@@ -6546,7 +6495,7 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 	}
 }
 
-func (recv NPtrContainersStruct) DecodeFromStream(s *scan.Stream) (result NPtrContainersStruct, _ error) {
+func (recv NPtrContainersStruct) DecodeFromStream(s *scan.Stream) (result NPtrContainersStruct, err error) {
 	result = recv
 	if result.MP != nil {
 		clear(result.MP)
@@ -6569,7 +6518,7 @@ func (recv NPtrContainersStruct) DecodeFromStream(s *scan.Stream) (result NPtrCo
 	seenMPP := false
 	seenNSPP := false
 	seenSPP := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}

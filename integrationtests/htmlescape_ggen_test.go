@@ -12,11 +12,8 @@ import (
 	"github.com/sirkostya009/ggen/scan"
 )
 
-func (recv HTMLRawStruct) DecodeFrom(data []byte) (result HTMLRawStruct, _ int, _ error) {
-	i := 0
+func (recv HTMLRawStruct) DecodeFrom(data []byte) (result HTMLRawStruct, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenNote := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
@@ -118,10 +115,10 @@ func (recv HTMLRawStruct) DecodeFrom(data []byte) (result HTMLRawStruct, _ int, 
 	}
 }
 
-func (recv HTMLRawStruct) DecodeFromStream(s *scan.Stream) (result HTMLRawStruct, _ error) {
+func (recv HTMLRawStruct) DecodeFromStream(s *scan.Stream) (result HTMLRawStruct, err error) {
 	result = recv
 	seenNote := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -204,11 +201,8 @@ func (s HTMLRawStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv HTMLEscapeStruct) DecodeFrom(data []byte) (result HTMLEscapeStruct, _ int, _ error) {
-	i := 0
+func (recv HTMLEscapeStruct) DecodeFrom(data []byte) (result HTMLEscapeStruct, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenNote := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
@@ -310,10 +304,10 @@ func (recv HTMLEscapeStruct) DecodeFrom(data []byte) (result HTMLEscapeStruct, _
 	}
 }
 
-func (recv HTMLEscapeStruct) DecodeFromStream(s *scan.Stream) (result HTMLEscapeStruct, _ error) {
+func (recv HTMLEscapeStruct) DecodeFromStream(s *scan.Stream) (result HTMLEscapeStruct, err error) {
 	result = recv
 	seenNote := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}

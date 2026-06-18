@@ -13,11 +13,8 @@ import (
 	"github.com/sirkostya009/ggen/scan"
 )
 
-func (recv FallbackStruct) DecodeFrom(data []byte) (result FallbackStruct, _ int, _ error) {
-	i := 0
+func (recv FallbackStruct) DecodeFrom(data []byte) (result FallbackStruct, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenExtra := false
 	seenID := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -134,11 +131,11 @@ func (recv FallbackStruct) DecodeFrom(data []byte) (result FallbackStruct, _ int
 	}
 }
 
-func (recv FallbackStruct) DecodeFromStream(s *scan.Stream) (result FallbackStruct, _ error) {
+func (recv FallbackStruct) DecodeFromStream(s *scan.Stream) (result FallbackStruct, err error) {
 	result = recv
 	seenExtra := false
 	seenID := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -249,11 +246,8 @@ func (s FallbackStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv FastFallbackStruct) DecodeFrom(data []byte) (result FastFallbackStruct, _ int, _ error) {
-	i := 0
+func (recv FastFallbackStruct) DecodeFrom(data []byte) (result FastFallbackStruct, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenExtra := false
 	seenID := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -367,11 +361,11 @@ func (recv FastFallbackStruct) DecodeFrom(data []byte) (result FastFallbackStruc
 	}
 }
 
-func (recv FastFallbackStruct) DecodeFromStream(s *scan.Stream) (result FastFallbackStruct, _ error) {
+func (recv FastFallbackStruct) DecodeFromStream(s *scan.Stream) (result FastFallbackStruct, err error) {
 	result = recv
 	seenExtra := false
 	seenID := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -475,11 +469,8 @@ func (s FastFallbackStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv TextFallbackStruct) DecodeFrom(data []byte) (result TextFallbackStruct, _ int, _ error) {
-	i := 0
+func (recv TextFallbackStruct) DecodeFrom(data []byte) (result TextFallbackStruct, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenID := false
 	seenTag := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -596,11 +587,11 @@ func (recv TextFallbackStruct) DecodeFrom(data []byte) (result TextFallbackStruc
 	}
 }
 
-func (recv TextFallbackStruct) DecodeFromStream(s *scan.Stream) (result TextFallbackStruct, _ error) {
+func (recv TextFallbackStruct) DecodeFromStream(s *scan.Stream) (result TextFallbackStruct, err error) {
 	result = recv
 	seenID := false
 	seenTag := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}

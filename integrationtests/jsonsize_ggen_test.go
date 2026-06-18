@@ -13,11 +13,8 @@ import (
 	"github.com/sirkostya009/ggen/scan"
 )
 
-func (recv URLStruct) DecodeFrom(data []byte) (result URLStruct, _ int, _ error) {
-	i := 0
+func (recv URLStruct) DecodeFrom(data []byte) (result URLStruct, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenSite := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
@@ -126,10 +123,10 @@ func (recv URLStruct) DecodeFrom(data []byte) (result URLStruct, _ int, _ error)
 	}
 }
 
-func (recv URLStruct) DecodeFromStream(s *scan.Stream) (result URLStruct, _ error) {
+func (recv URLStruct) DecodeFromStream(s *scan.Stream) (result URLStruct, err error) {
 	result = recv
 	seenSite := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}

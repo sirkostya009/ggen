@@ -15,8 +15,7 @@ import (
 	"github.com/sirkostya009/ggen/scan"
 )
 
-func (recv DiveStruct) DecodeFrom(data []byte) (result DiveStruct, _ int, _ error) {
-	i := 0
+func (recv DiveStruct) DecodeFrom(data []byte) (result DiveStruct, i int, err error) {
 	result = recv
 	if result.Scores != nil {
 		result.Scores = result.Scores[:0]
@@ -24,8 +23,6 @@ func (recv DiveStruct) DecodeFrom(data []byte) (result DiveStruct, _ int, _ erro
 	if result.Tags != nil {
 		result.Tags = result.Tags[:0]
 	}
-	var err error
-	_ = err
 	seenCount := false
 	seenScores := false
 	seenTags := false
@@ -376,7 +373,7 @@ func (recv DiveStruct) DecodeFrom(data []byte) (result DiveStruct, _ int, _ erro
 	}
 }
 
-func (recv DiveStruct) DecodeFromStream(s *scan.Stream) (result DiveStruct, _ error) {
+func (recv DiveStruct) DecodeFromStream(s *scan.Stream) (result DiveStruct, err error) {
 	result = recv
 	if result.Scores != nil {
 		result.Scores = result.Scores[:0]
@@ -388,7 +385,7 @@ func (recv DiveStruct) DecodeFromStream(s *scan.Stream) (result DiveStruct, _ er
 	seenScores := false
 	seenTags := false
 	seenTitle := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -730,8 +727,7 @@ func (s DiveStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv CustomDiveStruct) DecodeFrom(data []byte) (result CustomDiveStruct, _ int, _ error) {
-	i := 0
+func (recv CustomDiveStruct) DecodeFrom(data []byte) (result CustomDiveStruct, i int, err error) {
 	result = recv
 	if result.Lookup != nil {
 		clear(result.Lookup)
@@ -745,8 +741,6 @@ func (recv CustomDiveStruct) DecodeFrom(data []byte) (result CustomDiveStruct, _
 	if result.Trim != nil {
 		result.Trim = result.Trim[:0]
 	}
-	var err error
-	_ = err
 	seenLookup := false
 	seenMixed := false
 	seenPtr := false
@@ -1296,7 +1290,7 @@ func (recv CustomDiveStruct) DecodeFrom(data []byte) (result CustomDiveStruct, _
 	}
 }
 
-func (recv CustomDiveStruct) DecodeFromStream(s *scan.Stream) (result CustomDiveStruct, _ error) {
+func (recv CustomDiveStruct) DecodeFromStream(s *scan.Stream) (result CustomDiveStruct, err error) {
 	result = recv
 	if result.Lookup != nil {
 		clear(result.Lookup)
@@ -1315,7 +1309,7 @@ func (recv CustomDiveStruct) DecodeFromStream(s *scan.Stream) (result CustomDive
 	seenPtr := false
 	seenTags := false
 	seenTrim := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}

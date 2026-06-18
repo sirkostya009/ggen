@@ -20,11 +20,8 @@ import (
 var ggenOneof0 = []string{"en", "es", "fr", "de", "uk"}
 var ggenOneof1 = []string{"admin", "user", "guest"}
 
-func (recv Addr) DecodeFrom(data []byte) (result Addr, _ int, _ error) {
-	i := 0
+func (recv Addr) DecodeFrom(data []byte) (result Addr, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenCity := false
 	seenStreet := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -154,11 +151,11 @@ func (recv Addr) DecodeFrom(data []byte) (result Addr, _ int, _ error) {
 	}
 }
 
-func (recv Addr) DecodeFromStream(s *scan.Stream) (result Addr, _ error) {
+func (recv Addr) DecodeFromStream(s *scan.Stream) (result Addr, err error) {
 	result = recv
 	seenCity := false
 	seenStreet := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -257,8 +254,7 @@ func (s Addr) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv Node) DecodeFrom(data []byte) (result Node, _ int, _ error) {
-	i := 0
+func (recv Node) DecodeFrom(data []byte) (result Node, i int, err error) {
 	result = recv
 	if result.Blob != nil {
 		result.Blob = result.Blob[:0]
@@ -278,8 +274,6 @@ func (recv Node) DecodeFrom(data []byte) (result Node, _ int, _ error) {
 	if result.Tags != nil {
 		result.Tags = result.Tags[:0]
 	}
-	var err error
-	_ = err
 	seenActive := false
 	seenBlob := false
 	seenChildren := false
@@ -1144,7 +1138,7 @@ func (recv Node) DecodeFrom(data []byte) (result Node, _ int, _ error) {
 	}
 }
 
-func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, _ error) {
+func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 	result = recv
 	if result.Blob != nil {
 		result.Blob = result.Blob[:0]
@@ -1179,7 +1173,7 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, _ error) {
 	seenRefs := false
 	seenScore := false
 	seenTags := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -2401,14 +2395,11 @@ func (s Node) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv Validated) DecodeFrom(data []byte) (result Validated, _ int, _ error) {
-	i := 0
+func (recv Validated) DecodeFrom(data []byte) (result Validated, i int, err error) {
 	result = recv
 	if result.Tags != nil {
 		result.Tags = result.Tags[:0]
 	}
-	var err error
-	_ = err
 	seenAge := false
 	seenBio := false
 	seenEmail := false
@@ -2730,7 +2721,7 @@ func (recv Validated) DecodeFrom(data []byte) (result Validated, _ int, _ error)
 	}
 }
 
-func (recv Validated) DecodeFromStream(s *scan.Stream) (result Validated, _ error) {
+func (recv Validated) DecodeFromStream(s *scan.Stream) (result Validated, err error) {
 	result = recv
 	if result.Tags != nil {
 		result.Tags = result.Tags[:0]
@@ -2740,7 +2731,7 @@ func (recv Validated) DecodeFromStream(s *scan.Stream) (result Validated, _ erro
 	seenEmail := false
 	seenName := false
 	seenTags := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -3019,11 +3010,8 @@ func (s Validated) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv Claim) DecodeFrom(data []byte) (result Claim, _ int, _ error) {
-	i := 0
+func (recv Claim) DecodeFrom(data []byte) (result Claim, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenAud := false
 	seenExp := false
 	seenIat := false
@@ -3383,7 +3371,7 @@ func (recv Claim) DecodeFrom(data []byte) (result Claim, _ int, _ error) {
 	}
 }
 
-func (recv Claim) DecodeFromStream(s *scan.Stream) (result Claim, _ error) {
+func (recv Claim) DecodeFromStream(s *scan.Stream) (result Claim, err error) {
 	result = recv
 	seenAud := false
 	seenExp := false
@@ -3392,7 +3380,7 @@ func (recv Claim) DecodeFromStream(s *scan.Stream) (result Claim, _ error) {
 	seenJti := false
 	seenNbf := false
 	seenSub := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -3614,11 +3602,8 @@ func (s Claim) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, _ int, _ error) {
-	i := 0
+func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenAge := false
 	seenCountry := false
 	seenEmail := false
@@ -4060,7 +4045,7 @@ func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, _ i
 	}
 }
 
-func (recv ValidationHeavy) DecodeFromStream(s *scan.Stream) (result ValidationHeavy, _ error) {
+func (recv ValidationHeavy) DecodeFromStream(s *scan.Stream) (result ValidationHeavy, err error) {
 	result = recv
 	seenAge := false
 	seenCountry := false
@@ -4072,7 +4057,7 @@ func (recv ValidationHeavy) DecodeFromStream(s *scan.Stream) (result ValidationH
 	seenScore := false
 	seenURL := false
 	seenUsername := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -4383,11 +4368,8 @@ func (s ValidationHeavy) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv NoValidationHeavy) DecodeFrom(data []byte) (result NoValidationHeavy, _ int, _ error) {
-	i := 0
+func (recv NoValidationHeavy) DecodeFrom(data []byte) (result NoValidationHeavy, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenAge := false
 	seenCountry := false
 	seenEmail := false
@@ -4747,7 +4729,7 @@ func (recv NoValidationHeavy) DecodeFrom(data []byte) (result NoValidationHeavy,
 	}
 }
 
-func (recv NoValidationHeavy) DecodeFromStream(s *scan.Stream) (result NoValidationHeavy, _ error) {
+func (recv NoValidationHeavy) DecodeFromStream(s *scan.Stream) (result NoValidationHeavy, err error) {
 	result = recv
 	seenAge := false
 	seenCountry := false
@@ -4759,7 +4741,7 @@ func (recv NoValidationHeavy) DecodeFromStream(s *scan.Stream) (result NoValidat
 	seenScore := false
 	seenURL := false
 	seenUsername := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -4988,11 +4970,8 @@ func (s NoValidationHeavy) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv HTMLEscape) DecodeFrom(data []byte) (result HTMLEscape, _ int, _ error) {
-	i := 0
+func (recv HTMLEscape) DecodeFrom(data []byte) (result HTMLEscape, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenNote := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
@@ -5094,10 +5073,10 @@ func (recv HTMLEscape) DecodeFrom(data []byte) (result HTMLEscape, _ int, _ erro
 	}
 }
 
-func (recv HTMLEscape) DecodeFromStream(s *scan.Stream) (result HTMLEscape, _ error) {
+func (recv HTMLEscape) DecodeFromStream(s *scan.Stream) (result HTMLEscape, err error) {
 	result = recv
 	seenNote := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -5180,11 +5159,8 @@ func (s HTMLEscape) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv HTMLPlain) DecodeFrom(data []byte) (result HTMLPlain, _ int, _ error) {
-	i := 0
+func (recv HTMLPlain) DecodeFrom(data []byte) (result HTMLPlain, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenNote := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
@@ -5286,10 +5262,10 @@ func (recv HTMLPlain) DecodeFrom(data []byte) (result HTMLPlain, _ int, _ error)
 	}
 }
 
-func (recv HTMLPlain) DecodeFromStream(s *scan.Stream) (result HTMLPlain, _ error) {
+func (recv HTMLPlain) DecodeFromStream(s *scan.Stream) (result HTMLPlain, err error) {
 	result = recv
 	seenNote := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -5372,14 +5348,11 @@ func (s HTMLPlain) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv MapHeavy) DecodeFrom(data []byte) (result MapHeavy, _ int, _ error) {
-	i := 0
+func (recv MapHeavy) DecodeFrom(data []byte) (result MapHeavy, i int, err error) {
 	result = recv
 	if result.Labels != nil {
 		clear(result.Labels)
 	}
-	var err error
-	_ = err
 	seenLabels := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
@@ -5558,13 +5531,13 @@ func (recv MapHeavy) DecodeFrom(data []byte) (result MapHeavy, _ int, _ error) {
 	}
 }
 
-func (recv MapHeavy) DecodeFromStream(s *scan.Stream) (result MapHeavy, _ error) {
+func (recv MapHeavy) DecodeFromStream(s *scan.Stream) (result MapHeavy, err error) {
 	result = recv
 	if result.Labels != nil {
 		clear(result.Labels)
 	}
 	seenLabels := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}

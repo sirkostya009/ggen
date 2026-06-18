@@ -16,11 +16,8 @@ import (
 	"github.com/sirkostya009/ggen/scan"
 )
 
-func (recv SQLNullStringStruct) DecodeFrom(data []byte) (result SQLNullStringStruct, _ int, _ error) {
-	i := 0
+func (recv SQLNullStringStruct) DecodeFrom(data []byte) (result SQLNullStringStruct, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenS := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
@@ -130,10 +127,10 @@ func (recv SQLNullStringStruct) DecodeFrom(data []byte) (result SQLNullStringStr
 	}
 }
 
-func (recv SQLNullStringStruct) DecodeFromStream(s *scan.Stream) (result SQLNullStringStruct, _ error) {
+func (recv SQLNullStringStruct) DecodeFromStream(s *scan.Stream) (result SQLNullStringStruct, err error) {
 	result = recv
 	seenS := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -244,11 +241,8 @@ func (s SQLNullStringStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv SQLNullInt64Struct) DecodeFrom(data []byte) (result SQLNullInt64Struct, _ int, _ error) {
-	i := 0
+func (recv SQLNullInt64Struct) DecodeFrom(data []byte) (result SQLNullInt64Struct, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenI := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
@@ -382,10 +376,10 @@ func (recv SQLNullInt64Struct) DecodeFrom(data []byte) (result SQLNullInt64Struc
 	}
 }
 
-func (recv SQLNullInt64Struct) DecodeFromStream(s *scan.Stream) (result SQLNullInt64Struct, _ error) {
+func (recv SQLNullInt64Struct) DecodeFromStream(s *scan.Stream) (result SQLNullInt64Struct, err error) {
 	result = recv
 	seenI := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -494,11 +488,8 @@ func (s SQLNullInt64Struct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv SQLNullInt32Struct) DecodeFrom(data []byte) (result SQLNullInt32Struct, _ int, _ error) {
-	i := 0
+func (recv SQLNullInt32Struct) DecodeFrom(data []byte) (result SQLNullInt32Struct, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenI32 := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
@@ -632,10 +623,10 @@ func (recv SQLNullInt32Struct) DecodeFrom(data []byte) (result SQLNullInt32Struc
 	}
 }
 
-func (recv SQLNullInt32Struct) DecodeFromStream(s *scan.Stream) (result SQLNullInt32Struct, _ error) {
+func (recv SQLNullInt32Struct) DecodeFromStream(s *scan.Stream) (result SQLNullInt32Struct, err error) {
 	result = recv
 	seenI32 := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -744,11 +735,8 @@ func (s SQLNullInt32Struct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv SQLNullInt16Struct) DecodeFrom(data []byte) (result SQLNullInt16Struct, _ int, _ error) {
-	i := 0
+func (recv SQLNullInt16Struct) DecodeFrom(data []byte) (result SQLNullInt16Struct, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenI16 := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
@@ -882,10 +870,10 @@ func (recv SQLNullInt16Struct) DecodeFrom(data []byte) (result SQLNullInt16Struc
 	}
 }
 
-func (recv SQLNullInt16Struct) DecodeFromStream(s *scan.Stream) (result SQLNullInt16Struct, _ error) {
+func (recv SQLNullInt16Struct) DecodeFromStream(s *scan.Stream) (result SQLNullInt16Struct, err error) {
 	result = recv
 	seenI16 := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -994,11 +982,8 @@ func (s SQLNullInt16Struct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv SQLNullByteStruct) DecodeFrom(data []byte) (result SQLNullByteStruct, _ int, _ error) {
-	i := 0
+func (recv SQLNullByteStruct) DecodeFrom(data []byte) (result SQLNullByteStruct, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenB := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
@@ -1107,10 +1092,10 @@ func (recv SQLNullByteStruct) DecodeFrom(data []byte) (result SQLNullByteStruct,
 	}
 }
 
-func (recv SQLNullByteStruct) DecodeFromStream(s *scan.Stream) (result SQLNullByteStruct, _ error) {
+func (recv SQLNullByteStruct) DecodeFromStream(s *scan.Stream) (result SQLNullByteStruct, err error) {
 	result = recv
 	seenB := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -1219,11 +1204,8 @@ func (s SQLNullByteStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv SQLNullBoolStruct) DecodeFrom(data []byte) (result SQLNullBoolStruct, _ int, _ error) {
-	i := 0
+func (recv SQLNullBoolStruct) DecodeFrom(data []byte) (result SQLNullBoolStruct, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenBL := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
@@ -1315,10 +1297,10 @@ func (recv SQLNullBoolStruct) DecodeFrom(data []byte) (result SQLNullBoolStruct,
 	}
 }
 
-func (recv SQLNullBoolStruct) DecodeFromStream(s *scan.Stream) (result SQLNullBoolStruct, _ error) {
+func (recv SQLNullBoolStruct) DecodeFromStream(s *scan.Stream) (result SQLNullBoolStruct, err error) {
 	result = recv
 	seenBL := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -1427,11 +1409,8 @@ func (s SQLNullBoolStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv SQLNullFloat64Struct) DecodeFrom(data []byte) (result SQLNullFloat64Struct, _ int, _ error) {
-	i := 0
+func (recv SQLNullFloat64Struct) DecodeFrom(data []byte) (result SQLNullFloat64Struct, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenF := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
@@ -1523,10 +1502,10 @@ func (recv SQLNullFloat64Struct) DecodeFrom(data []byte) (result SQLNullFloat64S
 	}
 }
 
-func (recv SQLNullFloat64Struct) DecodeFromStream(s *scan.Stream) (result SQLNullFloat64Struct, _ error) {
+func (recv SQLNullFloat64Struct) DecodeFromStream(s *scan.Stream) (result SQLNullFloat64Struct, err error) {
 	result = recv
 	seenF := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -1637,11 +1616,8 @@ func (s SQLNullFloat64Struct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv SQLNullTimeStruct) DecodeFrom(data []byte) (result SQLNullTimeStruct, _ int, _ error) {
-	i := 0
+func (recv SQLNullTimeStruct) DecodeFrom(data []byte) (result SQLNullTimeStruct, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenT := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
@@ -1756,10 +1732,10 @@ func (recv SQLNullTimeStruct) DecodeFrom(data []byte) (result SQLNullTimeStruct,
 	}
 }
 
-func (recv SQLNullTimeStruct) DecodeFromStream(s *scan.Stream) (result SQLNullTimeStruct, _ error) {
+func (recv SQLNullTimeStruct) DecodeFromStream(s *scan.Stream) (result SQLNullTimeStruct, err error) {
 	result = recv
 	seenT := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -1875,11 +1851,8 @@ func (s SQLNullTimeStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv SQLNullStruct) DecodeFrom(data []byte) (result SQLNullStruct, _ int, _ error) {
-	i := 0
+func (recv SQLNullStruct) DecodeFrom(data []byte) (result SQLNullStruct, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenB := false
 	seenBL := false
 	seenF := false
@@ -2281,7 +2254,7 @@ func (recv SQLNullStruct) DecodeFrom(data []byte) (result SQLNullStruct, _ int, 
 	}
 }
 
-func (recv SQLNullStruct) DecodeFromStream(s *scan.Stream) (result SQLNullStruct, _ error) {
+func (recv SQLNullStruct) DecodeFromStream(s *scan.Stream) (result SQLNullStruct, err error) {
 	result = recv
 	seenB := false
 	seenBL := false
@@ -2291,7 +2264,7 @@ func (recv SQLNullStruct) DecodeFromStream(s *scan.Stream) (result SQLNullStruct
 	seenI32 := false
 	seenS := false
 	seenT := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}

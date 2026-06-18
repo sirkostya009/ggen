@@ -16,11 +16,8 @@ import (
 	"github.com/sirkostya009/ggen/scan"
 )
 
-func (recv AllowDupsStruct) DecodeFrom(data []byte) (result AllowDupsStruct, _ int, _ error) {
-	i := 0
+func (recv AllowDupsStruct) DecodeFrom(data []byte) (result AllowDupsStruct, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenN := false
 	seenName := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -200,11 +197,11 @@ func (recv AllowDupsStruct) DecodeFrom(data []byte) (result AllowDupsStruct, _ i
 	}
 }
 
-func (recv AllowDupsStruct) DecodeFromStream(s *scan.Stream) (result AllowDupsStruct, _ error) {
+func (recv AllowDupsStruct) DecodeFromStream(s *scan.Stream) (result AllowDupsStruct, err error) {
 	result = recv
 	seenN := false
 	seenName := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}

@@ -18,14 +18,11 @@ import (
 	"github.com/sirkostya009/ggen/scan"
 )
 
-func (recv base32Wrap) DecodeFrom(data []byte) (result base32Wrap, _ int, _ error) {
-	i := 0
+func (recv base32Wrap) DecodeFrom(data []byte) (result base32Wrap, i int, err error) {
 	result = recv
 	if result.B != nil {
 		result.B = result.B[:0]
 	}
-	var err error
-	_ = err
 	seenB := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
@@ -140,13 +137,13 @@ func (recv base32Wrap) DecodeFrom(data []byte) (result base32Wrap, _ int, _ erro
 	}
 }
 
-func (recv base32Wrap) DecodeFromStream(s *scan.Stream) (result base32Wrap, _ error) {
+func (recv base32Wrap) DecodeFromStream(s *scan.Stream) (result base32Wrap, err error) {
 	result = recv
 	if result.B != nil {
 		result.B = result.B[:0]
 	}
 	seenB := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -263,11 +260,8 @@ func (s base32Wrap) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv TimeLayout) DecodeFrom(data []byte) (result TimeLayout, _ int, _ error) {
-	i := 0
+func (recv TimeLayout) DecodeFrom(data []byte) (result TimeLayout, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenLayout := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
@@ -374,10 +368,10 @@ func (recv TimeLayout) DecodeFrom(data []byte) (result TimeLayout, _ int, _ erro
 	}
 }
 
-func (recv TimeLayout) DecodeFromStream(s *scan.Stream) (result TimeLayout, _ error) {
+func (recv TimeLayout) DecodeFromStream(s *scan.Stream) (result TimeLayout, err error) {
 	result = recv
 	seenLayout := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -464,11 +458,8 @@ func (s TimeLayout) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, "\"}"...), nil
 }
 
-func (recv TimeStamp) DecodeFrom(data []byte) (result TimeStamp, _ int, _ error) {
-	i := 0
+func (recv TimeStamp) DecodeFrom(data []byte) (result TimeStamp, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenStamp := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
@@ -575,10 +566,10 @@ func (recv TimeStamp) DecodeFrom(data []byte) (result TimeStamp, _ int, _ error)
 	}
 }
 
-func (recv TimeStamp) DecodeFromStream(s *scan.Stream) (result TimeStamp, _ error) {
+func (recv TimeStamp) DecodeFromStream(s *scan.Stream) (result TimeStamp, err error) {
 	result = recv
 	seenStamp := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -665,11 +656,8 @@ func (s TimeStamp) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, "\"}"...), nil
 }
 
-func (recv TimeStampMilli) DecodeFrom(data []byte) (result TimeStampMilli, _ int, _ error) {
-	i := 0
+func (recv TimeStampMilli) DecodeFrom(data []byte) (result TimeStampMilli, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenStampMilli := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
@@ -776,10 +764,10 @@ func (recv TimeStampMilli) DecodeFrom(data []byte) (result TimeStampMilli, _ int
 	}
 }
 
-func (recv TimeStampMilli) DecodeFromStream(s *scan.Stream) (result TimeStampMilli, _ error) {
+func (recv TimeStampMilli) DecodeFromStream(s *scan.Stream) (result TimeStampMilli, err error) {
 	result = recv
 	seenStampMilli := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -866,11 +854,8 @@ func (s TimeStampMilli) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, "\"}"...), nil
 }
 
-func (recv TimeStampMicro) DecodeFrom(data []byte) (result TimeStampMicro, _ int, _ error) {
-	i := 0
+func (recv TimeStampMicro) DecodeFrom(data []byte) (result TimeStampMicro, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenStampMicro := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
@@ -977,10 +962,10 @@ func (recv TimeStampMicro) DecodeFrom(data []byte) (result TimeStampMicro, _ int
 	}
 }
 
-func (recv TimeStampMicro) DecodeFromStream(s *scan.Stream) (result TimeStampMicro, _ error) {
+func (recv TimeStampMicro) DecodeFromStream(s *scan.Stream) (result TimeStampMicro, err error) {
 	result = recv
 	seenStampMicro := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -1067,11 +1052,8 @@ func (s TimeStampMicro) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, "\"}"...), nil
 }
 
-func (recv TimeStampNano) DecodeFrom(data []byte) (result TimeStampNano, _ int, _ error) {
-	i := 0
+func (recv TimeStampNano) DecodeFrom(data []byte) (result TimeStampNano, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenStampNano := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
@@ -1178,10 +1160,10 @@ func (recv TimeStampNano) DecodeFrom(data []byte) (result TimeStampNano, _ int, 
 	}
 }
 
-func (recv TimeStampNano) DecodeFromStream(s *scan.Stream) (result TimeStampNano, _ error) {
+func (recv TimeStampNano) DecodeFromStream(s *scan.Stream) (result TimeStampNano, err error) {
 	result = recv
 	seenStampNano := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -1268,11 +1250,8 @@ func (s TimeStampNano) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, "\"}"...), nil
 }
 
-func (recv TimeCustomTiny) DecodeFrom(data []byte) (result TimeCustomTiny, _ int, _ error) {
-	i := 0
+func (recv TimeCustomTiny) DecodeFrom(data []byte) (result TimeCustomTiny, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenCustomTiny := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
@@ -1379,10 +1358,10 @@ func (recv TimeCustomTiny) DecodeFrom(data []byte) (result TimeCustomTiny, _ int
 	}
 }
 
-func (recv TimeCustomTiny) DecodeFromStream(s *scan.Stream) (result TimeCustomTiny, _ error) {
+func (recv TimeCustomTiny) DecodeFromStream(s *scan.Stream) (result TimeCustomTiny, err error) {
 	result = recv
 	seenCustomTiny := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -1469,11 +1448,8 @@ func (s TimeCustomTiny) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, "\"}"...), nil
 }
 
-func (recv TimeCustomLong) DecodeFrom(data []byte) (result TimeCustomLong, _ int, _ error) {
-	i := 0
+func (recv TimeCustomLong) DecodeFrom(data []byte) (result TimeCustomLong, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenCustomLong := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
@@ -1580,10 +1556,10 @@ func (recv TimeCustomLong) DecodeFrom(data []byte) (result TimeCustomLong, _ int
 	}
 }
 
-func (recv TimeCustomLong) DecodeFromStream(s *scan.Stream) (result TimeCustomLong, _ error) {
+func (recv TimeCustomLong) DecodeFromStream(s *scan.Stream) (result TimeCustomLong, err error) {
 	result = recv
 	seenCustomLong := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -1670,11 +1646,8 @@ func (s TimeCustomLong) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, "\"}"...), nil
 }
 
-func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct, _ int, _ error) {
-	i := 0
+func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenANSIC := false
 	seenCustomLong := false
 	seenCustomTiny := false
@@ -2524,7 +2497,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 	}
 }
 
-func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeFormatsStruct, _ error) {
+func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeFormatsStruct, err error) {
 	result = recv
 	seenANSIC := false
 	seenCustomLong := false
@@ -2552,7 +2525,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 	seenUnixMicro := false
 	seenUnixMilli := false
 	seenUnixNano := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -3130,11 +3103,8 @@ func (s TimeFormatsStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv BoundaryStruct) DecodeFrom(data []byte) (result BoundaryStruct, _ int, _ error) {
-	i := 0
+func (recv BoundaryStruct) DecodeFrom(data []byte) (result BoundaryStruct, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenF := false
 	seenI := false
 	seenStr := false
@@ -3298,12 +3268,12 @@ func (recv BoundaryStruct) DecodeFrom(data []byte) (result BoundaryStruct, _ int
 	}
 }
 
-func (recv BoundaryStruct) DecodeFromStream(s *scan.Stream) (result BoundaryStruct, _ error) {
+func (recv BoundaryStruct) DecodeFromStream(s *scan.Stream) (result BoundaryStruct, err error) {
 	result = recv
 	seenF := false
 	seenI := false
 	seenStr := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}

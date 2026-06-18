@@ -12,11 +12,8 @@ import (
 	"github.com/sirkostya009/ggen/scan"
 )
 
-func (recv AnyStruct) DecodeFrom(data []byte) (result AnyStruct, _ int, _ error) {
-	i := 0
+func (recv AnyStruct) DecodeFrom(data []byte) (result AnyStruct, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenBody := false
 	seenName := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -128,11 +125,11 @@ func (recv AnyStruct) DecodeFrom(data []byte) (result AnyStruct, _ int, _ error)
 	}
 }
 
-func (recv AnyStruct) DecodeFromStream(s *scan.Stream) (result AnyStruct, _ error) {
+func (recv AnyStruct) DecodeFromStream(s *scan.Stream) (result AnyStruct, err error) {
 	result = recv
 	seenBody := false
 	seenName := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -232,11 +229,8 @@ func (s AnyStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv AnyNumberStruct) DecodeFrom(data []byte) (result AnyNumberStruct, _ int, _ error) {
-	i := 0
+func (recv AnyNumberStruct) DecodeFrom(data []byte) (result AnyNumberStruct, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenBody := false
 	seenName := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -348,11 +342,11 @@ func (recv AnyNumberStruct) DecodeFrom(data []byte) (result AnyNumberStruct, _ i
 	}
 }
 
-func (recv AnyNumberStruct) DecodeFromStream(s *scan.Stream) (result AnyNumberStruct, _ error) {
+func (recv AnyNumberStruct) DecodeFromStream(s *scan.Stream) (result AnyNumberStruct, err error) {
 	result = recv
 	seenBody := false
 	seenName := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}

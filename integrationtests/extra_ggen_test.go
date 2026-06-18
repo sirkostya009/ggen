@@ -15,8 +15,7 @@ import (
 	"github.com/sirkostya009/ggen/scan"
 )
 
-func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, _ int, _ error) {
-	i := 0
+func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err error) {
 	result = recv
 	if result.HintedTags != nil {
 		result.HintedTags = result.HintedTags[:0]
@@ -30,8 +29,6 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, _ int, _ er
 	if result.Triple != nil {
 		result.Triple = result.Triple[:0]
 	}
-	var err error
-	_ = err
 	seenClampedScore := false
 	seenHintedTags := false
 	seenKeyedMap := false
@@ -744,7 +741,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, _ int, _ er
 	}
 }
 
-func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, _ error) {
+func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, err error) {
 	result = recv
 	if result.HintedTags != nil {
 		result.HintedTags = result.HintedTags[:0]
@@ -763,7 +760,7 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, _ 
 	seenKeyedMap := false
 	seenNestedInts := false
 	seenTriple := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -1731,14 +1728,11 @@ func (s ExtraStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, _ int, _ error) {
-	i := 0
+func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err error) {
 	result = recv
 	if result.Segments != nil {
 		result.Segments = result.Segments[:0]
 	}
-	var err error
-	_ = err
 	seenPair := false
 	seenPoint := false
 	seenRGB := false
@@ -2222,7 +2216,7 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, _ int, _ er
 	}
 }
 
-func (recv TupleStruct) DecodeFromStream(s *scan.Stream) (result TupleStruct, _ error) {
+func (recv TupleStruct) DecodeFromStream(s *scan.Stream) (result TupleStruct, err error) {
 	result = recv
 	if result.Segments != nil {
 		result.Segments = result.Segments[:0]
@@ -2231,7 +2225,7 @@ func (recv TupleStruct) DecodeFromStream(s *scan.Stream) (result TupleStruct, _ 
 	seenPoint := false
 	seenRGB := false
 	seenSegments := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}

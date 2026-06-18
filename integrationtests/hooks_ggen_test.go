@@ -16,11 +16,8 @@ import (
 	"github.com/sirkostya009/ggen/scan"
 )
 
-func (recv HookedStruct) DecodeFrom(data []byte) (result HookedStruct, _ int, _ error) {
-	i := 0
+func (recv HookedStruct) DecodeFrom(data []byte) (result HookedStruct, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenN := false
 	seenName := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -93,7 +90,10 @@ func (recv HookedStruct) DecodeFrom(data []byte) (result HookedStruct, _ int, _ 
 				limit = scan.SignedNeg
 			}
 			var u uint64
-			de := min(i + 18, len(data))
+			de := i + 18
+			if de > len(data) {
+				de = len(data)
+			}
 			for i < de && data[i] >= '0' && data[i] <= '9' {
 				u = u*10 + uint64(data[i]-'0')
 				i++
@@ -189,11 +189,11 @@ func (recv HookedStruct) DecodeFrom(data []byte) (result HookedStruct, _ int, _ 
 	}
 }
 
-func (recv HookedStruct) DecodeFromStream(s *scan.Stream) (result HookedStruct, _ error) {
+func (recv HookedStruct) DecodeFromStream(s *scan.Stream) (result HookedStruct, err error) {
 	result = recv
 	seenN := false
 	seenName := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}

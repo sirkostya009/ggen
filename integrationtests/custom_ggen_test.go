@@ -16,11 +16,8 @@ import (
 
 var ggenOneof0 = []string{"admin", "user", "guest"}
 
-func (recv MultiErrStruct) DecodeFrom(data []byte) (result MultiErrStruct, _ int, _ error) {
-	i := 0
+func (recv MultiErrStruct) DecodeFrom(data []byte) (result MultiErrStruct, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	var errs validation.Errors
 	seenAge := false
 	seenName := false
@@ -251,13 +248,13 @@ func (recv MultiErrStruct) DecodeFrom(data []byte) (result MultiErrStruct, _ int
 	}
 }
 
-func (recv MultiErrStruct) DecodeFromStream(s *scan.Stream) (result MultiErrStruct, _ error) {
+func (recv MultiErrStruct) DecodeFromStream(s *scan.Stream) (result MultiErrStruct, err error) {
 	result = recv
 	var errs validation.Errors
 	seenAge := false
 	seenName := false
 	seenRole := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -428,14 +425,11 @@ func (s MultiErrStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv CustomBothStruct) DecodeFrom(data []byte) (result CustomBothStruct, _ int, _ error) {
-	i := 0
+func (recv CustomBothStruct) DecodeFrom(data []byte) (result CustomBothStruct, i int, err error) {
 	result = recv
 	if result.Tags != nil {
 		result.Tags = result.Tags[:0]
 	}
-	var err error
-	_ = err
 	seenTags := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
@@ -586,13 +580,13 @@ func (recv CustomBothStruct) DecodeFrom(data []byte) (result CustomBothStruct, _
 	}
 }
 
-func (recv CustomBothStruct) DecodeFromStream(s *scan.Stream) (result CustomBothStruct, _ error) {
+func (recv CustomBothStruct) DecodeFromStream(s *scan.Stream) (result CustomBothStruct, err error) {
 	result = recv
 	if result.Tags != nil {
 		result.Tags = result.Tags[:0]
 	}
 	seenTags := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}

@@ -14,11 +14,8 @@ import (
 	"github.com/sirkostya009/ggen/scan"
 )
 
-func (recv External2) DecodeFrom(data []byte) (result External2, _ int, _ error) {
-	i := 0
+func (recv External2) DecodeFrom(data []byte) (result External2, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenKey := false
 	seenValue := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -184,11 +181,11 @@ func (recv External2) DecodeFrom(data []byte) (result External2, _ int, _ error)
 	}
 }
 
-func (recv External2) DecodeFromStream(s *scan.Stream) (result External2, _ error) {
+func (recv External2) DecodeFromStream(s *scan.Stream) (result External2, err error) {
 	result = recv
 	seenKey := false
 	seenValue := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}

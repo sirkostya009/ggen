@@ -13,8 +13,7 @@ import (
 	"github.com/sirkostya009/ggen/scan"
 )
 
-func (recv OmitStruct) DecodeFrom(data []byte) (result OmitStruct, _ int, _ error) {
-	i := 0
+func (recv OmitStruct) DecodeFrom(data []byte) (result OmitStruct, i int, err error) {
 	result = recv
 	if result.Extra != nil {
 		result.Extra = result.Extra[:0]
@@ -28,8 +27,6 @@ func (recv OmitStruct) DecodeFrom(data []byte) (result OmitStruct, _ int, _ erro
 	if result.Tags != nil {
 		result.Tags = result.Tags[:0]
 	}
-	var err error
-	_ = err
 	seenBio := false
 	seenStrCount := false
 	seenExtra := false
@@ -559,7 +556,7 @@ func (recv OmitStruct) DecodeFrom(data []byte) (result OmitStruct, _ int, _ erro
 	}
 }
 
-func (recv OmitStruct) DecodeFromStream(s *scan.Stream) (result OmitStruct, _ error) {
+func (recv OmitStruct) DecodeFromStream(s *scan.Stream) (result OmitStruct, err error) {
 	result = recv
 	if result.Extra != nil {
 		result.Extra = result.Extra[:0]
@@ -581,7 +578,7 @@ func (recv OmitStruct) DecodeFromStream(s *scan.Stream) (result OmitStruct, _ er
 	seenName := false
 	seenScore := false
 	seenTags := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -1255,11 +1252,8 @@ func (s OmitStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv StringTagStruct) DecodeFrom(data []byte) (result StringTagStruct, _ int, _ error) {
-	i := 0
+func (recv StringTagStruct) DecodeFrom(data []byte) (result StringTagStruct, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenB := false
 	seenF32 := false
 	seenF64 := false
@@ -1683,7 +1677,7 @@ func (recv StringTagStruct) DecodeFrom(data []byte) (result StringTagStruct, _ i
 	}
 }
 
-func (recv StringTagStruct) DecodeFromStream(s *scan.Stream) (result StringTagStruct, _ error) {
+func (recv StringTagStruct) DecodeFromStream(s *scan.Stream) (result StringTagStruct, err error) {
 	result = recv
 	seenB := false
 	seenF32 := false
@@ -1696,7 +1690,7 @@ func (recv StringTagStruct) DecodeFromStream(s *scan.Stream) (result StringTagSt
 	seenU32 := false
 	seenU64 := false
 	seenU8 := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}

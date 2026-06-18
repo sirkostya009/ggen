@@ -14,11 +14,8 @@ import (
 	"github.com/sirkostya009/ggen/scan"
 )
 
-func (recv Address) DecodeFrom(data []byte) (result Address, _ int, _ error) {
-	i := 0
+func (recv Address) DecodeFrom(data []byte) (result Address, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenCity := false
 	seenStreet := false
 	seenZipCode := false
@@ -206,12 +203,12 @@ func (recv Address) DecodeFrom(data []byte) (result Address, _ int, _ error) {
 	}
 }
 
-func (recv Address) DecodeFromStream(s *scan.Stream) (result Address, _ error) {
+func (recv Address) DecodeFromStream(s *scan.Stream) (result Address, err error) {
 	result = recv
 	seenCity := false
 	seenStreet := false
 	seenZipCode := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -356,8 +353,7 @@ func (s Address) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv Node) DecodeFrom(data []byte) (result Node, _ int, _ error) {
-	i := 0
+func (recv Node) DecodeFrom(data []byte) (result Node, i int, err error) {
 	result = recv
 	if result.Children != nil {
 		result.Children = result.Children[:0]
@@ -368,8 +364,6 @@ func (recv Node) DecodeFrom(data []byte) (result Node, _ int, _ error) {
 	if result.Tags != nil {
 		result.Tags = result.Tags[:0]
 	}
-	var err error
-	_ = err
 	seenActive := false
 	seenChildren := false
 	seenID := false
@@ -778,7 +772,7 @@ func (recv Node) DecodeFrom(data []byte) (result Node, _ int, _ error) {
 	}
 }
 
-func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, _ error) {
+func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 	result = recv
 	if result.Children != nil {
 		result.Children = result.Children[:0]
@@ -796,7 +790,7 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, _ error) {
 	seenProps := false
 	seenScore := false
 	seenTags := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -1277,11 +1271,8 @@ func (s Node) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, _ int, _ error) {
-	i := 0
+func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	var seen uint64
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
@@ -2676,10 +2667,10 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, _ int, _ erro
 	}
 }
 
-func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, _ error) {
+func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err error) {
 	result = recv
 	var seen uint64
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}

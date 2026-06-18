@@ -14,8 +14,7 @@ import (
 	"github.com/sirkostya009/ggen/scan"
 )
 
-func (recv MapStruct) DecodeFrom(data []byte) (result MapStruct, _ int, _ error) {
-	i := 0
+func (recv MapStruct) DecodeFrom(data []byte) (result MapStruct, i int, err error) {
 	result = recv
 	if result.Addresses != nil {
 		clear(result.Addresses)
@@ -26,8 +25,6 @@ func (recv MapStruct) DecodeFrom(data []byte) (result MapStruct, _ int, _ error)
 	if result.Labels != nil {
 		clear(result.Labels)
 	}
-	var err error
-	_ = err
 	seenAddresses := false
 	seenCounts := false
 	seenLabels := false
@@ -431,7 +428,7 @@ func (recv MapStruct) DecodeFrom(data []byte) (result MapStruct, _ int, _ error)
 	}
 }
 
-func (recv MapStruct) DecodeFromStream(s *scan.Stream) (result MapStruct, _ error) {
+func (recv MapStruct) DecodeFromStream(s *scan.Stream) (result MapStruct, err error) {
 	result = recv
 	if result.Addresses != nil {
 		clear(result.Addresses)
@@ -445,7 +442,7 @@ func (recv MapStruct) DecodeFromStream(s *scan.Stream) (result MapStruct, _ erro
 	seenAddresses := false
 	seenCounts := false
 	seenLabels := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -918,8 +915,7 @@ func (s MapStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv MapDiveStruct) DecodeFrom(data []byte) (result MapDiveStruct, _ int, _ error) {
-	i := 0
+func (recv MapDiveStruct) DecodeFrom(data []byte) (result MapDiveStruct, i int, err error) {
 	result = recv
 	if result.Clamped != nil {
 		clear(result.Clamped)
@@ -930,8 +926,6 @@ func (recv MapDiveStruct) DecodeFrom(data []byte) (result MapDiveStruct, _ int, 
 	if result.Names != nil {
 		clear(result.Names)
 	}
-	var err error
-	_ = err
 	seenClamped := false
 	seenCounts := false
 	seenNames := false
@@ -1386,7 +1380,7 @@ func (recv MapDiveStruct) DecodeFrom(data []byte) (result MapDiveStruct, _ int, 
 	}
 }
 
-func (recv MapDiveStruct) DecodeFromStream(s *scan.Stream) (result MapDiveStruct, _ error) {
+func (recv MapDiveStruct) DecodeFromStream(s *scan.Stream) (result MapDiveStruct, err error) {
 	result = recv
 	if result.Clamped != nil {
 		clear(result.Clamped)
@@ -1400,7 +1394,7 @@ func (recv MapDiveStruct) DecodeFromStream(s *scan.Stream) (result MapDiveStruct
 	seenClamped := false
 	seenCounts := false
 	seenNames := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -1883,11 +1877,8 @@ func (s MapDiveStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv Derived) DecodeFrom(data []byte) (result Derived, _ int, _ error) {
-	i := 0
+func (recv Derived) DecodeFrom(data []byte) (result Derived, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenID := false
 	seenMeta := false
 	seenName := false
@@ -2060,12 +2051,12 @@ func (recv Derived) DecodeFrom(data []byte) (result Derived, _ int, _ error) {
 	}
 }
 
-func (recv Derived) DecodeFromStream(s *scan.Stream) (result Derived, _ error) {
+func (recv Derived) DecodeFromStream(s *scan.Stream) (result Derived, err error) {
 	result = recv
 	seenID := false
 	seenMeta := false
 	seenName := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}

@@ -15,14 +15,11 @@ import (
 	"github.com/sirkostya009/ggen/scan"
 )
 
-func (recv ModStruct) DecodeFrom(data []byte) (result ModStruct, _ int, _ error) {
-	i := 0
+func (recv ModStruct) DecodeFrom(data []byte) (result ModStruct, i int, err error) {
 	result = recv
 	if result.Tags != nil {
 		result.Tags = result.Tags[:0]
 	}
-	var err error
-	_ = err
 	seenEmail := false
 	seenSKU := false
 	seenTags := false
@@ -233,7 +230,7 @@ func (recv ModStruct) DecodeFrom(data []byte) (result ModStruct, _ int, _ error)
 	}
 }
 
-func (recv ModStruct) DecodeFromStream(s *scan.Stream) (result ModStruct, _ error) {
+func (recv ModStruct) DecodeFromStream(s *scan.Stream) (result ModStruct, err error) {
 	result = recv
 	if result.Tags != nil {
 		result.Tags = result.Tags[:0]
@@ -241,7 +238,7 @@ func (recv ModStruct) DecodeFromStream(s *scan.Stream) (result ModStruct, _ erro
 	seenEmail := false
 	seenSKU := false
 	seenTags := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -456,11 +453,8 @@ func (s ModStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv FallibleModStruct) DecodeFrom(data []byte) (result FallibleModStruct, _ int, _ error) {
-	i := 0
+func (recv FallibleModStruct) DecodeFrom(data []byte) (result FallibleModStruct, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenEmail := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
@@ -579,10 +573,10 @@ func (recv FallibleModStruct) DecodeFrom(data []byte) (result FallibleModStruct,
 	}
 }
 
-func (recv FallibleModStruct) DecodeFromStream(s *scan.Stream) (result FallibleModStruct, _ error) {
+func (recv FallibleModStruct) DecodeFromStream(s *scan.Stream) (result FallibleModStruct, err error) {
 	result = recv
 	seenEmail := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -682,11 +676,8 @@ func (s FallibleModStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv FallibleModMultierrStruct) DecodeFrom(data []byte) (result FallibleModMultierrStruct, _ int, _ error) {
-	i := 0
+func (recv FallibleModMultierrStruct) DecodeFrom(data []byte) (result FallibleModMultierrStruct, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	var errs validation.Errors
 	seenEmail := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -821,11 +812,11 @@ func (recv FallibleModMultierrStruct) DecodeFrom(data []byte) (result FallibleMo
 	}
 }
 
-func (recv FallibleModMultierrStruct) DecodeFromStream(s *scan.Stream) (result FallibleModMultierrStruct, _ error) {
+func (recv FallibleModMultierrStruct) DecodeFromStream(s *scan.Stream) (result FallibleModMultierrStruct, err error) {
 	result = recv
 	var errs validation.Errors
 	seenEmail := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -945,11 +936,8 @@ func (s FallibleModMultierrStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv CrossPkgModStruct) DecodeFrom(data []byte) (result CrossPkgModStruct, _ int, _ error) {
-	i := 0
+func (recv CrossPkgModStruct) DecodeFrom(data []byte) (result CrossPkgModStruct, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenCode := false
 	seenNonEmpty := false
 	seenTag := false
@@ -1116,12 +1104,12 @@ func (recv CrossPkgModStruct) DecodeFrom(data []byte) (result CrossPkgModStruct,
 	}
 }
 
-func (recv CrossPkgModStruct) DecodeFromStream(s *scan.Stream) (result CrossPkgModStruct, _ error) {
+func (recv CrossPkgModStruct) DecodeFromStream(s *scan.Stream) (result CrossPkgModStruct, err error) {
 	result = recv
 	seenCode := false
 	seenNonEmpty := false
 	seenTag := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -1245,11 +1233,8 @@ func (s CrossPkgModStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv NestedMultierrStruct) DecodeFrom(data []byte) (result NestedMultierrStruct, _ int, _ error) {
-	i := 0
+func (recv NestedMultierrStruct) DecodeFrom(data []byte) (result NestedMultierrStruct, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	var errs validation.Errors
 	seenCode := false
 	seenInner := false
@@ -1460,13 +1445,13 @@ func (recv NestedMultierrStruct) DecodeFrom(data []byte) (result NestedMultierrS
 	}
 }
 
-func (recv NestedMultierrStruct) DecodeFromStream(s *scan.Stream) (result NestedMultierrStruct, _ error) {
+func (recv NestedMultierrStruct) DecodeFromStream(s *scan.Stream) (result NestedMultierrStruct, err error) {
 	result = recv
 	var errs validation.Errors
 	seenCode := false
 	seenInner := false
 	seenName := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}

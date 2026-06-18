@@ -2608,26 +2608,26 @@ func emitReceiverReset(b *bytes.Buffer, s StructInfo) {
 // instead of a string compare per case. Whitespace skipping is inlined at
 // each hot-path site to avoid the ~5ns/call overhead dominating runtime.
 func renderDecode(b *bytes.Buffer, s StructInfo) {
-	// Named first result `result` homes the value directly in the
-	// caller-allocated return slot; the `result = recv` prologue seeds it from
-	// the receiver (merge source). Every `return result, …` then compiles to
-	// register sets + RET with no struct copy — vs an anonymous result, where
-	// each of the ~99 RET sites copies the full receiver-sized struct. Happy
-	// path is copy-neutral (the one entry copy replaces the one exit copy);
-	// error paths and function text shrink. See perf-candidates [15].
-	fmt.Fprintf(b, "func (recv %s) DecodeFrom(data []byte) (result %s, _ int, _ error) {\n", s.Name, s.Name)
-	b.WriteString("i := 0\nresult = recv\n")
+	// Named results home the values directly in the caller-allocated return
+	// slot; the `result = recv` prologue seeds `result` from the receiver
+	// (merge source). Every `return result, …` then compiles to register sets
+	// + RET with no struct copy — vs an anonymous result, where each of the
+	// ~99 RET sites copies the full receiver-sized struct. Happy path is
+	// copy-neutral (the one entry copy replaces the one exit copy); error
+	// paths and function text shrink. Naming `i`/`err` too drops the
+	// `i := 0` + `var err error; _ = err` prelude — `i` zero-inits and an
+	// unused named `err` needs no blank assignment. See perf-candidates [15].
+	fmt.Fprintf(b, "func (recv %s) DecodeFrom(data []byte) (result %s, i int, err error) {\n", s.Name, s.Name)
+	b.WriteString("result = recv\n")
 	if s.IsAlias {
 		renderAliasDecode(b, s)
 		b.WriteString("}\n\n")
 		return
 	}
 	emitReceiverReset(b, s)
-	// Function-scope err shared by every sub-render — slice/map/SQL-null
-	// emitters use `=` to reassign instead of declaring local `var err
-	// error` per block. `_ = err` keeps it kosher when no sub-render
-	// actually touches err (pure-primitive struct).
-	b.WriteString("var err error\n_ = err\n")
+	// `err` is the named result (see signature) — every sub-render reassigns
+	// it with `=`; a pure-primitive struct that never touches it just leaves
+	// the named result unused, no blank assignment needed.
 	if s.MultiErr {
 		b.WriteString("var errs validation.Errors\n")
 	}
@@ -4380,7 +4380,7 @@ func emitByteSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth i
 // stay valid for the lifetime of the Stream.
 func renderStreamDecode(b *bytes.Buffer, s StructInfo) {
 	// Named-result return slot — see DecodeFrom above.
-	fmt.Fprintf(b, "func (recv %s) DecodeFromStream(s *scan.Stream) (result %s, _ error) {\n", s.Name, s.Name)
+	fmt.Fprintf(b, "func (recv %s) DecodeFromStream(s *scan.Stream) (result %s, err error) {\n", s.Name, s.Name)
 	b.WriteString("result = recv\n")
 	if s.IsAlias {
 		renderAliasStreamDecode(b, s)
@@ -4422,7 +4422,7 @@ func renderStreamDecodeStruct(b *bytes.Buffer, s StructInfo) {
 	rmore := `if s.Pos >= len(s.Bytes()) { if err = s.ReadMore(s.Pos); err != nil { return result, decode.NewParseErr("", s.Pos, err) }; s.Pos = 0 }
 `
 	badObj := `return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)`
-	fmt.Fprintf(b, `err := s.ObjectOpen()
+	fmt.Fprintf(b, `err = s.ObjectOpen()
 %[1]serr = s.SkipSpace()
 %[1]s%[5]sif s.Bytes()[s.Pos] == '}' {
 s.Pos++

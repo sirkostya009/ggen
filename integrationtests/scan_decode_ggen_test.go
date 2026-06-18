@@ -14,11 +14,8 @@ import (
 	"github.com/sirkostya009/ggen/scan"
 )
 
-func (recv HugeStringStruct) DecodeFrom(data []byte) (result HugeStringStruct, _ int, _ error) {
-	i := 0
+func (recv HugeStringStruct) DecodeFrom(data []byte) (result HugeStringStruct, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenBig := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
@@ -120,10 +117,10 @@ func (recv HugeStringStruct) DecodeFrom(data []byte) (result HugeStringStruct, _
 	}
 }
 
-func (recv HugeStringStruct) DecodeFromStream(s *scan.Stream) (result HugeStringStruct, _ error) {
+func (recv HugeStringStruct) DecodeFromStream(s *scan.Stream) (result HugeStringStruct, err error) {
 	result = recv
 	seenBig := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -206,11 +203,8 @@ func (s HugeStringStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv SequentialStringsStruct) DecodeFrom(data []byte) (result SequentialStringsStruct, _ int, _ error) {
-	i := 0
+func (recv SequentialStringsStruct) DecodeFrom(data []byte) (result SequentialStringsStruct, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenA := false
 	seenB := false
 	seenC := false
@@ -508,7 +502,7 @@ func (recv SequentialStringsStruct) DecodeFrom(data []byte) (result SequentialSt
 	}
 }
 
-func (recv SequentialStringsStruct) DecodeFromStream(s *scan.Stream) (result SequentialStringsStruct, _ error) {
+func (recv SequentialStringsStruct) DecodeFromStream(s *scan.Stream) (result SequentialStringsStruct, err error) {
 	result = recv
 	seenA := false
 	seenB := false
@@ -518,7 +512,7 @@ func (recv SequentialStringsStruct) DecodeFromStream(s *scan.Stream) (result Seq
 	seenF := false
 	seenG := false
 	seenH := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -713,11 +707,8 @@ func (s SequentialStringsStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv UnknownErrorStruct) DecodeFrom(data []byte) (result UnknownErrorStruct, _ int, _ error) {
-	i := 0
+func (recv UnknownErrorStruct) DecodeFrom(data []byte) (result UnknownErrorStruct, i int, err error) {
 	result = recv
-	var err error
-	_ = err
 	seenName := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
@@ -819,10 +810,10 @@ func (recv UnknownErrorStruct) DecodeFrom(data []byte) (result UnknownErrorStruc
 	}
 }
 
-func (recv UnknownErrorStruct) DecodeFromStream(s *scan.Stream) (result UnknownErrorStruct, _ error) {
+func (recv UnknownErrorStruct) DecodeFromStream(s *scan.Stream) (result UnknownErrorStruct, err error) {
 	result = recv
 	seenName := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}

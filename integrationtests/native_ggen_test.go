@@ -18,8 +18,7 @@ import (
 	"github.com/sirkostya009/ggen/scan"
 )
 
-func (recv NativeTypes) DecodeFrom(data []byte) (result NativeTypes, _ int, _ error) {
-	i := 0
+func (recv NativeTypes) DecodeFrom(data []byte) (result NativeTypes, i int, err error) {
 	result = recv
 	if result.Blob != nil {
 		result.Blob = result.Blob[:0]
@@ -30,8 +29,6 @@ func (recv NativeTypes) DecodeFrom(data []byte) (result NativeTypes, _ int, _ er
 	if result.HexBlob != nil {
 		result.HexBlob = result.HexBlob[:0]
 	}
-	var err error
-	_ = err
 	seenAddr := false
 	seenBlob := false
 	seenByteArray := false
@@ -458,7 +455,7 @@ func (recv NativeTypes) DecodeFrom(data []byte) (result NativeTypes, _ int, _ er
 	}
 }
 
-func (recv NativeTypes) DecodeFromStream(s *scan.Stream) (result NativeTypes, _ error) {
+func (recv NativeTypes) DecodeFromStream(s *scan.Stream) (result NativeTypes, err error) {
 	result = recv
 	if result.Blob != nil {
 		result.Blob = result.Blob[:0]
@@ -480,7 +477,7 @@ func (recv NativeTypes) DecodeFromStream(s *scan.Stream) (result NativeTypes, _ 
 	seenSecDur := false
 	seenUnitDur := false
 	seenUnixAt := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}

@@ -12,14 +12,11 @@ import (
 	"github.com/sirkostya009/ggen/scan"
 )
 
-func (recv InlineStruct) DecodeFrom(data []byte) (result InlineStruct, _ int, _ error) {
-	i := 0
+func (recv InlineStruct) DecodeFrom(data []byte) (result InlineStruct, i int, err error) {
 	result = recv
 	if result.Extra != nil {
 		clear(result.Extra)
 	}
-	var err error
-	_ = err
 	seenName := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
@@ -127,13 +124,13 @@ func (recv InlineStruct) DecodeFrom(data []byte) (result InlineStruct, _ int, _ 
 	}
 }
 
-func (recv InlineStruct) DecodeFromStream(s *scan.Stream) (result InlineStruct, _ error) {
+func (recv InlineStruct) DecodeFromStream(s *scan.Stream) (result InlineStruct, err error) {
 	result = recv
 	if result.Extra != nil {
 		clear(result.Extra)
 	}
 	seenName := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -247,14 +244,11 @@ func (s InlineStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv InlineStringsStruct) DecodeFrom(data []byte) (result InlineStringsStruct, _ int, _ error) {
-	i := 0
+func (recv InlineStringsStruct) DecodeFrom(data []byte) (result InlineStringsStruct, i int, err error) {
 	result = recv
 	if result.Extra != nil {
 		clear(result.Extra)
 	}
-	var err error
-	_ = err
 	seenName := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
@@ -362,13 +356,13 @@ func (recv InlineStringsStruct) DecodeFrom(data []byte) (result InlineStringsStr
 	}
 }
 
-func (recv InlineStringsStruct) DecodeFromStream(s *scan.Stream) (result InlineStringsStruct, _ error) {
+func (recv InlineStringsStruct) DecodeFromStream(s *scan.Stream) (result InlineStringsStruct, err error) {
 	result = recv
 	if result.Extra != nil {
 		clear(result.Extra)
 	}
 	seenName := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -481,14 +475,11 @@ func (s InlineStringsStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv InlineStructsStruct) DecodeFrom(data []byte) (result InlineStructsStruct, _ int, _ error) {
-	i := 0
+func (recv InlineStructsStruct) DecodeFrom(data []byte) (result InlineStructsStruct, i int, err error) {
 	result = recv
 	if result.Extra != nil {
 		clear(result.Extra)
 	}
-	var err error
-	_ = err
 	seenName := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
@@ -600,13 +591,13 @@ func (recv InlineStructsStruct) DecodeFrom(data []byte) (result InlineStructsStr
 	}
 }
 
-func (recv InlineStructsStruct) DecodeFromStream(s *scan.Stream) (result InlineStructsStruct, _ error) {
+func (recv InlineStructsStruct) DecodeFromStream(s *scan.Stream) (result InlineStructsStruct, err error) {
 	result = recv
 	if result.Extra != nil {
 		clear(result.Extra)
 	}
 	seenName := false
-	err := s.ObjectOpen()
+	err = s.ObjectOpen()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
