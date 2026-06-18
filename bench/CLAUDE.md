@@ -12,6 +12,31 @@
   Unmarshal, Marshal, Reader. Hosts `BenchmarkRetention`.
 - `bench/small_test.go` — small-value (~2.9 KiB ValidPayload) Unmarshal + Reader.
 - `bench/slowstream_test.go` — slow-reader benchmarks.
+- `bench/simple_test.go` — `BenchmarkNoAlloc_Unmarshal` + `_Reader`. The
+  `Account` family + `AccountValue`/`AccountPayload` + the easyjson-only
+  `Easy*` mirror live in `types.go` (untagged, so ggen methods land in
+  `bench_ggen.go`; `easyjson bench/types.go` regenerates `types_easyjson.go`).
+
+## BenchmarkNoAlloc
+
+`Account` (`types.go`) is a wide denormalized user record — profile + address +
+employer + settings flattened into nested VALUE structs. Carries no
+slice/map/pointer/`any`/`json.RawMessage` kind, so the bytes-path decode makes
+**zero allocations** (strings alias the input — incl. the large multilingual
+non-ASCII fields — nested structs decode in place, scalars land in the
+receiver). Isolates the raw scan + key-dispatch + per-field-assign loop with the
+allocator out of the picture — the complement to the alloc-heavy Mega tree. Both
+benches warm up (64 iters) before timing.
+
+- `_Unmarshal` — bytes path (jsonv2/sonic/sonic_fast/easyjson/ggen). ggen ~3×
+  the throughput of sonic, ~4.5× jsonv2, ~3.5× easyjson here, at 0 B/op vs
+  theirs. easyjson copies strings out of the input → ~25 allocs.
+- `_Reader` — Reader path (jsonv2/sonic/easyjson/ggen_stream/ggen_readall).
+  `ggen_stream` starts each decode with a FRESH 512-byte buffer (< payload) so
+  the stream genuinely refills + compacts mid-decode — a payload-sized or
+  carried-forward grown buffer reads everything in one shot and degenerates into
+  the bytes path. It also copies strings out of the buffer, so it is NOT
+  zero-alloc; still the fastest Reader row.
 
 ## BenchmarkMega
 
