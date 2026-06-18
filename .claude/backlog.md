@@ -4,12 +4,13 @@
   prototyped + A/B'd at Mega scale, then reverted; numbers below are measured,
   not estimated. (`skipString` bounded backslash probe — the 5.1× stream fix —
   already landed.) Suggested order: stream pair → decode pair → encode.
-    - **Stream `s.buf` hoist.** In-loop `ReadMore` forces slice-header
-      reload per byte in `SkipSpace`/`Int64`/`Uint64`/`Float64`/`Number`
-      (`scan/stream.go`). Nested-loop restructure (`buf := s.buf; for i <
-      len(buf)`, refill in outer loop) registerizes header. Measured -3.1%
-      stream wall (SkipSpace+Int64 only); extensions ~1-2% more. Distinct from
-      rejected `inlineStreamSkipWS` (that kept Ensure in-loop; Ensure gone).
+    - **Stream `s.buf` hoist. LANDED 2026-06-18.** Nested-loop restructure
+      (`buf := s.buf; for i < len(buf)`, refill in outer loop) registerizes the
+      slice header across `skipSpaceSlow`/`Int64`/`Uint64`/`Float64`/`Number`
+      (`scan/stream.go`). Measured **−2.0% Mega_Reader/ggen_stream** (p=0.000,
+      n=30, core-pinned, ±1% spread), throughput +2.1%, allocs/B byte-identical.
+      Behavior byte-identical (Shift-gated cursor reset preserved). See
+      scan/CLAUDE.md "Buffer-header hoist in refill loops".
     - **Gated stream string slab.** `Stream.String`/`Number` bump-allocate
       <1024B strings from append-only chunks (`unsafe.String`), fresh chunk on
       overflow, dropped on Reset, never reused/rewritten — immune to the

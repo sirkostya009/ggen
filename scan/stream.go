@@ -170,26 +170,32 @@ func (s *Stream) SkipSpace() error {
 
 func (s *Stream) skipSpaceSlow() error {
 	i := s.Pos
+	// Hoist the buffer header into a local so the inner loop compares
+	// against a registerized len(buf) instead of reloading s.buf through
+	// the pointer every byte. Refill happens in the outer loop, after
+	// which buf is reloaded.
+	buf := s.buf
 	for {
-		if i >= len(s.buf) {
-			if err := s.ReadMore(i); err != nil {
-				if err == io.ErrUnexpectedEOF {
-					s.Pos = i
-					return nil
-				}
+		for i < len(buf) {
+			c := buf[i]
+			if c != ' ' && c != '\t' && c != '\n' && c != '\r' {
 				s.Pos = i
-				return err
+				return nil
 			}
-			if s.Shift {
-				i = 0
-			}
+			i++
 		}
-		c := s.buf[i]
-		if c != ' ' && c != '\t' && c != '\n' && c != '\r' {
+		if err := s.ReadMore(i); err != nil {
+			if err == io.ErrUnexpectedEOF {
+				s.Pos = i
+				return nil
+			}
 			s.Pos = i
-			return nil
+			return err
 		}
-		i++
+		if s.Shift {
+			i = 0
+		}
+		buf = s.buf
 	}
 }
 
@@ -623,31 +629,36 @@ func (s *Stream) Int64() (int64, error) {
 		limit = SignedNeg
 	}
 	var u uint64
+	// buf hoisted into a local (see skipSpaceSlow): the digit loop runs
+	// against a registerized len(buf); refill reloads buf in the outer loop.
+	buf := s.buf
+scan:
 	for {
-		if i >= len(s.buf) {
-			err := s.ReadMore(i)
-			// ReadMore shifts only when s.Shift — in no-shift mode the
-			// bytes stay put and resetting i would re-read consumed digits.
-			if s.Shift {
-				i = 0
+		for i < len(buf) {
+			c := buf[i]
+			if c < '0' || c > '9' {
+				if c == '.' || c == 'e' || c == 'E' {
+					return 0, ErrBadNumber
+				}
+				break scan
 			}
-			if err != nil {
-				break
+			d := uint64(c - '0')
+			if u > limit/10 || (u == limit/10 && d > limit%10) {
+				return 0, ErrNumberOverflow
 			}
+			u = u*10 + d
+			i++
 		}
-		c := s.buf[i]
-		if c < '0' || c > '9' {
-			if c == '.' || c == 'e' || c == 'E' {
-				return 0, ErrBadNumber
-			}
+		err := s.ReadMore(i)
+		// ReadMore shifts only when s.Shift — in no-shift mode the
+		// bytes stay put and resetting i would re-read consumed digits.
+		if s.Shift {
+			i = 0
+		}
+		if err != nil {
 			break
 		}
-		d := uint64(c - '0')
-		if u > limit/10 || (u == limit/10 && d > limit%10) {
-			return 0, ErrNumberOverflow
-		}
-		u = u*10 + d
-		i++
+		buf = s.buf
 	}
 	s.Pos = i
 	if neg {
@@ -675,27 +686,31 @@ func (s *Stream) Uint64() (uint64, error) {
 		return 0, ErrBadNumber
 	}
 	var n uint64
+	// buf hoisted into a local (see skipSpaceSlow).
+	buf := s.buf
+scan:
 	for {
-		if i >= len(s.buf) {
-			err := s.ReadMore(i)
-			// See Int64: no-shift refills move no bytes; keep the cursor.
-			if s.Shift {
-				i = 0
+		for i < len(buf) {
+			c := buf[i]
+			if c < '0' || c > '9' {
+				break scan
 			}
-			if err != nil {
-				break
+			d := uint64(c - '0')
+			if n > Uint64Limit/10 || (n == Uint64Limit/10 && d > Uint64Limit%10) {
+				return 0, ErrNumberOverflow
 			}
+			n = n*10 + d
+			i++
 		}
-		c := s.buf[i]
-		if c < '0' || c > '9' {
+		err := s.ReadMore(i)
+		// See Int64: no-shift refills move no bytes; keep the cursor.
+		if s.Shift {
+			i = 0
+		}
+		if err != nil {
 			break
 		}
-		d := uint64(c - '0')
-		if n > Uint64Limit/10 || (n == Uint64Limit/10 && d > Uint64Limit%10) {
-			return 0, ErrNumberOverflow
-		}
-		n = n*10 + d
-		i++
+		buf = s.buf
 	}
 	s.Pos = i
 	return n, nil
@@ -710,21 +725,26 @@ func (s *Stream) Float64() (float64, error) {
 		}
 	}
 	start := i
-	if s.buf[i] == '-' {
+	// buf hoisted into a local (see skipSpaceSlow); ReadMore(0) is grow-only
+	// so the cursor never resets and the span stays stable.
+	buf := s.buf
+	if buf[i] == '-' {
 		i++
 	}
+scan:
 	for {
-		if i >= len(s.buf) {
-			if err := s.ReadMore(0); err != nil {
-				break
+		for i < len(buf) {
+			c := buf[i]
+			if c >= '0' && c <= '9' || c == '.' || c == 'e' || c == 'E' || c == '+' || c == '-' {
+				i++
+				continue
 			}
+			break scan
 		}
-		c := s.buf[i]
-		if c >= '0' && c <= '9' || c == '.' || c == 'e' || c == 'E' || c == '+' || c == '-' {
-			i++
-			continue
+		if err := s.ReadMore(0); err != nil {
+			break
 		}
-		break
+		buf = s.buf
 	}
 	if i == start {
 		return 0, ErrBadNumber
@@ -1087,21 +1107,26 @@ func (s *Stream) Number() (json.Number, error) {
 		}
 	}
 	start := i
-	if s.buf[i] == '-' {
+	// buf hoisted into a local (see skipSpaceSlow); ReadMore(0) is grow-only
+	// so the cursor never resets and the span stays stable.
+	buf := s.buf
+	if buf[i] == '-' {
 		i++
 	}
+scan:
 	for {
-		if i >= len(s.buf) {
-			if err := s.ReadMore(0); err != nil {
-				break
+		for i < len(buf) {
+			c := buf[i]
+			if c >= '0' && c <= '9' || c == '.' || c == 'e' || c == 'E' || c == '+' || c == '-' {
+				i++
+				continue
 			}
+			break scan
 		}
-		c := s.buf[i]
-		if c >= '0' && c <= '9' || c == '.' || c == 'e' || c == 'E' || c == '+' || c == '-' {
-			i++
-			continue
+		if err := s.ReadMore(0); err != nil {
+			break
 		}
-		break
+		buf = s.buf
 	}
 	if i == start || (i == start+1 && s.buf[start] == '-') {
 		return "", ErrBadNumber

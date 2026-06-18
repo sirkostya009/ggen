@@ -63,6 +63,22 @@ including the EOF-returns-nil-at-`Pos==len` quirk generated code relies on.
 > single default-layout A/B; trust `Mega_*` (large, layout-robust) for the
 > real signal.
 
+### Buffer-header hoist in refill loops
+
+`skipSpaceSlow`, `Int64`, `Uint64`, `Float64`, `Number` hoist `buf := s.buf`
+into a local and run a nested loop (`for i < len(buf)`) so the hot byte/digit
+scan compares against a registerized `len(buf)` instead of reloading the
+`s.buf` slice header through the `*Stream` pointer every iteration. Refill
+(`ReadMore`) happens in the outer loop, which reloads `buf = s.buf` after the
+shift. Behavior is byte-identical — the Shift-gated cursor reset
+(`if s.Shift { i = 0 }`) and the no-shift cursor-keep are preserved exactly.
+Measured −2.0% `Mega_Reader/ggen_stream` (p=0.000, n=30, core-pinned;
+±1% spread), throughput +2.1%, allocs/B unchanged. (An earlier unpinned
+n=24 run read −3.4% p=0.022, but the ±3-5% per-group variance inflated the
+mean — core-pinning to ±1% nailed the true effect at ~2%.) Composes with
+the two-tier `SkipSpace` (that elides the call; this registerizes the slow
+path's interior).
+
 ### Lazy bounds checks (one-byte-at-a-time refill)
 
 Each method does own bounds check (`if s.Pos >= len(s.buf) { ... ReadMore
