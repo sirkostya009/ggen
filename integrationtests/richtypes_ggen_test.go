@@ -15,8 +15,9 @@ import (
 	"github.com/sirkostya009/ggen/scan"
 )
 
-func (result RichTypes) DecodeFrom(data []byte) (RichTypes, int, error) {
+func (recv RichTypes) DecodeFrom(data []byte) (result RichTypes, _ int, _ error) {
 	i := 0
+	result = recv
 	var err error
 	_ = err
 	seenBig := false
@@ -27,14 +28,14 @@ func (result RichTypes) DecodeFrom(data []byte) (RichTypes, int, error) {
 	seenRaw1 := false
 	seenRaw2 := false
 	seenSite := false
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
 		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 	i++
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i < len(data) && data[i] == '}' {
@@ -65,14 +66,14 @@ func (result RichTypes) DecodeFrom(data []byte) (RichTypes, int, error) {
 				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
 			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		i++
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		switch key {
@@ -238,7 +239,7 @@ func (result RichTypes) DecodeFrom(data []byte) (RichTypes, int, error) {
 		default:
 			return result, i, &validation.UnknownKeyError{Path: []string{key}}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
@@ -246,7 +247,7 @@ func (result RichTypes) DecodeFrom(data []byte) (RichTypes, int, error) {
 		}
 		if data[i] == ',' {
 			i++
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			continue
@@ -259,7 +260,8 @@ func (result RichTypes) DecodeFrom(data []byte) (RichTypes, int, error) {
 	}
 }
 
-func (result RichTypes) DecodeFromStream(s *scan.Stream) (RichTypes, error) {
+func (recv RichTypes) DecodeFromStream(s *scan.Stream) (result RichTypes, _ error) {
+	result = recv
 	seenBig := false
 	seenBigF := false
 	seenBigR := false

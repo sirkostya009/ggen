@@ -15,8 +15,9 @@ import (
 	"github.com/sirkostya009/ggen/scan"
 )
 
-func (result ModStruct) DecodeFrom(data []byte) (ModStruct, int, error) {
+func (recv ModStruct) DecodeFrom(data []byte) (result ModStruct, _ int, _ error) {
 	i := 0
+	result = recv
 	if result.Tags != nil {
 		result.Tags = result.Tags[:0]
 	}
@@ -25,14 +26,14 @@ func (result ModStruct) DecodeFrom(data []byte) (ModStruct, int, error) {
 	seenEmail := false
 	seenSKU := false
 	seenTags := false
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
 		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 	i++
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i < len(data) && data[i] == '}' {
@@ -63,14 +64,14 @@ func (result ModStruct) DecodeFrom(data []byte) (ModStruct, int, error) {
 				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
 			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		i++
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		switch key {
@@ -139,7 +140,7 @@ func (result ModStruct) DecodeFrom(data []byte) (ModStruct, int, error) {
 				return result, i, &validation.DuplicateKeyError{Path: []string{"tags"}}
 			}
 			seenTags = true
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -151,7 +152,7 @@ func (result ModStruct) DecodeFrom(data []byte) (ModStruct, int, error) {
 				return result, i, scan.ErrBadArray
 			}
 			i++
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			if i < len(data) && data[i] == ']' {
@@ -189,12 +190,12 @@ func (result ModStruct) DecodeFrom(data []byte) (ModStruct, int, error) {
 				}
 				result.Tags[len(result.Tags)-1] = strings.TrimSpace(result.Tags[len(result.Tags)-1])
 				result.Tags[len(result.Tags)-1] = strings.ToLower(result.Tags[len(result.Tags)-1])
-				for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 					i++
 				}
 				if i < len(data) && data[i] == ',' {
 					i++
-					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
 					if i >= len(data) || data[i] == ']' {
@@ -211,7 +212,7 @@ func (result ModStruct) DecodeFrom(data []byte) (ModStruct, int, error) {
 		default:
 			return result, i, &validation.UnknownKeyError{Path: []string{key}}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
@@ -219,7 +220,7 @@ func (result ModStruct) DecodeFrom(data []byte) (ModStruct, int, error) {
 		}
 		if data[i] == ',' {
 			i++
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			continue
@@ -232,7 +233,8 @@ func (result ModStruct) DecodeFrom(data []byte) (ModStruct, int, error) {
 	}
 }
 
-func (result ModStruct) DecodeFromStream(s *scan.Stream) (ModStruct, error) {
+func (recv ModStruct) DecodeFromStream(s *scan.Stream) (result ModStruct, _ error) {
+	result = recv
 	if result.Tags != nil {
 		result.Tags = result.Tags[:0]
 	}
@@ -454,19 +456,20 @@ func (s ModStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (result FallibleModStruct) DecodeFrom(data []byte) (FallibleModStruct, int, error) {
+func (recv FallibleModStruct) DecodeFrom(data []byte) (result FallibleModStruct, _ int, _ error) {
 	i := 0
+	result = recv
 	var err error
 	_ = err
 	seenEmail := false
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
 		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 	i++
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i < len(data) && data[i] == '}' {
@@ -500,14 +503,14 @@ func (result FallibleModStruct) DecodeFrom(data []byte) (FallibleModStruct, int,
 				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
 			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		i++
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		switch key {
@@ -552,7 +555,7 @@ func (result FallibleModStruct) DecodeFrom(data []byte) (FallibleModStruct, int,
 		default:
 			return result, i, &validation.UnknownKeyError{Path: []string{key}}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
@@ -560,7 +563,7 @@ func (result FallibleModStruct) DecodeFrom(data []byte) (FallibleModStruct, int,
 		}
 		if data[i] == ',' {
 			i++
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			continue
@@ -576,7 +579,8 @@ func (result FallibleModStruct) DecodeFrom(data []byte) (FallibleModStruct, int,
 	}
 }
 
-func (result FallibleModStruct) DecodeFromStream(s *scan.Stream) (FallibleModStruct, error) {
+func (recv FallibleModStruct) DecodeFromStream(s *scan.Stream) (result FallibleModStruct, _ error) {
+	result = recv
 	seenEmail := false
 	err := s.ObjectOpen()
 	if err != nil {
@@ -678,20 +682,21 @@ func (s FallibleModStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (result FallibleModMultierrStruct) DecodeFrom(data []byte) (FallibleModMultierrStruct, int, error) {
+func (recv FallibleModMultierrStruct) DecodeFrom(data []byte) (result FallibleModMultierrStruct, _ int, _ error) {
 	i := 0
+	result = recv
 	var err error
 	_ = err
 	var errs validation.Errors
 	seenEmail := false
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
 		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 	i++
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i < len(data) && data[i] == '}' {
@@ -728,14 +733,14 @@ func (result FallibleModMultierrStruct) DecodeFrom(data []byte) (FallibleModMult
 				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
 			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		i++
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		switch key {
@@ -789,7 +794,7 @@ func (result FallibleModMultierrStruct) DecodeFrom(data []byte) (FallibleModMult
 				return result, i, decode.NewParseErr(key, i, err)
 			}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
@@ -797,7 +802,7 @@ func (result FallibleModMultierrStruct) DecodeFrom(data []byte) (FallibleModMult
 		}
 		if data[i] == ',' {
 			i++
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			continue
@@ -816,7 +821,8 @@ func (result FallibleModMultierrStruct) DecodeFrom(data []byte) (FallibleModMult
 	}
 }
 
-func (result FallibleModMultierrStruct) DecodeFromStream(s *scan.Stream) (FallibleModMultierrStruct, error) {
+func (recv FallibleModMultierrStruct) DecodeFromStream(s *scan.Stream) (result FallibleModMultierrStruct, _ error) {
+	result = recv
 	var errs validation.Errors
 	seenEmail := false
 	err := s.ObjectOpen()
@@ -939,21 +945,22 @@ func (s FallibleModMultierrStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (result CrossPkgModStruct) DecodeFrom(data []byte) (CrossPkgModStruct, int, error) {
+func (recv CrossPkgModStruct) DecodeFrom(data []byte) (result CrossPkgModStruct, _ int, _ error) {
 	i := 0
+	result = recv
 	var err error
 	_ = err
 	seenCode := false
 	seenNonEmpty := false
 	seenTag := false
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
 		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 	i++
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i < len(data) && data[i] == '}' {
@@ -984,14 +991,14 @@ func (result CrossPkgModStruct) DecodeFrom(data []byte) (CrossPkgModStruct, int,
 				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
 			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		i++
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		switch key {
@@ -1088,7 +1095,7 @@ func (result CrossPkgModStruct) DecodeFrom(data []byte) (CrossPkgModStruct, int,
 		default:
 			return result, i, &validation.UnknownKeyError{Path: []string{key}}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
@@ -1096,7 +1103,7 @@ func (result CrossPkgModStruct) DecodeFrom(data []byte) (CrossPkgModStruct, int,
 		}
 		if data[i] == ',' {
 			i++
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			continue
@@ -1109,7 +1116,8 @@ func (result CrossPkgModStruct) DecodeFrom(data []byte) (CrossPkgModStruct, int,
 	}
 }
 
-func (result CrossPkgModStruct) DecodeFromStream(s *scan.Stream) (CrossPkgModStruct, error) {
+func (recv CrossPkgModStruct) DecodeFromStream(s *scan.Stream) (result CrossPkgModStruct, _ error) {
+	result = recv
 	seenCode := false
 	seenNonEmpty := false
 	seenTag := false
@@ -1237,22 +1245,23 @@ func (s CrossPkgModStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (result NestedMultierrStruct) DecodeFrom(data []byte) (NestedMultierrStruct, int, error) {
+func (recv NestedMultierrStruct) DecodeFrom(data []byte) (result NestedMultierrStruct, _ int, _ error) {
 	i := 0
+	result = recv
 	var err error
 	_ = err
 	var errs validation.Errors
 	seenCode := false
 	seenInner := false
 	seenName := false
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
 		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 	i++
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i < len(data) && data[i] == '}' {
@@ -1289,14 +1298,14 @@ func (result NestedMultierrStruct) DecodeFrom(data []byte) (NestedMultierrStruct
 				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
 			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		i++
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		switch key {
@@ -1322,6 +1331,14 @@ func (result NestedMultierrStruct) DecodeFrom(data []byte) (NestedMultierrStruct
 					limit = scan.SignedNeg
 				}
 				var u uint64
+				de := i + 18
+				if de > len(data) {
+					de = len(data)
+				}
+				for i < de && data[i] >= '0' && data[i] <= '9' {
+					u = u*10 + uint64(data[i]-'0')
+					i++
+				}
 				for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 					d := uint64(data[i] - '0')
 					if u > limit/10 || (u == limit/10 && d > limit%10) {
@@ -1416,7 +1433,7 @@ func (result NestedMultierrStruct) DecodeFrom(data []byte) (NestedMultierrStruct
 				return result, i, decode.NewParseErr(key, i, err)
 			}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
@@ -1424,7 +1441,7 @@ func (result NestedMultierrStruct) DecodeFrom(data []byte) (NestedMultierrStruct
 		}
 		if data[i] == ',' {
 			i++
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			continue
@@ -1443,7 +1460,8 @@ func (result NestedMultierrStruct) DecodeFrom(data []byte) (NestedMultierrStruct
 	}
 }
 
-func (result NestedMultierrStruct) DecodeFromStream(s *scan.Stream) (NestedMultierrStruct, error) {
+func (recv NestedMultierrStruct) DecodeFromStream(s *scan.Stream) (result NestedMultierrStruct, _ error) {
+	result = recv
 	var errs validation.Errors
 	seenCode := false
 	seenInner := false

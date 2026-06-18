@@ -209,7 +209,7 @@ func TestGenerate_basic(t *testing.T) {
 	s := string(code)
 	for _, want := range []string{
 		"package testpkg",
-		"func (result TestStruct) DecodeFrom",
+		"func (recv TestStruct) DecodeFrom",
 		"seenName",
 		`validation.Required`,
 	} {

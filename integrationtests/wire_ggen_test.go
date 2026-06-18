@@ -18,22 +18,23 @@ import (
 	"github.com/sirkostya009/ggen/scan"
 )
 
-func (result base32Wrap) DecodeFrom(data []byte) (base32Wrap, int, error) {
+func (recv base32Wrap) DecodeFrom(data []byte) (result base32Wrap, _ int, _ error) {
 	i := 0
+	result = recv
 	if result.B != nil {
 		result.B = result.B[:0]
 	}
 	var err error
 	_ = err
 	seenB := false
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
 		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 	i++
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i < len(data) && data[i] == '}' {
@@ -64,14 +65,14 @@ func (result base32Wrap) DecodeFrom(data []byte) (base32Wrap, int, error) {
 				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
 			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		i++
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		switch key {
@@ -118,7 +119,7 @@ func (result base32Wrap) DecodeFrom(data []byte) (base32Wrap, int, error) {
 		default:
 			return result, i, &validation.UnknownKeyError{Path: []string{key}}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
@@ -126,7 +127,7 @@ func (result base32Wrap) DecodeFrom(data []byte) (base32Wrap, int, error) {
 		}
 		if data[i] == ',' {
 			i++
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			continue
@@ -139,7 +140,8 @@ func (result base32Wrap) DecodeFrom(data []byte) (base32Wrap, int, error) {
 	}
 }
 
-func (result base32Wrap) DecodeFromStream(s *scan.Stream) (base32Wrap, error) {
+func (recv base32Wrap) DecodeFromStream(s *scan.Stream) (result base32Wrap, _ error) {
+	result = recv
 	if result.B != nil {
 		result.B = result.B[:0]
 	}
@@ -261,19 +263,20 @@ func (s base32Wrap) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (result TimeLayout) DecodeFrom(data []byte) (TimeLayout, int, error) {
+func (recv TimeLayout) DecodeFrom(data []byte) (result TimeLayout, _ int, _ error) {
 	i := 0
+	result = recv
 	var err error
 	_ = err
 	seenLayout := false
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
 		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 	i++
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i < len(data) && data[i] == '}' {
@@ -304,14 +307,14 @@ func (result TimeLayout) DecodeFrom(data []byte) (TimeLayout, int, error) {
 				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
 			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		i++
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		switch key {
@@ -350,7 +353,7 @@ func (result TimeLayout) DecodeFrom(data []byte) (TimeLayout, int, error) {
 		default:
 			return result, i, &validation.UnknownKeyError{Path: []string{key}}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
@@ -358,7 +361,7 @@ func (result TimeLayout) DecodeFrom(data []byte) (TimeLayout, int, error) {
 		}
 		if data[i] == ',' {
 			i++
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			continue
@@ -371,7 +374,8 @@ func (result TimeLayout) DecodeFrom(data []byte) (TimeLayout, int, error) {
 	}
 }
 
-func (result TimeLayout) DecodeFromStream(s *scan.Stream) (TimeLayout, error) {
+func (recv TimeLayout) DecodeFromStream(s *scan.Stream) (result TimeLayout, _ error) {
+	result = recv
 	seenLayout := false
 	err := s.ObjectOpen()
 	if err != nil {
@@ -460,19 +464,20 @@ func (s TimeLayout) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, "\"}"...), nil
 }
 
-func (result TimeStamp) DecodeFrom(data []byte) (TimeStamp, int, error) {
+func (recv TimeStamp) DecodeFrom(data []byte) (result TimeStamp, _ int, _ error) {
 	i := 0
+	result = recv
 	var err error
 	_ = err
 	seenStamp := false
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
 		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 	i++
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i < len(data) && data[i] == '}' {
@@ -503,14 +508,14 @@ func (result TimeStamp) DecodeFrom(data []byte) (TimeStamp, int, error) {
 				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
 			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		i++
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		switch key {
@@ -549,7 +554,7 @@ func (result TimeStamp) DecodeFrom(data []byte) (TimeStamp, int, error) {
 		default:
 			return result, i, &validation.UnknownKeyError{Path: []string{key}}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
@@ -557,7 +562,7 @@ func (result TimeStamp) DecodeFrom(data []byte) (TimeStamp, int, error) {
 		}
 		if data[i] == ',' {
 			i++
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			continue
@@ -570,7 +575,8 @@ func (result TimeStamp) DecodeFrom(data []byte) (TimeStamp, int, error) {
 	}
 }
 
-func (result TimeStamp) DecodeFromStream(s *scan.Stream) (TimeStamp, error) {
+func (recv TimeStamp) DecodeFromStream(s *scan.Stream) (result TimeStamp, _ error) {
+	result = recv
 	seenStamp := false
 	err := s.ObjectOpen()
 	if err != nil {
@@ -659,19 +665,20 @@ func (s TimeStamp) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, "\"}"...), nil
 }
 
-func (result TimeStampMilli) DecodeFrom(data []byte) (TimeStampMilli, int, error) {
+func (recv TimeStampMilli) DecodeFrom(data []byte) (result TimeStampMilli, _ int, _ error) {
 	i := 0
+	result = recv
 	var err error
 	_ = err
 	seenStampMilli := false
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
 		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 	i++
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i < len(data) && data[i] == '}' {
@@ -702,14 +709,14 @@ func (result TimeStampMilli) DecodeFrom(data []byte) (TimeStampMilli, int, error
 				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
 			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		i++
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		switch key {
@@ -748,7 +755,7 @@ func (result TimeStampMilli) DecodeFrom(data []byte) (TimeStampMilli, int, error
 		default:
 			return result, i, &validation.UnknownKeyError{Path: []string{key}}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
@@ -756,7 +763,7 @@ func (result TimeStampMilli) DecodeFrom(data []byte) (TimeStampMilli, int, error
 		}
 		if data[i] == ',' {
 			i++
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			continue
@@ -769,7 +776,8 @@ func (result TimeStampMilli) DecodeFrom(data []byte) (TimeStampMilli, int, error
 	}
 }
 
-func (result TimeStampMilli) DecodeFromStream(s *scan.Stream) (TimeStampMilli, error) {
+func (recv TimeStampMilli) DecodeFromStream(s *scan.Stream) (result TimeStampMilli, _ error) {
+	result = recv
 	seenStampMilli := false
 	err := s.ObjectOpen()
 	if err != nil {
@@ -858,19 +866,20 @@ func (s TimeStampMilli) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, "\"}"...), nil
 }
 
-func (result TimeStampMicro) DecodeFrom(data []byte) (TimeStampMicro, int, error) {
+func (recv TimeStampMicro) DecodeFrom(data []byte) (result TimeStampMicro, _ int, _ error) {
 	i := 0
+	result = recv
 	var err error
 	_ = err
 	seenStampMicro := false
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
 		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 	i++
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i < len(data) && data[i] == '}' {
@@ -901,14 +910,14 @@ func (result TimeStampMicro) DecodeFrom(data []byte) (TimeStampMicro, int, error
 				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
 			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		i++
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		switch key {
@@ -947,7 +956,7 @@ func (result TimeStampMicro) DecodeFrom(data []byte) (TimeStampMicro, int, error
 		default:
 			return result, i, &validation.UnknownKeyError{Path: []string{key}}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
@@ -955,7 +964,7 @@ func (result TimeStampMicro) DecodeFrom(data []byte) (TimeStampMicro, int, error
 		}
 		if data[i] == ',' {
 			i++
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			continue
@@ -968,7 +977,8 @@ func (result TimeStampMicro) DecodeFrom(data []byte) (TimeStampMicro, int, error
 	}
 }
 
-func (result TimeStampMicro) DecodeFromStream(s *scan.Stream) (TimeStampMicro, error) {
+func (recv TimeStampMicro) DecodeFromStream(s *scan.Stream) (result TimeStampMicro, _ error) {
+	result = recv
 	seenStampMicro := false
 	err := s.ObjectOpen()
 	if err != nil {
@@ -1057,19 +1067,20 @@ func (s TimeStampMicro) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, "\"}"...), nil
 }
 
-func (result TimeStampNano) DecodeFrom(data []byte) (TimeStampNano, int, error) {
+func (recv TimeStampNano) DecodeFrom(data []byte) (result TimeStampNano, _ int, _ error) {
 	i := 0
+	result = recv
 	var err error
 	_ = err
 	seenStampNano := false
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
 		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 	i++
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i < len(data) && data[i] == '}' {
@@ -1100,14 +1111,14 @@ func (result TimeStampNano) DecodeFrom(data []byte) (TimeStampNano, int, error) 
 				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
 			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		i++
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		switch key {
@@ -1146,7 +1157,7 @@ func (result TimeStampNano) DecodeFrom(data []byte) (TimeStampNano, int, error) 
 		default:
 			return result, i, &validation.UnknownKeyError{Path: []string{key}}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
@@ -1154,7 +1165,7 @@ func (result TimeStampNano) DecodeFrom(data []byte) (TimeStampNano, int, error) 
 		}
 		if data[i] == ',' {
 			i++
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			continue
@@ -1167,7 +1178,8 @@ func (result TimeStampNano) DecodeFrom(data []byte) (TimeStampNano, int, error) 
 	}
 }
 
-func (result TimeStampNano) DecodeFromStream(s *scan.Stream) (TimeStampNano, error) {
+func (recv TimeStampNano) DecodeFromStream(s *scan.Stream) (result TimeStampNano, _ error) {
+	result = recv
 	seenStampNano := false
 	err := s.ObjectOpen()
 	if err != nil {
@@ -1256,19 +1268,20 @@ func (s TimeStampNano) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, "\"}"...), nil
 }
 
-func (result TimeCustomTiny) DecodeFrom(data []byte) (TimeCustomTiny, int, error) {
+func (recv TimeCustomTiny) DecodeFrom(data []byte) (result TimeCustomTiny, _ int, _ error) {
 	i := 0
+	result = recv
 	var err error
 	_ = err
 	seenCustomTiny := false
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
 		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 	i++
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i < len(data) && data[i] == '}' {
@@ -1299,14 +1312,14 @@ func (result TimeCustomTiny) DecodeFrom(data []byte) (TimeCustomTiny, int, error
 				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
 			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		i++
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		switch key {
@@ -1345,7 +1358,7 @@ func (result TimeCustomTiny) DecodeFrom(data []byte) (TimeCustomTiny, int, error
 		default:
 			return result, i, &validation.UnknownKeyError{Path: []string{key}}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
@@ -1353,7 +1366,7 @@ func (result TimeCustomTiny) DecodeFrom(data []byte) (TimeCustomTiny, int, error
 		}
 		if data[i] == ',' {
 			i++
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			continue
@@ -1366,7 +1379,8 @@ func (result TimeCustomTiny) DecodeFrom(data []byte) (TimeCustomTiny, int, error
 	}
 }
 
-func (result TimeCustomTiny) DecodeFromStream(s *scan.Stream) (TimeCustomTiny, error) {
+func (recv TimeCustomTiny) DecodeFromStream(s *scan.Stream) (result TimeCustomTiny, _ error) {
+	result = recv
 	seenCustomTiny := false
 	err := s.ObjectOpen()
 	if err != nil {
@@ -1455,19 +1469,20 @@ func (s TimeCustomTiny) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, "\"}"...), nil
 }
 
-func (result TimeCustomLong) DecodeFrom(data []byte) (TimeCustomLong, int, error) {
+func (recv TimeCustomLong) DecodeFrom(data []byte) (result TimeCustomLong, _ int, _ error) {
 	i := 0
+	result = recv
 	var err error
 	_ = err
 	seenCustomLong := false
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
 		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 	i++
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i < len(data) && data[i] == '}' {
@@ -1498,14 +1513,14 @@ func (result TimeCustomLong) DecodeFrom(data []byte) (TimeCustomLong, int, error
 				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
 			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		i++
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		switch key {
@@ -1544,7 +1559,7 @@ func (result TimeCustomLong) DecodeFrom(data []byte) (TimeCustomLong, int, error
 		default:
 			return result, i, &validation.UnknownKeyError{Path: []string{key}}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
@@ -1552,7 +1567,7 @@ func (result TimeCustomLong) DecodeFrom(data []byte) (TimeCustomLong, int, error
 		}
 		if data[i] == ',' {
 			i++
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			continue
@@ -1565,7 +1580,8 @@ func (result TimeCustomLong) DecodeFrom(data []byte) (TimeCustomLong, int, error
 	}
 }
 
-func (result TimeCustomLong) DecodeFromStream(s *scan.Stream) (TimeCustomLong, error) {
+func (recv TimeCustomLong) DecodeFromStream(s *scan.Stream) (result TimeCustomLong, _ error) {
+	result = recv
 	seenCustomLong := false
 	err := s.ObjectOpen()
 	if err != nil {
@@ -1654,8 +1670,9 @@ func (s TimeCustomLong) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, "\"}"...), nil
 }
 
-func (result TimeFormatsStruct) DecodeFrom(data []byte) (TimeFormatsStruct, int, error) {
+func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct, _ int, _ error) {
 	i := 0
+	result = recv
 	var err error
 	_ = err
 	seenANSIC := false
@@ -1684,14 +1701,14 @@ func (result TimeFormatsStruct) DecodeFrom(data []byte) (TimeFormatsStruct, int,
 	seenUnixMicro := false
 	seenUnixMilli := false
 	seenUnixNano := false
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
 		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 	i++
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i < len(data) && data[i] == '}' {
@@ -1722,14 +1739,14 @@ func (result TimeFormatsStruct) DecodeFrom(data []byte) (TimeFormatsStruct, int,
 				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
 			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		i++
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		switch key {
@@ -2486,7 +2503,7 @@ func (result TimeFormatsStruct) DecodeFrom(data []byte) (TimeFormatsStruct, int,
 		default:
 			return result, i, &validation.UnknownKeyError{Path: []string{key}}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
@@ -2494,7 +2511,7 @@ func (result TimeFormatsStruct) DecodeFrom(data []byte) (TimeFormatsStruct, int,
 		}
 		if data[i] == ',' {
 			i++
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			continue
@@ -2507,7 +2524,8 @@ func (result TimeFormatsStruct) DecodeFrom(data []byte) (TimeFormatsStruct, int,
 	}
 }
 
-func (result TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (TimeFormatsStruct, error) {
+func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeFormatsStruct, _ error) {
+	result = recv
 	seenANSIC := false
 	seenCustomLong := false
 	seenCustomTiny := false
@@ -3112,21 +3130,22 @@ func (s TimeFormatsStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (result BoundaryStruct) DecodeFrom(data []byte) (BoundaryStruct, int, error) {
+func (recv BoundaryStruct) DecodeFrom(data []byte) (result BoundaryStruct, _ int, _ error) {
 	i := 0
+	result = recv
 	var err error
 	_ = err
 	seenF := false
 	seenI := false
 	seenStr := false
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
 		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 	i++
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i < len(data) && data[i] == '}' {
@@ -3157,14 +3176,14 @@ func (result BoundaryStruct) DecodeFrom(data []byte) (BoundaryStruct, int, error
 				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
 			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		i++
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		switch key {
@@ -3195,6 +3214,14 @@ func (result BoundaryStruct) DecodeFrom(data []byte) (BoundaryStruct, int, error
 				limit = scan.SignedNeg
 			}
 			var u uint64
+			de := i + 18
+			if de > len(data) {
+				de = len(data)
+			}
+			for i < de && data[i] >= '0' && data[i] <= '9' {
+				u = u*10 + uint64(data[i]-'0')
+				i++
+			}
 			for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 				d := uint64(data[i] - '0')
 				if u > limit/10 || (u == limit/10 && d > limit%10) {
@@ -3250,7 +3277,7 @@ func (result BoundaryStruct) DecodeFrom(data []byte) (BoundaryStruct, int, error
 		default:
 			return result, i, &validation.UnknownKeyError{Path: []string{key}}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
@@ -3258,7 +3285,7 @@ func (result BoundaryStruct) DecodeFrom(data []byte) (BoundaryStruct, int, error
 		}
 		if data[i] == ',' {
 			i++
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			continue
@@ -3271,7 +3298,8 @@ func (result BoundaryStruct) DecodeFrom(data []byte) (BoundaryStruct, int, error
 	}
 }
 
-func (result BoundaryStruct) DecodeFromStream(s *scan.Stream) (BoundaryStruct, error) {
+func (recv BoundaryStruct) DecodeFromStream(s *scan.Stream) (result BoundaryStruct, _ error) {
+	result = recv
 	seenF := false
 	seenI := false
 	seenStr := false

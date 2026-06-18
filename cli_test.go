@@ -1669,13 +1669,13 @@ type Count int
 			t.Fatalf("ggen msg.go: %v\n%s", err, out)
 		}
 		body := mustReadOutput(t, filepath.Join(dir, "msg_ggen.go"))
-		if !strings.Contains(body, "(result HtmlString) DecodeFrom") {
+		if !strings.Contains(body, "(recv HtmlString) DecodeFrom") {
 			t.Errorf("HtmlString.DecodeFrom missing:\n%s", body)
 		}
 		if !strings.Contains(body, "result = HtmlString(v)") {
 			t.Errorf("HtmlString cast missing:\n%s", body)
 		}
-		if !strings.Contains(body, "(result Count) DecodeFrom") {
+		if !strings.Contains(body, "(recv Count) DecodeFrom") {
 			t.Errorf("Count.DecodeFrom missing:\n%s", body)
 		}
 		if !strings.Contains(body, "strconv.AppendInt(dst, int64(s), 10)") {
@@ -1704,11 +1704,11 @@ type Tuple [3]int
 		}
 		body := mustReadOutput(t, filepath.Join(dir, "msg_ggen.go"))
 		for _, want := range []string{
-			") DecodeFrom(data []byte) (Tags",
+			") DecodeFrom(data []byte) (result Tags",
 			"s Tags) AppendJSON",
-			") DecodeFrom(data []byte) (Lookup",
+			") DecodeFrom(data []byte) (result Lookup",
 			"s Lookup) AppendJSON",
-			") DecodeFrom(data []byte) (Tuple",
+			") DecodeFrom(data []byte) (result Tuple",
 			"s Tuple) AppendJSON",
 		} {
 			if !strings.Contains(body, want) {

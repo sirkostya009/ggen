@@ -154,6 +154,40 @@
 
 # Tried Rejected
 
+- **ConsumeColon fast-path header (`[5b]`).** After landing the two-tier
+  inlinable `SkipSpace` (`[5]`), tried adding a bespoke header to
+  `(*Stream).ConsumeColon` (`if s.Pos+1 < len && buf[Pos]==':' &&
+  buf[Pos+1] > ' ' { Pos++; return nil }`). Measured **dead flat** across 3
+  `-randlayout` seeds (p=0.97/0.35/0.11) on Mega_Reader. `[5]` already inlines
+  `SkipSpace` into `ConsumeColon`, and the per-key separator handling is a
+  negligible fraction of stream cost (string copies + ReadMore dominate).
+  Reverted — pure code weight, no win.
+
+- **Indexed marshal slice loop (`[23]` Layer 1).** Premise (from the perf-hunt
+  note) was that `for _, v := range ref[1:]` copies each struct element into
+  the range var AND again into the value-receiver `AppendJSON` — so an indexed
+  `for i := …; ref[i].AppendJSON()` would drop one 256 B copy/element.
+  **Wrong for go1.26**: a controlled `-S` A/B (256 B elem, value receiver)
+  shows range-by-value and indexed BOTH emit exactly 16 wide-copy MOVUPS = ONE
+  256 B copy/iteration — gc already folds the range var straight into the
+  receiver slot; the range form is even 17 B larger (iterator bookkeeping). The
+  single remaining copy is the value-receiver argument pass, removable only by a
+  pointer receiver. No-op; don't reintroduce.
+
+- **Pointer-receiver decode cores (`[23]` Layer 2) — not attempted, vetoed.**
+  Would replace the value-receiver `DecodeFrom`/`DecodeFromStream` struct-copy
+  traffic with unexported `(*T).decodeFrom` in-place cores + thin value-receiver
+  shims (the public surface is pinned by `decode.Decoder[T]` requiring
+  `DecodeFrom(data) (T, int, error)` and the `T{}.DecodeFrom(data)` ergonomics —
+  a bare `*T` receiver breaks the generic walkers). Subsumes `[15]`. Deferred:
+  the copies it removes are cold-path stack writes (store-buffer-absorbed) —
+  `[15]` removing 98 of them measured wall-flat, so this likely measures flat
+  too, while carrying large churn (return-shape rewrite through
+  `parseerr_postpass`, every return site, stream mirror, shim-inline
+  verification). Only `DeepNested` (50-level chain, compounded nested moves)
+  might show it. Prototype on `Node` + asm-confirm copies vanish + interleaved
+  A/B BEFORE committing to the codegen rewrite.
+
 - **Direct-write `encode.AppendInt/AppendUint` replacing strconv.** Fully
   implemented (digit count via `bits.Len64`+pow10, in-cap `dst[:l+n]` extend,
   backward two-digit fill; parity-fuzzed 4M+ values incl. MinInt64/pow10

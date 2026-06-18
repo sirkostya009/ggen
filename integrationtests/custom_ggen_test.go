@@ -16,22 +16,23 @@ import (
 
 var ggenOneof0 = []string{"admin", "user", "guest"}
 
-func (result MultiErrStruct) DecodeFrom(data []byte) (MultiErrStruct, int, error) {
+func (recv MultiErrStruct) DecodeFrom(data []byte) (result MultiErrStruct, _ int, _ error) {
 	i := 0
+	result = recv
 	var err error
 	_ = err
 	var errs validation.Errors
 	seenAge := false
 	seenName := false
 	seenRole := false
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
 		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 	i++
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i < len(data) && data[i] == '}' {
@@ -68,14 +69,14 @@ func (result MultiErrStruct) DecodeFrom(data []byte) (MultiErrStruct, int, error
 				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
 			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		i++
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		switch key {
@@ -101,6 +102,14 @@ func (result MultiErrStruct) DecodeFrom(data []byte) (MultiErrStruct, int, error
 					limit = scan.SignedNeg
 				}
 				var u uint64
+				de := i + 18
+				if de > len(data) {
+					de = len(data)
+				}
+				for i < de && data[i] >= '0' && data[i] <= '9' {
+					u = u*10 + uint64(data[i]-'0')
+					i++
+				}
 				for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 					d := uint64(data[i] - '0')
 					if u > limit/10 || (u == limit/10 && d > limit%10) {
@@ -215,7 +224,7 @@ func (result MultiErrStruct) DecodeFrom(data []byte) (MultiErrStruct, int, error
 				return result, i, decode.NewParseErr(key, i, err)
 			}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
@@ -223,7 +232,7 @@ func (result MultiErrStruct) DecodeFrom(data []byte) (MultiErrStruct, int, error
 		}
 		if data[i] == ',' {
 			i++
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			continue
@@ -242,7 +251,8 @@ func (result MultiErrStruct) DecodeFrom(data []byte) (MultiErrStruct, int, error
 	}
 }
 
-func (result MultiErrStruct) DecodeFromStream(s *scan.Stream) (MultiErrStruct, error) {
+func (recv MultiErrStruct) DecodeFromStream(s *scan.Stream) (result MultiErrStruct, _ error) {
+	result = recv
 	var errs validation.Errors
 	seenAge := false
 	seenName := false
@@ -418,22 +428,23 @@ func (s MultiErrStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (result CustomBothStruct) DecodeFrom(data []byte) (CustomBothStruct, int, error) {
+func (recv CustomBothStruct) DecodeFrom(data []byte) (result CustomBothStruct, _ int, _ error) {
 	i := 0
+	result = recv
 	if result.Tags != nil {
 		result.Tags = result.Tags[:0]
 	}
 	var err error
 	_ = err
 	seenTags := false
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
 		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 	i++
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i < len(data) && data[i] == '}' {
@@ -464,14 +475,14 @@ func (result CustomBothStruct) DecodeFrom(data []byte) (CustomBothStruct, int, e
 				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
 			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		i++
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		switch key {
@@ -480,7 +491,7 @@ func (result CustomBothStruct) DecodeFrom(data []byte) (CustomBothStruct, int, e
 				return result, i, &validation.DuplicateKeyError{Path: []string{"tags"}}
 			}
 			seenTags = true
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -492,7 +503,7 @@ func (result CustomBothStruct) DecodeFrom(data []byte) (CustomBothStruct, int, e
 				return result, i, scan.ErrBadArray
 			}
 			i++
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			if i < len(data) && data[i] == ']' {
@@ -532,12 +543,12 @@ func (result CustomBothStruct) DecodeFrom(data []byte) (CustomBothStruct, int, e
 				if err := NotBlank(result.Tags[len(result.Tags)-1]); err != nil {
 					return result, i, &validation.CustomError{Path: []string{"tags[]"}, Name: "@NotBlank", Cause: err}
 				}
-				for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 					i++
 				}
 				if i < len(data) && data[i] == ',' {
 					i++
-					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
 					if i >= len(data) || data[i] == ']' {
@@ -554,7 +565,7 @@ func (result CustomBothStruct) DecodeFrom(data []byte) (CustomBothStruct, int, e
 		default:
 			return result, i, &validation.UnknownKeyError{Path: []string{key}}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
@@ -562,7 +573,7 @@ func (result CustomBothStruct) DecodeFrom(data []byte) (CustomBothStruct, int, e
 		}
 		if data[i] == ',' {
 			i++
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			continue
@@ -575,7 +586,8 @@ func (result CustomBothStruct) DecodeFrom(data []byte) (CustomBothStruct, int, e
 	}
 }
 
-func (result CustomBothStruct) DecodeFromStream(s *scan.Stream) (CustomBothStruct, error) {
+func (recv CustomBothStruct) DecodeFromStream(s *scan.Stream) (result CustomBothStruct, _ error) {
+	result = recv
 	if result.Tags != nil {
 		result.Tags = result.Tags[:0]
 	}

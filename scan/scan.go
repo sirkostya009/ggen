@@ -36,7 +36,9 @@ var (
 
 // SkipSpace advances past JSON whitespace (space, tab, CR, LF).
 func SkipSpace(data []byte, i int) int {
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	// `data[i] <= ' '` gate: compact JSON exits on one compare (see the
+	// inlineSkipWS codegen note); whitespace chars are all <= ' '.
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	return i
@@ -224,6 +226,16 @@ func Int64(data []byte, i int) (int64, int, error) {
 		limit = SignedNeg
 	}
 	var u uint64
+	// First up to 18 digits can never overflow int64 of either sign
+	// (10^18-1 < MaxInt64 < |MinInt64|), so skip the per-digit overflow
+	// check on the common short-number path. A 19th digit (if present)
+	// resumes the checked loop below — error identity and position stay
+	// bit-identical.
+	de := min(i+18, len(data))
+	for i < de && data[i] >= '0' && data[i] <= '9' {
+		u = u*10 + uint64(data[i]-'0')
+		i++
+	}
 	for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 		d := uint64(data[i] - '0')
 		if u > limit/10 || (u == limit/10 && d > limit%10) {
@@ -256,6 +268,13 @@ func Uint64(data []byte, i int) (uint64, int, error) {
 		return 0, 0, ErrBadNumber
 	}
 	var n uint64
+	// First up to 19 digits can never overflow uint64 (10^19-1 < MaxUint64);
+	// a 20th digit resumes the checked loop. See Int64 for the rationale.
+	de := min(i+19, len(data))
+	for i < de && data[i] >= '0' && data[i] <= '9' {
+		n = n*10 + uint64(data[i]-'0')
+		i++
+	}
 	for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 		d := uint64(data[i] - '0')
 		if n > Uint64Limit/10 || (n == Uint64Limit/10 && d > Uint64Limit%10) {

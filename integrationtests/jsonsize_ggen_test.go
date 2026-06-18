@@ -13,19 +13,20 @@ import (
 	"github.com/sirkostya009/ggen/scan"
 )
 
-func (result URLStruct) DecodeFrom(data []byte) (URLStruct, int, error) {
+func (recv URLStruct) DecodeFrom(data []byte) (result URLStruct, _ int, _ error) {
 	i := 0
+	result = recv
 	var err error
 	_ = err
 	seenSite := false
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
 		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 	i++
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i < len(data) && data[i] == '}' {
@@ -56,14 +57,14 @@ func (result URLStruct) DecodeFrom(data []byte) (URLStruct, int, error) {
 				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
 			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		i++
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		switch key {
@@ -104,7 +105,7 @@ func (result URLStruct) DecodeFrom(data []byte) (URLStruct, int, error) {
 		default:
 			return result, i, &validation.UnknownKeyError{Path: []string{key}}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
@@ -112,7 +113,7 @@ func (result URLStruct) DecodeFrom(data []byte) (URLStruct, int, error) {
 		}
 		if data[i] == ',' {
 			i++
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			continue
@@ -125,7 +126,8 @@ func (result URLStruct) DecodeFrom(data []byte) (URLStruct, int, error) {
 	}
 }
 
-func (result URLStruct) DecodeFromStream(s *scan.Stream) (URLStruct, error) {
+func (recv URLStruct) DecodeFromStream(s *scan.Stream) (result URLStruct, _ error) {
+	result = recv
 	seenSite := false
 	err := s.ObjectOpen()
 	if err != nil {

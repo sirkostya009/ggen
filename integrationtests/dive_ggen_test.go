@@ -15,8 +15,9 @@ import (
 	"github.com/sirkostya009/ggen/scan"
 )
 
-func (result DiveStruct) DecodeFrom(data []byte) (DiveStruct, int, error) {
+func (recv DiveStruct) DecodeFrom(data []byte) (result DiveStruct, _ int, _ error) {
 	i := 0
+	result = recv
 	if result.Scores != nil {
 		result.Scores = result.Scores[:0]
 	}
@@ -29,14 +30,14 @@ func (result DiveStruct) DecodeFrom(data []byte) (DiveStruct, int, error) {
 	seenScores := false
 	seenTags := false
 	seenTitle := false
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
 		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 	i++
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i < len(data) && data[i] == '}' {
@@ -67,14 +68,14 @@ func (result DiveStruct) DecodeFrom(data []byte) (DiveStruct, int, error) {
 				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
 			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		i++
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		switch key {
@@ -96,6 +97,14 @@ func (result DiveStruct) DecodeFrom(data []byte) (DiveStruct, int, error) {
 				limit = scan.SignedNeg
 			}
 			var u uint64
+			de := i + 18
+			if de > len(data) {
+				de = len(data)
+			}
+			for i < de && data[i] >= '0' && data[i] <= '9' {
+				u = u*10 + uint64(data[i]-'0')
+				i++
+			}
 			for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 				d := uint64(data[i] - '0')
 				if u > limit/10 || (u == limit/10 && d > limit%10) {
@@ -129,7 +138,7 @@ func (result DiveStruct) DecodeFrom(data []byte) (DiveStruct, int, error) {
 				return result, i, &validation.DuplicateKeyError{Path: []string{"scores"}}
 			}
 			seenScores = true
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -141,7 +150,7 @@ func (result DiveStruct) DecodeFrom(data []byte) (DiveStruct, int, error) {
 				return result, i, scan.ErrBadArray
 			}
 			i++
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			if i < len(data) && data[i] == ']' {
@@ -168,6 +177,14 @@ func (result DiveStruct) DecodeFrom(data []byte) (DiveStruct, int, error) {
 					limit = scan.SignedNeg
 				}
 				var u uint64
+				de := i + 18
+				if de > len(data) {
+					de = len(data)
+				}
+				for i < de && data[i] >= '0' && data[i] <= '9' {
+					u = u*10 + uint64(data[i]-'0')
+					i++
+				}
 				for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 					d := uint64(data[i] - '0')
 					if u > limit/10 || (u == limit/10 && d > limit%10) {
@@ -199,12 +216,12 @@ func (result DiveStruct) DecodeFrom(data []byte) (DiveStruct, int, error) {
 				if result.Scores[len(result.Scores)-1] > 100 {
 					return result, i, &validation.LTEError{Path: []string{"scores[]"}, Limit: 100, Value: result.Scores[len(result.Scores)-1]}
 				}
-				for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 					i++
 				}
 				if i < len(data) && data[i] == ',' {
 					i++
-					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
 					if i >= len(data) || data[i] == ']' {
@@ -223,7 +240,7 @@ func (result DiveStruct) DecodeFrom(data []byte) (DiveStruct, int, error) {
 				return result, i, &validation.DuplicateKeyError{Path: []string{"tags"}}
 			}
 			seenTags = true
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -234,7 +251,7 @@ func (result DiveStruct) DecodeFrom(data []byte) (DiveStruct, int, error) {
 					return result, i, scan.ErrBadArray
 				}
 				i++
-				for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 					i++
 				}
 				if i < len(data) && data[i] == ']' {
@@ -276,12 +293,12 @@ func (result DiveStruct) DecodeFrom(data []byte) (DiveStruct, int, error) {
 					if utf8.RuneCountInString(result.Tags[len(result.Tags)-1]) > 10 {
 						return result, i, &validation.MaxRunesError{Path: []string{"tags[]"}, Limit: 10, Got: utf8.RuneCountInString(result.Tags[len(result.Tags)-1])}
 					}
-					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
 					if i < len(data) && data[i] == ',' {
 						i++
-						for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
@@ -338,7 +355,7 @@ func (result DiveStruct) DecodeFrom(data []byte) (DiveStruct, int, error) {
 		default:
 			return result, i, &validation.UnknownKeyError{Path: []string{key}}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
@@ -346,7 +363,7 @@ func (result DiveStruct) DecodeFrom(data []byte) (DiveStruct, int, error) {
 		}
 		if data[i] == ',' {
 			i++
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			continue
@@ -359,7 +376,8 @@ func (result DiveStruct) DecodeFrom(data []byte) (DiveStruct, int, error) {
 	}
 }
 
-func (result DiveStruct) DecodeFromStream(s *scan.Stream) (DiveStruct, error) {
+func (recv DiveStruct) DecodeFromStream(s *scan.Stream) (result DiveStruct, _ error) {
+	result = recv
 	if result.Scores != nil {
 		result.Scores = result.Scores[:0]
 	}
@@ -712,8 +730,9 @@ func (s DiveStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (result CustomDiveStruct) DecodeFrom(data []byte) (CustomDiveStruct, int, error) {
+func (recv CustomDiveStruct) DecodeFrom(data []byte) (result CustomDiveStruct, _ int, _ error) {
 	i := 0
+	result = recv
 	if result.Lookup != nil {
 		clear(result.Lookup)
 	}
@@ -733,14 +752,14 @@ func (result CustomDiveStruct) DecodeFrom(data []byte) (CustomDiveStruct, int, e
 	seenPtr := false
 	seenTags := false
 	seenTrim := false
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
 		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 	i++
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i < len(data) && data[i] == '}' {
@@ -771,14 +790,14 @@ func (result CustomDiveStruct) DecodeFrom(data []byte) (CustomDiveStruct, int, e
 				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
 			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		i++
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		switch key {
@@ -787,7 +806,7 @@ func (result CustomDiveStruct) DecodeFrom(data []byte) (CustomDiveStruct, int, e
 				return result, i, &validation.DuplicateKeyError{Path: []string{"lookup"}}
 			}
 			seenLookup = true
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -799,7 +818,7 @@ func (result CustomDiveStruct) DecodeFrom(data []byte) (CustomDiveStruct, int, e
 				return result, i, decode.NewParseErr("lookup", i, scan.ErrBadObject)
 			}
 			i++
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			if i < len(data) && data[i] == '}' {
@@ -838,14 +857,14 @@ func (result CustomDiveStruct) DecodeFrom(data []byte) (CustomDiveStruct, int, e
 				if err := KeyShape(mk); err != nil {
 					return result, i, &validation.CustomError{Path: []string{"lookup.key"}, Name: "@KeyShape", Cause: err}
 				}
-				for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 					i++
 				}
 				if i >= len(data) || data[i] != ':' {
 					return result, i, decode.NewParseErr("lookup", i, scan.ErrBadObject)
 				}
 				i++
-				for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 					i++
 				}
 				neg := false
@@ -861,6 +880,14 @@ func (result CustomDiveStruct) DecodeFrom(data []byte) (CustomDiveStruct, int, e
 					limit = scan.SignedNeg
 				}
 				var u uint64
+				de := i + 18
+				if de > len(data) {
+					de = len(data)
+				}
+				for i < de && data[i] >= '0' && data[i] <= '9' {
+					u = u*10 + uint64(data[i]-'0')
+					i++
+				}
 				for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 					d := uint64(data[i] - '0')
 					if u > limit/10 || (u == limit/10 && d > limit%10) {
@@ -886,12 +913,12 @@ func (result CustomDiveStruct) DecodeFrom(data []byte) (CustomDiveStruct, int, e
 					n = int64(u)
 				}
 				result.Lookup[mk] = int(n)
-				for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 					i++
 				}
 				if i < len(data) && data[i] == ',' {
 					i++
-					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
 					if i >= len(data) || data[i] == '}' {
@@ -910,7 +937,7 @@ func (result CustomDiveStruct) DecodeFrom(data []byte) (CustomDiveStruct, int, e
 				return result, i, &validation.DuplicateKeyError{Path: []string{"mixed"}}
 			}
 			seenMixed = true
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -922,7 +949,7 @@ func (result CustomDiveStruct) DecodeFrom(data []byte) (CustomDiveStruct, int, e
 				return result, i, decode.NewParseErr("mixed", i, scan.ErrBadObject)
 			}
 			i++
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			if i < len(data) && data[i] == '}' {
@@ -959,14 +986,14 @@ func (result CustomDiveStruct) DecodeFrom(data []byte) (CustomDiveStruct, int, e
 					}
 				}
 				mk = LowerKey(mk)
-				for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 					i++
 				}
 				if i >= len(data) || data[i] != ':' {
 					return result, i, decode.NewParseErr("mixed", i, scan.ErrBadObject)
 				}
 				i++
-				for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 					i++
 				}
 				neg := false
@@ -982,6 +1009,14 @@ func (result CustomDiveStruct) DecodeFrom(data []byte) (CustomDiveStruct, int, e
 					limit = scan.SignedNeg
 				}
 				var u uint64
+				de := i + 18
+				if de > len(data) {
+					de = len(data)
+				}
+				for i < de && data[i] >= '0' && data[i] <= '9' {
+					u = u*10 + uint64(data[i]-'0')
+					i++
+				}
 				for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 					d := uint64(data[i] - '0')
 					if u > limit/10 || (u == limit/10 && d > limit%10) {
@@ -1007,12 +1042,12 @@ func (result CustomDiveStruct) DecodeFrom(data []byte) (CustomDiveStruct, int, e
 					n = int64(u)
 				}
 				result.Mixed[mk] = int(n)
-				for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 					i++
 				}
 				if i < len(data) && data[i] == ',' {
 					i++
-					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
 					if i >= len(data) || data[i] == '}' {
@@ -1048,6 +1083,14 @@ func (result CustomDiveStruct) DecodeFrom(data []byte) (CustomDiveStruct, int, e
 					limit = scan.SignedNeg
 				}
 				var u uint64
+				de := i + 18
+				if de > len(data) {
+					de = len(data)
+				}
+				for i < de && data[i] >= '0' && data[i] <= '9' {
+					u = u*10 + uint64(data[i]-'0')
+					i++
+				}
 				for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 					d := uint64(data[i] - '0')
 					if u > limit/10 || (u == limit/10 && d > limit%10) {
@@ -1086,7 +1129,7 @@ func (result CustomDiveStruct) DecodeFrom(data []byte) (CustomDiveStruct, int, e
 				return result, i, &validation.DuplicateKeyError{Path: []string{"tags"}}
 			}
 			seenTags = true
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -1098,7 +1141,7 @@ func (result CustomDiveStruct) DecodeFrom(data []byte) (CustomDiveStruct, int, e
 				return result, i, scan.ErrBadArray
 			}
 			i++
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			if i < len(data) && data[i] == ']' {
@@ -1137,12 +1180,12 @@ func (result CustomDiveStruct) DecodeFrom(data []byte) (CustomDiveStruct, int, e
 				if err := NotBlank(result.Tags[len(result.Tags)-1]); err != nil {
 					return result, i, &validation.CustomError{Path: []string{"tags[]"}, Name: "@NotBlank", Cause: err}
 				}
-				for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 					i++
 				}
 				if i < len(data) && data[i] == ',' {
 					i++
-					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
 					if i >= len(data) || data[i] == ']' {
@@ -1161,7 +1204,7 @@ func (result CustomDiveStruct) DecodeFrom(data []byte) (CustomDiveStruct, int, e
 				return result, i, &validation.DuplicateKeyError{Path: []string{"trim"}}
 			}
 			seenTrim = true
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -1173,7 +1216,7 @@ func (result CustomDiveStruct) DecodeFrom(data []byte) (CustomDiveStruct, int, e
 				return result, i, scan.ErrBadArray
 			}
 			i++
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			if i < len(data) && data[i] == ']' {
@@ -1210,12 +1253,12 @@ func (result CustomDiveStruct) DecodeFrom(data []byte) (CustomDiveStruct, int, e
 					}
 				}
 				result.Trim[len(result.Trim)-1] = TrimSpace(result.Trim[len(result.Trim)-1])
-				for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 					i++
 				}
 				if i < len(data) && data[i] == ',' {
 					i++
-					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
 					if i >= len(data) || data[i] == ']' {
@@ -1232,7 +1275,7 @@ func (result CustomDiveStruct) DecodeFrom(data []byte) (CustomDiveStruct, int, e
 		default:
 			return result, i, &validation.UnknownKeyError{Path: []string{key}}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
@@ -1240,7 +1283,7 @@ func (result CustomDiveStruct) DecodeFrom(data []byte) (CustomDiveStruct, int, e
 		}
 		if data[i] == ',' {
 			i++
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			continue
@@ -1253,7 +1296,8 @@ func (result CustomDiveStruct) DecodeFrom(data []byte) (CustomDiveStruct, int, e
 	}
 }
 
-func (result CustomDiveStruct) DecodeFromStream(s *scan.Stream) (CustomDiveStruct, error) {
+func (recv CustomDiveStruct) DecodeFromStream(s *scan.Stream) (result CustomDiveStruct, _ error) {
+	result = recv
 	if result.Lookup != nil {
 		clear(result.Lookup)
 	}

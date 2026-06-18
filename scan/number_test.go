@@ -103,6 +103,88 @@ func TestInt64_RejectsFloatsParity(t *testing.T) {
 	}
 }
 
+// TestInt64_OverflowBoundaryLattice pins the 18-digit unchecked-prefix
+// optimization: the checked tail must still catch every overflow and the
+// values around the 18/19/20-digit boundary stay bit-exact. Leading-zero
+// runs that push the significant digits past the 18-byte window must also
+// resume correctly in the checked loop.
+func TestInt64_OverflowBoundaryLattice(t *testing.T) {
+	ok := map[string]int64{
+		"99999999999999999":     99999999999999999,     // 17 digits
+		"999999999999999999":    999999999999999999,    // 18 digits
+		"1000000000000000000":   1000000000000000000,   // 19 digits, valid
+		"9223372036854775807":   math.MaxInt64,         // MaxInt64 (19 digits)
+		"-9223372036854775808":  math.MinInt64,         // MinInt64
+		"-9223372036854775807":  -9223372036854775807,  // MinInt64+1
+		"0000000000000000007":   7,                     // 18 leading zeros + 7
+		"00000000000000000009223372036854775807": math.MaxInt64, // zeros push MaxInt64 past window
+	}
+	for in, want := range ok {
+		t.Run("ok/"+in, func(t *testing.T) {
+			got, j, err := Int64([]byte(in), 0)
+			if err != nil {
+				t.Fatalf("Int64(%q): unexpected err %v", in, err)
+			}
+			if got != want {
+				t.Errorf("Int64(%q) = %d, want %d", in, got, want)
+			}
+			if j != len(in) {
+				t.Errorf("Int64(%q) pos = %d, want %d", in, j, len(in))
+			}
+		})
+	}
+	overflow := []string{
+		"9223372036854775808",   // MaxInt64+1 (positive overflow)
+		"9999999999999999999",   // 19 nines
+		"99999999999999999999",  // 20 nines
+		"-9223372036854775809",  // MinInt64-1
+		"-99999999999999999999", // negative 20 nines
+	}
+	for _, in := range overflow {
+		t.Run("overflow/"+in, func(t *testing.T) {
+			if _, _, err := Int64([]byte(in), 0); !errors.Is(err, ErrNumberOverflow) {
+				t.Errorf("Int64(%q): got %v, want ErrNumberOverflow", in, err)
+			}
+		})
+	}
+}
+
+// TestUint64_OverflowBoundaryLattice mirrors the Int64 lattice for the
+// 19-digit unchecked prefix.
+func TestUint64_OverflowBoundaryLattice(t *testing.T) {
+	ok := map[string]uint64{
+		"9999999999999999999":  9999999999999999999,  // 19 nines, valid
+		"10000000000000000000": 10000000000000000000, // 20 digits, valid
+		"18446744073709551615": math.MaxUint64,        // MaxUint64 (20 digits)
+		"00000000000000000000018446744073709551615": math.MaxUint64, // leading zeros past window
+	}
+	for in, want := range ok {
+		t.Run("ok/"+in, func(t *testing.T) {
+			got, j, err := Uint64([]byte(in), 0)
+			if err != nil {
+				t.Fatalf("Uint64(%q): unexpected err %v", in, err)
+			}
+			if got != want {
+				t.Errorf("Uint64(%q) = %d, want %d", in, got, want)
+			}
+			if j != len(in) {
+				t.Errorf("Uint64(%q) pos = %d, want %d", in, j, len(in))
+			}
+		})
+	}
+	for _, in := range []string{
+		"18446744073709551616", // MaxUint64+1
+		"99999999999999999999",  // 20 nines
+		"184467440737095516150", // 21 digits
+	} {
+		t.Run("overflow/"+in, func(t *testing.T) {
+			if _, _, err := Uint64([]byte(in), 0); !errors.Is(err, ErrNumberOverflow) {
+				t.Errorf("Uint64(%q): got %v, want ErrNumberOverflow", in, err)
+			}
+		})
+	}
+}
+
 func TestUint64_StdlibParity(t *testing.T) {
 	cases := []string{"0", "1", "42", "18446744073709551615"} // max uint64
 	for _, in := range cases {

@@ -16,19 +16,20 @@ import (
 	"github.com/sirkostya009/ggen/scan"
 )
 
-func (result SQLNullStringStruct) DecodeFrom(data []byte) (SQLNullStringStruct, int, error) {
+func (recv SQLNullStringStruct) DecodeFrom(data []byte) (result SQLNullStringStruct, _ int, _ error) {
 	i := 0
+	result = recv
 	var err error
 	_ = err
 	seenS := false
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
 		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 	i++
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i < len(data) && data[i] == '}' {
@@ -59,14 +60,14 @@ func (result SQLNullStringStruct) DecodeFrom(data []byte) (SQLNullStringStruct, 
 				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
 			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		i++
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		switch key {
@@ -108,7 +109,7 @@ func (result SQLNullStringStruct) DecodeFrom(data []byte) (SQLNullStringStruct, 
 		default:
 			return result, i, &validation.UnknownKeyError{Path: []string{key}}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
@@ -116,7 +117,7 @@ func (result SQLNullStringStruct) DecodeFrom(data []byte) (SQLNullStringStruct, 
 		}
 		if data[i] == ',' {
 			i++
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			continue
@@ -129,7 +130,8 @@ func (result SQLNullStringStruct) DecodeFrom(data []byte) (SQLNullStringStruct, 
 	}
 }
 
-func (result SQLNullStringStruct) DecodeFromStream(s *scan.Stream) (SQLNullStringStruct, error) {
+func (recv SQLNullStringStruct) DecodeFromStream(s *scan.Stream) (result SQLNullStringStruct, _ error) {
+	result = recv
 	seenS := false
 	err := s.ObjectOpen()
 	if err != nil {
@@ -242,19 +244,20 @@ func (s SQLNullStringStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (result SQLNullInt64Struct) DecodeFrom(data []byte) (SQLNullInt64Struct, int, error) {
+func (recv SQLNullInt64Struct) DecodeFrom(data []byte) (result SQLNullInt64Struct, _ int, _ error) {
 	i := 0
+	result = recv
 	var err error
 	_ = err
 	seenI := false
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
 		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 	i++
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i < len(data) && data[i] == '}' {
@@ -285,14 +288,14 @@ func (result SQLNullInt64Struct) DecodeFrom(data []byte) (SQLNullInt64Struct, in
 				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
 			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		i++
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		switch key {
@@ -319,6 +322,14 @@ func (result SQLNullInt64Struct) DecodeFrom(data []byte) (SQLNullInt64Struct, in
 					limit = scan.SignedNeg
 				}
 				var u uint64
+				de := i + 18
+				if de > len(data) {
+					de = len(data)
+				}
+				for i < de && data[i] >= '0' && data[i] <= '9' {
+					u = u*10 + uint64(data[i]-'0')
+					i++
+				}
 				for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 					d := uint64(data[i] - '0')
 					if u > limit/10 || (u == limit/10 && d > limit%10) {
@@ -350,7 +361,7 @@ func (result SQLNullInt64Struct) DecodeFrom(data []byte) (SQLNullInt64Struct, in
 		default:
 			return result, i, &validation.UnknownKeyError{Path: []string{key}}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
@@ -358,7 +369,7 @@ func (result SQLNullInt64Struct) DecodeFrom(data []byte) (SQLNullInt64Struct, in
 		}
 		if data[i] == ',' {
 			i++
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			continue
@@ -371,7 +382,8 @@ func (result SQLNullInt64Struct) DecodeFrom(data []byte) (SQLNullInt64Struct, in
 	}
 }
 
-func (result SQLNullInt64Struct) DecodeFromStream(s *scan.Stream) (SQLNullInt64Struct, error) {
+func (recv SQLNullInt64Struct) DecodeFromStream(s *scan.Stream) (result SQLNullInt64Struct, _ error) {
+	result = recv
 	seenI := false
 	err := s.ObjectOpen()
 	if err != nil {
@@ -482,19 +494,20 @@ func (s SQLNullInt64Struct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (result SQLNullInt32Struct) DecodeFrom(data []byte) (SQLNullInt32Struct, int, error) {
+func (recv SQLNullInt32Struct) DecodeFrom(data []byte) (result SQLNullInt32Struct, _ int, _ error) {
 	i := 0
+	result = recv
 	var err error
 	_ = err
 	seenI32 := false
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
 		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 	i++
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i < len(data) && data[i] == '}' {
@@ -525,14 +538,14 @@ func (result SQLNullInt32Struct) DecodeFrom(data []byte) (SQLNullInt32Struct, in
 				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
 			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		i++
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		switch key {
@@ -559,6 +572,14 @@ func (result SQLNullInt32Struct) DecodeFrom(data []byte) (SQLNullInt32Struct, in
 					limit = scan.SignedNeg
 				}
 				var u uint64
+				de := i + 18
+				if de > len(data) {
+					de = len(data)
+				}
+				for i < de && data[i] >= '0' && data[i] <= '9' {
+					u = u*10 + uint64(data[i]-'0')
+					i++
+				}
 				for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 					d := uint64(data[i] - '0')
 					if u > limit/10 || (u == limit/10 && d > limit%10) {
@@ -590,7 +611,7 @@ func (result SQLNullInt32Struct) DecodeFrom(data []byte) (SQLNullInt32Struct, in
 		default:
 			return result, i, &validation.UnknownKeyError{Path: []string{key}}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
@@ -598,7 +619,7 @@ func (result SQLNullInt32Struct) DecodeFrom(data []byte) (SQLNullInt32Struct, in
 		}
 		if data[i] == ',' {
 			i++
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			continue
@@ -611,7 +632,8 @@ func (result SQLNullInt32Struct) DecodeFrom(data []byte) (SQLNullInt32Struct, in
 	}
 }
 
-func (result SQLNullInt32Struct) DecodeFromStream(s *scan.Stream) (SQLNullInt32Struct, error) {
+func (recv SQLNullInt32Struct) DecodeFromStream(s *scan.Stream) (result SQLNullInt32Struct, _ error) {
+	result = recv
 	seenI32 := false
 	err := s.ObjectOpen()
 	if err != nil {
@@ -722,19 +744,20 @@ func (s SQLNullInt32Struct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (result SQLNullInt16Struct) DecodeFrom(data []byte) (SQLNullInt16Struct, int, error) {
+func (recv SQLNullInt16Struct) DecodeFrom(data []byte) (result SQLNullInt16Struct, _ int, _ error) {
 	i := 0
+	result = recv
 	var err error
 	_ = err
 	seenI16 := false
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
 		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 	i++
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i < len(data) && data[i] == '}' {
@@ -765,14 +788,14 @@ func (result SQLNullInt16Struct) DecodeFrom(data []byte) (SQLNullInt16Struct, in
 				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
 			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		i++
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		switch key {
@@ -799,6 +822,14 @@ func (result SQLNullInt16Struct) DecodeFrom(data []byte) (SQLNullInt16Struct, in
 					limit = scan.SignedNeg
 				}
 				var u uint64
+				de := i + 18
+				if de > len(data) {
+					de = len(data)
+				}
+				for i < de && data[i] >= '0' && data[i] <= '9' {
+					u = u*10 + uint64(data[i]-'0')
+					i++
+				}
 				for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 					d := uint64(data[i] - '0')
 					if u > limit/10 || (u == limit/10 && d > limit%10) {
@@ -830,7 +861,7 @@ func (result SQLNullInt16Struct) DecodeFrom(data []byte) (SQLNullInt16Struct, in
 		default:
 			return result, i, &validation.UnknownKeyError{Path: []string{key}}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
@@ -838,7 +869,7 @@ func (result SQLNullInt16Struct) DecodeFrom(data []byte) (SQLNullInt16Struct, in
 		}
 		if data[i] == ',' {
 			i++
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			continue
@@ -851,7 +882,8 @@ func (result SQLNullInt16Struct) DecodeFrom(data []byte) (SQLNullInt16Struct, in
 	}
 }
 
-func (result SQLNullInt16Struct) DecodeFromStream(s *scan.Stream) (SQLNullInt16Struct, error) {
+func (recv SQLNullInt16Struct) DecodeFromStream(s *scan.Stream) (result SQLNullInt16Struct, _ error) {
+	result = recv
 	seenI16 := false
 	err := s.ObjectOpen()
 	if err != nil {
@@ -962,19 +994,20 @@ func (s SQLNullInt16Struct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (result SQLNullByteStruct) DecodeFrom(data []byte) (SQLNullByteStruct, int, error) {
+func (recv SQLNullByteStruct) DecodeFrom(data []byte) (result SQLNullByteStruct, _ int, _ error) {
 	i := 0
+	result = recv
 	var err error
 	_ = err
 	seenB := false
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
 		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 	i++
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i < len(data) && data[i] == '}' {
@@ -1005,14 +1038,14 @@ func (result SQLNullByteStruct) DecodeFrom(data []byte) (SQLNullByteStruct, int,
 				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
 			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		i++
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		switch key {
@@ -1030,6 +1063,14 @@ func (result SQLNullByteStruct) DecodeFrom(data []byte) (SQLNullByteStruct, int,
 					return result, i, decode.NewParseErr("b", i, scan.ErrBadNumber)
 				}
 				var n uint64
+				de := i + 19
+				if de > len(data) {
+					de = len(data)
+				}
+				for i < de && data[i] >= '0' && data[i] <= '9' {
+					n = n*10 + uint64(data[i]-'0')
+					i++
+				}
 				for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 					d := uint64(data[i] - '0')
 					if n > scan.Uint64Limit/10 || (n == scan.Uint64Limit/10 && d > scan.Uint64Limit%10) {
@@ -1045,7 +1086,7 @@ func (result SQLNullByteStruct) DecodeFrom(data []byte) (SQLNullByteStruct, int,
 		default:
 			return result, i, &validation.UnknownKeyError{Path: []string{key}}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
@@ -1053,7 +1094,7 @@ func (result SQLNullByteStruct) DecodeFrom(data []byte) (SQLNullByteStruct, int,
 		}
 		if data[i] == ',' {
 			i++
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			continue
@@ -1066,7 +1107,8 @@ func (result SQLNullByteStruct) DecodeFrom(data []byte) (SQLNullByteStruct, int,
 	}
 }
 
-func (result SQLNullByteStruct) DecodeFromStream(s *scan.Stream) (SQLNullByteStruct, error) {
+func (recv SQLNullByteStruct) DecodeFromStream(s *scan.Stream) (result SQLNullByteStruct, _ error) {
+	result = recv
 	seenB := false
 	err := s.ObjectOpen()
 	if err != nil {
@@ -1177,19 +1219,20 @@ func (s SQLNullByteStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (result SQLNullBoolStruct) DecodeFrom(data []byte) (SQLNullBoolStruct, int, error) {
+func (recv SQLNullBoolStruct) DecodeFrom(data []byte) (result SQLNullBoolStruct, _ int, _ error) {
 	i := 0
+	result = recv
 	var err error
 	_ = err
 	seenBL := false
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
 		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 	i++
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i < len(data) && data[i] == '}' {
@@ -1220,14 +1263,14 @@ func (result SQLNullBoolStruct) DecodeFrom(data []byte) (SQLNullBoolStruct, int,
 				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
 			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		i++
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		switch key {
@@ -1251,7 +1294,7 @@ func (result SQLNullBoolStruct) DecodeFrom(data []byte) (SQLNullBoolStruct, int,
 		default:
 			return result, i, &validation.UnknownKeyError{Path: []string{key}}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
@@ -1259,7 +1302,7 @@ func (result SQLNullBoolStruct) DecodeFrom(data []byte) (SQLNullBoolStruct, int,
 		}
 		if data[i] == ',' {
 			i++
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			continue
@@ -1272,7 +1315,8 @@ func (result SQLNullBoolStruct) DecodeFrom(data []byte) (SQLNullBoolStruct, int,
 	}
 }
 
-func (result SQLNullBoolStruct) DecodeFromStream(s *scan.Stream) (SQLNullBoolStruct, error) {
+func (recv SQLNullBoolStruct) DecodeFromStream(s *scan.Stream) (result SQLNullBoolStruct, _ error) {
+	result = recv
 	seenBL := false
 	err := s.ObjectOpen()
 	if err != nil {
@@ -1383,19 +1427,20 @@ func (s SQLNullBoolStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (result SQLNullFloat64Struct) DecodeFrom(data []byte) (SQLNullFloat64Struct, int, error) {
+func (recv SQLNullFloat64Struct) DecodeFrom(data []byte) (result SQLNullFloat64Struct, _ int, _ error) {
 	i := 0
+	result = recv
 	var err error
 	_ = err
 	seenF := false
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
 		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 	i++
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i < len(data) && data[i] == '}' {
@@ -1426,14 +1471,14 @@ func (result SQLNullFloat64Struct) DecodeFrom(data []byte) (SQLNullFloat64Struct
 				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
 			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		i++
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		switch key {
@@ -1457,7 +1502,7 @@ func (result SQLNullFloat64Struct) DecodeFrom(data []byte) (SQLNullFloat64Struct
 		default:
 			return result, i, &validation.UnknownKeyError{Path: []string{key}}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
@@ -1465,7 +1510,7 @@ func (result SQLNullFloat64Struct) DecodeFrom(data []byte) (SQLNullFloat64Struct
 		}
 		if data[i] == ',' {
 			i++
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			continue
@@ -1478,7 +1523,8 @@ func (result SQLNullFloat64Struct) DecodeFrom(data []byte) (SQLNullFloat64Struct
 	}
 }
 
-func (result SQLNullFloat64Struct) DecodeFromStream(s *scan.Stream) (SQLNullFloat64Struct, error) {
+func (recv SQLNullFloat64Struct) DecodeFromStream(s *scan.Stream) (result SQLNullFloat64Struct, _ error) {
+	result = recv
 	seenF := false
 	err := s.ObjectOpen()
 	if err != nil {
@@ -1591,19 +1637,20 @@ func (s SQLNullFloat64Struct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (result SQLNullTimeStruct) DecodeFrom(data []byte) (SQLNullTimeStruct, int, error) {
+func (recv SQLNullTimeStruct) DecodeFrom(data []byte) (result SQLNullTimeStruct, _ int, _ error) {
 	i := 0
+	result = recv
 	var err error
 	_ = err
 	seenT := false
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
 		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 	i++
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i < len(data) && data[i] == '}' {
@@ -1634,14 +1681,14 @@ func (result SQLNullTimeStruct) DecodeFrom(data []byte) (SQLNullTimeStruct, int,
 				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
 			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		i++
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		switch key {
@@ -1688,7 +1735,7 @@ func (result SQLNullTimeStruct) DecodeFrom(data []byte) (SQLNullTimeStruct, int,
 		default:
 			return result, i, &validation.UnknownKeyError{Path: []string{key}}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
@@ -1696,7 +1743,7 @@ func (result SQLNullTimeStruct) DecodeFrom(data []byte) (SQLNullTimeStruct, int,
 		}
 		if data[i] == ',' {
 			i++
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			continue
@@ -1709,7 +1756,8 @@ func (result SQLNullTimeStruct) DecodeFrom(data []byte) (SQLNullTimeStruct, int,
 	}
 }
 
-func (result SQLNullTimeStruct) DecodeFromStream(s *scan.Stream) (SQLNullTimeStruct, error) {
+func (recv SQLNullTimeStruct) DecodeFromStream(s *scan.Stream) (result SQLNullTimeStruct, _ error) {
+	result = recv
 	seenT := false
 	err := s.ObjectOpen()
 	if err != nil {
@@ -1827,8 +1875,9 @@ func (s SQLNullTimeStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (result SQLNullStruct) DecodeFrom(data []byte) (SQLNullStruct, int, error) {
+func (recv SQLNullStruct) DecodeFrom(data []byte) (result SQLNullStruct, _ int, _ error) {
 	i := 0
+	result = recv
 	var err error
 	_ = err
 	seenB := false
@@ -1839,14 +1888,14 @@ func (result SQLNullStruct) DecodeFrom(data []byte) (SQLNullStruct, int, error) 
 	seenI32 := false
 	seenS := false
 	seenT := false
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
 		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 	i++
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i < len(data) && data[i] == '}' {
@@ -1877,14 +1926,14 @@ func (result SQLNullStruct) DecodeFrom(data []byte) (SQLNullStruct, int, error) 
 				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
 			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		i++
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		switch key {
@@ -1902,6 +1951,14 @@ func (result SQLNullStruct) DecodeFrom(data []byte) (SQLNullStruct, int, error) 
 					return result, i, decode.NewParseErr("b", i, scan.ErrBadNumber)
 				}
 				var n uint64
+				de := i + 19
+				if de > len(data) {
+					de = len(data)
+				}
+				for i < de && data[i] >= '0' && data[i] <= '9' {
+					n = n*10 + uint64(data[i]-'0')
+					i++
+				}
 				for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 					d := uint64(data[i] - '0')
 					if n > scan.Uint64Limit/10 || (n == scan.Uint64Limit/10 && d > scan.Uint64Limit%10) {
@@ -1971,6 +2028,14 @@ func (result SQLNullStruct) DecodeFrom(data []byte) (SQLNullStruct, int, error) 
 					limit = scan.SignedNeg
 				}
 				var u uint64
+				de := i + 18
+				if de > len(data) {
+					de = len(data)
+				}
+				for i < de && data[i] >= '0' && data[i] <= '9' {
+					u = u*10 + uint64(data[i]-'0')
+					i++
+				}
 				for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 					d := uint64(data[i] - '0')
 					if u > limit/10 || (u == limit/10 && d > limit%10) {
@@ -2022,6 +2087,14 @@ func (result SQLNullStruct) DecodeFrom(data []byte) (SQLNullStruct, int, error) 
 					limit = scan.SignedNeg
 				}
 				var u uint64
+				de := i + 18
+				if de > len(data) {
+					de = len(data)
+				}
+				for i < de && data[i] >= '0' && data[i] <= '9' {
+					u = u*10 + uint64(data[i]-'0')
+					i++
+				}
 				for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 					d := uint64(data[i] - '0')
 					if u > limit/10 || (u == limit/10 && d > limit%10) {
@@ -2073,6 +2146,14 @@ func (result SQLNullStruct) DecodeFrom(data []byte) (SQLNullStruct, int, error) 
 					limit = scan.SignedNeg
 				}
 				var u uint64
+				de := i + 18
+				if de > len(data) {
+					de = len(data)
+				}
+				for i < de && data[i] >= '0' && data[i] <= '9' {
+					u = u*10 + uint64(data[i]-'0')
+					i++
+				}
 				for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 					d := uint64(data[i] - '0')
 					if u > limit/10 || (u == limit/10 && d > limit%10) {
@@ -2179,7 +2260,7 @@ func (result SQLNullStruct) DecodeFrom(data []byte) (SQLNullStruct, int, error) 
 		default:
 			return result, i, &validation.UnknownKeyError{Path: []string{key}}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
@@ -2187,7 +2268,7 @@ func (result SQLNullStruct) DecodeFrom(data []byte) (SQLNullStruct, int, error) 
 		}
 		if data[i] == ',' {
 			i++
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			continue
@@ -2200,7 +2281,8 @@ func (result SQLNullStruct) DecodeFrom(data []byte) (SQLNullStruct, int, error) 
 	}
 }
 
-func (result SQLNullStruct) DecodeFromStream(s *scan.Stream) (SQLNullStruct, error) {
+func (recv SQLNullStruct) DecodeFromStream(s *scan.Stream) (result SQLNullStruct, _ error) {
+	result = recv
 	seenB := false
 	seenBL := false
 	seenF := false

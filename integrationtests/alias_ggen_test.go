@@ -14,8 +14,9 @@ import (
 	"github.com/sirkostya009/ggen/scan"
 )
 
-func (result AliasString) DecodeFrom(data []byte) (AliasString, int, error) {
+func (recv AliasString) DecodeFrom(data []byte) (result AliasString, _ int, _ error) {
 	i := 0
+	result = recv
 	var err error
 	_ = err
 	var v string
@@ -27,7 +28,8 @@ func (result AliasString) DecodeFrom(data []byte) (AliasString, int, error) {
 	return result, i, nil
 }
 
-func (result AliasString) DecodeFromStream(s *scan.Stream) (AliasString, error) {
+func (recv AliasString) DecodeFromStream(s *scan.Stream) (result AliasString, _ error) {
+	result = recv
 	var err error
 	_ = err
 	var v string
@@ -49,8 +51,9 @@ func (s AliasString) AppendJSON(dst []byte) ([]byte, error) {
 	return dst, nil
 }
 
-func (result AliasHTML) DecodeFrom(data []byte) (AliasHTML, int, error) {
+func (recv AliasHTML) DecodeFrom(data []byte) (result AliasHTML, _ int, _ error) {
 	i := 0
+	result = recv
 	var err error
 	_ = err
 	var v string
@@ -62,7 +65,8 @@ func (result AliasHTML) DecodeFrom(data []byte) (AliasHTML, int, error) {
 	return result, i, nil
 }
 
-func (result AliasHTML) DecodeFromStream(s *scan.Stream) (AliasHTML, error) {
+func (recv AliasHTML) DecodeFromStream(s *scan.Stream) (result AliasHTML, _ error) {
+	result = recv
 	var err error
 	_ = err
 	var v string
@@ -84,8 +88,9 @@ func (s AliasHTML) AppendJSON(dst []byte) ([]byte, error) {
 	return dst, nil
 }
 
-func (result AliasInt) DecodeFrom(data []byte) (AliasInt, int, error) {
+func (recv AliasInt) DecodeFrom(data []byte) (result AliasInt, _ int, _ error) {
 	i := 0
+	result = recv
 	var err error
 	_ = err
 	var v int64
@@ -97,7 +102,8 @@ func (result AliasInt) DecodeFrom(data []byte) (AliasInt, int, error) {
 	return result, i, nil
 }
 
-func (result AliasInt) DecodeFromStream(s *scan.Stream) (AliasInt, error) {
+func (recv AliasInt) DecodeFromStream(s *scan.Stream) (result AliasInt, _ error) {
+	result = recv
 	var err error
 	_ = err
 	var v int64
@@ -117,8 +123,9 @@ func (s AliasInt) AppendJSON(dst []byte) ([]byte, error) {
 	return strconv.AppendInt(dst, int64(s), 10), nil
 }
 
-func (result AliasUint64) DecodeFrom(data []byte) (AliasUint64, int, error) {
+func (recv AliasUint64) DecodeFrom(data []byte) (result AliasUint64, _ int, _ error) {
 	i := 0
+	result = recv
 	var err error
 	_ = err
 	var v uint64
@@ -130,7 +137,8 @@ func (result AliasUint64) DecodeFrom(data []byte) (AliasUint64, int, error) {
 	return result, i, nil
 }
 
-func (result AliasUint64) DecodeFromStream(s *scan.Stream) (AliasUint64, error) {
+func (recv AliasUint64) DecodeFromStream(s *scan.Stream) (result AliasUint64, _ error) {
+	result = recv
 	var err error
 	_ = err
 	var v uint64
@@ -150,8 +158,9 @@ func (s AliasUint64) AppendJSON(dst []byte) ([]byte, error) {
 	return strconv.AppendUint(dst, uint64(s), 10), nil
 }
 
-func (result AliasFloat64) DecodeFrom(data []byte) (AliasFloat64, int, error) {
+func (recv AliasFloat64) DecodeFrom(data []byte) (result AliasFloat64, _ int, _ error) {
 	i := 0
+	result = recv
 	var err error
 	_ = err
 	var v float64
@@ -163,7 +172,8 @@ func (result AliasFloat64) DecodeFrom(data []byte) (AliasFloat64, int, error) {
 	return result, i, nil
 }
 
-func (result AliasFloat64) DecodeFromStream(s *scan.Stream) (AliasFloat64, error) {
+func (recv AliasFloat64) DecodeFromStream(s *scan.Stream) (result AliasFloat64, _ error) {
+	result = recv
 	var err error
 	_ = err
 	var v float64
@@ -183,8 +193,9 @@ func (s AliasFloat64) AppendJSON(dst []byte) ([]byte, error) {
 	return strconv.AppendFloat(dst, float64(s), 'g', -1, 64), nil
 }
 
-func (result AliasBool) DecodeFrom(data []byte) (AliasBool, int, error) {
+func (recv AliasBool) DecodeFrom(data []byte) (result AliasBool, _ int, _ error) {
 	i := 0
+	result = recv
 	var err error
 	_ = err
 	var v bool
@@ -196,7 +207,8 @@ func (result AliasBool) DecodeFrom(data []byte) (AliasBool, int, error) {
 	return result, i, nil
 }
 
-func (result AliasBool) DecodeFromStream(s *scan.Stream) (AliasBool, error) {
+func (recv AliasBool) DecodeFromStream(s *scan.Stream) (result AliasBool, _ error) {
+	result = recv
 	var err error
 	_ = err
 	var v bool
@@ -216,20 +228,21 @@ func (s AliasBool) AppendJSON(dst []byte) ([]byte, error) {
 	return strconv.AppendBool(dst, bool(s)), nil
 }
 
-func (result PlainAlias) DecodeFrom(data []byte) (PlainAlias, int, error) {
+func (recv PlainAlias) DecodeFrom(data []byte) (result PlainAlias, _ int, _ error) {
 	i := 0
+	result = recv
 	var err error
 	_ = err
 	seenCount := false
 	seenTitle := false
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
 		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 	i++
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i < len(data) && data[i] == '}' {
@@ -260,14 +273,14 @@ func (result PlainAlias) DecodeFrom(data []byte) (PlainAlias, int, error) {
 				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
 			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		i++
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		switch key {
@@ -289,6 +302,14 @@ func (result PlainAlias) DecodeFrom(data []byte) (PlainAlias, int, error) {
 				limit = scan.SignedNeg
 			}
 			var u uint64
+			de := i + 18
+			if de > len(data) {
+				de = len(data)
+			}
+			for i < de && data[i] >= '0' && data[i] <= '9' {
+				u = u*10 + uint64(data[i]-'0')
+				i++
+			}
 			for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 				d := uint64(data[i] - '0')
 				if u > limit/10 || (u == limit/10 && d > limit%10) {
@@ -344,7 +365,7 @@ func (result PlainAlias) DecodeFrom(data []byte) (PlainAlias, int, error) {
 		default:
 			return result, i, &validation.UnknownKeyError{Path: []string{key}}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
@@ -352,7 +373,7 @@ func (result PlainAlias) DecodeFrom(data []byte) (PlainAlias, int, error) {
 		}
 		if data[i] == ',' {
 			i++
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			continue
@@ -365,7 +386,8 @@ func (result PlainAlias) DecodeFrom(data []byte) (PlainAlias, int, error) {
 	}
 }
 
-func (result PlainAlias) DecodeFromStream(s *scan.Stream) (PlainAlias, error) {
+func (recv PlainAlias) DecodeFromStream(s *scan.Stream) (result PlainAlias, _ error) {
+	result = recv
 	seenCount := false
 	seenTitle := false
 	err := s.ObjectOpen()
@@ -468,20 +490,21 @@ func (s PlainAlias) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (result SamePkgAlias) DecodeFrom(data []byte) (SamePkgAlias, int, error) {
+func (recv SamePkgAlias) DecodeFrom(data []byte) (result SamePkgAlias, _ int, _ error) {
 	i := 0
+	result = recv
 	var err error
 	_ = err
 	seenX := false
 	seenY := false
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
 		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 	i++
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i < len(data) && data[i] == '}' {
@@ -512,14 +535,14 @@ func (result SamePkgAlias) DecodeFrom(data []byte) (SamePkgAlias, int, error) {
 				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
 			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		i++
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		switch key {
@@ -541,6 +564,14 @@ func (result SamePkgAlias) DecodeFrom(data []byte) (SamePkgAlias, int, error) {
 				limit = scan.SignedNeg
 			}
 			var u uint64
+			de := i + 18
+			if de > len(data) {
+				de = len(data)
+			}
+			for i < de && data[i] >= '0' && data[i] <= '9' {
+				u = u*10 + uint64(data[i]-'0')
+				i++
+			}
 			for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 				d := uint64(data[i] - '0')
 				if u > limit/10 || (u == limit/10 && d > limit%10) {
@@ -596,7 +627,7 @@ func (result SamePkgAlias) DecodeFrom(data []byte) (SamePkgAlias, int, error) {
 		default:
 			return result, i, &validation.UnknownKeyError{Path: []string{key}}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
@@ -604,7 +635,7 @@ func (result SamePkgAlias) DecodeFrom(data []byte) (SamePkgAlias, int, error) {
 		}
 		if data[i] == ',' {
 			i++
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			continue
@@ -617,7 +648,8 @@ func (result SamePkgAlias) DecodeFrom(data []byte) (SamePkgAlias, int, error) {
 	}
 }
 
-func (result SamePkgAlias) DecodeFromStream(s *scan.Stream) (SamePkgAlias, error) {
+func (recv SamePkgAlias) DecodeFromStream(s *scan.Stream) (result SamePkgAlias, _ error) {
+	result = recv
 	seenX := false
 	seenY := false
 	err := s.ObjectOpen()
@@ -720,20 +752,21 @@ func (s SamePkgAlias) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (result CrossPkgTaggedAlias) DecodeFrom(data []byte) (CrossPkgTaggedAlias, int, error) {
+func (recv CrossPkgTaggedAlias) DecodeFrom(data []byte) (result CrossPkgTaggedAlias, _ int, _ error) {
 	i := 0
+	result = recv
 	var err error
 	_ = err
 	seenName := false
 	seenTag := false
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
 		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 	i++
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i < len(data) && data[i] == '}' {
@@ -764,14 +797,14 @@ func (result CrossPkgTaggedAlias) DecodeFrom(data []byte) (CrossPkgTaggedAlias, 
 				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
 			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		i++
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		switch key {
@@ -832,7 +865,7 @@ func (result CrossPkgTaggedAlias) DecodeFrom(data []byte) (CrossPkgTaggedAlias, 
 		default:
 			return result, i, &validation.UnknownKeyError{Path: []string{key}}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
@@ -840,7 +873,7 @@ func (result CrossPkgTaggedAlias) DecodeFrom(data []byte) (CrossPkgTaggedAlias, 
 		}
 		if data[i] == ',' {
 			i++
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			continue
@@ -853,7 +886,8 @@ func (result CrossPkgTaggedAlias) DecodeFrom(data []byte) (CrossPkgTaggedAlias, 
 	}
 }
 
-func (result CrossPkgTaggedAlias) DecodeFromStream(s *scan.Stream) (CrossPkgTaggedAlias, error) {
+func (recv CrossPkgTaggedAlias) DecodeFromStream(s *scan.Stream) (result CrossPkgTaggedAlias, _ error) {
+	result = recv
 	seenName := false
 	seenTag := false
 	err := s.ObjectOpen()
@@ -955,8 +989,9 @@ func (s CrossPkgTaggedAlias) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (result OpaqueAlias) DecodeFrom(data []byte) (OpaqueAlias, int, error) {
+func (recv OpaqueAlias) DecodeFrom(data []byte) (result OpaqueAlias, _ int, _ error) {
 	i := 0
+	result = recv
 	start := i
 	k, err := scan.SkipValue(data, start)
 	if err != nil {
@@ -970,7 +1005,8 @@ func (result OpaqueAlias) DecodeFrom(data []byte) (OpaqueAlias, int, error) {
 	return result, k, nil
 }
 
-func (result OpaqueAlias) DecodeFromStream(s *scan.Stream) (OpaqueAlias, error) {
+func (recv OpaqueAlias) DecodeFromStream(s *scan.Stream) (result OpaqueAlias, _ error) {
+	result = recv
 	start := s.Pos
 	prevPin := s.Shift
 	s.Shift = false
@@ -995,14 +1031,15 @@ func (s OpaqueAlias) AppendJSON(dst []byte) ([]byte, error) {
 	return OpaqueWithMethods(s).MarshalJSON()
 }
 
-func (result AliasTags) DecodeFrom(data []byte) (AliasTags, int, error) {
+func (recv AliasTags) DecodeFrom(data []byte) (result AliasTags, _ int, _ error) {
 	i := 0
+	result = recv
 	var err error
 	_ = err
 	if result != nil {
 		result = result[:0]
 	}
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -1013,7 +1050,7 @@ func (result AliasTags) DecodeFrom(data []byte) (AliasTags, int, error) {
 			return result, i, scan.ErrBadArray
 		}
 		i++
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i < len(data) && data[i] == ']' {
@@ -1049,12 +1086,12 @@ func (result AliasTags) DecodeFrom(data []byte) (AliasTags, int, error) {
 					return result, i, decode.NewParseErr("", i, err)
 				}
 			}
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			if i < len(data) && data[i] == ',' {
 				i++
-				for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 					i++
 				}
 				if i >= len(data) || data[i] == ']' {
@@ -1072,7 +1109,8 @@ func (result AliasTags) DecodeFrom(data []byte) (AliasTags, int, error) {
 	return result, i, nil
 }
 
-func (result AliasTags) DecodeFromStream(s *scan.Stream) (AliasTags, error) {
+func (recv AliasTags) DecodeFromStream(s *scan.Stream) (result AliasTags, _ error) {
+	result = recv
 	var err error
 	_ = err
 	if result != nil {
@@ -1182,14 +1220,15 @@ func (s AliasTags) AppendJSON(dst []byte) ([]byte, error) {
 	return dst, nil
 }
 
-func (result AliasLookup) DecodeFrom(data []byte) (AliasLookup, int, error) {
+func (recv AliasLookup) DecodeFrom(data []byte) (result AliasLookup, _ int, _ error) {
 	i := 0
+	result = recv
 	var err error
 	_ = err
 	if result != nil {
 		clear(result)
 	}
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -1200,7 +1239,7 @@ func (result AliasLookup) DecodeFrom(data []byte) (AliasLookup, int, error) {
 			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		i++
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i < len(data) && data[i] == '}' {
@@ -1236,14 +1275,14 @@ func (result AliasLookup) DecodeFrom(data []byte) (AliasLookup, int, error) {
 					return result, i, decode.NewParseErr("", i, err)
 				}
 			}
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			if i >= len(data) || data[i] != ':' {
 				return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 			}
 			i++
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			neg := false
@@ -1259,6 +1298,14 @@ func (result AliasLookup) DecodeFrom(data []byte) (AliasLookup, int, error) {
 				limit = scan.SignedNeg
 			}
 			var u uint64
+			de := i + 18
+			if de > len(data) {
+				de = len(data)
+			}
+			for i < de && data[i] >= '0' && data[i] <= '9' {
+				u = u*10 + uint64(data[i]-'0')
+				i++
+			}
 			for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 				d := uint64(data[i] - '0')
 				if u > limit/10 || (u == limit/10 && d > limit%10) {
@@ -1284,12 +1331,12 @@ func (result AliasLookup) DecodeFrom(data []byte) (AliasLookup, int, error) {
 				n = int64(u)
 			}
 			result[mk] = int(n)
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			if i < len(data) && data[i] == ',' {
 				i++
-				for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 					i++
 				}
 				if i >= len(data) || data[i] == '}' {
@@ -1307,7 +1354,8 @@ func (result AliasLookup) DecodeFrom(data []byte) (AliasLookup, int, error) {
 	return result, i, nil
 }
 
-func (result AliasLookup) DecodeFromStream(s *scan.Stream) (AliasLookup, error) {
+func (recv AliasLookup) DecodeFromStream(s *scan.Stream) (result AliasLookup, _ error) {
+	result = recv
 	var err error
 	_ = err
 	if result != nil {
@@ -1443,18 +1491,19 @@ func (s AliasLookup) AppendJSON(dst []byte) ([]byte, error) {
 	return dst, nil
 }
 
-func (result AliasTuple) DecodeFrom(data []byte) (AliasTuple, int, error) {
+func (recv AliasTuple) DecodeFrom(data []byte) (result AliasTuple, _ int, _ error) {
 	i := 0
+	result = recv
 	var err error
 	_ = err
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i >= len(data) || data[i] != '[' {
 		return result, i, scan.ErrBadArray
 	}
 	i++
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	var idx0 int
@@ -1475,6 +1524,14 @@ func (result AliasTuple) DecodeFrom(data []byte) (AliasTuple, int, error) {
 			limit = scan.SignedNeg
 		}
 		var u uint64
+		de := i + 18
+		if de > len(data) {
+			de = len(data)
+		}
+		for i < de && data[i] >= '0' && data[i] <= '9' {
+			u = u*10 + uint64(data[i]-'0')
+			i++
+		}
 		for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 			d := uint64(data[i] - '0')
 			if u > limit/10 || (u == limit/10 && d > limit%10) {
@@ -1501,12 +1558,12 @@ func (result AliasTuple) DecodeFrom(data []byte) (AliasTuple, int, error) {
 		}
 		result[idx0] = int(n)
 		idx0++
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i < len(data) && data[i] == ',' {
 			i++
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			if i >= len(data) || data[i] == ']' {
@@ -1526,7 +1583,8 @@ func (result AliasTuple) DecodeFrom(data []byte) (AliasTuple, int, error) {
 	return result, i, nil
 }
 
-func (result AliasTuple) DecodeFromStream(s *scan.Stream) (AliasTuple, error) {
+func (recv AliasTuple) DecodeFromStream(s *scan.Stream) (result AliasTuple, _ error) {
+	result = recv
 	var err error
 	_ = err
 	err = s.ArrayOpen()
@@ -1603,20 +1661,21 @@ func (s AliasTuple) AppendJSON(dst []byte) ([]byte, error) {
 	return dst, nil
 }
 
-func (result AliasFieldExample) DecodeFrom(data []byte) (AliasFieldExample, int, error) {
+func (recv AliasFieldExample) DecodeFrom(data []byte) (result AliasFieldExample, _ int, _ error) {
 	i := 0
+	result = recv
 	var err error
 	_ = err
 	seenBody := false
 	seenCount := false
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
 		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 	i++
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i < len(data) && data[i] == '}' {
@@ -1650,14 +1709,14 @@ func (result AliasFieldExample) DecodeFrom(data []byte) (AliasFieldExample, int,
 				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
 			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		i++
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		switch key {
@@ -1706,7 +1765,7 @@ func (result AliasFieldExample) DecodeFrom(data []byte) (AliasFieldExample, int,
 		default:
 			return result, i, &validation.UnknownKeyError{Path: []string{key}}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
@@ -1714,7 +1773,7 @@ func (result AliasFieldExample) DecodeFrom(data []byte) (AliasFieldExample, int,
 		}
 		if data[i] == ',' {
 			i++
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			continue
@@ -1730,7 +1789,8 @@ func (result AliasFieldExample) DecodeFrom(data []byte) (AliasFieldExample, int,
 	}
 }
 
-func (result AliasFieldExample) DecodeFromStream(s *scan.Stream) (AliasFieldExample, error) {
+func (recv AliasFieldExample) DecodeFromStream(s *scan.Stream) (result AliasFieldExample, _ error) {
+	result = recv
 	seenBody := false
 	seenCount := false
 	err := s.ObjectOpen()

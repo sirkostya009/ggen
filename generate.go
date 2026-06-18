@@ -2383,9 +2383,13 @@ func preallocCap(f FieldInfo) (slice, slab int) {
 func fieldLit(f FieldInfo) string { return strconv.Quote(f.JSONName) }
 
 func inlineSkipWS(b *bytes.Buffer, posVar string) {
+	// `data[i] <= ' '` gates the 4-way whitespace test: on compact JSON the
+	// loop never runs and the dominant non-whitespace byte exits on a single
+	// compare (gc lowers `<= ' '` to one CMPB+JHI, flags reused by the `== ' '`
+	// branch). Boolean-identical accept set — every whitespace char is <= ' '.
 	fmt.Fprintf(b,
-		"for %s < len(data) && (data[%s] == ' ' || data[%s] == '\\t' || data[%s] == '\\n' || data[%s] == '\\r') { %s++ }\n",
-		posVar, posVar, posVar, posVar, posVar, posVar)
+		"for %s < len(data) && data[%s] <= ' ' && (data[%s] == ' ' || data[%s] == '\\t' || data[%s] == '\\n' || data[%s] == '\\r') { %s++ }\n",
+		posVar, posVar, posVar, posVar, posVar, posVar, posVar)
 }
 
 // inlineNullPeek emits an inline `null` literal check on posVar. On a match,
@@ -2454,6 +2458,12 @@ if %[1]s >= len(data) || data[%[1]s] < '0' || data[%[1]s] > '9' { return result,
 limit := uint64(math.MaxInt64)
 if neg { limit = scan.SignedNeg }
 var u uint64
+de := %[1]s + 18
+if de > len(data) { de = len(data) }
+for %[1]s < de && data[%[1]s] >= '0' && data[%[1]s] <= '9' {
+	u = u*10 + uint64(data[%[1]s]-'0')
+	%[1]s++
+}
 for %[1]s < len(data) && data[%[1]s] >= '0' && data[%[1]s] <= '9' {
 	d := uint64(data[%[1]s]-'0')
 	if u > limit/10 || (u == limit/10 && d > limit%%10) {
@@ -2496,6 +2506,12 @@ func inlineScanUint64(b *bytes.Buffer, posVar, dst, castFn, field string) {
 func inlineScanUint64Stmt(b *bytes.Buffer, posVar, field, stmt string) {
 	fmt.Fprintf(b, `if %[1]s >= len(data) || data[%[1]s] < '0' || data[%[1]s] > '9' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrBadNumber) }
 var n uint64
+de := %[1]s + 19
+if de > len(data) { de = len(data) }
+for %[1]s < de && data[%[1]s] >= '0' && data[%[1]s] <= '9' {
+	n = n*10 + uint64(data[%[1]s]-'0')
+	%[1]s++
+}
 for %[1]s < len(data) && data[%[1]s] >= '0' && data[%[1]s] <= '9' {
 	d := uint64(data[%[1]s]-'0')
 	if n > scan.Uint64Limit/10 || (n == scan.Uint64Limit/10 && d > scan.Uint64Limit%%10) {
@@ -2592,8 +2608,15 @@ func emitReceiverReset(b *bytes.Buffer, s StructInfo) {
 // instead of a string compare per case. Whitespace skipping is inlined at
 // each hot-path site to avoid the ~5ns/call overhead dominating runtime.
 func renderDecode(b *bytes.Buffer, s StructInfo) {
-	fmt.Fprintf(b, "func (result %s) DecodeFrom(data []byte) (%s, int, error) {\n", s.Name, s.Name)
-	b.WriteString("i := 0\n")
+	// Named first result `result` homes the value directly in the
+	// caller-allocated return slot; the `result = recv` prologue seeds it from
+	// the receiver (merge source). Every `return result, …` then compiles to
+	// register sets + RET with no struct copy — vs an anonymous result, where
+	// each of the ~99 RET sites copies the full receiver-sized struct. Happy
+	// path is copy-neutral (the one entry copy replaces the one exit copy);
+	// error paths and function text shrink. See perf-candidates [15].
+	fmt.Fprintf(b, "func (recv %s) DecodeFrom(data []byte) (result %s, _ int, _ error) {\n", s.Name, s.Name)
+	b.WriteString("i := 0\nresult = recv\n")
 	if s.IsAlias {
 		renderAliasDecode(b, s)
 		b.WriteString("}\n\n")
@@ -4356,7 +4379,9 @@ func emitByteSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth i
 // array is fixed-capacity and never reallocates — zero-copy string aliases
 // stay valid for the lifetime of the Stream.
 func renderStreamDecode(b *bytes.Buffer, s StructInfo) {
-	fmt.Fprintf(b, "func (result %s) DecodeFromStream(s *scan.Stream) (%s, error) {\n", s.Name, s.Name)
+	// Named-result return slot — see DecodeFrom above.
+	fmt.Fprintf(b, "func (recv %s) DecodeFromStream(s *scan.Stream) (result %s, _ error) {\n", s.Name, s.Name)
+	b.WriteString("result = recv\n")
 	if s.IsAlias {
 		renderAliasStreamDecode(b, s)
 		b.WriteString("}\n\n")

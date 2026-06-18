@@ -157,6 +157,18 @@ func (s *Stream) ReadMore(keep int) error {
 // capture), ReadMore behaves as grow-only and Pos stays where it
 // was.
 func (s *Stream) SkipSpace() error {
+	// Two-tier: the dominant compact-JSON case (cursor in-bounds, current
+	// byte non-whitespace) returns inline. Everything else — whitespace to
+	// skip, control bytes, refill at EOF — falls to skipSpaceSlow. The exact
+	// no-temp shape is load-bearing: it inlines at cost 77 (budget 80); an
+	// `i := s.Pos` temp variant costs 81 and does NOT inline.
+	if s.Pos < len(s.buf) && s.buf[s.Pos] > ' ' {
+		return nil
+	}
+	return s.skipSpaceSlow()
+}
+
+func (s *Stream) skipSpaceSlow() error {
 	i := s.Pos
 	for {
 		if i >= len(s.buf) {
@@ -322,7 +334,29 @@ func (s *Stream) KeyView() (string, error) {
 		return "", ErrExpectString
 	}
 	start := i + 1
-	j := start
+	// Scalar prelude: dispatch keys are short (a few bytes), so one pass
+	// locates the closing quote while validating backslash/control — sparing
+	// the two bytes.IndexByte call setups that lose to a tight scalar loop on
+	// short spans. A key longer than the window, an escape, or a quote not yet
+	// buffered falls through to the IndexByte loop below, which RESUMES at the
+	// window end (j = we) so the prelude-validated prefix is never re-scanned.
+	// Applied to KeyView (short keys) but not Stream.String — value strings
+	// are often long (base64), where the SIMD IndexByte path wins.
+	we := min(start+stringPreludeWindow, len(s.buf))
+	for k := start; k < we; k++ {
+		c := s.buf[k]
+		if c == '"' {
+			s.Pos = k + 1
+			return unsafe.String(unsafe.SliceData(s.buf[start:]), k-start), nil
+		}
+		if c == '\\' {
+			return s.stringSlow(start, k)
+		}
+		if c < 0x20 {
+			return "", ErrBadString
+		}
+	}
+	j := we
 	for {
 		rel := bytes.IndexByte(s.buf[j:], '"')
 		if rel < 0 {
@@ -358,6 +392,12 @@ func (s *Stream) KeyView() (string, error) {
 		return unsafe.String(unsafe.SliceData(s.buf[start:]), end-start), nil
 	}
 }
+
+// stringPreludeWindow bounds the scalar single-pass scan in KeyView before
+// it falls back to the bytes.IndexByte loop. Sized to cover typical object
+// keys in one pass without pre-scanning long spans the SIMD path handles
+// better.
+const stringPreludeWindow = 24
 
 // skipString advances Pos past a JSON string. No copy, no body
 // decode — escapes are validated only enough to advance correctly

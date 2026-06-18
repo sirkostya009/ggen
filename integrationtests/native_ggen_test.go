@@ -18,8 +18,9 @@ import (
 	"github.com/sirkostya009/ggen/scan"
 )
 
-func (result NativeTypes) DecodeFrom(data []byte) (NativeTypes, int, error) {
+func (recv NativeTypes) DecodeFrom(data []byte) (result NativeTypes, _ int, _ error) {
 	i := 0
+	result = recv
 	if result.Blob != nil {
 		result.Blob = result.Blob[:0]
 	}
@@ -42,14 +43,14 @@ func (result NativeTypes) DecodeFrom(data []byte) (NativeTypes, int, error) {
 	seenSecDur := false
 	seenUnitDur := false
 	seenUnixAt := false
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
 		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 	i++
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i < len(data) && data[i] == '}' {
@@ -80,14 +81,14 @@ func (result NativeTypes) DecodeFrom(data []byte) (NativeTypes, int, error) {
 				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
 			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		i++
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		switch key {
@@ -173,14 +174,14 @@ func (result NativeTypes) DecodeFrom(data []byte) (NativeTypes, int, error) {
 				result.ByteArray = nil
 				break
 			}
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			if i >= len(data) || data[i] != '[' {
 				return result, i, decode.NewParseErr("byteArray", i, scan.ErrBadArray)
 			}
 			i++
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			var u uint64
@@ -190,12 +191,12 @@ func (result NativeTypes) DecodeFrom(data []byte) (NativeTypes, int, error) {
 					return result, i, decode.NewParseErr("byteArray", i, err)
 				}
 				result.ByteArray = append(result.ByteArray, byte(u))
-				for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 					i++
 				}
 				if i < len(data) && data[i] == ',' {
 					i++
-					for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
 					if i >= len(data) || data[i] == ']' {
@@ -436,7 +437,7 @@ func (result NativeTypes) DecodeFrom(data []byte) (NativeTypes, int, error) {
 		default:
 			return result, i, &validation.UnknownKeyError{Path: []string{key}}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
@@ -444,7 +445,7 @@ func (result NativeTypes) DecodeFrom(data []byte) (NativeTypes, int, error) {
 		}
 		if data[i] == ',' {
 			i++
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			continue
@@ -457,7 +458,8 @@ func (result NativeTypes) DecodeFrom(data []byte) (NativeTypes, int, error) {
 	}
 }
 
-func (result NativeTypes) DecodeFromStream(s *scan.Stream) (NativeTypes, error) {
+func (recv NativeTypes) DecodeFromStream(s *scan.Stream) (result NativeTypes, _ error) {
+	result = recv
 	if result.Blob != nil {
 		result.Blob = result.Blob[:0]
 	}

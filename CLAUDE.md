@@ -667,6 +667,49 @@ float64` 6459→3417. Outpaces stdjson v1 and jsonv2 on every map shape.
     Narrow numerics keep a wide temp for the cast; STRUCT values keep the
     fresh `var mv T` — direct decode would merge duplicate map keys in one
     payload instead of fresh-decoding each occurrence (stdlib parity).
+38. **Named-result return slot.** `DecodeFrom`/`DecodeFromStream` emit as
+    `func (recv T) DecodeFrom(data []byte) (result T, _ int, _ error)` with a
+    `result = recv` prologue (receiver renamed `recv`; bodies still write
+    `result`). The named first result homes the value in the caller's return
+    slot, so every `return result, …` is register-set + RET with NO struct
+    copy — vs an anonymous result, where each of the ~99 RET sites copied the
+    full receiver-sized struct (264 B for Node). Happy path is copy-neutral
+    (the one entry `result = recv` replaces the one exit copy); merge
+    semantics unchanged (`recv` IS the merge source, exactly as the old
+    `result` receiver was). Shrinks `Node.DecodeFrom` text −23% (33.8→25.9 KB)
+    and `DecodeFromStream` −32% (40.0→27.1 KB); wall flat-to-marginal across
+    3 `-randlayout` seeds (memory-latency-bound walk caps it), allocs/B
+    identical. Applies to struct + alias renderers, both paths. `parseerr`
+    post-pass unaffected (return text still `return result, …`).
+39. **Bounded unchecked digit-accumulation prefix (bytes path).** The inline
+    int/uint scanners (`inlineScanInt64Stmt`/`inlineScanUint64Stmt`) and the
+    runtime `scan.Int64`/`Uint64` split the digit loop in two: the first ≤18
+    (int) / ≤19 (uint) digits accumulate with NO per-digit overflow check —
+    `10^18-1 < MaxInt64 < |MinInt64|` and `10^19-1 < MaxUint64`, so neither the
+    `u*10+d` accumulation nor the value can overflow within the prefix. A 19th
+    (int) / 20th (uint) digit, if present, resumes the original checked loop,
+    keeping `scan.ErrNumberOverflow` identity and error position bit-identical.
+    Cuts the hot per-digit body from ~5 to ~2 compare+branches; leading-zero
+    runs that push significant digits past the window resume correctly in the
+    checked tail (the prefix accumulates 0). Measured −1.0% to −1.7%
+    `Mega_Unmarshal` consistent across 3 `-randlayout` seeds (one of the few
+    CPU shaves that beats the memory-latency-bound walk — digit bytes are
+    sequential + cache-hot). Accept-set unchanged (no grammar edge decision).
+    Boundary lattice pinned by `TestInt64_OverflowBoundaryLattice` /
+    `TestUint64_OverflowBoundaryLattice`. Stream `Stream.Int64`/`Uint64` keep
+    the checked loop (mid-number ReadMore refill complicates the window) — a
+    backlog follow-up.
+40. **Whitespace-skip `<= ' '` exit gate.** `inlineSkipWS` and `scan.SkipSpace`
+    prepend `data[i] <= ' '` to the 4-way WS test (`==' '||=='\t'||=='\n'||
+    =='\r'`). On compact JSON the loop never runs and the dominant
+    non-whitespace byte exits on ONE compare (gc lowers `<= ' '` to a single
+    CMPB+JHI, flags reused by `== ' '`) instead of four. Boolean-identical
+    accept set (every WS char is <= ' '; control bytes <0x20 fall through to
+    the unchanged 4-way and still stop the scan). Measured ~−1% Mega_Unmarshal
+    on 2/3 `-randlayout` seeds (flat on the third, never regresses) and a
+    consistent −3..−7% on the dispatch-bound `Tiny_Unmarshal` across all
+    seeds; allocs/B identical. The stream path needs no change — its `> ' '`
+    fast path (opt #5 / `SkipSpace` two-tier) already is this gate.
 
 ## Design decisions (the why)
 

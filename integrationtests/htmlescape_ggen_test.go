@@ -12,19 +12,20 @@ import (
 	"github.com/sirkostya009/ggen/scan"
 )
 
-func (result HTMLRawStruct) DecodeFrom(data []byte) (HTMLRawStruct, int, error) {
+func (recv HTMLRawStruct) DecodeFrom(data []byte) (result HTMLRawStruct, _ int, _ error) {
 	i := 0
+	result = recv
 	var err error
 	_ = err
 	seenNote := false
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
 		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 	i++
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i < len(data) && data[i] == '}' {
@@ -55,14 +56,14 @@ func (result HTMLRawStruct) DecodeFrom(data []byte) (HTMLRawStruct, int, error) 
 				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
 			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		i++
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		switch key {
@@ -96,7 +97,7 @@ func (result HTMLRawStruct) DecodeFrom(data []byte) (HTMLRawStruct, int, error) 
 		default:
 			return result, i, &validation.UnknownKeyError{Path: []string{key}}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
@@ -104,7 +105,7 @@ func (result HTMLRawStruct) DecodeFrom(data []byte) (HTMLRawStruct, int, error) 
 		}
 		if data[i] == ',' {
 			i++
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			continue
@@ -117,7 +118,8 @@ func (result HTMLRawStruct) DecodeFrom(data []byte) (HTMLRawStruct, int, error) 
 	}
 }
 
-func (result HTMLRawStruct) DecodeFromStream(s *scan.Stream) (HTMLRawStruct, error) {
+func (recv HTMLRawStruct) DecodeFromStream(s *scan.Stream) (result HTMLRawStruct, _ error) {
+	result = recv
 	seenNote := false
 	err := s.ObjectOpen()
 	if err != nil {
@@ -202,19 +204,20 @@ func (s HTMLRawStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (result HTMLEscapeStruct) DecodeFrom(data []byte) (HTMLEscapeStruct, int, error) {
+func (recv HTMLEscapeStruct) DecodeFrom(data []byte) (result HTMLEscapeStruct, _ int, _ error) {
 	i := 0
+	result = recv
 	var err error
 	_ = err
 	seenNote := false
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
 		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 	}
 	i++
-	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
 	if i < len(data) && data[i] == '}' {
@@ -245,14 +248,14 @@ func (result HTMLEscapeStruct) DecodeFrom(data []byte) (HTMLEscapeStruct, int, e
 				return result, i, decode.NewParseErr("", i, err)
 			}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
 			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 		}
 		i++
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		switch key {
@@ -286,7 +289,7 @@ func (result HTMLEscapeStruct) DecodeFrom(data []byte) (HTMLEscapeStruct, int, e
 		default:
 			return result, i, &validation.UnknownKeyError{Path: []string{key}}
 		}
-		for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
@@ -294,7 +297,7 @@ func (result HTMLEscapeStruct) DecodeFrom(data []byte) (HTMLEscapeStruct, int, e
 		}
 		if data[i] == ',' {
 			i++
-			for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
 			continue
@@ -307,7 +310,8 @@ func (result HTMLEscapeStruct) DecodeFrom(data []byte) (HTMLEscapeStruct, int, e
 	}
 }
 
-func (result HTMLEscapeStruct) DecodeFromStream(s *scan.Stream) (HTMLEscapeStruct, error) {
+func (recv HTMLEscapeStruct) DecodeFromStream(s *scan.Stream) (result HTMLEscapeStruct, _ error) {
+	result = recv
 	seenNote := false
 	err := s.ObjectOpen()
 	if err != nil {
