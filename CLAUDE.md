@@ -12,28 +12,33 @@ package's own CLAUDE.md (see "Repo layout").
 
 ```
 schema/
-├── main.go, parse.go, generate.go, tags.go, types.go   ← CLI (package main)
-├── introspect.go                                       ← go/types interface detection (TextAppender, TextMarshaler, …)
-├── alias.go                                            ← alias-type code emitters (decode + AppendJSON)
-├── applicability.go                                    ← parse-time rule/kind compatibility matrix
-├── customfunc.go                                       ← @Func resolution for custom validators / mods
-├── check.go                                            ← `-dry` / future-ggenvet parse-only entry points
-├── log.go                                              ← cliLog: leveled logger with deferred flush
-├── parse_test.go, tags_test.go, cli_test.go, …         ← CLI tests
-├── bench_test.go                                       ← BenchmarkGenerate (generator perf only)
-├── decode/             → see decode/CLAUDE.md
-├── decode/validation/  → see decode/validation/CLAUDE.md
-├── encode/             → see encode/CLAUDE.md
-├── scan/               → see scan/CLAUDE.md
+├── go.work                                             ← workspace tying all four modules together
+├── cli/                                                ← CLI module (github.com/sirkostya009/ggen/cli)
+│   ├── main.go, parse.go, generate.go, tags.go, types.go   ← CLI (package main)
+│   ├── introspect.go                                       ← go/types interface detection (TextAppender, TextMarshaler, …)
+│   ├── alias.go                                            ← alias-type code emitters (decode + AppendJSON)
+│   ├── applicability.go                                    ← parse-time rule/kind compatibility matrix
+│   ├── customfunc.go                                       ← @Func resolution for custom validators / mods
+│   ├── check.go                                            ← `-dry` / future-ggenvet parse-only entry points
+│   ├── log.go                                              ← cliLog: leveled logger with deferred flush
+│   ├── parse_test.go, tags_test.go, cli_test.go, …         ← CLI tests
+│   └── bench_test.go                                       ← BenchmarkGenerate (generator perf only)
+├── decode/             → see decode/CLAUDE.md          ┐
+├── decode/validation/  → see decode/validation/CLAUDE.md │ runtime library
+├── encode/             → see encode/CLAUDE.md          │ (root module
+├── scan/               → see scan/CLAUDE.md            ┘  github.com/sirkostya009/ggen)
 ├── integrationtests/   → see integrationtests/CLAUDE.md (own Go module)
 ├── bench/              → see bench/CLAUDE.md            (own Go module)
 └── .claude/backlog.md  ← ideas worth pursuing, tried-and-rejected, maybe-someday
 ```
 
-`bench/` + `integrationtests/` = **separate Go modules**. Root
-module tests = unit tests + CLI integration tests + generator bench
-(`BenchmarkGenerate`); other benches in `bench/`,
-post-gen integration tests in `integrationtests/`.
+Four modules under one `go.work`: root (`github.com/sirkostya009/ggen` —
+runtime library `decode`/`encode`/`scan` only, no external deps), `cli/`
+(the generator, depends on `golang.org/x/tools`), `bench/`, `integrationtests/`.
+The CLI doesn't import the runtime packages — it emits their import paths as
+string literals into generated code. CLI tests = unit tests + CLI integration
+tests + generator bench (`BenchmarkGenerate`), all under `cli/`; other benches
+in `bench/`, post-gen integration tests in `integrationtests/`.
 
 ## Generator CLI (`main` package)
 
@@ -728,11 +733,11 @@ float64` 6459→3417. Outpaces stdjson v1 and jsonv2 on every map shape.
    wrap as `validation.CustomError{Name, Cause}`; fallible mod errors
    propagate as parse errors.
 
-## Test files (root module only)
+## Test files (`cli/` module)
 
-Cover CLI itself. Per-package tests live next to implementation
-(`encode/`, `scan/`); feature/roundtrip/compat/fuzz under `integrationtests/`;
-benchmarks under `bench/`.
+Cover CLI itself, live under `cli/`. Per-package runtime tests live next to
+implementation (`encode/`, `scan/`); feature/roundtrip/compat/fuzz under
+`integrationtests/`; benchmarks under `bench/`.
 
 - `parse_test.go` — annotation/tag/rule parsing, cross-package symbol
   resolution. Hosts test-only `generate(pkg, structs) ([]byte, error)`
@@ -751,15 +756,16 @@ Binary git-ignored; in-tree builds keep it discoverable, avoid
 cross-session collisions, match test harness path.
 
 ```sh
-go build -o ggen .
-./ggen .
-(cd bench && GOEXPERIMENT=jsonv2 ../ggen .)
+go build -o ggen ./cli
+./ggen ./decode/... ./encode/... ./scan/...
 easyjson bench/types.go
-(cd integrationtests && GOEXPERIMENT=jsonv2 go generate ./...)
+GOEXPERIMENT=jsonv2 go generate work
 ```
 
-ggen module-scoped — `./...` from root visits ONLY root-module packages.
-`bench/` and `integrationtests/` each carry own `go.mod`, must be
+Binary builds from the `cli/` module to project-root `./ggen` (so the
+`../ggen` references in `bench/` and `integrationtests/` still resolve).
+ggen module-scoped — `./...` visits ONLY the invoked module's packages.
+`cli/`, `bench/`, `integrationtests/` each carry own `go.mod`, must be
 regen'd from inside (one invocation per module), like `go build ./...`. In
 `integrationtests/`, each annotated source carries `//go:generate ../ggen $GOFILE`
 and emits sibling `<file>_ggen_test.go`.

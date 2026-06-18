@@ -113,8 +113,8 @@ Install the CLI and pull in the runtime subpackages your generated code
 will import:
 
 ```sh
-go install github.com/sirkostya009/ggen@latest
-go get github.com/sirkostya009/ggen
+go install github.com/sirkostya009/ggen/cli@latest # CLI binary
+go get github.com/sirkostya009/ggen                 # runtime subpackages
 ```
 
 Annotate a struct with `//ggen:generate` and run the cli.
