@@ -53,6 +53,38 @@ func TestMerge_sliceBackingReused(t *testing.T) {
 	}
 }
 
+func TestMerge_nestedSliceBackingReused(t *testing.T) {
+	// [][]int decode-into-receiver must reuse BOTH the outer backing AND the
+	// inner row backings when the new shape fits the carried caps — proof the
+	// reslice-grow + row[:0] seeding reuses buffers rather than make()ing a
+	// fresh row each decode.
+	first, _, err := ExtraStruct{}.DecodeFrom([]byte(`{"nestedInts":[[1,2,3],[4,5,6]]}`))
+	if err != nil {
+		t.Fatalf("first decode: %v", err)
+	}
+	outerPtr := unsafe.SliceData(first.NestedInts)
+	row0Ptr := unsafe.SliceData(first.NestedInts[0])
+	row1Ptr := unsafe.SliceData(first.NestedInts[1])
+
+	// Re-decode into the same value; the new rows fit the carried caps (3, 3).
+	got, _, err := first.DecodeFrom([]byte(`{"nestedInts":[[7,8],[9,10,11]]}`))
+	if err != nil {
+		t.Fatalf("second decode: %v", err)
+	}
+	if !reflect.DeepEqual(got.NestedInts, [][]int{{7, 8}, {9, 10, 11}}) {
+		t.Fatalf("nestedInts=%v want [[7 8] [9 10 11]]", got.NestedInts)
+	}
+	if unsafe.SliceData(got.NestedInts) != outerPtr {
+		t.Errorf("outer backing reallocated — reslice-grow not reusing the outer slice")
+	}
+	if unsafe.SliceData(got.NestedInts[0]) != row0Ptr {
+		t.Errorf("row 0 backing reallocated — nested row not reused")
+	}
+	if unsafe.SliceData(got.NestedInts[1]) != row1Ptr {
+		t.Errorf("row 1 backing reallocated — nested row not reused")
+	}
+}
+
 func TestMerge_sliceDoesNotAppendOverExisting(t *testing.T) {
 	// "new decoder must not append into an existing slice" — receiver had 5
 	// entries, JSON has 2; result has exactly 2 (not 7).

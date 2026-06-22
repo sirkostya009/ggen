@@ -20,24 +20,32 @@
       mandatory**: un-gated 8KiB first chunk regresses small payloads 3.5×
       B/op, +30-90% ns (geometric 512→8KiB or payload-gated first chunk).
       Update scan/CLAUDE.md "owned copies" wording if landed.
-    - **Exact-cap comma pre-count for flat numeric/bool slice elems, bytes
-      path.** Elem kinds where `,`/`]` can't appear inside elem: `IndexByte(']')`
-      + `bytes.Count(',')+1` before `make` (both SIMD). `generate.go`
-      preallocCap + emitByteSliceRead non-empty arm; every depth via
-      peelSliceField; hintlen/len/minlen keep precedence. Measured (Matrix
-      only): allocs -36.6% (101,927→64,599), ns -7.5%, B/op -21%, residency
-      improves (exact caps — opposite of rejected maxlen-as-prealloc). Bytes
-      path ONLY (stream has no full buffer). Verify small_test no-regress.
-    - **Hoist nested-container slot into depth-suffixed local.** Recursion
-      threads `result.Matrix[len(result.Matrix)-1]` as inner dst → ~30 instr
-      header churn + write barrier per inner elem (barriers ≈10% of decode
-      samples). Emit `var rowN <inner>` / `rowN := target`, recurse on it,
-      `target = rowN` after inner `]` before elem validation
-      (`generate.go` bytes + stream emitters). Measured -3.4% serial Mega;
-      micro -12% matrix-only, asm-verified (4→2 barrier sites). Composes with
-      comma pre-count (both want row local).
+    - **Exact-cap comma pre-count for flat numeric/bool SLICES, bytes path.
+      LANDED 2026-06-22.** `bytes.Count(',')+1` → `make([]E,0,cnt)`,
+      `scalarCountable` gate, `userPreallocHint < 0`, every depth via
+      peelSliceField, reused slots keep backing (nil-guard). **Maps
+      deliberately excluded** — a valid object key with N colons would inflate
+      a `:`-count into an N-sized make (memory amplification on well-formed
+      input); the slice case is immune (scalars can't carry `,`). Map runtime
+      sizing → the buffer-then-build track below. Measured interleaved
+      core-pinned across 2 `-randlayout` seeds: Mega_Unmarshal **−10% wall,
+      −36.6% allocs, −21% B/op**; readall −4%; marshal control flat. See
+      CLAUDE.md opt #42.
+    - **Hoist nested-container slot into reuse-seeded depth-local. LANDED
+      2026-06-22.** `rowN := <slot>` (seeded from the carried slot, slice
+      reset `[:0]`); recurse into rowN; `target = rowN` after inner `]`. Outer
+      slice-of-slice grows by reslicing within cap so the carried inner header
+      survives → inner row BACKINGS reused on decode-into-receiver (extends the
+      top-level `[:0]` contract one level down; pinned by
+      `TestMerge_nestedSliceBackingReused`). Both bytes + stream emitters.
+      asm-verified 4→2 barrier sites; **−1.8..−4.85% Mega_Reader/ggen_stream**
+      (allocs flat on fresh decode), composes with the comma pre-count above.
+      See CLAUDE.md opt #43.
     - **Map decode buffer-then-build (fresh-decode arm, primitive/string
-      values).** 73% of mapassign time = Swiss-map growth from unsized `make`.
+      values).** The robust map-sizing path — a `:`-count prealloc was tried
+      and rejected (key strings carry `:`, inflating the count on valid input;
+      see Tried Rejected). 73% of mapassign time = Swiss-map growth from
+      unsized `make`.
       Buffer `pairs` slice, at `}` emit `make(map, len(pairs))` + fill.
       Runtime-learned count — not the rejected tag-derived sizing. Measured
       micro -41-44% map build; ~3-5% Mega, 20-30% map-heavy. Cautions: B/op
@@ -154,6 +162,18 @@
 
 
 # Tried Rejected
+
+- **Map `:`-count prealloc (sibling of the slice comma-count, opt #42).**
+  Shipped briefly alongside the slice count, then dropped same day: sizing a
+  `map[string]<numeric|bool>` from `bytes.Count(span, ':')+1` is a
+  memory-amplification footgun on WELL-FORMED input — JSON object keys are
+  strings, so one valid entry `{"a::::…::": 1}` with N colons in the key
+  inflates the count into an N-sized `make`. Unlike the slice comma-count
+  (scalar elements can't contain `,`/`]`, so inflation requires malformed
+  input that errors before the alloc matters), the map key is attacker/data
+  controlled on the happy path. Robust map sizing = runtime buffer-then-build
+  (see TODO), not a delimiter heuristic. Don't reintroduce a key-delimiter
+  count.
 
 - **ConsumeColon fast-path header (`[5b]`).** After landing the two-tier
   inlinable `SkipSpace` (`[5]`), tried adding a bespoke header to

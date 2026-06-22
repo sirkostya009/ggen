@@ -3,6 +3,7 @@
 package bench
 
 import (
+	"bytes"
 	"encoding/base64"
 	"math"
 	"strconv"
@@ -623,9 +624,14 @@ func (recv Node) DecodeFrom(data []byte) (result Node, i int, err error) {
 					}
 				}
 				for i < len(data) && data[i] != ']' {
-					result.Matrix = append(result.Matrix, nil)
+					if len(result.Matrix) < cap(result.Matrix) {
+						result.Matrix = result.Matrix[:len(result.Matrix)+1]
+					} else {
+						result.Matrix = append(result.Matrix, nil)
+					}
 					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 						i += 4
+						result.Matrix[len(result.Matrix)-1] = nil
 						if len(result.Matrix[len(result.Matrix)-1]) > 32 {
 							return result, i, &validation.MaxLenError{Path: []string{"matrix[]"}, Limit: 32, Got: len(result.Matrix[len(result.Matrix)-1])}
 						}
@@ -644,6 +650,10 @@ func (recv Node) DecodeFrom(data []byte) (result Node, i int, err error) {
 						}
 						break
 					}
+					row0 := result.Matrix[len(result.Matrix)-1]
+					if row0 != nil {
+						row0 = row0[:0]
+					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
@@ -655,16 +665,20 @@ func (recv Node) DecodeFrom(data []byte) (result Node, i int, err error) {
 						i++
 					}
 					if i < len(data) && data[i] == ']' {
-						if result.Matrix[len(result.Matrix)-1] == nil {
-							result.Matrix[len(result.Matrix)-1] = []int{}
+						if row0 == nil {
+							row0 = []int{}
 						}
 					} else {
-						if result.Matrix[len(result.Matrix)-1] == nil {
-							result.Matrix[len(result.Matrix)-1] = make([]int, 0, 4)
+						if row0 == nil {
+							cnt1 := 1
+							if e := bytes.IndexByte(data[i:], ']'); e >= 0 {
+								cnt1 = bytes.Count(data[i:i+e], []byte{','}) + 1
+							}
+							row0 = make([]int, 0, cnt1)
 						}
 					}
 					for i < len(data) && data[i] != ']' {
-						result.Matrix[len(result.Matrix)-1] = append(result.Matrix[len(result.Matrix)-1], 0)
+						row0 = append(row0, 0)
 						neg := false
 						if i < len(data) && data[i] == '-' {
 							neg = true
@@ -710,7 +724,7 @@ func (recv Node) DecodeFrom(data []byte) (result Node, i int, err error) {
 						} else {
 							n = int64(u)
 						}
-						result.Matrix[len(result.Matrix)-1][len(result.Matrix[len(result.Matrix)-1])-1] = int(n)
+						row0[len(row0)-1] = int(n)
 						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
 						}
@@ -730,6 +744,7 @@ func (recv Node) DecodeFrom(data []byte) (result Node, i int, err error) {
 						return result, i, scan.ErrBadArray
 					}
 					i++
+					result.Matrix[len(result.Matrix)-1] = row0
 					if len(result.Matrix[len(result.Matrix)-1]) > 32 {
 						return result, i, &validation.MaxLenError{Path: []string{"matrix[]"}, Limit: 32, Got: len(result.Matrix[len(result.Matrix)-1])}
 					}
@@ -1511,7 +1526,11 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 					}
 				}
 				for s.Bytes()[s.Pos] != ']' {
-					result.Matrix = append(result.Matrix, nil)
+					if len(result.Matrix) < cap(result.Matrix) {
+						result.Matrix = result.Matrix[:len(result.Matrix)+1]
+					} else {
+						result.Matrix = append(result.Matrix, nil)
+					}
 					if s.Pos >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
 							return result, decode.NewParseErr("matrix", s.Pos, err)
@@ -1529,6 +1548,7 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 							}
 						}
 						s.Pos += 4
+						result.Matrix[len(result.Matrix)-1] = nil
 						if len(result.Matrix[len(result.Matrix)-1]) > 32 {
 							return result, &validation.MaxLenError{Path: []string{"matrix[]"}, Limit: 32, Got: len(result.Matrix[len(result.Matrix)-1])}
 						}
@@ -1554,6 +1574,10 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 						}
 						break
 					}
+					row0 := result.Matrix[len(result.Matrix)-1]
+					if row0 != nil {
+						row0 = row0[:0]
+					}
 					err = s.ArrayOpen()
 					if err != nil {
 						return result, decode.NewParseErr("matrix[]", s.Pos, err)
@@ -1568,22 +1592,22 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 						}
 					}
 					if s.Bytes()[s.Pos] == ']' {
-						if result.Matrix[len(result.Matrix)-1] == nil {
-							result.Matrix[len(result.Matrix)-1] = []int{}
+						if row0 == nil {
+							row0 = []int{}
 						}
 					} else {
-						if result.Matrix[len(result.Matrix)-1] == nil {
-							result.Matrix[len(result.Matrix)-1] = make([]int, 0, 4)
+						if row0 == nil {
+							row0 = make([]int, 0, 4)
 						}
 					}
 					for s.Bytes()[s.Pos] != ']' {
-						result.Matrix[len(result.Matrix)-1] = append(result.Matrix[len(result.Matrix)-1], 0)
+						row0 = append(row0, 0)
 						var iv int64
 						iv, err = s.Int64()
 						if err != nil {
 							return result, decode.NewParseErr("matrix[]", s.Pos, err)
 						}
-						result.Matrix[len(result.Matrix)-1][len(result.Matrix[len(result.Matrix)-1])-1] = int(iv)
+						row0[len(row0)-1] = int(iv)
 						err = s.SkipSpace()
 						if err != nil {
 							return result, decode.NewParseErr("matrix[]", s.Pos, err)
@@ -1610,6 +1634,7 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 						return result, decode.NewParseErr("matrix[]", s.Pos, scan.ErrBadArray)
 					}
 					s.Pos++
+					result.Matrix[len(result.Matrix)-1] = row0
 					if len(result.Matrix[len(result.Matrix)-1]) > 32 {
 						return result, &validation.MaxLenError{Path: []string{"matrix[]"}, Limit: 32, Got: len(result.Matrix[len(result.Matrix)-1])}
 					}

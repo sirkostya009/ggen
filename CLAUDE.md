@@ -207,7 +207,12 @@ capacity kept; lazy per-key reset was implemented and reverted, see backlog
 "Tried Rejected"):
 
 - slices and `[]byte`: `if X != nil { X = X[:0] }` at entry (backing array
-  reused; `make(...)` only when `X == nil`)
+  reused; `make(...)` only when `X == nil`). For a slice-of-slice (`[][]T`,
+  any depth), the **inner row backings are reused too**: the outer grows by
+  reslicing within cap (keeping the carried inner header in the slot) and each
+  row is seeded `rowN := slot; if rowN != nil { rowN = rowN[:0] }` so the inner
+  decode reuses its backing; a past-cap/fresh slot reads back nil and allocates
+  anew (opt #43; pinned by `TestMerge_nestedSliceBackingReused`)
 - `map[K]V`: `if X != nil { clear(X) }` at entry (buckets reused; `make` only
   when nil)
 - nested struct: `result.X, _, _ = result.X.DecodeFrom(...)` — value-receiver
@@ -732,6 +737,52 @@ float64` 6459→3417. Outpaces stdjson v1 and jsonv2 on every map shape.
     Measured −1.45% wall / −2.95% B/op / −1.89% allocs `Mega_Reader` with 2
     aliasable Node sites; text-heavy schemas gain more. See
     scan/CLAUDE.md "Stream copies vs bytes-path aliases" / "`StringView`".
+42. **Exact-cap comma pre-count for flat numeric/bool SLICES (bytes path).**
+    Numeric/bool elements carry no `,` or `]`, so a one-shot `bytes.IndexByte`
+    + `bytes.Count` over the value span yields the precise element count before
+    any `make` (`scalarCountable` gate, `emitByteSliceRead` non-empty arm):
+    `cnt := bytes.Count(data[k:k+e], ',')+1` → `make([]E,0,cnt)`, killing the
+    1→2→4→8 growth chain and its orphan trailing backings with NO over-cap
+    residency cost (opposite of the rejected maxlen-as-hint). Gates on
+    `userPreallocHint < 0` (hintlen/len/minlen keep precedence) and a reused
+    (non-nil) slot keeps its backing (the `if dst == nil` guard skips the
+    make); applies at every nest depth via `peelSliceField`. String/struct/
+    pointer elems excluded (delimiters inside quotes / nested objects). A
+    malformed array with no `]` falls back to cap 1 and errors in the scan
+    loop. Stream path has no full buffer — bytes only. **NOT done for maps:**
+    JSON object keys are strings that may contain `:`, so a single VALID entry
+    with a colon-laden key would inflate a `:`-count into a huge `make()` — a
+    memory-amplification footgun on well-formed input (the slice case is immune
+    — scalar elements can't carry the delimiter, so inflation needs malformed
+    input that errors at once). Maps keep the unsized make(); robust runtime
+    sizing for maps is the backlog "buffer-then-build" track. Measured (Mega
+    Node, Matrix `[][]int`): Unmarshal **−10% wall, −36.6% allocs, −21% B/op**,
+    robust across 2 `-randlayout` seeds; composes with #43. Marshal is the
+    control — generated marshal code byte-identical, wall flat (a one-off
+    seed-1 +4% was pure code-layout noise on the memory-latency-bound cold-tree
+    walk).
+43. **Nested-container slot hoisted into a reuse-seeded depth-local.** The
+    recursive slice/array emitters used to thread the parent slot expression
+    (`dst[len(dst)-1]` / `dst[ivar]`) into the inner element loop as its dst,
+    so every inner append/decode re-evaluated that index (len()/bounds) and
+    took a parent-backing write barrier per element. Now `rowN := <slot>`;
+    recurse into `rowN`; one `target = rowN` publishes the finished row — the
+    inner loop writes a local slice header (barrier-free), and the
+    `len(len(len(…)))` nest disappears from generated output. **The row is
+    seeded from the carried slot so its backing is reused** (decode-into-
+    receiver): a slice-of-slice outer grows by reslicing within cap
+    (`if len < cap { dst = dst[:len+1] } else { dst = append(dst, nil) }`)
+    instead of `append(dst, nil)`, so the carried inner header survives into
+    the slot; `rowN := dst[len-1]; if rowN != nil { rowN = rowN[:0] }` then
+    resets len (cap/backing kept) and the inner make-guard (`if rowN == nil`)
+    skips the make on reuse and allocates only past-cap/fresh — mirroring the
+    top-level `[:0]` receiver-reset one level down. A `null` element nils the
+    slot unconditionally (it may carry a reused header). Both bytes
+    (`emitByteSliceRead`) and stream (`emitStreamSliceRead`) paths. asm-verified
+    4→2 barrier sites; **−1.8% to −4.85% Mega_Reader/ggen_stream** (allocs flat
+    — pure codegen win on fresh decode), folds into the bytes-path number
+    above; nested-row backing reuse pinned by
+    `TestMerge_nestedSliceBackingReused`.
 
 ## Design decisions (the why)
 

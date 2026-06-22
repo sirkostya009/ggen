@@ -6242,9 +6242,14 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 				}
 			}
 			for i < len(data) && data[i] != ']' {
-				result.NSPP = append(result.NSPP, nil)
+				if len(result.NSPP) < cap(result.NSPP) {
+					result.NSPP = result.NSPP[:len(result.NSPP)+1]
+				} else {
+					result.NSPP = append(result.NSPP, nil)
+				}
 				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 					i += 4
+					result.NSPP[len(result.NSPP)-1] = nil
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
@@ -6260,6 +6265,10 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 					}
 					break
 				}
+				row0 := result.NSPP[len(result.NSPP)-1]
+				if row0 != nil {
+					row0 = row0[:0]
+				}
 				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 					i++
 				}
@@ -6271,19 +6280,19 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 					i++
 				}
 				if i < len(data) && data[i] == ']' {
-					if result.NSPP[len(result.NSPP)-1] == nil {
-						result.NSPP[len(result.NSPP)-1] = []**int{}
+					if row0 == nil {
+						row0 = []**int{}
 					}
 				} else {
-					if result.NSPP[len(result.NSPP)-1] == nil {
-						result.NSPP[len(result.NSPP)-1] = make([]**int, 0, 4)
+					if row0 == nil {
+						row0 = make([]**int, 0, 4)
 					}
 				}
 				for i < len(data) && data[i] != ']' {
-					result.NSPP[len(result.NSPP)-1] = append(result.NSPP[len(result.NSPP)-1], nil)
+					row0 = append(row0, nil)
 					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 						i += 4
-						result.NSPP[len(result.NSPP)-1][len(result.NSPP[len(result.NSPP)-1])-1] = nil
+						row0[len(row0)-1] = nil
 					} else {
 						neg := false
 						if i < len(data) && data[i] == '-' {
@@ -6330,7 +6339,7 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 						} else {
 							n = int64(u)
 						}
-						result.NSPP[len(result.NSPP)-1][len(result.NSPP[len(result.NSPP)-1])-1] = new(new(int(n)))
+						row0[len(row0)-1] = new(new(int(n)))
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -6351,6 +6360,7 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 					return result, i, scan.ErrBadArray
 				}
 				i++
+				result.NSPP[len(result.NSPP)-1] = row0
 				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 					i++
 				}
@@ -7078,7 +7088,11 @@ func (recv NPtrContainersStruct) DecodeFromStream(s *scan.Stream) (result NPtrCo
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {
-				result.NSPP = append(result.NSPP, nil)
+				if len(result.NSPP) < cap(result.NSPP) {
+					result.NSPP = result.NSPP[:len(result.NSPP)+1]
+				} else {
+					result.NSPP = append(result.NSPP, nil)
+				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
 						return result, decode.NewParseErr("nspp", s.Pos, err)
@@ -7096,6 +7110,7 @@ func (recv NPtrContainersStruct) DecodeFromStream(s *scan.Stream) (result NPtrCo
 						}
 					}
 					s.Pos += 4
+					result.NSPP[len(result.NSPP)-1] = nil
 					err = s.SkipSpace()
 					if err != nil {
 						return result, decode.NewParseErr("nspp", s.Pos, err)
@@ -7118,6 +7133,10 @@ func (recv NPtrContainersStruct) DecodeFromStream(s *scan.Stream) (result NPtrCo
 					}
 					break
 				}
+				row0 := result.NSPP[len(result.NSPP)-1]
+				if row0 != nil {
+					row0 = row0[:0]
+				}
 				err = s.ArrayOpen()
 				if err != nil {
 					return result, decode.NewParseErr("nspp[]", s.Pos, err)
@@ -7132,16 +7151,16 @@ func (recv NPtrContainersStruct) DecodeFromStream(s *scan.Stream) (result NPtrCo
 					}
 				}
 				if s.Bytes()[s.Pos] == ']' {
-					if result.NSPP[len(result.NSPP)-1] == nil {
-						result.NSPP[len(result.NSPP)-1] = []**int{}
+					if row0 == nil {
+						row0 = []**int{}
 					}
 				} else {
-					if result.NSPP[len(result.NSPP)-1] == nil {
-						result.NSPP[len(result.NSPP)-1] = make([]**int, 0, 4)
+					if row0 == nil {
+						row0 = make([]**int, 0, 4)
 					}
 				}
 				for s.Bytes()[s.Pos] != ']' {
-					result.NSPP[len(result.NSPP)-1] = append(result.NSPP[len(result.NSPP)-1], nil)
+					row0 = append(row0, nil)
 					if s.Pos >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
 							return result, decode.NewParseErr("nspp[][]", s.Pos, err)
@@ -7159,14 +7178,14 @@ func (recv NPtrContainersStruct) DecodeFromStream(s *scan.Stream) (result NPtrCo
 							}
 						}
 						s.Pos += 4
-						result.NSPP[len(result.NSPP)-1][len(result.NSPP[len(result.NSPP)-1])-1] = nil
+						row0[len(row0)-1] = nil
 					} else {
 						var v int64
 						v, err = s.Int64()
 						if err != nil {
 							return result, decode.NewParseErr("nspp[][]", s.Pos, err)
 						}
-						result.NSPP[len(result.NSPP)-1][len(result.NSPP[len(result.NSPP)-1])-1] = new(new(int(v)))
+						row0[len(row0)-1] = new(new(int(v)))
 					}
 					err = s.SkipSpace()
 					if err != nil {
@@ -7194,6 +7213,7 @@ func (recv NPtrContainersStruct) DecodeFromStream(s *scan.Stream) (result NPtrCo
 					return result, decode.NewParseErr("nspp[]", s.Pos, scan.ErrBadArray)
 				}
 				s.Pos++
+				result.NSPP[len(result.NSPP)-1] = row0
 				err = s.SkipSpace()
 				if err != nil {
 					return result, decode.NewParseErr("nspp", s.Pos, err)

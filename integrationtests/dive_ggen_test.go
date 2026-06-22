@@ -3,6 +3,7 @@
 package integrationtests
 
 import (
+	"bytes"
 	"math"
 	"strconv"
 	"strings"
@@ -156,7 +157,11 @@ func (recv DiveStruct) DecodeFrom(data []byte) (result DiveStruct, i int, err er
 				}
 			} else {
 				if result.Scores == nil {
-					result.Scores = make([]int, 0, 4)
+					cnt0 := 1
+					if e := bytes.IndexByte(data[i:], ']'); e >= 0 {
+						cnt0 = bytes.Count(data[i:i+e], []byte{','}) + 1
+					}
+					result.Scores = make([]int, 0, cnt0)
 				}
 			}
 			for i < len(data) && data[i] != ']' {

@@ -211,8 +211,9 @@ u, err = u.DecodeFromStream(s)
 
 Similar to stdlib, ggen also has merge semantics but they're deliberately made different:
 non-nil slices, maps and pointer fields are reused, which can be used as an optimization
-on paths where you need to repeatedly parse same object shape. A JSON `null` still nils
-a slice/map/pointer field.
+on paths where you need to repeatedly parse same object shape. Reuse also reaches nested
+slices — re-decoding a `[][]T` (any depth) reuses the inner rows' backing arrays, not just
+the outer slice. A JSON `null` still nils a slice/map/pointer field.
 
 It is deliberately not identical though: all containers are reset regardless of
 presence in payload (stdlib keeps them) — a blank payload gives you a blank

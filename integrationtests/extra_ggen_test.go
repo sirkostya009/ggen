@@ -3,6 +3,7 @@
 package integrationtests
 
 import (
+	"bytes"
 	"math"
 	"strconv"
 	"strings"
@@ -381,9 +382,14 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 				}
 			}
 			for i < len(data) && data[i] != ']' {
-				result.NestedInts = append(result.NestedInts, nil)
+				if len(result.NestedInts) < cap(result.NestedInts) {
+					result.NestedInts = result.NestedInts[:len(result.NestedInts)+1]
+				} else {
+					result.NestedInts = append(result.NestedInts, nil)
+				}
 				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 					i += 4
+					result.NestedInts[len(result.NestedInts)-1] = nil
 					if len(result.NestedInts[len(result.NestedInts)-1]) < 1 {
 						return result, i, &validation.MinLenError{Path: []string{"nestedInts[]"}, Limit: 1, Got: len(result.NestedInts[len(result.NestedInts)-1])}
 					}
@@ -402,6 +408,10 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 					}
 					break
 				}
+				row0 := result.NestedInts[len(result.NestedInts)-1]
+				if row0 != nil {
+					row0 = row0[:0]
+				}
 				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 					i++
 				}
@@ -413,16 +423,20 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 					i++
 				}
 				if i < len(data) && data[i] == ']' {
-					if result.NestedInts[len(result.NestedInts)-1] == nil {
-						result.NestedInts[len(result.NestedInts)-1] = []int{}
+					if row0 == nil {
+						row0 = []int{}
 					}
 				} else {
-					if result.NestedInts[len(result.NestedInts)-1] == nil {
-						result.NestedInts[len(result.NestedInts)-1] = make([]int, 0, 4)
+					if row0 == nil {
+						cnt1 := 1
+						if e := bytes.IndexByte(data[i:], ']'); e >= 0 {
+							cnt1 = bytes.Count(data[i:i+e], []byte{','}) + 1
+						}
+						row0 = make([]int, 0, cnt1)
 					}
 				}
 				for i < len(data) && data[i] != ']' {
-					result.NestedInts[len(result.NestedInts)-1] = append(result.NestedInts[len(result.NestedInts)-1], 0)
+					row0 = append(row0, 0)
 					neg := false
 					if i < len(data) && data[i] == '-' {
 						neg = true
@@ -468,12 +482,12 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 					} else {
 						n = int64(u)
 					}
-					result.NestedInts[len(result.NestedInts)-1][len(result.NestedInts[len(result.NestedInts)-1])-1] = int(n)
-					if result.NestedInts[len(result.NestedInts)-1][len(result.NestedInts[len(result.NestedInts)-1])-1] < 0 {
-						return result, i, &validation.GTEError{Path: []string{"nestedInts[][]"}, Limit: 0, Value: result.NestedInts[len(result.NestedInts)-1][len(result.NestedInts[len(result.NestedInts)-1])-1]}
+					row0[len(row0)-1] = int(n)
+					if row0[len(row0)-1] < 0 {
+						return result, i, &validation.GTEError{Path: []string{"nestedInts[][]"}, Limit: 0, Value: row0[len(row0)-1]}
 					}
-					if result.NestedInts[len(result.NestedInts)-1][len(result.NestedInts[len(result.NestedInts)-1])-1] > 100 {
-						return result, i, &validation.LTEError{Path: []string{"nestedInts[][]"}, Limit: 100, Value: result.NestedInts[len(result.NestedInts)-1][len(result.NestedInts[len(result.NestedInts)-1])-1]}
+					if row0[len(row0)-1] > 100 {
+						return result, i, &validation.LTEError{Path: []string{"nestedInts[][]"}, Limit: 100, Value: row0[len(row0)-1]}
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -494,6 +508,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 					return result, i, scan.ErrBadArray
 				}
 				i++
+				result.NestedInts[len(result.NestedInts)-1] = row0
 				if len(result.NestedInts[len(result.NestedInts)-1]) < 1 {
 					return result, i, &validation.MinLenError{Path: []string{"nestedInts[]"}, Limit: 1, Got: len(result.NestedInts[len(result.NestedInts)-1])}
 				}
@@ -546,9 +561,14 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 				}
 			}
 			for i < len(data) && data[i] != ']' {
-				result.Triple = append(result.Triple, nil)
+				if len(result.Triple) < cap(result.Triple) {
+					result.Triple = result.Triple[:len(result.Triple)+1]
+				} else {
+					result.Triple = append(result.Triple, nil)
+				}
 				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 					i += 4
+					result.Triple[len(result.Triple)-1] = nil
 					if len(result.Triple[len(result.Triple)-1]) < 1 {
 						return result, i, &validation.MinLenError{Path: []string{"triple[]"}, Limit: 1, Got: len(result.Triple[len(result.Triple)-1])}
 					}
@@ -567,6 +587,10 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 					}
 					break
 				}
+				row0 := result.Triple[len(result.Triple)-1]
+				if row0 != nil {
+					row0 = row0[:0]
+				}
 				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 					i++
 				}
@@ -578,20 +602,25 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 					i++
 				}
 				if i < len(data) && data[i] == ']' {
-					if result.Triple[len(result.Triple)-1] == nil {
-						result.Triple[len(result.Triple)-1] = [][]string{}
+					if row0 == nil {
+						row0 = [][]string{}
 					}
 				} else {
-					if result.Triple[len(result.Triple)-1] == nil {
-						result.Triple[len(result.Triple)-1] = make([][]string, 0, 4)
+					if row0 == nil {
+						row0 = make([][]string, 0, 4)
 					}
 				}
 				for i < len(data) && data[i] != ']' {
-					result.Triple[len(result.Triple)-1] = append(result.Triple[len(result.Triple)-1], nil)
+					if len(row0) < cap(row0) {
+						row0 = row0[:len(row0)+1]
+					} else {
+						row0 = append(row0, nil)
+					}
 					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 						i += 4
-						if len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1]) < 1 {
-							return result, i, &validation.MinLenError{Path: []string{"triple[][]"}, Limit: 1, Got: len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1])}
+						row0[len(row0)-1] = nil
+						if len(row0[len(row0)-1]) < 1 {
+							return result, i, &validation.MinLenError{Path: []string{"triple[][]"}, Limit: 1, Got: len(row0[len(row0)-1])}
 						}
 						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
@@ -608,6 +637,10 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 						}
 						break
 					}
+					row1 := row0[len(row0)-1]
+					if row1 != nil {
+						row1 = row1[:0]
+					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
@@ -619,16 +652,16 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 						i++
 					}
 					if i < len(data) && data[i] == ']' {
-						if result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1] == nil {
-							result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1] = []string{}
+						if row1 == nil {
+							row1 = []string{}
 						}
 					} else {
-						if result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1] == nil {
-							result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1] = make([]string, 0, 4)
+						if row1 == nil {
+							row1 = make([]string, 0, 4)
 						}
 					}
 					for i < len(data) && data[i] != ']' {
-						result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1] = append(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1], "")
+						row1 = append(row1, "")
 						if i >= len(data) || data[i] != '"' {
 							return result, i, decode.NewParseErr("triple[][]", i, scan.ErrExpectString)
 						}
@@ -643,16 +676,16 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 							return result, i, decode.NewParseErr("triple[][]", i, scan.ErrBadString)
 						}
 						if data[ke] == '"' {
-							result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1][len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1])-1] = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+							row1[len(row1)-1] = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 							i = ke + 1
 						} else {
-							result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1][len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1])-1], i, err = scan.String(data, i)
+							row1[len(row1)-1], i, err = scan.String(data, i)
 							if err != nil {
 								return result, i, decode.NewParseErr("triple[][]", i, err)
 							}
 						}
-						if len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1][len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1])-1]) < 1 {
-							return result, i, &validation.MinLenError{Path: []string{"triple[][][]"}, Limit: 1, Got: len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1][len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1])-1])}
+						if len(row1[len(row1)-1]) < 1 {
+							return result, i, &validation.MinLenError{Path: []string{"triple[][][]"}, Limit: 1, Got: len(row1[len(row1)-1])}
 						}
 						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
@@ -673,8 +706,9 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 						return result, i, scan.ErrBadArray
 					}
 					i++
-					if len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1]) < 1 {
-						return result, i, &validation.MinLenError{Path: []string{"triple[][]"}, Limit: 1, Got: len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1])}
+					row0[len(row0)-1] = row1
+					if len(row0[len(row0)-1]) < 1 {
+						return result, i, &validation.MinLenError{Path: []string{"triple[][]"}, Limit: 1, Got: len(row0[len(row0)-1])}
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -695,6 +729,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 					return result, i, scan.ErrBadArray
 				}
 				i++
+				result.Triple[len(result.Triple)-1] = row0
 				if len(result.Triple[len(result.Triple)-1]) < 1 {
 					return result, i, &validation.MinLenError{Path: []string{"triple[]"}, Limit: 1, Got: len(result.Triple[len(result.Triple)-1])}
 				}
@@ -1070,7 +1105,11 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {
-				result.NestedInts = append(result.NestedInts, nil)
+				if len(result.NestedInts) < cap(result.NestedInts) {
+					result.NestedInts = result.NestedInts[:len(result.NestedInts)+1]
+				} else {
+					result.NestedInts = append(result.NestedInts, nil)
+				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
 						return result, decode.NewParseErr("nestedInts", s.Pos, err)
@@ -1088,6 +1127,7 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 						}
 					}
 					s.Pos += 4
+					result.NestedInts[len(result.NestedInts)-1] = nil
 					if len(result.NestedInts[len(result.NestedInts)-1]) < 1 {
 						return result, &validation.MinLenError{Path: []string{"nestedInts[]"}, Limit: 1, Got: len(result.NestedInts[len(result.NestedInts)-1])}
 					}
@@ -1113,6 +1153,10 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 					}
 					break
 				}
+				row0 := result.NestedInts[len(result.NestedInts)-1]
+				if row0 != nil {
+					row0 = row0[:0]
+				}
 				err = s.ArrayOpen()
 				if err != nil {
 					return result, decode.NewParseErr("nestedInts[]", s.Pos, err)
@@ -1127,27 +1171,27 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 					}
 				}
 				if s.Bytes()[s.Pos] == ']' {
-					if result.NestedInts[len(result.NestedInts)-1] == nil {
-						result.NestedInts[len(result.NestedInts)-1] = []int{}
+					if row0 == nil {
+						row0 = []int{}
 					}
 				} else {
-					if result.NestedInts[len(result.NestedInts)-1] == nil {
-						result.NestedInts[len(result.NestedInts)-1] = make([]int, 0, 4)
+					if row0 == nil {
+						row0 = make([]int, 0, 4)
 					}
 				}
 				for s.Bytes()[s.Pos] != ']' {
-					result.NestedInts[len(result.NestedInts)-1] = append(result.NestedInts[len(result.NestedInts)-1], 0)
+					row0 = append(row0, 0)
 					var iv int64
 					iv, err = s.Int64()
 					if err != nil {
 						return result, decode.NewParseErr("nestedInts[]", s.Pos, err)
 					}
-					result.NestedInts[len(result.NestedInts)-1][len(result.NestedInts[len(result.NestedInts)-1])-1] = int(iv)
-					if result.NestedInts[len(result.NestedInts)-1][len(result.NestedInts[len(result.NestedInts)-1])-1] < 0 {
-						return result, &validation.GTEError{Path: []string{"nestedInts[][]"}, Limit: 0, Value: result.NestedInts[len(result.NestedInts)-1][len(result.NestedInts[len(result.NestedInts)-1])-1]}
+					row0[len(row0)-1] = int(iv)
+					if row0[len(row0)-1] < 0 {
+						return result, &validation.GTEError{Path: []string{"nestedInts[][]"}, Limit: 0, Value: row0[len(row0)-1]}
 					}
-					if result.NestedInts[len(result.NestedInts)-1][len(result.NestedInts[len(result.NestedInts)-1])-1] > 100 {
-						return result, &validation.LTEError{Path: []string{"nestedInts[][]"}, Limit: 100, Value: result.NestedInts[len(result.NestedInts)-1][len(result.NestedInts[len(result.NestedInts)-1])-1]}
+					if row0[len(row0)-1] > 100 {
+						return result, &validation.LTEError{Path: []string{"nestedInts[][]"}, Limit: 100, Value: row0[len(row0)-1]}
 					}
 					err = s.SkipSpace()
 					if err != nil {
@@ -1175,6 +1219,7 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 					return result, decode.NewParseErr("nestedInts[]", s.Pos, scan.ErrBadArray)
 				}
 				s.Pos++
+				result.NestedInts[len(result.NestedInts)-1] = row0
 				if len(result.NestedInts[len(result.NestedInts)-1]) < 1 {
 					return result, &validation.MinLenError{Path: []string{"nestedInts[]"}, Limit: 1, Got: len(result.NestedInts[len(result.NestedInts)-1])}
 				}
@@ -1260,7 +1305,11 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {
-				result.Triple = append(result.Triple, nil)
+				if len(result.Triple) < cap(result.Triple) {
+					result.Triple = result.Triple[:len(result.Triple)+1]
+				} else {
+					result.Triple = append(result.Triple, nil)
+				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
 						return result, decode.NewParseErr("triple", s.Pos, err)
@@ -1278,6 +1327,7 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 						}
 					}
 					s.Pos += 4
+					result.Triple[len(result.Triple)-1] = nil
 					if len(result.Triple[len(result.Triple)-1]) < 1 {
 						return result, &validation.MinLenError{Path: []string{"triple[]"}, Limit: 1, Got: len(result.Triple[len(result.Triple)-1])}
 					}
@@ -1303,6 +1353,10 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 					}
 					break
 				}
+				row0 := result.Triple[len(result.Triple)-1]
+				if row0 != nil {
+					row0 = row0[:0]
+				}
 				err = s.ArrayOpen()
 				if err != nil {
 					return result, decode.NewParseErr("triple[]", s.Pos, err)
@@ -1317,16 +1371,20 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 					}
 				}
 				if s.Bytes()[s.Pos] == ']' {
-					if result.Triple[len(result.Triple)-1] == nil {
-						result.Triple[len(result.Triple)-1] = [][]string{}
+					if row0 == nil {
+						row0 = [][]string{}
 					}
 				} else {
-					if result.Triple[len(result.Triple)-1] == nil {
-						result.Triple[len(result.Triple)-1] = make([][]string, 0, 4)
+					if row0 == nil {
+						row0 = make([][]string, 0, 4)
 					}
 				}
 				for s.Bytes()[s.Pos] != ']' {
-					result.Triple[len(result.Triple)-1] = append(result.Triple[len(result.Triple)-1], nil)
+					if len(row0) < cap(row0) {
+						row0 = row0[:len(row0)+1]
+					} else {
+						row0 = append(row0, nil)
+					}
 					if s.Pos >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
 							return result, decode.NewParseErr("triple[]", s.Pos, err)
@@ -1344,8 +1402,9 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 							}
 						}
 						s.Pos += 4
-						if len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1]) < 1 {
-							return result, &validation.MinLenError{Path: []string{"triple[][]"}, Limit: 1, Got: len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1])}
+						row0[len(row0)-1] = nil
+						if len(row0[len(row0)-1]) < 1 {
+							return result, &validation.MinLenError{Path: []string{"triple[][]"}, Limit: 1, Got: len(row0[len(row0)-1])}
 						}
 						err = s.SkipSpace()
 						if err != nil {
@@ -1369,6 +1428,10 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 						}
 						break
 					}
+					row1 := row0[len(row0)-1]
+					if row1 != nil {
+						row1 = row1[:0]
+					}
 					err = s.ArrayOpen()
 					if err != nil {
 						return result, decode.NewParseErr("triple[][]", s.Pos, err)
@@ -1383,22 +1446,22 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 						}
 					}
 					if s.Bytes()[s.Pos] == ']' {
-						if result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1] == nil {
-							result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1] = []string{}
+						if row1 == nil {
+							row1 = []string{}
 						}
 					} else {
-						if result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1] == nil {
-							result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1] = make([]string, 0, 4)
+						if row1 == nil {
+							row1 = make([]string, 0, 4)
 						}
 					}
 					for s.Bytes()[s.Pos] != ']' {
-						result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1] = append(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1], "")
-						result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1][len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1])-1], err = s.String()
+						row1 = append(row1, "")
+						row1[len(row1)-1], err = s.String()
 						if err != nil {
 							return result, decode.NewParseErr("triple[][]", s.Pos, err)
 						}
-						if len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1][len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1])-1]) < 1 {
-							return result, &validation.MinLenError{Path: []string{"triple[][][]"}, Limit: 1, Got: len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1][len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1])-1])}
+						if len(row1[len(row1)-1]) < 1 {
+							return result, &validation.MinLenError{Path: []string{"triple[][][]"}, Limit: 1, Got: len(row1[len(row1)-1])}
 						}
 						err = s.SkipSpace()
 						if err != nil {
@@ -1426,8 +1489,9 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 						return result, decode.NewParseErr("triple[][]", s.Pos, scan.ErrBadArray)
 					}
 					s.Pos++
-					if len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1]) < 1 {
-						return result, &validation.MinLenError{Path: []string{"triple[][]"}, Limit: 1, Got: len(result.Triple[len(result.Triple)-1][len(result.Triple[len(result.Triple)-1])-1])}
+					row0[len(row0)-1] = row1
+					if len(row0[len(row0)-1]) < 1 {
+						return result, &validation.MinLenError{Path: []string{"triple[][]"}, Limit: 1, Got: len(row0[len(row0)-1])}
 					}
 					err = s.SkipSpace()
 					if err != nil {
@@ -1455,6 +1519,7 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 					return result, decode.NewParseErr("triple[]", s.Pos, scan.ErrBadArray)
 				}
 				s.Pos++
+				result.Triple[len(result.Triple)-1] = row0
 				if len(result.Triple[len(result.Triple)-1]) < 1 {
 					return result, &validation.MinLenError{Path: []string{"triple[]"}, Limit: 1, Got: len(result.Triple[len(result.Triple)-1])}
 				}
@@ -1825,6 +1890,10 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 					}
 					break
 				}
+				row0 := result.Pair[idx0]
+				if row0 != nil {
+					row0 = row0[:0]
+				}
 				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 					i++
 				}
@@ -1836,16 +1905,16 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 					i++
 				}
 				if i < len(data) && data[i] == ']' {
-					if result.Pair[idx0] == nil {
-						result.Pair[idx0] = []string{}
+					if row0 == nil {
+						row0 = []string{}
 					}
 				} else {
-					if result.Pair[idx0] == nil {
-						result.Pair[idx0] = make([]string, 0, 4)
+					if row0 == nil {
+						row0 = make([]string, 0, 4)
 					}
 				}
 				for i < len(data) && data[i] != ']' {
-					result.Pair[idx0] = append(result.Pair[idx0], "")
+					row0 = append(row0, "")
 					if i >= len(data) || data[i] != '"' {
 						return result, i, decode.NewParseErr("pair[]", i, scan.ErrExpectString)
 					}
@@ -1860,10 +1929,10 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 						return result, i, decode.NewParseErr("pair[]", i, scan.ErrBadString)
 					}
 					if data[ke] == '"' {
-						result.Pair[idx0][len(result.Pair[idx0])-1] = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						row0[len(row0)-1] = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 						i = ke + 1
 					} else {
-						result.Pair[idx0][len(result.Pair[idx0])-1], i, err = scan.String(data, i)
+						row0[len(row0)-1], i, err = scan.String(data, i)
 						if err != nil {
 							return result, i, decode.NewParseErr("pair[]", i, err)
 						}
@@ -1887,6 +1956,7 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 					return result, i, scan.ErrBadArray
 				}
 				i++
+				result.Pair[idx0] = row0
 				idx0++
 				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 					i++
@@ -2089,6 +2159,7 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 			}
 			for i < len(data) && data[i] != ']' {
 				result.Segments = append(result.Segments, [2]int{})
+				row0 := result.Segments[len(result.Segments)-1]
 				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 					i++
 				}
@@ -2149,7 +2220,7 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 					} else {
 						n = int64(u)
 					}
-					result.Segments[len(result.Segments)-1][idx1] = int(n)
+					row0[idx1] = int(n)
 					idx1++
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -2173,6 +2244,7 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 					return result, i, &validation.LenError{Path: []string{"segments[]"}, Want: 2, Got: idx1}
 				}
 				i++
+				result.Segments[len(result.Segments)-1] = row0
 				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 					i++
 				}
@@ -2318,6 +2390,10 @@ func (recv TupleStruct) DecodeFromStream(s *scan.Stream) (result TupleStruct, er
 					}
 					break
 				}
+				row0 := result.Pair[idx0]
+				if row0 != nil {
+					row0 = row0[:0]
+				}
 				err = s.ArrayOpen()
 				if err != nil {
 					return result, decode.NewParseErr("pair[]", s.Pos, err)
@@ -2332,17 +2408,17 @@ func (recv TupleStruct) DecodeFromStream(s *scan.Stream) (result TupleStruct, er
 					}
 				}
 				if s.Bytes()[s.Pos] == ']' {
-					if result.Pair[idx0] == nil {
-						result.Pair[idx0] = []string{}
+					if row0 == nil {
+						row0 = []string{}
 					}
 				} else {
-					if result.Pair[idx0] == nil {
-						result.Pair[idx0] = make([]string, 0, 4)
+					if row0 == nil {
+						row0 = make([]string, 0, 4)
 					}
 				}
 				for s.Bytes()[s.Pos] != ']' {
-					result.Pair[idx0] = append(result.Pair[idx0], "")
-					result.Pair[idx0][len(result.Pair[idx0])-1], err = s.String()
+					row0 = append(row0, "")
+					row0[len(row0)-1], err = s.String()
 					if err != nil {
 						return result, decode.NewParseErr("pair[]", s.Pos, err)
 					}
@@ -2372,6 +2448,7 @@ func (recv TupleStruct) DecodeFromStream(s *scan.Stream) (result TupleStruct, er
 					return result, decode.NewParseErr("pair[]", s.Pos, scan.ErrBadArray)
 				}
 				s.Pos++
+				result.Pair[idx0] = row0
 				idx0++
 				err = s.SkipSpace()
 				if err != nil {
@@ -2595,6 +2672,7 @@ func (recv TupleStruct) DecodeFromStream(s *scan.Stream) (result TupleStruct, er
 			}
 			for s.Bytes()[s.Pos] != ']' {
 				result.Segments = append(result.Segments, [2]int{})
+				row0 := result.Segments[len(result.Segments)-1]
 				err = s.ArrayOpen()
 				if err != nil {
 					return result, decode.NewParseErr("segments[]", s.Pos, err)
@@ -2618,7 +2696,7 @@ func (recv TupleStruct) DecodeFromStream(s *scan.Stream) (result TupleStruct, er
 					if err != nil {
 						return result, decode.NewParseErr("segments[]", s.Pos, err)
 					}
-					result.Segments[len(result.Segments)-1][idx1] = int(iv)
+					row0[idx1] = int(iv)
 					idx1++
 					err = s.SkipSpace()
 					if err != nil {
@@ -2649,6 +2727,7 @@ func (recv TupleStruct) DecodeFromStream(s *scan.Stream) (result TupleStruct, er
 					return result, &validation.LenError{Path: []string{"segments[]"}, Want: 2, Got: idx1}
 				}
 				s.Pos++
+				result.Segments[len(result.Segments)-1] = row0
 				err = s.SkipSpace()
 				if err != nil {
 					return result, decode.NewParseErr("segments", s.Pos, err)

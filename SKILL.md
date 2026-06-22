@@ -284,7 +284,7 @@ Bytes-path (`DecodeFrom`) still zero-copy via `unsafe.String` into caller `data`
 
 ### Decode-into-receiver (merge)
 
-Decoders parse values into method non-pointer receiver. Non-nil slices/maps reuse capacity, values overwritten. Non-nil pointer fields reuse the pointee (struct pointees merge omitted fields; `null` nils the field). Niche, useful for reusing capacity of slice/map/pointer fields when same object reused for multiple (not necessarily _different_) payloads.
+Decoders parse values into method non-pointer receiver. Non-nil slices/maps reuse capacity, values overwritten — nested slices too: re-decoding a `[][]T` (any depth) reuses the inner rows' backing arrays, not just the outer slice. Non-nil pointer fields reuse the pointee (struct pointees merge omitted fields; `null` nils the field). Niche, useful for reusing capacity of slice/map/pointer fields when same object reused for multiple (not necessarily _different_) payloads.
 
 NOT 100% compatible with stdlib — ggen diverges in three ways: ALL containers are reset, regardless of presence (blank payload → blank slate, capacity kept), a PRESENT map key replaces the whole map (clear+refill; stdlib merges entries into it), and an explicit `null` on a non-pointer scalar/native field ERRORS (stdlib zeroes it — only pointer/slice/map/`[]byte`/`sql.Null*`/raw fields accept `null`). Scalars-persist-on-omit, slice-replace, null→nil for slice/map/pointer, nested-struct merge, and `*T`/`**T` reuse all match stdlib.
 

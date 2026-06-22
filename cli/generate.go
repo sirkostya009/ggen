@@ -550,6 +550,14 @@ func isNumeric(k TypeKind) bool {
 	return false
 }
 
+// scalarCountable reports whether a flat container of element kind k admits
+// exact-cap sizing by counting delimiters in the bytes-path buffer. True only
+// for numeric / bool elements: their textual form contains no `,`, `]`, `:` or
+// `}`, so a single `bytes.IndexByte` + `bytes.Count` over the value span yields
+// the precise element count. Strings (commas/brackets inside quotes) and
+// structs (nested delimiters) are excluded.
+func scalarCountable(k TypeKind) bool { return isNumeric(k) || k == KindBool }
+
 // renderMods emits post-decode transformation code against ref using the
 // field's Mods list. String mods (trim/lower/...) and numeric mods (clamp)
 // live here. Unknown names are skipped so validation tests can detect them.
@@ -2843,6 +2851,11 @@ func renderMap(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	// ref is decode-into-receiver: either nil (fresh) or already cleared
 	// at the top of DecodeFrom (existing map kept for reuse). Allocate only
 	// when nil; cleared maps reuse their bucket array.
+	// No `:`-count prealloc for maps: JSON object keys are strings that may
+	// contain `:`, so a single VALID entry with a colon-laden key would
+	// inflate the count into a huge make() — a memory-amplification footgun on
+	// well-formed input (unlike the slice comma-count, where scalar elements
+	// can't carry the delimiter). Maps keep the unsized make().
 	fmt.Fprintf(b, `	if %[1]s < len(data) && data[%[1]s] == '}' {
 		if %[2]s == nil { %[2]s = %[3]s{} }
 	} else {
@@ -4175,15 +4188,32 @@ func emitByteSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth i
 			fmt.Fprintf(b, "var %s []%s\n", slabVar, f.ElemType)
 		}
 		// dst is decode-into-receiver: either nil (fresh) or already [:0]'d
-		// at the top of DecodeFrom (existing backing kept for reuse). Only
-		// allocate when nil; otherwise the [:0]'d slice serves as the
-		// append target and re-uses the caller's backing array.
+		// at the top of DecodeFrom (existing backing kept for reuse), incl. a
+		// nested row seeded from its carried slot. Only allocate when nil;
+		// otherwise the [:0]'d slice serves as the append target and re-uses
+		// the caller's backing array.
 		fmt.Fprintf(b, "if %s < len(data) && data[%s] == ']' {\n", kvar, kvar)
 		fmt.Fprintf(b, "if %s == nil { %s = %s{} }\n", dst, dst, f.GoType)
 		fmt.Fprintf(b, "} else {\n")
-		if sCap > 0 {
+		switch {
+		case !f.ElemPointer && scalarCountable(f.ElemKind) && userPreallocHint(f) < 0:
+			// Exact-cap from a one-shot delimiter scan: numeric/bool elements
+			// can't contain `,` or `]`, so the first `]` is the real array
+			// close and each `,` separates exactly one element. Kills the
+			// 1→2→4→8 growth chain (and its orphan backings) with no over-cap
+			// residency cost — unlike maxlen-as-hint. Reused (non-nil) slots
+			// keep their backing — the guard skips the make. Malformed input
+			// with no `]` falls back to cap 1 and errors in the scan loop.
+			cntVar := fmt.Sprintf("cnt%d", depth)
+			fmt.Fprintf(b, `if %[1]s == nil {
+%[4]s := 1
+if e := bytes.IndexByte(data[%[2]s:], ']'); e >= 0 { %[4]s = bytes.Count(data[%[2]s:%[2]s+e], []byte{','}) + 1 }
+%[1]s = make(%[3]s, 0, %[4]s)
+}
+`, dst, kvar, f.GoType, cntVar)
+		case sCap > 0:
 			fmt.Fprintf(b, "if %s == nil { %s = make(%s, 0, %d) }\n", dst, dst, f.GoType, sCap)
-		} else {
+		default:
 			fmt.Fprintf(b, "if %s == nil { %s = %s{} }\n", dst, dst, f.GoType)
 		}
 		if f.ElemPointer && !mptr {
@@ -4251,6 +4281,13 @@ func emitByteSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth i
 		// pre-grow with the pointee's zero value.
 		fmt.Fprintf(b, "%s = append(%s, %s)\n", slabVar, slabVar, zeroLit(f.ElemType, f.ElemKind))
 		target = fmt.Sprintf("%s[len(%s)-1]", slabVar, slabVar)
+	case f.ElemKind == KindSlice:
+		// Element is itself a slice (reached only for a non-array, non-pointer
+		// outer). Grow by reslicing within cap so the carried inner header —
+		// and its backing array — survives into the slot for reuse; only a
+		// genuine past-cap grow allocates a fresh nil slot.
+		fmt.Fprintf(b, "if len(%[1]s) < cap(%[1]s) { %[1]s = %[1]s[:len(%[1]s)+1] } else { %[1]s = append(%[1]s, nil) }\n", dst)
+		target = fmt.Sprintf("%s[len(%s)-1]", dst, dst)
 	default:
 		fmt.Fprintf(b, "%s = append(%s, %s)\n", dst, dst, zeroLit(f.ElemType, f.ElemKind))
 		target = fmt.Sprintf("%s[len(%s)-1]", dst, dst)
@@ -4318,9 +4355,9 @@ func emitByteSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth i
 				// nil. Elem rules still run against the nil slot — same
 				// emit as the post-decode call below.
 				inlineNullPeek(b, kvar)
-				if isArray {
-					fmt.Fprintf(b, "%s = nil\n", target)
-				}
+				// Slot may carry a reused header (slice reslice-grow) or the
+				// receiver's element (array), so nil it unconditionally.
+				fmt.Fprintf(b, "%s = nil\n", target)
 				if len(f.ElemValidation) > 0 {
 					renderValidationOn(b, f.ElemValidation, target, f.JSONName+"[]", f.ElemKind, f.MultiErr, "i")
 				}
@@ -4334,7 +4371,24 @@ func emitByteSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth i
 				b.WriteString("continue }\nbreak\n}\n")
 				inner.NullDone = true
 			}
-			emitByteSliceRead(b, inner, target, kvar, depth+1)
+			// Hoist the nested slot into a depth-local `rowN` rather than
+			// threading `dst[len(dst)-1]` / `dst[ivar]` through the recursion
+			// as its dst. The inner append/decode loop then writes a local
+			// slice header — no per-element parent-backing write barrier and
+			// no len()/bounds re-eval — and one `target = rowN` publishes the
+			// finished row. Also drops the unreadable `len(len(len(…)))` nest.
+			// Seed the row from the carried slot (target) so the inner decode
+			// REUSES its backing: a slice row resets to [:0] (len cleared, cap
+			// kept), a past-cap / fresh slot reads back nil and the inner
+			// emitter make()s anew. Mirrors the top-level `[:0]` receiver-reset
+			// contract one level down.
+			row := fmt.Sprintf("row%d", depth)
+			fmt.Fprintf(b, "%s := %s\n", row, target)
+			if inner.Kind == KindSlice {
+				fmt.Fprintf(b, "if %[1]s != nil { %[1]s = %[1]s[:0] }\n", row)
+			}
+			emitByteSliceRead(b, inner, row, kvar, depth+1)
+			fmt.Fprintf(b, "%s = %s\n", target, row)
 		}
 		if len(f.ElemMods) > 0 {
 			renderMods(b, f.ElemMods, target, f.ElemType, f.ElemKind)
@@ -5427,6 +5481,11 @@ func emitStreamSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth
 	case f.ElemPointer:
 		fmt.Fprintf(b, "%s = append(%s, %s)\n", slabVar, slabVar, zeroLit(f.ElemType, f.ElemKind))
 		target = fmt.Sprintf("%s[len(%s)-1]", slabVar, slabVar)
+	case f.ElemKind == KindSlice:
+		// Reslice within cap to keep the carried inner header for reuse
+		// (see emitByteSliceRead); only a past-cap grow allocates nil.
+		fmt.Fprintf(b, "if len(%[1]s) < cap(%[1]s) { %[1]s = %[1]s[:len(%[1]s)+1] } else { %[1]s = append(%[1]s, nil) }\n", dst)
+		target = fmt.Sprintf("%s[len(%s)-1]", dst, dst)
 	default:
 		fmt.Fprintf(b, "%s = append(%s, %s)\n", dst, dst, zeroLit(f.ElemType, f.ElemKind))
 		target = fmt.Sprintf("%s[len(%s)-1]", dst, dst)
@@ -5497,9 +5556,9 @@ fv, err = s.Float64()
 	}
 	s.Pos += 4
 `, field, rm, rmKi)
-				if isArray {
-					fmt.Fprintf(b, "%s = nil\n", target)
-				}
+				// Slot may carry a reused header (reslice-grow) or the
+				// receiver's element (array) — nil it unconditionally.
+				fmt.Fprintf(b, "%s = nil\n", target)
 				if len(f.ElemValidation) > 0 {
 					renderValidationOn(b, f.ElemValidation, target, f.JSONName+"[]", f.ElemKind, f.MultiErr, "")
 				}
@@ -5513,7 +5572,17 @@ break
 `, chk, rm, streamNoCloseAfterComma(field, ']'))
 				inner.NullDone = true
 			}
-			emitStreamSliceRead(b, inner, target, "s.Pos", depth+1)
+			// See emitByteSliceRead: hoist the nested slot into `rowN` so the
+			// inner loop writes a local header (no parent-backing barrier),
+			// seeded from the carried slot so its backing is reused (slice →
+			// [:0]); publish with `target = rowN`.
+			row := fmt.Sprintf("row%d", depth)
+			fmt.Fprintf(b, "%s := %s\n", row, target)
+			if inner.Kind == KindSlice {
+				fmt.Fprintf(b, "if %[1]s != nil { %[1]s = %[1]s[:0] }\n", row)
+			}
+			emitStreamSliceRead(b, inner, row, "s.Pos", depth+1)
+			fmt.Fprintf(b, "%s = %s\n", target, row)
 		}
 		if len(f.ElemMods) > 0 {
 			renderStreamMods(b, f.ElemMods, target, f.ElemType, f.ElemKind)
