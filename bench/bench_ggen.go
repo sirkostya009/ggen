@@ -1247,7 +1247,7 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 				break
 			}
 			var sv string
-			sv, err = s.String()
+			sv, err = s.StringView()
 			if err != nil {
 				return result, decode.NewParseErr("blob", s.Pos, err)
 			}
@@ -1419,7 +1419,7 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 			}
 			seenCreatedAt = true
 			var sv string
-			sv, err = s.String()
+			sv, err = s.StringView()
 			if err != nil {
 				return result, decode.NewParseErr("createdAt", s.Pos, err)
 			}

@@ -323,7 +323,7 @@ func (recv RichTypes) DecodeFromStream(s *scan.Stream) (result RichTypes, err er
 			}
 			seenBigF = true
 			var sv string
-			sv, err = s.String()
+			sv, err = s.StringView()
 			if err != nil {
 				return result, decode.NewParseErr("bigF", s.Pos, err)
 			}
@@ -340,7 +340,7 @@ func (recv RichTypes) DecodeFromStream(s *scan.Stream) (result RichTypes, err er
 			}
 			seenBigR = true
 			var sv string
-			sv, err = s.String()
+			sv, err = s.StringView()
 			if err != nil {
 				return result, decode.NewParseErr("bigR", s.Pos, err)
 			}
@@ -357,7 +357,7 @@ func (recv RichTypes) DecodeFromStream(s *scan.Stream) (result RichTypes, err er
 			}
 			seenGofrsID = true
 			var ts string
-			ts, err = s.String()
+			ts, err = s.StringView()
 			if err != nil {
 				return result, decode.NewParseErr("gofrsId", s.Pos, err)
 			}
@@ -375,7 +375,7 @@ func (recv RichTypes) DecodeFromStream(s *scan.Stream) (result RichTypes, err er
 			}
 			seenID = true
 			var ts string
-			ts, err = s.String()
+			ts, err = s.StringView()
 			if err != nil {
 				return result, decode.NewParseErr("id", s.Pos, err)
 			}

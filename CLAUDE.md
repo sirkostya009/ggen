@@ -715,6 +715,23 @@ float64` 6459→3417. Outpaces stdjson v1 and jsonv2 on every map shape.
     consistent −3..−7% on the dispatch-bound `Tiny_Unmarshal` across all
     seeds; allocs/B identical. The stream path needs no change — its `> ' '`
     fast path (opt #5 / `SkipSpace` two-tier) already is this gate.
+41. **Stream `StringView` for transiently-consumed value strings.** A
+    `Stream.String` sibling that returns an `unsafe.String` alias into
+    `s.buf` (no `KeyView` scalar prelude — value strings are often long).
+    Generated stream decoders use it where the value string is consumed
+    before the next stream op AND retains no bytes past that point:
+    base64/base32/hex `[]byte` (`AppendDecode` into independent dst),
+    `time.Time`/`time.Duration` text formats, `net.IP` (error literal
+    clones), `netip.Addr`/`Prefix`, `big.Float`/`big.Rat`, cross-pkg
+    `TextUnmarshaler` (encoding contract forbids arg retention; bytes path
+    already aliases). NOT `url.URL` (`url.Parse` slices its input into
+    `Path`/`RawQuery`), plain `string` fields, map keys, or map/slice
+    string elems — those outlive the scan and keep the `Stream.String`
+    copy. `Stream.String` itself is now `StringView` + `strings.Clone`
+    (shared scanner; −0.9% vs the old standalone body, allocs identical).
+    Measured −1.45% wall / −2.95% B/op / −1.89% allocs `Mega_Reader` with 2
+    aliasable Node sites; text-heavy schemas gain more. See
+    scan/CLAUDE.md "Stream copies vs bytes-path aliases" / "`StringView`".
 
 ## Design decisions (the why)
 

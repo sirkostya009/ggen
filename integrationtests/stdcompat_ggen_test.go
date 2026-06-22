@@ -162,7 +162,7 @@ func (recv TimeDefault) DecodeFromStream(s *scan.Stream) (result TimeDefault, er
 			}
 			seenDefault = true
 			var sv string
-			sv, err = s.String()
+			sv, err = s.StringView()
 			if err != nil {
 				return result, decode.NewParseErr("default", s.Pos, err)
 			}
@@ -1061,7 +1061,7 @@ func (recv TimeANSIC) DecodeFromStream(s *scan.Stream) (result TimeANSIC, err er
 			}
 			seenANSIC = true
 			var sv string
-			sv, err = s.String()
+			sv, err = s.StringView()
 			if err != nil {
 				return result, decode.NewParseErr("ansic", s.Pos, err)
 			}
@@ -1259,7 +1259,7 @@ func (recv TimeUnixDate) DecodeFromStream(s *scan.Stream) (result TimeUnixDate, 
 			}
 			seenUnixDate = true
 			var sv string
-			sv, err = s.String()
+			sv, err = s.StringView()
 			if err != nil {
 				return result, decode.NewParseErr("unixDate", s.Pos, err)
 			}
@@ -1457,7 +1457,7 @@ func (recv TimeRubyDate) DecodeFromStream(s *scan.Stream) (result TimeRubyDate, 
 			}
 			seenRubyDate = true
 			var sv string
-			sv, err = s.String()
+			sv, err = s.StringView()
 			if err != nil {
 				return result, decode.NewParseErr("rubyDate", s.Pos, err)
 			}
@@ -1655,7 +1655,7 @@ func (recv TimeRFC822) DecodeFromStream(s *scan.Stream) (result TimeRFC822, err 
 			}
 			seenRFC822 = true
 			var sv string
-			sv, err = s.String()
+			sv, err = s.StringView()
 			if err != nil {
 				return result, decode.NewParseErr("rfc822", s.Pos, err)
 			}
@@ -1853,7 +1853,7 @@ func (recv TimeRFC822Z) DecodeFromStream(s *scan.Stream) (result TimeRFC822Z, er
 			}
 			seenRFC822Z = true
 			var sv string
-			sv, err = s.String()
+			sv, err = s.StringView()
 			if err != nil {
 				return result, decode.NewParseErr("rfc822Z", s.Pos, err)
 			}
@@ -2051,7 +2051,7 @@ func (recv TimeRFC850) DecodeFromStream(s *scan.Stream) (result TimeRFC850, err 
 			}
 			seenRFC850 = true
 			var sv string
-			sv, err = s.String()
+			sv, err = s.StringView()
 			if err != nil {
 				return result, decode.NewParseErr("rfc850", s.Pos, err)
 			}
@@ -2249,7 +2249,7 @@ func (recv TimeRFC1123) DecodeFromStream(s *scan.Stream) (result TimeRFC1123, er
 			}
 			seenRFC1123 = true
 			var sv string
-			sv, err = s.String()
+			sv, err = s.StringView()
 			if err != nil {
 				return result, decode.NewParseErr("rfc1123", s.Pos, err)
 			}
@@ -2447,7 +2447,7 @@ func (recv TimeRFC1123Z) DecodeFromStream(s *scan.Stream) (result TimeRFC1123Z, 
 			}
 			seenRFC1123Z = true
 			var sv string
-			sv, err = s.String()
+			sv, err = s.StringView()
 			if err != nil {
 				return result, decode.NewParseErr("rfc1123Z", s.Pos, err)
 			}
@@ -2645,7 +2645,7 @@ func (recv TimeRFC3339) DecodeFromStream(s *scan.Stream) (result TimeRFC3339, er
 			}
 			seenRFC3339 = true
 			var sv string
-			sv, err = s.String()
+			sv, err = s.StringView()
 			if err != nil {
 				return result, decode.NewParseErr("rfc3339", s.Pos, err)
 			}
@@ -2843,7 +2843,7 @@ func (recv TimeRFC3339Nano) DecodeFromStream(s *scan.Stream) (result TimeRFC3339
 			}
 			seenRFC3339Nano = true
 			var sv string
-			sv, err = s.String()
+			sv, err = s.StringView()
 			if err != nil {
 				return result, decode.NewParseErr("rfc3339Nano", s.Pos, err)
 			}
@@ -3041,7 +3041,7 @@ func (recv TimeKitchen) DecodeFromStream(s *scan.Stream) (result TimeKitchen, er
 			}
 			seenKitchen = true
 			var sv string
-			sv, err = s.String()
+			sv, err = s.StringView()
 			if err != nil {
 				return result, decode.NewParseErr("kitchen", s.Pos, err)
 			}
@@ -3239,7 +3239,7 @@ func (recv TimeDateTime) DecodeFromStream(s *scan.Stream) (result TimeDateTime, 
 			}
 			seenDateTime = true
 			var sv string
-			sv, err = s.String()
+			sv, err = s.StringView()
 			if err != nil {
 				return result, decode.NewParseErr("dateTime", s.Pos, err)
 			}
@@ -3437,7 +3437,7 @@ func (recv TimeDateOnly) DecodeFromStream(s *scan.Stream) (result TimeDateOnly, 
 			}
 			seenDateOnly = true
 			var sv string
-			sv, err = s.String()
+			sv, err = s.StringView()
 			if err != nil {
 				return result, decode.NewParseErr("dateOnly", s.Pos, err)
 			}
@@ -3635,7 +3635,7 @@ func (recv TimeTimeOnly) DecodeFromStream(s *scan.Stream) (result TimeTimeOnly, 
 			}
 			seenTimeOnly = true
 			var sv string
-			sv, err = s.String()
+			sv, err = s.StringView()
 			if err != nil {
 				return result, decode.NewParseErr("timeOnly", s.Pos, err)
 			}
@@ -4363,7 +4363,7 @@ func (recv TimeFormatsStdCompat) DecodeFromStream(s *scan.Stream) (result TimeFo
 			}
 			seenANSIC = true
 			var sv string
-			sv, err = s.String()
+			sv, err = s.StringView()
 			if err != nil {
 				return result, decode.NewParseErr("ansic", s.Pos, err)
 			}
@@ -4381,7 +4381,7 @@ func (recv TimeFormatsStdCompat) DecodeFromStream(s *scan.Stream) (result TimeFo
 			}
 			seenDateOnly = true
 			var sv string
-			sv, err = s.String()
+			sv, err = s.StringView()
 			if err != nil {
 				return result, decode.NewParseErr("dateOnly", s.Pos, err)
 			}
@@ -4399,7 +4399,7 @@ func (recv TimeFormatsStdCompat) DecodeFromStream(s *scan.Stream) (result TimeFo
 			}
 			seenDateTime = true
 			var sv string
-			sv, err = s.String()
+			sv, err = s.StringView()
 			if err != nil {
 				return result, decode.NewParseErr("dateTime", s.Pos, err)
 			}
@@ -4417,7 +4417,7 @@ func (recv TimeFormatsStdCompat) DecodeFromStream(s *scan.Stream) (result TimeFo
 			}
 			seenDefault = true
 			var sv string
-			sv, err = s.String()
+			sv, err = s.StringView()
 			if err != nil {
 				return result, decode.NewParseErr("default", s.Pos, err)
 			}
@@ -4435,7 +4435,7 @@ func (recv TimeFormatsStdCompat) DecodeFromStream(s *scan.Stream) (result TimeFo
 			}
 			seenKitchen = true
 			var sv string
-			sv, err = s.String()
+			sv, err = s.StringView()
 			if err != nil {
 				return result, decode.NewParseErr("kitchen", s.Pos, err)
 			}
@@ -4453,7 +4453,7 @@ func (recv TimeFormatsStdCompat) DecodeFromStream(s *scan.Stream) (result TimeFo
 			}
 			seenRFC1123 = true
 			var sv string
-			sv, err = s.String()
+			sv, err = s.StringView()
 			if err != nil {
 				return result, decode.NewParseErr("rfc1123", s.Pos, err)
 			}
@@ -4471,7 +4471,7 @@ func (recv TimeFormatsStdCompat) DecodeFromStream(s *scan.Stream) (result TimeFo
 			}
 			seenRFC1123Z = true
 			var sv string
-			sv, err = s.String()
+			sv, err = s.StringView()
 			if err != nil {
 				return result, decode.NewParseErr("rfc1123Z", s.Pos, err)
 			}
@@ -4489,7 +4489,7 @@ func (recv TimeFormatsStdCompat) DecodeFromStream(s *scan.Stream) (result TimeFo
 			}
 			seenRFC3339 = true
 			var sv string
-			sv, err = s.String()
+			sv, err = s.StringView()
 			if err != nil {
 				return result, decode.NewParseErr("rfc3339", s.Pos, err)
 			}
@@ -4507,7 +4507,7 @@ func (recv TimeFormatsStdCompat) DecodeFromStream(s *scan.Stream) (result TimeFo
 			}
 			seenRFC3339Nano = true
 			var sv string
-			sv, err = s.String()
+			sv, err = s.StringView()
 			if err != nil {
 				return result, decode.NewParseErr("rfc3339Nano", s.Pos, err)
 			}
@@ -4525,7 +4525,7 @@ func (recv TimeFormatsStdCompat) DecodeFromStream(s *scan.Stream) (result TimeFo
 			}
 			seenRFC822 = true
 			var sv string
-			sv, err = s.String()
+			sv, err = s.StringView()
 			if err != nil {
 				return result, decode.NewParseErr("rfc822", s.Pos, err)
 			}
@@ -4543,7 +4543,7 @@ func (recv TimeFormatsStdCompat) DecodeFromStream(s *scan.Stream) (result TimeFo
 			}
 			seenRFC822Z = true
 			var sv string
-			sv, err = s.String()
+			sv, err = s.StringView()
 			if err != nil {
 				return result, decode.NewParseErr("rfc822Z", s.Pos, err)
 			}
@@ -4561,7 +4561,7 @@ func (recv TimeFormatsStdCompat) DecodeFromStream(s *scan.Stream) (result TimeFo
 			}
 			seenRFC850 = true
 			var sv string
-			sv, err = s.String()
+			sv, err = s.StringView()
 			if err != nil {
 				return result, decode.NewParseErr("rfc850", s.Pos, err)
 			}
@@ -4579,7 +4579,7 @@ func (recv TimeFormatsStdCompat) DecodeFromStream(s *scan.Stream) (result TimeFo
 			}
 			seenRubyDate = true
 			var sv string
-			sv, err = s.String()
+			sv, err = s.StringView()
 			if err != nil {
 				return result, decode.NewParseErr("rubyDate", s.Pos, err)
 			}
@@ -4597,7 +4597,7 @@ func (recv TimeFormatsStdCompat) DecodeFromStream(s *scan.Stream) (result TimeFo
 			}
 			seenTimeOnly = true
 			var sv string
-			sv, err = s.String()
+			sv, err = s.StringView()
 			if err != nil {
 				return result, decode.NewParseErr("timeOnly", s.Pos, err)
 			}
@@ -4633,7 +4633,7 @@ func (recv TimeFormatsStdCompat) DecodeFromStream(s *scan.Stream) (result TimeFo
 			}
 			seenUnixDate = true
 			var sv string
-			sv, err = s.String()
+			sv, err = s.StringView()
 			if err != nil {
 				return result, decode.NewParseErr("unixDate", s.Pos, err)
 			}
@@ -5038,7 +5038,7 @@ func (recv richSubset) DecodeFromStream(s *scan.Stream) (result richSubset, err 
 			}
 			seenBigF = true
 			var sv string
-			sv, err = s.String()
+			sv, err = s.StringView()
 			if err != nil {
 				return result, decode.NewParseErr("bigF", s.Pos, err)
 			}
@@ -5055,7 +5055,7 @@ func (recv richSubset) DecodeFromStream(s *scan.Stream) (result richSubset, err 
 			}
 			seenBigR = true
 			var sv string
-			sv, err = s.String()
+			sv, err = s.StringView()
 			if err != nil {
 				return result, decode.NewParseErr("bigR", s.Pos, err)
 			}
@@ -5072,7 +5072,7 @@ func (recv richSubset) DecodeFromStream(s *scan.Stream) (result richSubset, err 
 			}
 			seenGofrsID = true
 			var ts string
-			ts, err = s.String()
+			ts, err = s.StringView()
 			if err != nil {
 				return result, decode.NewParseErr("gofrsId", s.Pos, err)
 			}
@@ -5090,7 +5090,7 @@ func (recv richSubset) DecodeFromStream(s *scan.Stream) (result richSubset, err 
 			}
 			seenID = true
 			var ts string
-			ts, err = s.String()
+			ts, err = s.StringView()
 			if err != nil {
 				return result, decode.NewParseErr("id", s.Pos, err)
 			}

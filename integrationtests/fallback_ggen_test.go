@@ -639,7 +639,7 @@ func (recv TextFallbackStruct) DecodeFromStream(s *scan.Stream) (result TextFall
 			}
 			seenTag = true
 			var ts string
-			ts, err = s.String()
+			ts, err = s.StringView()
 			if err != nil {
 				return result, decode.NewParseErr("tag", s.Pos, err)
 			}

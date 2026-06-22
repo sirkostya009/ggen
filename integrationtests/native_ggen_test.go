@@ -512,7 +512,7 @@ func (recv NativeTypes) DecodeFromStream(s *scan.Stream) (result NativeTypes, er
 			}
 			seenAddr = true
 			var sv string
-			sv, err = s.String()
+			sv, err = s.StringView()
 			if err != nil {
 				return result, decode.NewParseErr("addr", s.Pos, err)
 			}
@@ -550,7 +550,7 @@ func (recv NativeTypes) DecodeFromStream(s *scan.Stream) (result NativeTypes, er
 				break
 			}
 			var sv string
-			sv, err = s.String()
+			sv, err = s.StringView()
 			if err != nil {
 				return result, decode.NewParseErr("blob", s.Pos, err)
 			}
@@ -646,7 +646,7 @@ func (recv NativeTypes) DecodeFromStream(s *scan.Stream) (result NativeTypes, er
 			}
 			seenCidr = true
 			var sv string
-			sv, err = s.String()
+			sv, err = s.StringView()
 			if err != nil {
 				return result, decode.NewParseErr("cidr", s.Pos, err)
 			}
@@ -664,7 +664,7 @@ func (recv NativeTypes) DecodeFromStream(s *scan.Stream) (result NativeTypes, er
 			}
 			seenCreatedAt = true
 			var sv string
-			sv, err = s.String()
+			sv, err = s.StringView()
 			if err != nil {
 				return result, decode.NewParseErr("createdAt", s.Pos, err)
 			}
@@ -702,7 +702,7 @@ func (recv NativeTypes) DecodeFromStream(s *scan.Stream) (result NativeTypes, er
 				break
 			}
 			var sv string
-			sv, err = s.String()
+			sv, err = s.StringView()
 			if err != nil {
 				return result, decode.NewParseErr("hexBlob", s.Pos, err)
 			}
@@ -723,7 +723,7 @@ func (recv NativeTypes) DecodeFromStream(s *scan.Stream) (result NativeTypes, er
 			}
 			seenIssuedAt = true
 			var sv string
-			sv, err = s.String()
+			sv, err = s.StringView()
 			if err != nil {
 				return result, decode.NewParseErr("issuedAt", s.Pos, err)
 			}
@@ -741,13 +741,13 @@ func (recv NativeTypes) DecodeFromStream(s *scan.Stream) (result NativeTypes, er
 			}
 			seenLegacyIP = true
 			var sv string
-			sv, err = s.String()
+			sv, err = s.StringView()
 			if err != nil {
 				return result, decode.NewParseErr("legacyIP", s.Pos, err)
 			}
 			result.LegacyIP = net.ParseIP(sv)
 			if result.LegacyIP == nil {
-				return result, decode.NewParseErr("legacyIP", s.Pos, &net.ParseError{Type: "IP address", Text: sv})
+				return result, decode.NewParseErr("legacyIP", s.Pos, &net.ParseError{Type: "IP address", Text: string(sv)})
 			}
 		case "secDur":
 			err = s.ConsumeColon()
@@ -774,7 +774,7 @@ func (recv NativeTypes) DecodeFromStream(s *scan.Stream) (result NativeTypes, er
 			}
 			seenUnitDur = true
 			var sv string
-			sv, err = s.String()
+			sv, err = s.StringView()
 			if err != nil {
 				return result, decode.NewParseErr("unitDur", s.Pos, err)
 			}

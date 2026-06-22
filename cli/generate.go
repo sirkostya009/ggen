@@ -3270,8 +3270,11 @@ s.Shift = prevPin
 %[2]s`, ref, chk)
 
 		case f.Iface.TextUnmarshaler:
+			// StringView: UnmarshalText must not retain its arg (encoding
+			// contract), and the bytes path already passes an aliased slice
+			// here — see Stream.StringView.
 			return fmt.Sprintf(`var ts string
-ts, err = s.String()
+ts, err = s.StringView()
 %[2]serr = %[1]s.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts)))
 %[2]s`, ref, chk)
 
@@ -4775,16 +4778,19 @@ s.Pos++
 	}
 	// `sv` not `v`: a pointer-leaf caller declares `var v []byte` in the
 	// same scope.
+	// StringView: sv aliases s.buf and is consumed by AppendDecode (which
+	// writes into the independent dst slice and retains no input bytes)
+	// before any further stream op — see Stream.StringView.
 	if enc == "" {
 		fmt.Fprintf(b, `var sv string
-sv, err = s.String()
+sv, err = s.StringView()
 %[2]sif cap(%[1]s) < hex.DecodedLen(len(sv)) { %[1]s = make([]byte, 0, hex.DecodedLen(len(sv))) }
 %[1]s, err = hex.AppendDecode(%[1]s, unsafe.Slice(unsafe.StringData(sv), len(sv)))
 %[2]s`, ref, chk)
 		return
 	}
 	fmt.Fprintf(b, `var sv string
-sv, err = s.String()
+sv, err = s.StringView()
 %[4]sif cap(%[1]s) < %[2]s(len(sv)) { %[1]s = make([]byte, 0, %[2]s(len(sv))) }
 %[1]s, err = %[3]s.AppendDecode(%[1]s, unsafe.Slice(unsafe.StringData(sv), len(sv)))
 %[4]s`, ref, dlen, enc, chk)
@@ -4818,9 +4824,10 @@ n, err = s.Int64()
 		return
 	}
 	// `sv` not `v`: a pointer-leaf caller declares `var v time.Time` in the
-	// same scope.
+	// same scope. StringView: sv aliases s.buf; time.Parse retains none of
+	// it on success (an error halts the parse) — see Stream.StringView.
 	fmt.Fprintf(b, `var sv string
-sv, err = s.String()
+sv, err = s.StringView()
 %[3]s%[1]s, err = time.Parse(%[2]s, sv)
 %[3]s`, ref, layout, chk)
 }
@@ -4850,8 +4857,11 @@ n, err = s.Int64()
 `, ref, unit, chk)
 		return
 	}
+	// StringView: time.ParseDuration returns an int64 Duration; its error
+	// builds a fresh quoted string, retaining no input — see
+	// Stream.StringView.
 	fmt.Fprintf(b, `var sv string
-sv, err = s.String()
+sv, err = s.StringView()
 %[2]s%[1]s, err = time.ParseDuration(sv)
 %[2]s`, ref, chk)
 }
@@ -4860,18 +4870,23 @@ func renderStreamNetIP(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	_ = posVar
 	field := fieldLit(f)
 	chk := streamErrCheck(field)
+	// StringView: sv aliases s.buf; net.ParseIP copies into a fresh IP and
+	// retains nothing. The error literal does retain sv, so clone there
+	// (string(sv)) — it outlives the scan — see Stream.StringView.
 	fmt.Fprintf(b, `var sv string
-sv, err = s.String()
+sv, err = s.StringView()
 %[2]s%[1]s = net.ParseIP(sv)
-if %[1]s == nil { return result, decode.NewParseErr(%[3]s, s.Pos, &net.ParseError{Type: "IP address", Text: sv}) }
+if %[1]s == nil { return result, decode.NewParseErr(%[3]s, s.Pos, &net.ParseError{Type: "IP address", Text: string(sv)}) }
 `, ref, chk, field)
 }
 
 func renderStreamNetipAddr(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	_ = posVar
 	chk := streamErrCheck(fieldLit(f))
+	// StringView: netip.Addr is a value type and zones are deep-copied by
+	// unique — no input bytes retained on success — see Stream.StringView.
 	fmt.Fprintf(b, `var sv string
-sv, err = s.String()
+sv, err = s.StringView()
 %[2]s%[1]s, err = netip.ParseAddr(sv)
 %[2]s`, ref, chk)
 }
@@ -4879,8 +4894,10 @@ sv, err = s.String()
 func renderStreamNetipPrefix(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	_ = posVar
 	chk := streamErrCheck(fieldLit(f))
+	// StringView: netip.Prefix is a value type, no input bytes retained on
+	// success — see Stream.StringView.
 	fmt.Fprintf(b, `var sv string
-sv, err = s.String()
+sv, err = s.StringView()
 %[2]s%[1]s, err = netip.ParsePrefix(sv)
 %[2]s`, ref, chk)
 }
@@ -4933,8 +4950,10 @@ func renderStreamBigFloat(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	_ = posVar
 	field := fieldLit(f)
 	chk := streamErrCheck(field)
+	// StringView: (*big.Float).Parse reads the digits into the receiver's
+	// mantissa and retains no input bytes — see Stream.StringView.
 	fmt.Fprintf(b, `var sv string
-sv, err = s.String()
+sv, err = s.StringView()
 %[2]sif _, _, err := (&%[1]s).Parse(sv, 10); err != nil {
 	return result, decode.NewParseErr(%[3]s, s.Pos, err)
 }
@@ -4945,8 +4964,11 @@ func renderStreamBigRat(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	_ = posVar
 	field := fieldLit(f)
 	chk := streamErrCheck(field)
+	// StringView: (*big.Rat).SetString parses into the receiver and retains
+	// no input bytes; failure returns ok=false, no error object holding sv
+	// — see Stream.StringView.
 	fmt.Fprintf(b, `var sv string
-sv, err = s.String()
+sv, err = s.StringView()
 %[2]sif _, ok := (&%[1]s).SetString(sv); !ok {
 	return result, decode.NewParseErr(%[3]s, s.Pos, scan.ErrBadNumber)
 }

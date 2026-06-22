@@ -6,6 +6,7 @@ import (
 	"io"
 	"math"
 	"strconv"
+	"strings"
 	"unicode/utf16"
 	"unicode/utf8"
 	"unsafe"
@@ -252,13 +253,36 @@ func (s *Stream) ArrayOpen() error {
 
 // String decodes a JSON string. Always copies the body out of the
 // buffer — the result is owned, no dependency on the buffer.
-//
-// Uses bytes.IndexByte over the buffered span; on miss, validates
-// the already-buffered bytes for backslash/control then pulls more.
-// Compacts in-place when the buffer fills mid-scan: ReadMore(start)
-// preserves the partial string body (`s.buf[start:j]`) and discards
-// everything before it.
 func (s *Stream) String() (string, error) {
+	// String returns an OWNED copy — the buffer is a recyclable working
+	// area. StringView does the scan and aliases the span; clone it so the
+	// result outlives the buffer. (stringSlow already returns an owned copy
+	// on the escape path; cloning it again is a rare extra copy.)
+	v, err := s.StringView()
+	if err != nil {
+		return "", err
+	}
+	return strings.Clone(v), nil
+}
+
+// StringView reads a JSON string value and returns it as an alias into
+// the Stream's buffer — zero-copy, like [Stream.KeyView] but without the
+// short-key scalar prelude (value strings are often long, e.g. base64,
+// where the SIMD IndexByte path wins). On escapes it falls back to the
+// copy path (stringSlow), since aliasing only holds when the source
+// bytes ARE the final bytes.
+//
+// USE ONLY where the caller finishes consuming the string before the
+// next Stream operation AND retains none of its bytes past that point —
+// e.g. decoding a base64 []byte (decoded bytes land in an independent
+// slice), or parsing into a number/time/IP value type. The alias is
+// invalidated by the next compacting ReadMore and the bytes are recycled
+// as the Stream advances, so a consumer that keeps a substring of the
+// input (url.URL slices its Path/RawQuery out of the source) MUST use
+// [Stream.String], which copies. A parse error halts decoding, so an
+// error value that retains the string never sees a subsequent buffer
+// write.
+func (s *Stream) StringView() (string, error) {
 	i := s.Pos
 	if i >= len(s.buf) {
 		if err := s.ReadMore(i); err != nil {
@@ -276,9 +300,6 @@ func (s *Stream) String() (string, error) {
 	for {
 		rel := bytes.IndexByte(s.buf[j:], '"')
 		if rel < 0 {
-			// Closing quote not yet buffered. Validate the buffered span
-			// for backslash/control before pulling more bytes — a
-			// backslash means we're already on the slow path.
 			if bsRel := bytes.IndexByte(s.buf[j:], '\\'); bsRel >= 0 {
 				return s.stringSlow(start, j+bsRel)
 			}
@@ -308,7 +329,7 @@ func (s *Stream) String() (string, error) {
 			}
 		}
 		s.Pos = end + 1
-		return string(s.buf[start:end]), nil
+		return unsafe.String(unsafe.SliceData(s.buf[start:]), end-start), nil
 	}
 }
 

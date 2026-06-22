@@ -1790,7 +1790,7 @@ func (recv SQLNullTimeStruct) DecodeFromStream(s *scan.Stream) (result SQLNullTi
 			} else {
 				var nv time.Time
 				var sv string
-				sv, err = s.String()
+				sv, err = s.StringView()
 				if err != nil {
 					return result, decode.NewParseErr("t", s.Pos, err)
 				}
@@ -2571,7 +2571,7 @@ func (recv SQLNullStruct) DecodeFromStream(s *scan.Stream) (result SQLNullStruct
 			} else {
 				var nv time.Time
 				var sv string
-				sv, err = s.String()
+				sv, err = s.StringView()
 				if err != nil {
 					return result, decode.NewParseErr("t", s.Pos, err)
 				}
