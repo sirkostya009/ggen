@@ -303,10 +303,8 @@ func (s *Stream) StringView() (string, error) {
 			if bsRel := bytes.IndexByte(s.buf[j:], '\\'); bsRel >= 0 {
 				return s.stringSlow(start, j+bsRel)
 			}
-			for k := j; k < len(s.buf); k++ {
-				if s.buf[k] < 0x20 {
-					return "", ErrBadString
-				}
+			if hasCtrlByte(s.buf[j:]) {
+				return "", ErrBadString
 			}
 			j = len(s.buf)
 			err := s.ReadMore(start)
@@ -323,10 +321,8 @@ func (s *Stream) StringView() (string, error) {
 		if bsRel := bytes.IndexByte(s.buf[j:end], '\\'); bsRel >= 0 {
 			return s.stringSlow(start, j+bsRel)
 		}
-		for k := j; k < end; k++ {
-			if s.buf[k] < 0x20 {
-				return "", ErrBadString
-			}
+		if hasCtrlByte(s.buf[j:end]) {
+			return "", ErrBadString
 		}
 		s.Pos = end + 1
 		return unsafe.String(unsafe.SliceData(s.buf[start:]), end-start), nil
@@ -390,10 +386,8 @@ func (s *Stream) KeyView() (string, error) {
 			if bsRel := bytes.IndexByte(s.buf[j:], '\\'); bsRel >= 0 {
 				return s.stringSlow(start, j+bsRel)
 			}
-			for k := j; k < len(s.buf); k++ {
-				if s.buf[k] < 0x20 {
-					return "", ErrBadString
-				}
+			if hasCtrlByte(s.buf[j:]) {
+				return "", ErrBadString
 			}
 			j = len(s.buf)
 			err := s.ReadMore(start)
@@ -410,10 +404,8 @@ func (s *Stream) KeyView() (string, error) {
 		if bsRel := bytes.IndexByte(s.buf[j:end], '\\'); bsRel >= 0 {
 			return s.stringSlow(start, j+bsRel)
 		}
-		for k := j; k < end; k++ {
-			if s.buf[k] < 0x20 {
-				return "", ErrBadString
-			}
+		if hasCtrlByte(s.buf[j:end]) {
+			return "", ErrBadString
 		}
 		s.Pos = end + 1
 		return unsafe.String(unsafe.SliceData(s.buf[start:]), end-start), nil
@@ -458,10 +450,8 @@ func (s *Stream) skipString() error {
 		// Closing quote with no backslash before it — fast path.
 		if rel >= 0 && bsRel < 0 {
 			end := j + rel
-			for k := j; k < end; k++ {
-				if s.buf[k] < 0x20 {
-					return ErrBadString
-				}
+			if hasCtrlByte(s.buf[j:end]) {
+				return ErrBadString
 			}
 			s.Pos = end + 1
 			return nil
@@ -470,10 +460,8 @@ func (s *Stream) skipString() error {
 		// literal bytes up to the backslash, then handle the escape.
 		if bsRel >= 0 {
 			bs := j + bsRel
-			for k := j; k < bs; k++ {
-				if s.buf[k] < 0x20 {
-					return ErrBadString
-				}
+			if hasCtrlByte(s.buf[j:bs]) {
+				return ErrBadString
 			}
 			// Need at least one byte past the backslash for the escape kind.
 			if bs+1 >= len(s.buf) {
@@ -512,10 +500,8 @@ func (s *Stream) skipString() error {
 		}
 		// Neither quote nor backslash in current buffer — validate
 		// what's there, then read more.
-		for k := j; k < len(s.buf); k++ {
-			if s.buf[k] < 0x20 {
-				return ErrBadString
-			}
+		if hasCtrlByte(s.buf[j:]) {
+			return ErrBadString
 		}
 		j = len(s.buf)
 		err := s.ReadMore(start)

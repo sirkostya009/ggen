@@ -21,17 +21,17 @@ import (
 )
 
 var (
-	ErrExpectString  = errors.New("scan: expected string")
-	ErrBadString     = errors.New("scan: invalid string")
-	ErrUnterminated  = errors.New("scan: unterminated string")
-	ErrBadNumber     = errors.New("scan: invalid number")
+	ErrExpectString   = errors.New("scan: expected string")
+	ErrBadString      = errors.New("scan: invalid string")
+	ErrUnterminated   = errors.New("scan: unterminated string")
+	ErrBadNumber      = errors.New("scan: invalid number")
 	ErrNumberOverflow = errors.New("scan: integer overflow")
-	ErrBadBool       = errors.New("scan: invalid bool")
-	ErrBadLiteral    = errors.New("scan: invalid literal")
-	ErrBadValue      = errors.New("scan: invalid value")
-	ErrBadArray      = errors.New("scan: invalid array")
-	ErrBadObject     = errors.New("scan: invalid object")
-	ErrUnexpectedEnd = errors.New("scan: unexpected end of input")
+	ErrBadBool        = errors.New("scan: invalid bool")
+	ErrBadLiteral     = errors.New("scan: invalid literal")
+	ErrBadValue       = errors.New("scan: invalid value")
+	ErrBadArray       = errors.New("scan: invalid array")
+	ErrBadObject      = errors.New("scan: invalid object")
+	ErrUnexpectedEnd  = errors.New("scan: unexpected end of input")
 )
 
 // SkipSpace advances past JSON whitespace (space, tab, CR, LF).
@@ -102,12 +102,39 @@ func String(data []byte, i int) (string, int, error) {
 		// quote is itself escaped (`\"`) — then append regrows.
 		return stringSlow(data, start, start+bsIdx, closeIdx)
 	}
-	for k := range closeIdx {
-		if rest[k] < 0x20 {
-			return "", 0, ErrBadString
-		}
+	if hasCtrlByte(rest[:closeIdx]) {
+		return "", 0, ErrBadString
 	}
 	return unsafe.String(unsafe.SliceData(rest), closeIdx), start + closeIdx + 1, nil
+}
+
+// hasCtrlByte reports whether b contains a JSON control character (a byte
+// < 0x20, illegal unescaped inside a string). Scans 8 bytes per iteration
+// via SWAR — the classic hasless bit trick: a lane below 0x20 borrows into
+// its high bit, `&^x` clears false hits from UTF-8 continuation/lead bytes
+// (>= 0x80), `& high` keeps the per-lane flag. A scalar tail covers the
+// final < 8 bytes, so short spans pay only the byte loop (no SWAR setup).
+// gc never auto-vectorizes the per-byte loop this replaces; on valid JSON
+// it returns false having only read each word once.
+func hasCtrlByte(b []byte) bool {
+	const (
+		ones uint64 = 0x0101010101010101
+		high uint64 = 0x8080808080808080
+		sub  uint64 = 0x20 * ones // 0x2020202020202020
+	)
+	i := 0
+	for ; i+8 <= len(b); i += 8 {
+		x := binary.LittleEndian.Uint64(b[i:])
+		if (x-sub)&^x&high != 0 {
+			return true
+		}
+	}
+	for ; i < len(b); i++ {
+		if b[i] < 0x20 {
+			return true
+		}
+	}
+	return false
 }
 
 // stringSlow handles strings that contain at least one escape sequence.
@@ -204,8 +231,8 @@ func parseHex4(b []byte) (rune, bool) {
 // are bounded by SignedPos (MaxInt64). Exported because ggen-generated
 // code references them in the inlined scan loops.
 const (
-	Uint64Limit = ^uint64(0)        // MaxUint64
-	SignedNeg   = uint64(1) << 63   // |MinInt64|
+	Uint64Limit = ^uint64(0)      // MaxUint64
+	SignedNeg   = uint64(1) << 63 // |MinInt64|
 )
 
 // Int64 scans an integer JSON number. Floats/exponent notation error out.

@@ -110,6 +110,38 @@ Alias survives buffer growth (GC pins old backing once string header references 
 
 **Scalar prelude.** `KeyView` opens with a bounded scalar pass over the first `stringPreludeWindow` (24) buffered bytes that finds the closing quote while validating backslash/control in one loop — sparing the two `bytes.IndexByte` call setups (quote + bounded backslash) that lose to a tight scalar loop on the short spans dispatch keys occupy. A key longer than the window, an escape, or a not-yet-buffered quote falls through to the `IndexByte` loop, which RESUMES at the window end (`j = we`) so the validated prefix is never re-scanned. Error identity (`ErrBadString`, `stringSlow` handoff at the first `\`) is byte-identical. Measured −0.7% to −2.4% `Mega_Reader/ggen_stream` across 3 `-randlayout` seeds, allocs/B unchanged (alias path). NOT applied to `Stream.String` — value strings are often long (base64), where the pre-scan would be pure overhead vs SIMD `IndexByte`.
 
+### `hasCtrlByte` — SWAR control-byte validation
+
+Every string scanner (`scan.String` bytes path; `StringView`/`KeyView`/
+`skipString` stream path) validates that a span carries no unescaped control
+byte (`< 0x20`, illegal in a JSON string) after `bytes.IndexByte` locates the
+closing quote + backslash. That pass was a scalar per-byte loop; it is now a
+shared `hasCtrlByte(b []byte) bool` (scan.go) scanning **8 bytes/iteration via
+SWAR** — the classic hasless trick `(x-0x2020…20) &^ x & 0x8080…80`: a lane
+below `0x20` borrows into its high bit, `&^ x` clears false hits from UTF-8
+bytes (`>= 0x80`), `& high` keeps the per-lane flag; non-zero ⇒ a control byte
+is present. A scalar tail handles the final `< 8` bytes, so short spans pay only
+the byte loop (no SWAR setup) — gc never auto-vectorizes the loop it replaces.
+`KeyView`'s scalar prelude (short keys, `≤ stringPreludeWindow`) is untouched;
+the SWAR pass only runs on the post-prelude / long-span path.
+
+**Conservative tier only** — SWAR replaces the *control-char* pass; the quote +
+backslash locate stay on SIMD `bytes.IndexByte` (folding the backslash scan into
+SWAR loses to AVX2 `IndexByte` on long spans — the rejected ambitious tier).
+
+Measured (interleaved, core-pinned, `-cpu=1`): the win is **string-length
+gated**. `Mega_Reader/ggen_stream` (Node — strings ≤ ~12B, copy-alloc + ReadMore
+dominate): **flat** (p=0.9). `NoAlloc_Reader/ggen_stream` (Account — long
+multilingual value strings): **−10% to −17%** across 3 independent
+`-randlayout` seeds (p=0.000) — a real, layout-robust win on long-string stream
+decode. Bytes-path generated decoders inline their own fused scan and never call
+`scan.String`, so bytes benches are flat (their per-seed deltas are layout
+noise, confirmed by the seed sweep). Behavior byte-identical: error identity
+(`ErrBadString`) and `stringSlow` handoff at the first `\` are unchanged; pinned
+by `TestHasCtrlByte_DifferentialExhaustive` (control byte at every position ×
+every word-phase alignment vs the naive loop) + `_Boundary` (0x1f vs 0x20 at the
+lane seam), fuzz-clean (~7.6M execs FuzzScanNoPanic/FuzzCompat/FuzzRoundtrip).
+
 ### `skipString` — bounded backslash probe
 
 All three string scanners (`String`, `KeyView`, `skipString`) bound the backslash IndexByte to the closing quote; whole-tail probe only when quote not yet buffered. `skipString` once probed the full tail per skipped string — `SkipValue` went O(payload²) when buffer held whole payload (Shift=false RawJSON capture): bound cut Mega stream wall -67% serial (benchstat p=0.002, n=6; readall control flat), allocs identical.
