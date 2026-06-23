@@ -52,6 +52,101 @@
       (FuzzCompat ggen↔jsonv2 + FuzzStreamEqualsBytes, ~20M execs). See
       scan/CLAUDE.md.
 
+- **Open perf candidates (2026-06-13 hunt — UNMEASURED, prune freely).** Source-
+  verified, no A/B run. The four LANDED items above + the rejected float / stream-
+  slab / map-buffer items below exhaust the 2026-06-11 audit; these are the lower-
+  confidence remainder, condensed from the now-deleted (never-committed)
+  `.claude/perf-candidates.md` — the source-line citations below are the only
+  surviving detail, so re-derive mechanism from them. House rule: nothing lands
+  without an interleaved core-pinned benchstat — Mega is memory-latency-bound, so
+  CPU-only shaves routinely vanish in wall clock.
+
+    *validation (highest-value unmined):*
+    - **[25] rune-rule byte-length gating + ASCII subsumption.** minrunes/maxrunes/
+      runes emit unconditional `utf8.RuneCountInString` walks (a min+max field walks
+      the whole string TWICE on the happy path). From the invariant `1 <= bytes/rune
+      <= 4`: gate (`len<N` fails free, `len>=4N` passes free, N=1 → `len==0`), hoist
+      one `rc` when ≥2 rune rules survive, and DELETE the walk when an ASCII-implying
+      rule (alphanum/numeric/ascii/hex) precedes it. Est. **5-15% ValidationHeavy_
+      Unmarshal**, ~0 elsewhere. Gate the ASCII-subsumption tier on the charset rule
+      preceding the rune rule in emit order — else error identity / multierr contents
+      change on doubly-invalid input; tiers 1-2 carry the win regardless. Keep the
+      failure-branch `rc` recompute for `MinRunesError.Got`. generate.go:785-793.
+    - **[4] single-pass IsEmail + 256-byte class-bitmask predicates.** IsEmail
+      (decode/validators.go:5-29) is two passes; track `lastDot` in loop 1, delete
+      loop 2. IsAlphanum/IsHex/IsPrintable → one `class[256]uint8` indexed load+AND
+      per byte; IsASCII via SWAR high-bit mask. Both likely noise-floor alone
+      (~0.5-0.7% Small); land bundled with [25]. 256-value parity tests make it safe.
+    - **[26] container maxlen early-bail inside element loops.** maxlen is validated
+      only AFTER the loop, so a 10M-elem payload vs maxlen=64 fully decodes+ALLOCATES
+      before failing. Loop-top `if len(dst)==MAX { MaxLenError }` caps work at MAX+1
+      (multierr: append once, `SkipValue` the rest). DoS-hardening, ~0 on valid input.
+      SEMANTICS DECISION REQUIRED: `MaxLenError.Got` becomes MAX+1, multierr stops
+      collecting dive errors past the bound. Touches every container emitter.
+
+    *encode:*
+    - **[11] AppendAny reflect.Map — 2 allocs/entry.** Named map types / non-concrete
+      value types iterate via reflect `copyVal` (2 heap allocs/entry). `ConvertibleTo`
+      an exact concrete shape → 0 allocs (map is pointer-shaped); else hoist
+      `SetIterKey`/`SetIterValue` scratch → 2 fixed allocs total. Micro-only (generated
+      typed paths never reach it; Mega's `Extra` hits the concrete case). any.go:342-358.
+    - **[12] AppendAny addressable-value boxing.** Slice elems (`rv.Index`) + pointer
+      derefs (`rv.Elem`) box on `.Interface()`. Tier (a) concrete cases (`[]time.Time`,
+      `[][]string`, `[]RawMessage`); tier (b) per-field cached dispatch so indirect
+      struct fields skip `Interface()`. Land (a) first. Micro-only, macro flat.
+    - **[22] flatten small infallible leaf-struct AppendJSON into parent sites.**
+      `[]*Addr`/`*Addr` elems emit a non-inlinable call + 32B receiver copy + dead err
+      check + a coalescing barrier. Inline the body for small non-recursive same-pkg
+      generated structs (fallibility decidable at codegen). Est. 0.5-2% Mega_Marshal,
+      likely flat. JSONSize half already moot (gc inlines it). Wire-identical →
+      correctness is an output diff. generate.go:1337/2150.
+    - **[24] JSONSize comma-branch folding.** `size += n-1` + `size += len*K` →
+      `size += len*(K+1)` (overcounts 1B/non-empty container — still an upper bound,
+      `sizeMapContrib` already does this). Sub-0.5% non-presized Marshal, likely flat;
+      codegen-simplification ride-along, accept only if non-regressing + simpler.
+    - **[10] remainder** (entry sizing partially LANDED): `Write`/`WriteSlice` cold-pool
+      presize from JSONSize (GATE on a steady-state no-regress A/B — the JSONSize walk
+      is real warm-path work), and generic `Marshal[T]` to drop the interface box
+      (cheap API cleanup; breaks `encode.Marshal`-as-func-value callers).
+    - **[14] remainder**: 256-byte shared escape table for AppendString/NoHTML —
+      cache-resident payloads only (Mega marshal proved wall-flat, SWAR precedent).
+
+    *bytes decode (likely flat on Mega — cheap probes / hygiene):*
+    - **[19] localized scan cursor + lower seen-bitmask threshold.** Inline int/uint
+      scanners loop on the function-lifetime cursor (per-digit frame store); loop on a
+      short-lived local `p`, sync at error returns. Drop `seenBitmaskThreshold` 32→12-16
+      for recursive structs (Node: 15 bool slots → one register `_seen uint64`). One-
+      line probes; likely store-buffer-hidden on Mega. Error-return cursor sync is the
+      correctness gate.
+    - **[18] redundant leading WS-skip + dead identical empty-peek arms.**
+      emitByteSliceRead/renderMap re-skip WS every caller already skipped (the alias
+      path is the one real dependency → needs a `wsDone` flag); `sCap==0` empty-peek
+      emits two byte-identical arms. Wire-identical hygiene; expect flat. WS-variant
+      fixtures are the gate, not ns/op.
+    - **[16] remainder**: do-while element-loop restructure (drop the redundant loop-top
+      `]`/`}` re-check) — the trailing-comma correctness half already landed.
+
+    *stream (low-confidence remainder — stream is copy/ReadMore-dominated):*
+    - **[9] `[512]byte` inline Stream scratch re-measure.** The escape-analysis blocker
+      (the since-removed generic UnmarshalStream wrapper) is gone — but the self-
+      referential `s.buf = s.scratch[:0]` store may still heap the now-~576B struct
+      under field-insensitive EA. RUN THE `-gcflags=-m` CHECK FIRST; stop if it trips.
+      Win is −1 alloc on nil-buf one-shot decodes only (Mega/recycled flat); needs a
+      no-copy contract.
+    - **[6] fused `Stream.Key()`** (key + colon + post-colon WS in one call, grow-only
+      refill keeps the alias). DEPRIORITIZED — [5b] showed separator handling is cheap;
+      only a small incremental call reduction over the landed two-tier SkipSpace.
+      Revisit only if a key-fusion micro-bench justifies.
+    - **[20] whole-literal buffered null-peek compare.** Stream null peek is a per-byte
+      loop with a refill branch, duplicated ~8× in Node.DecodeFromStream. Gate on
+      `s.Pos+4<=len` for a straight 3-byte compare, or outline a cold helper. ~0 perf
+      (runs only on actual nulls); code-size cleanup only.
+
+    Rejected from this hunt (do not retry without a new argument): **[17]** positional
+    next-key predictor (Validated +4.64%, payload-order-dependent), **[23]** indexed
+    marshal loop (go1.26 already folds the range copy) + pointer-receiver cores
+    (vetoed — public surface pinned by `Decoder[T]`).
+
 - **Improve fuzz coverage.** Current surface (`integrationtests/fuzz_test.go`):
   three fuzzers over `Node` — `FuzzScanNoPanic` (panic safety),
   `FuzzRoundtrip` (encode→decode fixed-point), `FuzzCompat` (ggen ↔ jsonv2
