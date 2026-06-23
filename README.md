@@ -1,5 +1,5 @@
 > [!CAUTION]
-> Project is under active developemnt. No release versions are available. Every new commit changes behaviour.
+> Project is under active development. No release versions are available. Every new commit changes behaviour.
 
 # ggen
 
