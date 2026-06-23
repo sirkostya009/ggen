@@ -85,6 +85,7 @@ Most flags have matching annotation token (no leading dash). Annotations space-s
 | `-allowdups`     | `allowdups`     | accept duplicate JSON keys, first-wins (default: error on second occurrence)                           |
 | `-novalidate`    | `novalidate`    | drop validation, required-field checks, and mods                                                       |
 | `-ignoreunknown` | `ignoreunknown` | silently drop unknown JSON keys (default: error). Overridden when an inline catch-all map is present   |
+| `-nullzero`      | `nullzero`      | accept explicit JSON `null` on every non-pointer value field, decoding it to the Go zero (default: error). Per-field `json:",nullzero"` opts in one field |
 | `-nosortkeys`    | `nosortkeys`    | emit struct fields in declaration order (default: alphabetical, compresses better)                     |
 | `-usenumber`     | `usenumber`     | decode JSON numbers in `any` fields as `json.Number` instead of `float64`                              |
 | `-htmlescape`    | `htmlescape`    | escape `<`, `>`, `&` to `\uXXXX` (default: literal, matches `encoding/json` v2)                        |
@@ -121,6 +122,7 @@ type Order struct { /* ... */ }
 - `json:",inline"` — field = catch-all map for unknown keys. Type must be a string-keyed map (`map[string]V`); V may be `any`, a primitive, a ggen-annotated struct, or any other type (typed elems dispatch through the elem's fast path or `encoding/json.Unmarshal` over the captured span). Overrides `-ignoreunknown`.
 - `json:"name,omitempty"` — skip on marshal when JSON-empty.
 - `json:"name,omitzero"` — skip on marshal when Go-zero.
+- `json:"name,nullzero"` — decode-only: accept explicit JSON `null` on this non-pointer value field, setting it to the Go zero value (default: `null` on a non-pointer value errors). No-op on already-null-aware kinds (pointer/slice/map/`[]byte`/`sql.Null*`/raw/`any`).
 - `json:"name,string"` — wrap primitive as JSON string (unwrap on decode).
 - `json:"name,format:X"` — format hint for native types (see kinds below). MUST be last option in tag (jsonv2 rule).
 
@@ -363,6 +365,7 @@ Build tag propagation: struct in file behind `//go:build foo` land in `<dir>_foo
 | "still want `json.Marshal(u)` to work"                    | `-marshal` (and/or `-unmarshal`)                                                    |
 | "collect all errors, not just the first"                  | `-multierr`                                                                         |
 | "skip unknown keys silently"                              | `-ignoreunknown` or a `json:",inline"` catch-all map                                |
+| "accept `null` on a scalar instead of erroring"           | `json:",nullzero"` per field, or `-nullzero` / `//ggen:generate nullzero` for all   |
 | "fastest possible decode, I trust the input"              | `-novalidate`                                                                       |
 | "wire output embedded directly in HTML"                   | `-htmlescape` (or per-type via alias `//ggen:generate htmlescape`)                  |
 | "exact-precision numbers (big ints, no float64)"          | `-usenumber` for `any` fields; or use `math/big.Int`                                |

@@ -105,6 +105,8 @@ func TestParseJSONTag(t *testing.T) {
 		{"field1,omitzero", "field1", JSONOptions{OmitZero: true}, false},
 		{"field1,string", "field1", JSONOptions{String: true}, false},
 		{"field1,omitempty,omitzero,string", "field1", JSONOptions{OmitEmpty: true, OmitZero: true, String: true}, false},
+		{"field1,nullzero", "field1", JSONOptions{NullZero: true}, false},
+		{"field1,nullzero,omitzero", "field1", JSONOptions{NullZero: true, OmitZero: true}, false},
 		{"-", "", JSONOptions{}, true},
 		{",omitempty", "", JSONOptions{OmitEmpty: true}, false},
 	}

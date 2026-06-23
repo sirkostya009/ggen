@@ -96,6 +96,7 @@ type FieldInfo struct {
 	ElemIface       FieldInterfaces    // method-set probe on the slice/array/map element type (used by size estimators for struct elements)
 	OmitEmpty       bool
 	OmitZero        bool
+	NullZero        bool   // decode: accept an explicit JSON null on this (non-pointer) value field, setting it to its Go zero value instead of erroring. No-op on already-null-aware kinds (pointer/slice/map/[]byte/sql.Null*/raw/any)
 	String          bool   // marshal/unmarshal the field as a JSON-quoted string
 	Format          string // jsonv2 format flag ("RFC3339", "unix", "hex", ...)
 	Inline          bool   // catch-all map: absorbs unknown JSON keys on decode, splices entries on encode
@@ -134,6 +135,7 @@ type StructInfo struct {
 	AllowDups     bool   // do NOT error on duplicate JSON keys (opt-out of default)
 	NoValidate    bool   // skip validation rules, required-field checks, and mods
 	IgnoreUnknown bool   // skip unknown JSON keys silently (default: emit validation.Error{UnknownKey})
+	NullZero      bool   // accept explicit JSON null on every non-pointer value field (null → Go zero); per-field json:",nullzero" can opt a single field in
 	NoSort        bool   // opt out of codegen-time struct-field sort by JSON name
 	UseNumber     bool   // decode JSON numbers into `any` fields as json.Number instead of float64
 	HTMLEscape    bool   // HTML-safe escape <, >, & in emitted strings (default: literal, matches jsonv2)

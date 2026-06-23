@@ -218,8 +218,10 @@ the outer slice. A JSON `null` still nils a slice/map/pointer field.
 It is deliberately not identical though: all containers are reset regardless of
 presence in payload (stdlib keeps them) — a blank payload gives you a blank
 slate while keeping capacity — and a JSON `null` aimed at a non-pointer
-scalar or struct is treated as a parse error — use a pointer if you need a
-nullable scalar.
+scalar or struct is treated as a parse error by default — use a pointer if you
+need a nullable scalar, or opt the field into stdlib-style null handling with
+`json:",nullzero"` (decode `null` to the Go zero value); `-nullzero` /
+`//ggen:generate nullzero` turns it on for every value field at once.
 
 ### runtime packages
 
@@ -262,6 +264,7 @@ unmarshal multierr`.
 | `-allowdups`     | `allowdups`       | accept duplicate JSON keys with first-wins semantics — the first occurrence is parsed, later ones are skipped via `scan.SkipValue` without being decoded (default: error on the second hit) |
 | `-novalidate`    | `novalidate`      | drop validation, required-field checks, and mods entirely — fastest decode path                                                                                                             |
 | `-ignoreunknown` | `ignoreunknown`   | silently drop unknown JSON keys (default: error). overridden by an inline catch-all map field                                                                                               |
+| `-nullzero`      | `nullzero`        | accept an explicit JSON `null` on every non-pointer value field, decoding it to the Go zero value (default: error). per-field `json:",nullzero"` opts in a single field                     |
 | `-nosortkeys`    | `nosortkeys`      | emit struct fields in declaration order (default: alphabetical by JSON name, compresses better)                                                                                             |
 | `-usenumber`     | `usenumber`       | decode numbers in `any` fields as `json.Number` instead of `float64`                                                                                                                        |
 | `-htmlescape`    | `htmlescape`      | escape `<`, `>`, `&` to `\uXXXX` for safe embedding in HTML (default: literal, matches `encoding/json` v2 — v2 dropped HTML escaping as a default)                                          |
@@ -283,6 +286,10 @@ output) — same as `encoding/json`. Extras worth knowing:
   exists (string scan, generated `DecodeFrom`), or via `encoding/json`
   unmarshal of the captured span otherwise. Overrides `-ignoreunknown`;
   on marshal the entries are spliced into the parent object.
+- `json:",nullzero"` — accept an explicit JSON `null` on this non-pointer
+  value field, decoding it to the Go zero value instead of erroring. No-op on
+  kinds that already handle `null` (pointer, slice, map, `[]byte`, `sql.Null*`,
+  raw message, `any`). Decode-only — no effect on marshal.
 - `format:X` — type-specific format hint (see _supported kinds_ below).
   Per jsonv2, this MUST be the last option in the tag.
 

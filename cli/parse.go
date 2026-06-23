@@ -69,6 +69,7 @@ type annotationFlags struct {
 	allowdups     bool
 	novalidate    bool
 	ignoreunknown bool // opt in: silently skip unknown JSON keys (default: error)
+	nullzero      bool // opt in: accept explicit JSON null on every non-pointer value field (null → Go zero)
 	nosortkeys    bool // opt out: emit fields in declaration order instead of JSON-name sorted
 	usenumber     bool // opt in: decode JSON numbers into `any` fields as json.Number instead of float64
 	htmlescape    bool // opt in: HTML-safe escape <, >, & in emitted strings (default: literal, matches jsonv2)
@@ -293,6 +294,8 @@ func parseAnnotation(groups ...*ast.CommentGroup) (annotationFlags, bool) {
 					flags.novalidate = true
 				case "ignoreunknown":
 					flags.ignoreunknown = true
+				case "nullzero":
+					flags.nullzero = true
 				case "nosortkeys":
 					flags.nosortkeys = true
 				case "usenumber":
@@ -381,6 +384,7 @@ func (s *structSet) resolveFiltered(wanted []string, allowExpand func(string) bo
 			info.AllowDups = flags.allowdups
 			info.NoValidate = flags.novalidate
 			info.IgnoreUnknown = flags.ignoreunknown
+			info.NullZero = flags.nullzero
 			info.NoSort = flags.nosortkeys
 			info.UseNumber = flags.usenumber
 			info.HTMLEscape = flags.htmlescape
@@ -893,6 +897,7 @@ func (s *structSet) extractFieldFromTypes(structName string, field *types.Var, t
 	}
 	fi.OmitEmpty = opts.OmitEmpty
 	fi.OmitZero = opts.OmitZero
+	fi.NullZero = opts.NullZero
 	fi.String = opts.String
 	fi.Format = opts.Format
 	fi.Inline = opts.Inline
@@ -1232,6 +1237,7 @@ func extractField(structName, goName string, field *ast.Field) (FieldInfo, error
 		}
 		fi.OmitEmpty = opts.OmitEmpty
 		fi.OmitZero = opts.OmitZero
+		fi.NullZero = opts.NullZero
 		fi.String = opts.String
 		fi.Format = opts.Format
 		fi.Inline = opts.Inline

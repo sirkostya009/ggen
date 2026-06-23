@@ -1103,6 +1103,45 @@ type Validated struct {
 		}
 	})
 
+	t.Run("NullZeroFlag_AcceptsNullIntoValueField", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		writeFixture(t, filepath.Join(dir, "msg.go"), minimalStruct)
+		// Default: a non-pointer scalar has no null branch (strict-reject).
+		if out, err := runCLI(t, bin, dir, "msg.go"); err != nil {
+			t.Fatalf("ggen default: %v\n%s", err, out)
+		}
+		body := mustReadOutput(t, filepath.Join(dir, "msg_ggen.go"))
+		if strings.Contains(body, `result.Text = ""`) {
+			t.Fatalf("did not expect a null→zero branch by default, got:\n%s", body)
+		}
+		// -nullzero: an explicit null sets the field to its zero value.
+		if out, err := runCLI(t, bin, dir, "-nullzero", "msg.go"); err != nil {
+			t.Fatalf("ggen -nullzero: %v\n%s", err, out)
+		}
+		body = mustReadOutput(t, filepath.Join(dir, "msg_ggen.go"))
+		if !strings.Contains(body, `result.Text = ""`) {
+			t.Fatalf("expected null→zero branch with -nullzero, got:\n%s", body)
+		}
+		// //ggen:generate nullzero — the per-struct annotation has the same
+		// effect without the CLI flag.
+		andir := t.TempDir()
+		writeFixture(t, filepath.Join(andir, "msg.go"), `package fixture
+
+//ggen:generate nullzero
+type Msg struct {
+	Text string `+"`"+`json:"text"`+"`"+`
+}
+`)
+		if out, err := runCLI(t, bin, andir, "msg.go"); err != nil {
+			t.Fatalf("ggen annotation: %v\n%s", err, out)
+		}
+		body = mustReadOutput(t, filepath.Join(andir, "msg_ggen.go"))
+		if !strings.Contains(body, `result.Text = ""`) {
+			t.Fatalf("expected null→zero branch from //ggen:generate nullzero, got:\n%s", body)
+		}
+	})
+
 	// --- single-file name filter ---
 
 	t.Run("NameFilter_OnlyEmitsRequestedStructs", func(t *testing.T) {

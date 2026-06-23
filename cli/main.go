@@ -41,6 +41,7 @@ func main() {
 	flag.BoolVar(&cliFlags.allowdups, "allowdups", false, "skip the default duplicate-key guard in generated unmarshal code")
 	flag.BoolVar(&cliFlags.novalidate, "novalidate", false, "skip validation rules, required-field checks, and mods (trades correctness for speed)")
 	flag.BoolVar(&cliFlags.ignoreunknown, "ignoreunknown", false, "silently skip unknown JSON keys on unmarshal (default: error)")
+	flag.BoolVar(&cliFlags.nullzero, "nullzero", false, "accept explicit JSON null on non-pointer value fields, decoding it to the Go zero value (default: error)")
 	flag.BoolVar(&cliFlags.nosortkeys, "nosortkeys", false, "emit struct fields in declaration order (default: sorted by JSON name at codegen time)")
 	flag.BoolVar(&cliFlags.usenumber, "usenumber", false, "decode JSON numbers into `any` fields as json.Number instead of float64 (mirrors json.Decoder.UseNumber)")
 	flag.BoolVar(&cliFlags.htmlescape, "htmlescape", false, "HTML-safe escape <, >, & in emitted strings (default: literal, matches stdlib jsonv2)")
@@ -172,6 +173,9 @@ func applyCLIFlags(structs []StructInfo) {
 		if cliFlags.ignoreunknown {
 			structs[i].IgnoreUnknown = true
 		}
+		if cliFlags.nullzero {
+			structs[i].NullZero = true
+		}
 		if cliFlags.nosortkeys {
 			structs[i].NoSort = true
 		}
@@ -187,6 +191,9 @@ func applyCLIFlags(structs []StructInfo) {
 			structs[i].Fields[j].NoValidate = structs[i].NoValidate
 			structs[i].Fields[j].UseNumber = structs[i].UseNumber
 			structs[i].Fields[j].HTMLEscape = structs[i].HTMLEscape
+			// OR, not assign: a struct/CLI opt-in turns every field on, but a
+			// per-field json:",nullzero" tag must survive when the struct flag is off.
+			structs[i].Fields[j].NullZero = structs[i].Fields[j].NullZero || structs[i].NullZero
 		}
 	}
 }

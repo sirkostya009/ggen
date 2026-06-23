@@ -3872,6 +3872,45 @@ func nullBreakOK(f FieldInfo) bool {
 	return f.AtDispatch && (f.NoValidate || (len(f.Validation) == 0 && len(f.Mods) == 0))
 }
 
+// nullZeroApplies reports whether the `nullzero` opt-in adds a null→zero
+// branch for this field. Only non-pointer value kinds that would otherwise
+// hard-error on an explicit JSON `null` qualify; the already-null-aware kinds
+// (pointer, slice, map, []byte, sql.Null*, raw message, any) carry their own
+// null handling, so nullzero is a no-op there. The branch is emitted at the
+// dispatch level only (a value field decodes inside the key-dispatch switch),
+// so a freshly-decoded null can `break` to the comma handling.
+func nullZeroApplies(f FieldInfo) bool {
+	if !f.NullZero || f.Pointer || !f.AtDispatch {
+		return false
+	}
+	switch f.Kind {
+	case KindSlice, KindMap, KindBytes, KindRawJSON, KindSQLNull, KindAny:
+		return false
+	}
+	return true
+}
+
+// emitStreamNullZero is the stream-path counterpart of the bytes-path
+// inlineNullPeek + zero assign used for `nullzero`. It emits the buffered
+// `null` literal check (ReadMore-guarded, like the stream pointer branch),
+// sets ref to its Go zero on a match, then breaks (flat) or opens an else.
+func emitStreamNullZero(b *bytes.Buffer, ref, zero, field string, flat bool) {
+	rm := streamReadMore(field, "0", false)
+	rmKi := strings.Replace(rm, "if s.Pos >=", "if s.Pos+ki >=", 1)
+	fmt.Fprintf(b, `%[2]sif s.Bytes()[s.Pos] == 'n' {
+	for ki := 1; ki < 4; ki++ {
+		%[3]sif s.Bytes()[s.Pos+ki] != "null"[ki] { return result, decode.NewParseErr(%[4]s, s.Pos, scan.ErrBadLiteral) }
+	}
+	s.Pos += 4
+	%[1]s = %[5]s
+`, ref, rm, rmKi, field, zero)
+	if flat {
+		b.WriteString("break\n}\n")
+	} else {
+		b.WriteString("} else {\n")
+	}
+}
+
 // emitPointerSeed copies the receiver's existing leaf into the decode temp
 // `v` when the whole pointer chain is already allocated — so a mergeable leaf
 // merges against its carried-in value. No-op for non-mergeable leaves.
@@ -4006,10 +4045,30 @@ func renderField(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 		}
 		return
 	}
+	// `nullzero`: accept an explicit JSON null on this non-pointer value field,
+	// setting it to its Go zero value. At dispatch level a freshly-zeroed null
+	// breaks to the comma handling (flat); with field rules present the value
+	// decode nests in an else so the shared validateAndMod runs on either the
+	// decoded value or the zero. Already-null-aware kinds opt out via
+	// nullZeroApplies. Mirrors the pointer/slice null-branch shape (opt #34).
+	nz := nullZeroApplies(f)
+	flat := nz && nullBreakOK(f)
+	if nz {
+		inlineNullPeek(b, posVar)
+		fmt.Fprintf(b, "%s = %s\n", ref, zeroLit(f.GoType, f.Kind))
+		if flat {
+			b.WriteString("break\n}\n")
+		} else {
+			b.WriteString("} else {\n")
+		}
+	}
 	// jsonv2 dropped `,string` for bool; ggen follows. Fall through to
 	// the normal bool decode path so the wire stays bare `true`/`false`.
 	if f.String && f.Kind != KindBool {
 		renderStringTag(b, f, ref, posVar)
+		if nz && !flat {
+			b.WriteString("}\n")
+		}
 		if !f.NoValidate {
 			validateAndMod(b, f, ref)
 		}
@@ -4090,6 +4149,9 @@ if err != nil { return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, err) }
 		fmt.Fprintf(b, `k, err := scan.SkipValue(data, %[1]s)
 %[2]s%[1]s = k
 `, posVar, bytesErrCheck(fieldLit(f), posVar))
+	}
+	if nz && !flat {
+		b.WriteString("}\n")
 	}
 	// Post-decode: mods then validation. The `seen<GoName>` bool is set
 	// by the caller (renderDispatch emits it), not here.
@@ -5300,7 +5362,15 @@ func renderStreamField(f FieldInfo, ref, posVar string) string {
 	// See renderField — `,string` on bool is a no-op to match jsonv2.
 	if f.String && f.Kind != KindBool {
 		var out bytes.Buffer
+		nz := nullZeroApplies(f)
+		flat := nz && nullBreakOK(f)
+		if nz {
+			emitStreamNullZero(&out, ref, zeroLit(f.GoType, f.Kind), fieldLit(f), flat)
+		}
 		renderStreamStringTag(&out, f, ref, posVar)
+		if nz && !flat {
+			out.WriteString("}\n")
+		}
 		if !f.NoValidate {
 			validateAndModStream(&out, f, ref)
 		}
@@ -5386,6 +5456,13 @@ func renderStreamField(f FieldInfo, ref, posVar string) string {
 %[6]s%[4]s = %[5]s(%[1]s)
 `, wideVar, wideType, method, ref, castTo, chk)
 	}
+	// `nullzero`: see renderField. Accept an explicit null → Go zero on this
+	// non-pointer value field instead of erroring.
+	nz := nullZeroApplies(f)
+	flat := nz && nullBreakOK(f)
+	if nz {
+		emitStreamNullZero(b, ref, zeroLit(f.GoType, f.Kind), field, flat)
+	}
 	switch f.Kind {
 	case KindString:
 		primScan("String")
@@ -5445,6 +5522,9 @@ func renderStreamField(f FieldInfo, ref, posVar string) string {
 	default:
 		fmt.Fprintf(b, `err = s.SkipValue()
 %s`, chk)
+	}
+	if nz && !flat {
+		b.WriteString("}\n")
 	}
 	if !f.NoValidate {
 		validateAndModStream(b, f, ref)

@@ -173,6 +173,7 @@ func parseModTag(tag string) ModTag {
 type JSONOptions struct {
 	OmitEmpty bool   // omit during marshal if JSON-empty (null, "", [], {})
 	OmitZero  bool   // omit during marshal if Go zero value
+	NullZero  bool   // decode: accept explicit JSON null on a non-pointer value field (null → Go zero) instead of erroring
 	String    bool   // wrap primitive as a JSON string on marshal, unwrap on unmarshal
 	Format    string // jsonv2 format flag (e.g., RFC3339, unix, hex, base64)
 	Inline    bool   // catch-all: map absorbs unknown keys, entries splice into parent object
@@ -202,6 +203,8 @@ func parseJSONTag(tag string) (name string, opts JSONOptions, ignored bool) {
 			opts.OmitEmpty = true
 		case "omitzero":
 			opts.OmitZero = true
+		case "nullzero":
+			opts.NullZero = true
 		case "string":
 			opts.String = true
 		case "inline":

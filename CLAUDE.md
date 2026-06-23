@@ -82,6 +82,10 @@ locked). Dot/underscore-prefix dirs, `vendor/`, `testdata/`,
 - `-novalidate` — skip validation rules, required-field checks, mods
 - `-ignoreunknown` — silently skip unknown JSON keys. Default: error with
   `validation.UnknownKeyError`. Overridden when inline map field present
+- `-nullzero` — accept an explicit JSON `null` on every non-pointer value
+  field, decoding it to the Go zero value. Default: hard-error (see "null
+  acceptance is kind-gated"). Per-field `json:",nullzero"` opts in one field;
+  no-op on already-null-aware kinds
 - `-nosortkeys` — emit fields in Go declaration order. Default: sorted
   alphabetically. Inline map fields stay last
 - `-usenumber` — decode JSON numbers into `any` fields as `json.Number`
@@ -104,6 +108,7 @@ Space-separated tokens after:
 - `allowdups`
 - `novalidate`
 - `ignoreunknown`
+- `nullzero`
 - `nosortkeys`
 - `usenumber`
 - `htmlescape`
@@ -121,6 +126,11 @@ Annotations apply only to a struct.
   span). Overrides `ignoreunknown`. Entries spliced out on marshal
 - `json:"name,omitempty"` — not marshaled when JSON-empty (null, "", [], {})
 - `json:"name,omitzero"` — not marshaled when Go-zero value
+- `json:"name,nullzero"` — decode-only: accept an explicit JSON `null` on this
+  non-pointer value field, setting it to the Go zero value instead of erroring.
+  No-op on already-null-aware kinds (pointer/slice/map/`[]byte`/`sql.Null*`/
+  raw/`any`). `-nullzero` / `//ggen:generate nullzero` is the all-fields form;
+  the per-field tag ORs on top
 - `json:"name,string"` — wrap primitive as JSON string on marshal, unwrap on
   unmarshal. Primitives only, like stdlib
 - `json:"name,format:X"` — format hint for native types (see Kinds).
@@ -261,8 +271,24 @@ ggen's other strict defaults (UnknownKeyError, strict array length,
 DuplicateKeyError, trailing-comma rejection) — for a nullable scalar, use a
 pointer. Decode-into-receiver divergences are pinned in
 `integrationtests/stdcompat_test.go`
-(`TestStdCompatMerge_IntentionalDivergences`); revisiting null-on-scalar is a
-backlog item.
+(`TestStdCompatMerge_IntentionalDivergences`).
+
+**`nullzero` opts a value field into null-as-zero.** `json:",nullzero"` (per
+field) / `-nullzero` / `//ggen:generate nullzero` (whole struct) make a
+non-pointer value field accept an explicit JSON `null`, decoding it to the Go
+zero value instead of erroring — the documented middle ground between the
+strict-reject default and stdlib's accept-everywhere. Gated by
+`nullZeroApplies` (set + `AtDispatch` + a kind that would otherwise reject
+null; the already-null-aware kinds above stay no-ops). Emit mirrors the
+pointer/slice null branch (opt #34): a 4-byte `null` peek (`inlineNullPeek`
+bytes / `emitStreamNullZero` stream) sets `ref = <zeroLit>` then `break`s out
+of the dispatch case when no field rules follow (flat, `nullBreakOK`), else
+nests the value decode in an `else` so the shared `validateAndMod` runs on
+either the decoded value or the zero (so `nullzero` + `minlen=1` on a string
+still rejects `null`→`""`). Per-field tag ORs onto the struct/CLI flag in
+`applyCLIFlags`. Struct fields only — not top-level alias types. Decode-only;
+encode is untouched. Pinned in `integrationtests/nullzero_test.go` +
+`cli_test.go` (`NullZeroFlag_AcceptsNullIntoValueField`).
 
 **Trailing commas are rejected (stdlib parity).** Every element-loop comma
 branch (slice / map / tuple / nested / pointer-elem / `[]byte` format:array,

@@ -201,22 +201,22 @@
   `error` (typed sub-interface could improve `errors.As`). Pick when
   concrete report-shape ask exists.
 
-- **`null` on non-pointer value kinds — accept-as-zero vs strict-reject.**
-  Surfaced by the merge audit (`TestStdCompatMerge_IntentionalDivergences`).
-  ggen emits a `null` peek only for pointer / slice / map / `sql.Null*` /
-  raw-message fields; every other kind (scalars, `[]byte`, time, duration,
-  net/netip, url.URL, big.*, uuid, `,string` scalars) hard-errors on an explicit
-  JSON `null`, whereas stdlib v1/v2 accept it (zero the field / no-op). Real
-  parity gap: a payload stdlib accepts, ggen rejects. Two stances: (a) keep
-  strict-reject (consistent with UnknownKeyError / strict-array / DuplicateKey
-  defaults — "use a pointer for nullable") and just keep it documented; (b) emit
-  a `null` peek for these kinds that zeroes the field (matches stdlib). If (b):
-  add an `inlineNullPeek`-style 4-byte check at the top of each scalar/native
-  value emit in `renderField`/`renderStreamField` that sets the field to its
-  zero value and advances 4 — mirrors the existing pointer/slice null branch.
-  Decide per ggen's strictness philosophy; (a) is the current default. Pinned as
-  divergence until decided. (`[]byte` sub-case RESOLVED — KindBytes now
-  accepts `null` → nil and marshals nil as `null`.)
+- **`null` on non-pointer value kinds — RESOLVED 2026-06-23 via opt-in
+  `nullzero`.** Default stays strict-reject (consistent with UnknownKeyError /
+  strict-array / DuplicateKey — "use a pointer for nullable"); the parity gap is
+  now closable per-field with `json:",nullzero"` or per-struct/globally with
+  `//ggen:generate nullzero` / `-nullzero`, which decode an explicit `null` to
+  the Go zero value. This is option (c) — the opt-in middle ground between the
+  documented stances (a) keep-strict and (b) accept-everywhere. Implemented as
+  the `inlineNullPeek`-style 4-byte check (stream: `emitStreamNullZero`) at the
+  top of `renderField`/`renderStreamField`, gated by `nullZeroApplies` (set +
+  `AtDispatch` + a kind that would otherwise reject null); flat-break when no
+  field rules, else-wrap so validation runs on the zero. Struct fields only (not
+  top-level aliases). Pinned in `integrationtests/nullzero_test.go` +
+  `cli_test.go`. (`[]byte` sub-case had already RESOLVED separately — KindBytes
+  accepts `null` → nil and marshals nil as `null`.) Open follow-up if ever
+  wanted: extend `nullzero` to top-level alias types (needs a non-dispatch null
+  branch in the alias renderers).
 
 
 # Tried Rejected
