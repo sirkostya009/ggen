@@ -338,6 +338,61 @@ func Float64(data []byte, i int) (float64, int, error) {
 	return v, i, nil
 }
 
+// skipNumber validates and consumes a JSON number per the RFC 8259 grammar
+//
+//	-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?
+//
+// without the strconv.ParseFloat conversion [Float64] runs. Used by [SkipValue]
+// for discarded numbers (RawMessage capture, ignoreunknown, allowdups skips),
+// where only the end position is needed. Diverges from a Float64-based skip in
+// two ways, both toward stdlib parity: range-overflow numbers like 1e400 skip
+// OK (grammar-valid — a skip must not range-check), while ParseFloat-isms JSON
+// forbids (leading +, leading zeros, bare/trailing dot: "+1", "01", "1.",
+// ".5") are rejected. Malformed numbers return ErrBadNumber, not *NumError.
+func skipNumber(data []byte, i int) (int, error) {
+	n := len(data)
+	if i < n && data[i] == '-' {
+		i++
+	}
+	if i >= n {
+		return 0, ErrBadNumber
+	}
+	if data[i] == '0' {
+		i++
+	} else if data[i] >= '1' && data[i] <= '9' {
+		i++
+		for i < n && data[i] >= '0' && data[i] <= '9' {
+			i++
+		}
+	} else {
+		return 0, ErrBadNumber
+	}
+	if i < n && data[i] == '.' {
+		i++
+		if i >= n || data[i] < '0' || data[i] > '9' {
+			return 0, ErrBadNumber
+		}
+		i++
+		for i < n && data[i] >= '0' && data[i] <= '9' {
+			i++
+		}
+	}
+	if i < n && (data[i] == 'e' || data[i] == 'E') {
+		i++
+		if i < n && (data[i] == '+' || data[i] == '-') {
+			i++
+		}
+		if i >= n || data[i] < '0' || data[i] > '9' {
+			return 0, ErrBadNumber
+		}
+		i++
+		for i < n && data[i] >= '0' && data[i] <= '9' {
+			i++
+		}
+	}
+	return i, nil
+}
+
 // Literal hex packings for "null", "true", "alse" (the tail of "false")
 // — Go's compiler doesn't fold the per-byte CMPB sequence into a single
 // 32-bit load, so we do it ourselves for a ~35% speedup on the hot peek.
@@ -385,8 +440,7 @@ func SkipValue(data []byte, i int) (int, error) {
 		}
 		return 0, ErrBadLiteral
 	case '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
-		_, j, err := Float64(data, i)
-		return j, err
+		return skipNumber(data, i)
 	case '[':
 		return skipArray(data, i+1)
 	case '{':

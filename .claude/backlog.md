@@ -11,15 +11,6 @@
       n=30, core-pinned, ±1% spread), throughput +2.1%, allocs/B byte-identical.
       Behavior byte-identical (Shift-gated cursor reset preserved). See
       scan/CLAUDE.md "Buffer-header hoist in refill loops".
-    - **Gated stream string slab.** `Stream.String`/`Number` bump-allocate
-      <1024B strings from append-only chunks (`unsafe.String`), fresh chunk on
-      overflow, dropped on Reset, never reused/rewritten — immune to the
-      rejected-pool corruption class, not the rejected 2-walk arena. Measured:
-      allocs 256,588 → 104,641 (readall parity), -3-6% wall;
-      BenchmarkRetention parity (~86 KiB/item both ways). **Chunk-size gating
-      mandatory**: un-gated 8KiB first chunk regresses small payloads 3.5×
-      B/op, +30-90% ns (geometric 512→8KiB or payload-gated first chunk).
-      Update scan/CLAUDE.md "owned copies" wording if landed.
     - **Exact-cap comma pre-count for flat numeric/bool SLICES, bytes path.
       LANDED 2026-06-22.** `bytes.Count(',')+1` → `make([]E,0,cnt)`,
       `scalarCountable` gate, `userPreallocHint < 0`, every depth via
@@ -41,37 +32,25 @@
       asm-verified 4→2 barrier sites; **−1.8..−4.85% Mega_Reader/ggen_stream**
       (allocs flat on fresh decode), composes with the comma pre-count above.
       See CLAUDE.md opt #43.
-    - **Map decode buffer-then-build (fresh-decode arm, primitive/string
-      values).** The robust map-sizing path — a `:`-count prealloc was tried
-      and rejected (key strings carry `:`, inflating the count on valid input;
-      see Tried Rejected). 73% of mapassign time = Swiss-map growth from
-      unsized `make`.
-      Buffer `pairs` slice, at `}` emit `make(map, len(pairs))` + fill.
-      Runtime-learned count — not the rejected tag-derived sizing. Measured
-      micro -41-44% map build; ~3-5% Mega, 20-30% map-heavy. Cautions: B/op
-      grows at n≥25 (geometric pairs growth or spill-to-map); ~45ns absolute
-      regression at n=6-8; struct values stay direct (dup-key fresh-decode,
-      opt #37).
-    - **Length-gated SWAR string-span scan, decode.** SWAR prelude
-      (`LittleEndian.Uint64` + escape mask + `TrailingZeros64`) emitted ONLY
-      for provably-long fields (KindBytes base64; large/absent maxlen); keys +
-      short fields keep byte loop. Measured: Small_Unmarshal -37%, Mega
-      neutral. Un-gated all-sites variant regresses Mega +2% (register
-      pressure) — gate is load-bearing.
-    - **Grammar-only `skipNumber`.** SkipValue full-ParseFloats discarded
-      numbers (~4.75% cum decode). Validating one-pass number state machine in
-      SkipValue/skipArray/skipObject + stream mirror. Measured 4.5×/skipped
-      number, ~1-1.5% Mega; multiplies on RawMessage-heavy/ignoreunknown.
-      Decide accept-set edge ("1.", "-.5", 1e400 — ParseFloat hard-errors
-      today, grammar skip would accept); error identity flips *NumError →
-      ErrBadNumber at skip sites. Land with old-vs-new accept-set fuzz.
-    - **Fused span-scan + Eisel-Lemire in `Float64`.** Span walk then
-      ParseFloat re-scans (duplicate classification, ~4.65% cum). Accumulate
-      mantissa+exp10 in existing loop; exact path + pure-Go EL (≤19-digit
-      mantissa, ~60 LOC + 11KB pow10 table), ParseFloat fallback. Measured
-      2-2.7×/number bit-exact over 200K+ values; Mega ~1%. EL variant ONLY —
-      exact-only-without-EL regresses 16% (see Tried Rejected). BSD
-      attribution for vendored EL.
+    - **Grammar-only `skipNumber`. LANDED 2026-06-23.** `SkipValue` skips
+      numbers via a one-pass RFC 8259 grammar validator
+      (`-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?`) instead of
+      `Float64`/`ParseFloat` — discarded numbers (RawMessage, `ignoreunknown`,
+      `allowdups` skips) only need the end position. Bytes `scan.skipNumber` +
+      stream `(*Stream).skipNumber` (single chokepoint: SkipValue's number
+      case; skipArray/skipObject route through it). **Accept-set decided =
+      strict JSON grammar**, both shifts toward stdlib parity: range-overflow
+      (`1e400`) now skips OK; ParseFloat-isms (`+1`, `01`, `1.`, `.5`) now
+      rejected; error identity `*NumError` → `ErrBadNumber` at skip sites.
+      Measured interleaved core-pinned (`taskset -c 4`, `-cpu=1`, n=12):
+      **−3.04% Mega_Unmarshal** (p=0.000, +3.13% throughput, −1 GC) / **−1.10%
+      Mega_Reader/ggen_stream** (p=0.020; stream is copy/ReadMore-dominated so
+      smaller), allocs/B byte-identical on both, beating the ~1-1.5% estimate
+      (Mega's `Raw` field is number-heavy). Accept-set pinned by
+      `TestSkipNumber_AcceptSetMatchesJSONGrammar` (differential vs
+      `encoding/json.Valid`) + `TestSkipNumber_StreamMatchesBytes`; fuzz-clean
+      (FuzzCompat ggen↔jsonv2 + FuzzStreamEqualsBytes, ~20M execs). See
+      scan/CLAUDE.md.
 
 - **Improve fuzz coverage.** Current surface (`integrationtests/fuzz_test.go`):
   three fuzzers over `Node` — `FuzzScanNoPanic` (panic safety),
@@ -162,6 +141,48 @@
 
 
 # Tried Rejected
+
+- **Fused span-scan + Eisel-Lemire in `Float64` — built, measured, ditched
+  2026-06-23.** Fully implemented and verified: shared `fastParseFloat` walked
+  the number span once (permissive `[-+.eE0-9]`, cursor/consumed-length
+  byte-identical), accumulated a ≤19-digit mantissa + exp10, ran `eiselLemire64`
+  vendored verbatim from Go's BSD-licensed `strconv` (`eiselLemire64` +
+  `detailedPowersOfTen` table, ~830 LOC in `scan/eisel_lemire.go`); any miss
+  fell back to `strconv.ParseFloat` over the SAME span (accept-set provably
+  unchanged). Measured interleaved core-pinned (n=12, `-cpu=1`): **−3.86%
+  Mega_Unmarshal / −2.10% Mega_Reader** (both p=0.000), allocs/B byte-identical;
+  fuzz-clean (13.9M float-parity + 6.4M stream-vs-bytes + 4.5M ggen-vs-jsonv2).
+  NoAlloc was layout-lottery (sign flipped −0.6/+1.4/+13.6 across 3 `-randlayout`
+  seeds; generated decoder byte-identical, so noise not regression). **Reverted
+  by decision**: a real win, but not worth permanently vendoring + maintaining a
+  copy of the stdlib's internal Eisel-Lemire implementation and its 11KB
+  power-of-ten table inside this repo. If the standard library ever exposes a
+  fast float parser (or `strconv.ParseFloat` itself gets fast enough that fusion
+  is moot), revisit — until then `scan.Float64`/`Stream.Float64` stay on the
+  plain span-scan + `strconv.ParseFloat`. Don't re-vendor EL.
+
+- **Gated stream string slab — dropped by decision 2026-06-23.** Real measured
+  win (allocs 256,588 → 104,641, −3..6% wall, Retention parity) but cut from
+  the agenda: chunk-size gating is load-bearing (un-gated 8KiB first chunk
+  regresses small payloads 3.5× B/op, +30-90% ns) and the gating + lifetime
+  reasoning (`unsafe.String` into never-rewritten chunks, dropped on Reset)
+  carries corruption-class risk not worth the alloc cut. Bytes path already
+  aliases; stream alloc reduction not a current priority.
+
+- **Map decode buffer-then-build — dropped by decision 2026-06-23.** The robust
+  runtime map-sizing path (buffer `pairs`, `make(map, len(pairs))` + fill at
+  `}`; measured micro −41..44%, ~3-5% Mega, 20-30% map-heavy) cut from the
+  agenda. B/op grows at n≥25, ~45ns absolute regression at n=6-8, and it only
+  pays on map-heavy schemas. Maps keep the unsized `make()`. The `:`-count
+  heuristic stays rejected (below) regardless.
+
+- **Length-gated SWAR string-SPAN scan (closing-quote locate) — not pursued.**
+  The control-byte VALIDATION half landed in `a27a1ca` (SWAR `< 0x20` check,
+  length-gated, −10..17% long-string stream decode). The remaining half — SWAR
+  closing-quote/backslash locate via escape-mask + `TrailingZeros64` (the
+  Small_Unmarshal −37% figure) — is deliberately NOT done: `bytes.IndexByte`
+  is already SIMD/AVX2 and beats a SWAR span scan on long spans. Quote/backslash
+  locate stays on `IndexByte`. Don't fold them into SWAR.
 
 - **Map `:`-count prealloc (sibling of the slice comma-count, opt #42).**
   Shipped briefly alongside the slice count, then dropped same day: sizing a

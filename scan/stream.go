@@ -765,6 +765,69 @@ scan:
 	return v, nil
 }
 
+// hasByteAt ensures buf[i] is in the buffer, issuing one grow-only refill
+// (ReadMore(0) never moves bytes, so i and prior aliases stay valid) when the
+// cursor reached the buffered tail. Reports false at true end-of-stream.
+func (s *Stream) hasByteAt(i int) bool {
+	if i < len(s.buf) {
+		return true
+	}
+	return s.ReadMore(0) == nil && i < len(s.buf)
+}
+
+// skipNumber is the stream mirror of the bytes-path skipNumber: it validates
+// and consumes a JSON number per the RFC 8259 grammar without the
+// strconv.ParseFloat conversion Float64 runs. Same accept-set divergences (see
+// scan.skipNumber): range-overflow numbers skip OK, ParseFloat-isms ("+1",
+// "01", "1.", ".5") are rejected with ErrBadNumber.
+func (s *Stream) skipNumber() error {
+	i := s.Pos
+	if !s.hasByteAt(i) {
+		return ErrBadNumber
+	}
+	if s.buf[i] == '-' {
+		i++
+		if !s.hasByteAt(i) {
+			return ErrBadNumber
+		}
+	}
+	if s.buf[i] == '0' {
+		i++
+	} else if s.buf[i] >= '1' && s.buf[i] <= '9' {
+		i++
+		for s.hasByteAt(i) && s.buf[i] >= '0' && s.buf[i] <= '9' {
+			i++
+		}
+	} else {
+		return ErrBadNumber
+	}
+	if s.hasByteAt(i) && s.buf[i] == '.' {
+		i++
+		if !s.hasByteAt(i) || s.buf[i] < '0' || s.buf[i] > '9' {
+			return ErrBadNumber
+		}
+		i++
+		for s.hasByteAt(i) && s.buf[i] >= '0' && s.buf[i] <= '9' {
+			i++
+		}
+	}
+	if s.hasByteAt(i) && (s.buf[i] == 'e' || s.buf[i] == 'E') {
+		i++
+		if s.hasByteAt(i) && (s.buf[i] == '+' || s.buf[i] == '-') {
+			i++
+		}
+		if !s.hasByteAt(i) || s.buf[i] < '0' || s.buf[i] > '9' {
+			return ErrBadNumber
+		}
+		i++
+		for s.hasByteAt(i) && s.buf[i] >= '0' && s.buf[i] <= '9' {
+			i++
+		}
+	}
+	s.Pos = i
+	return nil
+}
+
 // Bool scans a true/false literal byte-by-byte: each char is
 // bounds-checked individually and one ReadMore is issued only when
 // the buffer is exhausted at that position. Mismatch fails fast
@@ -837,8 +900,7 @@ func (s *Stream) SkipValue() error {
 		s.Pos = j + 4
 		return nil
 	case '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
-		_, err := s.Float64()
-		return err
+		return s.skipNumber()
 	case '[':
 		s.Pos++
 		return s.skipArray()
