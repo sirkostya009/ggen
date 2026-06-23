@@ -610,6 +610,48 @@ func TestJSONSize_SQLNullPerType_NoRealloc(t *testing.T) {
 			SQLNullTimeStruct{},
 			SQLNullTimeStruct{T: sql.NullTime{Time: when, Valid: true}},
 		},
+		// Generic sql.Null[T] — same size contract as the named flavors.
+		{
+			"GenString",
+			SQLNullGenStringStruct{},
+			SQLNullGenStringStruct{S: sql.Null[string]{V: strings.Repeat("a", 100), Valid: true}},
+		},
+		{
+			"GenInt",
+			SQLNullGenIntStruct{},
+			SQLNullGenIntStruct{I: sql.Null[int]{V: math.MinInt64, Valid: true}},
+		},
+		{
+			"GenUint64",
+			SQLNullGenUint64Struct{},
+			SQLNullGenUint64Struct{U: sql.Null[uint64]{V: math.MaxUint64, Valid: true}},
+		},
+		{
+			"GenFloat32",
+			SQLNullGenFloat32Struct{},
+			SQLNullGenFloat32Struct{F: sql.Null[float32]{V: math.MaxFloat32, Valid: true}},
+		},
+		{
+			"GenTime",
+			SQLNullGenTimeStruct{},
+			SQLNullGenTimeStruct{T: sql.Null[time.Time]{V: when, Valid: true}},
+		},
+		// Custom inner types — named primitive (json fallback) + TextMarshaler.
+		{
+			"GenAccountID",
+			SQLNullGenAccountStruct{},
+			SQLNullGenAccountStruct{A: sql.Null[SQLAccountID]{V: math.MinInt64, Valid: true}},
+		},
+		{
+			"GenLabel",
+			SQLNullGenLabelStruct{},
+			SQLNullGenLabelStruct{L: sql.Null[SQLLabel]{V: SQLLabel(strings.Repeat("a", 100)), Valid: true}},
+		},
+		{
+			"GenUUID",
+			SQLNullGenUUIDStruct{},
+			SQLNullGenUUIDStruct{ID: sql.Null[uuid.UUID]{V: uuid.New(), Valid: true}},
+		},
 	}
 	check := func(t *testing.T, v encode.Marshaler) {
 		t.Helper()

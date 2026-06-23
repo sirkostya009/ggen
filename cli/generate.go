@@ -448,7 +448,15 @@ func collectFieldImports(f FieldInfo, add func(string), anyString, anyValidation
 		}
 	case KindSQLNull:
 		add("database/sql")
-		if spec, ok := SQLNullSpec(f.GoType); ok {
+		if f.SQLNullInner != nil {
+			// Foreign-package imports for the `sql.Null[T]{…}` / `var nv T`
+			// type literals, plus the inner type's own behavioral imports
+			// (time, encoding/json fallback, base64, …) via recursion.
+			for _, imp := range f.SQLNullImports {
+				add(imp)
+			}
+			collectFieldImports(*f.SQLNullInner, add, anyString, anyValidation, anyBytes, anyRequired)
+		} else if spec, ok := SQLNullSpec(f.GoType); ok {
 			switch spec.Inner {
 			case KindString:
 				*anyString = true
@@ -1387,6 +1395,13 @@ dst = append(dst, '"')
 		// straight into dst instead of materializing a fresh string.
 		fmt.Fprintf(b, "dst = append(dst, '\"')\nif dst, err = (&%s).AppendText(dst); err != nil { return dst, err }\ndst = append(dst, '\"')\n", ref)
 	case KindSQLNull:
+		if f.SQLNullInner != nil {
+			inner := sqlNullInnerField(f)
+			fmt.Fprintf(b, "if !%s.Valid {\n\tdst = append(dst, 'n', 'u', 'l', 'l')\n} else {\n\t", ref)
+			renderAppendValue(b, inner, ref+".V")
+			b.WriteString("}\n")
+			return
+		}
 		spec, ok := SQLNullSpec(f.GoType)
 		if !ok {
 			return
@@ -1916,6 +1931,13 @@ func sizeContribKind(f FieldInfo, ref string) (int, string) {
 		// Two big.Ints + slash + quotes. Approximate by num+denom bit lengths.
 		return 8, fmt.Sprintf("size += (%s.Num().BitLen() + %s.Denom().BitLen())/3\n", ref, ref)
 	case KindSQLNull:
+		if f.SQLNullInner != nil {
+			inner := sqlNullInnerField(f)
+			innerN, code := sizeContrib(inner, ref+".V")
+			// !Valid emits the literal "null" (4 bytes); widen like the
+			// named-flavor path below.
+			return max(innerN, 4), code
+		}
 		spec, ok := SQLNullSpec(f.GoType)
 		if !ok {
 			return 0, ""
@@ -3381,13 +3403,46 @@ func renderBigRat(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 // Valid=true. The outer-scope local is `nv` (null-inner-value) — chosen
 // to avoid collisions with the `v` that the time/string sub-renderers
 // declare internally.
+// sqlNullInnerField returns a render-ready copy of a generic sql.Null[T]'s
+// inner FieldInfo: the synthetic V field with the parent's struct-propagated
+// flags (MultiErr / NoValidate / UseNumber / HTMLEscape) applied, since the
+// inner is built at parse time before flag propagation runs.
+func sqlNullInnerField(f FieldInfo) FieldInfo {
+	inner := *f.SQLNullInner
+	inner.JSONName = f.JSONName
+	inner.MultiErr = f.MultiErr
+	inner.NoValidate = f.NoValidate
+	inner.UseNumber = f.UseNumber
+	inner.HTMLEscape = f.HTMLEscape
+	inner.AtDispatch = false
+	return inner
+}
+
 func renderSQLNull(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+	if f.SQLNullInner != nil {
+		// Generic sql.Null[T]: null → zero; else decode V like a bare field
+		// of type T into a temp, then publish the {V, Valid:true} literal.
+		inner := sqlNullInnerField(f)
+		var dec bytes.Buffer
+		fmt.Fprintf(&dec, "var nv %s\n", inner.GoType)
+		renderField(&dec, inner, "nv", posVar)
+		fmt.Fprintf(b, `if %[1]s+4 <= len(data) && data[%[1]s] == 'n' && data[%[1]s+1] == 'u' && data[%[1]s+2] == 'l' && data[%[1]s+3] == 'l' {
+	%[2]s = sql.%[3]s{}
+	%[1]s += 4
+} else {
+	%[4]s
+	%[2]s = sql.%[3]s{V: nv, Valid: true}
+}
+`, posVar, ref, sqlTypeName(f.GoType), dec.String())
+		return
+	}
 	spec, ok := SQLNullSpec(f.GoType)
 	if !ok {
 		return
 	}
 	field := fieldLit(f)
 	var inner bytes.Buffer
+	valExpr := "nv"
 	switch spec.Inner {
 	case KindString:
 		inner.WriteString("var nv string\n")
@@ -3396,19 +3451,27 @@ func renderSQLNull(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 		inner.WriteString("var nv bool\n")
 		fmt.Fprintf(&inner, "nv, %[1]s, err = scan.Bool(data, %[1]s)\n", posVar)
 		fmt.Fprintf(&inner, "if err != nil { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, err) }\n", posVar, field)
-	case KindInt64:
-		inner.WriteString("var nv int64\n")
-		inlineScanInt64(&inner, posVar, "nv", "", field)
-	case KindInt32, KindInt16:
+	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
 		fmt.Fprintf(&inner, "var nv %s\n", spec.Type)
-		inlineScanInt64(&inner, posVar, "nv", spec.Type, field)
-	case KindUint8:
+		cast := spec.Type
+		if spec.Type == "int64" {
+			cast = ""
+		}
+		inlineScanInt64(&inner, posVar, "nv", cast, field)
+	case KindUint, KindUint8, KindUint16, KindUint32, KindUint64:
 		fmt.Fprintf(&inner, "var nv %s\n", spec.Type)
-		inlineScanUint64(&inner, posVar, "nv", spec.Type, field)
-	case KindFloat64:
+		cast := spec.Type
+		if spec.Type == "uint64" {
+			cast = ""
+		}
+		inlineScanUint64(&inner, posVar, "nv", cast, field)
+	case KindFloat32, KindFloat64:
 		inner.WriteString("var nv float64\n")
 		fmt.Fprintf(&inner, "nv, %[1]s, err = scan.Float64(data, %[1]s)\n", posVar)
 		fmt.Fprintf(&inner, "if err != nil { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, err) }\n", posVar, field)
+		if spec.Type != "float64" {
+			valExpr = "float32(nv)"
+		}
 	case KindTime:
 		tf := FieldInfo{JSONName: f.JSONName, Format: f.Format}
 		inner.WriteString("var nv time.Time\n")
@@ -3419,12 +3482,12 @@ func renderSQLNull(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	%s += 4
 } else {
 	%s
-	%s = sql.%s{%s: nv, Valid: true}
+	%s = sql.%s{%s: %s, Valid: true}
 }
 `, posVar, posVar, posVar, posVar, posVar,
 		ref, sqlTypeName(f.GoType), posVar,
 		inner.String(),
-		ref, sqlTypeName(f.GoType), spec.Field)
+		ref, sqlTypeName(f.GoType), spec.Field, valExpr)
 }
 
 // sqlTypeName returns the bare type name from a `sql.NullX` qualified name.
@@ -5036,6 +5099,26 @@ sv, err = s.StringView()
 // inlined inside the `sql.NullX{Field: …, Valid: true}` literal.
 func renderStreamSQLNull(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	_ = posVar
+	if f.SQLNullInner != nil {
+		inner := sqlNullInnerField(f)
+		field := fieldLit(f)
+		rm := streamReadMore(field, "0", false)
+		rmKi := strings.Replace(rm, "if s.Pos >=", "if s.Pos+ki >=", 1)
+		dec := renderStreamField(inner, "nv", posVar)
+		fmt.Fprintf(b, `%[5]sif s.Bytes()[s.Pos] == 'n' {
+	for ki := 1; ki < 4; ki++ {
+		%[7]sif s.Bytes()[s.Pos+ki] != "null"[ki] { return result, decode.NewParseErr(%[6]s, s.Pos, scan.ErrBadLiteral) }
+	}
+	%[1]s = sql.%[2]s{}
+	s.Pos += 4
+} else {
+	var nv %[3]s
+	%[4]s
+	%[1]s = sql.%[2]s{V: nv, Valid: true}
+}
+`, ref, sqlTypeName(f.GoType), inner.GoType, dec, rm, field, rmKi)
+		return
+	}
 	spec, ok := SQLNullSpec(f.GoType)
 	if !ok {
 		return
@@ -5056,18 +5139,24 @@ nv, err = s.%[2]s()
 	case KindBool:
 		scanTmpl("bool", "Bool")
 		valExpr = "nv"
-	case KindInt64, KindInt32, KindInt16:
+	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
 		scanTmpl("int64", "Int64")
 		valExpr = "nv"
 		if spec.Type != "int64" {
 			valExpr = fmt.Sprintf("%s(nv)", spec.Type)
 		}
-	case KindUint8:
+	case KindUint, KindUint8, KindUint16, KindUint32, KindUint64:
 		scanTmpl("uint64", "Uint64")
-		valExpr = fmt.Sprintf("%s(nv)", spec.Type)
-	case KindFloat64:
+		valExpr = "nv"
+		if spec.Type != "uint64" {
+			valExpr = fmt.Sprintf("%s(nv)", spec.Type)
+		}
+	case KindFloat32, KindFloat64:
 		scanTmpl("float64", "Float64")
 		valExpr = "nv"
+		if spec.Type != "float64" {
+			valExpr = fmt.Sprintf("%s(nv)", spec.Type)
+		}
 	case KindTime:
 		tf := FieldInfo{JSONName: f.JSONName, Format: f.Format}
 		inner.WriteString("var nv time.Time\n")

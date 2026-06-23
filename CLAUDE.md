@@ -406,9 +406,29 @@ Field-introspection types render via `types.RelativeTo(s.typesPkg)`.
   falls back to `MarshalText() + AppendString` (one alloc). Can also declare
   AppendJSON method for ggen to pick up (highest precedence).
 - `database/sql.Null*` (`NullString`, `NullInt64`, `NullInt32`, `NullInt16`,
-  `NullByte`, `NullBool`, `NullFloat64`, `NullTime`). Decode probes `null`
+  `NullByte`, `NullBool`, `NullFloat64`, `NullTime`) **and the generic
+  `sql.Null[T]`** (Go 1.22; inner field is always `V`). Decode probes `null`
   first → `Valid=false`; else reads inner value, sets `Valid=true`. Encode
-  `null` when `!Valid`, inner value otherwise
+  `null` when `!Valid`, inner value otherwise — wire shape is always
+  inner-or-null, never the `{"V":…,"Valid":…}` struct dump. The named flavors
+  use the string-keyed `SQLNullSpec` (`Field`/`Inner`/`Type`).
+  **Generic `sql.Null[T]` supports ANY inner `T` ggen can render as a field.**
+  With go/types info (`sqlNullGenericInfo` in `parse.go`), the parser builds a
+  synthetic `FieldInfo` for `T` (via `extractFieldFromTypes` on a synthesized
+  `V` var, name-qualifying foreign types and dropping the spurious
+  underlying-peel for named types so `uuid.UUID`/`net.IP` keep their text path)
+  and stashes it on `FieldInfo.SQLNullInner` (+ `SQLNullImports` for the type
+  literals). The decode/encode/size renderers delegate the `V` slot to the
+  standard field emitters (`renderField`/`renderStreamField`/`renderAppendValue`/
+  `sizeContrib`) via that inner `FieldInfo`, so `sql.Null[T]` gets exactly the
+  wire (and fast path) of a bare field of type `T`: primitives/`time.Time`/
+  `netip`/marshaler types go native, anything else uses `T`'s own
+  `encoding/json` fallback (which still emits the bare inner value, NOT the
+  struct). Parent struct flags (`MultiErr`/`NoValidate`/`UseNumber`/`HTMLEscape`)
+  copy onto the inner at render time (`sqlNullInnerField`). The AST-only loader
+  (no go/types) keeps just the built-in-primitive generic forms via the
+  string-based `SQLNullSpec` + `isSupportedSQLNullInner` gate; custom inners
+  there fall back to `encoding/json` on the whole value
 - `any` / `interface{}` — decode via `scan.Any` / `(*Stream).Any`, stdlib
   defaults: `null→nil`, `bool`, `number→float64`, `string` (zero-copy alias),
   `array→[]any`, `object→map[string]any`. With `usenumber`, emits

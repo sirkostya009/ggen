@@ -201,22 +201,6 @@
   `error` (typed sub-interface could improve `errors.As`). Pick when
   concrete report-shape ask exists.
 
-- **`sql.Null[T]` (Go 1.22 generic form) fast path.** Doesn't match
-  `SQLNullSpec` (string lookup against `sql.NullString`/…), so every
-  `sql.Null[int]`/`[time.Time]`/… falls through to `encoding/json`
-  reflective fallback for both decode and marshal. Two consequences: (1)
-  **wire-shape divergence inside family** — legacy `sql.NullX` ships ggen's
-  "value or null" shape, generic form reflects out `{"V":val,"Valid":true}`
-  (silent footgun); (2) **slow path** — no inline scan, no AppendText, flat
-  128-byte JSONSize. Fix: extend `SQLNullSpec` (or add `SQLNullGenericSpec`) to
-  recognize `sql.Null[…]`, parse inner type, resolve via `resolveKind`,
-  return `SQLNullKind{Field:"V", Inner, Type}` — four codegen paths already
-  thread `spec.Field`/`Inner`/`Type` correctly, so one parse-time change
-  unlocks all. Open questions: scope of accepted inner kinds (whitelist
-  string/int*/uint*/float*/bool/time.Time is tightest); cross-package
-  `pkg.Null[T]` probably out of scope. Mirror legacy `SQLNull*Struct` split
-  in `integrationtests/sql_test.go`.
-
 - **`null` on non-pointer value kinds — accept-as-zero vs strict-reject.**
   Surfaced by the merge audit (`TestStdCompatMerge_IntentionalDivergences`).
   ggen emits a `null` peek only for pointer / slice / map / `sql.Null*` /

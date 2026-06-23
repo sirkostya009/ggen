@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/sirkostya009/ggen/decode"
 	"github.com/sirkostya009/ggen/encode"
 )
@@ -60,6 +61,65 @@ type SQLNullFloat64Struct struct {
 //ggen:generate
 type SQLNullTimeStruct struct {
 	T sql.NullTime `json:"t"`
+}
+
+// Generic sql.Null[T] (Go 1.22) carriers. The inner field is always V; these
+// exercise inner kinds with no legacy named counterpart (int / uint64 /
+// float32) plus a string/bool/time spread to prove the V-field path matches
+// the named NullX wire shape.
+
+//ggen:generate
+type SQLNullGenStringStruct struct {
+	S sql.Null[string] `json:"s"`
+}
+
+//ggen:generate
+type SQLNullGenIntStruct struct {
+	I sql.Null[int] `json:"i"`
+}
+
+//ggen:generate
+type SQLNullGenUint64Struct struct {
+	U sql.Null[uint64] `json:"u"`
+}
+
+//ggen:generate
+type SQLNullGenFloat32Struct struct {
+	F sql.Null[float32] `json:"f"`
+}
+
+//ggen:generate
+type SQLNullGenBoolStruct struct {
+	BL sql.Null[bool] `json:"bl"`
+}
+
+//ggen:generate
+type SQLNullGenTimeStruct struct {
+	T sql.Null[time.Time] `json:"t"`
+}
+
+// Custom inner types — not just built-in primitives. A named int and a named
+// string decode/encode their underlying primitive wire via the per-inner
+// encoding/json fallback (NOT the {V,Valid} struct dump); a TextMarshaler
+// type (uuid.UUID) routes through its text methods. All three carry the
+// inner-or-null wire shape, same as the named NullX flavors.
+
+type SQLAccountID int64
+type SQLLabel string
+
+//ggen:generate
+type SQLNullGenAccountStruct struct {
+	A sql.Null[SQLAccountID] `json:"a"`
+}
+
+//ggen:generate
+type SQLNullGenLabelStruct struct {
+	L sql.Null[SQLLabel] `json:"l"`
+}
+
+//ggen:generate
+type SQLNullGenUUIDStruct struct {
+	ID sql.Null[uuid.UUID] `json:"id"`
 }
 
 // SQLNullStruct keeps the composite shape so the existing roundtrip /
@@ -159,6 +219,30 @@ func TestSQLNull_PerType(t *testing.T) {
 		SQLNullFloat64Struct{F: sql.NullFloat64{Float64: 3.14, Valid: true}})
 	runSQLNullPerType(t, "NullTime", "t", `"2023-11-14T22:13:20Z"`,
 		SQLNullTimeStruct{T: sql.NullTime{Time: sqlWhen, Valid: true}})
+
+	// Generic sql.Null[T] — same wire shape as the named NullX flavors.
+	runSQLNullPerType(t, "GenString", "s", `"hello"`,
+		SQLNullGenStringStruct{S: sql.Null[string]{V: "hello", Valid: true}})
+	runSQLNullPerType(t, "GenInt", "i", `42`,
+		SQLNullGenIntStruct{I: sql.Null[int]{V: 42, Valid: true}})
+	runSQLNullPerType(t, "GenUint64", "u", `18446744073709551615`,
+		SQLNullGenUint64Struct{U: sql.Null[uint64]{V: 18446744073709551615, Valid: true}})
+	runSQLNullPerType(t, "GenFloat32", "f", `1.5`,
+		SQLNullGenFloat32Struct{F: sql.Null[float32]{V: 1.5, Valid: true}})
+	runSQLNullPerType(t, "GenBool", "bl", `true`,
+		SQLNullGenBoolStruct{BL: sql.Null[bool]{V: true, Valid: true}})
+	runSQLNullPerType(t, "GenTime", "t", `"2023-11-14T22:13:20Z"`,
+		SQLNullGenTimeStruct{T: sql.Null[time.Time]{V: sqlWhen, Valid: true}})
+
+	// Custom inner types: a named int and named string flow through the inner
+	// type's own wire (bare number / quoted string), NOT the {V,Valid} dump.
+	runSQLNullPerType(t, "GenAccountID", "a", `9001`,
+		SQLNullGenAccountStruct{A: sql.Null[SQLAccountID]{V: 9001, Valid: true}})
+	runSQLNullPerType(t, "GenLabel", "l", `"vip"`,
+		SQLNullGenLabelStruct{L: sql.Null[SQLLabel]{V: "vip", Valid: true}})
+	// uuid.UUID routes through TextMarshaler/TextUnmarshaler.
+	runSQLNullPerType(t, "GenUUID", "id", `"550e8400-e29b-41d4-a716-446655440000"`,
+		SQLNullGenUUIDStruct{ID: sql.Null[uuid.UUID]{V: uuid.MustParse("550e8400-e29b-41d4-a716-446655440000"), Valid: true}})
 }
 
 // TestSQLNull_Composite exercises the embedded composite all together:

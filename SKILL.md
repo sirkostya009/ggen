@@ -232,7 +232,7 @@ Mods like `replace` and custom mods may copy string. Break zero-copy for that fi
 - `json.RawMessage` / `jsontext.Value` — opaque, zero-copy alias.
 - `net/url.URL` — JSON string (NOT struct dump — wire divergence from stdlib).
 - `math/big.Int` (JSON number), `big.Float` / `big.Rat` (JSON string — wire divergence from stdlib).
-- `database/sql.Null*` — inner value or `null` (NOT `{Valid:…}` — wire divergence from stdlib).
+- `database/sql.Null*` and generic `sql.Null[T]` (Go 1.22, any inner `T` ggen handles as a field — primitive, `time.Time`, `uuid.UUID`, named types, …) — inner value or `null` (NOT `{Valid:…}` — wire divergence from stdlib).
 - Any type implementing `encoding.TextAppender` / `TextMarshaler` / `TextUnmarshaler` — auto-picked (`google/uuid`, `gofrs/uuid/v5`, `shopspring/decimal`, `oklog/ulid`, `segmentio/ksuid`, `rs/xid`, `net/mail.Address`, custom enums, etc.).
 
 ### Cross-package types

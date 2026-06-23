@@ -1148,6 +1148,16 @@ func (s *structSet) extractStruct(name string, st *ast.StructType) (StructInfo, 
 					}
 				}
 			}
+			// Generic database/sql.Null[T] (Go 1.22): decode/encode the V slot
+			// like a bare field of type T. Needs go/types to resolve the inner
+			// type; the AST-only loader leaves primitives on the SQLNullSpec
+			// path (resolveKind already classified them) and custom inners on
+			// the encoding/json fallback.
+			if inner, imps, ok := s.sqlNullGenericInfo(name, fieldType, &fi); ok {
+				fi.Kind = KindSQLNull
+				fi.SQLNullInner = inner
+				fi.SQLNullImports = imps
+			}
 			// Resolve any `@Func` references in validation/mod tags.
 			// resolveCustomRules returns *richError with CodeSpan
 			// already set to the `@ref` token so the pretty renderer
@@ -1361,6 +1371,9 @@ func exprToString(expr ast.Expr) string {
 		return "*" + exprToString(e.X)
 	case *ast.BasicLit:
 		return e.Value
+	case *ast.IndexExpr:
+		// Generic instantiation with one type arg, e.g. sql.Null[int].
+		return exprToString(e.X) + "[" + exprToString(e.Index) + "]"
 	case *ast.MapType:
 		return "map[" + exprToString(e.Key) + "]" + exprToString(e.Value)
 	case *ast.InterfaceType:
@@ -1431,6 +1444,12 @@ func resolveKind(goType string) TypeKind {
 	case "any", "interface{}":
 		return KindAny
 	default:
+		// sql.Null[T] (Go 1.22 generic form) with a supported inner kind.
+		// Unsupported inners fall through to KindStruct → encoding/json
+		// fallback, matching pre-generic behaviour.
+		if inner, ok := sqlNullGenericInner(goType); ok && isSupportedSQLNullInner(resolveKind(inner)) {
+			return KindSQLNull
+		}
 		if strings.HasPrefix(goType, "[]") {
 			return KindSlice
 		}
@@ -1446,5 +1465,127 @@ func resolveKind(goType string) TypeKind {
 			}
 		}
 		return KindStruct
+	}
+}
+
+// sqlNullGenericInner extracts the inner type string T from a `sql.Null[T]`
+// generic instantiation (Go 1.22). Returns ("", false) for any other type.
+func sqlNullGenericInner(goType string) (string, bool) {
+	const prefix = "sql.Null["
+	if !strings.HasPrefix(goType, prefix) || !strings.HasSuffix(goType, "]") {
+		return "", false
+	}
+	inner := goType[len(prefix) : len(goType)-1]
+	return inner, inner != ""
+}
+
+// isSupportedSQLNullInner reports whether kind k may sit inside a generic
+// sql.Null[T] on the AST-only (string-based) path. Mirrors the inner kinds the
+// SQLNullSpec primitive path handles; anything else degrades to the
+// encoding/json fallback there. The go/types path (sqlNullGenericInfo) is not
+// gated by this — it delegates to the full field emitters, so any inner T ggen
+// can render as a field works.
+func isSupportedSQLNullInner(k TypeKind) bool {
+	switch k {
+	case KindString, KindBool,
+		KindInt, KindInt8, KindInt16, KindInt32, KindInt64,
+		KindUint, KindUint8, KindUint16, KindUint32, KindUint64,
+		KindFloat32, KindFloat64, KindTime:
+		return true
+	}
+	return false
+}
+
+// isStdSQLNull reports whether named is the generic database/sql.Null[T]
+// (Go 1.22), i.e. a single-type-arg instantiation of database/sql.Null.
+func isStdSQLNull(named *types.Named) bool {
+	obj := named.Obj()
+	return obj != nil && obj.Name() == "Null" && obj.Pkg() != nil &&
+		obj.Pkg().Path() == "database/sql" && named.TypeArgs().Len() == 1
+}
+
+// sqlNullGenericInfo detects a generic database/sql.Null[T] field and builds
+// the synthetic FieldInfo describing the inner type T (resolved through the
+// same type-driven extractor used for embedded/foreign fields), plus the
+// foreign-package imports the emitted `sql.Null[T]{…}` / `var nv T` type
+// literals reference. Returns ok=false for any non-sql.Null type or when no
+// type info is available. parent supplies the field's JSON name for inner
+// error diagnostics.
+func (s *structSet) sqlNullGenericInfo(structName string, t types.Type, parent *FieldInfo) (*FieldInfo, []string, bool) {
+	named, ok := t.(*types.Named)
+	if !ok || !isStdSQLNull(named) {
+		return nil, nil, false
+	}
+	innerType := named.TypeArgs().At(0)
+	innerVar := types.NewVar(token.NoPos, s.typesPkg, "V", innerType)
+	inner, err := s.extractFieldFromTypes(structName, innerVar, "")
+	if err != nil {
+		// Inner type ggen can't model as a field — leave the field on the
+		// fallback path (resolveKind already classified it).
+		return nil, nil, false
+	}
+	// extractFieldFromTypes peels a named type's underlying (e.g. uuid.UUID →
+	// [16]byte → KindArray, net.IP → []byte → KindSlice). The AST field path
+	// never does this — a named type stays KindStruct (routed through its
+	// Text/JSON marshaler) unless resolveKind recognizes the name (time.Time,
+	// net.IP, …). Mirror that: for a named inner, trust resolveKind on the
+	// type name and drop the spurious element data.
+	if _, isNamed := innerType.(*types.Named); isNamed {
+		inner.Kind = resolveKind(inner.GoType)
+		inner.ElemType, inner.ElemKind = "", 0
+		inner.ArrayLen, inner.ElemArrayLen = 0, 0
+		inner.ElemPointer = false
+		inner.ElemIface = FieldInterfaces{}
+	}
+	inner.JSONName = parent.JSONName
+
+	// extractFieldFromTypes qualifies foreign types with their full import
+	// PATH (types.RelativeTo), but generated code references them by package
+	// NAME. Rewrite path → name in the emitted type-literal strings and
+	// collect the imports.
+	pkgs := map[string]string{} // import path → package name
+	s.collectTypeImports(innerType, pkgs)
+	fix := func(str string) string {
+		for path, name := range pkgs {
+			str = strings.ReplaceAll(str, path+".", name+".")
+		}
+		return str
+	}
+	inner.GoType = fix(inner.GoType)
+	inner.ElemType = fix(inner.ElemType)
+	inner.PointeeType = fix(inner.PointeeType)
+
+	imps := make([]string, 0, len(pkgs)+1)
+	imps = append(imps, "database/sql")
+	for p := range pkgs {
+		imps = append(imps, p)
+	}
+	slices.Sort(imps)
+	return &inner, imps, true
+}
+
+// collectTypeImports walks a types.Type and records (import path → package
+// name) for every named type defined outside the package being generated.
+// Used to import + name-qualify the inner type referenced by a sql.Null[T]
+// type literal (and any nested element types, e.g. sql.Null[[]uuid.UUID] /
+// sql.Null[map[string]decimal.Decimal]).
+func (s *structSet) collectTypeImports(t types.Type, out map[string]string) {
+	switch x := t.(type) {
+	case *types.Named:
+		if obj := x.Obj(); obj != nil && obj.Pkg() != nil && obj.Pkg() != s.typesPkg {
+			out[obj.Pkg().Path()] = obj.Pkg().Name()
+		}
+		for i := range x.TypeArgs().Len() {
+			s.collectTypeImports(x.TypeArgs().At(i), out)
+		}
+	case *types.Pointer:
+		s.collectTypeImports(x.Elem(), out)
+	case *types.Slice:
+		s.collectTypeImports(x.Elem(), out)
+	case *types.Array:
+		s.collectTypeImports(x.Elem(), out)
+	case *types.Map:
+		s.collectTypeImports(x.Key(), out)
+		s.collectTypeImports(x.Elem(), out)
 	}
 }

@@ -106,6 +106,18 @@ type FieldInfo struct {
 	HTMLEscape      bool   // propagated from parent struct: HTML-safe escape <, >, & when emitting strings (default: literal, matches jsonv2)
 	Ignored         bool
 
+	// SQLNullInner, when non-nil, marks a generic database/sql.Null[T]
+	// field (Go 1.22). It is the synthetic FieldInfo describing the inner
+	// type T — the renderers decode/encode/size the V slot by delegating to
+	// the standard field emitters with this, so sql.Null[T] gets exactly the
+	// wire shape (and fast path) ggen would give a bare field of type T:
+	// "(T's wire) or null". The legacy named sql.NullX flavors keep the
+	// string-keyed SQLNullSpec path and leave this nil. SQLNullImports holds
+	// the foreign-package import paths the `sql.Null[T]{…}` / `var nv T` type
+	// literals reference (T's package and any nested ones).
+	SQLNullInner   *FieldInfo
+	SQLNullImports []string
+
 	// Codegen-internal flags — never set by the parse layer.
 	AtDispatch bool // value emit sits directly inside the key-dispatch switch; a `null` match may `break` to the comma handling instead of nesting the whole value decode in an else
 	TargetNil  bool // decode target is a freshly-declared nil local (map-value temp, pre-grown []**T slot) — skip the receiver seed and collapse the pointer assign cascade to a straight new-chain
@@ -186,6 +198,13 @@ func SQLNullSpec(goType string) (SQLNullKind, bool) {
 		return SQLNullKind{Field: "Float64", Inner: KindFloat64, Type: "float64"}, true
 	case "sql.NullTime":
 		return SQLNullKind{Field: "Time", Inner: KindTime, Type: "time.Time"}, true
+	}
+	// Generic sql.Null[T] (Go 1.22): the inner field is always V; resolve the
+	// inner kind from the instantiation. Gated to inners the renderers handle.
+	if inner, ok := sqlNullGenericInner(goType); ok {
+		if k := resolveKind(inner); isSupportedSQLNullInner(k) {
+			return SQLNullKind{Field: "V", Inner: k, Type: inner}, true
+		}
 	}
 	return SQLNullKind{}, false
 }

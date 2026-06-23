@@ -420,3 +420,54 @@ type Msg struct {
 		t.Errorf("generated file not found at %q: %v", want, err)
 	}
 }
+
+// TestSQLNullGeneric covers the STRING-based path (resolveKind + SQLNullSpec)
+// for the Go 1.22 generic sql.Null[T] form — the classification the AST-only
+// loader uses when no go/types info is available. Built-in primitive inners
+// classify as KindSQLNull with the V field. Non-primitive inners return false
+// here (so the AST path leaves them on the encoding/json fallback); the
+// go/types path (sqlNullGenericInfo) instead delegates to the field emitters
+// and supports arbitrary inner T — exercised end-to-end in integrationtests.
+func TestSQLNullGeneric(t *testing.T) {
+	supported := []struct {
+		goType string
+		inner  TypeKind
+		typ    string
+	}{
+		{"sql.Null[string]", KindString, "string"},
+		{"sql.Null[bool]", KindBool, "bool"},
+		{"sql.Null[int]", KindInt, "int"},
+		{"sql.Null[int64]", KindInt64, "int64"},
+		{"sql.Null[uint64]", KindUint64, "uint64"},
+		{"sql.Null[float32]", KindFloat32, "float32"},
+		{"sql.Null[float64]", KindFloat64, "float64"},
+		{"sql.Null[time.Time]", KindTime, "time.Time"},
+	}
+	for _, c := range supported {
+		t.Run(c.goType, func(t *testing.T) {
+			if k := resolveKind(c.goType); k != KindSQLNull {
+				t.Fatalf("resolveKind(%q) = %v, want KindSQLNull", c.goType, k)
+			}
+			spec, ok := SQLNullSpec(c.goType)
+			if !ok {
+				t.Fatalf("SQLNullSpec(%q) not ok", c.goType)
+			}
+			if spec.Field != "V" || spec.Inner != c.inner || spec.Type != c.typ {
+				t.Errorf("SQLNullSpec(%q) = %+v, want {V %v %s}", c.goType, spec, c.inner, c.typ)
+			}
+		})
+	}
+
+	// Non-primitive / malformed inners are not classified by the string path
+	// (the go/types path picks up the valid ones like netip.Addr).
+	for _, goType := range []string{"sql.Null[netip.Addr]", "sql.Null[[]byte]", "sql.Null[]", "sql.NullFoo"} {
+		t.Run("reject/"+goType, func(t *testing.T) {
+			if k := resolveKind(goType); k == KindSQLNull {
+				t.Errorf("resolveKind(%q) = KindSQLNull, want fallback", goType)
+			}
+			if _, ok := SQLNullSpec(goType); ok {
+				t.Errorf("SQLNullSpec(%q) ok, want false", goType)
+			}
+		})
+	}
+}

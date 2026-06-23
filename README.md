@@ -549,12 +549,13 @@ ggen treats a bunch of stdlib types as first-class with special encoding and dec
 | `math/big.Float`     | JSON string         | arbitrary precision (matches jsonv2)                                                                |
 | `math/big.Rat`       | JSON string         | `"22/7"`                                                                                            |
 | `database/sql.NullX` | inner value or null | `NullString`, `NullInt64`/`32`/`16`, `NullByte`, `NullBool`, `NullFloat64`, `NullTime`              |
+| `database/sql.Null[T]` | inner value or null | generic form (Go 1.22); any `T` ggen handles as a field (primitive, `time.Time`, `uuid.UUID`, named types, …) |
 
 `any` also works and is similar to how standard json treats it.
 
 #### divergences from stdlib
 
-The `net/url.URL` and `sql.NullX` rows above ship a different wire shape
+The `net/url.URL`, `sql.NullX`, and `sql.Null[T]` rows above ship a different wire shape
 from `encoding/json` v1/v2 — ggen serializes them the way consumers would
 usually expect, diverging from stdlib's exported-field struct dump:
 
