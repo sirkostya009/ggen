@@ -24,6 +24,18 @@ s.SkipValue()
 raw := s.Bytes()[start:s.Pos]
 ```
 
+### Absolute offset — `Offset()` / `consumed`
+
+`Pos` is **buffer-relative** — it resets toward 0 as compacting `ReadMore`
+(keep > 0) slides the window. The unexported `consumed int` accumulates every
+discarded prefix (`+= keep`, or `+= len(buf)` on the full-discard branch), so
+`buf[0]` always sits at absolute document offset `consumed`. `Offset()` returns
+`consumed + Pos` = the absolute cursor offset, stable across the whole stream.
+`Reset` zeroes `consumed`; no-shift mode never advances it (offsets stay stable
+by construction). Used by generated decoders to stamp `validation.*Error.Pos`
+with a full-payload-relative offset on the stream path (the raw buffer-relative
+`Pos` would be wrong once the window compacts) — see `decode/validation/CLAUDE.md`.
+
 ### `ReadMore(keep int) error` — the only I/O primitive
 
 One Read per call, never loops. `keep` = lowest offset caller still needs; bytes before may be discarded:

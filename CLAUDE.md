@@ -561,7 +561,13 @@ single underscores: `goexperiment.jsonv2` → `goexperiment_jsonv2`,
     emits typed literal at failure site. `OneOfError.Allowed` points to
     deduped package-level frozen `[]string` (`var _oneof_N = []string{...}`)
     emitted once per unique allowed-set. `EqError`/`NeqError` use `Want any`
-    (one struct for string + numeric). See `decode/validation/CLAUDE.md`.
+    (one struct for string + numeric). Every error also carries a `Pos int`
+    (first field) stamped at the failure site — the byte offset relative to the
+    full payload: bytes cursor `i`, or `s.Offset()` on the stream path (NOT the
+    raw buffer-relative `s.Pos`, which the compacting window invalidates).
+    Injected uniformly by `withPos`/`posLit` (wraps `renderValidationOn`'s
+    `onErr` + the standalone required / array-len / dup-key / unknown-key
+    literals). See `decode/validation/CLAUDE.md`.
 14. **Parse-error wrapping at every error return.** Codegen embeds the
     JSON field name as a compile-time literal in each `return result, …`
     site: `return result, i, decode.NewParseErr("street", i, err)`. The

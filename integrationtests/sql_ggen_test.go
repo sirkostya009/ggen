@@ -72,7 +72,7 @@ func (recv SQLNullStringStruct) DecodeFrom(data []byte) (result SQLNullStringStr
 		switch key {
 		case "s":
 			if seenS {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"s"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"s"}}
 			}
 			seenS = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -106,7 +106,7 @@ func (recv SQLNullStringStruct) DecodeFrom(data []byte) (result SQLNullStringStr
 				result.S = sql.NullString{String: nv, Valid: true}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -163,7 +163,7 @@ func (recv SQLNullStringStruct) DecodeFromStream(s *scan.Stream) (result SQLNull
 				return result, decode.NewParseErr("s", s.Pos, err)
 			}
 			if seenS {
-				return result, &validation.DuplicateKeyError{Path: []string{"s"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"s"}}
 			}
 			seenS = true
 			if s.Pos >= len(s.Bytes()) {
@@ -194,7 +194,7 @@ func (recv SQLNullStringStruct) DecodeFromStream(s *scan.Stream) (result SQLNull
 				result.S = sql.NullString{String: nv, Valid: true}
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -297,7 +297,7 @@ func (recv SQLNullInt64Struct) DecodeFrom(data []byte) (result SQLNullInt64Struc
 		switch key {
 		case "i":
 			if seenI {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"i"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"i"}}
 			}
 			seenI = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -355,7 +355,7 @@ func (recv SQLNullInt64Struct) DecodeFrom(data []byte) (result SQLNullInt64Struc
 				result.I = sql.NullInt64{Int64: nv, Valid: true}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -412,7 +412,7 @@ func (recv SQLNullInt64Struct) DecodeFromStream(s *scan.Stream) (result SQLNullI
 				return result, decode.NewParseErr("i", s.Pos, err)
 			}
 			if seenI {
-				return result, &validation.DuplicateKeyError{Path: []string{"i"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"i"}}
 			}
 			seenI = true
 			if s.Pos >= len(s.Bytes()) {
@@ -443,7 +443,7 @@ func (recv SQLNullInt64Struct) DecodeFromStream(s *scan.Stream) (result SQLNullI
 				result.I = sql.NullInt64{Int64: nv, Valid: true}
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -544,7 +544,7 @@ func (recv SQLNullInt32Struct) DecodeFrom(data []byte) (result SQLNullInt32Struc
 		switch key {
 		case "i32":
 			if seenI32 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"i32"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"i32"}}
 			}
 			seenI32 = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -602,7 +602,7 @@ func (recv SQLNullInt32Struct) DecodeFrom(data []byte) (result SQLNullInt32Struc
 				result.I32 = sql.NullInt32{Int32: nv, Valid: true}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -659,7 +659,7 @@ func (recv SQLNullInt32Struct) DecodeFromStream(s *scan.Stream) (result SQLNullI
 				return result, decode.NewParseErr("i32", s.Pos, err)
 			}
 			if seenI32 {
-				return result, &validation.DuplicateKeyError{Path: []string{"i32"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"i32"}}
 			}
 			seenI32 = true
 			if s.Pos >= len(s.Bytes()) {
@@ -690,7 +690,7 @@ func (recv SQLNullInt32Struct) DecodeFromStream(s *scan.Stream) (result SQLNullI
 				result.I32 = sql.NullInt32{Int32: int32(nv), Valid: true}
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -791,7 +791,7 @@ func (recv SQLNullInt16Struct) DecodeFrom(data []byte) (result SQLNullInt16Struc
 		switch key {
 		case "i16":
 			if seenI16 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"i16"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"i16"}}
 			}
 			seenI16 = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -849,7 +849,7 @@ func (recv SQLNullInt16Struct) DecodeFrom(data []byte) (result SQLNullInt16Struc
 				result.I16 = sql.NullInt16{Int16: nv, Valid: true}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -906,7 +906,7 @@ func (recv SQLNullInt16Struct) DecodeFromStream(s *scan.Stream) (result SQLNullI
 				return result, decode.NewParseErr("i16", s.Pos, err)
 			}
 			if seenI16 {
-				return result, &validation.DuplicateKeyError{Path: []string{"i16"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"i16"}}
 			}
 			seenI16 = true
 			if s.Pos >= len(s.Bytes()) {
@@ -937,7 +937,7 @@ func (recv SQLNullInt16Struct) DecodeFromStream(s *scan.Stream) (result SQLNullI
 				result.I16 = sql.NullInt16{Int16: int16(nv), Valid: true}
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -1038,7 +1038,7 @@ func (recv SQLNullByteStruct) DecodeFrom(data []byte) (result SQLNullByteStruct,
 		switch key {
 		case "b":
 			if seenB {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"b"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"b"}}
 			}
 			seenB = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -1071,7 +1071,7 @@ func (recv SQLNullByteStruct) DecodeFrom(data []byte) (result SQLNullByteStruct,
 				result.B = sql.NullByte{Byte: nv, Valid: true}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -1128,7 +1128,7 @@ func (recv SQLNullByteStruct) DecodeFromStream(s *scan.Stream) (result SQLNullBy
 				return result, decode.NewParseErr("b", s.Pos, err)
 			}
 			if seenB {
-				return result, &validation.DuplicateKeyError{Path: []string{"b"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"b"}}
 			}
 			seenB = true
 			if s.Pos >= len(s.Bytes()) {
@@ -1159,7 +1159,7 @@ func (recv SQLNullByteStruct) DecodeFromStream(s *scan.Stream) (result SQLNullBy
 				result.B = sql.NullByte{Byte: byte(nv), Valid: true}
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -1260,7 +1260,7 @@ func (recv SQLNullBoolStruct) DecodeFrom(data []byte) (result SQLNullBoolStruct,
 		switch key {
 		case "bl":
 			if seenBL {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"bl"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"bl"}}
 			}
 			seenBL = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -1276,7 +1276,7 @@ func (recv SQLNullBoolStruct) DecodeFrom(data []byte) (result SQLNullBoolStruct,
 				result.BL = sql.NullBool{Bool: nv, Valid: true}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -1333,7 +1333,7 @@ func (recv SQLNullBoolStruct) DecodeFromStream(s *scan.Stream) (result SQLNullBo
 				return result, decode.NewParseErr("bl", s.Pos, err)
 			}
 			if seenBL {
-				return result, &validation.DuplicateKeyError{Path: []string{"bl"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"bl"}}
 			}
 			seenBL = true
 			if s.Pos >= len(s.Bytes()) {
@@ -1364,7 +1364,7 @@ func (recv SQLNullBoolStruct) DecodeFromStream(s *scan.Stream) (result SQLNullBo
 				result.BL = sql.NullBool{Bool: nv, Valid: true}
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -1465,7 +1465,7 @@ func (recv SQLNullFloat64Struct) DecodeFrom(data []byte) (result SQLNullFloat64S
 		switch key {
 		case "f":
 			if seenF {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"f"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f"}}
 			}
 			seenF = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -1481,7 +1481,7 @@ func (recv SQLNullFloat64Struct) DecodeFrom(data []byte) (result SQLNullFloat64S
 				result.F = sql.NullFloat64{Float64: nv, Valid: true}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -1538,7 +1538,7 @@ func (recv SQLNullFloat64Struct) DecodeFromStream(s *scan.Stream) (result SQLNul
 				return result, decode.NewParseErr("f", s.Pos, err)
 			}
 			if seenF {
-				return result, &validation.DuplicateKeyError{Path: []string{"f"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f"}}
 			}
 			seenF = true
 			if s.Pos >= len(s.Bytes()) {
@@ -1569,7 +1569,7 @@ func (recv SQLNullFloat64Struct) DecodeFromStream(s *scan.Stream) (result SQLNul
 				result.F = sql.NullFloat64{Float64: nv, Valid: true}
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -1672,7 +1672,7 @@ func (recv SQLNullTimeStruct) DecodeFrom(data []byte) (result SQLNullTimeStruct,
 		switch key {
 		case "t":
 			if seenT {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"t"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"t"}}
 			}
 			seenT = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -1711,7 +1711,7 @@ func (recv SQLNullTimeStruct) DecodeFrom(data []byte) (result SQLNullTimeStruct,
 				result.T = sql.NullTime{Time: nv, Valid: true}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -1768,7 +1768,7 @@ func (recv SQLNullTimeStruct) DecodeFromStream(s *scan.Stream) (result SQLNullTi
 				return result, decode.NewParseErr("t", s.Pos, err)
 			}
 			if seenT {
-				return result, &validation.DuplicateKeyError{Path: []string{"t"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"t"}}
 			}
 			seenT = true
 			if s.Pos >= len(s.Bytes()) {
@@ -1804,7 +1804,7 @@ func (recv SQLNullTimeStruct) DecodeFromStream(s *scan.Stream) (result SQLNullTi
 				result.T = sql.NullTime{Time: nv, Valid: true}
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -1907,7 +1907,7 @@ func (recv SQLNullGenStringStruct) DecodeFrom(data []byte) (result SQLNullGenStr
 		switch key {
 		case "s":
 			if seenS {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"s"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"s"}}
 			}
 			seenS = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -1941,7 +1941,7 @@ func (recv SQLNullGenStringStruct) DecodeFrom(data []byte) (result SQLNullGenStr
 				result.S = sql.Null[string]{V: nv, Valid: true}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -1998,7 +1998,7 @@ func (recv SQLNullGenStringStruct) DecodeFromStream(s *scan.Stream) (result SQLN
 				return result, decode.NewParseErr("s", s.Pos, err)
 			}
 			if seenS {
-				return result, &validation.DuplicateKeyError{Path: []string{"s"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"s"}}
 			}
 			seenS = true
 			if s.Pos >= len(s.Bytes()) {
@@ -2029,7 +2029,7 @@ func (recv SQLNullGenStringStruct) DecodeFromStream(s *scan.Stream) (result SQLN
 				result.S = sql.Null[string]{V: nv, Valid: true}
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -2132,7 +2132,7 @@ func (recv SQLNullGenIntStruct) DecodeFrom(data []byte) (result SQLNullGenIntStr
 		switch key {
 		case "i":
 			if seenI {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"i"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"i"}}
 			}
 			seenI = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -2190,7 +2190,7 @@ func (recv SQLNullGenIntStruct) DecodeFrom(data []byte) (result SQLNullGenIntStr
 				result.I = sql.Null[int]{V: nv, Valid: true}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -2247,7 +2247,7 @@ func (recv SQLNullGenIntStruct) DecodeFromStream(s *scan.Stream) (result SQLNull
 				return result, decode.NewParseErr("i", s.Pos, err)
 			}
 			if seenI {
-				return result, &validation.DuplicateKeyError{Path: []string{"i"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"i"}}
 			}
 			seenI = true
 			if s.Pos >= len(s.Bytes()) {
@@ -2280,7 +2280,7 @@ func (recv SQLNullGenIntStruct) DecodeFromStream(s *scan.Stream) (result SQLNull
 				result.I = sql.Null[int]{V: nv, Valid: true}
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -2381,7 +2381,7 @@ func (recv SQLNullGenUint64Struct) DecodeFrom(data []byte) (result SQLNullGenUin
 		switch key {
 		case "u":
 			if seenU {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"u"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"u"}}
 			}
 			seenU = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -2414,7 +2414,7 @@ func (recv SQLNullGenUint64Struct) DecodeFrom(data []byte) (result SQLNullGenUin
 				result.U = sql.Null[uint64]{V: nv, Valid: true}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -2471,7 +2471,7 @@ func (recv SQLNullGenUint64Struct) DecodeFromStream(s *scan.Stream) (result SQLN
 				return result, decode.NewParseErr("u", s.Pos, err)
 			}
 			if seenU {
-				return result, &validation.DuplicateKeyError{Path: []string{"u"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"u"}}
 			}
 			seenU = true
 			if s.Pos >= len(s.Bytes()) {
@@ -2502,7 +2502,7 @@ func (recv SQLNullGenUint64Struct) DecodeFromStream(s *scan.Stream) (result SQLN
 				result.U = sql.Null[uint64]{V: nv, Valid: true}
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -2603,7 +2603,7 @@ func (recv SQLNullGenFloat32Struct) DecodeFrom(data []byte) (result SQLNullGenFl
 		switch key {
 		case "f":
 			if seenF {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"f"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f"}}
 			}
 			seenF = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -2621,7 +2621,7 @@ func (recv SQLNullGenFloat32Struct) DecodeFrom(data []byte) (result SQLNullGenFl
 				result.F = sql.Null[float32]{V: nv, Valid: true}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -2678,7 +2678,7 @@ func (recv SQLNullGenFloat32Struct) DecodeFromStream(s *scan.Stream) (result SQL
 				return result, decode.NewParseErr("f", s.Pos, err)
 			}
 			if seenF {
-				return result, &validation.DuplicateKeyError{Path: []string{"f"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f"}}
 			}
 			seenF = true
 			if s.Pos >= len(s.Bytes()) {
@@ -2711,7 +2711,7 @@ func (recv SQLNullGenFloat32Struct) DecodeFromStream(s *scan.Stream) (result SQL
 				result.F = sql.Null[float32]{V: nv, Valid: true}
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -2814,7 +2814,7 @@ func (recv SQLNullGenBoolStruct) DecodeFrom(data []byte) (result SQLNullGenBoolS
 		switch key {
 		case "bl":
 			if seenBL {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"bl"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"bl"}}
 			}
 			seenBL = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -2830,7 +2830,7 @@ func (recv SQLNullGenBoolStruct) DecodeFrom(data []byte) (result SQLNullGenBoolS
 				result.BL = sql.Null[bool]{V: nv, Valid: true}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -2887,7 +2887,7 @@ func (recv SQLNullGenBoolStruct) DecodeFromStream(s *scan.Stream) (result SQLNul
 				return result, decode.NewParseErr("bl", s.Pos, err)
 			}
 			if seenBL {
-				return result, &validation.DuplicateKeyError{Path: []string{"bl"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"bl"}}
 			}
 			seenBL = true
 			if s.Pos >= len(s.Bytes()) {
@@ -2918,7 +2918,7 @@ func (recv SQLNullGenBoolStruct) DecodeFromStream(s *scan.Stream) (result SQLNul
 				result.BL = sql.Null[bool]{V: nv, Valid: true}
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -3019,7 +3019,7 @@ func (recv SQLNullGenTimeStruct) DecodeFrom(data []byte) (result SQLNullGenTimeS
 		switch key {
 		case "t":
 			if seenT {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"t"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"t"}}
 			}
 			seenT = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -3058,7 +3058,7 @@ func (recv SQLNullGenTimeStruct) DecodeFrom(data []byte) (result SQLNullGenTimeS
 				result.T = sql.Null[time.Time]{V: nv, Valid: true}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -3115,7 +3115,7 @@ func (recv SQLNullGenTimeStruct) DecodeFromStream(s *scan.Stream) (result SQLNul
 				return result, decode.NewParseErr("t", s.Pos, err)
 			}
 			if seenT {
-				return result, &validation.DuplicateKeyError{Path: []string{"t"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"t"}}
 			}
 			seenT = true
 			if s.Pos >= len(s.Bytes()) {
@@ -3151,7 +3151,7 @@ func (recv SQLNullGenTimeStruct) DecodeFromStream(s *scan.Stream) (result SQLNul
 				result.T = sql.Null[time.Time]{V: nv, Valid: true}
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -3254,7 +3254,7 @@ func (recv SQLNullGenAccountStruct) DecodeFrom(data []byte) (result SQLNullGenAc
 		switch key {
 		case "a":
 			if seenA {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"a"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"a"}}
 			}
 			seenA = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -3275,7 +3275,7 @@ func (recv SQLNullGenAccountStruct) DecodeFrom(data []byte) (result SQLNullGenAc
 				result.A = sql.Null[SQLAccountID]{V: nv, Valid: true}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -3332,7 +3332,7 @@ func (recv SQLNullGenAccountStruct) DecodeFromStream(s *scan.Stream) (result SQL
 				return result, decode.NewParseErr("a", s.Pos, err)
 			}
 			if seenA {
-				return result, &validation.DuplicateKeyError{Path: []string{"a"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"a"}}
 			}
 			seenA = true
 			if s.Pos >= len(s.Bytes()) {
@@ -3371,7 +3371,7 @@ func (recv SQLNullGenAccountStruct) DecodeFromStream(s *scan.Stream) (result SQL
 				result.A = sql.Null[SQLAccountID]{V: nv, Valid: true}
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -3477,7 +3477,7 @@ func (recv SQLNullGenLabelStruct) DecodeFrom(data []byte) (result SQLNullGenLabe
 		switch key {
 		case "l":
 			if seenL {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"l"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"l"}}
 			}
 			seenL = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -3498,7 +3498,7 @@ func (recv SQLNullGenLabelStruct) DecodeFrom(data []byte) (result SQLNullGenLabe
 				result.L = sql.Null[SQLLabel]{V: nv, Valid: true}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -3555,7 +3555,7 @@ func (recv SQLNullGenLabelStruct) DecodeFromStream(s *scan.Stream) (result SQLNu
 				return result, decode.NewParseErr("l", s.Pos, err)
 			}
 			if seenL {
-				return result, &validation.DuplicateKeyError{Path: []string{"l"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"l"}}
 			}
 			seenL = true
 			if s.Pos >= len(s.Bytes()) {
@@ -3594,7 +3594,7 @@ func (recv SQLNullGenLabelStruct) DecodeFromStream(s *scan.Stream) (result SQLNu
 				result.L = sql.Null[SQLLabel]{V: nv, Valid: true}
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -3700,7 +3700,7 @@ func (recv SQLNullGenUUIDStruct) DecodeFrom(data []byte) (result SQLNullGenUUIDS
 		switch key {
 		case "id":
 			if seenID {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"id"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"id"}}
 			}
 			seenID = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -3721,7 +3721,7 @@ func (recv SQLNullGenUUIDStruct) DecodeFrom(data []byte) (result SQLNullGenUUIDS
 				result.ID = sql.Null[uuid.UUID]{V: nv, Valid: true}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -3778,7 +3778,7 @@ func (recv SQLNullGenUUIDStruct) DecodeFromStream(s *scan.Stream) (result SQLNul
 				return result, decode.NewParseErr("id", s.Pos, err)
 			}
 			if seenID {
-				return result, &validation.DuplicateKeyError{Path: []string{"id"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"id"}}
 			}
 			seenID = true
 			if s.Pos >= len(s.Bytes()) {
@@ -3814,7 +3814,7 @@ func (recv SQLNullGenUUIDStruct) DecodeFromStream(s *scan.Stream) (result SQLNul
 				result.ID = sql.Null[uuid.UUID]{V: nv, Valid: true}
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -3928,7 +3928,7 @@ func (recv SQLNullStruct) DecodeFrom(data []byte) (result SQLNullStruct, i int, 
 		switch key {
 		case "b":
 			if seenB {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"b"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"b"}}
 			}
 			seenB = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -3962,7 +3962,7 @@ func (recv SQLNullStruct) DecodeFrom(data []byte) (result SQLNullStruct, i int, 
 			}
 		case "bl":
 			if seenBL {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"bl"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"bl"}}
 			}
 			seenBL = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -3979,7 +3979,7 @@ func (recv SQLNullStruct) DecodeFrom(data []byte) (result SQLNullStruct, i int, 
 			}
 		case "f":
 			if seenF {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"f"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f"}}
 			}
 			seenF = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -3996,7 +3996,7 @@ func (recv SQLNullStruct) DecodeFrom(data []byte) (result SQLNullStruct, i int, 
 			}
 		case "i":
 			if seenI {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"i"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"i"}}
 			}
 			seenI = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -4055,7 +4055,7 @@ func (recv SQLNullStruct) DecodeFrom(data []byte) (result SQLNullStruct, i int, 
 			}
 		case "i16":
 			if seenI16 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"i16"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"i16"}}
 			}
 			seenI16 = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -4114,7 +4114,7 @@ func (recv SQLNullStruct) DecodeFrom(data []byte) (result SQLNullStruct, i int, 
 			}
 		case "i32":
 			if seenI32 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"i32"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"i32"}}
 			}
 			seenI32 = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -4173,7 +4173,7 @@ func (recv SQLNullStruct) DecodeFrom(data []byte) (result SQLNullStruct, i int, 
 			}
 		case "s":
 			if seenS {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"s"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"s"}}
 			}
 			seenS = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -4208,7 +4208,7 @@ func (recv SQLNullStruct) DecodeFrom(data []byte) (result SQLNullStruct, i int, 
 			}
 		case "t":
 			if seenT {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"t"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"t"}}
 			}
 			seenT = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -4247,7 +4247,7 @@ func (recv SQLNullStruct) DecodeFrom(data []byte) (result SQLNullStruct, i int, 
 				result.T = sql.NullTime{Time: nv, Valid: true}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -4311,7 +4311,7 @@ func (recv SQLNullStruct) DecodeFromStream(s *scan.Stream) (result SQLNullStruct
 				return result, decode.NewParseErr("b", s.Pos, err)
 			}
 			if seenB {
-				return result, &validation.DuplicateKeyError{Path: []string{"b"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"b"}}
 			}
 			seenB = true
 			if s.Pos >= len(s.Bytes()) {
@@ -4347,7 +4347,7 @@ func (recv SQLNullStruct) DecodeFromStream(s *scan.Stream) (result SQLNullStruct
 				return result, decode.NewParseErr("bl", s.Pos, err)
 			}
 			if seenBL {
-				return result, &validation.DuplicateKeyError{Path: []string{"bl"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"bl"}}
 			}
 			seenBL = true
 			if s.Pos >= len(s.Bytes()) {
@@ -4383,7 +4383,7 @@ func (recv SQLNullStruct) DecodeFromStream(s *scan.Stream) (result SQLNullStruct
 				return result, decode.NewParseErr("f", s.Pos, err)
 			}
 			if seenF {
-				return result, &validation.DuplicateKeyError{Path: []string{"f"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f"}}
 			}
 			seenF = true
 			if s.Pos >= len(s.Bytes()) {
@@ -4419,7 +4419,7 @@ func (recv SQLNullStruct) DecodeFromStream(s *scan.Stream) (result SQLNullStruct
 				return result, decode.NewParseErr("i", s.Pos, err)
 			}
 			if seenI {
-				return result, &validation.DuplicateKeyError{Path: []string{"i"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"i"}}
 			}
 			seenI = true
 			if s.Pos >= len(s.Bytes()) {
@@ -4455,7 +4455,7 @@ func (recv SQLNullStruct) DecodeFromStream(s *scan.Stream) (result SQLNullStruct
 				return result, decode.NewParseErr("i16", s.Pos, err)
 			}
 			if seenI16 {
-				return result, &validation.DuplicateKeyError{Path: []string{"i16"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"i16"}}
 			}
 			seenI16 = true
 			if s.Pos >= len(s.Bytes()) {
@@ -4491,7 +4491,7 @@ func (recv SQLNullStruct) DecodeFromStream(s *scan.Stream) (result SQLNullStruct
 				return result, decode.NewParseErr("i32", s.Pos, err)
 			}
 			if seenI32 {
-				return result, &validation.DuplicateKeyError{Path: []string{"i32"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"i32"}}
 			}
 			seenI32 = true
 			if s.Pos >= len(s.Bytes()) {
@@ -4527,7 +4527,7 @@ func (recv SQLNullStruct) DecodeFromStream(s *scan.Stream) (result SQLNullStruct
 				return result, decode.NewParseErr("s", s.Pos, err)
 			}
 			if seenS {
-				return result, &validation.DuplicateKeyError{Path: []string{"s"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"s"}}
 			}
 			seenS = true
 			if s.Pos >= len(s.Bytes()) {
@@ -4563,7 +4563,7 @@ func (recv SQLNullStruct) DecodeFromStream(s *scan.Stream) (result SQLNullStruct
 				return result, decode.NewParseErr("t", s.Pos, err)
 			}
 			if seenT {
-				return result, &validation.DuplicateKeyError{Path: []string{"t"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"t"}}
 			}
 			seenT = true
 			if s.Pos >= len(s.Bytes()) {
@@ -4599,7 +4599,7 @@ func (recv SQLNullStruct) DecodeFromStream(s *scan.Stream) (result SQLNullStruct
 				result.T = sql.NullTime{Time: nv, Valid: true}
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()

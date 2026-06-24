@@ -75,7 +75,7 @@ func (recv base32Wrap) DecodeFrom(data []byte) (result base32Wrap, i int, err er
 		switch key {
 		case "b":
 			if seenB {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"b"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"b"}}
 			}
 			seenB = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -114,7 +114,7 @@ func (recv base32Wrap) DecodeFrom(data []byte) (result base32Wrap, i int, err er
 				return result, i, decode.NewParseErr("b", i, err)
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -174,7 +174,7 @@ func (recv base32Wrap) DecodeFromStream(s *scan.Stream) (result base32Wrap, err 
 				return result, decode.NewParseErr("b", s.Pos, err)
 			}
 			if seenB {
-				return result, &validation.DuplicateKeyError{Path: []string{"b"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"b"}}
 			}
 			seenB = true
 			if s.Pos >= len(s.Bytes()) {
@@ -210,7 +210,7 @@ func (recv base32Wrap) DecodeFromStream(s *scan.Stream) (result base32Wrap, err 
 				return result, decode.NewParseErr("b", s.Pos, err)
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -314,7 +314,7 @@ func (recv TimeLayout) DecodeFrom(data []byte) (result TimeLayout, i int, err er
 		switch key {
 		case "layout":
 			if seenLayout {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"layout"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"layout"}}
 			}
 			seenLayout = true
 			var s string
@@ -345,7 +345,7 @@ func (recv TimeLayout) DecodeFrom(data []byte) (result TimeLayout, i int, err er
 				return result, i, decode.NewParseErr("layout", i, err)
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -402,7 +402,7 @@ func (recv TimeLayout) DecodeFromStream(s *scan.Stream) (result TimeLayout, err 
 				return result, decode.NewParseErr("layout", s.Pos, err)
 			}
 			if seenLayout {
-				return result, &validation.DuplicateKeyError{Path: []string{"layout"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"layout"}}
 			}
 			seenLayout = true
 			var sv string
@@ -415,7 +415,7 @@ func (recv TimeLayout) DecodeFromStream(s *scan.Stream) (result TimeLayout, err 
 				return result, decode.NewParseErr("layout", s.Pos, err)
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -512,7 +512,7 @@ func (recv TimeStamp) DecodeFrom(data []byte) (result TimeStamp, i int, err erro
 		switch key {
 		case "stamp":
 			if seenStamp {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"stamp"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"stamp"}}
 			}
 			seenStamp = true
 			var s string
@@ -543,7 +543,7 @@ func (recv TimeStamp) DecodeFrom(data []byte) (result TimeStamp, i int, err erro
 				return result, i, decode.NewParseErr("stamp", i, err)
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -600,7 +600,7 @@ func (recv TimeStamp) DecodeFromStream(s *scan.Stream) (result TimeStamp, err er
 				return result, decode.NewParseErr("stamp", s.Pos, err)
 			}
 			if seenStamp {
-				return result, &validation.DuplicateKeyError{Path: []string{"stamp"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"stamp"}}
 			}
 			seenStamp = true
 			var sv string
@@ -613,7 +613,7 @@ func (recv TimeStamp) DecodeFromStream(s *scan.Stream) (result TimeStamp, err er
 				return result, decode.NewParseErr("stamp", s.Pos, err)
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -710,7 +710,7 @@ func (recv TimeStampMilli) DecodeFrom(data []byte) (result TimeStampMilli, i int
 		switch key {
 		case "stampMilli":
 			if seenStampMilli {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"stampMilli"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"stampMilli"}}
 			}
 			seenStampMilli = true
 			var s string
@@ -741,7 +741,7 @@ func (recv TimeStampMilli) DecodeFrom(data []byte) (result TimeStampMilli, i int
 				return result, i, decode.NewParseErr("stampMilli", i, err)
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -798,7 +798,7 @@ func (recv TimeStampMilli) DecodeFromStream(s *scan.Stream) (result TimeStampMil
 				return result, decode.NewParseErr("stampMilli", s.Pos, err)
 			}
 			if seenStampMilli {
-				return result, &validation.DuplicateKeyError{Path: []string{"stampMilli"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"stampMilli"}}
 			}
 			seenStampMilli = true
 			var sv string
@@ -811,7 +811,7 @@ func (recv TimeStampMilli) DecodeFromStream(s *scan.Stream) (result TimeStampMil
 				return result, decode.NewParseErr("stampMilli", s.Pos, err)
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -908,7 +908,7 @@ func (recv TimeStampMicro) DecodeFrom(data []byte) (result TimeStampMicro, i int
 		switch key {
 		case "stampMicro":
 			if seenStampMicro {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"stampMicro"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"stampMicro"}}
 			}
 			seenStampMicro = true
 			var s string
@@ -939,7 +939,7 @@ func (recv TimeStampMicro) DecodeFrom(data []byte) (result TimeStampMicro, i int
 				return result, i, decode.NewParseErr("stampMicro", i, err)
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -996,7 +996,7 @@ func (recv TimeStampMicro) DecodeFromStream(s *scan.Stream) (result TimeStampMic
 				return result, decode.NewParseErr("stampMicro", s.Pos, err)
 			}
 			if seenStampMicro {
-				return result, &validation.DuplicateKeyError{Path: []string{"stampMicro"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"stampMicro"}}
 			}
 			seenStampMicro = true
 			var sv string
@@ -1009,7 +1009,7 @@ func (recv TimeStampMicro) DecodeFromStream(s *scan.Stream) (result TimeStampMic
 				return result, decode.NewParseErr("stampMicro", s.Pos, err)
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -1106,7 +1106,7 @@ func (recv TimeStampNano) DecodeFrom(data []byte) (result TimeStampNano, i int, 
 		switch key {
 		case "stampNano":
 			if seenStampNano {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"stampNano"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"stampNano"}}
 			}
 			seenStampNano = true
 			var s string
@@ -1137,7 +1137,7 @@ func (recv TimeStampNano) DecodeFrom(data []byte) (result TimeStampNano, i int, 
 				return result, i, decode.NewParseErr("stampNano", i, err)
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -1194,7 +1194,7 @@ func (recv TimeStampNano) DecodeFromStream(s *scan.Stream) (result TimeStampNano
 				return result, decode.NewParseErr("stampNano", s.Pos, err)
 			}
 			if seenStampNano {
-				return result, &validation.DuplicateKeyError{Path: []string{"stampNano"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"stampNano"}}
 			}
 			seenStampNano = true
 			var sv string
@@ -1207,7 +1207,7 @@ func (recv TimeStampNano) DecodeFromStream(s *scan.Stream) (result TimeStampNano
 				return result, decode.NewParseErr("stampNano", s.Pos, err)
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -1304,7 +1304,7 @@ func (recv TimeCustomTiny) DecodeFrom(data []byte) (result TimeCustomTiny, i int
 		switch key {
 		case "customTiny":
 			if seenCustomTiny {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"customTiny"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"customTiny"}}
 			}
 			seenCustomTiny = true
 			var s string
@@ -1335,7 +1335,7 @@ func (recv TimeCustomTiny) DecodeFrom(data []byte) (result TimeCustomTiny, i int
 				return result, i, decode.NewParseErr("customTiny", i, err)
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -1392,7 +1392,7 @@ func (recv TimeCustomTiny) DecodeFromStream(s *scan.Stream) (result TimeCustomTi
 				return result, decode.NewParseErr("customTiny", s.Pos, err)
 			}
 			if seenCustomTiny {
-				return result, &validation.DuplicateKeyError{Path: []string{"customTiny"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"customTiny"}}
 			}
 			seenCustomTiny = true
 			var sv string
@@ -1405,7 +1405,7 @@ func (recv TimeCustomTiny) DecodeFromStream(s *scan.Stream) (result TimeCustomTi
 				return result, decode.NewParseErr("customTiny", s.Pos, err)
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -1502,7 +1502,7 @@ func (recv TimeCustomLong) DecodeFrom(data []byte) (result TimeCustomLong, i int
 		switch key {
 		case "customLong":
 			if seenCustomLong {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"customLong"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"customLong"}}
 			}
 			seenCustomLong = true
 			var s string
@@ -1533,7 +1533,7 @@ func (recv TimeCustomLong) DecodeFrom(data []byte) (result TimeCustomLong, i int
 				return result, i, decode.NewParseErr("customLong", i, err)
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -1590,7 +1590,7 @@ func (recv TimeCustomLong) DecodeFromStream(s *scan.Stream) (result TimeCustomLo
 				return result, decode.NewParseErr("customLong", s.Pos, err)
 			}
 			if seenCustomLong {
-				return result, &validation.DuplicateKeyError{Path: []string{"customLong"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"customLong"}}
 			}
 			seenCustomLong = true
 			var sv string
@@ -1603,7 +1603,7 @@ func (recv TimeCustomLong) DecodeFromStream(s *scan.Stream) (result TimeCustomLo
 				return result, decode.NewParseErr("customLong", s.Pos, err)
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -1725,7 +1725,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 		switch key {
 		case "ansic":
 			if seenANSIC {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"ansic"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"ansic"}}
 			}
 			seenANSIC = true
 			var s string
@@ -1757,7 +1757,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			}
 		case "customLong":
 			if seenCustomLong {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"customLong"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"customLong"}}
 			}
 			seenCustomLong = true
 			var s string
@@ -1789,7 +1789,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			}
 		case "customTiny":
 			if seenCustomTiny {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"customTiny"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"customTiny"}}
 			}
 			seenCustomTiny = true
 			var s string
@@ -1821,7 +1821,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			}
 		case "dateOnly":
 			if seenDateOnly {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"dateOnly"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"dateOnly"}}
 			}
 			seenDateOnly = true
 			var s string
@@ -1853,7 +1853,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			}
 		case "dateTime":
 			if seenDateTime {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"dateTime"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"dateTime"}}
 			}
 			seenDateTime = true
 			var s string
@@ -1885,7 +1885,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			}
 		case "default":
 			if seenDefault {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"default"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"default"}}
 			}
 			seenDefault = true
 			var s string
@@ -1917,7 +1917,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			}
 		case "kitchen":
 			if seenKitchen {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"kitchen"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"kitchen"}}
 			}
 			seenKitchen = true
 			var s string
@@ -1949,7 +1949,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			}
 		case "layout":
 			if seenLayout {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"layout"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"layout"}}
 			}
 			seenLayout = true
 			var s string
@@ -1981,7 +1981,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			}
 		case "rfc1123":
 			if seenRFC1123 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"rfc1123"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"rfc1123"}}
 			}
 			seenRFC1123 = true
 			var s string
@@ -2013,7 +2013,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			}
 		case "rfc1123Z":
 			if seenRFC1123Z {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"rfc1123Z"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"rfc1123Z"}}
 			}
 			seenRFC1123Z = true
 			var s string
@@ -2045,7 +2045,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			}
 		case "rfc3339":
 			if seenRFC3339 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"rfc3339"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"rfc3339"}}
 			}
 			seenRFC3339 = true
 			var s string
@@ -2077,7 +2077,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			}
 		case "rfc3339Nano":
 			if seenRFC3339Nano {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"rfc3339Nano"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"rfc3339Nano"}}
 			}
 			seenRFC3339Nano = true
 			var s string
@@ -2109,7 +2109,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			}
 		case "rfc822":
 			if seenRFC822 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"rfc822"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"rfc822"}}
 			}
 			seenRFC822 = true
 			var s string
@@ -2141,7 +2141,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			}
 		case "rfc822Z":
 			if seenRFC822Z {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"rfc822Z"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"rfc822Z"}}
 			}
 			seenRFC822Z = true
 			var s string
@@ -2173,7 +2173,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			}
 		case "rfc850":
 			if seenRFC850 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"rfc850"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"rfc850"}}
 			}
 			seenRFC850 = true
 			var s string
@@ -2205,7 +2205,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			}
 		case "rubyDate":
 			if seenRubyDate {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"rubyDate"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"rubyDate"}}
 			}
 			seenRubyDate = true
 			var s string
@@ -2237,7 +2237,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			}
 		case "stamp":
 			if seenStamp {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"stamp"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"stamp"}}
 			}
 			seenStamp = true
 			var s string
@@ -2269,7 +2269,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			}
 		case "stampMicro":
 			if seenStampMicro {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"stampMicro"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"stampMicro"}}
 			}
 			seenStampMicro = true
 			var s string
@@ -2301,7 +2301,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			}
 		case "stampMilli":
 			if seenStampMilli {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"stampMilli"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"stampMilli"}}
 			}
 			seenStampMilli = true
 			var s string
@@ -2333,7 +2333,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			}
 		case "stampNano":
 			if seenStampNano {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"stampNano"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"stampNano"}}
 			}
 			seenStampNano = true
 			var s string
@@ -2365,7 +2365,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			}
 		case "timeOnly":
 			if seenTimeOnly {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"timeOnly"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"timeOnly"}}
 			}
 			seenTimeOnly = true
 			var s string
@@ -2397,7 +2397,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			}
 		case "unix":
 			if seenUnix {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"unix"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"unix"}}
 			}
 			seenUnix = true
 			var f float64
@@ -2410,7 +2410,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			result.Unix = time.Unix(sec, nsec)
 		case "unixDate":
 			if seenUnixDate {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"unixDate"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"unixDate"}}
 			}
 			seenUnixDate = true
 			var s string
@@ -2442,7 +2442,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			}
 		case "unixMicro":
 			if seenUnixMicro {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"unixMicro"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"unixMicro"}}
 			}
 			seenUnixMicro = true
 			var n int64
@@ -2453,7 +2453,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			result.UnixMicro = time.UnixMicro(n)
 		case "unixMilli":
 			if seenUnixMilli {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"unixMilli"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"unixMilli"}}
 			}
 			seenUnixMilli = true
 			var n int64
@@ -2464,7 +2464,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			result.UnixMilli = time.UnixMilli(n)
 		case "unixNano":
 			if seenUnixNano {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"unixNano"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"unixNano"}}
 			}
 			seenUnixNano = true
 			var n int64
@@ -2474,7 +2474,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			}
 			result.UnixNano = time.Unix(0, n)
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -2556,7 +2556,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 				return result, decode.NewParseErr("ansic", s.Pos, err)
 			}
 			if seenANSIC {
-				return result, &validation.DuplicateKeyError{Path: []string{"ansic"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"ansic"}}
 			}
 			seenANSIC = true
 			var sv string
@@ -2574,7 +2574,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 				return result, decode.NewParseErr("customLong", s.Pos, err)
 			}
 			if seenCustomLong {
-				return result, &validation.DuplicateKeyError{Path: []string{"customLong"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"customLong"}}
 			}
 			seenCustomLong = true
 			var sv string
@@ -2592,7 +2592,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 				return result, decode.NewParseErr("customTiny", s.Pos, err)
 			}
 			if seenCustomTiny {
-				return result, &validation.DuplicateKeyError{Path: []string{"customTiny"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"customTiny"}}
 			}
 			seenCustomTiny = true
 			var sv string
@@ -2610,7 +2610,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 				return result, decode.NewParseErr("dateOnly", s.Pos, err)
 			}
 			if seenDateOnly {
-				return result, &validation.DuplicateKeyError{Path: []string{"dateOnly"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"dateOnly"}}
 			}
 			seenDateOnly = true
 			var sv string
@@ -2628,7 +2628,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 				return result, decode.NewParseErr("dateTime", s.Pos, err)
 			}
 			if seenDateTime {
-				return result, &validation.DuplicateKeyError{Path: []string{"dateTime"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"dateTime"}}
 			}
 			seenDateTime = true
 			var sv string
@@ -2646,7 +2646,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 				return result, decode.NewParseErr("default", s.Pos, err)
 			}
 			if seenDefault {
-				return result, &validation.DuplicateKeyError{Path: []string{"default"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"default"}}
 			}
 			seenDefault = true
 			var sv string
@@ -2664,7 +2664,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 				return result, decode.NewParseErr("kitchen", s.Pos, err)
 			}
 			if seenKitchen {
-				return result, &validation.DuplicateKeyError{Path: []string{"kitchen"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"kitchen"}}
 			}
 			seenKitchen = true
 			var sv string
@@ -2682,7 +2682,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 				return result, decode.NewParseErr("layout", s.Pos, err)
 			}
 			if seenLayout {
-				return result, &validation.DuplicateKeyError{Path: []string{"layout"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"layout"}}
 			}
 			seenLayout = true
 			var sv string
@@ -2700,7 +2700,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 				return result, decode.NewParseErr("rfc1123", s.Pos, err)
 			}
 			if seenRFC1123 {
-				return result, &validation.DuplicateKeyError{Path: []string{"rfc1123"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"rfc1123"}}
 			}
 			seenRFC1123 = true
 			var sv string
@@ -2718,7 +2718,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 				return result, decode.NewParseErr("rfc1123Z", s.Pos, err)
 			}
 			if seenRFC1123Z {
-				return result, &validation.DuplicateKeyError{Path: []string{"rfc1123Z"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"rfc1123Z"}}
 			}
 			seenRFC1123Z = true
 			var sv string
@@ -2736,7 +2736,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 				return result, decode.NewParseErr("rfc3339", s.Pos, err)
 			}
 			if seenRFC3339 {
-				return result, &validation.DuplicateKeyError{Path: []string{"rfc3339"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"rfc3339"}}
 			}
 			seenRFC3339 = true
 			var sv string
@@ -2754,7 +2754,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 				return result, decode.NewParseErr("rfc3339Nano", s.Pos, err)
 			}
 			if seenRFC3339Nano {
-				return result, &validation.DuplicateKeyError{Path: []string{"rfc3339Nano"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"rfc3339Nano"}}
 			}
 			seenRFC3339Nano = true
 			var sv string
@@ -2772,7 +2772,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 				return result, decode.NewParseErr("rfc822", s.Pos, err)
 			}
 			if seenRFC822 {
-				return result, &validation.DuplicateKeyError{Path: []string{"rfc822"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"rfc822"}}
 			}
 			seenRFC822 = true
 			var sv string
@@ -2790,7 +2790,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 				return result, decode.NewParseErr("rfc822Z", s.Pos, err)
 			}
 			if seenRFC822Z {
-				return result, &validation.DuplicateKeyError{Path: []string{"rfc822Z"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"rfc822Z"}}
 			}
 			seenRFC822Z = true
 			var sv string
@@ -2808,7 +2808,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 				return result, decode.NewParseErr("rfc850", s.Pos, err)
 			}
 			if seenRFC850 {
-				return result, &validation.DuplicateKeyError{Path: []string{"rfc850"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"rfc850"}}
 			}
 			seenRFC850 = true
 			var sv string
@@ -2826,7 +2826,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 				return result, decode.NewParseErr("rubyDate", s.Pos, err)
 			}
 			if seenRubyDate {
-				return result, &validation.DuplicateKeyError{Path: []string{"rubyDate"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"rubyDate"}}
 			}
 			seenRubyDate = true
 			var sv string
@@ -2844,7 +2844,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 				return result, decode.NewParseErr("stamp", s.Pos, err)
 			}
 			if seenStamp {
-				return result, &validation.DuplicateKeyError{Path: []string{"stamp"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"stamp"}}
 			}
 			seenStamp = true
 			var sv string
@@ -2862,7 +2862,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 				return result, decode.NewParseErr("stampMicro", s.Pos, err)
 			}
 			if seenStampMicro {
-				return result, &validation.DuplicateKeyError{Path: []string{"stampMicro"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"stampMicro"}}
 			}
 			seenStampMicro = true
 			var sv string
@@ -2880,7 +2880,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 				return result, decode.NewParseErr("stampMilli", s.Pos, err)
 			}
 			if seenStampMilli {
-				return result, &validation.DuplicateKeyError{Path: []string{"stampMilli"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"stampMilli"}}
 			}
 			seenStampMilli = true
 			var sv string
@@ -2898,7 +2898,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 				return result, decode.NewParseErr("stampNano", s.Pos, err)
 			}
 			if seenStampNano {
-				return result, &validation.DuplicateKeyError{Path: []string{"stampNano"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"stampNano"}}
 			}
 			seenStampNano = true
 			var sv string
@@ -2916,7 +2916,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 				return result, decode.NewParseErr("timeOnly", s.Pos, err)
 			}
 			if seenTimeOnly {
-				return result, &validation.DuplicateKeyError{Path: []string{"timeOnly"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"timeOnly"}}
 			}
 			seenTimeOnly = true
 			var sv string
@@ -2934,7 +2934,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 				return result, decode.NewParseErr("unix", s.Pos, err)
 			}
 			if seenUnix {
-				return result, &validation.DuplicateKeyError{Path: []string{"unix"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"unix"}}
 			}
 			seenUnix = true
 			var f float64
@@ -2952,7 +2952,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 				return result, decode.NewParseErr("unixDate", s.Pos, err)
 			}
 			if seenUnixDate {
-				return result, &validation.DuplicateKeyError{Path: []string{"unixDate"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"unixDate"}}
 			}
 			seenUnixDate = true
 			var sv string
@@ -2970,7 +2970,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 				return result, decode.NewParseErr("unixMicro", s.Pos, err)
 			}
 			if seenUnixMicro {
-				return result, &validation.DuplicateKeyError{Path: []string{"unixMicro"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"unixMicro"}}
 			}
 			seenUnixMicro = true
 			var n int64
@@ -2985,7 +2985,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 				return result, decode.NewParseErr("unixMilli", s.Pos, err)
 			}
 			if seenUnixMilli {
-				return result, &validation.DuplicateKeyError{Path: []string{"unixMilli"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"unixMilli"}}
 			}
 			seenUnixMilli = true
 			var n int64
@@ -3000,7 +3000,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 				return result, decode.NewParseErr("unixNano", s.Pos, err)
 			}
 			if seenUnixNano {
-				return result, &validation.DuplicateKeyError{Path: []string{"unixNano"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"unixNano"}}
 			}
 			seenUnixNano = true
 			var n int64
@@ -3010,7 +3010,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 			}
 			result.UnixNano = time.Unix(0, n)
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -3159,7 +3159,7 @@ func (recv BoundaryStruct) DecodeFrom(data []byte) (result BoundaryStruct, i int
 		switch key {
 		case "f":
 			if seenF {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"f"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f"}}
 			}
 			seenF = true
 			result.F, i, err = scan.Float64(data, i)
@@ -3168,7 +3168,7 @@ func (recv BoundaryStruct) DecodeFrom(data []byte) (result BoundaryStruct, i int
 			}
 		case "i":
 			if seenI {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"i"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"i"}}
 			}
 			seenI = true
 			neg := false
@@ -3219,7 +3219,7 @@ func (recv BoundaryStruct) DecodeFrom(data []byte) (result BoundaryStruct, i int
 			result.I = n
 		case "str":
 			if seenStr {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"str"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"str"}}
 			}
 			seenStr = true
 			if i >= len(data) || data[i] != '"' {
@@ -3245,7 +3245,7 @@ func (recv BoundaryStruct) DecodeFrom(data []byte) (result BoundaryStruct, i int
 				}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -3304,7 +3304,7 @@ func (recv BoundaryStruct) DecodeFromStream(s *scan.Stream) (result BoundaryStru
 				return result, decode.NewParseErr("f", s.Pos, err)
 			}
 			if seenF {
-				return result, &validation.DuplicateKeyError{Path: []string{"f"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f"}}
 			}
 			seenF = true
 			result.F, err = s.Float64()
@@ -3317,7 +3317,7 @@ func (recv BoundaryStruct) DecodeFromStream(s *scan.Stream) (result BoundaryStru
 				return result, decode.NewParseErr("i", s.Pos, err)
 			}
 			if seenI {
-				return result, &validation.DuplicateKeyError{Path: []string{"i"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"i"}}
 			}
 			seenI = true
 			result.I, err = s.Int64()
@@ -3330,7 +3330,7 @@ func (recv BoundaryStruct) DecodeFromStream(s *scan.Stream) (result BoundaryStru
 				return result, decode.NewParseErr("str", s.Pos, err)
 			}
 			if seenStr {
-				return result, &validation.DuplicateKeyError{Path: []string{"str"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"str"}}
 			}
 			seenStr = true
 			result.Str, err = s.String()
@@ -3338,7 +3338,7 @@ func (recv BoundaryStruct) DecodeFromStream(s *scan.Stream) (result BoundaryStru
 				return result, decode.NewParseErr("str", s.Pos, err)
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()

@@ -66,7 +66,7 @@ func (recv IgnoreUnknownStruct) DecodeFrom(data []byte) (result IgnoreUnknownStr
 		switch key {
 		case "name":
 			if seenName {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"name"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"name"}}
 			}
 			seenName = true
 			if i >= len(data) || data[i] != '"' {
@@ -152,7 +152,7 @@ func (recv IgnoreUnknownStruct) DecodeFromStream(s *scan.Stream) (result IgnoreU
 				return result, decode.NewParseErr("name", s.Pos, err)
 			}
 			if seenName {
-				return result, &validation.DuplicateKeyError{Path: []string{"name"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"name"}}
 			}
 			seenName = true
 			result.Name, err = s.String()

@@ -67,7 +67,7 @@ func (recv AnyStruct) DecodeFrom(data []byte) (result AnyStruct, i int, err erro
 		switch key {
 		case "body":
 			if seenBody {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"body"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"body"}}
 			}
 			seenBody = true
 			result.Body, i, err = scan.Any(data, i)
@@ -76,7 +76,7 @@ func (recv AnyStruct) DecodeFrom(data []byte) (result AnyStruct, i int, err erro
 			}
 		case "name":
 			if seenName {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"name"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"name"}}
 			}
 			seenName = true
 			if i >= len(data) || data[i] != '"' {
@@ -102,7 +102,7 @@ func (recv AnyStruct) DecodeFrom(data []byte) (result AnyStruct, i int, err erro
 				}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -160,7 +160,7 @@ func (recv AnyStruct) DecodeFromStream(s *scan.Stream) (result AnyStruct, err er
 				return result, decode.NewParseErr("body", s.Pos, err)
 			}
 			if seenBody {
-				return result, &validation.DuplicateKeyError{Path: []string{"body"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"body"}}
 			}
 			seenBody = true
 			result.Body, err = s.Any()
@@ -173,7 +173,7 @@ func (recv AnyStruct) DecodeFromStream(s *scan.Stream) (result AnyStruct, err er
 				return result, decode.NewParseErr("name", s.Pos, err)
 			}
 			if seenName {
-				return result, &validation.DuplicateKeyError{Path: []string{"name"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"name"}}
 			}
 			seenName = true
 			result.Name, err = s.String()
@@ -181,7 +181,7 @@ func (recv AnyStruct) DecodeFromStream(s *scan.Stream) (result AnyStruct, err er
 				return result, decode.NewParseErr("name", s.Pos, err)
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -284,7 +284,7 @@ func (recv AnyNumberStruct) DecodeFrom(data []byte) (result AnyNumberStruct, i i
 		switch key {
 		case "body":
 			if seenBody {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"body"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"body"}}
 			}
 			seenBody = true
 			result.Body, i, err = scan.AnyNumber(data, i)
@@ -293,7 +293,7 @@ func (recv AnyNumberStruct) DecodeFrom(data []byte) (result AnyNumberStruct, i i
 			}
 		case "name":
 			if seenName {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"name"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"name"}}
 			}
 			seenName = true
 			if i >= len(data) || data[i] != '"' {
@@ -319,7 +319,7 @@ func (recv AnyNumberStruct) DecodeFrom(data []byte) (result AnyNumberStruct, i i
 				}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -377,7 +377,7 @@ func (recv AnyNumberStruct) DecodeFromStream(s *scan.Stream) (result AnyNumberSt
 				return result, decode.NewParseErr("body", s.Pos, err)
 			}
 			if seenBody {
-				return result, &validation.DuplicateKeyError{Path: []string{"body"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"body"}}
 			}
 			seenBody = true
 			result.Body, err = s.AnyNumber()
@@ -390,7 +390,7 @@ func (recv AnyNumberStruct) DecodeFromStream(s *scan.Stream) (result AnyNumberSt
 				return result, decode.NewParseErr("name", s.Pos, err)
 			}
 			if seenName {
-				return result, &validation.DuplicateKeyError{Path: []string{"name"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"name"}}
 			}
 			seenName = true
 			result.Name, err = s.String()
@@ -398,7 +398,7 @@ func (recv AnyNumberStruct) DecodeFromStream(s *scan.Stream) (result AnyNumberSt
 				return result, decode.NewParseErr("name", s.Pos, err)
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()

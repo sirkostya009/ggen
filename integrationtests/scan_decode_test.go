@@ -553,3 +553,49 @@ func TestTruncatedAfterComma(t *testing.T) {
 		})
 	}
 }
+
+// ValidationPosStruct carries a single minlen rule so a violation returns a
+// concrete *validation.MinLenError (no multierr wrapping).
+//
+//ggen:generate
+type ValidationPosStruct struct {
+	A string `json:"a"`
+	B string `json:"b" ggen:"minlen=4"`
+}
+
+// posPayload places the failing "b" value far enough past a long "a" that the
+// stream buffer compacts (discards the long "a") before B is validated — so
+// the stream cursor s.Pos is window-relative, yet Pos must still report the
+// offset relative to the full payload.
+var posPayload = []byte(`{"a":"` + strings.Repeat("x", 64) + `","b":"yy"}`)
+
+// TestValidationError_Pos pins validation.*Error.Pos: a single byte offset
+// relative to the FULL payload, identical on the bytes and stream paths even
+// though the stream window has compacted past the long "a".
+func TestValidationError_Pos(t *testing.T) {
+	// Bytes path — Pos indexes the data slice directly. Validation runs after
+	// the value scan, so the cursor sits just past the closing quote of "yy".
+	_, _, bErr := ValidationPosStruct{}.DecodeFrom(posPayload)
+	var bMin *validation.MinLenError
+	if !errors.As(bErr, &bMin) {
+		t.Fatalf("bytes: want *MinLenError, got %T: %v", bErr, bErr)
+	}
+	if !strings.HasSuffix(string(posPayload[:bMin.Pos]), `"yy"`) {
+		t.Errorf("bytes: Pos %d does not land just after the b value; prefix=%q",
+			bMin.Pos, posPayload[:bMin.Pos])
+	}
+
+	// Stream path with 1-byte chunks + tiny buffer — forces compaction.
+	r := &chunkReader{data: posPayload, max: 1}
+	var s scan.Stream
+	s.Reset(r, make([]byte, 0, 16))
+	_, sErr := ValidationPosStruct{}.DecodeFromStream(&s)
+	var sMin *validation.MinLenError
+	if !errors.As(sErr, &sMin) {
+		t.Fatalf("stream: want *MinLenError, got %T: %v", sErr, sErr)
+	}
+	// Full-payload-relative offset is path-independent: same payload, same Pos.
+	if sMin.Pos != bMin.Pos {
+		t.Errorf("stream: Pos %d != bytes Pos %d (must be relative to full payload)", sMin.Pos, bMin.Pos)
+	}
+}

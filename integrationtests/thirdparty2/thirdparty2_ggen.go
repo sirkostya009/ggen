@@ -31,7 +31,7 @@ func (recv External2) DecodeFrom(data []byte) (result External2, i int, err erro
 	if i < len(data) && data[i] == '}' {
 		i++
 		if !seenKey {
-			return result, i, &validation.RequiredError{Path: []string{"key"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"key"}}
 		}
 		return result, i, nil
 	}
@@ -72,7 +72,7 @@ func (recv External2) DecodeFrom(data []byte) (result External2, i int, err erro
 		switch key {
 		case "key":
 			if seenKey {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"key"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"key"}}
 			}
 			seenKey = true
 			if i >= len(data) || data[i] != '"' {
@@ -98,11 +98,11 @@ func (recv External2) DecodeFrom(data []byte) (result External2, i int, err erro
 				}
 			}
 			if len(result.Key) < 1 {
-				return result, i, &validation.MinLenError{Path: []string{"key"}, Limit: 1, Got: len(result.Key)}
+				return result, i, &validation.MinLenError{Pos: i, Path: []string{"key"}, Limit: 1, Got: len(result.Key)}
 			}
 		case "value":
 			if seenValue {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"value"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"value"}}
 			}
 			seenValue = true
 			neg := false
@@ -152,10 +152,10 @@ func (recv External2) DecodeFrom(data []byte) (result External2, i int, err erro
 			}
 			result.Value = int(n)
 			if result.Value < 0 {
-				return result, i, &validation.GTEError{Path: []string{"value"}, Limit: 0, Value: result.Value}
+				return result, i, &validation.GTEError{Pos: i, Path: []string{"value"}, Limit: 0, Value: result.Value}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -173,7 +173,7 @@ func (recv External2) DecodeFrom(data []byte) (result External2, i int, err erro
 		if data[i] == '}' {
 			i++
 			if !seenKey {
-				return result, i, &validation.RequiredError{Path: []string{"key"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"key"}}
 			}
 			return result, i, nil
 		}
@@ -202,7 +202,7 @@ func (recv External2) DecodeFromStream(s *scan.Stream) (result External2, err er
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
 		if !seenKey {
-			return result, &validation.RequiredError{Path: []string{"key"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"key"}}
 		}
 		return result, nil
 	}
@@ -219,7 +219,7 @@ func (recv External2) DecodeFromStream(s *scan.Stream) (result External2, err er
 				return result, decode.NewParseErr("key", s.Pos, err)
 			}
 			if seenKey {
-				return result, &validation.DuplicateKeyError{Path: []string{"key"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"key"}}
 			}
 			seenKey = true
 			result.Key, err = s.String()
@@ -227,7 +227,7 @@ func (recv External2) DecodeFromStream(s *scan.Stream) (result External2, err er
 				return result, decode.NewParseErr("key", s.Pos, err)
 			}
 			if len(result.Key) < 1 {
-				return result, &validation.MinLenError{Path: []string{"key"}, Limit: 1, Got: len(result.Key)}
+				return result, &validation.MinLenError{Pos: s.Offset(), Path: []string{"key"}, Limit: 1, Got: len(result.Key)}
 			}
 		case "value":
 			err = s.ConsumeColon()
@@ -235,7 +235,7 @@ func (recv External2) DecodeFromStream(s *scan.Stream) (result External2, err er
 				return result, decode.NewParseErr("value", s.Pos, err)
 			}
 			if seenValue {
-				return result, &validation.DuplicateKeyError{Path: []string{"value"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"value"}}
 			}
 			seenValue = true
 			var iv int64
@@ -245,10 +245,10 @@ func (recv External2) DecodeFromStream(s *scan.Stream) (result External2, err er
 			}
 			result.Value = int(iv)
 			if result.Value < 0 {
-				return result, &validation.GTEError{Path: []string{"value"}, Limit: 0, Value: result.Value}
+				return result, &validation.GTEError{Pos: s.Offset(), Path: []string{"value"}, Limit: 0, Value: result.Value}
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -273,7 +273,7 @@ func (recv External2) DecodeFromStream(s *scan.Stream) (result External2, err er
 		if c == '}' {
 			s.Pos++
 			if !seenKey {
-				return result, &validation.RequiredError{Path: []string{"key"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"key"}}
 			}
 			return result, nil
 		}

@@ -68,7 +68,7 @@ func (recv HugeStringStruct) DecodeFrom(data []byte) (result HugeStringStruct, i
 		switch key {
 		case "big":
 			if seenBig {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"big"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"big"}}
 			}
 			seenBig = true
 			if i >= len(data) || data[i] != '"' {
@@ -94,7 +94,7 @@ func (recv HugeStringStruct) DecodeFrom(data []byte) (result HugeStringStruct, i
 				}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -151,7 +151,7 @@ func (recv HugeStringStruct) DecodeFromStream(s *scan.Stream) (result HugeString
 				return result, decode.NewParseErr("big", s.Pos, err)
 			}
 			if seenBig {
-				return result, &validation.DuplicateKeyError{Path: []string{"big"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"big"}}
 			}
 			seenBig = true
 			result.Big, err = s.String()
@@ -159,7 +159,7 @@ func (recv HugeStringStruct) DecodeFromStream(s *scan.Stream) (result HugeString
 				return result, decode.NewParseErr("big", s.Pos, err)
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -264,7 +264,7 @@ func (recv SequentialStringsStruct) DecodeFrom(data []byte) (result SequentialSt
 		switch key {
 		case "a":
 			if seenA {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"a"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"a"}}
 			}
 			seenA = true
 			if i >= len(data) || data[i] != '"' {
@@ -291,7 +291,7 @@ func (recv SequentialStringsStruct) DecodeFrom(data []byte) (result SequentialSt
 			}
 		case "b":
 			if seenB {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"b"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"b"}}
 			}
 			seenB = true
 			if i >= len(data) || data[i] != '"' {
@@ -318,7 +318,7 @@ func (recv SequentialStringsStruct) DecodeFrom(data []byte) (result SequentialSt
 			}
 		case "c":
 			if seenC {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"c"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"c"}}
 			}
 			seenC = true
 			if i >= len(data) || data[i] != '"' {
@@ -345,7 +345,7 @@ func (recv SequentialStringsStruct) DecodeFrom(data []byte) (result SequentialSt
 			}
 		case "d":
 			if seenD {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"d"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"d"}}
 			}
 			seenD = true
 			if i >= len(data) || data[i] != '"' {
@@ -372,7 +372,7 @@ func (recv SequentialStringsStruct) DecodeFrom(data []byte) (result SequentialSt
 			}
 		case "e":
 			if seenE {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"e"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"e"}}
 			}
 			seenE = true
 			if i >= len(data) || data[i] != '"' {
@@ -399,7 +399,7 @@ func (recv SequentialStringsStruct) DecodeFrom(data []byte) (result SequentialSt
 			}
 		case "f":
 			if seenF {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"f"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f"}}
 			}
 			seenF = true
 			if i >= len(data) || data[i] != '"' {
@@ -426,7 +426,7 @@ func (recv SequentialStringsStruct) DecodeFrom(data []byte) (result SequentialSt
 			}
 		case "g":
 			if seenG {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"g"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"g"}}
 			}
 			seenG = true
 			if i >= len(data) || data[i] != '"' {
@@ -453,7 +453,7 @@ func (recv SequentialStringsStruct) DecodeFrom(data []byte) (result SequentialSt
 			}
 		case "h":
 			if seenH {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"h"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"h"}}
 			}
 			seenH = true
 			if i >= len(data) || data[i] != '"' {
@@ -479,7 +479,7 @@ func (recv SequentialStringsStruct) DecodeFrom(data []byte) (result SequentialSt
 				}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -543,7 +543,7 @@ func (recv SequentialStringsStruct) DecodeFromStream(s *scan.Stream) (result Seq
 				return result, decode.NewParseErr("a", s.Pos, err)
 			}
 			if seenA {
-				return result, &validation.DuplicateKeyError{Path: []string{"a"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"a"}}
 			}
 			seenA = true
 			result.A, err = s.String()
@@ -556,7 +556,7 @@ func (recv SequentialStringsStruct) DecodeFromStream(s *scan.Stream) (result Seq
 				return result, decode.NewParseErr("b", s.Pos, err)
 			}
 			if seenB {
-				return result, &validation.DuplicateKeyError{Path: []string{"b"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"b"}}
 			}
 			seenB = true
 			result.B, err = s.String()
@@ -569,7 +569,7 @@ func (recv SequentialStringsStruct) DecodeFromStream(s *scan.Stream) (result Seq
 				return result, decode.NewParseErr("c", s.Pos, err)
 			}
 			if seenC {
-				return result, &validation.DuplicateKeyError{Path: []string{"c"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"c"}}
 			}
 			seenC = true
 			result.C, err = s.String()
@@ -582,7 +582,7 @@ func (recv SequentialStringsStruct) DecodeFromStream(s *scan.Stream) (result Seq
 				return result, decode.NewParseErr("d", s.Pos, err)
 			}
 			if seenD {
-				return result, &validation.DuplicateKeyError{Path: []string{"d"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"d"}}
 			}
 			seenD = true
 			result.D, err = s.String()
@@ -595,7 +595,7 @@ func (recv SequentialStringsStruct) DecodeFromStream(s *scan.Stream) (result Seq
 				return result, decode.NewParseErr("e", s.Pos, err)
 			}
 			if seenE {
-				return result, &validation.DuplicateKeyError{Path: []string{"e"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"e"}}
 			}
 			seenE = true
 			result.E, err = s.String()
@@ -608,7 +608,7 @@ func (recv SequentialStringsStruct) DecodeFromStream(s *scan.Stream) (result Seq
 				return result, decode.NewParseErr("f", s.Pos, err)
 			}
 			if seenF {
-				return result, &validation.DuplicateKeyError{Path: []string{"f"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f"}}
 			}
 			seenF = true
 			result.F, err = s.String()
@@ -621,7 +621,7 @@ func (recv SequentialStringsStruct) DecodeFromStream(s *scan.Stream) (result Seq
 				return result, decode.NewParseErr("g", s.Pos, err)
 			}
 			if seenG {
-				return result, &validation.DuplicateKeyError{Path: []string{"g"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"g"}}
 			}
 			seenG = true
 			result.G, err = s.String()
@@ -634,7 +634,7 @@ func (recv SequentialStringsStruct) DecodeFromStream(s *scan.Stream) (result Seq
 				return result, decode.NewParseErr("h", s.Pos, err)
 			}
 			if seenH {
-				return result, &validation.DuplicateKeyError{Path: []string{"h"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"h"}}
 			}
 			seenH = true
 			result.H, err = s.String()
@@ -642,7 +642,7 @@ func (recv SequentialStringsStruct) DecodeFromStream(s *scan.Stream) (result Seq
 				return result, decode.NewParseErr("h", s.Pos, err)
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -761,7 +761,7 @@ func (recv UnknownErrorStruct) DecodeFrom(data []byte) (result UnknownErrorStruc
 		switch key {
 		case "name":
 			if seenName {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"name"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"name"}}
 			}
 			seenName = true
 			if i >= len(data) || data[i] != '"' {
@@ -787,7 +787,7 @@ func (recv UnknownErrorStruct) DecodeFrom(data []byte) (result UnknownErrorStruc
 				}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -844,7 +844,7 @@ func (recv UnknownErrorStruct) DecodeFromStream(s *scan.Stream) (result UnknownE
 				return result, decode.NewParseErr("name", s.Pos, err)
 			}
 			if seenName {
-				return result, &validation.DuplicateKeyError{Path: []string{"name"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"name"}}
 			}
 			seenName = true
 			result.Name, err = s.String()
@@ -852,7 +852,7 @@ func (recv UnknownErrorStruct) DecodeFromStream(s *scan.Stream) (result UnknownE
 				return result, decode.NewParseErr("name", s.Pos, err)
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -893,5 +893,245 @@ func (s UnknownErrorStruct) AppendJSON(dst []byte) ([]byte, error) {
 	_ = err
 	dst = append(dst, "{\"name\":\""...)
 	dst = encode.AppendStringNoHTML(dst, s.Name)
+	return append(dst, '}'), nil
+}
+
+func (recv ValidationPosStruct) DecodeFrom(data []byte) (result ValidationPosStruct, i int, err error) {
+	result = recv
+	seenA := false
+	seenB := false
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+	}
+	i++
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		i++
+		return result, i, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
+		}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
+			}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		}
+		i++
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch key {
+		case "a":
+			if seenA {
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"a"}}
+			}
+			seenA = true
+			if i >= len(data) || data[i] != '"' {
+				return result, i, decode.NewParseErr("a", i, scan.ErrExpectString)
+			}
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, decode.NewParseErr("a", i, scan.ErrUnterminated)
+			}
+			if data[ke] < 0x20 {
+				return result, i, decode.NewParseErr("a", i, scan.ErrBadString)
+			}
+			if data[ke] == '"' {
+				result.A = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				result.A, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("a", i, err)
+				}
+			}
+		case "b":
+			if seenB {
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"b"}}
+			}
+			seenB = true
+			if i >= len(data) || data[i] != '"' {
+				return result, i, decode.NewParseErr("b", i, scan.ErrExpectString)
+			}
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, decode.NewParseErr("b", i, scan.ErrUnterminated)
+			}
+			if data[ke] < 0x20 {
+				return result, i, decode.NewParseErr("b", i, scan.ErrBadString)
+			}
+			if data[ke] == '"' {
+				result.B = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				result.B, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("b", i, err)
+				}
+			}
+			if len(result.B) < 4 {
+				return result, i, &validation.MinLenError{Pos: i, Path: []string{"b"}, Limit: 4, Got: len(result.B)}
+			}
+		default:
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			i++
+			return result, i, nil
+		}
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+	}
+}
+
+func (recv ValidationPosStruct) DecodeFromStream(s *scan.Stream) (result ValidationPosStruct, err error) {
+	result = recv
+	seenA := false
+	seenB := false
+	err = s.ObjectOpen()
+	if err != nil {
+		return result, decode.NewParseErr("", s.Pos, err)
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, decode.NewParseErr("", s.Pos, err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView()
+		if err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		switch key {
+		case "a":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("a", s.Pos, err)
+			}
+			if seenA {
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"a"}}
+			}
+			seenA = true
+			result.A, err = s.String()
+			if err != nil {
+				return result, decode.NewParseErr("a", s.Pos, err)
+			}
+		case "b":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("b", s.Pos, err)
+			}
+			if seenB {
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"b"}}
+			}
+			seenB = true
+			result.B, err = s.String()
+			if err != nil {
+				return result, decode.NewParseErr("b", s.Pos, err)
+			}
+			if len(result.B) < 4 {
+				return result, &validation.MinLenError{Pos: s.Offset(), Path: []string{"b"}, Limit: 4, Got: len(result.B)}
+			}
+		default:
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+		}
+
+		err = s.SkipSpace()
+		if err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, decode.NewParseErr("", s.Pos, err)
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, decode.NewParseErr("", s.Pos, err)
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			return result, nil
+		}
+		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+	}
+}
+
+func (s ValidationPosStruct) JSONSize() int {
+	size := 15
+	size += len(s.A) * 2
+	size += len(s.B) * 2
+	return size
+}
+
+func (s ValidationPosStruct) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"a\":\""...)
+	dst = encode.AppendStringNoHTML(dst, s.A)
+	dst = append(dst, ",\"b\":\""...)
+	dst = encode.AppendStringNoHTML(dst, s.B)
 	return append(dst, '}'), nil
 }

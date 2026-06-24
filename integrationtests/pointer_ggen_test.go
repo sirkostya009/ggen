@@ -69,7 +69,7 @@ func (recv PtrNameStruct) DecodeFrom(data []byte) (result PtrNameStruct, i int, 
 		switch key {
 		case "name":
 			if seenName {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"name"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"name"}}
 			}
 			seenName = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -106,7 +106,7 @@ func (recv PtrNameStruct) DecodeFrom(data []byte) (result PtrNameStruct, i int, 
 				(*result.Name) = v
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -163,7 +163,7 @@ func (recv PtrNameStruct) DecodeFromStream(s *scan.Stream) (result PtrNameStruct
 				return result, decode.NewParseErr("name", s.Pos, err)
 			}
 			if seenName {
-				return result, &validation.DuplicateKeyError{Path: []string{"name"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"name"}}
 			}
 			seenName = true
 			if s.Pos >= len(s.Bytes()) {
@@ -197,7 +197,7 @@ func (recv PtrNameStruct) DecodeFromStream(s *scan.Stream) (result PtrNameStruct
 				(*result.Name) = v
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -305,7 +305,7 @@ func (recv PtrCountStruct) DecodeFrom(data []byte) (result PtrCountStruct, i int
 		switch key {
 		case "count":
 			if seenCount {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"count"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"count"}}
 			}
 			seenCount = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -364,7 +364,7 @@ func (recv PtrCountStruct) DecodeFrom(data []byte) (result PtrCountStruct, i int
 				(*result.Count) = int(n)
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -421,7 +421,7 @@ func (recv PtrCountStruct) DecodeFromStream(s *scan.Stream) (result PtrCountStru
 				return result, decode.NewParseErr("count", s.Pos, err)
 			}
 			if seenCount {
-				return result, &validation.DuplicateKeyError{Path: []string{"count"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"count"}}
 			}
 			seenCount = true
 			if s.Pos >= len(s.Bytes()) {
@@ -455,7 +455,7 @@ func (recv PtrCountStruct) DecodeFromStream(s *scan.Stream) (result PtrCountStru
 				(*result.Count) = int(v)
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -562,7 +562,7 @@ func (recv PtrRatioStruct) DecodeFrom(data []byte) (result PtrRatioStruct, i int
 		switch key {
 		case "ratio":
 			if seenRatio {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"ratio"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"ratio"}}
 			}
 			seenRatio = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -581,7 +581,7 @@ func (recv PtrRatioStruct) DecodeFrom(data []byte) (result PtrRatioStruct, i int
 				(*result.Ratio) = v
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -638,7 +638,7 @@ func (recv PtrRatioStruct) DecodeFromStream(s *scan.Stream) (result PtrRatioStru
 				return result, decode.NewParseErr("ratio", s.Pos, err)
 			}
 			if seenRatio {
-				return result, &validation.DuplicateKeyError{Path: []string{"ratio"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"ratio"}}
 			}
 			seenRatio = true
 			if s.Pos >= len(s.Bytes()) {
@@ -672,7 +672,7 @@ func (recv PtrRatioStruct) DecodeFromStream(s *scan.Stream) (result PtrRatioStru
 				(*result.Ratio) = v
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -781,7 +781,7 @@ func (recv PtrAddrStruct) DecodeFrom(data []byte) (result PtrAddrStruct, i int, 
 		switch key {
 		case "addr":
 			if seenAddr {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"addr"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"addr"}}
 			}
 			seenAddr = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -805,7 +805,7 @@ func (recv PtrAddrStruct) DecodeFrom(data []byte) (result PtrAddrStruct, i int, 
 				(*result.Addr) = v
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -862,7 +862,7 @@ func (recv PtrAddrStruct) DecodeFromStream(s *scan.Stream) (result PtrAddrStruct
 				return result, decode.NewParseErr("addr", s.Pos, err)
 			}
 			if seenAddr {
-				return result, &validation.DuplicateKeyError{Path: []string{"addr"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"addr"}}
 			}
 			seenAddr = true
 			if s.Pos >= len(s.Bytes()) {
@@ -899,7 +899,7 @@ func (recv PtrAddrStruct) DecodeFromStream(s *scan.Stream) (result PtrAddrStruct
 				(*result.Addr) = v
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -1009,7 +1009,7 @@ func (recv PtrWhenStruct) DecodeFrom(data []byte) (result PtrWhenStruct, i int, 
 		switch key {
 		case "when":
 			if seenWhen {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"when"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"when"}}
 			}
 			seenWhen = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -1032,7 +1032,7 @@ func (recv PtrWhenStruct) DecodeFrom(data []byte) (result PtrWhenStruct, i int, 
 				(*result.When) = v
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -1089,7 +1089,7 @@ func (recv PtrWhenStruct) DecodeFromStream(s *scan.Stream) (result PtrWhenStruct
 				return result, decode.NewParseErr("when", s.Pos, err)
 			}
 			if seenWhen {
-				return result, &validation.DuplicateKeyError{Path: []string{"when"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"when"}}
 			}
 			seenWhen = true
 			if s.Pos >= len(s.Bytes()) {
@@ -1128,7 +1128,7 @@ func (recv PtrWhenStruct) DecodeFromStream(s *scan.Stream) (result PtrWhenStruct
 				(*result.When) = v
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -1235,7 +1235,7 @@ func (recv PtrEnabledStruct) DecodeFrom(data []byte) (result PtrEnabledStruct, i
 		switch key {
 		case "enabled":
 			if seenEnabled {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"enabled"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"enabled"}}
 			}
 			seenEnabled = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -1254,7 +1254,7 @@ func (recv PtrEnabledStruct) DecodeFrom(data []byte) (result PtrEnabledStruct, i
 				(*result.Enabled) = v
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -1311,7 +1311,7 @@ func (recv PtrEnabledStruct) DecodeFromStream(s *scan.Stream) (result PtrEnabled
 				return result, decode.NewParseErr("enabled", s.Pos, err)
 			}
 			if seenEnabled {
-				return result, &validation.DuplicateKeyError{Path: []string{"enabled"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"enabled"}}
 			}
 			seenEnabled = true
 			if s.Pos >= len(s.Bytes()) {
@@ -1345,7 +1345,7 @@ func (recv PtrEnabledStruct) DecodeFromStream(s *scan.Stream) (result PtrEnabled
 				(*result.Enabled) = v
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -1456,7 +1456,7 @@ func (recv PointerStruct) DecodeFrom(data []byte) (result PointerStruct, i int, 
 		switch key {
 		case "addr":
 			if seenAddr {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"addr"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"addr"}}
 			}
 			seenAddr = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -1481,7 +1481,7 @@ func (recv PointerStruct) DecodeFrom(data []byte) (result PointerStruct, i int, 
 			}
 		case "count":
 			if seenCount {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"count"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"count"}}
 			}
 			seenCount = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -1541,7 +1541,7 @@ func (recv PointerStruct) DecodeFrom(data []byte) (result PointerStruct, i int, 
 			}
 		case "enabled":
 			if seenEnabled {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"enabled"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"enabled"}}
 			}
 			seenEnabled = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -1561,7 +1561,7 @@ func (recv PointerStruct) DecodeFrom(data []byte) (result PointerStruct, i int, 
 			}
 		case "name":
 			if seenName {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"name"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"name"}}
 			}
 			seenName = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -1599,7 +1599,7 @@ func (recv PointerStruct) DecodeFrom(data []byte) (result PointerStruct, i int, 
 			}
 		case "ratio":
 			if seenRatio {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"ratio"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"ratio"}}
 			}
 			seenRatio = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -1619,7 +1619,7 @@ func (recv PointerStruct) DecodeFrom(data []byte) (result PointerStruct, i int, 
 			}
 		case "when":
 			if seenWhen {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"when"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"when"}}
 			}
 			seenWhen = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -1642,7 +1642,7 @@ func (recv PointerStruct) DecodeFrom(data []byte) (result PointerStruct, i int, 
 				(*result.When) = v
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -1704,7 +1704,7 @@ func (recv PointerStruct) DecodeFromStream(s *scan.Stream) (result PointerStruct
 				return result, decode.NewParseErr("addr", s.Pos, err)
 			}
 			if seenAddr {
-				return result, &validation.DuplicateKeyError{Path: []string{"addr"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"addr"}}
 			}
 			seenAddr = true
 			if s.Pos >= len(s.Bytes()) {
@@ -1746,7 +1746,7 @@ func (recv PointerStruct) DecodeFromStream(s *scan.Stream) (result PointerStruct
 				return result, decode.NewParseErr("count", s.Pos, err)
 			}
 			if seenCount {
-				return result, &validation.DuplicateKeyError{Path: []string{"count"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"count"}}
 			}
 			seenCount = true
 			if s.Pos >= len(s.Bytes()) {
@@ -1785,7 +1785,7 @@ func (recv PointerStruct) DecodeFromStream(s *scan.Stream) (result PointerStruct
 				return result, decode.NewParseErr("enabled", s.Pos, err)
 			}
 			if seenEnabled {
-				return result, &validation.DuplicateKeyError{Path: []string{"enabled"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"enabled"}}
 			}
 			seenEnabled = true
 			if s.Pos >= len(s.Bytes()) {
@@ -1824,7 +1824,7 @@ func (recv PointerStruct) DecodeFromStream(s *scan.Stream) (result PointerStruct
 				return result, decode.NewParseErr("name", s.Pos, err)
 			}
 			if seenName {
-				return result, &validation.DuplicateKeyError{Path: []string{"name"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"name"}}
 			}
 			seenName = true
 			if s.Pos >= len(s.Bytes()) {
@@ -1863,7 +1863,7 @@ func (recv PointerStruct) DecodeFromStream(s *scan.Stream) (result PointerStruct
 				return result, decode.NewParseErr("ratio", s.Pos, err)
 			}
 			if seenRatio {
-				return result, &validation.DuplicateKeyError{Path: []string{"ratio"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"ratio"}}
 			}
 			seenRatio = true
 			if s.Pos >= len(s.Bytes()) {
@@ -1902,7 +1902,7 @@ func (recv PointerStruct) DecodeFromStream(s *scan.Stream) (result PointerStruct
 				return result, decode.NewParseErr("when", s.Pos, err)
 			}
 			if seenWhen {
-				return result, &validation.DuplicateKeyError{Path: []string{"when"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"when"}}
 			}
 			seenWhen = true
 			if s.Pos >= len(s.Bytes()) {
@@ -1941,7 +1941,7 @@ func (recv PointerStruct) DecodeFromStream(s *scan.Stream) (result PointerStruct
 				(*result.When) = v
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -2113,7 +2113,7 @@ func (recv PtrPPStruct) DecodeFrom(data []byte) (result PtrPPStruct, i int, err 
 		switch key {
 		case "pp":
 			if seenPP {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"pp"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"pp"}}
 			}
 			seenPP = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -2174,7 +2174,7 @@ func (recv PtrPPStruct) DecodeFrom(data []byte) (result PtrPPStruct, i int, err 
 				(*(*result.PP)) = int(n)
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -2231,7 +2231,7 @@ func (recv PtrPPStruct) DecodeFromStream(s *scan.Stream) (result PtrPPStruct, er
 				return result, decode.NewParseErr("pp", s.Pos, err)
 			}
 			if seenPP {
-				return result, &validation.DuplicateKeyError{Path: []string{"pp"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"pp"}}
 			}
 			seenPP = true
 			if s.Pos >= len(s.Bytes()) {
@@ -2267,7 +2267,7 @@ func (recv PtrPPStruct) DecodeFromStream(s *scan.Stream) (result PtrPPStruct, er
 				(*(*result.PP)) = int(v)
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -2377,7 +2377,7 @@ func (recv PtrPPPStruct) DecodeFrom(data []byte) (result PtrPPPStruct, i int, er
 		switch key {
 		case "ppp":
 			if seenPPP {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"ppp"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"ppp"}}
 			}
 			seenPPP = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -2440,7 +2440,7 @@ func (recv PtrPPPStruct) DecodeFrom(data []byte) (result PtrPPPStruct, i int, er
 				(*(*(*result.PPP))) = int(n)
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -2497,7 +2497,7 @@ func (recv PtrPPPStruct) DecodeFromStream(s *scan.Stream) (result PtrPPPStruct, 
 				return result, decode.NewParseErr("ppp", s.Pos, err)
 			}
 			if seenPPP {
-				return result, &validation.DuplicateKeyError{Path: []string{"ppp"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"ppp"}}
 			}
 			seenPPP = true
 			if s.Pos >= len(s.Bytes()) {
@@ -2535,7 +2535,7 @@ func (recv PtrPPPStruct) DecodeFromStream(s *scan.Stream) (result PtrPPPStruct, 
 				(*(*(*result.PPP))) = int(v)
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -2649,7 +2649,7 @@ func (recv PtrPPPPStruct) DecodeFrom(data []byte) (result PtrPPPPStruct, i int, 
 		switch key {
 		case "pppp":
 			if seenPPPP {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"pppp"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"pppp"}}
 			}
 			seenPPPP = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -2692,7 +2692,7 @@ func (recv PtrPPPPStruct) DecodeFrom(data []byte) (result PtrPPPPStruct, i int, 
 				(*(*(*(*result.PPPP)))) = v
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -2749,7 +2749,7 @@ func (recv PtrPPPPStruct) DecodeFromStream(s *scan.Stream) (result PtrPPPPStruct
 				return result, decode.NewParseErr("pppp", s.Pos, err)
 			}
 			if seenPPPP {
-				return result, &validation.DuplicateKeyError{Path: []string{"pppp"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"pppp"}}
 			}
 			seenPPPP = true
 			if s.Pos >= len(s.Bytes()) {
@@ -2789,7 +2789,7 @@ func (recv PtrPPPPStruct) DecodeFromStream(s *scan.Stream) (result PtrPPPPStruct
 				(*(*(*(*result.PPPP)))) = v
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -2909,7 +2909,7 @@ func (recv PtrAddr2Struct) DecodeFrom(data []byte) (result PtrAddr2Struct, i int
 		switch key {
 		case "addr":
 			if seenAddr {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"addr"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"addr"}}
 			}
 			seenAddr = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -2935,7 +2935,7 @@ func (recv PtrAddr2Struct) DecodeFrom(data []byte) (result PtrAddr2Struct, i int
 				(*(*result.Addr)) = v
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -2992,7 +2992,7 @@ func (recv PtrAddr2Struct) DecodeFromStream(s *scan.Stream) (result PtrAddr2Stru
 				return result, decode.NewParseErr("addr", s.Pos, err)
 			}
 			if seenAddr {
-				return result, &validation.DuplicateKeyError{Path: []string{"addr"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"addr"}}
 			}
 			seenAddr = true
 			if s.Pos >= len(s.Bytes()) {
@@ -3031,7 +3031,7 @@ func (recv PtrAddr2Struct) DecodeFromStream(s *scan.Stream) (result PtrAddr2Stru
 				(*(*result.Addr)) = v
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -3146,7 +3146,7 @@ func (recv NPtrStruct) DecodeFrom(data []byte) (result NPtrStruct, i int, err er
 		switch key {
 		case "addr":
 			if seenAddr {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"addr"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"addr"}}
 			}
 			seenAddr = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -3173,7 +3173,7 @@ func (recv NPtrStruct) DecodeFrom(data []byte) (result NPtrStruct, i int, err er
 			}
 		case "pp":
 			if seenPP {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"pp"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"pp"}}
 			}
 			seenPP = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -3235,7 +3235,7 @@ func (recv NPtrStruct) DecodeFrom(data []byte) (result NPtrStruct, i int, err er
 			}
 		case "ppp":
 			if seenPPP {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"ppp"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"ppp"}}
 			}
 			seenPPP = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -3299,7 +3299,7 @@ func (recv NPtrStruct) DecodeFrom(data []byte) (result NPtrStruct, i int, err er
 			}
 		case "pppp":
 			if seenPPPP {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"pppp"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"pppp"}}
 			}
 			seenPPPP = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -3342,7 +3342,7 @@ func (recv NPtrStruct) DecodeFrom(data []byte) (result NPtrStruct, i int, err er
 				(*(*(*(*result.PPPP)))) = v
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -3402,7 +3402,7 @@ func (recv NPtrStruct) DecodeFromStream(s *scan.Stream) (result NPtrStruct, err 
 				return result, decode.NewParseErr("addr", s.Pos, err)
 			}
 			if seenAddr {
-				return result, &validation.DuplicateKeyError{Path: []string{"addr"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"addr"}}
 			}
 			seenAddr = true
 			if s.Pos >= len(s.Bytes()) {
@@ -3446,7 +3446,7 @@ func (recv NPtrStruct) DecodeFromStream(s *scan.Stream) (result NPtrStruct, err 
 				return result, decode.NewParseErr("pp", s.Pos, err)
 			}
 			if seenPP {
-				return result, &validation.DuplicateKeyError{Path: []string{"pp"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"pp"}}
 			}
 			seenPP = true
 			if s.Pos >= len(s.Bytes()) {
@@ -3487,7 +3487,7 @@ func (recv NPtrStruct) DecodeFromStream(s *scan.Stream) (result NPtrStruct, err 
 				return result, decode.NewParseErr("ppp", s.Pos, err)
 			}
 			if seenPPP {
-				return result, &validation.DuplicateKeyError{Path: []string{"ppp"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"ppp"}}
 			}
 			seenPPP = true
 			if s.Pos >= len(s.Bytes()) {
@@ -3530,7 +3530,7 @@ func (recv NPtrStruct) DecodeFromStream(s *scan.Stream) (result NPtrStruct, err 
 				return result, decode.NewParseErr("pppp", s.Pos, err)
 			}
 			if seenPPPP {
-				return result, &validation.DuplicateKeyError{Path: []string{"pppp"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"pppp"}}
 			}
 			seenPPPP = true
 			if s.Pos >= len(s.Bytes()) {
@@ -3570,7 +3570,7 @@ func (recv NPtrStruct) DecodeFromStream(s *scan.Stream) (result NPtrStruct, err 
 				(*(*(*(*result.PPPP)))) = v
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -3744,7 +3744,7 @@ func (recv PtrSliceItemsStruct) DecodeFrom(data []byte) (result PtrSliceItemsStr
 		switch key {
 		case "items":
 			if seenItems {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"items"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"items"}}
 			}
 			seenItems = true
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -3820,7 +3820,7 @@ func (recv PtrSliceItemsStruct) DecodeFrom(data []byte) (result PtrSliceItemsStr
 			}
 			i++
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -3880,7 +3880,7 @@ func (recv PtrSliceItemsStruct) DecodeFromStream(s *scan.Stream) (result PtrSlic
 				return result, decode.NewParseErr("items", s.Pos, err)
 			}
 			if seenItems {
-				return result, &validation.DuplicateKeyError{Path: []string{"items"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"items"}}
 			}
 			seenItems = true
 			err = s.SkipSpace()
@@ -4005,7 +4005,7 @@ func (recv PtrSliceItemsStruct) DecodeFromStream(s *scan.Stream) (result PtrSlic
 			}
 			s.Pos++
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -4136,7 +4136,7 @@ func (recv PtrSliceTupleStruct) DecodeFrom(data []byte) (result PtrSliceTupleStr
 		switch key {
 		case "tuple":
 			if seenTuple {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"tuple"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"tuple"}}
 			}
 			seenTuple = true
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -4153,7 +4153,7 @@ func (recv PtrSliceTupleStruct) DecodeFrom(data []byte) (result PtrSliceTupleStr
 			slab0 := make([]Address, 3)
 			for i < len(data) && data[i] != ']' {
 				if idx0 >= 3 {
-					return result, i, &validation.LenError{Path: []string{"tuple"}, Want: 3, Got: idx0}
+					return result, i, &validation.LenError{Pos: i, Path: []string{"tuple"}, Want: 3, Got: idx0}
 				}
 				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 					i += 4
@@ -4201,11 +4201,11 @@ func (recv PtrSliceTupleStruct) DecodeFrom(data []byte) (result PtrSliceTupleStr
 				return result, i, scan.ErrBadArray
 			}
 			if idx0 != 3 {
-				return result, i, &validation.LenError{Path: []string{"tuple"}, Want: 3, Got: idx0}
+				return result, i, &validation.LenError{Pos: i, Path: []string{"tuple"}, Want: 3, Got: idx0}
 			}
 			i++
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -4262,7 +4262,7 @@ func (recv PtrSliceTupleStruct) DecodeFromStream(s *scan.Stream) (result PtrSlic
 				return result, decode.NewParseErr("tuple", s.Pos, err)
 			}
 			if seenTuple {
-				return result, &validation.DuplicateKeyError{Path: []string{"tuple"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"tuple"}}
 			}
 			seenTuple = true
 			err = s.ArrayOpen()
@@ -4282,7 +4282,7 @@ func (recv PtrSliceTupleStruct) DecodeFromStream(s *scan.Stream) (result PtrSlic
 			slab0 := make([]Address, 3)
 			for s.Bytes()[s.Pos] != ']' {
 				if idx0 >= 3 {
-					return result, &validation.LenError{Path: []string{"tuple"}, Want: 3, Got: idx0}
+					return result, &validation.LenError{Pos: s.Offset(), Path: []string{"tuple"}, Want: 3, Got: idx0}
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
@@ -4357,11 +4357,11 @@ func (recv PtrSliceTupleStruct) DecodeFromStream(s *scan.Stream) (result PtrSlic
 				return result, decode.NewParseErr("tuple", s.Pos, scan.ErrBadArray)
 			}
 			if idx0 != 3 {
-				return result, &validation.LenError{Path: []string{"tuple"}, Want: 3, Got: idx0}
+				return result, &validation.LenError{Pos: s.Offset(), Path: []string{"tuple"}, Want: 3, Got: idx0}
 			}
 			s.Pos++
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -4489,7 +4489,7 @@ func (recv PtrSliceNodesStruct) DecodeFrom(data []byte) (result PtrSliceNodesStr
 		switch key {
 		case "nodes":
 			if seenNodes {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"nodes"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"nodes"}}
 			}
 			seenNodes = true
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -4565,7 +4565,7 @@ func (recv PtrSliceNodesStruct) DecodeFrom(data []byte) (result PtrSliceNodesStr
 			}
 			i++
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -4625,7 +4625,7 @@ func (recv PtrSliceNodesStruct) DecodeFromStream(s *scan.Stream) (result PtrSlic
 				return result, decode.NewParseErr("nodes", s.Pos, err)
 			}
 			if seenNodes {
-				return result, &validation.DuplicateKeyError{Path: []string{"nodes"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"nodes"}}
 			}
 			seenNodes = true
 			err = s.SkipSpace()
@@ -4750,7 +4750,7 @@ func (recv PtrSliceNodesStruct) DecodeFromStream(s *scan.Stream) (result PtrSlic
 			}
 			s.Pos++
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -4889,7 +4889,7 @@ func (recv PtrSliceStruct) DecodeFrom(data []byte) (result PtrSliceStruct, i int
 		switch key {
 		case "items":
 			if seenItems {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"items"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"items"}}
 			}
 			seenItems = true
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -4966,7 +4966,7 @@ func (recv PtrSliceStruct) DecodeFrom(data []byte) (result PtrSliceStruct, i int
 			i++
 		case "nodes":
 			if seenNodes {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"nodes"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"nodes"}}
 			}
 			seenNodes = true
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -5043,7 +5043,7 @@ func (recv PtrSliceStruct) DecodeFrom(data []byte) (result PtrSliceStruct, i int
 			i++
 		case "tuple":
 			if seenTuple {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"tuple"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"tuple"}}
 			}
 			seenTuple = true
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -5060,7 +5060,7 @@ func (recv PtrSliceStruct) DecodeFrom(data []byte) (result PtrSliceStruct, i int
 			slab0 := make([]Address, 3)
 			for i < len(data) && data[i] != ']' {
 				if idx0 >= 3 {
-					return result, i, &validation.LenError{Path: []string{"tuple"}, Want: 3, Got: idx0}
+					return result, i, &validation.LenError{Pos: i, Path: []string{"tuple"}, Want: 3, Got: idx0}
 				}
 				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 					i += 4
@@ -5108,11 +5108,11 @@ func (recv PtrSliceStruct) DecodeFrom(data []byte) (result PtrSliceStruct, i int
 				return result, i, scan.ErrBadArray
 			}
 			if idx0 != 3 {
-				return result, i, &validation.LenError{Path: []string{"tuple"}, Want: 3, Got: idx0}
+				return result, i, &validation.LenError{Pos: i, Path: []string{"tuple"}, Want: 3, Got: idx0}
 			}
 			i++
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -5177,7 +5177,7 @@ func (recv PtrSliceStruct) DecodeFromStream(s *scan.Stream) (result PtrSliceStru
 				return result, decode.NewParseErr("items", s.Pos, err)
 			}
 			if seenItems {
-				return result, &validation.DuplicateKeyError{Path: []string{"items"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"items"}}
 			}
 			seenItems = true
 			err = s.SkipSpace()
@@ -5307,7 +5307,7 @@ func (recv PtrSliceStruct) DecodeFromStream(s *scan.Stream) (result PtrSliceStru
 				return result, decode.NewParseErr("nodes", s.Pos, err)
 			}
 			if seenNodes {
-				return result, &validation.DuplicateKeyError{Path: []string{"nodes"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"nodes"}}
 			}
 			seenNodes = true
 			err = s.SkipSpace()
@@ -5437,7 +5437,7 @@ func (recv PtrSliceStruct) DecodeFromStream(s *scan.Stream) (result PtrSliceStru
 				return result, decode.NewParseErr("tuple", s.Pos, err)
 			}
 			if seenTuple {
-				return result, &validation.DuplicateKeyError{Path: []string{"tuple"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"tuple"}}
 			}
 			seenTuple = true
 			err = s.ArrayOpen()
@@ -5457,7 +5457,7 @@ func (recv PtrSliceStruct) DecodeFromStream(s *scan.Stream) (result PtrSliceStru
 			slab0 := make([]Address, 3)
 			for s.Bytes()[s.Pos] != ']' {
 				if idx0 >= 3 {
-					return result, &validation.LenError{Path: []string{"tuple"}, Want: 3, Got: idx0}
+					return result, &validation.LenError{Pos: s.Offset(), Path: []string{"tuple"}, Want: 3, Got: idx0}
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
@@ -5532,11 +5532,11 @@ func (recv PtrSliceStruct) DecodeFromStream(s *scan.Stream) (result PtrSliceStru
 				return result, decode.NewParseErr("tuple", s.Pos, scan.ErrBadArray)
 			}
 			if idx0 != 3 {
-				return result, &validation.LenError{Path: []string{"tuple"}, Want: 3, Got: idx0}
+				return result, &validation.LenError{Pos: s.Offset(), Path: []string{"tuple"}, Want: 3, Got: idx0}
 			}
 			s.Pos++
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -5753,7 +5753,7 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 		switch key {
 		case "app":
 			if seenAPP {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"app"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"app"}}
 			}
 			seenAPP = true
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -5769,7 +5769,7 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 			var idx0 int
 			for i < len(data) && data[i] != ']' {
 				if idx0 >= 3 {
-					return result, i, &validation.LenError{Path: []string{"app"}, Want: 3, Got: idx0}
+					return result, i, &validation.LenError{Pos: i, Path: []string{"app"}, Want: 3, Got: idx0}
 				}
 				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 					i += 4
@@ -5848,12 +5848,12 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 				return result, i, scan.ErrBadArray
 			}
 			if idx0 != 3 {
-				return result, i, &validation.LenError{Path: []string{"app"}, Want: 3, Got: idx0}
+				return result, i, &validation.LenError{Pos: i, Path: []string{"app"}, Want: 3, Got: idx0}
 			}
 			i++
 		case "mp":
 			if seenMP {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"mp"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"mp"}}
 			}
 			seenMP = true
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -5986,7 +5986,7 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 			i++
 		case "mpa":
 			if seenMPA {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"mpa"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"mpa"}}
 			}
 			seenMPA = true
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -6081,7 +6081,7 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 			i++
 		case "mpp":
 			if seenMPP {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"mpp"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"mpp"}}
 			}
 			seenMPP = true
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -6214,7 +6214,7 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 			i++
 		case "nspp":
 			if seenNSPP {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"nspp"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"nspp"}}
 			}
 			seenNSPP = true
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -6382,7 +6382,7 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 			i++
 		case "spp":
 			if seenSPP {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"spp"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"spp"}}
 			}
 			seenSPP = true
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -6482,7 +6482,7 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 			}
 			i++
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -6559,7 +6559,7 @@ func (recv NPtrContainersStruct) DecodeFromStream(s *scan.Stream) (result NPtrCo
 				return result, decode.NewParseErr("app", s.Pos, err)
 			}
 			if seenAPP {
-				return result, &validation.DuplicateKeyError{Path: []string{"app"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"app"}}
 			}
 			seenAPP = true
 			err = s.ArrayOpen()
@@ -6578,7 +6578,7 @@ func (recv NPtrContainersStruct) DecodeFromStream(s *scan.Stream) (result NPtrCo
 			var idx0 int
 			for s.Bytes()[s.Pos] != ']' {
 				if idx0 >= 3 {
-					return result, &validation.LenError{Path: []string{"app"}, Want: 3, Got: idx0}
+					return result, &validation.LenError{Pos: s.Offset(), Path: []string{"app"}, Want: 3, Got: idx0}
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
@@ -6639,7 +6639,7 @@ func (recv NPtrContainersStruct) DecodeFromStream(s *scan.Stream) (result NPtrCo
 				return result, decode.NewParseErr("app", s.Pos, scan.ErrBadArray)
 			}
 			if idx0 != 3 {
-				return result, &validation.LenError{Path: []string{"app"}, Want: 3, Got: idx0}
+				return result, &validation.LenError{Pos: s.Offset(), Path: []string{"app"}, Want: 3, Got: idx0}
 			}
 			s.Pos++
 		case "mp":
@@ -6648,7 +6648,7 @@ func (recv NPtrContainersStruct) DecodeFromStream(s *scan.Stream) (result NPtrCo
 				return result, decode.NewParseErr("mp", s.Pos, err)
 			}
 			if seenMP {
-				return result, &validation.DuplicateKeyError{Path: []string{"mp"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"mp"}}
 			}
 			seenMP = true
 			err = s.SkipSpace()
@@ -6778,7 +6778,7 @@ func (recv NPtrContainersStruct) DecodeFromStream(s *scan.Stream) (result NPtrCo
 				return result, decode.NewParseErr("mpa", s.Pos, err)
 			}
 			if seenMPA {
-				return result, &validation.DuplicateKeyError{Path: []string{"mpa"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"mpa"}}
 			}
 			seenMPA = true
 			err = s.SkipSpace()
@@ -6908,7 +6908,7 @@ func (recv NPtrContainersStruct) DecodeFromStream(s *scan.Stream) (result NPtrCo
 				return result, decode.NewParseErr("mpp", s.Pos, err)
 			}
 			if seenMPP {
-				return result, &validation.DuplicateKeyError{Path: []string{"mpp"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"mpp"}}
 			}
 			seenMPP = true
 			err = s.SkipSpace()
@@ -7038,7 +7038,7 @@ func (recv NPtrContainersStruct) DecodeFromStream(s *scan.Stream) (result NPtrCo
 				return result, decode.NewParseErr("nspp", s.Pos, err)
 			}
 			if seenNSPP {
-				return result, &validation.DuplicateKeyError{Path: []string{"nspp"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"nspp"}}
 			}
 			seenNSPP = true
 			err = s.SkipSpace()
@@ -7246,7 +7246,7 @@ func (recv NPtrContainersStruct) DecodeFromStream(s *scan.Stream) (result NPtrCo
 				return result, decode.NewParseErr("spp", s.Pos, err)
 			}
 			if seenSPP {
-				return result, &validation.DuplicateKeyError{Path: []string{"spp"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"spp"}}
 			}
 			seenSPP = true
 			err = s.SkipSpace()
@@ -7350,7 +7350,7 @@ func (recv NPtrContainersStruct) DecodeFromStream(s *scan.Stream) (result NPtrCo
 			}
 			s.Pos++
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()

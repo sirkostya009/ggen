@@ -12,6 +12,25 @@ type Rule string                              // const enum of rule names
 type Errors []Error                           // multierr return; Unwrap() []error
 ```
 
+## `Pos` (failure location)
+
+Every concrete error struct carries a `Pos int` as its first field — the byte
+offset of the failure **relative to the full payload**. The codegen injects it
+right after the struct-literal opening brace at every emit site
+(`withPos`/`posLit` in `generate.go` — wraps the `onErr` closure plus the
+standalone required / array-len / dup-key / unknown-key literals):
+
+- **Bytes path** — the cursor `i`, a true index into the `data` slice.
+- **Stream path** — `scan.Stream.Offset()` (= `consumed + Pos`), NOT the raw
+  buffer-relative `s.Pos`. The stream buffer compacts (discards consumed bytes)
+  as it slides, so only `Offset()` stays relative to the whole payload.
+
+Validation runs *after* the value is scanned, so the position lands just past
+the offending value (not at its first byte). The aggregate `Errors` slice
+carries no `Pos` of its own — each leaf has its own. Pinned by
+`integrationtests/scan_decode_test.go` (`TestValidationError_Pos` — `Pos`
+identical on bytes + stream despite stream-window compaction).
+
 `Rule` constants: `Required`, `NotEmpty`, `Len`, `MinLen`, `MaxLen`, `Runes`,
 `MinRunes`, `MaxRunes`, `GT`, `GTE`, `LT`, `LTE`, `Eq`, `Neq`, `OneOf`,
 `Email`, `URL`, `ASCII`, `Printable`, `Alphanum`, `Numeric`, `Lower`, `Upper`,
@@ -20,7 +39,10 @@ type Errors []Error                           // multierr return; Unwrap() []err
 
 ## Concrete error structs (one per rule)
 
-Pointer-receiver structs, all implement `validation.Error`:
+Pointer-receiver structs, all implement `validation.Error`. Each also carries
+a `Pos int` (full-payload byte offset, first field) and a root-relative `Path
+[]string` (the shapes below name `Field` historically — the actual field is
+`Path`):
 
 - **presence**: `RequiredError{Field}`, `NotEmptyError{Field}`
 - **length**: `LenError{Field,Want,Got int}`, `MinLenError`/`MaxLenError

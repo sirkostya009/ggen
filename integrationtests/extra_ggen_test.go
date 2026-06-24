@@ -86,7 +86,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 		switch key {
 		case "clampedScore":
 			if seenClampedScore {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"clampedScore"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"clampedScore"}}
 			}
 			seenClampedScore = true
 			neg := false
@@ -143,7 +143,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 			}
 		case "hintedTags":
 			if seenHintedTags {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"hintedTags"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"hintedTags"}}
 			}
 			seenHintedTags = true
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -214,11 +214,11 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 				i++
 			}
 			if len(result.HintedTags) > 1000 {
-				return result, i, &validation.MaxLenError{Path: []string{"hintedTags"}, Limit: 1000, Got: len(result.HintedTags)}
+				return result, i, &validation.MaxLenError{Pos: i, Path: []string{"hintedTags"}, Limit: 1000, Got: len(result.HintedTags)}
 			}
 		case "keyedMap":
 			if seenKeyedMap {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"keyedMap"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"keyedMap"}}
 			}
 			seenKeyedMap = true
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -272,10 +272,10 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 				mk = strings.TrimSpace(mk)
 				mk = strings.ToLower(mk)
 				if utf8.RuneCountInString(mk) < 2 {
-					return result, i, &validation.MinRunesError{Path: []string{"keyedMap.key"}, Limit: 2, Got: utf8.RuneCountInString(mk)}
+					return result, i, &validation.MinRunesError{Pos: i, Path: []string{"keyedMap.key"}, Limit: 2, Got: utf8.RuneCountInString(mk)}
 				}
 				if utf8.RuneCountInString(mk) > 16 {
-					return result, i, &validation.MaxRunesError{Path: []string{"keyedMap.key"}, Limit: 16, Got: utf8.RuneCountInString(mk)}
+					return result, i, &validation.MaxRunesError{Pos: i, Path: []string{"keyedMap.key"}, Limit: 16, Got: utf8.RuneCountInString(mk)}
 				}
 				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 					i++
@@ -354,7 +354,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 			i++
 		case "nestedInts":
 			if seenNestedInts {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"nestedInts"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"nestedInts"}}
 			}
 			seenNestedInts = true
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -391,7 +391,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 					i += 4
 					result.NestedInts[len(result.NestedInts)-1] = nil
 					if len(result.NestedInts[len(result.NestedInts)-1]) < 1 {
-						return result, i, &validation.MinLenError{Path: []string{"nestedInts[]"}, Limit: 1, Got: len(result.NestedInts[len(result.NestedInts)-1])}
+						return result, i, &validation.MinLenError{Pos: i, Path: []string{"nestedInts[]"}, Limit: 1, Got: len(result.NestedInts[len(result.NestedInts)-1])}
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -484,10 +484,10 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 					}
 					row0[len(row0)-1] = int(n)
 					if row0[len(row0)-1] < 0 {
-						return result, i, &validation.GTEError{Path: []string{"nestedInts[][]"}, Limit: 0, Value: row0[len(row0)-1]}
+						return result, i, &validation.GTEError{Pos: i, Path: []string{"nestedInts[][]"}, Limit: 0, Value: row0[len(row0)-1]}
 					}
 					if row0[len(row0)-1] > 100 {
-						return result, i, &validation.LTEError{Path: []string{"nestedInts[][]"}, Limit: 100, Value: row0[len(row0)-1]}
+						return result, i, &validation.LTEError{Pos: i, Path: []string{"nestedInts[][]"}, Limit: 100, Value: row0[len(row0)-1]}
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -510,7 +510,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 				i++
 				result.NestedInts[len(result.NestedInts)-1] = row0
 				if len(result.NestedInts[len(result.NestedInts)-1]) < 1 {
-					return result, i, &validation.MinLenError{Path: []string{"nestedInts[]"}, Limit: 1, Got: len(result.NestedInts[len(result.NestedInts)-1])}
+					return result, i, &validation.MinLenError{Pos: i, Path: []string{"nestedInts[]"}, Limit: 1, Got: len(result.NestedInts[len(result.NestedInts)-1])}
 				}
 				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 					i++
@@ -533,7 +533,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 			i++
 		case "triple":
 			if seenTriple {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"triple"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"triple"}}
 			}
 			seenTriple = true
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -570,7 +570,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 					i += 4
 					result.Triple[len(result.Triple)-1] = nil
 					if len(result.Triple[len(result.Triple)-1]) < 1 {
-						return result, i, &validation.MinLenError{Path: []string{"triple[]"}, Limit: 1, Got: len(result.Triple[len(result.Triple)-1])}
+						return result, i, &validation.MinLenError{Pos: i, Path: []string{"triple[]"}, Limit: 1, Got: len(result.Triple[len(result.Triple)-1])}
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -620,7 +620,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 						i += 4
 						row0[len(row0)-1] = nil
 						if len(row0[len(row0)-1]) < 1 {
-							return result, i, &validation.MinLenError{Path: []string{"triple[][]"}, Limit: 1, Got: len(row0[len(row0)-1])}
+							return result, i, &validation.MinLenError{Pos: i, Path: []string{"triple[][]"}, Limit: 1, Got: len(row0[len(row0)-1])}
 						}
 						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
@@ -685,7 +685,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 							}
 						}
 						if len(row1[len(row1)-1]) < 1 {
-							return result, i, &validation.MinLenError{Path: []string{"triple[][][]"}, Limit: 1, Got: len(row1[len(row1)-1])}
+							return result, i, &validation.MinLenError{Pos: i, Path: []string{"triple[][][]"}, Limit: 1, Got: len(row1[len(row1)-1])}
 						}
 						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
@@ -708,7 +708,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 					i++
 					row0[len(row0)-1] = row1
 					if len(row0[len(row0)-1]) < 1 {
-						return result, i, &validation.MinLenError{Path: []string{"triple[][]"}, Limit: 1, Got: len(row0[len(row0)-1])}
+						return result, i, &validation.MinLenError{Pos: i, Path: []string{"triple[][]"}, Limit: 1, Got: len(row0[len(row0)-1])}
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -731,7 +731,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 				i++
 				result.Triple[len(result.Triple)-1] = row0
 				if len(result.Triple[len(result.Triple)-1]) < 1 {
-					return result, i, &validation.MinLenError{Path: []string{"triple[]"}, Limit: 1, Got: len(result.Triple[len(result.Triple)-1])}
+					return result, i, &validation.MinLenError{Pos: i, Path: []string{"triple[]"}, Limit: 1, Got: len(result.Triple[len(result.Triple)-1])}
 				}
 				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 					i++
@@ -753,7 +753,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 			}
 			i++
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -826,7 +826,7 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 				return result, decode.NewParseErr("clampedScore", s.Pos, err)
 			}
 			if seenClampedScore {
-				return result, &validation.DuplicateKeyError{Path: []string{"clampedScore"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"clampedScore"}}
 			}
 			seenClampedScore = true
 			var iv int64
@@ -847,7 +847,7 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 				return result, decode.NewParseErr("hintedTags", s.Pos, err)
 			}
 			if seenHintedTags {
-				return result, &validation.DuplicateKeyError{Path: []string{"hintedTags"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"hintedTags"}}
 			}
 			seenHintedTags = true
 			err = s.SkipSpace()
@@ -929,7 +929,7 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 				s.Pos++
 			}
 			if len(result.HintedTags) > 1000 {
-				return result, &validation.MaxLenError{Path: []string{"hintedTags"}, Limit: 1000, Got: len(result.HintedTags)}
+				return result, &validation.MaxLenError{Pos: s.Offset(), Path: []string{"hintedTags"}, Limit: 1000, Got: len(result.HintedTags)}
 			}
 		case "keyedMap":
 			err = s.ConsumeColon()
@@ -937,7 +937,7 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 				return result, decode.NewParseErr("keyedMap", s.Pos, err)
 			}
 			if seenKeyedMap {
-				return result, &validation.DuplicateKeyError{Path: []string{"keyedMap"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"keyedMap"}}
 			}
 			seenKeyedMap = true
 			err = s.SkipSpace()
@@ -995,10 +995,10 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 				mk = strings.TrimSpace(mk)
 				mk = strings.ToLower(mk)
 				if utf8.RuneCountInString(mk) < 2 {
-					return result, &validation.MinRunesError{Path: []string{"keyedMap.key"}, Limit: 2, Got: utf8.RuneCountInString(mk)}
+					return result, &validation.MinRunesError{Pos: s.Offset(), Path: []string{"keyedMap.key"}, Limit: 2, Got: utf8.RuneCountInString(mk)}
 				}
 				if utf8.RuneCountInString(mk) > 16 {
-					return result, &validation.MaxRunesError{Path: []string{"keyedMap.key"}, Limit: 16, Got: utf8.RuneCountInString(mk)}
+					return result, &validation.MaxRunesError{Pos: s.Offset(), Path: []string{"keyedMap.key"}, Limit: 16, Got: utf8.RuneCountInString(mk)}
 				}
 				err = s.SkipSpace()
 				if err != nil {
@@ -1055,7 +1055,7 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 				return result, decode.NewParseErr("nestedInts", s.Pos, err)
 			}
 			if seenNestedInts {
-				return result, &validation.DuplicateKeyError{Path: []string{"nestedInts"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"nestedInts"}}
 			}
 			seenNestedInts = true
 			err = s.SkipSpace()
@@ -1129,7 +1129,7 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 					s.Pos += 4
 					result.NestedInts[len(result.NestedInts)-1] = nil
 					if len(result.NestedInts[len(result.NestedInts)-1]) < 1 {
-						return result, &validation.MinLenError{Path: []string{"nestedInts[]"}, Limit: 1, Got: len(result.NestedInts[len(result.NestedInts)-1])}
+						return result, &validation.MinLenError{Pos: s.Offset(), Path: []string{"nestedInts[]"}, Limit: 1, Got: len(result.NestedInts[len(result.NestedInts)-1])}
 					}
 					err = s.SkipSpace()
 					if err != nil {
@@ -1188,10 +1188,10 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 					}
 					row0[len(row0)-1] = int(iv)
 					if row0[len(row0)-1] < 0 {
-						return result, &validation.GTEError{Path: []string{"nestedInts[][]"}, Limit: 0, Value: row0[len(row0)-1]}
+						return result, &validation.GTEError{Pos: s.Offset(), Path: []string{"nestedInts[][]"}, Limit: 0, Value: row0[len(row0)-1]}
 					}
 					if row0[len(row0)-1] > 100 {
-						return result, &validation.LTEError{Path: []string{"nestedInts[][]"}, Limit: 100, Value: row0[len(row0)-1]}
+						return result, &validation.LTEError{Pos: s.Offset(), Path: []string{"nestedInts[][]"}, Limit: 100, Value: row0[len(row0)-1]}
 					}
 					err = s.SkipSpace()
 					if err != nil {
@@ -1221,7 +1221,7 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 				s.Pos++
 				result.NestedInts[len(result.NestedInts)-1] = row0
 				if len(result.NestedInts[len(result.NestedInts)-1]) < 1 {
-					return result, &validation.MinLenError{Path: []string{"nestedInts[]"}, Limit: 1, Got: len(result.NestedInts[len(result.NestedInts)-1])}
+					return result, &validation.MinLenError{Pos: s.Offset(), Path: []string{"nestedInts[]"}, Limit: 1, Got: len(result.NestedInts[len(result.NestedInts)-1])}
 				}
 				err = s.SkipSpace()
 				if err != nil {
@@ -1255,7 +1255,7 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 				return result, decode.NewParseErr("triple", s.Pos, err)
 			}
 			if seenTriple {
-				return result, &validation.DuplicateKeyError{Path: []string{"triple"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"triple"}}
 			}
 			seenTriple = true
 			err = s.SkipSpace()
@@ -1329,7 +1329,7 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 					s.Pos += 4
 					result.Triple[len(result.Triple)-1] = nil
 					if len(result.Triple[len(result.Triple)-1]) < 1 {
-						return result, &validation.MinLenError{Path: []string{"triple[]"}, Limit: 1, Got: len(result.Triple[len(result.Triple)-1])}
+						return result, &validation.MinLenError{Pos: s.Offset(), Path: []string{"triple[]"}, Limit: 1, Got: len(result.Triple[len(result.Triple)-1])}
 					}
 					err = s.SkipSpace()
 					if err != nil {
@@ -1404,7 +1404,7 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 						s.Pos += 4
 						row0[len(row0)-1] = nil
 						if len(row0[len(row0)-1]) < 1 {
-							return result, &validation.MinLenError{Path: []string{"triple[][]"}, Limit: 1, Got: len(row0[len(row0)-1])}
+							return result, &validation.MinLenError{Pos: s.Offset(), Path: []string{"triple[][]"}, Limit: 1, Got: len(row0[len(row0)-1])}
 						}
 						err = s.SkipSpace()
 						if err != nil {
@@ -1461,7 +1461,7 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 							return result, decode.NewParseErr("triple[][]", s.Pos, err)
 						}
 						if len(row1[len(row1)-1]) < 1 {
-							return result, &validation.MinLenError{Path: []string{"triple[][][]"}, Limit: 1, Got: len(row1[len(row1)-1])}
+							return result, &validation.MinLenError{Pos: s.Offset(), Path: []string{"triple[][][]"}, Limit: 1, Got: len(row1[len(row1)-1])}
 						}
 						err = s.SkipSpace()
 						if err != nil {
@@ -1491,7 +1491,7 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 					s.Pos++
 					row0[len(row0)-1] = row1
 					if len(row0[len(row0)-1]) < 1 {
-						return result, &validation.MinLenError{Path: []string{"triple[][]"}, Limit: 1, Got: len(row0[len(row0)-1])}
+						return result, &validation.MinLenError{Pos: s.Offset(), Path: []string{"triple[][]"}, Limit: 1, Got: len(row0[len(row0)-1])}
 					}
 					err = s.SkipSpace()
 					if err != nil {
@@ -1521,7 +1521,7 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 				s.Pos++
 				result.Triple[len(result.Triple)-1] = row0
 				if len(result.Triple[len(result.Triple)-1]) < 1 {
-					return result, &validation.MinLenError{Path: []string{"triple[]"}, Limit: 1, Got: len(result.Triple[len(result.Triple)-1])}
+					return result, &validation.MinLenError{Pos: s.Offset(), Path: []string{"triple[]"}, Limit: 1, Got: len(result.Triple[len(result.Triple)-1])}
 				}
 				err = s.SkipSpace()
 				if err != nil {
@@ -1550,7 +1550,7 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 			}
 			s.Pos++
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -1853,7 +1853,7 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 		switch key {
 		case "pair":
 			if seenPair {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"pair"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"pair"}}
 			}
 			seenPair = true
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -1869,7 +1869,7 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 			var idx0 int
 			for i < len(data) && data[i] != ']' {
 				if idx0 >= 2 {
-					return result, i, &validation.LenError{Path: []string{"pair"}, Want: 2, Got: idx0}
+					return result, i, &validation.LenError{Pos: i, Path: []string{"pair"}, Want: 2, Got: idx0}
 				}
 				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 					i += 4
@@ -1977,12 +1977,12 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 				return result, i, scan.ErrBadArray
 			}
 			if idx0 != 2 {
-				return result, i, &validation.LenError{Path: []string{"pair"}, Want: 2, Got: idx0}
+				return result, i, &validation.LenError{Pos: i, Path: []string{"pair"}, Want: 2, Got: idx0}
 			}
 			i++
 		case "point":
 			if seenPoint {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"point"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"point"}}
 			}
 			seenPoint = true
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -1998,7 +1998,7 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 			var idx0 int
 			for i < len(data) && data[i] != ']' {
 				if idx0 >= 2 {
-					return result, i, &validation.LenError{Path: []string{"point"}, Want: 2, Got: idx0}
+					return result, i, &validation.LenError{Pos: i, Path: []string{"point"}, Want: 2, Got: idx0}
 				}
 				result.Point[idx0], i, err = scan.Float64(data, i)
 				if err != nil {
@@ -2024,12 +2024,12 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 				return result, i, scan.ErrBadArray
 			}
 			if idx0 != 2 {
-				return result, i, &validation.LenError{Path: []string{"point"}, Want: 2, Got: idx0}
+				return result, i, &validation.LenError{Pos: i, Path: []string{"point"}, Want: 2, Got: idx0}
 			}
 			i++
 		case "rgb":
 			if seenRGB {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"rgb"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"rgb"}}
 			}
 			seenRGB = true
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -2045,7 +2045,7 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 			var idx0 int
 			for i < len(data) && data[i] != ']' {
 				if idx0 >= 3 {
-					return result, i, &validation.LenError{Path: []string{"rgb"}, Want: 3, Got: idx0}
+					return result, i, &validation.LenError{Pos: i, Path: []string{"rgb"}, Want: 3, Got: idx0}
 				}
 				neg := false
 				if i < len(data) && data[i] == '-' {
@@ -2100,10 +2100,10 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 					result.RGB[idx0] = 255
 				}
 				if result.RGB[idx0] < 0 {
-					return result, i, &validation.GTEError{Path: []string{"rgb[]"}, Limit: 0, Value: result.RGB[idx0]}
+					return result, i, &validation.GTEError{Pos: i, Path: []string{"rgb[]"}, Limit: 0, Value: result.RGB[idx0]}
 				}
 				if result.RGB[idx0] > 255 {
-					return result, i, &validation.LTEError{Path: []string{"rgb[]"}, Limit: 255, Value: result.RGB[idx0]}
+					return result, i, &validation.LTEError{Pos: i, Path: []string{"rgb[]"}, Limit: 255, Value: result.RGB[idx0]}
 				}
 				idx0++
 				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -2125,12 +2125,12 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 				return result, i, scan.ErrBadArray
 			}
 			if idx0 != 3 {
-				return result, i, &validation.LenError{Path: []string{"rgb"}, Want: 3, Got: idx0}
+				return result, i, &validation.LenError{Pos: i, Path: []string{"rgb"}, Want: 3, Got: idx0}
 			}
 			i++
 		case "segments":
 			if seenSegments {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"segments"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"segments"}}
 			}
 			seenSegments = true
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -2173,7 +2173,7 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 				var idx1 int
 				for i < len(data) && data[i] != ']' {
 					if idx1 >= 2 {
-						return result, i, &validation.LenError{Path: []string{"segments[]"}, Want: 2, Got: idx1}
+						return result, i, &validation.LenError{Pos: i, Path: []string{"segments[]"}, Want: 2, Got: idx1}
 					}
 					neg := false
 					if i < len(data) && data[i] == '-' {
@@ -2241,7 +2241,7 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 					return result, i, scan.ErrBadArray
 				}
 				if idx1 != 2 {
-					return result, i, &validation.LenError{Path: []string{"segments[]"}, Want: 2, Got: idx1}
+					return result, i, &validation.LenError{Pos: i, Path: []string{"segments[]"}, Want: 2, Got: idx1}
 				}
 				i++
 				result.Segments[len(result.Segments)-1] = row0
@@ -2265,7 +2265,7 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 			}
 			i++
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -2328,7 +2328,7 @@ func (recv TupleStruct) DecodeFromStream(s *scan.Stream) (result TupleStruct, er
 				return result, decode.NewParseErr("pair", s.Pos, err)
 			}
 			if seenPair {
-				return result, &validation.DuplicateKeyError{Path: []string{"pair"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"pair"}}
 			}
 			seenPair = true
 			err = s.ArrayOpen()
@@ -2347,7 +2347,7 @@ func (recv TupleStruct) DecodeFromStream(s *scan.Stream) (result TupleStruct, er
 			var idx0 int
 			for s.Bytes()[s.Pos] != ']' {
 				if idx0 >= 2 {
-					return result, &validation.LenError{Path: []string{"pair"}, Want: 2, Got: idx0}
+					return result, &validation.LenError{Pos: s.Offset(), Path: []string{"pair"}, Want: 2, Got: idx0}
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
@@ -2476,7 +2476,7 @@ func (recv TupleStruct) DecodeFromStream(s *scan.Stream) (result TupleStruct, er
 				return result, decode.NewParseErr("pair", s.Pos, scan.ErrBadArray)
 			}
 			if idx0 != 2 {
-				return result, &validation.LenError{Path: []string{"pair"}, Want: 2, Got: idx0}
+				return result, &validation.LenError{Pos: s.Offset(), Path: []string{"pair"}, Want: 2, Got: idx0}
 			}
 			s.Pos++
 		case "point":
@@ -2485,7 +2485,7 @@ func (recv TupleStruct) DecodeFromStream(s *scan.Stream) (result TupleStruct, er
 				return result, decode.NewParseErr("point", s.Pos, err)
 			}
 			if seenPoint {
-				return result, &validation.DuplicateKeyError{Path: []string{"point"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"point"}}
 			}
 			seenPoint = true
 			err = s.ArrayOpen()
@@ -2504,7 +2504,7 @@ func (recv TupleStruct) DecodeFromStream(s *scan.Stream) (result TupleStruct, er
 			var idx0 int
 			for s.Bytes()[s.Pos] != ']' {
 				if idx0 >= 2 {
-					return result, &validation.LenError{Path: []string{"point"}, Want: 2, Got: idx0}
+					return result, &validation.LenError{Pos: s.Offset(), Path: []string{"point"}, Want: 2, Got: idx0}
 				}
 				result.Point[idx0], err = s.Float64()
 				if err != nil {
@@ -2537,7 +2537,7 @@ func (recv TupleStruct) DecodeFromStream(s *scan.Stream) (result TupleStruct, er
 				return result, decode.NewParseErr("point", s.Pos, scan.ErrBadArray)
 			}
 			if idx0 != 2 {
-				return result, &validation.LenError{Path: []string{"point"}, Want: 2, Got: idx0}
+				return result, &validation.LenError{Pos: s.Offset(), Path: []string{"point"}, Want: 2, Got: idx0}
 			}
 			s.Pos++
 		case "rgb":
@@ -2546,7 +2546,7 @@ func (recv TupleStruct) DecodeFromStream(s *scan.Stream) (result TupleStruct, er
 				return result, decode.NewParseErr("rgb", s.Pos, err)
 			}
 			if seenRGB {
-				return result, &validation.DuplicateKeyError{Path: []string{"rgb"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"rgb"}}
 			}
 			seenRGB = true
 			err = s.ArrayOpen()
@@ -2565,7 +2565,7 @@ func (recv TupleStruct) DecodeFromStream(s *scan.Stream) (result TupleStruct, er
 			var idx0 int
 			for s.Bytes()[s.Pos] != ']' {
 				if idx0 >= 3 {
-					return result, &validation.LenError{Path: []string{"rgb"}, Want: 3, Got: idx0}
+					return result, &validation.LenError{Pos: s.Offset(), Path: []string{"rgb"}, Want: 3, Got: idx0}
 				}
 				var iv int64
 				iv, err = s.Int64()
@@ -2580,10 +2580,10 @@ func (recv TupleStruct) DecodeFromStream(s *scan.Stream) (result TupleStruct, er
 					result.RGB[idx0] = 255
 				}
 				if result.RGB[idx0] < 0 {
-					return result, &validation.GTEError{Path: []string{"rgb[]"}, Limit: 0, Value: result.RGB[idx0]}
+					return result, &validation.GTEError{Pos: s.Offset(), Path: []string{"rgb[]"}, Limit: 0, Value: result.RGB[idx0]}
 				}
 				if result.RGB[idx0] > 255 {
-					return result, &validation.LTEError{Path: []string{"rgb[]"}, Limit: 255, Value: result.RGB[idx0]}
+					return result, &validation.LTEError{Pos: s.Offset(), Path: []string{"rgb[]"}, Limit: 255, Value: result.RGB[idx0]}
 				}
 				idx0++
 				err = s.SkipSpace()
@@ -2612,7 +2612,7 @@ func (recv TupleStruct) DecodeFromStream(s *scan.Stream) (result TupleStruct, er
 				return result, decode.NewParseErr("rgb", s.Pos, scan.ErrBadArray)
 			}
 			if idx0 != 3 {
-				return result, &validation.LenError{Path: []string{"rgb"}, Want: 3, Got: idx0}
+				return result, &validation.LenError{Pos: s.Offset(), Path: []string{"rgb"}, Want: 3, Got: idx0}
 			}
 			s.Pos++
 		case "segments":
@@ -2621,7 +2621,7 @@ func (recv TupleStruct) DecodeFromStream(s *scan.Stream) (result TupleStruct, er
 				return result, decode.NewParseErr("segments", s.Pos, err)
 			}
 			if seenSegments {
-				return result, &validation.DuplicateKeyError{Path: []string{"segments"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"segments"}}
 			}
 			seenSegments = true
 			err = s.SkipSpace()
@@ -2689,7 +2689,7 @@ func (recv TupleStruct) DecodeFromStream(s *scan.Stream) (result TupleStruct, er
 				var idx1 int
 				for s.Bytes()[s.Pos] != ']' {
 					if idx1 >= 2 {
-						return result, &validation.LenError{Path: []string{"segments[]"}, Want: 2, Got: idx1}
+						return result, &validation.LenError{Pos: s.Offset(), Path: []string{"segments[]"}, Want: 2, Got: idx1}
 					}
 					var iv int64
 					iv, err = s.Int64()
@@ -2724,7 +2724,7 @@ func (recv TupleStruct) DecodeFromStream(s *scan.Stream) (result TupleStruct, er
 					return result, decode.NewParseErr("segments[]", s.Pos, scan.ErrBadArray)
 				}
 				if idx1 != 2 {
-					return result, &validation.LenError{Path: []string{"segments[]"}, Want: 2, Got: idx1}
+					return result, &validation.LenError{Pos: s.Offset(), Path: []string{"segments[]"}, Want: 2, Got: idx1}
 				}
 				s.Pos++
 				result.Segments[len(result.Segments)-1] = row0
@@ -2755,7 +2755,7 @@ func (recv TupleStruct) DecodeFromStream(s *scan.Stream) (result TupleStruct, er
 			}
 			s.Pos++
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()

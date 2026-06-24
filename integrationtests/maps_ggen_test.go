@@ -79,7 +79,7 @@ func (recv MapStruct) DecodeFrom(data []byte) (result MapStruct, i int, err erro
 		switch key {
 		case "addresses":
 			if seenAddresses {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"addresses"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"addresses"}}
 			}
 			seenAddresses = true
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -169,7 +169,7 @@ func (recv MapStruct) DecodeFrom(data []byte) (result MapStruct, i int, err erro
 			i++
 		case "counts":
 			if seenCounts {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"counts"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"counts"}}
 			}
 			seenCounts = true
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -296,11 +296,11 @@ func (recv MapStruct) DecodeFrom(data []byte) (result MapStruct, i int, err erro
 				i++
 			}
 			if len(result.Counts) > 10 {
-				return result, i, &validation.MaxLenError{Path: []string{"counts"}, Limit: 10, Got: len(result.Counts)}
+				return result, i, &validation.MaxLenError{Pos: i, Path: []string{"counts"}, Limit: 10, Got: len(result.Counts)}
 			}
 		case "labels":
 			if seenLabels {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"labels"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"labels"}}
 			}
 			seenLabels = true
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -405,7 +405,7 @@ func (recv MapStruct) DecodeFrom(data []byte) (result MapStruct, i int, err erro
 			}
 			i++
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -473,7 +473,7 @@ func (recv MapStruct) DecodeFromStream(s *scan.Stream) (result MapStruct, err er
 				return result, decode.NewParseErr("addresses", s.Pos, err)
 			}
 			if seenAddresses {
-				return result, &validation.DuplicateKeyError{Path: []string{"addresses"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"addresses"}}
 			}
 			seenAddresses = true
 			err = s.SkipSpace()
@@ -583,7 +583,7 @@ func (recv MapStruct) DecodeFromStream(s *scan.Stream) (result MapStruct, err er
 				return result, decode.NewParseErr("counts", s.Pos, err)
 			}
 			if seenCounts {
-				return result, &validation.DuplicateKeyError{Path: []string{"counts"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"counts"}}
 			}
 			seenCounts = true
 			err = s.SkipSpace()
@@ -688,7 +688,7 @@ func (recv MapStruct) DecodeFromStream(s *scan.Stream) (result MapStruct, err er
 				s.Pos++
 			}
 			if len(result.Counts) > 10 {
-				return result, &validation.MaxLenError{Path: []string{"counts"}, Limit: 10, Got: len(result.Counts)}
+				return result, &validation.MaxLenError{Pos: s.Offset(), Path: []string{"counts"}, Limit: 10, Got: len(result.Counts)}
 			}
 		case "labels":
 			err = s.ConsumeColon()
@@ -696,7 +696,7 @@ func (recv MapStruct) DecodeFromStream(s *scan.Stream) (result MapStruct, err er
 				return result, decode.NewParseErr("labels", s.Pos, err)
 			}
 			if seenLabels {
-				return result, &validation.DuplicateKeyError{Path: []string{"labels"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"labels"}}
 			}
 			seenLabels = true
 			err = s.SkipSpace()
@@ -801,7 +801,7 @@ func (recv MapStruct) DecodeFromStream(s *scan.Stream) (result MapStruct, err er
 			}
 			s.Pos++
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -980,7 +980,7 @@ func (recv MapDiveStruct) DecodeFrom(data []byte) (result MapDiveStruct, i int, 
 		switch key {
 		case "clamped":
 			if seenClamped {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"clamped"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"clamped"}}
 			}
 			seenClamped = true
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -1114,7 +1114,7 @@ func (recv MapDiveStruct) DecodeFrom(data []byte) (result MapDiveStruct, i int, 
 			i++
 		case "counts":
 			if seenCounts {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"counts"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"counts"}}
 			}
 			seenCounts = true
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -1222,10 +1222,10 @@ func (recv MapDiveStruct) DecodeFrom(data []byte) (result MapDiveStruct, i int, 
 				}
 				result.Counts[mk] = int(n)
 				if result.Counts[mk] < 0 {
-					return result, i, &validation.GTEError{Path: []string{"counts.value"}, Limit: 0, Value: result.Counts[mk]}
+					return result, i, &validation.GTEError{Pos: i, Path: []string{"counts.value"}, Limit: 0, Value: result.Counts[mk]}
 				}
 				if result.Counts[mk] > 100 {
-					return result, i, &validation.LTEError{Path: []string{"counts.value"}, Limit: 100, Value: result.Counts[mk]}
+					return result, i, &validation.LTEError{Pos: i, Path: []string{"counts.value"}, Limit: 100, Value: result.Counts[mk]}
 				}
 				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 					i++
@@ -1248,7 +1248,7 @@ func (recv MapDiveStruct) DecodeFrom(data []byte) (result MapDiveStruct, i int, 
 			i++
 		case "names":
 			if seenNames {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"names"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"names"}}
 			}
 			seenNames = true
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -1332,10 +1332,10 @@ func (recv MapDiveStruct) DecodeFrom(data []byte) (result MapDiveStruct, i int, 
 					}
 				}
 				if len(result.Names[mk]) < 1 {
-					return result, i, &validation.MinLenError{Path: []string{"names.value"}, Limit: 1, Got: len(result.Names[mk])}
+					return result, i, &validation.MinLenError{Pos: i, Path: []string{"names.value"}, Limit: 1, Got: len(result.Names[mk])}
 				}
 				if len(result.Names[mk]) > 5 {
-					return result, i, &validation.MaxLenError{Path: []string{"names.value"}, Limit: 5, Got: len(result.Names[mk])}
+					return result, i, &validation.MaxLenError{Pos: i, Path: []string{"names.value"}, Limit: 5, Got: len(result.Names[mk])}
 				}
 				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 					i++
@@ -1357,7 +1357,7 @@ func (recv MapDiveStruct) DecodeFrom(data []byte) (result MapDiveStruct, i int, 
 			}
 			i++
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -1425,7 +1425,7 @@ func (recv MapDiveStruct) DecodeFromStream(s *scan.Stream) (result MapDiveStruct
 				return result, decode.NewParseErr("clamped", s.Pos, err)
 			}
 			if seenClamped {
-				return result, &validation.DuplicateKeyError{Path: []string{"clamped"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"clamped"}}
 			}
 			seenClamped = true
 			err = s.SkipSpace()
@@ -1541,7 +1541,7 @@ func (recv MapDiveStruct) DecodeFromStream(s *scan.Stream) (result MapDiveStruct
 				return result, decode.NewParseErr("counts", s.Pos, err)
 			}
 			if seenCounts {
-				return result, &validation.DuplicateKeyError{Path: []string{"counts"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"counts"}}
 			}
 			seenCounts = true
 			err = s.SkipSpace()
@@ -1620,10 +1620,10 @@ func (recv MapDiveStruct) DecodeFromStream(s *scan.Stream) (result MapDiveStruct
 				}
 				result.Counts[mk] = int(iv)
 				if result.Counts[mk] < 0 {
-					return result, &validation.GTEError{Path: []string{"counts.value"}, Limit: 0, Value: result.Counts[mk]}
+					return result, &validation.GTEError{Pos: s.Offset(), Path: []string{"counts.value"}, Limit: 0, Value: result.Counts[mk]}
 				}
 				if result.Counts[mk] > 100 {
-					return result, &validation.LTEError{Path: []string{"counts.value"}, Limit: 100, Value: result.Counts[mk]}
+					return result, &validation.LTEError{Pos: s.Offset(), Path: []string{"counts.value"}, Limit: 100, Value: result.Counts[mk]}
 				}
 				err = s.SkipSpace()
 				if err != nil {
@@ -1657,7 +1657,7 @@ func (recv MapDiveStruct) DecodeFromStream(s *scan.Stream) (result MapDiveStruct
 				return result, decode.NewParseErr("names", s.Pos, err)
 			}
 			if seenNames {
-				return result, &validation.DuplicateKeyError{Path: []string{"names"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"names"}}
 			}
 			seenNames = true
 			err = s.SkipSpace()
@@ -1734,10 +1734,10 @@ func (recv MapDiveStruct) DecodeFromStream(s *scan.Stream) (result MapDiveStruct
 					return result, decode.NewParseErr("names", s.Pos, err)
 				}
 				if len(result.Names[mk]) < 1 {
-					return result, &validation.MinLenError{Path: []string{"names.value"}, Limit: 1, Got: len(result.Names[mk])}
+					return result, &validation.MinLenError{Pos: s.Offset(), Path: []string{"names.value"}, Limit: 1, Got: len(result.Names[mk])}
 				}
 				if len(result.Names[mk]) > 5 {
-					return result, &validation.MaxLenError{Path: []string{"names.value"}, Limit: 5, Got: len(result.Names[mk])}
+					return result, &validation.MaxLenError{Pos: s.Offset(), Path: []string{"names.value"}, Limit: 5, Got: len(result.Names[mk])}
 				}
 				err = s.SkipSpace()
 				if err != nil {
@@ -1766,7 +1766,7 @@ func (recv MapDiveStruct) DecodeFromStream(s *scan.Stream) (result MapDiveStruct
 			}
 			s.Pos++
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -1895,10 +1895,10 @@ func (recv Derived) DecodeFrom(data []byte) (result Derived, i int, err error) {
 	if i < len(data) && data[i] == '}' {
 		i++
 		if !seenID {
-			return result, i, &validation.RequiredError{Path: []string{"id"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"id"}}
 		}
 		if !seenName {
-			return result, i, &validation.RequiredError{Path: []string{"name"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"name"}}
 		}
 		return result, i, nil
 	}
@@ -1939,7 +1939,7 @@ func (recv Derived) DecodeFrom(data []byte) (result Derived, i int, err error) {
 		switch key {
 		case "id":
 			if seenID {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"id"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"id"}}
 			}
 			seenID = true
 			if i >= len(data) || data[i] != '"' {
@@ -1966,7 +1966,7 @@ func (recv Derived) DecodeFrom(data []byte) (result Derived, i int, err error) {
 			}
 		case "meta":
 			if seenMeta {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"meta"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"meta"}}
 			}
 			seenMeta = true
 			if i >= len(data) || data[i] != '"' {
@@ -1993,7 +1993,7 @@ func (recv Derived) DecodeFrom(data []byte) (result Derived, i int, err error) {
 			}
 		case "name":
 			if seenName {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"name"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"name"}}
 			}
 			seenName = true
 			if i >= len(data) || data[i] != '"' {
@@ -2019,10 +2019,10 @@ func (recv Derived) DecodeFrom(data []byte) (result Derived, i int, err error) {
 				}
 			}
 			if len(result.Name) < 1 {
-				return result, i, &validation.MinLenError{Path: []string{"name"}, Limit: 1, Got: len(result.Name)}
+				return result, i, &validation.MinLenError{Pos: i, Path: []string{"name"}, Limit: 1, Got: len(result.Name)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -2040,10 +2040,10 @@ func (recv Derived) DecodeFrom(data []byte) (result Derived, i int, err error) {
 		if data[i] == '}' {
 			i++
 			if !seenID {
-				return result, i, &validation.RequiredError{Path: []string{"id"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"id"}}
 			}
 			if !seenName {
-				return result, i, &validation.RequiredError{Path: []string{"name"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"name"}}
 			}
 			return result, i, nil
 		}
@@ -2073,10 +2073,10 @@ func (recv Derived) DecodeFromStream(s *scan.Stream) (result Derived, err error)
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
 		if !seenID {
-			return result, &validation.RequiredError{Path: []string{"id"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"id"}}
 		}
 		if !seenName {
-			return result, &validation.RequiredError{Path: []string{"name"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"name"}}
 		}
 		return result, nil
 	}
@@ -2093,7 +2093,7 @@ func (recv Derived) DecodeFromStream(s *scan.Stream) (result Derived, err error)
 				return result, decode.NewParseErr("id", s.Pos, err)
 			}
 			if seenID {
-				return result, &validation.DuplicateKeyError{Path: []string{"id"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"id"}}
 			}
 			seenID = true
 			result.ID, err = s.String()
@@ -2106,7 +2106,7 @@ func (recv Derived) DecodeFromStream(s *scan.Stream) (result Derived, err error)
 				return result, decode.NewParseErr("meta", s.Pos, err)
 			}
 			if seenMeta {
-				return result, &validation.DuplicateKeyError{Path: []string{"meta"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"meta"}}
 			}
 			seenMeta = true
 			result.Meta, err = s.String()
@@ -2119,7 +2119,7 @@ func (recv Derived) DecodeFromStream(s *scan.Stream) (result Derived, err error)
 				return result, decode.NewParseErr("name", s.Pos, err)
 			}
 			if seenName {
-				return result, &validation.DuplicateKeyError{Path: []string{"name"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"name"}}
 			}
 			seenName = true
 			result.Name, err = s.String()
@@ -2127,10 +2127,10 @@ func (recv Derived) DecodeFromStream(s *scan.Stream) (result Derived, err error)
 				return result, decode.NewParseErr("name", s.Pos, err)
 			}
 			if len(result.Name) < 1 {
-				return result, &validation.MinLenError{Path: []string{"name"}, Limit: 1, Got: len(result.Name)}
+				return result, &validation.MinLenError{Pos: s.Offset(), Path: []string{"name"}, Limit: 1, Got: len(result.Name)}
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -2155,10 +2155,10 @@ func (recv Derived) DecodeFromStream(s *scan.Stream) (result Derived, err error)
 		if c == '}' {
 			s.Pos++
 			if !seenID {
-				return result, &validation.RequiredError{Path: []string{"id"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"id"}}
 			}
 			if !seenName {
-				return result, &validation.RequiredError{Path: []string{"name"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"name"}}
 			}
 			return result, nil
 		}

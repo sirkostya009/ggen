@@ -76,7 +76,7 @@ func (recv RichTypes) DecodeFrom(data []byte) (result RichTypes, i int, err erro
 		switch key {
 		case "big":
 			if seenBig {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"big"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"big"}}
 			}
 			seenBig = true
 			start := i
@@ -89,7 +89,7 @@ func (recv RichTypes) DecodeFrom(data []byte) (result RichTypes, i int, err erro
 			}
 		case "bigF":
 			if seenBigF {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"bigF"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"bigF"}}
 			}
 			seenBigF = true
 			var s string
@@ -120,7 +120,7 @@ func (recv RichTypes) DecodeFrom(data []byte) (result RichTypes, i int, err erro
 			}
 		case "bigR":
 			if seenBigR {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"bigR"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"bigR"}}
 			}
 			seenBigR = true
 			var s string
@@ -151,7 +151,7 @@ func (recv RichTypes) DecodeFrom(data []byte) (result RichTypes, i int, err erro
 			}
 		case "gofrsId":
 			if seenGofrsID {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"gofrsId"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"gofrsId"}}
 			}
 			seenGofrsID = true
 			var ts string
@@ -165,7 +165,7 @@ func (recv RichTypes) DecodeFrom(data []byte) (result RichTypes, i int, err erro
 			}
 		case "id":
 			if seenID {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"id"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"id"}}
 			}
 			seenID = true
 			var ts string
@@ -179,7 +179,7 @@ func (recv RichTypes) DecodeFrom(data []byte) (result RichTypes, i int, err erro
 			}
 		case "raw1":
 			if seenRaw1 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"raw1"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"raw1"}}
 			}
 			seenRaw1 = true
 			start := i
@@ -190,7 +190,7 @@ func (recv RichTypes) DecodeFrom(data []byte) (result RichTypes, i int, err erro
 			result.Raw1 = data[start:i]
 		case "raw2":
 			if seenRaw2 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"raw2"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"raw2"}}
 			}
 			seenRaw2 = true
 			start := i
@@ -201,7 +201,7 @@ func (recv RichTypes) DecodeFrom(data []byte) (result RichTypes, i int, err erro
 			result.Raw2 = data[start:i]
 		case "site":
 			if seenSite {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"site"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"site"}}
 			}
 			seenSite = true
 			var s string
@@ -234,7 +234,7 @@ func (recv RichTypes) DecodeFrom(data []byte) (result RichTypes, i int, err erro
 			}
 			result.Site = *u
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -298,7 +298,7 @@ func (recv RichTypes) DecodeFromStream(s *scan.Stream) (result RichTypes, err er
 				return result, decode.NewParseErr("big", s.Pos, err)
 			}
 			if seenBig {
-				return result, &validation.DuplicateKeyError{Path: []string{"big"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"big"}}
 			}
 			seenBig = true
 			start := s.Pos
@@ -319,7 +319,7 @@ func (recv RichTypes) DecodeFromStream(s *scan.Stream) (result RichTypes, err er
 				return result, decode.NewParseErr("bigF", s.Pos, err)
 			}
 			if seenBigF {
-				return result, &validation.DuplicateKeyError{Path: []string{"bigF"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"bigF"}}
 			}
 			seenBigF = true
 			var sv string
@@ -336,7 +336,7 @@ func (recv RichTypes) DecodeFromStream(s *scan.Stream) (result RichTypes, err er
 				return result, decode.NewParseErr("bigR", s.Pos, err)
 			}
 			if seenBigR {
-				return result, &validation.DuplicateKeyError{Path: []string{"bigR"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"bigR"}}
 			}
 			seenBigR = true
 			var sv string
@@ -353,7 +353,7 @@ func (recv RichTypes) DecodeFromStream(s *scan.Stream) (result RichTypes, err er
 				return result, decode.NewParseErr("gofrsId", s.Pos, err)
 			}
 			if seenGofrsID {
-				return result, &validation.DuplicateKeyError{Path: []string{"gofrsId"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"gofrsId"}}
 			}
 			seenGofrsID = true
 			var ts string
@@ -371,7 +371,7 @@ func (recv RichTypes) DecodeFromStream(s *scan.Stream) (result RichTypes, err er
 				return result, decode.NewParseErr("id", s.Pos, err)
 			}
 			if seenID {
-				return result, &validation.DuplicateKeyError{Path: []string{"id"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"id"}}
 			}
 			seenID = true
 			var ts string
@@ -389,7 +389,7 @@ func (recv RichTypes) DecodeFromStream(s *scan.Stream) (result RichTypes, err er
 				return result, decode.NewParseErr("raw1", s.Pos, err)
 			}
 			if seenRaw1 {
-				return result, &validation.DuplicateKeyError{Path: []string{"raw1"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"raw1"}}
 			}
 			seenRaw1 = true
 			start := s.Pos
@@ -408,7 +408,7 @@ func (recv RichTypes) DecodeFromStream(s *scan.Stream) (result RichTypes, err er
 				return result, decode.NewParseErr("raw2", s.Pos, err)
 			}
 			if seenRaw2 {
-				return result, &validation.DuplicateKeyError{Path: []string{"raw2"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"raw2"}}
 			}
 			seenRaw2 = true
 			start := s.Pos
@@ -427,7 +427,7 @@ func (recv RichTypes) DecodeFromStream(s *scan.Stream) (result RichTypes, err er
 				return result, decode.NewParseErr("site", s.Pos, err)
 			}
 			if seenSite {
-				return result, &validation.DuplicateKeyError{Path: []string{"site"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"site"}}
 			}
 			seenSite = true
 			var sv string
@@ -441,7 +441,7 @@ func (recv RichTypes) DecodeFromStream(s *scan.Stream) (result RichTypes, err er
 			}
 			result.Site = *u
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()

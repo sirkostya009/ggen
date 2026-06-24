@@ -91,7 +91,7 @@ func (recv NativeTypes) DecodeFrom(data []byte) (result NativeTypes, i int, err 
 		switch key {
 		case "addr":
 			if seenAddr {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"addr"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"addr"}}
 			}
 			seenAddr = true
 			var s string
@@ -123,7 +123,7 @@ func (recv NativeTypes) DecodeFrom(data []byte) (result NativeTypes, i int, err 
 			}
 		case "blob":
 			if seenBlob {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"blob"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"blob"}}
 			}
 			seenBlob = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -163,7 +163,7 @@ func (recv NativeTypes) DecodeFrom(data []byte) (result NativeTypes, i int, err 
 			}
 		case "byteArray":
 			if seenByteArray {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"byteArray"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"byteArray"}}
 			}
 			seenByteArray = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -209,7 +209,7 @@ func (recv NativeTypes) DecodeFrom(data []byte) (result NativeTypes, i int, err 
 			i++
 		case "cidr":
 			if seenCidr {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"cidr"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"cidr"}}
 			}
 			seenCidr = true
 			var s string
@@ -241,7 +241,7 @@ func (recv NativeTypes) DecodeFrom(data []byte) (result NativeTypes, i int, err 
 			}
 		case "createdAt":
 			if seenCreatedAt {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"createdAt"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"createdAt"}}
 			}
 			seenCreatedAt = true
 			var s string
@@ -273,7 +273,7 @@ func (recv NativeTypes) DecodeFrom(data []byte) (result NativeTypes, i int, err 
 			}
 		case "hexBlob":
 			if seenHexBlob {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"hexBlob"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"hexBlob"}}
 			}
 			seenHexBlob = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -313,7 +313,7 @@ func (recv NativeTypes) DecodeFrom(data []byte) (result NativeTypes, i int, err 
 			}
 		case "issuedAt":
 			if seenIssuedAt {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"issuedAt"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"issuedAt"}}
 			}
 			seenIssuedAt = true
 			var s string
@@ -345,7 +345,7 @@ func (recv NativeTypes) DecodeFrom(data []byte) (result NativeTypes, i int, err 
 			}
 		case "legacyIP":
 			if seenLegacyIP {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"legacyIP"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"legacyIP"}}
 			}
 			seenLegacyIP = true
 			var s string
@@ -377,7 +377,7 @@ func (recv NativeTypes) DecodeFrom(data []byte) (result NativeTypes, i int, err 
 			}
 		case "secDur":
 			if seenSecDur {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"secDur"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"secDur"}}
 			}
 			seenSecDur = true
 			var f float64
@@ -388,7 +388,7 @@ func (recv NativeTypes) DecodeFrom(data []byte) (result NativeTypes, i int, err 
 			result.SecDur = time.Duration(f * float64(time.Second))
 		case "unitDur":
 			if seenUnitDur {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"unitDur"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"unitDur"}}
 			}
 			seenUnitDur = true
 			var s string
@@ -420,7 +420,7 @@ func (recv NativeTypes) DecodeFrom(data []byte) (result NativeTypes, i int, err 
 			}
 		case "unixAt":
 			if seenUnixAt {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"unixAt"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"unixAt"}}
 			}
 			seenUnixAt = true
 			var f float64
@@ -432,7 +432,7 @@ func (recv NativeTypes) DecodeFrom(data []byte) (result NativeTypes, i int, err 
 			nsec := int64((f - float64(sec)) * 1e9)
 			result.UnixAt = time.Unix(sec, nsec)
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -508,7 +508,7 @@ func (recv NativeTypes) DecodeFromStream(s *scan.Stream) (result NativeTypes, er
 				return result, decode.NewParseErr("addr", s.Pos, err)
 			}
 			if seenAddr {
-				return result, &validation.DuplicateKeyError{Path: []string{"addr"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"addr"}}
 			}
 			seenAddr = true
 			var sv string
@@ -526,7 +526,7 @@ func (recv NativeTypes) DecodeFromStream(s *scan.Stream) (result NativeTypes, er
 				return result, decode.NewParseErr("blob", s.Pos, err)
 			}
 			if seenBlob {
-				return result, &validation.DuplicateKeyError{Path: []string{"blob"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"blob"}}
 			}
 			seenBlob = true
 			if s.Pos >= len(s.Bytes()) {
@@ -567,7 +567,7 @@ func (recv NativeTypes) DecodeFromStream(s *scan.Stream) (result NativeTypes, er
 				return result, decode.NewParseErr("byteArray", s.Pos, err)
 			}
 			if seenByteArray {
-				return result, &validation.DuplicateKeyError{Path: []string{"byteArray"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"byteArray"}}
 			}
 			seenByteArray = true
 			if s.Pos >= len(s.Bytes()) {
@@ -642,7 +642,7 @@ func (recv NativeTypes) DecodeFromStream(s *scan.Stream) (result NativeTypes, er
 				return result, decode.NewParseErr("cidr", s.Pos, err)
 			}
 			if seenCidr {
-				return result, &validation.DuplicateKeyError{Path: []string{"cidr"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"cidr"}}
 			}
 			seenCidr = true
 			var sv string
@@ -660,7 +660,7 @@ func (recv NativeTypes) DecodeFromStream(s *scan.Stream) (result NativeTypes, er
 				return result, decode.NewParseErr("createdAt", s.Pos, err)
 			}
 			if seenCreatedAt {
-				return result, &validation.DuplicateKeyError{Path: []string{"createdAt"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"createdAt"}}
 			}
 			seenCreatedAt = true
 			var sv string
@@ -678,7 +678,7 @@ func (recv NativeTypes) DecodeFromStream(s *scan.Stream) (result NativeTypes, er
 				return result, decode.NewParseErr("hexBlob", s.Pos, err)
 			}
 			if seenHexBlob {
-				return result, &validation.DuplicateKeyError{Path: []string{"hexBlob"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"hexBlob"}}
 			}
 			seenHexBlob = true
 			if s.Pos >= len(s.Bytes()) {
@@ -719,7 +719,7 @@ func (recv NativeTypes) DecodeFromStream(s *scan.Stream) (result NativeTypes, er
 				return result, decode.NewParseErr("issuedAt", s.Pos, err)
 			}
 			if seenIssuedAt {
-				return result, &validation.DuplicateKeyError{Path: []string{"issuedAt"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"issuedAt"}}
 			}
 			seenIssuedAt = true
 			var sv string
@@ -737,7 +737,7 @@ func (recv NativeTypes) DecodeFromStream(s *scan.Stream) (result NativeTypes, er
 				return result, decode.NewParseErr("legacyIP", s.Pos, err)
 			}
 			if seenLegacyIP {
-				return result, &validation.DuplicateKeyError{Path: []string{"legacyIP"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"legacyIP"}}
 			}
 			seenLegacyIP = true
 			var sv string
@@ -755,7 +755,7 @@ func (recv NativeTypes) DecodeFromStream(s *scan.Stream) (result NativeTypes, er
 				return result, decode.NewParseErr("secDur", s.Pos, err)
 			}
 			if seenSecDur {
-				return result, &validation.DuplicateKeyError{Path: []string{"secDur"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"secDur"}}
 			}
 			seenSecDur = true
 			var f float64
@@ -770,7 +770,7 @@ func (recv NativeTypes) DecodeFromStream(s *scan.Stream) (result NativeTypes, er
 				return result, decode.NewParseErr("unitDur", s.Pos, err)
 			}
 			if seenUnitDur {
-				return result, &validation.DuplicateKeyError{Path: []string{"unitDur"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"unitDur"}}
 			}
 			seenUnitDur = true
 			var sv string
@@ -788,7 +788,7 @@ func (recv NativeTypes) DecodeFromStream(s *scan.Stream) (result NativeTypes, er
 				return result, decode.NewParseErr("unixAt", s.Pos, err)
 			}
 			if seenUnixAt {
-				return result, &validation.DuplicateKeyError{Path: []string{"unixAt"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"unixAt"}}
 			}
 			seenUnixAt = true
 			var f float64
@@ -801,7 +801,7 @@ func (recv NativeTypes) DecodeFromStream(s *scan.Stream) (result NativeTypes, er
 			nsec := int64((f - float64(sec)) * 1e9)
 			result.UnixAt = time.Unix(sec, nsec)
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()

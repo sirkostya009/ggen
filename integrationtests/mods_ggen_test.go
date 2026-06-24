@@ -74,7 +74,7 @@ func (recv ModStruct) DecodeFrom(data []byte) (result ModStruct, i int, err erro
 		switch key {
 		case "email":
 			if seenEmail {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"email"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"email"}}
 			}
 			seenEmail = true
 			if i >= len(data) || data[i] != '"' {
@@ -102,11 +102,11 @@ func (recv ModStruct) DecodeFrom(data []byte) (result ModStruct, i int, err erro
 			result.Email = strings.TrimSpace(result.Email)
 			result.Email = strings.ToLower(result.Email)
 			if !decode.IsEmail(result.Email) {
-				return result, i, &validation.EmailError{Path: []string{"email"}, Value: result.Email}
+				return result, i, &validation.EmailError{Pos: i, Path: []string{"email"}, Value: result.Email}
 			}
 		case "sku":
 			if seenSKU {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"sku"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"sku"}}
 			}
 			seenSKU = true
 			if i >= len(data) || data[i] != '"' {
@@ -134,7 +134,7 @@ func (recv ModStruct) DecodeFrom(data []byte) (result ModStruct, i int, err erro
 			result.SKU = strings.TrimPrefix(result.SKU, "SKU-")
 		case "tags":
 			if seenTags {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"tags"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"tags"}}
 			}
 			seenTags = true
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -207,7 +207,7 @@ func (recv ModStruct) DecodeFrom(data []byte) (result ModStruct, i int, err erro
 			}
 			i++
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -269,7 +269,7 @@ func (recv ModStruct) DecodeFromStream(s *scan.Stream) (result ModStruct, err er
 				return result, decode.NewParseErr("email", s.Pos, err)
 			}
 			if seenEmail {
-				return result, &validation.DuplicateKeyError{Path: []string{"email"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"email"}}
 			}
 			seenEmail = true
 			result.Email, err = s.String()
@@ -279,7 +279,7 @@ func (recv ModStruct) DecodeFromStream(s *scan.Stream) (result ModStruct, err er
 			result.Email = strings.TrimSpace(result.Email)
 			result.Email = strings.ToLower(result.Email)
 			if !decode.IsEmail(result.Email) {
-				return result, &validation.EmailError{Path: []string{"email"}, Value: result.Email}
+				return result, &validation.EmailError{Pos: s.Offset(), Path: []string{"email"}, Value: result.Email}
 			}
 		case "sku":
 			err = s.ConsumeColon()
@@ -287,7 +287,7 @@ func (recv ModStruct) DecodeFromStream(s *scan.Stream) (result ModStruct, err er
 				return result, decode.NewParseErr("sku", s.Pos, err)
 			}
 			if seenSKU {
-				return result, &validation.DuplicateKeyError{Path: []string{"sku"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"sku"}}
 			}
 			seenSKU = true
 			result.SKU, err = s.String()
@@ -301,7 +301,7 @@ func (recv ModStruct) DecodeFromStream(s *scan.Stream) (result ModStruct, err er
 				return result, decode.NewParseErr("tags", s.Pos, err)
 			}
 			if seenTags {
-				return result, &validation.DuplicateKeyError{Path: []string{"tags"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"tags"}}
 			}
 			seenTags = true
 			err = s.SkipSpace()
@@ -385,7 +385,7 @@ func (recv ModStruct) DecodeFromStream(s *scan.Stream) (result ModStruct, err er
 			}
 			s.Pos++
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -469,7 +469,7 @@ func (recv FallibleModStruct) DecodeFrom(data []byte) (result FallibleModStruct,
 	if i < len(data) && data[i] == '}' {
 		i++
 		if !seenEmail {
-			return result, i, &validation.RequiredError{Path: []string{"email"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"email"}}
 		}
 		return result, i, nil
 	}
@@ -510,7 +510,7 @@ func (recv FallibleModStruct) DecodeFrom(data []byte) (result FallibleModStruct,
 		switch key {
 		case "email":
 			if seenEmail {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"email"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"email"}}
 			}
 			seenEmail = true
 			if i >= len(data) || data[i] != '"' {
@@ -541,13 +541,13 @@ func (recv FallibleModStruct) DecodeFrom(data []byte) (result FallibleModStruct,
 				result.Email = v
 			}
 			if !decode.IsEmail(result.Email) {
-				return result, i, &validation.EmailError{Path: []string{"email"}, Value: result.Email}
+				return result, i, &validation.EmailError{Pos: i, Path: []string{"email"}, Value: result.Email}
 			}
 			if len(result.Email) < 10 {
-				return result, i, &validation.MinLenError{Path: []string{"email"}, Limit: 10, Got: len(result.Email)}
+				return result, i, &validation.MinLenError{Pos: i, Path: []string{"email"}, Limit: 10, Got: len(result.Email)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -565,7 +565,7 @@ func (recv FallibleModStruct) DecodeFrom(data []byte) (result FallibleModStruct,
 		if data[i] == '}' {
 			i++
 			if !seenEmail {
-				return result, i, &validation.RequiredError{Path: []string{"email"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"email"}}
 			}
 			return result, i, nil
 		}
@@ -593,7 +593,7 @@ func (recv FallibleModStruct) DecodeFromStream(s *scan.Stream) (result FallibleM
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
 		if !seenEmail {
-			return result, &validation.RequiredError{Path: []string{"email"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"email"}}
 		}
 		return result, nil
 	}
@@ -610,7 +610,7 @@ func (recv FallibleModStruct) DecodeFromStream(s *scan.Stream) (result FallibleM
 				return result, decode.NewParseErr("email", s.Pos, err)
 			}
 			if seenEmail {
-				return result, &validation.DuplicateKeyError{Path: []string{"email"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"email"}}
 			}
 			seenEmail = true
 			result.Email, err = s.String()
@@ -623,13 +623,13 @@ func (recv FallibleModStruct) DecodeFromStream(s *scan.Stream) (result FallibleM
 				result.Email = v
 			}
 			if !decode.IsEmail(result.Email) {
-				return result, &validation.EmailError{Path: []string{"email"}, Value: result.Email}
+				return result, &validation.EmailError{Pos: s.Offset(), Path: []string{"email"}, Value: result.Email}
 			}
 			if len(result.Email) < 10 {
-				return result, &validation.MinLenError{Path: []string{"email"}, Limit: 10, Got: len(result.Email)}
+				return result, &validation.MinLenError{Pos: s.Offset(), Path: []string{"email"}, Limit: 10, Got: len(result.Email)}
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -654,7 +654,7 @@ func (recv FallibleModStruct) DecodeFromStream(s *scan.Stream) (result FallibleM
 		if c == '}' {
 			s.Pos++
 			if !seenEmail {
-				return result, &validation.RequiredError{Path: []string{"email"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"email"}}
 			}
 			return result, nil
 		}
@@ -693,7 +693,7 @@ func (recv FallibleModMultierrStruct) DecodeFrom(data []byte) (result FallibleMo
 	if i < len(data) && data[i] == '}' {
 		i++
 		if !seenEmail {
-			errs = append(errs, &validation.RequiredError{Path: []string{"email"}})
+			errs = append(errs, &validation.RequiredError{Pos: i, Path: []string{"email"}})
 		}
 		if len(errs) > 0 {
 			return result, i, errs
@@ -737,7 +737,7 @@ func (recv FallibleModMultierrStruct) DecodeFrom(data []byte) (result FallibleMo
 		switch key {
 		case "email":
 			if seenEmail {
-				errs = append(errs, &validation.DuplicateKeyError{Path: []string{"email"}})
+				errs = append(errs, &validation.DuplicateKeyError{Pos: i, Path: []string{"email"}})
 				i, err = scan.SkipValue(data, i)
 				if err != nil {
 					return result, i, decode.NewParseErr("email", i, err)
@@ -772,14 +772,14 @@ func (recv FallibleModMultierrStruct) DecodeFrom(data []byte) (result FallibleMo
 					result.Email = v
 				}
 				if !decode.IsEmail(result.Email) {
-					errs = append(errs, &validation.EmailError{Path: []string{"email"}, Value: result.Email})
+					errs = append(errs, &validation.EmailError{Pos: i, Path: []string{"email"}, Value: result.Email})
 				}
 				if len(result.Email) < 10 {
-					errs = append(errs, &validation.MinLenError{Path: []string{"email"}, Limit: 10, Got: len(result.Email)})
+					errs = append(errs, &validation.MinLenError{Pos: i, Path: []string{"email"}, Limit: 10, Got: len(result.Email)})
 				}
 			}
 		default:
-			errs = append(errs, &validation.UnknownKeyError{Path: []string{key}})
+			errs = append(errs, &validation.UnknownKeyError{Pos: i, Path: []string{key}})
 			i, err = scan.SkipValue(data, i)
 			if err != nil {
 				return result, i, decode.NewParseErr(key, i, err)
@@ -801,7 +801,7 @@ func (recv FallibleModMultierrStruct) DecodeFrom(data []byte) (result FallibleMo
 		if data[i] == '}' {
 			i++
 			if !seenEmail {
-				errs = append(errs, &validation.RequiredError{Path: []string{"email"}})
+				errs = append(errs, &validation.RequiredError{Pos: i, Path: []string{"email"}})
 			}
 			if len(errs) > 0 {
 				return result, i, errs
@@ -833,7 +833,7 @@ func (recv FallibleModMultierrStruct) DecodeFromStream(s *scan.Stream) (result F
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
 		if !seenEmail {
-			errs = append(errs, &validation.RequiredError{Path: []string{"email"}})
+			errs = append(errs, &validation.RequiredError{Pos: s.Offset(), Path: []string{"email"}})
 		}
 		if len(errs) > 0 {
 			return result, errs
@@ -853,7 +853,7 @@ func (recv FallibleModMultierrStruct) DecodeFromStream(s *scan.Stream) (result F
 				return result, decode.NewParseErr("email", s.Pos, err)
 			}
 			if seenEmail {
-				errs = append(errs, &validation.DuplicateKeyError{Path: []string{"email"}})
+				errs = append(errs, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"email"}})
 				err = s.SkipValue()
 				if err != nil {
 					return result, decode.NewParseErr("email", s.Pos, err)
@@ -870,15 +870,15 @@ func (recv FallibleModMultierrStruct) DecodeFromStream(s *scan.Stream) (result F
 					result.Email = v
 				}
 				if !decode.IsEmail(result.Email) {
-					errs = append(errs, &validation.EmailError{Path: []string{"email"}, Value: result.Email})
+					errs = append(errs, &validation.EmailError{Pos: s.Offset(), Path: []string{"email"}, Value: result.Email})
 				}
 				if len(result.Email) < 10 {
-					errs = append(errs, &validation.MinLenError{Path: []string{"email"}, Limit: 10, Got: len(result.Email)})
+					errs = append(errs, &validation.MinLenError{Pos: s.Offset(), Path: []string{"email"}, Limit: 10, Got: len(result.Email)})
 				}
 
 			}
 		default:
-			errs = append(errs, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}})
+			errs = append(errs, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}})
 			err = s.ConsumeColon()
 			if err != nil {
 				return result, decode.NewParseErr(strings.Clone(key), s.Pos, err)
@@ -911,7 +911,7 @@ func (recv FallibleModMultierrStruct) DecodeFromStream(s *scan.Stream) (result F
 		if c == '}' {
 			s.Pos++
 			if !seenEmail {
-				errs = append(errs, &validation.RequiredError{Path: []string{"email"}})
+				errs = append(errs, &validation.RequiredError{Pos: s.Offset(), Path: []string{"email"}})
 			}
 			if len(errs) > 0 {
 				return result, errs
@@ -992,7 +992,7 @@ func (recv CrossPkgModStruct) DecodeFrom(data []byte) (result CrossPkgModStruct,
 		switch key {
 		case "code":
 			if seenCode {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"code"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"code"}}
 			}
 			seenCode = true
 			if i >= len(data) || data[i] != '"' {
@@ -1018,11 +1018,11 @@ func (recv CrossPkgModStruct) DecodeFrom(data []byte) (result CrossPkgModStruct,
 				}
 			}
 			if err := thirdparty.ValidateUpper(result.Code); err != nil {
-				return result, i, &validation.CustomError{Path: []string{"code"}, Name: "@thirdparty.ValidateUpper", Cause: err}
+				return result, i, &validation.CustomError{Pos: i, Path: []string{"code"}, Name: "@thirdparty.ValidateUpper", Cause: err}
 			}
 		case "nonEmpty":
 			if seenNonEmpty {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"nonEmpty"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"nonEmpty"}}
 			}
 			seenNonEmpty = true
 			if i >= len(data) || data[i] != '"' {
@@ -1054,7 +1054,7 @@ func (recv CrossPkgModStruct) DecodeFrom(data []byte) (result CrossPkgModStruct,
 			}
 		case "tag":
 			if seenTag {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"tag"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"tag"}}
 			}
 			seenTag = true
 			if i >= len(data) || data[i] != '"' {
@@ -1081,7 +1081,7 @@ func (recv CrossPkgModStruct) DecodeFrom(data []byte) (result CrossPkgModStruct,
 			}
 			result.Tag = thirdparty.PrefixHash(result.Tag)
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -1140,7 +1140,7 @@ func (recv CrossPkgModStruct) DecodeFromStream(s *scan.Stream) (result CrossPkgM
 				return result, decode.NewParseErr("code", s.Pos, err)
 			}
 			if seenCode {
-				return result, &validation.DuplicateKeyError{Path: []string{"code"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"code"}}
 			}
 			seenCode = true
 			result.Code, err = s.String()
@@ -1148,7 +1148,7 @@ func (recv CrossPkgModStruct) DecodeFromStream(s *scan.Stream) (result CrossPkgM
 				return result, decode.NewParseErr("code", s.Pos, err)
 			}
 			if err := thirdparty.ValidateUpper(result.Code); err != nil {
-				return result, &validation.CustomError{Path: []string{"code"}, Name: "@thirdparty.ValidateUpper", Cause: err}
+				return result, &validation.CustomError{Pos: s.Offset(), Path: []string{"code"}, Name: "@thirdparty.ValidateUpper", Cause: err}
 			}
 		case "nonEmpty":
 			err = s.ConsumeColon()
@@ -1156,7 +1156,7 @@ func (recv CrossPkgModStruct) DecodeFromStream(s *scan.Stream) (result CrossPkgM
 				return result, decode.NewParseErr("nonEmpty", s.Pos, err)
 			}
 			if seenNonEmpty {
-				return result, &validation.DuplicateKeyError{Path: []string{"nonEmpty"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"nonEmpty"}}
 			}
 			seenNonEmpty = true
 			result.NonEmpty, err = s.String()
@@ -1174,7 +1174,7 @@ func (recv CrossPkgModStruct) DecodeFromStream(s *scan.Stream) (result CrossPkgM
 				return result, decode.NewParseErr("tag", s.Pos, err)
 			}
 			if seenTag {
-				return result, &validation.DuplicateKeyError{Path: []string{"tag"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"tag"}}
 			}
 			seenTag = true
 			result.Tag, err = s.String()
@@ -1183,7 +1183,7 @@ func (recv CrossPkgModStruct) DecodeFromStream(s *scan.Stream) (result CrossPkgM
 			}
 			result.Tag = thirdparty.PrefixHash(result.Tag)
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -1252,7 +1252,7 @@ func (recv NestedMultierrStruct) DecodeFrom(data []byte) (result NestedMultierrS
 	if i < len(data) && data[i] == '}' {
 		i++
 		if !seenName {
-			errs = append(errs, &validation.RequiredError{Path: []string{"name"}})
+			errs = append(errs, &validation.RequiredError{Pos: i, Path: []string{"name"}})
 		}
 		if len(errs) > 0 {
 			return result, i, errs
@@ -1296,7 +1296,7 @@ func (recv NestedMultierrStruct) DecodeFrom(data []byte) (result NestedMultierrS
 		switch key {
 		case "code":
 			if seenCode {
-				errs = append(errs, &validation.DuplicateKeyError{Path: []string{"code"}})
+				errs = append(errs, &validation.DuplicateKeyError{Pos: i, Path: []string{"code"}})
 				i, err = scan.SkipValue(data, i)
 				if err != nil {
 					return result, i, decode.NewParseErr("code", i, err)
@@ -1350,15 +1350,15 @@ func (recv NestedMultierrStruct) DecodeFrom(data []byte) (result NestedMultierrS
 				}
 				result.Code = int(n)
 				if result.Code < 0 {
-					errs = append(errs, &validation.GTEError{Path: []string{"code"}, Limit: 0, Value: result.Code})
+					errs = append(errs, &validation.GTEError{Pos: i, Path: []string{"code"}, Limit: 0, Value: result.Code})
 				}
 				if result.Code > 100 {
-					errs = append(errs, &validation.LTEError{Path: []string{"code"}, Limit: 100, Value: result.Code})
+					errs = append(errs, &validation.LTEError{Pos: i, Path: []string{"code"}, Limit: 100, Value: result.Code})
 				}
 			}
 		case "inner":
 			if seenInner {
-				errs = append(errs, &validation.DuplicateKeyError{Path: []string{"inner"}})
+				errs = append(errs, &validation.DuplicateKeyError{Pos: i, Path: []string{"inner"}})
 				i, err = scan.SkipValue(data, i)
 				if err != nil {
 					return result, i, decode.NewParseErr("inner", i, err)
@@ -1378,7 +1378,7 @@ func (recv NestedMultierrStruct) DecodeFrom(data []byte) (result NestedMultierrS
 			}
 		case "name":
 			if seenName {
-				errs = append(errs, &validation.DuplicateKeyError{Path: []string{"name"}})
+				errs = append(errs, &validation.DuplicateKeyError{Pos: i, Path: []string{"name"}})
 				i, err = scan.SkipValue(data, i)
 				if err != nil {
 					return result, i, decode.NewParseErr("name", i, err)
@@ -1408,11 +1408,11 @@ func (recv NestedMultierrStruct) DecodeFrom(data []byte) (result NestedMultierrS
 					}
 				}
 				if len(result.Name) < 2 {
-					errs = append(errs, &validation.MinLenError{Path: []string{"name"}, Limit: 2, Got: len(result.Name)})
+					errs = append(errs, &validation.MinLenError{Pos: i, Path: []string{"name"}, Limit: 2, Got: len(result.Name)})
 				}
 			}
 		default:
-			errs = append(errs, &validation.UnknownKeyError{Path: []string{key}})
+			errs = append(errs, &validation.UnknownKeyError{Pos: i, Path: []string{key}})
 			i, err = scan.SkipValue(data, i)
 			if err != nil {
 				return result, i, decode.NewParseErr(key, i, err)
@@ -1434,7 +1434,7 @@ func (recv NestedMultierrStruct) DecodeFrom(data []byte) (result NestedMultierrS
 		if data[i] == '}' {
 			i++
 			if !seenName {
-				errs = append(errs, &validation.RequiredError{Path: []string{"name"}})
+				errs = append(errs, &validation.RequiredError{Pos: i, Path: []string{"name"}})
 			}
 			if len(errs) > 0 {
 				return result, i, errs
@@ -1468,7 +1468,7 @@ func (recv NestedMultierrStruct) DecodeFromStream(s *scan.Stream) (result Nested
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
 		if !seenName {
-			errs = append(errs, &validation.RequiredError{Path: []string{"name"}})
+			errs = append(errs, &validation.RequiredError{Pos: s.Offset(), Path: []string{"name"}})
 		}
 		if len(errs) > 0 {
 			return result, errs
@@ -1488,7 +1488,7 @@ func (recv NestedMultierrStruct) DecodeFromStream(s *scan.Stream) (result Nested
 				return result, decode.NewParseErr("code", s.Pos, err)
 			}
 			if seenCode {
-				errs = append(errs, &validation.DuplicateKeyError{Path: []string{"code"}})
+				errs = append(errs, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"code"}})
 				err = s.SkipValue()
 				if err != nil {
 					return result, decode.NewParseErr("code", s.Pos, err)
@@ -1502,10 +1502,10 @@ func (recv NestedMultierrStruct) DecodeFromStream(s *scan.Stream) (result Nested
 				}
 				result.Code = int(iv)
 				if result.Code < 0 {
-					errs = append(errs, &validation.GTEError{Path: []string{"code"}, Limit: 0, Value: result.Code})
+					errs = append(errs, &validation.GTEError{Pos: s.Offset(), Path: []string{"code"}, Limit: 0, Value: result.Code})
 				}
 				if result.Code > 100 {
-					errs = append(errs, &validation.LTEError{Path: []string{"code"}, Limit: 100, Value: result.Code})
+					errs = append(errs, &validation.LTEError{Pos: s.Offset(), Path: []string{"code"}, Limit: 100, Value: result.Code})
 				}
 
 			}
@@ -1515,7 +1515,7 @@ func (recv NestedMultierrStruct) DecodeFromStream(s *scan.Stream) (result Nested
 				return result, decode.NewParseErr("inner", s.Pos, err)
 			}
 			if seenInner {
-				errs = append(errs, &validation.DuplicateKeyError{Path: []string{"inner"}})
+				errs = append(errs, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"inner"}})
 				err = s.SkipValue()
 				if err != nil {
 					return result, decode.NewParseErr("inner", s.Pos, err)
@@ -1538,7 +1538,7 @@ func (recv NestedMultierrStruct) DecodeFromStream(s *scan.Stream) (result Nested
 				return result, decode.NewParseErr("name", s.Pos, err)
 			}
 			if seenName {
-				errs = append(errs, &validation.DuplicateKeyError{Path: []string{"name"}})
+				errs = append(errs, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"name"}})
 				err = s.SkipValue()
 				if err != nil {
 					return result, decode.NewParseErr("name", s.Pos, err)
@@ -1550,12 +1550,12 @@ func (recv NestedMultierrStruct) DecodeFromStream(s *scan.Stream) (result Nested
 					return result, decode.NewParseErr("name", s.Pos, err)
 				}
 				if len(result.Name) < 2 {
-					errs = append(errs, &validation.MinLenError{Path: []string{"name"}, Limit: 2, Got: len(result.Name)})
+					errs = append(errs, &validation.MinLenError{Pos: s.Offset(), Path: []string{"name"}, Limit: 2, Got: len(result.Name)})
 				}
 
 			}
 		default:
-			errs = append(errs, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}})
+			errs = append(errs, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}})
 			err = s.ConsumeColon()
 			if err != nil {
 				return result, decode.NewParseErr(strings.Clone(key), s.Pos, err)
@@ -1588,7 +1588,7 @@ func (recv NestedMultierrStruct) DecodeFromStream(s *scan.Stream) (result Nested
 		if c == '}' {
 			s.Pos++
 			if !seenName {
-				errs = append(errs, &validation.RequiredError{Path: []string{"name"}})
+				errs = append(errs, &validation.RequiredError{Pos: s.Offset(), Path: []string{"name"}})
 			}
 			if len(errs) > 0 {
 				return result, errs

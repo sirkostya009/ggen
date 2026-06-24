@@ -82,7 +82,10 @@ const (
 
 // --- presence ---
 
-type RequiredError struct{ Path []string }
+type RequiredError struct {
+	Pos  int
+	Path []string
+}
 
 func (e *RequiredError) Error() string {
 	return fmt.Sprintf("missing required field %q", strings.Join(e.Path, "."))
@@ -90,7 +93,10 @@ func (e *RequiredError) Error() string {
 func (*RequiredError) Rule() Rule             { return Required }
 func (e *RequiredError) prependPath(s string) { e.Path = prepend(e.Path, s) }
 
-type NotEmptyError struct{ Path []string }
+type NotEmptyError struct {
+	Pos  int
+	Path []string
+}
 
 func (e *NotEmptyError) Error() string {
 	return fmt.Sprintf("%s: must not be empty", strings.Join(e.Path, "."))
@@ -101,6 +107,7 @@ func (e *NotEmptyError) prependPath(s string) { e.Path = prepend(e.Path, s) }
 // --- length ---
 
 type LenError struct {
+	Pos  int
 	Path []string
 	Want int
 	Got  int
@@ -113,6 +120,7 @@ func (*LenError) Rule() Rule             { return Len }
 func (e *LenError) prependPath(s string) { e.Path = prepend(e.Path, s) }
 
 type MinLenError struct {
+	Pos   int
 	Path  []string
 	Limit int
 	Got   int
@@ -125,6 +133,7 @@ func (*MinLenError) Rule() Rule             { return MinLen }
 func (e *MinLenError) prependPath(s string) { e.Path = prepend(e.Path, s) }
 
 type MaxLenError struct {
+	Pos   int
 	Path  []string
 	Limit int
 	Got   int
@@ -139,6 +148,7 @@ func (e *MaxLenError) prependPath(s string) { e.Path = prepend(e.Path, s) }
 // --- runes ---
 
 type RunesError struct {
+	Pos  int
 	Path []string
 	Want int
 	Got  int
@@ -151,6 +161,7 @@ func (*RunesError) Rule() Rule             { return Runes }
 func (e *RunesError) prependPath(s string) { e.Path = prepend(e.Path, s) }
 
 type MinRunesError struct {
+	Pos   int
 	Path  []string
 	Limit int
 	Got   int
@@ -163,6 +174,7 @@ func (*MinRunesError) Rule() Rule             { return MinRunes }
 func (e *MinRunesError) prependPath(s string) { e.Path = prepend(e.Path, s) }
 
 type MaxRunesError struct {
+	Pos   int
 	Path  []string
 	Limit int
 	Got   int
@@ -179,6 +191,7 @@ func (e *MaxRunesError) prependPath(s string) { e.Path = prepend(e.Path, s) }
 // numeric type for inspection (boxing only happens on the failure path).
 
 type GTError struct {
+	Pos   int
 	Path  []string
 	Limit float64
 	Value any
@@ -191,6 +204,7 @@ func (*GTError) Rule() Rule             { return GT }
 func (e *GTError) prependPath(s string) { e.Path = prepend(e.Path, s) }
 
 type GTEError struct {
+	Pos   int
 	Path  []string
 	Limit float64
 	Value any
@@ -203,6 +217,7 @@ func (*GTEError) Rule() Rule             { return GTE }
 func (e *GTEError) prependPath(s string) { e.Path = prepend(e.Path, s) }
 
 type LTError struct {
+	Pos   int
 	Path  []string
 	Limit float64
 	Value any
@@ -215,6 +230,7 @@ func (*LTError) Rule() Rule             { return LT }
 func (e *LTError) prependPath(s string) { e.Path = prepend(e.Path, s) }
 
 type LTEError struct {
+	Pos   int
 	Path  []string
 	Limit float64
 	Value any
@@ -231,6 +247,7 @@ func (e *LTEError) prependPath(s string) { e.Path = prepend(e.Path, s) }
 // failure site.
 
 type EqError struct {
+	Pos   int
 	Path  []string
 	Want  any
 	Value any
@@ -243,6 +260,7 @@ func (*EqError) Rule() Rule             { return Eq }
 func (e *EqError) prependPath(s string) { e.Path = prepend(e.Path, s) }
 
 type NeqError struct {
+	Pos   int
 	Path  []string
 	Want  any
 	Value any
@@ -258,6 +276,7 @@ func (e *NeqError) prependPath(s string) { e.Path = prepend(e.Path, s) }
 // emitted by codegen — no per-error allocation.
 
 type OneOfError struct {
+	Pos     int
 	Path    []string
 	Allowed []string
 	Value   any
@@ -273,6 +292,7 @@ func (e *OneOfError) prependPath(s string) { e.Path = prepend(e.Path, s) }
 // --- format predicates ---
 
 type EmailError struct {
+	Pos   int
 	Path  []string
 	Value string
 }
@@ -284,6 +304,7 @@ func (*EmailError) Rule() Rule             { return Email }
 func (e *EmailError) prependPath(s string) { e.Path = prepend(e.Path, s) }
 
 type URLError struct {
+	Pos   int
 	Path  []string
 	Value string
 	Cause error
@@ -297,6 +318,7 @@ func (e *URLError) Unwrap() error        { return e.Cause }
 func (e *URLError) prependPath(s string) { e.Path = prepend(e.Path, s) }
 
 type ASCIIError struct {
+	Pos   int
 	Path  []string
 	Value string
 }
@@ -308,6 +330,7 @@ func (*ASCIIError) Rule() Rule             { return ASCII }
 func (e *ASCIIError) prependPath(s string) { e.Path = prepend(e.Path, s) }
 
 type PrintableError struct {
+	Pos   int
 	Path  []string
 	Value string
 }
@@ -319,6 +342,7 @@ func (*PrintableError) Rule() Rule             { return Printable }
 func (e *PrintableError) prependPath(s string) { e.Path = prepend(e.Path, s) }
 
 type AlphanumError struct {
+	Pos   int
 	Path  []string
 	Value string
 }
@@ -330,6 +354,7 @@ func (*AlphanumError) Rule() Rule             { return Alphanum }
 func (e *AlphanumError) prependPath(s string) { e.Path = prepend(e.Path, s) }
 
 type NumericError struct {
+	Pos   int
 	Path  []string
 	Value string
 }
@@ -341,6 +366,7 @@ func (*NumericError) Rule() Rule             { return Numeric }
 func (e *NumericError) prependPath(s string) { e.Path = prepend(e.Path, s) }
 
 type LowerError struct {
+	Pos   int
 	Path  []string
 	Value string
 }
@@ -352,6 +378,7 @@ func (*LowerError) Rule() Rule             { return Lower }
 func (e *LowerError) prependPath(s string) { e.Path = prepend(e.Path, s) }
 
 type UpperError struct {
+	Pos   int
 	Path  []string
 	Value string
 }
@@ -363,6 +390,7 @@ func (*UpperError) Rule() Rule             { return Upper }
 func (e *UpperError) prependPath(s string) { e.Path = prepend(e.Path, s) }
 
 type HexadecimalError struct {
+	Pos   int
 	Path  []string
 	Value string
 }
@@ -376,6 +404,7 @@ func (e *HexadecimalError) prependPath(s string) { e.Path = prepend(e.Path, s) }
 // --- prefix/suffix/contains ---
 
 type StartsError struct {
+	Pos         int
 	Path        []string
 	Want, Value string
 }
@@ -387,6 +416,7 @@ func (*StartsError) Rule() Rule             { return Starts }
 func (e *StartsError) prependPath(s string) { e.Path = prepend(e.Path, s) }
 
 type EndsError struct {
+	Pos         int
 	Path        []string
 	Want, Value string
 }
@@ -398,6 +428,7 @@ func (*EndsError) Rule() Rule             { return Ends }
 func (e *EndsError) prependPath(s string) { e.Path = prepend(e.Path, s) }
 
 type ContainsError struct {
+	Pos         int
 	Path        []string
 	Want, Value string
 }
@@ -411,6 +442,7 @@ func (e *ContainsError) prependPath(s string) { e.Path = prepend(e.Path, s) }
 // --- multiple ---
 
 type MultipleError struct {
+	Pos   int
 	Path  []string
 	Of    float64
 	Value any
@@ -424,7 +456,10 @@ func (e *MultipleError) prependPath(s string) { e.Path = prepend(e.Path, s) }
 
 // --- key violations ---
 
-type DuplicateKeyError struct{ Path []string }
+type DuplicateKeyError struct {
+	Pos  int
+	Path []string
+}
 
 func (e *DuplicateKeyError) Error() string {
 	return fmt.Sprintf("duplicate key %q", strings.Join(e.Path, "."))
@@ -432,7 +467,10 @@ func (e *DuplicateKeyError) Error() string {
 func (*DuplicateKeyError) Rule() Rule             { return DuplicateKey }
 func (e *DuplicateKeyError) prependPath(s string) { e.Path = prepend(e.Path, s) }
 
-type UnknownKeyError struct{ Path []string }
+type UnknownKeyError struct {
+	Pos  int
+	Path []string
+}
 
 func (e *UnknownKeyError) Error() string {
 	return fmt.Sprintf("unknown key %q", strings.Join(e.Path, "."))
@@ -443,6 +481,7 @@ func (e *UnknownKeyError) prependPath(s string) { e.Path = prepend(e.Path, s) }
 // --- custom ---
 
 type CustomError struct {
+	Pos   int
 	Path  []string
 	Name  string
 	Cause error

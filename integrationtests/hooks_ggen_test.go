@@ -33,7 +33,7 @@ func (recv HookedStruct) DecodeFrom(data []byte) (result HookedStruct, i int, er
 	if i < len(data) && data[i] == '}' {
 		i++
 		if !seenName {
-			return result, i, &validation.RequiredError{Path: []string{"name"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"name"}}
 		}
 		return result, i, nil
 	}
@@ -74,7 +74,7 @@ func (recv HookedStruct) DecodeFrom(data []byte) (result HookedStruct, i int, er
 		switch key {
 		case "n":
 			if seenN {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"n"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"n"}}
 			}
 			seenN = true
 			neg := false
@@ -124,14 +124,14 @@ func (recv HookedStruct) DecodeFrom(data []byte) (result HookedStruct, i int, er
 			}
 			result.N = int(n)
 			if result.N < 0 {
-				return result, i, &validation.GTEError{Path: []string{"n"}, Limit: 0, Value: result.N}
+				return result, i, &validation.GTEError{Pos: i, Path: []string{"n"}, Limit: 0, Value: result.N}
 			}
 			if result.N > 100 {
-				return result, i, &validation.LTEError{Path: []string{"n"}, Limit: 100, Value: result.N}
+				return result, i, &validation.LTEError{Pos: i, Path: []string{"n"}, Limit: 100, Value: result.N}
 			}
 		case "name":
 			if seenName {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"name"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"name"}}
 			}
 			seenName = true
 			if i >= len(data) || data[i] != '"' {
@@ -157,13 +157,13 @@ func (recv HookedStruct) DecodeFrom(data []byte) (result HookedStruct, i int, er
 				}
 			}
 			if len(result.Name) < 1 {
-				return result, i, &validation.MinLenError{Path: []string{"name"}, Limit: 1, Got: len(result.Name)}
+				return result, i, &validation.MinLenError{Pos: i, Path: []string{"name"}, Limit: 1, Got: len(result.Name)}
 			}
 			if len(result.Name) > 20 {
-				return result, i, &validation.MaxLenError{Path: []string{"name"}, Limit: 20, Got: len(result.Name)}
+				return result, i, &validation.MaxLenError{Pos: i, Path: []string{"name"}, Limit: 20, Got: len(result.Name)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -181,7 +181,7 @@ func (recv HookedStruct) DecodeFrom(data []byte) (result HookedStruct, i int, er
 		if data[i] == '}' {
 			i++
 			if !seenName {
-				return result, i, &validation.RequiredError{Path: []string{"name"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"name"}}
 			}
 			return result, i, nil
 		}
@@ -210,7 +210,7 @@ func (recv HookedStruct) DecodeFromStream(s *scan.Stream) (result HookedStruct, 
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
 		if !seenName {
-			return result, &validation.RequiredError{Path: []string{"name"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"name"}}
 		}
 		return result, nil
 	}
@@ -227,7 +227,7 @@ func (recv HookedStruct) DecodeFromStream(s *scan.Stream) (result HookedStruct, 
 				return result, decode.NewParseErr("n", s.Pos, err)
 			}
 			if seenN {
-				return result, &validation.DuplicateKeyError{Path: []string{"n"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"n"}}
 			}
 			seenN = true
 			var iv int64
@@ -237,10 +237,10 @@ func (recv HookedStruct) DecodeFromStream(s *scan.Stream) (result HookedStruct, 
 			}
 			result.N = int(iv)
 			if result.N < 0 {
-				return result, &validation.GTEError{Path: []string{"n"}, Limit: 0, Value: result.N}
+				return result, &validation.GTEError{Pos: s.Offset(), Path: []string{"n"}, Limit: 0, Value: result.N}
 			}
 			if result.N > 100 {
-				return result, &validation.LTEError{Path: []string{"n"}, Limit: 100, Value: result.N}
+				return result, &validation.LTEError{Pos: s.Offset(), Path: []string{"n"}, Limit: 100, Value: result.N}
 			}
 		case "name":
 			err = s.ConsumeColon()
@@ -248,7 +248,7 @@ func (recv HookedStruct) DecodeFromStream(s *scan.Stream) (result HookedStruct, 
 				return result, decode.NewParseErr("name", s.Pos, err)
 			}
 			if seenName {
-				return result, &validation.DuplicateKeyError{Path: []string{"name"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"name"}}
 			}
 			seenName = true
 			result.Name, err = s.String()
@@ -256,13 +256,13 @@ func (recv HookedStruct) DecodeFromStream(s *scan.Stream) (result HookedStruct, 
 				return result, decode.NewParseErr("name", s.Pos, err)
 			}
 			if len(result.Name) < 1 {
-				return result, &validation.MinLenError{Path: []string{"name"}, Limit: 1, Got: len(result.Name)}
+				return result, &validation.MinLenError{Pos: s.Offset(), Path: []string{"name"}, Limit: 1, Got: len(result.Name)}
 			}
 			if len(result.Name) > 20 {
-				return result, &validation.MaxLenError{Path: []string{"name"}, Limit: 20, Got: len(result.Name)}
+				return result, &validation.MaxLenError{Pos: s.Offset(), Path: []string{"name"}, Limit: 20, Got: len(result.Name)}
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -287,7 +287,7 @@ func (recv HookedStruct) DecodeFromStream(s *scan.Stream) (result HookedStruct, 
 		if c == '}' {
 			s.Pos++
 			if !seenName {
-				return result, &validation.RequiredError{Path: []string{"name"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"name"}}
 			}
 			return result, nil
 		}

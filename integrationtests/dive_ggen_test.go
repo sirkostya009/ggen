@@ -79,7 +79,7 @@ func (recv DiveStruct) DecodeFrom(data []byte) (result DiveStruct, i int, err er
 		switch key {
 		case "count":
 			if seenCount {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"count"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"count"}}
 			}
 			seenCount = true
 			neg := false
@@ -129,11 +129,11 @@ func (recv DiveStruct) DecodeFrom(data []byte) (result DiveStruct, i int, err er
 			}
 			result.Count = int(n)
 			if err := EvenOnly(result.Count); err != nil {
-				return result, i, &validation.CustomError{Path: []string{"count"}, Name: "@EvenOnly", Cause: err}
+				return result, i, &validation.CustomError{Pos: i, Path: []string{"count"}, Name: "@EvenOnly", Cause: err}
 			}
 		case "scores":
 			if seenScores {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"scores"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"scores"}}
 			}
 			seenScores = true
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -213,10 +213,10 @@ func (recv DiveStruct) DecodeFrom(data []byte) (result DiveStruct, i int, err er
 				}
 				result.Scores[len(result.Scores)-1] = int(n)
 				if result.Scores[len(result.Scores)-1] < 0 {
-					return result, i, &validation.GTEError{Path: []string{"scores[]"}, Limit: 0, Value: result.Scores[len(result.Scores)-1]}
+					return result, i, &validation.GTEError{Pos: i, Path: []string{"scores[]"}, Limit: 0, Value: result.Scores[len(result.Scores)-1]}
 				}
 				if result.Scores[len(result.Scores)-1] > 100 {
-					return result, i, &validation.LTEError{Path: []string{"scores[]"}, Limit: 100, Value: result.Scores[len(result.Scores)-1]}
+					return result, i, &validation.LTEError{Pos: i, Path: []string{"scores[]"}, Limit: 100, Value: result.Scores[len(result.Scores)-1]}
 				}
 				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 					i++
@@ -239,7 +239,7 @@ func (recv DiveStruct) DecodeFrom(data []byte) (result DiveStruct, i int, err er
 			i++
 		case "tags":
 			if seenTags {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"tags"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"tags"}}
 			}
 			seenTags = true
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -290,10 +290,10 @@ func (recv DiveStruct) DecodeFrom(data []byte) (result DiveStruct, i int, err er
 						}
 					}
 					if utf8.RuneCountInString(result.Tags[len(result.Tags)-1]) < 2 {
-						return result, i, &validation.MinRunesError{Path: []string{"tags[]"}, Limit: 2, Got: utf8.RuneCountInString(result.Tags[len(result.Tags)-1])}
+						return result, i, &validation.MinRunesError{Pos: i, Path: []string{"tags[]"}, Limit: 2, Got: utf8.RuneCountInString(result.Tags[len(result.Tags)-1])}
 					}
 					if utf8.RuneCountInString(result.Tags[len(result.Tags)-1]) > 10 {
-						return result, i, &validation.MaxRunesError{Path: []string{"tags[]"}, Limit: 10, Got: utf8.RuneCountInString(result.Tags[len(result.Tags)-1])}
+						return result, i, &validation.MaxRunesError{Pos: i, Path: []string{"tags[]"}, Limit: 10, Got: utf8.RuneCountInString(result.Tags[len(result.Tags)-1])}
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -316,14 +316,14 @@ func (recv DiveStruct) DecodeFrom(data []byte) (result DiveStruct, i int, err er
 				i++
 			}
 			if len(result.Tags) < 1 {
-				return result, i, &validation.MinLenError{Path: []string{"tags"}, Limit: 1, Got: len(result.Tags)}
+				return result, i, &validation.MinLenError{Pos: i, Path: []string{"tags"}, Limit: 1, Got: len(result.Tags)}
 			}
 			if len(result.Tags) > 3 {
-				return result, i, &validation.MaxLenError{Path: []string{"tags"}, Limit: 3, Got: len(result.Tags)}
+				return result, i, &validation.MaxLenError{Pos: i, Path: []string{"tags"}, Limit: 3, Got: len(result.Tags)}
 			}
 		case "title":
 			if seenTitle {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"title"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"title"}}
 			}
 			seenTitle = true
 			if i >= len(data) || data[i] != '"' {
@@ -349,13 +349,13 @@ func (recv DiveStruct) DecodeFrom(data []byte) (result DiveStruct, i int, err er
 				}
 			}
 			if utf8.RuneCountInString(result.Title) < 1 {
-				return result, i, &validation.MinRunesError{Path: []string{"title"}, Limit: 1, Got: utf8.RuneCountInString(result.Title)}
+				return result, i, &validation.MinRunesError{Pos: i, Path: []string{"title"}, Limit: 1, Got: utf8.RuneCountInString(result.Title)}
 			}
 			if utf8.RuneCountInString(result.Title) > 5 {
-				return result, i, &validation.MaxRunesError{Path: []string{"title"}, Limit: 5, Got: utf8.RuneCountInString(result.Title)}
+				return result, i, &validation.MaxRunesError{Pos: i, Path: []string{"title"}, Limit: 5, Got: utf8.RuneCountInString(result.Title)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -421,7 +421,7 @@ func (recv DiveStruct) DecodeFromStream(s *scan.Stream) (result DiveStruct, err 
 				return result, decode.NewParseErr("count", s.Pos, err)
 			}
 			if seenCount {
-				return result, &validation.DuplicateKeyError{Path: []string{"count"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"count"}}
 			}
 			seenCount = true
 			var iv int64
@@ -431,7 +431,7 @@ func (recv DiveStruct) DecodeFromStream(s *scan.Stream) (result DiveStruct, err 
 			}
 			result.Count = int(iv)
 			if err := EvenOnly(result.Count); err != nil {
-				return result, &validation.CustomError{Path: []string{"count"}, Name: "@EvenOnly", Cause: err}
+				return result, &validation.CustomError{Pos: s.Offset(), Path: []string{"count"}, Name: "@EvenOnly", Cause: err}
 			}
 		case "scores":
 			err = s.ConsumeColon()
@@ -439,7 +439,7 @@ func (recv DiveStruct) DecodeFromStream(s *scan.Stream) (result DiveStruct, err 
 				return result, decode.NewParseErr("scores", s.Pos, err)
 			}
 			if seenScores {
-				return result, &validation.DuplicateKeyError{Path: []string{"scores"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"scores"}}
 			}
 			seenScores = true
 			err = s.SkipSpace()
@@ -497,10 +497,10 @@ func (recv DiveStruct) DecodeFromStream(s *scan.Stream) (result DiveStruct, err 
 				}
 				result.Scores[len(result.Scores)-1] = int(iv)
 				if result.Scores[len(result.Scores)-1] < 0 {
-					return result, &validation.GTEError{Path: []string{"scores[]"}, Limit: 0, Value: result.Scores[len(result.Scores)-1]}
+					return result, &validation.GTEError{Pos: s.Offset(), Path: []string{"scores[]"}, Limit: 0, Value: result.Scores[len(result.Scores)-1]}
 				}
 				if result.Scores[len(result.Scores)-1] > 100 {
-					return result, &validation.LTEError{Path: []string{"scores[]"}, Limit: 100, Value: result.Scores[len(result.Scores)-1]}
+					return result, &validation.LTEError{Pos: s.Offset(), Path: []string{"scores[]"}, Limit: 100, Value: result.Scores[len(result.Scores)-1]}
 				}
 				err = s.SkipSpace()
 				if err != nil {
@@ -534,7 +534,7 @@ func (recv DiveStruct) DecodeFromStream(s *scan.Stream) (result DiveStruct, err 
 				return result, decode.NewParseErr("tags", s.Pos, err)
 			}
 			if seenTags {
-				return result, &validation.DuplicateKeyError{Path: []string{"tags"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"tags"}}
 			}
 			seenTags = true
 			err = s.SkipSpace()
@@ -589,10 +589,10 @@ func (recv DiveStruct) DecodeFromStream(s *scan.Stream) (result DiveStruct, err 
 						return result, decode.NewParseErr("tags", s.Pos, err)
 					}
 					if utf8.RuneCountInString(result.Tags[len(result.Tags)-1]) < 2 {
-						return result, &validation.MinRunesError{Path: []string{"tags[]"}, Limit: 2, Got: utf8.RuneCountInString(result.Tags[len(result.Tags)-1])}
+						return result, &validation.MinRunesError{Pos: s.Offset(), Path: []string{"tags[]"}, Limit: 2, Got: utf8.RuneCountInString(result.Tags[len(result.Tags)-1])}
 					}
 					if utf8.RuneCountInString(result.Tags[len(result.Tags)-1]) > 10 {
-						return result, &validation.MaxRunesError{Path: []string{"tags[]"}, Limit: 10, Got: utf8.RuneCountInString(result.Tags[len(result.Tags)-1])}
+						return result, &validation.MaxRunesError{Pos: s.Offset(), Path: []string{"tags[]"}, Limit: 10, Got: utf8.RuneCountInString(result.Tags[len(result.Tags)-1])}
 					}
 					err = s.SkipSpace()
 					if err != nil {
@@ -622,10 +622,10 @@ func (recv DiveStruct) DecodeFromStream(s *scan.Stream) (result DiveStruct, err 
 				s.Pos++
 			}
 			if len(result.Tags) < 1 {
-				return result, &validation.MinLenError{Path: []string{"tags"}, Limit: 1, Got: len(result.Tags)}
+				return result, &validation.MinLenError{Pos: s.Offset(), Path: []string{"tags"}, Limit: 1, Got: len(result.Tags)}
 			}
 			if len(result.Tags) > 3 {
-				return result, &validation.MaxLenError{Path: []string{"tags"}, Limit: 3, Got: len(result.Tags)}
+				return result, &validation.MaxLenError{Pos: s.Offset(), Path: []string{"tags"}, Limit: 3, Got: len(result.Tags)}
 			}
 		case "title":
 			err = s.ConsumeColon()
@@ -633,7 +633,7 @@ func (recv DiveStruct) DecodeFromStream(s *scan.Stream) (result DiveStruct, err 
 				return result, decode.NewParseErr("title", s.Pos, err)
 			}
 			if seenTitle {
-				return result, &validation.DuplicateKeyError{Path: []string{"title"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"title"}}
 			}
 			seenTitle = true
 			result.Title, err = s.String()
@@ -641,13 +641,13 @@ func (recv DiveStruct) DecodeFromStream(s *scan.Stream) (result DiveStruct, err 
 				return result, decode.NewParseErr("title", s.Pos, err)
 			}
 			if utf8.RuneCountInString(result.Title) < 1 {
-				return result, &validation.MinRunesError{Path: []string{"title"}, Limit: 1, Got: utf8.RuneCountInString(result.Title)}
+				return result, &validation.MinRunesError{Pos: s.Offset(), Path: []string{"title"}, Limit: 1, Got: utf8.RuneCountInString(result.Title)}
 			}
 			if utf8.RuneCountInString(result.Title) > 5 {
-				return result, &validation.MaxRunesError{Path: []string{"title"}, Limit: 5, Got: utf8.RuneCountInString(result.Title)}
+				return result, &validation.MaxRunesError{Pos: s.Offset(), Path: []string{"title"}, Limit: 5, Got: utf8.RuneCountInString(result.Title)}
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -802,7 +802,7 @@ func (recv CustomDiveStruct) DecodeFrom(data []byte) (result CustomDiveStruct, i
 		switch key {
 		case "lookup":
 			if seenLookup {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"lookup"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"lookup"}}
 			}
 			seenLookup = true
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -854,7 +854,7 @@ func (recv CustomDiveStruct) DecodeFrom(data []byte) (result CustomDiveStruct, i
 					}
 				}
 				if err := KeyShape(mk); err != nil {
-					return result, i, &validation.CustomError{Path: []string{"lookup.key"}, Name: "@KeyShape", Cause: err}
+					return result, i, &validation.CustomError{Pos: i, Path: []string{"lookup.key"}, Name: "@KeyShape", Cause: err}
 				}
 				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 					i++
@@ -933,7 +933,7 @@ func (recv CustomDiveStruct) DecodeFrom(data []byte) (result CustomDiveStruct, i
 			i++
 		case "mixed":
 			if seenMixed {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"mixed"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"mixed"}}
 			}
 			seenMixed = true
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -1062,7 +1062,7 @@ func (recv CustomDiveStruct) DecodeFrom(data []byte) (result CustomDiveStruct, i
 			i++
 		case "ptr":
 			if seenPtr {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"ptr"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"ptr"}}
 			}
 			seenPtr = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -1121,11 +1121,11 @@ func (recv CustomDiveStruct) DecodeFrom(data []byte) (result CustomDiveStruct, i
 				}
 			}
 			if err := PointerCheck(result.Ptr); err != nil {
-				return result, i, &validation.CustomError{Path: []string{"ptr"}, Name: "@PointerCheck", Cause: err}
+				return result, i, &validation.CustomError{Pos: i, Path: []string{"ptr"}, Name: "@PointerCheck", Cause: err}
 			}
 		case "tags":
 			if seenTags {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"tags"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"tags"}}
 			}
 			seenTags = true
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -1177,7 +1177,7 @@ func (recv CustomDiveStruct) DecodeFrom(data []byte) (result CustomDiveStruct, i
 					}
 				}
 				if err := NotBlank(result.Tags[len(result.Tags)-1]); err != nil {
-					return result, i, &validation.CustomError{Path: []string{"tags[]"}, Name: "@NotBlank", Cause: err}
+					return result, i, &validation.CustomError{Pos: i, Path: []string{"tags[]"}, Name: "@NotBlank", Cause: err}
 				}
 				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 					i++
@@ -1200,7 +1200,7 @@ func (recv CustomDiveStruct) DecodeFrom(data []byte) (result CustomDiveStruct, i
 			i++
 		case "trim":
 			if seenTrim {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"trim"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"trim"}}
 			}
 			seenTrim = true
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -1272,7 +1272,7 @@ func (recv CustomDiveStruct) DecodeFrom(data []byte) (result CustomDiveStruct, i
 			}
 			i++
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -1345,7 +1345,7 @@ func (recv CustomDiveStruct) DecodeFromStream(s *scan.Stream) (result CustomDive
 				return result, decode.NewParseErr("lookup", s.Pos, err)
 			}
 			if seenLookup {
-				return result, &validation.DuplicateKeyError{Path: []string{"lookup"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"lookup"}}
 			}
 			seenLookup = true
 			err = s.SkipSpace()
@@ -1401,7 +1401,7 @@ func (recv CustomDiveStruct) DecodeFromStream(s *scan.Stream) (result CustomDive
 					return result, decode.NewParseErr("lookup", s.Pos, err)
 				}
 				if err := KeyShape(mk); err != nil {
-					return result, &validation.CustomError{Path: []string{"lookup.key"}, Name: "@KeyShape", Cause: err}
+					return result, &validation.CustomError{Pos: s.Offset(), Path: []string{"lookup.key"}, Name: "@KeyShape", Cause: err}
 				}
 				err = s.SkipSpace()
 				if err != nil {
@@ -1458,7 +1458,7 @@ func (recv CustomDiveStruct) DecodeFromStream(s *scan.Stream) (result CustomDive
 				return result, decode.NewParseErr("mixed", s.Pos, err)
 			}
 			if seenMixed {
-				return result, &validation.DuplicateKeyError{Path: []string{"mixed"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"mixed"}}
 			}
 			seenMixed = true
 			err = s.SkipSpace()
@@ -1569,7 +1569,7 @@ func (recv CustomDiveStruct) DecodeFromStream(s *scan.Stream) (result CustomDive
 				return result, decode.NewParseErr("ptr", s.Pos, err)
 			}
 			if seenPtr {
-				return result, &validation.DuplicateKeyError{Path: []string{"ptr"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"ptr"}}
 			}
 			seenPtr = true
 			if s.Pos >= len(s.Bytes()) {
@@ -1603,7 +1603,7 @@ func (recv CustomDiveStruct) DecodeFromStream(s *scan.Stream) (result CustomDive
 				}
 			}
 			if err := PointerCheck(result.Ptr); err != nil {
-				return result, &validation.CustomError{Path: []string{"ptr"}, Name: "@PointerCheck", Cause: err}
+				return result, &validation.CustomError{Pos: s.Offset(), Path: []string{"ptr"}, Name: "@PointerCheck", Cause: err}
 			}
 		case "tags":
 			err = s.ConsumeColon()
@@ -1611,7 +1611,7 @@ func (recv CustomDiveStruct) DecodeFromStream(s *scan.Stream) (result CustomDive
 				return result, decode.NewParseErr("tags", s.Pos, err)
 			}
 			if seenTags {
-				return result, &validation.DuplicateKeyError{Path: []string{"tags"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"tags"}}
 			}
 			seenTags = true
 			err = s.SkipSpace()
@@ -1667,7 +1667,7 @@ func (recv CustomDiveStruct) DecodeFromStream(s *scan.Stream) (result CustomDive
 					return result, decode.NewParseErr("tags", s.Pos, err)
 				}
 				if err := NotBlank(result.Tags[len(result.Tags)-1]); err != nil {
-					return result, &validation.CustomError{Path: []string{"tags[]"}, Name: "@NotBlank", Cause: err}
+					return result, &validation.CustomError{Pos: s.Offset(), Path: []string{"tags[]"}, Name: "@NotBlank", Cause: err}
 				}
 				err = s.SkipSpace()
 				if err != nil {
@@ -1701,7 +1701,7 @@ func (recv CustomDiveStruct) DecodeFromStream(s *scan.Stream) (result CustomDive
 				return result, decode.NewParseErr("trim", s.Pos, err)
 			}
 			if seenTrim {
-				return result, &validation.DuplicateKeyError{Path: []string{"trim"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"trim"}}
 			}
 			seenTrim = true
 			err = s.SkipSpace()
@@ -1784,7 +1784,7 @@ func (recv CustomDiveStruct) DecodeFromStream(s *scan.Stream) (result CustomDive
 			}
 			s.Pos++
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()

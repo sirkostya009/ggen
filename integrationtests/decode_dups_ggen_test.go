@@ -33,7 +33,7 @@ func (recv AllowDupsStruct) DecodeFrom(data []byte) (result AllowDupsStruct, i i
 	if i < len(data) && data[i] == '}' {
 		i++
 		if !seenName {
-			return result, i, &validation.RequiredError{Path: []string{"name"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"name"}}
 		}
 		return result, i, nil
 	}
@@ -127,10 +127,10 @@ func (recv AllowDupsStruct) DecodeFrom(data []byte) (result AllowDupsStruct, i i
 				}
 				result.N = int(n)
 				if result.N < 0 {
-					return result, i, &validation.GTEError{Path: []string{"n"}, Limit: 0, Value: result.N}
+					return result, i, &validation.GTEError{Pos: i, Path: []string{"n"}, Limit: 0, Value: result.N}
 				}
 				if result.N > 100 {
-					return result, i, &validation.LTEError{Path: []string{"n"}, Limit: 100, Value: result.N}
+					return result, i, &validation.LTEError{Pos: i, Path: []string{"n"}, Limit: 100, Value: result.N}
 				}
 			}
 		case "name":
@@ -164,14 +164,14 @@ func (recv AllowDupsStruct) DecodeFrom(data []byte) (result AllowDupsStruct, i i
 					}
 				}
 				if len(result.Name) < 1 {
-					return result, i, &validation.MinLenError{Path: []string{"name"}, Limit: 1, Got: len(result.Name)}
+					return result, i, &validation.MinLenError{Pos: i, Path: []string{"name"}, Limit: 1, Got: len(result.Name)}
 				}
 				if len(result.Name) > 20 {
-					return result, i, &validation.MaxLenError{Path: []string{"name"}, Limit: 20, Got: len(result.Name)}
+					return result, i, &validation.MaxLenError{Pos: i, Path: []string{"name"}, Limit: 20, Got: len(result.Name)}
 				}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -189,7 +189,7 @@ func (recv AllowDupsStruct) DecodeFrom(data []byte) (result AllowDupsStruct, i i
 		if data[i] == '}' {
 			i++
 			if !seenName {
-				return result, i, &validation.RequiredError{Path: []string{"name"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"name"}}
 			}
 			return result, i, nil
 		}
@@ -218,7 +218,7 @@ func (recv AllowDupsStruct) DecodeFromStream(s *scan.Stream) (result AllowDupsSt
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
 		if !seenName {
-			return result, &validation.RequiredError{Path: []string{"name"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"name"}}
 		}
 		return result, nil
 	}
@@ -248,10 +248,10 @@ func (recv AllowDupsStruct) DecodeFromStream(s *scan.Stream) (result AllowDupsSt
 				}
 				result.N = int(iv)
 				if result.N < 0 {
-					return result, &validation.GTEError{Path: []string{"n"}, Limit: 0, Value: result.N}
+					return result, &validation.GTEError{Pos: s.Offset(), Path: []string{"n"}, Limit: 0, Value: result.N}
 				}
 				if result.N > 100 {
-					return result, &validation.LTEError{Path: []string{"n"}, Limit: 100, Value: result.N}
+					return result, &validation.LTEError{Pos: s.Offset(), Path: []string{"n"}, Limit: 100, Value: result.N}
 				}
 
 			}
@@ -272,15 +272,15 @@ func (recv AllowDupsStruct) DecodeFromStream(s *scan.Stream) (result AllowDupsSt
 					return result, decode.NewParseErr("name", s.Pos, err)
 				}
 				if len(result.Name) < 1 {
-					return result, &validation.MinLenError{Path: []string{"name"}, Limit: 1, Got: len(result.Name)}
+					return result, &validation.MinLenError{Pos: s.Offset(), Path: []string{"name"}, Limit: 1, Got: len(result.Name)}
 				}
 				if len(result.Name) > 20 {
-					return result, &validation.MaxLenError{Path: []string{"name"}, Limit: 20, Got: len(result.Name)}
+					return result, &validation.MaxLenError{Pos: s.Offset(), Path: []string{"name"}, Limit: 20, Got: len(result.Name)}
 				}
 
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -305,7 +305,7 @@ func (recv AllowDupsStruct) DecodeFromStream(s *scan.Stream) (result AllowDupsSt
 		if c == '}' {
 			s.Pos++
 			if !seenName {
-				return result, &validation.RequiredError{Path: []string{"name"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"name"}}
 			}
 			return result, nil
 		}

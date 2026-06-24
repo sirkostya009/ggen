@@ -253,7 +253,7 @@ func (recv PlainAlias) DecodeFrom(data []byte) (result PlainAlias, i int, err er
 		switch key {
 		case "count":
 			if seenCount {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"count"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"count"}}
 			}
 			seenCount = true
 			neg := false
@@ -304,7 +304,7 @@ func (recv PlainAlias) DecodeFrom(data []byte) (result PlainAlias, i int, err er
 			result.Count = int(n)
 		case "title":
 			if seenTitle {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"title"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"title"}}
 			}
 			seenTitle = true
 			if i >= len(data) || data[i] != '"' {
@@ -330,7 +330,7 @@ func (recv PlainAlias) DecodeFrom(data []byte) (result PlainAlias, i int, err er
 				}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -388,7 +388,7 @@ func (recv PlainAlias) DecodeFromStream(s *scan.Stream) (result PlainAlias, err 
 				return result, decode.NewParseErr("count", s.Pos, err)
 			}
 			if seenCount {
-				return result, &validation.DuplicateKeyError{Path: []string{"count"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"count"}}
 			}
 			seenCount = true
 			var iv int64
@@ -403,7 +403,7 @@ func (recv PlainAlias) DecodeFromStream(s *scan.Stream) (result PlainAlias, err 
 				return result, decode.NewParseErr("title", s.Pos, err)
 			}
 			if seenTitle {
-				return result, &validation.DuplicateKeyError{Path: []string{"title"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"title"}}
 			}
 			seenTitle = true
 			result.Title, err = s.String()
@@ -411,7 +411,7 @@ func (recv PlainAlias) DecodeFromStream(s *scan.Stream) (result PlainAlias, err 
 				return result, decode.NewParseErr("title", s.Pos, err)
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -512,7 +512,7 @@ func (recv SamePkgAlias) DecodeFrom(data []byte) (result SamePkgAlias, i int, er
 		switch key {
 		case "X":
 			if seenX {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"X"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"X"}}
 			}
 			seenX = true
 			neg := false
@@ -563,7 +563,7 @@ func (recv SamePkgAlias) DecodeFrom(data []byte) (result SamePkgAlias, i int, er
 			result.X = int(n)
 		case "Y":
 			if seenY {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"Y"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"Y"}}
 			}
 			seenY = true
 			if i >= len(data) || data[i] != '"' {
@@ -589,7 +589,7 @@ func (recv SamePkgAlias) DecodeFrom(data []byte) (result SamePkgAlias, i int, er
 				}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -647,7 +647,7 @@ func (recv SamePkgAlias) DecodeFromStream(s *scan.Stream) (result SamePkgAlias, 
 				return result, decode.NewParseErr("X", s.Pos, err)
 			}
 			if seenX {
-				return result, &validation.DuplicateKeyError{Path: []string{"X"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"X"}}
 			}
 			seenX = true
 			var iv int64
@@ -662,7 +662,7 @@ func (recv SamePkgAlias) DecodeFromStream(s *scan.Stream) (result SamePkgAlias, 
 				return result, decode.NewParseErr("Y", s.Pos, err)
 			}
 			if seenY {
-				return result, &validation.DuplicateKeyError{Path: []string{"Y"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"Y"}}
 			}
 			seenY = true
 			result.Y, err = s.String()
@@ -670,7 +670,7 @@ func (recv SamePkgAlias) DecodeFromStream(s *scan.Stream) (result SamePkgAlias, 
 				return result, decode.NewParseErr("Y", s.Pos, err)
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -771,7 +771,7 @@ func (recv CrossPkgTaggedAlias) DecodeFrom(data []byte) (result CrossPkgTaggedAl
 		switch key {
 		case "Name":
 			if seenName {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"Name"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"Name"}}
 			}
 			seenName = true
 			if i >= len(data) || data[i] != '"' {
@@ -798,7 +798,7 @@ func (recv CrossPkgTaggedAlias) DecodeFrom(data []byte) (result CrossPkgTaggedAl
 			}
 		case "Tag":
 			if seenTag {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"Tag"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"Tag"}}
 			}
 			seenTag = true
 			if i >= len(data) || data[i] != '"' {
@@ -824,7 +824,7 @@ func (recv CrossPkgTaggedAlias) DecodeFrom(data []byte) (result CrossPkgTaggedAl
 				}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -882,7 +882,7 @@ func (recv CrossPkgTaggedAlias) DecodeFromStream(s *scan.Stream) (result CrossPk
 				return result, decode.NewParseErr("Name", s.Pos, err)
 			}
 			if seenName {
-				return result, &validation.DuplicateKeyError{Path: []string{"Name"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"Name"}}
 			}
 			seenName = true
 			result.Name, err = s.String()
@@ -895,7 +895,7 @@ func (recv CrossPkgTaggedAlias) DecodeFromStream(s *scan.Stream) (result CrossPk
 				return result, decode.NewParseErr("Tag", s.Pos, err)
 			}
 			if seenTag {
-				return result, &validation.DuplicateKeyError{Path: []string{"Tag"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"Tag"}}
 			}
 			seenTag = true
 			result.Tag, err = s.String()
@@ -903,7 +903,7 @@ func (recv CrossPkgTaggedAlias) DecodeFromStream(s *scan.Stream) (result CrossPk
 				return result, decode.NewParseErr("Tag", s.Pos, err)
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -1456,7 +1456,7 @@ func (recv AliasTuple) DecodeFrom(data []byte) (result AliasTuple, i int, err er
 	var idx0 int
 	for i < len(data) && data[i] != ']' {
 		if idx0 >= 3 {
-			return result, i, &validation.LenError{Path: []string{""}, Want: 3, Got: idx0}
+			return result, i, &validation.LenError{Pos: i, Path: []string{""}, Want: 3, Got: idx0}
 		}
 		neg := false
 		if i < len(data) && data[i] == '-' {
@@ -1524,7 +1524,7 @@ func (recv AliasTuple) DecodeFrom(data []byte) (result AliasTuple, i int, err er
 		return result, i, scan.ErrBadArray
 	}
 	if idx0 != 3 {
-		return result, i, &validation.LenError{Path: []string{""}, Want: 3, Got: idx0}
+		return result, i, &validation.LenError{Pos: i, Path: []string{""}, Want: 3, Got: idx0}
 	}
 	i++
 	return result, i, nil
@@ -1548,7 +1548,7 @@ func (recv AliasTuple) DecodeFromStream(s *scan.Stream) (result AliasTuple, err 
 	var idx0 int
 	for s.Bytes()[s.Pos] != ']' {
 		if idx0 >= 3 {
-			return result, &validation.LenError{Path: []string{""}, Want: 3, Got: idx0}
+			return result, &validation.LenError{Pos: s.Offset(), Path: []string{""}, Want: 3, Got: idx0}
 		}
 		var iv int64
 		iv, err = s.Int64()
@@ -1583,7 +1583,7 @@ func (recv AliasTuple) DecodeFromStream(s *scan.Stream) (result AliasTuple, err 
 		return result, decode.NewParseErr("", s.Pos, scan.ErrBadArray)
 	}
 	if idx0 != 3 {
-		return result, &validation.LenError{Path: []string{""}, Want: 3, Got: idx0}
+		return result, &validation.LenError{Pos: s.Offset(), Path: []string{""}, Want: 3, Got: idx0}
 	}
 	s.Pos++
 	return result, nil
@@ -1623,7 +1623,7 @@ func (recv AliasFieldExample) DecodeFrom(data []byte) (result AliasFieldExample,
 	if i < len(data) && data[i] == '}' {
 		i++
 		if !seenBody {
-			return result, i, &validation.RequiredError{Path: []string{"body"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"body"}}
 		}
 		return result, i, nil
 	}
@@ -1664,7 +1664,7 @@ func (recv AliasFieldExample) DecodeFrom(data []byte) (result AliasFieldExample,
 		switch key {
 		case "body":
 			if seenBody {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"body"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"body"}}
 			}
 			seenBody = true
 			var _n int
@@ -1676,14 +1676,14 @@ func (recv AliasFieldExample) DecodeFrom(data []byte) (result AliasFieldExample,
 			result.Body = AliasString(strings.TrimSpace(string(result.Body)))
 			result.Body = AliasString(strings.ToLower(string(result.Body)))
 			if len(result.Body) < 2 {
-				return result, i, &validation.MinLenError{Path: []string{"body"}, Limit: 2, Got: len(result.Body)}
+				return result, i, &validation.MinLenError{Pos: i, Path: []string{"body"}, Limit: 2, Got: len(result.Body)}
 			}
 			if len(result.Body) > 10 {
-				return result, i, &validation.MaxLenError{Path: []string{"body"}, Limit: 10, Got: len(result.Body)}
+				return result, i, &validation.MaxLenError{Pos: i, Path: []string{"body"}, Limit: 10, Got: len(result.Body)}
 			}
 		case "count":
 			if seenCount {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"count"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"count"}}
 			}
 			seenCount = true
 			var _n int
@@ -1699,13 +1699,13 @@ func (recv AliasFieldExample) DecodeFrom(data []byte) (result AliasFieldExample,
 				result.Count = AliasInt(100)
 			}
 			if result.Count < 1 {
-				return result, i, &validation.GTEError{Path: []string{"count"}, Limit: 1, Value: result.Count}
+				return result, i, &validation.GTEError{Pos: i, Path: []string{"count"}, Limit: 1, Value: result.Count}
 			}
 			if result.Count > 100 {
-				return result, i, &validation.LTEError{Path: []string{"count"}, Limit: 100, Value: result.Count}
+				return result, i, &validation.LTEError{Pos: i, Path: []string{"count"}, Limit: 100, Value: result.Count}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -1723,7 +1723,7 @@ func (recv AliasFieldExample) DecodeFrom(data []byte) (result AliasFieldExample,
 		if data[i] == '}' {
 			i++
 			if !seenBody {
-				return result, i, &validation.RequiredError{Path: []string{"body"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"body"}}
 			}
 			return result, i, nil
 		}
@@ -1752,7 +1752,7 @@ func (recv AliasFieldExample) DecodeFromStream(s *scan.Stream) (result AliasFiel
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
 		if !seenBody {
-			return result, &validation.RequiredError{Path: []string{"body"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"body"}}
 		}
 		return result, nil
 	}
@@ -1769,7 +1769,7 @@ func (recv AliasFieldExample) DecodeFromStream(s *scan.Stream) (result AliasFiel
 				return result, decode.NewParseErr("body", s.Pos, err)
 			}
 			if seenBody {
-				return result, &validation.DuplicateKeyError{Path: []string{"body"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"body"}}
 			}
 			seenBody = true
 			result.Body, err = result.Body.DecodeFromStream(s)
@@ -1779,10 +1779,10 @@ func (recv AliasFieldExample) DecodeFromStream(s *scan.Stream) (result AliasFiel
 			result.Body = AliasString(strings.TrimSpace(string(result.Body)))
 			result.Body = AliasString(strings.ToLower(string(result.Body)))
 			if len(result.Body) < 2 {
-				return result, &validation.MinLenError{Path: []string{"body"}, Limit: 2, Got: len(result.Body)}
+				return result, &validation.MinLenError{Pos: s.Offset(), Path: []string{"body"}, Limit: 2, Got: len(result.Body)}
 			}
 			if len(result.Body) > 10 {
-				return result, &validation.MaxLenError{Path: []string{"body"}, Limit: 10, Got: len(result.Body)}
+				return result, &validation.MaxLenError{Pos: s.Offset(), Path: []string{"body"}, Limit: 10, Got: len(result.Body)}
 			}
 		case "count":
 			err = s.ConsumeColon()
@@ -1790,7 +1790,7 @@ func (recv AliasFieldExample) DecodeFromStream(s *scan.Stream) (result AliasFiel
 				return result, decode.NewParseErr("count", s.Pos, err)
 			}
 			if seenCount {
-				return result, &validation.DuplicateKeyError{Path: []string{"count"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"count"}}
 			}
 			seenCount = true
 			result.Count, err = result.Count.DecodeFromStream(s)
@@ -1804,13 +1804,13 @@ func (recv AliasFieldExample) DecodeFromStream(s *scan.Stream) (result AliasFiel
 				result.Count = AliasInt(100)
 			}
 			if result.Count < 1 {
-				return result, &validation.GTEError{Path: []string{"count"}, Limit: 1, Value: result.Count}
+				return result, &validation.GTEError{Pos: s.Offset(), Path: []string{"count"}, Limit: 1, Value: result.Count}
 			}
 			if result.Count > 100 {
-				return result, &validation.LTEError{Path: []string{"count"}, Limit: 100, Value: result.Count}
+				return result, &validation.LTEError{Pos: s.Offset(), Path: []string{"count"}, Limit: 100, Value: result.Count}
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -1835,7 +1835,7 @@ func (recv AliasFieldExample) DecodeFromStream(s *scan.Stream) (result AliasFiel
 		if c == '}' {
 			s.Pos++
 			if !seenBody {
-				return result, &validation.RequiredError{Path: []string{"body"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"body"}}
 			}
 			return result, nil
 		}

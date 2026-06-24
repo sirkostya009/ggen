@@ -86,7 +86,7 @@ func (recv OmitStruct) DecodeFrom(data []byte) (result OmitStruct, i int, err er
 		switch key {
 		case "bio":
 			if seenBio {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"bio"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"bio"}}
 			}
 			seenBio = true
 			if i >= len(data) || data[i] != '"' {
@@ -113,7 +113,7 @@ func (recv OmitStruct) DecodeFrom(data []byte) (result OmitStruct, i int, err er
 			}
 		case "count":
 			if seenStrCount {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"count"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"count"}}
 			}
 			seenStrCount = true
 			var sv string
@@ -146,7 +146,7 @@ func (recv OmitStruct) DecodeFrom(data []byte) (result OmitStruct, i int, err er
 			result.StrCount = int(n)
 		case "extra":
 			if seenExtra {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"extra"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"extra"}}
 			}
 			seenExtra = true
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -218,7 +218,7 @@ func (recv OmitStruct) DecodeFrom(data []byte) (result OmitStruct, i int, err er
 			i++
 		case "labels":
 			if seenLabels {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"labels"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"labels"}}
 			}
 			seenLabels = true
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -322,7 +322,7 @@ func (recv OmitStruct) DecodeFrom(data []byte) (result OmitStruct, i int, err er
 			i++
 		case "meta":
 			if seenMeta {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"meta"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"meta"}}
 			}
 			seenMeta = true
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -426,7 +426,7 @@ func (recv OmitStruct) DecodeFrom(data []byte) (result OmitStruct, i int, err er
 			i++
 		case "name":
 			if seenName {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"name"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"name"}}
 			}
 			seenName = true
 			if i >= len(data) || data[i] != '"' {
@@ -453,7 +453,7 @@ func (recv OmitStruct) DecodeFrom(data []byte) (result OmitStruct, i int, err er
 			}
 		case "score":
 			if seenScore {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"score"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"score"}}
 			}
 			seenScore = true
 			result.Score, i, err = scan.Float64(data, i)
@@ -462,7 +462,7 @@ func (recv OmitStruct) DecodeFrom(data []byte) (result OmitStruct, i int, err er
 			}
 		case "tags":
 			if seenTags {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"tags"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"tags"}}
 			}
 			seenTags = true
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -533,7 +533,7 @@ func (recv OmitStruct) DecodeFrom(data []byte) (result OmitStruct, i int, err er
 			}
 			i++
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -609,7 +609,7 @@ func (recv OmitStruct) DecodeFromStream(s *scan.Stream) (result OmitStruct, err 
 				return result, decode.NewParseErr("bio", s.Pos, err)
 			}
 			if seenBio {
-				return result, &validation.DuplicateKeyError{Path: []string{"bio"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"bio"}}
 			}
 			seenBio = true
 			result.Bio, err = s.String()
@@ -622,7 +622,7 @@ func (recv OmitStruct) DecodeFromStream(s *scan.Stream) (result OmitStruct, err 
 				return result, decode.NewParseErr("count", s.Pos, err)
 			}
 			if seenStrCount {
-				return result, &validation.DuplicateKeyError{Path: []string{"count"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"count"}}
 			}
 			seenStrCount = true
 			var sv string
@@ -641,7 +641,7 @@ func (recv OmitStruct) DecodeFromStream(s *scan.Stream) (result OmitStruct, err 
 				return result, decode.NewParseErr("extra", s.Pos, err)
 			}
 			if seenExtra {
-				return result, &validation.DuplicateKeyError{Path: []string{"extra"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"extra"}}
 			}
 			seenExtra = true
 			err = s.SkipSpace()
@@ -728,7 +728,7 @@ func (recv OmitStruct) DecodeFromStream(s *scan.Stream) (result OmitStruct, err 
 				return result, decode.NewParseErr("labels", s.Pos, err)
 			}
 			if seenLabels {
-				return result, &validation.DuplicateKeyError{Path: []string{"labels"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"labels"}}
 			}
 			seenLabels = true
 			err = s.SkipSpace()
@@ -836,7 +836,7 @@ func (recv OmitStruct) DecodeFromStream(s *scan.Stream) (result OmitStruct, err 
 				return result, decode.NewParseErr("meta", s.Pos, err)
 			}
 			if seenMeta {
-				return result, &validation.DuplicateKeyError{Path: []string{"meta"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"meta"}}
 			}
 			seenMeta = true
 			err = s.SkipSpace()
@@ -944,7 +944,7 @@ func (recv OmitStruct) DecodeFromStream(s *scan.Stream) (result OmitStruct, err 
 				return result, decode.NewParseErr("name", s.Pos, err)
 			}
 			if seenName {
-				return result, &validation.DuplicateKeyError{Path: []string{"name"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"name"}}
 			}
 			seenName = true
 			result.Name, err = s.String()
@@ -957,7 +957,7 @@ func (recv OmitStruct) DecodeFromStream(s *scan.Stream) (result OmitStruct, err 
 				return result, decode.NewParseErr("score", s.Pos, err)
 			}
 			if seenScore {
-				return result, &validation.DuplicateKeyError{Path: []string{"score"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"score"}}
 			}
 			seenScore = true
 			result.Score, err = s.Float64()
@@ -970,7 +970,7 @@ func (recv OmitStruct) DecodeFromStream(s *scan.Stream) (result OmitStruct, err 
 				return result, decode.NewParseErr("tags", s.Pos, err)
 			}
 			if seenTags {
-				return result, &validation.DuplicateKeyError{Path: []string{"tags"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"tags"}}
 			}
 			seenTags = true
 			err = s.SkipSpace()
@@ -1052,7 +1052,7 @@ func (recv OmitStruct) DecodeFromStream(s *scan.Stream) (result OmitStruct, err 
 			}
 			s.Pos++
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -1316,7 +1316,7 @@ func (recv StringTagStruct) DecodeFrom(data []byte) (result StringTagStruct, i i
 		switch key {
 		case "b":
 			if seenB {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"b"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"b"}}
 			}
 			seenB = true
 			result.B, i, err = scan.Bool(data, i)
@@ -1325,7 +1325,7 @@ func (recv StringTagStruct) DecodeFrom(data []byte) (result StringTagStruct, i i
 			}
 		case "f32":
 			if seenF32 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"f32"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f32"}}
 			}
 			seenF32 = true
 			var sv string
@@ -1358,7 +1358,7 @@ func (recv StringTagStruct) DecodeFrom(data []byte) (result StringTagStruct, i i
 			result.F32 = float32(f)
 		case "f64":
 			if seenF64 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"f64"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f64"}}
 			}
 			seenF64 = true
 			var sv string
@@ -1391,7 +1391,7 @@ func (recv StringTagStruct) DecodeFrom(data []byte) (result StringTagStruct, i i
 			result.F64 = f
 		case "i16":
 			if seenI16 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"i16"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"i16"}}
 			}
 			seenI16 = true
 			var sv string
@@ -1424,7 +1424,7 @@ func (recv StringTagStruct) DecodeFrom(data []byte) (result StringTagStruct, i i
 			result.I16 = int16(n)
 		case "i32":
 			if seenI32 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"i32"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"i32"}}
 			}
 			seenI32 = true
 			var sv string
@@ -1457,7 +1457,7 @@ func (recv StringTagStruct) DecodeFrom(data []byte) (result StringTagStruct, i i
 			result.I32 = int32(n)
 		case "i64":
 			if seenI64 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"i64"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"i64"}}
 			}
 			seenI64 = true
 			var sv string
@@ -1490,7 +1490,7 @@ func (recv StringTagStruct) DecodeFrom(data []byte) (result StringTagStruct, i i
 			result.I64 = n
 		case "i8":
 			if seenI8 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"i8"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"i8"}}
 			}
 			seenI8 = true
 			var sv string
@@ -1523,7 +1523,7 @@ func (recv StringTagStruct) DecodeFrom(data []byte) (result StringTagStruct, i i
 			result.I8 = int8(n)
 		case "u16":
 			if seenU16 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"u16"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"u16"}}
 			}
 			seenU16 = true
 			var sv string
@@ -1556,7 +1556,7 @@ func (recv StringTagStruct) DecodeFrom(data []byte) (result StringTagStruct, i i
 			result.U16 = uint16(u)
 		case "u32":
 			if seenU32 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"u32"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"u32"}}
 			}
 			seenU32 = true
 			var sv string
@@ -1589,7 +1589,7 @@ func (recv StringTagStruct) DecodeFrom(data []byte) (result StringTagStruct, i i
 			result.U32 = uint32(u)
 		case "u64":
 			if seenU64 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"u64"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"u64"}}
 			}
 			seenU64 = true
 			var sv string
@@ -1622,7 +1622,7 @@ func (recv StringTagStruct) DecodeFrom(data []byte) (result StringTagStruct, i i
 			result.U64 = u
 		case "u8":
 			if seenU8 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"u8"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"u8"}}
 			}
 			seenU8 = true
 			var sv string
@@ -1654,7 +1654,7 @@ func (recv StringTagStruct) DecodeFrom(data []byte) (result StringTagStruct, i i
 			}
 			result.U8 = uint8(u)
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -1721,7 +1721,7 @@ func (recv StringTagStruct) DecodeFromStream(s *scan.Stream) (result StringTagSt
 				return result, decode.NewParseErr("b", s.Pos, err)
 			}
 			if seenB {
-				return result, &validation.DuplicateKeyError{Path: []string{"b"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"b"}}
 			}
 			seenB = true
 			result.B, err = s.Bool()
@@ -1734,7 +1734,7 @@ func (recv StringTagStruct) DecodeFromStream(s *scan.Stream) (result StringTagSt
 				return result, decode.NewParseErr("f32", s.Pos, err)
 			}
 			if seenF32 {
-				return result, &validation.DuplicateKeyError{Path: []string{"f32"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f32"}}
 			}
 			seenF32 = true
 			var sv string
@@ -1753,7 +1753,7 @@ func (recv StringTagStruct) DecodeFromStream(s *scan.Stream) (result StringTagSt
 				return result, decode.NewParseErr("f64", s.Pos, err)
 			}
 			if seenF64 {
-				return result, &validation.DuplicateKeyError{Path: []string{"f64"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f64"}}
 			}
 			seenF64 = true
 			var sv string
@@ -1772,7 +1772,7 @@ func (recv StringTagStruct) DecodeFromStream(s *scan.Stream) (result StringTagSt
 				return result, decode.NewParseErr("i16", s.Pos, err)
 			}
 			if seenI16 {
-				return result, &validation.DuplicateKeyError{Path: []string{"i16"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"i16"}}
 			}
 			seenI16 = true
 			var sv string
@@ -1791,7 +1791,7 @@ func (recv StringTagStruct) DecodeFromStream(s *scan.Stream) (result StringTagSt
 				return result, decode.NewParseErr("i32", s.Pos, err)
 			}
 			if seenI32 {
-				return result, &validation.DuplicateKeyError{Path: []string{"i32"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"i32"}}
 			}
 			seenI32 = true
 			var sv string
@@ -1810,7 +1810,7 @@ func (recv StringTagStruct) DecodeFromStream(s *scan.Stream) (result StringTagSt
 				return result, decode.NewParseErr("i64", s.Pos, err)
 			}
 			if seenI64 {
-				return result, &validation.DuplicateKeyError{Path: []string{"i64"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"i64"}}
 			}
 			seenI64 = true
 			var sv string
@@ -1829,7 +1829,7 @@ func (recv StringTagStruct) DecodeFromStream(s *scan.Stream) (result StringTagSt
 				return result, decode.NewParseErr("i8", s.Pos, err)
 			}
 			if seenI8 {
-				return result, &validation.DuplicateKeyError{Path: []string{"i8"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"i8"}}
 			}
 			seenI8 = true
 			var sv string
@@ -1848,7 +1848,7 @@ func (recv StringTagStruct) DecodeFromStream(s *scan.Stream) (result StringTagSt
 				return result, decode.NewParseErr("u16", s.Pos, err)
 			}
 			if seenU16 {
-				return result, &validation.DuplicateKeyError{Path: []string{"u16"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"u16"}}
 			}
 			seenU16 = true
 			var sv string
@@ -1867,7 +1867,7 @@ func (recv StringTagStruct) DecodeFromStream(s *scan.Stream) (result StringTagSt
 				return result, decode.NewParseErr("u32", s.Pos, err)
 			}
 			if seenU32 {
-				return result, &validation.DuplicateKeyError{Path: []string{"u32"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"u32"}}
 			}
 			seenU32 = true
 			var sv string
@@ -1886,7 +1886,7 @@ func (recv StringTagStruct) DecodeFromStream(s *scan.Stream) (result StringTagSt
 				return result, decode.NewParseErr("u64", s.Pos, err)
 			}
 			if seenU64 {
-				return result, &validation.DuplicateKeyError{Path: []string{"u64"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"u64"}}
 			}
 			seenU64 = true
 			var sv string
@@ -1905,7 +1905,7 @@ func (recv StringTagStruct) DecodeFromStream(s *scan.Stream) (result StringTagSt
 				return result, decode.NewParseErr("u8", s.Pos, err)
 			}
 			if seenU8 {
-				return result, &validation.DuplicateKeyError{Path: []string{"u8"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"u8"}}
 			}
 			seenU8 = true
 			var sv string
@@ -1919,7 +1919,7 @@ func (recv StringTagStruct) DecodeFromStream(s *scan.Stream) (result StringTagSt
 			}
 			result.U8 = uint8(u)
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()

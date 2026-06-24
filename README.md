@@ -341,9 +341,16 @@ make([]int, 0, 10)
 ```go
 var minlen *validation.MinLenError
 if errors.As(err, &minlen) {
-    // minlen.Field, minlen.Limit, minlen.Got
+    // minlen.Path  — root-relative path segments, e.g. ["addr", "zip"]
+    // minlen.Limit, minlen.Got
+    // minlen.Pos   — byte offset of the failure, relative to the full payload
 }
 ```
+
+Every validation error carries a `Pos int` — the byte offset of the failure
+relative to the full payload, the same on the bytes and stream paths. (On the
+stream path it accounts for buffer compaction, so it stays meaningful across a
+long stream rather than tracking the sliding `scan.Stream.Pos` window.)
 
 > In `-multierr` mode the generated code returns `validation.Errors`
 > (`[]validation.Error`) instead of stopping on the first failure. It

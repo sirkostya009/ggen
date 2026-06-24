@@ -711,10 +711,32 @@ func kindPrimitiveName(k TypeKind) string {
 	return ""
 }
 
+// posLit builds the Pos field for a validation error literal — the byte
+// offset of the failure relative to the full payload. posVar names the
+// bytes-path cursor (a true offset into the whole data slice); the empty
+// string selects the stream path, where s.Offset() is the absolute offset
+// (buffer-relative s.Pos plus the bytes already discarded by compaction).
+func posLit(posVar string) string {
+	if posVar == "" {
+		return "Pos: s.Offset(), "
+	}
+	return fmt.Sprintf("Pos: %s, ", posVar)
+}
+
+// withPos injects posLit right after the opening brace of a
+// `&validation.XError{...}` / `validation.XError{...}` literal, so every
+// emitted validation error carries its failure position. The first '{'
+// is always the struct literal's (the type name has none).
+func withPos(errExpr, posVar string) string {
+	k := strings.IndexByte(errExpr, '{')
+	return errExpr[:k+1] + posLit(posVar) + errExpr[k+1:]
+}
+
 // arrayLenErr builds a typed *validation.LenError literal for the strict
-// fixed-array element-count check.
-func arrayLenErr(field string, want int, gotExpr string) string {
-	return fmt.Sprintf("&validation.LenError{Path: []string{%q}, Want: %d, Got: %s}", field, want, gotExpr)
+// fixed-array element-count check. posVar carries the failure position
+// (bytes-path cursor, or "" for the stream path).
+func arrayLenErr(field string, want int, gotExpr, posVar string) string {
+	return withPos(fmt.Sprintf("&validation.LenError{Path: []string{%q}, Want: %d, Got: %s}", field, want, gotExpr), posVar)
 }
 
 // requiredErr builds a typed *validation.RequiredError literal.
@@ -765,6 +787,7 @@ func renderValidationOn(b *bytes.Buffer, rules []ValidationRule, ref, jsonName s
 	// root-relative Path; nested struct decodes prepend their outer
 	// segment via [validation.Append] when bubbling up.
 	onErr := func(errExpr string) string {
+		errExpr = withPos(errExpr, posVar)
 		if multiErr {
 			return "errs = append(errs, " + errExpr + ")"
 		}
@@ -2724,16 +2747,18 @@ func renderStreamPostLoop(b *bytes.Buffer, s StructInfo) {
 func renderPostLoopShape(b *bytes.Buffer, s StructInfo, stream bool) {
 	retShape := "return result, i, %s"
 	errsShape := "if len(errs) > 0 { return result, i, errs }\n"
+	posVar := "i"
 	if stream {
 		retShape = "return result, %s"
 		errsShape = "if len(errs) > 0 { return result, errs }\n"
+		posVar = ""
 	}
 	if !s.NoValidate {
 		for _, f := range s.Fields {
 			if !f.IsRequired() || f.Inline {
 				continue
 			}
-			errExpr := requiredErr(f.JSONName)
+			errExpr := withPos(requiredErr(f.JSONName), posVar)
 			notSeen := seenNotAccess(s, f)
 			if s.MultiErr {
 				fmt.Fprintf(b, "if %s { errs = append(errs, %s) }\n", notSeen, errExpr)
@@ -2782,7 +2807,7 @@ func renderDispatch(b *bytes.Buffer, s StructInfo) {
 		}
 		if s.MultiErr {
 			fmt.Fprintf(b, `if %[1]s {
-	errs = append(errs, &validation.DuplicateKeyError{Path: []string{%[2]q}})
+	errs = append(errs, &validation.DuplicateKeyError{Pos: i, Path: []string{%[2]q}})
 	i, err = scan.SkipValue(data, i)
 	%[3]s} else {
 	%[4]s`, seen, f.JSONName, chk, set)
@@ -2790,7 +2815,7 @@ func renderDispatch(b *bytes.Buffer, s StructInfo) {
 			b.WriteString("}\n")
 			return
 		}
-		fmt.Fprintf(b, `if %s { return result, i, &validation.DuplicateKeyError{Path: []string{%q}} }
+		fmt.Fprintf(b, `if %s { return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{%q}} }
 %s`, seen, f.JSONName, set)
 		renderField(b, f, "result."+f.GoName, "i")
 	}
@@ -3662,11 +3687,11 @@ result.%[3]s[key] = _iv
 %[2]s`, posVar, chk)
 	}
 	if s.MultiErr {
-		return fmt.Sprintf(`errs = append(errs, &validation.UnknownKeyError{Path: []string{key}})
+		return fmt.Sprintf(`errs = append(errs, &validation.UnknownKeyError{Pos: %[1]s, Path: []string{key}})
 %[1]s, err = scan.SkipValue(data, %[1]s)
 %[2]s`, posVar, chk)
 	}
-	return "return result, i, &validation.UnknownKeyError{Path: []string{key}}\n"
+	return fmt.Sprintf("return result, %[1]s, &validation.UnknownKeyError{Pos: %[1]s, Path: []string{key}}\n", posVar)
 }
 
 // validateAndMod emits mods + validation for a field inline in the decoder
@@ -4367,7 +4392,7 @@ if e := bytes.IndexByte(data[%[2]s:], ']'); e >= 0 { %[4]s = bytes.Count(data[%[
 		// the Go [N]T can hold.
 		fmt.Fprintf(b, "if %s >= %d { return result, i, %s }\n",
 			ivar, arrayN,
-			arrayLenErr(f.JSONName, arrayN, ivar))
+			arrayLenErr(f.JSONName, arrayN, ivar, "i"))
 	}
 	if f.ElemPointer && !mptr {
 		// `null` element → nil pointer. Skip the parse + slab work.
@@ -4547,7 +4572,7 @@ if e := bytes.IndexByte(data[%[2]s:], ']'); e >= 0 { %[4]s = bytes.Count(data[%[
 	if isArray {
 		fmt.Fprintf(b, "if %s != %d { return result, i, %s }\n",
 			ivar, arrayN,
-			arrayLenErr(f.JSONName, arrayN, ivar))
+			arrayLenErr(f.JSONName, arrayN, ivar, "i"))
 	}
 	// kvar == posVar (no alias); just step past the closing `]`.
 	fmt.Fprintf(b, "%s++\n", posVar)
@@ -4653,7 +4678,7 @@ func renderStreamDispatch(s StructInfo) string {
 		}
 		if s.MultiErr {
 			fmt.Fprintf(b, `if %[1]s {
-	errs = append(errs, &validation.DuplicateKeyError{Path: []string{%[2]q}})
+	errs = append(errs, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{%[2]q}})
 	err = s.SkipValue()
 	%[5]s} else {
 	%[3]s%[4]s
@@ -4661,7 +4686,7 @@ func renderStreamDispatch(s StructInfo) string {
 `, seen, f.JSONName, set, parse, chk)
 			return
 		}
-		fmt.Fprintf(b, `if %s { return result, &validation.DuplicateKeyError{Path: []string{%q}} }
+		fmt.Fprintf(b, `if %s { return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{%q}} }
 %s%s`, seen, f.JSONName, set, parse)
 	}
 
@@ -5308,12 +5333,12 @@ result.%[2]s[ownKey] = _iv
 	}
 	if s.MultiErr {
 		chk := streamErrCheck("strings.Clone(key)")
-		return fmt.Sprintf(`errs = append(errs, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}})
+		return fmt.Sprintf(`errs = append(errs, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}})
 err = s.ConsumeColon()
 %[1]serr = s.SkipValue()
 %[1]s`, chk)
 	}
-	return "return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}\n"
+	return "return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}\n"
 }
 
 func renderStreamStringTag(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
@@ -5614,7 +5639,7 @@ func emitStreamSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth
 	if isArray {
 		fmt.Fprintf(b, "if %s >= %d { return result, %s }\n",
 			ivar, arrayN,
-			arrayLenErr(f.JSONName, arrayN, ivar))
+			arrayLenErr(f.JSONName, arrayN, ivar, ""))
 	}
 	if f.ElemPointer && !mptr {
 		// `null` element → nil pointer. Skip the parse + slab work.
@@ -5782,7 +5807,7 @@ if s.Bytes()[s.Pos] != ']' { return result, decode.NewParseErr(%[2]s, s.Pos, sca
 	if isArray {
 		fmt.Fprintf(b, "if %s != %d { return result, %s }\n",
 			ivar, arrayN,
-			arrayLenErr(f.JSONName, arrayN, ivar))
+			arrayLenErr(f.JSONName, arrayN, ivar, ""))
 	}
 	b.WriteString("s.Pos++\n")
 	if !isArray && !flat && !f.NullDone {

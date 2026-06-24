@@ -32,13 +32,13 @@ func (recv Address) DecodeFrom(data []byte) (result Address, i int, err error) {
 	if i < len(data) && data[i] == '}' {
 		i++
 		if !seenCity {
-			return result, i, &validation.RequiredError{Path: []string{"city"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"city"}}
 		}
 		if !seenStreet {
-			return result, i, &validation.RequiredError{Path: []string{"street"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"street"}}
 		}
 		if !seenZipCode {
-			return result, i, &validation.RequiredError{Path: []string{"zipCode"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"zipCode"}}
 		}
 		return result, i, nil
 	}
@@ -79,7 +79,7 @@ func (recv Address) DecodeFrom(data []byte) (result Address, i int, err error) {
 		switch key {
 		case "city":
 			if seenCity {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"city"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"city"}}
 			}
 			seenCity = true
 			if i >= len(data) || data[i] != '"' {
@@ -105,11 +105,11 @@ func (recv Address) DecodeFrom(data []byte) (result Address, i int, err error) {
 				}
 			}
 			if len(result.City) == 0 {
-				return result, i, &validation.NotEmptyError{Path: []string{"city"}}
+				return result, i, &validation.NotEmptyError{Pos: i, Path: []string{"city"}}
 			}
 		case "street":
 			if seenStreet {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"street"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"street"}}
 			}
 			seenStreet = true
 			if i >= len(data) || data[i] != '"' {
@@ -135,14 +135,14 @@ func (recv Address) DecodeFrom(data []byte) (result Address, i int, err error) {
 				}
 			}
 			if len(result.Street) < 1 {
-				return result, i, &validation.MinLenError{Path: []string{"street"}, Limit: 1, Got: len(result.Street)}
+				return result, i, &validation.MinLenError{Pos: i, Path: []string{"street"}, Limit: 1, Got: len(result.Street)}
 			}
 			if len(result.Street) > 200 {
-				return result, i, &validation.MaxLenError{Path: []string{"street"}, Limit: 200, Got: len(result.Street)}
+				return result, i, &validation.MaxLenError{Pos: i, Path: []string{"street"}, Limit: 200, Got: len(result.Street)}
 			}
 		case "zipCode":
 			if seenZipCode {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"zipCode"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"zipCode"}}
 			}
 			seenZipCode = true
 			if i >= len(data) || data[i] != '"' {
@@ -168,10 +168,10 @@ func (recv Address) DecodeFrom(data []byte) (result Address, i int, err error) {
 				}
 			}
 			if len(result.ZipCode) != 5 {
-				return result, i, &validation.LenError{Path: []string{"zipCode"}, Want: 5, Got: len(result.ZipCode)}
+				return result, i, &validation.LenError{Pos: i, Path: []string{"zipCode"}, Want: 5, Got: len(result.ZipCode)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -189,13 +189,13 @@ func (recv Address) DecodeFrom(data []byte) (result Address, i int, err error) {
 		if data[i] == '}' {
 			i++
 			if !seenCity {
-				return result, i, &validation.RequiredError{Path: []string{"city"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"city"}}
 			}
 			if !seenStreet {
-				return result, i, &validation.RequiredError{Path: []string{"street"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"street"}}
 			}
 			if !seenZipCode {
-				return result, i, &validation.RequiredError{Path: []string{"zipCode"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"zipCode"}}
 			}
 			return result, i, nil
 		}
@@ -225,13 +225,13 @@ func (recv Address) DecodeFromStream(s *scan.Stream) (result Address, err error)
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
 		if !seenCity {
-			return result, &validation.RequiredError{Path: []string{"city"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"city"}}
 		}
 		if !seenStreet {
-			return result, &validation.RequiredError{Path: []string{"street"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"street"}}
 		}
 		if !seenZipCode {
-			return result, &validation.RequiredError{Path: []string{"zipCode"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"zipCode"}}
 		}
 		return result, nil
 	}
@@ -248,7 +248,7 @@ func (recv Address) DecodeFromStream(s *scan.Stream) (result Address, err error)
 				return result, decode.NewParseErr("city", s.Pos, err)
 			}
 			if seenCity {
-				return result, &validation.DuplicateKeyError{Path: []string{"city"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"city"}}
 			}
 			seenCity = true
 			result.City, err = s.String()
@@ -256,7 +256,7 @@ func (recv Address) DecodeFromStream(s *scan.Stream) (result Address, err error)
 				return result, decode.NewParseErr("city", s.Pos, err)
 			}
 			if len(result.City) == 0 {
-				return result, &validation.NotEmptyError{Path: []string{"city"}}
+				return result, &validation.NotEmptyError{Pos: s.Offset(), Path: []string{"city"}}
 			}
 		case "street":
 			err = s.ConsumeColon()
@@ -264,7 +264,7 @@ func (recv Address) DecodeFromStream(s *scan.Stream) (result Address, err error)
 				return result, decode.NewParseErr("street", s.Pos, err)
 			}
 			if seenStreet {
-				return result, &validation.DuplicateKeyError{Path: []string{"street"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"street"}}
 			}
 			seenStreet = true
 			result.Street, err = s.String()
@@ -272,10 +272,10 @@ func (recv Address) DecodeFromStream(s *scan.Stream) (result Address, err error)
 				return result, decode.NewParseErr("street", s.Pos, err)
 			}
 			if len(result.Street) < 1 {
-				return result, &validation.MinLenError{Path: []string{"street"}, Limit: 1, Got: len(result.Street)}
+				return result, &validation.MinLenError{Pos: s.Offset(), Path: []string{"street"}, Limit: 1, Got: len(result.Street)}
 			}
 			if len(result.Street) > 200 {
-				return result, &validation.MaxLenError{Path: []string{"street"}, Limit: 200, Got: len(result.Street)}
+				return result, &validation.MaxLenError{Pos: s.Offset(), Path: []string{"street"}, Limit: 200, Got: len(result.Street)}
 			}
 		case "zipCode":
 			err = s.ConsumeColon()
@@ -283,7 +283,7 @@ func (recv Address) DecodeFromStream(s *scan.Stream) (result Address, err error)
 				return result, decode.NewParseErr("zipCode", s.Pos, err)
 			}
 			if seenZipCode {
-				return result, &validation.DuplicateKeyError{Path: []string{"zipCode"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"zipCode"}}
 			}
 			seenZipCode = true
 			result.ZipCode, err = s.String()
@@ -291,10 +291,10 @@ func (recv Address) DecodeFromStream(s *scan.Stream) (result Address, err error)
 				return result, decode.NewParseErr("zipCode", s.Pos, err)
 			}
 			if len(result.ZipCode) != 5 {
-				return result, &validation.LenError{Path: []string{"zipCode"}, Want: 5, Got: len(result.ZipCode)}
+				return result, &validation.LenError{Pos: s.Offset(), Path: []string{"zipCode"}, Want: 5, Got: len(result.ZipCode)}
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -319,13 +319,13 @@ func (recv Address) DecodeFromStream(s *scan.Stream) (result Address, err error)
 		if c == '}' {
 			s.Pos++
 			if !seenCity {
-				return result, &validation.RequiredError{Path: []string{"city"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"city"}}
 			}
 			if !seenStreet {
-				return result, &validation.RequiredError{Path: []string{"street"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"street"}}
 			}
 			if !seenZipCode {
-				return result, &validation.RequiredError{Path: []string{"zipCode"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"zipCode"}}
 			}
 			return result, nil
 		}
@@ -422,7 +422,7 @@ func (recv Node) DecodeFrom(data []byte) (result Node, i int, err error) {
 		switch key {
 		case "active":
 			if seenActive {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"active"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"active"}}
 			}
 			seenActive = true
 			result.Active, i, err = scan.Bool(data, i)
@@ -431,7 +431,7 @@ func (recv Node) DecodeFrom(data []byte) (result Node, i int, err error) {
 			}
 		case "children":
 			if seenChildren {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"children"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"children"}}
 			}
 			seenChildren = true
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -487,7 +487,7 @@ func (recv Node) DecodeFrom(data []byte) (result Node, i int, err error) {
 			i++
 		case "id":
 			if seenID {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"id"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"id"}}
 			}
 			seenID = true
 			neg := false
@@ -538,7 +538,7 @@ func (recv Node) DecodeFrom(data []byte) (result Node, i int, err error) {
 			result.ID = n
 		case "name":
 			if seenName {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"name"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"name"}}
 			}
 			seenName = true
 			if i >= len(data) || data[i] != '"' {
@@ -565,7 +565,7 @@ func (recv Node) DecodeFrom(data []byte) (result Node, i int, err error) {
 			}
 		case "props":
 			if seenProps {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"props"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"props"}}
 			}
 			seenProps = true
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -669,7 +669,7 @@ func (recv Node) DecodeFrom(data []byte) (result Node, i int, err error) {
 			i++
 		case "score":
 			if seenScore {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"score"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"score"}}
 			}
 			seenScore = true
 			result.Score, i, err = scan.Float64(data, i)
@@ -678,7 +678,7 @@ func (recv Node) DecodeFrom(data []byte) (result Node, i int, err error) {
 			}
 		case "tags":
 			if seenTags {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"tags"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"tags"}}
 			}
 			seenTags = true
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -749,7 +749,7 @@ func (recv Node) DecodeFrom(data []byte) (result Node, i int, err error) {
 			}
 			i++
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -821,7 +821,7 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 				return result, decode.NewParseErr("active", s.Pos, err)
 			}
 			if seenActive {
-				return result, &validation.DuplicateKeyError{Path: []string{"active"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"active"}}
 			}
 			seenActive = true
 			result.Active, err = s.Bool()
@@ -834,7 +834,7 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 				return result, decode.NewParseErr("children", s.Pos, err)
 			}
 			if seenChildren {
-				return result, &validation.DuplicateKeyError{Path: []string{"children"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"children"}}
 			}
 			seenChildren = true
 			err = s.SkipSpace()
@@ -921,7 +921,7 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 				return result, decode.NewParseErr("id", s.Pos, err)
 			}
 			if seenID {
-				return result, &validation.DuplicateKeyError{Path: []string{"id"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"id"}}
 			}
 			seenID = true
 			result.ID, err = s.Int64()
@@ -934,7 +934,7 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 				return result, decode.NewParseErr("name", s.Pos, err)
 			}
 			if seenName {
-				return result, &validation.DuplicateKeyError{Path: []string{"name"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"name"}}
 			}
 			seenName = true
 			result.Name, err = s.String()
@@ -947,7 +947,7 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 				return result, decode.NewParseErr("props", s.Pos, err)
 			}
 			if seenProps {
-				return result, &validation.DuplicateKeyError{Path: []string{"props"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"props"}}
 			}
 			seenProps = true
 			err = s.SkipSpace()
@@ -1055,7 +1055,7 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 				return result, decode.NewParseErr("score", s.Pos, err)
 			}
 			if seenScore {
-				return result, &validation.DuplicateKeyError{Path: []string{"score"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"score"}}
 			}
 			seenScore = true
 			result.Score, err = s.Float64()
@@ -1068,7 +1068,7 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 				return result, decode.NewParseErr("tags", s.Pos, err)
 			}
 			if seenTags {
-				return result, &validation.DuplicateKeyError{Path: []string{"tags"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"tags"}}
 			}
 			seenTags = true
 			err = s.SkipSpace()
@@ -1150,7 +1150,7 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 			}
 			s.Pos++
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -1287,124 +1287,124 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 	if i < len(data) && data[i] == '}' {
 		i++
 		if seen&(1<<0) == 0 {
-			return result, i, &validation.RequiredError{Path: []string{"f1"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f1"}}
 		}
 		if seen&(1<<1) == 0 {
-			return result, i, &validation.RequiredError{Path: []string{"f10"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f10"}}
 		}
 		if seen&(1<<2) == 0 {
-			return result, i, &validation.RequiredError{Path: []string{"f11"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f11"}}
 		}
 		if seen&(1<<3) == 0 {
-			return result, i, &validation.RequiredError{Path: []string{"f12"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f12"}}
 		}
 		if seen&(1<<4) == 0 {
-			return result, i, &validation.RequiredError{Path: []string{"f13"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f13"}}
 		}
 		if seen&(1<<5) == 0 {
-			return result, i, &validation.RequiredError{Path: []string{"f14"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f14"}}
 		}
 		if seen&(1<<6) == 0 {
-			return result, i, &validation.RequiredError{Path: []string{"f15"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f15"}}
 		}
 		if seen&(1<<7) == 0 {
-			return result, i, &validation.RequiredError{Path: []string{"f16"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f16"}}
 		}
 		if seen&(1<<8) == 0 {
-			return result, i, &validation.RequiredError{Path: []string{"f17"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f17"}}
 		}
 		if seen&(1<<9) == 0 {
-			return result, i, &validation.RequiredError{Path: []string{"f18"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f18"}}
 		}
 		if seen&(1<<10) == 0 {
-			return result, i, &validation.RequiredError{Path: []string{"f19"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f19"}}
 		}
 		if seen&(1<<11) == 0 {
-			return result, i, &validation.RequiredError{Path: []string{"f2"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f2"}}
 		}
 		if seen&(1<<12) == 0 {
-			return result, i, &validation.RequiredError{Path: []string{"f20"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f20"}}
 		}
 		if seen&(1<<13) == 0 {
-			return result, i, &validation.RequiredError{Path: []string{"f21"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f21"}}
 		}
 		if seen&(1<<14) == 0 {
-			return result, i, &validation.RequiredError{Path: []string{"f22"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f22"}}
 		}
 		if seen&(1<<15) == 0 {
-			return result, i, &validation.RequiredError{Path: []string{"f23"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f23"}}
 		}
 		if seen&(1<<16) == 0 {
-			return result, i, &validation.RequiredError{Path: []string{"f24"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f24"}}
 		}
 		if seen&(1<<17) == 0 {
-			return result, i, &validation.RequiredError{Path: []string{"f25"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f25"}}
 		}
 		if seen&(1<<18) == 0 {
-			return result, i, &validation.RequiredError{Path: []string{"f26"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f26"}}
 		}
 		if seen&(1<<19) == 0 {
-			return result, i, &validation.RequiredError{Path: []string{"f27"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f27"}}
 		}
 		if seen&(1<<20) == 0 {
-			return result, i, &validation.RequiredError{Path: []string{"f28"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f28"}}
 		}
 		if seen&(1<<21) == 0 {
-			return result, i, &validation.RequiredError{Path: []string{"f29"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f29"}}
 		}
 		if seen&(1<<22) == 0 {
-			return result, i, &validation.RequiredError{Path: []string{"f3"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f3"}}
 		}
 		if seen&(1<<23) == 0 {
-			return result, i, &validation.RequiredError{Path: []string{"f30"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f30"}}
 		}
 		if seen&(1<<24) == 0 {
-			return result, i, &validation.RequiredError{Path: []string{"f31"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f31"}}
 		}
 		if seen&(1<<25) == 0 {
-			return result, i, &validation.RequiredError{Path: []string{"f32"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f32"}}
 		}
 		if seen&(1<<26) == 0 {
-			return result, i, &validation.RequiredError{Path: []string{"f33"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f33"}}
 		}
 		if seen&(1<<27) == 0 {
-			return result, i, &validation.RequiredError{Path: []string{"f34"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f34"}}
 		}
 		if seen&(1<<28) == 0 {
-			return result, i, &validation.RequiredError{Path: []string{"f35"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f35"}}
 		}
 		if seen&(1<<29) == 0 {
-			return result, i, &validation.RequiredError{Path: []string{"f36"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f36"}}
 		}
 		if seen&(1<<30) == 0 {
-			return result, i, &validation.RequiredError{Path: []string{"f37"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f37"}}
 		}
 		if seen&(1<<31) == 0 {
-			return result, i, &validation.RequiredError{Path: []string{"f38"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f38"}}
 		}
 		if seen&(1<<32) == 0 {
-			return result, i, &validation.RequiredError{Path: []string{"f39"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f39"}}
 		}
 		if seen&(1<<33) == 0 {
-			return result, i, &validation.RequiredError{Path: []string{"f4"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f4"}}
 		}
 		if seen&(1<<34) == 0 {
-			return result, i, &validation.RequiredError{Path: []string{"f40"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f40"}}
 		}
 		if seen&(1<<35) == 0 {
-			return result, i, &validation.RequiredError{Path: []string{"f5"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f5"}}
 		}
 		if seen&(1<<36) == 0 {
-			return result, i, &validation.RequiredError{Path: []string{"f6"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f6"}}
 		}
 		if seen&(1<<37) == 0 {
-			return result, i, &validation.RequiredError{Path: []string{"f7"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f7"}}
 		}
 		if seen&(1<<38) == 0 {
-			return result, i, &validation.RequiredError{Path: []string{"f8"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f8"}}
 		}
 		if seen&(1<<39) == 0 {
-			return result, i, &validation.RequiredError{Path: []string{"f9"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f9"}}
 		}
 		return result, i, nil
 	}
@@ -1445,7 +1445,7 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 		switch key {
 		case "f1":
 			if seen&(1<<0) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"f1"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f1"}}
 			}
 			seen |= 1 << 0
 			if i >= len(data) || data[i] != '"' {
@@ -1472,7 +1472,7 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			}
 		case "f10":
 			if seen&(1<<1) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"f10"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f10"}}
 			}
 			seen |= 1 << 1
 			if i >= len(data) || data[i] != '"' {
@@ -1499,7 +1499,7 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			}
 		case "f11":
 			if seen&(1<<2) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"f11"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f11"}}
 			}
 			seen |= 1 << 2
 			if i >= len(data) || data[i] != '"' {
@@ -1526,7 +1526,7 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			}
 		case "f12":
 			if seen&(1<<3) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"f12"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f12"}}
 			}
 			seen |= 1 << 3
 			if i >= len(data) || data[i] != '"' {
@@ -1553,7 +1553,7 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			}
 		case "f13":
 			if seen&(1<<4) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"f13"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f13"}}
 			}
 			seen |= 1 << 4
 			if i >= len(data) || data[i] != '"' {
@@ -1580,7 +1580,7 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			}
 		case "f14":
 			if seen&(1<<5) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"f14"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f14"}}
 			}
 			seen |= 1 << 5
 			if i >= len(data) || data[i] != '"' {
@@ -1607,7 +1607,7 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			}
 		case "f15":
 			if seen&(1<<6) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"f15"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f15"}}
 			}
 			seen |= 1 << 6
 			if i >= len(data) || data[i] != '"' {
@@ -1634,7 +1634,7 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			}
 		case "f16":
 			if seen&(1<<7) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"f16"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f16"}}
 			}
 			seen |= 1 << 7
 			if i >= len(data) || data[i] != '"' {
@@ -1661,7 +1661,7 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			}
 		case "f17":
 			if seen&(1<<8) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"f17"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f17"}}
 			}
 			seen |= 1 << 8
 			if i >= len(data) || data[i] != '"' {
@@ -1688,7 +1688,7 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			}
 		case "f18":
 			if seen&(1<<9) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"f18"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f18"}}
 			}
 			seen |= 1 << 9
 			if i >= len(data) || data[i] != '"' {
@@ -1715,7 +1715,7 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			}
 		case "f19":
 			if seen&(1<<10) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"f19"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f19"}}
 			}
 			seen |= 1 << 10
 			if i >= len(data) || data[i] != '"' {
@@ -1742,7 +1742,7 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			}
 		case "f2":
 			if seen&(1<<11) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"f2"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f2"}}
 			}
 			seen |= 1 << 11
 			if i >= len(data) || data[i] != '"' {
@@ -1769,7 +1769,7 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			}
 		case "f20":
 			if seen&(1<<12) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"f20"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f20"}}
 			}
 			seen |= 1 << 12
 			if i >= len(data) || data[i] != '"' {
@@ -1796,7 +1796,7 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			}
 		case "f21":
 			if seen&(1<<13) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"f21"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f21"}}
 			}
 			seen |= 1 << 13
 			if i >= len(data) || data[i] != '"' {
@@ -1823,7 +1823,7 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			}
 		case "f22":
 			if seen&(1<<14) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"f22"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f22"}}
 			}
 			seen |= 1 << 14
 			if i >= len(data) || data[i] != '"' {
@@ -1850,7 +1850,7 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			}
 		case "f23":
 			if seen&(1<<15) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"f23"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f23"}}
 			}
 			seen |= 1 << 15
 			if i >= len(data) || data[i] != '"' {
@@ -1877,7 +1877,7 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			}
 		case "f24":
 			if seen&(1<<16) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"f24"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f24"}}
 			}
 			seen |= 1 << 16
 			if i >= len(data) || data[i] != '"' {
@@ -1904,7 +1904,7 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			}
 		case "f25":
 			if seen&(1<<17) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"f25"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f25"}}
 			}
 			seen |= 1 << 17
 			if i >= len(data) || data[i] != '"' {
@@ -1931,7 +1931,7 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			}
 		case "f26":
 			if seen&(1<<18) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"f26"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f26"}}
 			}
 			seen |= 1 << 18
 			if i >= len(data) || data[i] != '"' {
@@ -1958,7 +1958,7 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			}
 		case "f27":
 			if seen&(1<<19) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"f27"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f27"}}
 			}
 			seen |= 1 << 19
 			if i >= len(data) || data[i] != '"' {
@@ -1985,7 +1985,7 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			}
 		case "f28":
 			if seen&(1<<20) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"f28"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f28"}}
 			}
 			seen |= 1 << 20
 			if i >= len(data) || data[i] != '"' {
@@ -2012,7 +2012,7 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			}
 		case "f29":
 			if seen&(1<<21) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"f29"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f29"}}
 			}
 			seen |= 1 << 21
 			if i >= len(data) || data[i] != '"' {
@@ -2039,7 +2039,7 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			}
 		case "f3":
 			if seen&(1<<22) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"f3"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f3"}}
 			}
 			seen |= 1 << 22
 			if i >= len(data) || data[i] != '"' {
@@ -2066,7 +2066,7 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			}
 		case "f30":
 			if seen&(1<<23) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"f30"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f30"}}
 			}
 			seen |= 1 << 23
 			if i >= len(data) || data[i] != '"' {
@@ -2093,7 +2093,7 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			}
 		case "f31":
 			if seen&(1<<24) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"f31"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f31"}}
 			}
 			seen |= 1 << 24
 			if i >= len(data) || data[i] != '"' {
@@ -2120,7 +2120,7 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			}
 		case "f32":
 			if seen&(1<<25) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"f32"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f32"}}
 			}
 			seen |= 1 << 25
 			if i >= len(data) || data[i] != '"' {
@@ -2147,7 +2147,7 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			}
 		case "f33":
 			if seen&(1<<26) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"f33"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f33"}}
 			}
 			seen |= 1 << 26
 			if i >= len(data) || data[i] != '"' {
@@ -2174,7 +2174,7 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			}
 		case "f34":
 			if seen&(1<<27) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"f34"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f34"}}
 			}
 			seen |= 1 << 27
 			if i >= len(data) || data[i] != '"' {
@@ -2201,7 +2201,7 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			}
 		case "f35":
 			if seen&(1<<28) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"f35"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f35"}}
 			}
 			seen |= 1 << 28
 			if i >= len(data) || data[i] != '"' {
@@ -2228,7 +2228,7 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			}
 		case "f36":
 			if seen&(1<<29) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"f36"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f36"}}
 			}
 			seen |= 1 << 29
 			if i >= len(data) || data[i] != '"' {
@@ -2255,7 +2255,7 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			}
 		case "f37":
 			if seen&(1<<30) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"f37"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f37"}}
 			}
 			seen |= 1 << 30
 			if i >= len(data) || data[i] != '"' {
@@ -2282,7 +2282,7 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			}
 		case "f38":
 			if seen&(1<<31) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"f38"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f38"}}
 			}
 			seen |= 1 << 31
 			if i >= len(data) || data[i] != '"' {
@@ -2309,7 +2309,7 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			}
 		case "f39":
 			if seen&(1<<32) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"f39"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f39"}}
 			}
 			seen |= 1 << 32
 			if i >= len(data) || data[i] != '"' {
@@ -2336,7 +2336,7 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			}
 		case "f4":
 			if seen&(1<<33) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"f4"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f4"}}
 			}
 			seen |= 1 << 33
 			if i >= len(data) || data[i] != '"' {
@@ -2363,7 +2363,7 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			}
 		case "f40":
 			if seen&(1<<34) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"f40"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f40"}}
 			}
 			seen |= 1 << 34
 			if i >= len(data) || data[i] != '"' {
@@ -2390,7 +2390,7 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			}
 		case "f5":
 			if seen&(1<<35) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"f5"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f5"}}
 			}
 			seen |= 1 << 35
 			if i >= len(data) || data[i] != '"' {
@@ -2417,7 +2417,7 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			}
 		case "f6":
 			if seen&(1<<36) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"f6"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f6"}}
 			}
 			seen |= 1 << 36
 			if i >= len(data) || data[i] != '"' {
@@ -2444,7 +2444,7 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			}
 		case "f7":
 			if seen&(1<<37) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"f7"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f7"}}
 			}
 			seen |= 1 << 37
 			if i >= len(data) || data[i] != '"' {
@@ -2471,7 +2471,7 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			}
 		case "f8":
 			if seen&(1<<38) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"f8"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f8"}}
 			}
 			seen |= 1 << 38
 			if i >= len(data) || data[i] != '"' {
@@ -2498,7 +2498,7 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			}
 		case "f9":
 			if seen&(1<<39) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"f9"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f9"}}
 			}
 			seen |= 1 << 39
 			if i >= len(data) || data[i] != '"' {
@@ -2524,7 +2524,7 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 				}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -2542,124 +2542,124 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 		if data[i] == '}' {
 			i++
 			if seen&(1<<0) == 0 {
-				return result, i, &validation.RequiredError{Path: []string{"f1"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f1"}}
 			}
 			if seen&(1<<1) == 0 {
-				return result, i, &validation.RequiredError{Path: []string{"f10"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f10"}}
 			}
 			if seen&(1<<2) == 0 {
-				return result, i, &validation.RequiredError{Path: []string{"f11"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f11"}}
 			}
 			if seen&(1<<3) == 0 {
-				return result, i, &validation.RequiredError{Path: []string{"f12"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f12"}}
 			}
 			if seen&(1<<4) == 0 {
-				return result, i, &validation.RequiredError{Path: []string{"f13"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f13"}}
 			}
 			if seen&(1<<5) == 0 {
-				return result, i, &validation.RequiredError{Path: []string{"f14"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f14"}}
 			}
 			if seen&(1<<6) == 0 {
-				return result, i, &validation.RequiredError{Path: []string{"f15"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f15"}}
 			}
 			if seen&(1<<7) == 0 {
-				return result, i, &validation.RequiredError{Path: []string{"f16"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f16"}}
 			}
 			if seen&(1<<8) == 0 {
-				return result, i, &validation.RequiredError{Path: []string{"f17"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f17"}}
 			}
 			if seen&(1<<9) == 0 {
-				return result, i, &validation.RequiredError{Path: []string{"f18"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f18"}}
 			}
 			if seen&(1<<10) == 0 {
-				return result, i, &validation.RequiredError{Path: []string{"f19"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f19"}}
 			}
 			if seen&(1<<11) == 0 {
-				return result, i, &validation.RequiredError{Path: []string{"f2"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f2"}}
 			}
 			if seen&(1<<12) == 0 {
-				return result, i, &validation.RequiredError{Path: []string{"f20"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f20"}}
 			}
 			if seen&(1<<13) == 0 {
-				return result, i, &validation.RequiredError{Path: []string{"f21"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f21"}}
 			}
 			if seen&(1<<14) == 0 {
-				return result, i, &validation.RequiredError{Path: []string{"f22"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f22"}}
 			}
 			if seen&(1<<15) == 0 {
-				return result, i, &validation.RequiredError{Path: []string{"f23"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f23"}}
 			}
 			if seen&(1<<16) == 0 {
-				return result, i, &validation.RequiredError{Path: []string{"f24"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f24"}}
 			}
 			if seen&(1<<17) == 0 {
-				return result, i, &validation.RequiredError{Path: []string{"f25"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f25"}}
 			}
 			if seen&(1<<18) == 0 {
-				return result, i, &validation.RequiredError{Path: []string{"f26"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f26"}}
 			}
 			if seen&(1<<19) == 0 {
-				return result, i, &validation.RequiredError{Path: []string{"f27"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f27"}}
 			}
 			if seen&(1<<20) == 0 {
-				return result, i, &validation.RequiredError{Path: []string{"f28"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f28"}}
 			}
 			if seen&(1<<21) == 0 {
-				return result, i, &validation.RequiredError{Path: []string{"f29"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f29"}}
 			}
 			if seen&(1<<22) == 0 {
-				return result, i, &validation.RequiredError{Path: []string{"f3"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f3"}}
 			}
 			if seen&(1<<23) == 0 {
-				return result, i, &validation.RequiredError{Path: []string{"f30"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f30"}}
 			}
 			if seen&(1<<24) == 0 {
-				return result, i, &validation.RequiredError{Path: []string{"f31"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f31"}}
 			}
 			if seen&(1<<25) == 0 {
-				return result, i, &validation.RequiredError{Path: []string{"f32"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f32"}}
 			}
 			if seen&(1<<26) == 0 {
-				return result, i, &validation.RequiredError{Path: []string{"f33"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f33"}}
 			}
 			if seen&(1<<27) == 0 {
-				return result, i, &validation.RequiredError{Path: []string{"f34"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f34"}}
 			}
 			if seen&(1<<28) == 0 {
-				return result, i, &validation.RequiredError{Path: []string{"f35"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f35"}}
 			}
 			if seen&(1<<29) == 0 {
-				return result, i, &validation.RequiredError{Path: []string{"f36"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f36"}}
 			}
 			if seen&(1<<30) == 0 {
-				return result, i, &validation.RequiredError{Path: []string{"f37"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f37"}}
 			}
 			if seen&(1<<31) == 0 {
-				return result, i, &validation.RequiredError{Path: []string{"f38"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f38"}}
 			}
 			if seen&(1<<32) == 0 {
-				return result, i, &validation.RequiredError{Path: []string{"f39"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f39"}}
 			}
 			if seen&(1<<33) == 0 {
-				return result, i, &validation.RequiredError{Path: []string{"f4"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f4"}}
 			}
 			if seen&(1<<34) == 0 {
-				return result, i, &validation.RequiredError{Path: []string{"f40"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f40"}}
 			}
 			if seen&(1<<35) == 0 {
-				return result, i, &validation.RequiredError{Path: []string{"f5"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f5"}}
 			}
 			if seen&(1<<36) == 0 {
-				return result, i, &validation.RequiredError{Path: []string{"f6"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f6"}}
 			}
 			if seen&(1<<37) == 0 {
-				return result, i, &validation.RequiredError{Path: []string{"f7"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f7"}}
 			}
 			if seen&(1<<38) == 0 {
-				return result, i, &validation.RequiredError{Path: []string{"f8"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f8"}}
 			}
 			if seen&(1<<39) == 0 {
-				return result, i, &validation.RequiredError{Path: []string{"f9"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f9"}}
 			}
 			return result, i, nil
 		}
@@ -2687,124 +2687,124 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
 		if seen&(1<<0) == 0 {
-			return result, &validation.RequiredError{Path: []string{"f1"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f1"}}
 		}
 		if seen&(1<<1) == 0 {
-			return result, &validation.RequiredError{Path: []string{"f10"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f10"}}
 		}
 		if seen&(1<<2) == 0 {
-			return result, &validation.RequiredError{Path: []string{"f11"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f11"}}
 		}
 		if seen&(1<<3) == 0 {
-			return result, &validation.RequiredError{Path: []string{"f12"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f12"}}
 		}
 		if seen&(1<<4) == 0 {
-			return result, &validation.RequiredError{Path: []string{"f13"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f13"}}
 		}
 		if seen&(1<<5) == 0 {
-			return result, &validation.RequiredError{Path: []string{"f14"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f14"}}
 		}
 		if seen&(1<<6) == 0 {
-			return result, &validation.RequiredError{Path: []string{"f15"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f15"}}
 		}
 		if seen&(1<<7) == 0 {
-			return result, &validation.RequiredError{Path: []string{"f16"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f16"}}
 		}
 		if seen&(1<<8) == 0 {
-			return result, &validation.RequiredError{Path: []string{"f17"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f17"}}
 		}
 		if seen&(1<<9) == 0 {
-			return result, &validation.RequiredError{Path: []string{"f18"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f18"}}
 		}
 		if seen&(1<<10) == 0 {
-			return result, &validation.RequiredError{Path: []string{"f19"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f19"}}
 		}
 		if seen&(1<<11) == 0 {
-			return result, &validation.RequiredError{Path: []string{"f2"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f2"}}
 		}
 		if seen&(1<<12) == 0 {
-			return result, &validation.RequiredError{Path: []string{"f20"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f20"}}
 		}
 		if seen&(1<<13) == 0 {
-			return result, &validation.RequiredError{Path: []string{"f21"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f21"}}
 		}
 		if seen&(1<<14) == 0 {
-			return result, &validation.RequiredError{Path: []string{"f22"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f22"}}
 		}
 		if seen&(1<<15) == 0 {
-			return result, &validation.RequiredError{Path: []string{"f23"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f23"}}
 		}
 		if seen&(1<<16) == 0 {
-			return result, &validation.RequiredError{Path: []string{"f24"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f24"}}
 		}
 		if seen&(1<<17) == 0 {
-			return result, &validation.RequiredError{Path: []string{"f25"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f25"}}
 		}
 		if seen&(1<<18) == 0 {
-			return result, &validation.RequiredError{Path: []string{"f26"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f26"}}
 		}
 		if seen&(1<<19) == 0 {
-			return result, &validation.RequiredError{Path: []string{"f27"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f27"}}
 		}
 		if seen&(1<<20) == 0 {
-			return result, &validation.RequiredError{Path: []string{"f28"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f28"}}
 		}
 		if seen&(1<<21) == 0 {
-			return result, &validation.RequiredError{Path: []string{"f29"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f29"}}
 		}
 		if seen&(1<<22) == 0 {
-			return result, &validation.RequiredError{Path: []string{"f3"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f3"}}
 		}
 		if seen&(1<<23) == 0 {
-			return result, &validation.RequiredError{Path: []string{"f30"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f30"}}
 		}
 		if seen&(1<<24) == 0 {
-			return result, &validation.RequiredError{Path: []string{"f31"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f31"}}
 		}
 		if seen&(1<<25) == 0 {
-			return result, &validation.RequiredError{Path: []string{"f32"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f32"}}
 		}
 		if seen&(1<<26) == 0 {
-			return result, &validation.RequiredError{Path: []string{"f33"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f33"}}
 		}
 		if seen&(1<<27) == 0 {
-			return result, &validation.RequiredError{Path: []string{"f34"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f34"}}
 		}
 		if seen&(1<<28) == 0 {
-			return result, &validation.RequiredError{Path: []string{"f35"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f35"}}
 		}
 		if seen&(1<<29) == 0 {
-			return result, &validation.RequiredError{Path: []string{"f36"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f36"}}
 		}
 		if seen&(1<<30) == 0 {
-			return result, &validation.RequiredError{Path: []string{"f37"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f37"}}
 		}
 		if seen&(1<<31) == 0 {
-			return result, &validation.RequiredError{Path: []string{"f38"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f38"}}
 		}
 		if seen&(1<<32) == 0 {
-			return result, &validation.RequiredError{Path: []string{"f39"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f39"}}
 		}
 		if seen&(1<<33) == 0 {
-			return result, &validation.RequiredError{Path: []string{"f4"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f4"}}
 		}
 		if seen&(1<<34) == 0 {
-			return result, &validation.RequiredError{Path: []string{"f40"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f40"}}
 		}
 		if seen&(1<<35) == 0 {
-			return result, &validation.RequiredError{Path: []string{"f5"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f5"}}
 		}
 		if seen&(1<<36) == 0 {
-			return result, &validation.RequiredError{Path: []string{"f6"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f6"}}
 		}
 		if seen&(1<<37) == 0 {
-			return result, &validation.RequiredError{Path: []string{"f7"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f7"}}
 		}
 		if seen&(1<<38) == 0 {
-			return result, &validation.RequiredError{Path: []string{"f8"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f8"}}
 		}
 		if seen&(1<<39) == 0 {
-			return result, &validation.RequiredError{Path: []string{"f9"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f9"}}
 		}
 		return result, nil
 	}
@@ -2821,7 +2821,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, decode.NewParseErr("f1", s.Pos, err)
 			}
 			if seen&(1<<0) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"f1"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f1"}}
 			}
 			seen |= 1 << 0
 			result.F1, err = s.String()
@@ -2834,7 +2834,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, decode.NewParseErr("f10", s.Pos, err)
 			}
 			if seen&(1<<1) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"f10"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f10"}}
 			}
 			seen |= 1 << 1
 			result.F10, err = s.String()
@@ -2847,7 +2847,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, decode.NewParseErr("f11", s.Pos, err)
 			}
 			if seen&(1<<2) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"f11"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f11"}}
 			}
 			seen |= 1 << 2
 			result.F11, err = s.String()
@@ -2860,7 +2860,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, decode.NewParseErr("f12", s.Pos, err)
 			}
 			if seen&(1<<3) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"f12"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f12"}}
 			}
 			seen |= 1 << 3
 			result.F12, err = s.String()
@@ -2873,7 +2873,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, decode.NewParseErr("f13", s.Pos, err)
 			}
 			if seen&(1<<4) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"f13"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f13"}}
 			}
 			seen |= 1 << 4
 			result.F13, err = s.String()
@@ -2886,7 +2886,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, decode.NewParseErr("f14", s.Pos, err)
 			}
 			if seen&(1<<5) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"f14"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f14"}}
 			}
 			seen |= 1 << 5
 			result.F14, err = s.String()
@@ -2899,7 +2899,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, decode.NewParseErr("f15", s.Pos, err)
 			}
 			if seen&(1<<6) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"f15"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f15"}}
 			}
 			seen |= 1 << 6
 			result.F15, err = s.String()
@@ -2912,7 +2912,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, decode.NewParseErr("f16", s.Pos, err)
 			}
 			if seen&(1<<7) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"f16"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f16"}}
 			}
 			seen |= 1 << 7
 			result.F16, err = s.String()
@@ -2925,7 +2925,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, decode.NewParseErr("f17", s.Pos, err)
 			}
 			if seen&(1<<8) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"f17"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f17"}}
 			}
 			seen |= 1 << 8
 			result.F17, err = s.String()
@@ -2938,7 +2938,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, decode.NewParseErr("f18", s.Pos, err)
 			}
 			if seen&(1<<9) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"f18"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f18"}}
 			}
 			seen |= 1 << 9
 			result.F18, err = s.String()
@@ -2951,7 +2951,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, decode.NewParseErr("f19", s.Pos, err)
 			}
 			if seen&(1<<10) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"f19"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f19"}}
 			}
 			seen |= 1 << 10
 			result.F19, err = s.String()
@@ -2964,7 +2964,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, decode.NewParseErr("f2", s.Pos, err)
 			}
 			if seen&(1<<11) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"f2"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f2"}}
 			}
 			seen |= 1 << 11
 			result.F2, err = s.String()
@@ -2977,7 +2977,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, decode.NewParseErr("f20", s.Pos, err)
 			}
 			if seen&(1<<12) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"f20"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f20"}}
 			}
 			seen |= 1 << 12
 			result.F20, err = s.String()
@@ -2990,7 +2990,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, decode.NewParseErr("f21", s.Pos, err)
 			}
 			if seen&(1<<13) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"f21"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f21"}}
 			}
 			seen |= 1 << 13
 			result.F21, err = s.String()
@@ -3003,7 +3003,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, decode.NewParseErr("f22", s.Pos, err)
 			}
 			if seen&(1<<14) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"f22"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f22"}}
 			}
 			seen |= 1 << 14
 			result.F22, err = s.String()
@@ -3016,7 +3016,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, decode.NewParseErr("f23", s.Pos, err)
 			}
 			if seen&(1<<15) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"f23"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f23"}}
 			}
 			seen |= 1 << 15
 			result.F23, err = s.String()
@@ -3029,7 +3029,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, decode.NewParseErr("f24", s.Pos, err)
 			}
 			if seen&(1<<16) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"f24"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f24"}}
 			}
 			seen |= 1 << 16
 			result.F24, err = s.String()
@@ -3042,7 +3042,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, decode.NewParseErr("f25", s.Pos, err)
 			}
 			if seen&(1<<17) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"f25"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f25"}}
 			}
 			seen |= 1 << 17
 			result.F25, err = s.String()
@@ -3055,7 +3055,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, decode.NewParseErr("f26", s.Pos, err)
 			}
 			if seen&(1<<18) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"f26"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f26"}}
 			}
 			seen |= 1 << 18
 			result.F26, err = s.String()
@@ -3068,7 +3068,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, decode.NewParseErr("f27", s.Pos, err)
 			}
 			if seen&(1<<19) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"f27"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f27"}}
 			}
 			seen |= 1 << 19
 			result.F27, err = s.String()
@@ -3081,7 +3081,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, decode.NewParseErr("f28", s.Pos, err)
 			}
 			if seen&(1<<20) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"f28"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f28"}}
 			}
 			seen |= 1 << 20
 			result.F28, err = s.String()
@@ -3094,7 +3094,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, decode.NewParseErr("f29", s.Pos, err)
 			}
 			if seen&(1<<21) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"f29"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f29"}}
 			}
 			seen |= 1 << 21
 			result.F29, err = s.String()
@@ -3107,7 +3107,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, decode.NewParseErr("f3", s.Pos, err)
 			}
 			if seen&(1<<22) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"f3"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f3"}}
 			}
 			seen |= 1 << 22
 			result.F3, err = s.String()
@@ -3120,7 +3120,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, decode.NewParseErr("f30", s.Pos, err)
 			}
 			if seen&(1<<23) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"f30"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f30"}}
 			}
 			seen |= 1 << 23
 			result.F30, err = s.String()
@@ -3133,7 +3133,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, decode.NewParseErr("f31", s.Pos, err)
 			}
 			if seen&(1<<24) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"f31"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f31"}}
 			}
 			seen |= 1 << 24
 			result.F31, err = s.String()
@@ -3146,7 +3146,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, decode.NewParseErr("f32", s.Pos, err)
 			}
 			if seen&(1<<25) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"f32"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f32"}}
 			}
 			seen |= 1 << 25
 			result.F32, err = s.String()
@@ -3159,7 +3159,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, decode.NewParseErr("f33", s.Pos, err)
 			}
 			if seen&(1<<26) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"f33"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f33"}}
 			}
 			seen |= 1 << 26
 			result.F33, err = s.String()
@@ -3172,7 +3172,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, decode.NewParseErr("f34", s.Pos, err)
 			}
 			if seen&(1<<27) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"f34"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f34"}}
 			}
 			seen |= 1 << 27
 			result.F34, err = s.String()
@@ -3185,7 +3185,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, decode.NewParseErr("f35", s.Pos, err)
 			}
 			if seen&(1<<28) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"f35"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f35"}}
 			}
 			seen |= 1 << 28
 			result.F35, err = s.String()
@@ -3198,7 +3198,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, decode.NewParseErr("f36", s.Pos, err)
 			}
 			if seen&(1<<29) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"f36"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f36"}}
 			}
 			seen |= 1 << 29
 			result.F36, err = s.String()
@@ -3211,7 +3211,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, decode.NewParseErr("f37", s.Pos, err)
 			}
 			if seen&(1<<30) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"f37"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f37"}}
 			}
 			seen |= 1 << 30
 			result.F37, err = s.String()
@@ -3224,7 +3224,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, decode.NewParseErr("f38", s.Pos, err)
 			}
 			if seen&(1<<31) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"f38"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f38"}}
 			}
 			seen |= 1 << 31
 			result.F38, err = s.String()
@@ -3237,7 +3237,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, decode.NewParseErr("f39", s.Pos, err)
 			}
 			if seen&(1<<32) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"f39"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f39"}}
 			}
 			seen |= 1 << 32
 			result.F39, err = s.String()
@@ -3250,7 +3250,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, decode.NewParseErr("f4", s.Pos, err)
 			}
 			if seen&(1<<33) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"f4"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f4"}}
 			}
 			seen |= 1 << 33
 			result.F4, err = s.String()
@@ -3263,7 +3263,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, decode.NewParseErr("f40", s.Pos, err)
 			}
 			if seen&(1<<34) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"f40"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f40"}}
 			}
 			seen |= 1 << 34
 			result.F40, err = s.String()
@@ -3276,7 +3276,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, decode.NewParseErr("f5", s.Pos, err)
 			}
 			if seen&(1<<35) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"f5"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f5"}}
 			}
 			seen |= 1 << 35
 			result.F5, err = s.String()
@@ -3289,7 +3289,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, decode.NewParseErr("f6", s.Pos, err)
 			}
 			if seen&(1<<36) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"f6"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f6"}}
 			}
 			seen |= 1 << 36
 			result.F6, err = s.String()
@@ -3302,7 +3302,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, decode.NewParseErr("f7", s.Pos, err)
 			}
 			if seen&(1<<37) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"f7"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f7"}}
 			}
 			seen |= 1 << 37
 			result.F7, err = s.String()
@@ -3315,7 +3315,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, decode.NewParseErr("f8", s.Pos, err)
 			}
 			if seen&(1<<38) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"f8"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f8"}}
 			}
 			seen |= 1 << 38
 			result.F8, err = s.String()
@@ -3328,7 +3328,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, decode.NewParseErr("f9", s.Pos, err)
 			}
 			if seen&(1<<39) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"f9"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f9"}}
 			}
 			seen |= 1 << 39
 			result.F9, err = s.String()
@@ -3336,7 +3336,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, decode.NewParseErr("f9", s.Pos, err)
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -3361,124 +3361,124 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 		if c == '}' {
 			s.Pos++
 			if seen&(1<<0) == 0 {
-				return result, &validation.RequiredError{Path: []string{"f1"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f1"}}
 			}
 			if seen&(1<<1) == 0 {
-				return result, &validation.RequiredError{Path: []string{"f10"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f10"}}
 			}
 			if seen&(1<<2) == 0 {
-				return result, &validation.RequiredError{Path: []string{"f11"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f11"}}
 			}
 			if seen&(1<<3) == 0 {
-				return result, &validation.RequiredError{Path: []string{"f12"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f12"}}
 			}
 			if seen&(1<<4) == 0 {
-				return result, &validation.RequiredError{Path: []string{"f13"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f13"}}
 			}
 			if seen&(1<<5) == 0 {
-				return result, &validation.RequiredError{Path: []string{"f14"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f14"}}
 			}
 			if seen&(1<<6) == 0 {
-				return result, &validation.RequiredError{Path: []string{"f15"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f15"}}
 			}
 			if seen&(1<<7) == 0 {
-				return result, &validation.RequiredError{Path: []string{"f16"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f16"}}
 			}
 			if seen&(1<<8) == 0 {
-				return result, &validation.RequiredError{Path: []string{"f17"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f17"}}
 			}
 			if seen&(1<<9) == 0 {
-				return result, &validation.RequiredError{Path: []string{"f18"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f18"}}
 			}
 			if seen&(1<<10) == 0 {
-				return result, &validation.RequiredError{Path: []string{"f19"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f19"}}
 			}
 			if seen&(1<<11) == 0 {
-				return result, &validation.RequiredError{Path: []string{"f2"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f2"}}
 			}
 			if seen&(1<<12) == 0 {
-				return result, &validation.RequiredError{Path: []string{"f20"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f20"}}
 			}
 			if seen&(1<<13) == 0 {
-				return result, &validation.RequiredError{Path: []string{"f21"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f21"}}
 			}
 			if seen&(1<<14) == 0 {
-				return result, &validation.RequiredError{Path: []string{"f22"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f22"}}
 			}
 			if seen&(1<<15) == 0 {
-				return result, &validation.RequiredError{Path: []string{"f23"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f23"}}
 			}
 			if seen&(1<<16) == 0 {
-				return result, &validation.RequiredError{Path: []string{"f24"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f24"}}
 			}
 			if seen&(1<<17) == 0 {
-				return result, &validation.RequiredError{Path: []string{"f25"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f25"}}
 			}
 			if seen&(1<<18) == 0 {
-				return result, &validation.RequiredError{Path: []string{"f26"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f26"}}
 			}
 			if seen&(1<<19) == 0 {
-				return result, &validation.RequiredError{Path: []string{"f27"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f27"}}
 			}
 			if seen&(1<<20) == 0 {
-				return result, &validation.RequiredError{Path: []string{"f28"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f28"}}
 			}
 			if seen&(1<<21) == 0 {
-				return result, &validation.RequiredError{Path: []string{"f29"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f29"}}
 			}
 			if seen&(1<<22) == 0 {
-				return result, &validation.RequiredError{Path: []string{"f3"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f3"}}
 			}
 			if seen&(1<<23) == 0 {
-				return result, &validation.RequiredError{Path: []string{"f30"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f30"}}
 			}
 			if seen&(1<<24) == 0 {
-				return result, &validation.RequiredError{Path: []string{"f31"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f31"}}
 			}
 			if seen&(1<<25) == 0 {
-				return result, &validation.RequiredError{Path: []string{"f32"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f32"}}
 			}
 			if seen&(1<<26) == 0 {
-				return result, &validation.RequiredError{Path: []string{"f33"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f33"}}
 			}
 			if seen&(1<<27) == 0 {
-				return result, &validation.RequiredError{Path: []string{"f34"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f34"}}
 			}
 			if seen&(1<<28) == 0 {
-				return result, &validation.RequiredError{Path: []string{"f35"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f35"}}
 			}
 			if seen&(1<<29) == 0 {
-				return result, &validation.RequiredError{Path: []string{"f36"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f36"}}
 			}
 			if seen&(1<<30) == 0 {
-				return result, &validation.RequiredError{Path: []string{"f37"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f37"}}
 			}
 			if seen&(1<<31) == 0 {
-				return result, &validation.RequiredError{Path: []string{"f38"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f38"}}
 			}
 			if seen&(1<<32) == 0 {
-				return result, &validation.RequiredError{Path: []string{"f39"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f39"}}
 			}
 			if seen&(1<<33) == 0 {
-				return result, &validation.RequiredError{Path: []string{"f4"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f4"}}
 			}
 			if seen&(1<<34) == 0 {
-				return result, &validation.RequiredError{Path: []string{"f40"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f40"}}
 			}
 			if seen&(1<<35) == 0 {
-				return result, &validation.RequiredError{Path: []string{"f5"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f5"}}
 			}
 			if seen&(1<<36) == 0 {
-				return result, &validation.RequiredError{Path: []string{"f6"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f6"}}
 			}
 			if seen&(1<<37) == 0 {
-				return result, &validation.RequiredError{Path: []string{"f7"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f7"}}
 			}
 			if seen&(1<<38) == 0 {
-				return result, &validation.RequiredError{Path: []string{"f8"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f8"}}
 			}
 			if seen&(1<<39) == 0 {
-				return result, &validation.RequiredError{Path: []string{"f9"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f9"}}
 			}
 			return result, nil
 		}

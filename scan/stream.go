@@ -41,6 +41,12 @@ type Stream struct {
 	// before returning. Generated code reads Pos directly to capture
 	// raw spans (e.g. `start := s.Pos; s.SkipValue(); raw := s.Bytes()[start:s.Pos]`).
 	Pos int
+	// consumed is the number of bytes discarded off the front of buf by
+	// every compacting ReadMore (keep > 0) since Reset, so buf[0] sits at
+	// absolute document offset `consumed`. The absolute offset of the
+	// cursor is therefore consumed + Pos — see Offset. Pos alone is only
+	// buffer-relative and resets toward 0 as the window compacts.
+	consumed int
 	// Err is the sticky reader error. Once set (non-EOF), every
 	// subsequent ReadMore call returns it without touching the reader.
 	Err error
@@ -55,6 +61,12 @@ type Stream struct {
 	// value after.
 	Shift bool
 }
+
+// Offset returns the absolute byte offset of the cursor within the full
+// document — bytes already discarded by buffer compaction plus the
+// buffer-relative [Stream.Pos]. Use it (vs Pos) when reporting a position
+// that must stay meaningful across a long, compacting stream.
+func (s *Stream) Offset() int { return s.consumed + s.Pos }
 
 // NewStream allocates a Stream bound to r with buf as the initial
 // backing slice. See Reset for the buf / Shift semantics. Equivalent
@@ -111,8 +123,10 @@ func (s *Stream) ReadMore(keep int) error {
 	// whether the subsequent Read succeeds.
 	if keep > 0 {
 		if keep >= len(s.buf) {
+			s.consumed += len(s.buf)
 			s.buf = s.buf[:0]
 		} else {
+			s.consumed += keep
 			copy(s.buf, s.buf[keep:])
 			s.buf = s.buf[:len(s.buf)-keep]
 		}

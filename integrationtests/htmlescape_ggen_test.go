@@ -66,7 +66,7 @@ func (recv HTMLRawStruct) DecodeFrom(data []byte) (result HTMLRawStruct, i int, 
 		switch key {
 		case "note":
 			if seenNote {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"note"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"note"}}
 			}
 			seenNote = true
 			if i >= len(data) || data[i] != '"' {
@@ -92,7 +92,7 @@ func (recv HTMLRawStruct) DecodeFrom(data []byte) (result HTMLRawStruct, i int, 
 				}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -149,7 +149,7 @@ func (recv HTMLRawStruct) DecodeFromStream(s *scan.Stream) (result HTMLRawStruct
 				return result, decode.NewParseErr("note", s.Pos, err)
 			}
 			if seenNote {
-				return result, &validation.DuplicateKeyError{Path: []string{"note"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"note"}}
 			}
 			seenNote = true
 			result.Note, err = s.String()
@@ -157,7 +157,7 @@ func (recv HTMLRawStruct) DecodeFromStream(s *scan.Stream) (result HTMLRawStruct
 				return result, decode.NewParseErr("note", s.Pos, err)
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -255,7 +255,7 @@ func (recv HTMLEscapeStruct) DecodeFrom(data []byte) (result HTMLEscapeStruct, i
 		switch key {
 		case "note":
 			if seenNote {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"note"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"note"}}
 			}
 			seenNote = true
 			if i >= len(data) || data[i] != '"' {
@@ -281,7 +281,7 @@ func (recv HTMLEscapeStruct) DecodeFrom(data []byte) (result HTMLEscapeStruct, i
 				}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -338,7 +338,7 @@ func (recv HTMLEscapeStruct) DecodeFromStream(s *scan.Stream) (result HTMLEscape
 				return result, decode.NewParseErr("note", s.Pos, err)
 			}
 			if seenNote {
-				return result, &validation.DuplicateKeyError{Path: []string{"note"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"note"}}
 			}
 			seenNote = true
 			result.Note, err = s.String()
@@ -346,7 +346,7 @@ func (recv HTMLEscapeStruct) DecodeFromStream(s *scan.Stream) (result HTMLEscape
 				return result, decode.NewParseErr("note", s.Pos, err)
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()

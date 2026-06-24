@@ -67,7 +67,7 @@ func (recv URLStruct) DecodeFrom(data []byte) (result URLStruct, i int, err erro
 		switch key {
 		case "site":
 			if seenSite {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"site"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"site"}}
 			}
 			seenSite = true
 			var s string
@@ -100,7 +100,7 @@ func (recv URLStruct) DecodeFrom(data []byte) (result URLStruct, i int, err erro
 			}
 			result.Site = *u
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -157,7 +157,7 @@ func (recv URLStruct) DecodeFromStream(s *scan.Stream) (result URLStruct, err er
 				return result, decode.NewParseErr("site", s.Pos, err)
 			}
 			if seenSite {
-				return result, &validation.DuplicateKeyError{Path: []string{"site"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"site"}}
 			}
 			seenSite = true
 			var sv string
@@ -171,7 +171,7 @@ func (recv URLStruct) DecodeFromStream(s *scan.Stream) (result URLStruct, err er
 			}
 			result.Site = *u
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()

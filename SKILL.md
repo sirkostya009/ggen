@@ -177,7 +177,8 @@ Mismatches rejected at parse time with clear diagnostic.
 ```go
 var e *validation.MinLenError
 if errors.As(err, &e) {
-	// e.Field, e.Limit, e.Got
+	// e.Path, e.Limit, e.Got
+	// e.Pos — failure byte offset, relative to the full payload
 }
 ```
 

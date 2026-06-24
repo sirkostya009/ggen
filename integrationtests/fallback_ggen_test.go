@@ -68,7 +68,7 @@ func (recv FallbackStruct) DecodeFrom(data []byte) (result FallbackStruct, i int
 		switch key {
 		case "extra":
 			if seenExtra {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"extra"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"extra"}}
 			}
 			seenExtra = true
 			start := i
@@ -82,7 +82,7 @@ func (recv FallbackStruct) DecodeFrom(data []byte) (result FallbackStruct, i int
 			}
 		case "id":
 			if seenID {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"id"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"id"}}
 			}
 			seenID = true
 			if i >= len(data) || data[i] != '"' {
@@ -108,7 +108,7 @@ func (recv FallbackStruct) DecodeFrom(data []byte) (result FallbackStruct, i int
 				}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -166,7 +166,7 @@ func (recv FallbackStruct) DecodeFromStream(s *scan.Stream) (result FallbackStru
 				return result, decode.NewParseErr("extra", s.Pos, err)
 			}
 			if seenExtra {
-				return result, &validation.DuplicateKeyError{Path: []string{"extra"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"extra"}}
 			}
 			seenExtra = true
 			start := s.Pos
@@ -187,7 +187,7 @@ func (recv FallbackStruct) DecodeFromStream(s *scan.Stream) (result FallbackStru
 				return result, decode.NewParseErr("id", s.Pos, err)
 			}
 			if seenID {
-				return result, &validation.DuplicateKeyError{Path: []string{"id"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"id"}}
 			}
 			seenID = true
 			result.ID, err = s.String()
@@ -195,7 +195,7 @@ func (recv FallbackStruct) DecodeFromStream(s *scan.Stream) (result FallbackStru
 				return result, decode.NewParseErr("id", s.Pos, err)
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -301,7 +301,7 @@ func (recv FastFallbackStruct) DecodeFrom(data []byte) (result FastFallbackStruc
 		switch key {
 		case "extra":
 			if seenExtra {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"extra"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"extra"}}
 			}
 			seenExtra = true
 			var _n int
@@ -312,7 +312,7 @@ func (recv FastFallbackStruct) DecodeFrom(data []byte) (result FastFallbackStruc
 			}
 		case "id":
 			if seenID {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"id"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"id"}}
 			}
 			seenID = true
 			if i >= len(data) || data[i] != '"' {
@@ -338,7 +338,7 @@ func (recv FastFallbackStruct) DecodeFrom(data []byte) (result FastFallbackStruc
 				}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -396,7 +396,7 @@ func (recv FastFallbackStruct) DecodeFromStream(s *scan.Stream) (result FastFall
 				return result, decode.NewParseErr("extra", s.Pos, err)
 			}
 			if seenExtra {
-				return result, &validation.DuplicateKeyError{Path: []string{"extra"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"extra"}}
 			}
 			seenExtra = true
 			result.Extra, err = result.Extra.DecodeFromStream(s)
@@ -409,7 +409,7 @@ func (recv FastFallbackStruct) DecodeFromStream(s *scan.Stream) (result FastFall
 				return result, decode.NewParseErr("id", s.Pos, err)
 			}
 			if seenID {
-				return result, &validation.DuplicateKeyError{Path: []string{"id"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"id"}}
 			}
 			seenID = true
 			result.ID, err = s.String()
@@ -417,7 +417,7 @@ func (recv FastFallbackStruct) DecodeFromStream(s *scan.Stream) (result FastFall
 				return result, decode.NewParseErr("id", s.Pos, err)
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -524,7 +524,7 @@ func (recv TextFallbackStruct) DecodeFrom(data []byte) (result TextFallbackStruc
 		switch key {
 		case "id":
 			if seenID {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"id"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"id"}}
 			}
 			seenID = true
 			if i >= len(data) || data[i] != '"' {
@@ -551,7 +551,7 @@ func (recv TextFallbackStruct) DecodeFrom(data []byte) (result TextFallbackStruc
 			}
 		case "tag":
 			if seenTag {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"tag"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"tag"}}
 			}
 			seenTag = true
 			var ts string
@@ -564,7 +564,7 @@ func (recv TextFallbackStruct) DecodeFrom(data []byte) (result TextFallbackStruc
 				return result, i, decode.NewParseErr("tag", i, err)
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -622,7 +622,7 @@ func (recv TextFallbackStruct) DecodeFromStream(s *scan.Stream) (result TextFall
 				return result, decode.NewParseErr("id", s.Pos, err)
 			}
 			if seenID {
-				return result, &validation.DuplicateKeyError{Path: []string{"id"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"id"}}
 			}
 			seenID = true
 			result.ID, err = s.String()
@@ -635,7 +635,7 @@ func (recv TextFallbackStruct) DecodeFromStream(s *scan.Stream) (result TextFall
 				return result, decode.NewParseErr("tag", s.Pos, err)
 			}
 			if seenTag {
-				return result, &validation.DuplicateKeyError{Path: []string{"tag"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"tag"}}
 			}
 			seenTag = true
 			var ts string
@@ -648,7 +648,7 @@ func (recv TextFallbackStruct) DecodeFromStream(s *scan.Stream) (result TextFall
 				return result, decode.NewParseErr("tag", s.Pos, err)
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()

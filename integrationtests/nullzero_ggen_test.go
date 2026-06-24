@@ -73,7 +73,7 @@ func (recv NullZeroTags) DecodeFrom(data []byte) (result NullZeroTags, i int, er
 		switch key {
 		case "nzBool":
 			if seenNZBool {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"nzBool"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"nzBool"}}
 			}
 			seenNZBool = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -87,7 +87,7 @@ func (recv NullZeroTags) DecodeFrom(data []byte) (result NullZeroTags, i int, er
 			}
 		case "nzFloat":
 			if seenNZFloat {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"nzFloat"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"nzFloat"}}
 			}
 			seenNZFloat = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -101,7 +101,7 @@ func (recv NullZeroTags) DecodeFrom(data []byte) (result NullZeroTags, i int, er
 			}
 		case "nzInt":
 			if seenNZInt {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"nzInt"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"nzInt"}}
 			}
 			seenNZInt = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -157,7 +157,7 @@ func (recv NullZeroTags) DecodeFrom(data []byte) (result NullZeroTags, i int, er
 			result.NZInt = int(n)
 		case "nzStr":
 			if seenNZStr {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"nzStr"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"nzStr"}}
 			}
 			seenNZStr = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -189,7 +189,7 @@ func (recv NullZeroTags) DecodeFrom(data []byte) (result NullZeroTags, i int, er
 			}
 		case "strict":
 			if seenStrict {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"strict"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"strict"}}
 			}
 			seenStrict = true
 			if i >= len(data) || data[i] != '"' {
@@ -215,7 +215,7 @@ func (recv NullZeroTags) DecodeFrom(data []byte) (result NullZeroTags, i int, er
 				}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -276,7 +276,7 @@ func (recv NullZeroTags) DecodeFromStream(s *scan.Stream) (result NullZeroTags, 
 				return result, decode.NewParseErr("nzBool", s.Pos, err)
 			}
 			if seenNZBool {
-				return result, &validation.DuplicateKeyError{Path: []string{"nzBool"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"nzBool"}}
 			}
 			seenNZBool = true
 			if s.Pos >= len(s.Bytes()) {
@@ -309,7 +309,7 @@ func (recv NullZeroTags) DecodeFromStream(s *scan.Stream) (result NullZeroTags, 
 				return result, decode.NewParseErr("nzFloat", s.Pos, err)
 			}
 			if seenNZFloat {
-				return result, &validation.DuplicateKeyError{Path: []string{"nzFloat"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"nzFloat"}}
 			}
 			seenNZFloat = true
 			if s.Pos >= len(s.Bytes()) {
@@ -342,7 +342,7 @@ func (recv NullZeroTags) DecodeFromStream(s *scan.Stream) (result NullZeroTags, 
 				return result, decode.NewParseErr("nzInt", s.Pos, err)
 			}
 			if seenNZInt {
-				return result, &validation.DuplicateKeyError{Path: []string{"nzInt"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"nzInt"}}
 			}
 			seenNZInt = true
 			if s.Pos >= len(s.Bytes()) {
@@ -377,7 +377,7 @@ func (recv NullZeroTags) DecodeFromStream(s *scan.Stream) (result NullZeroTags, 
 				return result, decode.NewParseErr("nzStr", s.Pos, err)
 			}
 			if seenNZStr {
-				return result, &validation.DuplicateKeyError{Path: []string{"nzStr"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"nzStr"}}
 			}
 			seenNZStr = true
 			if s.Pos >= len(s.Bytes()) {
@@ -410,7 +410,7 @@ func (recv NullZeroTags) DecodeFromStream(s *scan.Stream) (result NullZeroTags, 
 				return result, decode.NewParseErr("strict", s.Pos, err)
 			}
 			if seenStrict {
-				return result, &validation.DuplicateKeyError{Path: []string{"strict"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"strict"}}
 			}
 			seenStrict = true
 			result.Strict, err = s.String()
@@ -418,7 +418,7 @@ func (recv NullZeroTags) DecodeFromStream(s *scan.Stream) (result NullZeroTags, 
 				return result, decode.NewParseErr("strict", s.Pos, err)
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -528,7 +528,7 @@ func (recv NullZeroValidated) DecodeFrom(data []byte) (result NullZeroValidated,
 		switch key {
 		case "count":
 			if seenCount {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"count"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"count"}}
 			}
 			seenCount = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -583,11 +583,11 @@ func (recv NullZeroValidated) DecodeFrom(data []byte) (result NullZeroValidated,
 				result.Count = int(n)
 			}
 			if result.Count < 0 {
-				return result, i, &validation.GTEError{Path: []string{"count"}, Limit: 0, Value: result.Count}
+				return result, i, &validation.GTEError{Pos: i, Path: []string{"count"}, Limit: 0, Value: result.Count}
 			}
 		case "name":
 			if seenName {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"name"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"name"}}
 			}
 			seenName = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -618,10 +618,10 @@ func (recv NullZeroValidated) DecodeFrom(data []byte) (result NullZeroValidated,
 				}
 			}
 			if len(result.Name) < 1 {
-				return result, i, &validation.MinLenError{Path: []string{"name"}, Limit: 1, Got: len(result.Name)}
+				return result, i, &validation.MinLenError{Pos: i, Path: []string{"name"}, Limit: 1, Got: len(result.Name)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -679,7 +679,7 @@ func (recv NullZeroValidated) DecodeFromStream(s *scan.Stream) (result NullZeroV
 				return result, decode.NewParseErr("count", s.Pos, err)
 			}
 			if seenCount {
-				return result, &validation.DuplicateKeyError{Path: []string{"count"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"count"}}
 			}
 			seenCount = true
 			if s.Pos >= len(s.Bytes()) {
@@ -709,7 +709,7 @@ func (recv NullZeroValidated) DecodeFromStream(s *scan.Stream) (result NullZeroV
 				result.Count = int(iv)
 			}
 			if result.Count < 0 {
-				return result, &validation.GTEError{Path: []string{"count"}, Limit: 0, Value: result.Count}
+				return result, &validation.GTEError{Pos: s.Offset(), Path: []string{"count"}, Limit: 0, Value: result.Count}
 			}
 		case "name":
 			err = s.ConsumeColon()
@@ -717,7 +717,7 @@ func (recv NullZeroValidated) DecodeFromStream(s *scan.Stream) (result NullZeroV
 				return result, decode.NewParseErr("name", s.Pos, err)
 			}
 			if seenName {
-				return result, &validation.DuplicateKeyError{Path: []string{"name"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"name"}}
 			}
 			seenName = true
 			if s.Pos >= len(s.Bytes()) {
@@ -745,10 +745,10 @@ func (recv NullZeroValidated) DecodeFromStream(s *scan.Stream) (result NullZeroV
 				}
 			}
 			if len(result.Name) < 1 {
-				return result, &validation.MinLenError{Path: []string{"name"}, Limit: 1, Got: len(result.Name)}
+				return result, &validation.MinLenError{Pos: s.Offset(), Path: []string{"name"}, Limit: 1, Got: len(result.Name)}
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -853,7 +853,7 @@ func (recv NullZeroWhole) DecodeFrom(data []byte) (result NullZeroWhole, i int, 
 		switch key {
 		case "a":
 			if seenA {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"a"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"a"}}
 			}
 			seenA = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -885,7 +885,7 @@ func (recv NullZeroWhole) DecodeFrom(data []byte) (result NullZeroWhole, i int, 
 			}
 		case "b":
 			if seenB {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"b"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"b"}}
 			}
 			seenB = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -941,7 +941,7 @@ func (recv NullZeroWhole) DecodeFrom(data []byte) (result NullZeroWhole, i int, 
 			result.B = int(n)
 		case "c":
 			if seenC {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"c"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"c"}}
 			}
 			seenC = true
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -1040,7 +1040,7 @@ func (recv NullZeroWhole) DecodeFrom(data []byte) (result NullZeroWhole, i int, 
 			}
 			i++
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -1102,7 +1102,7 @@ func (recv NullZeroWhole) DecodeFromStream(s *scan.Stream) (result NullZeroWhole
 				return result, decode.NewParseErr("a", s.Pos, err)
 			}
 			if seenA {
-				return result, &validation.DuplicateKeyError{Path: []string{"a"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"a"}}
 			}
 			seenA = true
 			if s.Pos >= len(s.Bytes()) {
@@ -1135,7 +1135,7 @@ func (recv NullZeroWhole) DecodeFromStream(s *scan.Stream) (result NullZeroWhole
 				return result, decode.NewParseErr("b", s.Pos, err)
 			}
 			if seenB {
-				return result, &validation.DuplicateKeyError{Path: []string{"b"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"b"}}
 			}
 			seenB = true
 			if s.Pos >= len(s.Bytes()) {
@@ -1170,7 +1170,7 @@ func (recv NullZeroWhole) DecodeFromStream(s *scan.Stream) (result NullZeroWhole
 				return result, decode.NewParseErr("c", s.Pos, err)
 			}
 			if seenC {
-				return result, &validation.DuplicateKeyError{Path: []string{"c"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"c"}}
 			}
 			seenC = true
 			err = s.SkipSpace()
@@ -1254,7 +1254,7 @@ func (recv NullZeroWhole) DecodeFromStream(s *scan.Stream) (result NullZeroWhole
 			}
 			s.Pos++
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()

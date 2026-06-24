@@ -188,11 +188,44 @@
   explicit `AppendAnySized(dst, v, hint)`. Pick when real workload pins slice
   marshal as hotspot — map wins dominate today, slice tie acceptable.
 
-- **Position context on `validation.*` errors.** Same idea one layer up. Add
-  `Pos int` (maybe `Snippet []byte`) to `MinLenError` etc. — generated code
-  already has `pos`/`s.Pos` in scope at failure site. Either grow
-  `validation.Error` interface or add sibling `PositionedError interface {
-  error; Pos() int }`. Pair with parse-error wrap above.
+- **Position context on `validation.*` errors — RESOLVED 2026-06-23.** Every
+  error now carries a single `Pos int` (first field, not a grown interface /
+  sibling type — keeps `errors.As` on the concrete pointers): the byte offset
+  of the failure **relative to the full payload**, identical on bytes + stream.
+  Bytes path uses the cursor `i`; stream path uses `scan.Stream.Offset()` (a
+  new `consumed` counter + `Offset()` method, `consumed` incremented per
+  compacting `ReadMore`) — NOT the raw window-relative `s.Pos`, which the
+  sliding/compacting buffer invalidates. (A two-field `Pos`+`BufPos` shape was
+  built first and rejected — a single full-payload offset is the contract; the
+  caller already has the input to slice from it.) Codegen injects via
+  `withPos`/`posLit` in `generate.go` (wraps `onErr` + standalone
+  required/array-len/dup-key/unknown-key literals). Pinned by
+  `TestValidationError_Pos`. Open follow-up if ever wanted: `Snippet []byte`
+  around the failure offset (rejected for now — caller has the input + `Pos`).
+
+- **Reconsider the struct-field tag design as a whole.** ggen spreads
+  field-level config across three tag namespaces with no single organizing
+  principle: `json:"name,opt,opt,format:X"` (wire name + a grab-bag of decode
+  AND encode options — `omitempty`/`omitzero` are encode-only, `string` is
+  both, `inline` is decode-structural, `nullzero` is decode-only, `format:X` is
+  both), `ggen:"…"` (validation rules + the `hintlen` sizing hint that is NOT
+  validation + the `dive:`/`keys:` level prefixes), and `mod:"…"` (transforms,
+  same `dive:`/`keys:` prefixes). Friction points worth a fresh look: (1) the
+  json tag is becoming a dumping ground — `nullzero` landed there because it
+  "felt like `,string`", but it's a strictness knob, not a wire-shape one;
+  where should the next decode-behavior flag go? (2) `dive:`/`keys:` are
+  duplicated across `ggen:` and `mod:` with identical parsing — a shared
+  level-prefix grammar, or one unified tag, might cut that; (3) sizing
+  (`hintlen`) lives inside the validation tag but is lifted out at parse time —
+  it doesn't belong with rules; (4) encode vs decode options are interleaved
+  with no marker, so a reader can't tell which half of the pipeline a token
+  affects. Possible directions (NOT decided): a single `ggen:"…"` tag with
+  sub-namespaces (`decode:`/`encode:`/`validate:`/`mod:`), keeping `json:` to
+  stdlib-compatible name+omitempty only; or formalize the current three-tag
+  split with a documented rule for "which tag does a new option go in". This is
+  a design/ergonomics reconsideration, not a bug — weigh against the cost of
+  churning every annotated struct in the wild + the docs. Surfaced 2026-06-23
+  after `nullzero` highlighted the json-tag-grab-bag tension.
 
 - **Revisit `validation.CustomError` shape.** Today `{Field, Name string,
   Cause error}` + `Unwrap()`. Rough edges: `Name` doubles as rule identifier
