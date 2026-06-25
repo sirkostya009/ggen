@@ -13,50 +13,29 @@ import (
 	"github.com/sirkostya009/ggen/scan"
 )
 
-// ExtraStruct exercises the keys:/hintlen/clamp/nested-dive features in a
-// single annotated struct.
+// ExtraStruct exercises keys:/hintlen/clamp/nested-dive.
 //
 //ggen:generate
 type ExtraStruct struct {
-	// `hintlen=N` sizes the preallocation independently of any validation
-	// bound. Useful when the payload is expected to land near N but maxlen
-	// is much larger (or absent).
-	HintedTags []string `json:"hintedTags" ggen:"hintlen=4,maxlen=1000"`
-	// `clamp=lo|hi` mod rounds the value into [lo, hi] before validation.
-	ClampedScore int `json:"clampedScore" mod:"clamp=0|100"`
-	// `keys:` applies rules to map keys (always strings). Key mods run
-	// before the key is stored, so the map key here ends up trimmed and
-	// lower-cased.
-	KeyedMap map[string]int `json:"keyedMap" ggen:"keys:minrunes=2,maxrunes=16" mod:"keys:trim,lower"`
-	// Nested slice — arbitrary-depth dive:. Each `dive:` peels one level.
-	NestedInts [][]int `json:"nestedInts" ggen:"dive:minlen=1,dive:gte=0,lte=100"`
-	// Three-level nesting exercised by the recursive emitter.
-	Triple [][][]string `json:"triple" ggen:"dive:minlen=1,dive:minlen=1,dive:minlen=1"`
+	HintedTags   []string       `json:"hintedTags" pipe:"maxlen=1000" hint:"4"`
+	ClampedScore int            `json:"clampedScore" pipe:"clamp=0|100"`
+	KeyedMap     map[string]int `json:"keyedMap" pipe:"keys:(trim lower minrunes=2 maxrunes=16)"`
+	NestedInts   [][]int        `json:"nestedInts" pipe:"inner:(minlen=1 inner:(gte=0 lte=100))"`
+	Triple       [][][]string   `json:"triple" pipe:"inner:(minlen=1 inner:(minlen=1 inner:minlen=1))"`
 }
 
-// TupleStruct exercises fixed-length arrays `[N]T` treated as JSON tuples.
-// Strict count: decode errors when the JSON array's element count ≠ N.
+// TupleStruct exercises fixed-length arrays [N]T as JSON tuples (strict count).
 //
 //ggen:generate
 type TupleStruct struct {
-	// Classic XY pair.
-	Point [2]float64 `json:"point"`
-	// RGB triple with per-component clamp mod + outer dive validation.
-	RGB [3]int `json:"rgb" mod:"dive:clamp=0|255" ggen:"dive:gte=0,lte=255"`
-	// Slice-of-tuple — each inner [2]int is its own tuple; outer is a
-	// variable-length slice. Exercises the peel helper switching between
-	// slice and array kinds at different depths.
-	Segments [][2]int `json:"segments"`
-	// Array-of-slice — inverse mix. Exactly 2 sub-slices, each variable.
-	Pair [2][]string `json:"pair"`
+	Point    [2]float64  `json:"point"`
+	RGB      [3]int      `json:"rgb" pipe:"inner:(clamp=0|255 gte=0 lte=255)"`
+	Segments [][2]int    `json:"segments"`
+	Pair     [2][]string `json:"pair"`
 }
 
-// TestHintlen_Prealloc sizes a slice via hintlen and decodes normally. We
-// can't directly observe cap() through the generated API, but we can confirm
-// the field decodes correctly at capacity much larger than the default (8).
+// TestHintlen_Prealloc: hintlen-sized slice decodes correctly past default cap.
 func TestHintlen_Prealloc(t *testing.T) {
-	// 12 elements — default cap 8 would grow once; hintlen=4 would grow more;
-	// hintlen=4 is the written hint and the test just proves decoding works.
 	in := []byte(`{"hintedTags":["a","b","c","d","e","f","g","h","i","j","k","l"]}`)
 	got, _, err := ExtraStruct{}.DecodeFrom(in)
 	if err != nil {
@@ -67,8 +46,7 @@ func TestHintlen_Prealloc(t *testing.T) {
 	}
 }
 
-// TestClamp_Numeric_ModLowBound exercises clamp=0|100 where the incoming
-// value is well below the lower bound.
+// TestClamp_Numeric_ModLowBound: value below the lower bound is clamped up.
 func TestClamp_Numeric_ModLowBound(t *testing.T) {
 	got, _, err := ExtraStruct{}.DecodeFrom([]byte(`{"clampedScore":-50}`))
 	if err != nil {
@@ -99,7 +77,7 @@ func TestClamp_Numeric_ModInRange(t *testing.T) {
 	}
 }
 
-// TestKeys_ValidationOnMapKey: key too short should fail the minrunes=2 rule.
+// TestKeys_ValidationOnMapKey: short key fails minrunes=2.
 func TestKeys_ValidationOnMapKey(t *testing.T) {
 	in := []byte(`{"keyedMap":{"a":1}}`)
 	_, _, err := ExtraStruct{}.DecodeFrom(in)
@@ -112,8 +90,7 @@ func TestKeys_ValidationOnMapKey(t *testing.T) {
 	}
 }
 
-// TestKeys_ModOnMapKey confirms trim+lower mods run on the map key before
-// insertion. The incoming key `"  FOO  "` should become `foo` in the map.
+// TestKeys_ModOnMapKey: trim+lower mods run on the key before insertion.
 func TestKeys_ModOnMapKey(t *testing.T) {
 	in := []byte(`{"keyedMap":{"  FOO  ":7}}`)
 	got, _, err := ExtraStruct{}.DecodeFrom(in)
@@ -125,8 +102,7 @@ func TestKeys_ModOnMapKey(t *testing.T) {
 	}
 }
 
-// TestNestedDive_TwoLevels checks that a [][]int decodes and per-level
-// validation (outer minlen=1 via dive:, inner gte=0,lte=100) both fire.
+// TestNestedDive_TwoLevels_OK: [][]int decodes; per-level validation passes.
 func TestNestedDive_TwoLevels_OK(t *testing.T) {
 	in := []byte(`{"nestedInts":[[1,2,3],[10,20]]}`)
 	got, _, err := ExtraStruct{}.DecodeFrom(in)
@@ -140,7 +116,7 @@ func TestNestedDive_TwoLevels_OK(t *testing.T) {
 }
 
 func TestNestedDive_OuterViolation(t *testing.T) {
-	// Inner slice empty violates `dive:minlen=1`.
+	// Empty inner slice violates inner:minlen=1.
 	in := []byte(`{"nestedInts":[[]]}`)
 	_, _, err := ExtraStruct{}.DecodeFrom(in)
 	if err == nil {
@@ -149,7 +125,7 @@ func TestNestedDive_OuterViolation(t *testing.T) {
 }
 
 func TestNestedDive_InnerViolation(t *testing.T) {
-	// Inner element > 100 violates `dive:...,lte=100` at deepest level.
+	// Element > 100 violates lte=100 at the deepest level.
 	in := []byte(`{"nestedInts":[[1,2,999]]}`)
 	_, _, err := ExtraStruct{}.DecodeFrom(in)
 	if err == nil {
@@ -157,8 +133,7 @@ func TestNestedDive_InnerViolation(t *testing.T) {
 	}
 }
 
-// TestTripleNested decodes a [][][]string to prove the recursive emitter
-// handles three levels of slice nesting.
+// TestTripleNested: three levels of slice nesting decode.
 func TestTripleNested(t *testing.T) {
 	in := []byte(`{"triple":[[["a","b"],["c"]],[["d"]]]}`)
 	got, _, err := ExtraStruct{}.DecodeFrom(in)
@@ -171,9 +146,7 @@ func TestTripleNested(t *testing.T) {
 	}
 }
 
-// TestNestedDive_Stream confirms the streaming decoder handles nested slices.
-// UnmarshalStream shares the same recursive emitter as the bytes path but
-// threads positions through a *scan.Stream.
+// TestNestedDive_Stream: stream path handles nested slices.
 func TestNestedDive_Stream(t *testing.T) {
 	in := []byte(`{"nestedInts":[[1,2],[3,4,5]],"triple":[[["a"]]]}`)
 	var s scan.Stream
@@ -190,9 +163,7 @@ func TestNestedDive_Stream(t *testing.T) {
 	}
 }
 
-// TestTuple_Basic decodes a struct with fixed-length arrays ([N]T) and
-// checks that each slot lands in the expected position. [2]float64, [3]int,
-// [2][]string all exercised.
+// TestTuple_Basic: [N]T fields decode each slot into position.
 func TestTuple_Basic(t *testing.T) {
 	in := []byte(`{"point":[1.5,2.5],"rgb":[10,20,30],"segments":[[1,2],[3,4]],"pair":[["a","b"],["c"]]}`)
 	got, _, err := TupleStruct{}.DecodeFrom(in)
@@ -213,8 +184,7 @@ func TestTuple_Basic(t *testing.T) {
 	}
 }
 
-// TestTuple_StrictTooFew asserts that a [N]T field with fewer than N JSON
-// elements errors — strict tuple semantics.
+// TestTuple_StrictTooFew: fewer than N elements errors.
 func TestTuple_StrictTooFew(t *testing.T) {
 	in := []byte(`{"point":[1.5]}`)
 	_, _, err := TupleStruct{}.DecodeFrom(in)
@@ -227,7 +197,7 @@ func TestTuple_StrictTooFew(t *testing.T) {
 	}
 }
 
-// TestTuple_StrictTooMany: extra JSON elements also fail.
+// TestTuple_StrictTooMany: more than N elements errors.
 func TestTuple_StrictTooMany(t *testing.T) {
 	in := []byte(`{"point":[1.5,2.5,3.5]}`)
 	_, _, err := TupleStruct{}.DecodeFrom(in)
@@ -240,8 +210,7 @@ func TestTuple_StrictTooMany(t *testing.T) {
 	}
 }
 
-// TestTuple_Clamp confirms per-element mods (clamp) and validation apply
-// inside a tuple the same way they apply inside a slice via `dive:`.
+// TestTuple_Clamp: per-element clamp mod applies inside a tuple via inner:.
 func TestTuple_Clamp(t *testing.T) {
 	in := []byte(`{"rgb":[-5,300,128]}`)
 	got, _, err := TupleStruct{}.DecodeFrom(in)
@@ -253,7 +222,6 @@ func TestTuple_Clamp(t *testing.T) {
 	}
 }
 
-// TestTuple_MarshalRoundtrip: Marshal a struct with tuples and re-unmarshal.
 func TestTuple_MarshalRoundtrip(t *testing.T) {
 	in := TupleStruct{
 		Point:    [2]float64{3.14, 2.71},
@@ -271,7 +239,7 @@ func TestTuple_MarshalRoundtrip(t *testing.T) {
 	}
 }
 
-// TestTuple_Stream verifies the streaming path handles [N]T strictness too.
+// TestTuple_Stream: stream path handles [N]T strictness.
 func TestTuple_Stream(t *testing.T) {
 	in := []byte(`{"point":[1.25,2.5],"rgb":[0,0,0],"segments":[[1,2]],"pair":[["a"],["b","c"]]}`)
 	var s scan.Stream
@@ -288,8 +256,7 @@ func TestTuple_Stream(t *testing.T) {
 	}
 }
 
-// TestNestedMarshalRoundtrip confirms nested slices also marshal. Go through
-// Marshal + Unmarshal and require DeepEqual back.
+// TestNestedMarshalRoundtrip: nested slices survive Marshal + Unmarshal.
 func TestNestedMarshalRoundtrip(t *testing.T) {
 	in := ExtraStruct{
 		HintedTags:   []string{"x"},

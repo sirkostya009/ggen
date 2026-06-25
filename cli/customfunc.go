@@ -9,10 +9,8 @@ import (
 	"strings"
 )
 
-// customFunc holds the resolution for a `@Func` or `@pkg.Func` reference
-// found in a `ggen:"..."` or `mod:"..."` tag. Result is stamped onto the
-// Validation/ModRule so codegen emits a direct call without consulting the
-// runtime registry (which has been removed entirely).
+// customFunc holds the resolution for a `@Func` / `@pkg.Func` reference,
+// stamped onto the Validation/ModRule so codegen emits a direct call.
 type customFunc struct {
 	PkgImport string // import path; "" for same-package
 	PkgName   string // canonical name to qualify the call in generated code; "" for same-package
@@ -20,148 +18,210 @@ type customFunc struct {
 	Fallible  bool   // mods only: true when signature is `func(T) (T, error)`
 }
 
-// resolveCustomFunc looks up `ref` (the part after `@`) and validates the
-// signature against `fieldType`. Returns a populated customFunc or an error
-// suitable for surfacing back to the user.
-//
-// Supports:
-//   - same-package: `Func` → looked up in pkg.Scope().
-//   - cross-package via file-scoped alias: `alias.Func` → file.Imports walked
-//     for an import whose alias matches `alias`.
-//   - cross-package via canonical package name: `pkgname.Func` → walks
-//     pkg.Imports() looking for a *types.Package whose Name() matches.
-//     Lets users blank-import (`_ "path/to/lib"`) and reference by the
-//     library's natural package name without aliasing.
-//
-// `isMod` toggles signature flavor: validators must be `func(T) error`;
-// mods accept either `func(T) T` (pure) or `func(T) (T, error)` (fallible).
-// `errType` is the well-known `error` interface looked up once at parse pass
-// (typesInfo carries it via the universe scope).
-func resolveCustomFunc(ref string, fieldType types.Type, file *ast.File, pkg *types.Package, isMod bool) (customFunc, error) {
+// lookupFunc resolves a `@Func` / `@pkg.Func` reference (the part after the
+// `@`) to its *types.Func plus the import path / package name the generated
+// call must qualify with. Shared by resolveCustomFunc (legacy ggen:/mod:) and
+// classifyPipeFunc (the pipe: path).
+func lookupFunc(ref string, file *ast.File, pkg *types.Package) (fn *types.Func, pkgImp, pkgName string, err error) {
 	if ref == "" {
-		return customFunc{}, fmt.Errorf("empty @ reference")
+		return nil, "", "", fmt.Errorf("empty @ reference")
 	}
 	pkgPart, funcPart, hasDot := strings.Cut(ref, ".")
 	if !hasDot {
 		funcPart = pkgPart
 		pkgPart = ""
 	}
-
-	var (
-		fn      *types.Func
-		pkgImp  string
-		pkgName string
-	)
 	if pkgPart == "" {
-		// Same package.
 		if pkg == nil {
-			return customFunc{}, fmt.Errorf("no package context (run ggen with a Go module so type info is available)")
+			return nil, "", "", fmt.Errorf("no package context (run ggen with a Go module so type info is available)")
 		}
 		obj := pkg.Scope().Lookup(funcPart)
 		if obj == nil {
-			return customFunc{}, fmt.Errorf("func %s not found in package %s", funcPart, pkg.Name())
+			return nil, "", "", fmt.Errorf("func %s not found in package %s", funcPart, pkg.Name())
 		}
 		f, ok := obj.(*types.Func)
 		if !ok {
-			return customFunc{}, fmt.Errorf("%s is not a function (got %T)", funcPart, obj)
+			return nil, "", "", fmt.Errorf("%s is not a function (got %T)", funcPart, obj)
 		}
-		fn = f
-	} else {
-		target, importPath, err := lookupCrossPkg(pkgPart, file, pkg)
-		if err != nil {
-			return customFunc{}, fmt.Errorf("%w", err)
-		}
-		obj := target.Scope().Lookup(funcPart)
-		if obj == nil {
-			return customFunc{}, fmt.Errorf("func %s not found in package %s", funcPart, target.Path())
-		}
-		f, ok := obj.(*types.Func)
-		if !ok {
-			return customFunc{}, fmt.Errorf("%s is not a function (got %T)", funcPart, obj)
-		}
-		fn = f
-		pkgImp = importPath
-		pkgName = target.Name()
+		return f, "", "", nil
 	}
+	target, importPath, err := lookupCrossPkg(pkgPart, file, pkg)
+	if err != nil {
+		return nil, "", "", fmt.Errorf("%w", err)
+	}
+	obj := target.Scope().Lookup(funcPart)
+	if obj == nil {
+		return nil, "", "", fmt.Errorf("func %s not found in package %s", funcPart, target.Path())
+	}
+	f, ok := obj.(*types.Func)
+	if !ok {
+		return nil, "", "", fmt.Errorf("%s is not a function (got %T)", funcPart, obj)
+	}
+	return f, importPath, target.Name(), nil
+}
 
+// pipeRole classifies a value-stage `@Func`: validator, mod (pure or
+// fallible, in-type == out-type), or converter (in != out — only legal in the
+// decode stage, rejected here).
+type pipeRole uint8
+
+const (
+	roleValidator pipeRole = iota
+	roleMod
+	roleConverter
+)
+
+// classifyValueFunc resolves a value-stage `@Func` against the working type wt
+// and classifies it from its signature, per the redesign rule "a single bool
+// or error return is ALWAYS a validator":
+//
+//	func(T) error         → validator
+//	func(T) bool          → validator (message-capable)   [func(bool)bool banned]
+//	func(T) T             → mod (pure)
+//	func(T) (T, error)    → mod (fallible, error)
+//	func(T) (T, bool)     → mod (fallible, message-capable)
+//	func(T) U  (U != T)   → converter — illegal in a value stage
+func classifyValueFunc(ref string, wt types.Type, file *ast.File, pkg *types.Package) (role pipeRole, cf customFunc, boolForm bool, err error) {
+	fn, pkgImp, pkgName, err := lookupFunc(ref, file, pkg)
+	if err != nil {
+		return 0, customFunc{}, false, err
+	}
+	_, funcPart, hasDot := strings.Cut(ref, ".")
+	if !hasDot {
+		funcPart = ref
+	}
 	sig, ok := fn.Type().(*types.Signature)
 	if !ok {
-		return customFunc{}, fmt.Errorf("not a function signature")
+		return 0, customFunc{}, false, fmt.Errorf("not a function signature")
 	}
 	if sig.Recv() != nil {
-		return customFunc{}, fmt.Errorf("must be a top-level function, not a method")
+		return 0, customFunc{}, false, fmt.Errorf("must be a top-level function, not a method")
 	}
 	if sig.Params().Len() != 1 {
-		return customFunc{}, fmt.Errorf("must take exactly one parameter (the field value)")
+		return 0, customFunc{}, false, fmt.Errorf("must take exactly one parameter (the value)")
 	}
-	paramType := sig.Params().At(0).Type()
-	// Accept generic params (`func[T constraint](T) error`) when the
-	// field type satisfies the type-param's constraint. The generated
-	// code calls Func(field) and Go inferences T = fieldType at the
-	// call site, so as long as fieldType is in the constraint's type
-	// set the call type-checks.
-	paramTypeParam, paramIsGeneric := paramType.(*types.TypeParam)
-	if paramIsGeneric {
-		if !satisfiesConstraint(fieldType, paramTypeParam) {
-			return customFunc{}, fmt.Errorf("field type %s does not satisfy constraint %s on param T", fieldType, paramTypeParam.Constraint())
-		}
-	} else if !types.Identical(paramType, fieldType) {
-		return customFunc{}, fmt.Errorf("param type %s does not match field type %s", paramType, fieldType)
-	}
+	cf = customFunc{PkgImport: pkgImp, PkgName: pkgName, FuncName: funcPart}
 
-	// resultMatchesField reports whether r either equals fieldType
-	// directly OR is the same type parameter as the input (so the
-	// instantiation aligns: `func[T](T) T` returns fieldType).
-	resultMatchesField := func(r types.Type) bool {
-		if types.Identical(r, fieldType) {
+	paramType := sig.Params().At(0).Type()
+	paramTP, paramGeneric := paramType.(*types.TypeParam)
+	if paramGeneric {
+		if !satisfiesConstraint(wt, paramTP) {
+			return 0, customFunc{}, false, fmt.Errorf("value type %s does not satisfy constraint %s on param", wt, paramTP.Constraint())
+		}
+	} else if !types.Identical(paramType, wt) {
+		return 0, customFunc{}, false, fmt.Errorf("param type %s does not match value type %s", paramType, wt)
+	}
+	matchesWT := func(r types.Type) bool {
+		if types.Identical(r, wt) {
 			return true
 		}
-		if rtp, ok := r.(*types.TypeParam); ok && paramIsGeneric {
-			return rtp == paramTypeParam
+		if rtp, ok := r.(*types.TypeParam); ok && paramGeneric {
+			return rtp == paramTP
 		}
 		return false
 	}
+	wtIsBool := false
+	if b, ok := wt.Underlying().(*types.Basic); ok && b.Kind() == types.Bool {
+		wtIsBool = true
+	}
 
-	results := sig.Results()
-	out := customFunc{
-		PkgImport: pkgImp,
-		PkgName:   pkgName,
-		FuncName:  funcPart,
-	}
-	if isMod {
-		switch results.Len() {
-		case 1:
-			if !resultMatchesField(results.At(0).Type()) {
-				return customFunc{}, fmt.Errorf("mod result type %s does not match field type %s", results.At(0).Type(), fieldType)
+	res := sig.Results()
+	switch res.Len() {
+	case 1:
+		rt := res.At(0).Type()
+		switch {
+		case isErrorType(rt):
+			return roleValidator, cf, false, nil
+		case isBoolType(rt):
+			// func(bool)bool is banned (ambiguous; use func(bool) error).
+			if wtIsBool {
+				return 0, customFunc{}, false, fmt.Errorf("func(bool) bool is banned — use func(bool) error to validate a bool field")
 			}
-		case 2:
-			if !resultMatchesField(results.At(0).Type()) {
-				return customFunc{}, fmt.Errorf("fallible mod first result %s does not match field type %s", results.At(0).Type(), fieldType)
-			}
-			if !isErrorType(results.At(1).Type()) {
-				return customFunc{}, fmt.Errorf("fallible mod second result must be error, got %s", results.At(1).Type())
-			}
-			out.Fallible = true
+			return roleValidator, cf, true, nil
+		case matchesWT(rt):
+			return roleMod, cf, false, nil // pure mod
 		default:
-			return customFunc{}, fmt.Errorf("mod must return T or (T, error), got %d results", results.Len())
+			return roleConverter, cf, false, fmt.Errorf("converter (func(%s) %s) is only valid as a decode-stage variant, not a value step", wt, rt)
 		}
-	} else {
-		if results.Len() != 1 {
-			return customFunc{}, fmt.Errorf("validator must return error, got %d results", results.Len())
+	case 2:
+		rt, st := res.At(0).Type(), res.At(1).Type()
+		if !matchesWT(rt) {
+			return roleConverter, cf, false, fmt.Errorf("converter (func(%s) (%s, …)) is only valid as a decode-stage variant, not a value step", wt, rt)
 		}
-		if !isErrorType(results.At(0).Type()) {
-			return customFunc{}, fmt.Errorf("validator must return error, got %s", results.At(0).Type())
+		cf.Fallible = true
+		switch {
+		case isErrorType(st):
+			return roleMod, cf, false, nil
+		case isBoolType(st):
+			return roleMod, cf, true, nil
+		default:
+			return 0, customFunc{}, false, fmt.Errorf("fallible mod second result must be error or bool, got %s", st)
 		}
 	}
-	return out, nil
+	return 0, customFunc{}, false, fmt.Errorf("must return one of: error, bool, T, (T, error), (T, bool); got %d results", res.Len())
 }
 
-// satisfiesConstraint reports whether t is permitted as an
-// instantiation of the type parameter tp. Uses types.Satisfies which
-// performs the Go-spec type-set membership check (1.21+); for older
-// Go versions or constraints expressed as plain method-set
-// interfaces, falls back to types.Implements against the underlying
-// interface.
+// classifyConverter resolves a decode-stage converter variant `@Conv`. Unlike
+// a value func it is OUTPUT-anchored: the first result must equal the field
+// type T; the single parameter W is the type ggen scans natively (its wire
+// shape decides the JSON shape this variant claims). Returns W's Go type
+// literal. W must be builtin or same-package — foreign inputs aren't wired yet.
+func classifyConverter(ref string, fieldType types.Type, qualifier types.Qualifier, file *ast.File, pkg *types.Package) (cf customFunc, inType string, boolForm bool, err error) {
+	fn, pkgImp, pkgName, err := lookupFunc(ref, file, pkg)
+	if err != nil {
+		return customFunc{}, "", false, err
+	}
+	_, funcPart, hasDot := strings.Cut(ref, ".")
+	if !hasDot {
+		funcPart = ref
+	}
+	sig, ok := fn.Type().(*types.Signature)
+	if !ok {
+		return customFunc{}, "", false, fmt.Errorf("not a function signature")
+	}
+	if sig.Recv() != nil {
+		return customFunc{}, "", false, fmt.Errorf("must be a top-level function, not a method")
+	}
+	if sig.Params().Len() != 1 {
+		return customFunc{}, "", false, fmt.Errorf("converter must take exactly one parameter (the scanned input)")
+	}
+	w := sig.Params().At(0).Type()
+	if named, isNamed := w.(*types.Named); isNamed && named.Obj().Pkg() != nil && named.Obj().Pkg() != pkg {
+		return customFunc{}, "", false, fmt.Errorf("converter input %s is from another package; only builtin or same-package input types are supported", w)
+	}
+	cf = customFunc{PkgImport: pkgImp, PkgName: pkgName, FuncName: funcPart}
+	res := sig.Results()
+	switch res.Len() {
+	case 1:
+		if !types.Identical(res.At(0).Type(), fieldType) {
+			return customFunc{}, "", false, fmt.Errorf("converter output %s must equal field type %s", res.At(0).Type(), fieldType)
+		}
+	case 2:
+		if !types.Identical(res.At(0).Type(), fieldType) {
+			return customFunc{}, "", false, fmt.Errorf("converter first result %s must equal field type %s", res.At(0).Type(), fieldType)
+		}
+		cf.Fallible = true
+		switch {
+		case isErrorType(res.At(1).Type()):
+		case isBoolType(res.At(1).Type()):
+			boolForm = true
+		default:
+			return customFunc{}, "", false, fmt.Errorf("converter second result must be error or bool, got %s", res.At(1).Type())
+		}
+	default:
+		return customFunc{}, "", false, fmt.Errorf("converter must return T or (T, error) or (T, bool), got %d results", res.Len())
+	}
+	return cf, types.TypeString(w, qualifier), boolForm, nil
+}
+
+// isBoolType reports whether t is the predeclared bool.
+func isBoolType(t types.Type) bool {
+	b, ok := t.Underlying().(*types.Basic)
+	return ok && b.Kind() == types.Bool
+}
+
+// satisfiesConstraint reports whether t may instantiate the type parameter tp
+// (type-set membership check against tp's constraint interface).
 func satisfiesConstraint(t types.Type, tp *types.TypeParam) bool {
 	constraint := tp.Constraint()
 	if iface, ok := constraint.Underlying().(*types.Interface); ok {
@@ -175,8 +235,7 @@ func satisfiesConstraint(t types.Type, tp *types.TypeParam) bool {
 // import path so the generator can add it to the generated file.
 func lookupCrossPkg(pkgPart string, file *ast.File, pkg *types.Package) (*types.Package, string, error) {
 	if file != nil {
-		// Pass 1: file-scoped aliases. `import alias "path"` lets the user
-		// refer to the package by `alias` regardless of its declared Name().
+		// Pass 1: file-scoped aliases (`import alias "path"`).
 		for _, imp := range file.Imports {
 			path, err := strconv.Unquote(imp.Path.Value)
 			if err != nil {
@@ -198,18 +257,15 @@ func lookupCrossPkg(pkgPart string, file *ast.File, pkg *types.Package) (*types.
 					return target, path, nil
 				}
 			case "_":
-				// Blank import: no file-scoped name introduced. Match on
-				// the package's declared name so users can pull a lib
-				// purely for ggen's benefit.
+				// Blank import: no file-scoped name; match the declared name.
 				if target.Name() == pkgPart {
 					return target, path, nil
 				}
 			}
 		}
 	}
-	// Pass 2: any transitive import whose declared package name matches.
-	// Picks up cases where the file-scoped lookup missed (e.g., the import
-	// is in a different file of the same package).
+	// Pass 2: any transitive import whose declared name matches (catches an
+	// import living in a different file of the same package).
 	for _, imp := range pkg.Imports() {
 		if imp.Name() == pkgPart {
 			return imp, imp.Path(), nil
@@ -240,14 +296,45 @@ func isErrorType(t types.Type) bool {
 	return false
 }
 
-// resolveCustomRules walks every validation/mod rule on fi and resolves
-// the `@`-prefixed references. Mutates fi in place. Errors out if any
-// `@`-rule is present without type info available — the generator can't
-// validate signatures (or even resolve cross-package refs) in AST-only
-// mode, so we'd be flying blind.
-func (s *structSet) resolveCustomRules(structName string, fi *FieldInfo, fieldType types.Type) error {
-	hasCustom := anyCustom(fi)
-	if !hasCustom {
+// pipeHasCustom reports whether any unclassified `@`-step is present on fi's
+// pipe buckets (customs are parked as validator-shaped steps with Name "@…"
+// until classifyValueFunc runs).
+func pipeHasCustom(fi *FieldInfo) bool {
+	has := func(steps []Step) bool {
+		for _, s := range steps {
+			if strings.HasPrefix(s.V.Name, "@") || strings.HasPrefix(s.M.Name, "@") {
+				return true
+			}
+		}
+		return false
+	}
+	if has(fi.Pipe) || has(fi.KeyPipe) {
+		return true
+	}
+	for _, lv := range fi.Levels {
+		if has(lv) {
+			return true
+		}
+	}
+	return false
+}
+
+// pipeHasConverter reports whether fi has a decode-stage converter variant.
+func pipeHasConverter(fi *FieldInfo) bool {
+	for _, v := range fi.Variants {
+		if v.Kind == VariantConvert {
+			return true
+		}
+	}
+	return false
+}
+
+// resolvePipeCustoms classifies and resolves every `@`-step on a pipe-tagged
+// field against the working type at its level, then re-derives the split
+// buckets. Mod vs validator is decided by signature here.
+func (s *structSet) resolvePipeCustoms(structName string, fi *FieldInfo, fieldType types.Type) error {
+	if !pipeHasCustom(fi) && !pipeHasConverter(fi) {
+		deriveBuckets(fi)
 		return nil
 	}
 	if s.typesInfo == nil || fieldType == nil {
@@ -255,148 +342,88 @@ func (s *structSet) resolveCustomRules(structName string, fi *FieldInfo, fieldTy
 	}
 	file := s.structFile[structName]
 	pkg := s.typesPkg
-
-	// Accumulate across every @-ref location — a field with both an
-	// unresolvable val ref AND an unresolvable mod ref (or many @-refs
-	// across dive levels) needs all of them surfaced at once. Returning
-	// on the first error means the user fixes one, re-runs, finds
-	// another, fixes that, re-runs… painful UX.
+	qualifier := types.RelativeTo(pkg)
 	var errs []error
-	collect := func(err error) { errs = append(errs, err) }
 
-	// Outer rules see the field's type as-is (incl. *T for pointer fields).
-	collect(resolveValidationRules(fi.Validation, fieldType, file, pkg))
-	collect(resolveModRules(fi.Mods, fieldType, file, pkg))
-
-	// Map keys are always string.
-	keyT := types.Typ[types.String]
-	collect(resolveValidationRules(fi.KeyValidation, keyT, file, pkg))
-	collect(resolveModRules(fi.KeyMods, keyT, file, pkg))
-
-	// Dive levels: peel one container per level.
-	if len(fi.ElemValidation) > 0 || len(fi.ElemMods) > 0 || len(fi.InnerValidation) > 0 || len(fi.InnerMods) > 0 {
-		elem, err := diveElemType(fieldType)
+	// Decode-stage converter variants: resolve OUTPUT==T, capture input W.
+	for i := range fi.Variants {
+		v := &fi.Variants[i]
+		if v.Kind != VariantConvert {
+			continue
+		}
+		cf, inType, boolForm, err := classifyConverter(v.FuncName, fieldType, qualifier, file, pkg)
 		if err != nil {
-			collect(fmt.Errorf("dive: %w", err))
-		} else {
-			collect(resolveValidationRules(fi.ElemValidation, elem, file, pkg))
-			collect(resolveModRules(fi.ElemMods, elem, file, pkg))
-			inner := elem
-			for i := range fi.InnerValidation {
-				next, derr := diveElemType(inner)
-				if derr != nil {
-					collect(fmt.Errorf("dive level %d: %w", i+2, derr))
-					break
-				}
-				inner = next
-				collect(resolveValidationRules(fi.InnerValidation[i], inner, file, pkg))
-				if i < len(fi.InnerMods) {
-					collect(resolveModRules(fi.InnerMods[i], inner, file, pkg))
-				}
+			errs = append(errs, &richError{Msg: err.Error(), CodeSpan: "@" + v.FuncName})
+			continue
+		}
+		if v.Msg != "" && !boolForm {
+			errs = append(errs, &richError{Msg: fmt.Sprintf("inline message on @%s requires a bool-form converter (func(W) (T, bool))", v.FuncName), CodeSpan: "@" + v.FuncName})
+			continue
+		}
+		v.Custom = true
+		v.PkgImport = cf.PkgImport
+		v.PkgName = cf.PkgName
+		v.FuncName = cf.FuncName
+		v.Fallible = cf.Fallible
+		v.BoolForm = boolForm
+		v.InType = inType
+		v.InKind = resolveKind(inType)
+	}
+
+	resolve := func(steps []Step, wt types.Type) {
+		for i := range steps {
+			st := &steps[i]
+			name := st.V.Name
+			if st.IsMod || !strings.HasPrefix(name, "@") {
+				continue
+			}
+			msg := st.V.Msg
+			role, cf, boolForm, err := classifyValueFunc(name[1:], wt, file, pkg)
+			if err != nil {
+				errs = append(errs, &richError{Msg: err.Error(), CodeSpan: name})
+				continue
+			}
+			if msg != "" && !boolForm {
+				errs = append(errs, &richError{
+					Msg:      fmt.Sprintf("inline message on %s requires a bool-form func (func(_) bool / func(_) (_, bool))", name),
+					CodeSpan: name,
+				})
+				continue
+			}
+			switch role {
+			case roleValidator:
+				st.IsMod = false
+				st.V = ValidationRule{Name: name, Custom: true, PkgImport: cf.PkgImport, PkgName: cf.PkgName, FuncName: cf.FuncName, BoolForm: boolForm, Msg: msg}
+			case roleMod:
+				st.IsMod = true
+				st.M = ModRule{Name: name, Custom: true, PkgImport: cf.PkgImport, PkgName: cf.PkgName, FuncName: cf.FuncName, Fallible: cf.Fallible, BoolForm: boolForm, Msg: msg}
+				st.V = ValidationRule{}
 			}
 		}
 	}
-	return errors.Join(errs...)
-}
 
-func resolveValidationRules(rules []ValidationRule, fieldType types.Type, file *ast.File, pkg *types.Package) error {
-	var errs []error
-	for i := range rules {
-		if !strings.HasPrefix(rules[i].Name, "@") {
-			continue
-		}
-		ref := rules[i].Name[1:]
-		cf, err := resolveCustomFunc(ref, fieldType, file, pkg, false)
+	resolve(fi.Pipe, fieldType)
+	resolve(fi.KeyPipe, types.Typ[types.String])
+	wt := fieldType
+	for i := range fi.Levels {
+		elem, err := diveElemType(wt)
 		if err != nil {
-			// Wrap into a richError with CodeSpan = the original
-			// `@ref` token, so the pretty renderer's caret lands on
-			// the offending tag text, not on the field declaration.
-			errs = append(errs, &richError{Msg: err.Error(), CodeSpan: "@" + ref})
-			continue
+			errs = append(errs, fmt.Errorf("dive level %d: %w", i+1, err))
+			break
 		}
-		rules[i].Custom = true
-		rules[i].PkgImport = cf.PkgImport
-		rules[i].PkgName = cf.PkgName
-		rules[i].FuncName = cf.FuncName
+		resolve(fi.Levels[i], elem)
+		wt = elem
 	}
+	if err := checkVariantShapes(*fi); err != nil {
+		errs = append(errs, err)
+	}
+	deriveBuckets(fi)
 	return errors.Join(errs...)
 }
 
-func resolveModRules(rules []ModRule, fieldType types.Type, file *ast.File, pkg *types.Package) error {
-	var errs []error
-	for i := range rules {
-		if !strings.HasPrefix(rules[i].Name, "@") {
-			continue
-		}
-		ref := rules[i].Name[1:]
-		cf, err := resolveCustomFunc(ref, fieldType, file, pkg, true)
-		if err != nil {
-			errs = append(errs, &richError{Msg: err.Error(), CodeSpan: "@" + ref})
-			continue
-		}
-		rules[i].Custom = true
-		rules[i].PkgImport = cf.PkgImport
-		rules[i].PkgName = cf.PkgName
-		rules[i].FuncName = cf.FuncName
-		rules[i].Fallible = cf.Fallible
-	}
-	return errors.Join(errs...)
-}
-
-// anyCustom reports whether any rule on fi is `@`-prefixed.
-func anyCustom(fi *FieldInfo) bool {
-	for _, r := range fi.Validation {
-		if strings.HasPrefix(r.Name, "@") {
-			return true
-		}
-	}
-	for _, r := range fi.ElemValidation {
-		if strings.HasPrefix(r.Name, "@") {
-			return true
-		}
-	}
-	for _, r := range fi.KeyValidation {
-		if strings.HasPrefix(r.Name, "@") {
-			return true
-		}
-	}
-	for _, group := range fi.InnerValidation {
-		for _, r := range group {
-			if strings.HasPrefix(r.Name, "@") {
-				return true
-			}
-		}
-	}
-	for _, r := range fi.Mods {
-		if strings.HasPrefix(r.Name, "@") {
-			return true
-		}
-	}
-	for _, r := range fi.ElemMods {
-		if strings.HasPrefix(r.Name, "@") {
-			return true
-		}
-	}
-	for _, r := range fi.KeyMods {
-		if strings.HasPrefix(r.Name, "@") {
-			return true
-		}
-	}
-	for _, group := range fi.InnerMods {
-		for _, r := range group {
-			if strings.HasPrefix(r.Name, "@") {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// partitionCustomValidation splits a rule list into built-in vs `@Func`
-// rules. Used by the pointer-field codegen path: built-in rules continue
-// to operate on the deref'd value (so `gte=0` keeps comparing the int),
-// while `@Func` rules apply to the field's exact `*T` type per the
-// "exact field type" spec for custom funcs.
+// partitionCustomValidation splits a rule list into built-in vs `@Func` rules.
+// Pointer-field codegen runs built-in rules on the deref'd value but `@Func`
+// rules on the exact `*T` field type.
 func partitionCustomValidation(rules []ValidationRule) (builtin, custom []ValidationRule) {
 	for _, r := range rules {
 		if r.Custom {
@@ -420,7 +447,7 @@ func partitionCustomMods(rules []ModRule) (builtin, custom []ModRule) {
 	return
 }
 
-// diveElemType peels one container layer off t. `dive:` rules apply to the
+// diveElemType peels one container layer off t. `inner:` rules apply to the
 // elements of slices/arrays/maps; this helper computes the type each level
 // will see at codegen time.
 func diveElemType(t types.Type) (types.Type, error) {

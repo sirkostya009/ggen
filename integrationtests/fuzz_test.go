@@ -2,15 +2,8 @@
 
 package integrationtests
 
-// Fuzz tests. Three targets:
-//   - FuzzScanNoPanic: random bytes must never panic the scanner.
-//   - FuzzRoundtrip: ggen-decode → ggen-marshal → ggen-decode must be stable.
-//   - FuzzCompat: ggen and jsonv2 must agree (both error, or both succeed
-//     with semantically equal results).
-//
-// Run a target: `go test -run=^$ -fuzz=FuzzScanNoPanic -fuzztime=30s`.
-// Failing inputs are auto-saved under testdata/fuzz/<Name>/ as regression
-// seeds picked up by the normal `go test` run.
+// Fuzz tests. Run a target:
+// `go test -run=^$ -fuzz=FuzzScanNoPanic -fuzztime=30s`.
 
 import (
 	"bytes"
@@ -43,7 +36,7 @@ func addSeeds(f *testing.F) {
 	}
 }
 
-// FuzzScanNoPanic: untrusted bytes must yield an error, not a panic.
+// FuzzScanNoPanic: untrusted bytes yield an error, not a panic.
 func FuzzScanNoPanic(f *testing.F) {
 	addSeeds(f)
 	f.Fuzz(func(t *testing.T, data []byte) {
@@ -51,9 +44,8 @@ func FuzzScanNoPanic(f *testing.F) {
 	})
 }
 
-// FuzzRoundtrip: if ggen accepts the input, re-marshalling and re-decoding
-// must produce a value semantically equal to the first decode. Catches
-// encode/decode asymmetry (escape table mismatches, format-tag drift).
+// FuzzRoundtrip: decode → marshal → decode must reach a fixed point.
+// Catches encode/decode asymmetry (escape table, format-tag drift).
 func FuzzRoundtrip(f *testing.F) {
 	addSeeds(f)
 	f.Fuzz(func(t *testing.T, data []byte) {
@@ -61,10 +53,8 @@ func FuzzRoundtrip(f *testing.F) {
 		if err != nil {
 			return
 		}
-		// Two rounds: the first round may legitimately diverge (a missing
-		// "tags" key decodes to nil, but the marshalled form emits []
-		// which decodes to an empty slice). After one round through
-		// marshal, the value is in a fixed point — round two must equal.
+		// First round may diverge (missing "tags" key → nil, marshals as []
+		// → empty slice); round two onward is a fixed point.
 		out1, err := encode.Marshal(v1)
 		if err != nil {
 			t.Fatalf("re-marshal failed for accepted input: %v\nin: %s", err, data)
@@ -87,9 +77,7 @@ func FuzzRoundtrip(f *testing.F) {
 	})
 }
 
-// FuzzCompat: ggen and jsonv2 must agree on accept/reject. When both
-// accept, the resulting values must compare semantically equal. Catches
-// stdlib drift (e.g. ggen accepting input jsonv2 rejects).
+// FuzzCompat: when ggen and jsonv2 both accept, decoded values must agree.
 func FuzzCompat(f *testing.F) {
 	addSeeds(f)
 	f.Fuzz(func(t *testing.T, data []byte) {
@@ -97,9 +85,8 @@ func FuzzCompat(f *testing.F) {
 		var sv Node
 		serr := jsonv2.Unmarshal(data, &sv)
 
-		// Don't flag accept/reject drift — known cases (top-level `null`,
-		// trailing garbage, invalid UTF-8 in strings) diverge by design.
-		// The interesting check is value agreement when both succeed.
+		// Accept/reject drift is by design (top-level null, trailing garbage,
+		// invalid UTF-8); only check value agreement when both succeed.
 		if gerr != nil || serr != nil {
 			return
 		}
@@ -109,9 +96,8 @@ func FuzzCompat(f *testing.F) {
 	})
 }
 
-// FuzzStreamEqualsBytes: bytes path and stream path must agree when both
-// succeed. The chunk size derived from the input varies boundary alignment
-// between runs.
+// FuzzStreamEqualsBytes: bytes and stream paths agree when both succeed.
+// The chunk size varies boundary alignment.
 func FuzzStreamEqualsBytes(f *testing.F) {
 	for _, s := range fuzzSeeds {
 		f.Add(s, uint8(1))
@@ -145,9 +131,8 @@ func FuzzStreamEqualsBytes(f *testing.F) {
 	})
 }
 
-// FuzzBoundaryNoPanic: random bytes through the boundary surface
-// (BoundaryStruct holds float/int/string with no validation). Every
-// outcome (accept or reject) must be panic-free.
+// FuzzBoundaryNoPanic: BoundaryStruct (float/int/string, no validation)
+// must be panic-free on any input.
 func FuzzBoundaryNoPanic(f *testing.F) {
 	for _, s := range [][]byte{
 		[]byte(`{"f":1.0,"i":1,"str":"a"}`),
@@ -170,8 +155,8 @@ func FuzzBoundaryNoPanic(f *testing.F) {
 	})
 }
 
-// FuzzStreamHugeStringNoPanic: increasingly-large string payloads through
-// tiny initial bufs. Panic-free invariant on the slow-path grow loop.
+// FuzzStreamHugeStringNoPanic: large strings through tiny bufs exercise the
+// slow-path grow loop; must stay panic-free.
 func FuzzStreamHugeStringNoPanic(f *testing.F) {
 	f.Add(uint16(1), uint32(1024))
 	f.Add(uint16(4), uint32(65536))
@@ -203,9 +188,8 @@ func FuzzStreamHugeStringNoPanic(f *testing.F) {
 	})
 }
 
-// FuzzAppendJSONIdempotent: marshal twice and verify decoded results match.
-// Catches non-determinism in encoders (map iteration influence, time
-// formatting drift).
+// FuzzAppendJSONIdempotent: marshal twice; decoded results must match.
+// Catches encoder non-determinism (map iteration, time formatting).
 func FuzzAppendJSONIdempotent(f *testing.F) {
 	addSeeds(f)
 	f.Fuzz(func(t *testing.T, data []byte) {

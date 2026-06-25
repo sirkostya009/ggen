@@ -36,9 +36,8 @@ func Marshal(v Marshaler) ([]byte, error) {
 	return v.AppendJSON(make([]byte, 0, v.JSONSize()))
 }
 
-// errNaN / errInf*: returned by AppendFloat when v is non-finite. JSON
-// has no representation for NaN / ±Inf and stdlib v1 + v2 both reject
-// these values on marshal; ggen follows.
+// Returned by AppendFloat when v is non-finite — JSON has no NaN/±Inf,
+// and stdlib v1 + v2 both reject them on marshal.
 var (
 	errNaN  = errors.New("ggen: unsupported value: NaN")
 	errPInf = errors.New("ggen: unsupported value: +Inf")
@@ -71,7 +70,7 @@ func AppendFloat(dst []byte, v float64, bitSize int) ([]byte, error) {
 	}
 	dst = strconv.AppendFloat(dst, v, format, -1, bitSize)
 	if format == 'e' {
-		// Trim the zero-padded exponent: e-09 → e-9.
+		// Trim zero-padded exponent: e-09 → e-9.
 		if n := len(dst); n >= 4 && dst[n-4] == 'e' && dst[n-3] == '-' && dst[n-2] == '0' {
 			dst[n-2] = dst[n-1]
 			dst = dst[:n-1]

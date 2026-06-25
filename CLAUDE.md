@@ -14,11 +14,13 @@ package's own CLAUDE.md (see "Repo layout").
 schema/
 ├── go.work                                             ← workspace tying all four modules together
 ├── cli/                                                ← CLI module (github.com/sirkostya009/ggen/cli)
-│   ├── main.go, parse.go, generate.go, tags.go, types.go   ← CLI (package main)
+│   ├── main.go, parse.go, generate.go, tags.go, types.go   ← CLI (package main); tags.go = json tag only
+│   ├── pipe.go                                             ← pipe:/hint: grammar (tokenize, ParsedPipe, Step/Variant, deriveBuckets)
+│   ├── variants.go                                         ← multi-shape decode dispatch codegen (/ variants)
 │   ├── introspect.go                                       ← go/types interface detection (TextAppender, TextMarshaler, …)
 │   ├── alias.go                                            ← alias-type code emitters (decode + AppendJSON)
 │   ├── applicability.go                                    ← parse-time rule/kind compatibility matrix
-│   ├── customfunc.go                                       ← @Func resolution for custom validators / mods
+│   ├── customfunc.go                                       ← @Func resolution + signature classification (validator/mod/converter)
 │   ├── check.go                                            ← `-dry` / future-ggenvet parse-only entry points
 │   ├── log.go                                              ← cliLog: leveled logger with deferred flush
 │   ├── parse_test.go, tags_test.go, cli_test.go, …         ← CLI tests
@@ -84,8 +86,8 @@ locked). Dot/underscore-prefix dirs, `vendor/`, `testdata/`,
   `validation.UnknownKeyError`. Overridden when inline map field present
 - `-nullzero` — accept an explicit JSON `null` on every non-pointer value
   field, decoding it to the Go zero value. Default: hard-error (see "null
-  acceptance is kind-gated"). Per-field `json:",nullzero"` opts in one field;
-  no-op on already-null-aware kinds
+  acceptance is kind-gated"). A per-field `nullzero` decode variant in `pipe:`
+  opts in one field; no-op on already-null-aware kinds
 - `-nosortkeys` — emit fields in Go declaration order. Default: sorted
   alphabetically. Inline map fields stay last
 - `-usenumber` — decode JSON numbers into `any` fields as `json.Number`
@@ -126,66 +128,92 @@ Annotations apply only to a struct.
   span). Overrides `ignoreunknown`. Entries spliced out on marshal
 - `json:"name,omitempty"` — not marshaled when JSON-empty (null, "", [], {})
 - `json:"name,omitzero"` — not marshaled when Go-zero value
-- `json:"name,nullzero"` — decode-only: accept an explicit JSON `null` on this
-  non-pointer value field, setting it to the Go zero value instead of erroring.
-  No-op on already-null-aware kinds (pointer/slice/map/`[]byte`/`sql.Null*`/
-  raw/`any`). `-nullzero` / `//ggen:generate nullzero` is the all-fields form;
-  the per-field tag ORs on top
 - `json:"name,string"` — wrap primitive as JSON string on marshal, unwrap on
   unmarshal. Primitives only, like stdlib
 - `json:"name,format:X"` — format hint for native types (see Kinds).
   **jsonv2 requirement: `format:X` must be LAST in tag.**
+  (No `nullzero` json opt — it became a `pipe:` decode variant, below.)
 
-- `ggen:"..."` — validation rules, comma-separated. Three mode prefixes
-  partition rule list (any order):
-    - (default, no prefix) — applies to field itself (or whole
-      slice/map for container fields)
-    - `dive:` — rules after apply to next level down. Each additional
-      `dive:` peels one more level (`[][]T`: first dive → each `[]T`, second
-      → each `T`). Works for arbitrarily-deep slices
-    - `keys:` — rules after apply to map keys only (always `string`)
+- `pipe:"..."` — the unified decode/transform/validate pipeline (replaced the
+  old `ggen:`/`mod:` split; those tags no longer exist). One ordered,
+  whitespace-separated step list parsed in `pipe.go` into a `ParsedPipe`
+  (Presence / Variants / Outer / Keys / Levels). Conceptually:
 
-    Example: `ggen:"minlen=1,dive:maxlen=10,dive:required,keys:minrunes=2,maxrunes=32"`.
-    Rules:
-    - `required`, `optional`, `notempty`
-    - `len=N`, `minlen=N`, `maxlen=N` (len on strings/slices/maps)
-    - `hintlen=N` — **preallocation hint, NOT validation**. Lifted out at
-      parse time. Overrides `len`/`minlen` for sizing
-      `make([]T,0,N)` / `make(map,N)`. Use when payload lands near N but
-      validation bound much larger or absent
-    - `runes=N`, `minrunes=N`, `maxrunes=N` (utf8.RuneCountInString)
-    - `gt=N`, `gte=N`, `lt=N`, `lte=N`, `eq=N`, `neq=N` (numeric; or string
-      eq/neq on strings)
-    - `oneof=a|b|c` (strings or numerics)
-    - `email`, `url`, `ascii`, `printable`, `alphanum`, `numeric`, `lower`,
-      `upper`, `hexadecimal` (strings only)
-    - `starts=X`, `ends=X`, `contains=X` (strings only)
-    - `multiple=N` (ints only)
-    - `@FuncName` / `@pkg.FuncName` — custom validator resolved at codegen
-      time. Signature `func(T) error`. Looked up w/ `packages.Load`,
-      type-checked at generate time. Cross-package via source file import
-      block; file-scoped aliases + blank imports work too
+    ```
+    pipe        := stage ( "~" stage )*
+    first stage := variant ( "/" variant )*    // decode: JSON-shape dispatch
+    later stage := step ( WS step )*            // value steps, inner:/keys: levels
+    ```
 
-- `mod:"..."` — input transforms, applied after decode, before validation.
-  Same `dive:` / `keys:` prefixes.
+    - **Presence** (lifted, position-independent): `required` → object-close
+      seen check (`RequiredError`, via `IsRequired()` which now also reads
+      `FieldInfo.Presence`); `optional` is a marker. Absent key → Go zero.
+    - **Decode stage** — `/`-separated variants, one per JSON shape; ggen peeks
+      the first byte and routes (`variants.go`). `~` is optional sugar: with no
+      `~` the decode stage is the leading run of variant keywords
+      (`leadingDecodeExtent`). Variants:
+        - `.` — native decode of the field type T.
+        - `nullzero` — JSON `null` → `zero(T)` (sets `FieldInfo.NullZero`;
+          reuses the existing null-as-zero emit). Bare `nullzero` needs no `.`.
+        - `@Conv` — converter `func(W)T` / `func(W)(T,error)` / `func(W)(T,bool)`,
+          OUTPUT-anchored (result == T). ggen scans input `W` (primitive or
+          ggen-decodable struct → delegates to its `DecodeFrom`) and converts.
+          Same emit on bytes + stream; encode is untouched (marshals native T).
+          A lone leading `@Func` is a value step, NOT a converter — needs `/`,
+          a leading `.`, or `~`. Variants must claim disjoint shapes
+          (`checkVariantShapes`).
+    - **Value steps** (after the decode stage): mods + validators interleaved
+      **in declared order** — a unified ordered `[]Step` per level, emitted by
+      `renderPipe` (which dispatches each step to `renderOneVal`/`renderOneMod`).
+        - `inner:` scopes to one container level down, `keys:` to map keys. A
+          bare prefix takes ONE step (`inner:trim`); parentheses group several
+          (`inner:(trim maxlen=20)`); groups nest for deeper levels
+          (`inner:(a inner:(b))`). Parsed recursively by `parseScope`/
+          `parsePrefixEntry`/`matchParen` (pipe.go). Levels carried as
+          `FieldInfo.Levels [][]Step` (`Levels[0]` = per-elem), peeled by
+          `peelSliceField`, emitted via `elemSteps`. (No `;` — retired.)
+        - validators: `notempty`; `len/minlen/maxlen=N`; `runes/minrunes/
+          maxrunes=N`; `gt/gte/lt/lte/eq/neq=N`; `multiple=N`; `oneof=a|b|c`;
+          `email`/`url`/`ascii`/`printable`/`alphanum`/`numeric`/`lower`/`upper`/
+          `hexadecimal`; `starts/ends/contains=X`.
+        - mods: `trim`, `lower`, `upper`, `trimleft=X`, `trimright=X`,
+          `replace=old|new`, `clamp=lo|hi`.
+    - **Custom funcs** (`@FuncName` / `@pkg.FuncName`) — classified by signature
+      in `customfunc.go` (`classifyValueFunc` for value steps, `classifyConverter`
+      for variants), type-checked against the working type at that level:
+      `func(T)error`→validator (`CustomError`), `func(T)bool`→validator
+      (`PredicateError`, message-capable), `func(T)T`→pure mod,
+      `func(T)(T,error)`→fallible mod (parse error), `func(T)(T,bool)`→fallible
+      mod (`ModError`, message-capable). `func(bool)bool` is rejected. Bool
+      forms carry an inline message `@Even:'must be even'`. Cross-package via
+      source-file imports; blank imports work.
 
-    Rules:
-    - String: `trim`, `lower`, `upper`, `trimleft=X`, `trimright=X`,
-      `replace=old|new`
-    - Numeric: `clamp=lo|hi` — rounds into `[lo,hi]`; either bound may be empty
-      (`clamp=0|` floors at 0, `clamp=|100` caps at 100)
-    - `@FuncName` / `@pkg.FuncName` — user transform. **pure** `func(T) T`
-      emits `field = Func(field)`; **fallible** `func(T) (T, error)`
-      propagates as parse error (early return), NOT validation.
-      Pure vs fallible detected at generate-time. Same lookup as validators
-    - Mods can break zero-copy for modified field (force new string)
+- **Lexing/quoting** (`tokenizePipe`): steps WS-separated; structural glyphs
+  `/ ~ ( )` significant with/without spaces (plus the `inner:`/`keys:` word
+  prefixes); a value/message may be single-quoted, required only when it
+  contains whitespace; `\'` is a literal quote. (A leftover `;` errors with a
+  pointer to `inner:(…)`.)
+
+- `hint:"..."` — prealloc capacity only (replaced `ggen:"hintlen=N"`).
+  `hint:"N"` → `make([]T,0,N)`; per-level via `inner:` (`hint:"32 inner:8"`).
+  Lifted, order-independent (`FieldInfo.HintLen` / `HintLevels`). `hint:"0"`
+  opts out; negative is a parse error.
+
+### Internal model
+
+`FieldInfo` keeps the legacy split buckets (`Validation`/`Mods`/`Elem*`/`Inner*`/
+`Key*`) as the SOURCE for order-independent consumers (import-collection walks,
+`peelSliceField`, the pointer-leaf partition) — they are DERIVED from the
+ordered `Pipe`/`KeyPipe`/`Levels` by `deriveBuckets`. The ordered step lists are
+the source of truth for emit ORDER at the value-stage sites; `fieldPipe`/
+`elemSteps` fall back to `stepsFromLegacy(mods, vals)` for synthetic fields that
+set only buckets.
 
 ### Rule applicability (parse-time)
 
-`applicability.go` rejects mismatched rules at parse time (clear message).
-
-Cases covered exhaustively in `TestCLI/InvalidRuleApplication` — add table
-entry there when new rule lands.
+`applicability.go` rejects mismatched rules against the working type (clear
+message); per-level gating (elem kind under `inner:`, `string` under `keys:`).
+Cases covered exhaustively in `TestCLI/InvalidRuleApplication`.
 
 ## Generated methods (per annotated struct T)
 
@@ -273,11 +301,12 @@ pointer. Decode-into-receiver divergences are pinned in
 `integrationtests/stdcompat_test.go`
 (`TestStdCompatMerge_IntentionalDivergences`).
 
-**`nullzero` opts a value field into null-as-zero.** `json:",nullzero"` (per
-field) / `-nullzero` / `//ggen:generate nullzero` (whole struct) make a
-non-pointer value field accept an explicit JSON `null`, decoding it to the Go
-zero value instead of erroring — the documented middle ground between the
-strict-reject default and stdlib's accept-everywhere. Gated by
+**`nullzero` opts a value field into null-as-zero.** A `nullzero` decode
+variant in `pipe:` (per field) / `-nullzero` / `//ggen:generate nullzero`
+(whole struct) make a non-pointer value field accept an explicit JSON `null`,
+decoding it to the Go zero value instead of erroring — the documented middle
+ground between the strict-reject default and stdlib's accept-everywhere. Gated
+by
 `nullZeroApplies` (set + `AtDispatch` + a kind that would otherwise reject
 null; the already-null-aware kinds above stay no-ops). Emit mirrors the
 pointer/slice null branch (opt #34): a 4-byte `null` peek (`inlineNullPeek`
@@ -378,7 +407,7 @@ Accepted underlying kinds:
 map[string]int`, `type Tuple [3]int`): synthetic FieldInfo (ElemType,
   ElemKind, ArrayLen) handed to field-level emitters with `result`
   (decode) / `s` (encode) as ref. All field-level features carry over —
-  strict-length arrays, slabbed `[]*T`, dive validation
+  strict-length arrays, slabbed `[]*T`, inner validation
 - **`[]byte` alias**: collapses to KindBytes, base64 path
 
 Rejected: channel, interface, function — no sensible JSON shape.
@@ -691,8 +720,8 @@ float64` 6459→3417. Outpaces stdjson v1 and jsonv2 on every map shape.
     inside the key-dispatch switch ends with `break` (straight to the comma
     handling) instead of wrapping the whole value decode in an `else` —
     pointer/slice/map/`[]byte` kinds, bytes + stream paths. Gated by
-    `nullBreakOK` (`FieldInfo.AtDispatch` + no field-level `ggen:`/`mod:`
-    rules — a break would skip the post-value validateAndMod). Nested-slice
+    `nullBreakOK` (`FieldInfo.AtDispatch` + no field-level `pipe:` value steps
+    — a break would skip the post-value validateAndMod). Nested-slice
     elements get the same flattening via `FieldInfo.NullDone`: the PARENT
     element loop consumes the null (nil slot + duplicated elem-validation
     emit + comma handling + `continue`, mirroring the `[]*T` nil-elem fast
@@ -844,14 +873,15 @@ float64` 6459→3417. Outpaces stdjson v1 and jsonv2 on every map shape.
    runtime cost; deterministic, compresses better.
 3. **No runtime reflection anywhere.** Even cross-package fallback uses
    `encoding/json.Unmarshal` only for types NOT in generation pass.
-4. **Custom validators / mods = codegen-time function injection.** Tags like
-   `ggen:"@EvenOnly"` / `mod:"@Squash"` resolved via `packages.Load` at parse
-   time — looked up, signature-validated against field's exact go/types
-   type, emitted as direct call. No runtime registry, no `func(any) any`
-   boxing, zero alloc. Cross-package via `@pkg.FuncName` through source
-   file imports; blank imports (`_ "path/to/lib"`) work. Validator errors
-   wrap as `validation.CustomError{Name, Cause}`; fallible mod errors
-   propagate as parse errors.
+4. **Custom validators / mods / converters = codegen-time function injection.**
+   `pipe:` steps like `@EvenOnly` / `@Squash` (and `@Conv` decode variants)
+   resolved via `packages.Load` at parse time — looked up, classified by
+   signature, type-checked against the working type, emitted as a direct call.
+   No runtime registry, no `func(any) any` boxing, zero alloc. Cross-package via
+   `@pkg.FuncName` through source file imports; blank imports
+   (`_ "path/to/lib"`) work. Validator errors wrap as
+   `validation.CustomError{Name, Cause}` (or `PredicateError` for bool form);
+   fallible mod errors propagate as parse errors (`ModError` for bool form).
 
 ## Test files (`cli/` module)
 
@@ -862,7 +892,8 @@ implementation (`encode/`, `scan/`); feature/roundtrip/compat/fuzz under
 - `parse_test.go` — annotation/tag/rule parsing, cross-package symbol
   resolution. Hosts test-only `generate(pkg, structs) ([]byte, error)`
   wrapper (production calls `generateTo` against destination `*os.File`).
-- `tags_test.go` — `json:`/`ggen:`/`mod:` tag parser, incl. dive/keys prefixes.
+- `tags_test.go` — `json:` tag parser. `pipe:`/`hint:` parsing (incl. inner/
+  keys/group/variants) is in `pipe_test.go`.
 - `applicability_test.go` — rule-applicability matrix.
 - `cli_test.go` — CLI integration: binary built in TestMain, file-naming
   contract, `./...` walk + dot/underscore-dir skip, per-flag effects on output.

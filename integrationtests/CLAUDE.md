@@ -28,7 +28,7 @@ Per-feature coverage files:
 | `any_test.go`           | `any` / `interface{}` fields; usenumber mode.                                                                                                                                          |
 | `custom_test.go`        | `@FuncName` / `@pkg.FuncName` validators and mods.                                                                                                                                     |
 | `decode_dups_test.go`   | `allowdups`: first-wins, `SkipValue` advance for later occurrences vs default `DuplicateKeyError`.                                                                                     |
-| `dive_test.go`          | `dive:` / `keys:` tag prefixes on slices / arrays / maps.                                                                                                                              |
+| `dive_test.go`          | `inner:` / `keys:` tag prefixes on slices / arrays / maps.                                                                                                                              |
 | `extra_test.go`         | Misc edge cases not fit elsewhere.                                                                                                                                              |
 | `fallback_test.go`      | `encoding/json` fallback for cross-package non-annotated types.                                                                                                                        |
 | `hooks_test.go`         | Opt-in `MarshalJSON` / `UnmarshalJSON` hooks (`-marshal` / `-unmarshal`).                                                                                                              |

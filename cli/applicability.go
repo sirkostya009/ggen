@@ -7,48 +7,26 @@ import (
 	"strings"
 )
 
-// checkRuleApplicability rejects validation/mod tags whose semantics
-// don't make sense for the field's Go kind — e.g. `ascii` on an int,
-// `clamp` on a string, `hintlen` on a bool. Without these checks the
-// generator silently emits broken Go (`decode.IsASCII(result.N)` for
-// an int field) and the user only finds out at compile time on the
-// generated file.
-//
-// Every reject returns a *richError (typed as error) so both loggers
-// can render it richly: concise mode appends BotHint in parens for
-// agents/CI, pretty mode emits a code excerpt with caret + a Note:
-// line carrying UserHint for humans. The two hints are deliberately
-// distinct — see log.go's Logger doc.
-//
-// Called from extractField / extractFieldFromTypes after kind
-// resolution. KindStruct fields are skipped: they may be aliases over
-// primitives or carry custom marshalers, so we can't decide
-// applicability without resolved type info that isn't always
-// available in AST-only mode.
+// checkRuleApplicability rejects validation/mod tags that don't fit the
+// field's Go kind (e.g. `ascii` on an int) — otherwise the generator emits
+// broken Go the user only hits at compile time. Each reject is a *richError
+// (see log.go). Called after kind resolution; KindStruct is skipped (aliases /
+// custom marshalers can't be judged without full type info).
 func checkRuleApplicability(fi FieldInfo) error {
-	// Render as `<StructName>.<GoName>` — fully-qualified Go path that
-	// uniquely identifies the field in source, makes the error
-	// grep-pable, and matches how Go itself would refer to the
-	// field in compile-time errors. Falls back to bare GoName when
-	// StructName isn't set (defensive — every code path that builds
-	// FieldInfo today populates it).
 	desc := fi.GoName
 	if fi.StructName != "" {
 		desc = fi.StructName + "." + fi.GoName
 	}
 
-	// Gather errors across every phase rather than short-circuiting.
-	// A field with `ggen:"ascii" mod:"trim"` on an int has TWO bugs;
-	// surfacing only the first hides the second until the user fixes
-	// it, then re-runs and discovers more — bad UX.
+	// Gather across every phase rather than short-circuiting — two bugs on one
+	// field should both surface in a single run.
 	var errs []error
 	collect := func(err error) { errs = append(errs, err) }
 
-	// Outer rules apply to the field itself. For pointer fields the
-	// rule operates on the dereferenced pointee, so fi.Kind (which
-	// resolveKind populates from PointeeType) is the right anchor.
-	collect(checkValRules(fi.Validation, "ggen", fi.Kind, fi.GoType, desc))
-	collect(checkModRules(fi.Mods, "mod", fi.Kind, fi.GoType, desc))
+	// Outer rules apply to the field itself. For pointers fi.Kind is the
+	// pointee kind, the right anchor.
+	collect(checkValRules(fi.Validation, "pipe", fi.Kind, fi.GoType, desc))
+	collect(checkModRules(fi.Mods, "pipe", fi.Kind, fi.GoType, desc))
 
 	// keys: only valid on maps. Keyed kind itself is always string.
 	if len(fi.KeyValidation) > 0 || len(fi.KeyMods) > 0 {
@@ -61,37 +39,37 @@ func checkRuleApplicability(fi FieldInfo) error {
 			})
 		}
 	}
-	collect(checkValRules(fi.KeyValidation, "ggen keys:", KindString, "string", desc+" key"))
-	collect(checkModRules(fi.KeyMods, "mod keys:", KindString, "string", desc+" key"))
+	collect(checkValRules(fi.KeyValidation, "pipe keys:", KindString, "string", desc+" key"))
+	collect(checkModRules(fi.KeyMods, "pipe keys:", KindString, "string", desc+" key"))
 
-	// dive: only valid on slice/array/map/[]byte.
+	// inner: only valid on slice/array/map/[]byte.
 	hasDive := len(fi.ElemValidation) > 0 || len(fi.ElemMods) > 0 ||
 		len(fi.InnerValidation) > 0 || len(fi.InnerMods) > 0
 	if hasDive && !canDive(fi.Kind) {
 		collect(&richError{
-			Msg:      desc + ": `dive:` tag prefix is only valid on slice/array/map fields (got " + fi.GoType + ")",
-			CodeSpan: "dive:",
+			Msg:      desc + ": `inner:` tag prefix is only valid on slice/array/map fields (got " + fi.GoType + ")",
+			CodeSpan: "inner:",
 			BotHint:  "expected slice/array/map field",
-			UserHint: "`dive:` only works with slice/array/map",
+			UserHint: "`inner:` only works with slice/array/map",
 		})
 	}
-	collect(checkValRules(fi.ElemValidation, "ggen dive:", fi.ElemKind, fi.ElemType, desc+" element"))
-	collect(checkModRules(fi.ElemMods, "mod dive:", fi.ElemKind, fi.ElemType, desc+" element"))
+	collect(checkValRules(fi.ElemValidation, "pipe inner:", fi.ElemKind, fi.ElemType, desc+" element"))
+	collect(checkModRules(fi.ElemMods, "pipe inner:", fi.ElemKind, fi.ElemType, desc+" element"))
 
-	// hintlen only meaningful on growable containers (slice/map).
+	// hint only meaningful on growable containers (slice/map).
 	if fi.HintLen >= 0 && fi.Kind != KindSlice && fi.Kind != KindMap {
 		collect(&richError{
-			Msg:      desc + ": `hintlen` is only valid on slice/map fields (got " + fi.GoType + ")",
-			CodeSpan: "hintlen",
+			Msg:      desc + ": `hint` is only valid on slice/map fields (got " + fi.GoType + ")",
+			CodeSpan: "hint",
 			BotHint:  "expected slice or map field",
-			UserHint: "`hintlen` is a prealloc capacity hint; only slice/map have capacity to size",
+			UserHint: "`hint` is a prealloc capacity hint; only slice/map have capacity to size",
 		})
 	}
 
 	return errors.Join(errs...)
 }
 
-// canDive reports whether dive: can peel one level off this kind.
+// canDive reports whether inner: can peel one level off this kind.
 func canDive(k TypeKind) bool {
 	return k == KindSlice || k == KindArray || k == KindMap || k == KindBytes
 }
@@ -114,10 +92,8 @@ func isIntegralNumeric(k TypeKind) bool {
 	return false
 }
 
-// isUnknownValRule reports whether the rule name is NOT in the
-// recognized validation-rule set. Keep in sync with the switch in
-// checkOneValRule. Used to short-circuit the rest of the rule-list
-// checks once a typo is found.
+// isUnknownValRule reports whether name is NOT a recognized validation rule.
+// Keep in sync with checkOneValRule's switch.
 func isUnknownValRule(name string) bool {
 	switch name {
 	case "", "required", "optional",
@@ -147,15 +123,9 @@ func isUnknownMod(name string) bool {
 	return true
 }
 
-// tagAnchor derives the struct-tag opening sequence from an
-// applicability source string. Used as the Anchor for richErrors
-// whose CodeSpan is too short to uniquely identify the offending
-// position (single-char rule names collide with json tag values).
-//
-// Source strings are "ggen" / "ggen keys:" / "ggen dive:" /
-// "mod" / "mod keys:" / "mod dive:". The first space-separated
-// word names the struct tag — `ggen:"...` or `mod:"...` —
-// which gives the search a unique fixed prefix to land inside.
+// tagAnchor derives the struct-tag opening (`pipe:"`) from a source string
+// like "pipe inner:" — used as a richError Anchor when the CodeSpan is too
+// short to locate alone (single-char rule names collide with json values).
 func tagAnchor(source string) string {
 	if i := strings.IndexByte(source, ' '); i >= 0 {
 		source = source[:i]
@@ -167,23 +137,12 @@ func tagAnchor(source string) string {
 }
 
 func checkValRules(rules []ValidationRule, source string, kind TypeKind, typeName, fieldDesc string) error {
-	// Opaque kinds: user-declared structs may be aliases or carry
-	// custom marshalers we can't introspect at parse time. Skip.
 	if kind == KindStruct {
-		return nil
+		return nil // opaque: may be an alias / custom marshaler
 	}
-	// First pass: collect unknown-rule errors. If any rule name is
-	// unrecognized, the user has a typo — surfacing kind-mismatch /
-	// bad-parameter diagnostics on the OTHER rules in the same list is
-	// noise (the typo'd rule may be hiding context, and a "fix this
-	// typo first" UX is cleaner than a 5-line wall of errors).
-	//
-	// Anchor disambiguates short rule names (single-char `b`, etc.)
-	// that would otherwise collide with json tag values earlier on the
-	// source line. tagAnchor derives the source-line anchor from the
-	// applicability source string (e.g. `ggen:"` for ggen rules,
-	// `mod:"` for mod rules), forcing the column search inside the
-	// right struct tag.
+	// First pass: collect unknown-rule errors. An unknown name means a typo;
+	// kind-mismatch diagnostics on the other rules would just be noise, so
+	// surface the typo alone. Anchor disambiguates short rule names.
 	anchor := tagAnchor(source)
 	var unknown []error
 	for _, r := range rules {
@@ -300,9 +259,7 @@ func checkOneValRule(r ValidationRule, source string, kind TypeKind, typeName, f
 				"use a custom validator instead")
 		}
 		if r.Value == "" {
-			// Pick an example matching the field's actual kind — the
-			// generic both-flavor hint forces the user to mentally
-			// filter to the half that applies.
+			// Example matching the field's kind.
 			example := "oneof=admin|user|guest"
 			if isNumeric(kind) {
 				example = "oneof=1|2|3"
@@ -355,16 +312,11 @@ func checkOneValRule(r ValidationRule, source string, kind TypeKind, typeName, f
 		}
 		return nil
 	}
-	// `@FuncName` references are resolved later in resolveCustomRules
-	// — they don't have a static kind/value contract for us to check
-	// here, so let them through.
+	// `@FuncName` references resolve later; pass through.
 	if strings.HasPrefix(r.Name, "@") {
 		return nil
 	}
-	// Unknown rule name — reject. Hints intentionally omitted: the
-	// message itself is the full diagnostic ("`b` is not a known
-	// validation rule"); a hint listing every known rule is noise
-	// for both humans and bots.
+	// Unknown rule — reject; hints omitted (the message is the full diagnostic).
 	return &richError{
 		Msg:      fmt.Sprintf("%s: `%s` is not a known validation rule", fieldDesc, r.Name),
 		CodeSpan: r.Name,
@@ -375,9 +327,7 @@ func checkModRules(mods []ModRule, source string, kind TypeKind, typeName, field
 	if kind == KindStruct {
 		return nil
 	}
-	// Same short-circuit as checkValRules: unknown mod names suppress
-	// other mod diagnostics on the same list. See the comment there
-	// for the rationale.
+	// Same unknown-name short-circuit as checkValRules.
 	anchor := tagAnchor(source)
 	var unknown []error
 	for _, m := range mods {
@@ -444,10 +394,6 @@ func checkOneModRule(m ModRule, source string, kind TypeKind, typeName, fieldDes
 		}
 		old, _, ok := strings.Cut(m.Value, "|")
 		if !ok || old == "" {
-			// Msg refers to the mod by name only (`replace`); the
-			// source-line CodeSpan still covers `replace=<value>`
-			// so the highlight pins the full broken token. Two
-			// distinct concerns: clean prose vs precise pointing.
 			return &richError{
 				Msg:      fmt.Sprintf("%s: `replace` requires `old|new` form (old cannot be empty)", fieldDesc),
 				CodeSpan: "replace=" + m.Value,
@@ -504,26 +450,21 @@ func checkOneModRule(m ModRule, source string, kind TypeKind, typeName, fieldDes
 		}
 		return nil
 	}
-	// `@FuncName` mods resolve later — pass through here.
+	// `@FuncName` mods resolve later; pass through.
 	if strings.HasPrefix(m.Name, "@") {
 		return nil
 	}
-	// Unknown mod name — reject without a hint (the msg itself is
-	// the full diagnostic; listing every known mod is noise).
+	// Unknown mod — reject; hint omitted (the message is the full diagnostic).
 	return &richError{
 		Msg:      fmt.Sprintf("%s: `%s` is not a known mod", fieldDesc, m.Name),
 		CodeSpan: m.Name,
 	}
 }
 
-// mismatch builds the kind-mismatch *richError for validation rules.
-// Message shape: "<Struct>.<Field>: <rule> is inapplicable to <type>".
-// We drop the "ggen rule" / "mod" tag-source word — the rule name
-// itself disambiguates ggen tags from mods (no collisions in the
-// rule namespace), and the position prefix already grounds the line.
-// requiredKind / botHint / userTail still build the gray hint.
+// mismatch builds the kind-mismatch *richError for validation rules:
+// "<Struct>.<Field>: <rule> is inapplicable to <type>".
 func mismatch(r ValidationRule, source, fieldDesc, typeName, requiredKind, botHint, userTail string) *richError {
-	_ = source // dive: / keys: prefixes are encoded in CodeSpan instead
+	_ = source
 	return &richError{
 		Msg:      fmt.Sprintf("%s: `%s` is inapplicable to %s", fieldDesc, r.Name, typeName),
 		CodeSpan: r.Name,

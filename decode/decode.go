@@ -1,10 +1,9 @@
-// Package decode provides a small set of runtime helpers that ggen-generated
-// decoders delegate to — the Decoder interface every generated type satisfies,
-// plus the array-walking helpers (UnmarshalSlice / ReadSlice /
-// UnmarshalSliceStream) callers would otherwise have to reimplement.
+// Package decode provides runtime helpers ggen-generated decoders delegate to:
+// the Decoder interface every generated type satisfies, plus array-walking
+// helpers (UnmarshalSlice / ReadSlice / UnmarshalSliceStream).
 //
-// Single-value entry points are NOT provided here: call the generated method
-// directly with a zero-value receiver, e.g.
+// For single values, call the generated method directly on a zero-value
+// receiver:
 //
 //	res, _, err := T{}.DecodeFrom(data)
 //	res, err := T{}.DecodeFromStream(s)
@@ -19,16 +18,10 @@ import (
 )
 
 // Decoder is the interface satisfied by every ggen-generated struct.
-// DecodeFrom reads one value out of the caller's byte slice and returns
-// the decoded value, the number of bytes consumed, and any error.
-// Callers chaining multiple values advance their own cursor:
-//
-//	v1, n, err := zero.DecodeFrom(data)
-//	// data[n:] is what remains
-//
-// DecodeFromStream is the streaming counterpart that pulls bytes from a
-// *scan.Stream; the Stream owns the cursor (s.Pos), so the method
-// returns only (T, error).
+// DecodeFrom reads one value and returns it, the bytes consumed, and any
+// error; callers chaining values advance their own cursor over data[n:].
+// DecodeFromStream is the streaming counterpart — the Stream owns the cursor
+// (s.Pos), so it returns only (T, error).
 //
 // Strings inside the returned value alias the caller's bytes via unsafe.String
 // — callers MUST NOT mutate the input buffer while the value is in use.
@@ -37,11 +30,8 @@ type Decoder[T any] interface {
 	DecodeFromStream(s *scan.Stream) (T, error)
 }
 
-// UnmarshalSlice decodes a JSON array of T by walking the array with scan
-// primitives and delegating each element to T.DecodeFrom. Every error
-// return is routed through [NewParseErr]: raw scan sentinels get wrapped
-// with the current cursor position, element-level errors that already
-// arrive as *ParseError pass through unchanged.
+// UnmarshalSlice decodes a JSON array of T, delegating each element to
+// T.DecodeFrom. Errors route through [NewParseErr].
 func UnmarshalSlice[T Decoder[T]](data []byte) ([]T, error) {
 	i := scan.SkipSpace(data, 0)
 	if i >= len(data) || data[i] != '[' {
@@ -76,8 +66,7 @@ func UnmarshalSlice[T Decoder[T]](data []byte) ([]T, error) {
 }
 
 // ReadSlice reads an array from r then decodes it via UnmarshalSlice.
-// io.ReadAll failures are surfaced as-is (transport errors, not parse
-// errors); decode failures keep their UnmarshalSlice wrap.
+// io.ReadAll failures are surfaced as-is (not wrapped as parse errors).
 func ReadSlice[T Decoder[T]](r io.Reader) ([]T, error) {
 	data, err := io.ReadAll(r)
 	if err != nil {
@@ -87,11 +76,9 @@ func ReadSlice[T Decoder[T]](r io.Reader) ([]T, error) {
 }
 
 // UnmarshalSliceStream decodes a JSON array of T lazily from r. buf is a
-// reusable working area; pass nil to allocate fresh, or a pre-sized /
-// pooled slice. The returned []byte is the (possibly grown) buffer —
-// caller can recycle it immediately, the decoded values own their
-// string content and have no dependency on the buffer. Every error
-// return is routed through [NewParseErr] (see [UnmarshalSlice]).
+// reusable working area (nil to allocate fresh). The returned []byte is the
+// (possibly grown) buffer — safe to recycle immediately, as decoded values
+// own their string content. Errors route through [NewParseErr].
 func UnmarshalSliceStream[T Decoder[T]](r io.Reader, buf []byte) ([]T, []byte, error) {
 	var s scan.Stream
 	s.Reset(r, buf)
@@ -141,11 +128,8 @@ func UnmarshalSliceStream[T Decoder[T]](r io.Reader, buf []byte) ([]T, []byte, e
 	}
 }
 
-// arrField renders "[N]" — used as the Field component on slice-walker
-// errors so a wrapped path like "[5].street" pinpoints the failing
-// element. Called only on the error path; no fmt dependency. The
-// returned string aliases the local buf; safe because buf is freshly
-// allocated each call and isn't mutated afterwards.
+// arrField renders "[N]" for the path segment on slice-walker errors
+// (e.g. "[5].street"). Error path only; aliases the freshly-allocated buf.
 func arrField(n int) string {
 	buf := make([]byte, 0, 12)
 	buf = append(buf, '[')

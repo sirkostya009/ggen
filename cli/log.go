@@ -13,9 +13,8 @@ import (
 	"sync"
 )
 
-// Level controls the verbosity floor — only messages at or above the
-// level are emitted. LevelQuiet is the default; -v / -vv / -vvv lift
-// it to Info / Debug / Trace.
+// Level controls the verbosity floor — only messages at or above it are
+// emitted. -v / -vv / -vvv lift LevelQuiet to Info / Debug / Trace.
 type Level int
 
 const (
@@ -25,48 +24,31 @@ const (
 	LevelTrace
 )
 
-// Logger emits diagnostics for the CLI. Two concrete impls share this
-// surface:
-//
-//   - conciseLogger: one line per record, machine-grep-able. Used in
-//     CI runs, coding-agent shells, and non-TTY contexts. The agent-
-//     facing hint (BotHint) is appended in parens so the caller can
-//     reason about the technical cause.
-//   - prettyLogger: multi-line, ANSI-coloured. Shows a Go-compiler-
-//     style code excerpt with caret + a Note: line carrying the
-//     human-actionable remedy.
-//
-// Two hints are intentionally distinct: the BotHint is a technical
-// fact ("expected string"); the UserHint is a suggestion that may not
-// always be the right move ("change the field type or remove the
-// rule"). Mixing them would poison agents into treating the human
-// suggestion as the only valid remedy.
+// Logger emits diagnostics for the CLI. Two impls share this surface:
+// conciseLogger (one grep-able line per record, for CI / agents / non-TTY,
+// with BotHint appended in parens) and prettyLogger (multi-line, ANSI, with a
+// code excerpt + caret + a Note: line carrying UserHint). BotHint and UserHint
+// stay distinct: a technical fact vs a human remedy that may be one of several
+// valid fixes — surfacing the latter to agents as authoritative would railroad
+// downstream decisions.
 type Logger interface {
 	Info(format string, args ...any)
 	Debug(format string, args ...any)
 	Trace(format string, args ...any)
-	// Error queues a non-fatal error for later batch emission. Errors
-	// are NOT printed at the call site — the run continues, and all
-	// queued errors are rendered together by Flush. This lets one
-	// invocation surface every problem at once instead of bailing on
-	// the first parsing/applicability failure.
+	// Error queues a non-fatal error for batch emission by Flush — the run
+	// continues so one invocation surfaces every problem at once.
 	Error(err error)
-	// Fatal renders the error immediately, flushes any previously
-	// queued errors, and exits with status 1. Use for pre-condition
-	// violations (bad CLI args, missing files) where continuing is
-	// pointless.
+	// Fatal renders the error, flushes the queue, and exits 1. For
+	// pre-condition violations where continuing is pointless.
 	Fatal(err error)
-	// Flush emits every error queued via Error in insertion order.
-	// Subsequent calls are no-ops until more errors are queued.
+	// Flush emits every queued error in insertion order, then clears the queue.
 	Flush()
-	// HasErrors reports whether any error has been queued (or
-	// printed via Fatal). main() exits non-zero based on this.
+	// HasErrors reports whether any error was queued or printed via Fatal.
 	HasErrors() bool
 }
 
-// NewLogger returns a Logger appropriate for the current process
-// environment. CI runners and AI coding agents get the concise impl;
-// interactive humans get the pretty one.
+// NewLogger returns the concise impl under CI / agents / non-TTY, the pretty
+// impl for interactive humans.
 func NewLogger(level Level) Logger {
 	if shouldUseConcise(os.Getenv, isTerminal(os.Stderr)) {
 		return &conciseLogger{level: level, w: os.Stderr}
@@ -74,9 +56,8 @@ func NewLogger(level Level) Logger {
 	return &prettyLogger{level: level, w: os.Stderr, color: true}
 }
 
-// shouldUseConcise is split from NewLogger so tests can inject env
-// vars and TTY state. Returns true when the caller is non-interactive
-// (CI, agent, or piped stderr).
+// shouldUseConcise is split from NewLogger so tests can inject env vars and TTY
+// state. True when the caller is non-interactive (CI, agent, or piped stderr).
 func shouldUseConcise(getenv func(string) string, stderrIsTTY bool) bool {
 	for _, k := range ciEnvVars {
 		if getenv(k) != "" {
@@ -91,9 +72,7 @@ func shouldUseConcise(getenv func(string) string, stderrIsTTY bool) bool {
 	return !stderrIsTTY
 }
 
-// ciEnvVars are environment variables whose presence (any non-empty
-// value) signals "running under a CI runner". CI itself is set by
-// most Linux-CI vendors; the rest cover specific systems that don't.
+// ciEnvVars: a non-empty value on any of these signals a CI runner.
 var ciEnvVars = []string{
 	"CI",
 	"CONTINUOUS_INTEGRATION",
@@ -108,9 +87,8 @@ var ciEnvVars = []string{
 	"TEAMCITY_VERSION",
 }
 
-// agentEnvVars are markers set by interactive coding agents that
-// drive shell commands programmatically. The set is curated, not
-// exhaustive — add new entries as agents adopt env markers.
+// agentEnvVars are markers set by coding agents that drive shells
+// programmatically. Curated, not exhaustive.
 var agentEnvVars = []string{
 	"AI_AGENT",        // generic cross-vendor (Claude Code et al.)
 	"CLAUDECODE",      // Anthropic's Claude Code
@@ -118,8 +96,8 @@ var agentEnvVars = []string{
 	"AIDER_AUTO_COMMITS",
 }
 
-// isTerminal reports whether f refers to a terminal device. Uses the
-// stat-mode bit rather than ioctl so it's portable and dep-free.
+// isTerminal reports whether f is a terminal device, via the stat-mode bit
+// (portable, dep-free) rather than ioctl.
 func isTerminal(f *os.File) bool {
 	fi, err := f.Stat()
 	if err != nil {
@@ -128,12 +106,9 @@ func isTerminal(f *os.File) bool {
 	return fi.Mode()&os.ModeCharDevice != 0
 }
 
-// relPath returns p relative to the current working directory when
-// that yields a shorter, less surprising path. Sibling paths get a
-// "./" prefix so they're unambiguously paths (not package paths) and
-// stay clickable in editors. Paths outside the cwd subtree fall back
-// to the absolute form when the relative one would traverse upward
-// more than the abs path's own length.
+// relPath returns p relative to cwd when that's shorter, with a "./" prefix on
+// siblings so they read as paths (not package paths) and stay editor-clickable.
+// Falls back to absolute when the relative form is longer (heavy "../" climb).
 func relPath(p string) string {
 	if p == "" {
 		return p
@@ -153,17 +128,14 @@ func relPath(p string) string {
 	if !strings.HasPrefix(rel, ".") {
 		rel = "./" + rel
 	}
-	// Heavy "../../" traversal usually means we're outside the
-	// project root — the absolute form is easier to read.
 	if len(rel) > len(abs) {
 		return abs
 	}
 	return rel
 }
 
-// formatPos renders a token.Position with the filename made relative
-// to cwd. Both loggers use this in place of the default token.Position
-// String() method (which always emits the absolute filename).
+// formatPos renders a token.Position with the filename relative to cwd
+// (token.Position.String always emits the absolute filename).
 func formatPos(pos token.Position) string {
 	if !pos.IsValid() {
 		return ""
@@ -176,8 +148,7 @@ func formatPos(pos token.Position) string {
 type conciseLogger struct {
 	level Level
 	w     io.Writer
-	// mu protects every field below — the CLI walks packages in
-	// parallel and each goroutine may emit logs / queue errors.
+	// mu protects every field below — packages are walked in parallel.
 	mu     sync.Mutex
 	queue  []error // Error() appends here; Flush() drains
 	errSet bool    // sticky: true once any error has been seen (queue or Fatal)
@@ -220,9 +191,8 @@ func (l *conciseLogger) Error(err error) {
 	l.errSet = true
 }
 
-// renderError emits one error to the writer in concise format.
-// Shared by Flush and Fatal. errors.Join'd batches are unwrapped and
-// rendered one-per-line so the user sees every problem in the run.
+// renderError emits one error in concise format (shared by Flush and Fatal).
+// errors.Join'd batches are unwrapped and rendered one-per-line.
 func (l *conciseLogger) renderError(err error) {
 	if subs, ok := unwrapMulti(err); ok {
 		for _, sub := range subs {
@@ -245,8 +215,7 @@ func (l *conciseLogger) renderError(err error) {
 }
 
 // unwrapMulti returns the inner errors of an errors.Join batch (or any
-// error implementing Unwrap() []error). Single errors return (nil, false)
-// so callers fall through to the normal render path.
+// Unwrap() []error). Single errors return (nil, false).
 func unwrapMulti(err error) ([]error, bool) {
 	type multi interface{ Unwrap() []error }
 	if m, ok := err.(multi); ok {
@@ -285,8 +254,7 @@ type prettyLogger struct {
 	level Level
 	w     io.Writer
 	color bool
-	// mu protects every field below — the CLI walks packages in
-	// parallel and each goroutine may emit logs / queue errors.
+	// mu protects every field below — packages are walked in parallel.
 	mu     sync.Mutex
 	queue  []error // Error() appends here; Flush() drains
 	errSet bool    // sticky: true once any error has been seen
@@ -295,8 +263,8 @@ type prettyLogger struct {
 const (
 	ansiReset    = "\x1b[0m"
 	ansiBold     = "\x1b[1m"
-	ansiRed      = "\x1b[31m" // dark red — used for caret + highlighted span
-	ansiLightRed = "\x1b[91m" // bright/light red — used for the error message body
+	ansiRed      = "\x1b[31m" // caret + highlighted span
+	ansiLightRed = "\x1b[91m" // error message body
 	ansiYellow   = "\x1b[33m"
 	ansiCyan     = "\x1b[36m"
 	ansiGreen    = "\x1b[32m"
@@ -372,26 +340,22 @@ func (l *prettyLogger) Fatal(err error) {
 	os.Exit(1)
 }
 
-// posKey collapses a token.Position to filename+line — the dimension
-// we group on. Column varies per error within the same source line.
+// posKey collapses a token.Position to filename+line — the grouping dimension.
 type posKey struct {
 	filename string
 	line     int
 }
 
-// renderUnit is one logical block in the pretty output: either a
-// group of rich errors at the same (file, line) — rendered as a
-// single header + multi-caret block — or a single position-less /
-// bare error rendered on its own.
+// renderUnit is one block of pretty output: a group of rich errors at the same
+// (file, line), or a single position-less / bare error.
 type renderUnit struct {
 	pos    token.Position // valid → grouped block; invalid → bare
 	riches []*richError   // populated when pos.IsValid()
 	bare   error          // populated when pos is invalid
 }
 
-// flattenErrors walks every top-level queue entry, recursively
-// unwrapping errors.Join batches into a flat slice. Order from the
-// queue is preserved (depth-first within each entry).
+// flattenErrors recursively unwraps errors.Join batches into a flat slice,
+// preserving queue order (depth-first within each entry).
 func flattenErrors(queue []error) []error {
 	out := make([]error, 0, len(queue))
 	var walk func(error)
@@ -410,10 +374,9 @@ func flattenErrors(queue []error) []error {
 	return out
 }
 
-// groupByLine partitions the flat error slice into ordered render
-// units. Rich errors with valid positions share a unit when their
-// (filename, line) matches a unit emitted earlier in the same Flush;
-// position-less and bare errors get their own unit each.
+// groupByLine partitions the flat error slice into ordered render units. Rich
+// errors share a unit by (filename, line); position-less / bare errors each
+// get their own.
 func groupByLine(errs []error) []renderUnit {
 	var groups []renderUnit
 	index := make(map[posKey]int, len(errs))
@@ -434,41 +397,21 @@ func groupByLine(errs []error) []renderUnit {
 	return groups
 }
 
-// renderUnit emits one block of pretty output. Grouped (multi-error)
-// units share a position header line + source excerpt + one caret
-// line bearing N carets, one per error's CodeSpan column. Bare/
-// position-less units fall back to the single-error path.
-//
-// Layout:
-//
-//	<bold cyan file:line[:col]>: <light-red Msg1> <gray (hint1)>
-//	                             <light-red Msg2> <gray (hint2)>
-//	\t<source line; spans highlighted>
-//	\t<caret indent>^<between-pad>^...
-//
-// Two header-column subtleties:
-//
-//  1. Single-error groups get a full `file:line:col:` header where
-//     `col` points at the offending CodeSpan inside the source line,
-//     NOT at the field declaration that token.Position originally
-//     marked. The field-decl column is correct for AST tooling but
-//     wrong for a user clicking the path in an IDE.
-//  2. Multi-error groups drop the column entirely — `file:line:` —
-//     since the errors point at different columns and there's no
-//     single "the" column to display in the header. Each cause is
-//     pinned by its caret on the line below.
+// renderUnit emits one block of pretty output: a position header, a
+// span-highlighted source excerpt, and a caret line (one caret per error's
+// CodeSpan column for grouped units). Bare units fall back to renderBare.
+// Single-error groups get a full `file:line:col:` header where col points at
+// the CodeSpan (not the field decl token.Position marked); multi-error groups
+// drop the column — carets disambiguate.
 func (l *prettyLogger) renderUnit(u renderUnit) {
 	if !u.pos.IsValid() {
 		l.renderBare(u.bare)
 		return
 	}
 	first := u.riches[0]
-	// Read source first — needed both for the col override below and
-	// the excerpt rendered after.
 	line, srcOK := readSourceLine(first.Pos.Filename, first.Pos.Line)
 	var prefix string
 	if len(u.riches) > 1 {
-		// Multi-error: no single column makes sense; carets disambiguate.
 		prefix = fmt.Sprintf("%s:%d: ", relPath(first.Pos.Filename), first.Pos.Line)
 	} else {
 		col := first.Pos.Column
@@ -480,23 +423,19 @@ func (l *prettyLogger) renderUnit(u renderUnit) {
 	_, _ = fmt.Fprintf(l.w, "%s%s\n",
 		l.paint(ansiBold+ansiCyan, prefix),
 		l.formatMsg(first))
-	// Continuation messages: indented under the first message column
-	// so the eye reads them as siblings of the header msg, not as
-	// new diagnostics.
+	// Continuation messages indented under the header msg as siblings.
 	contIndent := strings.Repeat(" ", len(prefix))
 	for _, re := range u.riches[1:] {
 		_, _ = fmt.Fprintf(l.w, "%s%s\n", contIndent, l.formatMsg(re))
 	}
-	// Source + multi-caret. Skipped when source isn't readable.
 	if srcOK {
 		_, _ = fmt.Fprintf(l.w, "\t%s\n", l.highlightSpans(line, u.riches))
 		_, _ = fmt.Fprintf(l.w, "\t%s\n", l.multiCaretLine(line, u.riches))
 	}
 }
 
-// renderBare renders a position-less rich error or a non-rich error
-// on a single line. Used for bucketed-out entries that don't fit the
-// position-grouped layout.
+// renderBare renders a position-less rich error or a non-rich error on a
+// single line.
 func (l *prettyLogger) renderBare(err error) {
 	var re *richError
 	if !errors.As(err, &re) {
@@ -506,41 +445,24 @@ func (l *prettyLogger) renderBare(err error) {
 	_, _ = fmt.Fprintf(l.w, "%s\n", l.formatMsg(re))
 }
 
-// formatMsg builds the `<light-red Msg> <gray (UserHint)>` body used
-// by both the header line and continuation lines. Both Msg and
-// UserHint are routed through emphasize() so backtick- and
-// double-quote-delimited identifiers get promoted to bold (and the
-// markers themselves stripped). UserHint is gray and renders without
-// surrounding parens — the muted color is enough visual separation.
+// formatMsg builds the `<light-red Msg> <gray UserHint>` body for header and
+// continuation lines. Msg and UserHint route through emphasize() (backtick /
+// double-quote identifiers → bold, markers stripped).
 func (l *prettyLogger) formatMsg(re *richError) string {
 	out := l.emphasize(re.Msg, ansiLightRed)
 	if re.UserHint != "" {
-		// Drop every period in hints — the gray run already provides
-		// visual end-of-thought; sentence punctuation is dead weight.
-		// Source hints stay readable when written in plain English
-		// because abbreviations like "e.g." are pre-stripped here.
+		// Drop periods — the gray run is enough end-of-thought separation.
 		hint := strings.ReplaceAll(re.UserHint, ".", "")
 		out = out + " " + l.emphasize(hint, ansiGray)
 	}
 	return out
 }
 
-// emphasize transforms emphasis markers in s and returns a styled
-// string. Two markers are recognised:
-//
-//	`ident`   — Markdown-style code span.
-//	"ident"   — Go fmt-style identifier quoting (%q output).
-//
-// Both render as the inner text in bold, with the markers stripped.
-// The non-emphasized text uses baseColor; emphasized segments break
-// out to bold-default-fg so they stand out against the surrounding
-// hue. When color is off, all markers are stripped and the result
-// is plain text (no ANSI). Unbalanced markers are tolerated — the
-// trailing reset closes any open run gracefully.
+// emphasize renders s with `ident` (Markdown code span) and "ident" (%q) both
+// bolded and their markers stripped; non-emphasized text uses baseColor. With
+// color off, markers are stripped to plain text. Unbalanced markers tolerated.
 func (l *prettyLogger) emphasize(s, baseColor string) string {
 	if !l.color {
-		// Plain-text fallback: strip markers so the sentence reads
-		// naturally. `foo` becomes foo; "foo" becomes foo.
 		var b strings.Builder
 		b.Grow(len(s))
 		for i := 0; i < len(s); i++ {
@@ -551,12 +473,8 @@ func (l *prettyLogger) emphasize(s, baseColor string) string {
 		}
 		return b.String()
 	}
-	// `\x1b[1m` enables bold without touching foreground colour, so
-	// the base hue (light-red for msg, gray for hint) carries through
-	// the emphasized span. `\x1b[22m` disables bold while leaving the
-	// colour alone — using ansiReset here would drop both, painting
-	// the emphasized text in the terminal's default fg (often near-
-	// black, which is exactly what we don't want against gray hints).
+	// boldOff (\x1b[22m) disables bold while keeping the base hue; ansiReset
+	// would drop the colour too, painting the span in the terminal default fg.
 	const boldOff = "\x1b[22m"
 	var b strings.Builder
 	b.WriteString(baseColor)
@@ -579,11 +497,8 @@ func (l *prettyLogger) emphasize(s, baseColor string) string {
 	return b.String()
 }
 
-// highlightSpans wraps every error's CodeSpan in red+bold ANSI when
-// color is enabled. Spans are looked up from each error's
-// Pos.Column-1 (so identical text earlier on the line isn't mistaken
-// for the cause) and applied in column order, with overlapping ranges
-// merged to keep the output well-formed.
+// highlightSpans wraps every error's CodeSpan in red+bold, looked up from each
+// Pos.Column-1, applied in column order with overlaps merged.
 func (l *prettyLogger) highlightSpans(line string, errs []*richError) string {
 	if !l.color {
 		return line
@@ -594,8 +509,7 @@ func (l *prettyLogger) highlightSpans(line string, errs []*richError) string {
 		if re.CodeSpan == "" {
 			continue
 		}
-		// resolveSpanCol returns 1-indexed; subtract to get the byte
-		// offset into line. Anchor consumed before searching CodeSpan.
+		// resolveSpanCol is 1-indexed; subtract for the byte offset.
 		col := resolveSpanCol(line, re.Pos.Column, re.CodeSpan, re.Anchor) - 1
 		if col < 0 || col >= len(line) {
 			continue
@@ -607,7 +521,7 @@ func (l *prettyLogger) highlightSpans(line string, errs []*richError) string {
 		return line
 	}
 	slices.SortFunc(spans, func(a, b span) int { return a.start - b.start })
-	// Merge overlaps so we don't emit half-open ANSI ranges.
+	// Merge overlaps to avoid half-open ANSI ranges.
 	merged := spans[:1]
 	for _, s := range spans[1:] {
 		last := &merged[len(merged)-1]
@@ -632,11 +546,8 @@ func (l *prettyLogger) highlightSpans(line string, errs []*richError) string {
 	return b.String()
 }
 
-// multiCaretLine builds a single caret-row spanning one `^` per
-// error column. Whitespace bytes from the source are mirrored
-// verbatim so tabs in the source align with tabs in the caret line.
-// When errors share a column (rare — typically the user duplicated
-// a rule), the caret renders once at that column.
+// multiCaretLine builds a caret row with one `^` per error column. Source
+// whitespace is mirrored verbatim so tabs align; shared columns render once.
 func (l *prettyLogger) multiCaretLine(line string, errs []*richError) string {
 	cols := make([]int, len(errs))
 	for i, re := range errs {
@@ -661,12 +572,9 @@ func (l *prettyLogger) multiCaretLine(line string, errs []*richError) string {
 	return b.String()
 }
 
-// resolveSpanCol does the actual column-search work, with optional
-// Anchor support. The anchor is a disambiguating prefix the caller
-// trusts to appear before the codeSpan target — useful when codeSpan
-// alone is a short string that collides with other text earlier on
-// the line. Anchor is consumed (search advances past it) but the
-// returned column points at codeSpan, not at the anchor.
+// resolveSpanCol finds codeSpan's 1-indexed column. An optional anchor (a
+// disambiguating prefix known to precede codeSpan) is consumed first, so a
+// short codeSpan that collides earlier on the line still resolves correctly.
 func resolveSpanCol(line string, posCol int, codeSpan, anchor string) int {
 	col := max(posCol-1, 0)
 	if anchor != "" && col < len(line) {
@@ -682,21 +590,9 @@ func resolveSpanCol(line string, posCol int, codeSpan, anchor string) int {
 	return col + 1
 }
 
-// caretIndent builds the whitespace prefix for the line under the
-// source excerpt so the caret lands directly under the offending
-// token. Three quirks that make this non-trivial:
-//
-//  1. The prefix `./file.go:line:col: ` appears before the source on
-//     the previous line; the caret line needs an equal-width run of
-//     spaces.
-//  2. Source lines often begin with tabs; replacing tabs with spaces
-//     in the indent would mis-align the caret in any terminal where a
-//     tab is rendered as N columns. Reuse the line's whitespace bytes
-//     verbatim, mapping non-whitespace to a single space.
-//  3. Pos.Column points at the field declaration, but the offender
-//     (CodeSpan = rule name / bad value) typically lives inside the
-//     struct tag a few columns later. Search for CodeSpan starting at
-//     Pos.Column so the caret lands on the actual cause.
+// caretIndent builds the whitespace prefix so the caret lands under the
+// offending token: the header-prefix width as spaces, then the source's own
+// whitespace bytes verbatim (so tabs align) up to the resolved CodeSpan column.
 func caretIndent(line, prefix string, posCol int, span, anchor string) string {
 	col := min(max(resolveSpanCol(line, posCol, span, anchor)-1, 0), len(line))
 	var b strings.Builder
@@ -714,11 +610,8 @@ func caretIndent(line, prefix string, posCol int, span, anchor string) string {
 	return b.String()
 }
 
-// highlightSpan returns line with the first occurrence of span
-// wrapped in red+bold. Empty span (or span absent from line) leaves
-// the line unchanged. Used to draw the eye to the offending substring
-// in a code excerpt — the caret below pins the column, this colours
-// the cause.
+// highlightSpan wraps the first occurrence of span in red+bold; an empty or
+// absent span leaves the line unchanged.
 func (l *prettyLogger) highlightSpan(line, span string) string {
 	if span == "" || !l.color {
 		return line
@@ -732,17 +625,15 @@ func (l *prettyLogger) highlightSpan(line, span string) string {
 
 // ----- source line reader -----
 
-// sourceLineCache memoises file reads so multiple errors from the
-// same file don't re-open it. Bounded informally by typical run size
-// (a single ggen invocation rarely touches > 100 files).
+// sourceLineCache memoises file reads so multiple errors from one file don't
+// re-open it.
 var sourceLineCache struct {
 	mu    sync.Mutex
 	files map[string][]string
 }
 
-// readSourceLine returns the 1-indexed line N from filename, or
-// (empty, false) on any read / range error. Read failures are not
-// fatal — the renderer falls back to a position-only display.
+// readSourceLine returns the 1-indexed line N from filename, or (empty, false)
+// on any read / range error (non-fatal — the renderer drops the excerpt).
 func readSourceLine(filename string, line int) (string, bool) {
 	if filename == "" || line < 1 {
 		return "", false
@@ -760,8 +651,6 @@ func readSourceLine(filename string, line int) (string, bool) {
 		}
 		defer func() { _ = f.Close() }()
 		sc := bufio.NewScanner(f)
-		// Default scanner buffer (64KiB) is enough for any sane Go
-		// source line; grow if needed in the future.
 		for sc.Scan() {
 			lines = append(lines, sc.Text())
 		}
@@ -778,18 +667,14 @@ func readSourceLine(filename string, line int) (string, bool) {
 
 // ----- richError -----
 
-// richError is the structured error type both log impls render. It
-// separates the *what* (Msg + Pos), the *bot context* (BotHint, shown
-// inline to agents/CI), and the *human remedy* (UserHint, shown as a
-// Note: line in pretty mode). Keeping the two hints distinct is
-// deliberate: the UserHint may suggest one of several valid fixes,
-// and surfacing it to an agent as authoritative would railroad
-// downstream tool decisions.
+// richError is the structured error type both log impls render. It separates
+// the what (Msg + Pos), the technical context (BotHint, inline for agents/CI),
+// and the human remedy (UserHint, a Note: line in pretty mode). See Logger.
 type richError struct {
 	Pos      token.Position // file:line:col; zero value when unknown
 	Msg      string         // main error message — what failed
 	CodeSpan string         // substring within the source line to highlight + point caret at
-	Anchor   string         // disambiguating prefix used for caret positioning ONLY; not highlighted. When set, the position search finds Anchor first, then searches for CodeSpan AFTER it. Use when CodeSpan is a short token that may collide with other occurrences earlier on the line (e.g. unknown-rule name `b` collides with `json:"b"`).
+	Anchor   string         // disambiguating prefix searched before CodeSpan (positioning only, not highlighted) when CodeSpan is short enough to collide earlier on the line
 	BotHint  string         // technical context for concise/agent output
 	UserHint string         // remedy suggestion for human output (Note:)
 	Err      error          // optional underlying error for errors.Unwrap

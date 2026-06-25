@@ -18,15 +18,10 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
-// fileBuildConstraint returns the canonical //go:build expression for f,
-// or "" when no build constraint is present. The result is normalized via
-// constraint.Parse + Expr.String() so semantically equivalent forms (e.g.
-// `foo && bar` and ` foo  &&  bar `) collapse into the same bucket key.
-//
-// Old-style `// +build` comments are also honored — they're folded into
-// an equivalent expression by go/build/constraint when the new-style line
-// is absent. The parser only inspects comments before the package clause,
-// matching Go's own constraint-recognition rules.
+// fileBuildConstraint returns the canonical //go:build expression for f (or "")
+// normalized via constraint.Parse so equivalent forms collapse to one bucket
+// key. Old-style `// +build` is honored; only comments before the package
+// clause are inspected (Go's own rule).
 func fileBuildConstraint(f *ast.File) string {
 	if f == nil {
 		return ""
@@ -53,8 +48,7 @@ func fileBuildConstraint(f *ast.File) string {
 	if len(plus) == 0 {
 		return ""
 	}
-	// `// +build` lines are AND'd together (terms within a line are OR'd —
-	// constraint.Parse already encodes that into the per-line Expr).
+	// `// +build` lines AND together (intra-line OR already encoded by Parse).
 	combined := plus[0]
 	for _, e := range plus[1:] {
 		combined = &constraint.AndExpr{X: combined, Y: e}
@@ -80,39 +74,31 @@ type structSet struct {
 	aliases     map[string]*ast.TypeSpec // top-level non-struct annotated types (alias of a primitive)
 	order       []string
 	annotations map[string]annotationFlags
-	// fromTest is the set of struct names declared in a *_test.go file. Used
-	// to route generated methods into *_ggen_test.go so they don't bundle with
-	// library builds. Absence means non-test.
+	// fromTest is the set of struct names from *_test.go files — routes their
+	// methods into *_ggen_test.go. Absence means non-test.
 	fromTest map[string]struct{}
 	pkgName  string
 
-	// fileSet / typesInfo / typesPkg are populated when the structs were
-	// loaded via golang.org/x/tools/go/packages with type info. Used by
-	// the generator at codegen time to detect interface implementations
-	// (TextMarshaler, ByteDecoder, etc.) on field types.
+	// fileSet / typesInfo / typesPkg are populated by the packages-aware
+	// loader; the generator uses them to detect interface impls on field types.
 	fileSet   *token.FileSet
 	typesInfo *types.Info
 	typesPkg  *types.Package
 	stdIfaces stdInterfaces
-	// fieldExpr maps "<StructName>.<FieldName>" → the AST type expression
-	// for that field, so extractField can look it up in typesInfo to
-	// resolve the field's go/types.Type.
+	// fieldExpr maps "<StructName>.<FieldName>" → its AST type expression, for
+	// resolving the field's go/types.Type.
 	fieldExpr map[string]ast.Expr
-	// structFile maps struct name → the *ast.File it was declared in. Used
-	// to resolve @pkg.Func references via the file's imports (aliased imports
-	// are file-scoped, not package-scoped).
+	// structFile maps struct name → its declaring *ast.File, for resolving
+	// @pkg.Func references against the file's (file-scoped) imports.
 	structFile map[string]*ast.File
-	// structBuildTag maps struct name → canonical //go:build expression of
-	// its source file (or "" for unconstrained). Generation buckets structs
-	// by this so a tagged struct ends up in its own _ggen.go file with the
-	// matching constraint header.
+	// structBuildTag maps struct name → its file's canonical //go:build
+	// expression ("" for unconstrained), used for output bucketing.
 	structBuildTag map[string]string
 }
 
-// loadStructs is the AST-only loader. Used by tests that exercise the
-// parser via temporary files without a full module context. No type info
-// — FieldInterfaces flags stay zero so the generator falls back to the
-// dynamic-probe cascade in cross-package paths.
+// loadStructs is the AST-only loader (temp files with no module context). No
+// type info — FieldInterfaces flags stay zero, so the generator uses its
+// runtime-probe cascade in cross-package paths.
 func loadStructs(filenames []string) (*structSet, error) {
 	set := &structSet{
 		structs:        map[string]*ast.StructType{},
@@ -139,11 +125,9 @@ func loadStructs(filenames []string) (*structSet, error) {
 	return set, nil
 }
 
-// loadDirWithTypes loads a Go package from disk via packages.Load with
-// full type info, then walks its syntax to collect annotated struct
-// definitions. The resulting structSet carries TypesInfo + std-interface
-// references so extractField can resolve each field's interface
-// implementation flags at parse time.
+// loadDirWithTypes loads a package via packages.Load with full type info and
+// walks its syntax for annotated structs. The structSet carries TypesInfo +
+// std-interface refs so extractField can resolve interface flags at parse time.
 func loadDirWithTypes(dir string) (*structSet, error) {
 	cfg := &packages.Config{
 		Dir: dir,
@@ -158,9 +142,8 @@ func loadDirWithTypes(dir string) (*structSet, error) {
 	if len(pkgs) == 0 {
 		return nil, fmt.Errorf("no packages loaded for %s", dir)
 	}
-	// With Tests=true, packages.Load typically returns the base package
-	// plus a "test" variant that includes _test.go files. Pick the
-	// variant with the largest Syntax slice — that one has everything.
+	// With Tests=true, Load returns the base package plus a test variant; pick
+	// the one with the largest Syntax slice (it has everything).
 	var best *packages.Package
 	for _, p := range pkgs {
 		if best == nil || len(p.Syntax) > len(best.Syntax) {
@@ -186,8 +169,7 @@ func loadDirWithTypes(dir string) (*structSet, error) {
 	}
 	for _, af := range best.Syntax {
 		filename := best.Fset.Position(af.Pos()).Filename
-		// Skip generated files and our own output to keep the same
-		// behavior as the AST loader.
+		// Skip our own generated output.
 		if strings.HasSuffix(filename, "_ggen.go") || strings.HasSuffix(filename, "_ggen_test.go") {
 			continue
 		}
@@ -197,9 +179,8 @@ func loadDirWithTypes(dir string) (*structSet, error) {
 	return set, nil
 }
 
-// walkStructDecls registers every top-level struct type declared in af.
-// Shared by both loaders (AST-only and packages-aware) so behavior stays
-// identical regardless of how the AST was produced.
+// walkStructDecls registers every top-level struct type in af. Shared by both
+// loaders so behavior is identical regardless of how the AST was produced.
 func walkStructDecls(af *ast.File, isTest bool, set *structSet) {
 	tag := fileBuildConstraint(af)
 	for _, decl := range af.Decls {
@@ -227,7 +208,7 @@ func walkStructDecls(af *ast.File, isTest bool, set *structSet) {
 				if flags, ok := parseAnnotation(gd.Doc, ts.Doc); ok {
 					set.annotations[name] = flags
 				}
-				// Stash each field's type expression for later type-info lookup.
+				// Stash field type expressions for later type-info lookup.
 				for _, field := range st.Fields.List {
 					for _, ident := range field.Names {
 						set.fieldExpr[name+"."+ident.Name] = field.Type
@@ -235,15 +216,10 @@ func walkStructDecls(af *ast.File, isTest bool, set *structSet) {
 				}
 				continue
 			}
-			// Non-struct top-level type. Register every alias so an
-			// explicit name filter (`ggen file.go Foo`) can target it
-			// via the underlying introspection path — even when the
-			// alias itself is unannotated. The annotation gate only
-			// decides whether the alias auto-generates without a
-			// filter (annotatedList()); BFS over fields doesn't walk
-			// aliases, so unannotated entries can't be picked up by
-			// accident. Unsupported underlyings (interface/chan/func)
-			// still error lazily inside extractAlias when targeted.
+			// Non-struct top-level type. Register every alias (even
+			// unannotated) so an explicit name filter can target it; the
+			// annotation gate only decides auto-generation without a filter.
+			// Unsupported underlyings error lazily in extractAlias.
 			flags, annotated := parseAnnotation(gd.Doc, ts.Doc)
 			set.aliases[name] = ts
 			set.order = append(set.order, name)
@@ -259,10 +235,8 @@ func walkStructDecls(af *ast.File, isTest bool, set *structSet) {
 	}
 }
 
-// parseAnnotation looks for a "//ggen:generate" directive in the given comment
-// groups, optionally followed by whitespace-separated flags (marshal,
-// unmarshal, multierr, ...). Returns the parsed flags and whether the
-// directive was present.
+// parseAnnotation looks for a "//ggen:generate" directive (optionally followed
+// by whitespace-separated flags) and returns the flags + whether it was present.
 func parseAnnotation(groups ...*ast.CommentGroup) (annotationFlags, bool) {
 	for _, cg := range groups {
 		if cg == nil {
@@ -316,12 +290,10 @@ func (s *structSet) resolve(wanted []string) ([]StructInfo, error) {
 	return s.resolveFiltered(wanted, nil)
 }
 
-// resolveFiltered walks wanted + transitive struct references, but only
-// expands transitive deps whose names pass allowExpand. A nil predicate
-// preserves the legacy behavior (expand everything) used by package-mode
-// generation. Single-file mode passes inFile so sibling-declared deps
-// stay out of this file's output — their own generation pass owns them.
-// The roots in `wanted` are always emitted regardless of allowExpand.
+// resolveFiltered walks wanted + transitive struct references, expanding only
+// deps whose names pass allowExpand (nil = expand everything, package mode;
+// single-file mode passes inFile to keep sibling-declared deps out). The roots
+// in `wanted` are always emitted.
 func (s *structSet) resolveFiltered(wanted []string, allowExpand func(string) bool) ([]StructInfo, error) {
 	gen := make(map[string]struct{}, len(wanted))
 	queue := slices.Clone(wanted)
@@ -370,10 +342,8 @@ func (s *structSet) resolveFiltered(wanted []string, allowExpand func(string) bo
 			info, err = s.extractStruct(name, s.structs[name])
 		}
 		if err != nil {
-			// Gather rather than bail — one struct's broken tag
-			// shouldn't hide problems in the next struct in the same
-			// file / package. errors.Join wraps the batch; the logger
-			// unwraps + renders each one separately.
+			// Gather rather than bail — one struct's broken tag shouldn't hide
+			// the next one's.
 			errs = append(errs, err)
 			continue
 		}
@@ -399,27 +369,20 @@ func (s *structSet) resolveFiltered(wanted []string, allowExpand func(string) bo
 	return result, nil
 }
 
-// parseFile loads structs from a single file. If wanted is empty, it uses
-// annotated structs; if there are none, it falls back to all exported.
-// Tries the packages-aware loader first (with type info); falls back to
-// AST-only when the file's directory isn't a fully resolvable Go package
-// (e.g., temp files in tests).
+// parseFile loads structs from a single file (annotated structs when wanted is
+// empty). Tries the packages-aware loader, falling back to AST-only for files
+// outside a resolvable module (e.g. test temp files).
 //
-// The third return value (siblings) carries every annotated struct/alias
-// name across the WHOLE package — even those declared in other files.
-// Callers in single-file mode use this to seed generatedTypes so a
-// cross-file struct reference routes to a direct DecodeFrom call instead
-// of falling back to encoding/json on the first run (chicken-and-egg
-// before sibling _ggen files exist on disk). Nil when the loader
-// degraded to AST-only — siblings are unknown in that mode.
+// The third return (siblings) is every annotated name across the whole package,
+// used in single-file mode to seed generatedTypes so a cross-file reference
+// routes to a direct DecodeFrom before sibling _ggen files exist. Nil in the
+// AST-only degraded mode (siblings unknown).
 func parseFile(filename string, wanted []string) ([]StructInfo, string, map[string]struct{}, error) {
 	dir := filepath.Dir(filename)
 	set, err := loadDirWithTypes(dir)
 	degraded := false
-	// Degrade to AST-only when packages.Load failed OR succeeded but came
-	// back empty (typical for orphan files outside a Go module — temp
-	// dirs in tests, scratch files, etc.). Static interface detection is
-	// off in that mode; the generator's runtime-probe cascade handles it.
+	// Degrade to AST-only when Load failed or came back empty (orphan files
+	// outside a module). Static interface detection is off in that mode.
 	if err != nil || (len(set.structs) == 0 && len(set.aliases) == 0) {
 		set, err = loadStructs([]string{filename})
 		if err != nil {
@@ -427,10 +390,8 @@ func parseFile(filename string, wanted []string) ([]StructInfo, string, map[stri
 		}
 		degraded = true
 	}
-	// loadDirWithTypes loads the whole package — single-file mode must
-	// only emit code for types declared in `filename`, not every annotated
-	// type across the package. Filter via structFile (populated by
-	// walkStructDecls with the *ast.File each type was declared in).
+	// loadDirWithTypes loads the whole package; single-file mode emits only
+	// types declared in `filename`. Filter via structFile.
 	absFile, _ := filepath.Abs(filename)
 	inFile := func(name string) bool {
 		af, ok := set.structFile[name]
@@ -453,17 +414,10 @@ func parseFile(filename string, wanted []string) ([]StructInfo, string, map[stri
 			}
 		}
 		if len(wanted) == 0 {
-			// No explicit name filter AND no annotated struct in this
-			// file. Earlier ggen versions silently fell back to "every
-			// exported struct in the file" — that surprised users whose
-			// scratch files happened to contain a struct with a stale
-			// `ggen:` tag, since the applicability check would then
-			// reject the unintended type. Be loud + helpful instead.
-			//
-			// Returned as a richError so the pretty logger renders the
-			// Note: line with the explicit-name escape hatch. No source
-			// position — this is a file-level error, not tied to any
-			// particular line.
+			// No name filter and no annotated struct in this file. Error loudly
+			// (the old "every exported struct" fallback surprised users with
+			// stale tags). richError so the pretty logger shows the escape
+			// hatch; no source position — this is file-level.
 			return nil, set.pkgName, nil, &richError{
 				Msg:      fmt.Sprintf("%s: no //ggen:generate-annotated struct found in file", relPath(filename)),
 				BotHint:  "missing //ggen:generate directive",
@@ -471,16 +425,12 @@ func parseFile(filename string, wanted []string) ([]StructInfo, string, map[stri
 			}
 		}
 	}
-	// Gate transitive expansion to types declared in `filename`. Sibling-
-	// declared structs (incl. transitively-referenced ones) get handled by
-	// their own file's generation pass — emitting them here too would
-	// produce duplicate method declarations across the package.
+	// Gate expansion to types in `filename`; sibling-declared deps are emitted
+	// by their own pass (else duplicate method declarations).
 	structs, err := set.resolveFiltered(wanted, inFile)
 	if err != nil {
-		// Position-carrying errors already include the filename in their
-		// `file:line:col:` prefix; double-prefixing would render as
-		// `temp.go: temp.go:5:2: msg`. Pass them through untouched and
-		// only prefix bare errors that lack source location info.
+		// Position-carrying errors already prefix the filename; don't
+		// double-prefix. Only prefix bare errors lacking location info.
 		if _, ok := errors.AsType[*richError](err); ok {
 			return nil, "", nil, err
 		}
@@ -501,7 +451,7 @@ func parseFile(filename string, wanted []string) ([]StructInfo, string, map[stri
 func parsePackage(dir string) ([]StructInfo, string, error) {
 	set, err := loadDirWithTypes(dir)
 	if err != nil || (len(set.structs) == 0 && len(set.aliases) == 0) {
-		// Degraded path: AST-only.
+		// AST-only fallback.
 		files, ferr := eligibleFiles(dir)
 		if ferr != nil {
 			return nil, "", ferr
@@ -558,39 +508,21 @@ func eligibleFiles(dir string) ([]string, error) {
 	return files, nil
 }
 
-// extractAlias builds a StructInfo for a top-level non-struct annotated
-// type. The accepted shapes:
-//
-//   - Primitive aliases — `type HtmlString string`, `type Count int`,
-//     etc. Codegen emits scan + cast.
-//   - Struct aliases (requires Go type info) — `type LocalUUID uuid.UUID`,
-//     `type Local OtherStruct`. When the underlying struct implements a
-//     marshal/unmarshal interface (TextMarshaler, JSONMarshaler, …),
-//     codegen delegates to the underlying type's method via cast. The
-//     no-method introspection path lands later.
-//
-// Slices, maps, arrays, channels, interfaces, and funcs are rejected
-// for now (slice/map/array support is on the roadmap).
+// extractAlias builds a StructInfo for a top-level non-struct annotated type
+// (primitive, struct, or slice/map/array alias). Channels, interfaces, and
+// funcs are rejected. Struct/container aliases need Go type info.
 func (s *structSet) extractAlias(name string, ts *ast.TypeSpec) (StructInfo, error) {
 	info := StructInfo{Name: name, IsAlias: true}
 
-	// Type-info-driven path: covers primitives AND struct aliases.
-	// Lookup goes through typesInfo.Defs (where type-spec definitions
-	// land) rather than .Types (which is for expressions). The named
-	// type's underlying determines the alias shape; the AST gives us
-	// the literal text the user wrote (e.g. "uuid.UUID") so we can
-	// emit casts that name the underlying type, plus its import path.
+	// Type-info path (primitives + structs). Lookup via typesInfo.Defs; the
+	// underlying gives the shape, the AST the literal text + import path.
 	if s.typesInfo != nil {
 		if obj, ok := s.typesInfo.Defs[ts.Name].(*types.TypeName); ok && obj != nil {
 			return s.extractAliasFromTypes(name, obj.Type(), ts.Type)
 		}
 	}
 
-	// AST-only fallback. Without type info we can't resolve struct
-	// underlyings or cross-package element types — but we can still
-	// support primitive aliases and containers of primitives by
-	// inspecting the AST directly. Non-JSON shapes get rejected
-	// with a specific diagnostic.
+	// AST-only fallback: primitive aliases + containers of primitives only.
 	switch tt := ts.Type.(type) {
 	case *ast.InterfaceType:
 		return info, fmt.Errorf("type %s: unsupported alias underlying (interface) — JSON has no shape for it", name)
@@ -616,10 +548,8 @@ func (s *structSet) extractAlias(name string, ts *ast.TypeSpec) (StructInfo, err
 	return info, nil
 }
 
-// extractContainerAliasAST handles `type T []E` (slice) and
-// `type T [N]E` (array) without type info. Element type must be a
-// primitive ident — anything richer (foreign types, nested
-// containers) needs the full go/types path.
+// extractContainerAliasAST handles `type T []E` / `type T [N]E` without type
+// info. Element must be a primitive ident; anything richer needs go/types.
 func (s *structSet) extractContainerAliasAST(name string, at *ast.ArrayType) (StructInfo, error) {
 	info := StructInfo{Name: name, IsAlias: true}
 	elemIdent, ok := at.Elt.(*ast.Ident)
@@ -680,13 +610,9 @@ func (s *structSet) extractMapAliasAST(name string, mt *ast.MapType) (StructInfo
 	return info, nil
 }
 
-// extractAliasFromTypes derives the alias's underlying kind via go/types.
-// Splits on the underlying shape: *types.Basic for primitive aliases,
-// *types.Struct for struct aliases (with method-set probing). The AST
-// expr `rhs` is what the user wrote on the right-hand side of the
-// `type Local <rhs>` declaration — used to recover the literal name
-// of the underlying type (e.g. "Inner" or "uuid.UUID") since the
-// types.Named for `Local` itself only carries its OWN name.
+// extractAliasFromTypes derives the alias's kind via go/types, splitting on the
+// underlying shape (Basic / Struct / Slice / Map / Array). `rhs` is the AST the
+// user wrote, used to recover the underlying's literal name + import path.
 func (s *structSet) extractAliasFromTypes(name string, t types.Type, rhs ast.Expr) (StructInfo, error) {
 	info := StructInfo{Name: name, IsAlias: true}
 	underlying := t.Underlying()
@@ -703,14 +629,10 @@ func (s *structSet) extractAliasFromTypes(name string, t types.Type, rhs ast.Exp
 
 	if _, ok := underlying.(*types.Struct); ok {
 		info.AliasKind = KindStruct
-		// Underlying name + import path come from the RHS AST: a bare
-		// Ident lives in the user's package; a SelectorExpr points to a
-		// foreign package whose path we resolve via typesInfo.
 		info.AliasUnderlying = exprToString(rhs)
-		// Probe the RHS named type's method set, NOT t itself — methods
-		// don't propagate from `Inner` to `type Local Inner`, so probing
-		// `Local` would always return empty. Look up the RHS ident in
-		// typesInfo.Uses to recover the underlying *types.TypeName.
+		// Probe the RHS named type's method set, NOT t — methods don't
+		// propagate from `Inner` to `type Local Inner`. Recover the underlying
+		// *types.TypeName via typesInfo.Uses.
 		var underlyingNamed types.Type
 		switch e := rhs.(type) {
 		case *ast.Ident:
@@ -732,14 +654,10 @@ func (s *structSet) extractAliasFromTypes(name string, t types.Type, rhs ast.Exp
 		}
 		// Dispatch ladder:
 		//   1. ggen-shaped methods on the underlying — delegate (fastest).
-		//   2. Struct has exported fields — introspect, generate fresh
-		//      hand-rolled decode/encode against those fields. Faster
-		//      than JSON/Text marshaler delegation, and the whole point
-		//      of this codepath is to give thirdparty structs the same
-		//      speed as locally-annotated ones.
-		//   3. Opaque struct (no exported fields, e.g. time.Time) but
-		//      has a JSON/Text marshaler pair — fall back to delegation.
-		//   4. Nothing usable — error out.
+		//   2. Exported fields — introspect + hand-roll (beats marshaler
+		//      delegation; gives thirdparty structs locally-annotated speed).
+		//   3. Opaque struct (no exported fields) with a marshaler pair — delegate.
+		//   4. Nothing usable — error.
 		if info.AliasIface.AppendJSON && info.AliasIface.ByteDecoder {
 			return info, nil
 		}
@@ -752,11 +670,9 @@ func (s *structSet) extractAliasFromTypes(name string, t types.Type, rhs ast.Exp
 			}
 		}
 		if hasExported {
-			// Field-introspection mode: walk the underlying *types.Struct
-			// and synthesize a FieldInfo per exported field, then treat
-			// the alias like a plain struct (IsAlias→false). Field
-			// access via `result.X` works because Go gives `Local` and
-			// the underlying the same memory layout.
+			// Synthesize a FieldInfo per exported field and treat the alias as
+			// a plain struct (IsAlias→false) — same memory layout, so
+			// `result.X` access is sound.
 			for i := 0; i < structType.NumFields(); i++ {
 				fv := structType.Field(i)
 				if !fv.Exported() {
@@ -771,7 +687,7 @@ func (s *structSet) extractAliasFromTypes(name string, t types.Type, rhs ast.Exp
 				}
 				info.Fields = append(info.Fields, fi)
 			}
-			info.IsAlias = false // route through the regular struct codegen
+			info.IsAlias = false // regular struct codegen
 			return info, nil
 		}
 		if aliasCanDelegate(info.AliasIface) {
@@ -780,17 +696,14 @@ func (s *structSet) extractAliasFromTypes(name string, t types.Type, rhs ast.Exp
 		return info, fmt.Errorf("type %s: underlying struct has no exported fields and no marshal/unmarshal methods to delegate to", name)
 	}
 
-	// Slice / Map / Array container aliases. Synthesize a FieldInfo
-	// describing the shape; the alias renderers reuse the existing
-	// slice/map/array emitters with `result` as ref.
+	// Slice / Map / Array container aliases — synthesize the shape FieldInfo.
 	switch tt := underlying.(type) {
 	case *types.Slice:
 		info.AliasKind = KindSlice
 		info.AliasUnderlying = exprToString(rhs)
 		f := s.aliasContainerField(tt.Elem(), 0)
 		if elemKindIsBytes(f.ElemType) {
-			// `type Bytes []byte` collapses to KindBytes for base64
-			// encoding (matching the field-level shorthand).
+			// `type Bytes []byte` collapses to KindBytes (base64).
 			info.AliasKind = KindBytes
 			info.AliasField = FieldInfo{Kind: KindBytes, GoType: info.AliasUnderlying}
 			return info, nil
@@ -821,9 +734,8 @@ func (s *structSet) extractAliasFromTypes(name string, t types.Type, rhs ast.Exp
 	return info, fmt.Errorf("type %s: alias of %s not supported", name, t)
 }
 
-// aliasContainerField builds a partial FieldInfo describing the element
-// type of a slice/map/array alias. ArrayLen is filled by the caller for
-// array aliases.
+// aliasContainerField builds a partial FieldInfo for a container alias's
+// element type. The caller sets ArrayLen for arrays.
 func (s *structSet) aliasContainerField(elem types.Type, _ int) FieldInfo {
 	qualifier := types.RelativeTo(s.typesPkg)
 	fi := FieldInfo{}
@@ -837,17 +749,14 @@ func (s *structSet) aliasContainerField(elem types.Type, _ int) FieldInfo {
 	return fi
 }
 
-// elemKindIsBytes reports whether the given Go type literal names the
-// byte type — used to recognize `[]byte`/`[]uint8` aliases that should
-// route through the base64 codec rather than the generic slice path.
+// elemKindIsBytes reports whether the Go type literal is the byte type — so
+// `[]byte`/`[]uint8` aliases route through the base64 codec.
 func elemKindIsBytes(elem string) bool {
 	return elem == "byte" || elem == "uint8"
 }
 
-// aliasCanDelegate reports whether a struct-alias's underlying type
-// has at least one marshal+unmarshal method pair we can delegate to.
-// One direction with no counterpart isn't enough — both sides of the
-// roundtrip must reach a ggen-emitted call site.
+// aliasCanDelegate reports whether the underlying has a marshal+unmarshal pair
+// to delegate to — both directions must reach a call site, not just one.
 func aliasCanDelegate(f FieldInterfaces) bool {
 	if f.AppendJSON && f.ByteDecoder {
 		return true
@@ -872,13 +781,9 @@ func isSupportedAliasPrimitive(k TypeKind) bool {
 	return false
 }
 
-// extractFieldFromTypes builds a FieldInfo entirely from go/types data.
-// Used when the alias underlying is a struct from another package (or
-// even our own) that we want to treat as if its fields were declared
-// locally — method-less struct aliases, in particular. The
-// type-driven path mirrors extractField's AST-driven logic but works
-// without reference to the original *ast.Field, which we don't have
-// for foreign-package types.
+// extractFieldFromTypes builds a FieldInfo entirely from go/types data — the
+// type-driven mirror of extractField, used for foreign/method-less struct
+// alias fields where no *ast.Field is available.
 func (s *structSet) extractFieldFromTypes(structName string, field *types.Var, tag string) (FieldInfo, error) {
 	fi := FieldInfo{GoName: field.Name(), StructName: structName}
 	qualifier := types.RelativeTo(s.typesPkg)
@@ -897,32 +802,12 @@ func (s *structSet) extractFieldFromTypes(structName string, field *types.Var, t
 	}
 	fi.OmitEmpty = opts.OmitEmpty
 	fi.OmitZero = opts.OmitZero
-	fi.NullZero = opts.NullZero
 	fi.String = opts.String
 	fi.Format = opts.Format
 	fi.Inline = opts.Inline
 
-	vt, err := parseValidationTagE(rt.Get("ggen"))
-	if err != nil {
-		return fi, fmt.Errorf("field %s: %w", fi.GoName, err)
-	}
-	fi.Validation = vt.Outer
-	fi.KeyValidation = vt.Keys
-	fi.HintLen = vt.HintLen
-	if len(vt.Levels) > 0 {
-		fi.ElemValidation = vt.Levels[0]
-	}
-	if len(vt.Levels) > 1 {
-		fi.InnerValidation = vt.Levels[1:]
-	}
-	mt := parseModTag(rt.Get("mod"))
-	fi.Mods = mt.Outer
-	fi.KeyMods = mt.Keys
-	if len(mt.Levels) > 0 {
-		fi.ElemMods = mt.Levels[0]
-	}
-	if len(mt.Levels) > 1 {
-		fi.InnerMods = mt.Levels[1:]
+	if err := applyPipeTags(&fi, rt, fi.GoName); err != nil {
+		return fi, err
 	}
 
 	t := field.Type()
@@ -987,16 +872,9 @@ func (s *structSet) extractFieldFromTypes(structName string, field *types.Var, t
 	return fi, nil
 }
 
-// attachPosition stamps a source position onto every *richError in
-// the error tree so each surfaced diagnostic carries file:line:col.
-// errors.Join'd batches from applicability.go contain multiple
-// independent richErrors — applying the position only to the first
-// (errors.AsType returns the first match) would leave subsequent
-// sub-errors position-less. setPosOnAll walks the tree recursively
-// to fix every one.
-//
-// When err contains no richError at all, a thin wrapper carries the
-// position and message.
+// attachPosition stamps pos onto every *richError in the error tree (an
+// errors.Join batch holds several), so each diagnostic carries file:line:col.
+// A non-richError tree is wrapped in a thin position-carrying richError.
 func attachPosition(err error, pos token.Position) error {
 	if setPosOnAll(err, pos) {
 		return err
@@ -1004,17 +882,9 @@ func attachPosition(err error, pos token.Position) error {
 	return &richError{Pos: pos, Msg: err.Error(), Err: err}
 }
 
-// qualifyRichErrors walks an error tree and prefixes every richError's
-// Msg with `<prefix>: `. Used to stamp the Struct.Field qualifier onto
-// every sub-error in an errors.Join batch from resolveCustomRules —
-// when a field has two failing @-refs (e.g. unresolvable val + mod),
-// both messages need the qualifier, not just the first one
-// errors.AsType would surface.
-//
-// Returns the same err (mutating richErrors in place); non-richError
-// nodes are unchanged. If the tree carries no richError at all,
-// returns a fresh richError wrapping err with the prefixed message
-// so the caller can still attach a position.
+// qualifyRichErrors prefixes every richError's Msg with `<prefix>: ` (mutating
+// in place), so a Struct.Field qualifier lands on every sub-error of a batch.
+// A tree with no richError is wrapped in a fresh one carrying the prefixed msg.
 func qualifyRichErrors(err error, prefix string) error {
 	if err == nil {
 		return nil
@@ -1050,16 +920,9 @@ func applyQualifier(err error, prefix string) bool {
 	return found
 }
 
-// setPosOnAll walks an error tree and fills in any unset Pos on every
-// *richError encountered. Returns true if at least one richError was
-// touched (or already present), false when the tree carries none.
-//
-// When stamping Pos, the Column is refined from the field-declaration
-// column (what token.Position carries) to the column of the CodeSpan
-// inside the source line — so both pretty and concise renderers point
-// users at the offending token rather than at the field name. This
-// requires reading the source line once per error tree branch; result
-// is cached in readSourceLine.
+// setPosOnAll fills any unset Pos on every *richError in the tree, returning
+// true if the tree held any. The Column is refined from the field-decl column
+// to the CodeSpan column so renderers point at the offending token.
 func setPosOnAll(err error, pos token.Position) bool {
 	if err == nil {
 		return false
@@ -1128,22 +991,15 @@ func (s *structSet) extractStruct(name string, st *ast.StructType) (StructInfo, 
 			fi, extractErr := extractField(name, ident.Name, field)
 			if extractErr != nil {
 				errs = append(errs, attachPosition(extractErr, s.fileSet.Position(field.Pos())))
-				// Don't `continue` here: applicability failures (the
-				// usual cause of extractErr) leave FieldInfo fully
-				// populated, and a parallel `@FuncName` in a different
-				// tag list (e.g. unknown ggen rule + unresolved mod
-				// @ref) is a legitimately-separate error the user
-				// needs to see. Fall through so resolveCustomRules
-				// runs too. fi.Ignored skips this entire path so
-				// guard it before continuing.
+				// Don't continue — extractErr (usually applicability) leaves fi
+				// populated, and a parallel @-ref error still needs surfacing,
+				// so fall through to resolvePipeCustoms.
 			}
 			if fi.Ignored {
 				continue
 			}
-			// When type info is available (packages-aware loader), resolve
-			// the field's go/types.Type and probe interface implementation
-			// statically. The generator uses these flags to emit hardcoded
-			// method calls instead of runtime probes.
+			// With type info, resolve the field's go/types.Type and probe
+			// interface impls statically for hardcoded method calls.
 			var fieldType types.Type
 			if s.typesInfo != nil {
 				if expr, ok := s.fieldExpr[name+"."+ident.Name]; ok {
@@ -1153,37 +1009,24 @@ func (s *structSet) extractStruct(name string, st *ast.StructType) (StructInfo, 
 					}
 				}
 			}
-			// Generic database/sql.Null[T] (Go 1.22): decode/encode the V slot
-			// like a bare field of type T. Needs go/types to resolve the inner
-			// type; the AST-only loader leaves primitives on the SQLNullSpec
-			// path (resolveKind already classified them) and custom inners on
-			// the encoding/json fallback.
+			// Generic sql.Null[T] (Go 1.22): treat the V slot as a bare T.
+			// Needs go/types; the AST-only loader keeps primitives on the
+			// SQLNullSpec path and custom inners on the encoding/json fallback.
 			if inner, imps, ok := s.sqlNullGenericInfo(name, fieldType, &fi); ok {
 				fi.Kind = KindSQLNull
 				fi.SQLNullInner = inner
 				fi.SQLNullImports = imps
 			}
-			// Resolve any `@Func` references in validation/mod tags.
-			// resolveCustomRules returns *richError with CodeSpan
-			// already set to the `@ref` token so the pretty renderer
-			// can point its caret at the offending tag substring.
-			// We prepend the Struct.Field qualifier to the existing
-			// Msg (instead of wrapping into a fresh richError) so
-			// CodeSpan / BotHint / UserHint survive.
-			if err := s.resolveCustomRules(name, &fi, fieldType); err != nil {
-				// resolveCustomRules may return an errors.Join batch
-				// of multiple richErrors (one per failed @-ref).
-				// Qualify EVERY sub-richError's Msg with the
-				// Struct.Field prefix — qualifying only the first
-				// would leave later messages naked.
+			// Resolve `@Func` references. Errors are richErrors with CodeSpan
+			// set; qualify every sub-error (a batch may hold several) with the
+			// Struct.Field prefix so CodeSpan/hints survive.
+			if err := s.resolvePipeCustoms(name, &fi, fieldType); err != nil {
 				qualified := qualifyRichErrors(err, fmt.Sprintf("%s.%s", name, ident.Name))
 				errs = append(errs, attachPosition(qualified, s.fileSet.Position(field.Pos())))
 				continue
 			}
-			// Only append a valid FieldInfo if extraction itself succeeded.
-			// When extractErr was set, the field had a parse-time problem
-			// (e.g. unknown rule) and the gen file shouldn't emit code
-			// for it.
+			// Append only on clean extraction — a parse-time problem means no
+			// code should be emitted for the field.
 			if extractErr == nil {
 				info.Fields = append(info.Fields, fi)
 			}
@@ -1237,31 +1080,11 @@ func extractField(structName, goName string, field *ast.Field) (FieldInfo, error
 		}
 		fi.OmitEmpty = opts.OmitEmpty
 		fi.OmitZero = opts.OmitZero
-		fi.NullZero = opts.NullZero
 		fi.String = opts.String
 		fi.Format = opts.Format
 		fi.Inline = opts.Inline
-		vt, err := parseValidationTagE(tag.Get("ggen"))
-		if err != nil {
-			return fi, fmt.Errorf("field %s: %w", goName, err)
-		}
-		fi.Validation = vt.Outer
-		fi.KeyValidation = vt.Keys
-		fi.HintLen = vt.HintLen
-		if len(vt.Levels) > 0 {
-			fi.ElemValidation = vt.Levels[0]
-		}
-		if len(vt.Levels) > 1 {
-			fi.InnerValidation = vt.Levels[1:]
-		}
-		mt := parseModTag(tag.Get("mod"))
-		fi.Mods = mt.Outer
-		fi.KeyMods = mt.Keys
-		if len(mt.Levels) > 0 {
-			fi.ElemMods = mt.Levels[0]
-		}
-		if len(mt.Levels) > 1 {
-			fi.InnerMods = mt.Levels[1:]
+		if err := applyPipeTags(&fi, tag, goName); err != nil {
+			return fi, err
 		}
 	}
 	if fi.JSONName == "" {
@@ -1271,7 +1094,7 @@ func extractField(structName, goName string, field *ast.Field) (FieldInfo, error
 	goType := exprToString(field.Type)
 	fi.GoType = goType
 
-	// Detect pointer wrapping: Kind/ElemType describe the pointee.
+	// Pointer wrapping: Kind/ElemType describe the pointee.
 	innerExpr := field.Type
 	if star, ok := innerExpr.(*ast.StarExpr); ok {
 		fi.Pointer = true
@@ -1299,15 +1122,10 @@ func extractField(structName, goName string, field *ast.Field) (FieldInfo, error
 		}
 	}
 
-	// `[]byte` / `[]uint8` were already classified as KindBytes by
-	// resolveKind — leave that alone so marshalling goes through the
-	// base64/hex/array format path rather than a generic slice writer.
-	// (array peel block below populates fi.ElemKind for slices/arrays;
-	// applicability check at the end of this function uses the final
-	// kind data.)
+	// `[]byte`/`[]uint8` stay KindBytes (resolveKind) so they take the
+	// base64/hex/array path, not the generic slice writer.
 	if arr, ok := innerExpr.(*ast.ArrayType); ok && fi.Kind != KindBytes {
 		// `[]*T` / `[N]*T`: unwrap the star so ElemType is the pointee.
-		// Decoders allocate a backing slab of T and take interior pointers.
 		elt := arr.Elt
 		if star, ok := elt.(*ast.StarExpr); ok {
 			fi.ElemPointer = true
@@ -1344,9 +1162,7 @@ func extractField(structName, goName string, field *ast.Field) (FieldInfo, error
 	return fi, nil
 }
 
-// arrayLenFromType pulls the N out of a "[N]T" Go type string. Returns 0
-// on parse failure (defensive; resolveKind only returns KindArray when the
-// prefix matches, so this should always succeed).
+// arrayLenFromType pulls N out of a "[N]T" type string, 0 on parse failure.
 func arrayLenFromType(typ string) int {
 	if len(typ) < 3 || typ[0] != '[' {
 		return 0
@@ -1450,9 +1266,8 @@ func resolveKind(goType string) TypeKind {
 	case "any", "interface{}":
 		return KindAny
 	default:
-		// sql.Null[T] (Go 1.22 generic form) with a supported inner kind.
-		// Unsupported inners fall through to KindStruct → encoding/json
-		// fallback, matching pre-generic behaviour.
+		// sql.Null[T] with a supported inner; unsupported inners fall through
+		// to KindStruct → encoding/json fallback.
 		if inner, ok := sqlNullGenericInner(goType); ok && isSupportedSQLNullInner(resolveKind(inner)) {
 			return KindSQLNull
 		}
@@ -1462,7 +1277,7 @@ func resolveKind(goType string) TypeKind {
 		if strings.HasPrefix(goType, "map[") {
 			return KindMap
 		}
-		// [N]T — fixed-length array (JSON tuple).
+		// [N]T — fixed-length array.
 		if len(goType) > 2 && goType[0] == '[' {
 			if end := strings.IndexByte(goType, ']'); end > 1 {
 				if _, err := strconv.Atoi(goType[1:end]); err == nil {
@@ -1485,12 +1300,9 @@ func sqlNullGenericInner(goType string) (string, bool) {
 	return inner, inner != ""
 }
 
-// isSupportedSQLNullInner reports whether kind k may sit inside a generic
-// sql.Null[T] on the AST-only (string-based) path. Mirrors the inner kinds the
-// SQLNullSpec primitive path handles; anything else degrades to the
-// encoding/json fallback there. The go/types path (sqlNullGenericInfo) is not
-// gated by this — it delegates to the full field emitters, so any inner T ggen
-// can render as a field works.
+// isSupportedSQLNullInner reports whether k may sit inside a generic sql.Null[T]
+// on the AST-only path (anything else degrades to encoding/json). The go/types
+// path (sqlNullGenericInfo) isn't gated by this — it handles any renderable T.
 func isSupportedSQLNullInner(k TypeKind) bool {
 	switch k {
 	case KindString, KindBool,
@@ -1510,13 +1322,10 @@ func isStdSQLNull(named *types.Named) bool {
 		obj.Pkg().Path() == "database/sql" && named.TypeArgs().Len() == 1
 }
 
-// sqlNullGenericInfo detects a generic database/sql.Null[T] field and builds
-// the synthetic FieldInfo describing the inner type T (resolved through the
-// same type-driven extractor used for embedded/foreign fields), plus the
-// foreign-package imports the emitted `sql.Null[T]{…}` / `var nv T` type
-// literals reference. Returns ok=false for any non-sql.Null type or when no
-// type info is available. parent supplies the field's JSON name for inner
-// error diagnostics.
+// sqlNullGenericInfo detects a generic sql.Null[T] field and builds the
+// synthetic FieldInfo for T (via extractFieldFromTypes) plus the foreign
+// imports the emitted type literals reference. ok=false for non-sql.Null or
+// without type info. parent supplies the JSON name for inner diagnostics.
 func (s *structSet) sqlNullGenericInfo(structName string, t types.Type, parent *FieldInfo) (*FieldInfo, []string, bool) {
 	named, ok := t.(*types.Named)
 	if !ok || !isStdSQLNull(named) {
@@ -1526,16 +1335,12 @@ func (s *structSet) sqlNullGenericInfo(structName string, t types.Type, parent *
 	innerVar := types.NewVar(token.NoPos, s.typesPkg, "V", innerType)
 	inner, err := s.extractFieldFromTypes(structName, innerVar, "")
 	if err != nil {
-		// Inner type ggen can't model as a field — leave the field on the
-		// fallback path (resolveKind already classified it).
-		return nil, nil, false
+		return nil, nil, false // unmodelable inner — stays on the fallback path
 	}
-	// extractFieldFromTypes peels a named type's underlying (e.g. uuid.UUID →
-	// [16]byte → KindArray, net.IP → []byte → KindSlice). The AST field path
-	// never does this — a named type stays KindStruct (routed through its
-	// Text/JSON marshaler) unless resolveKind recognizes the name (time.Time,
-	// net.IP, …). Mirror that: for a named inner, trust resolveKind on the
-	// type name and drop the spurious element data.
+	// extractFieldFromTypes peels a named type's underlying (uuid.UUID →
+	// [16]byte). The AST path keeps a named type as KindStruct unless
+	// resolveKind knows the name. Mirror that: trust resolveKind on the name
+	// and drop the spurious element data.
 	if _, isNamed := innerType.(*types.Named); isNamed {
 		inner.Kind = resolveKind(inner.GoType)
 		inner.ElemType, inner.ElemKind = "", 0
@@ -1545,10 +1350,8 @@ func (s *structSet) sqlNullGenericInfo(structName string, t types.Type, parent *
 	}
 	inner.JSONName = parent.JSONName
 
-	// extractFieldFromTypes qualifies foreign types with their full import
-	// PATH (types.RelativeTo), but generated code references them by package
-	// NAME. Rewrite path → name in the emitted type-literal strings and
-	// collect the imports.
+	// extractFieldFromTypes qualifies foreign types by import PATH, but
+	// generated code uses package NAME. Rewrite path → name and collect imports.
 	pkgs := map[string]string{} // import path → package name
 	s.collectTypeImports(innerType, pkgs)
 	fix := func(str string) string {

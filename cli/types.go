@@ -40,17 +40,19 @@ type ValidationRule struct {
 	Name  string // "required", "minlen", "maxlen", "gte", "lte", or "@FuncName" for user funcs
 	Value string // parameter value, e.g. "2" for minlen=2; empty for "required"
 
-	// Custom rule resolution (only populated when Name starts with "@"):
-	// the func is looked up via go/types at parse time and the call site is
-	// emitted directly — no runtime registry. PkgImport is empty for
-	// same-package funcs; otherwise it's the import path to add to the
-	// generated file. PkgName is the canonical package identifier the
-	// generated code uses to qualify the call (e.g. "thirdparty"); empty
-	// for same-package.
+	// Custom rule resolution (Name starts with "@"): looked up via go/types,
+	// emitted as a direct call. PkgImport/PkgName empty for same-package;
+	// otherwise the import path + qualifier the generated call uses.
 	Custom    bool
 	PkgImport string
 	PkgName   string
 	FuncName  string
+
+	// BoolForm marks a `func(T) bool` validator (vs `func(T) error`); a false
+	// return emits validation.PredicateError. Msg is the optional inline
+	// message (`@Even:'must be even'`), bool-form only.
+	BoolForm bool
+	Msg      string
 }
 
 // ModRule is an input-modification step applied after decoding but before
@@ -59,15 +61,19 @@ type ModRule struct {
 	Name  string // "trim", "lower", "upper", "trimleft", "trimright", "replace", or "@FuncName"
 	Value string // parameter (empty for trim/lower/upper)
 
-	// Custom mod resolution — same shape as ValidationRule's custom fields,
-	// plus Fallible: true when the func returns (T, error). When Fallible,
-	// the generator emits an error-propagation branch; the error surfaces as
-	// a parse error (not a validation error) — same level as scan.ErrBadX.
+	// Custom mod resolution — same shape as ValidationRule's, plus Fallible
+	// (func returns (T, error)/(T, bool)); a fallible error surfaces as a parse
+	// error, not a validation error.
 	Custom    bool
 	PkgImport string
 	PkgName   string
 	FuncName  string
-	Fallible  bool
+	Fallible  bool // returns a two-tuple (T, error) or (T, bool)
+
+	// BoolForm marks `func(T) (T, bool)` (vs the error form); a false return
+	// emits validation.ModError. Msg is the optional inline message, bool-form only.
+	BoolForm bool
+	Msg      string
 }
 
 type FieldInfo struct {
@@ -84,38 +90,46 @@ type FieldInfo struct {
 	Pointer         bool               // true when the field is *T; Kind describes the pointee
 	PointeeType     string             // for pointer fields: pointee Go type ("string", "Address")
 	Validation      []ValidationRule   // applies to the field (or whole slice)
-	ElemValidation  []ValidationRule   // level-1 dive: rules (per-element for slices, per-value for maps)
-	InnerValidation [][]ValidationRule // levels 2..N (one slice per extra `dive:`)
+	ElemValidation  []ValidationRule   // level-1 inner: rules (per-element for slices, per-value for maps)
+	InnerValidation [][]ValidationRule // levels 2..N (one slice per extra `inner:`)
 	KeyValidation   []ValidationRule   // rules after `keys:` — map keys only (always string)
 	Mods            []ModRule          // input transforms applied after decode
-	ElemMods        []ModRule          // level-1 dive: mods
+	ElemMods        []ModRule          // level-1 inner: mods
 	InnerMods       [][]ModRule        // levels 2..N
 	KeyMods         []ModRule          // `keys:` mods — map keys only
-	HintLen         int                // explicit preallocation hint for slices/maps; -1=unset (fall through to len/minlen/default), 0=user opt-out (no prealloc), N>0=use N as cap. Overrides len/minlen.
-	Iface           FieldInterfaces    // statically detected method-set membership (TextMarshaler, ByteDecoder, ...)
-	ElemIface       FieldInterfaces    // method-set probe on the slice/array/map element type (used by size estimators for struct elements)
-	OmitEmpty       bool
-	OmitZero        bool
-	NullZero        bool   // decode: accept an explicit JSON null on this (non-pointer) value field, setting it to its Go zero value instead of erroring. No-op on already-null-aware kinds (pointer/slice/map/[]byte/sql.Null*/raw/any)
-	String          bool   // marshal/unmarshal the field as a JSON-quoted string
-	Format          string // jsonv2 format flag ("RFC3339", "unix", "hex", ...)
-	Inline          bool   // catch-all map: absorbs unknown JSON keys on decode, splices entries on encode
-	MultiErr        bool   // propagated from parent struct: use errs collection
-	AllowDups       bool   // propagated from parent struct: skip duplicate-key guard
-	NoValidate      bool   // propagated from parent struct: skip validation + mods
-	UseNumber       bool   // propagated from parent struct: scan numbers into json.Number on KindAny fields
-	HTMLEscape      bool   // propagated from parent struct: HTML-safe escape <, >, & when emitting strings (default: literal, matches jsonv2)
-	Ignored         bool
 
-	// SQLNullInner, when non-nil, marks a generic database/sql.Null[T]
-	// field (Go 1.22). It is the synthetic FieldInfo describing the inner
-	// type T — the renderers decode/encode/size the V slot by delegating to
-	// the standard field emitters with this, so sql.Null[T] gets exactly the
-	// wire shape (and fast path) ggen would give a bare field of type T:
-	// "(T's wire) or null". The legacy named sql.NullX flavors keep the
-	// string-keyed SQLNullSpec path and leave this nil. SQLNullImports holds
-	// the foreign-package import paths the `sql.Null[T]{…}` / `var nv T` type
-	// literals reference (T's package and any nested ones).
+	// Unified ordered pipeline (the `pipe:` tag). Pipe/KeyPipe/Levels are the
+	// SOURCE OF TRUTH for value-stage emit order (mods + validators interleaved
+	// per level); the split buckets above are DERIVED for the order-independent
+	// consumers. Legacy ggen:/mod: translation yields [mods…, validators…].
+	Presence   Presence        // required / optional (lifted from the pipe)
+	Variants   []Variant       // decode stage; nil => implicit native decode of the field type
+	Pipe       []Step          // outer value steps (whole field / container, after decode)
+	KeyPipe    []Step          // map-key value steps
+	Levels     [][]Step        // dive levels: Levels[0] per-element, Levels[1] deeper, …
+	HintLen    int             // explicit preallocation hint for slices/maps; -1=unset (fall through to len/minlen/default), 0=user opt-out (no prealloc), N>0=use N as cap. Overrides len/minlen.
+	HintLevels []int           // per-dive prealloc hints from the `hint:` tag (entry -1 = unset); HintLevels[0] sizes the level-1 row, etc.
+	Iface      FieldInterfaces // statically detected method-set membership (TextMarshaler, ByteDecoder, ...)
+	ElemIface  FieldInterfaces // method-set probe on the slice/array/map element type (used by size estimators for struct elements)
+	OmitEmpty  bool
+	OmitZero   bool
+	NullZero   bool   // decode: accept an explicit JSON null on this (non-pointer) value field, setting it to its Go zero value instead of erroring. No-op on already-null-aware kinds (pointer/slice/map/[]byte/sql.Null*/raw/any)
+	String     bool   // marshal/unmarshal the field as a JSON-quoted string
+	Format     string // jsonv2 format flag ("RFC3339", "unix", "hex", ...)
+	Inline     bool   // catch-all map: absorbs unknown JSON keys on decode, splices entries on encode
+	MultiErr   bool   // propagated from parent struct: use errs collection
+	AllowDups  bool   // propagated from parent struct: skip duplicate-key guard
+	NoValidate bool   // propagated from parent struct: skip validation + mods
+	UseNumber  bool   // propagated from parent struct: scan numbers into json.Number on KindAny fields
+	HTMLEscape bool   // propagated from parent struct: HTML-safe escape <, >, & when emitting strings (default: literal, matches jsonv2)
+	Ignored    bool
+
+	// SQLNullInner, when non-nil, marks a generic database/sql.Null[T] (Go
+	// 1.22): the synthetic FieldInfo for T. Renderers delegate the V slot to
+	// the standard emitters with it, so sql.Null[T] gets the bare-T wire shape
+	// ("T's wire or null"). Named sql.NullX flavors keep the SQLNullSpec path
+	// (this stays nil). SQLNullImports holds the foreign imports the emitted
+	// type literals reference.
 	SQLNullInner   *FieldInfo
 	SQLNullImports []string
 
@@ -141,33 +155,22 @@ type StructInfo struct {
 	HTMLEscape    bool   // HTML-safe escape <, >, & in emitted strings (default: literal, matches jsonv2)
 	Test          bool   // declared in a *_test.go file — route output to *_ggen_test.go
 
-	// IsAlias marks a top-level named type that aliases a primitive or
-	// (with type info) a struct, e.g. `type HtmlString string`,
-	// `type Count int`, `type LocalUUID uuid.UUID`. Aliases generate the
-	// same method surface as structs (DecodeFrom / DecodeFromStream /
-	// JSONSize / AppendJSON) but the bodies are specialized:
-	//
-	//   - Primitive alias: AliasKind ∈ {KindString, KindBool, KindIntN,
-	//     KindUintN, KindFloatN}; AliasUnderlying is the basic type name
-	//     ("string", "int64", …). Bodies read/write the primitive and
-	//     cast.
-	//   - Struct alias: AliasKind == KindStruct. If the underlying type
-	//     implements one of the standard marshal/unmarshal interfaces,
-	//     AliasIface flags that. Codegen prefers method delegation
-	//     (cast → underlying.Method() → cast back) over field-level
-	//     introspection.
+	// IsAlias marks a top-level named type aliasing a primitive or struct
+	// (`type Count int`, `type LocalUUID uuid.UUID`). Aliases get the same
+	// method surface as structs with specialized bodies:
+	//   - Primitive: AliasKind is a primitive kind, AliasUnderlying the basic
+	//     type name; bodies read/write the primitive and cast.
+	//   - Struct: AliasKind == KindStruct; AliasIface flags marshal/unmarshal
+	//     support and codegen prefers method delegation over introspection.
 	IsAlias               bool
 	AliasKind             TypeKind
 	AliasUnderlying       string          // Go type literal for the underlying (e.g. "string", "uuid.UUID")
 	AliasUnderlyingImport string          // import path when the underlying is from a foreign package; "" for same-pkg / stdlib basic types
 	AliasIface            FieldInterfaces // method-set probe on the underlying struct (KindStruct aliases only)
 
-	// AliasField captures the container shape for slice/map/array
-	// aliases (`type Tags []string`, `type Lookup map[string]int`,
-	// `type Tuple [3]int`). Only the Kind / ElemType / ElemKind /
-	// ArrayLen / ElemPointer fields matter; the rest of FieldInfo is
-	// inert. Codegen reuses the existing slice/map/array emitters by
-	// passing this synthetic FieldInfo with `result` as ref.
+	// AliasField captures the container shape for slice/map/array aliases
+	// (`type Tags []string`, `type Tuple [3]int`). Only Kind/ElemType/ElemKind/
+	// ArrayLen/ElemPointer matter; codegen feeds it to the container emitters.
 	AliasField FieldInfo
 }
 
@@ -201,8 +204,8 @@ func SQLNullSpec(goType string) (SQLNullKind, bool) {
 	case "sql.NullTime":
 		return SQLNullKind{Field: "Time", Inner: KindTime, Type: "time.Time"}, true
 	}
-	// Generic sql.Null[T] (Go 1.22): the inner field is always V; resolve the
-	// inner kind from the instantiation. Gated to inners the renderers handle.
+	// Generic sql.Null[T] (Go 1.22): inner field is always V. Gated to inners
+	// the renderers handle.
 	if inner, ok := sqlNullGenericInner(goType); ok {
 		if k := resolveKind(inner); isSupportedSQLNullInner(k) {
 			return SQLNullKind{Field: "V", Inner: k, Type: inner}, true
@@ -217,13 +220,10 @@ func SQLNullSpec(goType string) (SQLNullKind, bool) {
 // (for cross-package / unannotated types).
 var generatedTypes map[string]struct{}
 
-// generatedAliasKinds maps each primitive-aliased type in the current
-// generation pass to the kind of its underlying (e.g. "AliasString" →
-// KindString, "Count" → KindInt). Lets the field-level codegen detect
-// when a field's declared type is an aliased primitive so it can cast
-// through the underlying for stdlib calls (strings.TrimSpace, etc.).
-// Only populated for IsAlias && primitive-kind aliases; struct/container
-// aliases are absent (their kind isn't a single primitive token).
+// generatedAliasKinds maps each primitive-aliased type in the pass to its
+// underlying kind ("Count" → KindInt), so field codegen can cast through the
+// underlying for stdlib calls. Only primitive-kind aliases; struct/container
+// aliases are absent.
 var generatedAliasKinds map[string]TypeKind
 
 // isGenerated reports whether name is a struct in the current generation pass.
@@ -234,6 +234,9 @@ func isGenerated(name string) bool {
 }
 
 func (f FieldInfo) IsRequired() bool {
+	if f.Presence == PresenceRequired {
+		return true
+	}
 	for _, v := range f.Validation {
 		if v.Name == "required" {
 			return true

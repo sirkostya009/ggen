@@ -8,27 +8,22 @@ import (
 	"testing"
 )
 
-// DiveStruct exercises per-element (dive) validation, rune-counting length
-// checks (multi-byte Unicode aware), and a user-defined custom validator
-// resolved at codegen time via the `@Func` syntax.
+// DiveStruct exercises inner: per-element validation, rune-count length
+// checks, and a custom @Func validator resolved at codegen time.
 //
 //ggen:generate
 type DiveStruct struct {
-	// Tags: slice length 1..3, each element 2..10 runes (not bytes).
-	Tags []string `json:"tags" ggen:"minlen=1,maxlen=3,dive:minrunes=2,maxrunes=10"`
-	// Title: rune-count bounds so "héllo" (5 runes, 6 bytes) is accepted.
-	Title string `json:"title" ggen:"minrunes=1,maxrunes=5"`
-	// Scores: each score must be 0..100 inclusive.
-	Scores []int `json:"scores" ggen:"dive:gte=0,lte=100"`
-	// Count: custom validator resolved statically — `@EvenOnly` looks up
-	// the EvenOnly function in this package at parse time, validates the
-	// signature is `func(int) error`, and emits a direct call.
-	Count int `json:"count" ggen:"@EvenOnly"`
+	// slice length 1..3, each element 2..10 runes
+	Tags []string `json:"tags" pipe:"minlen=1 maxlen=3 inner:(minrunes=2 maxrunes=10)"`
+	// rune bounds so "héllo" (5 runes, 6 bytes) passes
+	Title string `json:"title" pipe:"minrunes=1 maxrunes=5"`
+	// each score 0..100
+	Scores []int `json:"scores" pipe:"inner:(gte=0 lte=100)"`
+	// @EvenOnly resolved statically against this package
+	Count int `json:"count" pipe:"@EvenOnly"`
 }
 
-// EvenOnly is the custom validator referenced by DiveStruct.Count via
-// `ggen:"@EvenOnly"`. The generator resolves the symbol at codegen time
-// (no runtime registry) and checks the signature against the field type.
+// EvenOnly is the custom validator for DiveStruct.Count.
 func EvenOnly(n int) error {
 	if n%2 != 0 {
 		return fmt.Errorf("%d is not even", n)
@@ -100,23 +95,20 @@ func TestTags_sliceLengthVsElement(t *testing.T) {
 	}
 }
 
-// CustomDiveStruct exercises `@Func` resolution at the four
-// container-aware sites: slice element (`dive:`) for validators and
-// mods, and map key (`keys:`) for validators and mods. Plus a pointer
-// field where the func must accept `*T`. Each rule references a
-// dedicated function below so a missed call site shows up as test
-// failure rather than silent codegen drift.
+// CustomDiveStruct exercises @Func resolution at the container-aware sites:
+// slice element (inner:) and map key (keys:) for both validators and mods,
+// plus a pointer field where the func must accept *T.
 //
 //ggen:generate
 type CustomDiveStruct struct {
-	Tags   []string       `json:"tags" ggen:"dive:@NotBlank"`
-	Trim   []string       `json:"trim" mod:"dive:@TrimSpace"`
-	Lookup map[string]int `json:"lookup" ggen:"keys:@KeyShape"`
-	Mixed  map[string]int `json:"mixed" mod:"keys:@LowerKey"`
-	Ptr    *int           `json:"ptr" ggen:"@PointerCheck"`
+	Tags   []string       `json:"tags" pipe:"inner:@NotBlank"`
+	Trim   []string       `json:"trim" pipe:"inner:@TrimSpace"`
+	Lookup map[string]int `json:"lookup" pipe:"keys:@KeyShape"`
+	Mixed  map[string]int `json:"mixed" pipe:"keys:@LowerKey"`
+	Ptr    *int           `json:"ptr" pipe:"@PointerCheck"`
 }
 
-// NotBlank is invoked once per slice element via `dive:@NotBlank`.
+// NotBlank is invoked once per slice element via `inner:@NotBlank`.
 func NotBlank(s string) error {
 	if strings.TrimSpace(s) == "" {
 		return fmt.Errorf("blank element")
@@ -140,8 +132,7 @@ func KeyShape(s string) error {
 // LowerKey is a pure mod called per map key before insertion.
 func LowerKey(s string) string { return strings.ToLower(s) }
 
-// PointerCheck verifies that pointer fields receive `*T`, not `T`.
-// nil-handling lives in the user's func by design.
+// PointerCheck verifies a pointer field passes *T, not T.
 func PointerCheck(p *int) error {
 	if p != nil && *p < 0 {
 		return fmt.Errorf("negative")
@@ -149,8 +140,7 @@ func PointerCheck(p *int) error {
 	return nil
 }
 
-// TestCustomDive_sliceValidator: `dive:@NotBlank` rejects a blank
-// element. Locks down the per-element call site for slices.
+// inner:@NotBlank rejects a blank slice element.
 func TestCustomDive_sliceValidator(t *testing.T) {
 	in := []byte(`{"tags":["ok","   "],"trim":[],"lookup":{},"mixed":{},"ptr":null}`)
 	_, _, err := (CustomDiveStruct{}).DecodeFrom(in)
@@ -162,8 +152,7 @@ func TestCustomDive_sliceValidator(t *testing.T) {
 	}
 }
 
-// TestCustomDive_sliceMod: `dive:@TrimSpace` runs on each element
-// (visible because the trimmed result differs from the input).
+// inner:@TrimSpace runs on each slice element.
 func TestCustomDive_sliceMod(t *testing.T) {
 	in := []byte(`{"tags":["ok"],"trim":["  hi  ","  bye"],"lookup":{},"mixed":{},"ptr":null}`)
 	got, _, err := (CustomDiveStruct{}).DecodeFrom(in)
@@ -178,9 +167,7 @@ func TestCustomDive_sliceMod(t *testing.T) {
 	}
 }
 
-// TestCustomDive_keysValidator: `keys:@KeyShape` rejects a key that
-// fails the alphanumeric-lower predicate. Locks down the per-key
-// call site for maps.
+// keys:@KeyShape rejects a key failing the predicate.
 func TestCustomDive_keysValidator(t *testing.T) {
 	in := []byte(`{"tags":["ok"],"trim":[],"lookup":{"BAD!":1},"mixed":{},"ptr":null}`)
 	_, _, err := (CustomDiveStruct{}).DecodeFrom(in)
@@ -192,9 +179,7 @@ func TestCustomDive_keysValidator(t *testing.T) {
 	}
 }
 
-// TestCustomDive_keysMod: `mod:"keys:@LowerKey"` lowercases each key on
-// the way in. Verifies the mod runs before insertion (output map has
-// lowered keys).
+// keys:@LowerKey lowercases each key before insertion.
 func TestCustomDive_keysMod(t *testing.T) {
 	in := []byte(`{"tags":["ok"],"trim":[],"lookup":{},"mixed":{"FOO":1,"Bar":2},"ptr":null}`)
 	got, _, err := (CustomDiveStruct{}).DecodeFrom(in)
@@ -209,9 +194,7 @@ func TestCustomDive_keysMod(t *testing.T) {
 	}
 }
 
-// TestCustomDive_pointerField: `@PointerCheck` is `func(*int) error`,
-// proving the resolver respects "exact field type" for pointer
-// fields (the spec says `*T` field → mod takes `*T`).
+// @PointerCheck is func(*int) error — resolver respects the exact *T type.
 func TestCustomDive_pointerField(t *testing.T) {
 	// Negative value rejected.
 	bad := []byte(`{"tags":["ok"],"trim":[],"lookup":{},"mixed":{},"ptr":-5}`)

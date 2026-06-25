@@ -12,32 +12,26 @@ import (
 )
 
 // AppendAny marshals an `any` value into dst as JSON, type-switching on
-// the runtime value to avoid the reflection cliff for the common cases
-// (`nil`, primitives, `[]any`, `map[string]any`, `json.Number`). Then
-// dispatches via well-known interfaces (Marshaler, json.Marshaler,
-// TextAppender, TextMarshaler) before reflecting through slices,
-// arrays, maps, pointers, and structs. Last resort is
-// `encoding/json.Marshal`.
+// the runtime value to avoid the reflection cliff for the common cases,
+// then dispatching via well-known interfaces before reflecting. Last
+// resort is `encoding/json.Marshal`.
 //
 // Struct fields honor `json:"name,omitempty,omitzero,string,inline"`
-// tags. Anonymous (embedded) struct fields are promoted at parent level
-// per stdlib semantics.
+// tags; anonymous embedded fields are promoted at parent level.
 //
-// String escaping follows the package default (jsonv2 shape — <, >, &
-// literal), matching sibling generated string fields. AppendAnyHTML is
-// the HTML-safe variant for `htmlescape` structs.
+// String escaping is the package default (jsonv2 shape — <, >, & literal);
+// AppendAnyHTML is the HTML-safe variant for `htmlescape` structs.
 func AppendAny(dst []byte, v any) ([]byte, error) {
 	return appendAny(dst, v, AppendStringNoHTML)
 }
 
 // AppendAnyHTML is AppendAny with HTML-safe string escaping (<, >, & →
-// \uXXXX, stdlib v1 shape). Generated code routes `any` fields here when
-// the struct opts in via `htmlescape` / `-htmlescape`.
+// \uXXXX, stdlib v1 shape), used by `htmlescape` structs.
 func AppendAnyHTML(dst []byte, v any) ([]byte, error) {
 	return appendAny(dst, v, AppendString)
 }
 
-// escapeFn is AppendString or AppendStringNoHTML, threaded through the
+// escapeFn (AppendString or AppendStringNoHTML) is threaded through the
 // whole any-walk so nested strings and map keys escape consistently.
 type escapeFn = func([]byte, string) []byte
 
@@ -78,10 +72,7 @@ func appendAny(dst []byte, v any, esc escapeFn) ([]byte, error) {
 		// Already a valid JSON numeric literal — emit unquoted.
 		return append(dst, x...), nil
 	// Concrete container types — type-assert before reflect to avoid the
-	// reflect.MapIter / Value boxing that allocates per entry. These
-	// shapes (`[]any`, `map[string]any`, plus string→string and []string
-	// which are common metadata-bag shapes) dominate the alloc count
-	// when an `any` field holds a nested collection.
+	// per-entry reflect.MapIter / Value boxing.
 	case []any:
 		dst = append(dst, '[')
 		for i, e := range x {
@@ -105,10 +96,7 @@ func appendAny(dst []byte, v any, esc escapeFn) ([]byte, error) {
 			dst = esc(dst, s)
 		}
 		return append(dst, ']'), nil
-	// Homogeneous primitive slices. The reflect.Slice path would box
-	// the element type for every iteration via reflect.Value; native
-	// range over the typed slice is one strconv call per element with
-	// no per-element alloc.
+	// Homogeneous primitive slices — native range, no per-element alloc.
 	case []int:
 		return appendSliceInt(dst, x), nil
 	case []int8:
@@ -121,8 +109,8 @@ func appendAny(dst []byte, v any, esc escapeFn) ([]byte, error) {
 		return appendSliceInt(dst, x), nil
 	case []uint:
 		return appendSliceUint(dst, x), nil
-	// Skip `case []uint8`: that's `[]byte`, which routes through the
-	// base64 path in reflect.Slice further down — keep the wire shape.
+	// No `case []uint8`: that's `[]byte`, routed through the base64
+	// reflect.Slice path below.
 	case []uint16:
 		return appendSliceUint(dst, x), nil
 	case []uint32:
@@ -161,19 +149,14 @@ func appendAny(dst []byte, v any, esc escapeFn) ([]byte, error) {
 				dst = append(dst, ',')
 			}
 			first = false
-			// AppendString writes <body>"<closing-quote> — caller writes
-			// the opening `"`. So key emits as `"k"` then we append
-			// `:"` to start the value, AppendString closes value with `"`.
+			// esc writes body + closing `"`; caller writes the opening `"`.
 			dst = append(dst, '"')
 			dst = esc(dst, k)
 			dst = append(dst, ':', '"')
 			dst = esc(dst, val)
 		}
 		return append(dst, '}'), nil
-	// Homogeneous primitive maps. Same rationale as the typed-slice
-	// cases above: reflect.MapIter on a map[string]V allocates per
-	// iteration in practice (key+value boxing, even when V is a
-	// primitive); native range yields zero-alloc per entry.
+	// Homogeneous primitive maps — native range, zero-alloc per entry.
 	case map[string]int:
 		return appendMapInt(dst, x, esc), nil
 	case map[string]int8:
@@ -200,31 +183,23 @@ func appendAny(dst []byte, v any, esc escapeFn) ([]byte, error) {
 		return appendMapFloat(dst, x, 64, esc)
 	case map[string]bool:
 		return appendMapBool(dst, x, esc), nil
-	// Pre-empt the json.Marshaler / TextAppender interface dispatches
-	// for two common stdlib types. Both implement json.Marshaler so
-	// they'd otherwise hit `case json.Marshaler` and pay the
-	// `MarshalJSON() ([]byte, error)` alloc; the concrete cases write
-	// straight into dst with no intermediate buffer.
+	// Concrete stdlib cases sit before the json.Marshaler dispatch so
+	// they skip its return-alloc and write straight into dst.
 	case json.RawMessage:
-		// json.RawMessage is `type RawMessage []byte`. Nil / empty
-		// becomes `null` (matches encoding/json v1 behavior); otherwise
-		// the bytes are assumed valid JSON and pass through verbatim.
+		// Nil/empty → null (v1 parity); else assumed-valid JSON verbatim.
 		if len(x) == 0 {
 			return append(dst, 'n', 'u', 'l', 'l'), nil
 		}
 		return append(dst, x...), nil
 	case time.Time:
-		// Use AppendText (Go 1.24+ TextAppender) — same RFC3339Nano
-		// wire shape as MarshalJSON, no intermediate alloc.
 		return appendTime(dst, x)
 	case *time.Time:
 		if x == nil {
 			return append(dst, 'n', 'u', 'l', 'l'), nil
 		}
 		return appendTime(dst, *x)
-	// Pointer-to-primitive shortcuts. The reflect.Pointer path below
-	// derefs via rv.Elem().Interface() which boxes the pointee — one
-	// alloc per pointer dispatch. Concrete cases skip that. nil → null.
+	// Pointer-to-primitive shortcuts — skip the reflect.Pointer deref's
+	// boxing alloc. nil → null.
 	case *string:
 		if x == nil {
 			return append(dst, 'n', 'u', 'l', 'l'), nil
@@ -266,13 +241,10 @@ func appendAny(dst []byte, v any, esc escapeFn) ([]byte, error) {
 			return append(dst, 'n', 'u', 'l', 'l'), nil
 		}
 		return AppendFloat(dst, *x, 64)
-	// Interfaces, in cross-pkg-dispatch priority order. Text encoders
-	// outrank json.Marshaler so types that implement both route via
-	// AppendText (zero alloc, writes straight into dst) instead of
-	// paying the `MarshalJSON() ([]byte, error)` heap alloc. Types
-	// whose MarshalJSON shape differs from `"<AppendText body>"`
-	// must be pre-empted with a concrete case above this block (see
-	// `case time.Time:`).
+	// Interface dispatch, priority order. Text encoders outrank
+	// json.Marshaler (zero/one alloc vs MarshalJSON's return alloc); a
+	// type whose MarshalJSON shape differs from `"<AppendText body>"`
+	// needs a concrete case above (see `case time.Time:`).
 	case Marshaler:
 		return x.AppendJSON(dst)
 	case encoding.TextAppender:
@@ -298,10 +270,8 @@ func appendAny(dst []byte, v any, esc escapeFn) ([]byte, error) {
 		}
 		return append(dst, b...), nil
 	}
-	// Reflection-driven path for slices, arrays, maps, pointers, and
-	// structs. Recursing through AppendAny on each element keeps nested
-	// ggen Marshalers, TextAppenders, etc. on their fast path instead of
-	// dropping into json.Marshal's reflection.
+	// Reflection path. Recursing through AppendAny per element keeps
+	// nested ggen Marshalers / TextAppenders on their fast path.
 	rv := reflect.ValueOf(v)
 	switch rv.Kind() {
 	case reflect.Pointer, reflect.Interface:
@@ -309,9 +279,8 @@ func appendAny(dst []byte, v any, esc escapeFn) ([]byte, error) {
 			return append(dst, 'n', 'u', 'l', 'l'), nil
 		}
 		return appendAny(dst, rv.Elem().Interface(), esc)
-	// Named primitives (`type MyEnum int`, `type ID string`, etc.) — the
-	// type switch above only matches predeclared types exactly, so these
-	// cases catch the named-alias variants.
+	// Named primitives (`type MyEnum int`, …) — the type switch matches
+	// only predeclared types exactly, so named variants land here.
 	case reflect.Bool:
 		return strconv.AppendBool(dst, rv.Bool()), nil
 	case reflect.String:
@@ -328,8 +297,8 @@ func appendAny(dst []byte, v any, esc escapeFn) ([]byte, error) {
 	case reflect.Struct:
 		return appendStruct(dst, rv, esc)
 	case reflect.Slice, reflect.Array:
-		// `[]T` where T's underlying kind is uint8 also routes through
-		// base64 — matches stdlib (e.g. `type Bytes []byte`).
+		// uint8-elem slices/arrays go base64 (stdlib parity, e.g. `type
+		// Bytes []byte`).
 		if rv.Type().Elem().Kind() == reflect.Uint8 {
 			dst = append(dst, '"')
 			if rv.Kind() == reflect.Array {
@@ -379,9 +348,9 @@ func appendAny(dst []byte, v any, esc escapeFn) ([]byte, error) {
 	return dst, &json.UnsupportedTypeError{Type: rv.Type()}
 }
 
-// Primitive slice/map fast-path helpers, parameterized by element type
-// so all int / uint / float sizes share one body. Reached from the
-// concrete-type cases in AppendAny — never via reflect.
+// Primitive slice/map fast-path helpers, generic over element type so
+// all int / uint / float sizes share one body. Reached only from the
+// concrete-type cases in AppendAny.
 
 func appendSliceInt[V int | int8 | int16 | int32 | int64](dst []byte, s []V) []byte {
 	dst = append(dst, '[')
@@ -522,16 +491,10 @@ func appendPtrUint[V uint | uint8 | uint16 | uint32 | uint64](dst []byte, p *V) 
 	return strconv.AppendUint(dst, uint64(*p), 10)
 }
 
-// appendReflectValue emits rv to dst when the value's Kind is already
-// known to the caller. Fast-paths primitive kinds (string/bool/numeric)
-// by reading directly from the reflect.Value without going through the
-// interface-boxing detour `rv.Interface()` would take — `reflect.Value
-// .Interface()` allocates a fresh interface header for every value,
-// which is the dominant alloc cost when iterating string→string maps,
-// []int slices, etc.
-//
-// Non-primitive kinds fall back to AppendAny via the Interface() path —
-// they need full dispatch (Marshaler / TextAppender / nested any).
+// appendReflectValue emits rv to dst when its Kind is already known.
+// Primitive kinds read straight off the reflect.Value, skipping the
+// per-value interface alloc rv.Interface() costs. Non-primitive kinds
+// fall back to AppendAny via Interface() for full dispatch.
 func appendReflectValue(dst []byte, rv reflect.Value, kind reflect.Kind, esc escapeFn) ([]byte, error) {
 	switch kind {
 	case reflect.String:

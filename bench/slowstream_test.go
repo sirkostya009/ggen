@@ -18,9 +18,7 @@ import (
 )
 
 // slowPayload — a few-dozen-KiB Node tree, separate from MegaPayload so the
-// per-iteration I/O cost stays tractable. Built once at package init with
-// a fixed seed for reproducibility. Shape matches a real-world small API
-// response (a handful of children, a couple of refs, ~20 props/tags).
+// per-iteration I/O cost stays tractable. Built once at init with a fixed seed.
 var slowPayload []byte
 
 func init() {
@@ -33,15 +31,10 @@ func init() {
 	slowPayload = out
 }
 
-// slowReader wraps a []byte and serves it with a chunk size + per-Read
-// delay that interpolate linearly from a slow start to a fast steady
-// state. Models a connection warming up: large initial latency drops to
-// near-zero by the end of the response.
-//
-// Defaults below: read 1 starts at (1500 bytes, 52 ms); after
-// rampReads, the reader settles at (800 bytes, 1.2 ms). Latency
-// uses geometric decay (>>2 per read) so the floor is hit in
-// ~4 reads — models a connection that warms up fast.
+// slowReader serves a []byte with a chunk size + per-Read delay that ramp
+// from a slow start to a fast steady state — models a connection warming up.
+// Defaults: read 1 at (1500 bytes, 52 ms), settling to (800 bytes, 1.2 ms);
+// latency decays geometrically (>>2 per read), hitting the floor in ~4 reads.
 type slowReader struct {
 	data       []byte
 	pos        int
@@ -74,15 +67,12 @@ func (s *slowReader) Read(p []byte) (int, error) {
 		return 0, io.EOF
 	}
 	t := min(s.reads, s.rampReads)
-	// Chunk size: linear interp, t==0 → startChunk, t==rampReads → endChunk.
+	// Chunk size: linear interp from startChunk to endChunk over rampReads.
 	chunk := s.startChunk + (s.endChunk-s.startChunk)*t/s.rampReads
-	// Delay: geometric decay — each read shaves the remaining
-	// (current - endDelay) gap by 75%, so the latency collapses to
-	// the floor in about 4–5 reads. Models a connection that feels
-	// awful for the first packet or two and then settles fast.
+	// Delay: geometric decay — each read shaves the remaining gap by 75%.
 	extra := s.startDelay - s.endDelay
 	for range s.reads {
-		extra = extra >> 2 // multiply by 0.25
+		extra = extra >> 2 // ×0.25
 	}
 	delay := s.endDelay + extra
 	time.Sleep(delay)
@@ -99,10 +89,8 @@ func (s *slowReader) Read(p []byte) (int, error) {
 	return n, nil
 }
 
-// slowState carries per-goroutine reader + decode buffer. Each parallel
-// worker gets its own slowReader so the time.Sleep stays per-goroutine
-// (under -cpu=N, N concurrent slow connections in parallel) and the
-// Stream alias buffer doesn't race across workers.
+// slowState carries per-goroutine reader + decode buffer, so the Sleep stays
+// per-goroutine and the Stream alias buffer doesn't race across workers.
 type slowState struct {
 	r   *slowReader
 	buf []byte

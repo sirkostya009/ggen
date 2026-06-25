@@ -12,8 +12,7 @@ import (
 	"github.com/sirkostya009/ggen/scan"
 )
 
-// IgnoreUnknownStruct tests that `//ggen:generate ignoreunknown` suppresses
-// the default UnknownKey validation error and silently skips extra JSON keys.
+// IgnoreUnknownStruct: ignoreunknown silently skips extra JSON keys.
 //
 //ggen:generate ignoreunknown
 type IgnoreUnknownStruct struct {
@@ -79,7 +78,6 @@ func TestRead_unknownFields_errorByDefault(t *testing.T) {
 }
 
 func TestRead_unknownFields_ignoreOptIn(t *testing.T) {
-	// IgnoreUnknownStruct has `//ggen:generate ignoreunknown` — extras silently skipped.
 	input := []byte(`{"name":"alice","extra":42,"also":"ignored"}`)
 	got, _, err := IgnoreUnknownStruct{}.DecodeFrom(input)
 	if err != nil {
@@ -91,7 +89,6 @@ func TestRead_unknownFields_ignoreOptIn(t *testing.T) {
 }
 
 func TestRead_wrongType(t *testing.T) {
-	// street is a string; integer should error.
 	input := `{"street":123,"city":"c","zipCode":"12345"}`
 	_, _, err := Address{}.DecodeFrom([]byte(input))
 	if err == nil {
@@ -109,9 +106,8 @@ func TestRead_notObject(t *testing.T) {
 	}
 }
 
-// TestRead_parseErrorTopLevel: malformed JSON at the top of a struct surfaces
-// a *decode.ParseError carrying the underlying scan sentinel (errors.Is
-// keeps working) but no Field path.
+// TestRead_parseErrorTopLevel: top-level malformed JSON gives a *ParseError
+// carrying the scan sentinel (errors.Is works) but no Field path.
 func TestRead_parseErrorTopLevel(t *testing.T) {
 	_, _, err := (Address{}).DecodeFrom([]byte(`not-an-object`))
 	if err == nil {
@@ -129,8 +125,8 @@ func TestRead_parseErrorTopLevel(t *testing.T) {
 	}
 }
 
-// TestRead_parseErrorFieldName: wrong field type populates ParseError.Field
-// with the JSON key that was being decoded.
+// TestRead_parseErrorFieldName: wrong field type populates the ParseError path
+// with the failing JSON key.
 func TestRead_parseErrorFieldName(t *testing.T) {
 	_, _, err := (Address{}).DecodeFrom([]byte(`{"street":123,"city":"C","zipCode":"12345"}`))
 	if err == nil {
@@ -148,8 +144,8 @@ func TestRead_parseErrorFieldName(t *testing.T) {
 	}
 }
 
-// TestRead_validationNotWrapped: validation.* errors must remain typed and
-// reachable via errors.As without traversing a ParseError.
+// TestRead_validationNotWrapped: validation.* errors stay typed, not wrapped
+// in a ParseError.
 func TestRead_validationNotWrapped(t *testing.T) {
 	_, _, err := (Address{}).DecodeFrom([]byte(`{"street":"","city":"C","zipCode":"12345"}`))
 	if err == nil {

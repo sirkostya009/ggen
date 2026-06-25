@@ -38,8 +38,7 @@ func IsASCII(s string) bool {
 	return true
 }
 
-// IsPrintable reports whether every byte in s is a printable ASCII
-// character (>= 0x20 and not DEL).
+// IsPrintable reports whether every byte in s is printable ASCII (>= 0x20, not DEL).
 func IsPrintable(s string) bool {
 	for i := 0; i < len(s); i++ {
 		c := s[i]

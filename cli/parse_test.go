@@ -8,12 +8,8 @@ import (
 	"testing"
 )
 
-// generate is a test-only convenience over generateTo: it materializes
-// the output into a returned []byte. Production code paths in main.go
-// (generateDir / generateSingleFile) call generateTo directly against
-// the destination *os.File so there is no intermediate copy. Tests and
-// benchmarks need the bytes in memory to assert on or roundtrip, so the
-// helper lives here and stays out of release binaries.
+// generate is a test-only convenience over generateTo that returns the
+// output as a []byte for in-memory assertions.
 func generate(pkg string, structs []StructInfo) ([]byte, error) {
 	var buf bytes.Buffer
 	if err := generateTo(&buf, pkg, structs); err != nil {
@@ -36,8 +32,8 @@ func TestParseFile(t *testing.T) {
 	src := `package test
 
 type Foo struct {
-	Name    string  ` + "`" + `json:"name" ggen:"required,minlen=1"` + "`" + `
-	Age     int     ` + "`" + `json:"age" ggen:"gte=0,lte=150"` + "`" + `
+	Name    string  ` + "`" + `json:"name" pipe:"required minlen=1"` + "`" + `
+	Age     int     ` + "`" + `json:"age" pipe:"gte=0 lte=150"` + "`" + `
 	Ignored string  ` + "`" + `json:"-"` + "`" + `
 	Items   []string ` + "`" + `json:"items"` + "`" + `
 }
@@ -116,12 +112,8 @@ type Unrelated struct {
 	}
 }
 
-// parseFile in single-file mode requires either a //ggen:generate
-// annotation OR an explicit struct-name filter. Calling with neither
-// must surface a helpful diagnostic instead of silently emitting code
-// for every exported struct (the old behaviour was a footgun: scratch
-// files with a stale ggen: tag would unintentionally trip the
-// applicability check on an unrelated struct).
+// Single-file mode with neither a //ggen:generate annotation nor an explicit
+// name filter must error, not emit code for every exported struct.
 func TestParseFile_noAnnotationNoFilter_Errors(t *testing.T) {
 	src := `package test
 type A struct { X int ` + "`" + `json:"x"` + "`" + ` }
@@ -139,8 +131,7 @@ type B struct { Y int ` + "`" + `json:"y"` + "`" + ` }
 	}
 }
 
-// Explicit name filter still works without any //ggen:generate
-// annotation — opt-in via positional args remains the escape hatch.
+// An explicit name filter works without any //ggen:generate annotation.
 func TestParseFile_explicitNamesOverrideMissingAnnotation(t *testing.T) {
 	src := `package test
 type A struct { X int ` + "`" + `json:"x"` + "`" + ` }
@@ -421,13 +412,11 @@ type Msg struct {
 	}
 }
 
-// TestSQLNullGeneric covers the STRING-based path (resolveKind + SQLNullSpec)
-// for the Go 1.22 generic sql.Null[T] form — the classification the AST-only
-// loader uses when no go/types info is available. Built-in primitive inners
-// classify as KindSQLNull with the V field. Non-primitive inners return false
-// here (so the AST path leaves them on the encoding/json fallback); the
-// go/types path (sqlNullGenericInfo) instead delegates to the field emitters
-// and supports arbitrary inner T — exercised end-to-end in integrationtests.
+// TestSQLNullGeneric covers the string-based path (resolveKind + SQLNullSpec)
+// for generic sql.Null[T] — the AST-only loader's classification. Built-in
+// primitive inners classify as KindSQLNull with the V field; non-primitive
+// inners return false (left on the encoding/json fallback). The go/types path
+// (arbitrary inner T) is exercised end-to-end in integrationtests.
 func TestSQLNullGeneric(t *testing.T) {
 	supported := []struct {
 		goType string
@@ -458,8 +447,7 @@ func TestSQLNullGeneric(t *testing.T) {
 		})
 	}
 
-	// Non-primitive / malformed inners are not classified by the string path
-	// (the go/types path picks up the valid ones like netip.Addr).
+	// Non-primitive / malformed inners are not classified by the string path.
 	for _, goType := range []string{"sql.Null[netip.Addr]", "sql.Null[[]byte]", "sql.Null[]", "sql.NullFoo"} {
 		t.Run("reject/"+goType, func(t *testing.T) {
 			if k := resolveKind(goType); k == KindSQLNull {

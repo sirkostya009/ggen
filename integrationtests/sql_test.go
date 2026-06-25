@@ -3,9 +3,8 @@ package integrationtests
 //go:generate ../ggen $GOFILE
 
 // Coverage for the database/sql.Null* family. ggen emits inner-value-or-null
-// on the wire (the convention every driver expects); stdlib v1/v2 serialize
-// these as `{"Field":val,"Valid":true}` plain structs, so cross-compat lives
-// only in this file via the round-trip path.
+// on the wire; stdlib emits {"Field":val,"Valid":true}, so cross-compat here
+// is round-trip only.
 
 import (
 	"database/sql"
@@ -18,10 +17,8 @@ import (
 	"github.com/sirkostya009/ggen/encode"
 )
 
-// Each database/sql.NullX flavor as its own single-field struct so per-type
-// JSONSize cap-guards and decode paths can be exercised in isolation. Mirrors
-// the time-suite split (TimeDefault / TimeUnix / … in stdcompat_test.go) so
-// regressions in one Null* size class don't get buried inside a composite.
+// Each sql.NullX flavor as its own single-field struct so per-type JSONSize
+// cap-guards and decode paths are exercised in isolation.
 
 //ggen:generate
 type SQLNullStringStruct struct {
@@ -63,10 +60,9 @@ type SQLNullTimeStruct struct {
 	T sql.NullTime `json:"t"`
 }
 
-// Generic sql.Null[T] (Go 1.22) carriers. The inner field is always V; these
-// exercise inner kinds with no legacy named counterpart (int / uint64 /
-// float32) plus a string/bool/time spread to prove the V-field path matches
-// the named NullX wire shape.
+// Generic sql.Null[T] (Go 1.22) carriers — inner kinds with no named
+// counterpart (int / uint64 / float32) plus a string/bool/time spread to prove
+// the V-field path matches the named NullX wire shape.
 
 //ggen:generate
 type SQLNullGenStringStruct struct {
@@ -98,11 +94,9 @@ type SQLNullGenTimeStruct struct {
 	T sql.Null[time.Time] `json:"t"`
 }
 
-// Custom inner types — not just built-in primitives. A named int and a named
-// string decode/encode their underlying primitive wire via the per-inner
-// encoding/json fallback (NOT the {V,Valid} struct dump); a TextMarshaler
-// type (uuid.UUID) routes through its text methods. All three carry the
-// inner-or-null wire shape, same as the named NullX flavors.
+// Custom inner types: a named int and named string ride their primitive wire
+// via the per-inner fallback; a TextMarshaler type (uuid.UUID) routes through
+// its text methods. All carry the inner-or-null wire shape.
 
 type SQLAccountID int64
 type SQLLabel string
@@ -122,8 +116,7 @@ type SQLNullGenUUIDStruct struct {
 	ID sql.Null[uuid.UUID] `json:"id"`
 }
 
-// SQLNullStruct keeps the composite shape so the existing roundtrip /
-// marshal / JSONSize-composite tests still exercise the full set together.
+// SQLNullStruct is the composite of every named sql.NullX flavor.
 //
 //ggen:generate
 type SQLNullStruct struct {
@@ -137,22 +130,15 @@ type SQLNullStruct struct {
 	SQLNullTimeStruct
 }
 
-// sqlWhen is the fixed timestamp used across the sql.Null* tests.
-// time.Unix(1700000000,0).UTC() == 2023-11-14T22:13:20Z (RFC3339).
+// sqlWhen is the fixed timestamp (2023-11-14T22:13:20Z) used across these tests.
 var sqlWhen = time.Unix(1700000000, 0).UTC()
 
-// runSQLNullPerType drives one single-field sql.Null* struct end-to-end
-// purely through the wire, no per-type field access:
-//   - marshal-zero must equal {"key":null} (the !Valid arm)
-//   - marshal-present must equal {"key":presentVal} (the inner-value arm)
-//   - decode of each, then re-marshal, must reproduce the same bytes
-//     (a roundtrip fixed point — proves the value survived decode without
-//     reading the typed inner field)
+// runSQLNullPerType drives one single-field sql.Null* struct through the wire:
+//   - marshal-zero == {"key":null}
+//   - marshal-present == {"key":presentVal}
+//   - decode each then re-marshal reproduces the same bytes (roundtrip fixed point)
 //
-// `presentVal` is the raw JSON value text for the set field (e.g. `"hello"`,
-// `42`); the full object wire is built locally from `key`, same as nullWire.
-// Single-field structs marshal to exactly `{"key":value}`, so byte equality
-// is a tight check. T is inferred from `present`.
+// presentVal is the raw JSON value text for the set field; T is inferred from present.
 func runSQLNullPerType[T interface {
 	encode.Marshaler
 	decode.Decoder[T]
@@ -197,11 +183,8 @@ func runSQLNullPerType[T interface {
 	t.Run(name+"/decode_present", func(t *testing.T) { roundtrip(t, presentWire) })
 }
 
-// TestSQLNull_PerType exercises each single-field sql.Null* struct through
-// the full matrix (marshal-null / marshal-present / decode-null /
-// decode-present, all via wire round-trip equality) so every inner kind is
-// asserted on its own. Pure-data invocations — the type-specific decode
-// lives in the generic helper, not in a table of closures.
+// TestSQLNull_PerType runs each single-field sql.Null* struct through the full
+// marshal/decode matrix so every inner kind is asserted on its own.
 func TestSQLNull_PerType(t *testing.T) {
 	runSQLNullPerType(t, "NullString", "s", `"hello"`,
 		SQLNullStringStruct{S: sql.NullString{String: "hello", Valid: true}})
@@ -220,7 +203,7 @@ func TestSQLNull_PerType(t *testing.T) {
 	runSQLNullPerType(t, "NullTime", "t", `"2023-11-14T22:13:20Z"`,
 		SQLNullTimeStruct{T: sql.NullTime{Time: sqlWhen, Valid: true}})
 
-	// Generic sql.Null[T] — same wire shape as the named NullX flavors.
+	// Generic sql.Null[T].
 	runSQLNullPerType(t, "GenString", "s", `"hello"`,
 		SQLNullGenStringStruct{S: sql.Null[string]{V: "hello", Valid: true}})
 	runSQLNullPerType(t, "GenInt", "i", `42`,
@@ -234,8 +217,7 @@ func TestSQLNull_PerType(t *testing.T) {
 	runSQLNullPerType(t, "GenTime", "t", `"2023-11-14T22:13:20Z"`,
 		SQLNullGenTimeStruct{T: sql.Null[time.Time]{V: sqlWhen, Valid: true}})
 
-	// Custom inner types: a named int and named string flow through the inner
-	// type's own wire (bare number / quoted string), NOT the {V,Valid} dump.
+	// Custom inner types ride the inner type's own wire, not the {V,Valid} dump.
 	runSQLNullPerType(t, "GenAccountID", "a", `9001`,
 		SQLNullGenAccountStruct{A: sql.Null[SQLAccountID]{V: 9001, Valid: true}})
 	runSQLNullPerType(t, "GenLabel", "l", `"vip"`,
@@ -245,9 +227,8 @@ func TestSQLNull_PerType(t *testing.T) {
 		SQLNullGenUUIDStruct{ID: sql.Null[uuid.UUID]{V: uuid.MustParse("550e8400-e29b-41d4-a716-446655440000"), Valid: true}})
 }
 
-// TestSQLNull_Composite exercises the embedded composite all together:
-// every field set, every field null, in both directions. Complements
-// the per-type table above (which isolates each flavor).
+// TestSQLNull_Composite exercises the embedded composite: every field set and
+// every field null, both directions.
 func TestSQLNull_Composite(t *testing.T) {
 	full := SQLNullStruct{
 		SQLNullStringStruct:  SQLNullStringStruct{S: sql.NullString{String: "hello", Valid: true}},
@@ -260,9 +241,8 @@ func TestSQLNull_Composite(t *testing.T) {
 		SQLNullTimeStruct:    SQLNullTimeStruct{T: sql.NullTime{Time: sqlWhen, Valid: true}},
 	}
 
-	// assertFullSQLNull fails the test for any field that doesn't match the
-	// fullSQLNull() fixture. NullTime compares via Time.Equal (== on
-	// time.Time is location/monotonic-sensitive); the rest are comparable.
+	// assertFullSQLNull checks every field against full. NullTime compares via
+	// Time.Equal; the rest are comparable.
 	assertFullSQLNull := func(t *testing.T, got SQLNullStruct) {
 		t.Helper()
 		want := full

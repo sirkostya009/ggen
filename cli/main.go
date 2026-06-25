@@ -61,22 +61,15 @@ func main() {
 	}
 	flag.Parse()
 
-	// Standard `flag` stops at the first non-flag argument, so
-	// `ggen in.go -o out.go` would treat `-o out.go` as struct-name
-	// filters. Re-parse around each positional to let flags appear in
-	// any order — mirrors `go test`'s behaviour on the same surface.
+	// Standard `flag` stops at the first non-flag arg; re-parse around each
+	// positional so flags can appear in any order (like `go test`).
 	var positional []string
 	for args := flag.Args(); len(args) > 0; args = flag.Args() {
 		positional = append(positional, args[0])
-		// flag.CommandLine's default ErrorHandling is ExitOnError, so a
-		// malformed flag here exits before this returns.
-		_ = flag.CommandLine.Parse(args[1:])
+		_ = flag.CommandLine.Parse(args[1:]) // ExitOnError handles malformed flags
 	}
-	// Logger init must run AFTER the interspersing loop so flags placed
-	// after positionals (e.g. `ggen msg.go -vv`) still take effect.
-	// Highest-set verbosity wins; -vvv overrides -vv overrides -v.
-	// Pretty vs concise impl is decided by env (CI / agent / non-TTY →
-	// concise).
+	// After the loop so flags placed after positionals still apply. Highest
+	// verbosity wins.
 	level := LevelQuiet
 	switch {
 	case vvv:
@@ -94,10 +87,7 @@ func main() {
 	}
 	target := positional[0]
 
-	// -dry routes through the parse-only entry points in check.go. -o
-	// (single-file output) and -pkg (package-name override) are dead in
-	// that mode — nothing is written — so reject both up front instead
-	// of silently dropping them. Parallels the walk's -o rejection.
+	// -dry emits no file, so -o / -pkg are dead — reject rather than drop.
 	if cliDry && (outFlag != "" || pkgFlag != "") {
 		cliLog.Fatal(errors.New("-o / -pkg cannot be used with -dry (dry run emits no file)"))
 	}
@@ -106,10 +96,8 @@ func main() {
 		if outFlag != "" {
 			cliLog.Fatal(errors.New("-o cannot be used with ./... (pattern matches multiple packages; each writes its own output)"))
 		}
-		// Pattern mode collects errors across packages instead of
-		// bailing on the first: a single bad rule in pkg/a shouldn't
-		// hide problems in pkg/b. packages.Load failures (no go.mod,
-		// invalid pattern, etc.) are fatal — we can't recover.
+		// Pattern mode collects per-package errors rather than bailing; only
+		// packages.Load failures (no go.mod, bad pattern) are fatal.
 		act := func(dir string) error { return generateDir(dir, "", "") }
 		if cliDry {
 			act = checkPackage
@@ -141,10 +129,8 @@ func main() {
 		}
 	}
 
-	// Drain any errors collected during the run, then exit non-zero
-	// if any were seen. Errors stay queued until here so they print as
-	// a single batch — easier to scan than interleaved with `wrote …`
-	// info lines from successful packages.
+	// Drain collected errors as one batch (not interleaved with `wrote …`
+	// lines), then exit non-zero if any were seen.
 	cliLog.Flush()
 	if cliLog.HasErrors() {
 		os.Exit(1)
@@ -191,27 +177,19 @@ func applyCLIFlags(structs []StructInfo) {
 			structs[i].Fields[j].NoValidate = structs[i].NoValidate
 			structs[i].Fields[j].UseNumber = structs[i].UseNumber
 			structs[i].Fields[j].HTMLEscape = structs[i].HTMLEscape
-			// OR, not assign: a struct/CLI opt-in turns every field on, but a
-			// per-field json:",nullzero" tag must survive when the struct flag is off.
+			// OR, not assign: a per-field json:",nullzero" must survive when the
+			// struct flag is off.
 			structs[i].Fields[j].NullZero = structs[i].Fields[j].NullZero || structs[i].NullZero
 		}
 	}
 }
 
-// walkPackages resolves `pattern` via golang.org/x/tools/go/packages
-// and invokes `act` on every matched package's directory. Module-
-// scoped, workspace-aware, same dispatch as `go build <pattern>` /
-// `go test <pattern>` — never crosses module boundaries. Patterns
-// matching no packages produce a load-level diagnostic; the run still
-// returns nil so a no-op `ggen ./...` in an empty tree doesn't blow up.
-//
-// Processing order is post-order over the matched import subgraph:
-// a package's `_ggen.go` is on disk before any matched importer
-// runs, so the parent's parsePackage reads the child's generated
-// methods and routes cross-package field types through direct
-// DecodeFrom / AppendJSON calls instead of falling back to
-// encoding/json. Dependencies outside the matched set are left
-// alone — they're someone else's run.
+// walkPackages resolves `pattern` via go/packages and invokes `act` on every
+// matched package's directory — module-scoped, never crossing module bounds
+// (like `go build <pattern>`). Processing is post-order over the matched import
+// subgraph, so a package's `_ggen.go` lands on disk before any matched importer
+// runs and cross-package field types route through direct DecodeFrom/AppendJSON
+// rather than encoding/json. Deps outside the matched set are left alone.
 func walkPackages(pattern string, act func(dir string) error) error {
 	cfg := &packages.Config{
 		Mode: packages.NeedName | packages.NeedFiles | packages.NeedImports,
@@ -220,10 +198,8 @@ func walkPackages(pattern string, act func(dir string) error) error {
 	if err != nil {
 		return err
 	}
-	// Surface per-package load errors via our logger instead of
-	// returning on the first one — a broken-import package shouldn't
-	// hide problems in its siblings, and the user wants the full
-	// punch list in one run.
+	// Surface per-package load errors via the logger rather than returning on
+	// the first — a broken-import package shouldn't hide its siblings.
 	for _, p := range pkgs {
 		for _, e := range p.Errors {
 			cliLog.Error(fmt.Errorf("%s: %s", p.PkgPath, e))
@@ -234,9 +210,8 @@ func walkPackages(pattern string, act func(dir string) error) error {
 	for _, p := range pkgs {
 		matched[p.PkgPath] = true
 	}
-	// Dedup by directory (packages.Load can return base + test
-	// variants pointing at the same dir; generateDir already loads
-	// both via Tests:true internally, so visit once).
+	// Dedup by directory (packages.Load can return base + test variants for
+	// the same dir; generateDir loads both via Tests:true, so visit once).
 	visited := make(map[string]struct{}, len(pkgs))
 	seenPath := make(map[string]struct{}, len(pkgs))
 	var visit func(p *packages.Package)
@@ -268,20 +243,16 @@ func walkPackages(pattern string, act func(dir string) error) error {
 	return nil
 }
 
-// genGlobalsMu protects every globally-shared piece of generator
-// state touched by generate() — generatedTypes, generatedAliasKinds,
-// the oneof registry, and the smallPool/filePool consumers via the
-// renderer functions. walkAndGenerate fans parallel goroutines across
-// sibling packages at the same depth; parsing runs concurrently, but
-// only one goroutine at a time enters the generate+write section.
-// Holding the lock for the whole post-parse phase is fine — generate
-// is ~12 ms / package, dwarfed by parsePackage's go/packages.Load.
+// genGlobalsMu protects the globally-shared generator state touched by
+// generate() (generatedTypes, generatedAliasKinds, the oneof registry, the
+// pools). Packages parse concurrently but only one goroutine enters the
+// generate+write section; holding the lock for the whole post-parse phase is
+// cheap — generate is ~12 ms / package vs go/packages.Load.
 var genGlobalsMu sync.Mutex
 
 func generateDir(dir, outFlag, pkgFlag string) error {
 	cliLog.Debug("parsing package %s", dir)
-	// Parsing runs UNLOCKED — go/packages.Load does its own
-	// concurrency and doesn't touch our globals.
+	// Unlocked — go/packages.Load does its own concurrency, touches no globals.
 	structs, pkgName, err := parsePackage(dir)
 	if err != nil {
 		return err
@@ -298,22 +269,18 @@ func generateDir(dir, outFlag, pkgFlag string) error {
 		outPkg = pkgName
 	}
 
-	// Bucket structs by (BuildTag, Test). Each bucket emits its own gen
-	// file with a matching //go:build header so a struct declared behind
-	// `//go:build foo` doesn't pollute the unconstrained file (and break
-	// builds without `foo` with "undefined: <Struct>" errors).
+	// Bucket structs by (BuildTag, Test): each emits its own gen file with a
+	// matching //go:build header so a tagged struct doesn't pollute the
+	// unconstrained file.
 	buckets := bucketStructs(structs)
 	if outFlag != "" && len(buckets) > 1 {
 		return fmt.Errorf("-o cannot be used when %s has structs across multiple build-tag / test groups (%d buckets)", dir, len(buckets))
 	}
 
-	// LOCKED from here through the per-bucket generate+write loop.
-	// Seed generatedTypes with the full package set BEFORE running
-	// any bucket — a struct in the tagged bucket may reference one
-	// in the untagged bucket (same Go package), so the cross-bucket
-	// call must route to the direct DecodeFrom rather than the
-	// encoding/json fallback. Clear at the end to avoid leaking
-	// state into the next call.
+	// LOCKED through the per-bucket loop. Seed generatedTypes with the full
+	// package set first — a tagged-bucket struct may reference an untagged one
+	// (same package), so the cross-bucket call must route to direct DecodeFrom.
+	// Cleared at the end to avoid leaking into the next call.
 	genGlobalsMu.Lock()
 	defer genGlobalsMu.Unlock()
 	generatedTypes = make(map[string]struct{}, len(structs))
@@ -352,15 +319,14 @@ func generateDir(dir, outFlag, pkgFlag string) error {
 	return nil
 }
 
-// bucketKey identifies one output file: structs sharing the same build
-// constraint and test/non-test status are emitted together.
+// bucketKey identifies one output file: same build constraint + test status.
 type bucketKey struct {
 	tag  string
 	test bool
 }
 
-// bucketStructs groups structs by (BuildTag, Test). Stable iteration order
-// over the result is provided by bucketKeys.
+// bucketStructs groups structs by (BuildTag, Test); bucketKeys gives stable
+// iteration order.
 func bucketStructs(structs []StructInfo) map[bucketKey][]StructInfo {
 	out := make(map[bucketKey][]StructInfo, len(structs))
 	for _, s := range structs {
@@ -370,9 +336,8 @@ func bucketStructs(structs []StructInfo) map[bucketKey][]StructInfo {
 	return out
 }
 
-// bucketKeys returns the keys of m sorted deterministically — empty tag
-// first, then by tag string, with non-test before test inside each tag.
-// Keeps `wrote` log output stable across runs.
+// bucketKeys returns m's keys sorted deterministically (empty tag first, then
+// by tag, non-test before test) so `wrote` output stays stable across runs.
 func bucketKeys(m map[bucketKey][]StructInfo) []bucketKey {
 	keys := slices.Collect(maps.Keys(m))
 	slices.SortFunc(keys, func(a, b bucketKey) int {
@@ -388,10 +353,8 @@ func bucketKeys(m map[bucketKey][]StructInfo) []bucketKey {
 	return keys
 }
 
-// packageFileName builds the output filename for one bucket. Untagged
-// buckets get `<dir>_ggen.go` / `<dir>_ggen_test.go`; tagged buckets
-// get `<dir>_<slug>_ggen.go` so multiple //go:build groups in the same
-// package each end up in their own file.
+// packageFileName builds the output filename for one bucket: untagged buckets
+// get `<dir>_ggen.go` / `<dir>_ggen_test.go`, tagged buckets `<dir>_<slug>_ggen.go`.
 func packageFileName(dir, tag string, testFile bool) string {
 	base := filepath.Base(filepath.Clean(dir))
 	if base == "." || base == "/" || base == "" {
@@ -410,10 +373,9 @@ func packageFileName(dir, tag string, testFile bool) string {
 	return base + "_" + slugifyTag(tag) + suffix
 }
 
-// slugifyTag converts a build constraint expression into a filename-safe
-// slug. Non-alnum runs collapse into single underscores and leading /
-// trailing underscores are trimmed, so `goexperiment.jsonv2` becomes
-// `goexperiment_jsonv2` and `foo && bar` becomes `foo_bar`.
+// slugifyTag makes a build-constraint expression filename-safe: non-alnum runs
+// collapse to single underscores, trimmed (`goexperiment.jsonv2` →
+// `goexperiment_jsonv2`, `foo && bar` → `foo_bar`).
 func slugifyTag(tag string) string {
 	var b strings.Builder
 	last := byte(0)
@@ -447,20 +409,17 @@ func generateSingleFile(file string, wanted []string, outFlag, pkgFlag string) e
 
 	out := outFlag
 	if out == "" {
-		// Source foo_test.go → foo_ggen_test.go; otherwise foo.go → foo_ggen.go.
+		// foo_test.go → foo_ggen_test.go; otherwise foo.go → foo_ggen.go.
 		if before, ok := strings.CutSuffix(file, "_test.go"); ok {
 			out = before + genTestSuffix
 		} else {
 			out = strings.TrimSuffix(file, ".go") + genSuffix
 		}
 	}
-	// Seed generatedTypes with every annotated struct in the package
-	// (incl. siblings declared in other files) so a cross-file struct
-	// reference routes to a direct DecodeFrom call rather than the
-	// encoding/json fallback on first run — before sibling _ggen files
-	// exist on disk. AliasKind seeding is local to the structs we're
-	// actually emitting: primitive-alias casting only matters when the
-	// alias's owning file is in the current generation pass.
+	// Seed generatedTypes with every annotated struct in the package (incl.
+	// siblings in other files) so a cross-file reference routes to a direct
+	// DecodeFrom before sibling _ggen files exist on disk. AliasKind seeding
+	// stays local to the structs we actually emit.
 	genGlobalsMu.Lock()
 	defer genGlobalsMu.Unlock()
 	generatedTypes = make(map[string]struct{}, len(siblings)+len(structs))

@@ -9,9 +9,7 @@ import (
 	"github.com/sirkostya009/ggen/encode"
 )
 
-// OmitStruct exercises the json tag options: omitempty (skip JSON-empty on
-// marshal), omitzero (skip Go-zero on marshal), and string (wrap primitive as
-// JSON string on both marshal and unmarshal).
+// OmitStruct exercises omitempty / omitzero / string tag options.
 //
 //ggen:generate
 type OmitStruct struct {
@@ -26,7 +24,6 @@ type OmitStruct struct {
 }
 
 func TestOmitEmpty_marshal(t *testing.T) {
-	// Empty Bio + nil Tags → both omitted
 	s := OmitStruct{Name: "alice", Score: 0, StrCount: 42}
 	out, _ := encode.MarshalString(s)
 	if strings.Contains(out, "bio") {
@@ -52,7 +49,6 @@ func TestOmitEmpty_present(t *testing.T) {
 }
 
 func TestOmitZero_marshal(t *testing.T) {
-	// Score=0 → omitted via omitzero
 	s := OmitStruct{Name: "x", Score: 0, StrCount: 1}
 	out, _ := encode.MarshalString(s)
 	if strings.Contains(out, "score") {
@@ -69,7 +65,6 @@ func TestOmitZero_marshal(t *testing.T) {
 func TestStringTag_marshal(t *testing.T) {
 	s := OmitStruct{Name: "x", StrCount: 42}
 	out, _ := encode.MarshalString(s)
-	// StrCount must be JSON-string-wrapped, not a bare number
 	if !strings.Contains(out, `"count":"42"`) {
 		t.Errorf("expected quoted count, got %q", out)
 	}
@@ -94,7 +89,6 @@ func TestStringTag_unmarshalBadString(t *testing.T) {
 }
 
 func TestStringTag_unmarshalExpectsString(t *testing.T) {
-	// count is plain number, not a string — must error
 	input := []byte(`{"name":"x","count":99}`)
 	if _, _, err := (OmitStruct{}).DecodeFrom(input); err == nil {
 		t.Error("expected error when count is bare number instead of string-wrapped")
@@ -116,15 +110,9 @@ func TestOmit_roundtrip(t *testing.T) {
 
 // --- json:",string" width variants -----------------------------------------
 
-// StringTagStruct exercises the `,string` wrap tag across every numeric
-// width and bool. OmitStruct.StrCount above already covers plain `int` —
-// this struct adds int8/16/32, uint*, float32, float64. The bool field
-// locks in the jsonv2-compatible "no-op on bool" behavior: `,string` is
-// silently ignored, wire stays bare `true`/`false`.
-//
-// *int + ,string (`PtrI *int` with `,string` option) lives in
-// brokencodegen_test.go — current codegen emits `*int(n)` which isn't
-// valid Go.
+// StringTagStruct exercises ,string across every numeric width plus bool
+// (bool is a no-op: stays bare true/false). *int + ,string lives in
+// brokencodegen_test.go.
 //
 //ggen:generate
 type StringTagStruct struct {
@@ -151,8 +139,6 @@ func TestStringTag_AllVariants_marshal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	// Every numeric field must be JSON-string-wrapped; bool stays bare
-	// (jsonv2 spec — `,string` is a no-op on bool).
 	for _, want := range []string{
 		`"i8":"-8"`, `"i16":"16"`, `"i32":"-32"`, `"i64":"64"`,
 		`"u8":"8"`, `"u16":"16"`, `"u32":"32"`, `"u64":"64"`,

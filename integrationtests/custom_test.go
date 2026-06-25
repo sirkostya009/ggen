@@ -10,14 +10,13 @@ import (
 	"github.com/sirkostya009/ggen/decode/validation"
 )
 
-// MultiErrStruct collects all validation failures into a single joined error
-// rather than stopping at the first.
+// MultiErrStruct collects all validation failures rather than stopping first.
 //
 //ggen:generate multierr
 type MultiErrStruct struct {
-	Name string `json:"name" ggen:"required,minlen=1,maxlen=5"`
-	Age  int    `json:"age" ggen:"gte=0,lte=100"`
-	Role string `json:"role" ggen:"oneof=admin|user|guest"`
+	Name string `json:"name" pipe:"required minlen=1 maxlen=5"`
+	Age  int    `json:"age" pipe:"gte=0 lte=100"`
+	Role string `json:"role" pipe:"oneof=admin|user|guest"`
 }
 
 func TestCustomValidator_pass(t *testing.T) {
@@ -76,18 +75,16 @@ func TestAggregate_pass(t *testing.T) {
 	}
 }
 
-// CustomBothStruct exercises a single field carrying BOTH a custom @Func
-// validator AND a custom @Func mod. They must both run, mod first
-// (transforms the input) then validator (checks the transformed value).
+// CustomBothStruct carries both a custom @Func mod and validator on one
+// field — mod runs first, then the validator checks the result.
 //
 //ggen:generate
 type CustomBothStruct struct {
-	Tags []string `json:"tags" mod:"dive:@TrimSpace" ggen:"dive:@NotBlank"`
+	Tags []string `json:"tags" pipe:"inner:(@TrimSpace @NotBlank)"`
 }
 
-// TestCustomBoth_modThenValidator: mod runs first (trims), then validator
-// checks the result. Input `"  ok  "` → trim → `"ok"` → passes NotBlank.
-// Input `"   "` → trim → `""` → fails NotBlank.
+// mod (trim) runs before validator (NotBlank): "  ok  "→"ok" passes,
+// "   "→"" fails.
 func TestCustomBoth_modThenValidator(t *testing.T) {
 	good := []byte(`{"tags":["  hello  ","  world  "]}`)
 	got, _, err := CustomBothStruct{}.DecodeFrom(good)

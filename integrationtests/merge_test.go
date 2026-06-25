@@ -6,17 +6,13 @@ import (
 	"unsafe"
 )
 
-// Decode-into-receiver tests. The receiver passed to DecodeFrom IS the merge
-// source — scalars from receiver persist when JSON omits them, containers
-// reset (slice[:0] / clear(map)) before refill, and nested struct fields
-// recurse through the same value-receiver pattern.
-//
-// All tests call (T).DecodeFrom directly rather than decode.Unmarshal[T]
-// (which always builds a fresh zero value).
+// Decode-into-receiver tests. The receiver IS the merge source: scalars
+// persist across omitted keys, containers reset before refill, nested
+// structs recurse via the value-receiver pattern. Tests call (T).DecodeFrom
+// directly, not decode.Unmarshal[T] (which starts fresh).
 
 func TestMerge_scalarFieldsPersistAcrossOmitted(t *testing.T) {
-	// receiver carries Name and ZipCode. Payload only sets Street. Merge
-	// keeps the un-omitted fields from the receiver.
+	// Payload sets only Street; receiver's other fields persist.
 	receiver := Address{Street: "old street", City: "OldCity", ZipCode: "12345"}
 	got, _, err := receiver.DecodeFrom([]byte(`{"street":"new street","city":"NewCity","zipCode":"54321"}`))
 	if err != nil {
@@ -29,9 +25,8 @@ func TestMerge_scalarFieldsPersistAcrossOmitted(t *testing.T) {
 }
 
 func TestMerge_sliceBackingReused(t *testing.T) {
-	// receiver carries a Tags slice with cap=8. After decoding a 3-element
-	// JSON array, the resulting Tags must share the same backing array
-	// (proof of [:0] reuse, not a fresh make()).
+	// A 3-elem decode into a cap-8 receiver must reuse the backing ([:0],
+	// not a fresh make).
 	pre := make([]string, 0, 8)
 	pre = append(pre, "old1", "old2", "old3")
 	receiver := Node{Tags: pre}
@@ -54,10 +49,8 @@ func TestMerge_sliceBackingReused(t *testing.T) {
 }
 
 func TestMerge_nestedSliceBackingReused(t *testing.T) {
-	// [][]int decode-into-receiver must reuse BOTH the outer backing AND the
-	// inner row backings when the new shape fits the carried caps — proof the
-	// reslice-grow + row[:0] seeding reuses buffers rather than make()ing a
-	// fresh row each decode.
+	// [][]int decode-into-receiver reuses BOTH outer and inner row backings
+	// when the new shape fits the carried caps.
 	first, _, err := ExtraStruct{}.DecodeFrom([]byte(`{"nestedInts":[[1,2,3],[4,5,6]]}`))
 	if err != nil {
 		t.Fatalf("first decode: %v", err)
@@ -66,7 +59,7 @@ func TestMerge_nestedSliceBackingReused(t *testing.T) {
 	row0Ptr := unsafe.SliceData(first.NestedInts[0])
 	row1Ptr := unsafe.SliceData(first.NestedInts[1])
 
-	// Re-decode into the same value; the new rows fit the carried caps (3, 3).
+	// New rows fit the carried caps (3, 3).
 	got, _, err := first.DecodeFrom([]byte(`{"nestedInts":[[7,8],[9,10,11]]}`))
 	if err != nil {
 		t.Fatalf("second decode: %v", err)
@@ -86,8 +79,7 @@ func TestMerge_nestedSliceBackingReused(t *testing.T) {
 }
 
 func TestMerge_sliceDoesNotAppendOverExisting(t *testing.T) {
-	// "new decoder must not append into an existing slice" — receiver had 5
-	// entries, JSON has 2; result has exactly 2 (not 7).
+	// Receiver had 5, JSON has 2 → result is exactly 2 (no append-over).
 	receiver := Node{Tags: []string{"old1", "old2", "old3", "old4", "old5"}}
 	got, _, err := receiver.DecodeFrom([]byte(`{"tags":["a","b"]}`))
 	if err != nil {
@@ -169,9 +161,6 @@ func TestMerge_mapNullSetsNil(t *testing.T) {
 }
 
 func TestMerge_nestedStructRecursesIntoExisting(t *testing.T) {
-	// Children[0] carries Name="cached"; JSON omits child name, so merge
-	// preserves it. Children[0]'s Tags is filled in JSON — that field
-	// resets.
 	receiver := Node{
 		Children: []Node{{Name: "cached", Tags: []string{"stale"}}},
 	}
@@ -182,13 +171,8 @@ func TestMerge_nestedStructRecursesIntoExisting(t *testing.T) {
 	if len(got.Children) != 1 {
 		t.Fatalf("len(children)=%d want 1", len(got.Children))
 	}
-	// Children slice was reset+refilled by the parent slice's emit, which
-	// pre-grows with `Node{}` zero-values. So the inner Node receiver IS
-	// zero, and Name="cached" does NOT survive. This is by design: the
-	// outer slice owns the reset, the inner Node merge happens only when
-	// the slice slot was already populated by the receiver AND the JSON
-	// has data for it — but we [:0]'d the slice up front, so the slot is
-	// always a fresh zero-value pre-grow before recurse.
+	// By design: the parent slice [:0]'s and pre-grows each slot with a
+	// zero Node, so the carried Name="cached" does NOT survive.
 	if got.Children[0].Name != "" {
 		t.Errorf("Name=%q — slice elem merged against receiver, expected fresh zero", got.Children[0].Name)
 	}
@@ -197,17 +181,15 @@ func TestMerge_nestedStructRecursesIntoExisting(t *testing.T) {
 	}
 }
 
-// Pointer-field merge against the existing PointerStruct (`*T`) and NPtrStruct
-// (`**T`/…), both declared in pointer_test.go: a non-nil pointee is reused in
-// place rather than reallocated, an omitted pointer field keeps its receiver
-// value, JSON null nils the field, multi-level chains reuse their non-nil
-// prefix (allocating only from the first nil level down), and a parse failure
-// leaves the receiver untouched.
+// Pointer-field merge (PointerStruct *T, NPtrStruct **T/…, both in
+// pointer_test.go): non-nil pointees reused in place, omitted fields kept,
+// null nils, multi-level chains reuse their non-nil prefix, and a parse
+// failure leaves the receiver untouched.
 
 func TestMerge_pointerFieldPersistsWhenOmitted(t *testing.T) {
 	keep := new("keep")
 	receiver := PointerStruct{PtrNameStruct: PtrNameStruct{Name: keep}, PtrCountStruct: PtrCountStruct{Count: new(7)}}
-	// Payload omits "name" → its receiver pointer is left untouched.
+	// "name" omitted → receiver pointer untouched.
 	got, _, err := receiver.DecodeFrom([]byte(`{"count":9,"enabled":true}`))
 	if err != nil {
 		t.Fatalf("decode: %v", err)
@@ -236,7 +218,7 @@ func TestMerge_pointerScalarReusesPointee(t *testing.T) {
 }
 
 func TestMerge_pointerStructPointeeReused(t *testing.T) {
-	// Non-nil *Address pointee is decoded in place — same pointer, no realloc.
+	// Non-nil *Address pointee decoded in place — same pointer.
 	orig := &Address{Street: "Main 1", City: "Lviv", ZipCode: "79000"}
 	receiver := PointerStruct{PtrAddrStruct: PtrAddrStruct{Addr: orig}}
 	got, _, err := receiver.DecodeFrom([]byte(`{"addr":{"street":"Main 2","city":"Kyiv","zipCode":"01001"}}`))
@@ -252,7 +234,7 @@ func TestMerge_pointerStructPointeeReused(t *testing.T) {
 }
 
 func TestMerge_pointerNilReceiverAllocates(t *testing.T) {
-	// nil receiver fields → `new` fires, fresh pointees decoded.
+	// nil receiver fields → fresh pointees allocated.
 	got, _, err := PointerStruct{}.DecodeFrom([]byte(`{"count":9,"name":"x"}`))
 	if err != nil {
 		t.Fatalf("decode: %v", err)
@@ -329,9 +311,8 @@ func TestMerge_multiLevelStructLeafReused(t *testing.T) {
 }
 
 func TestMerge_pointerParseFailureLeavesReceiverUntouched(t *testing.T) {
-	// A wrong-typed leaf must NOT leave a freshly-allocated chain behind:
-	// the leaf is parsed into a temp first, so the nil receiver field stays
-	// nil on error.
+	// Leaf parses into a temp first, so a failure leaves the field nil
+	// (no half-allocated chain).
 	got, _, err := NPtrStruct{}.DecodeFrom([]byte(`{"pp":"not a number"}`))
 	if err == nil {
 		t.Fatal("expected parse error")

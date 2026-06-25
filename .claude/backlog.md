@@ -203,29 +203,20 @@
   `TestValidationError_Pos`. Open follow-up if ever wanted: `Snippet []byte`
   around the failure offset (rejected for now — caller has the input + `Pos`).
 
-- **Reconsider the struct-field tag design as a whole.** ggen spreads
-  field-level config across three tag namespaces with no single organizing
-  principle: `json:"name,opt,opt,format:X"` (wire name + a grab-bag of decode
-  AND encode options — `omitempty`/`omitzero` are encode-only, `string` is
-  both, `inline` is decode-structural, `nullzero` is decode-only, `format:X` is
-  both), `ggen:"…"` (validation rules + the `hintlen` sizing hint that is NOT
-  validation + the `dive:`/`keys:` level prefixes), and `mod:"…"` (transforms,
-  same `dive:`/`keys:` prefixes). Friction points worth a fresh look: (1) the
-  json tag is becoming a dumping ground — `nullzero` landed there because it
-  "felt like `,string`", but it's a strictness knob, not a wire-shape one;
-  where should the next decode-behavior flag go? (2) `dive:`/`keys:` are
-  duplicated across `ggen:` and `mod:` with identical parsing — a shared
-  level-prefix grammar, or one unified tag, might cut that; (3) sizing
-  (`hintlen`) lives inside the validation tag but is lifted out at parse time —
-  it doesn't belong with rules; (4) encode vs decode options are interleaved
-  with no marker, so a reader can't tell which half of the pipeline a token
-  affects. Possible directions (NOT decided): a single `ggen:"…"` tag with
-  sub-namespaces (`decode:`/`encode:`/`validate:`/`mod:`), keeping `json:` to
-  stdlib-compatible name+omitempty only; or formalize the current three-tag
-  split with a documented rule for "which tag does a new option go in". This is
-  a design/ergonomics reconsideration, not a bug — weigh against the cost of
-  churning every annotated struct in the wild + the docs. Surfaced 2026-06-23
-  after `nullzero` highlighted the json-tag-grab-bag tension.
+- **Struct-field tag design — RESOLVED 2026-06-25 (hard break).** The
+  `ggen:`/`mod:` split is gone; field config is now partitioned by ROLE across
+  three tags: `json:` (wire shape — name/omitempty/omitzero/string/inline/
+  format, stdlib-compatible), `pipe:` (one ordered decode→transform→validate
+  pipeline), `hint:` (prealloc only). The `pipe:` tag interleaves mods +
+  validators in declared order, lifts presence (`required`/`optional`), moves
+  `nullzero` to a decode-stage variant, adds multi-shape `/` decode dispatch
+  (native / nullzero / `@Conv` converters) and a `;` after-loop level pop.
+  Custom funcs are classified by signature (validator / mod / converter, bool
+  forms). Design spec: `.claude/tag-redesign.md`. Implemented across
+  `pipe.go` (grammar + model), `variants.go` (shape dispatch), `customfunc.go`
+  (classification), unified `renderPipe` in `generate.go`; legacy parsers/
+  resolvers deleted; whole corpus + docs migrated. Open follow-ups: foreign-
+  package converter inputs (import plumbing); top-level alias-type pipe support.
 
 - **Revisit `validation.CustomError` shape.** Today `{Field, Name string,
   Cause error}` + `Unwrap()`. Rough edges: `Name` doubles as rule identifier

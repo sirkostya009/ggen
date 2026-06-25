@@ -85,7 +85,7 @@ Most flags have matching annotation token (no leading dash). Annotations space-s
 | `-allowdups`     | `allowdups`     | accept duplicate JSON keys, first-wins (default: error on second occurrence)                           |
 | `-novalidate`    | `novalidate`    | drop validation, required-field checks, and mods                                                       |
 | `-ignoreunknown` | `ignoreunknown` | silently drop unknown JSON keys (default: error). Overridden when an inline catch-all map is present   |
-| `-nullzero`      | `nullzero`      | accept explicit JSON `null` on every non-pointer value field, decoding it to the Go zero (default: error). Per-field `json:",nullzero"` opts in one field |
+| `-nullzero`      | `nullzero`      | accept explicit JSON `null` on every non-pointer value field, decoding it to the Go zero (default: error). A per-field `nullzero` decode variant in `pipe:` opts in one field |
 | `-nosortkeys`    | `nosortkeys`    | emit struct fields in declaration order (default: alphabetical, compresses better)                     |
 | `-usenumber`     | `usenumber`     | decode JSON numbers in `any` fields as `json.Number` instead of `float64`                              |
 | `-htmlescape`    | `htmlescape`    | escape `<`, `>`, `&` to `\uXXXX` (default: literal, matches `encoding/json` v2)                        |
@@ -106,9 +106,9 @@ Trigger: `//ggen:generate` (no space between `//` and `ggen`, mirror `//go:gener
 //ggen:generate
 type User struct {
 	ID    int      `json:"id"`
-	Name  string   `json:"name"   ggen:"required,minlen=1,maxlen=64"`
-	Email string   `json:"email"  ggen:"email" mod:"trim,lower"`
-	Tags  []string `json:"tags,omitempty" ggen:"dive:notempty"`
+	Name  string   `json:"name"   pipe:"required minlen=1 maxlen=64"`
+	Email string   `json:"email"  pipe:"trim lower email"`
+	Tags  []string `json:"tags,omitempty" pipe:"inner:notempty"`
 }
 
 //ggen:generate marshal unmarshal multierr
@@ -122,55 +122,101 @@ type Order struct { /* ... */ }
 - `json:",inline"` — field = catch-all map for unknown keys. Type must be a string-keyed map (`map[string]V`); V may be `any`, a primitive, a ggen-annotated struct, or any other type (typed elems dispatch through the elem's fast path or `encoding/json.Unmarshal` over the captured span). Overrides `-ignoreunknown`.
 - `json:"name,omitempty"` — skip on marshal when JSON-empty.
 - `json:"name,omitzero"` — skip on marshal when Go-zero.
-- `json:"name,nullzero"` — decode-only: accept explicit JSON `null` on this non-pointer value field, setting it to the Go zero value (default: `null` on a non-pointer value errors). No-op on already-null-aware kinds (pointer/slice/map/`[]byte`/`sql.Null*`/raw/`any`).
 - `json:"name,string"` — wrap primitive as JSON string (unwrap on decode).
 - `json:"name,format:X"` — format hint for native types (see kinds below). MUST be last option in tag (jsonv2 rule).
 
 Only exported fields read/written, same as `encoding/json`.
 
-### `ggen:"..."` — validation rules
+### `pipe:"..."` — decode, transform, validate
 
-Comma-separated rules with three optional mode prefixes:
-
-- `(no prefix)` — apply to field itself, or whole slice/map/array for container fields.
-- `dive:` — apply subsequent rules to next nested level. Each extra `dive:` peel another layer.
-- `keys:` — apply rules to map keys only (always strings).
-
-Prefixes compose. Example:
+One ordered, whitespace-separated pipeline: presence, an optional decode stage,
+then value steps (mods + validators) that run **in declared order**. Values
+with spaces are single-quoted. `|` is an intra-rule arg separator.
 
 ```go
-Aliases map[string][]string `json:"aliases" ggen:"keys:minrunes=2,maxrunes=32,minlen=1,dive:maxlen=10,dive:notempty"`
+Name  string	`json:"name"  pipe:"required trim minlen=1 maxlen=50"`
+Email string	`json:"email" pipe:"trim lower email"`
+Aliases map[string][]string	`json:"aliases" pipe:"keys:(minrunes=2 maxrunes=32) inner:maxlen=10 inner:notempty"`
 ```
 
-Rules:
+**Presence:** `required` (key must appear → `RequiredError`) / `optional`
+(default, explicitly states "may be absent"). Position-independent. Absent → Go zero.
 
-| rule                                                                         | error type                                     | checks                                                              |
-| ---------------------------------------------------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------- |
-| `required`                                                                   | `RequiredError`                                | field must be present in the JSON object                            |
-| `optional`                                                                   | —                                              | marker; no runtime effect                                           |
-| `notempty`                                                                   | `NotEmptyError`                                | string non-empty / container non-zero length                        |
-| `len=N`, `minlen=N`, `maxlen=N`                                              | `LenError`, `MinLenError`, `MaxLenError`       | byte length (strings) / element count (containers)                  |
-| `runes=N`, `minrunes=N`, `maxrunes=N`                                        | `RunesError`, `MinRunesError`, `MaxRunesError` | rune count (utf8 aware) — strings only                              |
-| `gt=N`, `gte=N`, `lt=N`, `lte=N`                                             | `GTError`, `GTEError`, `LTError`, `LTEError`   | numeric comparison                                                  |
-| `eq=X`, `neq=X`                                                              | `EqError`, `NeqError`                          | equality (string or numeric)                                        |
-| `multiple=N`                                                                 | `MultipleError`                                | integer kinds — value `% N == 0`                                    |
-| `oneof=a\|b\|c`                                                              | `OneOfError`                                   | value must equal one of the listed alternatives                     |
-| `email`                                                                      | `EmailError`                                   | loose email shape                                                   |
-| `url`                                                                        | `URLError`                                     | starts with `<scheme>://...`                                        |
-| `ascii`, `printable`, `alphanum`, `numeric`, `lower`, `upper`, `hexadecimal` | matching `*Error`                              | character-class string checks                                       |
-| `starts=X`, `ends=X`, `contains=X`                                           | `StartsError`, `EndsError`, `ContainsError`    | substring tests on strings                                          |
-| `@FuncName`, `@pkg.FuncName`                                                 | `CustomError{Name, Cause}` (with `Unwrap()`)   | call a custom `func(T) error` — see _custom rules_ below            |
-| `hintlen=N`                                                                  | —                                              | preallocation hint, NOT a rule — `make([]T, 0, N)` (slice/map only) |
+**Decode stage (`/` variants):** by default a field decodes from its type's
+natural JSON shape. List `/`-separated variants to accept more (one per shape):
 
-#### Rule applicability
+- `.` — native decode of the field type.
+- `nullzero` — accept JSON `null` → Go zero. Allows non-pointer values to
+	accept `null` values as Go-zero.
+- `@Conv` — converter `func(W) T` / `(T,error)` / `(T,bool)`; ggen scans input
+  `W` (primitive or ggen struct), then calls it. Needs a `/`, leading `.`, or
+  `~` to read as a converter. Encode is unaffected (marshals as native T).
 
-- String-only validators (`email`, `url`, `ascii`, `printable`, `alphanum`, `numeric`, `lower`, `upper`, `hexadecimal`, `starts`, `ends`, `contains`, `runes`, `minrunes`, `maxrunes`) — strings only.
-- Numeric validators (`gt`, `gte`, `lt`, `lte`, `multiple`) — numeric kinds. `multiple` need integer.
-- `eq`/`neq`/`oneof` — string or numeric.
-- `len`/`minlen`/`maxlen`/`notempty` — any len-able kind (string/slice/array/map/[]byte).
-- `dive:` only on slice/array/map/[]byte; `keys:` only on maps.
+```go
+Age   int `json:"age"   pipe:". / @AtoiStrict gte=0 lte=150"` // AtoiStrict(string)(int,error)
+Price int `json:"price" pipe:". / @FromMoney"`                // FromMoney(Money) int
+```
 
-Mismatches rejected at parse time with clear diagnostic.
+**Value steps** run in declared order. Validators:
+
+| step                                                                                         | applies to | checks                          |
+| -------------------------------------------------------------------------------------------- | ---------- | ------------------------------- |
+| `notempty`                                                                                   | str/container | non-empty / non-zero length  |
+| `len=N`, `minlen=N`, `maxlen=N`                                                              | str/container | byte length / element count  |
+| `runes=N`, `minrunes=N`, `maxrunes=N`                                                        | string     | rune count (utf8 aware)         |
+| `gt=N`, `gte=N`, `lt=N`, `lte=N`                                                             | numeric    | comparison                      |
+| `eq=X`, `neq=X`                                                                              | str/numeric | equality                       |
+| `multiple=N`                                                                                 | integer    | `% N == 0`                      |
+| `oneof=a\|b\|c`                                                                              | str/numeric | one of the alternatives        |
+| `email`, `url`, `ascii`, `printable`, `alphanum`, `numeric`, `lower`, `upper`, `hexadecimal` | string     | character-class predicate       |
+| `starts=X`, `ends=X`, `contains=X`                                                           | string     | substring test                  |
+
+Mods (transforms):
+
+| step                        | applies to | effect                          |
+| ----------------------------| ---------- | ------------------------------- |
+| `trim`, `lower`, `upper`    | string     | whitespace / case               |
+| `trimleft=X`, `trimright=X` | string     | strip prefix / suffix           |
+| `replace=old\|new`          | string     | substring replace               |
+| `clamp=lo\|hi`              | numeric    | bound into `[lo,hi]` (either side may be empty: `clamp=0\|`, `clamp=\|100`) |
+
+Container levels: `inner:` scopes to one level down, `keys:` to map keys. A
+bare prefix takes one step (`inner:trim`); parenthesize several
+(`inner:(trim maxlen=20)`); nest groups to go deeper
+(`inner:(minlen=1 inner:(gte=0 lte=100))`). Steps outside any group apply to
+the whole container.
+
+**Custom funcs** (`@FuncName` / `@pkg.FuncName`, classified by signature):
+
+| signature              | role                                                   |
+| ---------------------- | ------------------------------------------------------ |
+| `func(T) error`        | validator → `CustomError{Cause}`                       |
+| `func(T) bool`         | validator → `PredicateError` (message-capable)         |
+| `func(T) T`            | mod (pure)                                             |
+| `func(T) (T, error)`   | mod (fallible; error → parse error)                    |
+| `func(T) (T, bool)`    | mod (fallible; false → `ModError`; message-capable)    |
+| `func(W) T` (W ≠ T)    | converter (decode-stage variant only)                  |
+
+`func(bool) bool` is rejected. Bool forms take an inline message:
+`@MustBeEven:'value must be even'`. Cross-package via `@pkg.Func` (resolves
+through the source file's imports; blank imports work).
+
+```go
+//ggen:generate
+type Box struct { N int `json:"n" pipe:"@EvenOnly"` }
+func EvenOnly(n int) error { if n%2 != 0 { return errors.New("must be even") }; return nil }
+```
+
+Applicability is checked at parse time (string-only rules on non-strings,
+numeric on non-numerics, `inner:` on non-containers, `keys:` on non-maps, etc.)
+with a clear diagnostic; each value step is gated against the working type at
+its level.
+
+### `hint:"..."` — preallocation
+
+`hint:"N"` → `make([]T, 0, N)` (slice/map only), overriding the default cap 4
+and `minlen`-derived caps. Per-level: `hint:"32 inner:8"`. `hint:"0"` disables;
+negative is a generate-time error.
 
 #### Inspecting errors
 
@@ -185,39 +231,6 @@ if errors.As(err, &e) {
 In `multierr` mode generated code return `validation.Errors` (`[]validation.Error`). Implement `Unwrap() []error`.
 
 Parse failures (malformed JSON, wrong primitive type) wrap in `*decode.ParseError` carrying `Field` (dotted JSON path), `Pos` (byte offset), `Err` (underlying `scan.ErrX` sentinel). `errors.Is(err, scan.ErrBadString)` keeps working through the wrap. Validation errors NOT wrapped — typed pointers stay reachable. `ParseError.Error()` only renders the `parse error at <field> (pos <n>)` prefix; `errors.Unwrap` for the underlying message.
-
-#### Custom rules
-
-`@FuncName` look up `func(T) error` at codegen. `T` must be field exact Go type (including `*T` for pointer fields). No runtime registry. Non-nil return wraps as `validation.CustomError{Name: "@FuncName", Cause: err}`.
-
-```go
-//ggen:generate
-type Box struct { N int `json:"n" ggen:"@EvenOnly"` }
-
-func EvenOnly(n int) error {
-	if n%2 != 0 { return errors.New("must be even") }
-	return nil
-}
-```
-
-Cross-package: `@pkg.FuncName`. Resolver read source file import block. File-scoped aliases and blank imports (`_ "path"`) both work.
-
-### `mod:"..."` — input transforms
-
-Mods run after decode, before validation. Same `dive:`/`keys:` prefixes.
-
-| target  | mods                                                                      |
-| ------- | ------------------------------------------------------------------------- |
-| string  | `trim`, `lower`, `upper`, `trimleft=X`, `trimright=X`, `replace=old\|new` |
-| numeric | `clamp=lo\|hi` (either side may be empty: `clamp=0\|`, `clamp=\|100`)     |
-| custom  | `@FuncName` / `@pkg.FuncName`                                             |
-
-Custom mods support two signatures:
-
-- pure: `func(T) T` — emit as `field = Func(field)`.
-- fallible: `func(T) (T, error)` — non-nil error propagate as parse error (early return), NOT validation. Validation never runs after mod failure on same field.
-
-Mods like `replace` and custom mods may copy string. Break zero-copy for that field.
 
 ## Supported field kinds
 
@@ -357,7 +370,7 @@ Build tag propagation: struct in file behind `//go:build foo` land in `<dir>_foo
 4. **AST-only fallback when no `go.mod`.** When `packages.Load` cannot resolve types (e.g. temp file with no module context), ggen fall back to AST-only mode and emit `encoding/json` for cross-package types. Slower but correct.
 5. **Build under right `GOEXPERIMENT`.** Files behind `goexperiment.jsonv2` invisible without `GOEXPERIMENT=jsonv2 ggen ./...`.
 6. **Test files first-class inputs.** Annotated structs in `_test.go` files route to `_ggen_test.go` so methods don't bundle into library build.
-7. **`hintlen` only safe prealloc hint.** Don't expect `maxlen` to size container — it doesn't (intentional, retained-heap reasons). Use `hintlen=N` when know typical size. Use `len=N` when count fixed.
+7. **`hint:` only safe prealloc hint.** Don't expect `maxlen` to size container — it doesn't (intentional, retained-heap reasons). Use `hint:"N"` when know typical size.
 
 ## Common user intents → flags
 
@@ -366,7 +379,7 @@ Build tag propagation: struct in file behind `//go:build foo` land in `<dir>_foo
 | "still want `json.Marshal(u)` to work"                    | `-marshal` (and/or `-unmarshal`)                                                    |
 | "collect all errors, not just the first"                  | `-multierr`                                                                         |
 | "skip unknown keys silently"                              | `-ignoreunknown` or a `json:",inline"` catch-all map                                |
-| "accept `null` on a scalar instead of erroring"           | `json:",nullzero"` per field, or `-nullzero` / `//ggen:generate nullzero` for all   |
+| "accept `null` on a scalar instead of erroring"           | a `nullzero` decode variant in `pipe:` per field, or `-nullzero` / `//ggen:generate nullzero` for all   |
 | "fastest possible decode, I trust the input"              | `-novalidate`                                                                       |
 | "wire output embedded directly in HTML"                   | `-htmlescape` (or per-type via alias `//ggen:generate htmlescape`)                  |
 | "exact-precision numbers (big ints, no float64)"          | `-usenumber` for `any` fields; or use `math/big.Int`                                |

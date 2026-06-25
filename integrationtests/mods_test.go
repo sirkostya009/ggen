@@ -11,21 +11,17 @@ import (
 	_ "github.com/sirkostya009/ggen/integrationtests/thirdparty"
 )
 
-// ModStruct exercises the mod tag: input transforms applied after decode and
-// before validation (so validation sees the normalized value).
+// ModStruct exercises the mod tag: transforms applied after decode, before
+// validation.
 //
 //ggen:generate
 type ModStruct struct {
-	// Lowercase + trim → validates after normalization.
-	Email string `json:"email" ggen:"email" mod:"trim,lower"`
-	// Each tag is trimmed before being kept.
-	Tags []string `json:"tags" mod:"dive:trim,lower"`
-	// Strip a known prefix.
-	SKU string `json:"sku" mod:"trimleft=SKU-"`
+	Email string   `json:"email" pipe:"trim lower email"`
+	Tags  []string `json:"tags" pipe:"inner:(trim lower)"`
+	SKU   string   `json:"sku" pipe:"trimleft=SKU-"`
 }
 
 func TestMods_trimLowerEmail(t *testing.T) {
-	// Raw has leading/trailing space and uppercase; mods normalize before validation.
 	in := []byte(`{"email":"  Foo@Bar.COM  "}`)
 	got, _, err := ModStruct{}.DecodeFrom(in)
 	if err != nil {
@@ -59,7 +55,7 @@ func TestMods_trimleft(t *testing.T) {
 		t.Errorf("SKU = %q", got.SKU)
 	}
 
-	// Without the prefix, pass-through.
+	// No prefix → pass-through.
 	in2 := []byte(`{"sku":"XYZ"}`)
 	got2, _, _ := ModStruct{}.DecodeFrom(in2)
 	if got2.SKU != "XYZ" {
@@ -67,24 +63,21 @@ func TestMods_trimleft(t *testing.T) {
 	}
 }
 
-// FallibleModStruct pairs a fallible custom mod with built-in validators
-// that would also fail on the same input. Tests below assert that mod
-// errors short-circuit BEFORE validation runs — they're parse-level
-// failures, not validation failures, so they bypass the multierr
-// aggregation path entirely.
+// FallibleModStruct pairs a fallible mod with validators that would also
+// fail — tests assert the mod error short-circuits as a parse error
+// (bypassing multierr aggregation).
 //
 //ggen:generate
 type FallibleModStruct struct {
-	Email string `json:"email" mod:"@RejectShort" ggen:"required,email,minlen=10"`
+	Email string `json:"email" pipe:"required @RejectShort email minlen=10"`
 }
 
-// FallibleModMultierrStruct is the same field set in multierr mode:
-// validation rules accumulate into validation.Errors, but a fallible
-// mod must NOT — it returns immediately as a single parse error.
+// FallibleModMultierrStruct: same fields in multierr mode — a fallible mod
+// still returns immediately as a single parse error, not aggregated.
 //
 //ggen:generate multierr
 type FallibleModMultierrStruct struct {
-	Email string `json:"email" mod:"@RejectShort" ggen:"required,email,minlen=10"`
+	Email string `json:"email" pipe:"required @RejectShort email minlen=10"`
 }
 
 func RejectShort(s string) (string, error) {
@@ -94,9 +87,8 @@ func RejectShort(s string) (string, error) {
 	return s, nil
 }
 
-// TestFallibleMod_shortCircuitsValidation: input is too short — both the
-// mod and the email/minlen validators would fail, but the mod runs first
-// and its error is what surfaces.
+// TestFallibleMod_shortCircuitsValidation: the mod runs first, so its error
+// surfaces ahead of the email/minlen validators that would also fail.
 func TestFallibleMod_shortCircuitsValidation(t *testing.T) {
 	_, _, err := FallibleModStruct{}.DecodeFrom([]byte(`{"email":"x"}`))
 	if err == nil {
@@ -105,17 +97,14 @@ func TestFallibleMod_shortCircuitsValidation(t *testing.T) {
 	if !strings.Contains(err.Error(), "rejected by mod") {
 		t.Errorf("expected mod error, got: %v", err)
 	}
-	// Validation messages from `email` / `minlen` would surface as
-	// "not a valid email" / "below minimum"; mod error must beat them.
+	// Validation messages must not appear — the mod error beats them.
 	if strings.Contains(err.Error(), "valid email") || strings.Contains(err.Error(), "below minimum") {
 		t.Errorf("validation ran despite mod failure: %v", err)
 	}
 }
 
-// TestFallibleMod_multierrStillShortCircuits: even in multierr mode,
-// a fallible mod is a parse error — it returns a single error
-// immediately, NOT a validation.Errors slice. The multierr aggregation
-// is only for validation-rule failures.
+// TestFallibleMod_multierrStillShortCircuits: in multierr mode a fallible
+// mod still returns a single parse error, not validation.Errors.
 func TestFallibleMod_multierrStillShortCircuits(t *testing.T) {
 	_, _, err := FallibleModMultierrStruct{}.DecodeFrom([]byte(`{"email":"x"}`))
 	if err == nil {
@@ -129,9 +118,8 @@ func TestFallibleMod_multierrStillShortCircuits(t *testing.T) {
 	}
 }
 
-// TestFallibleMod_passLetsValidationRun: when the mod ACCEPTS the value,
-// downstream validation still runs and can fire its own errors. Confirms
-// the mod is a gate, not a bypass.
+// TestFallibleMod_passLetsValidationRun: a passing mod is a gate, not a
+// bypass — downstream validation still runs.
 func TestFallibleMod_passLetsValidationRun(t *testing.T) {
 	// "abcdef" passes RejectShort (len >= 3) but fails minlen=10 + email.
 	_, _, err := FallibleModStruct{}.DecodeFrom([]byte(`{"email":"abcdef"}`))
@@ -143,21 +131,17 @@ func TestFallibleMod_passLetsValidationRun(t *testing.T) {
 	}
 }
 
-// CrossPkgModStruct exercises `@pkg.Func` resolution for both validators
-// and mods. The functions live in the sibling `thirdparty` package; the
-// codegen-time resolver walks this file's imports, picks up the
-// non-aliased `thirdparty` package, and emits a direct call. Three
-// flavors per direction so a regression in one (pure mod vs fallible
-// mod vs validator) surfaces at that flavor.
+// CrossPkgModStruct exercises @pkg.Func resolution for validators and mods
+// from the sibling thirdparty package, one flavor per field.
 //
 //ggen:generate
 type CrossPkgModStruct struct {
-	// Pure mod: prefixes the input with '#'.
-	Tag string `json:"tag" mod:"@thirdparty.PrefixHash"`
-	// Fallible mod: rejects empty input as a parse error, not validation.
-	NonEmpty string `json:"nonEmpty" mod:"@thirdparty.ParseNonEmpty"`
-	// Validator: requires all-uppercase ASCII.
-	Code string `json:"code" ggen:"@thirdparty.ValidateUpper"`
+	// Pure mod: prefixes with '#'.
+	Tag string `json:"tag" pipe:"@thirdparty.PrefixHash"`
+	// Fallible mod: empty input is a parse error.
+	NonEmpty string `json:"nonEmpty" pipe:"@thirdparty.ParseNonEmpty"`
+	// Validator: all-uppercase ASCII.
+	Code string `json:"code" pipe:"@thirdparty.ValidateUpper"`
 }
 
 func TestCrossPkgMod_pureMod(t *testing.T) {
@@ -200,27 +184,21 @@ func TestCrossPkgValidator_accepts(t *testing.T) {
 	}
 }
 
-// NestedMultierrStruct wraps another multierr struct (FallibleModMultierrStruct)
-// as a field, plus its own validation rules. When DecodeFrom hits inner's
-// validation errors, the outer must drain them into its own errs slice
-// instead of short-circuiting — so the caller sees ALL failures in one
-// validation.Errors aggregate (outer + inner).
+// NestedMultierrStruct wraps a multierr struct plus its own rules — the
+// outer must drain inner validation errors into one aggregate, not
+// short-circuit.
 //
 //ggen:generate multierr
 type NestedMultierrStruct struct {
 	Inner FallibleModMultierrStruct `json:"inner"`
-	Name  string                    `json:"name" ggen:"required,minlen=2"`
-	Code  int                       `json:"code" ggen:"gte=0,lte=100"`
+	Name  string                    `json:"name" pipe:"required minlen=2"`
+	Code  int                       `json:"code" pipe:"gte=0 lte=100"`
 }
 
 func TestNestedMultierr_drainsInnerValidationErrors(t *testing.T) {
-	// inner.email = "x" -> mod accepts (len>=3? no, len==1 — wait RejectShort
-	// rejects len<3 as a parse error). Use a value that passes the mod but
-	// fails validation, so the inner returns a validation.Errors aggregate
-	// rather than a single parse error.
-	// "abcdef" passes RejectShort (len>=3), fails minlen=10 (len=6) AND fails
-	// email pattern → inner returns validation.Errors{minlen, email}.
-	// Outer also fails: name = "" (required + minlen=2), code = 200 (lte=100).
+	// "abcdef" passes the mod but fails inner minlen=10 + email; outer also
+	// fails on name (required/minlen=2) and code (lte=100). Inner returns a
+	// validation.Errors aggregate the outer must drain.
 	in := []byte(`{"inner":{"email":"abcdef"},"name":"","code":200}`)
 	_, _, err := NestedMultierrStruct{}.DecodeFrom(in)
 	if err == nil {
@@ -233,9 +211,8 @@ func TestNestedMultierr_drainsInnerValidationErrors(t *testing.T) {
 	if len(leaves) < 4 {
 		t.Errorf("got %d leaves, want >= 4 (inner+outer combined): %v", len(leaves), leaves)
 	}
-	// Nested-struct decodes prepend the outer field segment via
-	// validation.Append; inner's email leaves surface with Path
-	// ["inner","email"], outer leaves stay one segment deep.
+	// Inner leaves get the outer field prepended (Path ["inner","email"]);
+	// outer leaves stay one segment deep.
 	buckets := map[string]int{}
 	for _, e := range leaves {
 		buckets[strings.Join(pathOf(e), ".")]++
@@ -247,17 +224,13 @@ func TestNestedMultierr_drainsInnerValidationErrors(t *testing.T) {
 	}
 }
 
-// pathOf reads the Path slice off any concrete validation error via a
-// shared shape — every leaf in the package embeds {Path []string} so a
-// reflect-free type switch over the open set is too noisy; the
-// errors.As fast path returns a pointer with the field we need.
+// pathOf reads the Path slice off a validation error, via the pathSegments
+// interface if present, else a type switch over the leaf types this test uses.
 func pathOf(e validation.Error) []string {
 	type pathed interface{ pathSegments() []string }
 	if p, ok := e.(pathed); ok {
 		return p.pathSegments()
 	}
-	// Fallback: dig via the public Path field on every leaf type by
-	// covering the ones used in this test.
 	switch v := e.(type) {
 	case *validation.EmailError:
 		return v.Path
@@ -273,11 +246,10 @@ func pathOf(e validation.Error) []string {
 	return nil
 }
 
-// TestNestedMultierr_innerParseErrorReturnsEarly: when the inner decode hits
-// a true parse error (malformed JSON), the outer should NOT drain it — it
-// returns immediately, wrapped in *decode.ParseError.
+// TestNestedMultierr_innerParseErrorReturnsEarly: an inner parse error
+// returns immediately (not drained), wrapped in *decode.ParseError.
 func TestNestedMultierr_innerParseErrorReturnsEarly(t *testing.T) {
-	// Inner email value is a number, not a string — scan.ErrExpectString.
+	// Inner email is a number, not a string.
 	in := []byte(`{"inner":{"email":123},"name":"valid","code":50}`)
 	_, _, err := NestedMultierrStruct{}.DecodeFrom(in)
 	if err == nil {

@@ -1,15 +1,8 @@
 package main
 
-// CLI integration tests. The whole CLI surface is exercised under one
-// parent test (TestCLI) so the binary build + temp-dir holding it can ride
-// on the parent's t.TempDir() — auto-cleaned when TestCLI returns. Each
-// `t.Run` subtest gets its own t.TempDir() for fixtures.
-//
-// Fixtures land in temp dirs outside any Go module — packages.Load returns
-// empty, the generator falls into its AST-only path, and output paths are
-// derived from filename / dir basename only. That's exactly the surface
-// these tests pin down: no module, no type info, just CLI dispatch +
-// post-codegen file write.
+// CLI integration tests, all under TestCLI so the built binary rides on the
+// parent's t.TempDir(). Fixtures in temp dirs outside any module exercise the
+// AST-only path with filename/basename-derived output paths.
 
 import (
 	"bytes"
@@ -20,9 +13,7 @@ import (
 	"testing"
 )
 
-// buildCLI compiles ggen into the parent test's TempDir so cleanup rides
-// on the standard t.TempDir() lifecycle. Returns the binary path. Called
-// once at the start of TestCLI; subtests reuse via closure.
+// buildCLI compiles ggen into the parent test's TempDir and returns its path.
 func buildCLI(t *testing.T) string {
 	t.Helper()
 	bin := filepath.Join(t.TempDir(), "ggen")
@@ -34,9 +25,8 @@ func buildCLI(t *testing.T) string {
 	return bin
 }
 
-// runCLI invokes the built ggen binary inside dir with the given args and
-// returns combined stdout+stderr. The caller decides whether the err is
-// expected (usage / -o-with-both-groups / etc.).
+// runCLI invokes the built ggen binary inside dir and returns combined
+// stdout+stderr plus the run error.
 func runCLI(t *testing.T, bin, dir string, args ...string) (string, error) {
 	t.Helper()
 	cmd := exec.Command(bin, args...)
@@ -59,9 +49,8 @@ func writeFixture(t *testing.T, path, content string) {
 	}
 }
 
-// writeGoMod drops a minimal go.mod into dir. Walk-mode tests need
-// one because `ggen ./...` now resolves the pattern via
-// packages.Load — same as `go build ./...`, so it needs module context.
+// writeGoMod drops a minimal go.mod into dir — walk-mode tests need module
+// context for packages.Load.
 func writeGoMod(t *testing.T, dir, module string) {
 	t.Helper()
 	writeFixture(t, filepath.Join(dir, "go.mod"), "module "+module+"\n\ngo 1.26\n")
@@ -138,11 +127,8 @@ func TestCLI(t *testing.T) {
 
 	t.Run("InterspersedFlags_FlagAfterPositional", func(t *testing.T) {
 		t.Parallel()
-		// Stdlib `flag.Parse` stops at the first non-flag arg, so the
-		// naive `ggen in.go -o out.go` form treats `-o out.go` as
-		// struct-name filters. The interspersing loop in main() re-parses
-		// around each positional so both orders work — match `go test`'s
-		// behaviour.
+		// flag.Parse stops at the first positional; main()'s interspersing
+		// loop must still pick up `-o out.go` placed after the file arg.
 		dir := t.TempDir()
 		writeFixture(t, filepath.Join(dir, "msg.go"), minimalStruct)
 		target := filepath.Join(dir, "after.go")
@@ -155,9 +141,8 @@ func TestCLI(t *testing.T) {
 
 	t.Run("InterspersedFlags_FlagBetweenPositionals", func(t *testing.T) {
 		t.Parallel()
-		// Two positionals (file + name filter) with a flag wedged between
-		// them. Both positionals must reach generateSingleFile in order;
-		// the flag must still take effect.
+		// A flag wedged between two positionals: both positionals must reach
+		// generateSingleFile in order and the flag must still take effect.
 		dir := t.TempDir()
 		writeFixture(t, filepath.Join(dir, "msg.go"), `package fixture
 
@@ -187,8 +172,7 @@ type Skipped struct {
 
 	t.Run("Verbosity_QuietSuppressesInfo", func(t *testing.T) {
 		t.Parallel()
-		// Default level is LevelQuiet — `wrote <file>` info lines must
-		// be suppressed. Only errors should reach stderr at this level.
+		// Default level LevelQuiet suppresses `wrote <file>` info lines.
 		dir := t.TempDir()
 		writeFixture(t, filepath.Join(dir, "msg.go"), minimalStruct)
 		out, err := runCLI(t, bin, dir, "msg.go")
@@ -217,8 +201,8 @@ type Skipped struct {
 
 	t.Run("Verbosity_VVShowsDebug", func(t *testing.T) {
 		t.Parallel()
-		// -vv lifts to LevelDebug. The dir-mode `parsing <pkg>` debug
-		// line is the most stable marker.
+		// -vv lifts to LevelDebug; the dir-mode `parsing <pkg>` line is the
+		// stable marker.
 		base := t.TempDir()
 		writeFixture(t, filepath.Join(base, "msg.go"),
 			strings.ReplaceAll(minimalStruct, "fixture", "vv"))
@@ -236,8 +220,8 @@ type Skipped struct {
 
 	t.Run("Verbosity_VVVShowsTrace", func(t *testing.T) {
 		t.Parallel()
-		// -vvv lifts to LevelTrace. Use a dir with no annotations so
-		// the `no annotated structs in X; skipping` trace line fires.
+		// -vvv lifts to LevelTrace; an annotation-free dir fires the
+		// `no annotated structs` trace line.
 		base := t.TempDir()
 		writeGoMod(t, base, "vvvtrace")
 		sub := filepath.Join(base, "empty")
@@ -256,8 +240,7 @@ type Bare struct {}
 
 	t.Run("Verbosity_PositionedFlagAfterTarget", func(t *testing.T) {
 		t.Parallel()
-		// The interspersing loop must also handle verbosity flags placed
-		// after a positional, since users will type `ggen msg.go -v`.
+		// Verbosity flags placed after a positional must still take effect.
 		dir := t.TempDir()
 		writeFixture(t, filepath.Join(dir, "msg.go"), minimalStruct)
 		out, err := runCLI(t, bin, dir, "msg.go", "-v")
@@ -271,9 +254,7 @@ type Bare struct {}
 
 	t.Run("InterspersedFlags_BoolFlagAfterPositional", func(t *testing.T) {
 		t.Parallel()
-		// Bool flags follow the same path. Pin -marshal AFTER the file
-		// arg to make sure the interspersing loop also picks up valueless
-		// flags (not just `-o <value>`).
+		// Valueless bool flags after a positional must also be picked up.
 		dir := t.TempDir()
 		writeFixture(t, filepath.Join(dir, "msg.go"), minimalStruct)
 		if out, err := runCLI(t, bin, dir, "msg.go", "-marshal"); err != nil {
@@ -287,9 +268,8 @@ type Bare struct {}
 
 	t.Run("SingleFile_NoAnnotation_ErrorsWithHint", func(t *testing.T) {
 		t.Parallel()
-		// File without `//ggen:generate` and no positional name filter
-		// must error out (not fall back to "all exported structs"). The
-		// diagnostic must mention how to fix it.
+		// No annotation and no name filter must error with a fix hint, not
+		// fall back to all exported structs.
 		dir := t.TempDir()
 		writeFixture(t, filepath.Join(dir, "msg.go"), `package fixture
 
@@ -314,9 +294,7 @@ type Msg struct {
 
 	t.Run("SingleFile_ExplicitNameOverridesMissingAnnotation", func(t *testing.T) {
 		t.Parallel()
-		// When the user names a struct explicitly, ggen processes it even
-		// though there's no `//ggen:generate` directive. Positional names
-		// are the escape hatch for the no-annotation case.
+		// An explicit positional name processes a struct lacking an annotation.
 		dir := t.TempDir()
 		writeFixture(t, filepath.Join(dir, "msg.go"), `package fixture
 
@@ -335,11 +313,8 @@ type Msg struct {
 
 	t.Run("SingleFile_OnlyEmitsRequestedFileStructs", func(t *testing.T) {
 		t.Parallel()
-		// Single-file mode must restrict output to types declared in the
-		// passed file, even when the directory IS a real Go module and
-		// packages.Load returns the whole package's syntax tree. Without
-		// this filter, `ggen one.go` inside a populated module dumps every
-		// annotated type across all sibling files into one_ggen.go.
+		// Single-file mode restricts output to types declared in the passed
+		// file, even inside a real module where packages.Load sees siblings.
 		base := t.TempDir()
 		writeFixture(t, filepath.Join(base, "go.mod"), `module sfscope
 
@@ -409,11 +384,8 @@ type SoloB struct {
 		mustHaveFile(t, filepath.Join(dir, "fixture_ggen.go"))
 		mustHaveFile(t, filepath.Join(dir, "fixture_ggen_test.go"))
 
-		// Content routing: Msg (declared in msg.go) belongs to the library
-		// build; MsgT (declared in msg_test.go) belongs to the test build.
-		// They must land in their respective _gen files and not bleed across
-		// — otherwise a `go test` build would pull duplicate methods or
-		// `go build` would import test-only types.
+		// Msg (msg.go) routes to the library build, MsgT (msg_test.go) to the
+		// test build; neither may bleed into the other's _gen file.
 		nonTest := mustReadOutput(t, filepath.Join(dir, "fixture_ggen.go"))
 		test := mustReadOutput(t, filepath.Join(dir, "fixture_ggen_test.go"))
 		if !strings.Contains(nonTest, "Msg) DecodeFrom") {
@@ -447,11 +419,9 @@ type Msg struct{ Text string }
 
 	t.Run("Directory_BuildTag_BucketsIntoSeparateFiles", func(t *testing.T) {
 		t.Parallel()
-		// Two files in the same package: one untagged, one behind
-		// `//go:build foo`. The tagged struct must NOT pollute the
-		// untagged gen file (would compile-break builds without `foo`),
-		// so the generator emits a separate `<dir>_foo_ggen.go` carrying
-		// the matching //go:build header.
+		// A struct behind `//go:build foo` must land in a separate
+		// `<dir>_foo_ggen.go` with the matching header, not pollute the
+		// untagged gen file.
 		base := t.TempDir()
 		dir := filepath.Join(base, "fixture")
 		writeFixture(t, filepath.Join(dir, "plain.go"), `package fixture
@@ -474,7 +444,7 @@ type Tagged struct {
 			t.Fatalf("ggen .: %v\n%s", err, out)
 		}
 
-		// Untagged bucket → fixture_ggen.go, Plain inside, no //go:build header.
+		// Untagged bucket: Plain in fixture_ggen.go, no //go:build header.
 		plain := filepath.Join(dir, "fixture_ggen.go")
 		mustHaveFile(t, plain)
 		plainBody := mustReadOutput(t, plain)
@@ -488,7 +458,7 @@ type Tagged struct {
 			t.Errorf("Tagged leaked into untagged file (would compile-break without `foo`):\n%s", plainBody)
 		}
 
-		// Tagged bucket → fixture_foo_ggen.go, Tagged inside, with the header.
+		// Tagged bucket: Tagged in fixture_foo_ggen.go, with the header.
 		tagged := filepath.Join(dir, "fixture_foo_ggen.go")
 		mustHaveFile(t, tagged)
 		taggedBody := mustReadOutput(t, tagged)
@@ -505,9 +475,8 @@ type Tagged struct {
 
 	t.Run("Directory_BuildTag_MultiTermExpression", func(t *testing.T) {
 		t.Parallel()
-		// `//go:build foo && bar` — multi-term constraint must canonicalize
-		// into a slug like `foo_bar` for the filename, with the original
-		// expression preserved verbatim in the //go:build header.
+		// Multi-term `//go:build foo && bar` canonicalizes to a `foo_bar`
+		// filename slug; the header keeps the original expression verbatim.
 		base := t.TempDir()
 		dir := filepath.Join(base, "fixture")
 		writeFixture(t, filepath.Join(dir, "tagged.go"), `//go:build foo && bar
@@ -569,12 +538,8 @@ type Tagged struct {
 
 	t.Run("WalkStopsAtSubModuleBoundary", func(t *testing.T) {
 		t.Parallel()
-		// `ggen ./...` is now module-scoped — same as `go build ./...`
-		// / `go test ./...`. A subdirectory with its OWN go.mod is a
-		// separate module and must NOT be visited by the parent's
-		// pattern run. Users with multi-module repos invoke ggen
-		// once per module (or wire a go.work + per-module loop) the
-		// same way they already do for `go build`.
+		// `ggen ./...` is module-scoped: a subdirectory with its own go.mod
+		// is a separate module and must not be visited by the parent's run.
 		base := t.TempDir()
 		writeGoMod(t, base, "rootmod")
 		writeFixture(t, filepath.Join(base, "root.go"),
@@ -593,11 +558,8 @@ type Tagged struct {
 
 	t.Run("Dot_DoesNotRecurseIntoSubpackages", func(t *testing.T) {
 		t.Parallel()
-		// `.` is single-package mode — only the directly named dir is
-		// processed. Subdirectories MUST NOT be touched, even when they
-		// contain annotated structs. This is the canonical
-		// `.` vs `./...` divergence and the easiest place for the dispatch
-		// in walkTarget to regress silently.
+		// `.` is single-package mode: subdirectories must not be touched even
+		// when they hold annotated structs (the `.` vs `./...` divergence).
 		base := t.TempDir()
 		writeFixture(t, filepath.Join(base, "top.go"),
 			strings.ReplaceAll(minimalStruct, "fixture", "root"))
@@ -614,9 +576,8 @@ type Tagged struct {
 
 	t.Run("Walk_RelativeSubtreePattern", func(t *testing.T) {
 		t.Parallel()
-		// `./pkg/...` scopes the pattern to a subtree — same as
-		// `go build ./pkg/...`. Sibling dirs outside the prefix
-		// don't get processed.
+		// `./pkg/...` scopes to a subtree; sibling dirs outside the prefix
+		// are not processed.
 		base := t.TempDir()
 		writeGoMod(t, base, "subtree")
 		root := filepath.Join(base, "pkg")
@@ -625,8 +586,7 @@ type Tagged struct {
 			strings.ReplaceAll(minimalStruct, "fixture", "pkg"))
 		writeFixture(t, filepath.Join(leaf, "msg.go"),
 			strings.ReplaceAll(strings.ReplaceAll(minimalStruct, "fixture", "leaf"), "Msg", "Leaf"))
-		// Sibling dir that must NOT get processed — proves the prefix
-		// scoping isn't ignored.
+		// Sibling dir outside the prefix — must not be processed.
 		sibling := filepath.Join(base, "other")
 		writeFixture(t, filepath.Join(sibling, "msg.go"),
 			strings.ReplaceAll(strings.ReplaceAll(minimalStruct, "fixture", "other"), "Msg", "Other"))
@@ -640,21 +600,19 @@ type Tagged struct {
 
 	t.Run("SingleFile_GathersErrorsAcrossStructs", func(t *testing.T) {
 		t.Parallel()
-		// One file, two structs, both with broken applicability rules
-		// (ascii on int / email on int). One invocation must surface
-		// BOTH diagnostics, not just the first — parse-time errors are
-		// accumulated via errors.Join and the logger unwraps the batch.
+		// Two structs with broken rules: one invocation must surface both
+		// diagnostics, not just the first.
 		dir := t.TempDir()
 		writeFixture(t, filepath.Join(dir, "multi.go"), `package fixture
 
 //ggen:generate
 type Test1 struct {
-	A int `+"`"+`json:"a" ggen:"ascii"`+"`"+`
+	A int `+"`"+`json:"a" pipe:"ascii"`+"`"+`
 }
 
 //ggen:generate
 type Test2 struct {
-	B int `+"`"+`json:"b" ggen:"email"`+"`"+`
+	B int `+"`"+`json:"b" pipe:"email"`+"`"+`
 }
 `)
 		out, err := runCLI(t, bin, dir, "multi.go", "Test1", "Test2")
@@ -671,17 +629,15 @@ type Test2 struct {
 
 	t.Run("SingleFile_GathersErrorsAcrossFields", func(t *testing.T) {
 		t.Parallel()
-		// One struct with multiple bad fields. Each field's
-		// applicability error must surface — extractStruct accumulates
-		// per-field errors via errors.Join.
+		// Each bad field's applicability error must surface.
 		dir := t.TempDir()
 		writeFixture(t, filepath.Join(dir, "multi.go"), `package fixture
 
 //ggen:generate
 type Multi struct {
-	A int `+"`"+`json:"a" ggen:"ascii"`+"`"+`
-	B int `+"`"+`json:"b" ggen:"email"`+"`"+`
-	C string `+"`"+`json:"c" ggen:"gt=0"`+"`"+`
+	A int `+"`"+`json:"a" pipe:"ascii"`+"`"+`
+	B int `+"`"+`json:"b" pipe:"email"`+"`"+`
+	C string `+"`"+`json:"c" pipe:"gt=0"`+"`"+`
 }
 `)
 		out, err := runCLI(t, bin, dir, "multi.go")
@@ -697,32 +653,28 @@ type Multi struct {
 
 	t.Run("SingleFile_GathersValAndModErrorsOnSameField", func(t *testing.T) {
 		t.Parallel()
-		// One field with BOTH a bad val rule AND a bad mod must surface
-		// both diagnostics — checkRuleApplicability accumulates errors
-		// across the val-phase + mod-phase + keys/dive/hintlen phases
-		// rather than short-circuiting on the first failure.
+		// A field with both a bad val rule and a bad mod must surface both
+		// diagnostics, not short-circuit on the first.
 		dir := t.TempDir()
 		writeFixture(t, filepath.Join(dir, "multi.go"), `package fixture
 
 //ggen:generate
 type Bad struct {
-	A int `+"`"+`json:"a" ggen:"ascii" mod:"trim"`+"`"+`
+	A int `+"`"+`json:"a" pipe:"trim ascii"`+"`"+`
 }
 `)
 		out, err := runCLI(t, bin, dir, "multi.go")
 		if err == nil {
 			t.Fatalf("expected non-zero exit, got:\n%s", out)
 		}
-		// ascii (val) and trim (mod) must BOTH appear, and each must
-		// carry its own position prefix (attachPosition walks the tree
-		// instead of stamping the first richError only).
+		// Both ascii (val) and trim (mod) must appear, each with its own
+		// position prefix.
 		for _, want := range []string{"`ascii`", "`trim`"} {
 			if !strings.Contains(out, want) {
 				t.Errorf("missing diagnostic for %s, got:\n%s", want, out)
 			}
 		}
-		// Two distinct position prefixes on the SAME line+column —
-		// proves both sub-errors got positions, not just the first.
+		// Two position prefixes — both sub-errors got positions.
 		if strings.Count(out, "multi.go:") < 2 {
 			t.Errorf("expected ≥2 position prefixes (val + mod), got:\n%s", out)
 		}
@@ -730,26 +682,23 @@ type Bad struct {
 
 	t.Run("Walk_GathersErrorsAcrossPackages", func(t *testing.T) {
 		t.Parallel()
-		// Walk mode must NOT bail on the first failing package — every
-		// package's errors get queued and flushed at exit, so users see
-		// the full problem list in one run. Three subdirs, two with bad
-		// applicability rules, one clean. After the run: both errors
-		// must surface, the clean dir's `wrote` line must still appear,
-		// and the exit code must be non-zero.
+		// Walk mode must not bail on the first failing package: two bad dirs
+		// + one clean, all errors surface, the clean dir still writes, exit
+		// is non-zero.
 		base := t.TempDir()
 		writeGoMod(t, base, "walkerrs")
 		writeFixture(t, filepath.Join(base, "a", "msg.go"), `package a
 
 //ggen:generate
 type A struct {
-	N int `+"`"+`json:"n" ggen:"ascii"`+"`"+`
+	N int `+"`"+`json:"n" pipe:"ascii"`+"`"+`
 }
 `)
 		writeFixture(t, filepath.Join(base, "b", "msg.go"), `package b
 
 //ggen:generate
 type B struct {
-	N int `+"`"+`json:"n" ggen:"email"`+"`"+`
+	N int `+"`"+`json:"n" pipe:"email"`+"`"+`
 }
 `)
 		writeFixture(t, filepath.Join(base, "c", "msg.go"), `package c
@@ -763,15 +712,13 @@ type C struct {
 		if err == nil {
 			t.Fatalf("walk with broken packages must exit non-zero, got:\n%s", out)
 		}
-		// Both errored packages must appear in the final batch.
 		if !strings.Contains(out, "`ascii`") {
 			t.Errorf("package a's ascii error missing, got:\n%s", out)
 		}
 		if !strings.Contains(out, "`email`") {
 			t.Errorf("package b's email error missing, got:\n%s", out)
 		}
-		// The clean package must still get its wrote line — proves the
-		// walk continued past the broken ones.
+		// The clean package still writes — the walk continued past the broken ones.
 		if !strings.Contains(out, "wrote") || !strings.Contains(out, "c_ggen.go") {
 			t.Errorf("clean package c should still emit `wrote ./c/c_ggen.go`, got:\n%s", out)
 		}
@@ -779,10 +726,8 @@ type C struct {
 
 	t.Run("Walk_RejectsOutputOverride", func(t *testing.T) {
 		t.Parallel()
-		// `-o` writes one file; pattern mode writes one per package. The
-		// combination has no sensible meaning, so reject it up front
-		// instead of silently dropping the flag. Rejection fires before
-		// packages.Load runs, so no go.mod is needed.
+		// `-o` (one file) is incompatible with pattern mode (one per package);
+		// rejected up front, before packages.Load, so no go.mod is needed.
 		base := t.TempDir()
 		a := filepath.Join(base, "a")
 		writeFixture(t, filepath.Join(a, "msg.go"),
@@ -800,10 +745,8 @@ type C struct {
 
 	t.Run("Dry_NoFileWritten", func(t *testing.T) {
 		t.Parallel()
-		// Three dispatch modes — single-file, directory, walk — each
-		// must exit zero on a clean fixture and leave NO _ggen.go on
-		// disk. One table per mode so a regression in any single
-		// dispatch branch surfaces in isolation.
+		// Each dispatch mode (single-file, directory, walk) must exit zero on
+		// a clean fixture and leave no _ggen.go on disk.
 		cases := []struct {
 			name  string
 			setup func(t *testing.T) (runDir string, args []string, mustAbsent []string)
@@ -859,13 +802,9 @@ type C struct {
 
 	t.Run("Dry_SurfacesAllErrors", func(t *testing.T) {
 		t.Parallel()
-		// Dry mode must surface every parse-time diagnostic the codegen
-		// path would have caught, exit non-zero, and leave nothing on
-		// disk. Two dispatches — single-file accumulates errors across
-		// fields in one struct; walk accumulates errors across multiple
-		// packages — exercised side-by-side so a regression in either
-		// the per-field or the per-package collection path stays
-		// localized.
+		// Dry mode must surface every parse-time diagnostic, exit non-zero,
+		// and leave nothing on disk — across both the per-field (single-file)
+		// and per-package (walk) collection paths.
 		cases := []struct {
 			name  string
 			setup func(t *testing.T) (runDir string, args, wantSubs, mustAbsent []string)
@@ -878,9 +817,9 @@ type C struct {
 
 //ggen:generate
 type Multi struct {
-	A int `+"`"+`json:"a" ggen:"ascii"`+"`"+`
-	B int `+"`"+`json:"b" ggen:"email"`+"`"+`
-	C string `+"`"+`json:"c" ggen:"gt=0"`+"`"+`
+	A int `+"`"+`json:"a" pipe:"ascii"`+"`"+`
+	B int `+"`"+`json:"b" pipe:"email"`+"`"+`
+	C string `+"`"+`json:"c" pipe:"gt=0"`+"`"+`
 }
 `)
 					return dir, []string{"-dry", "multi.go"},
@@ -897,14 +836,14 @@ type Multi struct {
 
 //ggen:generate
 type A struct {
-	N int `+"`"+`json:"n" ggen:"ascii"`+"`"+`
+	N int `+"`"+`json:"n" pipe:"ascii"`+"`"+`
 }
 `)
 					writeFixture(t, filepath.Join(base, "b", "msg.go"), `package b
 
 //ggen:generate
 type B struct {
-	N int `+"`"+`json:"n" ggen:"email"`+"`"+`
+	N int `+"`"+`json:"n" pipe:"email"`+"`"+`
 }
 `)
 					return base, []string{"-dry", "./..."},
@@ -939,8 +878,7 @@ type B struct {
 	t.Run("Dry_RejectsOutputOverride", func(t *testing.T) {
 		t.Parallel()
 		// -o and -pkg are dead in dry mode (nothing is written) — reject
-		// up front instead of silently dropping them. Parallels the
-		// walk's -o rejection.
+		// up front.
 		dir := t.TempDir()
 		writeFixture(t, filepath.Join(dir, "msg.go"), minimalStruct)
 		for _, args := range [][]string{
@@ -961,9 +899,7 @@ type B struct {
 
 	t.Run("WalkSkipsDotAndUnderscoreDirs", func(t *testing.T) {
 		t.Parallel()
-		// `go list ./...` skips dot- and underscore-prefixed dirs by
-		// convention; packages.Load inherits that, so the previous
-		// custom skip rule is redundant.
+		// packages.Load inherits `go list`'s dot-/underscore-dir skip.
 		base := t.TempDir()
 		writeGoMod(t, base, "skipdirs")
 		hidden := filepath.Join(base, ".hidden")
@@ -1030,10 +966,10 @@ type B struct {
 
 //ggen:generate
 type Validated struct {
-	Name string `+"`"+`json:"name" ggen:"required,minlen=1"`+"`"+`
+	Name string `+"`"+`json:"name" pipe:"required minlen=1"`+"`"+`
 }
 `)
-		// Default: required + MinLen rules emit typed errors at validation sites.
+		// Default: rules emit typed errors.
 		if out, err := runCLI(t, bin, dir, "msg.go"); err != nil {
 			t.Fatalf("ggen default: %v\n%s", err, out)
 		}
@@ -1041,7 +977,7 @@ type Validated struct {
 		if !strings.Contains(body, "MinLenError") || !strings.Contains(body, "RequiredError") {
 			t.Fatalf("expected MinLenError + RequiredError in default output, got:\n%s", body)
 		}
-		// -novalidate: rules elided; no validation.* error symbols anywhere.
+		// -novalidate: rules elided.
 		if out, err := runCLI(t, bin, dir, "-novalidate", "msg.go"); err != nil {
 			t.Fatalf("ggen -novalidate: %v\n%s", err, out)
 		}
@@ -1053,9 +989,8 @@ type Validated struct {
 
 	t.Run("HtmlescapeFlag_OptsIntoEscapeAppender", func(t *testing.T) {
 		t.Parallel()
-		// Default mode is jsonv2-shaped (literal `<`, `>`, `&`) → generated
-		// code uses AppendStringNoHTML. `-htmlescape` opts back into v1 wire
-		// shape and switches the call to the escaping AppendString helper.
+		// Default emits AppendStringNoHTML (literal `<`/`>`/`&`); -htmlescape
+		// switches to the escaping AppendString.
 		dir := t.TempDir()
 		writeFixture(t, filepath.Join(dir, "msg.go"), minimalStruct)
 
@@ -1123,8 +1058,7 @@ type Validated struct {
 		if !strings.Contains(body, `result.Text = ""`) {
 			t.Fatalf("expected null→zero branch with -nullzero, got:\n%s", body)
 		}
-		// //ggen:generate nullzero — the per-struct annotation has the same
-		// effect without the CLI flag.
+		// The per-struct //ggen:generate nullzero annotation has the same effect.
 		andir := t.TempDir()
 		writeFixture(t, filepath.Join(andir, "msg.go"), `package fixture
 
@@ -1175,10 +1109,9 @@ type Skipped struct {
 
 	t.Run("CrossPkgText_StaticDispatch", func(t *testing.T) {
 		t.Parallel()
-		// Real go.mod unlocks packages.Load + types.Implements. The consumer
-		// references a type from a sibling package implementing TextAppender +
-		// TextMarshaler + TextUnmarshaler. Generator must route through the
-		// fast text path (AppendText / UnmarshalText) instead of json.Marshal.
+		// With a real go.mod, a sibling-package type implementing
+		// TextAppender/TextMarshaler/TextUnmarshaler must route through the
+		// text path (AppendText/UnmarshalText), not json.Marshal.
 		base := t.TempDir()
 		writeFixture(t, filepath.Join(base, "go.mod"), `module crosspkgtest
 
@@ -1231,13 +1164,8 @@ type Msg struct {
 		}
 		body := mustReadOutput(t, filepath.Join(base, "consumer", "consumer_ggen.go"))
 
-		// Each generated method must dispatch through the static text path
-		// for the Tag field specifically (field-bound match — proves the
-		// receiver of the call is exactly result.Tag / s.Tag, not some
-		// random other call site).
-		// DecodeFrom bytes-path: result.Tag.UnmarshalText(...)
-		// DecodeFromStream: same call, distinguished by surrounding _s.String.
-		// AppendJSON: s.Tag.AppendText(dst).
+		// Field-bound match: the call receiver must be exactly result.Tag /
+		// s.Tag (two UnmarshalText: DecodeFrom + DecodeFromStream).
 		if got := strings.Count(body, "result.Tag.UnmarshalText("); got != 2 {
 			t.Errorf("expected 2 result.Tag.UnmarshalText calls (DecodeFrom + DecodeFromStream), got %d:\n%s", got, body)
 		}
@@ -1252,11 +1180,9 @@ type Msg struct {
 		}
 	})
 
-	// taggedExtPkg defines a TextMarshaler/Unmarshaler type with no
-	// `import "encoding"` or interface assertion — purely structural
-	// satisfaction. Shared across CrossPkgText_RealWorldThirdParty and
-	// CrossPkgText_GoWorkspace which only differ in how the consumer
-	// module is wired to the type.
+	// taggedExtPkg: a TextMarshaler/Unmarshaler type satisfied purely
+	// structurally (no `import "encoding"`). Shared by the third-party and
+	// go.work variants below.
 	const taggedExtPkg = `package ext
 
 type Tagged struct {
@@ -1280,10 +1206,8 @@ func (t *Tagged) UnmarshalText(b []byte) error {
 	return nil
 }
 `
-	// Consumer source referencing the ext package via the temp module's
-	// own path — no dependency on any sub-package of this repo. The
-	// `tagged` import alias documents that the generator must resolve
-	// the type via go/types method-set scan, not by name.
+	// Consumer source; the `tagged` import alias forces type resolution via
+	// go/types method-set scan, not by name.
 	const taggedConsumerSrc = `package consumer
 
 import tagged "consumertest/ext"
@@ -1296,13 +1220,8 @@ type Msg struct {
 
 	t.Run("CrossPkgText_RealWorldThirdParty", func(t *testing.T) {
 		t.Parallel()
-		// Real-world flow: a temp module references a type from another
-		// package in the SAME consumer module — TextMarshaler /
-		// UnmarshalText satisfied purely structurally (no `import
-		// "encoding"`, no interface assertion). The generator must
-		// detect it via types.Implements against std interfaces it
-		// loads on its own. Exercises the type-info dispatch end to
-		// end without depending on any sub-package of ggen itself.
+		// Type from another package in the same module, satisfying the text
+		// interfaces structurally; detected via types.Implements.
 		base := t.TempDir()
 		writeFixture(t, filepath.Join(base, "go.mod"), `module consumertest
 
@@ -1315,8 +1234,7 @@ go 1.26
 		}
 		body := mustReadOutput(t, filepath.Join(base, "consumer", "consumer_ggen.go"))
 
-		// Tagged has MarshalText (value receiver) + UnmarshalText (pointer
-		// receiver). No AppendText — encode side picks TextMarshaler branch.
+		// No AppendText, so encode picks the MarshalText branch.
 		if got := strings.Count(body, "result.Tag.UnmarshalText("); got != 2 {
 			t.Errorf("expected 2 result.Tag.UnmarshalText calls (DecodeFrom + DecodeFromStream), got %d:\n%s", got, body)
 		}
@@ -1330,12 +1248,8 @@ go 1.26
 
 	t.Run("CrossPkgText_GoWorkspace", func(t *testing.T) {
 		t.Parallel()
-		// go.work flow: the consumer module and the ext module are two
-		// separate modules wired together via a workspace. Same
-		// structural-detection assertions as the single-module variant;
-		// this proves the generator's loader honors workspace mode
-		// (packages.Load picks up GOFLAGS / go.work the same way
-		// `go build` does).
+		// Consumer and ext as separate modules wired via go.work — proves the
+		// loader honors workspace mode.
 		base := t.TempDir()
 		consumerDir := filepath.Join(base, "consumer")
 		extDir := filepath.Join(base, "ext")
@@ -1374,10 +1288,8 @@ go 1.26
 
 	t.Run("CrossPkgText_FallbackWithoutModule", func(t *testing.T) {
 		t.Parallel()
-		// Mirror of CrossPkgText_StaticDispatch but WITHOUT a go.mod:
-		// packages.Load returns nothing, generator falls into AST-only mode,
-		// and the cross-package field type goes through the json fallback.
-		// Pins the degraded-mode contract documented in parse.go.
+		// Without a go.mod, AST-only mode routes the cross-package field type
+		// through the json fallback (degraded-mode contract).
 		base := t.TempDir()
 		writeFixture(t, filepath.Join(base, "ext", "text.go"), `package ext
 
@@ -1403,10 +1315,7 @@ type Msg struct {
 			t.Fatalf("ggen .: %v\n%s", err, out)
 		}
 		body := mustReadOutput(t, filepath.Join(consumerDir, "consumer_ggen.go"))
-		// Without type info, the generator can't resolve interfaces — every
-		// generated method falls back to encoding/json against result.Tag /
-		// s.Tag specifically. Field-bound match confirms the json fallback
-		// landed at the correct call site and not some adjacent emission.
+		// Field-bound match: the json fallback must land on result.Tag / s.Tag.
 		if got := strings.Count(body, "json.Unmarshal(data[start:i], &result.Tag)"); got != 1 {
 			t.Errorf("expected 1 json.Unmarshal on &result.Tag in DecodeFrom, got %d:\n%s", got, body)
 		}
@@ -1425,10 +1334,8 @@ type Msg struct {
 
 	t.Run("CustomFunc_SamePackage_Validator", func(t *testing.T) {
 		t.Parallel()
-		// Same-package validator: `ggen:"@EvenOnly"` resolves to a top-level
-		// function in the SAME package as the struct. No import needed.
-		// Generated code calls EvenOnly(result.N) directly — no registry,
-		// no any-boxing, no allocs.
+		// Same-package `pipe:"@EvenOnly"` resolves to a top-level function;
+		// generated code calls EvenOnly(result.N) directly.
 		base := t.TempDir()
 		dir := filepath.Join(base, "customfunc")
 		writeFixture(t, filepath.Join(base, "go.mod"), `module customfunc
@@ -1441,7 +1348,7 @@ import "fmt"
 
 //ggen:generate
 type Msg struct {
-	N int `+"`"+`json:"n" ggen:"@EvenOnly"`+"`"+`
+	N int `+"`"+`json:"n" pipe:"@EvenOnly"`+"`"+`
 }
 
 func EvenOnly(n int) error {
@@ -1465,9 +1372,8 @@ func EvenOnly(n int) error {
 
 	t.Run("CustomFunc_SamePackage_PureMod", func(t *testing.T) {
 		t.Parallel()
-		// Same-package pure mod: `mod:"@Squash"` is `func(string) string`.
-		// Generated code emits direct assignment — no error-propagation
-		// branch since the signature is non-fallible.
+		// Pure mod `func(string) string` emits a direct assignment, no
+		// error-propagation branch.
 		base := t.TempDir()
 		dir := filepath.Join(base, "puremod")
 		writeFixture(t, filepath.Join(base, "go.mod"), `module puremod
@@ -1480,7 +1386,7 @@ import "strings"
 
 //ggen:generate
 type Msg struct {
-	S string `+"`"+`json:"s" mod:"@Squash"`+"`"+`
+	S string `+"`"+`json:"s" pipe:"@Squash"`+"`"+`
 }
 
 func Squash(s string) string { return strings.ReplaceAll(s, " ", "") }
@@ -1496,9 +1402,8 @@ func Squash(s string) string { return strings.ReplaceAll(s, " ", "") }
 
 	t.Run("CustomFunc_SamePackage_FallibleMod", func(t *testing.T) {
 		t.Parallel()
-		// Fallible mod: `func(T) (T, error)`. Generator detects the
-		// 2-result signature and emits an error-propagation branch.
-		// Errors surface as parse errors (early return), not validation.
+		// Fallible mod `func(T) (T, error)`: error-propagation branch,
+		// surfacing as a parse error (early return), not validation.
 		base := t.TempDir()
 		dir := filepath.Join(base, "fallible")
 		writeFixture(t, filepath.Join(base, "go.mod"), `module fallible
@@ -1511,7 +1416,7 @@ import "fmt"
 
 //ggen:generate
 type Msg struct {
-	S string `+"`"+`json:"s" mod:"@Reject"`+"`"+`
+	S string `+"`"+`json:"s" pipe:"@Reject"`+"`"+`
 }
 
 func Reject(s string) (string, error) {
@@ -1535,11 +1440,8 @@ func Reject(s string) (string, error) {
 
 	t.Run("CustomFunc_CrossPackage", func(t *testing.T) {
 		t.Parallel()
-		// Cross-package: `@ext.Validate`. ggen runs from INSIDE the consumer
-		// dir with arg `.` — it can't physically see ext/v.go through its
-		// own loaders, only resolve the import via packages.Load walking up
-		// to the module's go.mod. That's the realistic flow: users invoke
-		// ggen on their own package, not on a parent dir holding peers.
+		// Cross-package `@ext.Validate`: ggen runs from inside the consumer
+		// dir with `.`, resolving the import via packages.Load up to go.mod.
 		base := t.TempDir()
 		writeFixture(t, filepath.Join(base, "go.mod"), `module customfunc
 
@@ -1563,7 +1465,7 @@ import _ "customfunc/ext"
 
 //ggen:generate
 type Msg struct {
-	S string `+"`"+`json:"s" ggen:"@ext.Validate"`+"`"+`
+	S string `+"`"+`json:"s" pipe:"@ext.Validate"`+"`"+`
 }
 `)
 		if out, err := runCLI(t, bin, consumerDir, "."); err != nil {
@@ -1580,16 +1482,10 @@ type Msg struct {
 
 	t.Run("CustomFunc_CrossPackage_BlankImport_NameMismatch", func(t *testing.T) {
 		t.Parallel()
-		// Edge case: directory is `lib` but the package inside declares
-		// `package crunchy`. User blank-imports with `_ "customfunc/lib"`
-		// purely so ggen can resolve `@crunchy.Validate`. The resolver must:
-		//   1. Notice the file's `_`-aliased import.
-		//   2. Walk the import path → load the actual package via go/types.
-		//   3. Match the tag prefix against the package's declared Name(),
-		//      not the directory basename.
-		// Generated file then qualifies the call as `crunchy.Validate(...)`
-		// and adds the path-based import (no alias needed since `crunchy`
-		// is the natural identifier for that package).
+		// Dir `lib` declares `package crunchy`, blank-imported so ggen can
+		// resolve `@crunchy.Validate`. The resolver must follow the
+		// `_`-aliased import and match the tag prefix against the package's
+		// declared Name(), not the directory basename.
 		base := t.TempDir()
 		writeFixture(t, filepath.Join(base, "go.mod"), `module customfunc
 
@@ -1613,7 +1509,7 @@ import _ "customfunc/lib"
 
 //ggen:generate
 type Msg struct {
-	S string `+"`"+`json:"s" ggen:"@crunchy.Validate"`+"`"+`
+	S string `+"`"+`json:"s" pipe:"@crunchy.Validate"`+"`"+`
 }
 `)
 		if out, err := runCLI(t, bin, consumerDir, "."); err != nil {
@@ -1630,8 +1526,7 @@ type Msg struct {
 
 	t.Run("CustomFunc_SignatureMismatch_Error", func(t *testing.T) {
 		t.Parallel()
-		// Signature mismatch: validator returns wrong type → generator
-		// must reject at parse time, not silently emit broken code.
+		// Wrong validator signature must be rejected at parse time.
 		base := t.TempDir()
 		dir := filepath.Join(base, "badshape")
 		writeFixture(t, filepath.Join(base, "go.mod"), `module badshape
@@ -1642,26 +1537,26 @@ go 1.26
 
 //ggen:generate
 type Msg struct {
-	S string `+"`"+`json:"s" ggen:"@WrongShape"`+"`"+`
+	S string `+"`"+`json:"s" pipe:"@WrongShape"`+"`"+`
 }
 
-// WrongShape returns string instead of error — invalid validator shape.
-func WrongShape(s string) string { return s }
+// WrongShape's second result is int — fits none of error/bool, so it is
+// neither a valid fallible mod nor anything else.
+func WrongShape(s string) (string, int) { return s, 0 }
 `)
 		out, err := runCLI(t, bin, base, "./badshape")
 		if err == nil {
 			t.Fatalf("expected ggen to reject signature mismatch, got success:\n%s", out)
 		}
-		if !strings.Contains(out, "validator must return error") {
-			t.Errorf("expected diagnostic about validator return type, got:\n%s", out)
+		if !strings.Contains(out, "second result must be error or bool") {
+			t.Errorf("expected diagnostic about fallible second result, got:\n%s", out)
 		}
 	})
 
 	t.Run("CustomFunc_ParamMismatch_Error", func(t *testing.T) {
 		t.Parallel()
-		// Param-type mismatch: field is `int` but `@Foo` takes `string`.
-		// Generator must reject at parse time. Locks down the
-		// types.Identical(param, fieldType) check in resolveCustomFunc.
+		// Param-type mismatch (field int, func takes string) must be rejected
+		// at parse time — the types.Identical check in resolveCustomFunc.
 		base := t.TempDir()
 		dir := filepath.Join(base, "paramshape")
 		writeFixture(t, filepath.Join(base, "go.mod"), `module paramshape
@@ -1672,7 +1567,7 @@ go 1.26
 
 //ggen:generate
 type Msg struct {
-	N int `+"`"+`json:"n" ggen:"@WrongParam"`+"`"+`
+	N int `+"`"+`json:"n" pipe:"@WrongParam"`+"`"+`
 }
 
 // WrongParam takes string instead of int — param mismatch.
@@ -1682,7 +1577,7 @@ func WrongParam(s string) error { return nil }
 		if err == nil {
 			t.Fatalf("expected ggen to reject param mismatch, got success:\n%s", out)
 		}
-		if !strings.Contains(out, "param type string does not match field type int") {
+		if !strings.Contains(out, "param type string does not match value type int") {
 			t.Errorf("expected diagnostic about param type, got:\n%s", out)
 		}
 	})
@@ -1691,10 +1586,7 @@ func WrongParam(s string) error { return nil }
 
 	t.Run("Alias_Primitive_Generates", func(t *testing.T) {
 		t.Parallel()
-		// `type HtmlString string` annotated with //ggen:generate should
-		// produce DecodeFrom / AppendJSON methods on the named type.
-		// Smoke test: compile-level check — the generated file exists,
-		// declares the methods, and references the alias type literally.
+		// A primitive alias gets DecodeFrom / AppendJSON on the named type.
 		dir := t.TempDir()
 		writeFixture(t, filepath.Join(dir, "msg.go"), `package fixture
 
@@ -1724,8 +1616,7 @@ type Count int
 
 	t.Run("Alias_Container_Generates", func(t *testing.T) {
 		t.Parallel()
-		// Slice / map / array aliases over primitive elements must
-		// generate through the AST-only fallback (no go.mod here).
+		// Slice / map / array aliases generate through the AST-only fallback.
 		dir := t.TempDir()
 		writeFixture(t, filepath.Join(dir, "msg.go"), `package fixture
 
@@ -1758,8 +1649,8 @@ type Tuple [3]int
 
 	t.Run("Alias_RejectsUnsupported", func(t *testing.T) {
 		t.Parallel()
-		// Interfaces, channels, funcs have no JSON wire shape — generator
-		// must error at parse time rather than emit bogus code.
+		// Interfaces, channels, funcs have no JSON wire shape — reject at
+		// parse time.
 		cases := []struct {
 			name string
 			body string
@@ -1790,8 +1681,7 @@ type Tuple [3]int
 
 	t.Run("CustomFunc_NotFound_Error", func(t *testing.T) {
 		t.Parallel()
-		// `@Missing` references a function that doesn't exist. Generator
-		// must reject at parse time.
+		// `@Missing` references a nonexistent function — reject at parse time.
 		base := t.TempDir()
 		dir := filepath.Join(base, "missing")
 		writeFixture(t, filepath.Join(base, "go.mod"), `module missing
@@ -1802,7 +1692,7 @@ go 1.26
 
 //ggen:generate
 type Msg struct {
-	S string `+"`"+`json:"s" ggen:"@Missing"`+"`"+`
+	S string `+"`"+`json:"s" pipe:"@Missing"`+"`"+`
 }
 `)
 		out, err := runCLI(t, bin, base, "./missing")
@@ -1828,10 +1718,7 @@ type Msg struct {
 		}
 	})
 
-	// --- output formatting ---
-	//
-	// The rendered output is always run through go/format.Source so
-	// generated files land gofmt-clean.
+	// --- output formatting (always run through go/format.Source) ---
 
 	t.Run("DefaultOutputIsGofmtClean", func(t *testing.T) {
 		t.Parallel()
@@ -1841,10 +1728,8 @@ type Msg struct {
 			t.Fatalf("ggen msg.go: %v\n%s", err, out)
 		}
 		body := mustReadOutput(t, filepath.Join(dir, "msg_ggen.go"))
-		// gofmt-clean signal: inside DecodeFrom's body, statements
-		// emitted by the renderer get the same one-tab indent as the
-		// first line. Look for `\n\tvar err error\n` — gofmt indents
-		// it; an unformatted renderer would leave it flush-left.
+		// gofmt-clean signal: `\n\tvar err error\n` is one-tab indented; an
+		// unformatted renderer would leave it flush-left.
 		if !strings.Contains(body, "\n\tvar err error\n") {
 			t.Errorf("default output not gofmt-clean (var err error not indented):\n%s", body)
 		}
@@ -1852,11 +1737,8 @@ type Msg struct {
 
 	// --- rule applicability / value-shape rejection ---
 	//
-	// Every validation and mod rule that's coupled to a specific kind
-	// (string rules, numeric rules, len-rules, …) plus every numeric
-	// value parameter (`len=abc`, `gt=abc`, …) must be rejected at
-	// parse time with a clear diagnostic — silently emitting broken
-	// generated Go is the worst UX.
+	// Kind-coupled rules and bad value parameters (`len=abc`, `gt=abc`, …)
+	// must be rejected at parse time with a clear diagnostic.
 	t.Run("InvalidRuleApplication", func(t *testing.T) {
 		t.Parallel()
 		type bad struct {
@@ -1865,136 +1747,134 @@ type Msg struct {
 			tag      string // full struct-tag content (everything between backticks)
 			wantDiag string // substring expected somewhere in stderr+stdout
 		}
-		// Every entry produces a single-file fixture under a fresh
-		// temp dir and runs ggen against it; the CLI must exit
-		// non-zero and the diagnostic must contain `wantDiag`. Cases
-		// are grouped by rule for grep-ability.
+		// Each entry runs ggen on a single-file fixture; the CLI must exit
+		// non-zero and the diagnostic must contain wantDiag.
 		cases := []bad{
 			// ----- string-only rules on non-strings -----
-			{"ascii_on_int", "N int", `json:"n" ggen:"ascii"`, "`ascii` is inapplicable to int"},
-			{"email_on_int", "N int", `json:"n" ggen:"email"`, "`email` is inapplicable to int"},
-			{"url_on_bool", "B bool", `json:"b" ggen:"url"`, "`url` is inapplicable to bool"},
-			{"printable_on_float", "F float64", `json:"f" ggen:"printable"`, "`printable` is inapplicable to float64"},
-			{"alphanum_on_int", "N int", `json:"n" ggen:"alphanum"`, "`alphanum` is inapplicable to int"},
-			{"numericrule_on_int", "N int", `json:"n" ggen:"numeric"`, "`numeric` is inapplicable to int"},
-			{"lower_on_int", "N int", `json:"n" ggen:"lower"`, "`lower` is inapplicable to int"},
-			{"upper_on_int", "N int", `json:"n" ggen:"upper"`, "`upper` is inapplicable to int"},
-			{"hexadecimal_on_int", "N int", `json:"n" ggen:"hexadecimal"`, "`hexadecimal` is inapplicable to int"},
-			{"starts_on_int", "N int", `json:"n" ggen:"starts=foo"`, "`starts` is inapplicable to int"},
-			{"ends_on_int", "N int", `json:"n" ggen:"ends=foo"`, "`ends` is inapplicable to int"},
-			{"contains_on_int", "N int", `json:"n" ggen:"contains=foo"`, "`contains` is inapplicable to int"},
-			{"runes_on_int", "N int", `json:"n" ggen:"runes=3"`, "`runes` is inapplicable to int"},
-			{"minrunes_on_int", "N int", `json:"n" ggen:"minrunes=3"`, "`minrunes` is inapplicable to int"},
-			{"maxrunes_on_int", "N int", `json:"n" ggen:"maxrunes=3"`, "`maxrunes` is inapplicable to int"},
-			{"runes_on_bytes", "B []byte", `json:"b" ggen:"runes=3"`, "`runes` is inapplicable to []byte"},
-			{"ascii_on_bytes", "B []byte", `json:"b" ggen:"ascii"`, "`ascii` is inapplicable to []byte"},
-			{"starts_empty", "S string", `json:"s" ggen:"starts="`, `requires a non-empty value`},
-			{"ends_empty", "S string", `json:"s" ggen:"ends="`, `requires a non-empty value`},
-			{"contains_empty", "S string", `json:"s" ggen:"contains="`, `requires a non-empty value`},
+			{"ascii_on_int", "N int", `json:"n" pipe:"ascii"`, "`ascii` is inapplicable to int"},
+			{"email_on_int", "N int", `json:"n" pipe:"email"`, "`email` is inapplicable to int"},
+			{"url_on_bool", "B bool", `json:"b" pipe:"url"`, "`url` is inapplicable to bool"},
+			{"printable_on_float", "F float64", `json:"f" pipe:"printable"`, "`printable` is inapplicable to float64"},
+			{"alphanum_on_int", "N int", `json:"n" pipe:"alphanum"`, "`alphanum` is inapplicable to int"},
+			{"numericrule_on_int", "N int", `json:"n" pipe:"numeric"`, "`numeric` is inapplicable to int"},
+			{"lower_on_int", "N int", `json:"n" pipe:"lower"`, "`lower` is inapplicable to int"},
+			{"upper_on_int", "N int", `json:"n" pipe:"upper"`, "`upper` is inapplicable to int"},
+			{"hexadecimal_on_int", "N int", `json:"n" pipe:"hexadecimal"`, "`hexadecimal` is inapplicable to int"},
+			{"starts_on_int", "N int", `json:"n" pipe:"starts=foo"`, "`starts` is inapplicable to int"},
+			{"ends_on_int", "N int", `json:"n" pipe:"ends=foo"`, "`ends` is inapplicable to int"},
+			{"contains_on_int", "N int", `json:"n" pipe:"contains=foo"`, "`contains` is inapplicable to int"},
+			{"runes_on_int", "N int", `json:"n" pipe:"runes=3"`, "`runes` is inapplicable to int"},
+			{"minrunes_on_int", "N int", `json:"n" pipe:"minrunes=3"`, "`minrunes` is inapplicable to int"},
+			{"maxrunes_on_int", "N int", `json:"n" pipe:"maxrunes=3"`, "`maxrunes` is inapplicable to int"},
+			{"runes_on_bytes", "B []byte", `json:"b" pipe:"runes=3"`, "`runes` is inapplicable to []byte"},
+			{"ascii_on_bytes", "B []byte", `json:"b" pipe:"ascii"`, "`ascii` is inapplicable to []byte"},
+			{"starts_empty", "S string", `json:"s" pipe:"starts="`, `requires a non-empty value`},
+			{"ends_empty", "S string", `json:"s" pipe:"ends="`, `requires a non-empty value`},
+			{"contains_empty", "S string", `json:"s" pipe:"contains="`, `requires a non-empty value`},
 
 			// ----- numeric-only rules on non-numerics -----
-			{"gt_on_string", "S string", `json:"s" ggen:"gt=1"`, "`gt` is inapplicable to string"},
-			{"gte_on_string", "S string", `json:"s" ggen:"gte=1"`, "`gte` is inapplicable to string"},
-			{"lt_on_string", "S string", `json:"s" ggen:"lt=1"`, "`lt` is inapplicable to string"},
-			{"lte_on_string", "S string", `json:"s" ggen:"lte=1"`, "`lte` is inapplicable to string"},
-			{"gt_on_bool", "B bool", `json:"b" ggen:"gt=0"`, "`gt` is inapplicable to bool"},
-			{"gt_on_slice", "X []int", `json:"x" ggen:"gt=0"`, "`gt` is inapplicable to []int"},
-			{"gt_bad_value", "N int", `json:"n" ggen:"gt=abc"`, `value is not a valid number`},
-			{"gte_bad_value", "N int", `json:"n" ggen:"gte=abc"`, `value is not a valid number`},
-			{"lt_bad_value", "N int", `json:"n" ggen:"lt=abc"`, `value is not a valid number`},
-			{"lte_bad_value", "N int", `json:"n" ggen:"lte=abc"`, `value is not a valid number`},
-			{"gt_missing_value", "N int", `json:"n" ggen:"gt"`, `requires a numeric value`},
+			{"gt_on_string", "S string", `json:"s" pipe:"gt=1"`, "`gt` is inapplicable to string"},
+			{"gte_on_string", "S string", `json:"s" pipe:"gte=1"`, "`gte` is inapplicable to string"},
+			{"lt_on_string", "S string", `json:"s" pipe:"lt=1"`, "`lt` is inapplicable to string"},
+			{"lte_on_string", "S string", `json:"s" pipe:"lte=1"`, "`lte` is inapplicable to string"},
+			{"gt_on_bool", "B bool", `json:"b" pipe:"gt=0"`, "`gt` is inapplicable to bool"},
+			{"gt_on_slice", "X []int", `json:"x" pipe:"gt=0"`, "`gt` is inapplicable to []int"},
+			{"gt_bad_value", "N int", `json:"n" pipe:"gt=abc"`, `value is not a valid number`},
+			{"gte_bad_value", "N int", `json:"n" pipe:"gte=abc"`, `value is not a valid number`},
+			{"lt_bad_value", "N int", `json:"n" pipe:"lt=abc"`, `value is not a valid number`},
+			{"lte_bad_value", "N int", `json:"n" pipe:"lte=abc"`, `value is not a valid number`},
+			{"gt_missing_value", "N int", `json:"n" pipe:"gt"`, `requires a numeric value`},
 
 			// ----- multiple: integers only -----
-			{"multiple_on_string", "S string", `json:"s" ggen:"multiple=2"`, "`multiple` is inapplicable to string"},
-			{"multiple_on_float", "F float64", `json:"f" ggen:"multiple=2"`, "`multiple` is inapplicable to float64"},
-			{"multiple_on_bool", "B bool", `json:"b" ggen:"multiple=2"`, "`multiple` is inapplicable to bool"},
-			{"multiple_bad_value", "N int", `json:"n" ggen:"multiple=abc"`, `value is not a valid integer`},
-			{"multiple_missing", "N int", `json:"n" ggen:"multiple"`, `requires an integer value`},
+			{"multiple_on_string", "S string", `json:"s" pipe:"multiple=2"`, "`multiple` is inapplicable to string"},
+			{"multiple_on_float", "F float64", `json:"f" pipe:"multiple=2"`, "`multiple` is inapplicable to float64"},
+			{"multiple_on_bool", "B bool", `json:"b" pipe:"multiple=2"`, "`multiple` is inapplicable to bool"},
+			{"multiple_bad_value", "N int", `json:"n" pipe:"multiple=abc"`, `value is not a valid integer`},
+			{"multiple_missing", "N int", `json:"n" pipe:"multiple"`, `requires an integer value`},
 
 			// ----- len/minlen/maxlen/notempty on non-len-able kinds -----
-			{"len_on_int", "N int", `json:"n" ggen:"len=5"`, "`len` is inapplicable to int"},
-			{"len_on_bool", "B bool", `json:"b" ggen:"len=1"`, "`len` is inapplicable to bool"},
-			{"len_on_float", "F float64", `json:"f" ggen:"len=1"`, "`len` is inapplicable to float64"},
-			{"minlen_on_int", "N int", `json:"n" ggen:"minlen=1"`, "`minlen` is inapplicable to int"},
-			{"maxlen_on_int", "N int", `json:"n" ggen:"maxlen=1"`, "`maxlen` is inapplicable to int"},
-			{"notempty_on_int", "N int", `json:"n" ggen:"notempty"`, "`notempty` is inapplicable to int"},
-			{"notempty_on_bool", "B bool", `json:"b" ggen:"notempty"`, "`notempty` is inapplicable to bool"},
-			{"len_bad_value", "S string", `json:"s" ggen:"len=abc"`, `value is not a valid integer`},
-			{"minlen_bad_value", "S string", `json:"s" ggen:"minlen=abc"`, `value is not a valid integer`},
-			{"maxlen_bad_value", "S string", `json:"s" ggen:"maxlen=abc"`, `value is not a valid integer`},
-			{"len_missing_value", "S string", `json:"s" ggen:"len"`, `requires an integer value`},
-			{"len_float_value", "S string", `json:"s" ggen:"len=1.5"`, `value is not a valid integer`},
-			{"runes_bad_value", "S string", `json:"s" ggen:"runes=abc"`, `value is not a valid integer`},
-			{"minrunes_bad_value", "S string", `json:"s" ggen:"minrunes=abc"`, `value is not a valid integer`},
+			{"len_on_int", "N int", `json:"n" pipe:"len=5"`, "`len` is inapplicable to int"},
+			{"len_on_bool", "B bool", `json:"b" pipe:"len=1"`, "`len` is inapplicable to bool"},
+			{"len_on_float", "F float64", `json:"f" pipe:"len=1"`, "`len` is inapplicable to float64"},
+			{"minlen_on_int", "N int", `json:"n" pipe:"minlen=1"`, "`minlen` is inapplicable to int"},
+			{"maxlen_on_int", "N int", `json:"n" pipe:"maxlen=1"`, "`maxlen` is inapplicable to int"},
+			{"notempty_on_int", "N int", `json:"n" pipe:"notempty"`, "`notempty` is inapplicable to int"},
+			{"notempty_on_bool", "B bool", `json:"b" pipe:"notempty"`, "`notempty` is inapplicable to bool"},
+			{"len_bad_value", "S string", `json:"s" pipe:"len=abc"`, `value is not a valid integer`},
+			{"minlen_bad_value", "S string", `json:"s" pipe:"minlen=abc"`, `value is not a valid integer`},
+			{"maxlen_bad_value", "S string", `json:"s" pipe:"maxlen=abc"`, `value is not a valid integer`},
+			{"len_missing_value", "S string", `json:"s" pipe:"len"`, `requires an integer value`},
+			{"len_float_value", "S string", `json:"s" pipe:"len=1.5"`, `value is not a valid integer`},
+			{"runes_bad_value", "S string", `json:"s" pipe:"runes=abc"`, `value is not a valid integer`},
+			{"minrunes_bad_value", "S string", `json:"s" pipe:"minrunes=abc"`, `value is not a valid integer`},
 
 			// ----- eq / neq scope: not bool, not slice, not float-with-text -----
-			{"eq_on_slice", "X []int", `json:"x" ggen:"eq=1"`, "`eq` is inapplicable to []int"},
-			{"neq_on_slice", "X []int", `json:"x" ggen:"neq=1"`, "`neq` is inapplicable to []int"},
-			{"eq_on_bool", "B bool", `json:"b" ggen:"eq=true"`, "`eq` is inapplicable to bool"},
-			{"neq_on_bool", "B bool", `json:"b" ggen:"neq=true"`, "`neq` is inapplicable to bool"},
-			{"eq_int_bad_value", "N int", `json:"n" ggen:"eq=abc"`, `value is not a valid number`},
-			{"neq_int_bad_value", "N int", `json:"n" ggen:"neq=abc"`, `value is not a valid number`},
+			{"eq_on_slice", "X []int", `json:"x" pipe:"eq=1"`, "`eq` is inapplicable to []int"},
+			{"neq_on_slice", "X []int", `json:"x" pipe:"neq=1"`, "`neq` is inapplicable to []int"},
+			{"eq_on_bool", "B bool", `json:"b" pipe:"eq=true"`, "`eq` is inapplicable to bool"},
+			{"neq_on_bool", "B bool", `json:"b" pipe:"neq=true"`, "`neq` is inapplicable to bool"},
+			{"eq_int_bad_value", "N int", `json:"n" pipe:"eq=abc"`, `value is not a valid number`},
+			{"neq_int_bad_value", "N int", `json:"n" pipe:"neq=abc"`, `value is not a valid number`},
 
 			// ----- oneof: must be string/numeric, non-empty, numeric parts numeric -----
-			{"oneof_on_bool", "B bool", `json:"b" ggen:"oneof=true|false"`, "`oneof` is inapplicable to bool"},
-			{"oneof_on_slice", "X []int", `json:"x" ggen:"oneof=1|2"`, "`oneof` is inapplicable to []int"},
-			{"oneof_empty", "S string", `json:"s" ggen:"oneof"`, `oneof` + "` requires a "}, // matches "rule `oneof` requires a `|`-separated…"
-			{"oneof_numeric_bad_part", "N int", `json:"n" ggen:"oneof=1|two|3"`, `part "two" is not a valid number`},
+			{"oneof_on_bool", "B bool", `json:"b" pipe:"oneof=true|false"`, "`oneof` is inapplicable to bool"},
+			{"oneof_on_slice", "X []int", `json:"x" pipe:"oneof=1|2"`, "`oneof` is inapplicable to []int"},
+			{"oneof_empty", "S string", `json:"s" pipe:"oneof"`, `oneof` + "` requires a "}, // matches "rule `oneof` requires a `|`-separated…"
+			{"oneof_numeric_bad_part", "N int", `json:"n" pipe:"oneof=1|two|3"`, `part "two" is not a valid number`},
 
-			// ----- hintlen restricted to slice/map -----
-			{"hintlen_on_int", "N int", `json:"n" ggen:"hintlen=10"`, "`hintlen` is only valid on slice/map fields"},
-			{"hintlen_on_string", "S string", `json:"s" ggen:"hintlen=10"`, "`hintlen` is only valid on slice/map fields"},
-			{"hintlen_on_bool", "B bool", `json:"b" ggen:"hintlen=10"`, "`hintlen` is only valid on slice/map fields"},
-			{"hintlen_on_array", "X [3]int", `json:"x" ggen:"hintlen=10"`, "`hintlen` is only valid on slice/map fields"},
-			{"hintlen_zero_on_int", "N int", `json:"n" ggen:"hintlen=0"`, "`hintlen` is only valid on slice/map fields"},
-			{"hintlen_negative", "X []int", `json:"x" ggen:"hintlen=-1"`, "hintlen=-1 must be ≥ 0"},
-			{"hintlen_non_numeric", "X []int", `json:"x" ggen:"hintlen=abc"`, `hintlen="abc" is not a valid integer`},
+			// ----- hint restricted to slice/map -----
+			{"hint_on_int", "N int", `json:"n" hint:"10"`, "`hint` is only valid on slice/map fields"},
+			{"hint_on_string", "S string", `json:"s" hint:"10"`, "`hint` is only valid on slice/map fields"},
+			{"hint_on_bool", "B bool", `json:"b" hint:"10"`, "`hint` is only valid on slice/map fields"},
+			{"hint_on_array", "X [3]int", `json:"x" hint:"10"`, "`hint` is only valid on slice/map fields"},
+			{"hint_zero_on_int", "N int", `json:"n" hint:"0"`, "`hint` is only valid on slice/map fields"},
+			{"hint_negative", "X []int", `json:"x" hint:"-1"`, "must be ≥ 0"},
+			{"hint_non_numeric", "X []int", `json:"x" hint:"abc"`, `is not a valid integer`},
 
-			// ----- dive: only on slice/array/map -----
-			{"dive_on_string", "S string", `json:"s" ggen:"dive:minlen=1"`, "`dive:` tag prefix is only valid on slice/array/map fields"},
-			{"dive_on_int", "N int", `json:"n" ggen:"dive:gte=0"`, "`dive:` tag prefix is only valid on slice/array/map fields"},
-			{"dive_mod_on_int", "N int", `json:"n" mod:"dive:trim"`, "`dive:` tag prefix is only valid on slice/array/map fields"},
+			// ----- inner: only on slice/array/map -----
+			{"dive_on_string", "S string", `json:"s" pipe:"inner:minlen=1"`, "`inner:` tag prefix is only valid on slice/array/map fields"},
+			{"dive_on_int", "N int", `json:"n" pipe:"inner:gte=0"`, "`inner:` tag prefix is only valid on slice/array/map fields"},
+			{"dive_mod_on_int", "N int", `json:"n" pipe:"inner:trim"`, "`inner:` tag prefix is only valid on slice/array/map fields"},
 
 			// ----- keys: only on maps -----
-			{"keys_on_string", "S string", `json:"s" ggen:"keys:minlen=1"`, "`keys:` tag prefix is only valid on map[string]V fields"},
-			{"keys_on_slice", "X []int", `json:"x" ggen:"keys:minlen=1"`, "`keys:` tag prefix is only valid on map[string]V fields"},
-			{"keys_mod_on_string", "S string", `json:"s" mod:"keys:trim"`, "`keys:` tag prefix is only valid on map[string]V fields"},
+			{"keys_on_string", "S string", `json:"s" pipe:"keys:minlen=1"`, "`keys:` tag prefix is only valid on map[string]V fields"},
+			{"keys_on_slice", "X []int", `json:"x" pipe:"keys:minlen=1"`, "`keys:` tag prefix is only valid on map[string]V fields"},
+			{"keys_mod_on_string", "S string", `json:"s" pipe:"keys:trim"`, "`keys:` tag prefix is only valid on map[string]V fields"},
 			// keys: rules themselves are typed against KindString — verify
 			// a non-string-applicable rule still gets rejected even though
 			// the parent IS a map.
-			{"keys_numeric_rule", "M map[string]int", `json:"m" ggen:"keys:gt=1"`, "`gt` is inapplicable to string"},
+			{"keys_numeric_rule", "M map[string]int", `json:"m" pipe:"keys:gt=1"`, "`gt` is inapplicable to string"},
 
-			// ----- dive: element kind mismatch -----
+			// ----- inner: element kind mismatch -----
 			// []int element is int — string rules invalid on the element.
-			{"dive_ascii_on_int_elem", "X []int", `json:"x" ggen:"dive:ascii"`, "`ascii` is inapplicable to int"},
-			{"dive_email_on_int_elem", "X []int", `json:"x" ggen:"dive:email"`, "`email` is inapplicable to int"},
-			{"dive_len_on_int_elem", "X []int", `json:"x" ggen:"dive:len=3"`, "`len` is inapplicable to int"},
+			{"dive_ascii_on_int_elem", "X []int", `json:"x" pipe:"inner:ascii"`, "`ascii` is inapplicable to int"},
+			{"dive_email_on_int_elem", "X []int", `json:"x" pipe:"inner:email"`, "`email` is inapplicable to int"},
+			{"dive_len_on_int_elem", "X []int", `json:"x" pipe:"inner:len=3"`, "`len` is inapplicable to int"},
 			// map[string]int value is int.
-			{"dive_ascii_on_int_mapval", "M map[string]int", `json:"m" ggen:"dive:ascii"`, "`ascii` is inapplicable to int"},
+			{"dive_ascii_on_int_mapval", "M map[string]int", `json:"m" pipe:"inner:ascii"`, "`ascii` is inapplicable to int"},
 			// []string element is string — numeric rules invalid.
-			{"dive_gt_on_string_elem", "X []string", `json:"x" ggen:"dive:gt=1"`, "`gt` is inapplicable to string"},
+			{"dive_gt_on_string_elem", "X []string", `json:"x" pipe:"inner:gt=1"`, "`gt` is inapplicable to string"},
 
 			// ----- mods: string mods on numerics, numeric mods on strings -----
-			{"trim_on_int", "N int", `json:"n" mod:"trim"`, "`trim` is inapplicable to int"},
-			{"lower_mod_on_int", "N int", `json:"n" mod:"lower"`, "`lower` is inapplicable to int"},
-			{"upper_mod_on_int", "N int", `json:"n" mod:"upper"`, "`upper` is inapplicable to int"},
-			{"trimleft_on_int", "N int", `json:"n" mod:"trimleft=foo"`, "`trimleft` is inapplicable to int"},
-			{"trimright_on_int", "N int", `json:"n" mod:"trimright=foo"`, "`trimright` is inapplicable to int"},
-			{"replace_on_int", "N int", `json:"n" mod:"replace=a|b"`, "`replace` is inapplicable to int"},
-			{"clamp_on_string", "S string", `json:"s" mod:"clamp=0|10"`, "`clamp` is inapplicable to string"},
-			{"clamp_on_bool", "B bool", `json:"b" mod:"clamp=0|10"`, "`clamp` is inapplicable to bool"},
-			{"clamp_on_slice", "X []int", `json:"x" mod:"clamp=0|10"`, "`clamp` is inapplicable to []int"},
+			{"trim_on_int", "N int", `json:"n" pipe:"trim"`, "`trim` is inapplicable to int"},
+			{"lower_mod_on_int", "N int", `json:"n" pipe:"lower"`, "`lower` is inapplicable to int"},
+			{"upper_mod_on_int", "N int", `json:"n" pipe:"upper"`, "`upper` is inapplicable to int"},
+			{"trimleft_on_int", "N int", `json:"n" pipe:"trimleft=foo"`, "`trimleft` is inapplicable to int"},
+			{"trimright_on_int", "N int", `json:"n" pipe:"trimright=foo"`, "`trimright` is inapplicable to int"},
+			{"replace_on_int", "N int", `json:"n" pipe:"replace=a|b"`, "`replace` is inapplicable to int"},
+			{"clamp_on_string", "S string", `json:"s" pipe:"clamp=0|10"`, "`clamp` is inapplicable to string"},
+			{"clamp_on_bool", "B bool", `json:"b" pipe:"clamp=0|10"`, "`clamp` is inapplicable to bool"},
+			{"clamp_on_slice", "X []int", `json:"x" pipe:"clamp=0|10"`, "`clamp` is inapplicable to []int"},
 
 			// ----- mods: parameter-shape rejection -----
-			{"trimleft_empty", "S string", `json:"s" mod:"trimleft="`, "`trimleft` requires a non-empty value"},
-			{"trimright_empty", "S string", `json:"s" mod:"trimright="`, "`trimright` requires a non-empty value"},
-			{"replace_missing_pipe", "S string", `json:"s" mod:"replace=foo"`, "requires `old|new` form"},
-			{"replace_empty_old", "S string", `json:"s" mod:"replace=|new"`, "requires `old|new` form"},
-			{"clamp_missing_pipe", "N int", `json:"n" mod:"clamp=10"`, "is missing the lo`|`hi separator"},
-			{"clamp_both_empty", "N int", `json:"n" mod:"clamp=|"`, "requires at least one of lo or hi"},
-			{"clamp_bad_lo", "N int", `json:"n" mod:"clamp=abc|10"`, "lo \"abc\" is not a valid number"},
-			{"clamp_bad_hi", "N int", `json:"n" mod:"clamp=0|abc"`, "hi \"abc\" is not a valid number"},
+			{"trimleft_empty", "S string", `json:"s" pipe:"trimleft="`, "`trimleft` requires a non-empty value"},
+			{"trimright_empty", "S string", `json:"s" pipe:"trimright="`, "`trimright` requires a non-empty value"},
+			{"replace_missing_pipe", "S string", `json:"s" pipe:"replace=foo"`, "requires `old|new` form"},
+			{"replace_empty_old", "S string", `json:"s" pipe:"replace=|new"`, "requires `old|new` form"},
+			{"clamp_missing_pipe", "N int", `json:"n" pipe:"clamp=10"`, "is missing the lo`|`hi separator"},
+			{"clamp_both_empty", "N int", `json:"n" pipe:"clamp=|"`, "requires at least one of lo or hi"},
+			{"clamp_bad_lo", "N int", `json:"n" pipe:"clamp=abc|10"`, "lo \"abc\" is not a valid number"},
+			{"clamp_bad_hi", "N int", `json:"n" pipe:"clamp=0|abc"`, "hi \"abc\" is not a valid number"},
 		}
 
 		for _, tc := range cases {

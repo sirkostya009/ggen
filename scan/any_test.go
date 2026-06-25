@@ -133,15 +133,9 @@ func BenchmarkAny_scanNumber(b *testing.B) {
 	}
 }
 
-// BenchmarkAny_Shapes — per-shape decode benches. Same shape table the
-// encode side benches (encode/appendany_test.go) marshals from; here
-// we feed the marshalled bytes back through Any/AnyNumber and compare
-// to stdlib v1's reflective `json.Unmarshal` into `*any`. Surfaces
-// per-shape parsing cost across (scalar, slice, map, nested).
-//
-// Payloads come from the inline anyShapeInputs table; values are the
-// same shapes the AppendAny bench covers (32-entry primitive slices,
-// 32-entry primitive maps, scalars) so the comparison is symmetric.
+// BenchmarkAny_Shapes — per-shape decode benches over anyShapeInputs (the
+// same shape mix the AppendAny bench covers), three rows each: stdjson,
+// Any, AnyNumber.
 func BenchmarkAny_Shapes(b *testing.B) {
 	codecs := []struct {
 		name string

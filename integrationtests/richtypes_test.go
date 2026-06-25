@@ -4,9 +4,8 @@ package integrationtests
 
 //go:generate ../ggen $GOFILE
 
-// Coverage for the rich built-in type kinds: json.RawMessage / jsontext.Value
-// (passthrough), url.URL, math/big, and google/uuid. One annotated struct
-// hosts every kind so the generator's dispatch matrix is exercised end to end.
+// Coverage for the rich built-in kinds: json.RawMessage / jsontext.Value,
+// url.URL, math/big, and google/uuid.
 
 import (
 	"encoding/json"
@@ -22,11 +21,8 @@ import (
 	"github.com/sirkostya009/ggen/encode"
 )
 
-// RichTypes mixes every newly-added Kind. Field naming mirrors the type so
-// failures point straight at the offending dispatch case. ID and GofrsID
-// cover both major UUID libraries — both are `type UUID [16]byte` and
-// satisfy TextMarshaler/Unmarshaler, so the same generated dispatch
-// serves both with no per-lib codegen.
+// RichTypes mixes every rich kind. ID and GofrsID cover both major UUID
+// libraries, served by the same TextMarshaler/Unmarshaler dispatch.
 //
 //ggen:generate
 type RichTypes struct {
@@ -40,8 +36,8 @@ type RichTypes struct {
 	GofrsID gofrs.UUID      `json:"gofrsId"`
 }
 
-// TestRich_Roundtrip marshal → unmarshal preserves every field. Big values
-// chosen so they exceed int64 range, exercising arbitrary-precision paths.
+// TestRich_Roundtrip: marshal → unmarshal preserves every field. Big values
+// exceed int64 range to exercise arbitrary-precision paths.
 func TestRich_Roundtrip(t *testing.T) {
 	hugeInt, _ := new(big.Int).SetString("123456789012345678901234567890", 10)
 	site, _ := url.Parse("https://example.com/path?q=1")
@@ -66,7 +62,7 @@ func TestRich_Roundtrip(t *testing.T) {
 		t.Fatalf("unmarshal: %v\n%s", err, out)
 	}
 
-	// Raw bytes should round-trip byte-equal (modulo alias vs copy).
+	// Raw bytes round-trip byte-equal.
 	if string(got.Raw1) != string(in.Raw1) {
 		t.Errorf("Raw1 = %s, want %s", got.Raw1, in.Raw1)
 	}
@@ -80,8 +76,7 @@ func TestRich_Roundtrip(t *testing.T) {
 		t.Errorf("Big = %s, want %s", got.Big.String(), in.Big.String())
 	}
 	if got.BigF.Cmp(&in.BigF) != 0 {
-		// big.Float compare can be sensitive to precision — fall back to
-		// Text equality which is what we wrote on the wire.
+		// big.Float Cmp is precision-sensitive; fall back to wire Text equality.
 		if got.BigF.Text('g', 20) != in.BigF.Text('g', 20) {
 			t.Errorf("BigF = %s, want %s", got.BigF.Text('g', 20), in.BigF.Text('g', 20))
 		}
@@ -97,10 +92,8 @@ func TestRich_Roundtrip(t *testing.T) {
 	}
 }
 
-// TestRich_GofrsUUID_AltForms confirms the generated decoder delegates to
-// the lib's UnmarshalText, which accepts more forms than the canonical
-// 8-4-4-4-12 dashed string: hyphen-less and urn-prefixed pass too. Bytes-
-// malformed input still errors.
+// TestRich_GofrsUUID_AltForms: decode delegates to the lib's UnmarshalText, so
+// hyphen-less and urn-prefixed forms pass; garbage still errors.
 func TestRich_GofrsUUID_AltForms(t *testing.T) {
 	cases := [][]byte{
 		[]byte(`{"gofrsId":"550e8400-e29b-41d4-a716-446655440000"}`), // canonical
@@ -117,12 +110,8 @@ func TestRich_GofrsUUID_AltForms(t *testing.T) {
 	}
 }
 
-// TestRich_RawJSON_ZeroCopy: Raw1 should alias the source buffer rather than
-// allocate a fresh copy. Detect by comparing the slice header's data pointer
-// to the input's range — same backing array via reflect.SliceHeader-style
-// check is brittle; instead, we mutate the source after decode and watch
-// the field change. (DON'T do this in production code — this is the hazard
-// users have to understand.)
+// TestRich_RawJSON_ZeroCopy: Raw1 aliases the source buffer. Verified by
+// mutating the source post-decode and watching the field change.
 func TestRich_RawJSON_ZeroCopy(t *testing.T) {
 	in := []byte(`{"raw1":"alpha","raw2":null,"site":"http://x","big":0,"bigF":"0","bigR":"0","id":"00000000-0000-0000-0000-000000000000"}`)
 	got, _, err := RichTypes{}.DecodeFrom(in)
@@ -133,7 +122,7 @@ func TestRich_RawJSON_ZeroCopy(t *testing.T) {
 	if string(got.Raw1) != want {
 		t.Fatalf("Raw1 initial = %s, want %s", got.Raw1, want)
 	}
-	// Mutate the source buffer — alias should reflect it.
+	// Mutate the source — alias must reflect it.
 	off := strings.Index(string(in), "alpha")
 	if off < 0 {
 		t.Skip("payload reshaped, can't verify alias")
@@ -144,8 +133,7 @@ func TestRich_RawJSON_ZeroCopy(t *testing.T) {
 	}
 }
 
-// TestRich_URLValidation: bad URL should error from url.Parse, surfacing
-// through DecodeFrom's error return.
+// TestRich_URLValidation: a bad URL surfaces url.Parse's error.
 func TestRich_URLValidation(t *testing.T) {
 	bad := []byte(`{"raw1":null,"raw2":null,"site":"://broken","big":0,"bigF":"0","bigR":"0","id":"00000000-0000-0000-0000-000000000000"}`)
 	if _, _, err := (RichTypes{}).DecodeFrom(bad); err == nil {
@@ -174,9 +162,8 @@ func TestRich_UUIDInvalid(t *testing.T) {
 	}
 }
 
-// TestRich_RoundtripDeepEqual checks the higher-level invariant: encoding
-// then decoding produces something that compares equal under DeepEqual for
-// the simple-value fields (Raw* skipped because alias vs copy differs).
+// TestRich_RoundtripDeepEqual: encode→decode is DeepEqual for simple-value
+// fields (Raw* skipped — alias vs copy differs).
 func TestRich_RoundtripDeepEqual(t *testing.T) {
 	id := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
 	site, _ := url.Parse("https://x.test")

@@ -17,10 +17,8 @@ import (
 	"github.com/sirkostya009/ggen/scan"
 )
 
-// chunkReader delivers payload one byte at a time (or maxChunk at a time).
-// Stress-tests Stream.ReadMore's per-call grow path: every byte forces a
-// fresh Read, and the parser makes progress byte-by-byte without ever
-// looping inside ReadMore.
+// chunkReader delivers payload max bytes per Read, stressing Stream.ReadMore's
+// per-call grow path.
 type chunkReader struct {
 	data []byte
 	pos  int
@@ -116,7 +114,6 @@ func TestUnmarshalStream_roundtrip(t *testing.T) {
 }
 
 func TestUnmarshalStream_chunked(t *testing.T) {
-	// Force Ensure to loop: reader hands out 1 byte per Read call.
 	r := &chunkReader{data: complexPayload, max: 1}
 	var s scan.Stream
 	s.Reset(r, nil)
@@ -133,9 +130,7 @@ func TestUnmarshalStream_chunked(t *testing.T) {
 }
 
 func TestUnmarshalStream_tinyInitial(t *testing.T) {
-	// Hint smaller than payload — buffer must grow via append mid-parse.
-	// Zero-copy strings must remain valid across the grow (GC keeps old
-	// backing arrays alive because aliases reference them).
+	// Hint smaller than payload forces a mid-parse grow; aliases must survive it.
 	var s scan.Stream
 	s.Reset(bytes.NewReader(complexPayload), make([]byte, 0, 32))
 	got, err := Node{}.DecodeFromStream(&s)
@@ -150,17 +145,15 @@ func TestUnmarshalStream_tinyInitial(t *testing.T) {
 	}
 }
 
-// HugeStringStruct holds a single string. Used to slam ReadMore(0) and
-// stringSlow with a multi-MiB body.
+// HugeStringStruct slams ReadMore(0) and stringSlow with a multi-MiB body.
 //
 //ggen:generate
 type HugeStringStruct struct {
 	Big string `json:"big"`
 }
 
-// TestUnmarshalStream_SingleHugeString: a 2 MiB string fed through a tiny
-// initial buffer must decode losslessly. Exercises Stream.String's slow
-// path + grow + compaction across many ReadMore(0) calls.
+// TestUnmarshalStream_SingleHugeString: a 2 MiB string through a tiny buffer
+// decodes losslessly across many grow + compaction cycles.
 func TestUnmarshalStream_SingleHugeString(t *testing.T) {
 	const size = 2 * 1024 * 1024
 	huge := strings.Repeat("x", size)
@@ -180,9 +173,8 @@ func TestUnmarshalStream_SingleHugeString(t *testing.T) {
 	}
 }
 
-// TestUnmarshalStream_MassiveWhitespace: SkipSpace must consume ~300 KB
-// of inter-field whitespace across many ReadMore compaction cycles.
-// Failures here mean the keep>0 cursor adjustment after SkipSpace broke.
+// TestUnmarshalStream_MassiveWhitespace: SkipSpace consumes ~300 KB of
+// whitespace across compaction cycles (pins the keep>0 cursor adjustment).
 func TestUnmarshalStream_MassiveWhitespace(t *testing.T) {
 	gap := strings.Repeat("\n \t", 100_000)
 	payload := []byte(`{` + gap + `"big":` + gap + `"hello"` + gap + `}`)
@@ -198,9 +190,8 @@ func TestUnmarshalStream_MassiveWhitespace(t *testing.T) {
 	}
 }
 
-// SequentialStringsStruct: many string fields read back-to-back across
-// compactions. Each prior decode must be byte-identical to its input
-// AFTER subsequent compactions, because Stream.String copies its result.
+// SequentialStringsStruct: many string fields read back-to-back so prior
+// values must survive later compactions (Stream.String copies its result).
 //
 //ggen:generate
 type SequentialStringsStruct struct {
@@ -214,10 +205,8 @@ type SequentialStringsStruct struct {
 	H string `json:"h"`
 }
 
-// TestUnmarshalStream_ValuesSurviveCompaction: after each field is decoded
-// the buffer compacts on the next SkipSpace/dispatch. Owned-copy semantics
-// mean earlier values stay correct. Failure means a string path is aliasing
-// s.buf and getting clobbered by the memmove.
+// TestUnmarshalStream_ValuesSurviveCompaction: earlier decoded values stay
+// correct after later compactions (a string path aliasing s.buf would fail).
 func TestUnmarshalStream_ValuesSurviveCompaction(t *testing.T) {
 	in := []byte(`{"a":"AAAAAAAA","b":"BBBBBBBB","c":"CCCCCCCC","d":"DDDDDDDD",` +
 		`"e":"EEEEEEEE","f":"FFFFFFFF","g":"GGGGGGGG","h":"HHHHHHHH"}`)
@@ -239,10 +228,8 @@ func TestUnmarshalStream_ValuesSurviveCompaction(t *testing.T) {
 	}
 }
 
-// TestUnmarshalStream_RawJSONAcrossBoundary: capture a json.RawMessage
-// value that SPANS multiple ReadMore boundaries. The generator wraps
-// RawJSON capture in `s.Shift = false; ...; s.Shift = prev` so absolute
-// offsets stay stable.
+// TestUnmarshalStream_RawJSONAcrossBoundary: a json.RawMessage value spanning
+// multiple ReadMore boundaries captures intact (Shift-gated offsets).
 func TestUnmarshalStream_RawJSONAcrossBoundary(t *testing.T) {
 	bigInner := `{"deeply":{"nested":{"arr":[` +
 		strings.Repeat(`"item","item",`, 200) + `"end"]}}}`
@@ -261,10 +248,8 @@ func TestUnmarshalStream_RawJSONAcrossBoundary(t *testing.T) {
 	}
 }
 
-// TestUnmarshalStream_InlineMapKeyClone: catch-all map (json:",inline")
-// keys are aliased via Stream.KeyView for dispatch, but the inline-map
-// insertion must strings.Clone() the key — otherwise subsequent
-// compactions corrupt the map keys.
+// TestUnmarshalStream_InlineMapKeyClone: inline-map keys must be cloned on
+// insertion, else compactions corrupt them.
 func TestUnmarshalStream_InlineMapKeyClone(t *testing.T) {
 	in := []byte(`{"name":"alice","kAlpha":1,"kBravoo":2,"kCharlie":3,` +
 		`"kDelta11":4,"kEcho1234":5,"kFoxtrot1":6,"kGolf12345":7}`)
@@ -282,9 +267,8 @@ func TestUnmarshalStream_InlineMapKeyClone(t *testing.T) {
 	}
 }
 
-// UnknownErrorStruct: closed schema (default — errors on unknown). The
-// generated stream code must strings.Clone the unknown-key string before
-// stuffing it into validation.UnknownKeyError.
+// UnknownErrorStruct: closed schema — the unknown key must be cloned before
+// going into validation.UnknownKeyError.
 //
 //ggen:generate
 type UnknownErrorStruct struct {
@@ -310,9 +294,8 @@ func TestUnmarshalStream_UnknownKeyErrorClone(t *testing.T) {
 	}
 }
 
-// TestUnmarshalStream_TinyBufManyKeys: 40-field object decoded through
-// a 1-byte reader + 1-byte initial buf. Stress-tests the dispatch-loop
-// compaction shift points + bitmask seen-flag path.
+// TestUnmarshalStream_TinyBufManyKeys: 40-field object through a 1-byte reader
+// + buf, stressing the dispatch-loop compaction + bitmask seen-flag path.
 func TestUnmarshalStream_TinyBufManyKeys(t *testing.T) {
 	var parts []string
 	for i := 1; i <= 40; i++ {
@@ -339,10 +322,8 @@ func formatField(i int) string {
 	return `"f` + n + `":"v` + n + `"`
 }
 
-// TestUnmarshalStream_HintBufSmallerThanValue: hint buf strictly smaller
-// than the JSON value forces the slow-path grow+compaction repeatedly.
-// Mirrors what real HTTP-body-sized payloads behave like over a small
-// initial pool buffer.
+// TestUnmarshalStream_HintBufSmallerThanValue: a hint buf smaller than the
+// value forces repeated slow-path grow + compaction.
 func TestUnmarshalStream_HintBufSmallerThanValue(t *testing.T) {
 	for _, hint := range []int{1, 4, 16, 64, 256} {
 		t.Run(strconv.Itoa(hint), func(t *testing.T) {
@@ -360,8 +341,8 @@ func TestUnmarshalStream_HintBufSmallerThanValue(t *testing.T) {
 	}
 }
 
-// TestUnmarshalStream_PartialReadAtBoundaries: reader returns variable
-// chunk sizes — bursts then stalls. Models a real network reader.
+// TestUnmarshalStream_PartialReadAtBoundaries: variable burst-then-stall chunk
+// sizes, modeling a network reader.
 func TestUnmarshalStream_PartialReadAtBoundaries(t *testing.T) {
 	r := &burstReader{data: complexPayload, sizes: []int{3, 1, 7, 1, 13, 1, 50, 1}}
 	var s scan.Stream
@@ -375,9 +356,7 @@ func TestUnmarshalStream_PartialReadAtBoundaries(t *testing.T) {
 	}
 }
 
-// burstReader yields chunks of explicit sizes from the `sizes` slice,
-// wrapping when exhausted. Simulates the variable-burst-then-stall
-// pattern real network connections exhibit.
+// burstReader yields chunks of explicit sizes, wrapping when exhausted.
 type burstReader struct {
 	data  []byte
 	pos   int
@@ -405,10 +384,8 @@ func (b *burstReader) Read(p []byte) (int, error) {
 	return want, nil
 }
 
-// TestUnmarshalStream_BytesEqualsStream: property check — for any
-// payload that the bytes path accepts, the stream path must produce a
-// deeply-equal result. Catches chunk-boundary-sensitive bugs in
-// SkipSpace, KeyView, String escape handling, number scanning.
+// TestUnmarshalStream_BytesEqualsStream: any payload the bytes path accepts,
+// the stream path decodes equal — catches chunk-boundary-sensitive bugs.
 func TestUnmarshalStream_BytesEqualsStream(t *testing.T) {
 	seeds := [][]byte{
 		complexPayload,
@@ -440,8 +417,8 @@ func TestUnmarshalStream_BytesEqualsStream(t *testing.T) {
 	}
 }
 
-// TestUnmarshalStream_AcceptedByBytes_AlsoAcceptedByStream: complementary
-// check for the same property over the existing fuzz seed set.
+// TestUnmarshalStream_AcceptedByBytes_AlsoAcceptedByStream: same property over
+// the fuzz seed set.
 func TestUnmarshalStream_AcceptedByBytes_AlsoAcceptedByStream(t *testing.T) {
 	for _, seed := range fuzzSeeds {
 		want, _, errA := Node{}.DecodeFrom(seed)
@@ -464,9 +441,8 @@ func TestUnmarshalStream_AcceptedByBytes_AlsoAcceptedByStream(t *testing.T) {
 	}
 }
 
-// TestStream_parseErrorFieldName: the stream-path defer threads field-name
-// context the same way as the bytes path; the helper reads &s.Pos as the
-// pos source.
+// TestStream_parseErrorFieldName: the stream path threads field-name context
+// into the ParseError like the bytes path.
 func TestStream_parseErrorFieldName(t *testing.T) {
 	var s scan.Stream
 	s.Reset(bytes.NewReader([]byte(`{"street":123,"city":"C","zipCode":"12345"}`)), nil)
@@ -486,8 +462,8 @@ func TestStream_parseErrorFieldName(t *testing.T) {
 	}
 }
 
-// decodeBothPaths runs payload through the bytes-path DecodeFrom and the
-// stream-path DecodeFromStream of T, returning both errors.
+// decodeBothPaths runs payload through DecodeFrom and DecodeFromStream of T,
+// returning both errors.
 func decodeBothPaths[T decode.Decoder[T]](payload string) (bytesErr, streamErr error) {
 	var zb T
 	_, _, bytesErr = zb.DecodeFrom([]byte(payload))
@@ -498,10 +474,8 @@ func decodeBothPaths[T decode.Decoder[T]](payload string) (bytesErr, streamErr e
 	return bytesErr, streamErr
 }
 
-// TestTrailingCommaRejected: a comma immediately followed by the container
-// close is invalid JSON — stdlib v1/v2 reject it; ggen must too, on every
-// container emit shape (slice / map / tuple / nested / pointer-elem /
-// byte-array) and on both paths.
+// TestTrailingCommaRejected: a trailing comma before a container close is
+// rejected on every container shape and both paths.
 func TestTrailingCommaRejected(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -532,9 +506,8 @@ func TestTrailingCommaRejected(t *testing.T) {
 	}
 }
 
-// TestTruncatedAfterComma: input ending right after an element comma must
-// error on both paths — and must not panic on the stream path (the loop
-// top indexes s.Bytes()[s.Pos] after a SkipSpace that returns nil at EOF).
+// TestTruncatedAfterComma: input ending right after an element comma errors on
+// both paths without panicking the stream path at EOF.
 func TestTruncatedAfterComma(t *testing.T) {
 	for _, payload := range []string{`{"tags":["a",`, `{"props":{"a":"b",`} {
 		t.Run(payload, func(t *testing.T) {
@@ -554,27 +527,23 @@ func TestTruncatedAfterComma(t *testing.T) {
 	}
 }
 
-// ValidationPosStruct carries a single minlen rule so a violation returns a
-// concrete *validation.MinLenError (no multierr wrapping).
+// ValidationPosStruct carries one minlen rule so a violation returns a concrete
+// *validation.MinLenError.
 //
 //ggen:generate
 type ValidationPosStruct struct {
 	A string `json:"a"`
-	B string `json:"b" ggen:"minlen=4"`
+	B string `json:"b" pipe:"minlen=4"`
 }
 
-// posPayload places the failing "b" value far enough past a long "a" that the
-// stream buffer compacts (discards the long "a") before B is validated — so
-// the stream cursor s.Pos is window-relative, yet Pos must still report the
-// offset relative to the full payload.
+// posPayload places the failing "b" far enough past a long "a" that the stream
+// buffer compacts before B is validated.
 var posPayload = []byte(`{"a":"` + strings.Repeat("x", 64) + `","b":"yy"}`)
 
-// TestValidationError_Pos pins validation.*Error.Pos: a single byte offset
-// relative to the FULL payload, identical on the bytes and stream paths even
-// though the stream window has compacted past the long "a".
+// TestValidationError_Pos pins validation.*Error.Pos as a full-payload byte
+// offset, identical on bytes and stream paths despite stream compaction.
 func TestValidationError_Pos(t *testing.T) {
-	// Bytes path — Pos indexes the data slice directly. Validation runs after
-	// the value scan, so the cursor sits just past the closing quote of "yy".
+	// Bytes path — Pos sits just past the closing quote of "yy".
 	_, _, bErr := ValidationPosStruct{}.DecodeFrom(posPayload)
 	var bMin *validation.MinLenError
 	if !errors.As(bErr, &bMin) {
@@ -585,7 +554,7 @@ func TestValidationError_Pos(t *testing.T) {
 			bMin.Pos, posPayload[:bMin.Pos])
 	}
 
-	// Stream path with 1-byte chunks + tiny buffer — forces compaction.
+	// Stream path — 1-byte chunks + tiny buffer force compaction.
 	r := &chunkReader{data: posPayload, max: 1}
 	var s scan.Stream
 	s.Reset(r, make([]byte, 0, 16))
@@ -594,7 +563,7 @@ func TestValidationError_Pos(t *testing.T) {
 	if !errors.As(sErr, &sMin) {
 		t.Fatalf("stream: want *MinLenError, got %T: %v", sErr, sErr)
 	}
-	// Full-payload-relative offset is path-independent: same payload, same Pos.
+	// Same payload, same Pos.
 	if sMin.Pos != bMin.Pos {
 		t.Errorf("stream: Pos %d != bytes Pos %d (must be relative to full payload)", sMin.Pos, bMin.Pos)
 	}

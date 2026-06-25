@@ -6,10 +6,8 @@ import (
 	"strings"
 )
 
-// ValidateUpper enforces all-uppercase ASCII. Reachable from the main
-// integrationtests package via `ggen:"@thirdparty.ValidateUpper"`, so
-// the @pkg.Func resolver walks the source file's imports, picks up the
-// non-aliased thirdparty package, and emits a direct call.
+// ValidateUpper enforces all-uppercase ASCII. Used cross-package via
+// `pipe:"@thirdparty.ValidateUpper"` to exercise the @pkg.Func resolver.
 func ValidateUpper(s string) error {
 	for i := 0; i < len(s); i++ {
 		c := s[i]
@@ -20,14 +18,11 @@ func ValidateUpper(s string) error {
 	return nil
 }
 
-// PrefixHash is a pure mod (T → T) — same cross-package resolution path
-// as ValidateUpper, but used via `mod:"@thirdparty.PrefixHash"`.
+// PrefixHash is a pure cross-package mod (T → T).
 func PrefixHash(s string) string { return "#" + s }
 
-// ParseNonEmpty is a fallible mod (T → (T, error)) — exercises the
-// cross-package fallible-mod path. Empty input is rejected as a parse
-// error (not a validation error), matching same-package fallible-mod
-// semantics in mods_test.go.
+// ParseNonEmpty is a fallible cross-package mod (T → (T, error)); empty input
+// is a parse error, not a validation error.
 func ParseNonEmpty(s string) (string, error) {
 	if s == "" {
 		return "", errors.New("empty value")
@@ -35,17 +30,15 @@ func ParseNonEmpty(s string) (string, error) {
 	return s, nil
 }
 
-// External is a plain Go struct without any generated AppendJSON/DecodeFrom
-// methods. ggen-generated code should fall back to json for encoding and
-// decoding it.
+// External is a plain struct with no generated methods — forces the
+// encoding/json fallback.
 type External struct {
 	Key   string `json:"key"`
 	Value int    `json:"value"`
 }
 
-// Tagged is text-encoded as `"name#tag"`. Implements TextMarshaler /
-// TextUnmarshaler so the static analyzer routes encode/decode through
-// these methods instead of the slower json.Marshal / json.Unmarshal path.
+// Tagged is text-encoded as `"name#tag"` via TextMarshaler/TextUnmarshaler so
+// the analyzer routes through those instead of json.Marshal/Unmarshal.
 type Tagged struct {
 	Name string
 	Tag  string

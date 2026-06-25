@@ -1,13 +1,8 @@
 package encode
 
 // AppendString appends the escaped body of s plus a closing `"`. The
-// CALLER is responsible for writing the opening `"` — generated code
-// folds it into the constant key prefix where possible, or emits an
-// explicit `dst = append(dst, '"')` at slice/map/standalone call sites.
-//
-// Escapes are HTML-safe by default: <, >, & become <, >, &
-// (matches stdlib `encoding/json` v1). For raw output use
-// AppendStringNoHTML. Zero allocation.
+// CALLER writes the opening `"`. HTML-safe: <, >, & → \uXXXX (stdlib v1).
+// Use AppendStringNoHTML for raw output. Zero allocation.
 func AppendString(dst []byte, s string) []byte {
 	start := 0
 	for i := 0; i < len(s); i++ {
@@ -45,9 +40,8 @@ func AppendString(dst []byte, s string) []byte {
 	return append(dst, '"')
 }
 
-// AppendStringNoHTML is the no-HTML-escape counterpart of AppendString:
-// emits <, >, & literally and only applies the standard JSON escapes.
-// Same caller contract: opening quote is the caller's responsibility.
+// AppendStringNoHTML is AppendString without HTML escaping: <, >, &
+// emitted literally, standard JSON escapes only. Same caller contract.
 func AppendStringNoHTML(dst []byte, s string) []byte {
 	start := 0
 	for i := 0; i < len(s); i++ {

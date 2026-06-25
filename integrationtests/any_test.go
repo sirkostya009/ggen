@@ -2,9 +2,8 @@ package integrationtests
 
 //go:generate ../ggen $GOFILE
 
-// Coverage for the bare `any` / `interface{}` field kind on annotated
-// structs — both stdlib-default float64 numbers and `usenumber` opt-in
-// (json.Number for exact-digit preservation).
+// Coverage for the `any` field kind — stdlib-default float64 numbers and
+// the usenumber opt-in (json.Number).
 
 import (
 	"encoding/json"
@@ -13,8 +12,7 @@ import (
 	"github.com/sirkostya009/ggen/encode"
 )
 
-// AnyStruct: a single bare `any` field exercises the hand-rolled scan.Any
-// path with stdlib-default float64 numbers.
+// AnyStruct: bare `any` field, stdlib-default float64 numbers.
 //
 //ggen:generate
 type AnyStruct struct {
@@ -22,8 +20,7 @@ type AnyStruct struct {
 	Body any    `json:"body"`
 }
 
-// AnyNumberStruct: same shape but opts into json.Number for numeric values
-// via the `usenumber` annotation — preserves exact digits, no float64 cast.
+// AnyNumberStruct: same shape, usenumber → json.Number (exact digits).
 //
 //ggen:generate usenumber
 type AnyNumberStruct struct {

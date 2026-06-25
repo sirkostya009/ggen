@@ -13,37 +13,25 @@ import (
 	"github.com/sirkostya009/ggen/encode"
 )
 
-// NativeTypes exercises the jsonv2 format tag with native Go types:
-// time.Time (various layouts), time.Duration (various units), []byte (various
-// encodings), and net/netip address types.
+// NativeTypes exercises the format tag with native types: time.Time,
+// time.Duration, []byte encodings, and net/netip address types.
 //
 //ggen:generate
 type NativeTypes struct {
-	// time.Time in RFC3339Nano (default when format unset)
 	CreatedAt time.Time `json:"createdAt"`
-	// time.Time as a unix timestamp (number)
-	UnixAt time.Time `json:"unixAt,format:unix"`
-	// time.Time as RFC3339 (named layout)
-	IssuedAt time.Time `json:"issuedAt,format:RFC3339"`
+	UnixAt    time.Time `json:"unixAt,format:unix"`
+	IssuedAt  time.Time `json:"issuedAt,format:RFC3339"`
 
-	// time.Duration encoded as seconds float
-	SecDur time.Duration `json:"secDur,format:sec"`
-	// time.Duration encoded as "1h30m" string (time.Duration.String)
+	SecDur  time.Duration `json:"secDur,format:sec"`
 	UnitDur time.Duration `json:"unitDur,format:units"`
 
-	// []byte encoded as standard base64 (default)
-	Blob []byte `json:"blob"`
-	// []byte encoded as lowercase hex
-	HexBlob []byte `json:"hexBlob,format:hex"`
-	// []byte encoded as a JSON array of numbers
+	Blob      []byte `json:"blob"`
+	HexBlob   []byte `json:"hexBlob,format:hex"`
 	ByteArray []byte `json:"byteArray,format:array"`
 
-	// net.IP encoded as "192.0.2.1" or "::1"
-	LegacyIP net.IP `json:"legacyIP"`
-	// netip.Addr (modern value type)
-	Addr netip.Addr `json:"addr"`
-	// netip.Prefix ("10.0.0.0/8")
-	Cidr netip.Prefix `json:"cidr"`
+	LegacyIP net.IP       `json:"legacyIP"`
+	Addr     netip.Addr   `json:"addr"`
+	Cidr     netip.Prefix `json:"cidr"`
 }
 
 func TestNativeTypes_roundtrip(t *testing.T) {
@@ -105,7 +93,7 @@ func TestNativeTypes_roundtrip(t *testing.T) {
 }
 
 func TestNativeTypes_format(t *testing.T) {
-	// Spot-check that the format tag actually changes the wire encoding.
+	// Spot-check that format tags change the wire encoding.
 	in := NativeTypes{
 		UnixAt:    time.Unix(1_700_000_000, 0),
 		SecDur:    2 * time.Second,
@@ -132,9 +120,8 @@ func TestNativeTypes_format(t *testing.T) {
 	}
 }
 
-// JSON null on a []byte field decodes to nil (parity with sibling slice
-// kinds and stdlib), and a nil []byte marshals as `null` (stdlib v1
-// shape); empty non-nil keeps the empty-string / empty-array form.
+// null []byte decodes to nil and a nil []byte marshals as null; empty
+// non-nil keeps the empty-string / empty-array form.
 func TestBytes_nullRoundtrip(t *testing.T) {
 	got, _, err := NativeTypes{}.DecodeFrom([]byte(`{"blob":null,"hexBlob":null,"byteArray":null}`))
 	if err != nil {

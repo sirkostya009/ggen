@@ -6,10 +6,8 @@ import (
 	"testing"
 )
 
-// BenchmarkGenerate parses a representative file (the shared test
-// struct module via integrationtests' shared_test.go) and rounds
-// through generate() repeatedly. Run with -benchmem to compare
-// allocs/op before vs after the buffer pooling change.
+// BenchmarkGenerate parses integrationtests/shared_test.go and rounds through
+// generate() repeatedly.
 func BenchmarkGenerate(b *testing.B) {
 	wd, _ := os.Getwd()
 	src := filepath.Join(wd, "integrationtests", "shared_test.go")

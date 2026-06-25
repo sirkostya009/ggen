@@ -9,9 +9,8 @@ import (
 	"github.com/sirkostya009/ggen/encode"
 )
 
-// InlineStruct exercises the json:",inline" catch-all: every JSON key that
-// doesn't match a named field is absorbed into Extra. On marshal the map
-// entries splice back out at the object level.
+// InlineStruct exercises the json:",inline" catch-all: unknown keys absorbed
+// into Extra, spliced back out at the object level on marshal.
 //
 //ggen:generate
 type InlineStruct struct {
@@ -43,7 +42,7 @@ func TestInline_decodeAbsorbsUnknown(t *testing.T) {
 	if len(got.Extra) != 3 {
 		t.Fatalf("Extra len = %d, want 3: %+v", len(got.Extra), got.Extra)
 	}
-	// jsonv2 decodes bare numbers into float64 for `any`.
+	// bare numbers decode into float64 for any.
 	if age, _ := got.Extra["age"].(float64); age != 30 {
 		t.Errorf("Extra[age] = %v", got.Extra["age"])
 	}
@@ -57,7 +56,7 @@ func TestInline_decodeAbsorbsUnknown(t *testing.T) {
 }
 
 func TestInline_emptyDecode(t *testing.T) {
-	// No unknown keys → Extra stays nil, not an empty map.
+	// No unknown keys → Extra stays nil.
 	got, _, err := InlineStruct{}.DecodeFrom([]byte(`{"name":"bob"}`))
 	if err != nil {
 		t.Fatalf("unmarshal: %v", err)
@@ -120,8 +119,7 @@ func TestInline_marshalEmpty(t *testing.T) {
 }
 
 func TestInline_marshalOnlyExtras(t *testing.T) {
-	// Empty Name + extras — ensure comma logic works when the "fixed" field
-	// emits an empty value and the inline map has entries.
+	// Empty fixed field + inline entries — comma logic must hold.
 	s := InlineStruct{Extra: map[string]any{"k": "v"}}
 	out, _ := encode.MarshalString(s)
 	if !strings.Contains(out, `"k":"v"`) {
@@ -132,9 +130,8 @@ func TestInline_marshalOnlyExtras(t *testing.T) {
 	}
 }
 
-// TestInline_FixedFieldOrderStable: when an inline map is present alongside
-// fixed fields, the fixed field MUST appear in every marshal regardless of
-// map iteration order (which is random in Go).
+// TestInline_FixedFieldOrderStable: fixed field appears in every marshal
+// regardless of map iteration order.
 func TestInline_FixedFieldOrderStable(t *testing.T) {
 	s := InlineStruct{
 		Name:  "alice",
@@ -148,8 +145,7 @@ func TestInline_FixedFieldOrderStable(t *testing.T) {
 	}
 }
 
-// Typed inline catch-all: map[string]string. Unknown keys absorbed into a
-// string-typed map (no `any` boxing). Mirrors jsonv2's typed-inline behavior.
+// Typed inline catch-all: map[string]string (no any boxing).
 func TestInline_TypedString_Decode(t *testing.T) {
 	in := []byte(`{"name":"alice","city":"Lviv","role":"admin"}`)
 	got, _, err := InlineStringsStruct{}.DecodeFrom(in)
@@ -177,8 +173,7 @@ func TestInline_TypedString_EmptyExtra(t *testing.T) {
 	}
 }
 
-// Non-string value in payload must error — typed inline rejects shape
-// mismatch (parity with jsonv2's "cannot unmarshal JSON number into Go string").
+// Non-string value into a string-typed inline must error.
 func TestInline_TypedString_RejectsNonString(t *testing.T) {
 	_, _, err := InlineStringsStruct{}.DecodeFrom([]byte(`{"name":"alice","age":30}`))
 	if err == nil {
@@ -225,9 +220,8 @@ func TestInline_TypedString_Roundtrip(t *testing.T) {
 	}
 }
 
-// Typed inline catch-all: map[string]InlineStruct. Unknown keys decoded
-// via the elem type's DecodeFrom (zero-alloc structured value, not via
-// json.Unmarshal fallback).
+// Typed inline catch-all: map[string]InlineStruct, decoded via the elem
+// type's DecodeFrom (not json.Unmarshal fallback).
 func TestInline_TypedStruct_Decode(t *testing.T) {
 	in := []byte(`{"name":"root","kid":{"name":"alice","age":30},"sib":{"name":"bob"}}`)
 	got, _, err := InlineStructsStruct{}.DecodeFrom(in)
@@ -244,7 +238,7 @@ func TestInline_TypedStruct_Decode(t *testing.T) {
 	if kid.Name != "alice" {
 		t.Errorf("kid.Name = %q", kid.Name)
 	}
-	// Inner InlineStruct itself has its own catch-all — `age:30` lands there.
+	// Inner InlineStruct has its own catch-all — age:30 lands there.
 	if age, _ := kid.Extra["age"].(float64); age != 30 {
 		t.Errorf("kid.Extra[age] = %v", kid.Extra["age"])
 	}
@@ -285,8 +279,7 @@ func TestInline_TypedStruct_Roundtrip(t *testing.T) {
 	}
 }
 
-// Empty-Extra marshal: typed inline still emits exactly the fixed fields,
-// no trailing comma, no nested object.
+// Empty-Extra marshal: typed inline emits only the fixed fields.
 func TestInline_TypedString_MarshalEmpty(t *testing.T) {
 	out, _ := encode.MarshalString(InlineStringsStruct{Name: "alice"})
 	if out != `{"name":"alice"}` {

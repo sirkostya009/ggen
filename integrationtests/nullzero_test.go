@@ -11,31 +11,28 @@ import (
 	"github.com/sirkostya009/ggen/scan"
 )
 
-// NullZeroTags pins per-field json:",nullzero": an explicit JSON null decodes
-// to the Go zero value instead of erroring. Strict (non-nullzero) fields keep
-// rejecting null (ggen's default divergence from stdlib).
+// NullZeroTags pins per-field nullzero: null decodes to the zero value; strict
+// fields keep rejecting null.
 //
 //ggen:generate
 type NullZeroTags struct {
-	NZStr   string  `json:"nzStr,nullzero"`
-	NZInt   int     `json:"nzInt,nullzero"`
-	NZFloat float64 `json:"nzFloat,nullzero"`
-	NZBool  bool    `json:"nzBool,nullzero"`
+	NZStr   string  `json:"nzStr" pipe:"nullzero"`
+	NZInt   int     `json:"nzInt" pipe:"nullzero"`
+	NZFloat float64 `json:"nzFloat" pipe:"nullzero"`
+	NZBool  bool    `json:"nzBool" pipe:"nullzero"`
 	Strict  string  `json:"strict"`
 }
 
-// NullZeroValidated pins nullzero composing with validation: null sets the
-// zero value, then the field's rules run on that zero (a null key is "present",
-// so required-style checks see it).
+// NullZeroValidated pins nullzero composing with validation: rules run on the
+// zeroed value.
 //
 //ggen:generate
 type NullZeroValidated struct {
-	Count int    `json:"count,nullzero" ggen:"gte=0"`   // null → 0, passes gte=0
-	Name  string `json:"name,nullzero" ggen:"minlen=1"` // null → "", fails minlen=1
+	Count int    `json:"count" pipe:"nullzero gte=0"`
+	Name  string `json:"name" pipe:"nullzero minlen=1"`
 }
 
-// NullZeroWhole pins the struct-level `nullzero` annotation — every non-pointer
-// value field accepts null. The slice field keeps its own native null handling.
+// NullZeroWhole pins struct-level nullzero — every value field accepts null.
 //
 //ggen:generate nullzero
 type NullZeroWhole struct {
@@ -57,7 +54,6 @@ func TestNullZero_tag_bytes(t *testing.T) {
 }
 
 func TestNullZero_strict_rejects(t *testing.T) {
-	// A non-nullzero scalar still hard-errors on explicit null.
 	if _, _, err := (NullZeroTags{}).DecodeFrom([]byte(`{"strict":null}`)); err == nil {
 		t.Fatal("expected error on null into strict field, got nil")
 	}
@@ -76,13 +72,12 @@ func TestNullZero_nonNull_stillDecodes(t *testing.T) {
 }
 
 func TestNullZero_validation_runs_on_zero(t *testing.T) {
-	// null → 0 passes gte=0.
 	if got, _, err := (NullZeroValidated{}).DecodeFrom([]byte(`{"count":null}`)); err != nil {
 		t.Fatalf("count null: unexpected error: %v", err)
 	} else if got.Count != 0 {
 		t.Errorf("count = %d, want 0", got.Count)
 	}
-	// null → "" fails minlen=1 — validation applies to the zeroed value.
+	// null → "" fails minlen=1.
 	_, _, err := NullZeroValidated{}.DecodeFrom([]byte(`{"name":null}`))
 	if err == nil {
 		t.Fatal("name null: expected minlen validation error, got nil")

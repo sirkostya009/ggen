@@ -9,44 +9,36 @@ import (
 	"github.com/sirkostya009/ggen/encode"
 )
 
-// MapStruct exercises map[string]V fields: primitive values, struct values,
-// and dive-mods applied to each value.
+// MapStruct exercises map[string]V: primitive/struct values, dive mods.
 //
 //ggen:generate
 type MapStruct struct {
-	// Simple int values; outer maxlen caps map size.
-	Counts map[string]int `json:"counts" ggen:"maxlen=10"`
-	// String values, trimmed via dive mod.
-	Labels map[string]string `json:"labels" mod:"dive:trim,lower"`
-	// Nested annotated structs.
+	Counts    map[string]int     `json:"counts" pipe:"maxlen=10"`
+	Labels    map[string]string  `json:"labels" pipe:"inner:(trim lower)"`
 	Addresses map[string]Address `json:"addresses"`
 }
 
-// MapDiveStruct exercises dive: validation rules + dive: mods applied to
-// map values across both string and non-string element kinds.
+// MapDiveStruct exercises inner: validation + mods on map values.
 //
 //ggen:generate
 type MapDiveStruct struct {
-	Counts map[string]int    `json:"counts" ggen:"dive:gte=0,lte=100"`
-	Names  map[string]string `json:"names"  ggen:"dive:minlen=1,maxlen=5"`
-	// Clamped: numeric dive mod on map values — values outside [0,100] are
-	// pulled back to the bound before validation runs.
-	Clamped map[string]int `json:"clamped" mod:"dive:clamp=0|100"`
+	Counts  map[string]int    `json:"counts" pipe:"inner:(gte=0 lte=100)"`
+	Names   map[string]string `json:"names"  pipe:"inner:(minlen=1 maxlen=5)"`
+	Clamped map[string]int    `json:"clamped" pipe:"inner:clamp=0|100"`
 }
 
-// Base is embedded into Derived to exercise field promotion. Same-package,
-// untagged embedding — fields lift into the parent's JSON object.
+// Base is embedded into Derived to exercise field promotion.
 type Base struct {
-	ID   string `json:"id" ggen:"required"`
+	ID   string `json:"id" pipe:"required"`
 	Meta string `json:"meta,omitempty"`
 }
 
-// Derived embeds Base — ID and Meta are promoted to the JSON object level.
+// Derived embeds Base — ID and Meta promote to the JSON object level.
 //
 //ggen:generate
 type Derived struct {
 	Base
-	Name string `json:"name" ggen:"required,minlen=1"`
+	Name string `json:"name" pipe:"required minlen=1"`
 }
 
 func TestMap_primitiveRoundtrip(t *testing.T) {
@@ -82,7 +74,6 @@ func TestMap_structValueRoundtrip(t *testing.T) {
 }
 
 func TestMap_diveMod(t *testing.T) {
-	// Labels has `mod:"dive:trim,lower"` — each value normalized on decode.
 	in := []byte(`{"labels":{"en":"  HELLO ","es":" HOLA "}}`)
 	got, _, err := MapStruct{}.DecodeFrom(in)
 	if err != nil {
@@ -94,11 +85,11 @@ func TestMap_diveMod(t *testing.T) {
 }
 
 func TestMap_maxlenViolation(t *testing.T) {
-	// Counts has maxlen=10; 11 unique entries should fail.
+	// Counts maxlen=10; 11 entries must fail.
 	const alphabet = "abcdefghijk" // 11 letters
 	b := strings.Builder{}
 	b.WriteString(`{"counts":{`)
-	for i := 0; i < len(alphabet); i++ {
+	for i := range len(alphabet) {
 		if i > 0 {
 			b.WriteByte(',')
 		}
@@ -179,7 +170,7 @@ func TestEmbedded_promotedFields(t *testing.T) {
 }
 
 func TestEmbedded_promotedRequired(t *testing.T) {
-	// Base.ID is required; missing should fail.
+	// Base.ID is required; missing must fail.
 	in := []byte(`{"name":"bob"}`)
 	_, _, err := Derived{}.DecodeFrom(in)
 	if err == nil {

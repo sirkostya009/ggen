@@ -3,18 +3,9 @@
 package encode
 
 // BenchmarkAppendAny_* — encode.AppendAny across the shapes an `any`
-// field actually holds at runtime: scalars (nil, bool, string, ints,
-// floats, json.Number), homogeneous primitive slices ([]int*, []uint*,
-// []float*, []bool, []string, []any), and homogeneous string-keyed
-// maps (map[string]int*, …, map[string]float*, map[string]bool,
-// map[string]string, map[string]any). Each container shape carries 32
-// entries — small enough that per-call dispatch shows up, big enough
-// that per-element costs aren't drowned by the framing.
-//
-// Each shape runs three rows: stdlib v1 (encoding/json), stdlib v2
-// (encoding/json/v2), and ggen (encode.AppendAny). Cross-codec deltas
-// surface where ggen has a concrete-type fast path vs where it falls
-// through to the reflect.Map / reflect.Slice paths.
+// field holds at runtime (scalars, homogeneous primitive slices/maps),
+// each container 32 entries. Three rows per shape: stdlib v1, stdlib v2,
+// ggen — surfacing where ggen's concrete fast path beats reflection.
 
 import (
 	"encoding/json"

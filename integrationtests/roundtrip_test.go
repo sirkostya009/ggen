@@ -8,8 +8,7 @@ import (
 	"github.com/sirkostya009/ggen/encode"
 )
 
-// TestMarshalRoundtrip ensures the generated marshaller produces JSON that the
-// generated parser accepts, matching the original value.
+// TestMarshalRoundtrip: generated marshal output decodes back to the original.
 func TestMarshalRoundtrip(t *testing.T) {
 	out, _ := encode.Marshal(complexValue)
 	got, _, err := Node{}.DecodeFrom(out)
@@ -50,7 +49,7 @@ func TestSliceRoundtrip(t *testing.T) {
 		}
 	}
 
-	// String + Reader variants
+	// String + Reader variants.
 	s, _ := encode.MarshalSliceString(addrs)
 	if s[0] != '[' || s[len(s)-1] != ']' {
 		t.Errorf("bad slice string: %q", s)

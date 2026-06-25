@@ -2,10 +2,8 @@ package integrationtests
 
 //go:generate ../ggen $GOFILE
 
-// Top-level primitive aliases — `type X <primitive>` annotated with
-// //ggen:generate. Each alias gets the same method surface as a struct
-// (DecodeFrom / DecodeFromStream / JSONSize / AppendJSON) so it can be
-// fed to decode.Unmarshal / encode.Marshal directly.
+// Top-level type aliases — each gets the full struct method surface
+// (DecodeFrom / DecodeFromStream / JSONSize / AppendJSON).
 
 import (
 	"errors"
@@ -54,9 +52,7 @@ func TestAlias_String_Roundtrip(t *testing.T) {
 	}
 }
 
-// TestAlias_String_DefaultIsLiteral: default mode emits `<>&` literally —
-// ggen's wire shape matches encoding/json/v2 (which dropped HTML
-// escaping as a default).
+// default mode emits <>& literally, matching jsonv2.
 func TestAlias_String_DefaultIsLiteral(t *testing.T) {
 	out, _ := encode.Marshal(AliasString(`<a href="x">tom & jerry</a>`))
 	for _, lit := range []string{"<", ">", "&"} {
@@ -66,8 +62,7 @@ func TestAlias_String_DefaultIsLiteral(t *testing.T) {
 	}
 }
 
-// TestAlias_String_HtmlescapeOptIn: the `htmlescape` annotation on a
-// string alias flips the codegen to the v1-style \uXXXX escaper.
+// htmlescape on a string alias flips to the v1-style \uXXXX escaper.
 func TestAlias_String_HtmlescapeOptIn(t *testing.T) {
 	out, _ := encode.Marshal(AliasHTML(`<a href="x">tom & jerry</a>`))
 	for _, lit := range []string{"<", ">", "&"} {
@@ -137,20 +132,15 @@ func TestAlias_Bool_Roundtrip(t *testing.T) {
 	}
 }
 
-// TestAlias_String_RejectsNonString: feeding a JSON number to a string
-// alias must surface scan.ErrBadString, not a silent type coercion.
+// a JSON number into a string alias must error, not silently coerce.
 func TestAlias_String_RejectsNonString(t *testing.T) {
 	if _, _, err := (AliasString("")).DecodeFrom([]byte("42")); err == nil {
 		t.Error("expected scan error on number → string-alias")
 	}
 }
 
-// TestAlias_String_ZeroCopy verifies that converting a scanned string to
-// the alias type doesn't allocate a fresh string — the named-type cast
-// is a label change at compile time, not a memcpy. We mutate the input
-// buffer after decoding; if the alias still points into it, the decoded
-// value reflects the mutation. (DON'T do this in production code — it's
-// the documented hazard zero-copy aliasing buys you.)
+// TestAlias_String_ZeroCopy: the alias cast doesn't copy — mutating the
+// input buffer after decode shows through the aliased value.
 func TestAlias_String_ZeroCopy(t *testing.T) {
 	in := []byte(`"alpha"`)
 	got, _, err := AliasString("").DecodeFrom(in)
@@ -174,9 +164,8 @@ func TestAlias_String_ZeroCopy(t *testing.T) {
 	}
 }
 
-// PlainInner has NO Marshal/Unmarshal methods — ggen falls into the
-// field-introspection path: walk the underlying *types.Struct, synth
-// FieldInfo per exported field, treat the alias as a regular struct.
+// PlainInner has no Marshal/Unmarshal methods, so the alias goes through
+// field introspection — treated as a regular struct.
 type PlainInner struct {
 	Title string `json:"title"`
 	Count int    `json:"count"`
@@ -185,10 +174,7 @@ type PlainInner struct {
 //ggen:generate
 type PlainAlias PlainInner
 
-// TestAlias_StructIntrospect_NoMethods: alias of a method-less struct.
-// ggen synthesizes fields from the underlying *types.Struct and emits
-// regular per-field encode/decode. The wire shape is the natural JSON
-// object — no delegation involved.
+// alias of a method-less struct — introspected fields, natural JSON object.
 func TestAlias_StructIntrospect_NoMethods(t *testing.T) {
 	in := PlainAlias{Title: "hello", Count: 42}
 	out, err := encode.Marshal(in)
@@ -207,11 +193,8 @@ func TestAlias_StructIntrospect_NoMethods(t *testing.T) {
 	}
 }
 
-// SamePkgInner is the underlying for SamePkgAlias — defined in the
-// SAME package as the alias. Has MarshalJSON / UnmarshalJSON, but ggen
-// IGNORES those when the struct has exported fields and instead emits
-// a hand-rolled decoder/encoder driven off field introspection (faster
-// than method delegation for plain structs).
+// SamePkgInner has JSON methods, but ggen ignores them when the struct has
+// exported fields, preferring hand-rolled introspected codegen.
 type SamePkgInner struct {
 	X int
 	Y string
@@ -230,18 +213,13 @@ func (i *SamePkgInner) UnmarshalJSON(b []byte) error {
 //ggen:generate
 type SamePkgAlias SamePkgInner
 
-// CrossPkgTaggedAlias names a type whose underlying lives in another
-// package — `thirdparty.Tagged`. Underlying has MarshalText/UnmarshalText
-// AND exported fields; ggen prefers introspection over text delegation
-// because hand-rolled struct codegen is faster than text-method calls.
+// CrossPkgTaggedAlias's underlying (thirdparty.Tagged) has Text methods AND
+// exported fields; ggen prefers introspection over text delegation.
 //
 //ggen:generate
 type CrossPkgTaggedAlias thirdparty.Tagged
 
-// TestAlias_StructIntrospect_CrossPkg: thirdparty.Tagged has exported
-// fields, so introspection wins over its TextMarshaler/TextUnmarshaler.
-// Wire shape is the field-driven JSON object, NOT the canonical
-// "name#tag" text form.
+// introspection wins over Text methods — field-driven object, not "name#tag".
 func TestAlias_StructIntrospect_CrossPkg(t *testing.T) {
 	in := CrossPkgTaggedAlias(thirdparty.Tagged{Name: "alice", Tag: "admin"})
 	out, err := encode.Marshal(in)
@@ -260,10 +238,7 @@ func TestAlias_StructIntrospect_CrossPkg(t *testing.T) {
 	}
 }
 
-// TestAlias_StructIntrospect_SamePkg: SamePkgInner has exported fields,
-// so the alias introspects them rather than delegating to its
-// MarshalJSON/UnmarshalJSON. Wire shape is the introspected object
-// (`{"X":...,"Y":...}` — uppercase, since the underlying has no json tags).
+// introspection wins over the JSON methods — uppercase keys (no json tags).
 func TestAlias_StructIntrospect_SamePkg(t *testing.T) {
 	in := SamePkgAlias(SamePkgInner{X: 42, Y: "hello"})
 	out, err := encode.Marshal(in)
@@ -282,10 +257,8 @@ func TestAlias_StructIntrospect_SamePkg(t *testing.T) {
 	}
 }
 
-// OpaqueWithMethods has no exported fields but does carry JSON
-// methods — mirrors the time.Time / opaque-thirdparty shape. Aliases
-// of such types fall back to JSON/Text delegation (the only viable
-// path) since introspection would yield an empty struct.
+// OpaqueWithMethods has no exported fields but carries JSON methods (like
+// time.Time), so its alias falls back to JSON/Text delegation.
 type OpaqueWithMethods struct {
 	hidden string
 }
@@ -305,9 +278,7 @@ func (o *OpaqueWithMethods) UnmarshalJSON(b []byte) error {
 //ggen:generate
 type OpaqueAlias OpaqueWithMethods
 
-// TestAlias_StructDelegation_OpaqueFallback: when the underlying has
-// no exported fields, ggen falls back to JSON/Text method delegation —
-// introspection would generate nothing useful.
+// no exported fields → JSON/Text method delegation.
 func TestAlias_StructDelegation_OpaqueFallback(t *testing.T) {
 	in := OpaqueAlias(OpaqueWithMethods{hidden: "secret"})
 	out, err := encode.Marshal(in)
@@ -335,9 +306,7 @@ type AliasLookup map[string]int
 //ggen:generate
 type AliasTuple [3]int
 
-// TestAlias_Slice_Roundtrip: slice alias roundtrips through the same
-// codegen path as a regular slice field — JSON-array wire shape, no
-// special wrapping.
+// slice alias — JSON-array wire shape.
 func TestAlias_Slice_Roundtrip(t *testing.T) {
 	in := AliasTags{"go", "rust", "zig"}
 	out, err := encode.Marshal(in)
@@ -356,8 +325,7 @@ func TestAlias_Slice_Roundtrip(t *testing.T) {
 	}
 }
 
-// TestAlias_Map_Roundtrip: map alias — JSON object wire shape with
-// string keys.
+// map alias — JSON object wire shape.
 func TestAlias_Map_Roundtrip(t *testing.T) {
 	in := AliasLookup{"alpha": 1, "beta": 2}
 	out, err := encode.Marshal(in)
@@ -373,8 +341,7 @@ func TestAlias_Map_Roundtrip(t *testing.T) {
 	}
 }
 
-// TestAlias_Array_Roundtrip: array alias — JSON tuple with strict
-// element count enforced on decode.
+// array alias — JSON tuple with strict element count.
 func TestAlias_Array_Roundtrip(t *testing.T) {
 	in := AliasTuple{10, 20, 30}
 	out, err := encode.Marshal(in)
@@ -393,9 +360,7 @@ func TestAlias_Array_Roundtrip(t *testing.T) {
 	}
 }
 
-// TestAlias_Array_StrictLen: decoding into a fixed-length array alias
-// errors when the JSON tuple has the wrong element count — same
-// validation.LenError as the field-level array path.
+// wrong element count into an array alias errors with LenError.
 func TestAlias_Array_StrictLen(t *testing.T) {
 	if _, _, err := (AliasTuple{}).DecodeFrom([]byte(`[1,2]`)); err == nil {
 		t.Error("expected LenError on short tuple")
@@ -405,10 +370,7 @@ func TestAlias_Array_StrictLen(t *testing.T) {
 	}
 }
 
-// TestAlias_String_ZeroAllocations measures that decoding a string-alias
-// from a byte slice with no escape sequences does ZERO allocations —
-// confirming the scan path's unsafe.String alias plus the named-type
-// cast are both alloc-free.
+// decoding an escape-free string alias does zero allocations.
 func TestAlias_String_ZeroAllocations(t *testing.T) {
 	in := []byte(`"some-typical-html-payload-here"`)
 	allocs := testing.AllocsPerRun(100, func() {
@@ -426,16 +388,14 @@ func TestAlias_String_ZeroAllocations(t *testing.T) {
 	}
 }
 
-// AliasFieldExample exercises ggen validation rules and mod transforms
-// against fields whose declared types are top-level primitive aliases.
-// The codegen casts mod calls through the underlying primitive
-// (`AliasString` ↔ `string`, `AliasInt` ↔ `int`) so stdlib helpers
-// (`strings.TrimSpace`, comparison operators) accept the value.
+// AliasFieldExample exercises validation rules and mods on fields whose
+// types are primitive aliases — codegen casts through the underlying
+// primitive so stdlib helpers accept the value.
 //
 //ggen:generate
 type AliasFieldExample struct {
-	Body  AliasString `json:"body" ggen:"required,minlen=2,maxlen=10" mod:"trim,lower"`
-	Count AliasInt    `json:"count" ggen:"gte=1,lte=100" mod:"clamp=1|100"`
+	Body  AliasString `json:"body" pipe:"required trim lower minlen=2 maxlen=10"`
+	Count AliasInt    `json:"count" pipe:"clamp=1|100 gte=1 lte=100"`
 }
 
 func TestAlias_Field_ValidationAndMods(t *testing.T) {

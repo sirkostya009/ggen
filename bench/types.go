@@ -1,10 +1,8 @@
-// Package bench hosts the macro-benchmark types that need to be importable
-// by non-test codegens (easyjson in particular — its bootstrap compiles the
-// non-test build so test-only types are invisible).
+// Package bench hosts the macro-benchmark types. Kept in a non-test file so
+// easyjson's bootstrap (which compiles the non-test build) can see them.
 //
-// The mega payload used in these benchmarks is generated from Node at package
-// init with a fixed seed — ~1 MiB, 6 levels deep, similar shape to what
-// sonic & jsoniter benchmark against.
+// The mega payload is generated from Node at init with a fixed seed —
+// ~1 MiB, 6 levels deep.
 package bench
 
 import (
@@ -18,9 +16,7 @@ import (
 	"github.com/sirkostya009/ggen/encode"
 )
 
-// Addr is a small inline struct used as the pointed-to type for the
-// `Refs []*Addr` and `Parent *Addr` fields on Node. Matches what real
-// API responses tend to nest at depth-1.
+// Addr is the pointed-to type for Node's Refs []*Addr and Parent *Addr.
 //
 //ggen:generate
 //easyjson:json
@@ -29,27 +25,24 @@ type Addr struct {
 	City   string `json:"city"`
 }
 
-// Node is the deep-tree benchmark target. The original shape mirrored
-// sonic's bench struct (scalars + slices + maps + recursion). Expanded
-// to exercise the breadth of ggen features so the benchmark stresses
-// the codegen paths that real-world API responses actually hit:
-// tuples, slices of pointers, nested slices, pointer fields,
-// time/bytes/raw/any, and embedded validation. All shapes are also
+// Node is the deep-tree benchmark target. Exercises the breadth of ggen
+// kinds: scalars, slices, maps, tuples, slices of pointers, nested slices,
+// pointer fields, time/bytes/raw/any, and validation. All shapes are also
 // supported by jsonv2/sonic/easyjson for apples-to-apples comparison.
 //
 //ggen:generate
 //easyjson:json
 type Node struct {
-	ID        int64             `json:"id" ggen:"required,gte=0"`
-	Name      string            `json:"name" ggen:"required,minlen=1,maxlen=128"`
-	Score     float64           `json:"score" ggen:"gte=0,lte=100"`
+	ID        int64             `json:"id" pipe:"required gte=0"`
+	Name      string            `json:"name" pipe:"required minlen=1 maxlen=128"`
+	Score     float64           `json:"score" pipe:"gte=0 lte=100"`
 	Active    bool              `json:"active"`
-	Tags      []string          `json:"tags" ggen:"maxlen=64,dive:minlen=1,maxlen=64"`
-	Props     map[string]string `json:"props" ggen:"maxlen=64"`
-	Children  []Node            `json:"children" ggen:"maxlen=16"`
+	Tags      []string          `json:"tags" pipe:"maxlen=64 inner:(minlen=1 maxlen=64)"`
+	Props     map[string]string `json:"props" pipe:"maxlen=64"`
+	Children  []Node            `json:"children" pipe:"maxlen=16"`
 	Coords    [2]float64        `json:"coords"`
-	Refs      []*Addr           `json:"refs" ggen:"maxlen=16"`
-	Matrix    [][]int           `json:"matrix" ggen:"maxlen=16,dive:maxlen=32"`
+	Refs      []*Addr           `json:"refs" pipe:"maxlen=16"`
+	Matrix    [][]int           `json:"matrix" pipe:"maxlen=16 inner:maxlen=32"`
 	Parent    *Addr             `json:"parent,omitzero"`
 	CreatedAt time.Time         `json:"createdAt"`
 	Blob      []byte            `json:"blob"`
@@ -57,19 +50,13 @@ type Node struct {
 	Raw       json.RawMessage   `json:"raw"`
 }
 
-// AddrPlain is a defined type over Addr — strips easyjson's methods
-// (`type T U` drops all methods of U). Used by NodePlain so the
-// reflection-based decoder doesn't fall back to easyjson via the
-// `json.Unmarshaler` interface hook on `*Addr`.
+// AddrPlain strips easyjson's methods off Addr (`type T U` drops U's methods)
+// so NodePlain never falls back to easyjson via the json.Unmarshaler hook.
 type AddrPlain Addr
 
-// NodePlain mirrors Node's fields but defines its own self-referential
-// shape (`Children []NodePlain`, `Refs []*AddrPlain`, `Parent *AddrPlain`)
-// so nested decoding never crosses back into a type that has easyjson's
-// generated UnmarshalJSON / MarshalJSON. Used under the "stdjson" /
-// "jsonv2" rows so those rows actually measure stdlib's reflection
-// path, not easyjson via the `json.Marshaler` / `Unmarshaler` interface
-// hooks easyjson generates on Node.
+// NodePlain mirrors Node with a self-referential shape free of easyjson's
+// generated methods, so the stdjson/jsonv2 rows measure the reflection path
+// rather than easyjson via the json.Marshaler/Unmarshaler hooks.
 type NodePlain struct {
 	ID        int64             `json:"id"`
 	Name      string            `json:"name"`
@@ -88,9 +75,8 @@ type NodePlain struct {
 	Raw       json.RawMessage   `json:"raw"`
 }
 
-// nodeToPlain deep-converts a Node tree into NodePlain so marshal
-// benches can hand jsonv2 / sonic a value whose generated methods
-// are stripped. One-shot at init; not on the hot path.
+// nodeToPlain deep-converts a Node tree into NodePlain for the marshal
+// benches. One-shot at init.
 func nodeToPlain(n Node) NodePlain {
 	p := NodePlain{
 		ID:        n.ID,
@@ -128,17 +114,17 @@ func nodeToPlain(n Node) NodePlain {
 	return p
 }
 
-// Validated exercises ggen's per-field validation rules. Designed for
-// fail-fast streaming benchmarks: the alphabetically-first JSON field
-// (Email after sort) is the one we corrupt to force early rejection.
+// Validated exercises per-field validation rules for fail-fast streaming
+// benchmarks — Email (alphabetically first) is corrupted to force early
+// rejection.
 //
 //ggen:generate
 type Validated struct {
-	Email string   `json:"email" ggen:"required,email"`
-	Name  string   `json:"name"  ggen:"required,minlen=1,maxlen=64"`
-	Age   int      `json:"age"   ggen:"gte=0,lte=150"`
-	Tags  []string `json:"tags" ggen:"dive:notempty,minlen=1,maxlen=32"`
-	Bio   string   `json:"bio"   ggen:"maxlen=4096"`
+	Email string   `json:"email" pipe:"required email"`
+	Name  string   `json:"name"  pipe:"required minlen=1 maxlen=64"`
+	Age   int      `json:"age"   pipe:"gte=0 lte=150"`
+	Tags  []string `json:"tags" pipe:"inner:(notempty minlen=1 maxlen=32)"`
+	Bio   string   `json:"bio"   pipe:"maxlen=4096"`
 }
 
 var (
@@ -146,11 +132,9 @@ var (
 	MegaValuePlain NodePlain // converted copy for stdjson/jsonv2/sonic marshal rows
 	MegaPayload    []byte
 
-	// ValidPayload + InvalidPayload — short JSON bodies for fail-fast
-	// streaming benchmarks. Both about the same size; the invalid one
-	// fails on the first decoded field (email), so a streaming
-	// decoder with per-field validation can reject after reading just
-	// the prefix of the input.
+	// ValidPayload + InvalidPayload — same-size bodies for fail-fast
+	// streaming benchmarks; the invalid one fails on the first decoded
+	// field (email).
 	ValidPayload   []byte
 	InvalidPayload []byte
 )
@@ -165,9 +149,7 @@ func init() {
 		panic(err)
 	}
 
-	// ~3 KiB body — typical small POST payload. Bio padded with random
-	// content so the wire bytes meaningfully amount to something a
-	// slow reader has to deliver in chunks.
+	// ~3 KiB body; Bio padded so a slow reader delivers it in chunks.
 	bio := randString(rand.New(rand.NewSource(3)), 2800)
 	tags := []string{"alpha", "beta", "gamma", "delta"}
 	ValidPayload, err = encode.Marshal(Validated{
@@ -180,10 +162,8 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
-	// Same shape, but Email is malformed — fails the `email` rule on
-	// the very first decoded field (keys are emitted in sorted order,
-	// "age" comes before "bio" before "email" alphabetically).
-	// "age" passes, "bio" passes (just maxlen), then "email" trips.
+	// Same shape, but Email is malformed — fails the email rule on the
+	// first decoded field (sorted order: age, bio, then email trips).
 	InvalidPayload, err = encode.Marshal(Validated{
 		Email: "not-an-email",
 		Name:  "alice",
@@ -207,7 +187,7 @@ func buildNode(r *rand.Rand, depth int, fanout []int) Node {
 		Coords:    [2]float64{r.Float64()*180 - 90, r.Float64()*360 - 180},
 		Refs:      randAddrPtrs(r, 4+r.Intn(8)),
 		Matrix:    randMatrix(r, 4+r.Intn(8)),
-		Parent:    randAddrPtr(r, r.Intn(3) != 0), // ~2/3 of nodes have a parent
+		Parent:    randAddrPtr(r, r.Intn(3) != 0),
 		CreatedAt: time.Unix(r.Int63n(1<<31), r.Int63n(1<<30)).UTC(),
 		Blob:      randBytes(r, 32+r.Intn(192)),
 		Extra:     randAny(r),
@@ -240,7 +220,7 @@ func randAddrPtr(r *rand.Rand, present bool) *Addr {
 func randAddrPtrs(r *rand.Rand, n int) []*Addr {
 	out := make([]*Addr, n)
 	for i := range out {
-		// every 4th element is nil to exercise the null branch in the slab path
+		// every 4th element nil — exercises the slab path's null branch
 		out[i] = randAddrPtr(r, i%4 != 0)
 	}
 	return out
@@ -267,9 +247,8 @@ func randBytes(r *rand.Rand, n int) []byte {
 	return b
 }
 
-// randAny synthesizes an `any` value. Mostly scalars or nil — real
-// API "metadata" / "context" fields are scalar-dominated; nested any
-// shapes show up but aren't the common case.
+// randAny synthesizes an `any` value — mostly scalars or nil, occasionally
+// a small list or object.
 func randAny(r *rand.Rand) any {
 	switch r.Intn(10) {
 	case 0, 1, 2, 3:
@@ -283,7 +262,7 @@ func randAny(r *rand.Rand) any {
 	case 7:
 		return r.Intn(2) == 0
 	case 8:
-		// Small homogeneous string list — common for tags/labels.
+		// Small string list.
 		n := 2 + r.Intn(4)
 		out := make([]string, n)
 		for i := range out {
@@ -291,7 +270,7 @@ func randAny(r *rand.Rand) any {
 		}
 		return out
 	default:
-		// Small flat object — id/name/value triples.
+		// Small flat object.
 		n := 2 + r.Intn(3)
 		out := make(map[string]string, n)
 		for range n {
@@ -301,10 +280,8 @@ func randAny(r *rand.Rand) any {
 	}
 }
 
-// randRaw synthesizes JSON snippets aliased as RawMessage — objects with
-// random key sets, arrays of mixed scalars, and standalone scalars.
-// Sizes are bigger than typical scalar fields since RawMessage is the
-// "stuff anything in here" escape hatch.
+// randRaw synthesizes JSON snippets aliased as RawMessage — objects,
+// arrays of mixed scalars, and standalone scalars.
 func randRaw(r *rand.Rand) json.RawMessage {
 	switch r.Intn(6) {
 	case 0:
@@ -314,19 +291,15 @@ func randRaw(r *rand.Rand) json.RawMessage {
 	case 2:
 		return rawObject(r, 8+r.Intn(16))
 	case 3:
-		// Long quoted string.
 		return json.RawMessage(fmt.Sprintf(`%q`, randString(r, 32+r.Intn(96))))
 	case 4:
-		// Big integer.
 		return json.RawMessage(fmt.Sprintf(`%d`, r.Int63n(1<<60)))
 	default:
 		return json.RawMessage(`null`)
 	}
 }
 
-// rawObject builds a JSON object literal with n random string→scalar
-// entries. Keys are randomized so the resulting wire bytes don't
-// compress to a tiny set of repeated shapes.
+// rawObject builds a JSON object literal with n random string→scalar entries.
 func rawObject(r *rand.Rand, n int) json.RawMessage {
 	var b []byte
 	b = append(b, '{')
@@ -372,7 +345,7 @@ func appendRawScalar(b []byte, r *rand.Rand) []byte {
 	case 4:
 		return append(b, "null"...)
 	default:
-		// Nested array of ints to add wire-shape variety.
+		// Nested array of ints.
 		k := 2 + r.Intn(6)
 		b = append(b, '[')
 		for i := range k {
@@ -413,24 +386,22 @@ func randProps(r *rand.Rand, n int) map[string]string {
 
 // --- Tiny (JWT-claim sized ~150 B) payload --------------------------------
 
-// Claim is the JWT-claim-sized struct used by the tiny-payload benchmarks.
-// Real-world API tokens and auth-probe responses live at this size; mega's
-// 1 MiB dominates per-call overhead too much to see it.
+// Claim is the JWT-claim-sized struct used by the tiny-payload benchmarks,
+// where per-call overhead is visible.
 //
 //ggen:generate
 type Claim struct {
-	Sub string `json:"sub" ggen:"required"`
-	Iss string `json:"iss" ggen:"required"`
-	Exp int64  `json:"exp" ggen:"gte=0"`
-	Iat int64  `json:"iat" ggen:"gte=0"`
+	Sub string `json:"sub" pipe:"required"`
+	Iss string `json:"iss" pipe:"required"`
+	Exp int64  `json:"exp" pipe:"gte=0"`
+	Iat int64  `json:"iat" pipe:"gte=0"`
 	Nbf int64  `json:"nbf,omitempty"`
 	Aud string `json:"aud,omitempty"`
 	Jti string `json:"jti"`
 }
 
-// EasyClaim mirrors Claim with easyjson-generated MarshalJSON/UnmarshalJSON.
-// Decoupled so sonic/jsonv2/stdlib measuring Claim don't accidentally pick
-// up easyjson methods via the json.Marshaler/Unmarshaler interface check.
+// EasyClaim mirrors Claim with easyjson methods, kept on a separate type so
+// the reflection codecs don't pick them up via json.Marshaler/Unmarshaler.
 //
 //easyjson:json
 type EasyClaim struct {
@@ -451,29 +422,26 @@ var (
 
 // --- Validation-heavy payload ---------------------------------------------
 
-// ValidationHeavy carries enough rules that the per-field check cost
-// shows up against codecs that perform no validation. String length
-// rules are minrunes/maxrunes (full UTF-8 walk) rather than minlen/
-// maxlen (single len() call) so the per-string scan cost is meaningful.
+// ValidationHeavy carries enough rules that the per-field check cost shows
+// up against codecs that don't validate. Uses minrunes/maxrunes (full UTF-8
+// walk) so the per-string scan cost is meaningful.
 //
 //ggen:generate
 type ValidationHeavy struct {
-	Email    string  `json:"email" ggen:"required,email,maxrunes=128"`
-	Username string  `json:"username" ggen:"required,minrunes=3,maxrunes=32,alphanum,lower"`
-	Phone    string  `json:"phone" ggen:"minrunes=7,maxrunes=20,numeric"`
-	Age      int     `json:"age" ggen:"gte=0,lte=130"`
-	Score    float64 `json:"score" ggen:"gte=0,lte=100"`
-	Name     string  `json:"name" ggen:"required,minrunes=1,maxrunes=64"`
-	URL      string  `json:"url" ggen:"url"`
-	Country  string  `json:"country" ggen:"runes=2,upper"`
-	Lang     string  `json:"lang" ggen:"oneof=en|es|fr|de|uk"`
-	Role     string  `json:"role" ggen:"oneof=admin|user|guest"`
+	Email    string  `json:"email" pipe:"required email maxrunes=128"`
+	Username string  `json:"username" pipe:"required minrunes=3 maxrunes=32 alphanum lower"`
+	Phone    string  `json:"phone" pipe:"minrunes=7 maxrunes=20 numeric"`
+	Age      int     `json:"age" pipe:"gte=0 lte=130"`
+	Score    float64 `json:"score" pipe:"gte=0 lte=100"`
+	Name     string  `json:"name" pipe:"required minrunes=1 maxrunes=64"`
+	URL      string  `json:"url" pipe:"url"`
+	Country  string  `json:"country" pipe:"runes=2 upper"`
+	Lang     string  `json:"lang" pipe:"oneof=en|es|fr|de|uk"`
+	Role     string  `json:"role" pipe:"oneof=admin|user|guest"`
 }
 
-// NoValidationHeavy mirrors ValidationHeavy's wire shape but skips every
-// ggen validation rule (via `novalidate`). Lets the bench isolate the
-// pure decode cost from the per-rule check cost — ggen_novalidated row
-// vs ggen_validated row.
+// NoValidationHeavy mirrors ValidationHeavy's wire shape but skips validation
+// (via novalidate), isolating pure decode cost from the per-rule check cost.
 //
 //ggen:generate novalidate
 type NoValidationHeavy struct {
@@ -489,9 +457,8 @@ type NoValidationHeavy struct {
 	Role     string  `json:"role"`
 }
 
-// EasyValidationHeavy mirrors ValidationHeavy with easyjson-generated
-// methods. Separate so sonic/jsonv2 measuring ValidationHeavy don't
-// pick up easyjson via the json.Marshaler/Unmarshaler interface.
+// EasyValidationHeavy mirrors ValidationHeavy with easyjson methods (same
+// isolation rationale as EasyClaim).
 //
 //easyjson:json
 type EasyValidationHeavy struct {
@@ -511,8 +478,8 @@ var ValidationHeavyPayload []byte
 
 // --- HTML-escape parity payload --------------------------------------------
 
-// HTMLEscape exercises the htmlescape opt-in path on the encoder. Pairs
-// with HTMLPlain (default literal) for the wire-shape parity benchmark.
+// HTMLEscape exercises the htmlescape opt-in encoder path; pairs with
+// HTMLPlain (default literal) for the parity benchmark.
 //
 //ggen:generate htmlescape
 type HTMLEscape struct {
@@ -547,9 +514,8 @@ var DeepNestedPayload []byte
 
 // --- Map-heavy payload (1K-entry string→string map) ----------------------
 
-// MapHeavy holds a single big string-keyed map. At 1K+ entries map
-// allocation, hash fill, and iteration dominate decode/encode — a
-// different bottleneck from mega's tree-walk cost.
+// MapHeavy holds one big string-keyed map (1K+ entries) where map alloc,
+// hash fill, and iteration dominate — a different bottleneck from mega.
 //
 //ggen:generate
 type MapHeavy struct {
@@ -622,14 +588,11 @@ func init() {
 	}
 }
 
-// Account is the zero-allocation parse benchmark target (see
-// BenchmarkNoAlloc_Unmarshal in simple_test.go): a wide, denormalized record
-// of the shape a typical web server hands back for an authenticated user —
-// profile, address, employer, settings — flattened into one object.
-// Deliberately free of every kind that forces an allocation on decode: no
-// slices, no maps, no pointers, no `any`, no json.RawMessage. Strings alias
-// the input buffer (unsafe.String), nested structs decode in place, scalars
-// land in the receiver. A full decode therefore makes ZERO allocations.
+// Account is the zero-allocation parse target (BenchmarkNoAlloc_Unmarshal):
+// a wide denormalized record — profile, address, employer, settings —
+// flattened into one object. Free of every kind that forces a decode alloc
+// (no slices/maps/pointers/any/RawMessage), so a full decode makes ZERO
+// allocations: strings alias the input, nested structs decode in place.
 //
 //ggen:generate
 type Account struct {
@@ -719,10 +682,9 @@ type Preferences struct {
 	BetaFeatures       bool   `json:"betaFeatures"`
 }
 
-// Easy* mirror the Account family for the easyjson rows. Kept on separate
-// types so easyjson's MarshalJSON/UnmarshalJSON methods don't leak into the
-// jsonv2/sonic rows (those reflect over the clean Account family). Same wire
-// shape — see "easyjson method leakage" in bench/CLAUDE.md.
+// Easy* mirror the Account family for the easyjson rows, kept on separate
+// types so easyjson's methods don't leak into the jsonv2/sonic rows. Same
+// wire shape — see "easyjson method leakage" in bench/CLAUDE.md.
 //
 //easyjson:json
 type EasyAccount struct {
@@ -845,8 +807,8 @@ func init() {
 		LoginCount:   4821,
 		FailedLogins: 3,
 
-		// Long, multilingual, non-ASCII bodies — exercise the UTF-8 string
-		// scan (multi-byte runes, no escapes) over realistically large fields.
+		// Long multilingual non-ASCII bodies — exercise the UTF-8 string
+		// scan (multi-byte runes, no escapes) over large fields.
 		Bio: "Провідна інженерка розподілених систем. ‹分散システムの主任エンジニア›. " +
 			"Кохаю каву ☕, біг по стежках 🏃 та маю давню образу на необмежені черги. " +
 			"Mes opinions sont porteuses — μην εμπιστεύεσαι ουρές χωρίς όριο. " +

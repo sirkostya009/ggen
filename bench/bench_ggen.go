@@ -76,7 +76,7 @@ func (recv Addr) DecodeFrom(data []byte) (result Addr, i int, err error) {
 		switch key {
 		case "city":
 			if seenCity {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"city"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"city"}}
 			}
 			seenCity = true
 			if i >= len(data) || data[i] != '"' {
@@ -103,7 +103,7 @@ func (recv Addr) DecodeFrom(data []byte) (result Addr, i int, err error) {
 			}
 		case "street":
 			if seenStreet {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"street"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"street"}}
 			}
 			seenStreet = true
 			if i >= len(data) || data[i] != '"' {
@@ -129,7 +129,7 @@ func (recv Addr) DecodeFrom(data []byte) (result Addr, i int, err error) {
 				}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -187,7 +187,7 @@ func (recv Addr) DecodeFromStream(s *scan.Stream) (result Addr, err error) {
 				return result, decode.NewParseErr("city", s.Pos, err)
 			}
 			if seenCity {
-				return result, &validation.DuplicateKeyError{Path: []string{"city"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"city"}}
 			}
 			seenCity = true
 			result.City, err = s.String()
@@ -200,7 +200,7 @@ func (recv Addr) DecodeFromStream(s *scan.Stream) (result Addr, err error) {
 				return result, decode.NewParseErr("street", s.Pos, err)
 			}
 			if seenStreet {
-				return result, &validation.DuplicateKeyError{Path: []string{"street"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"street"}}
 			}
 			seenStreet = true
 			result.Street, err = s.String()
@@ -208,7 +208,7 @@ func (recv Addr) DecodeFromStream(s *scan.Stream) (result Addr, err error) {
 				return result, decode.NewParseErr("street", s.Pos, err)
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -303,10 +303,10 @@ func (recv Node) DecodeFrom(data []byte) (result Node, i int, err error) {
 	if i < len(data) && data[i] == '}' {
 		i++
 		if !seenID {
-			return result, i, &validation.RequiredError{Path: []string{"id"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"id"}}
 		}
 		if !seenName {
-			return result, i, &validation.RequiredError{Path: []string{"name"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"name"}}
 		}
 		return result, i, nil
 	}
@@ -347,7 +347,7 @@ func (recv Node) DecodeFrom(data []byte) (result Node, i int, err error) {
 		switch key {
 		case "active":
 			if seenActive {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"active"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"active"}}
 			}
 			seenActive = true
 			result.Active, i, err = scan.Bool(data, i)
@@ -356,7 +356,7 @@ func (recv Node) DecodeFrom(data []byte) (result Node, i int, err error) {
 			}
 		case "blob":
 			if seenBlob {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"blob"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"blob"}}
 			}
 			seenBlob = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -396,7 +396,7 @@ func (recv Node) DecodeFrom(data []byte) (result Node, i int, err error) {
 			}
 		case "children":
 			if seenChildren {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"children"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"children"}}
 			}
 			seenChildren = true
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -451,11 +451,11 @@ func (recv Node) DecodeFrom(data []byte) (result Node, i int, err error) {
 				i++
 			}
 			if len(result.Children) > 16 {
-				return result, i, &validation.MaxLenError{Path: []string{"children"}, Limit: 16, Got: len(result.Children)}
+				return result, i, &validation.MaxLenError{Pos: i, Path: []string{"children"}, Limit: 16, Got: len(result.Children)}
 			}
 		case "coords":
 			if seenCoords {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"coords"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"coords"}}
 			}
 			seenCoords = true
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -471,7 +471,7 @@ func (recv Node) DecodeFrom(data []byte) (result Node, i int, err error) {
 			var idx0 int
 			for i < len(data) && data[i] != ']' {
 				if idx0 >= 2 {
-					return result, i, &validation.LenError{Path: []string{"coords"}, Want: 2, Got: idx0}
+					return result, i, &validation.LenError{Pos: i, Path: []string{"coords"}, Want: 2, Got: idx0}
 				}
 				result.Coords[idx0], i, err = scan.Float64(data, i)
 				if err != nil {
@@ -497,12 +497,12 @@ func (recv Node) DecodeFrom(data []byte) (result Node, i int, err error) {
 				return result, i, scan.ErrBadArray
 			}
 			if idx0 != 2 {
-				return result, i, &validation.LenError{Path: []string{"coords"}, Want: 2, Got: idx0}
+				return result, i, &validation.LenError{Pos: i, Path: []string{"coords"}, Want: 2, Got: idx0}
 			}
 			i++
 		case "createdAt":
 			if seenCreatedAt {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"createdAt"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"createdAt"}}
 			}
 			seenCreatedAt = true
 			var s string
@@ -534,7 +534,7 @@ func (recv Node) DecodeFrom(data []byte) (result Node, i int, err error) {
 			}
 		case "extra":
 			if seenExtra {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"extra"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"extra"}}
 			}
 			seenExtra = true
 			result.Extra, i, err = scan.Any(data, i)
@@ -543,7 +543,7 @@ func (recv Node) DecodeFrom(data []byte) (result Node, i int, err error) {
 			}
 		case "id":
 			if seenID {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"id"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"id"}}
 			}
 			seenID = true
 			neg := false
@@ -593,11 +593,11 @@ func (recv Node) DecodeFrom(data []byte) (result Node, i int, err error) {
 			}
 			result.ID = n
 			if result.ID < 0 {
-				return result, i, &validation.GTEError{Path: []string{"id"}, Limit: 0, Value: result.ID}
+				return result, i, &validation.GTEError{Pos: i, Path: []string{"id"}, Limit: 0, Value: result.ID}
 			}
 		case "matrix":
 			if seenMatrix {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"matrix"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"matrix"}}
 			}
 			seenMatrix = true
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -633,7 +633,7 @@ func (recv Node) DecodeFrom(data []byte) (result Node, i int, err error) {
 						i += 4
 						result.Matrix[len(result.Matrix)-1] = nil
 						if len(result.Matrix[len(result.Matrix)-1]) > 32 {
-							return result, i, &validation.MaxLenError{Path: []string{"matrix[]"}, Limit: 32, Got: len(result.Matrix[len(result.Matrix)-1])}
+							return result, i, &validation.MaxLenError{Pos: i, Path: []string{"matrix[]"}, Limit: 32, Got: len(result.Matrix[len(result.Matrix)-1])}
 						}
 						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
@@ -746,7 +746,7 @@ func (recv Node) DecodeFrom(data []byte) (result Node, i int, err error) {
 					i++
 					result.Matrix[len(result.Matrix)-1] = row0
 					if len(result.Matrix[len(result.Matrix)-1]) > 32 {
-						return result, i, &validation.MaxLenError{Path: []string{"matrix[]"}, Limit: 32, Got: len(result.Matrix[len(result.Matrix)-1])}
+						return result, i, &validation.MaxLenError{Pos: i, Path: []string{"matrix[]"}, Limit: 32, Got: len(result.Matrix[len(result.Matrix)-1])}
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -769,11 +769,11 @@ func (recv Node) DecodeFrom(data []byte) (result Node, i int, err error) {
 				i++
 			}
 			if len(result.Matrix) > 16 {
-				return result, i, &validation.MaxLenError{Path: []string{"matrix"}, Limit: 16, Got: len(result.Matrix)}
+				return result, i, &validation.MaxLenError{Pos: i, Path: []string{"matrix"}, Limit: 16, Got: len(result.Matrix)}
 			}
 		case "name":
 			if seenName {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"name"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"name"}}
 			}
 			seenName = true
 			if i >= len(data) || data[i] != '"' {
@@ -799,14 +799,14 @@ func (recv Node) DecodeFrom(data []byte) (result Node, i int, err error) {
 				}
 			}
 			if len(result.Name) < 1 {
-				return result, i, &validation.MinLenError{Path: []string{"name"}, Limit: 1, Got: len(result.Name)}
+				return result, i, &validation.MinLenError{Pos: i, Path: []string{"name"}, Limit: 1, Got: len(result.Name)}
 			}
 			if len(result.Name) > 128 {
-				return result, i, &validation.MaxLenError{Path: []string{"name"}, Limit: 128, Got: len(result.Name)}
+				return result, i, &validation.MaxLenError{Pos: i, Path: []string{"name"}, Limit: 128, Got: len(result.Name)}
 			}
 		case "parent":
 			if seenParent {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"parent"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"parent"}}
 			}
 			seenParent = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -831,7 +831,7 @@ func (recv Node) DecodeFrom(data []byte) (result Node, i int, err error) {
 			}
 		case "props":
 			if seenProps {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"props"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"props"}}
 			}
 			seenProps = true
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -934,11 +934,11 @@ func (recv Node) DecodeFrom(data []byte) (result Node, i int, err error) {
 				i++
 			}
 			if len(result.Props) > 64 {
-				return result, i, &validation.MaxLenError{Path: []string{"props"}, Limit: 64, Got: len(result.Props)}
+				return result, i, &validation.MaxLenError{Pos: i, Path: []string{"props"}, Limit: 64, Got: len(result.Props)}
 			}
 		case "raw":
 			if seenRaw {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"raw"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"raw"}}
 			}
 			seenRaw = true
 			start := i
@@ -949,7 +949,7 @@ func (recv Node) DecodeFrom(data []byte) (result Node, i int, err error) {
 			result.Raw = data[start:i]
 		case "refs":
 			if seenRefs {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"refs"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"refs"}}
 			}
 			seenRefs = true
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -1025,11 +1025,11 @@ func (recv Node) DecodeFrom(data []byte) (result Node, i int, err error) {
 				i++
 			}
 			if len(result.Refs) > 16 {
-				return result, i, &validation.MaxLenError{Path: []string{"refs"}, Limit: 16, Got: len(result.Refs)}
+				return result, i, &validation.MaxLenError{Pos: i, Path: []string{"refs"}, Limit: 16, Got: len(result.Refs)}
 			}
 		case "score":
 			if seenScore {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"score"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"score"}}
 			}
 			seenScore = true
 			result.Score, i, err = scan.Float64(data, i)
@@ -1037,14 +1037,14 @@ func (recv Node) DecodeFrom(data []byte) (result Node, i int, err error) {
 				return result, i, decode.NewParseErr("score", i, err)
 			}
 			if result.Score < 0 {
-				return result, i, &validation.GTEError{Path: []string{"score"}, Limit: 0, Value: result.Score}
+				return result, i, &validation.GTEError{Pos: i, Path: []string{"score"}, Limit: 0, Value: result.Score}
 			}
 			if result.Score > 100 {
-				return result, i, &validation.LTEError{Path: []string{"score"}, Limit: 100, Value: result.Score}
+				return result, i, &validation.LTEError{Pos: i, Path: []string{"score"}, Limit: 100, Value: result.Score}
 			}
 		case "tags":
 			if seenTags {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"tags"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"tags"}}
 			}
 			seenTags = true
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -1095,10 +1095,10 @@ func (recv Node) DecodeFrom(data []byte) (result Node, i int, err error) {
 						}
 					}
 					if len(result.Tags[len(result.Tags)-1]) < 1 {
-						return result, i, &validation.MinLenError{Path: []string{"tags[]"}, Limit: 1, Got: len(result.Tags[len(result.Tags)-1])}
+						return result, i, &validation.MinLenError{Pos: i, Path: []string{"tags[]"}, Limit: 1, Got: len(result.Tags[len(result.Tags)-1])}
 					}
 					if len(result.Tags[len(result.Tags)-1]) > 64 {
-						return result, i, &validation.MaxLenError{Path: []string{"tags[]"}, Limit: 64, Got: len(result.Tags[len(result.Tags)-1])}
+						return result, i, &validation.MaxLenError{Pos: i, Path: []string{"tags[]"}, Limit: 64, Got: len(result.Tags[len(result.Tags)-1])}
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -1121,10 +1121,10 @@ func (recv Node) DecodeFrom(data []byte) (result Node, i int, err error) {
 				i++
 			}
 			if len(result.Tags) > 64 {
-				return result, i, &validation.MaxLenError{Path: []string{"tags"}, Limit: 64, Got: len(result.Tags)}
+				return result, i, &validation.MaxLenError{Pos: i, Path: []string{"tags"}, Limit: 64, Got: len(result.Tags)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -1142,10 +1142,10 @@ func (recv Node) DecodeFrom(data []byte) (result Node, i int, err error) {
 		if data[i] == '}' {
 			i++
 			if !seenID {
-				return result, i, &validation.RequiredError{Path: []string{"id"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"id"}}
 			}
 			if !seenName {
-				return result, i, &validation.RequiredError{Path: []string{"name"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"name"}}
 			}
 			return result, i, nil
 		}
@@ -1205,10 +1205,10 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
 		if !seenID {
-			return result, &validation.RequiredError{Path: []string{"id"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"id"}}
 		}
 		if !seenName {
-			return result, &validation.RequiredError{Path: []string{"name"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"name"}}
 		}
 		return result, nil
 	}
@@ -1225,7 +1225,7 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 				return result, decode.NewParseErr("active", s.Pos, err)
 			}
 			if seenActive {
-				return result, &validation.DuplicateKeyError{Path: []string{"active"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"active"}}
 			}
 			seenActive = true
 			result.Active, err = s.Bool()
@@ -1238,7 +1238,7 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 				return result, decode.NewParseErr("blob", s.Pos, err)
 			}
 			if seenBlob {
-				return result, &validation.DuplicateKeyError{Path: []string{"blob"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"blob"}}
 			}
 			seenBlob = true
 			if s.Pos >= len(s.Bytes()) {
@@ -1279,7 +1279,7 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 				return result, decode.NewParseErr("children", s.Pos, err)
 			}
 			if seenChildren {
-				return result, &validation.DuplicateKeyError{Path: []string{"children"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"children"}}
 			}
 			seenChildren = true
 			err = s.SkipSpace()
@@ -1361,7 +1361,7 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 				s.Pos++
 			}
 			if len(result.Children) > 16 {
-				return result, &validation.MaxLenError{Path: []string{"children"}, Limit: 16, Got: len(result.Children)}
+				return result, &validation.MaxLenError{Pos: s.Offset(), Path: []string{"children"}, Limit: 16, Got: len(result.Children)}
 			}
 		case "coords":
 			err = s.ConsumeColon()
@@ -1369,7 +1369,7 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 				return result, decode.NewParseErr("coords", s.Pos, err)
 			}
 			if seenCoords {
-				return result, &validation.DuplicateKeyError{Path: []string{"coords"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"coords"}}
 			}
 			seenCoords = true
 			err = s.ArrayOpen()
@@ -1388,7 +1388,7 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 			var idx0 int
 			for s.Bytes()[s.Pos] != ']' {
 				if idx0 >= 2 {
-					return result, &validation.LenError{Path: []string{"coords"}, Want: 2, Got: idx0}
+					return result, &validation.LenError{Pos: s.Offset(), Path: []string{"coords"}, Want: 2, Got: idx0}
 				}
 				result.Coords[idx0], err = s.Float64()
 				if err != nil {
@@ -1421,7 +1421,7 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 				return result, decode.NewParseErr("coords", s.Pos, scan.ErrBadArray)
 			}
 			if idx0 != 2 {
-				return result, &validation.LenError{Path: []string{"coords"}, Want: 2, Got: idx0}
+				return result, &validation.LenError{Pos: s.Offset(), Path: []string{"coords"}, Want: 2, Got: idx0}
 			}
 			s.Pos++
 		case "createdAt":
@@ -1430,7 +1430,7 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 				return result, decode.NewParseErr("createdAt", s.Pos, err)
 			}
 			if seenCreatedAt {
-				return result, &validation.DuplicateKeyError{Path: []string{"createdAt"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"createdAt"}}
 			}
 			seenCreatedAt = true
 			var sv string
@@ -1448,7 +1448,7 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 				return result, decode.NewParseErr("extra", s.Pos, err)
 			}
 			if seenExtra {
-				return result, &validation.DuplicateKeyError{Path: []string{"extra"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"extra"}}
 			}
 			seenExtra = true
 			result.Extra, err = s.Any()
@@ -1461,7 +1461,7 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 				return result, decode.NewParseErr("id", s.Pos, err)
 			}
 			if seenID {
-				return result, &validation.DuplicateKeyError{Path: []string{"id"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"id"}}
 			}
 			seenID = true
 			result.ID, err = s.Int64()
@@ -1469,7 +1469,7 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 				return result, decode.NewParseErr("id", s.Pos, err)
 			}
 			if result.ID < 0 {
-				return result, &validation.GTEError{Path: []string{"id"}, Limit: 0, Value: result.ID}
+				return result, &validation.GTEError{Pos: s.Offset(), Path: []string{"id"}, Limit: 0, Value: result.ID}
 			}
 		case "matrix":
 			err = s.ConsumeColon()
@@ -1477,7 +1477,7 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 				return result, decode.NewParseErr("matrix", s.Pos, err)
 			}
 			if seenMatrix {
-				return result, &validation.DuplicateKeyError{Path: []string{"matrix"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"matrix"}}
 			}
 			seenMatrix = true
 			err = s.SkipSpace()
@@ -1550,7 +1550,7 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 						s.Pos += 4
 						result.Matrix[len(result.Matrix)-1] = nil
 						if len(result.Matrix[len(result.Matrix)-1]) > 32 {
-							return result, &validation.MaxLenError{Path: []string{"matrix[]"}, Limit: 32, Got: len(result.Matrix[len(result.Matrix)-1])}
+							return result, &validation.MaxLenError{Pos: s.Offset(), Path: []string{"matrix[]"}, Limit: 32, Got: len(result.Matrix[len(result.Matrix)-1])}
 						}
 						err = s.SkipSpace()
 						if err != nil {
@@ -1636,7 +1636,7 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 					s.Pos++
 					result.Matrix[len(result.Matrix)-1] = row0
 					if len(result.Matrix[len(result.Matrix)-1]) > 32 {
-						return result, &validation.MaxLenError{Path: []string{"matrix[]"}, Limit: 32, Got: len(result.Matrix[len(result.Matrix)-1])}
+						return result, &validation.MaxLenError{Pos: s.Offset(), Path: []string{"matrix[]"}, Limit: 32, Got: len(result.Matrix[len(result.Matrix)-1])}
 					}
 					err = s.SkipSpace()
 					if err != nil {
@@ -1666,7 +1666,7 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 				s.Pos++
 			}
 			if len(result.Matrix) > 16 {
-				return result, &validation.MaxLenError{Path: []string{"matrix"}, Limit: 16, Got: len(result.Matrix)}
+				return result, &validation.MaxLenError{Pos: s.Offset(), Path: []string{"matrix"}, Limit: 16, Got: len(result.Matrix)}
 			}
 		case "name":
 			err = s.ConsumeColon()
@@ -1674,7 +1674,7 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 				return result, decode.NewParseErr("name", s.Pos, err)
 			}
 			if seenName {
-				return result, &validation.DuplicateKeyError{Path: []string{"name"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"name"}}
 			}
 			seenName = true
 			result.Name, err = s.String()
@@ -1682,10 +1682,10 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 				return result, decode.NewParseErr("name", s.Pos, err)
 			}
 			if len(result.Name) < 1 {
-				return result, &validation.MinLenError{Path: []string{"name"}, Limit: 1, Got: len(result.Name)}
+				return result, &validation.MinLenError{Pos: s.Offset(), Path: []string{"name"}, Limit: 1, Got: len(result.Name)}
 			}
 			if len(result.Name) > 128 {
-				return result, &validation.MaxLenError{Path: []string{"name"}, Limit: 128, Got: len(result.Name)}
+				return result, &validation.MaxLenError{Pos: s.Offset(), Path: []string{"name"}, Limit: 128, Got: len(result.Name)}
 			}
 		case "parent":
 			err = s.ConsumeColon()
@@ -1693,7 +1693,7 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 				return result, decode.NewParseErr("parent", s.Pos, err)
 			}
 			if seenParent {
-				return result, &validation.DuplicateKeyError{Path: []string{"parent"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"parent"}}
 			}
 			seenParent = true
 			if s.Pos >= len(s.Bytes()) {
@@ -1735,7 +1735,7 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 				return result, decode.NewParseErr("props", s.Pos, err)
 			}
 			if seenProps {
-				return result, &validation.DuplicateKeyError{Path: []string{"props"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"props"}}
 			}
 			seenProps = true
 			err = s.SkipSpace()
@@ -1838,7 +1838,7 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 				s.Pos++
 			}
 			if len(result.Props) > 64 {
-				return result, &validation.MaxLenError{Path: []string{"props"}, Limit: 64, Got: len(result.Props)}
+				return result, &validation.MaxLenError{Pos: s.Offset(), Path: []string{"props"}, Limit: 64, Got: len(result.Props)}
 			}
 		case "raw":
 			err = s.ConsumeColon()
@@ -1846,7 +1846,7 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 				return result, decode.NewParseErr("raw", s.Pos, err)
 			}
 			if seenRaw {
-				return result, &validation.DuplicateKeyError{Path: []string{"raw"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"raw"}}
 			}
 			seenRaw = true
 			start := s.Pos
@@ -1865,7 +1865,7 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 				return result, decode.NewParseErr("refs", s.Pos, err)
 			}
 			if seenRefs {
-				return result, &validation.DuplicateKeyError{Path: []string{"refs"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"refs"}}
 			}
 			seenRefs = true
 			err = s.SkipSpace()
@@ -1990,7 +1990,7 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 				s.Pos++
 			}
 			if len(result.Refs) > 16 {
-				return result, &validation.MaxLenError{Path: []string{"refs"}, Limit: 16, Got: len(result.Refs)}
+				return result, &validation.MaxLenError{Pos: s.Offset(), Path: []string{"refs"}, Limit: 16, Got: len(result.Refs)}
 			}
 		case "score":
 			err = s.ConsumeColon()
@@ -1998,7 +1998,7 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 				return result, decode.NewParseErr("score", s.Pos, err)
 			}
 			if seenScore {
-				return result, &validation.DuplicateKeyError{Path: []string{"score"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"score"}}
 			}
 			seenScore = true
 			result.Score, err = s.Float64()
@@ -2006,10 +2006,10 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 				return result, decode.NewParseErr("score", s.Pos, err)
 			}
 			if result.Score < 0 {
-				return result, &validation.GTEError{Path: []string{"score"}, Limit: 0, Value: result.Score}
+				return result, &validation.GTEError{Pos: s.Offset(), Path: []string{"score"}, Limit: 0, Value: result.Score}
 			}
 			if result.Score > 100 {
-				return result, &validation.LTEError{Path: []string{"score"}, Limit: 100, Value: result.Score}
+				return result, &validation.LTEError{Pos: s.Offset(), Path: []string{"score"}, Limit: 100, Value: result.Score}
 			}
 		case "tags":
 			err = s.ConsumeColon()
@@ -2017,7 +2017,7 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 				return result, decode.NewParseErr("tags", s.Pos, err)
 			}
 			if seenTags {
-				return result, &validation.DuplicateKeyError{Path: []string{"tags"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"tags"}}
 			}
 			seenTags = true
 			err = s.SkipSpace()
@@ -2072,10 +2072,10 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 						return result, decode.NewParseErr("tags", s.Pos, err)
 					}
 					if len(result.Tags[len(result.Tags)-1]) < 1 {
-						return result, &validation.MinLenError{Path: []string{"tags[]"}, Limit: 1, Got: len(result.Tags[len(result.Tags)-1])}
+						return result, &validation.MinLenError{Pos: s.Offset(), Path: []string{"tags[]"}, Limit: 1, Got: len(result.Tags[len(result.Tags)-1])}
 					}
 					if len(result.Tags[len(result.Tags)-1]) > 64 {
-						return result, &validation.MaxLenError{Path: []string{"tags[]"}, Limit: 64, Got: len(result.Tags[len(result.Tags)-1])}
+						return result, &validation.MaxLenError{Pos: s.Offset(), Path: []string{"tags[]"}, Limit: 64, Got: len(result.Tags[len(result.Tags)-1])}
 					}
 					err = s.SkipSpace()
 					if err != nil {
@@ -2105,10 +2105,10 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 				s.Pos++
 			}
 			if len(result.Tags) > 64 {
-				return result, &validation.MaxLenError{Path: []string{"tags"}, Limit: 64, Got: len(result.Tags)}
+				return result, &validation.MaxLenError{Pos: s.Offset(), Path: []string{"tags"}, Limit: 64, Got: len(result.Tags)}
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -2133,10 +2133,10 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 		if c == '}' {
 			s.Pos++
 			if !seenID {
-				return result, &validation.RequiredError{Path: []string{"id"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"id"}}
 			}
 			if !seenName {
-				return result, &validation.RequiredError{Path: []string{"name"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"name"}}
 			}
 			return result, nil
 		}
@@ -2443,10 +2443,10 @@ func (recv Validated) DecodeFrom(data []byte) (result Validated, i int, err erro
 	if i < len(data) && data[i] == '}' {
 		i++
 		if !seenEmail {
-			return result, i, &validation.RequiredError{Path: []string{"email"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"email"}}
 		}
 		if !seenName {
-			return result, i, &validation.RequiredError{Path: []string{"name"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"name"}}
 		}
 		return result, i, nil
 	}
@@ -2487,7 +2487,7 @@ func (recv Validated) DecodeFrom(data []byte) (result Validated, i int, err erro
 		switch key {
 		case "age":
 			if seenAge {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"age"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"age"}}
 			}
 			seenAge = true
 			neg := false
@@ -2537,14 +2537,14 @@ func (recv Validated) DecodeFrom(data []byte) (result Validated, i int, err erro
 			}
 			result.Age = int(n)
 			if result.Age < 0 {
-				return result, i, &validation.GTEError{Path: []string{"age"}, Limit: 0, Value: result.Age}
+				return result, i, &validation.GTEError{Pos: i, Path: []string{"age"}, Limit: 0, Value: result.Age}
 			}
 			if result.Age > 150 {
-				return result, i, &validation.LTEError{Path: []string{"age"}, Limit: 150, Value: result.Age}
+				return result, i, &validation.LTEError{Pos: i, Path: []string{"age"}, Limit: 150, Value: result.Age}
 			}
 		case "bio":
 			if seenBio {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"bio"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"bio"}}
 			}
 			seenBio = true
 			if i >= len(data) || data[i] != '"' {
@@ -2570,11 +2570,11 @@ func (recv Validated) DecodeFrom(data []byte) (result Validated, i int, err erro
 				}
 			}
 			if len(result.Bio) > 4096 {
-				return result, i, &validation.MaxLenError{Path: []string{"bio"}, Limit: 4096, Got: len(result.Bio)}
+				return result, i, &validation.MaxLenError{Pos: i, Path: []string{"bio"}, Limit: 4096, Got: len(result.Bio)}
 			}
 		case "email":
 			if seenEmail {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"email"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"email"}}
 			}
 			seenEmail = true
 			if i >= len(data) || data[i] != '"' {
@@ -2600,11 +2600,11 @@ func (recv Validated) DecodeFrom(data []byte) (result Validated, i int, err erro
 				}
 			}
 			if !decode.IsEmail(result.Email) {
-				return result, i, &validation.EmailError{Path: []string{"email"}, Value: result.Email}
+				return result, i, &validation.EmailError{Pos: i, Path: []string{"email"}, Value: result.Email}
 			}
 		case "name":
 			if seenName {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"name"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"name"}}
 			}
 			seenName = true
 			if i >= len(data) || data[i] != '"' {
@@ -2630,14 +2630,14 @@ func (recv Validated) DecodeFrom(data []byte) (result Validated, i int, err erro
 				}
 			}
 			if len(result.Name) < 1 {
-				return result, i, &validation.MinLenError{Path: []string{"name"}, Limit: 1, Got: len(result.Name)}
+				return result, i, &validation.MinLenError{Pos: i, Path: []string{"name"}, Limit: 1, Got: len(result.Name)}
 			}
 			if len(result.Name) > 64 {
-				return result, i, &validation.MaxLenError{Path: []string{"name"}, Limit: 64, Got: len(result.Name)}
+				return result, i, &validation.MaxLenError{Pos: i, Path: []string{"name"}, Limit: 64, Got: len(result.Name)}
 			}
 		case "tags":
 			if seenTags {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"tags"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"tags"}}
 			}
 			seenTags = true
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -2689,13 +2689,13 @@ func (recv Validated) DecodeFrom(data []byte) (result Validated, i int, err erro
 					}
 				}
 				if len(result.Tags[len(result.Tags)-1]) == 0 {
-					return result, i, &validation.NotEmptyError{Path: []string{"tags[]"}}
+					return result, i, &validation.NotEmptyError{Pos: i, Path: []string{"tags[]"}}
 				}
 				if len(result.Tags[len(result.Tags)-1]) < 1 {
-					return result, i, &validation.MinLenError{Path: []string{"tags[]"}, Limit: 1, Got: len(result.Tags[len(result.Tags)-1])}
+					return result, i, &validation.MinLenError{Pos: i, Path: []string{"tags[]"}, Limit: 1, Got: len(result.Tags[len(result.Tags)-1])}
 				}
 				if len(result.Tags[len(result.Tags)-1]) > 32 {
-					return result, i, &validation.MaxLenError{Path: []string{"tags[]"}, Limit: 32, Got: len(result.Tags[len(result.Tags)-1])}
+					return result, i, &validation.MaxLenError{Pos: i, Path: []string{"tags[]"}, Limit: 32, Got: len(result.Tags[len(result.Tags)-1])}
 				}
 				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 					i++
@@ -2717,7 +2717,7 @@ func (recv Validated) DecodeFrom(data []byte) (result Validated, i int, err erro
 			}
 			i++
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -2735,10 +2735,10 @@ func (recv Validated) DecodeFrom(data []byte) (result Validated, i int, err erro
 		if data[i] == '}' {
 			i++
 			if !seenEmail {
-				return result, i, &validation.RequiredError{Path: []string{"email"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"email"}}
 			}
 			if !seenName {
-				return result, i, &validation.RequiredError{Path: []string{"name"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"name"}}
 			}
 			return result, i, nil
 		}
@@ -2773,10 +2773,10 @@ func (recv Validated) DecodeFromStream(s *scan.Stream) (result Validated, err er
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
 		if !seenEmail {
-			return result, &validation.RequiredError{Path: []string{"email"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"email"}}
 		}
 		if !seenName {
-			return result, &validation.RequiredError{Path: []string{"name"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"name"}}
 		}
 		return result, nil
 	}
@@ -2793,7 +2793,7 @@ func (recv Validated) DecodeFromStream(s *scan.Stream) (result Validated, err er
 				return result, decode.NewParseErr("age", s.Pos, err)
 			}
 			if seenAge {
-				return result, &validation.DuplicateKeyError{Path: []string{"age"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"age"}}
 			}
 			seenAge = true
 			var iv int64
@@ -2803,10 +2803,10 @@ func (recv Validated) DecodeFromStream(s *scan.Stream) (result Validated, err er
 			}
 			result.Age = int(iv)
 			if result.Age < 0 {
-				return result, &validation.GTEError{Path: []string{"age"}, Limit: 0, Value: result.Age}
+				return result, &validation.GTEError{Pos: s.Offset(), Path: []string{"age"}, Limit: 0, Value: result.Age}
 			}
 			if result.Age > 150 {
-				return result, &validation.LTEError{Path: []string{"age"}, Limit: 150, Value: result.Age}
+				return result, &validation.LTEError{Pos: s.Offset(), Path: []string{"age"}, Limit: 150, Value: result.Age}
 			}
 		case "bio":
 			err = s.ConsumeColon()
@@ -2814,7 +2814,7 @@ func (recv Validated) DecodeFromStream(s *scan.Stream) (result Validated, err er
 				return result, decode.NewParseErr("bio", s.Pos, err)
 			}
 			if seenBio {
-				return result, &validation.DuplicateKeyError{Path: []string{"bio"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"bio"}}
 			}
 			seenBio = true
 			result.Bio, err = s.String()
@@ -2822,7 +2822,7 @@ func (recv Validated) DecodeFromStream(s *scan.Stream) (result Validated, err er
 				return result, decode.NewParseErr("bio", s.Pos, err)
 			}
 			if len(result.Bio) > 4096 {
-				return result, &validation.MaxLenError{Path: []string{"bio"}, Limit: 4096, Got: len(result.Bio)}
+				return result, &validation.MaxLenError{Pos: s.Offset(), Path: []string{"bio"}, Limit: 4096, Got: len(result.Bio)}
 			}
 		case "email":
 			err = s.ConsumeColon()
@@ -2830,7 +2830,7 @@ func (recv Validated) DecodeFromStream(s *scan.Stream) (result Validated, err er
 				return result, decode.NewParseErr("email", s.Pos, err)
 			}
 			if seenEmail {
-				return result, &validation.DuplicateKeyError{Path: []string{"email"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"email"}}
 			}
 			seenEmail = true
 			result.Email, err = s.String()
@@ -2838,7 +2838,7 @@ func (recv Validated) DecodeFromStream(s *scan.Stream) (result Validated, err er
 				return result, decode.NewParseErr("email", s.Pos, err)
 			}
 			if !decode.IsEmail(result.Email) {
-				return result, &validation.EmailError{Path: []string{"email"}, Value: result.Email}
+				return result, &validation.EmailError{Pos: s.Offset(), Path: []string{"email"}, Value: result.Email}
 			}
 		case "name":
 			err = s.ConsumeColon()
@@ -2846,7 +2846,7 @@ func (recv Validated) DecodeFromStream(s *scan.Stream) (result Validated, err er
 				return result, decode.NewParseErr("name", s.Pos, err)
 			}
 			if seenName {
-				return result, &validation.DuplicateKeyError{Path: []string{"name"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"name"}}
 			}
 			seenName = true
 			result.Name, err = s.String()
@@ -2854,10 +2854,10 @@ func (recv Validated) DecodeFromStream(s *scan.Stream) (result Validated, err er
 				return result, decode.NewParseErr("name", s.Pos, err)
 			}
 			if len(result.Name) < 1 {
-				return result, &validation.MinLenError{Path: []string{"name"}, Limit: 1, Got: len(result.Name)}
+				return result, &validation.MinLenError{Pos: s.Offset(), Path: []string{"name"}, Limit: 1, Got: len(result.Name)}
 			}
 			if len(result.Name) > 64 {
-				return result, &validation.MaxLenError{Path: []string{"name"}, Limit: 64, Got: len(result.Name)}
+				return result, &validation.MaxLenError{Pos: s.Offset(), Path: []string{"name"}, Limit: 64, Got: len(result.Name)}
 			}
 		case "tags":
 			err = s.ConsumeColon()
@@ -2865,7 +2865,7 @@ func (recv Validated) DecodeFromStream(s *scan.Stream) (result Validated, err er
 				return result, decode.NewParseErr("tags", s.Pos, err)
 			}
 			if seenTags {
-				return result, &validation.DuplicateKeyError{Path: []string{"tags"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"tags"}}
 			}
 			seenTags = true
 			err = s.SkipSpace()
@@ -2921,13 +2921,13 @@ func (recv Validated) DecodeFromStream(s *scan.Stream) (result Validated, err er
 					return result, decode.NewParseErr("tags", s.Pos, err)
 				}
 				if len(result.Tags[len(result.Tags)-1]) == 0 {
-					return result, &validation.NotEmptyError{Path: []string{"tags[]"}}
+					return result, &validation.NotEmptyError{Pos: s.Offset(), Path: []string{"tags[]"}}
 				}
 				if len(result.Tags[len(result.Tags)-1]) < 1 {
-					return result, &validation.MinLenError{Path: []string{"tags[]"}, Limit: 1, Got: len(result.Tags[len(result.Tags)-1])}
+					return result, &validation.MinLenError{Pos: s.Offset(), Path: []string{"tags[]"}, Limit: 1, Got: len(result.Tags[len(result.Tags)-1])}
 				}
 				if len(result.Tags[len(result.Tags)-1]) > 32 {
-					return result, &validation.MaxLenError{Path: []string{"tags[]"}, Limit: 32, Got: len(result.Tags[len(result.Tags)-1])}
+					return result, &validation.MaxLenError{Pos: s.Offset(), Path: []string{"tags[]"}, Limit: 32, Got: len(result.Tags[len(result.Tags)-1])}
 				}
 				err = s.SkipSpace()
 				if err != nil {
@@ -2956,7 +2956,7 @@ func (recv Validated) DecodeFromStream(s *scan.Stream) (result Validated, err er
 			}
 			s.Pos++
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -2981,10 +2981,10 @@ func (recv Validated) DecodeFromStream(s *scan.Stream) (result Validated, err er
 		if c == '}' {
 			s.Pos++
 			if !seenEmail {
-				return result, &validation.RequiredError{Path: []string{"email"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"email"}}
 			}
 			if !seenName {
-				return result, &validation.RequiredError{Path: []string{"name"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"name"}}
 			}
 			return result, nil
 		}
@@ -3057,10 +3057,10 @@ func (recv Claim) DecodeFrom(data []byte) (result Claim, i int, err error) {
 	if i < len(data) && data[i] == '}' {
 		i++
 		if !seenIss {
-			return result, i, &validation.RequiredError{Path: []string{"iss"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"iss"}}
 		}
 		if !seenSub {
-			return result, i, &validation.RequiredError{Path: []string{"sub"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"sub"}}
 		}
 		return result, i, nil
 	}
@@ -3101,7 +3101,7 @@ func (recv Claim) DecodeFrom(data []byte) (result Claim, i int, err error) {
 		switch key {
 		case "aud":
 			if seenAud {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"aud"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"aud"}}
 			}
 			seenAud = true
 			if i >= len(data) || data[i] != '"' {
@@ -3128,7 +3128,7 @@ func (recv Claim) DecodeFrom(data []byte) (result Claim, i int, err error) {
 			}
 		case "exp":
 			if seenExp {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"exp"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"exp"}}
 			}
 			seenExp = true
 			neg := false
@@ -3178,11 +3178,11 @@ func (recv Claim) DecodeFrom(data []byte) (result Claim, i int, err error) {
 			}
 			result.Exp = n
 			if result.Exp < 0 {
-				return result, i, &validation.GTEError{Path: []string{"exp"}, Limit: 0, Value: result.Exp}
+				return result, i, &validation.GTEError{Pos: i, Path: []string{"exp"}, Limit: 0, Value: result.Exp}
 			}
 		case "iat":
 			if seenIat {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"iat"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"iat"}}
 			}
 			seenIat = true
 			neg := false
@@ -3232,11 +3232,11 @@ func (recv Claim) DecodeFrom(data []byte) (result Claim, i int, err error) {
 			}
 			result.Iat = n
 			if result.Iat < 0 {
-				return result, i, &validation.GTEError{Path: []string{"iat"}, Limit: 0, Value: result.Iat}
+				return result, i, &validation.GTEError{Pos: i, Path: []string{"iat"}, Limit: 0, Value: result.Iat}
 			}
 		case "iss":
 			if seenIss {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"iss"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"iss"}}
 			}
 			seenIss = true
 			if i >= len(data) || data[i] != '"' {
@@ -3263,7 +3263,7 @@ func (recv Claim) DecodeFrom(data []byte) (result Claim, i int, err error) {
 			}
 		case "jti":
 			if seenJti {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"jti"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"jti"}}
 			}
 			seenJti = true
 			if i >= len(data) || data[i] != '"' {
@@ -3290,7 +3290,7 @@ func (recv Claim) DecodeFrom(data []byte) (result Claim, i int, err error) {
 			}
 		case "nbf":
 			if seenNbf {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"nbf"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"nbf"}}
 			}
 			seenNbf = true
 			neg := false
@@ -3341,7 +3341,7 @@ func (recv Claim) DecodeFrom(data []byte) (result Claim, i int, err error) {
 			result.Nbf = n
 		case "sub":
 			if seenSub {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"sub"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"sub"}}
 			}
 			seenSub = true
 			if i >= len(data) || data[i] != '"' {
@@ -3367,7 +3367,7 @@ func (recv Claim) DecodeFrom(data []byte) (result Claim, i int, err error) {
 				}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -3385,10 +3385,10 @@ func (recv Claim) DecodeFrom(data []byte) (result Claim, i int, err error) {
 		if data[i] == '}' {
 			i++
 			if !seenIss {
-				return result, i, &validation.RequiredError{Path: []string{"iss"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"iss"}}
 			}
 			if !seenSub {
-				return result, i, &validation.RequiredError{Path: []string{"sub"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"sub"}}
 			}
 			return result, i, nil
 		}
@@ -3422,10 +3422,10 @@ func (recv Claim) DecodeFromStream(s *scan.Stream) (result Claim, err error) {
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
 		if !seenIss {
-			return result, &validation.RequiredError{Path: []string{"iss"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"iss"}}
 		}
 		if !seenSub {
-			return result, &validation.RequiredError{Path: []string{"sub"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"sub"}}
 		}
 		return result, nil
 	}
@@ -3442,7 +3442,7 @@ func (recv Claim) DecodeFromStream(s *scan.Stream) (result Claim, err error) {
 				return result, decode.NewParseErr("aud", s.Pos, err)
 			}
 			if seenAud {
-				return result, &validation.DuplicateKeyError{Path: []string{"aud"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"aud"}}
 			}
 			seenAud = true
 			result.Aud, err = s.String()
@@ -3455,7 +3455,7 @@ func (recv Claim) DecodeFromStream(s *scan.Stream) (result Claim, err error) {
 				return result, decode.NewParseErr("exp", s.Pos, err)
 			}
 			if seenExp {
-				return result, &validation.DuplicateKeyError{Path: []string{"exp"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"exp"}}
 			}
 			seenExp = true
 			result.Exp, err = s.Int64()
@@ -3463,7 +3463,7 @@ func (recv Claim) DecodeFromStream(s *scan.Stream) (result Claim, err error) {
 				return result, decode.NewParseErr("exp", s.Pos, err)
 			}
 			if result.Exp < 0 {
-				return result, &validation.GTEError{Path: []string{"exp"}, Limit: 0, Value: result.Exp}
+				return result, &validation.GTEError{Pos: s.Offset(), Path: []string{"exp"}, Limit: 0, Value: result.Exp}
 			}
 		case "iat":
 			err = s.ConsumeColon()
@@ -3471,7 +3471,7 @@ func (recv Claim) DecodeFromStream(s *scan.Stream) (result Claim, err error) {
 				return result, decode.NewParseErr("iat", s.Pos, err)
 			}
 			if seenIat {
-				return result, &validation.DuplicateKeyError{Path: []string{"iat"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"iat"}}
 			}
 			seenIat = true
 			result.Iat, err = s.Int64()
@@ -3479,7 +3479,7 @@ func (recv Claim) DecodeFromStream(s *scan.Stream) (result Claim, err error) {
 				return result, decode.NewParseErr("iat", s.Pos, err)
 			}
 			if result.Iat < 0 {
-				return result, &validation.GTEError{Path: []string{"iat"}, Limit: 0, Value: result.Iat}
+				return result, &validation.GTEError{Pos: s.Offset(), Path: []string{"iat"}, Limit: 0, Value: result.Iat}
 			}
 		case "iss":
 			err = s.ConsumeColon()
@@ -3487,7 +3487,7 @@ func (recv Claim) DecodeFromStream(s *scan.Stream) (result Claim, err error) {
 				return result, decode.NewParseErr("iss", s.Pos, err)
 			}
 			if seenIss {
-				return result, &validation.DuplicateKeyError{Path: []string{"iss"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"iss"}}
 			}
 			seenIss = true
 			result.Iss, err = s.String()
@@ -3500,7 +3500,7 @@ func (recv Claim) DecodeFromStream(s *scan.Stream) (result Claim, err error) {
 				return result, decode.NewParseErr("jti", s.Pos, err)
 			}
 			if seenJti {
-				return result, &validation.DuplicateKeyError{Path: []string{"jti"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"jti"}}
 			}
 			seenJti = true
 			result.Jti, err = s.String()
@@ -3513,7 +3513,7 @@ func (recv Claim) DecodeFromStream(s *scan.Stream) (result Claim, err error) {
 				return result, decode.NewParseErr("nbf", s.Pos, err)
 			}
 			if seenNbf {
-				return result, &validation.DuplicateKeyError{Path: []string{"nbf"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"nbf"}}
 			}
 			seenNbf = true
 			result.Nbf, err = s.Int64()
@@ -3526,7 +3526,7 @@ func (recv Claim) DecodeFromStream(s *scan.Stream) (result Claim, err error) {
 				return result, decode.NewParseErr("sub", s.Pos, err)
 			}
 			if seenSub {
-				return result, &validation.DuplicateKeyError{Path: []string{"sub"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"sub"}}
 			}
 			seenSub = true
 			result.Sub, err = s.String()
@@ -3534,7 +3534,7 @@ func (recv Claim) DecodeFromStream(s *scan.Stream) (result Claim, err error) {
 				return result, decode.NewParseErr("sub", s.Pos, err)
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -3559,10 +3559,10 @@ func (recv Claim) DecodeFromStream(s *scan.Stream) (result Claim, err error) {
 		if c == '}' {
 			s.Pos++
 			if !seenIss {
-				return result, &validation.RequiredError{Path: []string{"iss"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"iss"}}
 			}
 			if !seenSub {
-				return result, &validation.RequiredError{Path: []string{"sub"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"sub"}}
 			}
 			return result, nil
 		}
@@ -3652,13 +3652,13 @@ func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, i i
 	if i < len(data) && data[i] == '}' {
 		i++
 		if !seenEmail {
-			return result, i, &validation.RequiredError{Path: []string{"email"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"email"}}
 		}
 		if !seenName {
-			return result, i, &validation.RequiredError{Path: []string{"name"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"name"}}
 		}
 		if !seenUsername {
-			return result, i, &validation.RequiredError{Path: []string{"username"}}
+			return result, i, &validation.RequiredError{Pos: i, Path: []string{"username"}}
 		}
 		return result, i, nil
 	}
@@ -3699,7 +3699,7 @@ func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, i i
 		switch key {
 		case "age":
 			if seenAge {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"age"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"age"}}
 			}
 			seenAge = true
 			neg := false
@@ -3749,14 +3749,14 @@ func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, i i
 			}
 			result.Age = int(n)
 			if result.Age < 0 {
-				return result, i, &validation.GTEError{Path: []string{"age"}, Limit: 0, Value: result.Age}
+				return result, i, &validation.GTEError{Pos: i, Path: []string{"age"}, Limit: 0, Value: result.Age}
 			}
 			if result.Age > 130 {
-				return result, i, &validation.LTEError{Path: []string{"age"}, Limit: 130, Value: result.Age}
+				return result, i, &validation.LTEError{Pos: i, Path: []string{"age"}, Limit: 130, Value: result.Age}
 			}
 		case "country":
 			if seenCountry {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"country"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"country"}}
 			}
 			seenCountry = true
 			if i >= len(data) || data[i] != '"' {
@@ -3782,14 +3782,12 @@ func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, i i
 				}
 			}
 			if utf8.RuneCountInString(result.Country) != 2 {
-				return result, i, &validation.RunesError{Path: []string{"country"}, Want: 2, Got: utf8.RuneCountInString(result.Country)}
+				return result, i, &validation.RunesError{Pos: i, Path: []string{"country"}, Want: 2, Got: utf8.RuneCountInString(result.Country)}
 			}
-			if !decode.IsUpper(result.Country) {
-				return result, i, &validation.UpperError{Path: []string{"country"}, Value: result.Country}
-			}
+			result.Country = strings.ToUpper(result.Country)
 		case "email":
 			if seenEmail {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"email"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"email"}}
 			}
 			seenEmail = true
 			if i >= len(data) || data[i] != '"' {
@@ -3815,14 +3813,14 @@ func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, i i
 				}
 			}
 			if !decode.IsEmail(result.Email) {
-				return result, i, &validation.EmailError{Path: []string{"email"}, Value: result.Email}
+				return result, i, &validation.EmailError{Pos: i, Path: []string{"email"}, Value: result.Email}
 			}
 			if utf8.RuneCountInString(result.Email) > 128 {
-				return result, i, &validation.MaxRunesError{Path: []string{"email"}, Limit: 128, Got: utf8.RuneCountInString(result.Email)}
+				return result, i, &validation.MaxRunesError{Pos: i, Path: []string{"email"}, Limit: 128, Got: utf8.RuneCountInString(result.Email)}
 			}
 		case "lang":
 			if seenLang {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"lang"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"lang"}}
 			}
 			seenLang = true
 			if i >= len(data) || data[i] != '"' {
@@ -3850,11 +3848,11 @@ func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, i i
 			switch result.Lang {
 			case "en", "es", "fr", "de", "uk":
 			default:
-				return result, i, &validation.OneOfError{Path: []string{"lang"}, Allowed: ggenOneof0, Value: result.Lang}
+				return result, i, &validation.OneOfError{Pos: i, Path: []string{"lang"}, Allowed: ggenOneof0, Value: result.Lang}
 			}
 		case "name":
 			if seenName {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"name"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"name"}}
 			}
 			seenName = true
 			if i >= len(data) || data[i] != '"' {
@@ -3880,14 +3878,14 @@ func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, i i
 				}
 			}
 			if utf8.RuneCountInString(result.Name) < 1 {
-				return result, i, &validation.MinRunesError{Path: []string{"name"}, Limit: 1, Got: utf8.RuneCountInString(result.Name)}
+				return result, i, &validation.MinRunesError{Pos: i, Path: []string{"name"}, Limit: 1, Got: utf8.RuneCountInString(result.Name)}
 			}
 			if utf8.RuneCountInString(result.Name) > 64 {
-				return result, i, &validation.MaxRunesError{Path: []string{"name"}, Limit: 64, Got: utf8.RuneCountInString(result.Name)}
+				return result, i, &validation.MaxRunesError{Pos: i, Path: []string{"name"}, Limit: 64, Got: utf8.RuneCountInString(result.Name)}
 			}
 		case "phone":
 			if seenPhone {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"phone"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"phone"}}
 			}
 			seenPhone = true
 			if i >= len(data) || data[i] != '"' {
@@ -3913,17 +3911,17 @@ func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, i i
 				}
 			}
 			if utf8.RuneCountInString(result.Phone) < 7 {
-				return result, i, &validation.MinRunesError{Path: []string{"phone"}, Limit: 7, Got: utf8.RuneCountInString(result.Phone)}
+				return result, i, &validation.MinRunesError{Pos: i, Path: []string{"phone"}, Limit: 7, Got: utf8.RuneCountInString(result.Phone)}
 			}
 			if utf8.RuneCountInString(result.Phone) > 20 {
-				return result, i, &validation.MaxRunesError{Path: []string{"phone"}, Limit: 20, Got: utf8.RuneCountInString(result.Phone)}
+				return result, i, &validation.MaxRunesError{Pos: i, Path: []string{"phone"}, Limit: 20, Got: utf8.RuneCountInString(result.Phone)}
 			}
 			if !decode.IsNumeric(result.Phone) {
-				return result, i, &validation.NumericError{Path: []string{"phone"}, Value: result.Phone}
+				return result, i, &validation.NumericError{Pos: i, Path: []string{"phone"}, Value: result.Phone}
 			}
 		case "role":
 			if seenRole {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"role"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"role"}}
 			}
 			seenRole = true
 			if i >= len(data) || data[i] != '"' {
@@ -3951,11 +3949,11 @@ func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, i i
 			switch result.Role {
 			case "admin", "user", "guest":
 			default:
-				return result, i, &validation.OneOfError{Path: []string{"role"}, Allowed: ggenOneof1, Value: result.Role}
+				return result, i, &validation.OneOfError{Pos: i, Path: []string{"role"}, Allowed: ggenOneof1, Value: result.Role}
 			}
 		case "score":
 			if seenScore {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"score"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"score"}}
 			}
 			seenScore = true
 			result.Score, i, err = scan.Float64(data, i)
@@ -3963,14 +3961,14 @@ func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, i i
 				return result, i, decode.NewParseErr("score", i, err)
 			}
 			if result.Score < 0 {
-				return result, i, &validation.GTEError{Path: []string{"score"}, Limit: 0, Value: result.Score}
+				return result, i, &validation.GTEError{Pos: i, Path: []string{"score"}, Limit: 0, Value: result.Score}
 			}
 			if result.Score > 100 {
-				return result, i, &validation.LTEError{Path: []string{"score"}, Limit: 100, Value: result.Score}
+				return result, i, &validation.LTEError{Pos: i, Path: []string{"score"}, Limit: 100, Value: result.Score}
 			}
 		case "url":
 			if seenURL {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"url"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"url"}}
 			}
 			seenURL = true
 			if i >= len(data) || data[i] != '"' {
@@ -3996,11 +3994,11 @@ func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, i i
 				}
 			}
 			if !decode.IsURL(result.URL) {
-				return result, i, &validation.URLError{Path: []string{"url"}, Value: result.URL}
+				return result, i, &validation.URLError{Pos: i, Path: []string{"url"}, Value: result.URL}
 			}
 		case "username":
 			if seenUsername {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"username"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"username"}}
 			}
 			seenUsername = true
 			if i >= len(data) || data[i] != '"' {
@@ -4026,19 +4024,17 @@ func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, i i
 				}
 			}
 			if utf8.RuneCountInString(result.Username) < 3 {
-				return result, i, &validation.MinRunesError{Path: []string{"username"}, Limit: 3, Got: utf8.RuneCountInString(result.Username)}
+				return result, i, &validation.MinRunesError{Pos: i, Path: []string{"username"}, Limit: 3, Got: utf8.RuneCountInString(result.Username)}
 			}
 			if utf8.RuneCountInString(result.Username) > 32 {
-				return result, i, &validation.MaxRunesError{Path: []string{"username"}, Limit: 32, Got: utf8.RuneCountInString(result.Username)}
+				return result, i, &validation.MaxRunesError{Pos: i, Path: []string{"username"}, Limit: 32, Got: utf8.RuneCountInString(result.Username)}
 			}
 			if !decode.IsAlphanum(result.Username) {
-				return result, i, &validation.AlphanumError{Path: []string{"username"}, Value: result.Username}
+				return result, i, &validation.AlphanumError{Pos: i, Path: []string{"username"}, Value: result.Username}
 			}
-			if !decode.IsLower(result.Username) {
-				return result, i, &validation.LowerError{Path: []string{"username"}, Value: result.Username}
-			}
+			result.Username = strings.ToLower(result.Username)
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -4056,13 +4052,13 @@ func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, i i
 		if data[i] == '}' {
 			i++
 			if !seenEmail {
-				return result, i, &validation.RequiredError{Path: []string{"email"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"email"}}
 			}
 			if !seenName {
-				return result, i, &validation.RequiredError{Path: []string{"name"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"name"}}
 			}
 			if !seenUsername {
-				return result, i, &validation.RequiredError{Path: []string{"username"}}
+				return result, i, &validation.RequiredError{Pos: i, Path: []string{"username"}}
 			}
 			return result, i, nil
 		}
@@ -4099,13 +4095,13 @@ func (recv ValidationHeavy) DecodeFromStream(s *scan.Stream) (result ValidationH
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
 		if !seenEmail {
-			return result, &validation.RequiredError{Path: []string{"email"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"email"}}
 		}
 		if !seenName {
-			return result, &validation.RequiredError{Path: []string{"name"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"name"}}
 		}
 		if !seenUsername {
-			return result, &validation.RequiredError{Path: []string{"username"}}
+			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"username"}}
 		}
 		return result, nil
 	}
@@ -4122,7 +4118,7 @@ func (recv ValidationHeavy) DecodeFromStream(s *scan.Stream) (result ValidationH
 				return result, decode.NewParseErr("age", s.Pos, err)
 			}
 			if seenAge {
-				return result, &validation.DuplicateKeyError{Path: []string{"age"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"age"}}
 			}
 			seenAge = true
 			var iv int64
@@ -4132,10 +4128,10 @@ func (recv ValidationHeavy) DecodeFromStream(s *scan.Stream) (result ValidationH
 			}
 			result.Age = int(iv)
 			if result.Age < 0 {
-				return result, &validation.GTEError{Path: []string{"age"}, Limit: 0, Value: result.Age}
+				return result, &validation.GTEError{Pos: s.Offset(), Path: []string{"age"}, Limit: 0, Value: result.Age}
 			}
 			if result.Age > 130 {
-				return result, &validation.LTEError{Path: []string{"age"}, Limit: 130, Value: result.Age}
+				return result, &validation.LTEError{Pos: s.Offset(), Path: []string{"age"}, Limit: 130, Value: result.Age}
 			}
 		case "country":
 			err = s.ConsumeColon()
@@ -4143,7 +4139,7 @@ func (recv ValidationHeavy) DecodeFromStream(s *scan.Stream) (result ValidationH
 				return result, decode.NewParseErr("country", s.Pos, err)
 			}
 			if seenCountry {
-				return result, &validation.DuplicateKeyError{Path: []string{"country"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"country"}}
 			}
 			seenCountry = true
 			result.Country, err = s.String()
@@ -4151,18 +4147,16 @@ func (recv ValidationHeavy) DecodeFromStream(s *scan.Stream) (result ValidationH
 				return result, decode.NewParseErr("country", s.Pos, err)
 			}
 			if utf8.RuneCountInString(result.Country) != 2 {
-				return result, &validation.RunesError{Path: []string{"country"}, Want: 2, Got: utf8.RuneCountInString(result.Country)}
+				return result, &validation.RunesError{Pos: s.Offset(), Path: []string{"country"}, Want: 2, Got: utf8.RuneCountInString(result.Country)}
 			}
-			if !decode.IsUpper(result.Country) {
-				return result, &validation.UpperError{Path: []string{"country"}, Value: result.Country}
-			}
+			result.Country = strings.ToUpper(result.Country)
 		case "email":
 			err = s.ConsumeColon()
 			if err != nil {
 				return result, decode.NewParseErr("email", s.Pos, err)
 			}
 			if seenEmail {
-				return result, &validation.DuplicateKeyError{Path: []string{"email"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"email"}}
 			}
 			seenEmail = true
 			result.Email, err = s.String()
@@ -4170,10 +4164,10 @@ func (recv ValidationHeavy) DecodeFromStream(s *scan.Stream) (result ValidationH
 				return result, decode.NewParseErr("email", s.Pos, err)
 			}
 			if !decode.IsEmail(result.Email) {
-				return result, &validation.EmailError{Path: []string{"email"}, Value: result.Email}
+				return result, &validation.EmailError{Pos: s.Offset(), Path: []string{"email"}, Value: result.Email}
 			}
 			if utf8.RuneCountInString(result.Email) > 128 {
-				return result, &validation.MaxRunesError{Path: []string{"email"}, Limit: 128, Got: utf8.RuneCountInString(result.Email)}
+				return result, &validation.MaxRunesError{Pos: s.Offset(), Path: []string{"email"}, Limit: 128, Got: utf8.RuneCountInString(result.Email)}
 			}
 		case "lang":
 			err = s.ConsumeColon()
@@ -4181,7 +4175,7 @@ func (recv ValidationHeavy) DecodeFromStream(s *scan.Stream) (result ValidationH
 				return result, decode.NewParseErr("lang", s.Pos, err)
 			}
 			if seenLang {
-				return result, &validation.DuplicateKeyError{Path: []string{"lang"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"lang"}}
 			}
 			seenLang = true
 			result.Lang, err = s.String()
@@ -4191,7 +4185,7 @@ func (recv ValidationHeavy) DecodeFromStream(s *scan.Stream) (result ValidationH
 			switch result.Lang {
 			case "en", "es", "fr", "de", "uk":
 			default:
-				return result, &validation.OneOfError{Path: []string{"lang"}, Allowed: ggenOneof0, Value: result.Lang}
+				return result, &validation.OneOfError{Pos: s.Offset(), Path: []string{"lang"}, Allowed: ggenOneof0, Value: result.Lang}
 			}
 		case "name":
 			err = s.ConsumeColon()
@@ -4199,7 +4193,7 @@ func (recv ValidationHeavy) DecodeFromStream(s *scan.Stream) (result ValidationH
 				return result, decode.NewParseErr("name", s.Pos, err)
 			}
 			if seenName {
-				return result, &validation.DuplicateKeyError{Path: []string{"name"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"name"}}
 			}
 			seenName = true
 			result.Name, err = s.String()
@@ -4207,10 +4201,10 @@ func (recv ValidationHeavy) DecodeFromStream(s *scan.Stream) (result ValidationH
 				return result, decode.NewParseErr("name", s.Pos, err)
 			}
 			if utf8.RuneCountInString(result.Name) < 1 {
-				return result, &validation.MinRunesError{Path: []string{"name"}, Limit: 1, Got: utf8.RuneCountInString(result.Name)}
+				return result, &validation.MinRunesError{Pos: s.Offset(), Path: []string{"name"}, Limit: 1, Got: utf8.RuneCountInString(result.Name)}
 			}
 			if utf8.RuneCountInString(result.Name) > 64 {
-				return result, &validation.MaxRunesError{Path: []string{"name"}, Limit: 64, Got: utf8.RuneCountInString(result.Name)}
+				return result, &validation.MaxRunesError{Pos: s.Offset(), Path: []string{"name"}, Limit: 64, Got: utf8.RuneCountInString(result.Name)}
 			}
 		case "phone":
 			err = s.ConsumeColon()
@@ -4218,7 +4212,7 @@ func (recv ValidationHeavy) DecodeFromStream(s *scan.Stream) (result ValidationH
 				return result, decode.NewParseErr("phone", s.Pos, err)
 			}
 			if seenPhone {
-				return result, &validation.DuplicateKeyError{Path: []string{"phone"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"phone"}}
 			}
 			seenPhone = true
 			result.Phone, err = s.String()
@@ -4226,13 +4220,13 @@ func (recv ValidationHeavy) DecodeFromStream(s *scan.Stream) (result ValidationH
 				return result, decode.NewParseErr("phone", s.Pos, err)
 			}
 			if utf8.RuneCountInString(result.Phone) < 7 {
-				return result, &validation.MinRunesError{Path: []string{"phone"}, Limit: 7, Got: utf8.RuneCountInString(result.Phone)}
+				return result, &validation.MinRunesError{Pos: s.Offset(), Path: []string{"phone"}, Limit: 7, Got: utf8.RuneCountInString(result.Phone)}
 			}
 			if utf8.RuneCountInString(result.Phone) > 20 {
-				return result, &validation.MaxRunesError{Path: []string{"phone"}, Limit: 20, Got: utf8.RuneCountInString(result.Phone)}
+				return result, &validation.MaxRunesError{Pos: s.Offset(), Path: []string{"phone"}, Limit: 20, Got: utf8.RuneCountInString(result.Phone)}
 			}
 			if !decode.IsNumeric(result.Phone) {
-				return result, &validation.NumericError{Path: []string{"phone"}, Value: result.Phone}
+				return result, &validation.NumericError{Pos: s.Offset(), Path: []string{"phone"}, Value: result.Phone}
 			}
 		case "role":
 			err = s.ConsumeColon()
@@ -4240,7 +4234,7 @@ func (recv ValidationHeavy) DecodeFromStream(s *scan.Stream) (result ValidationH
 				return result, decode.NewParseErr("role", s.Pos, err)
 			}
 			if seenRole {
-				return result, &validation.DuplicateKeyError{Path: []string{"role"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"role"}}
 			}
 			seenRole = true
 			result.Role, err = s.String()
@@ -4250,7 +4244,7 @@ func (recv ValidationHeavy) DecodeFromStream(s *scan.Stream) (result ValidationH
 			switch result.Role {
 			case "admin", "user", "guest":
 			default:
-				return result, &validation.OneOfError{Path: []string{"role"}, Allowed: ggenOneof1, Value: result.Role}
+				return result, &validation.OneOfError{Pos: s.Offset(), Path: []string{"role"}, Allowed: ggenOneof1, Value: result.Role}
 			}
 		case "score":
 			err = s.ConsumeColon()
@@ -4258,7 +4252,7 @@ func (recv ValidationHeavy) DecodeFromStream(s *scan.Stream) (result ValidationH
 				return result, decode.NewParseErr("score", s.Pos, err)
 			}
 			if seenScore {
-				return result, &validation.DuplicateKeyError{Path: []string{"score"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"score"}}
 			}
 			seenScore = true
 			result.Score, err = s.Float64()
@@ -4266,10 +4260,10 @@ func (recv ValidationHeavy) DecodeFromStream(s *scan.Stream) (result ValidationH
 				return result, decode.NewParseErr("score", s.Pos, err)
 			}
 			if result.Score < 0 {
-				return result, &validation.GTEError{Path: []string{"score"}, Limit: 0, Value: result.Score}
+				return result, &validation.GTEError{Pos: s.Offset(), Path: []string{"score"}, Limit: 0, Value: result.Score}
 			}
 			if result.Score > 100 {
-				return result, &validation.LTEError{Path: []string{"score"}, Limit: 100, Value: result.Score}
+				return result, &validation.LTEError{Pos: s.Offset(), Path: []string{"score"}, Limit: 100, Value: result.Score}
 			}
 		case "url":
 			err = s.ConsumeColon()
@@ -4277,7 +4271,7 @@ func (recv ValidationHeavy) DecodeFromStream(s *scan.Stream) (result ValidationH
 				return result, decode.NewParseErr("url", s.Pos, err)
 			}
 			if seenURL {
-				return result, &validation.DuplicateKeyError{Path: []string{"url"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"url"}}
 			}
 			seenURL = true
 			result.URL, err = s.String()
@@ -4285,7 +4279,7 @@ func (recv ValidationHeavy) DecodeFromStream(s *scan.Stream) (result ValidationH
 				return result, decode.NewParseErr("url", s.Pos, err)
 			}
 			if !decode.IsURL(result.URL) {
-				return result, &validation.URLError{Path: []string{"url"}, Value: result.URL}
+				return result, &validation.URLError{Pos: s.Offset(), Path: []string{"url"}, Value: result.URL}
 			}
 		case "username":
 			err = s.ConsumeColon()
@@ -4293,7 +4287,7 @@ func (recv ValidationHeavy) DecodeFromStream(s *scan.Stream) (result ValidationH
 				return result, decode.NewParseErr("username", s.Pos, err)
 			}
 			if seenUsername {
-				return result, &validation.DuplicateKeyError{Path: []string{"username"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"username"}}
 			}
 			seenUsername = true
 			result.Username, err = s.String()
@@ -4301,19 +4295,17 @@ func (recv ValidationHeavy) DecodeFromStream(s *scan.Stream) (result ValidationH
 				return result, decode.NewParseErr("username", s.Pos, err)
 			}
 			if utf8.RuneCountInString(result.Username) < 3 {
-				return result, &validation.MinRunesError{Path: []string{"username"}, Limit: 3, Got: utf8.RuneCountInString(result.Username)}
+				return result, &validation.MinRunesError{Pos: s.Offset(), Path: []string{"username"}, Limit: 3, Got: utf8.RuneCountInString(result.Username)}
 			}
 			if utf8.RuneCountInString(result.Username) > 32 {
-				return result, &validation.MaxRunesError{Path: []string{"username"}, Limit: 32, Got: utf8.RuneCountInString(result.Username)}
+				return result, &validation.MaxRunesError{Pos: s.Offset(), Path: []string{"username"}, Limit: 32, Got: utf8.RuneCountInString(result.Username)}
 			}
 			if !decode.IsAlphanum(result.Username) {
-				return result, &validation.AlphanumError{Path: []string{"username"}, Value: result.Username}
+				return result, &validation.AlphanumError{Pos: s.Offset(), Path: []string{"username"}, Value: result.Username}
 			}
-			if !decode.IsLower(result.Username) {
-				return result, &validation.LowerError{Path: []string{"username"}, Value: result.Username}
-			}
+			result.Username = strings.ToLower(result.Username)
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -4338,13 +4330,13 @@ func (recv ValidationHeavy) DecodeFromStream(s *scan.Stream) (result ValidationH
 		if c == '}' {
 			s.Pos++
 			if !seenEmail {
-				return result, &validation.RequiredError{Path: []string{"email"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"email"}}
 			}
 			if !seenName {
-				return result, &validation.RequiredError{Path: []string{"name"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"name"}}
 			}
 			if !seenUsername {
-				return result, &validation.RequiredError{Path: []string{"username"}}
+				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"username"}}
 			}
 			return result, nil
 		}
@@ -4456,7 +4448,7 @@ func (recv NoValidationHeavy) DecodeFrom(data []byte) (result NoValidationHeavy,
 		switch key {
 		case "age":
 			if seenAge {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"age"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"age"}}
 			}
 			seenAge = true
 			neg := false
@@ -4507,7 +4499,7 @@ func (recv NoValidationHeavy) DecodeFrom(data []byte) (result NoValidationHeavy,
 			result.Age = int(n)
 		case "country":
 			if seenCountry {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"country"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"country"}}
 			}
 			seenCountry = true
 			if i >= len(data) || data[i] != '"' {
@@ -4534,7 +4526,7 @@ func (recv NoValidationHeavy) DecodeFrom(data []byte) (result NoValidationHeavy,
 			}
 		case "email":
 			if seenEmail {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"email"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"email"}}
 			}
 			seenEmail = true
 			if i >= len(data) || data[i] != '"' {
@@ -4561,7 +4553,7 @@ func (recv NoValidationHeavy) DecodeFrom(data []byte) (result NoValidationHeavy,
 			}
 		case "lang":
 			if seenLang {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"lang"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"lang"}}
 			}
 			seenLang = true
 			if i >= len(data) || data[i] != '"' {
@@ -4588,7 +4580,7 @@ func (recv NoValidationHeavy) DecodeFrom(data []byte) (result NoValidationHeavy,
 			}
 		case "name":
 			if seenName {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"name"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"name"}}
 			}
 			seenName = true
 			if i >= len(data) || data[i] != '"' {
@@ -4615,7 +4607,7 @@ func (recv NoValidationHeavy) DecodeFrom(data []byte) (result NoValidationHeavy,
 			}
 		case "phone":
 			if seenPhone {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"phone"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"phone"}}
 			}
 			seenPhone = true
 			if i >= len(data) || data[i] != '"' {
@@ -4642,7 +4634,7 @@ func (recv NoValidationHeavy) DecodeFrom(data []byte) (result NoValidationHeavy,
 			}
 		case "role":
 			if seenRole {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"role"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"role"}}
 			}
 			seenRole = true
 			if i >= len(data) || data[i] != '"' {
@@ -4669,7 +4661,7 @@ func (recv NoValidationHeavy) DecodeFrom(data []byte) (result NoValidationHeavy,
 			}
 		case "score":
 			if seenScore {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"score"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"score"}}
 			}
 			seenScore = true
 			result.Score, i, err = scan.Float64(data, i)
@@ -4678,7 +4670,7 @@ func (recv NoValidationHeavy) DecodeFrom(data []byte) (result NoValidationHeavy,
 			}
 		case "url":
 			if seenURL {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"url"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"url"}}
 			}
 			seenURL = true
 			if i >= len(data) || data[i] != '"' {
@@ -4705,7 +4697,7 @@ func (recv NoValidationHeavy) DecodeFrom(data []byte) (result NoValidationHeavy,
 			}
 		case "username":
 			if seenUsername {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"username"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"username"}}
 			}
 			seenUsername = true
 			if i >= len(data) || data[i] != '"' {
@@ -4731,7 +4723,7 @@ func (recv NoValidationHeavy) DecodeFrom(data []byte) (result NoValidationHeavy,
 				}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -4797,7 +4789,7 @@ func (recv NoValidationHeavy) DecodeFromStream(s *scan.Stream) (result NoValidat
 				return result, decode.NewParseErr("age", s.Pos, err)
 			}
 			if seenAge {
-				return result, &validation.DuplicateKeyError{Path: []string{"age"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"age"}}
 			}
 			seenAge = true
 			var iv int64
@@ -4812,7 +4804,7 @@ func (recv NoValidationHeavy) DecodeFromStream(s *scan.Stream) (result NoValidat
 				return result, decode.NewParseErr("country", s.Pos, err)
 			}
 			if seenCountry {
-				return result, &validation.DuplicateKeyError{Path: []string{"country"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"country"}}
 			}
 			seenCountry = true
 			result.Country, err = s.String()
@@ -4825,7 +4817,7 @@ func (recv NoValidationHeavy) DecodeFromStream(s *scan.Stream) (result NoValidat
 				return result, decode.NewParseErr("email", s.Pos, err)
 			}
 			if seenEmail {
-				return result, &validation.DuplicateKeyError{Path: []string{"email"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"email"}}
 			}
 			seenEmail = true
 			result.Email, err = s.String()
@@ -4838,7 +4830,7 @@ func (recv NoValidationHeavy) DecodeFromStream(s *scan.Stream) (result NoValidat
 				return result, decode.NewParseErr("lang", s.Pos, err)
 			}
 			if seenLang {
-				return result, &validation.DuplicateKeyError{Path: []string{"lang"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"lang"}}
 			}
 			seenLang = true
 			result.Lang, err = s.String()
@@ -4851,7 +4843,7 @@ func (recv NoValidationHeavy) DecodeFromStream(s *scan.Stream) (result NoValidat
 				return result, decode.NewParseErr("name", s.Pos, err)
 			}
 			if seenName {
-				return result, &validation.DuplicateKeyError{Path: []string{"name"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"name"}}
 			}
 			seenName = true
 			result.Name, err = s.String()
@@ -4864,7 +4856,7 @@ func (recv NoValidationHeavy) DecodeFromStream(s *scan.Stream) (result NoValidat
 				return result, decode.NewParseErr("phone", s.Pos, err)
 			}
 			if seenPhone {
-				return result, &validation.DuplicateKeyError{Path: []string{"phone"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"phone"}}
 			}
 			seenPhone = true
 			result.Phone, err = s.String()
@@ -4877,7 +4869,7 @@ func (recv NoValidationHeavy) DecodeFromStream(s *scan.Stream) (result NoValidat
 				return result, decode.NewParseErr("role", s.Pos, err)
 			}
 			if seenRole {
-				return result, &validation.DuplicateKeyError{Path: []string{"role"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"role"}}
 			}
 			seenRole = true
 			result.Role, err = s.String()
@@ -4890,7 +4882,7 @@ func (recv NoValidationHeavy) DecodeFromStream(s *scan.Stream) (result NoValidat
 				return result, decode.NewParseErr("score", s.Pos, err)
 			}
 			if seenScore {
-				return result, &validation.DuplicateKeyError{Path: []string{"score"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"score"}}
 			}
 			seenScore = true
 			result.Score, err = s.Float64()
@@ -4903,7 +4895,7 @@ func (recv NoValidationHeavy) DecodeFromStream(s *scan.Stream) (result NoValidat
 				return result, decode.NewParseErr("url", s.Pos, err)
 			}
 			if seenURL {
-				return result, &validation.DuplicateKeyError{Path: []string{"url"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"url"}}
 			}
 			seenURL = true
 			result.URL, err = s.String()
@@ -4916,7 +4908,7 @@ func (recv NoValidationHeavy) DecodeFromStream(s *scan.Stream) (result NoValidat
 				return result, decode.NewParseErr("username", s.Pos, err)
 			}
 			if seenUsername {
-				return result, &validation.DuplicateKeyError{Path: []string{"username"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"username"}}
 			}
 			seenUsername = true
 			result.Username, err = s.String()
@@ -4924,7 +4916,7 @@ func (recv NoValidationHeavy) DecodeFromStream(s *scan.Stream) (result NoValidat
 				return result, decode.NewParseErr("username", s.Pos, err)
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -5049,7 +5041,7 @@ func (recv HTMLEscape) DecodeFrom(data []byte) (result HTMLEscape, i int, err er
 		switch key {
 		case "note":
 			if seenNote {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"note"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"note"}}
 			}
 			seenNote = true
 			if i >= len(data) || data[i] != '"' {
@@ -5075,7 +5067,7 @@ func (recv HTMLEscape) DecodeFrom(data []byte) (result HTMLEscape, i int, err er
 				}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -5132,7 +5124,7 @@ func (recv HTMLEscape) DecodeFromStream(s *scan.Stream) (result HTMLEscape, err 
 				return result, decode.NewParseErr("note", s.Pos, err)
 			}
 			if seenNote {
-				return result, &validation.DuplicateKeyError{Path: []string{"note"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"note"}}
 			}
 			seenNote = true
 			result.Note, err = s.String()
@@ -5140,7 +5132,7 @@ func (recv HTMLEscape) DecodeFromStream(s *scan.Stream) (result HTMLEscape, err 
 				return result, decode.NewParseErr("note", s.Pos, err)
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -5238,7 +5230,7 @@ func (recv HTMLPlain) DecodeFrom(data []byte) (result HTMLPlain, i int, err erro
 		switch key {
 		case "note":
 			if seenNote {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"note"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"note"}}
 			}
 			seenNote = true
 			if i >= len(data) || data[i] != '"' {
@@ -5264,7 +5256,7 @@ func (recv HTMLPlain) DecodeFrom(data []byte) (result HTMLPlain, i int, err erro
 				}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -5321,7 +5313,7 @@ func (recv HTMLPlain) DecodeFromStream(s *scan.Stream) (result HTMLPlain, err er
 				return result, decode.NewParseErr("note", s.Pos, err)
 			}
 			if seenNote {
-				return result, &validation.DuplicateKeyError{Path: []string{"note"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"note"}}
 			}
 			seenNote = true
 			result.Note, err = s.String()
@@ -5329,7 +5321,7 @@ func (recv HTMLPlain) DecodeFromStream(s *scan.Stream) (result HTMLPlain, err er
 				return result, decode.NewParseErr("note", s.Pos, err)
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -5430,7 +5422,7 @@ func (recv MapHeavy) DecodeFrom(data []byte) (result MapHeavy, i int, err error)
 		switch key {
 		case "labels":
 			if seenLabels {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"labels"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"labels"}}
 			}
 			seenLabels = true
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -5533,7 +5525,7 @@ func (recv MapHeavy) DecodeFrom(data []byte) (result MapHeavy, i int, err error)
 			}
 			i++
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -5593,7 +5585,7 @@ func (recv MapHeavy) DecodeFromStream(s *scan.Stream) (result MapHeavy, err erro
 				return result, decode.NewParseErr("labels", s.Pos, err)
 			}
 			if seenLabels {
-				return result, &validation.DuplicateKeyError{Path: []string{"labels"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"labels"}}
 			}
 			seenLabels = true
 			err = s.SkipSpace()
@@ -5696,7 +5688,7 @@ func (recv MapHeavy) DecodeFromStream(s *scan.Stream) (result MapHeavy, err erro
 			}
 			s.Pos++
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -5815,7 +5807,7 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 		switch key {
 		case "active":
 			if seen&(1<<0) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"active"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"active"}}
 			}
 			seen |= 1 << 0
 			result.Active, i, err = scan.Bool(data, i)
@@ -5824,7 +5816,7 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			}
 		case "address":
 			if seen&(1<<1) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"address"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"address"}}
 			}
 			seen |= 1 << 1
 			var _n int
@@ -5835,7 +5827,7 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			}
 		case "age":
 			if seen&(1<<2) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"age"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"age"}}
 			}
 			seen |= 1 << 2
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
@@ -5861,7 +5853,7 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			result.Age = uint8(n)
 		case "avatarUrl":
 			if seen&(1<<3) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"avatarUrl"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"avatarUrl"}}
 			}
 			seen |= 1 << 3
 			if i >= len(data) || data[i] != '"' {
@@ -5888,7 +5880,7 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			}
 		case "balance":
 			if seen&(1<<4) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"balance"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"balance"}}
 			}
 			seen |= 1 << 4
 			result.Balance, i, err = scan.Float64(data, i)
@@ -5897,7 +5889,7 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			}
 		case "bannerUrl":
 			if seen&(1<<5) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"bannerUrl"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"bannerUrl"}}
 			}
 			seen |= 1 << 5
 			if i >= len(data) || data[i] != '"' {
@@ -5924,7 +5916,7 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			}
 		case "bio":
 			if seen&(1<<6) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"bio"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"bio"}}
 			}
 			seen |= 1 << 6
 			if i >= len(data) || data[i] != '"' {
@@ -5951,7 +5943,7 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			}
 		case "company":
 			if seen&(1<<7) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"company"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"company"}}
 			}
 			seen |= 1 << 7
 			var _n int
@@ -5962,7 +5954,7 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			}
 		case "createdAt":
 			if seen&(1<<8) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"createdAt"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"createdAt"}}
 			}
 			seen |= 1 << 8
 			neg := false
@@ -6013,7 +6005,7 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			result.CreatedAt = n
 		case "deleted":
 			if seen&(1<<9) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"deleted"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"deleted"}}
 			}
 			seen |= 1 << 9
 			result.Deleted, i, err = scan.Bool(data, i)
@@ -6022,7 +6014,7 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			}
 		case "displayName":
 			if seen&(1<<10) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"displayName"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"displayName"}}
 			}
 			seen |= 1 << 10
 			if i >= len(data) || data[i] != '"' {
@@ -6049,7 +6041,7 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			}
 		case "email":
 			if seen&(1<<11) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"email"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"email"}}
 			}
 			seen |= 1 << 11
 			if i >= len(data) || data[i] != '"' {
@@ -6076,7 +6068,7 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			}
 		case "failedLogins":
 			if seen&(1<<12) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"failedLogins"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"failedLogins"}}
 			}
 			seen |= 1 << 12
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
@@ -6102,7 +6094,7 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			result.FailedLogins = uint16(n)
 		case "firstName":
 			if seen&(1<<13) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"firstName"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"firstName"}}
 			}
 			seen |= 1 << 13
 			if i >= len(data) || data[i] != '"' {
@@ -6129,7 +6121,7 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			}
 		case "followerCount":
 			if seen&(1<<14) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"followerCount"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"followerCount"}}
 			}
 			seen |= 1 << 14
 			neg := false
@@ -6180,7 +6172,7 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			result.FollowerCount = int(n)
 		case "followingCount":
 			if seen&(1<<15) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"followingCount"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"followingCount"}}
 			}
 			seen |= 1 << 15
 			neg := false
@@ -6231,7 +6223,7 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			result.FollowingCount = int(n)
 		case "id":
 			if seen&(1<<16) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"id"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"id"}}
 			}
 			seen |= 1 << 16
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
@@ -6257,7 +6249,7 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			result.ID = n
 		case "lastLogin":
 			if seen&(1<<17) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"lastLogin"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"lastLogin"}}
 			}
 			seen |= 1 << 17
 			neg := false
@@ -6308,7 +6300,7 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			result.LastLogin = n
 		case "lastName":
 			if seen&(1<<18) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"lastName"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"lastName"}}
 			}
 			seen |= 1 << 18
 			if i >= len(data) || data[i] != '"' {
@@ -6335,7 +6327,7 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			}
 		case "locale":
 			if seen&(1<<19) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"locale"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"locale"}}
 			}
 			seen |= 1 << 19
 			if i >= len(data) || data[i] != '"' {
@@ -6362,7 +6354,7 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			}
 		case "loginCount":
 			if seen&(1<<20) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"loginCount"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"loginCount"}}
 			}
 			seen |= 1 << 20
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
@@ -6388,7 +6380,7 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			result.LoginCount = uint32(n)
 		case "middleName":
 			if seen&(1<<21) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"middleName"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"middleName"}}
 			}
 			seen |= 1 << 21
 			if i >= len(data) || data[i] != '"' {
@@ -6415,7 +6407,7 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			}
 		case "phone":
 			if seen&(1<<22) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"phone"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"phone"}}
 			}
 			seen |= 1 << 22
 			if i >= len(data) || data[i] != '"' {
@@ -6442,7 +6434,7 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			}
 		case "postCount":
 			if seen&(1<<23) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"postCount"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"postCount"}}
 			}
 			seen |= 1 << 23
 			neg := false
@@ -6493,7 +6485,7 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			result.PostCount = int(n)
 		case "preferences":
 			if seen&(1<<24) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"preferences"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"preferences"}}
 			}
 			seen |= 1 << 24
 			var _n int
@@ -6504,7 +6496,7 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			}
 		case "premium":
 			if seen&(1<<25) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"premium"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"premium"}}
 			}
 			seen |= 1 << 25
 			result.Premium, i, err = scan.Bool(data, i)
@@ -6513,7 +6505,7 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			}
 		case "reputation":
 			if seen&(1<<26) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"reputation"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"reputation"}}
 			}
 			seen |= 1 << 26
 			neg := false
@@ -6564,7 +6556,7 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			result.Reputation = int32(n)
 		case "storageQuota":
 			if seen&(1<<27) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"storageQuota"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"storageQuota"}}
 			}
 			seen |= 1 << 27
 			neg := false
@@ -6615,7 +6607,7 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			result.StorageQuota = n
 		case "storageUsed":
 			if seen&(1<<28) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"storageUsed"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"storageUsed"}}
 			}
 			seen |= 1 << 28
 			neg := false
@@ -6666,7 +6658,7 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			result.StorageUsed = n
 		case "suspended":
 			if seen&(1<<29) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"suspended"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"suspended"}}
 			}
 			seen |= 1 << 29
 			result.Suspended, i, err = scan.Bool(data, i)
@@ -6675,7 +6667,7 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			}
 		case "trustScore":
 			if seen&(1<<30) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"trustScore"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"trustScore"}}
 			}
 			seen |= 1 << 30
 			result.TrustScore, i, err = scan.Float64(data, i)
@@ -6684,7 +6676,7 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			}
 		case "twoFactorEnabled":
 			if seen&(1<<31) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"twoFactorEnabled"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"twoFactorEnabled"}}
 			}
 			seen |= 1 << 31
 			result.TwoFactorEnabled, i, err = scan.Bool(data, i)
@@ -6693,7 +6685,7 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			}
 		case "updatedAt":
 			if seen&(1<<32) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"updatedAt"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"updatedAt"}}
 			}
 			seen |= 1 << 32
 			neg := false
@@ -6744,7 +6736,7 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			result.UpdatedAt = n
 		case "username":
 			if seen&(1<<33) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"username"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"username"}}
 			}
 			seen |= 1 << 33
 			if i >= len(data) || data[i] != '"' {
@@ -6771,7 +6763,7 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			}
 		case "verified":
 			if seen&(1<<34) != 0 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"verified"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"verified"}}
 			}
 			seen |= 1 << 34
 			result.Verified, i, err = scan.Bool(data, i)
@@ -6779,7 +6771,7 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 				return result, i, decode.NewParseErr("verified", i, err)
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -6836,7 +6828,7 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 				return result, decode.NewParseErr("active", s.Pos, err)
 			}
 			if seen&(1<<0) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"active"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"active"}}
 			}
 			seen |= 1 << 0
 			result.Active, err = s.Bool()
@@ -6849,7 +6841,7 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 				return result, decode.NewParseErr("address", s.Pos, err)
 			}
 			if seen&(1<<1) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"address"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"address"}}
 			}
 			seen |= 1 << 1
 			result.Address, err = result.Address.DecodeFromStream(s)
@@ -6862,7 +6854,7 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 				return result, decode.NewParseErr("age", s.Pos, err)
 			}
 			if seen&(1<<2) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"age"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"age"}}
 			}
 			seen |= 1 << 2
 			var uv uint64
@@ -6877,7 +6869,7 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 				return result, decode.NewParseErr("avatarUrl", s.Pos, err)
 			}
 			if seen&(1<<3) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"avatarUrl"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"avatarUrl"}}
 			}
 			seen |= 1 << 3
 			result.AvatarURL, err = s.String()
@@ -6890,7 +6882,7 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 				return result, decode.NewParseErr("balance", s.Pos, err)
 			}
 			if seen&(1<<4) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"balance"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"balance"}}
 			}
 			seen |= 1 << 4
 			result.Balance, err = s.Float64()
@@ -6903,7 +6895,7 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 				return result, decode.NewParseErr("bannerUrl", s.Pos, err)
 			}
 			if seen&(1<<5) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"bannerUrl"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"bannerUrl"}}
 			}
 			seen |= 1 << 5
 			result.BannerURL, err = s.String()
@@ -6916,7 +6908,7 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 				return result, decode.NewParseErr("bio", s.Pos, err)
 			}
 			if seen&(1<<6) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"bio"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"bio"}}
 			}
 			seen |= 1 << 6
 			result.Bio, err = s.String()
@@ -6929,7 +6921,7 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 				return result, decode.NewParseErr("company", s.Pos, err)
 			}
 			if seen&(1<<7) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"company"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"company"}}
 			}
 			seen |= 1 << 7
 			result.Company, err = result.Company.DecodeFromStream(s)
@@ -6942,7 +6934,7 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 				return result, decode.NewParseErr("createdAt", s.Pos, err)
 			}
 			if seen&(1<<8) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"createdAt"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"createdAt"}}
 			}
 			seen |= 1 << 8
 			result.CreatedAt, err = s.Int64()
@@ -6955,7 +6947,7 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 				return result, decode.NewParseErr("deleted", s.Pos, err)
 			}
 			if seen&(1<<9) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"deleted"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"deleted"}}
 			}
 			seen |= 1 << 9
 			result.Deleted, err = s.Bool()
@@ -6968,7 +6960,7 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 				return result, decode.NewParseErr("displayName", s.Pos, err)
 			}
 			if seen&(1<<10) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"displayName"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"displayName"}}
 			}
 			seen |= 1 << 10
 			result.DisplayName, err = s.String()
@@ -6981,7 +6973,7 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 				return result, decode.NewParseErr("email", s.Pos, err)
 			}
 			if seen&(1<<11) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"email"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"email"}}
 			}
 			seen |= 1 << 11
 			result.Email, err = s.String()
@@ -6994,7 +6986,7 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 				return result, decode.NewParseErr("failedLogins", s.Pos, err)
 			}
 			if seen&(1<<12) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"failedLogins"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"failedLogins"}}
 			}
 			seen |= 1 << 12
 			var uv uint64
@@ -7009,7 +7001,7 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 				return result, decode.NewParseErr("firstName", s.Pos, err)
 			}
 			if seen&(1<<13) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"firstName"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"firstName"}}
 			}
 			seen |= 1 << 13
 			result.FirstName, err = s.String()
@@ -7022,7 +7014,7 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 				return result, decode.NewParseErr("followerCount", s.Pos, err)
 			}
 			if seen&(1<<14) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"followerCount"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"followerCount"}}
 			}
 			seen |= 1 << 14
 			var iv int64
@@ -7037,7 +7029,7 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 				return result, decode.NewParseErr("followingCount", s.Pos, err)
 			}
 			if seen&(1<<15) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"followingCount"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"followingCount"}}
 			}
 			seen |= 1 << 15
 			var iv int64
@@ -7052,7 +7044,7 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 				return result, decode.NewParseErr("id", s.Pos, err)
 			}
 			if seen&(1<<16) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"id"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"id"}}
 			}
 			seen |= 1 << 16
 			result.ID, err = s.Uint64()
@@ -7065,7 +7057,7 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 				return result, decode.NewParseErr("lastLogin", s.Pos, err)
 			}
 			if seen&(1<<17) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"lastLogin"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"lastLogin"}}
 			}
 			seen |= 1 << 17
 			result.LastLogin, err = s.Int64()
@@ -7078,7 +7070,7 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 				return result, decode.NewParseErr("lastName", s.Pos, err)
 			}
 			if seen&(1<<18) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"lastName"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"lastName"}}
 			}
 			seen |= 1 << 18
 			result.LastName, err = s.String()
@@ -7091,7 +7083,7 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 				return result, decode.NewParseErr("locale", s.Pos, err)
 			}
 			if seen&(1<<19) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"locale"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"locale"}}
 			}
 			seen |= 1 << 19
 			result.Locale, err = s.String()
@@ -7104,7 +7096,7 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 				return result, decode.NewParseErr("loginCount", s.Pos, err)
 			}
 			if seen&(1<<20) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"loginCount"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"loginCount"}}
 			}
 			seen |= 1 << 20
 			var uv uint64
@@ -7119,7 +7111,7 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 				return result, decode.NewParseErr("middleName", s.Pos, err)
 			}
 			if seen&(1<<21) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"middleName"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"middleName"}}
 			}
 			seen |= 1 << 21
 			result.MiddleName, err = s.String()
@@ -7132,7 +7124,7 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 				return result, decode.NewParseErr("phone", s.Pos, err)
 			}
 			if seen&(1<<22) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"phone"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"phone"}}
 			}
 			seen |= 1 << 22
 			result.Phone, err = s.String()
@@ -7145,7 +7137,7 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 				return result, decode.NewParseErr("postCount", s.Pos, err)
 			}
 			if seen&(1<<23) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"postCount"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"postCount"}}
 			}
 			seen |= 1 << 23
 			var iv int64
@@ -7160,7 +7152,7 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 				return result, decode.NewParseErr("preferences", s.Pos, err)
 			}
 			if seen&(1<<24) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"preferences"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"preferences"}}
 			}
 			seen |= 1 << 24
 			result.Preferences, err = result.Preferences.DecodeFromStream(s)
@@ -7173,7 +7165,7 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 				return result, decode.NewParseErr("premium", s.Pos, err)
 			}
 			if seen&(1<<25) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"premium"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"premium"}}
 			}
 			seen |= 1 << 25
 			result.Premium, err = s.Bool()
@@ -7186,7 +7178,7 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 				return result, decode.NewParseErr("reputation", s.Pos, err)
 			}
 			if seen&(1<<26) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"reputation"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"reputation"}}
 			}
 			seen |= 1 << 26
 			var iv int64
@@ -7201,7 +7193,7 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 				return result, decode.NewParseErr("storageQuota", s.Pos, err)
 			}
 			if seen&(1<<27) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"storageQuota"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"storageQuota"}}
 			}
 			seen |= 1 << 27
 			result.StorageQuota, err = s.Int64()
@@ -7214,7 +7206,7 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 				return result, decode.NewParseErr("storageUsed", s.Pos, err)
 			}
 			if seen&(1<<28) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"storageUsed"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"storageUsed"}}
 			}
 			seen |= 1 << 28
 			result.StorageUsed, err = s.Int64()
@@ -7227,7 +7219,7 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 				return result, decode.NewParseErr("suspended", s.Pos, err)
 			}
 			if seen&(1<<29) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"suspended"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"suspended"}}
 			}
 			seen |= 1 << 29
 			result.Suspended, err = s.Bool()
@@ -7240,7 +7232,7 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 				return result, decode.NewParseErr("trustScore", s.Pos, err)
 			}
 			if seen&(1<<30) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"trustScore"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"trustScore"}}
 			}
 			seen |= 1 << 30
 			result.TrustScore, err = s.Float64()
@@ -7253,7 +7245,7 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 				return result, decode.NewParseErr("twoFactorEnabled", s.Pos, err)
 			}
 			if seen&(1<<31) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"twoFactorEnabled"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"twoFactorEnabled"}}
 			}
 			seen |= 1 << 31
 			result.TwoFactorEnabled, err = s.Bool()
@@ -7266,7 +7258,7 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 				return result, decode.NewParseErr("updatedAt", s.Pos, err)
 			}
 			if seen&(1<<32) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"updatedAt"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"updatedAt"}}
 			}
 			seen |= 1 << 32
 			result.UpdatedAt, err = s.Int64()
@@ -7279,7 +7271,7 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 				return result, decode.NewParseErr("username", s.Pos, err)
 			}
 			if seen&(1<<33) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"username"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"username"}}
 			}
 			seen |= 1 << 33
 			result.Username, err = s.String()
@@ -7292,7 +7284,7 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 				return result, decode.NewParseErr("verified", s.Pos, err)
 			}
 			if seen&(1<<34) != 0 {
-				return result, &validation.DuplicateKeyError{Path: []string{"verified"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"verified"}}
 			}
 			seen |= 1 << 34
 			result.Verified, err = s.Bool()
@@ -7300,7 +7292,7 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 				return result, decode.NewParseErr("verified", s.Pos, err)
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -7495,7 +7487,7 @@ func (recv PostalAddress) DecodeFrom(data []byte) (result PostalAddress, i int, 
 		switch key {
 		case "city":
 			if seenCity {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"city"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"city"}}
 			}
 			seenCity = true
 			if i >= len(data) || data[i] != '"' {
@@ -7522,7 +7514,7 @@ func (recv PostalAddress) DecodeFrom(data []byte) (result PostalAddress, i int, 
 			}
 		case "country":
 			if seenCountry {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"country"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"country"}}
 			}
 			seenCountry = true
 			if i >= len(data) || data[i] != '"' {
@@ -7549,7 +7541,7 @@ func (recv PostalAddress) DecodeFrom(data []byte) (result PostalAddress, i int, 
 			}
 		case "geo":
 			if seenGeo {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"geo"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"geo"}}
 			}
 			seenGeo = true
 			var _n int
@@ -7560,7 +7552,7 @@ func (recv PostalAddress) DecodeFrom(data []byte) (result PostalAddress, i int, 
 			}
 		case "line1":
 			if seenLine1 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"line1"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"line1"}}
 			}
 			seenLine1 = true
 			if i >= len(data) || data[i] != '"' {
@@ -7587,7 +7579,7 @@ func (recv PostalAddress) DecodeFrom(data []byte) (result PostalAddress, i int, 
 			}
 		case "line2":
 			if seenLine2 {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"line2"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"line2"}}
 			}
 			seenLine2 = true
 			if i >= len(data) || data[i] != '"' {
@@ -7614,7 +7606,7 @@ func (recv PostalAddress) DecodeFrom(data []byte) (result PostalAddress, i int, 
 			}
 		case "postalCode":
 			if seenPostalCode {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"postalCode"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"postalCode"}}
 			}
 			seenPostalCode = true
 			if i >= len(data) || data[i] != '"' {
@@ -7641,7 +7633,7 @@ func (recv PostalAddress) DecodeFrom(data []byte) (result PostalAddress, i int, 
 			}
 		case "state":
 			if seenState {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"state"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"state"}}
 			}
 			seenState = true
 			if i >= len(data) || data[i] != '"' {
@@ -7667,7 +7659,7 @@ func (recv PostalAddress) DecodeFrom(data []byte) (result PostalAddress, i int, 
 				}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -7730,7 +7722,7 @@ func (recv PostalAddress) DecodeFromStream(s *scan.Stream) (result PostalAddress
 				return result, decode.NewParseErr("city", s.Pos, err)
 			}
 			if seenCity {
-				return result, &validation.DuplicateKeyError{Path: []string{"city"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"city"}}
 			}
 			seenCity = true
 			result.City, err = s.String()
@@ -7743,7 +7735,7 @@ func (recv PostalAddress) DecodeFromStream(s *scan.Stream) (result PostalAddress
 				return result, decode.NewParseErr("country", s.Pos, err)
 			}
 			if seenCountry {
-				return result, &validation.DuplicateKeyError{Path: []string{"country"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"country"}}
 			}
 			seenCountry = true
 			result.Country, err = s.String()
@@ -7756,7 +7748,7 @@ func (recv PostalAddress) DecodeFromStream(s *scan.Stream) (result PostalAddress
 				return result, decode.NewParseErr("geo", s.Pos, err)
 			}
 			if seenGeo {
-				return result, &validation.DuplicateKeyError{Path: []string{"geo"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"geo"}}
 			}
 			seenGeo = true
 			result.Geo, err = result.Geo.DecodeFromStream(s)
@@ -7769,7 +7761,7 @@ func (recv PostalAddress) DecodeFromStream(s *scan.Stream) (result PostalAddress
 				return result, decode.NewParseErr("line1", s.Pos, err)
 			}
 			if seenLine1 {
-				return result, &validation.DuplicateKeyError{Path: []string{"line1"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"line1"}}
 			}
 			seenLine1 = true
 			result.Line1, err = s.String()
@@ -7782,7 +7774,7 @@ func (recv PostalAddress) DecodeFromStream(s *scan.Stream) (result PostalAddress
 				return result, decode.NewParseErr("line2", s.Pos, err)
 			}
 			if seenLine2 {
-				return result, &validation.DuplicateKeyError{Path: []string{"line2"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"line2"}}
 			}
 			seenLine2 = true
 			result.Line2, err = s.String()
@@ -7795,7 +7787,7 @@ func (recv PostalAddress) DecodeFromStream(s *scan.Stream) (result PostalAddress
 				return result, decode.NewParseErr("postalCode", s.Pos, err)
 			}
 			if seenPostalCode {
-				return result, &validation.DuplicateKeyError{Path: []string{"postalCode"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"postalCode"}}
 			}
 			seenPostalCode = true
 			result.PostalCode, err = s.String()
@@ -7808,7 +7800,7 @@ func (recv PostalAddress) DecodeFromStream(s *scan.Stream) (result PostalAddress
 				return result, decode.NewParseErr("state", s.Pos, err)
 			}
 			if seenState {
-				return result, &validation.DuplicateKeyError{Path: []string{"state"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"state"}}
 			}
 			seenState = true
 			result.State, err = s.String()
@@ -7816,7 +7808,7 @@ func (recv PostalAddress) DecodeFromStream(s *scan.Stream) (result PostalAddress
 				return result, decode.NewParseErr("state", s.Pos, err)
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -7937,7 +7929,7 @@ func (recv Geo) DecodeFrom(data []byte) (result Geo, i int, err error) {
 		switch key {
 		case "accuracy":
 			if seenAccuracy {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"accuracy"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"accuracy"}}
 			}
 			seenAccuracy = true
 			var fv float64
@@ -7948,7 +7940,7 @@ func (recv Geo) DecodeFrom(data []byte) (result Geo, i int, err error) {
 			result.Accuracy = float32(fv)
 		case "altitude":
 			if seenAltitude {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"altitude"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"altitude"}}
 			}
 			seenAltitude = true
 			result.Altitude, i, err = scan.Float64(data, i)
@@ -7957,7 +7949,7 @@ func (recv Geo) DecodeFrom(data []byte) (result Geo, i int, err error) {
 			}
 		case "lat":
 			if seenLat {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"lat"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"lat"}}
 			}
 			seenLat = true
 			result.Lat, i, err = scan.Float64(data, i)
@@ -7966,7 +7958,7 @@ func (recv Geo) DecodeFrom(data []byte) (result Geo, i int, err error) {
 			}
 		case "lng":
 			if seenLng {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"lng"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"lng"}}
 			}
 			seenLng = true
 			result.Lng, i, err = scan.Float64(data, i)
@@ -7974,7 +7966,7 @@ func (recv Geo) DecodeFrom(data []byte) (result Geo, i int, err error) {
 				return result, i, decode.NewParseErr("lng", i, err)
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -8034,7 +8026,7 @@ func (recv Geo) DecodeFromStream(s *scan.Stream) (result Geo, err error) {
 				return result, decode.NewParseErr("accuracy", s.Pos, err)
 			}
 			if seenAccuracy {
-				return result, &validation.DuplicateKeyError{Path: []string{"accuracy"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"accuracy"}}
 			}
 			seenAccuracy = true
 			var fv float64
@@ -8049,7 +8041,7 @@ func (recv Geo) DecodeFromStream(s *scan.Stream) (result Geo, err error) {
 				return result, decode.NewParseErr("altitude", s.Pos, err)
 			}
 			if seenAltitude {
-				return result, &validation.DuplicateKeyError{Path: []string{"altitude"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"altitude"}}
 			}
 			seenAltitude = true
 			result.Altitude, err = s.Float64()
@@ -8062,7 +8054,7 @@ func (recv Geo) DecodeFromStream(s *scan.Stream) (result Geo, err error) {
 				return result, decode.NewParseErr("lat", s.Pos, err)
 			}
 			if seenLat {
-				return result, &validation.DuplicateKeyError{Path: []string{"lat"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"lat"}}
 			}
 			seenLat = true
 			result.Lat, err = s.Float64()
@@ -8075,7 +8067,7 @@ func (recv Geo) DecodeFromStream(s *scan.Stream) (result Geo, err error) {
 				return result, decode.NewParseErr("lng", s.Pos, err)
 			}
 			if seenLng {
-				return result, &validation.DuplicateKeyError{Path: []string{"lng"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"lng"}}
 			}
 			seenLng = true
 			result.Lng, err = s.Float64()
@@ -8083,7 +8075,7 @@ func (recv Geo) DecodeFromStream(s *scan.Stream) (result Geo, err error) {
 				return result, decode.NewParseErr("lng", s.Pos, err)
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -8200,7 +8192,7 @@ func (recv Company) DecodeFrom(data []byte) (result Company, i int, err error) {
 		switch key {
 		case "department":
 			if seenDepartment {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"department"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"department"}}
 			}
 			seenDepartment = true
 			if i >= len(data) || data[i] != '"' {
@@ -8227,7 +8219,7 @@ func (recv Company) DecodeFrom(data []byte) (result Company, i int, err error) {
 			}
 		case "employeeId":
 			if seenEmployeeID {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"employeeId"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"employeeId"}}
 			}
 			seenEmployeeID = true
 			if i >= len(data) || data[i] != '"' {
@@ -8254,7 +8246,7 @@ func (recv Company) DecodeFrom(data []byte) (result Company, i int, err error) {
 			}
 		case "founded":
 			if seenFounded {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"founded"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"founded"}}
 			}
 			seenFounded = true
 			neg := false
@@ -8305,7 +8297,7 @@ func (recv Company) DecodeFrom(data []byte) (result Company, i int, err error) {
 			result.Founded = int16(n)
 		case "headcount":
 			if seenHeadcount {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"headcount"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"headcount"}}
 			}
 			seenHeadcount = true
 			neg := false
@@ -8356,7 +8348,7 @@ func (recv Company) DecodeFrom(data []byte) (result Company, i int, err error) {
 			result.Headcount = int(n)
 		case "isPublic":
 			if seenIsPublic {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"isPublic"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"isPublic"}}
 			}
 			seenIsPublic = true
 			result.IsPublic, i, err = scan.Bool(data, i)
@@ -8365,7 +8357,7 @@ func (recv Company) DecodeFrom(data []byte) (result Company, i int, err error) {
 			}
 		case "name":
 			if seenName {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"name"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"name"}}
 			}
 			seenName = true
 			if i >= len(data) || data[i] != '"' {
@@ -8392,7 +8384,7 @@ func (recv Company) DecodeFrom(data []byte) (result Company, i int, err error) {
 			}
 		case "title":
 			if seenTitle {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"title"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"title"}}
 			}
 			seenTitle = true
 			if i >= len(data) || data[i] != '"' {
@@ -8418,7 +8410,7 @@ func (recv Company) DecodeFrom(data []byte) (result Company, i int, err error) {
 				}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -8481,7 +8473,7 @@ func (recv Company) DecodeFromStream(s *scan.Stream) (result Company, err error)
 				return result, decode.NewParseErr("department", s.Pos, err)
 			}
 			if seenDepartment {
-				return result, &validation.DuplicateKeyError{Path: []string{"department"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"department"}}
 			}
 			seenDepartment = true
 			result.Department, err = s.String()
@@ -8494,7 +8486,7 @@ func (recv Company) DecodeFromStream(s *scan.Stream) (result Company, err error)
 				return result, decode.NewParseErr("employeeId", s.Pos, err)
 			}
 			if seenEmployeeID {
-				return result, &validation.DuplicateKeyError{Path: []string{"employeeId"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"employeeId"}}
 			}
 			seenEmployeeID = true
 			result.EmployeeID, err = s.String()
@@ -8507,7 +8499,7 @@ func (recv Company) DecodeFromStream(s *scan.Stream) (result Company, err error)
 				return result, decode.NewParseErr("founded", s.Pos, err)
 			}
 			if seenFounded {
-				return result, &validation.DuplicateKeyError{Path: []string{"founded"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"founded"}}
 			}
 			seenFounded = true
 			var iv int64
@@ -8522,7 +8514,7 @@ func (recv Company) DecodeFromStream(s *scan.Stream) (result Company, err error)
 				return result, decode.NewParseErr("headcount", s.Pos, err)
 			}
 			if seenHeadcount {
-				return result, &validation.DuplicateKeyError{Path: []string{"headcount"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"headcount"}}
 			}
 			seenHeadcount = true
 			var iv int64
@@ -8537,7 +8529,7 @@ func (recv Company) DecodeFromStream(s *scan.Stream) (result Company, err error)
 				return result, decode.NewParseErr("isPublic", s.Pos, err)
 			}
 			if seenIsPublic {
-				return result, &validation.DuplicateKeyError{Path: []string{"isPublic"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"isPublic"}}
 			}
 			seenIsPublic = true
 			result.IsPublic, err = s.Bool()
@@ -8550,7 +8542,7 @@ func (recv Company) DecodeFromStream(s *scan.Stream) (result Company, err error)
 				return result, decode.NewParseErr("name", s.Pos, err)
 			}
 			if seenName {
-				return result, &validation.DuplicateKeyError{Path: []string{"name"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"name"}}
 			}
 			seenName = true
 			result.Name, err = s.String()
@@ -8563,7 +8555,7 @@ func (recv Company) DecodeFromStream(s *scan.Stream) (result Company, err error)
 				return result, decode.NewParseErr("title", s.Pos, err)
 			}
 			if seenTitle {
-				return result, &validation.DuplicateKeyError{Path: []string{"title"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"title"}}
 			}
 			seenTitle = true
 			result.Title, err = s.String()
@@ -8571,7 +8563,7 @@ func (recv Company) DecodeFromStream(s *scan.Stream) (result Company, err error)
 				return result, decode.NewParseErr("title", s.Pos, err)
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
@@ -8693,7 +8685,7 @@ func (recv Preferences) DecodeFrom(data []byte) (result Preferences, i int, err 
 		switch key {
 		case "autoSave":
 			if seenAutoSave {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"autoSave"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"autoSave"}}
 			}
 			seenAutoSave = true
 			result.AutoSave, i, err = scan.Bool(data, i)
@@ -8702,7 +8694,7 @@ func (recv Preferences) DecodeFrom(data []byte) (result Preferences, i int, err 
 			}
 		case "betaFeatures":
 			if seenBetaFeatures {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"betaFeatures"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"betaFeatures"}}
 			}
 			seenBetaFeatures = true
 			result.BetaFeatures, i, err = scan.Bool(data, i)
@@ -8711,7 +8703,7 @@ func (recv Preferences) DecodeFrom(data []byte) (result Preferences, i int, err 
 			}
 		case "currency":
 			if seenCurrency {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"currency"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"currency"}}
 			}
 			seenCurrency = true
 			if i >= len(data) || data[i] != '"' {
@@ -8738,7 +8730,7 @@ func (recv Preferences) DecodeFrom(data []byte) (result Preferences, i int, err 
 			}
 		case "emailNotifications":
 			if seenEmailNotifications {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"emailNotifications"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"emailNotifications"}}
 			}
 			seenEmailNotifications = true
 			result.EmailNotifications, i, err = scan.Bool(data, i)
@@ -8747,7 +8739,7 @@ func (recv Preferences) DecodeFrom(data []byte) (result Preferences, i int, err 
 			}
 		case "itemsPerPage":
 			if seenItemsPerPage {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"itemsPerPage"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"itemsPerPage"}}
 			}
 			seenItemsPerPage = true
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
@@ -8773,7 +8765,7 @@ func (recv Preferences) DecodeFrom(data []byte) (result Preferences, i int, err 
 			result.ItemsPerPage = uint8(n)
 		case "language":
 			if seenLanguage {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"language"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"language"}}
 			}
 			seenLanguage = true
 			if i >= len(data) || data[i] != '"' {
@@ -8800,7 +8792,7 @@ func (recv Preferences) DecodeFrom(data []byte) (result Preferences, i int, err 
 			}
 		case "pushNotifications":
 			if seenPushNotifications {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"pushNotifications"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"pushNotifications"}}
 			}
 			seenPushNotifications = true
 			result.PushNotifications, i, err = scan.Bool(data, i)
@@ -8809,7 +8801,7 @@ func (recv Preferences) DecodeFrom(data []byte) (result Preferences, i int, err 
 			}
 		case "smsNotifications":
 			if seenSMSNotifications {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"smsNotifications"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"smsNotifications"}}
 			}
 			seenSMSNotifications = true
 			result.SMSNotifications, i, err = scan.Bool(data, i)
@@ -8818,7 +8810,7 @@ func (recv Preferences) DecodeFrom(data []byte) (result Preferences, i int, err 
 			}
 		case "theme":
 			if seenTheme {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"theme"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"theme"}}
 			}
 			seenTheme = true
 			if i >= len(data) || data[i] != '"' {
@@ -8845,7 +8837,7 @@ func (recv Preferences) DecodeFrom(data []byte) (result Preferences, i int, err 
 			}
 		case "timezone":
 			if seenTimezone {
-				return result, i, &validation.DuplicateKeyError{Path: []string{"timezone"}}
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"timezone"}}
 			}
 			seenTimezone = true
 			if i >= len(data) || data[i] != '"' {
@@ -8871,7 +8863,7 @@ func (recv Preferences) DecodeFrom(data []byte) (result Preferences, i int, err 
 				}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Path: []string{key}}
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -8937,7 +8929,7 @@ func (recv Preferences) DecodeFromStream(s *scan.Stream) (result Preferences, er
 				return result, decode.NewParseErr("autoSave", s.Pos, err)
 			}
 			if seenAutoSave {
-				return result, &validation.DuplicateKeyError{Path: []string{"autoSave"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"autoSave"}}
 			}
 			seenAutoSave = true
 			result.AutoSave, err = s.Bool()
@@ -8950,7 +8942,7 @@ func (recv Preferences) DecodeFromStream(s *scan.Stream) (result Preferences, er
 				return result, decode.NewParseErr("betaFeatures", s.Pos, err)
 			}
 			if seenBetaFeatures {
-				return result, &validation.DuplicateKeyError{Path: []string{"betaFeatures"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"betaFeatures"}}
 			}
 			seenBetaFeatures = true
 			result.BetaFeatures, err = s.Bool()
@@ -8963,7 +8955,7 @@ func (recv Preferences) DecodeFromStream(s *scan.Stream) (result Preferences, er
 				return result, decode.NewParseErr("currency", s.Pos, err)
 			}
 			if seenCurrency {
-				return result, &validation.DuplicateKeyError{Path: []string{"currency"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"currency"}}
 			}
 			seenCurrency = true
 			result.Currency, err = s.String()
@@ -8976,7 +8968,7 @@ func (recv Preferences) DecodeFromStream(s *scan.Stream) (result Preferences, er
 				return result, decode.NewParseErr("emailNotifications", s.Pos, err)
 			}
 			if seenEmailNotifications {
-				return result, &validation.DuplicateKeyError{Path: []string{"emailNotifications"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"emailNotifications"}}
 			}
 			seenEmailNotifications = true
 			result.EmailNotifications, err = s.Bool()
@@ -8989,7 +8981,7 @@ func (recv Preferences) DecodeFromStream(s *scan.Stream) (result Preferences, er
 				return result, decode.NewParseErr("itemsPerPage", s.Pos, err)
 			}
 			if seenItemsPerPage {
-				return result, &validation.DuplicateKeyError{Path: []string{"itemsPerPage"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"itemsPerPage"}}
 			}
 			seenItemsPerPage = true
 			var uv uint64
@@ -9004,7 +8996,7 @@ func (recv Preferences) DecodeFromStream(s *scan.Stream) (result Preferences, er
 				return result, decode.NewParseErr("language", s.Pos, err)
 			}
 			if seenLanguage {
-				return result, &validation.DuplicateKeyError{Path: []string{"language"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"language"}}
 			}
 			seenLanguage = true
 			result.Language, err = s.String()
@@ -9017,7 +9009,7 @@ func (recv Preferences) DecodeFromStream(s *scan.Stream) (result Preferences, er
 				return result, decode.NewParseErr("pushNotifications", s.Pos, err)
 			}
 			if seenPushNotifications {
-				return result, &validation.DuplicateKeyError{Path: []string{"pushNotifications"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"pushNotifications"}}
 			}
 			seenPushNotifications = true
 			result.PushNotifications, err = s.Bool()
@@ -9030,7 +9022,7 @@ func (recv Preferences) DecodeFromStream(s *scan.Stream) (result Preferences, er
 				return result, decode.NewParseErr("smsNotifications", s.Pos, err)
 			}
 			if seenSMSNotifications {
-				return result, &validation.DuplicateKeyError{Path: []string{"smsNotifications"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"smsNotifications"}}
 			}
 			seenSMSNotifications = true
 			result.SMSNotifications, err = s.Bool()
@@ -9043,7 +9035,7 @@ func (recv Preferences) DecodeFromStream(s *scan.Stream) (result Preferences, er
 				return result, decode.NewParseErr("theme", s.Pos, err)
 			}
 			if seenTheme {
-				return result, &validation.DuplicateKeyError{Path: []string{"theme"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"theme"}}
 			}
 			seenTheme = true
 			result.Theme, err = s.String()
@@ -9056,7 +9048,7 @@ func (recv Preferences) DecodeFromStream(s *scan.Stream) (result Preferences, er
 				return result, decode.NewParseErr("timezone", s.Pos, err)
 			}
 			if seenTimezone {
-				return result, &validation.DuplicateKeyError{Path: []string{"timezone"}}
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"timezone"}}
 			}
 			seenTimezone = true
 			result.Timezone, err = s.String()
@@ -9064,7 +9056,7 @@ func (recv Preferences) DecodeFromStream(s *scan.Stream) (result Preferences, er
 				return result, decode.NewParseErr("timezone", s.Pos, err)
 			}
 		default:
-			return result, &validation.UnknownKeyError{Path: []string{strings.Clone(key)}}
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()

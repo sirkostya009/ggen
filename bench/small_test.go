@@ -2,11 +2,9 @@
 
 package bench
 
-// BenchmarkSmall_* — small-value benchmarks on the ~2.9 KiB ValidPayload.
-// Where BenchmarkMega_* exercises the deep-tree case (decoded Node tree
-// dominates time and memory), this file isolates parse / streaming
-// overhead at a size where the decoded value is too small to drown out
-// per-call buffer management.
+// BenchmarkSmall_* — small-value benchmarks on the ~2.9 KiB ValidPayload,
+// isolating parse / streaming overhead at a size where the decoded value
+// is too small to drown out per-call buffer management.
 
 import (
 	"bytes"
@@ -46,10 +44,9 @@ func BenchmarkSmall_Unmarshal(b *testing.B) {
 	}
 }
 
-// BenchmarkSmall_Reader — Reader-path decode of ValidPayload. Two
-// ggen-stream rows: 512-byte initial buf (forces shifts + a couple
-// grows) vs a payload-sized buf (no growth, no shift). Reference rows
-// from jsonv2 / sonic / ggen-readall at the same payload size.
+// BenchmarkSmall_Reader — Reader-path decode of ValidPayload. Two ggen-stream
+// rows: 512-byte initial buf (forces shifts + grows) vs payload-sized buf (no
+// growth). Reference rows from jsonv2 / sonic / ggen-readall.
 func BenchmarkSmall_Reader(b *testing.B) {
 	type readerState struct {
 		r   bytes.Reader

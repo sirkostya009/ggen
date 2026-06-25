@@ -1,7 +1,5 @@
-// HTML-safe string escaping. By default (matching stdlib jsonv2) `<`, `>`,
-// and `&` are emitted literally. The `htmlescape` per-struct annotation
-// opts in to the v1-style `\uXXXX` escapes — useful when the JSON is
-// embedded in HTML and the consumer doesn't escape on its own.
+// HTML-safe string escaping. Default emits <, >, & literally (jsonv2-shaped);
+// the htmlescape annotation opts in to v1-style \uXXXX escapes.
 
 package integrationtests
 

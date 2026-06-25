@@ -1,23 +1,13 @@
 package main
 
-// Dry-run / vet-friendly validation entry points. checkPackage and
-// checkFile mirror generateDir / generateSingleFile but stop after
-// parsing: no codegen, no buffer, no file write. The parse layer
-// already surfaces every diagnostic the codegen path would have hit
-// (applicability, custom-func resolution, tag-shape errors); both
-// entry points just return the errors.Join the parser produced, and
-// the caller's logger renders them.
-//
-// Designed so a future `ggenvet` static-analysis binary can reuse the
-// same checks without dragging in any of the codegen surface. Vet-
-// specific checks that need more than parse-time data (stale
-// generated file detection, blame-able TODOs, post-CLI flag-state
-// audits) can plug in here behind the applyCLIFlags call.
+// Dry-run / vet-friendly validation entry points. checkPackage and checkFile
+// mirror generateDir / generateSingleFile but stop after parsing: no codegen,
+// no file write. The parse layer already surfaces every diagnostic the codegen
+// path would hit; these just return the parser's errors.Join. Factored so a
+// future `ggenvet` can reuse the checks without the codegen surface.
 
-// checkPackage validates every annotated struct in dir. Returns the
-// parser's errors.Join unchanged so the caller's logger can unwrap
-// + render each sub-error individually. Trace + debug log lines
-// mirror generateDir so verbose runs read the same in dry mode.
+// checkPackage validates every annotated struct in dir, returning the parser's
+// errors.Join unchanged for the caller's logger to unwrap + render.
 func checkPackage(dir string) error {
 	cliLog.Debug("checking package %s", dir)
 	structs, pkgName, err := parsePackage(dir)
@@ -29,18 +19,14 @@ func checkPackage(dir string) error {
 		return nil
 	}
 	cliLog.Debug("package %s: %d annotated structs", pkgName, len(structs))
-	// Run applyCLIFlags for parity with generateDir — a future vet check
-	// that inspects post-CLI flag state (e.g. spotting -multierr +
-	// -allowdups interactions) sees the same struct shape codegen would.
-	// Pure config mutation, no error path.
+	// Parity with generateDir so a future vet check sees the same struct shape.
 	applyCLIFlags(structs)
 	cliLog.Info("ok %s (%d structs)", relPath(dir), len(structs))
 	return nil
 }
 
-// checkFile is the single-file analogue of checkPackage. `wanted` is
-// the optional positional-name filter, identical to
-// generateSingleFile's equivalent argument.
+// checkFile is the single-file analogue of checkPackage; `wanted` is the
+// optional positional-name filter.
 func checkFile(filename string, wanted []string) error {
 	structs, _, _, err := parseFile(filename, wanted)
 	if err != nil {

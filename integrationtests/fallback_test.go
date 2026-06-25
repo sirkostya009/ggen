@@ -11,9 +11,8 @@ import (
 	"github.com/sirkostya009/ggen/integrationtests/thirdparty2"
 )
 
-// FallbackStruct references thirdparty.External — a plain Go struct with
-// no DecodeFrom and no TextUnmarshaler. The static analyzer sees this and
-// emits a plain `encoding/json.Unmarshal` call directly.
+// FallbackStruct: thirdparty.External has no DecodeFrom/TextUnmarshaler, so
+// codegen emits an encoding/json.Unmarshal fallback.
 //
 //ggen:generate
 type FallbackStruct struct {
@@ -21,10 +20,8 @@ type FallbackStruct struct {
 	Extra thirdparty.External `json:"extra"`
 }
 
-// FastFallbackStruct references thirdparty2.External2 — outside the main
-// package's generation pass, but ggen-generated in its own package. The
-// static analyzer detects the AppendJSON / DecodeFrom methods at codegen
-// time and emits direct method calls, bypassing the json reflective path.
+// FastFallbackStruct: thirdparty2.External2 is ggen-generated in its own
+// package, so codegen emits direct AppendJSON/DecodeFrom calls (no json path).
 //
 //ggen:generate
 type FastFallbackStruct struct {
@@ -32,9 +29,8 @@ type FastFallbackStruct struct {
 	Extra thirdparty2.External2 `json:"extra"`
 }
 
-// TextFallbackStruct references thirdparty.Tagged — implements
-// TextMarshaler/Unmarshaler. The static analyzer routes encode/decode
-// through those methods. Wire format is `"name#tag"`.
+// TextFallbackStruct: thirdparty.Tagged implements TextMarshaler/Unmarshaler;
+// codegen routes through those. Wire form is "name#tag".
 //
 //ggen:generate
 type TextFallbackStruct struct {
@@ -42,9 +38,8 @@ type TextFallbackStruct struct {
 	Tag thirdparty.Tagged `json:"tag"`
 }
 
-// TestFallback_roundtrip exercises nested-struct codegen where the nested
-// type has no generated AppendJSON/DecodeFrom. The generator emits
-// jsonv2.Marshal / jsonv2.UnmarshalDecode fallbacks.
+// TestFallback_roundtrip: nested type with no generated methods uses the
+// json fallback both ways.
 func TestFallback_roundtrip(t *testing.T) {
 	in := FallbackStruct{
 		ID:    "abc",
@@ -64,10 +59,8 @@ func TestFallback_roundtrip(t *testing.T) {
 	}
 }
 
-// TestFastFallback_roundtrip exercises static cross-pkg dispatch:
-// FastFallbackStruct.Extra is thirdparty2.External2, ggen-generated in
-// another package. The static analyzer detects DecodeFrom / AppendJSON
-// at codegen time, so json.Unmarshal is bypassed.
+// TestFastFallback_roundtrip: cross-pkg dispatch to External2's generated
+// methods round-trips.
 func TestFastFallback_roundtrip(t *testing.T) {
 	in := FastFallbackStruct{
 		ID:    "abc",
@@ -83,11 +76,8 @@ func TestFastFallback_roundtrip(t *testing.T) {
 	}
 }
 
-// TestFastFallback_validationFromGeneratedDecoder proves the static
-// dispatch actually ran: External2's generated DecodeFrom enforces
-// ggen:"required" on Key and ggen:"gte=0" on Value. If json.Unmarshal had
-// been used, neither rule would fire — stdlib doesn't read ggen tags. So
-// a validation.Error from a violating payload confirms static dispatch.
+// TestFastFallback_validationFromGeneratedDecoder: a validation error on the
+// nested field proves the generated decoder ran (json fallback wouldn't validate).
 func TestFastFallback_validationFromGeneratedDecoder(t *testing.T) {
 	// Empty Key violates required.
 	bad := []byte(`{"id":"x","extra":{"key":"","value":1}}`)
@@ -100,15 +90,11 @@ func TestFastFallback_validationFromGeneratedDecoder(t *testing.T) {
 	}
 }
 
-// TestTextFallback_roundtrip checks that ggen routes Tagged through
-// TextMarshaler/Unmarshaler. The wire format is `"name#tag"` — a JSON
-// string, not the struct's natural `{"Name":"...","Tag":"..."}` JSON shape
-// that json.Marshal would produce. Seeing the string form confirms the
-// text path ran.
+// TestTextFallback_roundtrip: Tagged routes through TextMarshaler/Unmarshaler;
+// the "name#tag" string form (not a sub-object) confirms the text path ran.
 func TestTextFallback_roundtrip(t *testing.T) {
 	in := TextFallbackStruct{ID: "x", Tag: thirdparty.Tagged{Name: "alice", Tag: "admin"}}
 	out, _ := encode.MarshalString(in)
-	// Must be a string-encoded value, not a sub-object.
 	if !strings.Contains(out, `"tag":"alice#admin"`) {
 		t.Fatalf("expected text-encoded form, got: %s", out)
 	}
@@ -121,8 +107,7 @@ func TestTextFallback_roundtrip(t *testing.T) {
 	}
 }
 
-// TestTextFallback_unmarshalErrorPropagates: bad input ("missing #") must
-// surface UnmarshalText's error from inside the cross-pkg fallback.
+// TestTextFallback_unmarshalErrorPropagates: UnmarshalText's error surfaces.
 func TestTextFallback_unmarshalErrorPropagates(t *testing.T) {
 	bad := []byte(`{"id":"x","tag":"no-separator-here"}`)
 	_, _, err := TextFallbackStruct{}.DecodeFrom(bad)

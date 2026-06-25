@@ -1,38 +1,21 @@
-// The url-encoding mode bits, the 256-byte `urlTable`, and the body
-// of AppendURL / appendUserinfo / appendURLEscape in this file are
-// ported from the Go standard library's `net/url` package (BSD-style
-// license). Upstream sources:
-//
-//   - net/url/encoding_table.go    (`encoding` constants + `table`)
-//   - net/url/url.go               (`escape`, `(*Userinfo).String`,
-//                                    `(*URL).String`, `EscapedPath`,
-//                                    `EscapedFragment`)
-//
-// The duplication is intentional. Go's url package neither exports the
-// table nor offers an append-style escape primitive, so calling
-// `(*URL).AppendBinary` / `String()` would allocate a fresh
-// strings.Builder buffer per call. By copying the table inline we get
-// the same wire bytes with zero allocation on the hot path.
+// The url-encoding mode bits, the 256-byte urlTable, and the bodies of
+// AppendURL / appendUserinfo / appendURLEscape are ported from Go's
+// net/url (BSD-style license; encoding_table.go + url.go's escape /
+// Userinfo.String / URL.String / EscapedPath / EscapedFragment). The
+// duplication is intentional: net/url neither exports the table nor
+// offers an append-style escape, so String() would allocate per call.
 
 package encode
 
 import "net/url"
 
-// AppendURL appends u's URL wire form (as produced by url.URL.String)
-// to dst. Zero allocation — replicates Go's url.escape inline using a
-// copy of net/url's encoding table, so no intermediate string is built.
+// AppendURL appends u's URL wire form (as url.URL.String) to dst, zero
+// allocation. Bytes match URL.String(). For EscapedPath/EscapedFragment
+// it prefers a non-empty RawPath/RawFragment when they're a valid
+// encoding (validURLEncoded), skipping the unescape+compare round-trip.
 //
-// The bytes produced match URL.String() for the common cases (parser
-// or programmatically constructed values). For the EscapedPath /
-// EscapedFragment paths we prefer RawPath/RawFragment when non-empty
-// without re-validating the encoding — Go's parser only sets them when
-// they're a valid encoding of Path/Fragment, so trusting them avoids
-// the extra unescape+compare round-trip.
-//
-// URL output never contains a raw `"` or `\` (both get percent-encoded
-// by every escape mode that applies inside JSON-quoted values), so the
-// emitted bytes are safe to drop between JSON quotes without further
-// escaping.
+// Output never contains a raw `"` or `\` (every applicable escape mode
+// percent-encodes both), so it's safe to drop between JSON quotes.
 func AppendURL(dst []byte, u url.URL) []byte {
 	if u.Scheme != "" {
 		dst = append(dst, u.Scheme...)
@@ -55,12 +38,8 @@ func AppendURL(dst []byte, u url.URL) []byte {
 				dst = appendURLEscape(dst, u.Host, urlEncodeHost)
 			}
 		}
-		// Path: prefer RawPath ONLY when it's a valid encoding of
-		// Path. The parser sets RawPath to the raw input bytes — when
-		// those include raw UTF-8 (i.e. the source URL skipped
-		// percent-encoding), validURLEncoded rejects it and we fall
-		// through to escape Path. Matches (*url.URL).EscapedPath
-		// without the unescape+compare alloc.
+		// Prefer RawPath only when it's a valid encoding of Path; raw
+		// UTF-8 there fails validURLEncoded and falls through to escape.
 		switch {
 		case u.RawPath != "" && validURLEncoded(u.RawPath, urlEncodePath):
 			dst = append(dst, u.RawPath...)
@@ -97,8 +76,7 @@ func AppendURL(dst []byte, u url.URL) []byte {
 }
 
 // appendUserinfo emits username[:password] with per-mode escaping.
-// Mirrors (*url.Userinfo).String — the field accessors don't allocate,
-// only the underlying escape() does (which we inline).
+// Mirrors (*url.Userinfo).String.
 func appendUserinfo(dst []byte, u *url.Userinfo) []byte {
 	if u == nil {
 		return dst
@@ -177,9 +155,7 @@ func containsColon(s string) bool {
 }
 
 // URL-encoding mode bits + lookup table — copied verbatim from
-// net/url/encoding_table.go. The duplication is intentional: the
-// upstream table isn't exported, and pulling it in via reflection or
-// runtime building would defeat the zero-alloc goal.
+// net/url/encoding_table.go (not exported upstream).
 type urlEncoding uint8
 
 const (

@@ -110,14 +110,14 @@ func TestInt64_RejectsFloatsParity(t *testing.T) {
 // resume correctly in the checked loop.
 func TestInt64_OverflowBoundaryLattice(t *testing.T) {
 	ok := map[string]int64{
-		"99999999999999999":     99999999999999999,     // 17 digits
-		"999999999999999999":    999999999999999999,    // 18 digits
-		"1000000000000000000":   1000000000000000000,   // 19 digits, valid
-		"9223372036854775807":   math.MaxInt64,         // MaxInt64 (19 digits)
-		"-9223372036854775808":  math.MinInt64,         // MinInt64
-		"-9223372036854775807":  -9223372036854775807,  // MinInt64+1
-		"0000000000000000007":   7,                     // 18 leading zeros + 7
-		"00000000000000000009223372036854775807": math.MaxInt64, // zeros push MaxInt64 past window
+		"99999999999999999":                      99999999999999999,    // 17 digits
+		"999999999999999999":                     999999999999999999,   // 18 digits
+		"1000000000000000000":                    1000000000000000000,  // 19 digits, valid
+		"9223372036854775807":                    math.MaxInt64,        // MaxInt64 (19 digits)
+		"-9223372036854775808":                   math.MinInt64,        // MinInt64
+		"-9223372036854775807":                   -9223372036854775807, // MinInt64+1
+		"0000000000000000007":                    7,                    // 18 leading zeros + 7
+		"00000000000000000009223372036854775807": math.MaxInt64,        // zeros push MaxInt64 past window
 	}
 	for in, want := range ok {
 		t.Run("ok/"+in, func(t *testing.T) {
@@ -153,10 +153,10 @@ func TestInt64_OverflowBoundaryLattice(t *testing.T) {
 // 19-digit unchecked prefix.
 func TestUint64_OverflowBoundaryLattice(t *testing.T) {
 	ok := map[string]uint64{
-		"9999999999999999999":  9999999999999999999,  // 19 nines, valid
-		"10000000000000000000": 10000000000000000000, // 20 digits, valid
-		"18446744073709551615": math.MaxUint64,        // MaxUint64 (20 digits)
-		"00000000000000000000018446744073709551615": math.MaxUint64, // leading zeros past window
+		"9999999999999999999":                       9999999999999999999,  // 19 nines, valid
+		"10000000000000000000":                      10000000000000000000, // 20 digits, valid
+		"18446744073709551615":                      math.MaxUint64,       // MaxUint64 (20 digits)
+		"00000000000000000000018446744073709551615": math.MaxUint64,       // leading zeros past window
 	}
 	for in, want := range ok {
 		t.Run("ok/"+in, func(t *testing.T) {
@@ -173,7 +173,7 @@ func TestUint64_OverflowBoundaryLattice(t *testing.T) {
 		})
 	}
 	for _, in := range []string{
-		"18446744073709551616", // MaxUint64+1
+		"18446744073709551616",  // MaxUint64+1
 		"99999999999999999999",  // 20 nines
 		"184467440737095516150", // 21 digits
 	} {

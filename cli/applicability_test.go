@@ -5,22 +5,19 @@ import (
 	"testing"
 )
 
-// Exhaustive unit tests for applicability.go. Two matrices drive the
-// bulk: every val rule × every kind, and every mod rule × every kind.
-// Per-rule shape errors (missing value, bad numeric, wrong form) are
-// covered by dedicated tables. The orchestrator's structural checks
-// (keys: on non-map, dive: on non-container, hintlen on non-slice/map,
-// KindStruct skip) get their own subtest driven through FieldInfo.
+// Unit tests for applicability.go. Two matrices drive the bulk (val rule ×
+// kind, mod rule × kind); per-rule shape errors and the orchestrator's
+// structural checks (keys:/inner:/hintlen scoping, KindStruct skip) get their
+// own tables.
 
 // kindEntry is one row of the kind matrix.
 type kindEntry struct {
 	kind TypeKind
-	name string // human label for failure messages; mirrors a Go type literal
+	name string // human label; mirrors a Go type literal
 }
 
-// allKindEntries covers every TypeKind the field-level resolver can
-// emit. KindStruct is included as a separate row so the "skip when
-// opaque" path gets explicit coverage.
+// allKindEntries covers every TypeKind the field-level resolver can emit,
+// including KindStruct for the "skip when opaque" path.
 var allKindEntries = []kindEntry{
 	{KindString, "string"},
 	{KindBool, "bool"},
@@ -54,9 +51,7 @@ var allKindEntries = []kindEntry{
 	{KindSQLNull, "sql.NullString"},
 }
 
-// Acceptance predicates, declared once so the per-rule tables stay
-// self-documenting (`accept: stringOnly` reads better than an inline
-// lambda).
+// Acceptance predicates, declared once to keep the per-rule tables readable.
 var (
 	anyKind         = func(k TypeKind) bool { return true }
 	stringOnly      = func(k TypeKind) bool { return k == KindString }
@@ -66,11 +61,9 @@ var (
 	stringOrNumeric = func(k TypeKind) bool { return k == KindString || isNumeric(k) }
 )
 
-// valSpec describes a validation rule + a sample value that should
-// satisfy the rule's value-shape check for every accepted kind. Use a
-// neutral value (`5`, `a|b|c`, `foo`) so the kind matrix never trips
-// over value-shape rejection — that's a separate dimension covered by
-// TestCheckOneValRule_ValueShape.
+// valSpec is a validation rule + a sample value chosen to pass the value-shape
+// check on every accepted kind, so the kind matrix never trips over value
+// shape (that's TestCheckOneValRule_ValueShape's job).
 type valSpec struct {
 	name   string
 	value  string
@@ -130,7 +123,7 @@ func TestCheckOneValRule_KindMatrix(t *testing.T) {
 					t.Errorf("rule=%q kind=%s: expected reject, got nil", spec.name, ke.name)
 				}
 				if !accepted && err != nil {
-					// Reject path must reference the rule name and field type.
+					// Reject path references rule name and field type.
 					if !strings.Contains(err.Error(), spec.name) {
 						t.Errorf("rule=%q kind=%s: diagnostic missing rule name: %v", spec.name, ke.name, err)
 					}
@@ -143,14 +136,9 @@ func TestCheckOneValRule_KindMatrix(t *testing.T) {
 	}
 }
 
-// TestCheckOneValRule_UnknownRuleRejected pins the new behavior:
-// unrecognised rule names are flagged loudly, not silently no-op'd.
-// A user typing `ggen:"b"` should get told `b` isn't a real rule —
-// the alternative (silent acceptance) hides the typo until the
-// generated code runs without the expected validation.
-//
-// Custom `@FuncName` rules are excluded — those resolve later in
-// resolveCustomRules and have no static kind contract to check.
+// Unrecognised rule names must error, not silently no-op (catches typos).
+// Custom `@FuncName` rules are excluded — they resolve later in
+// resolveCustomRules.
 func TestCheckOneValRule_UnknownRuleRejected(t *testing.T) {
 	t.Parallel()
 	for _, ke := range allKindEntries {
@@ -166,9 +154,7 @@ func TestCheckOneValRule_UnknownRuleRejected(t *testing.T) {
 	}
 }
 
-// TestCheckOneValRule_CustomAtPrefixTolerated pins the @ escape:
-// `@FuncName` references survive the unknown-rule check and reach
-// resolveCustomRules unimpeded.
+// `@FuncName` references must survive the unknown-rule check.
 func TestCheckOneValRule_CustomAtPrefixTolerated(t *testing.T) {
 	t.Parallel()
 	for _, ke := range allKindEntries {
@@ -180,9 +166,8 @@ func TestCheckOneValRule_CustomAtPrefixTolerated(t *testing.T) {
 	}
 }
 
-// TestCheckOneValRule_ValueShape covers per-rule value-shape errors
-// independently of kind matching. Each row uses a kind that ACCEPTS
-// the rule, so only the value-shape branch can fail.
+// TestCheckOneValRule_ValueShape covers per-rule value-shape errors. Each row
+// uses a kind that accepts the rule, so only the value-shape branch can fail.
 func TestCheckOneValRule_ValueShape(t *testing.T) {
 	t.Parallel()
 	type tc struct {
@@ -306,9 +291,7 @@ func TestCheckOneModRule_KindMatrix(t *testing.T) {
 	}
 }
 
-// TestCheckOneModRule_UnknownModRejected mirrors the validator
-// side: unrecognised mod names error out with a typo-catching
-// diagnostic. `@FuncName` mods (custom-resolved later) are exempt.
+// Unrecognised mod names must error (typo-catching); `@FuncName` mods exempt.
 func TestCheckOneModRule_UnknownModRejected(t *testing.T) {
 	t.Parallel()
 	for _, ke := range allKindEntries {
@@ -395,12 +378,10 @@ func TestCheckOneModRule_ValueShape(t *testing.T) {
 
 // ----- skip-paths -----
 
-// TestCheckValRules_KindStructSkipped: KindStruct fields opt out of the
-// applicability check entirely (alias / custom-marshaler ambiguity).
+// KindStruct fields opt out of the applicability check (alias /
+// custom-marshaler ambiguity), so kind-mismatched rules all pass.
 func TestCheckValRules_KindStructSkipped(t *testing.T) {
 	t.Parallel()
-	// Every kind-mismatched rule below would normally reject on its
-	// "right" kind. With kind=KindStruct they all pass.
 	rules := []ValidationRule{
 		{Name: "ascii"},
 		{Name: "email"},
@@ -429,14 +410,12 @@ func TestCheckModRules_KindStructSkipped(t *testing.T) {
 	}
 }
 
-// TestCheckValRules_CustomSkipped: @Func rules bypass the matrix —
-// resolveCustomRules has already type-checked the signature against
-// the field's exact go/types.Type.
+// @Func rules bypass the matrix — resolveCustomRules already type-checked the
+// signature against the field's go/types.Type.
 func TestCheckValRules_CustomSkipped(t *testing.T) {
 	t.Parallel()
 	rules := []ValidationRule{
-		// Kind=int but rule name says "ascii" — would normally reject.
-		// Custom=true makes it skip the matrix entirely.
+		// Custom=true skips the matrix despite the int/ascii mismatch.
 		{Name: "@MyCheck", Custom: true, FuncName: "MyCheck"},
 	}
 	if err := checkValRules(rules, "ggen", KindInt, "int", "field f"); err != nil {
@@ -568,9 +547,8 @@ func TestNeedFloat(t *testing.T) {
 
 // ----- orchestrator: keys / dive / hintlen structural checks -----
 
-// TestCheckRuleApplicability_Structural drives checkRuleApplicability
-// through FieldInfo so the orchestration logic (keys:/dive:/hintlen
-// scoping) gets exercised independently of the per-rule matrix.
+// TestCheckRuleApplicability_Structural exercises the orchestration logic
+// (keys:/inner:/hintlen scoping) through FieldInfo, apart from the rule matrix.
 func TestCheckRuleApplicability_Structural(t *testing.T) {
 	t.Parallel()
 	type tc struct {
@@ -622,7 +600,7 @@ func TestCheckRuleApplicability_Structural(t *testing.T) {
 			"`gt` is inapplicable to string",
 		},
 
-		// dive: only on containers.
+		// inner: only on containers.
 		{
 			"dive_on_int",
 			FieldInfo{
@@ -630,7 +608,7 @@ func TestCheckRuleApplicability_Structural(t *testing.T) {
 				ElemValidation: []ValidationRule{{Name: "minlen", Value: "1"}},
 				HintLen:        -1,
 			},
-			"`dive:` tag prefix is only valid on slice/array/map fields",
+			"`inner:` tag prefix is only valid on slice/array/map fields",
 		},
 		{
 			"dive_on_string",
@@ -639,7 +617,7 @@ func TestCheckRuleApplicability_Structural(t *testing.T) {
 				ElemValidation: []ValidationRule{{Name: "minlen", Value: "1"}},
 				HintLen:        -1,
 			},
-			"`dive:` tag prefix is only valid on slice/array/map fields",
+			"`inner:` tag prefix is only valid on slice/array/map fields",
 		},
 		{
 			"dive_mod_on_int",
@@ -648,7 +626,7 @@ func TestCheckRuleApplicability_Structural(t *testing.T) {
 				ElemMods: []ModRule{{Name: "trim"}},
 				HintLen:  -1,
 			},
-			"`dive:` tag prefix is only valid on slice/array/map fields",
+			"`inner:` tag prefix is only valid on slice/array/map fields",
 		},
 		{
 			"dive_inner_on_int",
@@ -657,7 +635,7 @@ func TestCheckRuleApplicability_Structural(t *testing.T) {
 				InnerValidation: [][]ValidationRule{{{Name: "required"}}},
 				HintLen:         -1,
 			},
-			"`dive:` tag prefix is only valid on slice/array/map fields",
+			"`inner:` tag prefix is only valid on slice/array/map fields",
 		},
 		{
 			"dive_on_slice_int_with_ascii",
@@ -697,7 +675,7 @@ func TestCheckRuleApplicability_Structural(t *testing.T) {
 				GoName: "N", GoType: "int", JSONName: "n", Kind: KindInt,
 				HintLen: 5,
 			},
-			"`hintlen` is only valid on slice/map fields",
+			"`hint` is only valid on slice/map fields",
 		},
 		{
 			"hintlen_on_string",
@@ -705,7 +683,7 @@ func TestCheckRuleApplicability_Structural(t *testing.T) {
 				GoName: "S", GoType: "string", JSONName: "s", Kind: KindString,
 				HintLen: 5,
 			},
-			"`hintlen` is only valid on slice/map fields",
+			"`hint` is only valid on slice/map fields",
 		},
 		{
 			"hintlen_on_array",
@@ -714,7 +692,7 @@ func TestCheckRuleApplicability_Structural(t *testing.T) {
 				Kind: KindArray, ArrayLen: 3, ElemKind: KindInt, ElemType: "int",
 				HintLen: 5,
 			},
-			"`hintlen` is only valid on slice/map fields",
+			"`hint` is only valid on slice/map fields",
 		},
 		{
 			"hintlen_zero_on_bool",
@@ -722,7 +700,7 @@ func TestCheckRuleApplicability_Structural(t *testing.T) {
 				GoName: "B", GoType: "bool", JSONName: "b", Kind: KindBool,
 				HintLen: 0, // 0 is still "explicitly set", not "unset"
 			},
-			"`hintlen` is only valid on slice/map fields",
+			"`hint` is only valid on slice/map fields",
 		},
 		{
 			"hintlen_unset_on_string_ok",
@@ -809,18 +787,11 @@ func TestCheckRuleApplicability_Structural(t *testing.T) {
 	}
 }
 
-// TestCheckRuleApplicability_FieldNameInDiagnostic locks the
-// user-facing convention: every reject must reference the Go field
-// name so users can jump-to-definition / grep their source for the
-// declared identifier (not the JSON wire name, which may shadow other
-// identifiers or be `-` for ignored fields).
+// Every reject must reference the Go field name (not the JSON wire name) so
+// users can jump-to-definition / grep their source.
 func TestCheckRuleApplicability_FieldNameInDiagnostic(t *testing.T) {
 	t.Parallel()
-	// Message format: "<Struct>.<Field>: `<rule>` is inapplicable to
-	// <type>" — Go-qualified path, no `field` prefix, no `ggen rule`
-	// tag-source noise. With StructName="Box" + GoName="Score" the
-	// header reads `Box.Score: ...` for fast jump-to-definition in
-	// editors and grep-pability in CI logs.
+	// Format: "<Struct>.<Field>: `<rule>` is inapplicable to <type>".
 	fi := FieldInfo{
 		StructName: "Box", GoName: "Score", GoType: "int", JSONName: "score", Kind: KindInt,
 		Validation: []ValidationRule{{Name: "ascii"}},

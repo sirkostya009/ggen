@@ -4,10 +4,7 @@ import "math/rand"
 
 // --- complex payload: small handcrafted Node -------------------------------
 //
-// Used by the roundtrip / read / scan-decode test families to exercise the
-// dispatch surface (scalars + slices + maps + a couple of children) without
-// the noise of the multi-megabyte mega payload. Field values are fixed so
-// tests can assert on them directly.
+// Small fixed-value Node for the roundtrip / read / scan-decode families.
 
 var complexPayload = []byte(`{
     "id": 42,
@@ -22,7 +19,7 @@ var complexPayload = []byte(`{
     ]
 }`)
 
-// complexValue is the struct form of complexPayload, used by marshal benches.
+// complexValue is the struct form of complexPayload.
 var complexValue = Node{
 	ID:     42,
 	Name:   "hello world",
@@ -38,17 +35,13 @@ var complexValue = Node{
 
 // --- mega value: deep Node tree ≈ 1 MB ------------------------------------
 
-// megaValue is a pseudorandom, 6-level-deep tree of Node values built
-// once at init with a fixed seed so results are reproducible across runs.
-// Shape (scalars + slices + maps + recursive children) mirrors the kind
-// of input other JSON libs benchmark against. Used by stdcompat to catch
-// float-formatting / ordering drift that only shows up at scale.
+// megaValue is a pseudorandom 6-level-deep Node tree built at init with a
+// fixed seed. Used by stdcompat to catch drift that only shows up at scale.
 var megaValue Node
 
 func init() {
 	r := rand.New(rand.NewSource(1))
-	// Fanout per level chosen so the resulting payload lands near 1 MiB. Tune
-	// here if content/Node shape changes.
+	// Fanout per level lands the payload near 1 MiB.
 	megaValue = buildNode(r, 6, []int{4, 4, 4, 4, 3, 3, 0})
 }
 

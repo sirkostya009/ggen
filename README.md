@@ -125,9 +125,9 @@ package api
 //ggen:generate
 type User struct {
     ID    int      `json:"id"`
-    Name  string   `json:"name"   ggen:"required,minlen=1,maxlen=64"`
-    Email string   `json:"email"  ggen:"email" mod:"trim,lower"`
-    Tags  []string `json:"tags,omitempty" ggen:"dive:notempty"`
+    Name  string   `json:"name"   pipe:"required minlen=1 maxlen=64"`
+    Email string   `json:"email"  pipe:"trim lower email"`
+    Tags  []string `json:"tags,omitempty" pipe:"inner:notempty"`
 }
 ```
 
@@ -220,8 +220,9 @@ presence in payload (stdlib keeps them) — a blank payload gives you a blank
 slate while keeping capacity — and a JSON `null` aimed at a non-pointer
 scalar or struct is treated as a parse error by default — use a pointer if you
 need a nullable scalar, or opt the field into stdlib-style null handling with
-`json:",nullzero"` (decode `null` to the Go zero value); `-nullzero` /
-`//ggen:generate nullzero` turns it on for every value field at once.
+a `nullzero` decode variant in its `pipe:` tag (decode `null` to the Go zero
+value); `-nullzero` / `//ggen:generate nullzero` turns it on for every value
+field at once.
 
 ### runtime packages
 
@@ -264,7 +265,7 @@ unmarshal multierr`.
 | `-allowdups`     | `allowdups`       | accept duplicate JSON keys with first-wins semantics — the first occurrence is parsed, later ones are skipped via `scan.SkipValue` without being decoded (default: error on the second hit) |
 | `-novalidate`    | `novalidate`      | drop validation, required-field checks, and mods entirely — fastest decode path                                                                                                             |
 | `-ignoreunknown` | `ignoreunknown`   | silently drop unknown JSON keys (default: error). overridden by an inline catch-all map field                                                                                               |
-| `-nullzero`      | `nullzero`        | accept an explicit JSON `null` on every non-pointer value field, decoding it to the Go zero value (default: error). per-field `json:",nullzero"` opts in a single field                     |
+| `-nullzero`      | `nullzero`        | accept an explicit JSON `null` on every non-pointer value field, decoding it to the Go zero value (default: error). a per-field `nullzero` decode variant in `pipe:` opts in a single field |
 | `-nosortkeys`    | `nosortkeys`      | emit struct fields in declaration order (default: alphabetical by JSON name, compresses better)                                                                                             |
 | `-usenumber`     | `usenumber`       | decode numbers in `any` fields as `json.Number` instead of `float64`                                                                                                                        |
 | `-htmlescape`    | `htmlescape`      | escape `<`, `>`, `&` to `\uXXXX` for safe embedding in HTML (default: literal, matches `encoding/json` v2 — v2 dropped HTML escaping as a default)                                          |
@@ -286,55 +287,136 @@ output) — same as `encoding/json`. Extras worth knowing:
   exists (string scan, generated `DecodeFrom`), or via `encoding/json`
   unmarshal of the captured span otherwise. Overrides `-ignoreunknown`;
   on marshal the entries are spliced into the parent object.
-- `json:",nullzero"` — accept an explicit JSON `null` on this non-pointer
-  value field, decoding it to the Go zero value instead of erroring. No-op on
-  kinds that already handle `null` (pointer, slice, map, `[]byte`, `sql.Null*`,
-  raw message, `any`). Decode-only — no effect on marshal.
 - `format:X` — type-specific format hint (see _supported kinds_ below).
   Per jsonv2, this MUST be the last option in the tag.
 
-### `ggen:"..."` — validation rules
+### `pipe:"..."` — decode, transform, validate
 
-Validation rules run right after a value has been parsed and reshaped by
-mods.
-
-| rule                                  | error                                          | what it checks                                                                        |
-| ------------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `required`                            | `RequiredError`                                | field MUST be present in the JSON object                                              |
-| `optional`                            | —                                              | marker for explicit "this is optional"; doesn't actually do anything                  |
-| `notempty`                            | `NotEmptyError`                                | string non-empty / slice / map non-zero length                                        |
-| `len=N`, `minlen=N`, `maxlen=N`       | `LenError`, `MinLenError`, `MaxLenError`       | byte-length bounds for strings; element-count bounds for slices/maps/arrays           |
-| `runes=N`, `minrunes=N`, `maxrunes=N` | `RunesError`, `MinRunesError`, `MaxRunesError` | rune-count bounds (utf8 aware — `héllo` is 5 runes, 6 bytes)                          |
-| `gt=N`, `gte=N`, `lt=N`, `lte=N`      | `GTError`, `GTEError`, `LTError`, `LTEError`   | numeric comparison                                                                    |
-| `eq=X`, `neq=X`                       | `EqError`, `NeqError`                          | equality — accepts numeric or string operand depending on the field's kind            |
-| `multiple=N`                          | `MultipleError`                                | numeric — value must be a multiple of N                                               |
-| `oneof=a\|b\|c`                       | `OneOfError`                                   | value must equal one of the listed alternatives                                       |
-| `email`                               | `EmailError`                                   | loose email shape — single `@` between non-space runs, at least one `.` in the domain |
-| `url`                                 | `URLError`                                     | starts with `<scheme>://...` (alpha + digit/`+-.` scheme chars)                       |
-| `ascii`                               | `ASCIIError`                                   | every byte ≤ 0x7F                                                                     |
-| `printable`                           | `PrintableError`                               | every byte is printable ASCII (≥ 0x20 and not DEL)                                    |
-| `alphanum`                            | `AlphanumError`                                | only ASCII letters and digits                                                         |
-| `numeric`                             | `NumericError`                                 | only ASCII digits 0–9                                                                 |
-| `lower` / `upper`                     | `LowerError` / `UpperError`                    | no uppercase / no lowercase ASCII letters                                             |
-| `hexadecimal`                         | `HexadecimalError`                             | only `0–9`, `a–f`, `A–F`                                                              |
-| `starts=X`, `ends=X`, `contains=X`    | `StartsError`, `EndsError`, `ContainsError`    | substring tests on strings                                                            |
-| `@FuncName` / `@pkg.FuncName`         | `CustomError` (with `Cause`)                   | call your own `func(T) error`. See _custom rules_ below                               |
-
-#### `hintlen=N` — preallocation hint
-
-By default ggen preallocates slices and maps with a default cap of 4.
-Validations like `minlen` and `len` override the default cap. You can
-directly hint to preallocate a more specific number by supplying `hintlen`.
-
-`hintlen=10` would preallocate the map or slice by emitting something like:
+The `pipe:` tag is one ordered pipeline: presence, an optional decode stage
+(which JSON shapes the field accepts), then value steps (mods and validators)
+that run **in the order you write them**.
 
 ```go
-make([]int, 0, 10)
+Name  string `json:"name"  pipe:"required trim minlen=1 maxlen=50"`
+Email string `json:"email" pipe:"trim lower email"`
+Tags  []string `json:"tags" pipe:"optional inner:notempty minlen=1"`
 ```
 
-`hintlen=0` explicitly disables any preallocation.
+Steps are whitespace-separated. A value or message that contains spaces is
+single-quoted (`contains='foo bar'`). The intra-rule arg separator stays `|`
+(`oneof=a|b|c`, `clamp=0|100`).
 
-`hintlen=-N` is a generate-time error.
+#### presence — `required` / `optional`
+
+`required` asserts the JSON key is present (checked at object close →
+`RequiredError`); `optional` is an explicit "may be absent" marker. They are
+position-independent (write them first by convention). Presence is separate
+from the value: a `required` field whose value is `null` still errors unless
+you also accept `null` (see `nullzero` below). An absent key leaves the Go
+zero value.
+
+#### decode stage — JSON-shape variants (`/`)
+
+By default a field decodes from its type's natural JSON shape. To accept more
+than one shape, list `/`-separated variants; ggen peeks the incoming shape and
+routes to the one matching variant (one per JSON shape):
+
+- `.` — native decode of the field type (the plain value).
+- `nullzero` — accept JSON `null`, producing the Go zero value. This is how a
+  non-pointer value field opts into `null`; bare `nullzero` needs no `.`.
+- `@Conv` — a converter `func(W) T` / `func(W) (T, error)` / `func(W) (T, bool)`.
+  ggen scans the input type `W` natively (W decides the shape this variant
+  claims), then calls your func. `W` may be a primitive **or a ggen-decodable
+  struct** — ggen builds it with its own decoder, then converts.
+
+```go
+// number natively, OR a string-encoded number; then range-checked
+Age   int `json:"age"   pipe:". / @AtoiStrict gte=0 lte=150"`   // AtoiStrict(string)(int,error)
+// number natively, OR a {amount,...} object via the Money decoder
+Price int `json:"price" pipe:". / @FromMoney gte=0"`            // FromMoney(Money) int
+// null→0, a number, or a string
+Opt   int `json:"opt"   pipe:"nullzero / . / @AtoiStrict"`
+```
+
+A converter needs a signal — `/`, a leading `.` (`./@Conv`), or it's read as a
+value step (below). Variants must claim distinct shapes (one object-rooted, one
+array-rooted, etc.) or codegen errors. Encode is unaffected: the field always
+marshals as its native type.
+
+#### value steps — validators + mods, in order
+
+Everything after the decode stage operates on the value. **Mods (transforms)
+and validators run in declared order**, so `lte=10 @Double` validates the raw
+value before doubling it, while `@Double lte=10` doubles first.
+
+| validators                            | error                                          | checks                                                                        |
+| ------------------------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------- |
+| `notempty`                            | `NotEmptyError`                                | string non-empty / slice / map non-zero length                                |
+| `len=N`, `minlen=N`, `maxlen=N`       | `LenError`, `MinLenError`, `MaxLenError`       | byte-length / element-count bounds                                            |
+| `runes=N`, `minrunes=N`, `maxrunes=N` | `RunesError`, `MinRunesError`, `MaxRunesError` | rune-count bounds (utf8 aware)                                                 |
+| `gt=N`, `gte=N`, `lt=N`, `lte=N`      | `GTError`, `GTEError`, `LTError`, `LTEError`   | numeric comparison                                                            |
+| `eq=X`, `neq=X`                       | `EqError`, `NeqError`                          | equality (numeric or string operand)                                          |
+| `multiple=N`                          | `MultipleError`                                | numeric — multiple of N                                                       |
+| `oneof=a\|b\|c`                       | `OneOfError`                                   | one of the listed alternatives                                                |
+| `email`, `url`, `ascii`, `printable`, `alphanum`, `numeric`, `lower`, `upper`, `hexadecimal` | `EmailError`, … | string-shape predicates                                  |
+| `starts=X`, `ends=X`, `contains=X`    | `StartsError`, `EndsError`, `ContainsError`    | substring tests on strings                                                    |
+
+| mods                                                                       | target  |
+| -------------------------------------------------------------------------- | ------- |
+| `trim`, `lower`, `upper`, `trimleft=X`, `trimright=X`, `replace=old\|new`  | string  |
+| `clamp=lo\|hi` (either side may be empty: `clamp=0\|`, `clamp=\|100`)      | numeric |
+
+#### `inner:` / `keys:` — container levels
+
+`inner:` scopes steps to one container level down (per element of a
+slice/array, per value of a map); `keys:` scopes to map keys. A bare prefix
+takes exactly one step (`inner:trim`); group several in parentheses
+(`inner:(trim maxlen=20)`); nest the groups to go deeper
+(`inner:(minlen=1 inner:(gte=0 lte=100))`). Steps written outside any group
+apply to the whole container.
+
+```go
+Tags []string `json:"tags" pipe:"inner:(trim maxlen=20) maxlen=100"`
+//                                 per-element trim+bound | whole-slice cap
+Lookup map[string]int `json:"lookup" pipe:"keys:minrunes=2 inner:gte=0"`
+```
+
+#### custom funcs — `@FuncName` / `@pkg.FuncName`
+
+ggen looks up the function at codegen and classifies it by signature — no
+runtime registry, no `any` boxing, and the Go compiler catches mismatches:
+
+| signature              | role                                                              |
+| ---------------------- | ----------------------------------------------------------------- |
+| `func(T) error`        | validator → `CustomError{Cause}`                                  |
+| `func(T) bool`         | validator → `PredicateError` (false = fail; message-capable)      |
+| `func(T) T`            | mod (pure transform)                                              |
+| `func(T) (T, error)`   | mod (fallible; non-nil error → parse error, even under multierr)  |
+| `func(T) (T, bool)`    | mod (fallible; false → `ModError` parse error; message-capable)   |
+| `func(W) T` (W ≠ T)    | converter (decode-stage variant only — see above)                |
+
+`func(bool) bool` is rejected (ambiguous — use `func(bool) error`). The bool
+forms take an inline message: `@MustBeEven:'value must be even'`.
+
+```go
+//ggen:generate
+type Box struct {
+    N int `json:"n" pipe:"@EvenOnly"`        // func(int) error → validator
+    M int `json:"m" pipe:"@MustBeEven:'must be even'"` // func(int) bool
+}
+func EvenOnly(n int) error { if n%2 != 0 { return errors.New("must be even") }; return nil }
+func MustBeEven(n int) bool { return n%2 == 0 }
+```
+
+Cross-package references (`@pkg.FuncName`) resolve through the source file's
+import block — file-scoped aliases and blank imports (`_ "path"`) both work.
+
+### `hint:"..."` — preallocation
+
+`hint:"N"` preallocates a slice/map with cap N (`make([]T, 0, N)`), overriding
+the default cap of 4 and any `minlen`-derived cap. Per-level via `inner:`:
+`hint:"32 inner:8"` sizes the outer cap 32, inner rows cap 8. `hint:"0"`
+disables preallocation; a negative hint is a generate-time error.
 
 #### inspecting errors
 
@@ -378,88 +460,6 @@ Validation errors are NOT wrapped: their typed pointers (`*validation.MinLenErro
 etc.) remain directly reachable via `errors.As`. `ParseError.Error()` only
 prints the `parse error at <field> (pos <n>)` prefix — call `errors.Unwrap`
 to get the underlying message.
-
-#### custom rules
-
-`@FuncName` references a function that ggen looks up at codegen. The
-signature MUST be `func(T) error` where `T` is the field's exact Go type
-(including `*T` for pointer fields). There is no runtime registry, no
-`any` boxing — the generator emits a direct call and the Go compiler
-catches mistakes. A non-nil return wraps as
-`validation.CustomError{Name: "@FuncName", Cause: err}`.
-
-```go
-//ggen:generate
-type Box struct {
-    N int `json:"n" ggen:"@EvenOnly"`
-}
-
-func EvenOnly(n int) error {
-    if n%2 != 0 {
-        return errors.New("must be even integer")
-    }
-    return nil
-}
-```
-
-For cross-package references, write `@pkg.FuncName`. The resolver looks
-through the source file's import block, so file-scoped aliases
-(`import alias "path"`) work, and so do blank imports
-(`_ "path"`) — useful when you pull in a library purely so ggen can
-resolve a name. The package's declared name is honored when it differs
-from its directory basename.
-
-#### `dive:` and `keys:`
-
-You can apply validation to containers' inner elements using either
-`dive:` or `keys:`.
-
-`keys:` only applies to map keys, while `dive:` applies to slices, arrays
-and maps as well. Same applicability rules apply.
-
-#### example
-
-```go
-Aliases map[string][]Email `json:"aliases" ggen:"keys:minrunes=2,maxrunes=32,minlen=1,dive:maxlen=10,dive:@CheckEmail"`
-```
-
-Reads as: keys must have character (rune) count from 2 to 32, the map
-itself must have at least one entry, each value slice may be at most 10
-elements and each `Email` is checked by a user-defined `CheckEmail` func.
-
-### `mod:"..."` — input transforms
-
-Mods run after the value is decoded but before validation, so validation
-sees the normalized value. The same `dive:` and `keys:` prefixes apply.
-
-| target  | mods                                                                      |
-| ------- | ------------------------------------------------------------------------- |
-| string  | `trim`, `lower`, `upper`, `trimleft=X`, `trimright=X`, `replace=old\|new` |
-| numeric | `clamp=lo\|hi` (either side can be empty: `clamp=0\|`, `clamp=\|100`)     |
-| custom  | `@FuncName` / `@pkg.FuncName`                                             |
-
-Unlike custom validations, mods don't have to return an error, so you have two
-options of what to provide:
-
-- pure functions: `func(T) T`, emitted as `field = Func(field)`
-- "errorable" functions: `func(T) (T, error)`. A non-nil error propagates
-  immediately as a parse error (early return), even in `-multierr` mode -
-  validators never get to run.
-
-```go
-//ggen:generate
-type Profile struct {
-    Email string `json:"email" mod:"@Squash,lower"`
-}
-
-func Squash(s string) string { return strings.ReplaceAll(s, " ", "") }
-```
-
-The same cross-package lookup rules apply as for custom validators.
-
-> [!NOTE]
-> Using some string mods like `replace` may copy the underlying string,
-> resulting in an allocation. Same can occur with custom mods as well.
 
 ## supported kinds
 
@@ -534,10 +534,10 @@ type LocalUUID uuid.UUID  // delegates to uuid.UUID's TextMarshaler
 
 //ggen:generate
 type Comment struct {
-    ID     UserID     `json:"id"     ggen:"gte=1"`                                   // numeric alias, no quoting; gte runs against int
-    Author string     `json:"author" ggen:"required,minlen=1" mod:"trim"`            // plain string, fast path
-    Body   HtmlString `json:"body"   ggen:"required,maxlen=4096" mod:"trim,lower"`   // \uXXXX-escaped via the alias; mods cast through string
-    Tags   Tags       `json:"tags"   ggen:"dive:notempty"`                           // dive runs against each element
+    ID     UserID     `json:"id"     pipe:"gte=1"`                                   // numeric alias, no quoting; gte runs against int
+    Author string     `json:"author" pipe:"required trim minlen=1"`            // plain string, fast path
+    Body   HtmlString `json:"body"   pipe:"required trim lower maxlen=4096"`   // \uXXXX-escaped via the alias; mods cast through string
+    Tags   Tags       `json:"tags"   pipe:"inner:notempty"`                           // inner: runs against each element
 }
 ```
 
@@ -589,8 +589,8 @@ parsing them in full as well as parsing potentially slower network streams.
 ```go
 //ggen:generate
 type CreateUser struct {
-    Email string `json:"email" ggen:"required,email"`
-    Bio   string `json:"bio"   ggen:"maxlen=4096"`
+    Email string `json:"email" pipe:"required email"`
+    Bio   string `json:"bio"   pipe:"maxlen=4096"`
 }
 
 var bufPool = sync.Pool{New: func() any {
@@ -624,13 +624,13 @@ func handler(w http.ResponseWriter, r *http.Request) {
 ```go
 //ggen:generate
 type Order struct {
-    Items []Item `json:"items" ggen:"required,minlen=1,maxlen=100,dive:required"`
+    Items []Item `json:"items" pipe:"required minlen=1 maxlen=100 inner:required"`
 }
 
 //ggen:generate
 type Item struct {
-    SKU string `json:"sku" ggen:"required,len=12,alphanum,upper"`
-    Qty int    `json:"qty" ggen:"required,gte=1,lte=999"`
+    SKU string `json:"sku" pipe:"required len=12 alphanum upper"`
+    Qty int    `json:"qty" pipe:"required gte=1 lte=999"`
 }
 ```
 

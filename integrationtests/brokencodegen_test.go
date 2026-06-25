@@ -1,23 +1,13 @@
 //go:build goexperiment.jsonv2 && ggen_brokencodegen
 
-// Test gaps for combinations that currently produce broken generator output.
-// Builds only with `-tags ggen_brokencodegen` so the default test run
-// stays green; tagging surfaces the codegen issues:
+// Pins combinations that currently produce broken generator output. Behind
+// `-tags ggen_brokencodegen` so the default test run stays green; tagging
+// reproduces the codegen issues and serves as a regression suite once fixed:
 //
 //   - Pointer-to-exotic types (*big.Int, *uuid.UUID, *netip.Addr, …):
-//     the generator emits `var v T; ... result.X = &v` but the inner
-//     decode block reuses the outer `v` name with a shadow `var v string`
-//     and reassigns via `v, err = netip.ParseAddr(v)` — wrong type.
+//     the inner decode shadows the outer `v` with a wrong-typed `var v string`.
 //   - Slice/map elements of the same exotic kinds — same shadow bug.
-//   - `var v big.Int` / `var v uuid.UUID` etc. emitted without the
-//     corresponding `import "math/big"` / `"github.com/google/uuid"` in
-//     the generated file's preamble.
-//
-// File this in a build-tagged region so:
-//   1. CI's default `go test ./...` doesn't break for unrelated work.
-//   2. `go test -tags ggen_brokencodegen ./...` reproduces the bugs.
-//   3. Source structs serve as a regression suite once the codegen fix
-//      lands — flip the tag and re-run.
+//   - `var v big.Int` etc. emitted without the corresponding import.
 
 package integrationtests
 
@@ -42,9 +32,8 @@ import (
 
 // --- Pointer-to-exotic types -----------------------------------------------
 
-// PtrExoticStruct holds pointer-wrapped exotic types. nil → JSON null, non-nil
-// dereferences cleanly through the exotic encoder/decoder. Each entry tests
-// the codegen's "if x == nil { emit null }" branch for a different exotic.
+// PtrExoticStruct holds pointer-wrapped exotic types — one nil-branch test
+// per exotic kind.
 //
 //ggen:generate
 type PtrExoticStruct struct {
@@ -154,9 +143,7 @@ func TestPtrExotic_JSONSize_NoRealloc(t *testing.T) {
 
 // --- Slice-of-exotic --------------------------------------------------------
 
-// SliceExoticStruct exercises slice element decoding for exotic types.
-// Each element kind hits its own per-element codegen path inside the slice
-// emitter — covers slot-write semantics for non-primitive element types.
+// SliceExoticStruct exercises slice-element decoding for exotic types.
 //
 //ggen:generate
 type SliceExoticStruct struct {
@@ -237,9 +224,7 @@ func TestSliceExotic_JSONSize_NoRealloc(t *testing.T) {
 
 // --- Map-of-exotic ----------------------------------------------------------
 
-// MapExoticStruct exercises map-value decoding for exotic types. The codegen
-// emits per-value-kind dispatch inside the map element handler — these
-// combos weren't reached by the existing primitive/struct-value tests.
+// MapExoticStruct exercises map-value decoding for exotic types.
 //
 //ggen:generate
 type MapExoticStruct struct {
@@ -311,9 +296,7 @@ func TestMapExotic_JSONSize_NoRealloc(t *testing.T) {
 // --- Fixed-array of exotic --------------------------------------------------
 
 // TupleExoticStruct exercises the strict [N]T tuple emitter for exotic
-// element kinds. Previously only [N]primitive ([N]int, [N]float64) and
-// [N]struct were covered; these combos cross the array-emitter into
-// territory where the per-element decode path is not a simple scan call.
+// element kinds (non-trivial per-element decode).
 //
 //ggen:generate
 type TupleExoticStruct struct {
@@ -389,10 +372,8 @@ func TestTupleExotic_JSONSize_NoRealloc(t *testing.T) {
 
 // --- Pointer-to-container --------------------------------------------------
 
-// PtrContainerStruct exercises *[]T / *map[K]V combos. Generator emits
-// `result.OptInts = result.OptInts[:0]` / `clear(result.OptMap)` —
-// invalid because OptInts is `*[]int`, not `[]int`. Codegen needs to
-// dereference (or just `result.OptInts = nil` then `*result.OptInts = ...`).
+// PtrContainerStruct exercises *[]T / *map[K]V combos — codegen emits the
+// container reset against the pointer instead of dereferencing it.
 //
 //ggen:generate
 type PtrContainerStruct struct {
@@ -443,9 +424,8 @@ func TestPtrContainer_PopulatedRoundtrip(t *testing.T) {
 
 // --- *T + json:",string" combo ---------------------------------------------
 
-// PtrStringTagStruct exercises `*int` with `,string`. The generator
-// emits `result.PtrI = *int(n)` (invalid Go) — the deref operator was
-// meant to be a type cast.
+// PtrStringTagStruct exercises *int with ,string — codegen emits
+// `result.PtrI = *int(n)` (the deref was meant to be a cast).
 //
 //ggen:generate
 type PtrStringTagStruct struct {
@@ -471,9 +451,7 @@ func TestPtrStringTag_roundtrip(t *testing.T) {
 	}
 }
 
-// FuzzPtrExoticNoPanic: random bytes through PtrExoticStruct exercise
-// the nil/non-nil dispatch for every exotic pointer kind. Panic-free
-// invariant; semantic checks live in the per-feature tests above.
+// FuzzPtrExoticNoPanic: random bytes through PtrExoticStruct stay panic-free.
 func FuzzPtrExoticNoPanic(f *testing.F) {
 	for _, s := range [][]byte{
 		[]byte(`{"big":null,"flt":null,"rat":null,"uid":null,"raw":null,"dur":null,"adr":null,"pfx":null,"url":null}`),
