@@ -18,6 +18,7 @@ func naiveHasCtrl(b []byte) bool {
 // high-bit (UTF-8) bytes that must NOT false-positive, and checks the SWAR
 // path agrees with the naive byte loop bit-for-bit.
 func TestHasCtrlByte_DifferentialExhaustive(t *testing.T) {
+	t.Parallel()
 	// Base spans cover lengths around the 8-byte word boundary (0..40) so
 	// the SWAR loop, the scalar tail, and their seam are all exercised.
 	for n := 0; n <= 40; n++ {
@@ -51,6 +52,7 @@ func TestHasCtrlByte_DifferentialExhaustive(t *testing.T) {
 // TestHasCtrlByte_Boundary pins 0x1f (control) vs 0x20 (space, the lowest
 // legal byte) at the exact lane boundary.
 func TestHasCtrlByte_Boundary(t *testing.T) {
+	t.Parallel()
 	for _, n := range []int{7, 8, 9, 15, 16, 17} {
 		clean := make([]byte, n)
 		for i := range clean {

@@ -42,6 +42,7 @@ type Derived struct {
 }
 
 func TestMap_primitiveRoundtrip(t *testing.T) {
+	t.Parallel()
 	in := MapStruct{
 		Counts: map[string]int{"a": 1, "b": 2, "c": 3},
 	}
@@ -58,6 +59,7 @@ func TestMap_primitiveRoundtrip(t *testing.T) {
 }
 
 func TestMap_structValueRoundtrip(t *testing.T) {
+	t.Parallel()
 	in := MapStruct{
 		Addresses: map[string]Address{
 			"home": {Street: "Main 1", City: "Lviv", ZipCode: "79000"},
@@ -74,6 +76,7 @@ func TestMap_structValueRoundtrip(t *testing.T) {
 }
 
 func TestMap_diveMod(t *testing.T) {
+	t.Parallel()
 	in := []byte(`{"labels":{"en":"  HELLO ","es":" HOLA "}}`)
 	got, _, err := MapStruct{}.DecodeFrom(in)
 	if err != nil {
@@ -85,6 +88,7 @@ func TestMap_diveMod(t *testing.T) {
 }
 
 func TestMap_maxlenViolation(t *testing.T) {
+	t.Parallel()
 	// Counts maxlen=10; 11 entries must fail.
 	const alphabet = "abcdefghijk" // 11 letters
 	b := strings.Builder{}
@@ -109,6 +113,7 @@ func TestMap_maxlenViolation(t *testing.T) {
 }
 
 func TestMap_diveValueValidation_intOOB(t *testing.T) {
+	t.Parallel()
 	in := []byte(`{"counts":{"a":50,"b":200}}`)
 	_, _, err := MapDiveStruct{}.DecodeFrom(in)
 	if err == nil {
@@ -120,6 +125,7 @@ func TestMap_diveValueValidation_intOOB(t *testing.T) {
 }
 
 func TestMap_diveValueValidation_stringTooLong(t *testing.T) {
+	t.Parallel()
 	in := []byte(`{"names":{"a":"ok","b":"toolong"}}`)
 	_, _, err := MapDiveStruct{}.DecodeFrom(in)
 	if err == nil {
@@ -128,6 +134,7 @@ func TestMap_diveValueValidation_stringTooLong(t *testing.T) {
 }
 
 func TestMap_diveMod_numericClamp(t *testing.T) {
+	t.Parallel()
 	in := []byte(`{"clamped":{"a":-5,"b":50,"c":250}}`)
 	got, _, err := MapDiveStruct{}.DecodeFrom(in)
 	if err != nil {
@@ -139,6 +146,7 @@ func TestMap_diveMod_numericClamp(t *testing.T) {
 }
 
 func TestMap_diveValueValidation_pass(t *testing.T) {
+	t.Parallel()
 	in := []byte(`{"counts":{"a":50,"b":99},"names":{"x":"hi"}}`)
 	got, _, err := MapDiveStruct{}.DecodeFrom(in)
 	if err != nil {
@@ -150,6 +158,7 @@ func TestMap_diveValueValidation_pass(t *testing.T) {
 }
 
 func TestEmbedded_promotedFields(t *testing.T) {
+	t.Parallel()
 	in := Derived{
 		Base: Base{ID: "abc", Meta: "info"},
 		Name: "alice",
@@ -170,6 +179,7 @@ func TestEmbedded_promotedFields(t *testing.T) {
 }
 
 func TestEmbedded_promotedRequired(t *testing.T) {
+	t.Parallel()
 	// Base.ID is required; missing must fail.
 	in := []byte(`{"name":"bob"}`)
 	_, _, err := Derived{}.DecodeFrom(in)

@@ -35,6 +35,7 @@ type AliasFloat64 float64
 type AliasBool bool
 
 func TestAlias_String_Roundtrip(t *testing.T) {
+	t.Parallel()
 	in := AliasString("hello")
 	out, err := encode.Marshal(in)
 	if err != nil {
@@ -54,6 +55,7 @@ func TestAlias_String_Roundtrip(t *testing.T) {
 
 // default mode emits <>& literally, matching jsonv2.
 func TestAlias_String_DefaultIsLiteral(t *testing.T) {
+	t.Parallel()
 	out, _ := encode.Marshal(AliasString(`<a href="x">tom & jerry</a>`))
 	for _, lit := range []string{"<", ">", "&"} {
 		if !strings.Contains(string(out), lit) {
@@ -64,6 +66,7 @@ func TestAlias_String_DefaultIsLiteral(t *testing.T) {
 
 // htmlescape on a string alias flips to the v1-style \uXXXX escaper.
 func TestAlias_String_HtmlescapeOptIn(t *testing.T) {
+	t.Parallel()
 	out, _ := encode.Marshal(AliasHTML(`<a href="x">tom & jerry</a>`))
 	for _, lit := range []string{"<", ">", "&"} {
 		if strings.Contains(string(out), lit) {
@@ -78,6 +81,7 @@ func TestAlias_String_HtmlescapeOptIn(t *testing.T) {
 }
 
 func TestAlias_Int_Roundtrip(t *testing.T) {
+	t.Parallel()
 	in := AliasInt(-42)
 	out, err := encode.Marshal(in)
 	if err != nil {
@@ -96,6 +100,7 @@ func TestAlias_Int_Roundtrip(t *testing.T) {
 }
 
 func TestAlias_Uint64_Roundtrip(t *testing.T) {
+	t.Parallel()
 	in := AliasUint64(18446744073709551615) // max uint64
 	out, _ := encode.Marshal(in)
 	got, _, err := AliasUint64(0).DecodeFrom(out)
@@ -108,6 +113,7 @@ func TestAlias_Uint64_Roundtrip(t *testing.T) {
 }
 
 func TestAlias_Float64_Roundtrip(t *testing.T) {
+	t.Parallel()
 	in := AliasFloat64(3.14159)
 	out, _ := encode.Marshal(in)
 	got, _, err := AliasFloat64(0).DecodeFrom(out)
@@ -120,6 +126,7 @@ func TestAlias_Float64_Roundtrip(t *testing.T) {
 }
 
 func TestAlias_Bool_Roundtrip(t *testing.T) {
+	t.Parallel()
 	for _, in := range []AliasBool{true, false} {
 		out, _ := encode.Marshal(in)
 		got, _, err := AliasBool(false).DecodeFrom(out)
@@ -134,6 +141,7 @@ func TestAlias_Bool_Roundtrip(t *testing.T) {
 
 // a JSON number into a string alias must error, not silently coerce.
 func TestAlias_String_RejectsNonString(t *testing.T) {
+	t.Parallel()
 	if _, _, err := (AliasString("")).DecodeFrom([]byte("42")); err == nil {
 		t.Error("expected scan error on number → string-alias")
 	}
@@ -142,6 +150,7 @@ func TestAlias_String_RejectsNonString(t *testing.T) {
 // TestAlias_String_ZeroCopy: the alias cast doesn't copy — mutating the
 // input buffer after decode shows through the aliased value.
 func TestAlias_String_ZeroCopy(t *testing.T) {
+	t.Parallel()
 	in := []byte(`"alpha"`)
 	got, _, err := AliasString("").DecodeFrom(in)
 	if err != nil {
@@ -176,6 +185,7 @@ type PlainAlias PlainInner
 
 // alias of a method-less struct — introspected fields, natural JSON object.
 func TestAlias_StructIntrospect_NoMethods(t *testing.T) {
+	t.Parallel()
 	in := PlainAlias{Title: "hello", Count: 42}
 	out, err := encode.Marshal(in)
 	if err != nil {
@@ -221,6 +231,7 @@ type CrossPkgTaggedAlias thirdparty.Tagged
 
 // introspection wins over Text methods — field-driven object, not "name#tag".
 func TestAlias_StructIntrospect_CrossPkg(t *testing.T) {
+	t.Parallel()
 	in := CrossPkgTaggedAlias(thirdparty.Tagged{Name: "alice", Tag: "admin"})
 	out, err := encode.Marshal(in)
 	if err != nil {
@@ -240,6 +251,7 @@ func TestAlias_StructIntrospect_CrossPkg(t *testing.T) {
 
 // introspection wins over the JSON methods — uppercase keys (no json tags).
 func TestAlias_StructIntrospect_SamePkg(t *testing.T) {
+	t.Parallel()
 	in := SamePkgAlias(SamePkgInner{X: 42, Y: "hello"})
 	out, err := encode.Marshal(in)
 	if err != nil {
@@ -280,6 +292,7 @@ type OpaqueAlias OpaqueWithMethods
 
 // no exported fields → JSON/Text method delegation.
 func TestAlias_StructDelegation_OpaqueFallback(t *testing.T) {
+	t.Parallel()
 	in := OpaqueAlias(OpaqueWithMethods{hidden: "secret"})
 	out, err := encode.Marshal(in)
 	if err != nil {
@@ -308,6 +321,7 @@ type AliasTuple [3]int
 
 // slice alias — JSON-array wire shape.
 func TestAlias_Slice_Roundtrip(t *testing.T) {
+	t.Parallel()
 	in := AliasTags{"go", "rust", "zig"}
 	out, err := encode.Marshal(in)
 	if err != nil {
@@ -327,6 +341,7 @@ func TestAlias_Slice_Roundtrip(t *testing.T) {
 
 // map alias — JSON object wire shape.
 func TestAlias_Map_Roundtrip(t *testing.T) {
+	t.Parallel()
 	in := AliasLookup{"alpha": 1, "beta": 2}
 	out, err := encode.Marshal(in)
 	if err != nil {
@@ -343,6 +358,7 @@ func TestAlias_Map_Roundtrip(t *testing.T) {
 
 // array alias — JSON tuple with strict element count.
 func TestAlias_Array_Roundtrip(t *testing.T) {
+	t.Parallel()
 	in := AliasTuple{10, 20, 30}
 	out, err := encode.Marshal(in)
 	if err != nil {
@@ -362,6 +378,7 @@ func TestAlias_Array_Roundtrip(t *testing.T) {
 
 // wrong element count into an array alias errors with LenError.
 func TestAlias_Array_StrictLen(t *testing.T) {
+	t.Parallel()
 	if _, _, err := (AliasTuple{}).DecodeFrom([]byte(`[1,2]`)); err == nil {
 		t.Error("expected LenError on short tuple")
 	}
@@ -399,6 +416,7 @@ type AliasFieldExample struct {
 }
 
 func TestAlias_Field_ValidationAndMods(t *testing.T) {
+	t.Parallel()
 	// trim + lower run before validation; the value the validator sees
 	// is the post-mod one.
 	got, _, err := AliasFieldExample{}.DecodeFrom([]byte(`{"body":"  HI  ","count":5}`))

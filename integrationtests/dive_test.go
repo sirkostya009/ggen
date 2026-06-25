@@ -32,6 +32,7 @@ func EvenOnly(n int) error {
 }
 
 func TestDive_valid(t *testing.T) {
+	t.Parallel()
 	input := `{"tags":["go","rust"],"title":"héllo","scores":[10,50,100]}`
 	got, _, err := (DiveStruct{}).DecodeFrom([]byte(input))
 	if err != nil {
@@ -46,6 +47,7 @@ func TestDive_valid(t *testing.T) {
 }
 
 func TestDive_tagTooShort(t *testing.T) {
+	t.Parallel()
 	// "x" is 1 rune, below minrunes=2 → per-element error
 	input := `{"tags":["ok","x"],"title":"hi","scores":[]}`
 	_, _, err := (DiveStruct{}).DecodeFrom([]byte(input))
@@ -58,6 +60,7 @@ func TestDive_tagTooShort(t *testing.T) {
 }
 
 func TestDive_scoreOutOfRange(t *testing.T) {
+	t.Parallel()
 	// 101 violates lte=100 per element
 	input := `{"tags":["ok"],"title":"hi","scores":[50,101]}`
 	_, _, err := (DiveStruct{}).DecodeFrom([]byte(input))
@@ -70,6 +73,7 @@ func TestDive_scoreOutOfRange(t *testing.T) {
 }
 
 func TestRuneCount_byteVsRune(t *testing.T) {
+	t.Parallel()
 	// "héllo" is 5 runes but 6 bytes. With rune-count bounds (1..5), it passes.
 	input := `{"tags":["ok"],"title":"héllo","scores":[]}`
 	if _, _, err := (DiveStruct{}).DecodeFrom([]byte(input)); err != nil {
@@ -84,6 +88,7 @@ func TestRuneCount_byteVsRune(t *testing.T) {
 }
 
 func TestTags_sliceLengthVsElement(t *testing.T) {
+	t.Parallel()
 	// 4 tags > maxlen=3 → slice-level error
 	input := `{"tags":["aa","bb","cc","dd"],"title":"hi","scores":[]}`
 	_, _, err := (DiveStruct{}).DecodeFrom([]byte(input))
@@ -142,6 +147,7 @@ func PointerCheck(p *int) error {
 
 // inner:@NotBlank rejects a blank slice element.
 func TestCustomDive_sliceValidator(t *testing.T) {
+	t.Parallel()
 	in := []byte(`{"tags":["ok","   "],"trim":[],"lookup":{},"mixed":{},"ptr":null}`)
 	_, _, err := (CustomDiveStruct{}).DecodeFrom(in)
 	if err == nil {
@@ -154,6 +160,7 @@ func TestCustomDive_sliceValidator(t *testing.T) {
 
 // inner:@TrimSpace runs on each slice element.
 func TestCustomDive_sliceMod(t *testing.T) {
+	t.Parallel()
 	in := []byte(`{"tags":["ok"],"trim":["  hi  ","  bye"],"lookup":{},"mixed":{},"ptr":null}`)
 	got, _, err := (CustomDiveStruct{}).DecodeFrom(in)
 	if err != nil {
@@ -169,6 +176,7 @@ func TestCustomDive_sliceMod(t *testing.T) {
 
 // keys:@KeyShape rejects a key failing the predicate.
 func TestCustomDive_keysValidator(t *testing.T) {
+	t.Parallel()
 	in := []byte(`{"tags":["ok"],"trim":[],"lookup":{"BAD!":1},"mixed":{},"ptr":null}`)
 	_, _, err := (CustomDiveStruct{}).DecodeFrom(in)
 	if err == nil {
@@ -181,6 +189,7 @@ func TestCustomDive_keysValidator(t *testing.T) {
 
 // keys:@LowerKey lowercases each key before insertion.
 func TestCustomDive_keysMod(t *testing.T) {
+	t.Parallel()
 	in := []byte(`{"tags":["ok"],"trim":[],"lookup":{},"mixed":{"FOO":1,"Bar":2},"ptr":null}`)
 	got, _, err := (CustomDiveStruct{}).DecodeFrom(in)
 	if err != nil {
@@ -196,6 +205,7 @@ func TestCustomDive_keysMod(t *testing.T) {
 
 // @PointerCheck is func(*int) error — resolver respects the exact *T type.
 func TestCustomDive_pointerField(t *testing.T) {
+	t.Parallel()
 	// Negative value rejected.
 	bad := []byte(`{"tags":["ok"],"trim":[],"lookup":{},"mixed":{},"ptr":-5}`)
 	if _, _, err := (CustomDiveStruct{}).DecodeFrom(bad); err == nil {

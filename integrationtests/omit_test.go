@@ -24,6 +24,7 @@ type OmitStruct struct {
 }
 
 func TestOmitEmpty_marshal(t *testing.T) {
+	t.Parallel()
 	s := OmitStruct{Name: "alice", Score: 0, StrCount: 42}
 	out, _ := encode.MarshalString(s)
 	if strings.Contains(out, "bio") {
@@ -38,6 +39,7 @@ func TestOmitEmpty_marshal(t *testing.T) {
 }
 
 func TestOmitEmpty_present(t *testing.T) {
+	t.Parallel()
 	s := OmitStruct{Name: "a", Bio: "hello", Tags: []string{"x"}, StrCount: 1}
 	out, _ := encode.MarshalString(s)
 	if !strings.Contains(out, `"bio":"hello"`) {
@@ -49,6 +51,7 @@ func TestOmitEmpty_present(t *testing.T) {
 }
 
 func TestOmitZero_marshal(t *testing.T) {
+	t.Parallel()
 	s := OmitStruct{Name: "x", Score: 0, StrCount: 1}
 	out, _ := encode.MarshalString(s)
 	if strings.Contains(out, "score") {
@@ -63,6 +66,7 @@ func TestOmitZero_marshal(t *testing.T) {
 }
 
 func TestStringTag_marshal(t *testing.T) {
+	t.Parallel()
 	s := OmitStruct{Name: "x", StrCount: 42}
 	out, _ := encode.MarshalString(s)
 	if !strings.Contains(out, `"count":"42"`) {
@@ -71,6 +75,7 @@ func TestStringTag_marshal(t *testing.T) {
 }
 
 func TestStringTag_unmarshal(t *testing.T) {
+	t.Parallel()
 	input := []byte(`{"name":"x","count":"99"}`)
 	got, _, err := OmitStruct{}.DecodeFrom(input)
 	if err != nil {
@@ -82,6 +87,7 @@ func TestStringTag_unmarshal(t *testing.T) {
 }
 
 func TestStringTag_unmarshalBadString(t *testing.T) {
+	t.Parallel()
 	input := []byte(`{"name":"x","count":"abc"}`)
 	if _, _, err := (OmitStruct{}).DecodeFrom(input); err == nil {
 		t.Error("expected parse error for non-numeric string")
@@ -89,6 +95,7 @@ func TestStringTag_unmarshalBadString(t *testing.T) {
 }
 
 func TestStringTag_unmarshalExpectsString(t *testing.T) {
+	t.Parallel()
 	input := []byte(`{"name":"x","count":99}`)
 	if _, _, err := (OmitStruct{}).DecodeFrom(input); err == nil {
 		t.Error("expected error when count is bare number instead of string-wrapped")
@@ -96,6 +103,7 @@ func TestStringTag_unmarshalExpectsString(t *testing.T) {
 }
 
 func TestOmit_roundtrip(t *testing.T) {
+	t.Parallel()
 	orig := OmitStruct{Name: "alice", Bio: "dev", Score: 9.5, StrCount: 42, Tags: []string{"go", "rust"}}
 	out, _ := encode.Marshal(orig)
 	got, _, err := OmitStruct{}.DecodeFrom(out)
@@ -130,6 +138,7 @@ type StringTagStruct struct {
 }
 
 func TestStringTag_AllVariants_marshal(t *testing.T) {
+	t.Parallel()
 	in := StringTagStruct{
 		I8: -8, I16: 16, I32: -32, I64: 64,
 		U8: 8, U16: 16, U32: 32, U64: 64,
@@ -151,6 +160,7 @@ func TestStringTag_AllVariants_marshal(t *testing.T) {
 }
 
 func TestStringTag_AllVariants_unmarshal(t *testing.T) {
+	t.Parallel()
 	in := []byte(`{"i8":"-8","i16":"16","i32":"-32","i64":"64",` +
 		`"u8":"8","u16":"16","u32":"32","u64":"64",` +
 		`"f32":"1.25","f64":"2.5","b":true}`)

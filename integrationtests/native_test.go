@@ -35,6 +35,7 @@ type NativeTypes struct {
 }
 
 func TestNativeTypes_roundtrip(t *testing.T) {
+	t.Parallel()
 	in := NativeTypes{
 		CreatedAt: time.Date(2026, 4, 18, 12, 34, 56, 789000000, time.UTC),
 		UnixAt:    time.Unix(1_700_000_000, 0).UTC(),
@@ -93,6 +94,7 @@ func TestNativeTypes_roundtrip(t *testing.T) {
 }
 
 func TestNativeTypes_format(t *testing.T) {
+	t.Parallel()
 	// Spot-check that format tags change the wire encoding.
 	in := NativeTypes{
 		UnixAt:    time.Unix(1_700_000_000, 0),
@@ -123,6 +125,7 @@ func TestNativeTypes_format(t *testing.T) {
 // null []byte decodes to nil and a nil []byte marshals as null; empty
 // non-nil keeps the empty-string / empty-array form.
 func TestBytes_nullRoundtrip(t *testing.T) {
+	t.Parallel()
 	got, _, err := NativeTypes{}.DecodeFrom([]byte(`{"blob":null,"hexBlob":null,"byteArray":null}`))
 	if err != nil {
 		t.Fatalf("decode: %v", err)

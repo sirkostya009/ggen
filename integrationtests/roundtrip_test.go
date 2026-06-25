@@ -10,6 +10,7 @@ import (
 
 // TestMarshalRoundtrip: generated marshal output decodes back to the original.
 func TestMarshalRoundtrip(t *testing.T) {
+	t.Parallel()
 	out, _ := encode.Marshal(complexValue)
 	got, _, err := Node{}.DecodeFrom(out)
 	if err != nil {
@@ -30,6 +31,7 @@ func TestMarshalRoundtrip(t *testing.T) {
 }
 
 func TestSliceRoundtrip(t *testing.T) {
+	t.Parallel()
 	addrs := []Address{
 		{Street: "Main 1", City: "Lviv", ZipCode: "79000"},
 		{Street: "Side 2", City: "Odesa", ZipCode: "65000"},
@@ -69,6 +71,7 @@ func TestSliceRoundtrip(t *testing.T) {
 }
 
 func TestWrite(t *testing.T) {
+	t.Parallel()
 	var buf bytes.Buffer
 	if err := encode.Write(&buf, complexValue); err != nil {
 		t.Fatal(err)

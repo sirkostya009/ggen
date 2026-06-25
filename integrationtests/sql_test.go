@@ -162,6 +162,7 @@ func runSQLNullPerType[T interface {
 		}
 	}
 	t.Run(name+"/marshal_null", func(t *testing.T) {
+		t.Parallel()
 		out, err := encode.MarshalString(zero)
 		if err != nil {
 			t.Fatalf("marshal zero: %v", err)
@@ -171,6 +172,7 @@ func runSQLNullPerType[T interface {
 		}
 	})
 	t.Run(name+"/marshal_present", func(t *testing.T) {
+		t.Parallel()
 		out, err := encode.MarshalString(present)
 		if err != nil {
 			t.Fatalf("marshal present: %v", err)
@@ -179,13 +181,20 @@ func runSQLNullPerType[T interface {
 			t.Errorf("marshal present = %s, want %s", out, presentWire)
 		}
 	})
-	t.Run(name+"/decode_null", func(t *testing.T) { roundtrip(t, nullWire) })
-	t.Run(name+"/decode_present", func(t *testing.T) { roundtrip(t, presentWire) })
+	t.Run(name+"/decode_null", func(t *testing.T) {
+		t.Parallel()
+		roundtrip(t, nullWire)
+	})
+	t.Run(name+"/decode_present", func(t *testing.T) {
+		t.Parallel()
+		roundtrip(t, presentWire)
+	})
 }
 
 // TestSQLNull_PerType runs each single-field sql.Null* struct through the full
 // marshal/decode matrix so every inner kind is asserted on its own.
 func TestSQLNull_PerType(t *testing.T) {
+	t.Parallel()
 	runSQLNullPerType(t, "NullString", "s", `"hello"`,
 		SQLNullStringStruct{S: sql.NullString{String: "hello", Valid: true}})
 	runSQLNullPerType(t, "NullInt64", "i", `42`,
@@ -230,6 +239,7 @@ func TestSQLNull_PerType(t *testing.T) {
 // TestSQLNull_Composite exercises the embedded composite: every field set and
 // every field null, both directions.
 func TestSQLNull_Composite(t *testing.T) {
+	t.Parallel()
 	full := SQLNullStruct{
 		SQLNullStringStruct:  SQLNullStringStruct{S: sql.NullString{String: "hello", Valid: true}},
 		SQLNullInt64Struct:   SQLNullInt64Struct{I: sql.NullInt64{Int64: 42, Valid: true}},
@@ -273,6 +283,7 @@ func TestSQLNull_Composite(t *testing.T) {
 	}
 
 	t.Run("decode_all_null", func(t *testing.T) {
+		t.Parallel()
 		in := []byte(`{"s":null,"i":null,"i32":null,"i16":null,"b":null,"bl":null,"f":null,"t":null}`)
 		got, _, err := SQLNullStruct{}.DecodeFrom(in)
 		if err != nil {
@@ -285,6 +296,7 @@ func TestSQLNull_Composite(t *testing.T) {
 	})
 
 	t.Run("decode_all_present", func(t *testing.T) {
+		t.Parallel()
 		in := []byte(`{"s":"hello","i":42,"i32":33,"i16":7,"b":255,"bl":true,"f":3.14,"t":"2023-11-14T22:13:20Z"}`)
 		got, _, err := SQLNullStruct{}.DecodeFrom(in)
 		if err != nil {
@@ -294,6 +306,7 @@ func TestSQLNull_Composite(t *testing.T) {
 	})
 
 	t.Run("marshal_all_null", func(t *testing.T) {
+		t.Parallel()
 		out, err := encode.MarshalString(SQLNullStruct{})
 		if err != nil {
 			t.Fatalf("marshal: %v", err)
@@ -307,6 +320,7 @@ func TestSQLNull_Composite(t *testing.T) {
 	})
 
 	t.Run("marshal_all_present", func(t *testing.T) {
+		t.Parallel()
 		out, err := encode.MarshalString(full)
 		if err != nil {
 			t.Fatalf("marshal: %v", err)
@@ -322,6 +336,7 @@ func TestSQLNull_Composite(t *testing.T) {
 	})
 
 	t.Run("roundtrip_all_present", func(t *testing.T) {
+		t.Parallel()
 		bs, _ := encode.Marshal(full)
 		got, _, err := SQLNullStruct{}.DecodeFrom(bs)
 		if err != nil {

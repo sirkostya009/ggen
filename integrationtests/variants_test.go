@@ -36,6 +36,7 @@ type ElemInterleave struct {
 }
 
 func TestVariants_ElemInterleave(t *testing.T) {
+	t.Parallel()
 	got, _, err := ElemInterleave{}.DecodeFrom([]byte(`{"nums":[6,5]}`))
 	if err != nil {
 		t.Fatalf("decode: %v", err)
@@ -49,6 +50,7 @@ func TestVariants_ElemInterleave(t *testing.T) {
 }
 
 func TestVariants_BytesPath(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name              string
 		in                string
@@ -64,6 +66,7 @@ func TestVariants_BytesPath(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			got, _, err := LooseThing{}.DecodeFrom([]byte(c.in))
 			if c.wantErr {
 				if err == nil {
@@ -83,6 +86,7 @@ func TestVariants_BytesPath(t *testing.T) {
 }
 
 func TestVariants_StreamPath(t *testing.T) {
+	t.Parallel()
 	in := []byte(`{"count":"7","price":{"amount":42},"opt":null}`)
 	var s scan.Stream
 	s.Reset(bytes.NewReader(in), make([]byte, 0, len(in)))

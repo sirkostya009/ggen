@@ -22,6 +22,7 @@ type IgnoreUnknownStruct struct {
 const validAddress = `{"street": "Main 1", "city": "Lviv", "zipCode": "79000"}`
 
 func TestRead_valid(t *testing.T) {
+	t.Parallel()
 	got, _, err := Address{}.DecodeFrom([]byte(validAddress))
 	if err != nil {
 		t.Fatal(err)
@@ -32,6 +33,7 @@ func TestRead_valid(t *testing.T) {
 }
 
 func TestRead_missingRequired(t *testing.T) {
+	t.Parallel()
 	// city omitted — Address.city is `required,notempty`.
 	_, _, err := Address{}.DecodeFrom([]byte(`{"street":"a","zipCode":"12345"}`))
 	if err == nil {
@@ -43,6 +45,7 @@ func TestRead_missingRequired(t *testing.T) {
 }
 
 func TestRead_notempty(t *testing.T) {
+	t.Parallel()
 	// city has notempty; empty string fails.
 	bad := `{"street":"s","city":"","zipCode":"12345"}`
 	_, _, err := Address{}.DecodeFrom([]byte(bad))
@@ -55,6 +58,7 @@ func TestRead_notempty(t *testing.T) {
 }
 
 func TestRead_len(t *testing.T) {
+	t.Parallel()
 	// zipCode len=5 exact; length 6 fails.
 	bad := `{"street":"s","city":"c","zipCode":"123456"}`
 	_, _, err := Address{}.DecodeFrom([]byte(bad))
@@ -67,6 +71,7 @@ func TestRead_len(t *testing.T) {
 }
 
 func TestRead_unknownFields_errorByDefault(t *testing.T) {
+	t.Parallel()
 	input := `{"street":"s","city":"c","zipCode":"12345","xx":"y"}`
 	_, _, err := Address{}.DecodeFrom([]byte(input))
 	if err == nil {
@@ -78,6 +83,7 @@ func TestRead_unknownFields_errorByDefault(t *testing.T) {
 }
 
 func TestRead_unknownFields_ignoreOptIn(t *testing.T) {
+	t.Parallel()
 	input := []byte(`{"name":"alice","extra":42,"also":"ignored"}`)
 	got, _, err := IgnoreUnknownStruct{}.DecodeFrom(input)
 	if err != nil {
@@ -89,6 +95,7 @@ func TestRead_unknownFields_ignoreOptIn(t *testing.T) {
 }
 
 func TestRead_wrongType(t *testing.T) {
+	t.Parallel()
 	input := `{"street":123,"city":"c","zipCode":"12345"}`
 	_, _, err := Address{}.DecodeFrom([]byte(input))
 	if err == nil {
@@ -100,6 +107,7 @@ func TestRead_wrongType(t *testing.T) {
 }
 
 func TestRead_notObject(t *testing.T) {
+	t.Parallel()
 	_, _, err := Address{}.DecodeFrom([]byte(`[1,2,3]`))
 	if err == nil {
 		t.Fatal("expected not-object error")
@@ -109,6 +117,7 @@ func TestRead_notObject(t *testing.T) {
 // TestRead_parseErrorTopLevel: top-level malformed JSON gives a *ParseError
 // carrying the scan sentinel (errors.Is works) but no Field path.
 func TestRead_parseErrorTopLevel(t *testing.T) {
+	t.Parallel()
 	_, _, err := (Address{}).DecodeFrom([]byte(`not-an-object`))
 	if err == nil {
 		t.Fatal("expected error")
@@ -128,6 +137,7 @@ func TestRead_parseErrorTopLevel(t *testing.T) {
 // TestRead_parseErrorFieldName: wrong field type populates the ParseError path
 // with the failing JSON key.
 func TestRead_parseErrorFieldName(t *testing.T) {
+	t.Parallel()
 	_, _, err := (Address{}).DecodeFrom([]byte(`{"street":123,"city":"C","zipCode":"12345"}`))
 	if err == nil {
 		t.Fatal("expected error")
@@ -147,6 +157,7 @@ func TestRead_parseErrorFieldName(t *testing.T) {
 // TestRead_validationNotWrapped: validation.* errors stay typed, not wrapped
 // in a ParseError.
 func TestRead_validationNotWrapped(t *testing.T) {
+	t.Parallel()
 	_, _, err := (Address{}).DecodeFrom([]byte(`{"street":"","city":"C","zipCode":"12345"}`))
 	if err == nil {
 		t.Fatal("expected error")

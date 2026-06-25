@@ -6,6 +6,7 @@ import (
 )
 
 func TestParsePipeTag(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		tag  string
@@ -170,6 +171,7 @@ func TestParsePipeTag(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			got, err := parsePipeTag(tt.tag)
 			if err != nil {
 				t.Fatalf("parsePipeTag(%q) error: %v", tt.tag, err)
@@ -182,6 +184,7 @@ func TestParsePipeTag(t *testing.T) {
 }
 
 func TestParseHintTag(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		tag  string
 		want HintTag
@@ -204,6 +207,7 @@ func TestParseHintTag(t *testing.T) {
 }
 
 func TestParsePipeTagErrors(t *testing.T) {
+	t.Parallel()
 	bad := []string{
 		"required optional",     // mutually exclusive
 		"foo / / bar ~ x",       // empty variant

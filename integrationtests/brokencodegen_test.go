@@ -49,6 +49,7 @@ type PtrExoticStruct struct {
 }
 
 func TestPtrExotic_AllNil_marshalsAsNull(t *testing.T) {
+	t.Parallel()
 	out, err := encode.Marshal(PtrExoticStruct{})
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
@@ -62,6 +63,7 @@ func TestPtrExotic_AllNil_marshalsAsNull(t *testing.T) {
 }
 
 func TestPtrExotic_AllNilRoundtrip(t *testing.T) {
+	t.Parallel()
 	out, _ := encode.Marshal(PtrExoticStruct{})
 	got, _, err := PtrExoticStruct{}.DecodeFrom(out)
 	if err != nil {
@@ -74,6 +76,7 @@ func TestPtrExotic_AllNilRoundtrip(t *testing.T) {
 }
 
 func TestPtrExotic_AllPopulated_roundtrip(t *testing.T) {
+	t.Parallel()
 	bigI, _ := new(big.Int).SetString("123456789012345678901234567890", 10)
 	bigF := big.NewFloat(3.14159)
 	bigR, _ := new(big.Rat).SetString("22/7")
@@ -114,6 +117,7 @@ func TestPtrExotic_AllPopulated_roundtrip(t *testing.T) {
 }
 
 func TestPtrExotic_JSONSize_NoRealloc(t *testing.T) {
+	t.Parallel()
 	bigI, _ := new(big.Int).SetString(strings.Repeat("9", 50), 10)
 	bigF := big.NewFloat(1.79e308)
 	bigR, _ := new(big.Rat).SetString("987654321098765432109876543210/123456789012345678901234567890")
@@ -157,6 +161,7 @@ type SliceExoticStruct struct {
 }
 
 func TestSliceExotic_roundtrip(t *testing.T) {
+	t.Parallel()
 	t0 := time.Unix(1700000000, 0).UTC()
 	t1 := time.Unix(1700001234, 5_000_000).UTC()
 	bigA, _ := new(big.Int).SetString("12345678901234567890", 10)
@@ -198,6 +203,7 @@ func TestSliceExotic_roundtrip(t *testing.T) {
 }
 
 func TestSliceExotic_JSONSize_NoRealloc(t *testing.T) {
+	t.Parallel()
 	bigA, _ := new(big.Int).SetString(strings.Repeat("9", 30), 10)
 	id := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
 	in := SliceExoticStruct{
@@ -236,6 +242,7 @@ type MapExoticStruct struct {
 }
 
 func TestMapExotic_roundtrip(t *testing.T) {
+	t.Parallel()
 	t0 := time.Unix(1700000000, 0).UTC()
 	bigA, _ := new(big.Int).SetString("123456789012345678901234567890", 10)
 	id := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
@@ -271,6 +278,7 @@ func TestMapExotic_roundtrip(t *testing.T) {
 }
 
 func TestMapExotic_JSONSize_NoRealloc(t *testing.T) {
+	t.Parallel()
 	bigA, _ := new(big.Int).SetString(strings.Repeat("7", 30), 10)
 	id := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
 	in := MapExoticStruct{
@@ -307,6 +315,7 @@ type TupleExoticStruct struct {
 }
 
 func TestTupleExotic_roundtrip(t *testing.T) {
+	t.Parallel()
 	t0 := time.Unix(1700000000, 0).UTC()
 	t1 := time.Unix(1700001234, 0).UTC()
 	id := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
@@ -347,6 +356,7 @@ func TestTupleExotic_roundtrip(t *testing.T) {
 }
 
 func TestTupleExotic_JSONSize_NoRealloc(t *testing.T) {
+	t.Parallel()
 	t0 := time.Now().UTC()
 	id := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
 	bigA, _ := new(big.Int).SetString(strings.Repeat("9", 60), 10)
@@ -384,6 +394,7 @@ type PtrContainerStruct struct {
 }
 
 func TestPtrContainer_NilEmitsNull(t *testing.T) {
+	t.Parallel()
 	out, err := encode.Marshal(PtrContainerStruct{})
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
@@ -400,6 +411,7 @@ func TestPtrContainer_NilEmitsNull(t *testing.T) {
 }
 
 func TestPtrContainer_PopulatedRoundtrip(t *testing.T) {
+	t.Parallel()
 	ints := []int{1, 2, 3}
 	m := map[string]string{"a": "b"}
 	strs := []string{"x", "y"}
@@ -433,6 +445,7 @@ type PtrStringTagStruct struct {
 }
 
 func TestPtrStringTag_roundtrip(t *testing.T) {
+	t.Parallel()
 	pi := 42
 	in := PtrStringTagStruct{PtrI: &pi}
 	out, err := encode.MarshalString(in)
@@ -475,6 +488,7 @@ func FuzzPtrExoticNoPanic(f *testing.F) {
 // --- Cross-compat tests for the broken-codegen structs --------------------
 
 func TestStdCompat_PtrExoticStruct(t *testing.T) {
+	t.Parallel()
 	bigI, _ := new(big.Int).SetString("12345678901234567890", 10)
 	bigF := big.NewFloat(2.5)
 	bigR, _ := new(big.Rat).SetString("22/7")
@@ -492,6 +506,7 @@ func TestStdCompat_PtrExoticStruct(t *testing.T) {
 }
 
 func TestStdCompat_SliceExoticStruct(t *testing.T) {
+	t.Parallel()
 	t0 := time.Unix(1700000000, 0).UTC()
 	bigA, _ := new(big.Int).SetString("99999", 10)
 	id := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
@@ -516,6 +531,7 @@ func TestStdCompat_SliceExoticStruct(t *testing.T) {
 }
 
 func TestStdCompat_MapExoticStruct(t *testing.T) {
+	t.Parallel()
 	t0 := time.Unix(1700000000, 0).UTC()
 	bigA, _ := new(big.Int).SetString("987654321", 10)
 	id := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
@@ -529,6 +545,7 @@ func TestStdCompat_MapExoticStruct(t *testing.T) {
 }
 
 func TestStdCompat_TupleExoticStruct(t *testing.T) {
+	t.Parallel()
 	t0 := time.Unix(1700000000, 0).UTC()
 	id := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
 	bigA, _ := new(big.Int).SetString("100", 10)
@@ -542,6 +559,7 @@ func TestStdCompat_TupleExoticStruct(t *testing.T) {
 }
 
 func TestStdCompat_PtrContainerStruct(t *testing.T) {
+	t.Parallel()
 	ints := []int{1, 2, 3}
 	m := map[string]string{"a": "b"}
 	strs := []string{"x", "y"}

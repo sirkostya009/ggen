@@ -95,6 +95,7 @@ func sameWire(t testing.TB, a, b any) bool {
 func exactWire[T ggenCompat[T]](t *testing.T, name string, in T) {
 	t.Helper()
 	t.Run(name, func(t *testing.T) {
+		t.Parallel()
 		ggenBytes, err := encode.Marshal(in)
 		if err != nil {
 			t.Fatalf("ggen Marshal for %T: %v", in, err)
@@ -110,10 +111,12 @@ func exactWire[T ggenCompat[T]](t *testing.T, name string, in T) {
 }
 
 func TestStdCompat_Address(t *testing.T) {
+	t.Parallel()
 	crossCompat(t, Address{Street: "Main 1", City: "Lviv", ZipCode: "79000"})
 }
 
 func TestStdCompat_Node(t *testing.T) {
+	t.Parallel()
 	in := Node{
 		ID: 1, Name: "root", Score: 1.5, Active: true,
 		Tags:  []string{"a", "b"},
@@ -126,19 +129,23 @@ func TestStdCompat_Node(t *testing.T) {
 }
 
 func TestStdCompat_Node_mega(t *testing.T) {
+	t.Parallel()
 	// Full 1MB payload — catches ordering/float drift that only shows at scale.
 	crossCompat(t, megaValue)
 }
 
 func TestStdCompat_HookedStruct(t *testing.T) {
+	t.Parallel()
 	crossCompat(t, HookedStruct{Name: "alice", N: 42})
 }
 
 func TestStdCompat_MultiErrStruct(t *testing.T) {
+	t.Parallel()
 	crossCompat(t, MultiErrStruct{Name: "ok", Age: 30, Role: "user"})
 }
 
 func TestStdCompat_PointerStruct(t *testing.T) {
+	t.Parallel()
 	name := "alice"
 	count := 3
 	ratio := 2.5
@@ -157,6 +164,7 @@ func TestStdCompat_PointerStruct(t *testing.T) {
 }
 
 func TestStdCompat_NativeTypes(t *testing.T) {
+	t.Parallel()
 	addr, _ := netip.ParseAddr("192.0.2.7")
 	prefix, _ := netip.ParsePrefix("10.0.0.0/24")
 	crossCompat(t, NativeTypes{
@@ -328,11 +336,13 @@ func timeFormatsStdCompat(when time.Time) TimeFormatsStdCompat {
 // token jsonv2 expects; non-zero nanos exercises the `format:unix` fractional
 // decimal path.
 func TestStdCompat_TimeFormatsStdCompat(t *testing.T) {
+	t.Parallel()
 	when := time.Date(2026, 5, 14, 12, 34, 56, 789000000, time.UTC)
 	crossCompat(t, timeFormatsStdCompat(when))
 }
 
 func TestStdCompat_OmitStruct(t *testing.T) {
+	t.Parallel()
 	// Zero values on omitempty/omitzero fields.
 	crossCompat(t, OmitStruct{Name: "alice", StrCount: 1})
 	// Populated.
@@ -340,15 +350,18 @@ func TestStdCompat_OmitStruct(t *testing.T) {
 }
 
 func TestStdCompat_FallbackStruct(t *testing.T) {
+	t.Parallel()
 	crossCompat(t, FallbackStruct{ID: "abc", Extra: thirdparty.External{Key: "k", Value: 42}})
 }
 
 func TestStdCompat_ModStruct(t *testing.T) {
+	t.Parallel()
 	// Start from a value mods won't change, else ggen-decoded diverges by design.
 	crossCompat(t, ModStruct{Email: "a@b.com", Tags: []string{"go", "rust"}, SKU: "A1"})
 }
 
 func TestStdCompat_MapStruct(t *testing.T) {
+	t.Parallel()
 	crossCompat(t, MapStruct{
 		Counts:    map[string]int{"a": 1, "b": 2},
 		Labels:    map[string]string{"en": "hello", "es": "hola"},
@@ -357,10 +370,12 @@ func TestStdCompat_MapStruct(t *testing.T) {
 }
 
 func TestStdCompat_Derived(t *testing.T) {
+	t.Parallel()
 	crossCompat(t, Derived{Base: Base{ID: "abc", Meta: "m"}, Name: "alice"})
 }
 
 func TestStdCompat_DiveStruct(t *testing.T) {
+	t.Parallel()
 	crossCompat(t, DiveStruct{
 		Tags:   []string{"go", "rust"},
 		Title:  "ok",
@@ -370,6 +385,7 @@ func TestStdCompat_DiveStruct(t *testing.T) {
 }
 
 func TestStdCompat_TupleStruct(t *testing.T) {
+	t.Parallel()
 	crossCompat(t, TupleStruct{
 		Point:    [2]float64{1.5, -2.25},
 		RGB:      [3]int{10, 20, 30},
@@ -379,6 +395,7 @@ func TestStdCompat_TupleStruct(t *testing.T) {
 }
 
 func TestStdCompat_ExtraStruct(t *testing.T) {
+	t.Parallel()
 	crossCompat(t, ExtraStruct{
 		HintedTags:   []string{"x", "y"},
 		ClampedScore: 42,
@@ -389,6 +406,7 @@ func TestStdCompat_ExtraStruct(t *testing.T) {
 }
 
 func TestStdCompat_InlineStruct(t *testing.T) {
+	t.Parallel()
 	crossCompat(t, InlineStruct{
 		Name:  "alice",
 		Extra: map[string]any{"age": float64(30), "city": "Lviv", "active": true},
@@ -410,6 +428,7 @@ type richSubset struct {
 }
 
 func TestStdCompat_RichTypes(t *testing.T) {
+	t.Parallel()
 	hugeInt, _ := new(big.Int).SetString("123456789012345678901234567890", 10)
 	id := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
 	gofrsID, _ := gofrs.FromString("550e8400-e29b-41d4-a716-446655440000")
@@ -427,6 +446,7 @@ func TestStdCompat_RichTypes(t *testing.T) {
 }
 
 func TestStdCompat_PtrSliceStruct(t *testing.T) {
+	t.Parallel()
 	a := Address{Street: "S1", City: "C1", ZipCode: "11111"}
 	b := Address{Street: "S2", City: "C2", ZipCode: "22222"}
 	// Mix of present + nil elements exercises the slab path's null branch.
@@ -442,6 +462,7 @@ func TestStdCompat_PtrSliceStruct(t *testing.T) {
 // structs. Deliberate divergence; round-trip in TestSQLNull_Roundtrip.
 
 func TestStdCompat_AnyStruct(t *testing.T) {
+	t.Parallel()
 	crossCompat(t, AnyStruct{
 		Name: "x",
 		Body: map[string]any{
@@ -479,6 +500,7 @@ type AnyWire struct {
 // across magnitude boundaries — crossCompat masks formatting differences
 // (`1e+06` vs `1000000` decode equal).
 func TestStdCompat_FloatWire(t *testing.T) {
+	t.Parallel()
 	for _, v := range []float64{
 		0, 0.1, -2.5, 1e6, 123456789, 1e20, 1e21, 1e-6, 1e-7, 1e-9, -1e-7,
 		1e100, 5e-324, math.MaxFloat64,
@@ -497,6 +519,7 @@ func TestStdCompat_FloatWire(t *testing.T) {
 // floats through the any path use the same fixed AppendFloat. Single-key maps
 // keep iteration order deterministic for the byte compare.
 func TestStdCompat_AnyWire(t *testing.T) {
+	t.Parallel()
 	cases := []any{
 		`<a href="x">tom & jerry</a>`,
 		[]any{"<e>", "f>g&h", "plain"},
@@ -511,6 +534,7 @@ func TestStdCompat_AnyWire(t *testing.T) {
 }
 
 func TestStdCompat_TextFallbackStruct(t *testing.T) {
+	t.Parallel()
 	crossCompat(t, TextFallbackStruct{
 		ID:  "x",
 		Tag: thirdparty.Tagged{Name: "alice", Tag: "admin"},
@@ -518,6 +542,7 @@ func TestStdCompat_TextFallbackStruct(t *testing.T) {
 }
 
 func TestStdCompat_FastFallbackStruct(t *testing.T) {
+	t.Parallel()
 	crossCompat(t, FastFallbackStruct{
 		ID:    "abc",
 		Extra: thirdparty2.External2{Key: "k", Value: 42},
@@ -525,16 +550,19 @@ func TestStdCompat_FastFallbackStruct(t *testing.T) {
 }
 
 func TestStdCompat_HTMLEscapeStruct(t *testing.T) {
+	t.Parallel()
 	// htmlescape opt-in emits \uXXXX for <>&; jsonv2 still decodes back equal.
 	crossCompat(t, HTMLEscapeStruct{Note: `<a href="x">tom & jerry</a>`})
 }
 
 func TestStdCompat_HTMLRawStruct(t *testing.T) {
+	t.Parallel()
 	// Default literal <>& is the jsonv2 wire shape.
 	crossCompat(t, HTMLRawStruct{Note: `<a href="x">tom & jerry</a>`})
 }
 
 func TestStdCompat_StringTagStruct(t *testing.T) {
+	t.Parallel()
 	crossCompat(t, StringTagStruct{
 		I8: -8, I16: 16, I32: -32, I64: 64,
 		U8: 8, U16: 16, U32: 32, U64: 64,
@@ -550,6 +578,7 @@ func TestStdCompat_StringTagStruct(t *testing.T) {
 func crossCompatMerge[T ggenCompat[T]](t *testing.T, name string, mk func() T, payload string) {
 	t.Helper()
 	t.Run(name, func(t *testing.T) {
+		t.Parallel()
 		std := mk()
 		if err := jsonv2.Unmarshal([]byte(payload), &std); err != nil {
 			t.Fatalf("jsonv2 merge of %q into %T: %v", payload, std, err)
@@ -633,6 +662,7 @@ func TestStdCompatMerge_IntentionalDivergences(t *testing.T) {
 
 	// 1. Present map key: stdlib merges entries; ggen clear()s then refills.
 	t.Run("map_present_key_replace_vs_merge", func(t *testing.T) {
+		t.Parallel()
 		const payload = `{"props":{"new":"3"}}`
 		std := Node{Props: map[string]string{"old": "1", "keep": "2"}}
 		if err := jsonv2.Unmarshal([]byte(payload), &std); err != nil {
@@ -656,6 +686,7 @@ func TestStdCompatMerge_IntentionalDivergences(t *testing.T) {
 	// 2. Omitted container key: ggen resets every container at entry, so an
 	//    absent slice/map key is emptied — stdlib leaves it untouched.
 	t.Run("omitted_container_reset_vs_retain", func(t *testing.T) {
+		t.Parallel()
 		const payload = `{"id":5}`
 		std := Node{Tags: []string{"a", "b"}, Props: map[string]string{"old": "1"}}
 		if err := jsonv2.Unmarshal([]byte(payload), &std); err != nil {
@@ -676,6 +707,7 @@ func TestStdCompatMerge_IntentionalDivergences(t *testing.T) {
 	// 3. Explicit null on a non-pointer scalar: stdlib zeroes it; ggen hard-
 	//    errors (only pointer/slice/map/[]byte accept null — use a pointer).
 	t.Run("scalar_null_error_vs_zero", func(t *testing.T) {
+		t.Parallel()
 		const payload = `{"id":null}`
 		std := Node{ID: 7}
 		if err := jsonv2.Unmarshal([]byte(payload), &std); err != nil {

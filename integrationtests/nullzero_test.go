@@ -42,6 +42,7 @@ type NullZeroWhole struct {
 }
 
 func TestNullZero_tag_bytes(t *testing.T) {
+	t.Parallel()
 	in := []byte(`{"nzStr":null,"nzInt":null,"nzFloat":null,"nzBool":null,"strict":"keep"}`)
 	got, _, err := NullZeroTags{}.DecodeFrom(in)
 	if err != nil {
@@ -54,12 +55,14 @@ func TestNullZero_tag_bytes(t *testing.T) {
 }
 
 func TestNullZero_strict_rejects(t *testing.T) {
+	t.Parallel()
 	if _, _, err := (NullZeroTags{}).DecodeFrom([]byte(`{"strict":null}`)); err == nil {
 		t.Fatal("expected error on null into strict field, got nil")
 	}
 }
 
 func TestNullZero_nonNull_stillDecodes(t *testing.T) {
+	t.Parallel()
 	in := []byte(`{"nzStr":"hi","nzInt":7,"nzFloat":1.5,"nzBool":true,"strict":"k"}`)
 	got, _, err := NullZeroTags{}.DecodeFrom(in)
 	if err != nil {
@@ -72,6 +75,7 @@ func TestNullZero_nonNull_stillDecodes(t *testing.T) {
 }
 
 func TestNullZero_validation_runs_on_zero(t *testing.T) {
+	t.Parallel()
 	if got, _, err := (NullZeroValidated{}).DecodeFrom([]byte(`{"count":null}`)); err != nil {
 		t.Fatalf("count null: unexpected error: %v", err)
 	} else if got.Count != 0 {
@@ -89,6 +93,7 @@ func TestNullZero_validation_runs_on_zero(t *testing.T) {
 }
 
 func TestNullZero_whole_annotation(t *testing.T) {
+	t.Parallel()
 	got, _, err := NullZeroWhole{}.DecodeFrom([]byte(`{"a":null,"b":null,"c":null}`))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -99,6 +104,7 @@ func TestNullZero_whole_annotation(t *testing.T) {
 }
 
 func TestNullZero_tag_stream(t *testing.T) {
+	t.Parallel()
 	in := []byte(`{"nzStr":null,"nzInt":null,"nzFloat":null,"nzBool":null,"strict":"keep"}`)
 	var s scan.Stream
 	s.Reset(bytes.NewReader(in), make([]byte, 0, len(in)))
@@ -113,6 +119,7 @@ func TestNullZero_tag_stream(t *testing.T) {
 }
 
 func TestNullZero_stream_strict_rejects(t *testing.T) {
+	t.Parallel()
 	in := []byte(`{"strict":null}`)
 	var s scan.Stream
 	s.Reset(bytes.NewReader(in), make([]byte, 0, len(in)))

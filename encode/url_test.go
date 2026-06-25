@@ -42,6 +42,7 @@ func TestAppendURL(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			var u url.URL
 			if c.raw != "" {
 				p, err := url.Parse(c.raw)
@@ -93,6 +94,7 @@ func TestAppendURL_Construction(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			want := c.u.String()
 			got := string(AppendURL(nil, c.u))
 			if got != want {

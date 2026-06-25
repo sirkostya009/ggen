@@ -16,6 +16,7 @@ func numberAccepted(tok string) bool {
 }
 
 func TestSkipNumber_AcceptSetMatchesJSONGrammar(t *testing.T) {
+	t.Parallel()
 	cases := []string{
 		// valid
 		"0", "-0", "123", "-123", "1.5", "-1.5", "0.5", "1e5", "1E5",
@@ -50,6 +51,7 @@ func TestSkipNumber_AcceptSetMatchesJSONGrammar(t *testing.T) {
 // Stream skip must have the byte-identical accept-set of the bytes path, incl.
 // across chunk boundaries (one-byte reader exercises every refill seam).
 func TestSkipNumber_StreamMatchesBytes(t *testing.T) {
+	t.Parallel()
 	cases := []string{
 		"0", "-0", "123", "-123", "1.5", "1e5", "1e+5", "1.5e10", "1e400",
 		"12345678901234567890", "+1", "01", "1.", ".5", "-", "1e", "1..2",

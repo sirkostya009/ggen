@@ -20,6 +20,7 @@ type MultiErrStruct struct {
 }
 
 func TestCustomValidator_pass(t *testing.T) {
+	t.Parallel()
 	in := []byte(`{"tags":["go","rust"],"title":"ok","scores":[50],"count":4}`)
 	got, _, err := DiveStruct{}.DecodeFrom(in)
 	if err != nil {
@@ -31,6 +32,7 @@ func TestCustomValidator_pass(t *testing.T) {
 }
 
 func TestCustomValidator_fail(t *testing.T) {
+	t.Parallel()
 	in := []byte(`{"tags":["go","rust"],"title":"ok","scores":[50],"count":5}`)
 	_, _, err := DiveStruct{}.DecodeFrom(in)
 	if err == nil {
@@ -42,6 +44,7 @@ func TestCustomValidator_fail(t *testing.T) {
 }
 
 func TestAggregate_allErrors(t *testing.T) {
+	t.Parallel()
 	// All three fields violate: Name too long, Age negative, Role not in set.
 	in := []byte(`{"name":"longname","age":-1,"role":"pirate"}`)
 	_, _, err := MultiErrStruct{}.DecodeFrom(in)
@@ -65,6 +68,7 @@ func TestAggregate_allErrors(t *testing.T) {
 }
 
 func TestAggregate_pass(t *testing.T) {
+	t.Parallel()
 	in := []byte(`{"name":"ok","age":30,"role":"user"}`)
 	got, _, err := MultiErrStruct{}.DecodeFrom(in)
 	if err != nil {
@@ -86,6 +90,7 @@ type CustomBothStruct struct {
 // mod (trim) runs before validator (NotBlank): "  ok  "→"ok" passes,
 // "   "→"" fails.
 func TestCustomBoth_modThenValidator(t *testing.T) {
+	t.Parallel()
 	good := []byte(`{"tags":["  hello  ","  world  "]}`)
 	got, _, err := CustomBothStruct{}.DecodeFrom(good)
 	if err != nil {

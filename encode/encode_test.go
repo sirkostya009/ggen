@@ -13,6 +13,7 @@ import (
 // exponent ("1e-7", not "1e-07"). Every row is cross-checked against
 // encoding/json v1 so the table can't drift.
 func TestAppendFloatStdlibParity(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		v    float64
 		bits int
@@ -69,6 +70,7 @@ func (f fatItem) AppendJSON(dst []byte) ([]byte, error) {
 // type must not panic (`var zero *T; zero.JSONSize()` derefs nil), and nil
 // elements must marshal as JSON null.
 func TestMarshalSlicePointerElems(t *testing.T) {
+	t.Parallel()
 	defer func() {
 		if r := recover(); r != nil {
 			t.Fatalf("MarshalSlice([]*T) panicked: %v", r)

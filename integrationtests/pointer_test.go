@@ -18,6 +18,7 @@ import (
 // TestPointer_parseErrorChainsThroughPointee pins that an inner pointee error
 // chains its field path through the outer field ("addr.street").
 func TestPointer_parseErrorChainsThroughPointee(t *testing.T) {
+	t.Parallel()
 	_, _, err := (PointerStruct{}).DecodeFrom([]byte(
 		`{"name":"x","enabled":true,"addr":{"street":123,"city":"C","zipCode":"12345"}}`))
 	if err == nil {
@@ -82,6 +83,7 @@ type PointerStruct struct {
 }
 
 func TestPointer_roundtripAllSet(t *testing.T) {
+	t.Parallel()
 	in := PointerStruct{
 		PtrNameStruct:    PtrNameStruct{Name: new("alice")},
 		PtrCountStruct:   PtrCountStruct{Count: new(7)},
@@ -102,6 +104,7 @@ func TestPointer_roundtripAllSet(t *testing.T) {
 }
 
 func TestPointer_nilOmitted(t *testing.T) {
+	t.Parallel()
 	in := PointerStruct{PtrNameStruct: PtrNameStruct{Name: new("bob")}, PtrEnabledStruct: PtrEnabledStruct{Enabled: new(false)}}
 	out, _ := encode.MarshalString(in)
 	// nil omitempty fields are absent.
@@ -120,6 +123,7 @@ func TestPointer_nilOmitted(t *testing.T) {
 }
 
 func TestPointer_nullRoundtrip(t *testing.T) {
+	t.Parallel()
 	in := []byte(`{"name":null,"enabled":null}`)
 	got, _, err := PointerStruct{}.DecodeFrom(in)
 	if err != nil {
@@ -168,6 +172,7 @@ type NPtrStruct struct {
 }
 
 func TestNPtr_scalarRoundtrip(t *testing.T) {
+	t.Parallel()
 	v1 := 42
 	pv1 := &v1
 	ppv1 := &pv1
@@ -205,6 +210,7 @@ func TestNPtr_scalarRoundtrip(t *testing.T) {
 }
 
 func TestNPtr_allNull(t *testing.T) {
+	t.Parallel()
 	in := []byte(`{"pp":null,"ppp":null,"pppp":null,"addr":null}`)
 	got, _, err := NPtrStruct{}.DecodeFrom(in)
 	if err != nil {
@@ -218,6 +224,7 @@ func TestNPtr_allNull(t *testing.T) {
 // TestNPtr_intermediateNilMarshalsNull: a non-nil outer with a nil inner
 // marshals the field as null (encode short-circuits at the first nil).
 func TestNPtr_intermediateNilMarshalsNull(t *testing.T) {
+	t.Parallel()
 	in := NPtrStruct{PtrPPStruct: PtrPPStruct{PP: new((*int)(nil))}} // non-nil outer, nil inner
 	out, err := encode.MarshalString(in)
 	if err != nil {
@@ -270,6 +277,7 @@ type NPtrContainersStruct struct {
 }
 
 func TestNPtr_containersRoundtrip(t *testing.T) {
+	t.Parallel()
 	in := []byte(`{"spp":[1,null,3],"app":[null,5,null],"nspp":[[7,null]],"mp":{"a":1,"b":null},"mpp":{"x":7,"y":null},"mpa":{"k":{"street":"Main 1","city":"Lviv","zipCode":"79000"},"n":null}}`)
 	got, n, err := NPtrContainersStruct{}.DecodeFrom(in)
 	if err != nil {
@@ -317,6 +325,7 @@ func TestNPtr_containersRoundtrip(t *testing.T) {
 }
 
 func TestNPtr_containersStream(t *testing.T) {
+	t.Parallel()
 	in := []byte(`{"spp":[1,null],"app":[9,null,2],"mp":{"a":4},"mpp":{"z":null}}`)
 	var s scan.Stream
 	s.Reset(bytes.NewReader(in), make([]byte, 16))

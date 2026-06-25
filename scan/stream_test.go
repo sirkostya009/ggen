@@ -44,8 +44,10 @@ func readStreamAny(t *testing.T, in string) any {
 // TestStream_AnyChunked: every byte arrives via a separate Read; the
 // result must still match stdlib's all-at-once parse.
 func TestStream_AnyChunked(t *testing.T) {
+	t.Parallel()
 	for _, tc := range anyCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			var want any
 			if err := json.Unmarshal([]byte(tc.in), &want); err != nil {
 				t.Fatalf("stdlib: %v", err)
@@ -59,8 +61,10 @@ func TestStream_AnyChunked(t *testing.T) {
 }
 
 func TestStream_StringChunked(t *testing.T) {
+	t.Parallel()
 	for _, tc := range stringHappyCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			var want string
 			if err := json.Unmarshal([]byte(tc.in), &want); err != nil {
 				t.Fatalf("stdlib: %v", err)
@@ -79,8 +83,10 @@ func TestStream_StringChunked(t *testing.T) {
 }
 
 func TestStream_NumberChunked(t *testing.T) {
+	t.Parallel()
 	for _, in := range floatCases {
 		t.Run(in, func(t *testing.T) {
+			t.Parallel()
 			var want float64
 			if err := json.Unmarshal([]byte(in), &want); err != nil {
 				t.Fatalf("stdlib: %v", err)
@@ -101,6 +107,7 @@ func TestStream_NumberChunked(t *testing.T) {
 // TestStream_HintZeroVsHinted: the result must be identical regardless of
 // whether the caller pre-sized the buffer.
 func TestStream_HintEquivalence(t *testing.T) {
+	t.Parallel()
 	in := []byte(`{"k":[1,2,3],"s":"hello"}`)
 	for _, hint := range []int{0, 1, 4, 16, 1024} {
 		var s Stream
@@ -122,6 +129,7 @@ func TestStream_HintEquivalence(t *testing.T) {
 // TestStream_TruncatedInput: reader exhausts mid-token. Must surface an
 // error, not panic.
 func TestStream_TruncatedInput(t *testing.T) {
+	t.Parallel()
 	cases := []string{
 		`{"k":1,"s":"hel`, // string mid-flight
 		`{"k":12`,         // number mid-flight
@@ -131,6 +139,7 @@ func TestStream_TruncatedInput(t *testing.T) {
 	}
 	for _, in := range cases {
 		t.Run(in, func(t *testing.T) {
+			t.Parallel()
 			var s Stream
 			s.Reset(strings.NewReader(in), nil)
 			defer func() {
@@ -150,6 +159,7 @@ func TestStream_TruncatedInput(t *testing.T) {
 // a bigger backing if the current buffer is full, but offsets stay valid
 // in the original coordinate system (no shift).
 func TestStream_ReadMoreKeepZero_GrowsWithoutShift(t *testing.T) {
+	t.Parallel()
 	var s Stream
 	r := bytes.NewReader([]byte("ABCDEFGHIJKLMNOPQRST"))
 	s.Reset(r, make([]byte, 0, 4))
@@ -169,6 +179,7 @@ func TestStream_ReadMoreKeepZero_GrowsWithoutShift(t *testing.T) {
 // TestStream_ReadMoreKeepFull_ResetsBuffer: keep == len(buf) clears
 // the buffer entirely; next Read refills from offset 0.
 func TestStream_ReadMoreKeepFull_ResetsBuffer(t *testing.T) {
+	t.Parallel()
 	var s Stream
 	r := bytes.NewReader([]byte("ABCDEFGHIJKLMNOPQRST"))
 	s.Reset(r, make([]byte, 0, 8))
@@ -191,6 +202,7 @@ func TestStream_ReadMoreKeepFull_ResetsBuffer(t *testing.T) {
 // the tail to offset 0 and refills behind it. Bytes at the original
 // keep offset must now be at offset 0.
 func TestStream_ReadMoreKeepMid_Memmoves(t *testing.T) {
+	t.Parallel()
 	var s Stream
 	r := bytes.NewReader([]byte("ABCDEFGHIJKLMNOPQRSTUVWXYZ"))
 	s.Reset(r, make([]byte, 0, 8))
@@ -213,6 +225,7 @@ func TestStream_ReadMoreKeepMid_Memmoves(t *testing.T) {
 // behave as if keep=0 regardless of the caller's keep argument. Used
 // by RawJSON capture and json.Unmarshal fallback paths.
 func TestStream_ShiftDisabled_GrowOnly(t *testing.T) {
+	t.Parallel()
 	var s Stream
 	r := bytes.NewReader([]byte("ABCDEFGHIJKLMNOPQRSTUVWXYZ"))
 	s.Reset(r, make([]byte, 0, 8))
@@ -239,6 +252,7 @@ func TestStream_ShiftDisabled_GrowOnly(t *testing.T) {
 // same call (io.Reader interface allows this). Stream must consume the
 // content and surface EOF on the NEXT call only.
 func TestStream_EOFAfterContent(t *testing.T) {
+	t.Parallel()
 	var s Stream
 	r := bytes.NewReader([]byte("ABC"))
 	s.Reset(r, make([]byte, 0, 8))
@@ -257,6 +271,7 @@ func TestStream_EOFAfterContent(t *testing.T) {
 // TestStream_PathologicalZeroRead: a reader returning (0, nil) must not
 // spin; Stream surfaces ErrUnexpectedEOF.
 func TestStream_PathologicalZeroRead(t *testing.T) {
+	t.Parallel()
 	var s Stream
 	s.Reset(zeroReader{}, make([]byte, 0, 8))
 	err := s.ReadMore(0)
@@ -274,7 +289,9 @@ func (zeroReader) Read(p []byte) (int, error) { return 0, nil }
 // keep to 0 when !s.Shift and moves no bytes, so the local cursor must
 // NOT reset to 0 — resetting re-reads already-consumed digits.
 func TestIntegerScanNoShiftRefill(t *testing.T) {
+	t.Parallel()
 	t.Run("int64", func(t *testing.T) {
+		t.Parallel()
 		var s Stream
 		s.Reset(strings.NewReader("12345 "), make([]byte, 0, 3))
 		s.Shift = false
@@ -290,6 +307,7 @@ func TestIntegerScanNoShiftRefill(t *testing.T) {
 		}
 	})
 	t.Run("int64 negative", func(t *testing.T) {
+		t.Parallel()
 		var s Stream
 		s.Reset(strings.NewReader("-1234 "), make([]byte, 0, 3))
 		s.Shift = false
@@ -302,6 +320,7 @@ func TestIntegerScanNoShiftRefill(t *testing.T) {
 		}
 	})
 	t.Run("uint64", func(t *testing.T) {
+		t.Parallel()
 		var s Stream
 		s.Reset(strings.NewReader("67890 "), make([]byte, 0, 3))
 		s.Shift = false

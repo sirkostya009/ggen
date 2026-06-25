@@ -10,6 +10,7 @@ import (
 )
 
 func TestParseError_ErrorString(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name string
 		pe   *ParseError
@@ -22,6 +23,7 @@ func TestParseError_ErrorString(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			if got := c.pe.Error(); got != c.want {
 				t.Errorf("Error() = %q, want %q", got, c.want)
 			}
@@ -30,6 +32,7 @@ func TestParseError_ErrorString(t *testing.T) {
 }
 
 func TestParseError_Unwrap(t *testing.T) {
+	t.Parallel()
 	pe := &ParseError{Err: scan.ErrBadString}
 	if got := pe.Unwrap(); got != scan.ErrBadString {
 		t.Errorf("Unwrap() = %v, want %v", got, scan.ErrBadString)
@@ -40,12 +43,14 @@ func TestParseError_Unwrap(t *testing.T) {
 }
 
 func TestNewParseErr_NilErr(t *testing.T) {
+	t.Parallel()
 	if got := NewParseErr("x", 1, nil); got != nil {
 		t.Errorf("NewParseErr(_, _, nil) = %v, want nil", got)
 	}
 }
 
 func TestNewParseErr_ValidationPassthrough(t *testing.T) {
+	t.Parallel()
 	cases := []error{
 		&validation.MinLenError{Path: []string{"x"}, Limit: 5, Got: 1},
 		validation.Errors{&validation.RequiredError{Path: []string{"x"}}},
@@ -59,6 +64,7 @@ func TestNewParseErr_ValidationPassthrough(t *testing.T) {
 }
 
 func TestNewParseErr_RawErrorWraps(t *testing.T) {
+	t.Parallel()
 	got := NewParseErr("name", 12, scan.ErrBadString)
 	var pe *ParseError
 	if !errors.As(got, &pe) {
@@ -70,6 +76,7 @@ func TestNewParseErr_RawErrorWraps(t *testing.T) {
 }
 
 func TestNewParseErr_ChainPrefixesField(t *testing.T) {
+	t.Parallel()
 	// Inner already wrapped (deeper-level decoder); outer prepends its
 	// segment onto the existing Path.
 	inner := &ParseError{Path: []string{"zip"}, Pos: 7, Err: scan.ErrBadNumber}
@@ -91,6 +98,7 @@ func TestNewParseErr_ChainPrefixesField(t *testing.T) {
 }
 
 func TestNewParseErr_ChainEmptyFieldNoChange(t *testing.T) {
+	t.Parallel()
 	inner := &ParseError{Path: []string{"zip"}, Err: scan.ErrBadNumber}
 	_ = NewParseErr("", 0, inner)
 	if strings.Join(inner.Path, ".") != "zip" {
@@ -99,6 +107,7 @@ func TestNewParseErr_ChainEmptyFieldNoChange(t *testing.T) {
 }
 
 func TestNewParseErr_ChainEmptyInnerField(t *testing.T) {
+	t.Parallel()
 	inner := &ParseError{Pos: 3, Err: scan.ErrBadNumber}
 	_ = NewParseErr("addr", 0, inner)
 	if strings.Join(inner.Path, ".") != "addr" {
@@ -126,6 +135,7 @@ func (stubElem) DecodeFromStream(s *scan.Stream) (stubElem, error) {
 }
 
 func TestUnmarshalSlice_WrapsBracketError(t *testing.T) {
+	t.Parallel()
 	_, err := UnmarshalSlice[stubElem]([]byte(`not-an-array`))
 	if err == nil {
 		t.Fatal("expected error")
@@ -143,6 +153,7 @@ func TestUnmarshalSlice_WrapsBracketError(t *testing.T) {
 }
 
 func TestUnmarshalSlice_ElementErrorCarriesIndex(t *testing.T) {
+	t.Parallel()
 	// Element 0 OK ({}), element 1 errors (stubElem requires '{'). The
 	// failing element's index should appear in Field.
 	_, err := UnmarshalSlice[stubElem]([]byte(`[{},BAD]`))

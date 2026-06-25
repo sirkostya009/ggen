@@ -48,8 +48,10 @@ var anyCases = []struct {
 }
 
 func TestAny_StdlibParity(t *testing.T) {
+	t.Parallel()
 	for _, tc := range anyCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			var want any
 			if err := json.Unmarshal([]byte(tc.in), &want); err != nil {
 				t.Fatalf("stdlib: %v", err)
@@ -66,8 +68,10 @@ func TestAny_StdlibParity(t *testing.T) {
 }
 
 func TestAnyNumber_StdlibParity(t *testing.T) {
+	t.Parallel()
 	for _, tc := range anyCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			dec := json.NewDecoder(strings.NewReader(tc.in))
 			dec.UseNumber()
 			var want any

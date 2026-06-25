@@ -39,6 +39,7 @@ type RichTypes struct {
 // TestRich_Roundtrip: marshal → unmarshal preserves every field. Big values
 // exceed int64 range to exercise arbitrary-precision paths.
 func TestRich_Roundtrip(t *testing.T) {
+	t.Parallel()
 	hugeInt, _ := new(big.Int).SetString("123456789012345678901234567890", 10)
 	site, _ := url.Parse("https://example.com/path?q=1")
 	id := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
@@ -95,6 +96,7 @@ func TestRich_Roundtrip(t *testing.T) {
 // TestRich_GofrsUUID_AltForms: decode delegates to the lib's UnmarshalText, so
 // hyphen-less and urn-prefixed forms pass; garbage still errors.
 func TestRich_GofrsUUID_AltForms(t *testing.T) {
+	t.Parallel()
 	cases := [][]byte{
 		[]byte(`{"gofrsId":"550e8400-e29b-41d4-a716-446655440000"}`), // canonical
 		[]byte(`{"gofrsId":"550e8400e29b41d4a716446655440000"}`),     // hyphen-less
@@ -113,6 +115,7 @@ func TestRich_GofrsUUID_AltForms(t *testing.T) {
 // TestRich_RawJSON_ZeroCopy: Raw1 aliases the source buffer. Verified by
 // mutating the source post-decode and watching the field change.
 func TestRich_RawJSON_ZeroCopy(t *testing.T) {
+	t.Parallel()
 	in := []byte(`{"raw1":"alpha","raw2":null,"site":"http://x","big":0,"bigF":"0","bigR":"0","id":"00000000-0000-0000-0000-000000000000"}`)
 	got, _, err := RichTypes{}.DecodeFrom(in)
 	if err != nil {
@@ -135,6 +138,7 @@ func TestRich_RawJSON_ZeroCopy(t *testing.T) {
 
 // TestRich_URLValidation: a bad URL surfaces url.Parse's error.
 func TestRich_URLValidation(t *testing.T) {
+	t.Parallel()
 	bad := []byte(`{"raw1":null,"raw2":null,"site":"://broken","big":0,"bigF":"0","bigR":"0","id":"00000000-0000-0000-0000-000000000000"}`)
 	if _, _, err := (RichTypes{}).DecodeFrom(bad); err == nil {
 		t.Error("expected url.Parse error")
@@ -143,6 +147,7 @@ func TestRich_URLValidation(t *testing.T) {
 
 // TestRich_BigIntArbitraryPrecision pushes a value way past int64 range.
 func TestRich_BigIntArbitraryPrecision(t *testing.T) {
+	t.Parallel()
 	huge := strings.Repeat("9", 100) // 100-digit number
 	in := []byte(`{"raw1":null,"raw2":null,"site":"http://x","big":` + huge + `,"bigF":"0","bigR":"0","id":"00000000-0000-0000-0000-000000000000"}`)
 	got, _, err := RichTypes{}.DecodeFrom(in)
@@ -156,6 +161,7 @@ func TestRich_BigIntArbitraryPrecision(t *testing.T) {
 
 // TestRich_UUIDInvalid surfaces uuid.Parse's error.
 func TestRich_UUIDInvalid(t *testing.T) {
+	t.Parallel()
 	in := []byte(`{"raw1":null,"raw2":null,"site":"http://x","big":0,"bigF":"0","bigR":"0","id":"not-a-uuid"}`)
 	if _, _, err := (RichTypes{}).DecodeFrom(in); err == nil {
 		t.Error("expected uuid.Parse error")
@@ -165,6 +171,7 @@ func TestRich_UUIDInvalid(t *testing.T) {
 // TestRich_RoundtripDeepEqual: encode→decode is DeepEqual for simple-value
 // fields (Raw* skipped — alias vs copy differs).
 func TestRich_RoundtripDeepEqual(t *testing.T) {
+	t.Parallel()
 	id := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
 	site, _ := url.Parse("https://x.test")
 	in := RichTypes{Site: *site, ID: id}

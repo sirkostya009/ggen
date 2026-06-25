@@ -22,6 +22,7 @@ type ModStruct struct {
 }
 
 func TestMods_trimLowerEmail(t *testing.T) {
+	t.Parallel()
 	in := []byte(`{"email":"  Foo@Bar.COM  "}`)
 	got, _, err := ModStruct{}.DecodeFrom(in)
 	if err != nil {
@@ -33,6 +34,7 @@ func TestMods_trimLowerEmail(t *testing.T) {
 }
 
 func TestMods_diveTagTrim(t *testing.T) {
+	t.Parallel()
 	in := []byte(`{"tags":["  Go  ","  Rust  ","  C++  "]}`)
 	got, _, err := ModStruct{}.DecodeFrom(in)
 	if err != nil {
@@ -46,6 +48,7 @@ func TestMods_diveTagTrim(t *testing.T) {
 }
 
 func TestMods_trimleft(t *testing.T) {
+	t.Parallel()
 	in := []byte(`{"sku":"SKU-ABC123"}`)
 	got, _, err := ModStruct{}.DecodeFrom(in)
 	if err != nil {
@@ -90,6 +93,7 @@ func RejectShort(s string) (string, error) {
 // TestFallibleMod_shortCircuitsValidation: the mod runs first, so its error
 // surfaces ahead of the email/minlen validators that would also fail.
 func TestFallibleMod_shortCircuitsValidation(t *testing.T) {
+	t.Parallel()
 	_, _, err := FallibleModStruct{}.DecodeFrom([]byte(`{"email":"x"}`))
 	if err == nil {
 		t.Fatal("expected mod rejection")
@@ -106,6 +110,7 @@ func TestFallibleMod_shortCircuitsValidation(t *testing.T) {
 // TestFallibleMod_multierrStillShortCircuits: in multierr mode a fallible
 // mod still returns a single parse error, not validation.Errors.
 func TestFallibleMod_multierrStillShortCircuits(t *testing.T) {
+	t.Parallel()
 	_, _, err := FallibleModMultierrStruct{}.DecodeFrom([]byte(`{"email":"x"}`))
 	if err == nil {
 		t.Fatal("expected mod rejection in multierr mode")
@@ -121,6 +126,7 @@ func TestFallibleMod_multierrStillShortCircuits(t *testing.T) {
 // TestFallibleMod_passLetsValidationRun: a passing mod is a gate, not a
 // bypass — downstream validation still runs.
 func TestFallibleMod_passLetsValidationRun(t *testing.T) {
+	t.Parallel()
 	// "abcdef" passes RejectShort (len >= 3) but fails minlen=10 + email.
 	_, _, err := FallibleModStruct{}.DecodeFrom([]byte(`{"email":"abcdef"}`))
 	if err == nil {
@@ -145,6 +151,7 @@ type CrossPkgModStruct struct {
 }
 
 func TestCrossPkgMod_pureMod(t *testing.T) {
+	t.Parallel()
 	got, _, err := CrossPkgModStruct{}.DecodeFrom([]byte(`{"tag":"x","nonEmpty":"y","code":"OK"}`))
 	if err != nil {
 		t.Fatalf("unmarshal: %v", err)
@@ -155,6 +162,7 @@ func TestCrossPkgMod_pureMod(t *testing.T) {
 }
 
 func TestCrossPkgMod_fallibleModRejects(t *testing.T) {
+	t.Parallel()
 	_, _, err := CrossPkgModStruct{}.DecodeFrom([]byte(`{"tag":"x","nonEmpty":"","code":"OK"}`))
 	if err == nil {
 		t.Fatal("expected fallible-mod rejection")
@@ -165,6 +173,7 @@ func TestCrossPkgMod_fallibleModRejects(t *testing.T) {
 }
 
 func TestCrossPkgValidator_rejects(t *testing.T) {
+	t.Parallel()
 	_, _, err := CrossPkgModStruct{}.DecodeFrom([]byte(`{"tag":"x","nonEmpty":"y","code":"lowercase"}`))
 	if err == nil {
 		t.Fatal("expected cross-pkg validator rejection")
@@ -175,6 +184,7 @@ func TestCrossPkgValidator_rejects(t *testing.T) {
 }
 
 func TestCrossPkgValidator_accepts(t *testing.T) {
+	t.Parallel()
 	got, _, err := CrossPkgModStruct{}.DecodeFrom([]byte(`{"tag":"x","nonEmpty":"y","code":"OK"}`))
 	if err != nil {
 		t.Fatalf("unmarshal: %v", err)
@@ -196,6 +206,7 @@ type NestedMultierrStruct struct {
 }
 
 func TestNestedMultierr_drainsInnerValidationErrors(t *testing.T) {
+	t.Parallel()
 	// "abcdef" passes the mod but fails inner minlen=10 + email; outer also
 	// fails on name (required/minlen=2) and code (lte=100). Inner returns a
 	// validation.Errors aggregate the outer must drain.
@@ -249,6 +260,7 @@ func pathOf(e validation.Error) []string {
 // TestNestedMultierr_innerParseErrorReturnsEarly: an inner parse error
 // returns immediately (not drained), wrapped in *decode.ParseError.
 func TestNestedMultierr_innerParseErrorReturnsEarly(t *testing.T) {
+	t.Parallel()
 	// Inner email is a number, not a string.
 	in := []byte(`{"inner":{"email":123},"name":"valid","code":50}`)
 	_, _, err := NestedMultierrStruct{}.DecodeFrom(in)

@@ -34,6 +34,7 @@ var (
 //
 //ggen:generate are surfaced through both jsonv1.Unmarshal and jsonv2.Unmarshal, i.e.
 func TestHookedValidationPropagates(t *testing.T) {
+	t.Parallel()
 	// N out of range (lte=100) — violates generated validation.
 	bad := []byte(`{"name":"ok","n":200}`)
 
@@ -64,6 +65,7 @@ func TestHookedValidationPropagates(t *testing.T) {
 
 // TestHookedRoundtrip: valid data round-trips through both stdlib entry points.
 func TestHookedRoundtrip(t *testing.T) {
+	t.Parallel()
 	in := HookedStruct{Name: "ok", N: 42}
 
 	for _, tc := range []struct {
@@ -77,6 +79,7 @@ func TestHookedRoundtrip(t *testing.T) {
 			func(b []byte, v any) error { return jsonv2.Unmarshal(b, v) }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			out, err := tc.marshal(in)
 			if err != nil {
 				t.Fatalf("marshal: %v", err)

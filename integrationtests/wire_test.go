@@ -57,6 +57,7 @@ func mustPresent(t *testing.T, data []byte, keys ...string) {
 
 // TestOmit_NilPointerKeyAbsent: nil omitempty pointer fields must not appear.
 func TestOmit_NilPointerKeyAbsent(t *testing.T) {
+	t.Parallel()
 	out, _ := encode.Marshal(PointerStruct{PtrNameStruct: PtrNameStruct{Name: new("x")}, PtrEnabledStruct: PtrEnabledStruct{Enabled: new(false)}})
 	// name/enabled are not omitempty — must be present.
 	mustPresent(t, out, "name", "enabled")
@@ -64,6 +65,7 @@ func TestOmit_NilPointerKeyAbsent(t *testing.T) {
 }
 
 func TestOmit_PresentPointerKeyEmitted(t *testing.T) {
+	t.Parallel()
 	count := 7
 	out, _ := encode.Marshal(PointerStruct{PtrNameStruct: PtrNameStruct{Name: new("")}, PtrEnabledStruct: PtrEnabledStruct{Enabled: new(false)}, PtrCountStruct: PtrCountStruct{Count: &count}})
 	mustPresent(t, out, "count")
@@ -71,6 +73,7 @@ func TestOmit_PresentPointerKeyEmitted(t *testing.T) {
 
 // TestOmit_ZeroNumberKeyAbsent: omitzero on Score=0 must drop the key.
 func TestOmit_ZeroNumberKeyAbsent(t *testing.T) {
+	t.Parallel()
 	out, _ := encode.Marshal(OmitStruct{Name: "x", Score: 0, StrCount: 1})
 	mustAbsent(t, out, "score")
 	mustPresent(t, out, "name", "count")
@@ -78,6 +81,7 @@ func TestOmit_ZeroNumberKeyAbsent(t *testing.T) {
 
 // TestOmit_EmptyContainersAbsent: omitempty drops empty string, nil slice.
 func TestOmit_EmptyContainersAbsent(t *testing.T) {
+	t.Parallel()
 	out, _ := encode.Marshal(OmitStruct{Name: "x", StrCount: 1})
 	mustAbsent(t, out, "bio", "tags")
 }
@@ -85,6 +89,7 @@ func TestOmit_EmptyContainersAbsent(t *testing.T) {
 // TestStringTag_QuotedNumber: the `,string` tag wraps the number as a JSON
 // string, not a bare number. Inspect the raw value to confirm shape.
 func TestStringTag_QuotedNumber(t *testing.T) {
+	t.Parallel()
 	out, _ := encode.Marshal(OmitStruct{Name: "x", StrCount: 42})
 	got := objectKeys(t, out)
 	v, ok := got["count"]
@@ -99,6 +104,7 @@ func TestStringTag_QuotedNumber(t *testing.T) {
 // TestFormat_HexParseable: `format:hex` must emit a quoted lowercase hex
 // string that hex.DecodeString accepts and round-trips to the input bytes.
 func TestFormat_HexParseable(t *testing.T) {
+	t.Parallel()
 	want := []byte{0xde, 0xad, 0xbe, 0xef, 0x00, 0x7f}
 	out, _ := encode.Marshal(NativeTypes{HexBlob: want})
 	got := objectKeys(t, out)
@@ -121,6 +127,7 @@ func TestFormat_HexParseable(t *testing.T) {
 
 // TestFormat_Base64Parseable: default `[]byte` (no format) is base64.
 func TestFormat_Base64Parseable(t *testing.T) {
+	t.Parallel()
 	want := []byte("hello world")
 	out, _ := encode.Marshal(NativeTypes{Blob: want})
 	got := objectKeys(t, out)
@@ -149,6 +156,7 @@ type base32Wrap struct {
 }
 
 func TestFormat_Base32Parseable(t *testing.T) {
+	t.Parallel()
 	want := []byte{1, 2, 3, 4, 5, 6, 7, 8}
 	out, _ := encode.Marshal(base32Wrap{B: want})
 	got := objectKeys(t, out)
@@ -167,6 +175,7 @@ func TestFormat_Base32Parseable(t *testing.T) {
 // TestFormat_BytesArray: `format:array` emits a JSON array of numbers
 // (uint8 each). Walk the array and verify every element matches.
 func TestFormat_BytesArray(t *testing.T) {
+	t.Parallel()
 	want := []byte{10, 20, 30, 40}
 	out, _ := encode.Marshal(NativeTypes{ByteArray: want})
 	got := objectKeys(t, out)
@@ -190,6 +199,7 @@ func TestFormat_BytesArray(t *testing.T) {
 
 // TestFormat_TimeUnixIsNumber: `format:unix` emits a bare number, not a string.
 func TestFormat_TimeUnixIsNumber(t *testing.T) {
+	t.Parallel()
 	when := time.Unix(1700000000, 0).UTC()
 	out, _ := encode.Marshal(NativeTypes{UnixAt: when})
 	got := objectKeys(t, out)
@@ -209,6 +219,7 @@ func TestFormat_TimeUnixIsNumber(t *testing.T) {
 // TestFormat_TimeRFC3339Parseable: `format:RFC3339` emits a quoted layout
 // string that time.Parse can read back.
 func TestFormat_TimeRFC3339Parseable(t *testing.T) {
+	t.Parallel()
 	when := time.Unix(1700000000, 0).UTC()
 	out, _ := encode.Marshal(NativeTypes{IssuedAt: when})
 	got := objectKeys(t, out)
@@ -225,6 +236,7 @@ func TestFormat_TimeRFC3339Parseable(t *testing.T) {
 
 // TestFormat_DurationSecIsNumber: `format:sec` emits a number (seconds).
 func TestFormat_DurationSecIsNumber(t *testing.T) {
+	t.Parallel()
 	out, _ := encode.Marshal(NativeTypes{SecDur: 90 * time.Second})
 	got := objectKeys(t, out)
 	v := got["secDur"]
@@ -236,6 +248,7 @@ func TestFormat_DurationSecIsNumber(t *testing.T) {
 // TestFormat_DurationUnitsParseable: `format:units` emits a Go-duration
 // string — time.ParseDuration must accept it.
 func TestFormat_DurationUnitsParseable(t *testing.T) {
+	t.Parallel()
 	d := time.Hour + 30*time.Minute
 	out, _ := encode.Marshal(NativeTypes{UnitDur: d})
 	got := objectKeys(t, out)
@@ -255,6 +268,7 @@ func TestFormat_DurationUnitsParseable(t *testing.T) {
 // (no quotes); every other layout must emit a quoted string whose
 // content time.Parse can read back when given the same layout.
 func TestFormat_AllTimeLayouts(t *testing.T) {
+	t.Parallel()
 	out, _ := encode.Marshal(timeFormatsAll())
 	got := objectKeys(t, out)
 
@@ -295,6 +309,7 @@ func TestFormat_AllTimeLayouts(t *testing.T) {
 // TestFormat_NetIPParseable: net.IP / netip.Addr / netip.Prefix all emit
 // quoted strings the corresponding parser accepts.
 func TestFormat_NetIPParseable(t *testing.T) {
+	t.Parallel()
 	addr, _ := netip.ParseAddr("192.0.2.7")
 	prefix, _ := netip.ParsePrefix("10.0.0.0/24")
 	out, _ := encode.Marshal(NativeTypes{
@@ -322,6 +337,7 @@ func TestFormat_NetIPParseable(t *testing.T) {
 
 // TestNilSlice_MarshalsAsNull: nil slice → `null`, empty non-nil → `[]`.
 func TestNilSlice_MarshalsAsNull(t *testing.T) {
+	t.Parallel()
 	out, err := encode.Marshal(Node{ID: 1, Name: "n"})
 	if err != nil {
 		t.Fatal(err)
@@ -347,6 +363,7 @@ func TestNilSlice_MarshalsAsNull(t *testing.T) {
 
 // TestNilMap_MarshalsAsNull: nil map → `null`. Empty non-nil → `{}`.
 func TestNilMap_MarshalsAsNull(t *testing.T) {
+	t.Parallel()
 	out, err := encode.Marshal(Node{ID: 1, Name: "n"})
 	if err != nil {
 		t.Fatal(err)
@@ -368,6 +385,7 @@ func TestNilMap_MarshalsAsNull(t *testing.T) {
 // TestEmptyArrayDecode_NonNil: `[]`/`{}` decode to non-nil empty containers
 // (symmetric to TestNullDecode_LeavesContainerNil).
 func TestEmptyArrayDecode_NonNil(t *testing.T) {
+	t.Parallel()
 	in := []byte(`{"id":1,"name":"n","tags":[],"children":[],"props":{},"score":0,"active":false}`)
 	got, _, err := Node{}.DecodeFrom(in)
 	if err != nil {
@@ -399,6 +417,7 @@ func TestEmptyArrayDecode_NonNil(t *testing.T) {
 // TestStdlibVsGgen_MapReplaceDivergence: stdlib merges into a pre-populated
 // map (old keys survive); ggen's DecodeFrom replaces it.
 func TestStdlibVsGgen_MapReplaceDivergence(t *testing.T) {
+	t.Parallel()
 	in := []byte(`{"id":1,"name":"n","props":{"new":"v"},"score":0,"active":false}`)
 
 	// stdlib baseline; skip rather than falsely fail if a future Go changes it.
@@ -435,6 +454,7 @@ func TestStdlibVsGgen_MapReplaceDivergence(t *testing.T) {
 // TestNullDecode_LeavesContainerNil: decoder consumes `null` for slice
 // and map fields, leaving the Go value nil — symmetric to the encoder.
 func TestNullDecode_LeavesContainerNil(t *testing.T) {
+	t.Parallel()
 	in := []byte(`{"id":1,"name":"n","tags":null,"children":null,"props":null,"score":0,"active":false}`)
 	got, _, err := Node{}.DecodeFrom(in)
 	if err != nil {
@@ -454,6 +474,7 @@ func TestNullDecode_LeavesContainerNil(t *testing.T) {
 // TestOmitEmpty_NilSliceMap_KeyAbsent: omitempty must still drop nil
 // slices/maps entirely after the nil-as-null change. Verify by absence.
 func TestOmitEmpty_NilSliceMap_KeyAbsent(t *testing.T) {
+	t.Parallel()
 	out, _ := encode.Marshal(OmitStruct{Name: "x", StrCount: 1})
 	mustAbsent(t, out, "tags", "labels")
 }
@@ -461,6 +482,7 @@ func TestOmitEmpty_NilSliceMap_KeyAbsent(t *testing.T) {
 // TestOmitEmpty_EmptyContainer_KeyAbsent: omitempty drops empty (len==0)
 // non-nil slices/maps too — same shape as nil, both go away.
 func TestOmitEmpty_EmptyContainer_KeyAbsent(t *testing.T) {
+	t.Parallel()
 	out, _ := encode.Marshal(OmitStruct{
 		Name: "x", StrCount: 1,
 		Tags:   []string{},
@@ -472,6 +494,7 @@ func TestOmitEmpty_EmptyContainer_KeyAbsent(t *testing.T) {
 // TestOmitZero_NilContainer_KeyAbsent: omitzero drops nil (Go zero) but
 // keeps empty non-nil. Different from omitempty.
 func TestOmitZero_NilContainer_KeyAbsent(t *testing.T) {
+	t.Parallel()
 	out, _ := encode.Marshal(OmitStruct{Name: "x", StrCount: 1})
 	mustAbsent(t, out, "extra", "meta")
 }
@@ -480,6 +503,7 @@ func TestOmitZero_NilContainer_KeyAbsent(t *testing.T) {
 // `make([]T, 0)` and `make(map, 0)` are non-zero Go values → emit `[]` /
 // `{}`.
 func TestOmitZero_EmptyContainer_KeyEmitted(t *testing.T) {
+	t.Parallel()
 	out, _ := encode.Marshal(OmitStruct{
 		Name: "x", StrCount: 1,
 		Extra: []string{},
@@ -497,6 +521,7 @@ func TestOmitZero_EmptyContainer_KeyEmitted(t *testing.T) {
 // TestPtrSlice_RoundTrip: `[]*T` through the slab path. Element values
 // survive the roundtrip; pointer identity does not.
 func TestPtrSlice_RoundTrip(t *testing.T) {
+	t.Parallel()
 	a := Address{Street: "S1", City: "C1", ZipCode: "11111"}
 	b := Address{Street: "S2", City: "C2", ZipCode: "22222"}
 	in := PtrSliceStruct{
@@ -535,6 +560,7 @@ func TestPtrSlice_RoundTrip(t *testing.T) {
 // TestPtrSlice_NilSlice_AsNull: a nil `[]*T` slice serializes as `null`
 // (matching the value-slice rule); decode of `null` produces nil slice.
 func TestPtrSlice_NilSlice_AsNull(t *testing.T) {
+	t.Parallel()
 	out, err := encode.Marshal(PtrSliceStruct{})
 	if err != nil {
 		t.Fatal(err)
@@ -559,6 +585,7 @@ func TestPtrSlice_NilSlice_AsNull(t *testing.T) {
 // TestPtrSlice_AllNullElements: a slice of all-null elements decodes to
 // a slice of nil pointers (length preserved).
 func TestPtrSlice_AllNullElements(t *testing.T) {
+	t.Parallel()
 	in := []byte(`{"items":[null,null,null],"tuple":[null,null,null],"nodes":[null]}`)
 	got, _, err := PtrSliceStruct{}.DecodeFrom(in)
 	if err != nil {
@@ -582,6 +609,7 @@ func TestPtrSlice_AllNullElements(t *testing.T) {
 // TestWideStruct_BitmaskSeenFlags: 40-field struct exercises the bitmask
 // seen-tracking path (roundtrip, missing-required, duplicate-key).
 func TestWideStruct_BitmaskSeenFlags(t *testing.T) {
+	t.Parallel()
 	in := WideStruct{
 		F1: "1", F2: "2", F3: "3", F4: "4", F5: "5",
 		F6: "6", F7: "7", F8: "8", F9: "9", F10: "10",
@@ -707,6 +735,7 @@ type BoundaryStruct struct {
 // TestBoundary_FloatNaN: NaN marshal must not leak a bare `NaN` literal
 // (error or null-encoding both fine).
 func TestBoundary_FloatNaN_marshal(t *testing.T) {
+	t.Parallel()
 	in := BoundaryStruct{F: math.NaN()}
 	out, err := encode.Marshal(in)
 	if err == nil {
@@ -717,6 +746,7 @@ func TestBoundary_FloatNaN_marshal(t *testing.T) {
 }
 
 func TestBoundary_FloatInf_marshal(t *testing.T) {
+	t.Parallel()
 	for _, v := range []float64{math.Inf(1), math.Inf(-1)} {
 		in := BoundaryStruct{F: v}
 		out, err := encode.Marshal(in)
@@ -731,6 +761,7 @@ func TestBoundary_FloatInf_marshal(t *testing.T) {
 // TestBoundary_IntegerOverflow: a number above int64 range must error, not
 // silently truncate (19 nines > 2^63-1).
 func TestBoundary_IntegerOverflow_unmarshal(t *testing.T) {
+	t.Parallel()
 	in := []byte(`{"i":9999999999999999999,"f":0,"str":""}`)
 	got, _, err := BoundaryStruct{}.DecodeFrom(in)
 	if err == nil {
@@ -744,6 +775,7 @@ func TestBoundary_IntegerOverflow_unmarshal(t *testing.T) {
 // TestBoundary_FloatPrecision_unmarshal: 1e308 stays finite, 1e309 overflows;
 // neither may panic.
 func TestBoundary_FloatPrecision_unmarshal(t *testing.T) {
+	t.Parallel()
 	ok := []byte(`{"f":1e308,"i":0,"str":""}`)
 	if got, _, err := (BoundaryStruct{}).DecodeFrom(ok); err == nil {
 		if math.IsInf(got.F, 0) || math.IsNaN(got.F) {
@@ -758,6 +790,7 @@ func TestBoundary_FloatPrecision_unmarshal(t *testing.T) {
 // TestBoundary_EveryEscapeAtOnce: a string of every short-escape char must
 // round-trip, and JSONSize must absorb the worst-case 2× expansion.
 func TestBoundary_EveryEscapeAtOnce(t *testing.T) {
+	t.Parallel()
 	str := "\b\f\n\r\t\"\\"
 	in := BoundaryStruct{Str: str}
 	out, err := encode.Marshal(in)
@@ -783,6 +816,7 @@ func TestBoundary_EveryEscapeAtOnce(t *testing.T) {
 
 // TestBoundary_LoneSurrogate: \uD800 alone must not panic (error or U+FFFD).
 func TestBoundary_LoneSurrogate_unmarshal(t *testing.T) {
+	t.Parallel()
 	in := []byte(`{"f":0,"i":0,"str":"\uD800"}`)
 	defer func() {
 		if r := recover(); r != nil {
@@ -795,6 +829,7 @@ func TestBoundary_LoneSurrogate_unmarshal(t *testing.T) {
 // TestBoundary_RawControlChar: a literal \x01 inside a string is invalid per
 // RFC 8259 and must be rejected (ggen follows stdlib, not Sonic).
 func TestBoundary_RawControlChar_unmarshal(t *testing.T) {
+	t.Parallel()
 	in := []byte("{\"f\":0,\"i\":0,\"str\":\"a\x01b\"}")
 	_, _, err := BoundaryStruct{}.DecodeFrom(in)
 	if err == nil {

@@ -5,6 +5,7 @@ import (
 )
 
 func TestParseJSONTag(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		input       string
 		wantName    string

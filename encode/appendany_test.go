@@ -44,6 +44,7 @@ func checkAny(t *testing.T, in any) {
 }
 
 func TestAppendAny_Nil(t *testing.T) {
+	t.Parallel()
 	out, err := AppendAny(nil, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -54,11 +55,13 @@ func TestAppendAny_Nil(t *testing.T) {
 }
 
 func TestAppendAny_Bool(t *testing.T) {
+	t.Parallel()
 	checkAny(t, true)
 	checkAny(t, false)
 }
 
 func TestAppendAny_String(t *testing.T) {
+	t.Parallel()
 	checkAny(t, "")
 	checkAny(t, "hello")
 	checkAny(t, "tab\there")
@@ -67,6 +70,7 @@ func TestAppendAny_String(t *testing.T) {
 }
 
 func TestAppendAny_Numbers(t *testing.T) {
+	t.Parallel()
 	checkAny(t, int(42))
 	checkAny(t, int8(-7))
 	checkAny(t, int16(-1234))
@@ -83,6 +87,7 @@ func TestAppendAny_Numbers(t *testing.T) {
 }
 
 func TestAppendAny_JSONNumber(t *testing.T) {
+	t.Parallel()
 	out, err := AppendAny(nil, json.Number("12345"))
 	if err != nil {
 		t.Fatal(err)
@@ -93,12 +98,14 @@ func TestAppendAny_JSONNumber(t *testing.T) {
 }
 
 func TestAppendAny_Slice(t *testing.T) {
+	t.Parallel()
 	checkAny(t, []any{})
 	checkAny(t, []any{1, "two", true, nil})
 	checkAny(t, []any{[]any{1, 2}, []any{3, 4}})
 }
 
 func TestAppendAny_Map(t *testing.T) {
+	t.Parallel()
 	checkAny(t, map[string]any{})
 	checkAny(t, map[string]any{"k": "v"})
 	checkAny(t, map[string]any{
@@ -111,6 +118,7 @@ func TestAppendAny_Map(t *testing.T) {
 }
 
 func TestAppendAny_PrimitiveSlices(t *testing.T) {
+	t.Parallel()
 	checkAny(t, []string{"a", "b", "c"})
 	checkAny(t, []string{})
 	checkAny(t, []int{1, 2, 3})
@@ -128,17 +136,20 @@ func TestAppendAny_PrimitiveSlices(t *testing.T) {
 }
 
 func TestAppendAny_Bytes(t *testing.T) {
+	t.Parallel()
 	// Stdlib marshals []byte as a base64 string — match.
 	checkAny(t, []byte("hello world"))
 	checkAny(t, []byte{0xde, 0xad, 0xbe, 0xef})
 }
 
 func TestAppendAny_StringMap(t *testing.T) {
+	t.Parallel()
 	checkAny(t, map[string]string{"k": "v"})
 	checkAny(t, map[string]string{"a": "1", "b": "2", "c": "3"})
 }
 
 func TestAppendAny_PrimitiveMaps(t *testing.T) {
+	t.Parallel()
 	checkAny(t, map[string]int{"a": 1, "b": 2})
 	checkAny(t, map[string]int8{"a": -1})
 	checkAny(t, map[string]int16{"a": -1000})
@@ -155,6 +166,7 @@ func TestAppendAny_PrimitiveMaps(t *testing.T) {
 }
 
 func TestAppendAny_Nested(t *testing.T) {
+	t.Parallel()
 	checkAny(t, map[string]any{
 		"items": []any{
 			map[string]any{"k": 1},
@@ -165,6 +177,7 @@ func TestAppendAny_Nested(t *testing.T) {
 
 // Untagged exported struct — uses Go field names verbatim.
 func TestAppendAny_Struct_Bare(t *testing.T) {
+	t.Parallel()
 	type point struct {
 		X, Y int
 	}
@@ -173,6 +186,7 @@ func TestAppendAny_Struct_Bare(t *testing.T) {
 
 // json-tagged fields: rename + skip via "-" + omitempty + omitzero.
 func TestAppendAny_Struct_Tags(t *testing.T) {
+	t.Parallel()
 	type tagged struct {
 		Name    string `json:"name"`
 		Skip    string `json:"-"`
@@ -185,6 +199,7 @@ func TestAppendAny_Struct_Tags(t *testing.T) {
 
 // Pointer fields and pointer-typed top-level value.
 func TestAppendAny_Struct_Pointers(t *testing.T) {
+	t.Parallel()
 	type withPtr struct {
 		Name *string `json:"name"`
 		N    *int    `json:"n"`
@@ -201,6 +216,7 @@ func TestAppendAny_Struct_Pointers(t *testing.T) {
 
 // Anonymous embedded struct fields are promoted at parent level.
 func TestAppendAny_Struct_Embedded(t *testing.T) {
+	t.Parallel()
 	type Base struct {
 		ID   string `json:"id"`
 		Meta string `json:"meta"`
@@ -214,6 +230,7 @@ func TestAppendAny_Struct_Embedded(t *testing.T) {
 
 // Nested struct fields hit the recursion path.
 func TestAppendAny_Struct_Nested(t *testing.T) {
+	t.Parallel()
 	type addr struct {
 		City string `json:"city"`
 	}
@@ -226,6 +243,7 @@ func TestAppendAny_Struct_Nested(t *testing.T) {
 
 // ,string option wraps numeric/bool primitives in JSON quotes.
 func TestAppendAny_Struct_StringOpt(t *testing.T) {
+	t.Parallel()
 	type quoted struct {
 		N int  `json:"n,string"`
 		B bool `json:"b,string"`
@@ -240,6 +258,7 @@ func TestAppendAny_Struct_StringOpt(t *testing.T) {
 }
 
 func TestAppendAny_RawMessage(t *testing.T) {
+	t.Parallel()
 	// Non-empty bytes pass through verbatim — no quoting, no escape.
 	checkAny(t, json.RawMessage(`{"a":1,"b":[true,null]}`))
 	checkAny(t, json.RawMessage(`42`))
@@ -256,6 +275,7 @@ func TestAppendAny_RawMessage(t *testing.T) {
 }
 
 func TestAppendAny_Time(t *testing.T) {
+	t.Parallel()
 	// Fixed instant so output is byte-stable.
 	ts := time.Date(2026, 5, 25, 12, 34, 56, 789_000_000, time.UTC)
 	out, err := AppendAny(nil, ts)
@@ -285,6 +305,7 @@ func TestAppendAny_Time(t *testing.T) {
 }
 
 func TestAppendAny_PrimitivePointers(t *testing.T) {
+	t.Parallel()
 	s := "hi"
 	b := true
 	i := 42
@@ -324,6 +345,7 @@ func TestAppendAny_PrimitivePointers(t *testing.T) {
 
 // Named primitive types route through reflection's primitive cases.
 func TestAppendAny_NamedPrimitives(t *testing.T) {
+	t.Parallel()
 	type myString string
 	type myInt int
 	type myBool bool
@@ -334,6 +356,7 @@ func TestAppendAny_NamedPrimitives(t *testing.T) {
 
 // Unsupported kinds (channels, funcs) error instead of silently skipping.
 func TestAppendAny_Unsupported(t *testing.T) {
+	t.Parallel()
 	_, err := AppendAny(nil, make(chan int))
 	if err == nil {
 		t.Fatal("expected error for chan, got nil")
@@ -372,6 +395,7 @@ func (f fakeTextMarshaler) MarshalText() ([]byte, error) {
 }
 
 func TestAppendAny_Marshaler(t *testing.T) {
+	t.Parallel()
 	out, err := AppendAny(nil, fakeAppendJSON{payload: `{"raw":1}`})
 	if err != nil {
 		t.Fatal(err)
@@ -382,6 +406,7 @@ func TestAppendAny_Marshaler(t *testing.T) {
 }
 
 func TestAppendAny_JSONMarshaler(t *testing.T) {
+	t.Parallel()
 	out, err := AppendAny(nil, fakeJSONMarshaler{s: "hi"})
 	if err != nil {
 		t.Fatal(err)
@@ -392,6 +417,7 @@ func TestAppendAny_JSONMarshaler(t *testing.T) {
 }
 
 func TestAppendAny_TextAppender(t *testing.T) {
+	t.Parallel()
 	out, err := AppendAny(nil, fakeTextAppender{word: "hello"})
 	if err != nil {
 		t.Fatal(err)
@@ -402,6 +428,7 @@ func TestAppendAny_TextAppender(t *testing.T) {
 }
 
 func TestAppendAny_TextMarshaler(t *testing.T) {
+	t.Parallel()
 	out, err := AppendAny(nil, fakeTextMarshaler{word: "hello"})
 	if err != nil {
 		t.Fatal(err)
@@ -430,6 +457,7 @@ func (fakeTextAndJSON) MarshalJSON() ([]byte, error) {
 // carry both hooks) would unexpectedly pay the MarshalJSON return
 // alloc.
 func TestAppendAny_TextAppenderOvertakesMarshalJSON(t *testing.T) {
+	t.Parallel()
 	out, err := AppendAny(nil, fakeTextAndJSON{})
 	if err != nil {
 		t.Fatal(err)
@@ -453,6 +481,7 @@ func (fakeTextMarshalerAndJSON) MarshalJSON() ([]byte, error) {
 }
 
 func TestAppendAny_TextMarshalerOvertakesMarshalJSON(t *testing.T) {
+	t.Parallel()
 	out, err := AppendAny(nil, fakeTextMarshalerAndJSON{})
 	if err != nil {
 		t.Fatal(err)
@@ -463,6 +492,7 @@ func TestAppendAny_TextMarshalerOvertakesMarshalJSON(t *testing.T) {
 }
 
 func TestAppendAny_NonStringMapKey(t *testing.T) {
+	t.Parallel()
 	_, err := AppendAny(nil, map[int]string{1: "a"})
 	if err == nil {
 		t.Fatal("expected error for non-string map key, got nil")
@@ -471,6 +501,7 @@ func TestAppendAny_NonStringMapKey(t *testing.T) {
 
 // AppendJSON-style: caller-owned dst gets appended to (not replaced).
 func TestAppendAny_AppendsToDst(t *testing.T) {
+	t.Parallel()
 	dst := []byte("prefix:")
 	out, err := AppendAny(dst, 42)
 	if err != nil {
@@ -732,6 +763,7 @@ type namedStr string
 // generated string fields. Raw-byte comparison: checkAny reparses decoded
 // values and would mask escaping differences.
 func TestAppendAny_NoHTMLEscapeDefault(t *testing.T) {
+	t.Parallel()
 	cases := []any{
 		`<a href="x">b & c</a>`,
 		[]string{"<&>"},

@@ -159,6 +159,7 @@ func TestJSONSize_NoReallocOnWorstCase(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			size := c.v.JSONSize()
 			buf := make([]byte, 0, size)
 			got, err := c.v.AppendJSON(buf)
@@ -226,6 +227,7 @@ func TestJSONSize_URLStruct(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			var s URLStruct
 			if c.raw != "" {
 				u, err := url.Parse(c.raw)
@@ -293,6 +295,7 @@ func TestJSONSize_TimeFormats(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			size := c.v.JSONSize()
 			got, err := c.v.AppendJSON(make([]byte, 0, size))
 			if err != nil {
@@ -368,6 +371,7 @@ func richTypesWorst() RichTypes {
 
 // TestJSONSize_TupleStruct_NoRealloc: cap-guard for [N]T fields.
 func TestJSONSize_TupleStruct_NoRealloc(t *testing.T) {
+	t.Parallel()
 	in := TupleStruct{
 		Point:    [2]float64{-math.MaxFloat64, math.MaxFloat64},
 		RGB:      [3]int{255, 0, 128},
@@ -390,6 +394,7 @@ func TestJSONSize_TupleStruct_NoRealloc(t *testing.T) {
 // TestJSONSize_HTMLEscapeStruct_NoRealloc: htmlescape opt-in expands < > &
 // to 6× (\uXXXX); the bound must cover an all-< > & string.
 func TestJSONSize_HTMLEscapeStruct_NoRealloc(t *testing.T) {
+	t.Parallel()
 	in := HTMLEscapeStruct{Note: strings.Repeat("<>&", 50)}
 	size := in.JSONSize()
 	got, err := in.AppendJSON(make([]byte, 0, size))
@@ -407,6 +412,7 @@ func TestJSONSize_HTMLEscapeStruct_NoRealloc(t *testing.T) {
 // TestJSONSize_InlineStruct_NoRealloc: bound must cover the fixed field AND
 // every spliced inline map entry.
 func TestJSONSize_InlineStruct_NoRealloc(t *testing.T) {
+	t.Parallel()
 	in := InlineStruct{
 		Name: strings.Repeat("n", 30),
 		Extra: map[string]any{
@@ -430,6 +436,7 @@ func TestJSONSize_InlineStruct_NoRealloc(t *testing.T) {
 // TestJSONSize_StringTagStruct_NoRealloc: ,string wrap adds two quotes over
 // the bare-number budget at every width.
 func TestJSONSize_StringTagStruct_NoRealloc(t *testing.T) {
+	t.Parallel()
 	in := StringTagStruct{
 		I8: math.MinInt8, I16: math.MinInt16, I32: math.MinInt32, I64: math.MinInt64,
 		U8: math.MaxUint8, U16: math.MaxUint16, U32: math.MaxUint32, U64: math.MaxUint64,
@@ -469,6 +476,7 @@ func populatedSQLNullAt(when time.Time) SQLNullStruct {
 // TestJSONSize_SQLNullStruct_NoRealloc: cap-guard for every sql.NullX flavor,
 // both Valid=true and Valid=false (size = max(inner, len("null"))).
 func TestJSONSize_SQLNullStruct_NoRealloc(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name string
 		v    SQLNullStruct
@@ -478,6 +486,7 @@ func TestJSONSize_SQLNullStruct_NoRealloc(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			size := c.v.JSONSize()
 			got, err := c.v.AppendJSON(make([]byte, 0, size))
 			if err != nil {
@@ -601,14 +610,21 @@ func TestJSONSize_SQLNullPerType_NoRealloc(t *testing.T) {
 		}
 	}
 	for _, c := range cases {
-		t.Run(c.name+"/null", func(t *testing.T) { check(t, c.nullCase) })
-		t.Run(c.name+"/valid", func(t *testing.T) { check(t, c.validCase) })
+		t.Run(c.name+"/null", func(t *testing.T) {
+			t.Parallel()
+			check(t, c.nullCase)
+		})
+		t.Run(c.name+"/valid", func(t *testing.T) {
+			t.Parallel()
+			check(t, c.validCase)
+		})
 	}
 }
 
 // TestJSONSize_PtrSliceStruct_NoRealloc: cap-guard for []*T slabs, with
 // nil + non-nil elements.
 func TestJSONSize_PtrSliceStruct_NoRealloc(t *testing.T) {
+	t.Parallel()
 	a := Address{Street: "Main 1", City: "Lviv", ZipCode: "79000"}
 	b := Address{Street: strings.Repeat("x", 200), City: strings.Repeat("y", 200), ZipCode: "00000"}
 	in := PtrSliceStruct{
@@ -649,6 +665,7 @@ func TestJSONSize_PtrSlicePerShape_NoRealloc(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			size := c.v.JSONSize()
 			got, err := c.v.AppendJSON(make([]byte, 0, size))
 			if err != nil {
@@ -689,6 +706,7 @@ func TestJSONSize_PtrFieldPerKind_NoRealloc(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			size := c.v.JSONSize()
 			got, err := c.v.AppendJSON(make([]byte, 0, size))
 			if err != nil {
@@ -724,6 +742,7 @@ func TestJSONSize_NPtrPerDepth_NoRealloc(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			size := c.v.JSONSize()
 			got, err := c.v.AppendJSON(make([]byte, 0, size))
 			if err != nil {
@@ -742,6 +761,7 @@ func TestJSONSize_NPtrPerDepth_NoRealloc(t *testing.T) {
 // TestJSONSize_AnyStruct_NoRealloc: cap-guard for an any field over a nested
 // map+array+string mix (usenumber variant below).
 func TestJSONSize_AnyStruct_NoRealloc(t *testing.T) {
+	t.Parallel()
 	body := map[string]any{
 		"k":   float64(42),
 		"l":   []any{float64(1), float64(2), "abc", true, nil},
@@ -763,6 +783,7 @@ func TestJSONSize_AnyStruct_NoRealloc(t *testing.T) {
 }
 
 func TestJSONSize_AnyNumberStruct_NoRealloc(t *testing.T) {
+	t.Parallel()
 	in := AnyNumberStruct{
 		Name: "n",
 		Body: map[string]any{"big": json.Number("9007199254740993"), "a": json.Number("1.5")},

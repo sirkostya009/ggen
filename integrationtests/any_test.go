@@ -29,6 +29,7 @@ type AnyNumberStruct struct {
 }
 
 func TestAny_DecodeObject(t *testing.T) {
+	t.Parallel()
 	in := []byte(`{"name":"x","body":{"k":1,"l":[1,2,3]}}`)
 	got, _, err := AnyStruct{}.DecodeFrom(in)
 	if err != nil {
@@ -44,6 +45,7 @@ func TestAny_DecodeObject(t *testing.T) {
 }
 
 func TestAny_DecodeScalars(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		json string
 		want any
@@ -65,6 +67,7 @@ func TestAny_DecodeScalars(t *testing.T) {
 }
 
 func TestAny_MarshalRoundtrip(t *testing.T) {
+	t.Parallel()
 	in := AnyStruct{Name: "x", Body: map[string]any{"k": float64(1), "v": "y"}}
 	out, _ := encode.Marshal(in)
 	got, _, err := AnyStruct{}.DecodeFrom(out)
@@ -78,6 +81,7 @@ func TestAny_MarshalRoundtrip(t *testing.T) {
 }
 
 func TestAnyNumber_Preservesint64Precision(t *testing.T) {
+	t.Parallel()
 	// 9007199254740993 = 2^53 + 1 — loses precision when round-tripped via float64.
 	in := []byte(`{"name":"x","body":9007199254740993}`)
 	got, _, err := AnyNumberStruct{}.DecodeFrom(in)
@@ -98,6 +102,7 @@ func TestAnyNumber_Preservesint64Precision(t *testing.T) {
 }
 
 func TestAnyNumber_NestedShape(t *testing.T) {
+	t.Parallel()
 	in := []byte(`{"name":"x","body":{"k":[1,2.5,3],"big":12345678901234567}}`)
 	got, _, err := AnyNumberStruct{}.DecodeFrom(in)
 	if err != nil {

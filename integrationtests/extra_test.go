@@ -36,6 +36,7 @@ type TupleStruct struct {
 
 // TestHintlen_Prealloc: hintlen-sized slice decodes correctly past default cap.
 func TestHintlen_Prealloc(t *testing.T) {
+	t.Parallel()
 	in := []byte(`{"hintedTags":["a","b","c","d","e","f","g","h","i","j","k","l"]}`)
 	got, _, err := ExtraStruct{}.DecodeFrom(in)
 	if err != nil {
@@ -48,6 +49,7 @@ func TestHintlen_Prealloc(t *testing.T) {
 
 // TestClamp_Numeric_ModLowBound: value below the lower bound is clamped up.
 func TestClamp_Numeric_ModLowBound(t *testing.T) {
+	t.Parallel()
 	got, _, err := ExtraStruct{}.DecodeFrom([]byte(`{"clampedScore":-50}`))
 	if err != nil {
 		t.Fatalf("unmarshal: %v", err)
@@ -58,6 +60,7 @@ func TestClamp_Numeric_ModLowBound(t *testing.T) {
 }
 
 func TestClamp_Numeric_ModHighBound(t *testing.T) {
+	t.Parallel()
 	got, _, err := ExtraStruct{}.DecodeFrom([]byte(`{"clampedScore":9999}`))
 	if err != nil {
 		t.Fatalf("unmarshal: %v", err)
@@ -68,6 +71,7 @@ func TestClamp_Numeric_ModHighBound(t *testing.T) {
 }
 
 func TestClamp_Numeric_ModInRange(t *testing.T) {
+	t.Parallel()
 	got, _, err := ExtraStruct{}.DecodeFrom([]byte(`{"clampedScore":42}`))
 	if err != nil {
 		t.Fatalf("unmarshal: %v", err)
@@ -79,6 +83,7 @@ func TestClamp_Numeric_ModInRange(t *testing.T) {
 
 // TestKeys_ValidationOnMapKey: short key fails minrunes=2.
 func TestKeys_ValidationOnMapKey(t *testing.T) {
+	t.Parallel()
 	in := []byte(`{"keyedMap":{"a":1}}`)
 	_, _, err := ExtraStruct{}.DecodeFrom(in)
 	if err == nil {
@@ -92,6 +97,7 @@ func TestKeys_ValidationOnMapKey(t *testing.T) {
 
 // TestKeys_ModOnMapKey: trim+lower mods run on the key before insertion.
 func TestKeys_ModOnMapKey(t *testing.T) {
+	t.Parallel()
 	in := []byte(`{"keyedMap":{"  FOO  ":7}}`)
 	got, _, err := ExtraStruct{}.DecodeFrom(in)
 	if err != nil {
@@ -104,6 +110,7 @@ func TestKeys_ModOnMapKey(t *testing.T) {
 
 // TestNestedDive_TwoLevels_OK: [][]int decodes; per-level validation passes.
 func TestNestedDive_TwoLevels_OK(t *testing.T) {
+	t.Parallel()
 	in := []byte(`{"nestedInts":[[1,2,3],[10,20]]}`)
 	got, _, err := ExtraStruct{}.DecodeFrom(in)
 	if err != nil {
@@ -116,6 +123,7 @@ func TestNestedDive_TwoLevels_OK(t *testing.T) {
 }
 
 func TestNestedDive_OuterViolation(t *testing.T) {
+	t.Parallel()
 	// Empty inner slice violates inner:minlen=1.
 	in := []byte(`{"nestedInts":[[]]}`)
 	_, _, err := ExtraStruct{}.DecodeFrom(in)
@@ -125,6 +133,7 @@ func TestNestedDive_OuterViolation(t *testing.T) {
 }
 
 func TestNestedDive_InnerViolation(t *testing.T) {
+	t.Parallel()
 	// Element > 100 violates lte=100 at the deepest level.
 	in := []byte(`{"nestedInts":[[1,2,999]]}`)
 	_, _, err := ExtraStruct{}.DecodeFrom(in)
@@ -135,6 +144,7 @@ func TestNestedDive_InnerViolation(t *testing.T) {
 
 // TestTripleNested: three levels of slice nesting decode.
 func TestTripleNested(t *testing.T) {
+	t.Parallel()
 	in := []byte(`{"triple":[[["a","b"],["c"]],[["d"]]]}`)
 	got, _, err := ExtraStruct{}.DecodeFrom(in)
 	if err != nil {
@@ -148,6 +158,7 @@ func TestTripleNested(t *testing.T) {
 
 // TestNestedDive_Stream: stream path handles nested slices.
 func TestNestedDive_Stream(t *testing.T) {
+	t.Parallel()
 	in := []byte(`{"nestedInts":[[1,2],[3,4,5]],"triple":[[["a"]]]}`)
 	var s scan.Stream
 	s.Reset(bytes.NewReader(in), make([]byte, 0, len(in)))
@@ -165,6 +176,7 @@ func TestNestedDive_Stream(t *testing.T) {
 
 // TestTuple_Basic: [N]T fields decode each slot into position.
 func TestTuple_Basic(t *testing.T) {
+	t.Parallel()
 	in := []byte(`{"point":[1.5,2.5],"rgb":[10,20,30],"segments":[[1,2],[3,4]],"pair":[["a","b"],["c"]]}`)
 	got, _, err := TupleStruct{}.DecodeFrom(in)
 	if err != nil {
@@ -186,6 +198,7 @@ func TestTuple_Basic(t *testing.T) {
 
 // TestTuple_StrictTooFew: fewer than N elements errors.
 func TestTuple_StrictTooFew(t *testing.T) {
+	t.Parallel()
 	in := []byte(`{"point":[1.5]}`)
 	_, _, err := TupleStruct{}.DecodeFrom(in)
 	if err == nil {
@@ -199,6 +212,7 @@ func TestTuple_StrictTooFew(t *testing.T) {
 
 // TestTuple_StrictTooMany: more than N elements errors.
 func TestTuple_StrictTooMany(t *testing.T) {
+	t.Parallel()
 	in := []byte(`{"point":[1.5,2.5,3.5]}`)
 	_, _, err := TupleStruct{}.DecodeFrom(in)
 	if err == nil {
@@ -212,6 +226,7 @@ func TestTuple_StrictTooMany(t *testing.T) {
 
 // TestTuple_Clamp: per-element clamp mod applies inside a tuple via inner:.
 func TestTuple_Clamp(t *testing.T) {
+	t.Parallel()
 	in := []byte(`{"rgb":[-5,300,128]}`)
 	got, _, err := TupleStruct{}.DecodeFrom(in)
 	if err != nil {
@@ -223,6 +238,7 @@ func TestTuple_Clamp(t *testing.T) {
 }
 
 func TestTuple_MarshalRoundtrip(t *testing.T) {
+	t.Parallel()
 	in := TupleStruct{
 		Point:    [2]float64{3.14, 2.71},
 		RGB:      [3]int{1, 2, 3},
@@ -241,6 +257,7 @@ func TestTuple_MarshalRoundtrip(t *testing.T) {
 
 // TestTuple_Stream: stream path handles [N]T strictness.
 func TestTuple_Stream(t *testing.T) {
+	t.Parallel()
 	in := []byte(`{"point":[1.25,2.5],"rgb":[0,0,0],"segments":[[1,2]],"pair":[["a"],["b","c"]]}`)
 	var s scan.Stream
 	s.Reset(bytes.NewReader(in), make([]byte, 0, len(in)))
@@ -258,6 +275,7 @@ func TestTuple_Stream(t *testing.T) {
 
 // TestNestedMarshalRoundtrip: nested slices survive Marshal + Unmarshal.
 func TestNestedMarshalRoundtrip(t *testing.T) {
+	t.Parallel()
 	in := ExtraStruct{
 		HintedTags:   []string{"x"},
 		ClampedScore: 50,

@@ -31,6 +31,7 @@ type InlineStructsStruct struct {
 }
 
 func TestInline_decodeAbsorbsUnknown(t *testing.T) {
+	t.Parallel()
 	in := []byte(`{"name":"alice","age":30,"city":"Lviv","tags":["a","b"]}`)
 	got, _, err := InlineStruct{}.DecodeFrom(in)
 	if err != nil {
@@ -56,6 +57,7 @@ func TestInline_decodeAbsorbsUnknown(t *testing.T) {
 }
 
 func TestInline_emptyDecode(t *testing.T) {
+	t.Parallel()
 	// No unknown keys → Extra stays nil.
 	got, _, err := InlineStruct{}.DecodeFrom([]byte(`{"name":"bob"}`))
 	if err != nil {
@@ -67,6 +69,7 @@ func TestInline_emptyDecode(t *testing.T) {
 }
 
 func TestInline_marshalSpreads(t *testing.T) {
+	t.Parallel()
 	s := InlineStruct{
 		Name:  "alice",
 		Extra: map[string]any{"age": 30, "city": "Lviv"},
@@ -88,6 +91,7 @@ func TestInline_marshalSpreads(t *testing.T) {
 }
 
 func TestInline_roundtrip(t *testing.T) {
+	t.Parallel()
 	orig := InlineStruct{
 		Name:  "alice",
 		Extra: map[string]any{"age": float64(30), "city": "Lviv", "active": true},
@@ -111,6 +115,7 @@ func TestInline_roundtrip(t *testing.T) {
 }
 
 func TestInline_marshalEmpty(t *testing.T) {
+	t.Parallel()
 	s := InlineStruct{Name: "alice"}
 	out, _ := encode.MarshalString(s)
 	if out != `{"name":"alice"}` {
@@ -119,6 +124,7 @@ func TestInline_marshalEmpty(t *testing.T) {
 }
 
 func TestInline_marshalOnlyExtras(t *testing.T) {
+	t.Parallel()
 	// Empty fixed field + inline entries — comma logic must hold.
 	s := InlineStruct{Extra: map[string]any{"k": "v"}}
 	out, _ := encode.MarshalString(s)
@@ -133,6 +139,7 @@ func TestInline_marshalOnlyExtras(t *testing.T) {
 // TestInline_FixedFieldOrderStable: fixed field appears in every marshal
 // regardless of map iteration order.
 func TestInline_FixedFieldOrderStable(t *testing.T) {
+	t.Parallel()
 	s := InlineStruct{
 		Name:  "alice",
 		Extra: map[string]any{"age": 30, "city": "Lviv", "active": true, "score": 9.5},
@@ -147,6 +154,7 @@ func TestInline_FixedFieldOrderStable(t *testing.T) {
 
 // Typed inline catch-all: map[string]string (no any boxing).
 func TestInline_TypedString_Decode(t *testing.T) {
+	t.Parallel()
 	in := []byte(`{"name":"alice","city":"Lviv","role":"admin"}`)
 	got, _, err := InlineStringsStruct{}.DecodeFrom(in)
 	if err != nil {
@@ -164,6 +172,7 @@ func TestInline_TypedString_Decode(t *testing.T) {
 }
 
 func TestInline_TypedString_EmptyExtra(t *testing.T) {
+	t.Parallel()
 	got, _, err := InlineStringsStruct{}.DecodeFrom([]byte(`{"name":"bob"}`))
 	if err != nil {
 		t.Fatalf("decode: %v", err)
@@ -175,6 +184,7 @@ func TestInline_TypedString_EmptyExtra(t *testing.T) {
 
 // Non-string value into a string-typed inline must error.
 func TestInline_TypedString_RejectsNonString(t *testing.T) {
+	t.Parallel()
 	_, _, err := InlineStringsStruct{}.DecodeFrom([]byte(`{"name":"alice","age":30}`))
 	if err == nil {
 		t.Fatal("expected error decoding number into string-typed inline")
@@ -182,6 +192,7 @@ func TestInline_TypedString_RejectsNonString(t *testing.T) {
 }
 
 func TestInline_TypedString_MarshalSpreads(t *testing.T) {
+	t.Parallel()
 	s := InlineStringsStruct{
 		Name:  "alice",
 		Extra: map[string]string{"city": "Lviv", "role": "admin"},
@@ -198,6 +209,7 @@ func TestInline_TypedString_MarshalSpreads(t *testing.T) {
 }
 
 func TestInline_TypedString_Roundtrip(t *testing.T) {
+	t.Parallel()
 	orig := InlineStringsStruct{
 		Name:  "alice",
 		Extra: map[string]string{"city": "Lviv", "role": "admin", "lang": "uk"},
@@ -223,6 +235,7 @@ func TestInline_TypedString_Roundtrip(t *testing.T) {
 // Typed inline catch-all: map[string]InlineStruct, decoded via the elem
 // type's DecodeFrom (not json.Unmarshal fallback).
 func TestInline_TypedStruct_Decode(t *testing.T) {
+	t.Parallel()
 	in := []byte(`{"name":"root","kid":{"name":"alice","age":30},"sib":{"name":"bob"}}`)
 	got, _, err := InlineStructsStruct{}.DecodeFrom(in)
 	if err != nil {
@@ -248,6 +261,7 @@ func TestInline_TypedStruct_Decode(t *testing.T) {
 }
 
 func TestInline_TypedStruct_Roundtrip(t *testing.T) {
+	t.Parallel()
 	orig := InlineStructsStruct{
 		Name: "root",
 		Extra: map[string]InlineStruct{
@@ -281,6 +295,7 @@ func TestInline_TypedStruct_Roundtrip(t *testing.T) {
 
 // Empty-Extra marshal: typed inline emits only the fixed fields.
 func TestInline_TypedString_MarshalEmpty(t *testing.T) {
+	t.Parallel()
 	out, _ := encode.MarshalString(InlineStringsStruct{Name: "alice"})
 	if out != `{"name":"alice"}` {
 		t.Errorf("empty-extra marshal = %q", out)
@@ -288,6 +303,7 @@ func TestInline_TypedString_MarshalEmpty(t *testing.T) {
 }
 
 func TestInline_TypedStruct_MarshalEmpty(t *testing.T) {
+	t.Parallel()
 	out, _ := encode.MarshalString(InlineStructsStruct{Name: "root"})
 	if out != `{"name":"root"}` {
 		t.Errorf("empty-extra marshal = %q", out)

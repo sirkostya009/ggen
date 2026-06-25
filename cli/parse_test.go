@@ -29,6 +29,7 @@ func writeGoFile(t *testing.T, src string) string {
 }
 
 func TestParseFile(t *testing.T) {
+	t.Parallel()
 	src := `package test
 
 type Foo struct {
@@ -67,6 +68,7 @@ type Foo struct {
 }
 
 func TestParseFile_autoDiscoverSubStructs(t *testing.T) {
+	t.Parallel()
 	src := `package test
 
 type Parent struct {
@@ -115,6 +117,7 @@ type Unrelated struct {
 // Single-file mode with neither a //ggen:generate annotation nor an explicit
 // name filter must error, not emit code for every exported struct.
 func TestParseFile_noAnnotationNoFilter_Errors(t *testing.T) {
+	t.Parallel()
 	src := `package test
 type A struct { X int ` + "`" + `json:"x"` + "`" + ` }
 type B struct { Y int ` + "`" + `json:"y"` + "`" + ` }
@@ -133,6 +136,7 @@ type B struct { Y int ` + "`" + `json:"y"` + "`" + ` }
 
 // An explicit name filter works without any //ggen:generate annotation.
 func TestParseFile_explicitNamesOverrideMissingAnnotation(t *testing.T) {
+	t.Parallel()
 	src := `package test
 type A struct { X int ` + "`" + `json:"x"` + "`" + ` }
 type B struct { Y int ` + "`" + `json:"y"` + "`" + ` }
@@ -148,6 +152,7 @@ type B struct { Y int ` + "`" + `json:"y"` + "`" + ` }
 }
 
 func TestParseFile_notFound(t *testing.T) {
+	t.Parallel()
 	file := writeGoFile(t, "package test\ntype Bar struct{}\n")
 	if _, _, _, err := parseFile(file, []string{"Foo"}); err == nil {
 		t.Fatal("expected error for missing struct")
@@ -155,6 +160,7 @@ func TestParseFile_notFound(t *testing.T) {
 }
 
 func TestParseFile_embedded(t *testing.T) {
+	t.Parallel()
 	src := `package test
 type Base struct {
 	ID int ` + "`" + `json:"id"` + "`" + `
@@ -246,6 +252,7 @@ func TestGenerate_newValidators(t *testing.T) {
 }
 
 func TestParsePackage_annotationFiltering(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	writeFile(t, dir, "a.go", `package pkg
 
@@ -289,6 +296,7 @@ type AlsoWanted struct {
 }
 
 func TestParsePackage_crossFileAutoDiscover(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	writeFile(t, dir, "a.go", `package p
 //ggen:generate
@@ -311,6 +319,7 @@ type Sub struct { N int `+"`"+`json:"n"`+"`"+` }
 }
 
 func TestParsePackage_skipsGenFiles(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	writeFile(t, dir, "a.go", `package p
 //ggen:generate
@@ -333,6 +342,7 @@ func also broken {`)
 }
 
 func TestParsePackage_includesTestFiles(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	writeFile(t, dir, "a_test.go", `package p
 //ggen:generate
@@ -351,6 +361,7 @@ type A struct { X int `+"`"+`json:"x"`+"`"+` }
 }
 
 func TestParsePackage_noAnnotationsNoOutput(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	writeFile(t, dir, "a.go", `package p
 type A struct { X int `+"`"+`json:"x"`+"`"+` }
@@ -418,6 +429,7 @@ type Msg struct {
 // inners return false (left on the encoding/json fallback). The go/types path
 // (arbitrary inner T) is exercised end-to-end in integrationtests.
 func TestSQLNullGeneric(t *testing.T) {
+	t.Parallel()
 	supported := []struct {
 		goType string
 		inner  TypeKind
@@ -434,6 +446,7 @@ func TestSQLNullGeneric(t *testing.T) {
 	}
 	for _, c := range supported {
 		t.Run(c.goType, func(t *testing.T) {
+			t.Parallel()
 			if k := resolveKind(c.goType); k != KindSQLNull {
 				t.Fatalf("resolveKind(%q) = %v, want KindSQLNull", c.goType, k)
 			}
@@ -450,6 +463,7 @@ func TestSQLNullGeneric(t *testing.T) {
 	// Non-primitive / malformed inners are not classified by the string path.
 	for _, goType := range []string{"sql.Null[netip.Addr]", "sql.Null[[]byte]", "sql.Null[]", "sql.NullFoo"} {
 		t.Run("reject/"+goType, func(t *testing.T) {
+			t.Parallel()
 			if k := resolveKind(goType); k == KindSQLNull {
 				t.Errorf("resolveKind(%q) = KindSQLNull, want fallback", goType)
 			}

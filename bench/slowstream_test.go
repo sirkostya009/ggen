@@ -234,6 +234,7 @@ func BenchmarkSlowStream_Invalid(b *testing.B) {
 // the timer — easier to debug a wiring mistake here than as a flaky
 // benchmark.
 func TestSlowReader_DeliversWholePayload(t *testing.T) {
+	t.Parallel()
 	r := newSlowReader(slowPayload)
 	// Override the delays so the test runs in milliseconds, not seconds.
 	r.startDelay = 0

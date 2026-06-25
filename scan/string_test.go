@@ -33,8 +33,10 @@ var stringHappyCases = []struct {
 }
 
 func TestString_StdlibParity(t *testing.T) {
+	t.Parallel()
 	for _, tc := range stringHappyCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			var want string
 			if err := json.Unmarshal([]byte(tc.in), &want); err != nil {
 				t.Fatalf("stdlib: %v", err)
@@ -58,6 +60,7 @@ func TestString_StdlibParity(t *testing.T) {
 // type differs — scan returns its sentinel; stdlib has its own — but
 // the accept/reject decision must match.
 func TestString_ErrorParity(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name string
 		in   string
@@ -73,6 +76,7 @@ func TestString_ErrorParity(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			_, _, err := String([]byte(tc.in), 0)
 			if !errors.Is(err, tc.want) {
 				t.Errorf("scan: got %v, want %v", err, tc.want)
@@ -92,6 +96,7 @@ func TestString_ErrorParity(t *testing.T) {
 // utf8.AppendRune which also yields U+FFFD for invalid runes — outputs
 // must match exactly.
 func TestString_LoneSurrogateParity(t *testing.T) {
+	t.Parallel()
 	cases := []string{
 		`"\uD83D"`,       // lone high surrogate
 		`"\uDC00"`,       // lone low surrogate
@@ -101,6 +106,7 @@ func TestString_LoneSurrogateParity(t *testing.T) {
 	}
 	for _, in := range cases {
 		t.Run(in, func(t *testing.T) {
+			t.Parallel()
 			var want string
 			if err := json.Unmarshal([]byte(in), &want); err != nil {
 				t.Fatalf("stdlib: %v", err)
@@ -119,6 +125,7 @@ func TestString_LoneSurrogateParity(t *testing.T) {
 // TestString_ZeroCopyAlias confirms the happy path aliases the input
 // (no escapes → returned string shares memory with data).
 func TestString_ZeroCopyAlias(t *testing.T) {
+	t.Parallel()
 	data := []byte(`"hello world"`)
 	s, _, err := String(data, 0)
 	if err != nil {

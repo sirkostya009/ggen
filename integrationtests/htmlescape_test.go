@@ -23,6 +23,7 @@ type HTMLEscapeStruct struct {
 }
 
 func TestHTMLEscape_DefaultLiteral(t *testing.T) {
+	t.Parallel()
 	const in = `<a href="x">tom & jerry</a>`
 	out, err := encode.Marshal(HTMLRawStruct{Note: in})
 	if err != nil {
@@ -42,6 +43,7 @@ func TestHTMLEscape_DefaultLiteral(t *testing.T) {
 }
 
 func TestHTMLEscape_OptIn(t *testing.T) {
+	t.Parallel()
 	const in = `<a href="x">tom & jerry</a>`
 	out, err := encode.Marshal(HTMLEscapeStruct{Note: in})
 	if err != nil {

@@ -19,8 +19,10 @@ var floatCases = []string{
 }
 
 func TestFloat64_StdlibParity(t *testing.T) {
+	t.Parallel()
 	for _, in := range floatCases {
 		t.Run(in, func(t *testing.T) {
+			t.Parallel()
 			var want float64
 			if err := json.Unmarshal([]byte(in), &want); err != nil {
 				t.Fatalf("stdlib: %v", err)
@@ -40,6 +42,7 @@ func TestFloat64_StdlibParity(t *testing.T) {
 }
 
 func TestFloat64_ErrorParity(t *testing.T) {
+	t.Parallel()
 	// Note: scan primitives expect the caller to have skipped leading
 	// whitespace already (contract per package doc). Stdlib auto-skips,
 	// so " 1" would falsely look like a parity violation — it's not in
@@ -51,6 +54,7 @@ func TestFloat64_ErrorParity(t *testing.T) {
 	}
 	for _, in := range cases {
 		t.Run(in, func(t *testing.T) {
+			t.Parallel()
 			_, _, err := Float64([]byte(in), 0)
 			if err == nil {
 				t.Error("scan accepted invalid number")
@@ -66,8 +70,10 @@ func TestFloat64_ErrorParity(t *testing.T) {
 func TestInt64_StdlibParity(t *testing.T) {
 	cases := []string{"0", "-0", "1", "-1", "42", "-42",
 		"9223372036854775807", "-9223372036854775808"}
+	t.Parallel()
 	for _, in := range cases {
 		t.Run(in, func(t *testing.T) {
+			t.Parallel()
 			var want int64
 			if err := json.Unmarshal([]byte(in), &want); err != nil {
 				t.Fatalf("stdlib: %v", err)
@@ -89,8 +95,10 @@ func TestInt64_StdlibParity(t *testing.T) {
 // Stdlib rejects float-shaped values when unmarshaling into int64, so
 // scan's same rejection is a parity property — assert both.
 func TestInt64_RejectsFloatsParity(t *testing.T) {
+	t.Parallel()
 	for _, in := range []string{"1.5", "1e3", "1.0", "1E5"} {
 		t.Run(in, func(t *testing.T) {
+			t.Parallel()
 			_, _, err := Int64([]byte(in), 0)
 			if !errors.Is(err, ErrBadNumber) {
 				t.Errorf("scan: got %v, want ErrBadNumber", err)
@@ -109,6 +117,7 @@ func TestInt64_RejectsFloatsParity(t *testing.T) {
 // runs that push the significant digits past the 18-byte window must also
 // resume correctly in the checked loop.
 func TestInt64_OverflowBoundaryLattice(t *testing.T) {
+	t.Parallel()
 	ok := map[string]int64{
 		"99999999999999999":                      99999999999999999,    // 17 digits
 		"999999999999999999":                     999999999999999999,   // 18 digits
@@ -121,6 +130,7 @@ func TestInt64_OverflowBoundaryLattice(t *testing.T) {
 	}
 	for in, want := range ok {
 		t.Run("ok/"+in, func(t *testing.T) {
+			t.Parallel()
 			got, j, err := Int64([]byte(in), 0)
 			if err != nil {
 				t.Fatalf("Int64(%q): unexpected err %v", in, err)
@@ -142,6 +152,7 @@ func TestInt64_OverflowBoundaryLattice(t *testing.T) {
 	}
 	for _, in := range overflow {
 		t.Run("overflow/"+in, func(t *testing.T) {
+			t.Parallel()
 			if _, _, err := Int64([]byte(in), 0); !errors.Is(err, ErrNumberOverflow) {
 				t.Errorf("Int64(%q): got %v, want ErrNumberOverflow", in, err)
 			}
@@ -152,6 +163,7 @@ func TestInt64_OverflowBoundaryLattice(t *testing.T) {
 // TestUint64_OverflowBoundaryLattice mirrors the Int64 lattice for the
 // 19-digit unchecked prefix.
 func TestUint64_OverflowBoundaryLattice(t *testing.T) {
+	t.Parallel()
 	ok := map[string]uint64{
 		"9999999999999999999":                       9999999999999999999,  // 19 nines, valid
 		"10000000000000000000":                      10000000000000000000, // 20 digits, valid
@@ -160,6 +172,7 @@ func TestUint64_OverflowBoundaryLattice(t *testing.T) {
 	}
 	for in, want := range ok {
 		t.Run("ok/"+in, func(t *testing.T) {
+			t.Parallel()
 			got, j, err := Uint64([]byte(in), 0)
 			if err != nil {
 				t.Fatalf("Uint64(%q): unexpected err %v", in, err)
@@ -178,6 +191,7 @@ func TestUint64_OverflowBoundaryLattice(t *testing.T) {
 		"184467440737095516150", // 21 digits
 	} {
 		t.Run("overflow/"+in, func(t *testing.T) {
+			t.Parallel()
 			if _, _, err := Uint64([]byte(in), 0); !errors.Is(err, ErrNumberOverflow) {
 				t.Errorf("Uint64(%q): got %v, want ErrNumberOverflow", in, err)
 			}
@@ -186,9 +200,11 @@ func TestUint64_OverflowBoundaryLattice(t *testing.T) {
 }
 
 func TestUint64_StdlibParity(t *testing.T) {
+	t.Parallel()
 	cases := []string{"0", "1", "42", "18446744073709551615"} // max uint64
 	for _, in := range cases {
 		t.Run(in, func(t *testing.T) {
+			t.Parallel()
 			var want uint64
 			if err := json.Unmarshal([]byte(in), &want); err != nil {
 				t.Fatalf("stdlib: %v", err)
@@ -208,8 +224,10 @@ func TestUint64_StdlibParity(t *testing.T) {
 }
 
 func TestNumber_StdlibParity(t *testing.T) {
+	t.Parallel()
 	for _, in := range floatCases {
 		t.Run(in, func(t *testing.T) {
+			t.Parallel()
 			dec := json.NewDecoder(strings.NewReader(in))
 			dec.UseNumber()
 			var want any

@@ -12,6 +12,7 @@ import (
 // directly, not decode.Unmarshal[T] (which starts fresh).
 
 func TestMerge_scalarFieldsPersistAcrossOmitted(t *testing.T) {
+	t.Parallel()
 	// Payload sets only Street; receiver's other fields persist.
 	receiver := Address{Street: "old street", City: "OldCity", ZipCode: "12345"}
 	got, _, err := receiver.DecodeFrom([]byte(`{"street":"new street","city":"NewCity","zipCode":"54321"}`))
@@ -25,6 +26,7 @@ func TestMerge_scalarFieldsPersistAcrossOmitted(t *testing.T) {
 }
 
 func TestMerge_sliceBackingReused(t *testing.T) {
+	t.Parallel()
 	// A 3-elem decode into a cap-8 receiver must reuse the backing ([:0],
 	// not a fresh make).
 	pre := make([]string, 0, 8)
@@ -49,6 +51,7 @@ func TestMerge_sliceBackingReused(t *testing.T) {
 }
 
 func TestMerge_nestedSliceBackingReused(t *testing.T) {
+	t.Parallel()
 	// [][]int decode-into-receiver reuses BOTH outer and inner row backings
 	// when the new shape fits the carried caps.
 	first, _, err := ExtraStruct{}.DecodeFrom([]byte(`{"nestedInts":[[1,2,3],[4,5,6]]}`))
@@ -79,6 +82,7 @@ func TestMerge_nestedSliceBackingReused(t *testing.T) {
 }
 
 func TestMerge_sliceDoesNotAppendOverExisting(t *testing.T) {
+	t.Parallel()
 	// Receiver had 5, JSON has 2 → result is exactly 2 (no append-over).
 	receiver := Node{Tags: []string{"old1", "old2", "old3", "old4", "old5"}}
 	got, _, err := receiver.DecodeFrom([]byte(`{"tags":["a","b"]}`))
@@ -91,6 +95,7 @@ func TestMerge_sliceDoesNotAppendOverExisting(t *testing.T) {
 }
 
 func TestMerge_sliceNullSetsNil(t *testing.T) {
+	t.Parallel()
 	receiver := Node{Tags: []string{"old"}}
 	got, _, err := receiver.DecodeFrom([]byte(`{"tags":null}`))
 	if err != nil {
@@ -102,6 +107,7 @@ func TestMerge_sliceNullSetsNil(t *testing.T) {
 }
 
 func TestMerge_sliceEmptyPreservesNonNilBacking(t *testing.T) {
+	t.Parallel()
 	pre := make([]string, 0, 16)
 	receiver := Node{Tags: pre}
 	got, _, err := receiver.DecodeFrom([]byte(`{"tags":[]}`))
@@ -120,6 +126,7 @@ func TestMerge_sliceEmptyPreservesNonNilBacking(t *testing.T) {
 }
 
 func TestMerge_sliceEmptyOnNilReceiverProducesNonNilEmpty(t *testing.T) {
+	t.Parallel()
 	// stdlib parity: nil receiver + JSON [] → non-nil empty.
 	receiver := Node{}
 	got, _, err := receiver.DecodeFrom([]byte(`{"tags":[]}`))
@@ -135,6 +142,7 @@ func TestMerge_sliceEmptyOnNilReceiverProducesNonNilEmpty(t *testing.T) {
 }
 
 func TestMerge_mapClearedAndRefilled(t *testing.T) {
+	t.Parallel()
 	pre := map[string]string{"old": "value", "ghost": "data"}
 	receiver := Node{Props: pre}
 	got, _, err := receiver.DecodeFrom([]byte(`{"props":{"a":"1","b":"2"}}`))
@@ -150,6 +158,7 @@ func TestMerge_mapClearedAndRefilled(t *testing.T) {
 }
 
 func TestMerge_mapNullSetsNil(t *testing.T) {
+	t.Parallel()
 	receiver := Node{Props: map[string]string{"old": "value"}}
 	got, _, err := receiver.DecodeFrom([]byte(`{"props":null}`))
 	if err != nil {
@@ -161,6 +170,7 @@ func TestMerge_mapNullSetsNil(t *testing.T) {
 }
 
 func TestMerge_nestedStructRecursesIntoExisting(t *testing.T) {
+	t.Parallel()
 	receiver := Node{
 		Children: []Node{{Name: "cached", Tags: []string{"stale"}}},
 	}
@@ -187,6 +197,7 @@ func TestMerge_nestedStructRecursesIntoExisting(t *testing.T) {
 // failure leaves the receiver untouched.
 
 func TestMerge_pointerFieldPersistsWhenOmitted(t *testing.T) {
+	t.Parallel()
 	keep := new("keep")
 	receiver := PointerStruct{PtrNameStruct: PtrNameStruct{Name: keep}, PtrCountStruct: PtrCountStruct{Count: new(7)}}
 	// "name" omitted → receiver pointer untouched.
@@ -203,6 +214,7 @@ func TestMerge_pointerFieldPersistsWhenOmitted(t *testing.T) {
 }
 
 func TestMerge_pointerScalarReusesPointee(t *testing.T) {
+	t.Parallel()
 	orig := new(3)
 	receiver := PointerStruct{PtrCountStruct: PtrCountStruct{Count: orig}}
 	got, _, err := receiver.DecodeFrom([]byte(`{"count":9}`))
@@ -218,6 +230,7 @@ func TestMerge_pointerScalarReusesPointee(t *testing.T) {
 }
 
 func TestMerge_pointerStructPointeeReused(t *testing.T) {
+	t.Parallel()
 	// Non-nil *Address pointee decoded in place — same pointer.
 	orig := &Address{Street: "Main 1", City: "Lviv", ZipCode: "79000"}
 	receiver := PointerStruct{PtrAddrStruct: PtrAddrStruct{Addr: orig}}
@@ -234,6 +247,7 @@ func TestMerge_pointerStructPointeeReused(t *testing.T) {
 }
 
 func TestMerge_pointerNilReceiverAllocates(t *testing.T) {
+	t.Parallel()
 	// nil receiver fields → fresh pointees allocated.
 	got, _, err := PointerStruct{}.DecodeFrom([]byte(`{"count":9,"name":"x"}`))
 	if err != nil {
@@ -248,6 +262,7 @@ func TestMerge_pointerNilReceiverAllocates(t *testing.T) {
 }
 
 func TestMerge_pointerNullDropsExistingPointee(t *testing.T) {
+	t.Parallel()
 	// JSON null nils the field even when the receiver carried a pointee.
 	receiver := PointerStruct{PtrNameStruct: PtrNameStruct{Name: new("x")}, PtrEnabledStruct: PtrEnabledStruct{Enabled: new(true)}}
 	got, _, err := receiver.DecodeFrom([]byte(`{"name":null,"enabled":null}`))
@@ -260,6 +275,7 @@ func TestMerge_pointerNullDropsExistingPointee(t *testing.T) {
 }
 
 func TestMerge_multiLevelReusesWholeChain(t *testing.T) {
+	t.Parallel()
 	inner := new(3) // *int
 	outer := &inner // **int, both levels allocated
 	receiver := NPtrStruct{PtrPPStruct: PtrPPStruct{PP: outer}}
@@ -279,6 +295,7 @@ func TestMerge_multiLevelReusesWholeChain(t *testing.T) {
 }
 
 func TestMerge_multiLevelAllocatesFromFirstNil(t *testing.T) {
+	t.Parallel()
 	var inner *int  // nil *int
 	outer := &inner // **int, outer non-nil, inner nil
 	receiver := NPtrStruct{PtrPPStruct: PtrPPStruct{PP: outer}}
@@ -295,6 +312,7 @@ func TestMerge_multiLevelAllocatesFromFirstNil(t *testing.T) {
 }
 
 func TestMerge_multiLevelStructLeafReused(t *testing.T) {
+	t.Parallel()
 	leaf := &Address{Street: "Main 1", City: "Lviv", ZipCode: "79000"}
 	mid := &leaf // **Address, fully allocated
 	receiver := NPtrStruct{PtrAddr2Struct: PtrAddr2Struct{Addr: mid}}
@@ -311,6 +329,7 @@ func TestMerge_multiLevelStructLeafReused(t *testing.T) {
 }
 
 func TestMerge_pointerParseFailureLeavesReceiverUntouched(t *testing.T) {
+	t.Parallel()
 	// Leaf parses into a temp first, so a failure leaves the field nil
 	// (no half-allocated chain).
 	got, _, err := NPtrStruct{}.DecodeFrom([]byte(`{"pp":"not a number"}`))
