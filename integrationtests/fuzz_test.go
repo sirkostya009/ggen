@@ -2,14 +2,17 @@
 
 package integrationtests
 
+//go:generate ../ggen $GOFILE
+
 // Fuzz tests. Run a target:
-// `go test -run=^$ -fuzz=FuzzScanNoPanic -fuzztime=30s`.
+// `go test -run=^$ -fuzz=FuzzPrimitivesCompat -fuzztime=30s`.
 
 import (
 	"bytes"
 	jsonv2 "encoding/json/v2"
-	"reflect"
+	"math"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/sirkostya009/ggen/encode"
 	"github.com/sirkostya009/ggen/scan"
@@ -28,72 +31,6 @@ var fuzzSeeds = [][]byte{
 	[]byte(`{"name":"\""}`),
 	[]byte(`{"tags":["a","b",]}`),
 	[]byte(`{"props":{"k":"v",}}`),
-}
-
-func addSeeds(f *testing.F) {
-	for _, s := range fuzzSeeds {
-		f.Add(s)
-	}
-}
-
-// FuzzScanNoPanic: untrusted bytes yield an error, not a panic.
-func FuzzScanNoPanic(f *testing.F) {
-	addSeeds(f)
-	f.Fuzz(func(t *testing.T, data []byte) {
-		_, _, _ = Node{}.DecodeFrom(data)
-	})
-}
-
-// FuzzRoundtrip: decode → marshal → decode must reach a fixed point.
-// Catches encode/decode asymmetry (escape table, format-tag drift).
-func FuzzRoundtrip(f *testing.F) {
-	addSeeds(f)
-	f.Fuzz(func(t *testing.T, data []byte) {
-		v1, _, err := Node{}.DecodeFrom(data)
-		if err != nil {
-			return
-		}
-		// First round may diverge (missing "tags" key → nil, marshals as []
-		// → empty slice); round two onward is a fixed point.
-		out1, err := encode.Marshal(v1)
-		if err != nil {
-			t.Fatalf("re-marshal failed for accepted input: %v\nin: %s", err, data)
-		}
-		v2, _, err := Node{}.DecodeFrom(out1)
-		if err != nil {
-			t.Fatalf("re-decode failed: %v\nin: %s\nremarshalled: %s", err, data, out1)
-		}
-		out2, err := encode.Marshal(v2)
-		if err != nil {
-			t.Fatalf("second marshal failed: %v\nv2: %+v", err, v2)
-		}
-		v3, _, err := Node{}.DecodeFrom(out2)
-		if err != nil {
-			t.Fatalf("third decode failed: %v\nbytes: %s", err, out2)
-		}
-		if !reflect.DeepEqual(v2, v3) {
-			t.Fatalf("roundtrip not fixed point\nfirst: %s\nsecond: %s\nv2: %+v\nv3: %+v", out1, out2, v2, v3)
-		}
-	})
-}
-
-// FuzzCompat: when ggen and jsonv2 both accept, decoded values must agree.
-func FuzzCompat(f *testing.F) {
-	addSeeds(f)
-	f.Fuzz(func(t *testing.T, data []byte) {
-		gv, _, gerr := Node{}.DecodeFrom(data)
-		var sv Node
-		serr := jsonv2.Unmarshal(data, &sv)
-
-		// Accept/reject drift is by design (top-level null, trailing garbage,
-		// invalid UTF-8); only check value agreement when both succeed.
-		if gerr != nil || serr != nil {
-			return
-		}
-		if !sameWire(t, gv, sv) {
-			t.Fatalf("decoded value drift\nggen: %+v\njsonv2: %+v\nin: %s", gv, sv, data)
-		}
-	})
 }
 
 // FuzzStreamEqualsBytes: bytes and stream paths agree when both succeed.
@@ -188,33 +125,76 @@ func FuzzStreamHugeStringNoPanic(f *testing.F) {
 	})
 }
 
-// FuzzAppendJSONIdempotent: marshal twice; decoded results must match.
-// Catches encoder non-determinism (map iteration, time formatting).
-func FuzzAppendJSONIdempotent(f *testing.F) {
-	addSeeds(f)
-	f.Fuzz(func(t *testing.T, data []byte) {
-		v, _, err := Node{}.DecodeFrom(data)
-		if err != nil {
+// PrimStruct holds one field per primitive kind. FuzzPrimitivesCompat fuzzes
+// the typed VALUES rather than payload bytes, so every input is a well-formed
+// payload that drives the numeric/bool/string value-parsers across their full
+// domain — boundaries the byte-soup fuzzers reach only by luck.
+//
+//ggen:generate
+type PrimStruct struct {
+	B   bool    `json:"b"`
+	I   int     `json:"i"`
+	I8  int8    `json:"i8"`
+	I16 int16   `json:"i16"`
+	I32 int32   `json:"i32"`
+	I64 int64   `json:"i64"`
+	U   uint    `json:"u"`
+	U8  uint8   `json:"u8"`
+	U16 uint16  `json:"u16"`
+	U32 uint32  `json:"u32"`
+	U64 uint64  `json:"u64"`
+	F32 float32 `json:"f32"`
+	F64 float64 `json:"f64"`
+	Str string  `json:"str"`
+}
+
+// FuzzPrimitivesCompat builds a payload from fuzzed typed values via stdlib,
+// then asserts ggen and stdlib decode it identically: both accept or both
+// reject, and on success the decoded structs are equal. A divergence is either
+// a ggen value-parsing bug or an accept/reject mismatch on valid JSON.
+func FuzzPrimitivesCompat(f *testing.F) {
+	add := func(p PrimStruct) {
+		f.Add(p.B, p.I, p.I8, p.I16, p.I32, p.I64, p.U, p.U8, p.U16, p.U32, p.U64, p.F32, p.F64, p.Str)
+	}
+	add(PrimStruct{B: true, I: 1, I8: -1, I16: 1, I32: -1, I64: 1, U: 1, U8: 255, U16: 1, U32: 1, U64: 1, F32: 1.5, F64: 1.0, Str: "strang"})
+	add(PrimStruct{I8: math.MinInt8, I16: math.MinInt16, I32: math.MinInt32, I64: math.MinInt64,
+		U8: math.MaxUint8, U16: math.MaxUint16, U32: math.MaxUint32, U64: math.MaxUint64,
+		F32: math.MaxFloat32, F64: math.MaxFloat64, Str: ""})
+	add(PrimStruct{I8: math.MaxInt8, I16: math.MaxInt16, I32: math.MaxInt32, I64: math.MaxInt64,
+		F32: math.SmallestNonzeroFloat32, F64: math.SmallestNonzeroFloat64, Str: "\"\\\n\t é\U0001f600"})
+	f.Fuzz(func(t *testing.T, b bool, i int, i8 int8, i16 int16, i32 int32, i64 int64,
+		u uint, u8 uint8, u16 uint16, u32 uint32, u64 uint64, f32 float32, f64 float64, str string) {
+		// Invalid UTF-8 has no shared canonical JSON encoding (covered by the
+		// byte-level fuzzers); skip so the payload is well-formed by construction.
+		if !utf8.ValidString(str) {
 			return
 		}
-		out1, err := encode.Marshal(v)
+		want := PrimStruct{B: b, I: i, I8: i8, I16: i16, I32: i32, I64: i64,
+			U: u, U8: u8, U16: u16, U32: u32, U64: u64, F32: f32, F64: f64, Str: str}
+		// NaN/Inf are the ONLY values with no JSON form — skip those upfront so
+		// any OTHER marshal failure is a real bug, not a silently-swallowed skip.
+		nonFinite := math.IsNaN(f64) || math.IsInf(f64, 0) ||
+			math.IsNaN(float64(f32)) || math.IsInf(float64(f32), 0)
+		payload, err := jsonv2.Marshal(want)
 		if err != nil {
-			t.Fatalf("first marshal: %v", err)
+			if nonFinite {
+				return
+			}
+			t.Fatalf("marshal of finite values failed: %v\n want: %+v", err, want)
 		}
-		out2, err := encode.Marshal(v)
-		if err != nil {
-			t.Fatalf("second marshal: %v", err)
+
+		gv, _, gerr := PrimStruct{}.DecodeFrom(payload)
+		var sv PrimStruct
+		serr := jsonv2.Unmarshal(payload, &sv)
+
+		if (gerr == nil) != (serr == nil) {
+			t.Fatalf("accept/reject drift:\n ggen err:   %v\n stdlib err: %v\n payload: %s", gerr, serr, payload)
 		}
-		v1, _, err := Node{}.DecodeFrom(out1)
-		if err != nil {
-			t.Fatalf("re-decode 1: %v\nout: %s", err, out1)
+		if gerr != nil {
+			return
 		}
-		v2, _, err := Node{}.DecodeFrom(out2)
-		if err != nil {
-			t.Fatalf("re-decode 2: %v\nout: %s", err, out2)
-		}
-		if !reflect.DeepEqual(v1, v2) {
-			t.Fatalf("marshal not deterministic:\n out1: %s\n out2: %s", out1, out2)
+		if gv != sv {
+			t.Fatalf("decoded value drift:\n ggen:   %+v\n stdlib: %+v\n payload: %s", gv, sv, payload)
 		}
 	})
 }

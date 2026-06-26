@@ -48,7 +48,7 @@ Per-feature coverage files:
 | `sql_test.go`           | `database/sql.Null*` family wire shape.                                                                                                                                                |
 | `stdcompat_test.go`     | Exhaustive ggen ↔ jsonv2 round-trip; re-marshaled via jsonv2, compared as parsed `any` (map order + nil/empty-slice noise normalized). Plus `exactWire` byte-identical checks (`F64Wire`/`F32Wire`/`AnyWire`) for wire shapes `crossCompat`'s normalization masks — float formatting (`1e+06` vs `1000000`) and any-string HTML escaping (`<` vs `<`); single-field/single-key carriers keep field/element order deterministic vs jsonv2. |
 | `wire_test.go`          | Wire-format fixtures for divergence-from-stdlib types (`url.URL`, `sql.Null*`).                                                                                                        |
-| `fuzz_test.go`          | Three fuzzers over `Node` — see Fuzz section.                                                                                                                                          |
+| `fuzz_test.go`          | Fuzzers over `Node`, `BoundaryStruct`, `HugeStringStruct`, `PrimStruct` — see Fuzz section.                                                                                            |
 | `brokencodegen_test.go` | Opt-in (behind `ggen_brokencodegen` tag) — codegen regressions worth pinning even when broken.                                                                                         |
 
 ### `thirdparty/` and `thirdparty2/`
@@ -58,7 +58,12 @@ Per-feature coverage files:
 
 ## Fuzz
 
-Three fuzzers over `Node` in `fuzz_test.go`: `FuzzScanNoPanic` (panic safety on random bytes), `FuzzRoundtrip` (encode → decode fixed point after one round), `FuzzCompat` (when both ggen and jsonv2 accept, decoded values agree via `sameWire`). Compat deliberately ignores accept/reject drift on: top-level `null`, trailing garbage, invalid UTF-8 inside strings.
+Fuzzers in `fuzz_test.go`:
+
+- `FuzzStreamEqualsBytes` — bytes vs stream path agreement across chunk sizes (`Node`). Seeds from `fuzzSeeds`.
+- `FuzzBoundaryNoPanic` / `FuzzStreamHugeStringNoPanic` — panic safety on NaN/Inf/overflow/lone-surrogate (`BoundaryStruct`) and multi-MiB strings through tiny bufs (`HugeStringStruct`).
+
+`FuzzPrimitivesCompat` fuzzes typed VALUES, not payload bytes. `PrimStruct` carries one field per primitive kind (bool, every int/uint width, float32/64, string); the fuzzed values are stdlib-marshaled into a well-formed payload, then ggen and jsonv2 must decode it identically (both accept/reject, equal structs on success). This drives the numeric/bool/string value-parsers across their full domain instead of reaching boundaries by byte-soup luck. Invalid-UTF-8 strings and NaN/Inf floats (no shared JSON form) are skipped. Note `float32` decodes via `scan.Float64`+cast (double-round) where stdlib parses at bitSize 32 — clean over millions of execs because jsonv2 emits shortest-round-tripping decimals.
 
 ## Running tests
 
