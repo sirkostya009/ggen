@@ -58,7 +58,7 @@ func TestSliceRoundtrip(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := encode.WriteSlice(&buf, addrs); err != nil {
+	if err := encode.WriteSliceTo(&buf, addrs); err != nil {
 		t.Fatal(err)
 	}
 	got2, err := decode.UnmarshalSlice[Address](buf.Bytes())
@@ -73,7 +73,7 @@ func TestSliceRoundtrip(t *testing.T) {
 func TestWrite(t *testing.T) {
 	t.Parallel()
 	var buf bytes.Buffer
-	if err := encode.Write(&buf, complexValue); err != nil {
+	if err := encode.WriteTo(&buf, complexValue); err != nil {
 		t.Fatal(err)
 	}
 	got, _, err := Node{}.DecodeFrom(buf.Bytes())

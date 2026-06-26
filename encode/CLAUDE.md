@@ -6,7 +6,7 @@ satisfies, plus buffer-append helpers generated code calls and
 
 ## Files
 
-- `encode/encode.go` — Marshaler interface, `Marshal`/`MarshalString`/`Write` +
+- `encode/encode.go` — Marshaler interface, `Marshal`/`MarshalString`/`WriteTo` +
   slice variants, `BytesToString`.
 - `encode/string.go` — `AppendString` (HTML-safe) + `AppendStringNoHTML`
   (jsonv2 default).
@@ -21,13 +21,13 @@ type Marshaler interface {
     JSONSize() int
 }
 
-func Marshal[T] (v Marshaler) ([]byte, error)       // append into make([]byte,0,v.JSONSize()) — 1 alloc
-func MarshalString[T] (v Marshaler) (string, error) // Marshal + BytesToString aliasing (no extra alloc)
-func Write(w io.Writer, v Marshaler) error          // pooled buffer; first non-nil error
+func Marshal[T Marshaler](v T) ([]byte, error)        // append into make([]byte,0,v.JSONSize()) — 1 alloc
+func MarshalString[T Marshaler](v T) (string, error)  // Marshal + BytesToString aliasing (no extra alloc)
+func WriteTo(w io.Writer, v Marshaler) error          // pooled buffer; first non-nil error
 func AppendSlice[T Marshaler](dst []byte, items []T) ([]byte, error)
 func MarshalSlice[T Marshaler](items []T) ([]byte, error)
 func MarshalSliceString[T Marshaler](items []T) (string, error)
-func WriteSlice[T Marshaler](w io.Writer, items []T) error
+func WriteSliceTo[T Marshaler](w io.Writer, items []T) error
 
 func BytesToString(buf []byte) string                // unsafe.String over buffer
 func AppendString(dst []byte, s string) []byte       // HTML-safe variant
@@ -46,6 +46,24 @@ was a silent wire divergence (`1e6` → `1e+06` vs stdlib `1000000`) — pinned
 by `TestAppendFloatStdlibParity`, every row cross-checked against v1.
 Codegen's `sizeFloat` budget is 25 (longest 'f' form: sign + `0.` + 5 zeros
 + 17 digits). The duration `format:sec` emit routes here too.
+
+## `Marshal` / `MarshalString` — generic, devirtualized
+
+Both are generic over `T Marshaler` (not a plain `Marshaler` arg) so a concrete
+call (`encode.Marshal(claim)`, the generated `MarshalJSON` hook, user code with
+concrete types) monomorphizes: the `JSONSize`/`AppendJSON` calls devirtualize
+and the value is NOT boxed into the interface. Measured on `Tiny_Marshal/ggen`:
+**2 → 1 allocs/op (the box), 320 → 224 B/op, −33% ns** (opt [10]). Caveat: a
+generic function can't be taken as a bare func value — `f := encode.Marshal`
+needs explicit instantiation `encode.Marshal[T]`. The interface `Marshaler`
+type itself is unchanged; passing an already-boxed `Marshaler` still works
+(T = the interface).
+
+`WriteTo` / `WriteSliceTo` (renamed from `Write` / `WriteSlice`) stay
+NON-generic interface-arg functions: their pooled-buffer + `io.Write` cost
+dwarfs one box, and presizing their buffer from `JSONSize()` was tried and
+**rejected** — the pool converges to the max payload size, so the size walk is
+pure overhead (+3% tiny / +4% mega, a second full tree walk; see backlog).
 
 ## `MarshalSlice` / `AppendSlice` — per-item sizing, nil pointers
 

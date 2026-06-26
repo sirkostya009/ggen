@@ -32,7 +32,7 @@ var bufPool = sync.Pool{
 }
 
 // Marshal returns the JSON encoding of v as a freshly owned []byte.
-func Marshal(v Marshaler) ([]byte, error) {
+func Marshal[T Marshaler](v T) ([]byte, error) {
 	return v.AppendJSON(make([]byte, 0, v.JSONSize()))
 }
 
@@ -81,7 +81,7 @@ func AppendFloat(dst []byte, v float64, bitSize int) ([]byte, error) {
 
 // MarshalString returns the JSON encoding of v as a string. The returned
 // string aliases the freshly allocated buffer via unsafe conversion.
-func MarshalString(v Marshaler) (string, error) {
+func MarshalString[T Marshaler](v T) (string, error) {
 	b, err := v.AppendJSON(make([]byte, 0, v.JSONSize()))
 	if err != nil {
 		return "", err
@@ -98,9 +98,9 @@ func BytesToString(buf []byte) string {
 	return unsafe.String(unsafe.SliceData(buf), len(buf))
 }
 
-// Write writes the JSON encoding of v directly to w using a pooled buffer.
+// WriteTo writes the JSON encoding of v directly to w using a pooled buffer.
 // Returns the first non-nil error from AppendJSON or the writer.
-func Write(w io.Writer, v Marshaler) error {
+func WriteTo[T Marshaler](w io.Writer, v T) error {
 	bufp := bufPool.Get().(*[]byte)
 	buf, err := v.AppendJSON((*bufp)[:0])
 	if err != nil {
@@ -167,8 +167,8 @@ func MarshalSliceString[T Marshaler](items []T) (string, error) {
 	return BytesToString(buf), nil
 }
 
-// WriteSlice writes the JSON encoding of items directly to w.
-func WriteSlice[T Marshaler](w io.Writer, items []T) error {
+// WriteSliceTo writes the JSON encoding of items directly to w.
+func WriteSliceTo[T Marshaler](w io.Writer, items []T) error {
 	bufp := bufPool.Get().(*[]byte)
 	buf, err := AppendSlice((*bufp)[:0], items)
 	if err != nil {

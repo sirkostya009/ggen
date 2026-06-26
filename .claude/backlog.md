@@ -116,10 +116,18 @@
       interface box via inlining/escape analysis, so it was reverted. `[][]string`
       (tier-a example) skipped as arbitrary. Pinned by `TestAppendAny_ReflectHeavy`
       + the new bench shapes.
-    - **[10] remainder** (entry sizing partially LANDED): `Write`/`WriteSlice` cold-pool
-      presize from JSONSize (GATE on a steady-state no-regress A/B — the JSONSize walk
-      is real warm-path work), and generic `Marshal[T]` to drop the interface box
-      (cheap API cleanup; breaks `encode.Marshal`-as-func-value callers).
+    - **[10] remainder: generic `Marshal` LANDED 2026-06-27; `Write` presize
+      REJECTED.** `Marshal`/`MarshalString` are now generic over `T Marshaler`
+      (was a plain `Marshaler` arg) → a concrete call devirtualizes and skips
+      the interface box: **Tiny_Marshal/ggen 2 → 1 allocs/op, 320 → 224 B/op,
+      −33% ns** (deterministic). Generated `MarshalJSON` hook (`encode.Marshal(s)`)
+      infers T, unchanged. Caveat: can't be a bare func value (`f :=
+      encode.Marshal` needs `[T]`). Presizing `WriteTo`/`WriteSliceTo`'s pooled
+      buffer from JSONSize was built + A/B'd and **regressed** (+3% tiny / +4%
+      mega) — the pool converges to the max payload size, so the size walk is
+      pure overhead (a second full tree walk at mega); reverted. (`Write`/
+      `WriteSlice` renamed to `WriteTo`/`WriteSliceTo` this pass.)
+      Generic `Marshal[T]` resolves the [10] interface-box note in full.
     - **[14] remainder**: 256-byte shared escape table for AppendString/NoHTML —
       cache-resident payloads only (Mega marshal proved wall-flat, SWAR precedent).
 

@@ -359,8 +359,8 @@ decode.ReadSlice[T](r)                     // ([]T, error)
 decode.UnmarshalSliceStream[T](r, buf)     // ([]T, []byte, error)
 
 // encode package
-encode.Marshal(t)            encode.MarshalString(t)          encode.Write(w, t)
-encode.MarshalSlice(items)   encode.MarshalSliceString(items) encode.WriteSlice(w, items)
+encode.Marshal(t)            encode.MarshalString(t)          encode.WriteTo(w, t)
+encode.MarshalSlice(items)   encode.MarshalSliceString(items) encode.WriteSliceTo(w, items)
 encode.AppendSlice(dst, items)
 ```
 
