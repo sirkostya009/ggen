@@ -50,6 +50,17 @@ Inner loop runs under `b.RunParallel`. `-cpu=1` serial, `-cpu=N` N-way parallel,
 
 At ~2.9 KiB decoded value small enough that per-call buffer management/streaming overhead visible, not drowned by tree-walk cost. Two ggen-stream Reader rows (512-byte initial buf vs payload-sized buf) isolate buffer-grow chain from steady-state throughput.
 
+## BenchmarkValidationHeavy / BenchmarkRuneGated
+
+`ValidationHeavy` (short fields) measures per-field validation cost vs codecs
+that skip it (`ggen_validated` vs `ggen_noval` + non-validating jsonv2/sonic/
+easyjson rows). `RuneGated` is the companion for **long** strings (~8 KB): a
+single ggen row isolating rune-rule validation where opt #44's byte-length
+gates skip the O(len) `utf8.RuneCountInString` walk — `LongRunes` (2048 genuine
+4-byte runes) clears its `minrunes/maxrunes` bound via pure `len` gates,
+`AsciiRunes` via tier-c (alphanum-precedes → count is `len`). The gates are flat
+on `ValidationHeavy` (short — the skipped walk is cheap) but −46.8% here.
+
 ## BenchmarkSlowStream
 
 Slow-reader benches (`slowReader`, geometric-decay delays). Two tables:

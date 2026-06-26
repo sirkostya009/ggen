@@ -251,18 +251,18 @@ func TestGenerate_newValidators(t *testing.T) {
 	}
 }
 
-// TestGenerate_runeCountHoist pins opt #25: >=2 rune rules against an
-// unchanged ref share one hoisted utf8.RuneCountInString (rc); a lone rule
-// stays inline; a string-mutating mod between rules splits the run so neither
-// side hoists.
-func TestGenerate_runeCountHoist(t *testing.T) {
-	gen := func(steps []Step) string {
+// TestGenerate_runeGates pins opt #44 tiers (b)/(c): rune rules avoid the
+// utf8.RuneCountInString walk via byte-length gates, and drop it entirely when
+// an ASCII-implying rule already passed in the same run (non-multierr).
+func TestGenerate_runeGates(t *testing.T) {
+	gen := func(multiErr bool, steps []Step) string {
 		t.Helper()
 		code, err := generate("p", []StructInfo{{
-			Name: "V",
+			Name:     "V",
+			MultiErr: multiErr,
 			Fields: []FieldInfo{{
 				GoName: "S", JSONName: "s", GoType: "string", Kind: KindString,
-				Pipe: steps,
+				Pipe: steps, MultiErr: multiErr,
 			}},
 		}})
 		if err != nil {
@@ -271,46 +271,75 @@ func TestGenerate_runeCountHoist(t *testing.T) {
 		return string(code)
 	}
 
-	t.Run("pair_hoisted", func(t *testing.T) {
-		s := gen([]Step{
-			{V: ValidationRule{Name: "minrunes", Value: "2"}},
-			{V: ValidationRule{Name: "maxrunes", Value: "5"}},
-		})
-		// one rc per decode path (DecodeFrom + DecodeFromStream)
-		if got := strings.Count(s, "rc := utf8.RuneCountInString(result.S)"); got != 2 {
-			t.Errorf("want 2 hoisted rc, got %d:\n%s", got, s)
+	t.Run("minrunes_gated", func(t *testing.T) {
+		// minrunes=3: fail-free len<3, pass-free len>=9 (4*3-3), band [3,9) walks.
+		s := gen(false, []Step{{V: ValidationRule{Name: "minrunes", Value: "3"}}})
+		if !strings.Contains(s, "if len(result.S) < 3 {") {
+			t.Errorf("missing fail-free len gate:\n%s", s)
 		}
-		// the only RuneCountInString calls are the two hoists — no inline recompute
-		if got := strings.Count(s, "utf8.RuneCountInString"); got != 2 {
-			t.Errorf("want 2 total RuneCountInString (no inline recompute), got %d:\n%s", got, s)
-		}
-		if !strings.Contains(s, "Got: rc}") {
-			t.Errorf("failure branch should reuse rc for Got:\n%s", s)
+		if !strings.Contains(s, "else if len(result.S) < 9 {") {
+			t.Errorf("missing ambiguous-band gate (4n-3=9):\n%s", s)
 		}
 	})
 
-	t.Run("single_inline", func(t *testing.T) {
-		s := gen([]Step{{V: ValidationRule{Name: "minrunes", Value: "2"}}})
-		if strings.Contains(s, "rc := utf8.RuneCountInString") {
-			t.Errorf("single rune rule should not hoist:\n%s", s)
+	t.Run("maxrunes_gated", func(t *testing.T) {
+		// maxrunes=5: pass-free len<=5, fail-free len>20 (4*5), band (5,20] walks.
+		s := gen(false, []Step{{V: ValidationRule{Name: "maxrunes", Value: "5"}}})
+		if !strings.Contains(s, "if len(result.S) > 20 {") {
+			t.Errorf("missing fail-free len gate (4n=20):\n%s", s)
 		}
-		// inline recomputes in both the condition and Got: — 2 per path,
-		// 2 paths = 4 (no hoist, so no rc to reuse)
-		if got := strings.Count(s, "utf8.RuneCountInString(result.S)"); got != 4 {
-			t.Errorf("want 4 inline RuneCountInString, got %d:\n%s", got, s)
+		if !strings.Contains(s, "else if len(result.S) > 5 {") {
+			t.Errorf("missing ambiguous-band gate:\n%s", s)
 		}
 	})
 
-	t.Run("mod_splits_run", func(t *testing.T) {
-		// trim mutates the string, so the rune rules straddle a mod and
-		// can't share a count — each stays inline.
-		s := gen([]Step{
-			{V: ValidationRule{Name: "minrunes", Value: "2"}},
-			{IsMod: true, M: ModRule{Name: "trim"}},
-			{V: ValidationRule{Name: "maxrunes", Value: "5"}},
+	t.Run("minrunes_1_collapses", func(t *testing.T) {
+		// minrunes=1: band [1,1) empty → only the len<1 (== empty) gate, no walk.
+		s := gen(false, []Step{{V: ValidationRule{Name: "minrunes", Value: "1"}}})
+		if !strings.Contains(s, "if len(result.S) < 1 {") {
+			t.Errorf("minrunes=1 should be a bare len gate:\n%s", s)
+		}
+		// the only walk is the cold Got: in the fail branch — none in a band
+		if strings.Contains(s, "else if") {
+			t.Errorf("minrunes=1 should have no ambiguous band:\n%s", s)
+		}
+	})
+
+	t.Run("ascii_precedes_drops_walk", func(t *testing.T) {
+		// tier (c): alphanum before maxrunes (non-multierr) → count is len, no walk.
+		s := gen(false, []Step{
+			{V: ValidationRule{Name: "alphanum"}},
+			{V: ValidationRule{Name: "maxrunes", Value: "16"}},
 		})
-		if strings.Contains(s, "rc := utf8.RuneCountInString") {
-			t.Errorf("rune rules split by a mod must not hoist:\n%s", s)
+		if strings.Contains(s, "utf8.RuneCountInString") {
+			t.Errorf("ascii-preceded rune rule must not walk:\n%s", s)
+		}
+		if !strings.Contains(s, "if len(result.S) > 16 {") {
+			t.Errorf("expected a direct len comparison:\n%s", s)
+		}
+	})
+
+	t.Run("ascii_after_does_not_drop", func(t *testing.T) {
+		// alphanum AFTER the rune rule can't license tier (c) — string isn't
+		// known ASCII yet, so the gated walk stays.
+		s := gen(false, []Step{
+			{V: ValidationRule{Name: "maxrunes", Value: "16"}},
+			{V: ValidationRule{Name: "alphanum"}},
+		})
+		if !strings.Contains(s, "utf8.RuneCountInString") {
+			t.Errorf("rune rule before the ascii rule should still gate+walk:\n%s", s)
+		}
+	})
+
+	t.Run("multierr_keeps_walk", func(t *testing.T) {
+		// under multierr a failed alphanum doesn't stop reaching maxrunes on
+		// non-ASCII input, so tier (c) is unsafe — gated walk stays.
+		s := gen(true, []Step{
+			{V: ValidationRule{Name: "alphanum"}},
+			{V: ValidationRule{Name: "maxrunes", Value: "16"}},
+		})
+		if !strings.Contains(s, "utf8.RuneCountInString") {
+			t.Errorf("multierr must keep the walk (tier c unsafe):\n%s", s)
 		}
 	})
 }

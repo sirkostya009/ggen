@@ -289,12 +289,17 @@ func (recv DiveStruct) DecodeFrom(data []byte) (result DiveStruct, i int, err er
 							return result, i, decode.NewParseErr("tags", i, err)
 						}
 					}
-					{
-						rc := utf8.RuneCountInString(result.Tags[len(result.Tags)-1])
-						if rc < 2 {
+					if len(result.Tags[len(result.Tags)-1]) < 2 {
+						return result, i, &validation.MinRunesError{Pos: i, Path: []string{"tags[]"}, Limit: 2, Got: utf8.RuneCountInString(result.Tags[len(result.Tags)-1])}
+					} else if len(result.Tags[len(result.Tags)-1]) < 5 {
+						if rc := utf8.RuneCountInString(result.Tags[len(result.Tags)-1]); rc < 2 {
 							return result, i, &validation.MinRunesError{Pos: i, Path: []string{"tags[]"}, Limit: 2, Got: rc}
 						}
-						if rc > 10 {
+					}
+					if len(result.Tags[len(result.Tags)-1]) > 40 {
+						return result, i, &validation.MaxRunesError{Pos: i, Path: []string{"tags[]"}, Limit: 10, Got: utf8.RuneCountInString(result.Tags[len(result.Tags)-1])}
+					} else if len(result.Tags[len(result.Tags)-1]) > 10 {
+						if rc := utf8.RuneCountInString(result.Tags[len(result.Tags)-1]); rc > 10 {
 							return result, i, &validation.MaxRunesError{Pos: i, Path: []string{"tags[]"}, Limit: 10, Got: rc}
 						}
 					}
@@ -351,12 +356,13 @@ func (recv DiveStruct) DecodeFrom(data []byte) (result DiveStruct, i int, err er
 					return result, i, decode.NewParseErr("title", i, err)
 				}
 			}
-			{
-				rc := utf8.RuneCountInString(result.Title)
-				if rc < 1 {
-					return result, i, &validation.MinRunesError{Pos: i, Path: []string{"title"}, Limit: 1, Got: rc}
-				}
-				if rc > 5 {
+			if len(result.Title) < 1 {
+				return result, i, &validation.MinRunesError{Pos: i, Path: []string{"title"}, Limit: 1, Got: utf8.RuneCountInString(result.Title)}
+			}
+			if len(result.Title) > 20 {
+				return result, i, &validation.MaxRunesError{Pos: i, Path: []string{"title"}, Limit: 5, Got: utf8.RuneCountInString(result.Title)}
+			} else if len(result.Title) > 5 {
+				if rc := utf8.RuneCountInString(result.Title); rc > 5 {
 					return result, i, &validation.MaxRunesError{Pos: i, Path: []string{"title"}, Limit: 5, Got: rc}
 				}
 			}
@@ -594,12 +600,17 @@ func (recv DiveStruct) DecodeFromStream(s *scan.Stream) (result DiveStruct, err 
 					if err != nil {
 						return result, decode.NewParseErr("tags", s.Pos, err)
 					}
-					{
-						rc := utf8.RuneCountInString(result.Tags[len(result.Tags)-1])
-						if rc < 2 {
+					if len(result.Tags[len(result.Tags)-1]) < 2 {
+						return result, &validation.MinRunesError{Pos: s.Offset(), Path: []string{"tags[]"}, Limit: 2, Got: utf8.RuneCountInString(result.Tags[len(result.Tags)-1])}
+					} else if len(result.Tags[len(result.Tags)-1]) < 5 {
+						if rc := utf8.RuneCountInString(result.Tags[len(result.Tags)-1]); rc < 2 {
 							return result, &validation.MinRunesError{Pos: s.Offset(), Path: []string{"tags[]"}, Limit: 2, Got: rc}
 						}
-						if rc > 10 {
+					}
+					if len(result.Tags[len(result.Tags)-1]) > 40 {
+						return result, &validation.MaxRunesError{Pos: s.Offset(), Path: []string{"tags[]"}, Limit: 10, Got: utf8.RuneCountInString(result.Tags[len(result.Tags)-1])}
+					} else if len(result.Tags[len(result.Tags)-1]) > 10 {
+						if rc := utf8.RuneCountInString(result.Tags[len(result.Tags)-1]); rc > 10 {
 							return result, &validation.MaxRunesError{Pos: s.Offset(), Path: []string{"tags[]"}, Limit: 10, Got: rc}
 						}
 					}
@@ -649,12 +660,13 @@ func (recv DiveStruct) DecodeFromStream(s *scan.Stream) (result DiveStruct, err 
 			if err != nil {
 				return result, decode.NewParseErr("title", s.Pos, err)
 			}
-			{
-				rc := utf8.RuneCountInString(result.Title)
-				if rc < 1 {
-					return result, &validation.MinRunesError{Pos: s.Offset(), Path: []string{"title"}, Limit: 1, Got: rc}
-				}
-				if rc > 5 {
+			if len(result.Title) < 1 {
+				return result, &validation.MinRunesError{Pos: s.Offset(), Path: []string{"title"}, Limit: 1, Got: utf8.RuneCountInString(result.Title)}
+			}
+			if len(result.Title) > 20 {
+				return result, &validation.MaxRunesError{Pos: s.Offset(), Path: []string{"title"}, Limit: 5, Got: utf8.RuneCountInString(result.Title)}
+			} else if len(result.Title) > 5 {
+				if rc := utf8.RuneCountInString(result.Title); rc > 5 {
 					return result, &validation.MaxRunesError{Pos: s.Offset(), Path: []string{"title"}, Limit: 5, Got: rc}
 				}
 			}

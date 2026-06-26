@@ -864,25 +864,37 @@ float64` 6459→3417. Outpaces stdjson v1 and jsonv2 on every map shape.
     — pure codegen win on fresh decode), folds into the bytes-path number
     above; nested-row backing reuse pinned by
     `TestMerge_nestedSliceBackingReused`.
-44. **Hoisted `utf8.RuneCountInString` across a rune-rule run.** `runes`/
-    `minrunes`/`maxrunes` each emitted an unconditional
-    `utf8.RuneCountInString` walk in BOTH the condition and the failure-branch
-    `Got:` — a `minrunes=2 maxrunes=5` pair walked the string four times on the
-    happy path. The value-stage emit now partitions each pipe into maximal
-    validator runs split at mods (a `trim`/`lower`/`@Mod` mutates the string, so
-    the count can't carry past it); a run holding ≥2 rune rules hoists ONE
-    block-scoped `rc := utf8.RuneCountInString(ref)` that every rune rule reuses
-    for both the test and `Got: rc` (`emitValRun` + the `rcVar` param on
-    `renderOneVal`, `generate.go`). The block scope means the hoisted `rc` never
-    collides across runs or across the key/value pipes of one map loop. A lone
-    rune rule stays inline (no `rc` var). Wire-identical — emit ORDER and error
-    identity unchanged; only the redundant walks disappear. Measured
-    interleaved core-pinned (`taskset -c 4`, `-cpu=1`, n=12): **−9.18%
-    ValidationHeavy_Unmarshal/ggen_validated** (p=0.000, +10.1% throughput,
-    allocs/B byte-identical) — three of its fields carry rune pairs. Pinned by
-    `TestGenerate_runeCountHoist` (pair hoists / lone stays inline / a mod
-    between splits the run). The byte-length gating + ASCII-subsumption tiers of
-    backlog item [25] are NOT done — this is the hoist tier only.
+44. **Byte-length-gated rune-count validation.** `runes`/`minrunes`/`maxrunes`
+    each emitted an unconditional `utf8.RuneCountInString` walk (O(len)) — a
+    waste when `len(ref)` alone settles the rule. For a B-byte UTF-8 string the
+    rune count R satisfies `ceil(B/4) <= R <= B`, so cheap `len` checks resolve
+    the common cases without walking (`emitRuneRule`, `generate.go`):
+      - `minrunes=N`: fail-free `len < N`; pass-free `len >= 4N-3`; walk only the
+        band `[N, 4N-3)`. (`N<=1` → just the `len < N` check, no band — a bare
+        empty-string test.)
+      - `maxrunes=N`: pass-free `len <= N`; fail-free `len > 4N`; walk band `(N, 4N]`.
+      - `runes=N`: fail-free `len < N || len > 4N`; walk band `[N, 4N]`.
+
+    The failure literal's `Got` reports the real count — a cold walk on the
+    fail path, the live `rc` inside a band; the happy path on a long string
+    walks zero times. **Tier (c) — ASCII subsumption:** if an ASCII-implying
+    rule (`alphanum`/`numeric`/`ascii`/`hexadecimal`, `asciiImplyingRule`) has
+    already PASSED earlier in the same validator run, every byte is one rune so
+    `R == len` exactly and the walk is dropped entirely (direct `len`
+    comparison). Gated on `asciiSeen && !multiErr` in declared order:
+    position-sensitive (the charset rule must precede the rune rule) and
+    skipped under multierr (a failed earlier rule there doesn't stop us reaching
+    the rune rule on non-ASCII input, so `len != R`). `emitValRun` walks the run
+    tracking `asciiSeen`; rune rules route to `emitRuneRule`, everything else to
+    `renderOneVal`. Wire-identical — same accept/reject, error type, and `Got`.
+    Measured interleaved core-pinned (`taskset -c 4`, `-cpu=1`, n=12): **flat on
+    `ValidationHeavy_Unmarshal`** (short fields — the walk it skips is cheap) but
+    **−46.8% `RuneGated_Unmarshal`** (p=0.000, +88% throughput, ~8 KB strings —
+    2048 four-byte runes — that clear their bound via the pass-free `len` gate /
+    tier-c, skipping a full multi-byte UTF-8 decode) — allocs/B byte-identical on
+    both. Pinned by `TestGenerate_runeGates` (gates per rule /
+    `minrunes=1` collapse / tier-c drops the walk / ascii-after and multierr keep
+    it). Implements all three tiers of backlog [25].
 
 ## Design decisions (the why)
 

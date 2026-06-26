@@ -488,18 +488,6 @@ func isNumeric(k TypeKind) bool {
 // for numeric / bool elements (their textual form carries no `,`/`]`/`:`/`}`).
 func scalarCountable(k TypeKind) bool { return isNumeric(k) || k == KindBool }
 
-// renderMods emits post-decode transformation code (bytes path, 3-tuple
-// return). goType + kind let it wrap aliased types with casts to their
-// underlying primitive; pass goType="" or the primitive name when no cast.
-func renderMods(b *bytes.Buffer, mods []ModRule, ref, goType string, kind TypeKind) {
-	renderModsShape(b, mods, ref, goType, kind, "i")
-}
-
-// renderStreamMods is the stream-path counterpart (2-tuple return).
-func renderStreamMods(b *bytes.Buffer, mods []ModRule, ref, goType string, kind TypeKind) {
-	renderModsShape(b, mods, ref, goType, kind, "")
-}
-
 func renderModsShape(b *bytes.Buffer, mods []ModRule, ref, goType string, kind TypeKind, posVar string) {
 	for _, m := range mods {
 		renderOneMod(b, m, ref, goType, kind, posVar)
@@ -701,45 +689,113 @@ func renderValidationOn(b *bytes.Buffer, rules []ValidationRule, ref, jsonName s
 		return "return result, " + posVar + ", " + errExpr
 	}
 
-	emitValRun(b, rules, ref, jsonName, kind, onErr)
+	emitValRun(b, rules, ref, jsonName, kind, multiErr, onErr)
 }
 
 func isRuneRule(name string) bool {
 	return name == "runes" || name == "minrunes" || name == "maxrunes"
 }
 
+// asciiImplyingRule reports whether passing this validator guarantees the
+// value is pure ASCII — so one byte per rune, i.e. utf8.RuneCountInString ==
+// len. Enables tier (c) of opt #44 (drop the rune walk for a rune rule that
+// FOLLOWS one of these in the same run).
+func asciiImplyingRule(name string) bool {
+	switch name {
+	case "alphanum", "numeric", "ascii", "hexadecimal":
+		return true
+	}
+	return false
+}
+
 // emitValRun emits a contiguous run of validators against an unchanged ref
-// (callers split runs at mods, which mutate ref). When the run holds >=2
-// rune-count rules it hoists a single utf8.RuneCountInString into a
-// block-scoped rc reused by every rune rule — a min+max pair otherwise walks
-// the string twice on the happy path. Otherwise each rule emits inline.
-func emitValRun(b *bytes.Buffer, run []ValidationRule, ref, jsonName string, kind TypeKind, onErr func(string) string) {
-	runeRules := 0
+// (callers split runs at mods, which mutate ref). Rune-count rules
+// (runes/minrunes/maxrunes) emit through emitRuneRule, which avoids the O(len)
+// utf8.RuneCountInString walk via byte-length gating (the rune count R of a B-
+// byte UTF-8 string satisfies ceil(B/4) <= R <= B). If an ASCII-implying rule
+// already passed earlier in this run AND we're not accumulating (multierr —
+// where a failed earlier rule doesn't stop us reaching this one on non-ASCII
+// input), the count is exactly len and the walk is dropped entirely (tier c).
+func emitValRun(b *bytes.Buffer, run []ValidationRule, ref, jsonName string, kind TypeKind, multiErr bool, onErr func(string) string) {
+	asciiSeen := false
 	for _, v := range run {
 		if isRuneRule(v.Name) {
-			runeRules++
+			emitRuneRule(b, v, ref, jsonName, onErr, asciiSeen && !multiErr)
+		} else {
+			renderOneVal(b, v, ref, jsonName, kind, onErr)
+		}
+		if asciiImplyingRule(v.Name) {
+			asciiSeen = true
 		}
 	}
-	if runeRules < 2 {
-		for _, v := range run {
-			renderOneVal(b, v, ref, jsonName, kind, onErr, "")
+}
+
+// emitRuneRule emits a single rune-count rule (runes/minrunes/maxrunes).
+// useLen drops the walk entirely (tier c — count is len). Otherwise byte-length
+// gates resolve the fail-free and pass-free cases in O(1); only the ambiguous
+// band walks. The failure literal's Got reports the real rune count (a cold
+// walk on the fail path; the live `rc` inside a band).
+func emitRuneRule(b *bytes.Buffer, v ValidationRule, ref, jsonName string, onErr func(string) string, useLen bool) {
+	errLit := func(got string) string {
+		switch v.Name {
+		case "runes":
+			return fmt.Sprintf("&validation.RunesError{Path: []string{%q}, Want: %s, Got: %s}", jsonName, v.Value, got)
+		case "minrunes":
+			return fmt.Sprintf("&validation.MinRunesError{Path: []string{%q}, Limit: %s, Got: %s}", jsonName, v.Value, got)
+		default: // maxrunes
+			return fmt.Sprintf("&validation.MaxRunesError{Path: []string{%q}, Limit: %s, Got: %s}", jsonName, v.Value, got)
 		}
+	}
+	walk := fmt.Sprintf("utf8.RuneCountInString(%s)", ref)
+
+	// Tier (c): every byte is a rune, so the count is len(ref) — no walk.
+	if useLen {
+		l := fmt.Sprintf("len(%s)", ref)
+		op := map[string]string{"runes": "!=", "minrunes": "<", "maxrunes": ">"}[v.Name]
+		fmt.Fprintf(b, "if %s %s %s {\n\t%s\n}\n", l, op, v.Value, onErr(errLit(l)))
 		return
 	}
-	fmt.Fprintf(b, "{\nrc := utf8.RuneCountInString(%s)\n", ref)
-	for _, v := range run {
-		renderOneVal(b, v, ref, jsonName, kind, onErr, "rc")
+
+	// Tier (b): byte-length gate. n parsed from the (applicability-validated)
+	// integer value; on the off chance it doesn't parse, fall back to a plain
+	// unconditional walk.
+	n, err := strconv.Atoi(v.Value)
+	if err != nil {
+		op := map[string]string{"runes": "!=", "minrunes": "<", "maxrunes": ">"}[v.Name]
+		fmt.Fprintf(b, "if %s %s %s {\n\t%s\n}\n", walk, op, v.Value, onErr(errLit(walk)))
+		return
 	}
-	b.WriteString("}\n")
+	switch v.Name {
+	case "minrunes":
+		// R >= n. Fail-free: len < n (R <= len < n). Pass-free: len >= 4n-3
+		// (R >= ceil(len/4) >= n). Band [n, 4n-3) walks. n<=1 → band empty.
+		fmt.Fprintf(b, "if len(%s) < %d {\n\t%s\n}", ref, n, onErr(errLit(walk)))
+		if 4*n-3 > n {
+			fmt.Fprintf(b, " else if len(%s) < %d {\n\tif rc := %s; rc < %d {\n\t\t%s\n\t}\n}", ref, 4*n-3, walk, n, onErr(errLit("rc")))
+		}
+		b.WriteString("\n")
+	case "maxrunes":
+		// R <= n. Pass-free: len <= n (R <= len). Fail-free: len > 4n
+		// (R >= ceil(len/4) > n). Band (n, 4n] walks. n<1 → no band.
+		fmt.Fprintf(b, "if len(%s) > %d {\n\t%s\n}", ref, 4*n, onErr(errLit(walk)))
+		if n >= 1 {
+			fmt.Fprintf(b, " else if len(%s) > %d {\n\tif rc := %s; rc > %d {\n\t\t%s\n\t}\n}", ref, n, walk, n, onErr(errLit("rc")))
+		}
+		b.WriteString("\n")
+	case "runes":
+		// R == n. Fail-free: len < n OR len > 4n. Band [n, 4n] walks.
+		fmt.Fprintf(b, "if len(%s) < %d || len(%s) > %d {\n\t%s\n} else if rc := %s; rc != %d {\n\t%s\n}\n",
+			ref, n, ref, 4*n, onErr(errLit(walk)), walk, n, onErr(errLit("rc")))
+	}
 }
 
 // renderOneVal emits one validation check against ref. onErr wraps a typed
 // error literal into the right failure action. Builtin validators dispatch by
 // name; a custom (`@Func`) validator calls the user func — error form wraps
 // CustomError, bool form (BoolForm) emits PredicateError on a false return.
-// rcVar, when non-empty, names a hoisted utf8.RuneCountInString result the
-// rune rules reuse instead of recomputing inline (see emitValRun).
-func renderOneVal(b *bytes.Buffer, v ValidationRule, ref, jsonName string, kind TypeKind, onErr func(string) string, rcVar string) {
+// Rune-count rules (runes/minrunes/maxrunes) are NOT handled here — emitValRun
+// routes them to emitRuneRule (byte-length gating).
+func renderOneVal(b *bytes.Buffer, v ValidationRule, ref, jsonName string, kind TypeKind, onErr func(string) string) {
 	switch v.Name {
 	case "required", "optional":
 		// required handled separately; optional is a no-op marker
@@ -757,28 +813,6 @@ func renderOneVal(b *bytes.Buffer, v ValidationRule, ref, jsonName string, kind 
 	case "maxlen":
 		fmt.Fprintf(b, "if len(%s) > %s {\n\t%s\n}\n", ref, v.Value,
 			onErr(fmt.Sprintf("&validation.MaxLenError{Path: []string{%q}, Limit: %s, Got: len(%s)}", jsonName, v.Value, ref)))
-
-	case "runes":
-		rc := rcVar
-		if rc == "" {
-			rc = fmt.Sprintf("utf8.RuneCountInString(%s)", ref)
-		}
-		fmt.Fprintf(b, "if %s != %s {\n\t%s\n}\n", rc, v.Value,
-			onErr(fmt.Sprintf("&validation.RunesError{Path: []string{%q}, Want: %s, Got: %s}", jsonName, v.Value, rc)))
-	case "minrunes":
-		rc := rcVar
-		if rc == "" {
-			rc = fmt.Sprintf("utf8.RuneCountInString(%s)", ref)
-		}
-		fmt.Fprintf(b, "if %s < %s {\n\t%s\n}\n", rc, v.Value,
-			onErr(fmt.Sprintf("&validation.MinRunesError{Path: []string{%q}, Limit: %s, Got: %s}", jsonName, v.Value, rc)))
-	case "maxrunes":
-		rc := rcVar
-		if rc == "" {
-			rc = fmt.Sprintf("utf8.RuneCountInString(%s)", ref)
-		}
-		fmt.Fprintf(b, "if %s > %s {\n\t%s\n}\n", rc, v.Value,
-			onErr(fmt.Sprintf("&validation.MaxRunesError{Path: []string{%q}, Limit: %s, Got: %s}", jsonName, v.Value, rc)))
 
 	case "gt":
 		fmt.Fprintf(b, "if %s <= %s {\n\t%s\n}\n", ref, v.Value,
@@ -3333,7 +3367,7 @@ func renderPipe(b *bytes.Buffer, steps []Step, ref, jsonName, goType string, kin
 			run = append(run, steps[q].V)
 			q++
 		}
-		emitValRun(b, run, ref, jsonName, kind, onErr)
+		emitValRun(b, run, ref, jsonName, kind, multiErr, onErr)
 		p = q
 	}
 }

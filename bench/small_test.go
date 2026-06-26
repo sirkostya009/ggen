@@ -201,6 +201,21 @@ func BenchmarkValidationHeavy_Unmarshal(b *testing.B) {
 	}
 }
 
+// BenchmarkRuneGated_Unmarshal isolates rune-rule validation on long (~8 KB)
+// strings — where opt #44's byte-length gates (tier b) and ascii subsumption
+// (tier c) skip an O(len) utf8.RuneCountInString walk. Decode-only validation
+// cost; no other codec validates, so a single ggen row.
+func BenchmarkRuneGated_Unmarshal(b *testing.B) {
+	runBench(b, int64(len(RuneGatedPayload)),
+		func() struct{} { return struct{}{} },
+		func(_ *struct{}) {
+			if _, _, err := (RuneGated{}).DecodeFrom(RuneGatedPayload); err != nil {
+				b.Fatal(err)
+			}
+		},
+	)
+}
+
 // BenchmarkHTMLEscape_MarshalParity — htmlescape opt-in vs default literal.
 // The opt-in pays 6× per `<` / `>` / `&` (the \uXXXX expansion); the
 // default emits them literally and matches jsonv2's wire shape.

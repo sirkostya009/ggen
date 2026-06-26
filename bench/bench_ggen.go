@@ -3781,8 +3781,10 @@ func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, i i
 					return result, i, decode.NewParseErr("country", i, err)
 				}
 			}
-			if utf8.RuneCountInString(result.Country) != 2 {
+			if len(result.Country) < 2 || len(result.Country) > 8 {
 				return result, i, &validation.RunesError{Pos: i, Path: []string{"country"}, Want: 2, Got: utf8.RuneCountInString(result.Country)}
+			} else if rc := utf8.RuneCountInString(result.Country); rc != 2 {
+				return result, i, &validation.RunesError{Pos: i, Path: []string{"country"}, Want: 2, Got: rc}
 			}
 			result.Country = strings.ToUpper(result.Country)
 		case "email":
@@ -3815,8 +3817,12 @@ func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, i i
 			if !decode.IsEmail(result.Email) {
 				return result, i, &validation.EmailError{Pos: i, Path: []string{"email"}, Value: result.Email}
 			}
-			if utf8.RuneCountInString(result.Email) > 128 {
+			if len(result.Email) > 512 {
 				return result, i, &validation.MaxRunesError{Pos: i, Path: []string{"email"}, Limit: 128, Got: utf8.RuneCountInString(result.Email)}
+			} else if len(result.Email) > 128 {
+				if rc := utf8.RuneCountInString(result.Email); rc > 128 {
+					return result, i, &validation.MaxRunesError{Pos: i, Path: []string{"email"}, Limit: 128, Got: rc}
+				}
 			}
 		case "lang":
 			if seenLang {
@@ -3877,12 +3883,13 @@ func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, i i
 					return result, i, decode.NewParseErr("name", i, err)
 				}
 			}
-			{
-				rc := utf8.RuneCountInString(result.Name)
-				if rc < 1 {
-					return result, i, &validation.MinRunesError{Pos: i, Path: []string{"name"}, Limit: 1, Got: rc}
-				}
-				if rc > 64 {
+			if len(result.Name) < 1 {
+				return result, i, &validation.MinRunesError{Pos: i, Path: []string{"name"}, Limit: 1, Got: utf8.RuneCountInString(result.Name)}
+			}
+			if len(result.Name) > 256 {
+				return result, i, &validation.MaxRunesError{Pos: i, Path: []string{"name"}, Limit: 64, Got: utf8.RuneCountInString(result.Name)}
+			} else if len(result.Name) > 64 {
+				if rc := utf8.RuneCountInString(result.Name); rc > 64 {
 					return result, i, &validation.MaxRunesError{Pos: i, Path: []string{"name"}, Limit: 64, Got: rc}
 				}
 			}
@@ -3913,17 +3920,22 @@ func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, i i
 					return result, i, decode.NewParseErr("phone", i, err)
 				}
 			}
-			{
-				rc := utf8.RuneCountInString(result.Phone)
-				if rc < 7 {
+			if len(result.Phone) < 7 {
+				return result, i, &validation.MinRunesError{Pos: i, Path: []string{"phone"}, Limit: 7, Got: utf8.RuneCountInString(result.Phone)}
+			} else if len(result.Phone) < 25 {
+				if rc := utf8.RuneCountInString(result.Phone); rc < 7 {
 					return result, i, &validation.MinRunesError{Pos: i, Path: []string{"phone"}, Limit: 7, Got: rc}
 				}
-				if rc > 20 {
+			}
+			if len(result.Phone) > 80 {
+				return result, i, &validation.MaxRunesError{Pos: i, Path: []string{"phone"}, Limit: 20, Got: utf8.RuneCountInString(result.Phone)}
+			} else if len(result.Phone) > 20 {
+				if rc := utf8.RuneCountInString(result.Phone); rc > 20 {
 					return result, i, &validation.MaxRunesError{Pos: i, Path: []string{"phone"}, Limit: 20, Got: rc}
 				}
-				if !decode.IsNumeric(result.Phone) {
-					return result, i, &validation.NumericError{Pos: i, Path: []string{"phone"}, Value: result.Phone}
-				}
+			}
+			if !decode.IsNumeric(result.Phone) {
+				return result, i, &validation.NumericError{Pos: i, Path: []string{"phone"}, Value: result.Phone}
 			}
 		case "role":
 			if seenRole {
@@ -4029,17 +4041,22 @@ func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, i i
 					return result, i, decode.NewParseErr("username", i, err)
 				}
 			}
-			{
-				rc := utf8.RuneCountInString(result.Username)
-				if rc < 3 {
+			if len(result.Username) < 3 {
+				return result, i, &validation.MinRunesError{Pos: i, Path: []string{"username"}, Limit: 3, Got: utf8.RuneCountInString(result.Username)}
+			} else if len(result.Username) < 9 {
+				if rc := utf8.RuneCountInString(result.Username); rc < 3 {
 					return result, i, &validation.MinRunesError{Pos: i, Path: []string{"username"}, Limit: 3, Got: rc}
 				}
-				if rc > 32 {
+			}
+			if len(result.Username) > 128 {
+				return result, i, &validation.MaxRunesError{Pos: i, Path: []string{"username"}, Limit: 32, Got: utf8.RuneCountInString(result.Username)}
+			} else if len(result.Username) > 32 {
+				if rc := utf8.RuneCountInString(result.Username); rc > 32 {
 					return result, i, &validation.MaxRunesError{Pos: i, Path: []string{"username"}, Limit: 32, Got: rc}
 				}
-				if !decode.IsAlphanum(result.Username) {
-					return result, i, &validation.AlphanumError{Pos: i, Path: []string{"username"}, Value: result.Username}
-				}
+			}
+			if !decode.IsAlphanum(result.Username) {
+				return result, i, &validation.AlphanumError{Pos: i, Path: []string{"username"}, Value: result.Username}
 			}
 			result.Username = strings.ToLower(result.Username)
 		default:
@@ -4155,8 +4172,10 @@ func (recv ValidationHeavy) DecodeFromStream(s *scan.Stream) (result ValidationH
 			if err != nil {
 				return result, decode.NewParseErr("country", s.Pos, err)
 			}
-			if utf8.RuneCountInString(result.Country) != 2 {
+			if len(result.Country) < 2 || len(result.Country) > 8 {
 				return result, &validation.RunesError{Pos: s.Offset(), Path: []string{"country"}, Want: 2, Got: utf8.RuneCountInString(result.Country)}
+			} else if rc := utf8.RuneCountInString(result.Country); rc != 2 {
+				return result, &validation.RunesError{Pos: s.Offset(), Path: []string{"country"}, Want: 2, Got: rc}
 			}
 			result.Country = strings.ToUpper(result.Country)
 		case "email":
@@ -4175,8 +4194,12 @@ func (recv ValidationHeavy) DecodeFromStream(s *scan.Stream) (result ValidationH
 			if !decode.IsEmail(result.Email) {
 				return result, &validation.EmailError{Pos: s.Offset(), Path: []string{"email"}, Value: result.Email}
 			}
-			if utf8.RuneCountInString(result.Email) > 128 {
+			if len(result.Email) > 512 {
 				return result, &validation.MaxRunesError{Pos: s.Offset(), Path: []string{"email"}, Limit: 128, Got: utf8.RuneCountInString(result.Email)}
+			} else if len(result.Email) > 128 {
+				if rc := utf8.RuneCountInString(result.Email); rc > 128 {
+					return result, &validation.MaxRunesError{Pos: s.Offset(), Path: []string{"email"}, Limit: 128, Got: rc}
+				}
 			}
 		case "lang":
 			err = s.ConsumeColon()
@@ -4209,12 +4232,13 @@ func (recv ValidationHeavy) DecodeFromStream(s *scan.Stream) (result ValidationH
 			if err != nil {
 				return result, decode.NewParseErr("name", s.Pos, err)
 			}
-			{
-				rc := utf8.RuneCountInString(result.Name)
-				if rc < 1 {
-					return result, &validation.MinRunesError{Pos: s.Offset(), Path: []string{"name"}, Limit: 1, Got: rc}
-				}
-				if rc > 64 {
+			if len(result.Name) < 1 {
+				return result, &validation.MinRunesError{Pos: s.Offset(), Path: []string{"name"}, Limit: 1, Got: utf8.RuneCountInString(result.Name)}
+			}
+			if len(result.Name) > 256 {
+				return result, &validation.MaxRunesError{Pos: s.Offset(), Path: []string{"name"}, Limit: 64, Got: utf8.RuneCountInString(result.Name)}
+			} else if len(result.Name) > 64 {
+				if rc := utf8.RuneCountInString(result.Name); rc > 64 {
 					return result, &validation.MaxRunesError{Pos: s.Offset(), Path: []string{"name"}, Limit: 64, Got: rc}
 				}
 			}
@@ -4231,17 +4255,22 @@ func (recv ValidationHeavy) DecodeFromStream(s *scan.Stream) (result ValidationH
 			if err != nil {
 				return result, decode.NewParseErr("phone", s.Pos, err)
 			}
-			{
-				rc := utf8.RuneCountInString(result.Phone)
-				if rc < 7 {
+			if len(result.Phone) < 7 {
+				return result, &validation.MinRunesError{Pos: s.Offset(), Path: []string{"phone"}, Limit: 7, Got: utf8.RuneCountInString(result.Phone)}
+			} else if len(result.Phone) < 25 {
+				if rc := utf8.RuneCountInString(result.Phone); rc < 7 {
 					return result, &validation.MinRunesError{Pos: s.Offset(), Path: []string{"phone"}, Limit: 7, Got: rc}
 				}
-				if rc > 20 {
+			}
+			if len(result.Phone) > 80 {
+				return result, &validation.MaxRunesError{Pos: s.Offset(), Path: []string{"phone"}, Limit: 20, Got: utf8.RuneCountInString(result.Phone)}
+			} else if len(result.Phone) > 20 {
+				if rc := utf8.RuneCountInString(result.Phone); rc > 20 {
 					return result, &validation.MaxRunesError{Pos: s.Offset(), Path: []string{"phone"}, Limit: 20, Got: rc}
 				}
-				if !decode.IsNumeric(result.Phone) {
-					return result, &validation.NumericError{Pos: s.Offset(), Path: []string{"phone"}, Value: result.Phone}
-				}
+			}
+			if !decode.IsNumeric(result.Phone) {
+				return result, &validation.NumericError{Pos: s.Offset(), Path: []string{"phone"}, Value: result.Phone}
 			}
 		case "role":
 			err = s.ConsumeColon()
@@ -4309,17 +4338,22 @@ func (recv ValidationHeavy) DecodeFromStream(s *scan.Stream) (result ValidationH
 			if err != nil {
 				return result, decode.NewParseErr("username", s.Pos, err)
 			}
-			{
-				rc := utf8.RuneCountInString(result.Username)
-				if rc < 3 {
+			if len(result.Username) < 3 {
+				return result, &validation.MinRunesError{Pos: s.Offset(), Path: []string{"username"}, Limit: 3, Got: utf8.RuneCountInString(result.Username)}
+			} else if len(result.Username) < 9 {
+				if rc := utf8.RuneCountInString(result.Username); rc < 3 {
 					return result, &validation.MinRunesError{Pos: s.Offset(), Path: []string{"username"}, Limit: 3, Got: rc}
 				}
-				if rc > 32 {
+			}
+			if len(result.Username) > 128 {
+				return result, &validation.MaxRunesError{Pos: s.Offset(), Path: []string{"username"}, Limit: 32, Got: utf8.RuneCountInString(result.Username)}
+			} else if len(result.Username) > 32 {
+				if rc := utf8.RuneCountInString(result.Username); rc > 32 {
 					return result, &validation.MaxRunesError{Pos: s.Offset(), Path: []string{"username"}, Limit: 32, Got: rc}
 				}
-				if !decode.IsAlphanum(result.Username) {
-					return result, &validation.AlphanumError{Pos: s.Offset(), Path: []string{"username"}, Value: result.Username}
-				}
+			}
+			if !decode.IsAlphanum(result.Username) {
+				return result, &validation.AlphanumError{Pos: s.Offset(), Path: []string{"username"}, Value: result.Username}
 			}
 			result.Username = strings.ToLower(result.Username)
 		default:
@@ -5002,6 +5036,280 @@ func (s NoValidationHeavy) AppendJSON(dst []byte) ([]byte, error) {
 	dst = encode.AppendStringNoHTML(dst, s.URL)
 	dst = append(dst, ",\"username\":\""...)
 	dst = encode.AppendStringNoHTML(dst, s.Username)
+	return append(dst, '}'), nil
+}
+
+func (recv RuneGated) DecodeFrom(data []byte) (result RuneGated, i int, err error) {
+	result = recv
+	seenAsciiRunes := false
+	seenLongRunes := false
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+	}
+	i++
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		i++
+		return result, i, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
+		}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
+			}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		}
+		i++
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch key {
+		case "asciiRunes":
+			if seenAsciiRunes {
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"asciiRunes"}}
+			}
+			seenAsciiRunes = true
+			if i >= len(data) || data[i] != '"' {
+				return result, i, decode.NewParseErr("asciiRunes", i, scan.ErrExpectString)
+			}
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, decode.NewParseErr("asciiRunes", i, scan.ErrUnterminated)
+			}
+			if data[ke] < 0x20 {
+				return result, i, decode.NewParseErr("asciiRunes", i, scan.ErrBadString)
+			}
+			if data[ke] == '"' {
+				result.AsciiRunes = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				result.AsciiRunes, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("asciiRunes", i, err)
+				}
+			}
+			if !decode.IsAlphanum(result.AsciiRunes) {
+				return result, i, &validation.AlphanumError{Pos: i, Path: []string{"asciiRunes"}, Value: result.AsciiRunes}
+			}
+			if len(result.AsciiRunes) > 1000000 {
+				return result, i, &validation.MaxRunesError{Pos: i, Path: []string{"asciiRunes"}, Limit: 1000000, Got: len(result.AsciiRunes)}
+			}
+		case "longRunes":
+			if seenLongRunes {
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"longRunes"}}
+			}
+			seenLongRunes = true
+			if i >= len(data) || data[i] != '"' {
+				return result, i, decode.NewParseErr("longRunes", i, scan.ErrExpectString)
+			}
+			ke := i + 1
+			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke >= len(data) {
+				return result, i, decode.NewParseErr("longRunes", i, scan.ErrUnterminated)
+			}
+			if data[ke] < 0x20 {
+				return result, i, decode.NewParseErr("longRunes", i, scan.ErrBadString)
+			}
+			if data[ke] == '"' {
+				result.LongRunes = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				result.LongRunes, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("longRunes", i, err)
+				}
+			}
+			if len(result.LongRunes) < 4 {
+				return result, i, &validation.MinRunesError{Pos: i, Path: []string{"longRunes"}, Limit: 4, Got: utf8.RuneCountInString(result.LongRunes)}
+			} else if len(result.LongRunes) < 13 {
+				if rc := utf8.RuneCountInString(result.LongRunes); rc < 4 {
+					return result, i, &validation.MinRunesError{Pos: i, Path: []string{"longRunes"}, Limit: 4, Got: rc}
+				}
+			}
+			if len(result.LongRunes) > 4000000 {
+				return result, i, &validation.MaxRunesError{Pos: i, Path: []string{"longRunes"}, Limit: 1000000, Got: utf8.RuneCountInString(result.LongRunes)}
+			} else if len(result.LongRunes) > 1000000 {
+				if rc := utf8.RuneCountInString(result.LongRunes); rc > 1000000 {
+					return result, i, &validation.MaxRunesError{Pos: i, Path: []string{"longRunes"}, Limit: 1000000, Got: rc}
+				}
+			}
+		default:
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			i++
+			return result, i, nil
+		}
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+	}
+}
+
+func (recv RuneGated) DecodeFromStream(s *scan.Stream) (result RuneGated, err error) {
+	result = recv
+	seenAsciiRunes := false
+	seenLongRunes := false
+	err = s.ObjectOpen()
+	if err != nil {
+		return result, decode.NewParseErr("", s.Pos, err)
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, decode.NewParseErr("", s.Pos, err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView()
+		if err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		switch key {
+		case "asciiRunes":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("asciiRunes", s.Pos, err)
+			}
+			if seenAsciiRunes {
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"asciiRunes"}}
+			}
+			seenAsciiRunes = true
+			result.AsciiRunes, err = s.String()
+			if err != nil {
+				return result, decode.NewParseErr("asciiRunes", s.Pos, err)
+			}
+			if !decode.IsAlphanum(result.AsciiRunes) {
+				return result, &validation.AlphanumError{Pos: s.Offset(), Path: []string{"asciiRunes"}, Value: result.AsciiRunes}
+			}
+			if len(result.AsciiRunes) > 1000000 {
+				return result, &validation.MaxRunesError{Pos: s.Offset(), Path: []string{"asciiRunes"}, Limit: 1000000, Got: len(result.AsciiRunes)}
+			}
+		case "longRunes":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("longRunes", s.Pos, err)
+			}
+			if seenLongRunes {
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"longRunes"}}
+			}
+			seenLongRunes = true
+			result.LongRunes, err = s.String()
+			if err != nil {
+				return result, decode.NewParseErr("longRunes", s.Pos, err)
+			}
+			if len(result.LongRunes) < 4 {
+				return result, &validation.MinRunesError{Pos: s.Offset(), Path: []string{"longRunes"}, Limit: 4, Got: utf8.RuneCountInString(result.LongRunes)}
+			} else if len(result.LongRunes) < 13 {
+				if rc := utf8.RuneCountInString(result.LongRunes); rc < 4 {
+					return result, &validation.MinRunesError{Pos: s.Offset(), Path: []string{"longRunes"}, Limit: 4, Got: rc}
+				}
+			}
+			if len(result.LongRunes) > 4000000 {
+				return result, &validation.MaxRunesError{Pos: s.Offset(), Path: []string{"longRunes"}, Limit: 1000000, Got: utf8.RuneCountInString(result.LongRunes)}
+			} else if len(result.LongRunes) > 1000000 {
+				if rc := utf8.RuneCountInString(result.LongRunes); rc > 1000000 {
+					return result, &validation.MaxRunesError{Pos: s.Offset(), Path: []string{"longRunes"}, Limit: 1000000, Got: rc}
+				}
+			}
+		default:
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+		}
+
+		err = s.SkipSpace()
+		if err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, decode.NewParseErr("", s.Pos, err)
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, decode.NewParseErr("", s.Pos, err)
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			return result, nil
+		}
+		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+	}
+}
+
+func (s RuneGated) JSONSize() int {
+	size := 32
+	size += len(s.AsciiRunes) * 2
+	size += len(s.LongRunes) * 2
+	return size
+}
+
+func (s RuneGated) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"asciiRunes\":\""...)
+	dst = encode.AppendStringNoHTML(dst, s.AsciiRunes)
+	dst = append(dst, ",\"longRunes\":\""...)
+	dst = encode.AppendStringNoHTML(dst, s.LongRunes)
 	return append(dst, '}'), nil
 }
 

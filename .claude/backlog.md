@@ -62,23 +62,23 @@
   CPU-only shaves routinely vanish in wall clock.
 
     *validation (highest-value unmined):*
-    - **[25] rune-rule byte-length gating + ASCII subsumption. HOIST TIER LANDED
-      2026-06-26 (remaining tiers open).** Three tiers: (a) hoist one `rc` when
-      ≥2 rune rules survive in a run; (b) byte-length gate from `1 <= bytes/rune
-      <= 4` (`len<N` fails free, `len>=4N` passes free, N=1 → `len==0`); (c)
-      DELETE the walk when an ASCII-implying rule (alphanum/numeric/ascii/hex)
-      precedes. **Tier (a) shipped** — `emitValRun` partitions each pipe into
-      maximal validator runs split at mods (a mod mutates ref), hoists one
-      block-scoped `rc := utf8.RuneCountInString(ref)` reused for both the test
-      and `Got: rc`; lone rules stay inline (opt #44,
-      `TestGenerate_runeCountHoist`). Measured **−9.18% ValidationHeavy_
-      Unmarshal/ggen_validated** (interleaved core-pinned, p=0.000, n=12,
-      allocs/B byte-identical) — inside the 5-15% est. Tiers (b)/(c) still open:
-      gate the ASCII-subsumption tier on the charset rule preceding the rune rule
-      in emit order — else error identity / multierr contents change on
-      doubly-invalid input; the byte-length gate carries the win on single-rule
-      fields the hoist doesn't touch. With `rc` now hoisted the failure branch
-      already reuses it (no recompute). generate.go `renderOneVal`/`emitValRun`.
+    - **[25] rune-rule byte-length gating + ASCII subsumption. LANDED 2026-06-26
+      (all three tiers).** From `ceil(B/4) <= R <= B` for a B-byte UTF-8 string:
+      (b) byte-length gates resolve fail-free/pass-free in O(1), walk only the
+      ambiguous band (`minrunes=N` band `[N,4N-3)`, `maxrunes=N` band `(N,4N]`,
+      `runes=N` band `[N,4N]`; `minrunes=1` collapses to an empty-string check);
+      (c) when an ASCII-implying rule (alphanum/numeric/ascii/hex) PASSED earlier
+      in the same run, `R == len` so the walk is dropped entirely. Tier (c) gated
+      on `asciiSeen && !multiErr` in declared order (position-sensitive; skipped
+      under multierr where a failed earlier rule doesn't stop reaching the rune
+      rule on non-ASCII input). The intermediate hoist (a) was superseded by the
+      gates — `emitRuneRule` (gating) + `emitValRun` (asciiSeen tracking) in
+      generate.go; the `rcVar` hoist param on `renderOneVal` was removed. Wire-
+      identical (same accept/reject, error type, `Got`). Measured interleaved
+      core-pinned (n=12): **flat on ValidationHeavy** (short strings — the skipped
+      walk is cheap) but **−46.8% RuneGated_Unmarshal** (p=0.000, +88% throughput,
+      ~8 KB strings of 2048 four-byte runes) — allocs/B byte-identical. Opt #44;
+      pinned by `TestGenerate_runeGates` + `BenchmarkRuneGated_Unmarshal`.
     - **[4] single-pass IsEmail + 256-byte class-bitmask predicates.** IsEmail
       (decode/validators.go:5-29) is two passes; track `lastDot` in loop 1, delete
       loop 2. IsAlphanum/IsHex/IsPrintable → one `class[256]uint8` indexed load+AND
@@ -107,10 +107,6 @@
       generated structs (fallibility decidable at codegen). Est. 0.5-2% Mega_Marshal,
       likely flat. JSONSize half already moot (gc inlines it). Wire-identical →
       correctness is an output diff. generate.go:1337/2150.
-    - **[24] JSONSize comma-branch folding.** `size += n-1` + `size += len*K` →
-      `size += len*(K+1)` (overcounts 1B/non-empty container — still an upper bound,
-      `sizeMapContrib` already does this). Sub-0.5% non-presized Marshal, likely flat;
-      codegen-simplification ride-along, accept only if non-regressing + simpler.
     - **[10] remainder** (entry sizing partially LANDED): `Write`/`WriteSlice` cold-pool
       presize from JSONSize (GATE on a steady-state no-regress A/B — the JSONSize walk
       is real warm-path work), and generic `Marshal[T]` to drop the interface box
