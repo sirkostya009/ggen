@@ -689,6 +689,29 @@ func init() {
 			}
 			return m
 		}()},
+
+		{name: "named_map_int", val: func() namedIntMap {
+			m := make(namedIntMap, n)
+			for i := range n {
+				m["key"+strconv.Itoa(i)] = r.Intn(1 << 30)
+			}
+			return m
+		}()},
+		{name: "struct_slice", val: func() []ptStruct {
+			out := make([]ptStruct, n)
+			for i := range out {
+				out[i] = ptStruct{X: i, Y: -i, S: randString(8), B: i%2 == 0}
+			}
+			return out
+		}()},
+		{name: "time_slice", val: func() []time.Time {
+			out := make([]time.Time, n)
+			base := time.Date(2026, 6, 27, 0, 0, 0, 0, time.UTC)
+			for i := range out {
+				out[i] = base.Add(time.Duration(i) * time.Hour)
+			}
+			return out
+		}()},
 	}
 
 	for i := range shapes {
@@ -757,6 +780,35 @@ func BenchmarkAppendAny_Presized(b *testing.B) {
 }
 
 type namedStr string
+
+type namedIntMap map[string]int
+type namedStrMap map[string]string
+
+type ptStruct struct {
+	X int    `json:"x"`
+	Y int    `json:"y"`
+	S string `json:"s"`
+	B bool   `json:"b"`
+}
+
+// TestAppendAny_ReflectHeavy covers the reflect-path shapes touched by opts
+// [11] (named-map SetIterKey/Value scratch) and [12] (concrete composite
+// slices + primitive struct fields read off the reflect.Value), each checked
+// against jsonv2 (reparsed, order-independent).
+func TestAppendAny_ReflectHeavy(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, 6, 27, 1, 2, 3, 0, time.UTC)
+	checkAny(t, namedIntMap{"a": 1, "b": -2, "c": 1 << 40})
+	checkAny(t, namedStrMap{"x": "one", "y": "two"})
+	checkAny(t, namedIntMap(nil))
+	checkAny(t, map[string]ptStruct{"p": {X: 1, Y: -1, S: "hi", B: true}})
+	checkAny(t, []time.Time{now, now.Add(time.Hour)})
+	checkAny(t, []time.Time(nil))
+	checkAny(t, []json.RawMessage{json.RawMessage(`{"a":1}`), json.RawMessage(`[2,3]`), nil})
+	checkAny(t, ptStruct{X: 7, Y: -7, S: "field", B: true})
+	checkAny(t, []ptStruct{{X: 1, S: "a"}, {Y: 2, B: true}})
+	checkAny(t, map[string][]int{"ns": {1, 2, 3}})
+}
 
 // TestAppendAny_NoHTMLEscapeDefault: AppendAny strings must use the package
 // default escaping (jsonv2 shape — <, >, & literal), matching the sibling

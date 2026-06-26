@@ -123,6 +123,33 @@ func appendAny(dst []byte, v any, esc escapeFn) ([]byte, error) {
 		return appendSliceFloat(dst, x, 64)
 	case []bool:
 		return appendSliceBool(dst, x), nil
+	// Concrete composite-element slices — handled wholesale so elements skip
+	// the reflect.Slice path's per-element rv.Interface() box.
+	case []time.Time:
+		dst = append(dst, '[')
+		for i := range x {
+			if i > 0 {
+				dst = append(dst, ',')
+			}
+			var err error
+			if dst, err = appendTime(dst, x[i]); err != nil {
+				return dst, err
+			}
+		}
+		return append(dst, ']'), nil
+	case []json.RawMessage:
+		dst = append(dst, '[')
+		for i, r := range x {
+			if i > 0 {
+				dst = append(dst, ',')
+			}
+			if len(r) == 0 {
+				dst = append(dst, 'n', 'u', 'l', 'l')
+			} else {
+				dst = append(dst, r...)
+			}
+		}
+		return append(dst, ']'), nil
 	case map[string]any:
 		dst = append(dst, '{')
 		first := true
@@ -328,17 +355,24 @@ func appendAny(dst []byte, v any, esc escapeFn) ([]byte, error) {
 		dst = append(dst, '{')
 		elemKind := rv.Type().Elem().Kind()
 		iter := rv.MapRange()
+		// Reused addressable scratch — iter.Key()/iter.Value() allocate a fresh
+		// reflect.Value per entry; SetIterKey/SetIterValue copy into these two
+		// instead, so the per-entry Value allocs become 2 fixed (opt [11]).
+		kv := reflect.New(rv.Type().Key()).Elem()
+		vv := reflect.New(rv.Type().Elem()).Elem()
 		first := true
 		for iter.Next() {
 			if !first {
 				dst = append(dst, ',')
 			}
 			first = false
+			kv.SetIterKey(iter)
+			vv.SetIterValue(iter)
 			dst = append(dst, '"')
-			dst = esc(dst, iter.Key().String())
+			dst = esc(dst, kv.String())
 			dst = append(dst, ':')
 			var err error
-			dst, err = appendReflectValue(dst, iter.Value(), elemKind, esc)
+			dst, err = appendReflectValue(dst, vv, elemKind, esc)
 			if err != nil {
 				return dst, err
 			}

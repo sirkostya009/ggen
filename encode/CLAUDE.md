@@ -120,7 +120,10 @@ Case order load-bearing for perf:
 1. **Concrete primitives** (`string`, `bool`, `int*`, `uint*`, `float*`, `nil`).
 2. **Homogeneous primitive slices** (`[]int*`, `[]uint16/32/64`, `[]float*`,
    `[]bool`, `[]string`, `[]any`). Skip `[]uint8` — that's `[]byte`, must stay
-   on base64 reflect.Slice path.
+   on base64 reflect.Slice path. Plus two concrete COMPOSITE-element slices
+   (`[]time.Time`, `[]json.RawMessage`, opt [12]) handled wholesale so their
+   elements skip the reflect.Slice path's per-element `rv.Interface()` box
+   (−80% allocs / −41% ns on the 32-elem `time_slice` bench).
 3. **Homogeneous string-keyed primitive maps** (`map[string]int*`/`uint*`/
    `float*`/`bool`/`string`/`any`) → generic helpers (`appendMapInt[V]`,
    `appendSliceFloat[V]`, …): one strconv call per entry, no reflect.
@@ -132,7 +135,12 @@ Case order load-bearing for perf:
    `encoding.TextAppender` / `encoding.TextMarshaler`.
 6. **Reflection** — slices/arrays/maps/pointers/structs (with json-tag parsing
    for struct walking), keeping nested ggen `Marshaler` / `TextAppender` on
-   fast path with no `json.Marshal` cliff.
+   fast path with no `json.Marshal` cliff. The `reflect.Map` walk reuses two
+   addressable scratch `reflect.Value`s via `Value.SetIterKey`/`SetIterValue`
+   (opt [11]) instead of `iter.Key()`/`iter.Value()`, which allocate a fresh
+   Value per entry — turns 2 allocs/entry into 2 fixed (named-map-of-primitive
+   drops to ~0/entry: −87% allocs / −32% ns on the 32-entry `named_map_int`
+   bench). Only `any` fields reach this — generated code emits direct map code.
 
 ### `usenumber` mode
 

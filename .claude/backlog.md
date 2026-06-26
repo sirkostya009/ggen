@@ -96,21 +96,26 @@
       collecting dive errors past the bound. Touches every container emitter.
 
     *encode:*
-    - **[11] AppendAny reflect.Map — 2 allocs/entry.** Named map types / non-concrete
-      value types iterate via reflect `copyVal` (2 heap allocs/entry). `ConvertibleTo`
-      an exact concrete shape → 0 allocs (map is pointer-shaped); else hoist
-      `SetIterKey`/`SetIterValue` scratch → 2 fixed allocs total. Micro-only (generated
-      typed paths never reach it; Mega's `Extra` hits the concrete case). any.go:342-358.
-    - **[12] AppendAny addressable-value boxing.** Slice elems (`rv.Index`) + pointer
-      derefs (`rv.Elem`) box on `.Interface()`. Tier (a) concrete cases (`[]time.Time`,
-      `[][]string`, `[]RawMessage`); tier (b) per-field cached dispatch so indirect
-      struct fields skip `Interface()`. Land (a) first. Micro-only, macro flat.
-    - **[22] flatten small infallible leaf-struct AppendJSON into parent sites.**
-      `[]*Addr`/`*Addr` elems emit a non-inlinable call + 32B receiver copy + dead err
-      check + a coalescing barrier. Inline the body for small non-recursive same-pkg
-      generated structs (fallibility decidable at codegen). Est. 0.5-2% Mega_Marshal,
-      likely flat. JSONSize half already moot (gc inlines it). Wire-identical →
-      correctness is an output diff. generate.go:1337/2150.
+    - **[11] AppendAny reflect.Map scratch. LANDED 2026-06-27.** The `reflect.Map`
+      walk reused `iter.Key()`/`iter.Value()` (a fresh reflect.Value per entry, 2
+      allocs/entry) → now two addressable scratch Values via `Value.SetIterKey`/
+      `SetIterValue`, so per-entry Value allocs become 2 fixed. Deterministic
+      alloc measure (32-entry `named_map_int` bench): **71 → 9 allocs/op (−87%),
+      −32% ns** — a named-map-of-primitive now ~0 alloc/entry (value read off the
+      Value, no box). Only `any` fields reach this (generated code emits direct
+      map code). The `ConvertibleTo`-to-concrete tier was unneeded — the scratch
+      already 0-allocs primitive-value maps. Wire-identical (`TestAppendAny_
+      ReflectHeavy` vs jsonv2). encode/any.go.
+    - **[12] AppendAny boxing: tier (a) LANDED 2026-06-27, tier (b) REJECTED.**
+      (a) Concrete composite-element slice cases `[]time.Time` + `[]json.RawMessage`
+      handled wholesale at the top switch → elements skip the reflect.Slice
+      per-element `rv.Interface()` box (32-elem `time_slice`: **40 → 8 allocs/op
+      (−80%), −41% ns**). (b) Reading primitive STRUCT fields off the reflect.Value
+      in `appendStruct` (vs `appendAny(fv.Interface())`) measured **dead flat**
+      (`struct_slice` 41 → 41 allocs) — gc already elides the primitive-field
+      interface box via inlining/escape analysis, so it was reverted. `[][]string`
+      (tier-a example) skipped as arbitrary. Pinned by `TestAppendAny_ReflectHeavy`
+      + the new bench shapes.
     - **[10] remainder** (entry sizing partially LANDED): `Write`/`WriteSlice` cold-pool
       presize from JSONSize (GATE on a steady-state no-regress A/B — the JSONSize walk
       is real warm-path work), and generic `Marshal[T]` to drop the interface box
@@ -251,6 +256,14 @@
 
 
 # Tried Rejected
+
+- **Inline leaf-struct AppendJSON at nested marshal sites ([22]) — built,
+  measured, reverted 2026-06-26.** Emitted a small infallible leaf struct's
+  append body inline (vs a call) at field/slice-elem/map-value sites, coalescing
+  the parent prefix with the leaf's `{"…":`. **Flat on Mega_Marshal** (memory-
+  latency-bound deep tree) — the only win was −4.86% on a contrived cache-
+  resident `[]Pt` marshal bench, not a real workload, and it added codegen
+  branching + a synthetic bench. Not worth it. Don't re-propose [22].
 
 - **256-byte class-bitmask charset predicates ([4] half) — built, measured,
   reverted 2026-06-26.** Replaced the range-check loops in IsAlphanum/IsNumeric/
