@@ -701,16 +701,45 @@ func renderValidationOn(b *bytes.Buffer, rules []ValidationRule, ref, jsonName s
 		return "return result, " + posVar + ", " + errExpr
 	}
 
-	for _, v := range rules {
-		renderOneVal(b, v, ref, jsonName, kind, onErr)
+	emitValRun(b, rules, ref, jsonName, kind, onErr)
+}
+
+func isRuneRule(name string) bool {
+	return name == "runes" || name == "minrunes" || name == "maxrunes"
+}
+
+// emitValRun emits a contiguous run of validators against an unchanged ref
+// (callers split runs at mods, which mutate ref). When the run holds >=2
+// rune-count rules it hoists a single utf8.RuneCountInString into a
+// block-scoped rc reused by every rune rule — a min+max pair otherwise walks
+// the string twice on the happy path. Otherwise each rule emits inline.
+func emitValRun(b *bytes.Buffer, run []ValidationRule, ref, jsonName string, kind TypeKind, onErr func(string) string) {
+	runeRules := 0
+	for _, v := range run {
+		if isRuneRule(v.Name) {
+			runeRules++
+		}
 	}
+	if runeRules < 2 {
+		for _, v := range run {
+			renderOneVal(b, v, ref, jsonName, kind, onErr, "")
+		}
+		return
+	}
+	fmt.Fprintf(b, "{\nrc := utf8.RuneCountInString(%s)\n", ref)
+	for _, v := range run {
+		renderOneVal(b, v, ref, jsonName, kind, onErr, "rc")
+	}
+	b.WriteString("}\n")
 }
 
 // renderOneVal emits one validation check against ref. onErr wraps a typed
 // error literal into the right failure action. Builtin validators dispatch by
 // name; a custom (`@Func`) validator calls the user func — error form wraps
 // CustomError, bool form (BoolForm) emits PredicateError on a false return.
-func renderOneVal(b *bytes.Buffer, v ValidationRule, ref, jsonName string, kind TypeKind, onErr func(string) string) {
+// rcVar, when non-empty, names a hoisted utf8.RuneCountInString result the
+// rune rules reuse instead of recomputing inline (see emitValRun).
+func renderOneVal(b *bytes.Buffer, v ValidationRule, ref, jsonName string, kind TypeKind, onErr func(string) string, rcVar string) {
 	switch v.Name {
 	case "required", "optional":
 		// required handled separately; optional is a no-op marker
@@ -730,14 +759,26 @@ func renderOneVal(b *bytes.Buffer, v ValidationRule, ref, jsonName string, kind 
 			onErr(fmt.Sprintf("&validation.MaxLenError{Path: []string{%q}, Limit: %s, Got: len(%s)}", jsonName, v.Value, ref)))
 
 	case "runes":
-		fmt.Fprintf(b, "if utf8.RuneCountInString(%s) != %s {\n\t%s\n}\n", ref, v.Value,
-			onErr(fmt.Sprintf("&validation.RunesError{Path: []string{%q}, Want: %s, Got: utf8.RuneCountInString(%s)}", jsonName, v.Value, ref)))
+		rc := rcVar
+		if rc == "" {
+			rc = fmt.Sprintf("utf8.RuneCountInString(%s)", ref)
+		}
+		fmt.Fprintf(b, "if %s != %s {\n\t%s\n}\n", rc, v.Value,
+			onErr(fmt.Sprintf("&validation.RunesError{Path: []string{%q}, Want: %s, Got: %s}", jsonName, v.Value, rc)))
 	case "minrunes":
-		fmt.Fprintf(b, "if utf8.RuneCountInString(%s) < %s {\n\t%s\n}\n", ref, v.Value,
-			onErr(fmt.Sprintf("&validation.MinRunesError{Path: []string{%q}, Limit: %s, Got: utf8.RuneCountInString(%s)}", jsonName, v.Value, ref)))
+		rc := rcVar
+		if rc == "" {
+			rc = fmt.Sprintf("utf8.RuneCountInString(%s)", ref)
+		}
+		fmt.Fprintf(b, "if %s < %s {\n\t%s\n}\n", rc, v.Value,
+			onErr(fmt.Sprintf("&validation.MinRunesError{Path: []string{%q}, Limit: %s, Got: %s}", jsonName, v.Value, rc)))
 	case "maxrunes":
-		fmt.Fprintf(b, "if utf8.RuneCountInString(%s) > %s {\n\t%s\n}\n", ref, v.Value,
-			onErr(fmt.Sprintf("&validation.MaxRunesError{Path: []string{%q}, Limit: %s, Got: utf8.RuneCountInString(%s)}", jsonName, v.Value, ref)))
+		rc := rcVar
+		if rc == "" {
+			rc = fmt.Sprintf("utf8.RuneCountInString(%s)", ref)
+		}
+		fmt.Fprintf(b, "if %s > %s {\n\t%s\n}\n", rc, v.Value,
+			onErr(fmt.Sprintf("&validation.MaxRunesError{Path: []string{%q}, Limit: %s, Got: %s}", jsonName, v.Value, rc)))
 
 	case "gt":
 		fmt.Fprintf(b, "if %s <= %s {\n\t%s\n}\n", ref, v.Value,
@@ -3279,12 +3320,21 @@ func renderPipe(b *bytes.Buffer, steps []Step, ref, jsonName, goType string, kin
 		}
 		return "return result, " + posVar + ", " + errExpr
 	}
-	for _, s := range steps {
-		if s.IsMod {
-			renderOneMod(b, s.M, ref, goType, kind, posVar)
-		} else {
-			renderOneVal(b, s.V, ref, jsonName, kind, onErr)
+	for p := 0; p < len(steps); {
+		if steps[p].IsMod {
+			renderOneMod(b, steps[p].M, ref, goType, kind, posVar)
+			p++
+			continue
 		}
+		// maximal run of validators against the current (unmutated) ref
+		q := p
+		run := make([]ValidationRule, 0, len(steps)-p)
+		for q < len(steps) && !steps[q].IsMod {
+			run = append(run, steps[q].V)
+			q++
+		}
+		emitValRun(b, run, ref, jsonName, kind, onErr)
+		p = q
 	}
 }
 

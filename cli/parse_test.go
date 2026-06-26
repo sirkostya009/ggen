@@ -251,6 +251,70 @@ func TestGenerate_newValidators(t *testing.T) {
 	}
 }
 
+// TestGenerate_runeCountHoist pins opt #25: >=2 rune rules against an
+// unchanged ref share one hoisted utf8.RuneCountInString (rc); a lone rule
+// stays inline; a string-mutating mod between rules splits the run so neither
+// side hoists.
+func TestGenerate_runeCountHoist(t *testing.T) {
+	gen := func(steps []Step) string {
+		t.Helper()
+		code, err := generate("p", []StructInfo{{
+			Name: "V",
+			Fields: []FieldInfo{{
+				GoName: "S", JSONName: "s", GoType: "string", Kind: KindString,
+				Pipe: steps,
+			}},
+		}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(code)
+	}
+
+	t.Run("pair_hoisted", func(t *testing.T) {
+		s := gen([]Step{
+			{V: ValidationRule{Name: "minrunes", Value: "2"}},
+			{V: ValidationRule{Name: "maxrunes", Value: "5"}},
+		})
+		// one rc per decode path (DecodeFrom + DecodeFromStream)
+		if got := strings.Count(s, "rc := utf8.RuneCountInString(result.S)"); got != 2 {
+			t.Errorf("want 2 hoisted rc, got %d:\n%s", got, s)
+		}
+		// the only RuneCountInString calls are the two hoists — no inline recompute
+		if got := strings.Count(s, "utf8.RuneCountInString"); got != 2 {
+			t.Errorf("want 2 total RuneCountInString (no inline recompute), got %d:\n%s", got, s)
+		}
+		if !strings.Contains(s, "Got: rc}") {
+			t.Errorf("failure branch should reuse rc for Got:\n%s", s)
+		}
+	})
+
+	t.Run("single_inline", func(t *testing.T) {
+		s := gen([]Step{{V: ValidationRule{Name: "minrunes", Value: "2"}}})
+		if strings.Contains(s, "rc := utf8.RuneCountInString") {
+			t.Errorf("single rune rule should not hoist:\n%s", s)
+		}
+		// inline recomputes in both the condition and Got: — 2 per path,
+		// 2 paths = 4 (no hoist, so no rc to reuse)
+		if got := strings.Count(s, "utf8.RuneCountInString(result.S)"); got != 4 {
+			t.Errorf("want 4 inline RuneCountInString, got %d:\n%s", got, s)
+		}
+	})
+
+	t.Run("mod_splits_run", func(t *testing.T) {
+		// trim mutates the string, so the rune rules straddle a mod and
+		// can't share a count — each stays inline.
+		s := gen([]Step{
+			{V: ValidationRule{Name: "minrunes", Value: "2"}},
+			{IsMod: true, M: ModRule{Name: "trim"}},
+			{V: ValidationRule{Name: "maxrunes", Value: "5"}},
+		})
+		if strings.Contains(s, "rc := utf8.RuneCountInString") {
+			t.Errorf("rune rules split by a mod must not hoist:\n%s", s)
+		}
+	})
+}
+
 func TestParsePackage_annotationFiltering(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()

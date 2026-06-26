@@ -271,11 +271,14 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 				}
 				mk = strings.TrimSpace(mk)
 				mk = strings.ToLower(mk)
-				if utf8.RuneCountInString(mk) < 2 {
-					return result, i, &validation.MinRunesError{Pos: i, Path: []string{"keyedMap.key"}, Limit: 2, Got: utf8.RuneCountInString(mk)}
-				}
-				if utf8.RuneCountInString(mk) > 16 {
-					return result, i, &validation.MaxRunesError{Pos: i, Path: []string{"keyedMap.key"}, Limit: 16, Got: utf8.RuneCountInString(mk)}
+				{
+					rc := utf8.RuneCountInString(mk)
+					if rc < 2 {
+						return result, i, &validation.MinRunesError{Pos: i, Path: []string{"keyedMap.key"}, Limit: 2, Got: rc}
+					}
+					if rc > 16 {
+						return result, i, &validation.MaxRunesError{Pos: i, Path: []string{"keyedMap.key"}, Limit: 16, Got: rc}
+					}
 				}
 				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 					i++
@@ -994,11 +997,14 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 				}
 				mk = strings.TrimSpace(mk)
 				mk = strings.ToLower(mk)
-				if utf8.RuneCountInString(mk) < 2 {
-					return result, &validation.MinRunesError{Pos: s.Offset(), Path: []string{"keyedMap.key"}, Limit: 2, Got: utf8.RuneCountInString(mk)}
-				}
-				if utf8.RuneCountInString(mk) > 16 {
-					return result, &validation.MaxRunesError{Pos: s.Offset(), Path: []string{"keyedMap.key"}, Limit: 16, Got: utf8.RuneCountInString(mk)}
+				{
+					rc := utf8.RuneCountInString(mk)
+					if rc < 2 {
+						return result, &validation.MinRunesError{Pos: s.Offset(), Path: []string{"keyedMap.key"}, Limit: 2, Got: rc}
+					}
+					if rc > 16 {
+						return result, &validation.MaxRunesError{Pos: s.Offset(), Path: []string{"keyedMap.key"}, Limit: 16, Got: rc}
+					}
 				}
 				err = s.SkipSpace()
 				if err != nil {

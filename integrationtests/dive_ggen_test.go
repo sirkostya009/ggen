@@ -289,11 +289,14 @@ func (recv DiveStruct) DecodeFrom(data []byte) (result DiveStruct, i int, err er
 							return result, i, decode.NewParseErr("tags", i, err)
 						}
 					}
-					if utf8.RuneCountInString(result.Tags[len(result.Tags)-1]) < 2 {
-						return result, i, &validation.MinRunesError{Pos: i, Path: []string{"tags[]"}, Limit: 2, Got: utf8.RuneCountInString(result.Tags[len(result.Tags)-1])}
-					}
-					if utf8.RuneCountInString(result.Tags[len(result.Tags)-1]) > 10 {
-						return result, i, &validation.MaxRunesError{Pos: i, Path: []string{"tags[]"}, Limit: 10, Got: utf8.RuneCountInString(result.Tags[len(result.Tags)-1])}
+					{
+						rc := utf8.RuneCountInString(result.Tags[len(result.Tags)-1])
+						if rc < 2 {
+							return result, i, &validation.MinRunesError{Pos: i, Path: []string{"tags[]"}, Limit: 2, Got: rc}
+						}
+						if rc > 10 {
+							return result, i, &validation.MaxRunesError{Pos: i, Path: []string{"tags[]"}, Limit: 10, Got: rc}
+						}
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -348,11 +351,14 @@ func (recv DiveStruct) DecodeFrom(data []byte) (result DiveStruct, i int, err er
 					return result, i, decode.NewParseErr("title", i, err)
 				}
 			}
-			if utf8.RuneCountInString(result.Title) < 1 {
-				return result, i, &validation.MinRunesError{Pos: i, Path: []string{"title"}, Limit: 1, Got: utf8.RuneCountInString(result.Title)}
-			}
-			if utf8.RuneCountInString(result.Title) > 5 {
-				return result, i, &validation.MaxRunesError{Pos: i, Path: []string{"title"}, Limit: 5, Got: utf8.RuneCountInString(result.Title)}
+			{
+				rc := utf8.RuneCountInString(result.Title)
+				if rc < 1 {
+					return result, i, &validation.MinRunesError{Pos: i, Path: []string{"title"}, Limit: 1, Got: rc}
+				}
+				if rc > 5 {
+					return result, i, &validation.MaxRunesError{Pos: i, Path: []string{"title"}, Limit: 5, Got: rc}
+				}
 			}
 		default:
 			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
@@ -588,11 +594,14 @@ func (recv DiveStruct) DecodeFromStream(s *scan.Stream) (result DiveStruct, err 
 					if err != nil {
 						return result, decode.NewParseErr("tags", s.Pos, err)
 					}
-					if utf8.RuneCountInString(result.Tags[len(result.Tags)-1]) < 2 {
-						return result, &validation.MinRunesError{Pos: s.Offset(), Path: []string{"tags[]"}, Limit: 2, Got: utf8.RuneCountInString(result.Tags[len(result.Tags)-1])}
-					}
-					if utf8.RuneCountInString(result.Tags[len(result.Tags)-1]) > 10 {
-						return result, &validation.MaxRunesError{Pos: s.Offset(), Path: []string{"tags[]"}, Limit: 10, Got: utf8.RuneCountInString(result.Tags[len(result.Tags)-1])}
+					{
+						rc := utf8.RuneCountInString(result.Tags[len(result.Tags)-1])
+						if rc < 2 {
+							return result, &validation.MinRunesError{Pos: s.Offset(), Path: []string{"tags[]"}, Limit: 2, Got: rc}
+						}
+						if rc > 10 {
+							return result, &validation.MaxRunesError{Pos: s.Offset(), Path: []string{"tags[]"}, Limit: 10, Got: rc}
+						}
 					}
 					err = s.SkipSpace()
 					if err != nil {
@@ -640,11 +649,14 @@ func (recv DiveStruct) DecodeFromStream(s *scan.Stream) (result DiveStruct, err 
 			if err != nil {
 				return result, decode.NewParseErr("title", s.Pos, err)
 			}
-			if utf8.RuneCountInString(result.Title) < 1 {
-				return result, &validation.MinRunesError{Pos: s.Offset(), Path: []string{"title"}, Limit: 1, Got: utf8.RuneCountInString(result.Title)}
-			}
-			if utf8.RuneCountInString(result.Title) > 5 {
-				return result, &validation.MaxRunesError{Pos: s.Offset(), Path: []string{"title"}, Limit: 5, Got: utf8.RuneCountInString(result.Title)}
+			{
+				rc := utf8.RuneCountInString(result.Title)
+				if rc < 1 {
+					return result, &validation.MinRunesError{Pos: s.Offset(), Path: []string{"title"}, Limit: 1, Got: rc}
+				}
+				if rc > 5 {
+					return result, &validation.MaxRunesError{Pos: s.Offset(), Path: []string{"title"}, Limit: 5, Got: rc}
+				}
 			}
 		default:
 			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}

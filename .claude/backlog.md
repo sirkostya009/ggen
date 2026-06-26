@@ -62,16 +62,23 @@
   CPU-only shaves routinely vanish in wall clock.
 
     *validation (highest-value unmined):*
-    - **[25] rune-rule byte-length gating + ASCII subsumption.** minrunes/maxrunes/
-      runes emit unconditional `utf8.RuneCountInString` walks (a min+max field walks
-      the whole string TWICE on the happy path). From the invariant `1 <= bytes/rune
-      <= 4`: gate (`len<N` fails free, `len>=4N` passes free, N=1 → `len==0`), hoist
-      one `rc` when ≥2 rune rules survive, and DELETE the walk when an ASCII-implying
-      rule (alphanum/numeric/ascii/hex) precedes it. Est. **5-15% ValidationHeavy_
-      Unmarshal**, ~0 elsewhere. Gate the ASCII-subsumption tier on the charset rule
-      preceding the rune rule in emit order — else error identity / multierr contents
-      change on doubly-invalid input; tiers 1-2 carry the win regardless. Keep the
-      failure-branch `rc` recompute for `MinRunesError.Got`. generate.go:785-793.
+    - **[25] rune-rule byte-length gating + ASCII subsumption. HOIST TIER LANDED
+      2026-06-26 (remaining tiers open).** Three tiers: (a) hoist one `rc` when
+      ≥2 rune rules survive in a run; (b) byte-length gate from `1 <= bytes/rune
+      <= 4` (`len<N` fails free, `len>=4N` passes free, N=1 → `len==0`); (c)
+      DELETE the walk when an ASCII-implying rule (alphanum/numeric/ascii/hex)
+      precedes. **Tier (a) shipped** — `emitValRun` partitions each pipe into
+      maximal validator runs split at mods (a mod mutates ref), hoists one
+      block-scoped `rc := utf8.RuneCountInString(ref)` reused for both the test
+      and `Got: rc`; lone rules stay inline (opt #44,
+      `TestGenerate_runeCountHoist`). Measured **−9.18% ValidationHeavy_
+      Unmarshal/ggen_validated** (interleaved core-pinned, p=0.000, n=12,
+      allocs/B byte-identical) — inside the 5-15% est. Tiers (b)/(c) still open:
+      gate the ASCII-subsumption tier on the charset rule preceding the rune rule
+      in emit order — else error identity / multierr contents change on
+      doubly-invalid input; the byte-length gate carries the win on single-rule
+      fields the hoist doesn't touch. With `rc` now hoisted the failure branch
+      already reuses it (no recompute). generate.go `renderOneVal`/`emitValRun`.
     - **[4] single-pass IsEmail + 256-byte class-bitmask predicates.** IsEmail
       (decode/validators.go:5-29) is two passes; track `lastDot` in loop 1, delete
       loop 2. IsAlphanum/IsHex/IsPrintable → one `class[256]uint8` indexed load+AND

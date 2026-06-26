@@ -864,6 +864,25 @@ float64` 6459→3417. Outpaces stdjson v1 and jsonv2 on every map shape.
     — pure codegen win on fresh decode), folds into the bytes-path number
     above; nested-row backing reuse pinned by
     `TestMerge_nestedSliceBackingReused`.
+44. **Hoisted `utf8.RuneCountInString` across a rune-rule run.** `runes`/
+    `minrunes`/`maxrunes` each emitted an unconditional
+    `utf8.RuneCountInString` walk in BOTH the condition and the failure-branch
+    `Got:` — a `minrunes=2 maxrunes=5` pair walked the string four times on the
+    happy path. The value-stage emit now partitions each pipe into maximal
+    validator runs split at mods (a `trim`/`lower`/`@Mod` mutates the string, so
+    the count can't carry past it); a run holding ≥2 rune rules hoists ONE
+    block-scoped `rc := utf8.RuneCountInString(ref)` that every rune rule reuses
+    for both the test and `Got: rc` (`emitValRun` + the `rcVar` param on
+    `renderOneVal`, `generate.go`). The block scope means the hoisted `rc` never
+    collides across runs or across the key/value pipes of one map loop. A lone
+    rune rule stays inline (no `rc` var). Wire-identical — emit ORDER and error
+    identity unchanged; only the redundant walks disappear. Measured
+    interleaved core-pinned (`taskset -c 4`, `-cpu=1`, n=12): **−9.18%
+    ValidationHeavy_Unmarshal/ggen_validated** (p=0.000, +10.1% throughput,
+    allocs/B byte-identical) — three of its fields carry rune pairs. Pinned by
+    `TestGenerate_runeCountHoist` (pair hoists / lone stays inline / a mod
+    between splits the run). The byte-length gating + ASCII-subsumption tiers of
+    backlog item [25] are NOT done — this is the hoist tier only.
 
 ## Design decisions (the why)
 

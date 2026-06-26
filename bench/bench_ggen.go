@@ -3877,11 +3877,14 @@ func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, i i
 					return result, i, decode.NewParseErr("name", i, err)
 				}
 			}
-			if utf8.RuneCountInString(result.Name) < 1 {
-				return result, i, &validation.MinRunesError{Pos: i, Path: []string{"name"}, Limit: 1, Got: utf8.RuneCountInString(result.Name)}
-			}
-			if utf8.RuneCountInString(result.Name) > 64 {
-				return result, i, &validation.MaxRunesError{Pos: i, Path: []string{"name"}, Limit: 64, Got: utf8.RuneCountInString(result.Name)}
+			{
+				rc := utf8.RuneCountInString(result.Name)
+				if rc < 1 {
+					return result, i, &validation.MinRunesError{Pos: i, Path: []string{"name"}, Limit: 1, Got: rc}
+				}
+				if rc > 64 {
+					return result, i, &validation.MaxRunesError{Pos: i, Path: []string{"name"}, Limit: 64, Got: rc}
+				}
 			}
 		case "phone":
 			if seenPhone {
@@ -3910,14 +3913,17 @@ func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, i i
 					return result, i, decode.NewParseErr("phone", i, err)
 				}
 			}
-			if utf8.RuneCountInString(result.Phone) < 7 {
-				return result, i, &validation.MinRunesError{Pos: i, Path: []string{"phone"}, Limit: 7, Got: utf8.RuneCountInString(result.Phone)}
-			}
-			if utf8.RuneCountInString(result.Phone) > 20 {
-				return result, i, &validation.MaxRunesError{Pos: i, Path: []string{"phone"}, Limit: 20, Got: utf8.RuneCountInString(result.Phone)}
-			}
-			if !decode.IsNumeric(result.Phone) {
-				return result, i, &validation.NumericError{Pos: i, Path: []string{"phone"}, Value: result.Phone}
+			{
+				rc := utf8.RuneCountInString(result.Phone)
+				if rc < 7 {
+					return result, i, &validation.MinRunesError{Pos: i, Path: []string{"phone"}, Limit: 7, Got: rc}
+				}
+				if rc > 20 {
+					return result, i, &validation.MaxRunesError{Pos: i, Path: []string{"phone"}, Limit: 20, Got: rc}
+				}
+				if !decode.IsNumeric(result.Phone) {
+					return result, i, &validation.NumericError{Pos: i, Path: []string{"phone"}, Value: result.Phone}
+				}
 			}
 		case "role":
 			if seenRole {
@@ -4023,14 +4029,17 @@ func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, i i
 					return result, i, decode.NewParseErr("username", i, err)
 				}
 			}
-			if utf8.RuneCountInString(result.Username) < 3 {
-				return result, i, &validation.MinRunesError{Pos: i, Path: []string{"username"}, Limit: 3, Got: utf8.RuneCountInString(result.Username)}
-			}
-			if utf8.RuneCountInString(result.Username) > 32 {
-				return result, i, &validation.MaxRunesError{Pos: i, Path: []string{"username"}, Limit: 32, Got: utf8.RuneCountInString(result.Username)}
-			}
-			if !decode.IsAlphanum(result.Username) {
-				return result, i, &validation.AlphanumError{Pos: i, Path: []string{"username"}, Value: result.Username}
+			{
+				rc := utf8.RuneCountInString(result.Username)
+				if rc < 3 {
+					return result, i, &validation.MinRunesError{Pos: i, Path: []string{"username"}, Limit: 3, Got: rc}
+				}
+				if rc > 32 {
+					return result, i, &validation.MaxRunesError{Pos: i, Path: []string{"username"}, Limit: 32, Got: rc}
+				}
+				if !decode.IsAlphanum(result.Username) {
+					return result, i, &validation.AlphanumError{Pos: i, Path: []string{"username"}, Value: result.Username}
+				}
 			}
 			result.Username = strings.ToLower(result.Username)
 		default:
@@ -4200,11 +4209,14 @@ func (recv ValidationHeavy) DecodeFromStream(s *scan.Stream) (result ValidationH
 			if err != nil {
 				return result, decode.NewParseErr("name", s.Pos, err)
 			}
-			if utf8.RuneCountInString(result.Name) < 1 {
-				return result, &validation.MinRunesError{Pos: s.Offset(), Path: []string{"name"}, Limit: 1, Got: utf8.RuneCountInString(result.Name)}
-			}
-			if utf8.RuneCountInString(result.Name) > 64 {
-				return result, &validation.MaxRunesError{Pos: s.Offset(), Path: []string{"name"}, Limit: 64, Got: utf8.RuneCountInString(result.Name)}
+			{
+				rc := utf8.RuneCountInString(result.Name)
+				if rc < 1 {
+					return result, &validation.MinRunesError{Pos: s.Offset(), Path: []string{"name"}, Limit: 1, Got: rc}
+				}
+				if rc > 64 {
+					return result, &validation.MaxRunesError{Pos: s.Offset(), Path: []string{"name"}, Limit: 64, Got: rc}
+				}
 			}
 		case "phone":
 			err = s.ConsumeColon()
@@ -4219,14 +4231,17 @@ func (recv ValidationHeavy) DecodeFromStream(s *scan.Stream) (result ValidationH
 			if err != nil {
 				return result, decode.NewParseErr("phone", s.Pos, err)
 			}
-			if utf8.RuneCountInString(result.Phone) < 7 {
-				return result, &validation.MinRunesError{Pos: s.Offset(), Path: []string{"phone"}, Limit: 7, Got: utf8.RuneCountInString(result.Phone)}
-			}
-			if utf8.RuneCountInString(result.Phone) > 20 {
-				return result, &validation.MaxRunesError{Pos: s.Offset(), Path: []string{"phone"}, Limit: 20, Got: utf8.RuneCountInString(result.Phone)}
-			}
-			if !decode.IsNumeric(result.Phone) {
-				return result, &validation.NumericError{Pos: s.Offset(), Path: []string{"phone"}, Value: result.Phone}
+			{
+				rc := utf8.RuneCountInString(result.Phone)
+				if rc < 7 {
+					return result, &validation.MinRunesError{Pos: s.Offset(), Path: []string{"phone"}, Limit: 7, Got: rc}
+				}
+				if rc > 20 {
+					return result, &validation.MaxRunesError{Pos: s.Offset(), Path: []string{"phone"}, Limit: 20, Got: rc}
+				}
+				if !decode.IsNumeric(result.Phone) {
+					return result, &validation.NumericError{Pos: s.Offset(), Path: []string{"phone"}, Value: result.Phone}
+				}
 			}
 		case "role":
 			err = s.ConsumeColon()
@@ -4294,14 +4309,17 @@ func (recv ValidationHeavy) DecodeFromStream(s *scan.Stream) (result ValidationH
 			if err != nil {
 				return result, decode.NewParseErr("username", s.Pos, err)
 			}
-			if utf8.RuneCountInString(result.Username) < 3 {
-				return result, &validation.MinRunesError{Pos: s.Offset(), Path: []string{"username"}, Limit: 3, Got: utf8.RuneCountInString(result.Username)}
-			}
-			if utf8.RuneCountInString(result.Username) > 32 {
-				return result, &validation.MaxRunesError{Pos: s.Offset(), Path: []string{"username"}, Limit: 32, Got: utf8.RuneCountInString(result.Username)}
-			}
-			if !decode.IsAlphanum(result.Username) {
-				return result, &validation.AlphanumError{Pos: s.Offset(), Path: []string{"username"}, Value: result.Username}
+			{
+				rc := utf8.RuneCountInString(result.Username)
+				if rc < 3 {
+					return result, &validation.MinRunesError{Pos: s.Offset(), Path: []string{"username"}, Limit: 3, Got: rc}
+				}
+				if rc > 32 {
+					return result, &validation.MaxRunesError{Pos: s.Offset(), Path: []string{"username"}, Limit: 32, Got: rc}
+				}
+				if !decode.IsAlphanum(result.Username) {
+					return result, &validation.AlphanumError{Pos: s.Offset(), Path: []string{"username"}, Value: result.Username}
+				}
 			}
 			result.Username = strings.ToLower(result.Username)
 		default:
