@@ -113,6 +113,21 @@ sites.
 - `AppendStringNoHTML` — default, standard JSON escapes only, emits `<`, `>`,
   `&` literally (matches stdlib jsonv2).
 
+The hot scan's "does this byte need escaping?" test is a `[256]bool` table
+lookup (`needEscapeNoHTML` / `needEscapeHTML`, built at init), not a chain of
+byte comparisons (opt [14]). Counter to the [4] decode result (where a table
+LOST to range checks), here the table WINS: the escape predicate is a 3-deep
+(NoHTML) / 6-deep (HTML) **dependent** `&&` chain, and replacing it with one
+**independent** L1 load lets the CPU pipeline across bytes. Three-way head-to-
+head in one binary (clean/no-escape strings — the common, confound-free case),
+clean-pinned `GOMAXPROCS=1` n=15: table **1239/1179 ns** vs comparison chain
+**1688/2167** (−27% NoHTML, −46% HTML) vs a branchless uint64 register-bitmap
+**3610/3574** (bitmap is ~2.9× slower — asm shows ~14 instrs/byte vs the table's
+~4; see backlog Tried Rejected). Numbers from a one-time 3-way head-to-head
+bench (since removed); `TestAppendString_TableParity` pins byte-for-byte parity
+against an independent comparison-chain reference over all 256. Flat on Mega
+marshal (memory-latency-bound) — the win is the cache-resident string-heavy case.
+
 ## `AppendAny` — runtime walker for `any` fields
 
 Type-switches over runtime primitives, homogeneous primitive slices/maps, and

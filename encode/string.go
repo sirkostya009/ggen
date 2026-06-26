@@ -1,5 +1,18 @@
 package encode
 
+var (
+	needEscapeHTML   [256]bool
+	needEscapeNoHTML [256]bool
+)
+
+func init() {
+	for c := range 256 {
+		base := c < 0x20 || c == '"' || c == '\\'
+		needEscapeNoHTML[c] = base
+		needEscapeHTML[c] = base || c == '<' || c == '>' || c == '&'
+	}
+}
+
 // AppendString appends the escaped body of s plus a closing `"`. The
 // CALLER writes the opening `"`. HTML-safe: <, >, & → \uXXXX (stdlib v1).
 // Use AppendStringNoHTML for raw output. Zero allocation.
@@ -7,7 +20,7 @@ func AppendString(dst []byte, s string) []byte {
 	start := 0
 	for i := 0; i < len(s); i++ {
 		c := s[i]
-		if c >= 0x20 && c != '"' && c != '\\' && c != '<' && c != '>' && c != '&' {
+		if !needEscapeHTML[c] {
 			continue
 		}
 		if start < i {
@@ -46,7 +59,7 @@ func AppendStringNoHTML(dst []byte, s string) []byte {
 	start := 0
 	for i := 0; i < len(s); i++ {
 		c := s[i]
-		if c >= 0x20 && c != '"' && c != '\\' {
+		if !needEscapeNoHTML[c] {
 			continue
 		}
 		if start < i {

@@ -103,3 +103,84 @@ func TestMarshalSliceSingleAlloc(t *testing.T) {
 		t.Errorf("MarshalSlice did %v allocs, want 1 (presized from zero-value JSONSize?)", allocs)
 	}
 }
+
+// --- opt [14]: escape-table correctness pin -------------------------------
+
+// refNoHTML / refHTML are an independent comparison-chain reference for the
+// shipped [256]bool-table escapers — TestAppendString_TableParity checks the
+// table matches them byte-for-byte. (The table-vs-comparison-vs-bitwise perf
+// comparison that picked the table is recorded in backlog Tried Rejected.)
+func refEscapeAt(dst []byte, s string, i, start int) (int, []byte) {
+	if start < i {
+		dst = append(dst, s[start:i]...)
+	}
+	switch c := s[i]; c {
+	case '"':
+		dst = append(dst, '\\', '"')
+	case '\\':
+		dst = append(dst, '\\', '\\')
+	case '\n':
+		dst = append(dst, '\\', 'n')
+	case '\r':
+		dst = append(dst, '\\', 'r')
+	case '\t':
+		dst = append(dst, '\\', 't')
+	case '\b':
+		dst = append(dst, '\\', 'b')
+	case '\f':
+		dst = append(dst, '\\', 'f')
+	default:
+		const hex = "0123456789abcdef"
+		dst = append(dst, '\\', 'u', '0', '0', hex[c>>4], hex[c&0xf])
+	}
+	return i + 1, dst
+}
+
+func refNoHTML(dst []byte, s string) []byte {
+	start := 0
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c >= 0x20 && c != '"' && c != '\\' {
+			continue
+		}
+		start, dst = refEscapeAt(dst, s, i, start)
+	}
+	if start < len(s) {
+		dst = append(dst, s[start:]...)
+	}
+	return append(dst, '"')
+}
+
+func refHTML(dst []byte, s string) []byte {
+	start := 0
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c >= 0x20 && c != '"' && c != '\\' && c != '<' && c != '>' && c != '&' {
+			continue
+		}
+		start, dst = refEscapeAt(dst, s, i, start)
+	}
+	if start < len(s) {
+		dst = append(dst, s[start:]...)
+	}
+	return append(dst, '"')
+}
+
+// TestAppendString_TableParity: the table-based escapers must match the
+// comparison-chain reference over every byte value and representative strings.
+func TestAppendString_TableParity(t *testing.T) {
+	t.Parallel()
+	inputs := []string{"", "hello world", "a\"b\\c", "tab\tnl\n", "<a>&</a>",
+		"\x00\x1f\x7f", "ünïcödé", strings.Repeat("x", 200)}
+	for b := range 256 {
+		inputs = append(inputs, string([]byte{byte(b)}))
+	}
+	for _, in := range inputs {
+		if got, want := AppendStringNoHTML(nil, in), refNoHTML(nil, in); string(got) != string(want) {
+			t.Errorf("NoHTML(%q) = %q, want %q", in, got, want)
+		}
+		if got, want := AppendString(nil, in), refHTML(nil, in); string(got) != string(want) {
+			t.Errorf("HTML(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

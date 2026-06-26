@@ -128,16 +128,20 @@
       pure overhead (a second full tree walk at mega); reverted. (`Write`/
       `WriteSlice` renamed to `WriteTo`/`WriteSliceTo` this pass.)
       Generic `Marshal[T]` resolves the [10] interface-box note in full.
-    - **[14] remainder**: 256-byte shared escape table for AppendString/NoHTML —
-      cache-resident payloads only (Mega marshal proved wall-flat, SWAR precedent).
+    - **[14] 256-byte escape table for AppendString/NoHTML. LANDED 2026-06-27.**
+      The hot scan's escape predicate is now a `[256]bool` load (`needEscapeNoHTML`
+      / `needEscapeHTML`) instead of a 3-/6-deep `&&` comparison chain. Surprised
+      the prior: the table WINS here (unlike the [4] decode class-table that lost)
+      because the escape predicate is a long DEPENDENT chain — one independent L1
+      load pipelines across bytes where the `&&` chain serializes. Three-way
+      head-to-head, one binary, clean strings, clean-pinned `GOMAXPROCS=1` n=15:
+      table **1239/1179 ns** vs cmp chain **1688/2167** (**−27% NoHTML / −46%
+      HTML**) vs bitwise register-bitmap **3610/3574** (rejected, below).
+      Numbers from a one-time 3-way bench (removed after the decision);
+      `TestAppendString_TableParity` pins byte-parity over all 256. Flat on Mega
+      (memory-bound) — the win is cache-resident string-heavy marshal.
 
     *bytes decode (likely flat on Mega — cheap probes / hygiene):*
-    - **[19] localized scan cursor + lower seen-bitmask threshold.** Inline int/uint
-      scanners loop on the function-lifetime cursor (per-digit frame store); loop on a
-      short-lived local `p`, sync at error returns. Drop `seenBitmaskThreshold` 32→12-16
-      for recursive structs (Node: 15 bool slots → one register `_seen uint64`). One-
-      line probes; likely store-buffer-hidden on Mega. Error-return cursor sync is the
-      correctness gate.
     - **[18] redundant leading WS-skip + dead identical empty-peek arms.**
       emitByteSliceRead/renderMap re-skip WS every caller already skipped (the alias
       path is the one real dependency → needs a `wsDone` flag); `sCap==0` empty-peek
@@ -147,12 +151,6 @@
       `]`/`}` re-check) — the trailing-comma correctness half already landed.
 
     *stream (low-confidence remainder — stream is copy/ReadMore-dominated):*
-    - **[9] `[512]byte` inline Stream scratch re-measure.** The escape-analysis blocker
-      (the since-removed generic UnmarshalStream wrapper) is gone — but the self-
-      referential `s.buf = s.scratch[:0]` store may still heap the now-~576B struct
-      under field-insensitive EA. RUN THE `-gcflags=-m` CHECK FIRST; stop if it trips.
-      Win is −1 alloc on nil-buf one-shot decodes only (Mega/recycled flat); needs a
-      no-copy contract.
     - **[6] fused `Stream.Key()`** (key + colon + post-colon WS in one call, grow-only
       refill keeps the alias). DEPRIORITIZED — [5b] showed separator handling is cheap;
       only a small incremental call reduction over the landed two-tier SkipSpace.
@@ -264,6 +262,23 @@
 
 
 # Tried Rejected
+
+- **Branchless register-bitmap escape predicate ([14] alternative) — built,
+  asm-inspected, measured, rejected 2026-06-27.** Instead of the `[256]bool`
+  table, test "needs escape" via two uint64 bitmaps (all escaped bytes < 0x80):
+  `(escLo>>c | escHi>>(c-64)) & 1`. Elegant — no memory load, no table/init —
+  but **~2.9× slower than the table** (clean-pinned `GOMAXPROCS=1` n=15:
+  3610/3574 ns vs table 1239/1179, also slower than the comparison chain).
+  Asm (`go test -gcflags=-S`) shows why: it's branchless (Go lowers the
+  `shift>=width→0` guard to `CMPB;SBBQ;ANDQ` masks, NOT branches — my first
+  guess was wrong), but compiles to ~14 instrs/byte (2 const loads + 2 variable
+  `SHRQ` + 2 SBB count-masks + OR + BTL) vs the table's ~4 (load c, load
+  table[c], TEST, JCC). One L1 load beats the ALU sequence. Lesson: a register
+  bitmap only wins when it replaces MORE work than a load; for a single
+  membership test the table's load is fewer ops. Don't retry without an asm
+  argument for fewer instructions. (The 3-way bench + bitwise reference were
+  removed after the decision; the table's correctness pin
+  `TestAppendString_TableParity` stays.)
 
 - **Inline leaf-struct AppendJSON at nested marshal sites ([22]) — built,
   measured, reverted 2026-06-26.** Emitted a small infallible leaf struct's
