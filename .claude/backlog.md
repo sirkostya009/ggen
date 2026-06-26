@@ -79,11 +79,15 @@
       walk is cheap) but **−46.8% RuneGated_Unmarshal** (p=0.000, +88% throughput,
       ~8 KB strings of 2048 four-byte runes) — allocs/B byte-identical. Opt #44;
       pinned by `TestGenerate_runeGates` + `BenchmarkRuneGated_Unmarshal`.
-    - **[4] single-pass IsEmail + 256-byte class-bitmask predicates.** IsEmail
-      (decode/validators.go:5-29) is two passes; track `lastDot` in loop 1, delete
-      loop 2. IsAlphanum/IsHex/IsPrintable → one `class[256]uint8` indexed load+AND
-      per byte; IsASCII via SWAR high-bit mask. Both likely noise-floor alone
-      (~0.5-0.7% Small); land bundled with [25]. 256-value parity tests make it safe.
+    - **[4] single-pass IsEmail LANDED 2026-06-26; class-bitmask predicates
+      REJECTED (see Tried Rejected).** IsEmail now tracks the last in-domain `.`
+      inline during the `@` scan — one pass, not the old scan-then-rescan-domain.
+      **−33.3% head-to-head** (`BenchmarkIsEmail` single_pass vs two_pass, one
+      binary so zero layout confound, 64 KB email, p=0.000 n=12); never worse on
+      short. Wire-identical, parity-pinned (`TestIsEmail_SinglePassParity`,
+      `TestCharsetPredicates_Parity` — first tests for these predicates). The
+      256-byte class-table half was prototyped and rejected (regresses long
+      strings — see Tried Rejected). IsASCII SWAR untried.
     - **[26] container maxlen early-bail inside element loops.** maxlen is validated
       only AFTER the loop, so a 10M-elem payload vs maxlen=64 fully decodes+ALLOCATES
       before failing. Loop-top `if len(dst)==MAX { MaxLenError }` caps work at MAX+1
@@ -247,6 +251,20 @@
 
 
 # Tried Rejected
+
+- **256-byte class-bitmask charset predicates ([4] half) — built, measured,
+  reverted 2026-06-26.** Replaced the range-check loops in IsAlphanum/IsNumeric/
+  IsHex/IsPrintable/IsLower/IsUpper with one shared `[256]uint8` class table
+  (`table[c]&mask`, one indexed load + AND per byte). **Regressed the long-string
+  case: +12-27% on IsAlphanum over 8 KB** — the per-byte L1 load can't hide
+  behind the loop the way the branch-predicted range comparisons (pure ALU, no
+  memory traffic, perfectly predicted on valid input) do. Same lesson as the
+  decode-inliner and SWAR-string rejections below: adding memory traffic to a
+  tight branch-predictable loop loses. (Measurement was also badly layout-
+  confounded — a no-op change showed ±27% on untouched code between builds; the
+  clean signal came from a same-binary head-to-head.) Keep the range checks.
+  The single-pass IsEmail half of [4] is a real win and LANDED — different
+  mechanism (eliminates a whole rescan pass, not a per-byte swap).
 
 - **Fused span-scan + Eisel-Lemire in `Float64` — built, measured, ditched
   2026-06-23.** Fully implemented and verified: shared `fastParseFloat` walked
