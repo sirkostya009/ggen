@@ -168,10 +168,15 @@
       refill keeps the alias). DEPRIORITIZED — [5b] showed separator handling is cheap;
       only a small incremental call reduction over the landed two-tier SkipSpace.
       Revisit only if a key-fusion micro-bench justifies.
-    - **[20] whole-literal buffered null-peek compare.** Stream null peek is a per-byte
-      loop with a refill branch, duplicated ~8× in Node.DecodeFromStream. Gate on
-      `s.Pos+4<=len` for a straight 3-byte compare, or outline a cold helper. ~0 perf
-      (runs only on actual nulls); code-size cleanup only.
+    - **[20] outlined stream null-peek — built, reverted 2026-06-27.** Outlined
+      the inlined 4-byte null-peek into `(*Stream).ConsumeNull()` at all 9 emit
+      sites (−1008 generated lines, byte-identical, `FuzzStreamEqualsBytes`
+      clean). Code-size-only: `ConsumeNull` isn't inlinable (cost 111 > 80) and a
+      single binary-pair A/B showed −3.13% `Mega_Reader/ggen_stream` but this
+      toolchain has no `-randlayout` to separate that from function-layout luck,
+      so no defensible perf claim. Reverted — not worth a runtime helper + call
+      indirection for an unprovable win. Don't re-propose without a layout-robust
+      A/B.
 
     Rejected from this hunt (do not retry without a new argument): **[17]** positional
     next-key predictor (Validated +4.64%, payload-order-dependent), **[23]** indexed

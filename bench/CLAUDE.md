@@ -155,10 +155,19 @@ Run `GGEN_BENCH_TOPALLOCS=1` to surface top-5 allocation sites.
 
 ## Running benchmarks
 
+**ALWAYS pin to a dedicated core and disable parallelism** — every perf claim in
+this repo must come from `GOMAXPROCS=1 taskset -c 25 … -cpu=1`. The default
+multi-core, multi-GOMAXPROCS run is layout- and scheduler-noise-dominated and
+will mislead (sub-1% deltas flip sign across runs). Use **core 25**.
+
 ```sh
-(cd bench && GOEXPERIMENT=jsonv2 go test -run=^$ -bench=. ./...)
+(cd bench && GOMAXPROCS=1 taskset -c 25 GOEXPERIMENT=jsonv2 go test -run=^$ -bench=. -cpu=1 -count=12 ./...)
 # fixed iter count for comparable retention numbers:
-(cd bench && GOEXPERIMENT=jsonv2 go test -run=^$ -bench=Retention -benchtime=1000x ./...)
+(cd bench && GOMAXPROCS=1 taskset -c 25 GOEXPERIMENT=jsonv2 go test -run=^$ -bench=Retention -benchtime=1000x -cpu=1 ./...)
 ```
+
+For an A/B (old vs new), build both as test binaries and interleave them under
+the same pin (`go test -c -o old.test` / `new.test`, then alternate runs), and
+run `benchstat` over `-count=12`+ samples — never a single default-layout A/B.
 
 `./...` from root does NOT cross module boundaries — `cd` into `bench/` first.
