@@ -826,9 +826,6 @@ func (recv ElemInterleave) DecodeFrom(data []byte) (result ElemInterleave, i int
 				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"nums"}}
 			}
 			seenNums = true
-			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-				i++
-			}
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 				i += 4
 				result.Nums = nil
@@ -854,72 +851,74 @@ func (recv ElemInterleave) DecodeFrom(data []byte) (result ElemInterleave, i int
 					result.Nums = make([]int, 0, cnt0)
 				}
 			}
-			for i < len(data) && data[i] != ']' {
-				result.Nums = append(result.Nums, 0)
-				neg := false
-				if i < len(data) && data[i] == '-' {
-					neg = true
-					i++
-				}
-				if i >= len(data) || data[i] < '0' || data[i] > '9' {
-					return result, i, decode.NewParseErr("nums", i, scan.ErrBadNumber)
-				}
-				limit := uint64(math.MaxInt64)
-				if neg {
-					limit = scan.SignedNeg
-				}
-				var u uint64
-				de := i + 18
-				if de > len(data) {
-					de = len(data)
-				}
-				for i < de && data[i] >= '0' && data[i] <= '9' {
-					u = u*10 + uint64(data[i]-'0')
-					i++
-				}
-				for i < len(data) && data[i] >= '0' && data[i] <= '9' {
-					d := uint64(data[i] - '0')
-					if u > limit/10 || (u == limit/10 && d > limit%10) {
-						return result, i, decode.NewParseErr("nums", i, scan.ErrNumberOverflow)
+			if i < len(data) && data[i] != ']' {
+				for {
+					result.Nums = append(result.Nums, 0)
+					neg := false
+					if i < len(data) && data[i] == '-' {
+						neg = true
+						i++
 					}
-					u = u*10 + d
-					i++
-				}
-				if i < len(data) {
-					c := data[i]
-					if c == '.' || c == 'e' || c == 'E' {
+					if i >= len(data) || data[i] < '0' || data[i] > '9' {
 						return result, i, decode.NewParseErr("nums", i, scan.ErrBadNumber)
 					}
-				}
-				var n int64
-				if neg {
-					if u == scan.SignedNeg {
-						n = math.MinInt64
-					} else {
-						n = -int64(u)
+					limit := uint64(math.MaxInt64)
+					if neg {
+						limit = scan.SignedNeg
 					}
-				} else {
-					n = int64(u)
-				}
-				result.Nums[len(result.Nums)-1] = int(n)
-				if result.Nums[len(result.Nums)-1] > 10 {
-					return result, i, &validation.LTEError{Pos: i, Path: []string{"nums[]"}, Limit: 10, Value: result.Nums[len(result.Nums)-1]}
-				}
-				result.Nums[len(result.Nums)-1] = DoubleInt(result.Nums[len(result.Nums)-1])
-				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-					i++
-				}
-				if i < len(data) && data[i] == ',' {
-					i++
+					var u uint64
+					de := i + 18
+					if de > len(data) {
+						de = len(data)
+					}
+					for i < de && data[i] >= '0' && data[i] <= '9' {
+						u = u*10 + uint64(data[i]-'0')
+						i++
+					}
+					for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+						d := uint64(data[i] - '0')
+						if u > limit/10 || (u == limit/10 && d > limit%10) {
+							return result, i, decode.NewParseErr("nums", i, scan.ErrNumberOverflow)
+						}
+						u = u*10 + d
+						i++
+					}
+					if i < len(data) {
+						c := data[i]
+						if c == '.' || c == 'e' || c == 'E' {
+							return result, i, decode.NewParseErr("nums", i, scan.ErrBadNumber)
+						}
+					}
+					var n int64
+					if neg {
+						if u == scan.SignedNeg {
+							n = math.MinInt64
+						} else {
+							n = -int64(u)
+						}
+					} else {
+						n = int64(u)
+					}
+					result.Nums[len(result.Nums)-1] = int(n)
+					if result.Nums[len(result.Nums)-1] > 10 {
+						return result, i, &validation.LTEError{Pos: i, Path: []string{"nums[]"}, Limit: 10, Value: result.Nums[len(result.Nums)-1]}
+					}
+					result.Nums[len(result.Nums)-1] = DoubleInt(result.Nums[len(result.Nums)-1])
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
-					if i >= len(data) || data[i] == ']' {
-						return result, i, scan.ErrBadArray
+					if i < len(data) && data[i] == ',' {
+						i++
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i >= len(data) || data[i] == ']' {
+							return result, i, scan.ErrBadArray
+						}
+						continue
 					}
-					continue
+					break
 				}
-				break
 			}
 			if i >= len(data) || data[i] != ']' {
 				return result, i, scan.ErrBadArray

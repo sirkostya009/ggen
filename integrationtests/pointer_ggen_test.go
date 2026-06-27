@@ -3747,9 +3747,6 @@ func (recv PtrSliceItemsStruct) DecodeFrom(data []byte) (result PtrSliceItemsStr
 				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"items"}}
 			}
 			seenItems = true
-			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-				i++
-			}
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 				i += 4
 				result.Items = nil
@@ -3773,10 +3770,34 @@ func (recv PtrSliceItemsStruct) DecodeFrom(data []byte) (result PtrSliceItemsStr
 				}
 				slab0 = make([]Address, 0, 4)
 			}
-			for i < len(data) && data[i] != ']' {
-				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-					i += 4
-					result.Items = append(result.Items, nil)
+			if i < len(data) && data[i] != ']' {
+				for {
+					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+						i += 4
+						result.Items = append(result.Items, nil)
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i < len(data) && data[i] == ',' {
+							i++
+							for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
+							}
+							if i >= len(data) || data[i] == ']' {
+								return result, i, scan.ErrBadArray
+							}
+							continue
+						}
+						break
+					}
+					slab0 = append(slab0, Address{})
+					var _n int
+					slab0[len(slab0)-1], _n, err = slab0[len(slab0)-1].DecodeFrom(data[i:])
+					i += _n
+					if err != nil {
+						return result, i, decode.NewParseErr("items", i, err)
+					}
+					result.Items = append(result.Items, &slab0[len(slab0)-1])
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
@@ -3792,28 +3813,6 @@ func (recv PtrSliceItemsStruct) DecodeFrom(data []byte) (result PtrSliceItemsStr
 					}
 					break
 				}
-				slab0 = append(slab0, Address{})
-				var _n int
-				slab0[len(slab0)-1], _n, err = slab0[len(slab0)-1].DecodeFrom(data[i:])
-				i += _n
-				if err != nil {
-					return result, i, decode.NewParseErr("items", i, err)
-				}
-				result.Items = append(result.Items, &slab0[len(slab0)-1])
-				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-					i++
-				}
-				if i < len(data) && data[i] == ',' {
-					i++
-					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-						i++
-					}
-					if i >= len(data) || data[i] == ']' {
-						return result, i, scan.ErrBadArray
-					}
-					continue
-				}
-				break
 			}
 			if i >= len(data) || data[i] != ']' {
 				return result, i, scan.ErrBadArray
@@ -4139,9 +4138,6 @@ func (recv PtrSliceTupleStruct) DecodeFrom(data []byte) (result PtrSliceTupleStr
 				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"tuple"}}
 			}
 			seenTuple = true
-			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-				i++
-			}
 			if i >= len(data) || data[i] != '[' {
 				return result, i, scan.ErrBadArray
 			}
@@ -4151,13 +4147,37 @@ func (recv PtrSliceTupleStruct) DecodeFrom(data []byte) (result PtrSliceTupleStr
 			}
 			var idx0 int
 			slab0 := make([]Address, 3)
-			for i < len(data) && data[i] != ']' {
-				if idx0 >= 3 {
-					return result, i, &validation.LenError{Pos: i, Path: []string{"tuple"}, Want: 3, Got: idx0}
-				}
-				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-					i += 4
-					result.Tuple[idx0] = nil
+			if i < len(data) && data[i] != ']' {
+				for {
+					if idx0 >= 3 {
+						return result, i, &validation.LenError{Pos: i, Path: []string{"tuple"}, Want: 3, Got: idx0}
+					}
+					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+						i += 4
+						result.Tuple[idx0] = nil
+						idx0++
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i < len(data) && data[i] == ',' {
+							i++
+							for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
+							}
+							if i >= len(data) || data[i] == ']' {
+								return result, i, scan.ErrBadArray
+							}
+							continue
+						}
+						break
+					}
+					var _n int
+					slab0[idx0], _n, err = slab0[idx0].DecodeFrom(data[i:])
+					i += _n
+					if err != nil {
+						return result, i, decode.NewParseErr("tuple", i, err)
+					}
+					result.Tuple[idx0] = &slab0[idx0]
 					idx0++
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -4174,28 +4194,6 @@ func (recv PtrSliceTupleStruct) DecodeFrom(data []byte) (result PtrSliceTupleStr
 					}
 					break
 				}
-				var _n int
-				slab0[idx0], _n, err = slab0[idx0].DecodeFrom(data[i:])
-				i += _n
-				if err != nil {
-					return result, i, decode.NewParseErr("tuple", i, err)
-				}
-				result.Tuple[idx0] = &slab0[idx0]
-				idx0++
-				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-					i++
-				}
-				if i < len(data) && data[i] == ',' {
-					i++
-					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-						i++
-					}
-					if i >= len(data) || data[i] == ']' {
-						return result, i, scan.ErrBadArray
-					}
-					continue
-				}
-				break
 			}
 			if i >= len(data) || data[i] != ']' {
 				return result, i, scan.ErrBadArray
@@ -4492,9 +4490,6 @@ func (recv PtrSliceNodesStruct) DecodeFrom(data []byte) (result PtrSliceNodesStr
 				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"nodes"}}
 			}
 			seenNodes = true
-			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-				i++
-			}
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 				i += 4
 				result.Nodes = nil
@@ -4518,10 +4513,34 @@ func (recv PtrSliceNodesStruct) DecodeFrom(data []byte) (result PtrSliceNodesStr
 				}
 				slab0 = make([]Node, 0, 4)
 			}
-			for i < len(data) && data[i] != ']' {
-				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-					i += 4
-					result.Nodes = append(result.Nodes, nil)
+			if i < len(data) && data[i] != ']' {
+				for {
+					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+						i += 4
+						result.Nodes = append(result.Nodes, nil)
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i < len(data) && data[i] == ',' {
+							i++
+							for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
+							}
+							if i >= len(data) || data[i] == ']' {
+								return result, i, scan.ErrBadArray
+							}
+							continue
+						}
+						break
+					}
+					slab0 = append(slab0, Node{})
+					var _n int
+					slab0[len(slab0)-1], _n, err = slab0[len(slab0)-1].DecodeFrom(data[i:])
+					i += _n
+					if err != nil {
+						return result, i, decode.NewParseErr("nodes", i, err)
+					}
+					result.Nodes = append(result.Nodes, &slab0[len(slab0)-1])
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
@@ -4537,28 +4556,6 @@ func (recv PtrSliceNodesStruct) DecodeFrom(data []byte) (result PtrSliceNodesStr
 					}
 					break
 				}
-				slab0 = append(slab0, Node{})
-				var _n int
-				slab0[len(slab0)-1], _n, err = slab0[len(slab0)-1].DecodeFrom(data[i:])
-				i += _n
-				if err != nil {
-					return result, i, decode.NewParseErr("nodes", i, err)
-				}
-				result.Nodes = append(result.Nodes, &slab0[len(slab0)-1])
-				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-					i++
-				}
-				if i < len(data) && data[i] == ',' {
-					i++
-					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-						i++
-					}
-					if i >= len(data) || data[i] == ']' {
-						return result, i, scan.ErrBadArray
-					}
-					continue
-				}
-				break
 			}
 			if i >= len(data) || data[i] != ']' {
 				return result, i, scan.ErrBadArray
@@ -4892,9 +4889,6 @@ func (recv PtrSliceStruct) DecodeFrom(data []byte) (result PtrSliceStruct, i int
 				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"items"}}
 			}
 			seenItems = true
-			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-				i++
-			}
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 				i += 4
 				result.Items = nil
@@ -4918,10 +4912,34 @@ func (recv PtrSliceStruct) DecodeFrom(data []byte) (result PtrSliceStruct, i int
 				}
 				slab0 = make([]Address, 0, 4)
 			}
-			for i < len(data) && data[i] != ']' {
-				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-					i += 4
-					result.Items = append(result.Items, nil)
+			if i < len(data) && data[i] != ']' {
+				for {
+					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+						i += 4
+						result.Items = append(result.Items, nil)
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i < len(data) && data[i] == ',' {
+							i++
+							for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
+							}
+							if i >= len(data) || data[i] == ']' {
+								return result, i, scan.ErrBadArray
+							}
+							continue
+						}
+						break
+					}
+					slab0 = append(slab0, Address{})
+					var _n int
+					slab0[len(slab0)-1], _n, err = slab0[len(slab0)-1].DecodeFrom(data[i:])
+					i += _n
+					if err != nil {
+						return result, i, decode.NewParseErr("items", i, err)
+					}
+					result.Items = append(result.Items, &slab0[len(slab0)-1])
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
@@ -4937,28 +4955,6 @@ func (recv PtrSliceStruct) DecodeFrom(data []byte) (result PtrSliceStruct, i int
 					}
 					break
 				}
-				slab0 = append(slab0, Address{})
-				var _n int
-				slab0[len(slab0)-1], _n, err = slab0[len(slab0)-1].DecodeFrom(data[i:])
-				i += _n
-				if err != nil {
-					return result, i, decode.NewParseErr("items", i, err)
-				}
-				result.Items = append(result.Items, &slab0[len(slab0)-1])
-				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-					i++
-				}
-				if i < len(data) && data[i] == ',' {
-					i++
-					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-						i++
-					}
-					if i >= len(data) || data[i] == ']' {
-						return result, i, scan.ErrBadArray
-					}
-					continue
-				}
-				break
 			}
 			if i >= len(data) || data[i] != ']' {
 				return result, i, scan.ErrBadArray
@@ -4969,9 +4965,6 @@ func (recv PtrSliceStruct) DecodeFrom(data []byte) (result PtrSliceStruct, i int
 				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"nodes"}}
 			}
 			seenNodes = true
-			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-				i++
-			}
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 				i += 4
 				result.Nodes = nil
@@ -4995,10 +4988,34 @@ func (recv PtrSliceStruct) DecodeFrom(data []byte) (result PtrSliceStruct, i int
 				}
 				slab0 = make([]Node, 0, 4)
 			}
-			for i < len(data) && data[i] != ']' {
-				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-					i += 4
-					result.Nodes = append(result.Nodes, nil)
+			if i < len(data) && data[i] != ']' {
+				for {
+					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+						i += 4
+						result.Nodes = append(result.Nodes, nil)
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i < len(data) && data[i] == ',' {
+							i++
+							for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
+							}
+							if i >= len(data) || data[i] == ']' {
+								return result, i, scan.ErrBadArray
+							}
+							continue
+						}
+						break
+					}
+					slab0 = append(slab0, Node{})
+					var _n int
+					slab0[len(slab0)-1], _n, err = slab0[len(slab0)-1].DecodeFrom(data[i:])
+					i += _n
+					if err != nil {
+						return result, i, decode.NewParseErr("nodes", i, err)
+					}
+					result.Nodes = append(result.Nodes, &slab0[len(slab0)-1])
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
@@ -5014,28 +5031,6 @@ func (recv PtrSliceStruct) DecodeFrom(data []byte) (result PtrSliceStruct, i int
 					}
 					break
 				}
-				slab0 = append(slab0, Node{})
-				var _n int
-				slab0[len(slab0)-1], _n, err = slab0[len(slab0)-1].DecodeFrom(data[i:])
-				i += _n
-				if err != nil {
-					return result, i, decode.NewParseErr("nodes", i, err)
-				}
-				result.Nodes = append(result.Nodes, &slab0[len(slab0)-1])
-				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-					i++
-				}
-				if i < len(data) && data[i] == ',' {
-					i++
-					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-						i++
-					}
-					if i >= len(data) || data[i] == ']' {
-						return result, i, scan.ErrBadArray
-					}
-					continue
-				}
-				break
 			}
 			if i >= len(data) || data[i] != ']' {
 				return result, i, scan.ErrBadArray
@@ -5046,9 +5041,6 @@ func (recv PtrSliceStruct) DecodeFrom(data []byte) (result PtrSliceStruct, i int
 				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"tuple"}}
 			}
 			seenTuple = true
-			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-				i++
-			}
 			if i >= len(data) || data[i] != '[' {
 				return result, i, scan.ErrBadArray
 			}
@@ -5058,13 +5050,37 @@ func (recv PtrSliceStruct) DecodeFrom(data []byte) (result PtrSliceStruct, i int
 			}
 			var idx0 int
 			slab0 := make([]Address, 3)
-			for i < len(data) && data[i] != ']' {
-				if idx0 >= 3 {
-					return result, i, &validation.LenError{Pos: i, Path: []string{"tuple"}, Want: 3, Got: idx0}
-				}
-				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-					i += 4
-					result.Tuple[idx0] = nil
+			if i < len(data) && data[i] != ']' {
+				for {
+					if idx0 >= 3 {
+						return result, i, &validation.LenError{Pos: i, Path: []string{"tuple"}, Want: 3, Got: idx0}
+					}
+					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+						i += 4
+						result.Tuple[idx0] = nil
+						idx0++
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i < len(data) && data[i] == ',' {
+							i++
+							for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
+							}
+							if i >= len(data) || data[i] == ']' {
+								return result, i, scan.ErrBadArray
+							}
+							continue
+						}
+						break
+					}
+					var _n int
+					slab0[idx0], _n, err = slab0[idx0].DecodeFrom(data[i:])
+					i += _n
+					if err != nil {
+						return result, i, decode.NewParseErr("tuple", i, err)
+					}
+					result.Tuple[idx0] = &slab0[idx0]
 					idx0++
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -5081,28 +5097,6 @@ func (recv PtrSliceStruct) DecodeFrom(data []byte) (result PtrSliceStruct, i int
 					}
 					break
 				}
-				var _n int
-				slab0[idx0], _n, err = slab0[idx0].DecodeFrom(data[i:])
-				i += _n
-				if err != nil {
-					return result, i, decode.NewParseErr("tuple", i, err)
-				}
-				result.Tuple[idx0] = &slab0[idx0]
-				idx0++
-				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-					i++
-				}
-				if i < len(data) && data[i] == ',' {
-					i++
-					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-						i++
-					}
-					if i >= len(data) || data[i] == ']' {
-						return result, i, scan.ErrBadArray
-					}
-					continue
-				}
-				break
 			}
 			if i >= len(data) || data[i] != ']' {
 				return result, i, scan.ErrBadArray
@@ -5756,9 +5750,6 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"app"}}
 			}
 			seenAPP = true
-			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-				i++
-			}
 			if i >= len(data) || data[i] != '[' {
 				return result, i, scan.ErrBadArray
 			}
@@ -5767,82 +5758,84 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 				i++
 			}
 			var idx0 int
-			for i < len(data) && data[i] != ']' {
-				if idx0 >= 3 {
-					return result, i, &validation.LenError{Pos: i, Path: []string{"app"}, Want: 3, Got: idx0}
-				}
-				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-					i += 4
-					result.APP[idx0] = nil
-				} else {
-					neg := false
-					if i < len(data) && data[i] == '-' {
-						neg = true
-						i++
+			if i < len(data) && data[i] != ']' {
+				for {
+					if idx0 >= 3 {
+						return result, i, &validation.LenError{Pos: i, Path: []string{"app"}, Want: 3, Got: idx0}
 					}
-					if i >= len(data) || data[i] < '0' || data[i] > '9' {
-						return result, i, decode.NewParseErr("app[]", i, scan.ErrBadNumber)
-					}
-					limit := uint64(math.MaxInt64)
-					if neg {
-						limit = scan.SignedNeg
-					}
-					var u uint64
-					de := i + 18
-					if de > len(data) {
-						de = len(data)
-					}
-					for i < de && data[i] >= '0' && data[i] <= '9' {
-						u = u*10 + uint64(data[i]-'0')
-						i++
-					}
-					for i < len(data) && data[i] >= '0' && data[i] <= '9' {
-						d := uint64(data[i] - '0')
-						if u > limit/10 || (u == limit/10 && d > limit%10) {
-							return result, i, decode.NewParseErr("app[]", i, scan.ErrNumberOverflow)
+					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+						i += 4
+						result.APP[idx0] = nil
+					} else {
+						neg := false
+						if i < len(data) && data[i] == '-' {
+							neg = true
+							i++
 						}
-						u = u*10 + d
-						i++
-					}
-					if i < len(data) {
-						c := data[i]
-						if c == '.' || c == 'e' || c == 'E' {
+						if i >= len(data) || data[i] < '0' || data[i] > '9' {
 							return result, i, decode.NewParseErr("app[]", i, scan.ErrBadNumber)
 						}
-					}
-					var n int64
-					if neg {
-						if u == scan.SignedNeg {
-							n = math.MinInt64
-						} else {
-							n = -int64(u)
+						limit := uint64(math.MaxInt64)
+						if neg {
+							limit = scan.SignedNeg
 						}
-					} else {
-						n = int64(u)
+						var u uint64
+						de := i + 18
+						if de > len(data) {
+							de = len(data)
+						}
+						for i < de && data[i] >= '0' && data[i] <= '9' {
+							u = u*10 + uint64(data[i]-'0')
+							i++
+						}
+						for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+							d := uint64(data[i] - '0')
+							if u > limit/10 || (u == limit/10 && d > limit%10) {
+								return result, i, decode.NewParseErr("app[]", i, scan.ErrNumberOverflow)
+							}
+							u = u*10 + d
+							i++
+						}
+						if i < len(data) {
+							c := data[i]
+							if c == '.' || c == 'e' || c == 'E' {
+								return result, i, decode.NewParseErr("app[]", i, scan.ErrBadNumber)
+							}
+						}
+						var n int64
+						if neg {
+							if u == scan.SignedNeg {
+								n = math.MinInt64
+							} else {
+								n = -int64(u)
+							}
+						} else {
+							n = int64(u)
+						}
+						if result.APP[idx0] == nil {
+							result.APP[idx0] = new(new(int(n)))
+						} else if (*result.APP[idx0]) == nil {
+							(*result.APP[idx0]) = new(int(n))
+						} else {
+							(*(*result.APP[idx0])) = int(n)
+						}
 					}
-					if result.APP[idx0] == nil {
-						result.APP[idx0] = new(new(int(n)))
-					} else if (*result.APP[idx0]) == nil {
-						(*result.APP[idx0]) = new(int(n))
-					} else {
-						(*(*result.APP[idx0])) = int(n)
-					}
-				}
-				idx0++
-				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-					i++
-				}
-				if i < len(data) && data[i] == ',' {
-					i++
+					idx0++
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
-					if i >= len(data) || data[i] == ']' {
-						return result, i, scan.ErrBadArray
+					if i < len(data) && data[i] == ',' {
+						i++
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i >= len(data) || data[i] == ']' {
+							return result, i, scan.ErrBadArray
+						}
+						continue
 					}
-					continue
+					break
 				}
-				break
 			}
 			if i >= len(data) || data[i] != ']' {
 				return result, i, scan.ErrBadArray
@@ -5856,9 +5849,6 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"mp"}}
 			}
 			seenMP = true
-			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-				i++
-			}
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 				i += 4
 				result.MP = nil
@@ -5880,105 +5870,107 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 					result.MP = make(map[string]*int)
 				}
 			}
-			for i < len(data) && data[i] != '}' {
-				var mk string
-				if i >= len(data) || data[i] != '"' {
-					return result, i, decode.NewParseErr("mp", i, scan.ErrExpectString)
-				}
-				ke := i + 1
-				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-					ke++
-				}
-				if ke >= len(data) {
-					return result, i, decode.NewParseErr("mp", i, scan.ErrUnterminated)
-				}
-				if data[ke] < 0x20 {
-					return result, i, decode.NewParseErr("mp", i, scan.ErrBadString)
-				}
-				if data[ke] == '"' {
-					mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-					i = ke + 1
-				} else {
-					mk, i, err = scan.String(data, i)
-					if err != nil {
-						return result, i, decode.NewParseErr("mp", i, err)
+			if i < len(data) && data[i] != '}' {
+				for {
+					var mk string
+					if i >= len(data) || data[i] != '"' {
+						return result, i, decode.NewParseErr("mp", i, scan.ErrExpectString)
 					}
-				}
-				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-					i++
-				}
-				if i >= len(data) || data[i] != ':' {
-					return result, i, decode.NewParseErr("mp", i, scan.ErrBadObject)
-				}
-				i++
-				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-					i++
-				}
-				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-					i += 4
-					result.MP[mk] = nil
-				} else {
-					neg := false
-					if i < len(data) && data[i] == '-' {
-						neg = true
-						i++
+					ke := i + 1
+					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+						ke++
 					}
-					if i >= len(data) || data[i] < '0' || data[i] > '9' {
-						return result, i, decode.NewParseErr("mp.value", i, scan.ErrBadNumber)
+					if ke >= len(data) {
+						return result, i, decode.NewParseErr("mp", i, scan.ErrUnterminated)
 					}
-					limit := uint64(math.MaxInt64)
-					if neg {
-						limit = scan.SignedNeg
+					if data[ke] < 0x20 {
+						return result, i, decode.NewParseErr("mp", i, scan.ErrBadString)
 					}
-					var u uint64
-					de := i + 18
-					if de > len(data) {
-						de = len(data)
-					}
-					for i < de && data[i] >= '0' && data[i] <= '9' {
-						u = u*10 + uint64(data[i]-'0')
-						i++
-					}
-					for i < len(data) && data[i] >= '0' && data[i] <= '9' {
-						d := uint64(data[i] - '0')
-						if u > limit/10 || (u == limit/10 && d > limit%10) {
-							return result, i, decode.NewParseErr("mp.value", i, scan.ErrNumberOverflow)
-						}
-						u = u*10 + d
-						i++
-					}
-					if i < len(data) {
-						c := data[i]
-						if c == '.' || c == 'e' || c == 'E' {
-							return result, i, decode.NewParseErr("mp.value", i, scan.ErrBadNumber)
-						}
-					}
-					var n int64
-					if neg {
-						if u == scan.SignedNeg {
-							n = math.MinInt64
-						} else {
-							n = -int64(u)
-						}
+					if data[ke] == '"' {
+						mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						i = ke + 1
 					} else {
-						n = int64(u)
+						mk, i, err = scan.String(data, i)
+						if err != nil {
+							return result, i, decode.NewParseErr("mp", i, err)
+						}
 					}
-					result.MP[mk] = new(int(n))
-				}
-				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-					i++
-				}
-				if i < len(data) && data[i] == ',' {
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i >= len(data) || data[i] != ':' {
+						return result, i, decode.NewParseErr("mp", i, scan.ErrBadObject)
+					}
 					i++
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
-					if i >= len(data) || data[i] == '}' {
-						return result, i, scan.ErrBadObject
+					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+						i += 4
+						result.MP[mk] = nil
+					} else {
+						neg := false
+						if i < len(data) && data[i] == '-' {
+							neg = true
+							i++
+						}
+						if i >= len(data) || data[i] < '0' || data[i] > '9' {
+							return result, i, decode.NewParseErr("mp.value", i, scan.ErrBadNumber)
+						}
+						limit := uint64(math.MaxInt64)
+						if neg {
+							limit = scan.SignedNeg
+						}
+						var u uint64
+						de := i + 18
+						if de > len(data) {
+							de = len(data)
+						}
+						for i < de && data[i] >= '0' && data[i] <= '9' {
+							u = u*10 + uint64(data[i]-'0')
+							i++
+						}
+						for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+							d := uint64(data[i] - '0')
+							if u > limit/10 || (u == limit/10 && d > limit%10) {
+								return result, i, decode.NewParseErr("mp.value", i, scan.ErrNumberOverflow)
+							}
+							u = u*10 + d
+							i++
+						}
+						if i < len(data) {
+							c := data[i]
+							if c == '.' || c == 'e' || c == 'E' {
+								return result, i, decode.NewParseErr("mp.value", i, scan.ErrBadNumber)
+							}
+						}
+						var n int64
+						if neg {
+							if u == scan.SignedNeg {
+								n = math.MinInt64
+							} else {
+								n = -int64(u)
+							}
+						} else {
+							n = int64(u)
+						}
+						result.MP[mk] = new(int(n))
 					}
-					continue
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i < len(data) && data[i] == ',' {
+						i++
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i >= len(data) || data[i] == '}' {
+							return result, i, scan.ErrBadObject
+						}
+						continue
+					}
+					break
 				}
-				break
 			}
 			if i >= len(data) || data[i] != '}' {
 				return result, i, decode.NewParseErr("mp", i, scan.ErrBadObject)
@@ -5989,9 +5981,6 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"mpa"}}
 			}
 			seenMPA = true
-			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-				i++
-			}
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 				i += 4
 				result.MPA = nil
@@ -6013,67 +6002,69 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 					result.MPA = make(map[string]*Address)
 				}
 			}
-			for i < len(data) && data[i] != '}' {
-				var mk string
-				if i >= len(data) || data[i] != '"' {
-					return result, i, decode.NewParseErr("mpa", i, scan.ErrExpectString)
-				}
-				ke := i + 1
-				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-					ke++
-				}
-				if ke >= len(data) {
-					return result, i, decode.NewParseErr("mpa", i, scan.ErrUnterminated)
-				}
-				if data[ke] < 0x20 {
-					return result, i, decode.NewParseErr("mpa", i, scan.ErrBadString)
-				}
-				if data[ke] == '"' {
-					mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-					i = ke + 1
-				} else {
-					mk, i, err = scan.String(data, i)
-					if err != nil {
-						return result, i, decode.NewParseErr("mpa", i, err)
+			if i < len(data) && data[i] != '}' {
+				for {
+					var mk string
+					if i >= len(data) || data[i] != '"' {
+						return result, i, decode.NewParseErr("mpa", i, scan.ErrExpectString)
 					}
-				}
-				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-					i++
-				}
-				if i >= len(data) || data[i] != ':' {
-					return result, i, decode.NewParseErr("mpa", i, scan.ErrBadObject)
-				}
-				i++
-				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-					i++
-				}
-				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-					i += 4
-					result.MPA[mk] = nil
-				} else {
-					var v Address
-					var _n int
-					v, _n, err = v.DecodeFrom(data[i:])
-					i += _n
-					if err != nil {
-						return result, i, decode.NewParseErr("mpa.value", i, err)
+					ke := i + 1
+					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+						ke++
 					}
-					result.MPA[mk] = new(v)
-				}
-				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-					i++
-				}
-				if i < len(data) && data[i] == ',' {
+					if ke >= len(data) {
+						return result, i, decode.NewParseErr("mpa", i, scan.ErrUnterminated)
+					}
+					if data[ke] < 0x20 {
+						return result, i, decode.NewParseErr("mpa", i, scan.ErrBadString)
+					}
+					if data[ke] == '"' {
+						mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						i = ke + 1
+					} else {
+						mk, i, err = scan.String(data, i)
+						if err != nil {
+							return result, i, decode.NewParseErr("mpa", i, err)
+						}
+					}
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i >= len(data) || data[i] != ':' {
+						return result, i, decode.NewParseErr("mpa", i, scan.ErrBadObject)
+					}
 					i++
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
-					if i >= len(data) || data[i] == '}' {
-						return result, i, scan.ErrBadObject
+					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+						i += 4
+						result.MPA[mk] = nil
+					} else {
+						var v Address
+						var _n int
+						v, _n, err = v.DecodeFrom(data[i:])
+						i += _n
+						if err != nil {
+							return result, i, decode.NewParseErr("mpa.value", i, err)
+						}
+						result.MPA[mk] = new(v)
 					}
-					continue
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i < len(data) && data[i] == ',' {
+						i++
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i >= len(data) || data[i] == '}' {
+							return result, i, scan.ErrBadObject
+						}
+						continue
+					}
+					break
 				}
-				break
 			}
 			if i >= len(data) || data[i] != '}' {
 				return result, i, decode.NewParseErr("mpa", i, scan.ErrBadObject)
@@ -6084,9 +6075,6 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"mpp"}}
 			}
 			seenMPP = true
-			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-				i++
-			}
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 				i += 4
 				result.MPP = nil
@@ -6108,105 +6096,107 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 					result.MPP = make(map[string]**int)
 				}
 			}
-			for i < len(data) && data[i] != '}' {
-				var mk string
-				if i >= len(data) || data[i] != '"' {
-					return result, i, decode.NewParseErr("mpp", i, scan.ErrExpectString)
-				}
-				ke := i + 1
-				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-					ke++
-				}
-				if ke >= len(data) {
-					return result, i, decode.NewParseErr("mpp", i, scan.ErrUnterminated)
-				}
-				if data[ke] < 0x20 {
-					return result, i, decode.NewParseErr("mpp", i, scan.ErrBadString)
-				}
-				if data[ke] == '"' {
-					mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-					i = ke + 1
-				} else {
-					mk, i, err = scan.String(data, i)
-					if err != nil {
-						return result, i, decode.NewParseErr("mpp", i, err)
+			if i < len(data) && data[i] != '}' {
+				for {
+					var mk string
+					if i >= len(data) || data[i] != '"' {
+						return result, i, decode.NewParseErr("mpp", i, scan.ErrExpectString)
 					}
-				}
-				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-					i++
-				}
-				if i >= len(data) || data[i] != ':' {
-					return result, i, decode.NewParseErr("mpp", i, scan.ErrBadObject)
-				}
-				i++
-				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-					i++
-				}
-				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-					i += 4
-					result.MPP[mk] = nil
-				} else {
-					neg := false
-					if i < len(data) && data[i] == '-' {
-						neg = true
-						i++
+					ke := i + 1
+					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+						ke++
 					}
-					if i >= len(data) || data[i] < '0' || data[i] > '9' {
-						return result, i, decode.NewParseErr("mpp.value", i, scan.ErrBadNumber)
+					if ke >= len(data) {
+						return result, i, decode.NewParseErr("mpp", i, scan.ErrUnterminated)
 					}
-					limit := uint64(math.MaxInt64)
-					if neg {
-						limit = scan.SignedNeg
+					if data[ke] < 0x20 {
+						return result, i, decode.NewParseErr("mpp", i, scan.ErrBadString)
 					}
-					var u uint64
-					de := i + 18
-					if de > len(data) {
-						de = len(data)
-					}
-					for i < de && data[i] >= '0' && data[i] <= '9' {
-						u = u*10 + uint64(data[i]-'0')
-						i++
-					}
-					for i < len(data) && data[i] >= '0' && data[i] <= '9' {
-						d := uint64(data[i] - '0')
-						if u > limit/10 || (u == limit/10 && d > limit%10) {
-							return result, i, decode.NewParseErr("mpp.value", i, scan.ErrNumberOverflow)
-						}
-						u = u*10 + d
-						i++
-					}
-					if i < len(data) {
-						c := data[i]
-						if c == '.' || c == 'e' || c == 'E' {
-							return result, i, decode.NewParseErr("mpp.value", i, scan.ErrBadNumber)
-						}
-					}
-					var n int64
-					if neg {
-						if u == scan.SignedNeg {
-							n = math.MinInt64
-						} else {
-							n = -int64(u)
-						}
+					if data[ke] == '"' {
+						mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						i = ke + 1
 					} else {
-						n = int64(u)
+						mk, i, err = scan.String(data, i)
+						if err != nil {
+							return result, i, decode.NewParseErr("mpp", i, err)
+						}
 					}
-					result.MPP[mk] = new(new(int(n)))
-				}
-				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-					i++
-				}
-				if i < len(data) && data[i] == ',' {
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i >= len(data) || data[i] != ':' {
+						return result, i, decode.NewParseErr("mpp", i, scan.ErrBadObject)
+					}
 					i++
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
-					if i >= len(data) || data[i] == '}' {
-						return result, i, scan.ErrBadObject
+					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+						i += 4
+						result.MPP[mk] = nil
+					} else {
+						neg := false
+						if i < len(data) && data[i] == '-' {
+							neg = true
+							i++
+						}
+						if i >= len(data) || data[i] < '0' || data[i] > '9' {
+							return result, i, decode.NewParseErr("mpp.value", i, scan.ErrBadNumber)
+						}
+						limit := uint64(math.MaxInt64)
+						if neg {
+							limit = scan.SignedNeg
+						}
+						var u uint64
+						de := i + 18
+						if de > len(data) {
+							de = len(data)
+						}
+						for i < de && data[i] >= '0' && data[i] <= '9' {
+							u = u*10 + uint64(data[i]-'0')
+							i++
+						}
+						for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+							d := uint64(data[i] - '0')
+							if u > limit/10 || (u == limit/10 && d > limit%10) {
+								return result, i, decode.NewParseErr("mpp.value", i, scan.ErrNumberOverflow)
+							}
+							u = u*10 + d
+							i++
+						}
+						if i < len(data) {
+							c := data[i]
+							if c == '.' || c == 'e' || c == 'E' {
+								return result, i, decode.NewParseErr("mpp.value", i, scan.ErrBadNumber)
+							}
+						}
+						var n int64
+						if neg {
+							if u == scan.SignedNeg {
+								n = math.MinInt64
+							} else {
+								n = -int64(u)
+							}
+						} else {
+							n = int64(u)
+						}
+						result.MPP[mk] = new(new(int(n)))
 					}
-					continue
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i < len(data) && data[i] == ',' {
+						i++
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i >= len(data) || data[i] == '}' {
+							return result, i, scan.ErrBadObject
+						}
+						continue
+					}
+					break
 				}
-				break
 			}
 			if i >= len(data) || data[i] != '}' {
 				return result, i, decode.NewParseErr("mpp", i, scan.ErrBadObject)
@@ -6217,9 +6207,6 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"nspp"}}
 			}
 			seenNSPP = true
-			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-				i++
-			}
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 				i += 4
 				result.NSPP = nil
@@ -6241,106 +6228,126 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 					result.NSPP = make([][]**int, 0, 4)
 				}
 			}
-			for i < len(data) && data[i] != ']' {
-				if len(result.NSPP) < cap(result.NSPP) {
-					result.NSPP = result.NSPP[:len(result.NSPP)+1]
-				} else {
-					result.NSPP = append(result.NSPP, nil)
-				}
-				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-					i += 4
-					result.NSPP[len(result.NSPP)-1] = nil
-					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-						i++
+			if i < len(data) && data[i] != ']' {
+				for {
+					if len(result.NSPP) < cap(result.NSPP) {
+						result.NSPP = result.NSPP[:len(result.NSPP)+1]
+					} else {
+						result.NSPP = append(result.NSPP, nil)
 					}
-					if i < len(data) && data[i] == ',' {
-						i++
-						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-							i++
-						}
-						if i >= len(data) || data[i] == ']' {
-							return result, i, scan.ErrBadArray
-						}
-						continue
-					}
-					break
-				}
-				row0 := result.NSPP[len(result.NSPP)-1]
-				if row0 != nil {
-					row0 = row0[:0]
-				}
-				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-					i++
-				}
-				if i >= len(data) || data[i] != '[' {
-					return result, i, scan.ErrBadArray
-				}
-				i++
-				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-					i++
-				}
-				if i < len(data) && data[i] == ']' {
-					if row0 == nil {
-						row0 = []**int{}
-					}
-				} else {
-					if row0 == nil {
-						row0 = make([]**int, 0, 4)
-					}
-				}
-				for i < len(data) && data[i] != ']' {
-					row0 = append(row0, nil)
 					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 						i += 4
-						row0[len(row0)-1] = nil
-					} else {
-						neg := false
-						if i < len(data) && data[i] == '-' {
-							neg = true
+						result.NSPP[len(result.NSPP)-1] = nil
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
 						}
-						if i >= len(data) || data[i] < '0' || data[i] > '9' {
-							return result, i, decode.NewParseErr("nspp[][]", i, scan.ErrBadNumber)
-						}
-						limit := uint64(math.MaxInt64)
-						if neg {
-							limit = scan.SignedNeg
-						}
-						var u uint64
-						de := i + 18
-						if de > len(data) {
-							de = len(data)
-						}
-						for i < de && data[i] >= '0' && data[i] <= '9' {
-							u = u*10 + uint64(data[i]-'0')
+						if i < len(data) && data[i] == ',' {
 							i++
-						}
-						for i < len(data) && data[i] >= '0' && data[i] <= '9' {
-							d := uint64(data[i] - '0')
-							if u > limit/10 || (u == limit/10 && d > limit%10) {
-								return result, i, decode.NewParseErr("nspp[][]", i, scan.ErrNumberOverflow)
+							for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
 							}
-							u = u*10 + d
-							i++
-						}
-						if i < len(data) {
-							c := data[i]
-							if c == '.' || c == 'e' || c == 'E' {
-								return result, i, decode.NewParseErr("nspp[][]", i, scan.ErrBadNumber)
+							if i >= len(data) || data[i] == ']' {
+								return result, i, scan.ErrBadArray
 							}
+							continue
 						}
-						var n int64
-						if neg {
-							if u == scan.SignedNeg {
-								n = math.MinInt64
-							} else {
-								n = -int64(u)
-							}
-						} else {
-							n = int64(u)
-						}
-						row0[len(row0)-1] = new(new(int(n)))
+						break
 					}
+					row0 := result.NSPP[len(result.NSPP)-1]
+					if row0 != nil {
+						row0 = row0[:0]
+					}
+					if i >= len(data) || data[i] != '[' {
+						return result, i, scan.ErrBadArray
+					}
+					i++
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i < len(data) && data[i] == ']' {
+						if row0 == nil {
+							row0 = []**int{}
+						}
+					} else {
+						if row0 == nil {
+							row0 = make([]**int, 0, 4)
+						}
+					}
+					if i < len(data) && data[i] != ']' {
+						for {
+							row0 = append(row0, nil)
+							if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+								i += 4
+								row0[len(row0)-1] = nil
+							} else {
+								neg := false
+								if i < len(data) && data[i] == '-' {
+									neg = true
+									i++
+								}
+								if i >= len(data) || data[i] < '0' || data[i] > '9' {
+									return result, i, decode.NewParseErr("nspp[][]", i, scan.ErrBadNumber)
+								}
+								limit := uint64(math.MaxInt64)
+								if neg {
+									limit = scan.SignedNeg
+								}
+								var u uint64
+								de := i + 18
+								if de > len(data) {
+									de = len(data)
+								}
+								for i < de && data[i] >= '0' && data[i] <= '9' {
+									u = u*10 + uint64(data[i]-'0')
+									i++
+								}
+								for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+									d := uint64(data[i] - '0')
+									if u > limit/10 || (u == limit/10 && d > limit%10) {
+										return result, i, decode.NewParseErr("nspp[][]", i, scan.ErrNumberOverflow)
+									}
+									u = u*10 + d
+									i++
+								}
+								if i < len(data) {
+									c := data[i]
+									if c == '.' || c == 'e' || c == 'E' {
+										return result, i, decode.NewParseErr("nspp[][]", i, scan.ErrBadNumber)
+									}
+								}
+								var n int64
+								if neg {
+									if u == scan.SignedNeg {
+										n = math.MinInt64
+									} else {
+										n = -int64(u)
+									}
+								} else {
+									n = int64(u)
+								}
+								row0[len(row0)-1] = new(new(int(n)))
+							}
+							for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
+							}
+							if i < len(data) && data[i] == ',' {
+								i++
+								for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+									i++
+								}
+								if i >= len(data) || data[i] == ']' {
+									return result, i, scan.ErrBadArray
+								}
+								continue
+							}
+							break
+						}
+					}
+					if i >= len(data) || data[i] != ']' {
+						return result, i, scan.ErrBadArray
+					}
+					i++
+					result.NSPP[len(result.NSPP)-1] = row0
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
@@ -6356,25 +6363,6 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 					}
 					break
 				}
-				if i >= len(data) || data[i] != ']' {
-					return result, i, scan.ErrBadArray
-				}
-				i++
-				result.NSPP[len(result.NSPP)-1] = row0
-				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-					i++
-				}
-				if i < len(data) && data[i] == ',' {
-					i++
-					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-						i++
-					}
-					if i >= len(data) || data[i] == ']' {
-						return result, i, scan.ErrBadArray
-					}
-					continue
-				}
-				break
 			}
 			if i >= len(data) || data[i] != ']' {
 				return result, i, scan.ErrBadArray
@@ -6385,9 +6373,6 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"spp"}}
 			}
 			seenSPP = true
-			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-				i++
-			}
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 				i += 4
 				result.SPP = nil
@@ -6409,73 +6394,75 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 					result.SPP = make([]**int, 0, 4)
 				}
 			}
-			for i < len(data) && data[i] != ']' {
-				result.SPP = append(result.SPP, nil)
-				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-					i += 4
-					result.SPP[len(result.SPP)-1] = nil
-				} else {
-					neg := false
-					if i < len(data) && data[i] == '-' {
-						neg = true
-						i++
-					}
-					if i >= len(data) || data[i] < '0' || data[i] > '9' {
-						return result, i, decode.NewParseErr("spp[]", i, scan.ErrBadNumber)
-					}
-					limit := uint64(math.MaxInt64)
-					if neg {
-						limit = scan.SignedNeg
-					}
-					var u uint64
-					de := i + 18
-					if de > len(data) {
-						de = len(data)
-					}
-					for i < de && data[i] >= '0' && data[i] <= '9' {
-						u = u*10 + uint64(data[i]-'0')
-						i++
-					}
-					for i < len(data) && data[i] >= '0' && data[i] <= '9' {
-						d := uint64(data[i] - '0')
-						if u > limit/10 || (u == limit/10 && d > limit%10) {
-							return result, i, decode.NewParseErr("spp[]", i, scan.ErrNumberOverflow)
+			if i < len(data) && data[i] != ']' {
+				for {
+					result.SPP = append(result.SPP, nil)
+					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+						i += 4
+						result.SPP[len(result.SPP)-1] = nil
+					} else {
+						neg := false
+						if i < len(data) && data[i] == '-' {
+							neg = true
+							i++
 						}
-						u = u*10 + d
-						i++
-					}
-					if i < len(data) {
-						c := data[i]
-						if c == '.' || c == 'e' || c == 'E' {
+						if i >= len(data) || data[i] < '0' || data[i] > '9' {
 							return result, i, decode.NewParseErr("spp[]", i, scan.ErrBadNumber)
 						}
-					}
-					var n int64
-					if neg {
-						if u == scan.SignedNeg {
-							n = math.MinInt64
-						} else {
-							n = -int64(u)
+						limit := uint64(math.MaxInt64)
+						if neg {
+							limit = scan.SignedNeg
 						}
-					} else {
-						n = int64(u)
+						var u uint64
+						de := i + 18
+						if de > len(data) {
+							de = len(data)
+						}
+						for i < de && data[i] >= '0' && data[i] <= '9' {
+							u = u*10 + uint64(data[i]-'0')
+							i++
+						}
+						for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+							d := uint64(data[i] - '0')
+							if u > limit/10 || (u == limit/10 && d > limit%10) {
+								return result, i, decode.NewParseErr("spp[]", i, scan.ErrNumberOverflow)
+							}
+							u = u*10 + d
+							i++
+						}
+						if i < len(data) {
+							c := data[i]
+							if c == '.' || c == 'e' || c == 'E' {
+								return result, i, decode.NewParseErr("spp[]", i, scan.ErrBadNumber)
+							}
+						}
+						var n int64
+						if neg {
+							if u == scan.SignedNeg {
+								n = math.MinInt64
+							} else {
+								n = -int64(u)
+							}
+						} else {
+							n = int64(u)
+						}
+						result.SPP[len(result.SPP)-1] = new(new(int(n)))
 					}
-					result.SPP[len(result.SPP)-1] = new(new(int(n)))
-				}
-				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-					i++
-				}
-				if i < len(data) && data[i] == ',' {
-					i++
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
-					if i >= len(data) || data[i] == ']' {
-						return result, i, scan.ErrBadArray
+					if i < len(data) && data[i] == ',' {
+						i++
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i >= len(data) || data[i] == ']' {
+							return result, i, scan.ErrBadArray
+						}
+						continue
 					}
-					continue
+					break
 				}
-				break
 			}
 			if i >= len(data) || data[i] != ']' {
 				return result, i, scan.ErrBadArray

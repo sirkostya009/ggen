@@ -895,6 +895,34 @@ float64` 6459→3417. Outpaces stdjson v1 and jsonv2 on every map shape.
     both. Pinned by `TestGenerate_runeGates` (gates per rule /
     `minrunes=1` collapse / tier-c drops the walk / ascii-after and multierr keep
     it). Implements all three tiers of backlog [25].
+45. **Bytes-path container-loop hygiene (wire-identical, generated-code
+    shrink).** Three cleanups to the slice/array/map decoders, backlog [18]/[16]:
+    (a) **no leading WS skip** in `emitByteSliceRead`/`renderMap` — every value
+    entry already skips WS (after `:` at the dispatch, after `[`/`,` in element
+    loops), so the container's own leading skip was redundant. The top-level
+    alias path had no preceding skip (its dependency), so the explicit skip moved
+    to `renderAliasContainerDecode`. Stream path KEEPS its leading `s.SkipSpace()`
+    — it does double duty (WS + `ReadMore` buffer-ensure), not safely removable.
+    (b) **collapsed empty-peek** — a non-pointer slice whose non-empty arm would
+    also be just `dst = T{}` (no comma-count, no cap, no slab: `[]struct`,
+    `[][N]T`) had two byte-identical empty-peek arms; emits one `if dst == nil {
+    dst = T{} }` and skips the `data[i]==']'` peek. (c) **do-while element/map
+    loop** — `for i<len && data[i]!=']' {…}` → `if i<len && data[i]!=']' { for
+    {…} }`: the per-iteration re-check was redundant (entry guaranteed non-`]` by
+    the peel; subsequent iterations by the post-comma `noClose` guard), and the
+    one-time guard preserves the empty-`[]`/truncation `ErrBadArray` path. Flat
+    by design (the skipped work is ~1 compare/container on compact input) — the
+    payoff is smaller generated code. Pinned by `TestWhitespace_Tolerance`
+    (decodes WS-laden payloads across slice/nested-slice/map/array/nested-struct
+    + top-level aliases, vs the compact form) and the bytes-vs-stream fuzzer.
+    (d) **Top-level alias early-return** — a container ALIAS (`type Tags
+    []string`) is the whole value, so the bytes emitters take a `topLevel` flag
+    (true only from `renderAliasContainerDecode`) and `return result, i, nil` at
+    each exit (null branch, array/map close) instead of falling through to a
+    trailing return, which is then dropped as dead code. Zero runtime (the
+    fall-through compiled identically) — purely cleaner generated source. Struct
+    fields / nested elements pass `topLevel=false` (their caller has more to
+    parse); stream path keeps its trailing return.
 
 ## Design decisions (the why)
 

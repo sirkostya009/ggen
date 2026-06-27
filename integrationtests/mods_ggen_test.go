@@ -137,9 +137,6 @@ func (recv ModStruct) DecodeFrom(data []byte) (result ModStruct, i int, err erro
 				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"tags"}}
 			}
 			seenTags = true
-			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-				i++
-			}
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 				i += 4
 				result.Tags = nil
@@ -161,46 +158,48 @@ func (recv ModStruct) DecodeFrom(data []byte) (result ModStruct, i int, err erro
 					result.Tags = make([]string, 0, 4)
 				}
 			}
-			for i < len(data) && data[i] != ']' {
-				result.Tags = append(result.Tags, "")
-				if i >= len(data) || data[i] != '"' {
-					return result, i, decode.NewParseErr("tags", i, scan.ErrExpectString)
-				}
-				ke := i + 1
-				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
-					ke++
-				}
-				if ke >= len(data) {
-					return result, i, decode.NewParseErr("tags", i, scan.ErrUnterminated)
-				}
-				if data[ke] < 0x20 {
-					return result, i, decode.NewParseErr("tags", i, scan.ErrBadString)
-				}
-				if data[ke] == '"' {
-					result.Tags[len(result.Tags)-1] = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-					i = ke + 1
-				} else {
-					result.Tags[len(result.Tags)-1], i, err = scan.String(data, i)
-					if err != nil {
-						return result, i, decode.NewParseErr("tags", i, err)
+			if i < len(data) && data[i] != ']' {
+				for {
+					result.Tags = append(result.Tags, "")
+					if i >= len(data) || data[i] != '"' {
+						return result, i, decode.NewParseErr("tags", i, scan.ErrExpectString)
 					}
-				}
-				result.Tags[len(result.Tags)-1] = strings.TrimSpace(result.Tags[len(result.Tags)-1])
-				result.Tags[len(result.Tags)-1] = strings.ToLower(result.Tags[len(result.Tags)-1])
-				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-					i++
-				}
-				if i < len(data) && data[i] == ',' {
-					i++
+					ke := i + 1
+					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+						ke++
+					}
+					if ke >= len(data) {
+						return result, i, decode.NewParseErr("tags", i, scan.ErrUnterminated)
+					}
+					if data[ke] < 0x20 {
+						return result, i, decode.NewParseErr("tags", i, scan.ErrBadString)
+					}
+					if data[ke] == '"' {
+						result.Tags[len(result.Tags)-1] = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						i = ke + 1
+					} else {
+						result.Tags[len(result.Tags)-1], i, err = scan.String(data, i)
+						if err != nil {
+							return result, i, decode.NewParseErr("tags", i, err)
+						}
+					}
+					result.Tags[len(result.Tags)-1] = strings.TrimSpace(result.Tags[len(result.Tags)-1])
+					result.Tags[len(result.Tags)-1] = strings.ToLower(result.Tags[len(result.Tags)-1])
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
-					if i >= len(data) || data[i] == ']' {
-						return result, i, scan.ErrBadArray
+					if i < len(data) && data[i] == ',' {
+						i++
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i >= len(data) || data[i] == ']' {
+							return result, i, scan.ErrBadArray
+						}
+						continue
 					}
-					continue
+					break
 				}
-				break
 			}
 			if i >= len(data) || data[i] != ']' {
 				return result, i, scan.ErrBadArray

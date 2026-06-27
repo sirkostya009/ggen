@@ -1002,24 +1002,20 @@ func (recv AliasTags) DecodeFrom(data []byte) (result AliasTags, i int, err erro
 	if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 		i += 4
 		result = nil
-	} else {
-		if i >= len(data) || data[i] != '[' {
-			return result, i, scan.ErrBadArray
-		}
+		return result, i, nil
+	}
+	if i >= len(data) || data[i] != '[' {
+		return result, i, scan.ErrBadArray
+	}
+	i++
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
-		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-			i++
-		}
-		if i < len(data) && data[i] == ']' {
-			if result == nil {
-				result = AliasTags{}
-			}
-		} else {
-			if result == nil {
-				result = AliasTags{}
-			}
-		}
-		for i < len(data) && data[i] != ']' {
+	}
+	if result == nil {
+		result = AliasTags{}
+	}
+	if i < len(data) && data[i] != ']' {
+		for {
 			result = append(result, "")
 			if i >= len(data) || data[i] != '"' {
 				return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
@@ -1058,11 +1054,11 @@ func (recv AliasTags) DecodeFrom(data []byte) (result AliasTags, i int, err erro
 			}
 			break
 		}
-		if i >= len(data) || data[i] != ']' {
-			return result, i, scan.ErrBadArray
-		}
-		i++
 	}
+	if i >= len(data) || data[i] != ']' {
+		return result, i, scan.ErrBadArray
+	}
+	i++
 	return result, i, nil
 }
 
@@ -1186,24 +1182,26 @@ func (recv AliasLookup) DecodeFrom(data []byte) (result AliasLookup, i int, err 
 	if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 		i += 4
 		result = nil
-	} else {
-		if i >= len(data) || data[i] != '{' {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
-		}
+		return result, i, nil
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+	}
+	i++
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
-		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-			i++
+	}
+	if i < len(data) && data[i] == '}' {
+		if result == nil {
+			result = AliasLookup{}
 		}
-		if i < len(data) && data[i] == '}' {
-			if result == nil {
-				result = AliasLookup{}
-			}
-		} else {
-			if result == nil {
-				result = make(AliasLookup)
-			}
+	} else {
+		if result == nil {
+			result = make(AliasLookup)
 		}
-		for i < len(data) && data[i] != '}' {
+	}
+	if i < len(data) && data[i] != '}' {
+		for {
 			var mk string
 			if i >= len(data) || data[i] != '"' {
 				return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
@@ -1298,11 +1296,11 @@ func (recv AliasLookup) DecodeFrom(data []byte) (result AliasLookup, i int, err 
 			}
 			break
 		}
-		if i >= len(data) || data[i] != '}' {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
-		}
-		i++
 	}
+	if i >= len(data) || data[i] != '}' {
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+	}
+	i++
 	return result, i, nil
 }
 
@@ -1454,71 +1452,73 @@ func (recv AliasTuple) DecodeFrom(data []byte) (result AliasTuple, i int, err er
 		i++
 	}
 	var idx0 int
-	for i < len(data) && data[i] != ']' {
-		if idx0 >= 3 {
-			return result, i, &validation.LenError{Pos: i, Path: []string{""}, Want: 3, Got: idx0}
-		}
-		neg := false
-		if i < len(data) && data[i] == '-' {
-			neg = true
-			i++
-		}
-		if i >= len(data) || data[i] < '0' || data[i] > '9' {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadNumber)
-		}
-		limit := uint64(math.MaxInt64)
-		if neg {
-			limit = scan.SignedNeg
-		}
-		var u uint64
-		de := i + 18
-		if de > len(data) {
-			de = len(data)
-		}
-		for i < de && data[i] >= '0' && data[i] <= '9' {
-			u = u*10 + uint64(data[i]-'0')
-			i++
-		}
-		for i < len(data) && data[i] >= '0' && data[i] <= '9' {
-			d := uint64(data[i] - '0')
-			if u > limit/10 || (u == limit/10 && d > limit%10) {
-				return result, i, decode.NewParseErr("", i, scan.ErrNumberOverflow)
+	if i < len(data) && data[i] != ']' {
+		for {
+			if idx0 >= 3 {
+				return result, i, &validation.LenError{Pos: i, Path: []string{""}, Want: 3, Got: idx0}
 			}
-			u = u*10 + d
-			i++
-		}
-		if i < len(data) {
-			c := data[i]
-			if c == '.' || c == 'e' || c == 'E' {
+			neg := false
+			if i < len(data) && data[i] == '-' {
+				neg = true
+				i++
+			}
+			if i >= len(data) || data[i] < '0' || data[i] > '9' {
 				return result, i, decode.NewParseErr("", i, scan.ErrBadNumber)
 			}
-		}
-		var n int64
-		if neg {
-			if u == scan.SignedNeg {
-				n = math.MinInt64
-			} else {
-				n = -int64(u)
+			limit := uint64(math.MaxInt64)
+			if neg {
+				limit = scan.SignedNeg
 			}
-		} else {
-			n = int64(u)
-		}
-		result[idx0] = int(n)
-		idx0++
-		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-			i++
-		}
-		if i < len(data) && data[i] == ',' {
-			i++
+			var u uint64
+			de := i + 18
+			if de > len(data) {
+				de = len(data)
+			}
+			for i < de && data[i] >= '0' && data[i] <= '9' {
+				u = u*10 + uint64(data[i]-'0')
+				i++
+			}
+			for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+				d := uint64(data[i] - '0')
+				if u > limit/10 || (u == limit/10 && d > limit%10) {
+					return result, i, decode.NewParseErr("", i, scan.ErrNumberOverflow)
+				}
+				u = u*10 + d
+				i++
+			}
+			if i < len(data) {
+				c := data[i]
+				if c == '.' || c == 'e' || c == 'E' {
+					return result, i, decode.NewParseErr("", i, scan.ErrBadNumber)
+				}
+			}
+			var n int64
+			if neg {
+				if u == scan.SignedNeg {
+					n = math.MinInt64
+				} else {
+					n = -int64(u)
+				}
+			} else {
+				n = int64(u)
+			}
+			result[idx0] = int(n)
+			idx0++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
-			if i >= len(data) || data[i] == ']' {
-				return result, i, scan.ErrBadArray
+			if i < len(data) && data[i] == ',' {
+				i++
+				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+					i++
+				}
+				if i >= len(data) || data[i] == ']' {
+					return result, i, scan.ErrBadArray
+				}
+				continue
 			}
-			continue
+			break
 		}
-		break
 	}
 	if i >= len(data) || data[i] != ']' {
 		return result, i, scan.ErrBadArray

@@ -2575,7 +2575,7 @@ func keyValidateAndModStream(b *bytes.Buffer, f FieldInfo, keyRef string) {
 // cleared a non-nil map, so allocation only happens when ref is nil. Maps
 // can't expose interior pointers (`&m[k]` illegal), so struct elems decode
 // into a temp and assign.
-func renderMap(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+func renderMap(b *bytes.Buffer, f FieldInfo, ref, posVar string, topLevel bool) {
 	field := fieldLit(f)
 	makeExpr := fmt.Sprintf("make(%s)", f.GoType)
 	if cap := mapPreallocCap(f); cap > 0 {
@@ -2584,11 +2584,16 @@ func renderMap(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	// At dispatch level the null branch breaks to the comma handling rather
 	// than nesting the object read in an else.
 	flat := nullBreakOK(f)
-	inlineSkipWS(b, posVar)
+	// No leading WS skip — the value-entry already skipped it (opt [18]; the
+	// alias path adds an explicit skip before calling).
 	inlineNullPeek(b, posVar)
 	fmt.Fprintf(b, "%s = nil\n", ref)
 	if flat {
 		b.WriteString("break\n}\n")
+	} else if topLevel {
+		// Whole-value alias: null → return directly; no else (the non-null path
+		// also returns at the object close).
+		fmt.Fprintf(b, "return result, %s, nil\n}\n", posVar)
 	} else {
 		b.WriteString("} else {\n")
 	}
@@ -2604,7 +2609,8 @@ func renderMap(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	} else {
 		if %[2]s == nil { %[2]s = %[4]s }
 	}
-	for %[1]s < len(data) && data[%[1]s] != '}' {
+	if %[1]s < len(data) && data[%[1]s] != '}' {
+	for {
 		var mk string
 `, posVar, ref, f.GoType, makeExpr)
 	inlineScanString(b, posVar, "mk", posVar, field)
@@ -2630,10 +2636,14 @@ func renderMap(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 		fmt.Fprintf(b, `			continue }
 		break
 	}
+	}
 	if %[1]s >= len(data) || data[%[1]s] != '}' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrBadObject) }
 	%[1]s++
 `, posVar, field)
-		if !flat {
+		if topLevel {
+			fmt.Fprintf(b, "return result, %s, nil\n", posVar)
+		}
+		if !flat && !topLevel {
 			b.WriteString("}\n") // close else (null-check)
 		}
 		return
@@ -2705,10 +2715,14 @@ if err != nil { return result, %[1]s, decode.NewParseErr(%[3]s, %[1]s, err) }
 	fmt.Fprintf(b, `			continue }
 		break
 	}
+	}
 	if %[1]s >= len(data) || data[%[1]s] != '}' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrBadObject) }
 	%[1]s++
 `, posVar, field)
-	if !flat {
+	if topLevel {
+		fmt.Fprintf(b, "return result, %s, nil\n", posVar)
+	}
+	if !flat && !topLevel {
 		b.WriteString("}\n") // close else (null-check)
 	}
 }
@@ -3787,7 +3801,7 @@ if err != nil { return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, err) }
 	case KindArray:
 		emitByteArrayRead(b, f, ref, posVar, 0)
 	case KindMap:
-		renderMap(b, f, ref, posVar)
+		renderMap(b, f, ref, posVar, false)
 	case KindBytes:
 		renderBytes(b, f, ref, posVar)
 	case KindTime:
@@ -3827,9 +3841,10 @@ if err != nil { return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, err) }
 	}
 }
 
-// renderSlice is the depth-0 entry point into the recursive slice emitter.
+// renderSlice is the depth-0 entry point into the recursive slice emitter
+// (struct-field path — not top-level).
 func renderSlice(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
-	emitByteSliceRead(b, f, ref, posVar, 0)
+	emitByteSliceRead(b, f, ref, posVar, 0, false)
 }
 
 // peelSliceField returns the FieldInfo one level down for a slice-of-slice or
@@ -3914,16 +3929,21 @@ func stripOneContainer(typ string) (inner string, kind TypeKind, length int) {
 	return typ, resolveKind(typ), 0
 }
 
-// emitByteArrayRead is a thin wrapper around emitByteSliceRead for [N]T fields.
+// emitByteArrayRead is a thin wrapper around emitByteSliceRead for [N]T fields
+// (struct-field path — not top-level).
 func emitByteArrayRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth int) {
-	emitByteSliceRead(b, f, dst, posVar, depth)
+	emitByteSliceRead(b, f, dst, posVar, depth, false)
 }
 
 // emitByteSliceRead emits a JSON array reader against `data` into `dst`,
 // advancing posVar. Handles slices (pre-sized via preallocCap, appended) and
 // fixed-length arrays (strict tuple: exactly f.ArrayLen elements or LenError).
 // Data locals (evN, idxN, slabN) carry the depth suffix to avoid collisions.
-func emitByteSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth int) {
+// topLevel marks a whole-value decode (a top-level container alias): there's
+// nothing to parse after the array, so each exit returns directly instead of
+// falling through to a trailing `return` (opt [16] follow-up). Always false for
+// struct fields and nested elements (their caller has more to parse).
+func emitByteSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth int, topLevel bool) {
 	isArray := f.Kind == KindArray
 	arrayN := f.ArrayLen
 	// Multi-level pointer element (`[]**T`, …): no slab — each element runs
@@ -3935,7 +3955,8 @@ func emitByteSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth i
 	kvar := posVar
 	evvar := fmt.Sprintf("ev%d", depth)
 	ivar := fmt.Sprintf("idx%d", depth)
-	inlineSkipWS(b, kvar)
+	// No leading WS skip — every value-entry site (after `:`/`[`/`,`, and the
+	// alias path explicitly) already skipped it (opt [18]).
 	// `null` → nil out the slice (arrays don't accept null). At dispatch level
 	// flat-break; a nested slot whose parent consumed the null (NullDone)
 	// skips the peek.
@@ -3945,6 +3966,10 @@ func emitByteSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth i
 		fmt.Fprintf(b, "%s = nil\n", dst)
 		if flat {
 			b.WriteString("break\n}\n")
+		} else if topLevel {
+			// Whole-value alias: null → return directly; no else needed since the
+			// non-null path also returns at the array close.
+			fmt.Fprintf(b, "return result, %s, nil\n}\n", kvar)
 		} else {
 			b.WriteString("} else {\n")
 		}
@@ -3962,42 +3987,54 @@ func emitByteSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth i
 		}
 	} else {
 		sCap, slCap := preallocCap(f)
-		if f.ElemPointer && !mptr {
-			fmt.Fprintf(b, "var %s []%s\n", slabVar, f.ElemType)
-		}
-		// dst is decode-into-receiver: nil (fresh) or [:0]'d (backing reused).
-		// Allocate only when nil; otherwise reuse the caller's backing.
-		fmt.Fprintf(b, "if %s < len(data) && data[%s] == ']' {\n", kvar, kvar)
-		fmt.Fprintf(b, "if %s == nil { %s = %s{} }\n", dst, dst, f.GoType)
-		fmt.Fprintf(b, "} else {\n")
-		switch {
-		case !f.ElemPointer && scalarCountable(f.ElemKind) && userPreallocHint(f) < 0:
-			// Exact-cap from a one-shot delimiter scan (scalar elems carry no
-			// `,`/`]`): kills the growth chain with no over-cap cost (opt #42).
-			// Reused slots keep their backing; malformed input falls to cap 1.
-			cntVar := fmt.Sprintf("cnt%d", depth)
-			fmt.Fprintf(b, `if %[1]s == nil {
+		countable := !f.ElemPointer && scalarCountable(f.ElemKind) && userPreallocHint(f) < 0
+		// When the non-empty arm's prealloc would also be just `dst = T{}`
+		// (no count, no cap, no slab), both empty-peek arms are byte-identical,
+		// so emit one `if dst == nil` and skip the peek (opt [18]).
+		if !f.ElemPointer && !countable && sCap <= 0 {
+			fmt.Fprintf(b, "if %s == nil { %s = %s{} }\n", dst, dst, f.GoType)
+		} else {
+			if f.ElemPointer && !mptr {
+				fmt.Fprintf(b, "var %s []%s\n", slabVar, f.ElemType)
+			}
+			// dst is decode-into-receiver: nil (fresh) or [:0]'d (backing reused).
+			// Allocate only when nil; otherwise reuse the caller's backing.
+			fmt.Fprintf(b, "if %s < len(data) && data[%s] == ']' {\n", kvar, kvar)
+			fmt.Fprintf(b, "if %s == nil { %s = %s{} }\n", dst, dst, f.GoType)
+			fmt.Fprintf(b, "} else {\n")
+			switch {
+			case countable:
+				// Exact-cap from a one-shot delimiter scan (scalar elems carry no
+				// `,`/`]`): kills the growth chain with no over-cap cost (opt #42).
+				// Reused slots keep their backing; malformed input falls to cap 1.
+				cntVar := fmt.Sprintf("cnt%d", depth)
+				fmt.Fprintf(b, `if %[1]s == nil {
 %[4]s := 1
 if e := bytes.IndexByte(data[%[2]s:], ']'); e >= 0 { %[4]s = bytes.Count(data[%[2]s:%[2]s+e], []byte{','}) + 1 }
 %[1]s = make(%[3]s, 0, %[4]s)
 }
 `, dst, kvar, f.GoType, cntVar)
-		case sCap > 0:
-			fmt.Fprintf(b, "if %s == nil { %s = make(%s, 0, %d) }\n", dst, dst, f.GoType, sCap)
-		default:
-			fmt.Fprintf(b, "if %s == nil { %s = %s{} }\n", dst, dst, f.GoType)
+			case sCap > 0:
+				fmt.Fprintf(b, "if %s == nil { %s = make(%s, 0, %d) }\n", dst, dst, f.GoType, sCap)
+			default:
+				fmt.Fprintf(b, "if %s == nil { %s = %s{} }\n", dst, dst, f.GoType)
+			}
+			if f.ElemPointer && !mptr {
+				fmt.Fprintf(b, "%s = make([]%s, 0, %d)\n", slabVar, f.ElemType, slCap)
+			}
+			fmt.Fprintf(b, "}\n")
 		}
-		if f.ElemPointer && !mptr {
-			fmt.Fprintf(b, "%s = make([]%s, 0, %d)\n", slabVar, f.ElemType, slCap)
-		}
-		fmt.Fprintf(b, "}\n")
 	}
 	// Every elem kind decodes IN PLACE into the destination slot (slab[ivar] /
 	// dst[ivar] for arrays; pre-grown slab/dst tail for slices). err is hoisted
 	// at the DecodeFrom function level.
 	directStruct := f.ElemKind == KindStruct && isGenerated(f.ElemType)
 	_ = evvar // legacy name no longer used at this scope
-	fmt.Fprintf(b, "for %s < len(data) && data[%s] != ']' {\n", kvar, kvar)
+	// Do-while: the empty `[]` and truncation cases are caught by this one-time
+	// guard (preserving ErrBadArray below); inside, the comma handler's
+	// continue/break drives iteration, so the per-element `data!=']'` re-check is
+	// redundant (opt [16]).
+	fmt.Fprintf(b, "if %s < len(data) && data[%s] != ']' {\nfor {\n", kvar, kvar)
 	if isArray {
 		// Strict tuple: reject excess elements.
 		fmt.Fprintf(b, "if %s >= %d { return result, i, %s }\n",
@@ -4124,7 +4161,7 @@ if e := bytes.IndexByte(data[%[2]s:], ']'); e >= 0 { %[4]s = bytes.Count(data[%[
 			if inner.Kind == KindSlice {
 				fmt.Fprintf(b, "if %[1]s != nil { %[1]s = %[1]s[:0] }\n", row)
 			}
-			emitByteSliceRead(b, inner, row, kvar, depth+1)
+			emitByteSliceRead(b, inner, row, kvar, depth+1, false)
 			fmt.Fprintf(b, "%s = %s\n", target, row)
 		}
 		renderPipe(b, elemSteps(f), target, f.JSONName+"[]", f.ElemType, f.ElemKind, f.MultiErr, "i")
@@ -4147,7 +4184,7 @@ if e := bytes.IndexByte(data[%[2]s:], ']'); e >= 0 { %[4]s = bytes.Count(data[%[
 	emitNoCloseAfterComma(b, kvar, ']')
 	b.WriteString("continue }\n")
 	b.WriteString("break\n")
-	b.WriteString("}\n")
+	b.WriteString("}\n}\n") // close for{} and the non-empty guard
 	fmt.Fprintf(b, "if %s >= len(data) || data[%s] != ']' { return result, i, scan.ErrBadArray }\n", kvar, kvar)
 	if isArray {
 		fmt.Fprintf(b, "if %s != %d { return result, i, %s }\n",
@@ -4155,7 +4192,11 @@ if e := bytes.IndexByte(data[%[2]s:], ']'); e >= 0 { %[4]s = bytes.Count(data[%[
 			arrayLenErr(f.JSONName, arrayN, ivar, "i"))
 	}
 	fmt.Fprintf(b, "%s++\n", posVar)
-	if !isArray && !flat && !f.NullDone {
+	if topLevel {
+		// Whole-value alias: array consumed, nothing follows → return directly.
+		fmt.Fprintf(b, "return result, %s, nil\n", posVar)
+	}
+	if !isArray && !flat && !f.NullDone && !topLevel {
 		b.WriteString("}\n") // close else (null-check)
 	}
 }

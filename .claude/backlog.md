@@ -141,14 +141,27 @@
       `TestAppendString_TableParity` pins byte-parity over all 256. Flat on Mega
       (memory-bound) — the win is cache-resident string-heavy marshal.
 
-    *bytes decode (likely flat on Mega — cheap probes / hygiene):*
-    - **[18] redundant leading WS-skip + dead identical empty-peek arms.**
-      emitByteSliceRead/renderMap re-skip WS every caller already skipped (the alias
-      path is the one real dependency → needs a `wsDone` flag); `sCap==0` empty-peek
-      emits two byte-identical arms. Wire-identical hygiene; expect flat. WS-variant
-      fixtures are the gate, not ns/op.
-    - **[16] remainder**: do-while element-loop restructure (drop the redundant loop-top
-      `]`/`}` re-check) — the trailing-comma correctness half already landed.
+    *bytes decode (wire-identical hygiene — flat, smaller generated code):*
+    - **[18] + [16] bytes container-loop hygiene. LANDED 2026-06-27 (bytes
+      only).** (18a) dropped the redundant leading WS-skip in emitByteSliceRead/
+      renderMap — every value entry already skips WS; the alias path (the one
+      real dependency) got an explicit skip in renderAliasContainerDecode instead
+      of the `wsDone`-flag plumbing. (18b) collapsed the empty-peek when both arms
+      would be byte-identical `dst=T{}` (non-pointer `[]struct`/`[][N]T`,
+      sCap==0). (16) do-while: `for i<len && data[i]!=']' {` → `if … { for {} }`,
+      one-time guard preserves the empty/truncation ErrBadArray path; applied to
+      slice/array AND the map loop (both tails). (16d) top-level container
+      ALIASES early-return at each exit (bytes emitters take a `topLevel` flag
+      set only by renderAliasContainerDecode; the dead trailing return is
+      dropped) — zero runtime, cleaner alias source. **Flat by design** (skips ~1
+      compare/container on compact input) — payoff is smaller generated code.
+      Wire-identical: pinned by the new `TestWhitespace_Tolerance` (WS-laden vs
+      compact across every container shape + top-level aliases) and re-verified by
+      `FuzzStreamEqualsBytes` (bytes changed, stream didn't → 4.2M execs agree).
+      **Stream NOT done** — its leading `s.SkipSpace()` does double duty (WS +
+      ReadMore buffer-ensure), not safely removable, and stream is
+      copy/ReadMore-dominated; map [18b] not done (map `T{}` vs `make(T)` arms
+      aren't byte-identical once a cap is involved).
 
     *stream (low-confidence remainder — stream is copy/ReadMore-dominated):*
     - **[6] fused `Stream.Key()`** (key + colon + post-colon WS in one call, grow-only
