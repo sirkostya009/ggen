@@ -1017,7 +1017,7 @@ func (recv CrossPkgModStruct) DecodeFrom(data []byte) (result CrossPkgModStruct,
 				}
 			}
 			if err := thirdparty.ValidateUpper(result.Code); err != nil {
-				return result, i, &validation.CustomError{Pos: i, Path: []string{"code"}, Name: "@thirdparty.ValidateUpper", Cause: err}
+				return result, i, &validation.CustomError{Pos: i, Path: []string{"code"}, Name: "thirdparty.ValidateUpper", Value: result.Code, Cause: err}
 			}
 		case "nonEmpty":
 			if seenNonEmpty {
@@ -1147,7 +1147,7 @@ func (recv CrossPkgModStruct) DecodeFromStream(s *scan.Stream) (result CrossPkgM
 				return result, decode.NewParseErr("code", s.Pos, err)
 			}
 			if err := thirdparty.ValidateUpper(result.Code); err != nil {
-				return result, &validation.CustomError{Pos: s.Offset(), Path: []string{"code"}, Name: "@thirdparty.ValidateUpper", Cause: err}
+				return result, &validation.CustomError{Pos: s.Offset(), Path: []string{"code"}, Name: "thirdparty.ValidateUpper", Value: result.Code, Cause: err}
 			}
 		case "nonEmpty":
 			err = s.ConsumeColon()

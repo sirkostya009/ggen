@@ -916,7 +916,7 @@ func renderOneVal(b *bytes.Buffer, v ValidationRule, ref, jsonName string, kind 
 			} else {
 				fmt.Fprintf(b, "if err := %s(%s); err != nil {\n\t%s\n}\n",
 					call, ref,
-					onErr(fmt.Sprintf("&validation.CustomError{Path: []string{%q}, Name: %q, Cause: err}", jsonName, v.Name)))
+					onErr(fmt.Sprintf("&validation.CustomError{Path: []string{%q}, Name: %q, Value: %s, Cause: err}", jsonName, strings.TrimPrefix(v.Name, "@"), ref)))
 			}
 		}
 		// Unknown non-custom names are silently ignored.

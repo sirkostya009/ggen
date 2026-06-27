@@ -469,10 +469,16 @@ func (e *UnknownKeyError) prependPath(s string) { e.Path = prepend(e.Path, s) }
 
 // --- custom ---
 
+// CustomError is the failure of a custom error-form validator (`func(T) error`;
+// the error half of `func(T) (T, error)` is a parse error, not this). Name is
+// the func identifier (no `@`); Value is the rejected input; Cause is the error
+// the validator returned. Mirrors PredicateError (the bool-form twin), which
+// carries Msg instead of Cause.
 type CustomError struct {
 	Pos   int
 	Path  []string
 	Name  string
+	Value any
 	Cause error
 }
 

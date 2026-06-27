@@ -1365,8 +1365,8 @@ func EvenOnly(n int) error {
 		if !strings.Contains(body, "if err := EvenOnly(result.N); err != nil") {
 			t.Errorf("expected direct EvenOnly call, got:\n%s", body)
 		}
-		if !strings.Contains(body, `Name: "@EvenOnly"`) {
-			t.Errorf("expected CustomError stamped with @EvenOnly, got:\n%s", body)
+		if !strings.Contains(body, `Name: "EvenOnly", Value: result.N`) {
+			t.Errorf("expected CustomError stamped with EvenOnly + Value, got:\n%s", body)
 		}
 	})
 

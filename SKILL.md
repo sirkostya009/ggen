@@ -190,7 +190,7 @@ the whole container.
 
 | signature              | role                                                   |
 | ---------------------- | ------------------------------------------------------ |
-| `func(T) error`        | validator → `CustomError{Cause}`                       |
+| `func(T) error`        | validator → `CustomError{Value, Cause}`                |
 | `func(T) bool`         | validator → `PredicateError` (message-capable)         |
 | `func(T) T`            | mod (pure)                                             |
 | `func(T) (T, error)`   | mod (fallible; error → parse error)                    |

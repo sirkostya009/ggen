@@ -61,7 +61,8 @@ a `Pos int` (full-payload byte offset, first field) and a root-relative `Path
   Want, Value string}`
 - **other**: `MultipleError{Field, Of float64, Value any}`,
   `DuplicateKeyError{Field}`, `UnknownKeyError{Field}`, `CustomError{Field,
-  Name string, Cause error}` (exposes `Unwrap()`)
+  Name string, Value any, Cause error}` (exposes `Unwrap()`; `Name` is the
+  bare func identifier, parallel to `PredicateError`)
 
 ## Inspecting failures
 

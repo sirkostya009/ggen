@@ -388,7 +388,7 @@ runtime registry, no `any` boxing, and the Go compiler catches mismatches:
 
 | signature              | role                                                              |
 | ---------------------- | ----------------------------------------------------------------- |
-| `func(T) error`        | validator → `CustomError{Cause}`                                  |
+| `func(T) error`        | validator → `CustomError{Value, Cause}`                           |
 | `func(T) bool`         | validator → `PredicateError` (false = fail; message-capable)      |
 | `func(T) T`            | mod (pure transform)                                              |
 | `func(T) (T, error)`   | mod (fallible; non-nil error → parse error, even under multierr)  |

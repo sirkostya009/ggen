@@ -129,14 +129,14 @@ func (recv DiveStruct) DecodeFrom(data []byte) (result DiveStruct, i int, err er
 			}
 			result.Count = int(n)
 			if err := EvenOnly(result.Count); err != nil {
-				return result, i, &validation.CustomError{Pos: i, Path: []string{"count"}, Name: "@EvenOnly", Cause: err}
+				return result, i, &validation.CustomError{Pos: i, Path: []string{"count"}, Name: "EvenOnly", Value: result.Count, Cause: err}
 			}
 		case "scores":
 			if seenScores {
 				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"scores"}}
 			}
 			seenScores = true
-				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 				i += 4
 				result.Scores = nil
 				break
@@ -441,7 +441,7 @@ func (recv DiveStruct) DecodeFromStream(s *scan.Stream) (result DiveStruct, err 
 			}
 			result.Count = int(iv)
 			if err := EvenOnly(result.Count); err != nil {
-				return result, &validation.CustomError{Pos: s.Offset(), Path: []string{"count"}, Name: "@EvenOnly", Cause: err}
+				return result, &validation.CustomError{Pos: s.Offset(), Path: []string{"count"}, Name: "EvenOnly", Value: result.Count, Cause: err}
 			}
 		case "scores":
 			err = s.ConsumeColon()
@@ -874,7 +874,7 @@ func (recv CustomDiveStruct) DecodeFrom(data []byte) (result CustomDiveStruct, i
 						}
 					}
 					if err := KeyShape(mk); err != nil {
-						return result, i, &validation.CustomError{Pos: i, Path: []string{"lookup.key"}, Name: "@KeyShape", Cause: err}
+						return result, i, &validation.CustomError{Pos: i, Path: []string{"lookup.key"}, Name: "KeyShape", Value: mk, Cause: err}
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -1141,7 +1141,7 @@ func (recv CustomDiveStruct) DecodeFrom(data []byte) (result CustomDiveStruct, i
 				}
 			}
 			if err := PointerCheck(result.Ptr); err != nil {
-				return result, i, &validation.CustomError{Pos: i, Path: []string{"ptr"}, Name: "@PointerCheck", Cause: err}
+				return result, i, &validation.CustomError{Pos: i, Path: []string{"ptr"}, Name: "PointerCheck", Value: result.Ptr, Cause: err}
 			}
 		case "tags":
 			if seenTags {
@@ -1195,7 +1195,7 @@ func (recv CustomDiveStruct) DecodeFrom(data []byte) (result CustomDiveStruct, i
 						}
 					}
 					if err := NotBlank(result.Tags[len(result.Tags)-1]); err != nil {
-						return result, i, &validation.CustomError{Pos: i, Path: []string{"tags[]"}, Name: "@NotBlank", Cause: err}
+						return result, i, &validation.CustomError{Pos: i, Path: []string{"tags[]"}, Name: "NotBlank", Value: result.Tags[len(result.Tags)-1], Cause: err}
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -1419,7 +1419,7 @@ func (recv CustomDiveStruct) DecodeFromStream(s *scan.Stream) (result CustomDive
 					return result, decode.NewParseErr("lookup", s.Pos, err)
 				}
 				if err := KeyShape(mk); err != nil {
-					return result, &validation.CustomError{Pos: s.Offset(), Path: []string{"lookup.key"}, Name: "@KeyShape", Cause: err}
+					return result, &validation.CustomError{Pos: s.Offset(), Path: []string{"lookup.key"}, Name: "KeyShape", Value: mk, Cause: err}
 				}
 				err = s.SkipSpace()
 				if err != nil {
@@ -1621,7 +1621,7 @@ func (recv CustomDiveStruct) DecodeFromStream(s *scan.Stream) (result CustomDive
 				}
 			}
 			if err := PointerCheck(result.Ptr); err != nil {
-				return result, &validation.CustomError{Pos: s.Offset(), Path: []string{"ptr"}, Name: "@PointerCheck", Cause: err}
+				return result, &validation.CustomError{Pos: s.Offset(), Path: []string{"ptr"}, Name: "PointerCheck", Value: result.Ptr, Cause: err}
 			}
 		case "tags":
 			err = s.ConsumeColon()
@@ -1685,7 +1685,7 @@ func (recv CustomDiveStruct) DecodeFromStream(s *scan.Stream) (result CustomDive
 					return result, decode.NewParseErr("tags", s.Pos, err)
 				}
 				if err := NotBlank(result.Tags[len(result.Tags)-1]); err != nil {
-					return result, &validation.CustomError{Pos: s.Offset(), Path: []string{"tags[]"}, Name: "@NotBlank", Cause: err}
+					return result, &validation.CustomError{Pos: s.Offset(), Path: []string{"tags[]"}, Name: "NotBlank", Value: result.Tags[len(result.Tags)-1], Cause: err}
 				}
 				err = s.SkipSpace()
 				if err != nil {

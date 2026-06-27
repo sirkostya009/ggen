@@ -939,7 +939,7 @@ float64` 6459→3417. Outpaces stdjson v1 and jsonv2 on every map shape.
    No runtime registry, no `func(any) any` boxing, zero alloc. Cross-package via
    `@pkg.FuncName` through source file imports; blank imports
    (`_ "path/to/lib"`) work. Validator errors wrap as
-   `validation.CustomError{Name, Cause}` (or `PredicateError` for bool form);
+   `validation.CustomError{Name, Value, Cause}` (or `PredicateError` for bool form);
    fallible mod errors propagate as parse errors (`ModError` for bool form).
 
 ## Test files (`cli/` module)

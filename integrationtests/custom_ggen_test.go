@@ -533,7 +533,7 @@ func (recv CustomBothStruct) DecodeFrom(data []byte) (result CustomBothStruct, i
 					}
 					result.Tags[len(result.Tags)-1] = TrimSpace(result.Tags[len(result.Tags)-1])
 					if err := NotBlank(result.Tags[len(result.Tags)-1]); err != nil {
-						return result, i, &validation.CustomError{Pos: i, Path: []string{"tags[]"}, Name: "@NotBlank", Cause: err}
+						return result, i, &validation.CustomError{Pos: i, Path: []string{"tags[]"}, Name: "NotBlank", Value: result.Tags[len(result.Tags)-1], Cause: err}
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -673,7 +673,7 @@ func (recv CustomBothStruct) DecodeFromStream(s *scan.Stream) (result CustomBoth
 				}
 				result.Tags[len(result.Tags)-1] = TrimSpace(result.Tags[len(result.Tags)-1])
 				if err := NotBlank(result.Tags[len(result.Tags)-1]); err != nil {
-					return result, &validation.CustomError{Pos: s.Offset(), Path: []string{"tags[]"}, Name: "@NotBlank", Cause: err}
+					return result, &validation.CustomError{Pos: s.Offset(), Path: []string{"tags[]"}, Name: "NotBlank", Value: result.Tags[len(result.Tags)-1], Cause: err}
 				}
 				err = s.SkipSpace()
 				if err != nil {
