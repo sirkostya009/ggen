@@ -164,10 +164,6 @@
       aren't byte-identical once a cap is involved).
 
     *stream (low-confidence remainder — stream is copy/ReadMore-dominated):*
-    - **[6] fused `Stream.Key()`** (key + colon + post-colon WS in one call, grow-only
-      refill keeps the alias). DEPRIORITIZED — [5b] showed separator handling is cheap;
-      only a small incremental call reduction over the landed two-tier SkipSpace.
-      Revisit only if a key-fusion micro-bench justifies.
     - **[20] outlined stream null-peek — built, reverted 2026-06-27.** Outlined
       the inlined 4-byte null-peek into `(*Stream).ConsumeNull()` at all 9 emit
       sites (−1008 generated lines, byte-identical, `FuzzStreamEqualsBytes`
