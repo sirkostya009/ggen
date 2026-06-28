@@ -19,7 +19,6 @@ paths as string literals into generated code.
 - `applicability.go` — parse-time rule/kind compatibility matrix
 - `customfunc.go` — `@Func` resolution + signature classification (validator/mod/converter)
 - `check.go` — `-dry` / future-ggenvet parse-only entry points
-- `parseerr_postpass.go` — textual post-pass that wraps error returns (opt #14)
 - `log.go` — `cliLog`: leveled logger with deferred flush
 - `parse_test.go`, `tags_test.go`, `pipe_test.go`, `applicability_test.go`,
   `cli_test.go`, `log_test.go` — CLI tests; `bench_test.go` = `BenchmarkGenerate`
@@ -458,8 +457,10 @@ Backlog and commit messages cite these by number — numbering is stable.
 4. **Inlined scan primitives in hot path.** Raw byte-compare loops for
    `SkipSpace`, `String`, `Int64`, `Uint64` emitted into each case body — no
    call overhead.
-5. **Mod + validation after field read.** `renderMods` → `renderValidationOn`
-   write into the parent buffer; `posVar` emits the right return shape inline.
+5. **Mod + validation after field read.** `validateAndMod` → `renderPipe` (mods +
+   validators interleaved in declared order, dispatching to `renderOneMod`/
+   `emitValRun`) write into the parent buffer; `posVar` emits the right return
+   shape inline.
 6. **Pointer fields** emit a 4-byte `null` peek → nil branch, else stack-local
    `var v <Pointee>` + recursive inner read + `&v`. Dispatch order in
    `renderField` = pointer-first → string-tag → kind switch (pointer-first
@@ -476,7 +477,7 @@ Backlog and commit messages cite these by number — numbering is stable.
 9. **Marshal output cap.** `JSONSize()` upper bound → single `make([]byte,0,cap)` +
    `AppendJSON`. 1 alloc per top-level Marshal.
 10. **Recursive nested-container emitter.** `emitByteSliceRead`/
-    `emitStreamSliceRead`/`emitAppendSlice`/`emitSizeSlice` take a depth param and
+    `emitStreamSliceRead`/`emitAppendSlice`/`sizeSliceContrib` take a depth param and
     unify slice+array. When `ElemKind` = KindSlice/KindArray they recurse via
     `peelSliceField(f)` + `stripOneContainer(typ)` (strips one `[]`/`[N]`, shifts
     inner validation down a level). Arrays carry N via `ElemArrayLen` for
@@ -495,16 +496,18 @@ any`. Every error carries a `Pos int` (byte offset relative to the full
     `s.Pos` which the compacting window invalidates). Injected by `withPos`/
     `posLit`. See `decode/validation/CLAUDE.md`.
 14. **Parse-error wrapping at every error return.** Codegen embeds the JSON field
-    name as a literal: `return result, i, decode.NewParseErr("street", i, err)`.
-    The field literal comes from `/*ggen-field:EXPR*/` markers emitted by the
-    dispatch; a textual post-pass (`wrapErrReturns`/`rewriteErrReturnsBody` in
-    `parseerr_postpass.go`) tracks the active marker, wraps every non-nil error
-    return, and strips markers. Zero runtime cost on the happy path.
-    `NewParseErr` builds `*decode.ParseError{Field, Pos, Err}` for raw sentinels,
-    passes `validation.Error`/`Errors` through untouched, and **chains** when err
-    is already a `*ParseError` — prepending the outer field so nested surfaces
-    read `addr.street`. `errors.Is(err, scan.ErrBadString)` works via `Unwrap()`;
-    `ParseError.Error()` calls `e.Err.Error()` once so chained prints stay linear.
+    name directly as the first arg of every error return:
+    `return result, i, decode.NewParseErr("street", i, err)`. The field literal is
+    written at emit time (no post-pass / no `/*ggen-field*/` markers) — each
+    `inlineScan*`/dispatch site interpolates the quoted JSON-path literal into its
+    `NewParseErr` call. Zero runtime cost on the happy path.
+    `NewParseErr(segment, pos, err)` builds `*decode.ParseError{Path []string,
+Pos, Err}` for raw sentinels (a one-segment path), passes `validation.Error`
+    through untouched, and **chains** when err is already a `*ParseError` —
+    prepending the segment onto `pe.Path` (deeper `Pos` kept) so nested surfaces
+    `Error()`-join to `addr.street`. Empty segment leaves the path untouched.
+    `errors.Is(err, scan.ErrBadString)` works via `Unwrap()`; `ParseError.Error()`
+    calls `e.Err.Error()` once so chained prints stay linear.
 15. **Constant-folded `JSONSize()`.** Each field size splits into a compile-time
     constant (folded into `size := N`) and a runtime expression. Pure-primitive
     structs collapse to `return N`.
