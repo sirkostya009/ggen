@@ -31,15 +31,15 @@ func (e *ParseError) Unwrap() error
 func NewParseErr(field string, pos int, err error) error
 ```
 
-`ParseError` is what every generated `DecodeFrom` / `DecodeFromStream` returns for raw parse failures. `Field` = dotted JSON path through the document, `Pos` = byte offset within the data slice passed to the failing method, `Err` = the underlying `scan.ErrX` sentinel. `errors.Is(err, scan.ErrBadString)` keeps working via `Unwrap()`.
+`ParseError` is what every generated `DecodeFrom` / `DecodeFromStream` returns for raw parse failures. `Field` = dotted JSON path through the document, `Pos` = byte offset within the data slice passed to the failing method, `Err` = the underlying `scan.ErrX` sentinel. `errors.Is(err, scan.ErrBadString)` works via `Unwrap()`.
 
-`NewParseErr` is the call-site constructor invoked at every error-return site in generated decoders. The codegen embeds `field` as a compile-time literal at each branch (`"street"`, `"addr"`, …) or as a runtime expression for dynamic keys (`key` in the bytes path — aliased into the caller's data, safe to read on the error path; `strings.Clone(key)` for the stream path because the underlying buffer may have compacted). Behaviour:
+`NewParseErr` is the call-site constructor at every error-return site in generated decoders. Codegen embeds `field` as a compile-time literal per branch (`"street"`, `"addr"`, …) or as a runtime expression for dynamic keys (`key` in the bytes path — aliased into the caller's data, safe on the error path; `strings.Clone(key)` for the stream path, since the underlying buffer may have compacted). Behaviour:
 
 - nil err → nil (zero-cost happy path — no allocation, no field-name probe)
 - `validation.Error` / `validation.Errors` → pass through unchanged (typed pointers stay reachable via `errors.As`)
-- already a `*ParseError` (deeper-level wrap) → **mutates** its `Field` in place, prepending the outer field name (`"addr"` + inner `"zip"` → `"addr.zip"`). `Pos` left at the deeper site.
-- raw error → wraps as `&ParseError{Field, Pos, Err: err}`.
+- already a `*ParseError` (deeper wrap) → **mutates** its `Field` in place, prepending the outer field name (`"addr"` + inner `"zip"` → `"addr.zip"`); `Pos` left at the deeper site
+- raw error → wraps as `&ParseError{Field, Pos, Err: err}`
 
-`Error()` renders `parse error[ at <field>] (pos <n>): <cause>` from a preallocated `[]byte`, returned as an `unsafe.String` alias. The cause's `Error()` is called exactly once and its result is appended directly — chained wraps stay linear.
+`Error()` renders `parse error[ at <field>] (pos <n>): <cause>` from a preallocated `[]byte` returned as an `unsafe.String` alias; the cause's `Error()` is called exactly once and appended directly, so chained wraps stay linear.
 
 Slice walkers (`UnmarshalSlice` / `UnmarshalSliceStream`) wrap their OWN bracket/comma `scan.ErrBadArray` failures in `*ParseError`; element-level errors come back already wrapped from the inner `DecodeFrom`.

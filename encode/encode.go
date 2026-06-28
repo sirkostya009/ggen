@@ -36,21 +36,18 @@ func Marshal[T Marshaler](v T) ([]byte, error) {
 	return v.AppendJSON(make([]byte, 0, v.JSONSize()))
 }
 
-// Returned by AppendFloat when v is non-finite — JSON has no NaN/±Inf,
-// and stdlib v1 + v2 both reject them on marshal.
+// Returned by AppendFloat when v is non-finite — JSON has no NaN/±Inf.
 var (
 	errNaN  = errors.New("ggen: unsupported value: NaN")
 	errPInf = errors.New("ggen: unsupported value: +Inf")
 	errNInf = errors.New("ggen: unsupported value: -Inf")
 )
 
-// AppendFloat appends v to dst as a JSON number, or returns an error
-// when v is NaN / ±Inf (matching encoding/json/v2). bitSize selects the
-// strconv precision — 32 for float32 source, 64 for float64.
-//
-// Format selection matches stdlib v1 and v2 (ES6 ToString semantics):
-// 'f' notation while the decimal exponent sits in [-6, 21), 'e'
-// otherwise, with no zero-padded negative exponent ("1e-7", not "1e-07").
+// AppendFloat appends v to dst as a JSON number, or returns an error when v
+// is NaN / ±Inf. bitSize selects the strconv precision — 32 for float32
+// source, 64 for float64. Format matches stdlib (ES6 ToString): 'f' while
+// the decimal exponent sits in [-6, 21), 'e' otherwise, with no zero-padded
+// negative exponent ("1e-7", not "1e-07").
 func AppendFloat(dst []byte, v float64, bitSize int) ([]byte, error) {
 	if math.IsNaN(v) {
 		return dst, errNaN
@@ -114,9 +111,8 @@ func WriteTo[T Marshaler](w io.Writer, v T) error {
 	return werr
 }
 
-// isPointer reports whether T's dynamic kind is a pointer — pointer-typed
-// items need a nil check before the (value-receiver-promoted) method calls
-// auto-deref them.
+// isPointer reports whether T's kind is a pointer, so slice walkers can
+// nil-check before the value-receiver methods auto-deref.
 func isPointer[T Marshaler]() bool {
 	return reflect.TypeFor[T]().Kind() == reflect.Pointer
 }

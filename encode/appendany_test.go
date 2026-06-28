@@ -451,11 +451,8 @@ func (fakeTextAndJSON) MarshalJSON() ([]byte, error) {
 	return []byte(`"from-json"`), nil
 }
 
-// Confirms the case order in AppendAny: TextAppender (zero-alloc)
-// must outrank json.Marshaler so types that implement both route
-// via AppendText. If this flips, types like uuid.UUID (which often
-// carry both hooks) would unexpectedly pay the MarshalJSON return
-// alloc.
+// TextAppender must outrank json.Marshaler so types implementing both
+// route via AppendText.
 func TestAppendAny_TextAppenderOvertakesMarshalJSON(t *testing.T) {
 	t.Parallel()
 	out, err := AppendAny(nil, fakeTextAndJSON{})
@@ -467,9 +464,8 @@ func TestAppendAny_TextAppenderOvertakesMarshalJSON(t *testing.T) {
 	}
 }
 
-// Same check one step down: TextMarshaler (one alloc) still ranks
-// above json.Marshaler. Types with only MarshalText + MarshalJSON
-// should route via MarshalText.
+// TextMarshaler must rank above json.Marshaler: types with both route
+// via MarshalText.
 type fakeTextMarshalerAndJSON struct{}
 
 func (fakeTextMarshalerAndJSON) MarshalText() ([]byte, error) {
@@ -791,10 +787,9 @@ type ptStruct struct {
 	B bool   `json:"b"`
 }
 
-// TestAppendAny_ReflectHeavy covers the reflect-path shapes touched by opts
-// [11] (named-map SetIterKey/Value scratch) and [12] (concrete composite
-// slices + primitive struct fields read off the reflect.Value), each checked
-// against jsonv2 (reparsed, order-independent).
+// TestAppendAny_ReflectHeavy covers the reflect-path shapes (named maps,
+// composite-element slices, struct fields), each checked against jsonv2
+// (reparsed, order-independent).
 func TestAppendAny_ReflectHeavy(t *testing.T) {
 	t.Parallel()
 	now := time.Date(2026, 6, 27, 1, 2, 3, 0, time.UTC)

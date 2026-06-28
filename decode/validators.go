@@ -1,8 +1,7 @@
 package decode
 
 // IsEmail reports whether s matches a loose email format: non-space chars,
-// exactly one '@' in the middle, and at least one '.' in the domain. Single
-// pass — the last in-domain '.' is tracked alongside the '@' scan.
+// exactly one '@' in the middle, and at least one '.' in the domain.
 func IsEmail(s string) bool {
 	at, dot := -1, -1
 	for i := 0; i < len(s); i++ {

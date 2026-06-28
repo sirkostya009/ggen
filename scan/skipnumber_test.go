@@ -5,11 +5,7 @@ import (
 	"testing"
 )
 
-// skipNumber's accept-set is the RFC 8259 number grammar. The authoritative
-// oracle for "is this token a grammatically valid JSON number" is
-// encoding/json.Valid over the whole token: a number consumed in full with no
-// error iff json.Valid reports the token a valid JSON value (and it leads with
-// a number byte, so it can only be a number).
+// numberAccepted reports whether SkipValue consumes tok in full as a number.
 func numberAccepted(tok string) bool {
 	pos, err := SkipValue([]byte(tok), 0)
 	return err == nil && pos == len(tok)

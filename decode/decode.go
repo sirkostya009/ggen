@@ -23,8 +23,8 @@ import (
 // DecodeFromStream is the streaming counterpart — the Stream owns the cursor
 // (s.Pos), so it returns only (T, error).
 //
-// Strings inside the returned value alias the caller's bytes via unsafe.String
-// — callers MUST NOT mutate the input buffer while the value is in use.
+// Strings inside the returned value alias the caller's bytes — callers MUST
+// NOT mutate the input buffer while the value is in use.
 type Decoder[T any] interface {
 	DecodeFrom(data []byte) (T, int, error)
 	DecodeFromStream(s *scan.Stream) (T, error)
@@ -129,7 +129,7 @@ func UnmarshalSliceStream[T Decoder[T]](r io.Reader, buf []byte) ([]T, []byte, e
 }
 
 // arrField renders "[N]" for the path segment on slice-walker errors
-// (e.g. "[5].street"). Error path only; aliases the freshly-allocated buf.
+// (e.g. "[5].street").
 func arrField(n int) string {
 	buf := make([]byte, 0, 12)
 	buf = append(buf, '[')

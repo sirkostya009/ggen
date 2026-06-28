@@ -213,7 +213,7 @@ func TestParsePipeTagErrors(t *testing.T) {
 		"foo / / bar ~ x",       // empty variant
 		"@ ~ x",                 // empty @ ref
 		"trim / lower",          // slash outside the decode stage
-		"inner:trim ; maxlen=1", // `;` retired
+		"inner:trim ; maxlen=1", // `;` not a valid glyph
 		"inner:(trim maxlen=1",  // unbalanced paren
 		"inner:",                // prefix with nothing following
 		"(trim)",                // stray group

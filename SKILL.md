@@ -364,8 +364,8 @@ Build tag propagation: struct in file behind `//go:build foo` land in `<dir>_foo
 
 ## Pitfalls
 
-1. **Zero-copy aliasing.** Decoded strings (and `json.RawMessage` / `jsontext.Value`) alias source `[]byte`. Mutating input after `DecodeFrom` silently corrupt decoded values. Streaming path (`UnmarshalStream*`) copy strings, safe to recycle buffer between calls.
-2. **Long-lived references can balloon heap.** Short string field from large payload stays referenced (cached, stored in struct held forever) → Go non-compacting GC keep entire backing buffer alive. For long-lived data, copy field (`s := string([]byte(decoded.X))`) or use streaming.
+1. **Zero-copy aliasing.** Decoded strings (and `json.RawMessage` / `jsontext.Value`) alias source `[]byte`. Mutating input after `DecodeFrom` silently corrupt decoded values. Streaming path copy strings, safe to recycle buffer between calls.
+2. **Long-lived references can balloon heap.** A short string field from a large payload stays referenced (cached, stored in a struct held forever) → Go's non-compacting GC keep the entire backing buffer alive. For long-lived data, copy field (`s := string([]byte(decoded.X))`) or use streaming.
 3. **Wire-shape divergences from stdlib** for `net/url.URL` (string, not struct dump) and `sql.Null*` (inner-or-null, not `{Valid:…}` wrapper). Round-trip through ggen fine. Pipe through stdlib `encoding/json` reshape value.
 4. **AST-only fallback when no `go.mod`.** When `packages.Load` cannot resolve types (e.g. temp file with no module context), ggen fall back to AST-only mode and emit `encoding/json` for cross-package types. Slower but correct.
 5. **Build under right `GOEXPERIMENT`.** Files behind `goexperiment.jsonv2` invisible without `GOEXPERIMENT=jsonv2 ggen ./...`.

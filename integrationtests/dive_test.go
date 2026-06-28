@@ -9,7 +9,7 @@ import (
 )
 
 // DiveStruct exercises inner: per-element validation, rune-count length
-// checks, and a custom @Func validator resolved at codegen time.
+// checks, and a custom @Func validator.
 //
 //ggen:generate
 type DiveStruct struct {
@@ -19,8 +19,7 @@ type DiveStruct struct {
 	Title string `json:"title" pipe:"minrunes=1 maxrunes=5"`
 	// each score 0..100
 	Scores []int `json:"scores" pipe:"inner:(gte=0 lte=100)"`
-	// @EvenOnly resolved statically against this package
-	Count int `json:"count" pipe:"@EvenOnly"`
+	Count  int   `json:"count" pipe:"@EvenOnly"`
 }
 
 // EvenOnly is the custom validator for DiveStruct.Count.
@@ -100,9 +99,8 @@ func TestTags_sliceLengthVsElement(t *testing.T) {
 	}
 }
 
-// CustomDiveStruct exercises @Func resolution at the container-aware sites:
-// slice element (inner:) and map key (keys:) for both validators and mods,
-// plus a pointer field where the func must accept *T.
+// CustomDiveStruct exercises @Func resolution at container-aware sites: slice
+// element (inner:), map key (keys:), and a pointer field whose func takes *T.
 //
 //ggen:generate
 type CustomDiveStruct struct {

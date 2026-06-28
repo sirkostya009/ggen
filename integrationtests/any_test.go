@@ -2,8 +2,8 @@ package integrationtests
 
 //go:generate ../ggen $GOFILE
 
-// Coverage for the `any` field kind — stdlib-default float64 numbers and
-// the usenumber opt-in (json.Number).
+// Coverage for the `any` field kind — default float64 numbers and the
+// usenumber opt-in (json.Number).
 
 import (
 	"encoding/json"
@@ -12,7 +12,7 @@ import (
 	"github.com/sirkostya009/ggen/encode"
 )
 
-// AnyStruct: bare `any` field, stdlib-default float64 numbers.
+// AnyStruct: bare `any` field, default float64 numbers.
 //
 //ggen:generate
 type AnyStruct struct {

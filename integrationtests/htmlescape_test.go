@@ -1,5 +1,5 @@
-// HTML-safe string escaping. Default emits <, >, & literally (jsonv2-shaped);
-// the htmlescape annotation opts in to v1-style \uXXXX escapes.
+// HTML-safe string escaping. Default emits <, >, & literally; the htmlescape
+// annotation opts in to \uXXXX escapes.
 
 package integrationtests
 

@@ -414,10 +414,9 @@ func parseFile(filename string, wanted []string) ([]StructInfo, string, map[stri
 			}
 		}
 		if len(wanted) == 0 {
-			// No name filter and no annotated struct in this file. Error loudly
-			// (the old "every exported struct" fallback surprised users with
-			// stale tags). richError so the pretty logger shows the escape
-			// hatch; no source position — this is file-level.
+			// No name filter and no annotated struct in this file. Error
+			// loudly. richError so the pretty logger shows the escape hatch;
+			// no source position — this is file-level.
 			return nil, set.pkgName, nil, &richError{
 				Msg:      fmt.Sprintf("%s: no //ggen:generate-annotated struct found in file", relPath(filename)),
 				BotHint:  "missing //ggen:generate directive",

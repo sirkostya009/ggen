@@ -8,7 +8,7 @@ import (
 	"github.com/sirkostya009/ggen/encode"
 )
 
-// TestMarshalRoundtrip: generated marshal output decodes back to the original.
+// Generated marshal output decodes back to the original.
 func TestMarshalRoundtrip(t *testing.T) {
 	t.Parallel()
 	out, _ := encode.Marshal(complexValue)

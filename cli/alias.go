@@ -245,13 +245,13 @@ func renderAliasContainerDecode(b *bytes.Buffer, s StructInfo, stream bool) {
 	if stream {
 		posVar = "s.Pos"
 	} else {
-		// Top-level alias value: no preceding dispatch skipped leading WS, and
-		// the container emitters no longer skip it themselves (opt [18]).
+		// Top-level alias value: nothing skipped leading WS before this, and the
+		// container emitters don't skip it themselves, so do it here.
 		inlineSkipWS(b, posVar)
 	}
 	// Bytes path passes topLevel=true: the container emitter returns at each exit
 	// (null / array close) instead of falling through, so the trailing return is
-	// dropped (opt [16] follow-up). Stream path keeps the trailing return.
+	// dropped. Stream path keeps the trailing return.
 	switch s.AliasKind {
 	case KindSlice:
 		if stream {
@@ -281,7 +281,7 @@ func renderAliasContainerDecode(b *bytes.Buffer, s StructInfo, stream bool) {
 		}
 	}
 	// Bytes slice/array/map self-return via topLevel; only stream (all kinds) and
-	// bytes KindBytes still need the trailing return.
+	// bytes KindBytes need the trailing return.
 	if stream {
 		b.WriteString("return result, nil\n")
 	} else if s.AliasKind == KindBytes {

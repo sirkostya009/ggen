@@ -208,8 +208,8 @@ func TestJSONSize_RuntimeBranches(t *testing.T) {
 	}
 }
 
-// TestJSONSize_URLStruct exercises the URL component-summing path across
-// empty/full/credential/percent-encoded shapes.
+// URL component-summing path across empty/full/credential/percent-encoded
+// shapes.
 func TestJSONSize_URLStruct(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -253,8 +253,8 @@ func TestJSONSize_URLStruct(t *testing.T) {
 	}
 }
 
-// TestJSONSize_TimeFormats: per-format budget for every time format in
-// isolation, with worst-output input (numeric zone fallback, max nanos).
+// Per-format budget for every time format in isolation, with worst-output
+// input (numeric zone fallback, max nanos).
 func TestJSONSize_TimeFormats(t *testing.T) {
 	t.Parallel()
 	noName := time.FixedZone("", -7*3600)
@@ -349,8 +349,7 @@ func summarizeOverflow(budget, actual int) string {
 	return "JSONSize underestimates worst-case input — increase the per-field budget"
 }
 
-// richTypesWorst returns a RichTypes with the heaviest per-kind content
-// (full URL with credentials, wide big numbers, raw blobs, a UUID).
+// richTypesWorst returns a RichTypes with the heaviest per-kind content.
 func richTypesWorst() RichTypes {
 	site, _ := url.Parse("https://user:supersecret@very-long-host.example.invalid:8080/a/long/path/segment?key1=val1&key2=val2&key3=val3#fragment-anchor-here")
 	hugeInt, _ := new(big.Int).SetString("123456789012345678901234567890123456789012345678901234567890", 10)
@@ -369,7 +368,7 @@ func richTypesWorst() RichTypes {
 	}
 }
 
-// TestJSONSize_TupleStruct_NoRealloc: cap-guard for [N]T fields.
+// Cap-guard for [N]T fields.
 func TestJSONSize_TupleStruct_NoRealloc(t *testing.T) {
 	t.Parallel()
 	in := TupleStruct{
@@ -391,8 +390,8 @@ func TestJSONSize_TupleStruct_NoRealloc(t *testing.T) {
 	}
 }
 
-// TestJSONSize_HTMLEscapeStruct_NoRealloc: htmlescape opt-in expands < > &
-// to 6× (\uXXXX); the bound must cover an all-< > & string.
+// htmlescape opt-in expands < > & to 6× (\uXXXX); the bound must cover an
+// all-< > & string.
 func TestJSONSize_HTMLEscapeStruct_NoRealloc(t *testing.T) {
 	t.Parallel()
 	in := HTMLEscapeStruct{Note: strings.Repeat("<>&", 50)}
@@ -409,8 +408,7 @@ func TestJSONSize_HTMLEscapeStruct_NoRealloc(t *testing.T) {
 	}
 }
 
-// TestJSONSize_InlineStruct_NoRealloc: bound must cover the fixed field AND
-// every spliced inline map entry.
+// The bound must cover the fixed field AND every spliced inline map entry.
 func TestJSONSize_InlineStruct_NoRealloc(t *testing.T) {
 	t.Parallel()
 	in := InlineStruct{
@@ -433,8 +431,7 @@ func TestJSONSize_InlineStruct_NoRealloc(t *testing.T) {
 	}
 }
 
-// TestJSONSize_StringTagStruct_NoRealloc: ,string wrap adds two quotes over
-// the bare-number budget at every width.
+// ,string wrap adds two quotes over the bare-number budget at every width.
 func TestJSONSize_StringTagStruct_NoRealloc(t *testing.T) {
 	t.Parallel()
 	in := StringTagStruct{
@@ -473,8 +470,8 @@ func populatedSQLNullAt(when time.Time) SQLNullStruct {
 	return out
 }
 
-// TestJSONSize_SQLNullStruct_NoRealloc: cap-guard for every sql.NullX flavor,
-// both Valid=true and Valid=false (size = max(inner, len("null"))).
+// Cap-guard for every sql.NullX flavor, both Valid=true and Valid=false
+// (size = max(inner, len("null"))).
 func TestJSONSize_SQLNullStruct_NoRealloc(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -502,8 +499,8 @@ func TestJSONSize_SQLNullStruct_NoRealloc(t *testing.T) {
 	}
 }
 
-// TestJSONSize_SQLNullPerType_NoRealloc: per-flavor cap-guard so a single
-// Null* regression surfaces at its flavor. Each row covers both arms.
+// Per-flavor cap-guard so a single Null* regression surfaces at its flavor.
+// Each row covers both arms.
 func TestJSONSize_SQLNullPerType_NoRealloc(t *testing.T) {
 	t.Parallel()
 	when := time.Unix(1700000000, 0).UTC()
@@ -621,8 +618,7 @@ func TestJSONSize_SQLNullPerType_NoRealloc(t *testing.T) {
 	}
 }
 
-// TestJSONSize_PtrSliceStruct_NoRealloc: cap-guard for []*T slabs, with
-// nil + non-nil elements.
+// Cap-guard for []*T slabs, with nil + non-nil elements.
 func TestJSONSize_PtrSliceStruct_NoRealloc(t *testing.T) {
 	t.Parallel()
 	a := Address{Street: "Main 1", City: "Lviv", ZipCode: "79000"}
@@ -645,8 +641,7 @@ func TestJSONSize_PtrSliceStruct_NoRealloc(t *testing.T) {
 	}
 }
 
-// TestJSONSize_PtrSlicePerShape_NoRealloc: per-shape cap-guard for the three
-// slab flavors (Items / Tuple / Nodes), each a distinct emit path.
+// Per-shape cap-guard for the three slab flavors (Items / Tuple / Nodes).
 func TestJSONSize_PtrSlicePerShape_NoRealloc(t *testing.T) {
 	t.Parallel()
 	a := Address{Street: "Main 1", City: "Lviv", ZipCode: "79000"}
@@ -682,8 +677,7 @@ func TestJSONSize_PtrSlicePerShape_NoRealloc(t *testing.T) {
 	}
 }
 
-// TestJSONSize_PtrFieldPerKind_NoRealloc: per-pointee-kind cap-guard for
-// single-level *T fields. Both nil and populated arms must absorb.
+// Per-pointee-kind cap-guard for single-level *T fields, nil + populated arms.
 func TestJSONSize_PtrFieldPerKind_NoRealloc(t *testing.T) {
 	t.Parallel()
 	worst := strings.Repeat(`"\`+"\n\t", 16)
@@ -722,8 +716,8 @@ func TestJSONSize_PtrFieldPerKind_NoRealloc(t *testing.T) {
 	}
 }
 
-// TestJSONSize_NPtrPerDepth_NoRealloc: per-depth cap-guard for multi-level
-// pointers (**int … **Address). Both top-nil and fully-allocated arms.
+// Per-depth cap-guard for multi-level pointers (**int … **Address), top-nil
+// + fully-allocated arms.
 func TestJSONSize_NPtrPerDepth_NoRealloc(t *testing.T) {
 	t.Parallel()
 	worst := strings.Repeat(`"\`+"\n\t", 16)
@@ -758,8 +752,7 @@ func TestJSONSize_NPtrPerDepth_NoRealloc(t *testing.T) {
 	}
 }
 
-// TestJSONSize_AnyStruct_NoRealloc: cap-guard for an any field over a nested
-// map+array+string mix (usenumber variant below).
+// Cap-guard for an any field over a nested map+array+string mix.
 func TestJSONSize_AnyStruct_NoRealloc(t *testing.T) {
 	t.Parallel()
 	body := map[string]any{

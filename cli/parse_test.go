@@ -251,9 +251,9 @@ func TestGenerate_newValidators(t *testing.T) {
 	}
 }
 
-// TestGenerate_runeGates pins opt #44 tiers (b)/(c): rune rules avoid the
-// utf8.RuneCountInString walk via byte-length gates, and drop it entirely when
-// an ASCII-implying rule already passed in the same run (non-multierr).
+// Rune rules avoid the utf8.RuneCountInString walk via byte-length gates, and
+// drop it entirely when an ASCII-implying rule already passed in the same run
+// (non-multierr).
 func TestGenerate_runeGates(t *testing.T) {
 	gen := func(multiErr bool, steps []Step) string {
 		t.Helper()
@@ -517,10 +517,10 @@ type Msg struct {
 }
 
 // TestSQLNullGeneric covers the string-based path (resolveKind + SQLNullSpec)
-// for generic sql.Null[T] — the AST-only loader's classification. Built-in
-// primitive inners classify as KindSQLNull with the V field; non-primitive
-// inners return false (left on the encoding/json fallback). The go/types path
-// (arbitrary inner T) is exercised end-to-end in integrationtests.
+// for generic sql.Null[T]: built-in primitive inners classify as KindSQLNull
+// with the V field; non-primitive inners return false (left on the
+// encoding/json fallback). The go/types path (arbitrary inner T) is exercised
+// in integrationtests.
 func TestSQLNullGeneric(t *testing.T) {
 	t.Parallel()
 	supported := []struct {

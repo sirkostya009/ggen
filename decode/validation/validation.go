@@ -14,8 +14,7 @@ import (
 	"unsafe"
 )
 
-// Error is satisfied by every validation failure type. prependPath is
-// private so only this package can mutate the leaf's Path.
+// Error is satisfied by every validation failure type.
 type Error interface {
 	error
 	Rule() Rule
@@ -23,7 +22,7 @@ type Error interface {
 }
 
 // prepend returns p with segment as the new head, on a fresh backing array
-// so leaf-shared slices don't corrupt siblings on aliasing chains.
+// so leaf-shared slices don't corrupt siblings.
 func prepend(p []string, segment string) []string {
 	out := make([]string, len(p)+1)
 	out[0] = segment
@@ -34,7 +33,7 @@ func prepend(p []string, segment string) []string {
 // Rule identifies which validation rule failed.
 type Rule string
 
-// Known rule identifiers, matching the keyword in the `ggen` struct tag.
+// Known rule identifiers, matching the keyword in the `pipe` struct tag.
 const (
 	Required     Rule = "required"
 	NotEmpty     Rule = "notempty"
@@ -177,8 +176,7 @@ func (e *MaxRunesError) Error() string {
 func (*MaxRunesError) Rule() Rule             { return MaxRunes }
 func (e *MaxRunesError) prependPath(s string) { e.Path = prepend(e.Path, s) }
 
-// --- numeric range. Limit is float64 to cover int/uint/float with one
-// shape; Value is `any` to preserve the originating numeric type.
+// --- numeric range. Limit is float64; Value holds the originating numeric type.
 
 type GTError struct {
 	Pos   int
@@ -232,8 +230,7 @@ func (e *LTEError) Error() string {
 func (*LTEError) Rule() Rule             { return LTE }
 func (e *LTEError) prependPath(s string) { e.Path = prepend(e.Path, s) }
 
-// --- equality. Want/Value are `any`: one shape for both string and
-// numeric fields; codegen picks the literal at the failure site.
+// --- equality. Want/Value are `any` to cover both string and numeric fields.
 
 type EqError struct {
 	Pos   int
@@ -261,8 +258,7 @@ func (e *NeqError) Error() string {
 func (*NeqError) Rule() Rule             { return Neq }
 func (e *NeqError) prependPath(s string) { e.Path = prepend(e.Path, s) }
 
-// --- oneof. Allowed points to a package-level frozen slice from codegen
-// — no per-error allocation.
+// --- oneof. Allowed points to a frozen package-level slice (not owned by the error).
 
 type OneOfError struct {
 	Pos     int
@@ -469,11 +465,9 @@ func (e *UnknownKeyError) prependPath(s string) { e.Path = prepend(e.Path, s) }
 
 // --- custom ---
 
-// CustomError is the failure of a custom error-form validator (`func(T) error`;
-// the error half of `func(T) (T, error)` is a parse error, not this). Name is
-// the func identifier (no `@`); Value is the rejected input; Cause is the error
-// the validator returned. Mirrors PredicateError (the bool-form twin), which
-// carries Msg instead of Cause.
+// CustomError is the failure of a custom error-form validator (`func(T) error`).
+// Name is the func identifier (no `@`); Value is the rejected input; Cause is
+// the error the validator returned.
 type CustomError struct {
 	Pos   int
 	Path  []string
@@ -493,10 +487,8 @@ func (e *CustomError) Unwrap() error        { return e.Cause }
 func (e *CustomError) prependPath(s string) { e.Path = prepend(e.Path, s) }
 
 // PredicateError is the failure for a custom bool-form validator
-// (`func(T) bool`; the bool half of `func(T) (T, bool)` is a ModError). No
-// wrapped cause. Name is the func identifier; Msg is the optional inline tag
-// message (empty renders a default); Value is the rejected input. Accumulates
-// under -multierr.
+// (`func(T) bool`). Name is the func identifier; Msg is the optional inline tag
+// message (empty renders a default); Value is the rejected input.
 type PredicateError struct {
 	Pos   int
 	Path  []string
@@ -515,11 +507,9 @@ func (*PredicateError) Rule() Rule             { return Predicate }
 func (e *PredicateError) prependPath(s string) { e.Path = prepend(e.Path, s) }
 
 // ModError is the failure of a fallible bool-form mod/converter
-// (`func(W) (T, bool)`) whose bool was false. Unlike PredicateError it is a
-// PARSE error: it returns immediately, wrapped by decode.NewParseErr, never
-// accumulated under -multierr. Error-form mods (`func(W) (T, error)`) return
-// the user's own error. Msg is the optional inline tag message (empty renders
-// a default).
+// (`func(W) (T, bool)`) whose bool was false. It is a parse error, wrapped by
+// decode.NewParseErr. Msg is the optional inline tag message (empty renders a
+// default).
 type ModError struct {
 	Pos   int
 	Name  string
@@ -537,9 +527,8 @@ func (e *ModError) Error() string {
 // --- aggregate ---
 
 // Errors is a flat slice of validation failures from a multierr decoder.
-// Each entry's Path is root-relative, prepended by [Append] as nested decodes
-// bubble up. Implements error and Unwrap() []error so errors.Is/As walk every
-// leaf.
+// Each entry's Path is root-relative. Implements error and Unwrap() []error so
+// errors.Is/As walk every leaf.
 type Errors []Error
 
 func (es Errors) Error() string {
@@ -557,8 +546,7 @@ func (es Errors) Error() string {
 
 func (Errors) Rule() Rule { return MultiErr }
 
-// prependPath propagates the segment into every leaf, satisfying [Error] so
-// an aggregate can be passed where a single [Error] is expected.
+// prependPath propagates the segment into every leaf.
 func (es Errors) prependPath(segment string) {
 	for _, e := range es {
 		e.prependPath(segment)

@@ -14,8 +14,8 @@ func init() {
 }
 
 // AppendString appends the escaped body of s plus a closing `"`. The
-// CALLER writes the opening `"`. HTML-safe: <, >, & → \uXXXX (stdlib v1).
-// Use AppendStringNoHTML for raw output. Zero allocation.
+// CALLER writes the opening `"`. HTML-safe: <, >, & → \uXXXX. Use
+// AppendStringNoHTML for raw output.
 func AppendString(dst []byte, s string) []byte {
 	start := 0
 	for i := 0; i < len(s); i++ {

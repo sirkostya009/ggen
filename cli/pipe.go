@@ -8,17 +8,16 @@ import (
 )
 
 // This file owns the `pipe:` and `hint:` struct-tag grammar — the unified
-// decode/transform/validate pipeline that replaced the old `ggen:`/`mod:`
-// split. See .claude/tag-redesign.md for the full design. Grammar:
+// decode/transform/validate pipeline. Grammar:
 //
 //	pipe        := stage ( "~" stage )*
 //	first stage := variant ( "/" variant )*    // decode: JSON-shape dispatch
 //	later stage := step ( WS step )*            // transform/validate the value
-//	                with inner: / keys: / ; for container levels
+//	                with inner: / keys: for container levels
 //
-// `required`/`optional` are lifted out (position-independent). A Step reuses
-// the existing ValidationRule / ModRule types; mods and validators now share
-// ONE ordered list per level.
+// `required`/`optional` are lifted out (position-independent). A Step holds
+// either a ValidationRule or a ModRule; mods and validators share ONE ordered
+// list per level.
 
 // Presence is the field-presence axis (the JSON key), independent of the
 // value (pipe steps) and the null shape (the nullzero variant).
@@ -518,9 +517,8 @@ func splitFuncMsg(s string) (ref, msg string) {
 	return ref, msg
 }
 
-// stepsFromLegacy translates the legacy split buckets into a unified ordered
-// step list, mods first then validators (the historical execution order), so
-// the ggen:/mod: → pipe shim emits byte-identical output.
+// stepsFromLegacy builds an ordered step list from the split buckets — mods
+// first, then validators. Used for synthetic fields that set only buckets.
 func stepsFromLegacy(mods []ModRule, vals []ValidationRule) []Step {
 	if len(mods) == 0 && len(vals) == 0 {
 		return nil
@@ -535,10 +533,9 @@ func stepsFromLegacy(mods []ModRule, vals []ValidationRule) []Step {
 	return steps
 }
 
-// splitSteps partitions an ordered step list back into the legacy
-// validator/mod buckets (order within each preserved). These feed the
-// order-independent consumers; the ordered Pipe stays source of truth for
-// outer/key emit order.
+// splitSteps partitions an ordered step list into separate validator/mod
+// buckets (order within each preserved). These feed the order-independent
+// consumers; the ordered Pipe stays source of truth for outer/key emit order.
 func splitSteps(steps []Step) (vs []ValidationRule, ms []ModRule) {
 	for _, s := range steps {
 		if s.IsMod {
@@ -550,7 +547,7 @@ func splitSteps(steps []Step) (vs []ValidationRule, ms []ModRule) {
 	return vs, ms
 }
 
-// deriveBuckets (re)populates the legacy split buckets on fi from its unified
+// deriveBuckets (re)populates the split buckets on fi from its unified
 // Pipe/KeyPipe/Levels. Called for pipe-tagged fields after parse and again
 // after custom-func classification stamps the steps.
 func deriveBuckets(fi *FieldInfo) {

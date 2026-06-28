@@ -29,7 +29,6 @@ func BenchmarkNoAlloc_Unmarshal(b *testing.B) {
 	}
 	for _, c := range codecs {
 		b.Run(c.name, func(b *testing.B) {
-			// Warm up before timing.
 			for range 64 {
 				if err := c.fn(AccountPayload); err != nil {
 					b.Fatal(err)
@@ -48,7 +47,7 @@ func BenchmarkNoAlloc_Unmarshal(b *testing.B) {
 }
 
 // BenchmarkNoAlloc_Reader — Reader-path decode of the Account payload. The
-// stream path COPIES strings out of the recycled buffer, so it is not
+// stream path copies strings out of the recycled buffer, so it is not
 // zero-alloc. ggen_stream starts with a fresh 512-byte buffer (forces refill
 // + compaction); ggen_readall is the io.ReadAll-then-bytes-path pattern.
 func BenchmarkNoAlloc_Reader(b *testing.B) {
@@ -94,7 +93,6 @@ func BenchmarkNoAlloc_Reader(b *testing.B) {
 	}
 	for _, c := range codecs {
 		b.Run(c.name, func(b *testing.B) {
-			// Warm up before timing.
 			var warm readerState
 			for range 64 {
 				if err := c.fn(&warm); err != nil {

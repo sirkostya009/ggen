@@ -38,8 +38,7 @@ type TextFallbackStruct struct {
 	Tag thirdparty.Tagged `json:"tag"`
 }
 
-// TestFallback_roundtrip: nested type with no generated methods uses the
-// json fallback both ways.
+// A nested type with no generated methods uses the json fallback both ways.
 func TestFallback_roundtrip(t *testing.T) {
 	t.Parallel()
 	in := FallbackStruct{
@@ -60,8 +59,7 @@ func TestFallback_roundtrip(t *testing.T) {
 	}
 }
 
-// TestFastFallback_roundtrip: cross-pkg dispatch to External2's generated
-// methods round-trips.
+// Cross-pkg dispatch to External2's generated methods round-trips.
 func TestFastFallback_roundtrip(t *testing.T) {
 	t.Parallel()
 	in := FastFallbackStruct{
@@ -78,8 +76,8 @@ func TestFastFallback_roundtrip(t *testing.T) {
 	}
 }
 
-// TestFastFallback_validationFromGeneratedDecoder: a validation error on the
-// nested field proves the generated decoder ran (json fallback wouldn't validate).
+// A validation error on the nested field proves the generated decoder ran
+// (the json fallback wouldn't validate).
 func TestFastFallback_validationFromGeneratedDecoder(t *testing.T) {
 	t.Parallel()
 	// Empty Key violates required.
@@ -93,8 +91,8 @@ func TestFastFallback_validationFromGeneratedDecoder(t *testing.T) {
 	}
 }
 
-// TestTextFallback_roundtrip: Tagged routes through TextMarshaler/Unmarshaler;
-// the "name#tag" string form (not a sub-object) confirms the text path ran.
+// Tagged routes through TextMarshaler/Unmarshaler; the "name#tag" string
+// form (not a sub-object) confirms the text path ran.
 func TestTextFallback_roundtrip(t *testing.T) {
 	t.Parallel()
 	in := TextFallbackStruct{ID: "x", Tag: thirdparty.Tagged{Name: "alice", Tag: "admin"}}
@@ -111,7 +109,7 @@ func TestTextFallback_roundtrip(t *testing.T) {
 	}
 }
 
-// TestTextFallback_unmarshalErrorPropagates: UnmarshalText's error surfaces.
+// UnmarshalText's error surfaces.
 func TestTextFallback_unmarshalErrorPropagates(t *testing.T) {
 	t.Parallel()
 	bad := []byte(`{"id":"x","tag":"no-separator-here"}`)

@@ -340,7 +340,7 @@ func TestPrettyLogger_RichError_NoSourceFile_PositionAlone(t *testing.T) {
 func TestConciseLogger_RichError_SingleLineWithBotHint(t *testing.T) {
 	t.Parallel()
 	// Concise: one line, position + msg + parenthesized bot hint. The user
-	// hint is omitted to avoid railroading downstream agent reasoning.
+	// hint is omitted.
 	pos := token.Position{Filename: "x.go", Line: 5, Column: 2}
 	err := &richError{
 		Pos:      pos,

@@ -191,8 +191,8 @@ func runSQLNullPerType[T interface {
 	})
 }
 
-// TestSQLNull_PerType runs each single-field sql.Null* struct through the full
-// marshal/decode matrix so every inner kind is asserted on its own.
+// Each single-field sql.Null* struct runs through the full marshal/decode
+// matrix so every inner kind is asserted on its own.
 func TestSQLNull_PerType(t *testing.T) {
 	t.Parallel()
 	runSQLNullPerType(t, "NullString", "s", `"hello"`,
@@ -236,8 +236,8 @@ func TestSQLNull_PerType(t *testing.T) {
 		SQLNullGenUUIDStruct{ID: sql.Null[uuid.UUID]{V: uuid.MustParse("550e8400-e29b-41d4-a716-446655440000"), Valid: true}})
 }
 
-// TestSQLNull_Composite exercises the embedded composite: every field set and
-// every field null, both directions.
+// The embedded composite: every field set and every field null, both
+// directions.
 func TestSQLNull_Composite(t *testing.T) {
 	t.Parallel()
 	full := SQLNullStruct{

@@ -11,7 +11,6 @@ import (
 
 func TestDuplicateKey_rejected(t *testing.T) {
 	t.Parallel()
-	// Duplicate key rejected by the generated seen<Field> guard.
 	in := []byte(`{"name":"guest","n":1,"n":999}`)
 	_, _, err := HookedStruct{}.DecodeFrom(in)
 	if err == nil {
@@ -35,12 +34,12 @@ func TestDuplicateKey_firstFieldAlsoRejected(t *testing.T) {
 }
 
 // AllowDupsStruct opts out of the duplicate-key error: first-wins, later
-// occurrences skipped via scan.SkipValue.
+// occurrences skipped.
 //
 //ggen:generate allowdups
 type AllowDupsStruct HookedStruct
 
-// first occurrence sticks, the second is skipped not overwritten.
+// First occurrence sticks, the second is skipped not overwritten.
 func TestAllowDups_firstWins(t *testing.T) {
 	t.Parallel()
 	in := []byte(`{"name":"alice","name":"bob","n":1}`)
@@ -56,7 +55,7 @@ func TestAllowDups_firstWins(t *testing.T) {
 	}
 }
 
-// same first-wins on a numeric field.
+// Same first-wins on a numeric field.
 func TestAllowDups_firstWins_numeric(t *testing.T) {
 	t.Parallel()
 	in := []byte(`{"name":"x","n":10,"n":999,"n":-5}`)
@@ -69,7 +68,7 @@ func TestAllowDups_firstWins_numeric(t *testing.T) {
 	}
 }
 
-// a malformed value in a skipped duplicate still errors (via SkipValue).
+// A malformed value in a skipped duplicate still errors.
 func TestAllowDups_skipMalformedValueStillErrors(t *testing.T) {
 	t.Parallel()
 	in := []byte(`{"name":"x","n":1,"n":@@@}`)

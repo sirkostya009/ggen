@@ -9,7 +9,7 @@ import (
 	"github.com/sirkostya009/ggen/encode"
 )
 
-// MapStruct exercises map[string]V: primitive/struct values, dive mods.
+// MapStruct exercises map[string]V: primitive/struct values, inner mods.
 //
 //ggen:generate
 type MapStruct struct {

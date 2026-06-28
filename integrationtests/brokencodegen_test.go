@@ -1,13 +1,10 @@
 //go:build goexperiment.jsonv2 && ggen_brokencodegen
 
-// Pins combinations that currently produce broken generator output. Behind
+// Pins combinations that produce broken generator output. Behind
 // `-tags ggen_brokencodegen` so the default test run stays green; tagging
-// reproduces the codegen issues and serves as a regression suite once fixed:
-//
-//   - Pointer-to-exotic types (*big.Int, *uuid.UUID, *netip.Addr, …):
-//     the inner decode shadows the outer `v` with a wrong-typed `var v string`.
-//   - Slice/map elements of the same exotic kinds — same shadow bug.
-//   - `var v big.Int` etc. emitted without the corresponding import.
+// reproduces the codegen issues and serves as a regression suite once fixed.
+// Covers pointer-to-exotic types, slice/map elements of exotic kinds, and
+// exotic locals emitted without their import.
 
 package integrationtests
 
@@ -32,8 +29,7 @@ import (
 
 // --- Pointer-to-exotic types -----------------------------------------------
 
-// PtrExoticStruct holds pointer-wrapped exotic types — one nil-branch test
-// per exotic kind.
+// PtrExoticStruct holds pointer-wrapped exotic types.
 //
 //ggen:generate
 type PtrExoticStruct struct {
@@ -147,7 +143,7 @@ func TestPtrExotic_JSONSize_NoRealloc(t *testing.T) {
 
 // --- Slice-of-exotic --------------------------------------------------------
 
-// SliceExoticStruct exercises slice-element decoding for exotic types.
+// SliceExoticStruct: slice-element decoding for exotic types.
 //
 //ggen:generate
 type SliceExoticStruct struct {
@@ -230,7 +226,7 @@ func TestSliceExotic_JSONSize_NoRealloc(t *testing.T) {
 
 // --- Map-of-exotic ----------------------------------------------------------
 
-// MapExoticStruct exercises map-value decoding for exotic types.
+// MapExoticStruct: map-value decoding for exotic types.
 //
 //ggen:generate
 type MapExoticStruct struct {
@@ -303,8 +299,7 @@ func TestMapExotic_JSONSize_NoRealloc(t *testing.T) {
 
 // --- Fixed-array of exotic --------------------------------------------------
 
-// TupleExoticStruct exercises the strict [N]T tuple emitter for exotic
-// element kinds (non-trivial per-element decode).
+// TupleExoticStruct: strict [N]T tuples of exotic element kinds.
 //
 //ggen:generate
 type TupleExoticStruct struct {
@@ -382,8 +377,7 @@ func TestTupleExotic_JSONSize_NoRealloc(t *testing.T) {
 
 // --- Pointer-to-container --------------------------------------------------
 
-// PtrContainerStruct exercises *[]T / *map[K]V combos — codegen emits the
-// container reset against the pointer instead of dereferencing it.
+// PtrContainerStruct: *[]T / *map[K]V combos.
 //
 //ggen:generate
 type PtrContainerStruct struct {
@@ -436,8 +430,7 @@ func TestPtrContainer_PopulatedRoundtrip(t *testing.T) {
 
 // --- *T + json:",string" combo ---------------------------------------------
 
-// PtrStringTagStruct exercises *int with ,string — codegen emits
-// `result.PtrI = *int(n)` (the deref was meant to be a cast).
+// PtrStringTagStruct: *int with the ,string tag.
 //
 //ggen:generate
 type PtrStringTagStruct struct {
@@ -464,7 +457,7 @@ func TestPtrStringTag_roundtrip(t *testing.T) {
 	}
 }
 
-// FuzzPtrExoticNoPanic: random bytes through PtrExoticStruct stay panic-free.
+// Random bytes through PtrExoticStruct stay panic-free.
 func FuzzPtrExoticNoPanic(f *testing.F) {
 	for _, s := range [][]byte{
 		[]byte(`{"big":null,"flt":null,"rat":null,"uid":null,"raw":null,"dur":null,"adr":null,"pfx":null,"url":null}`),

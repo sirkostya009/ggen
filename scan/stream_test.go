@@ -11,7 +11,7 @@ import (
 
 // chunkedReader returns one byte per Read until exhausted. Forces every
 // Stream primitive to grow the buffer one byte at a time, exercising the
-// Ensure/grow path and value-spans-buffer-boundary paths exhaustively.
+// refill and value-spans-buffer-boundary paths exhaustively.
 type chunkedReader struct {
 	data []byte
 	pos  int

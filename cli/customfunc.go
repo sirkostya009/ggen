@@ -20,8 +20,7 @@ type customFunc struct {
 
 // lookupFunc resolves a `@Func` / `@pkg.Func` reference (the part after the
 // `@`) to its *types.Func plus the import path / package name the generated
-// call must qualify with. Shared by resolveCustomFunc (legacy ggen:/mod:) and
-// classifyPipeFunc (the pipe: path).
+// call must qualify with. Shared by classifyValueFunc and classifyConverter.
 func lookupFunc(ref string, file *ast.File, pkg *types.Package) (fn *types.Func, pkgImp, pkgName string, err error) {
 	if ref == "" {
 		return nil, "", "", fmt.Errorf("empty @ reference")
@@ -72,8 +71,8 @@ const (
 )
 
 // classifyValueFunc resolves a value-stage `@Func` against the working type wt
-// and classifies it from its signature, per the redesign rule "a single bool
-// or error return is ALWAYS a validator":
+// and classifies it from its signature (a single bool or error return is
+// always a validator):
 //
 //	func(T) error         → validator
 //	func(T) bool          → validator (message-capable)   [func(bool)bool banned]
@@ -165,7 +164,7 @@ func classifyValueFunc(ref string, wt types.Type, file *ast.File, pkg *types.Pac
 // a value func it is OUTPUT-anchored: the first result must equal the field
 // type T; the single parameter W is the type ggen scans natively (its wire
 // shape decides the JSON shape this variant claims). Returns W's Go type
-// literal. W must be builtin or same-package — foreign inputs aren't wired yet.
+// literal. W must be builtin or same-package; foreign inputs are unsupported.
 func classifyConverter(ref string, fieldType types.Type, qualifier types.Qualifier, file *ast.File, pkg *types.Package) (cf customFunc, inType string, boolForm bool, err error) {
 	fn, pkgImp, pkgName, err := lookupFunc(ref, file, pkg)
 	if err != nil {

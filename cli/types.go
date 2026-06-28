@@ -101,7 +101,7 @@ type FieldInfo struct {
 	// Unified ordered pipeline (the `pipe:` tag). Pipe/KeyPipe/Levels are the
 	// SOURCE OF TRUTH for value-stage emit order (mods + validators interleaved
 	// per level); the split buckets above are DERIVED for the order-independent
-	// consumers. Legacy ggen:/mod: translation yields [mods…, validators…].
+	// consumers.
 	Presence   Presence        // required / optional (lifted from the pipe)
 	Variants   []Variant       // decode stage; nil => implicit native decode of the field type
 	Pipe       []Step          // outer value steps (whole field / container, after decode)

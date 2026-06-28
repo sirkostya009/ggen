@@ -36,7 +36,6 @@ var (
 
 // SkipSpace advances past JSON whitespace (space, tab, CR, LF).
 func SkipSpace(data []byte, i int) int {
-	// `<= ' '` gate: compact JSON exits on one compare; all WS is <= ' '.
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -72,9 +71,6 @@ func ArrayOpen(data []byte, i int) (int, error) {
 // String decodes a JSON string at data[i] (must start with '"'). Returns an
 // unsafe.String aliasing the input when there are no escapes (zero-copy);
 // otherwise decodes into a fresh allocation.
-//
-// Hot path: bytes.IndexByte (SIMD) locates the closing quote, a second over
-// the span detects a preceding backslash, then hasCtrlByte validates.
 func String(data []byte, i int) (string, int, error) {
 	if i >= len(data) || data[i] != '"' {
 		return "", 0, ErrExpectString
@@ -83,7 +79,7 @@ func String(data []byte, i int) (string, int, error) {
 	rest := data[start:]
 	closeIdx := bytes.IndexByte(rest, '"')
 	if closeIdx < 0 {
-		// No closing quote, but a backslash present → stringSlow so a
+		// No closing quote but a backslash present → stringSlow so a
 		// truncated `\u…` / trailing `\` surfaces as ErrBadString.
 		if bsIdx := bytes.IndexByte(rest, '\\'); bsIdx >= 0 {
 			return stringSlow(data, start, start+bsIdx, bsIdx+16)
@@ -91,8 +87,6 @@ func String(data []byte, i int) (string, int, error) {
 		return "", 0, ErrUnterminated
 	}
 	if bsIdx := bytes.IndexByte(rest[:closeIdx], '\\'); bsIdx >= 0 {
-		// closeIdx caps the decoded length unless the first quote is itself
-		// escaped (`\"`) — then append regrows.
 		return stringSlow(data, start, start+bsIdx, closeIdx)
 	}
 	if hasCtrlByte(rest[:closeIdx]) {
@@ -102,10 +96,7 @@ func String(data []byte, i int) (string, int, error) {
 }
 
 // hasCtrlByte reports whether b contains a JSON control character (< 0x20,
-// illegal unescaped in a string). Scans 8 bytes/iteration via the SWAR
-// hasless trick: a lane below 0x20 borrows into its high bit, `&^x` clears
-// false hits from UTF-8 bytes (>= 0x80), `& high` keeps the per-lane flag.
-// A scalar tail covers the final < 8 bytes.
+// illegal unescaped in a string). Scans 8 bytes/iteration via SWAR.
 func hasCtrlByte(b []byte) bool {
 	const (
 		ones uint64 = 0x0101010101010101
@@ -128,10 +119,9 @@ func hasCtrlByte(b []byte) bool {
 }
 
 // stringSlow handles strings with at least one escape sequence.
-// data[start:j] is escape-free; data[j] is the first '\\'. capHint sizes
-// the scratch (the span to the first quote candidate, NOT the payload — a
-// payload-sized cap made M escaped strings allocate O(N*M)). The returned
-// string aliases the write-once scratch via unsafe.String.
+// data[start:j] is escape-free; data[j] is the first '\\'. capHint sizes the
+// scratch (the span to the first quote candidate, not the payload). The
+// returned string aliases the write-once scratch via unsafe.String.
 func stringSlow(data []byte, start, j, capHint int) (string, int, error) {
 	buf := make([]byte, 0, capHint)
 	buf = append(buf, data[start:j]...)
@@ -215,16 +205,15 @@ func parseHex4(b []byte) (rune, bool) {
 	return r, true
 }
 
-// Limits for safe int64/uint64 accumulation. SignedNeg is |MinInt64|
-// (1<<63). Exported — generated code references them in inlined scan loops.
+// Limits for int64/uint64 accumulation. SignedNeg is |MinInt64| (1<<63).
+// Exported — generated code references them in inlined scan loops.
 const (
 	Uint64Limit = ^uint64(0)      // MaxUint64
 	SignedNeg   = uint64(1) << 63 // |MinInt64|
 )
 
 // Int64 scans an integer JSON number; floats/exponents error out.
-// Accumulates as uint64 with overflow detection (ErrNumberOverflow rather
-// than silent wrap), matching encoding/json/v2.
+// Overflow returns ErrNumberOverflow rather than silently wrapping.
 func Int64(data []byte, i int) (int64, int, error) {
 	neg := false
 	if i < len(data) && data[i] == '-' {
@@ -239,9 +228,8 @@ func Int64(data []byte, i int) (int64, int, error) {
 		limit = SignedNeg
 	}
 	var u uint64
-	// First ≤18 digits can't overflow int64 (10^18-1 < MaxInt64 <
-	// |MinInt64|), so skip the per-digit check; a 19th resumes the
-	// checked loop below.
+	// First ≤18 digits can't overflow int64, so skip the per-digit check;
+	// a 19th resumes the checked loop below.
 	de := min(i+18, len(data))
 	for i < de && data[i] >= '0' && data[i] <= '9' {
 		u = u*10 + uint64(data[i]-'0')
@@ -262,7 +250,7 @@ func Int64(data []byte, i int) (int64, int, error) {
 		}
 	}
 	if neg {
-		// `-int64(u)` would overflow at u==1<<63 — use the MinInt64 literal.
+		// -int64(u) would overflow at u==1<<63 — use the MinInt64 literal.
 		if u == SignedNeg {
 			return math.MinInt64, i, nil
 		}
@@ -278,8 +266,8 @@ func Uint64(data []byte, i int) (uint64, int, error) {
 		return 0, 0, ErrBadNumber
 	}
 	var n uint64
-	// First ≤19 digits can't overflow uint64 (10^19-1 < MaxUint64); a 20th
-	// resumes the checked loop. See Int64.
+	// First ≤19 digits can't overflow uint64; a 20th resumes the checked
+	// loop. See Int64.
 	de := min(i+19, len(data))
 	for i < de && data[i] >= '0' && data[i] <= '9' {
 		n = n*10 + uint64(data[i]-'0')
@@ -325,12 +313,8 @@ func Float64(data []byte, i int) (float64, int, error) {
 //
 //	-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?
 //
-// without [Float64]'s strconv.ParseFloat — [SkipValue] only needs the end
-// position for discarded numbers. Two accept-set divergences vs a
-// Float64-based skip, both toward stdlib parity: range-overflow numbers
-// (1e400) skip OK (a skip must not range-check); ParseFloat-isms JSON
-// forbids ("+1", "01", "1.", ".5") are rejected. Malformed → ErrBadNumber,
-// not *NumError.
+// It does not range-check, so out-of-range grammar-valid numbers (1e400) are
+// consumed. Malformed input returns ErrBadNumber.
 func skipNumber(data []byte, i int) (int, error) {
 	n := len(data)
 	if i < n && data[i] == '-' {
@@ -375,8 +359,7 @@ func skipNumber(data []byte, i int) (int, error) {
 	return i, nil
 }
 
-// Literal hex packings for "null", "true", "alse" (tail of "false") — gc
-// won't fold the per-byte compares into one 32-bit load, so we do it.
+// Little-endian 32-bit packings for "null", "true", "alse" (tail of "false").
 const (
 	litNull = 0x6c6c756e // "null"  — n, u, l, l
 	litTrue = 0x65757274 // "true"  — t, r, u, e
@@ -590,10 +573,9 @@ func anyObject(data []byte, i int) (map[string]any, int, error) {
 	}
 }
 
-// Number scans a JSON number's raw byte span and returns it as a
-// json.Number aliasing the input via unsafe.String — zero-alloc,
-// zero-copy on the happy path. Same byte rules as [Float64] but
-// without the strconv.ParseFloat call.
+// Number scans a JSON number's raw byte span and returns it as a json.Number
+// aliasing the input via unsafe.String (zero-copy; caller must not mutate
+// data while the result is in use). Same byte rules as [Float64], no parse.
 func Number(data []byte, i int) (json.Number, int, error) {
 	start := i
 	if i < len(data) && data[i] == '-' {
@@ -613,9 +595,8 @@ func Number(data []byte, i int) (json.Number, int, error) {
 	return json.Number(unsafe.String(unsafe.SliceData(data[start:]), i-start)), i, nil
 }
 
-// AnyNumber is the [Any] variant that decodes JSON numbers into
-// json.Number (preserving exact digits) instead of float64. Used by
-// code generated with the `usenumber` flag — mirrors stdlib's
+// AnyNumber is the [Any] variant that decodes JSON numbers into json.Number
+// (preserving exact digits) instead of float64. Mirrors stdlib's
 // json.Decoder.UseNumber() option.
 func AnyNumber(data []byte, i int) (any, int, error) {
 	i = SkipSpace(data, i)

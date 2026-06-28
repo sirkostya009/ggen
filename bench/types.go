@@ -476,14 +476,9 @@ type EasyValidationHeavy struct {
 
 var ValidationHeavyPayload []byte
 
-// RuneGated isolates the rune-validation walk on LONG strings — where opt #44's
-// byte-length gates (tier b) and ascii subsumption (tier c) skip an O(len)
-// utf8.RuneCountInString that the unconditional/hoisted form runs in full.
-// LongRunes holds genuine 4-byte runes (len == 4×runecount), the real
-// rune-rule workload — it clears both bounds via pure len gates, skipping a
-// full multi-byte UTF-8 decode. AsciiRunes is ASCII (alphanum rejects
-// non-ASCII) and preceded by alphanum, so its maxrunes count is len (tier c,
-// no rune walk — only the alphanum scan, common to both forms).
+// RuneGated isolates rune-rule validation on long strings. LongRunes holds
+// genuine 4-byte runes (len == 4×runecount); AsciiRunes is ASCII and preceded
+// by alphanum.
 //
 //ggen:generate
 type RuneGated struct {
@@ -573,8 +568,8 @@ func init() {
 		panic(err)
 	}
 
-	// Rune-gated (long ~8 KB strings; opt #44 tiers b/c skip the O(len) walk).
-	// LongRunes = 2048 four-byte runes (8192 bytes); AsciiRunes stays ASCII.
+	// Rune-gated: long ~8 KB strings. LongRunes = 2048 four-byte runes (8192
+	// bytes); AsciiRunes stays ASCII.
 	RuneGatedPayload, err = encode.Marshal(RuneGated{
 		LongRunes:  strings.Repeat("🦊", 2048),
 		AsciiRunes: strings.Repeat("abc123", 1366),

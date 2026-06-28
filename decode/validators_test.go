@@ -5,10 +5,8 @@ import (
 	"testing"
 )
 
-// BenchmarkIsEmail compares single-pass IsEmail against the two-pass refEmail
-// head-to-head in ONE binary — no code-layout confound between builds, so the
-// ratio is the pure algorithmic delta. The long domain makes the two-pass
-// form's domain rescan dominate.
+// BenchmarkIsEmail compares IsEmail against the two-pass refEmail over a long
+// domain.
 func BenchmarkIsEmail(b *testing.B) {
 	long := "user@" + strings.Repeat("a", 65000) + ".com"
 	b.Run("single_pass", func(b *testing.B) {
@@ -27,8 +25,7 @@ func BenchmarkIsEmail(b *testing.B) {
 	})
 }
 
-// Reference implementations (the pre-table range-check logic) the table-based
-// predicates must match byte-for-byte.
+// Reference implementations the predicates must match byte-for-byte.
 func refPrintable(s string) bool {
 	for i := 0; i < len(s); i++ {
 		if c := s[i]; c < 0x20 || c == 0x7f {

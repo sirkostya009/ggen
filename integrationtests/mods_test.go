@@ -11,7 +11,7 @@ import (
 	_ "github.com/sirkostya009/ggen/integrationtests/thirdparty"
 )
 
-// ModStruct exercises the mod tag: transforms applied after decode, before
+// ModStruct exercises pipe mods: transforms applied after decode, before
 // validation.
 //
 //ggen:generate
@@ -66,9 +66,8 @@ func TestMods_trimleft(t *testing.T) {
 	}
 }
 
-// FallibleModStruct pairs a fallible mod with validators that would also
-// fail — tests assert the mod error short-circuits as a parse error
-// (bypassing multierr aggregation).
+// FallibleModStruct pairs a fallible mod with validators that would also fail;
+// the mod error short-circuits as a parse error.
 //
 //ggen:generate
 type FallibleModStruct struct {
@@ -76,7 +75,7 @@ type FallibleModStruct struct {
 }
 
 // FallibleModMultierrStruct: same fields in multierr mode — a fallible mod
-// still returns immediately as a single parse error, not aggregated.
+// still returns a single parse error, not aggregated.
 //
 //ggen:generate multierr
 type FallibleModMultierrStruct struct {
@@ -90,8 +89,8 @@ func RejectShort(s string) (string, error) {
 	return s, nil
 }
 
-// TestFallibleMod_shortCircuitsValidation: the mod runs first, so its error
-// surfaces ahead of the email/minlen validators that would also fail.
+// The mod runs first, so its error surfaces ahead of the email/minlen
+// validators that would also fail.
 func TestFallibleMod_shortCircuitsValidation(t *testing.T) {
 	t.Parallel()
 	_, _, err := FallibleModStruct{}.DecodeFrom([]byte(`{"email":"x"}`))
@@ -101,14 +100,14 @@ func TestFallibleMod_shortCircuitsValidation(t *testing.T) {
 	if !strings.Contains(err.Error(), "rejected by mod") {
 		t.Errorf("expected mod error, got: %v", err)
 	}
-	// Validation messages must not appear — the mod error beats them.
+	// Validation messages must not appear.
 	if strings.Contains(err.Error(), "valid email") || strings.Contains(err.Error(), "below minimum") {
 		t.Errorf("validation ran despite mod failure: %v", err)
 	}
 }
 
-// TestFallibleMod_multierrStillShortCircuits: in multierr mode a fallible
-// mod still returns a single parse error, not validation.Errors.
+// In multierr mode a fallible mod still returns a single parse error, not
+// validation.Errors.
 func TestFallibleMod_multierrStillShortCircuits(t *testing.T) {
 	t.Parallel()
 	_, _, err := FallibleModMultierrStruct{}.DecodeFrom([]byte(`{"email":"x"}`))
@@ -123,8 +122,7 @@ func TestFallibleMod_multierrStillShortCircuits(t *testing.T) {
 	}
 }
 
-// TestFallibleMod_passLetsValidationRun: a passing mod is a gate, not a
-// bypass — downstream validation still runs.
+// A passing mod is a gate, not a bypass — downstream validation still runs.
 func TestFallibleMod_passLetsValidationRun(t *testing.T) {
 	t.Parallel()
 	// "abcdef" passes RejectShort (len >= 3) but fails minlen=10 + email.
@@ -257,8 +255,8 @@ func pathOf(e validation.Error) []string {
 	return nil
 }
 
-// TestNestedMultierr_innerParseErrorReturnsEarly: an inner parse error
-// returns immediately (not drained), wrapped in *decode.ParseError.
+// An inner parse error returns immediately (not drained), wrapped in
+// *decode.ParseError.
 func TestNestedMultierr_innerParseErrorReturnsEarly(t *testing.T) {
 	t.Parallel()
 	// Inner email is a number, not a string.

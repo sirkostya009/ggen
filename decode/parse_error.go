@@ -23,9 +23,7 @@ type ParseError struct {
 	Err  error
 }
 
-// Error renders "parse error[ at <a.b.c>] (pos <n>)[: <cause>]". The cause's
-// Error() is called exactly once so chained prints stay linear; returned as
-// an unsafe.String alias.
+// Error renders "parse error[ at <a.b.c>] (pos <n>)[: <cause>]".
 func (e *ParseError) Error() string {
 	field := strings.Join(e.Path, ".")
 	buf := make([]byte, 0, 42+len(field))
@@ -46,8 +44,7 @@ func (e *ParseError) Error() string {
 
 func (e *ParseError) Unwrap() error { return e.Err }
 
-// NewParseErr wraps an error-return at every site in generated decoders.
-// Behaviour:
+// NewParseErr wraps an error returned by a generated decoder:
 //
 //   - validation.Error  → pass through (stays reachable via errors.As)
 //   - *ParseError        → prepend segment onto its Path; Pos left at the

@@ -246,8 +246,7 @@ func walkPackages(pattern string, act func(dir string) error) error {
 // genGlobalsMu protects the globally-shared generator state touched by
 // generate() (generatedTypes, generatedAliasKinds, the oneof registry, the
 // pools). Packages parse concurrently but only one goroutine enters the
-// generate+write section; holding the lock for the whole post-parse phase is
-// cheap — generate is ~12 ms / package vs go/packages.Load.
+// generate+write section; the lock is held for the whole post-parse phase.
 var genGlobalsMu sync.Mutex
 
 func generateDir(dir, outFlag, pkgFlag string) error {

@@ -77,8 +77,7 @@ func TestNewParseErr_RawErrorWraps(t *testing.T) {
 
 func TestNewParseErr_ChainPrefixesField(t *testing.T) {
 	t.Parallel()
-	// Inner already wrapped (deeper-level decoder); outer prepends its
-	// segment onto the existing Path.
+	// Inner already wrapped; outer prepends its segment onto the Path.
 	inner := &ParseError{Path: []string{"zip"}, Pos: 7, Err: scan.ErrBadNumber}
 	got := NewParseErr("addr", 99, inner)
 	var pe *ParseError
@@ -91,7 +90,7 @@ func TestNewParseErr_ChainPrefixesField(t *testing.T) {
 	if strings.Join(pe.Path, ".") != "addr.zip" {
 		t.Errorf("Path = %v, want [addr zip]", pe.Path)
 	}
-	// Pos must stay at the deeper site — the most-local diagnostic.
+	// Pos stays at the deeper site.
 	if pe.Pos != 7 {
 		t.Errorf("Pos = %d, want 7 (deepest site)", pe.Pos)
 	}

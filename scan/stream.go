@@ -30,9 +30,9 @@ type Stream struct {
 	// directly to capture raw spans.
 	Pos int
 	// consumed is the number of bytes discarded off the front of buf by
-	// compacting ReadMore (keep > 0) since Reset, so buf[0] sits at absolute
-	// document offset `consumed`; the cursor's absolute offset is
-	// consumed + Pos (see Offset). Pos alone is buffer-relative.
+	// compacting ReadMore, so buf[0] sits at absolute document offset
+	// consumed and the cursor's absolute offset is consumed + Pos (see
+	// Offset). Pos alone is buffer-relative.
 	consumed int
 	// Err is the sticky reader error; once set (non-EOF) ReadMore returns
 	// it without touching the reader.
@@ -144,10 +144,9 @@ func (s *Stream) ReadMore(keep int) error {
 // caller must hold no aliases at offsets < Pos (e.g. a prior KeyView key).
 // No-shift mode (RawJSON capture) leaves Pos put.
 func (s *Stream) SkipSpace() error {
-	// Two-tier: the dominant compact-JSON case (cursor in-bounds,
-	// non-whitespace) returns inline; the rest falls to skipSpaceSlow. The
-	// no-temp shape is load-bearing — it inlines at cost 77 (budget 80); an
-	// `i := s.Pos` temp costs 81 and does NOT inline.
+	// Inlinable fast path: cursor in-bounds on a non-whitespace byte. The
+	// no-temp shape is load-bearing — adding an `i := s.Pos` temp pushes it
+	// over the inline budget.
 	if s.Pos < len(s.buf) && s.buf[s.Pos] > ' ' {
 		return nil
 	}
@@ -156,8 +155,8 @@ func (s *Stream) SkipSpace() error {
 
 func (s *Stream) skipSpaceSlow() error {
 	i := s.Pos
-	// Hoist the buffer header into a local so the inner loop compares
-	// against a registerized len(buf); refill reloads buf in the outer loop.
+	// buf hoisted into a local so the inner loop compares against a
+	// registerized len(buf); refill reloads it in the outer loop.
 	buf := s.buf
 	for {
 		for i < len(buf) {
@@ -235,8 +234,6 @@ func (s *Stream) ArrayOpen() error {
 // String decodes a JSON string. Always copies the body out of the
 // buffer — the result is owned, no dependency on the buffer.
 func (s *Stream) String() (string, error) {
-	// Owned copy: StringView aliases the span, Clone detaches it from the
-	// recyclable buffer. (Escape path already owns its copy; re-cloning is rare.)
 	v, err := s.StringView()
 	if err != nil {
 		return "", err
@@ -244,16 +241,13 @@ func (s *Stream) String() (string, error) {
 	return strings.Clone(v), nil
 }
 
-// StringView reads a JSON string value and returns it as an alias into
-// the Stream's buffer — zero-copy, like [Stream.KeyView] but without the
-// short-key scalar prelude (value strings are often long, where SIMD
-// IndexByte wins). Escapes fall back to the copy path (stringSlow).
+// StringView reads a JSON string value and returns it as an alias into the
+// Stream's buffer — zero-copy. Escapes fall back to the copy path.
 //
 // USE ONLY where the caller finishes consuming the string before the next
-// Stream op AND retains none of its bytes past that point (base64 []byte,
-// number/time/IP value types). The alias is invalidated by the next
-// compacting ReadMore, so a consumer that keeps a substring (url.URL
-// slices its Path/RawQuery) MUST use [Stream.String], which copies.
+// Stream op AND retains none of its bytes past that point. The alias is
+// invalidated by the next compacting ReadMore, so a consumer that keeps a
+// substring MUST use [Stream.String], which copies.
 func (s *Stream) StringView() (string, error) {
 	i := s.Pos
 	if i >= len(s.buf) {
@@ -303,11 +297,11 @@ func (s *Stream) StringView() (string, error) {
 
 // KeyView reads a JSON string and returns it as an alias into the
 // Stream's buffer — zero-copy on the happy path. The alias survives a
-// grow-only ReadMore (GC pins the backing while a string references it).
+// grow-only ReadMore but is invalidated by a compacting one.
 //
 // USE ONLY for short-lived dispatch where the string never escapes the
 // call frame (object-key matching). For values stored in the decoded
-// struct use [Stream.String]. Escapes fall back to stringSlow (copy).
+// struct use [Stream.String]. Escapes fall back to the copy path.
 func (s *Stream) KeyView() (string, error) {
 	i := s.Pos
 	if i >= len(s.buf) {
@@ -322,11 +316,10 @@ func (s *Stream) KeyView() (string, error) {
 		return "", ErrExpectString
 	}
 	start := i + 1
-	// Scalar prelude: dispatch keys are short, so one pass locates the
-	// closing quote while validating backslash/control, sparing the two
-	// IndexByte setups that lose on short spans. A longer key / escape /
-	// not-yet-buffered quote falls to the IndexByte loop, which RESUMES at
-	// the window end (j = we) so the validated prefix isn't re-scanned.
+	// Scalar prelude: one pass over the first window locates the closing
+	// quote while validating backslash/control — short dispatch keys finish
+	// here. A longer key / escape / not-yet-buffered quote falls to the
+	// IndexByte loop, which resumes at the window end (j = we).
 	we := min(start+stringPreludeWindow, len(s.buf))
 	for k := start; k < we; k++ {
 		c := s.buf[k]
@@ -375,7 +368,7 @@ func (s *Stream) KeyView() (string, error) {
 }
 
 // stringPreludeWindow bounds KeyView's scalar pass before it falls back to
-// the IndexByte loop — sized to cover typical object keys in one pass.
+// the IndexByte loop.
 const stringPreludeWindow = 24
 
 // skipString advances Pos past a JSON string — no copy, no decode,
@@ -398,8 +391,8 @@ func (s *Stream) skipString() error {
 	j := start
 	for {
 		rel := bytes.IndexByte(s.buf[j:], '"')
-		// Bound the backslash probe to the closing quote — a whole-tail
-		// probe made SkipValue quadratic on fully buffered payloads.
+		// Bound the backslash probe to the closing quote (a whole-tail probe
+		// makes SkipValue quadratic on fully buffered payloads).
 		bsEnd := len(s.buf)
 		if rel >= 0 {
 			bsEnd = j + rel
@@ -488,7 +481,6 @@ func (s *Stream) stringSlow(start, j int) (string, error) {
 		c := s.buf[j]
 		if c == '"' {
 			s.Pos = j + 1
-			// buf is write-once scratch — aliasing it yields an owned copy.
 			return unsafe.String(unsafe.SliceData(buf), len(buf)), nil
 		}
 		if c == '\\' {
@@ -556,8 +548,7 @@ func (s *Stream) stringSlow(start, j int) (string, error) {
 }
 
 // Int64 scans an integer with per-digit overflow detection, sign applied
-// at the end. No span is preserved, so the loop's ReadMore passes i as
-// keep (bytes < i discarded, i resets to 0). Matches scan.Int64.
+// at the end. Matches scan.Int64.
 func (s *Stream) Int64() (int64, error) {
 	i := s.Pos
 	if i >= len(s.buf) {
@@ -589,7 +580,6 @@ func (s *Stream) Int64() (int64, error) {
 		limit = SignedNeg
 	}
 	var u uint64
-	// buf hoisted into a local (see skipSpaceSlow).
 	buf := s.buf
 scan:
 	for {
@@ -644,7 +634,6 @@ func (s *Stream) Uint64() (uint64, error) {
 		return 0, ErrBadNumber
 	}
 	var n uint64
-	// buf hoisted into a local (see skipSpaceSlow).
 	buf := s.buf
 scan:
 	for {
@@ -683,8 +672,7 @@ func (s *Stream) Float64() (float64, error) {
 		}
 	}
 	start := i
-	// buf hoisted into a local (see skipSpaceSlow); ReadMore(0) is grow-only
-	// so the span stays stable.
+	// buf hoisted into a local; ReadMore(0) is grow-only so the span stays stable.
 	buf := s.buf
 	if buf[i] == '-' {
 		i++
@@ -726,7 +714,7 @@ func (s *Stream) hasByteAt(i int) bool {
 }
 
 // skipNumber is the stream mirror of the bytes-path [skipNumber] — same
-// RFC 8259 grammar, same accept-set divergences.
+// RFC 8259 grammar, same accept-set.
 func (s *Stream) skipNumber() error {
 	i := s.Pos
 	if !s.hasByteAt(i) {
@@ -1120,8 +1108,7 @@ func (s *Stream) Number() (json.Number, error) {
 		}
 	}
 	start := i
-	// buf hoisted into a local (see skipSpaceSlow); ReadMore(0) is grow-only
-	// so the span stays stable.
+	// buf hoisted into a local; ReadMore(0) is grow-only so the span stays stable.
 	buf := s.buf
 	if buf[i] == '-' {
 		i++

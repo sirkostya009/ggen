@@ -7,9 +7,8 @@ import (
 )
 
 // Decode-into-receiver tests. The receiver IS the merge source: scalars
-// persist across omitted keys, containers reset before refill, nested
-// structs recurse via the value-receiver pattern. Tests call (T).DecodeFrom
-// directly, not decode.Unmarshal[T] (which starts fresh).
+// persist across omitted keys, containers reset before refill, nested structs
+// recurse. Tests call (T).DecodeFrom directly (decode.Unmarshal starts fresh).
 
 func TestMerge_scalarFieldsPersistAcrossOmitted(t *testing.T) {
 	t.Parallel()
@@ -27,8 +26,8 @@ func TestMerge_scalarFieldsPersistAcrossOmitted(t *testing.T) {
 
 func TestMerge_sliceBackingReused(t *testing.T) {
 	t.Parallel()
-	// A 3-elem decode into a cap-8 receiver must reuse the backing ([:0],
-	// not a fresh make).
+	// A 3-elem decode into a cap-8 receiver must reuse the backing, not make
+	// a fresh one.
 	pre := make([]string, 0, 8)
 	pre = append(pre, "old1", "old2", "old3")
 	receiver := Node{Tags: pre}
@@ -181,8 +180,8 @@ func TestMerge_nestedStructRecursesIntoExisting(t *testing.T) {
 	if len(got.Children) != 1 {
 		t.Fatalf("len(children)=%d want 1", len(got.Children))
 	}
-	// By design: the parent slice [:0]'s and pre-grows each slot with a
-	// zero Node, so the carried Name="cached" does NOT survive.
+	// The parent slice resets and pre-grows each slot with a zero Node, so
+	// the carried Name="cached" does NOT survive.
 	if got.Children[0].Name != "" {
 		t.Errorf("Name=%q — slice elem merged against receiver, expected fresh zero", got.Children[0].Name)
 	}

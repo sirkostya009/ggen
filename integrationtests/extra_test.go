@@ -13,7 +13,7 @@ import (
 	"github.com/sirkostya009/ggen/scan"
 )
 
-// ExtraStruct exercises keys:/hintlen/clamp/nested-dive.
+// ExtraStruct exercises keys:/hint:/clamp/nested-dive.
 //
 //ggen:generate
 type ExtraStruct struct {
@@ -24,7 +24,7 @@ type ExtraStruct struct {
 	Triple       [][][]string   `json:"triple" pipe:"inner:(minlen=1 inner:(minlen=1 inner:minlen=1))"`
 }
 
-// TupleStruct exercises fixed-length arrays [N]T as JSON tuples (strict count).
+// TupleStruct exercises fixed-length arrays [N]T as strict-count JSON tuples.
 //
 //ggen:generate
 type TupleStruct struct {
@@ -34,7 +34,7 @@ type TupleStruct struct {
 	Pair     [2][]string `json:"pair"`
 }
 
-// TestHintlen_Prealloc: hintlen-sized slice decodes correctly past default cap.
+// A hint-sized slice decodes correctly past the default cap.
 func TestHintlen_Prealloc(t *testing.T) {
 	t.Parallel()
 	in := []byte(`{"hintedTags":["a","b","c","d","e","f","g","h","i","j","k","l"]}`)
@@ -47,7 +47,7 @@ func TestHintlen_Prealloc(t *testing.T) {
 	}
 }
 
-// TestClamp_Numeric_ModLowBound: value below the lower bound is clamped up.
+// A value below the lower bound is clamped up.
 func TestClamp_Numeric_ModLowBound(t *testing.T) {
 	t.Parallel()
 	got, _, err := ExtraStruct{}.DecodeFrom([]byte(`{"clampedScore":-50}`))
@@ -81,7 +81,7 @@ func TestClamp_Numeric_ModInRange(t *testing.T) {
 	}
 }
 
-// TestKeys_ValidationOnMapKey: short key fails minrunes=2.
+// A short map key fails minrunes=2.
 func TestKeys_ValidationOnMapKey(t *testing.T) {
 	t.Parallel()
 	in := []byte(`{"keyedMap":{"a":1}}`)
@@ -95,7 +95,7 @@ func TestKeys_ValidationOnMapKey(t *testing.T) {
 	}
 }
 
-// TestKeys_ModOnMapKey: trim+lower mods run on the key before insertion.
+// trim+lower mods run on the key before insertion.
 func TestKeys_ModOnMapKey(t *testing.T) {
 	t.Parallel()
 	in := []byte(`{"keyedMap":{"  FOO  ":7}}`)
@@ -108,7 +108,7 @@ func TestKeys_ModOnMapKey(t *testing.T) {
 	}
 }
 
-// TestNestedDive_TwoLevels_OK: [][]int decodes; per-level validation passes.
+// [][]int decodes; per-level validation passes.
 func TestNestedDive_TwoLevels_OK(t *testing.T) {
 	t.Parallel()
 	in := []byte(`{"nestedInts":[[1,2,3],[10,20]]}`)
@@ -142,7 +142,7 @@ func TestNestedDive_InnerViolation(t *testing.T) {
 	}
 }
 
-// TestTripleNested: three levels of slice nesting decode.
+// Three levels of slice nesting decode.
 func TestTripleNested(t *testing.T) {
 	t.Parallel()
 	in := []byte(`{"triple":[[["a","b"],["c"]],[["d"]]]}`)
@@ -156,7 +156,7 @@ func TestTripleNested(t *testing.T) {
 	}
 }
 
-// TestNestedDive_Stream: stream path handles nested slices.
+// Stream path handles nested slices.
 func TestNestedDive_Stream(t *testing.T) {
 	t.Parallel()
 	in := []byte(`{"nestedInts":[[1,2],[3,4,5]],"triple":[[["a"]]]}`)
@@ -174,7 +174,7 @@ func TestNestedDive_Stream(t *testing.T) {
 	}
 }
 
-// TestTuple_Basic: [N]T fields decode each slot into position.
+// [N]T fields decode each slot into position.
 func TestTuple_Basic(t *testing.T) {
 	t.Parallel()
 	in := []byte(`{"point":[1.5,2.5],"rgb":[10,20,30],"segments":[[1,2],[3,4]],"pair":[["a","b"],["c"]]}`)
@@ -196,7 +196,7 @@ func TestTuple_Basic(t *testing.T) {
 	}
 }
 
-// TestTuple_StrictTooFew: fewer than N elements errors.
+// Fewer than N elements errors.
 func TestTuple_StrictTooFew(t *testing.T) {
 	t.Parallel()
 	in := []byte(`{"point":[1.5]}`)
@@ -210,7 +210,7 @@ func TestTuple_StrictTooFew(t *testing.T) {
 	}
 }
 
-// TestTuple_StrictTooMany: more than N elements errors.
+// More than N elements errors.
 func TestTuple_StrictTooMany(t *testing.T) {
 	t.Parallel()
 	in := []byte(`{"point":[1.5,2.5,3.5]}`)
@@ -224,7 +224,7 @@ func TestTuple_StrictTooMany(t *testing.T) {
 	}
 }
 
-// TestTuple_Clamp: per-element clamp mod applies inside a tuple via inner:.
+// Per-element clamp mod applies inside a tuple via inner:.
 func TestTuple_Clamp(t *testing.T) {
 	t.Parallel()
 	in := []byte(`{"rgb":[-5,300,128]}`)
@@ -255,7 +255,7 @@ func TestTuple_MarshalRoundtrip(t *testing.T) {
 	}
 }
 
-// TestTuple_Stream: stream path handles [N]T strictness.
+// Stream path handles [N]T strictness.
 func TestTuple_Stream(t *testing.T) {
 	t.Parallel()
 	in := []byte(`{"point":[1.25,2.5],"rgb":[0,0,0],"segments":[[1,2]],"pair":[["a"],["b","c"]]}`)
@@ -273,7 +273,7 @@ func TestTuple_Stream(t *testing.T) {
 	}
 }
 
-// TestNestedMarshalRoundtrip: nested slices survive Marshal + Unmarshal.
+// Nested slices survive Marshal + Unmarshal.
 func TestNestedMarshalRoundtrip(t *testing.T) {
 	t.Parallel()
 	in := ExtraStruct{

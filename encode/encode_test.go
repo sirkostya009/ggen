@@ -104,12 +104,9 @@ func TestMarshalSliceSingleAlloc(t *testing.T) {
 	}
 }
 
-// --- opt [14]: escape-table correctness pin -------------------------------
-
 // refNoHTML / refHTML are an independent comparison-chain reference for the
-// shipped [256]bool-table escapers — TestAppendString_TableParity checks the
-// table matches them byte-for-byte. (The table-vs-comparison-vs-bitwise perf
-// comparison that picked the table is recorded in backlog Tried Rejected.)
+// table-based escapers — TestAppendString_TableParity checks the table
+// matches them byte-for-byte.
 func refEscapeAt(dst []byte, s string, i, start int) (int, []byte) {
 	if start < i {
 		dst = append(dst, s[start:i]...)

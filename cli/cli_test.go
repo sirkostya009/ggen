@@ -172,7 +172,7 @@ type Skipped struct {
 
 	t.Run("Verbosity_QuietSuppressesInfo", func(t *testing.T) {
 		t.Parallel()
-		// Default level LevelQuiet suppresses `wrote <file>` info lines.
+		// Default level (-v not set) suppresses `wrote <file>` info lines.
 		dir := t.TempDir()
 		writeFixture(t, filepath.Join(dir, "msg.go"), minimalStruct)
 		out, err := runCLI(t, bin, dir, "msg.go")

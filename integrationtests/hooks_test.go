@@ -19,8 +19,8 @@ type HookedStruct struct {
 	N    int    `json:"n" pipe:"gte=0 lte=100"`
 }
 
-// Compile-time interface satisfaction — ggen emits only the []byte-based
-// MarshalJSON/UnmarshalJSON hooks, not the jsontext streaming variants.
+// Compile-time interface satisfaction for the []byte-based MarshalJSON/
+// UnmarshalJSON hooks.
 var (
 	_ jsonv1.Marshaler = HookedStruct{}
 	_ jsonv2.Marshaler = HookedStruct{}
@@ -29,8 +29,8 @@ var (
 	_ jsonv2.Unmarshaler = (*HookedStruct)(nil)
 )
 
-// TestHookedValidationPropagates: validation errors from the hooks surface
-// through both jsonv1.Unmarshal and jsonv2.Unmarshal.
+// Validation errors from the hooks surface through both jsonv1.Unmarshal and
+// jsonv2.Unmarshal.
 //
 //ggen:generate are surfaced through both jsonv1.Unmarshal and jsonv2.Unmarshal, i.e.
 func TestHookedValidationPropagates(t *testing.T) {
@@ -63,7 +63,7 @@ func TestHookedValidationPropagates(t *testing.T) {
 	}
 }
 
-// TestHookedRoundtrip: valid data round-trips through both stdlib entry points.
+// Valid data round-trips through both stdlib entry points.
 func TestHookedRoundtrip(t *testing.T) {
 	t.Parallel()
 	in := HookedStruct{Name: "ok", N: 42}

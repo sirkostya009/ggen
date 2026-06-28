@@ -136,8 +136,7 @@ func TestInline_marshalOnlyExtras(t *testing.T) {
 	}
 }
 
-// TestInline_FixedFieldOrderStable: fixed field appears in every marshal
-// regardless of map iteration order.
+// The fixed field appears in every marshal regardless of map iteration order.
 func TestInline_FixedFieldOrderStable(t *testing.T) {
 	t.Parallel()
 	s := InlineStruct{

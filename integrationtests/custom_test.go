@@ -79,16 +79,14 @@ func TestAggregate_pass(t *testing.T) {
 	}
 }
 
-// CustomBothStruct carries both a custom @Func mod and validator on one
-// field — mod runs first, then the validator checks the result.
+// CustomBothStruct carries a custom @Func mod and validator on one field.
 //
 //ggen:generate
 type CustomBothStruct struct {
 	Tags []string `json:"tags" pipe:"inner:(@TrimSpace @NotBlank)"`
 }
 
-// mod (trim) runs before validator (NotBlank): "  ok  "→"ok" passes,
-// "   "→"" fails.
+// Mod (trim) runs before validator (NotBlank): "  ok  " passes, "   " fails.
 func TestCustomBoth_modThenValidator(t *testing.T) {
 	t.Parallel()
 	good := []byte(`{"tags":["  hello  ","  world  "]}`)

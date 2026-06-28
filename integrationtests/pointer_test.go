@@ -15,8 +15,8 @@ import (
 	"github.com/sirkostya009/ggen/scan"
 )
 
-// TestPointer_parseErrorChainsThroughPointee pins that an inner pointee error
-// chains its field path through the outer field ("addr.street").
+// An inner pointee error chains its field path through the outer field
+// ("addr.street").
 func TestPointer_parseErrorChainsThroughPointee(t *testing.T) {
 	t.Parallel()
 	_, _, err := (PointerStruct{}).DecodeFrom([]byte(
@@ -221,8 +221,8 @@ func TestNPtr_allNull(t *testing.T) {
 	}
 }
 
-// TestNPtr_intermediateNilMarshalsNull: a non-nil outer with a nil inner
-// marshals the field as null (encode short-circuits at the first nil).
+// A non-nil outer with a nil inner marshals the field as null (encode
+// short-circuits at the first nil).
 func TestNPtr_intermediateNilMarshalsNull(t *testing.T) {
 	t.Parallel()
 	in := NPtrStruct{PtrPPStruct: PtrPPStruct{PP: new((*int)(nil))}} // non-nil outer, nil inner

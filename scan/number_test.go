@@ -111,11 +111,9 @@ func TestInt64_RejectsFloatsParity(t *testing.T) {
 	}
 }
 
-// TestInt64_OverflowBoundaryLattice pins the 18-digit unchecked-prefix
-// optimization: the checked tail must still catch every overflow and the
-// values around the 18/19/20-digit boundary stay bit-exact. Leading-zero
-// runs that push the significant digits past the 18-byte window must also
-// resume correctly in the checked loop.
+// TestInt64_OverflowBoundaryLattice checks values around the 18/19/20-digit
+// boundary stay bit-exact and every overflow is caught, including leading-zero
+// runs that push significant digits past the 18-byte window.
 func TestInt64_OverflowBoundaryLattice(t *testing.T) {
 	t.Parallel()
 	ok := map[string]int64{
@@ -160,8 +158,8 @@ func TestInt64_OverflowBoundaryLattice(t *testing.T) {
 	}
 }
 
-// TestUint64_OverflowBoundaryLattice mirrors the Int64 lattice for the
-// 19-digit unchecked prefix.
+// TestUint64_OverflowBoundaryLattice mirrors the Int64 lattice around the
+// 19/20-digit boundary.
 func TestUint64_OverflowBoundaryLattice(t *testing.T) {
 	t.Parallel()
 	ok := map[string]uint64{

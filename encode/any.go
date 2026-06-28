@@ -11,22 +11,16 @@ import (
 	"time"
 )
 
-// AppendAny marshals an `any` value into dst as JSON, type-switching on
-// the runtime value to avoid the reflection cliff for the common cases,
-// then dispatching via well-known interfaces before reflecting. Last
-// resort is `encoding/json.Marshal`.
-//
-// Struct fields honor `json:"name,omitempty,omitzero,string,inline"`
-// tags; anonymous embedded fields are promoted at parent level.
-//
-// String escaping is the package default (jsonv2 shape — <, >, & literal);
-// AppendAnyHTML is the HTML-safe variant for `htmlescape` structs.
+// AppendAny marshals an `any` value into dst as JSON. Struct fields honor
+// `json:"name,omitempty,omitzero,string,inline"` tags; anonymous embedded
+// fields are promoted at parent level. Strings escape without HTML-safety
+// (<, >, & literal); AppendAnyHTML is the HTML-safe variant.
 func AppendAny(dst []byte, v any) ([]byte, error) {
 	return appendAny(dst, v, AppendStringNoHTML)
 }
 
 // AppendAnyHTML is AppendAny with HTML-safe string escaping (<, >, & →
-// \uXXXX, stdlib v1 shape), used by `htmlescape` structs.
+// \uXXXX).
 func AppendAnyHTML(dst []byte, v any) ([]byte, error) {
 	return appendAny(dst, v, AppendString)
 }
@@ -71,8 +65,6 @@ func appendAny(dst []byte, v any, esc escapeFn) ([]byte, error) {
 	case json.Number:
 		// Already a valid JSON numeric literal — emit unquoted.
 		return append(dst, x...), nil
-	// Concrete container types — type-assert before reflect to avoid the
-	// per-entry reflect.MapIter / Value boxing.
 	case []any:
 		dst = append(dst, '[')
 		for i, e := range x {
@@ -96,7 +88,6 @@ func appendAny(dst []byte, v any, esc escapeFn) ([]byte, error) {
 			dst = esc(dst, s)
 		}
 		return append(dst, ']'), nil
-	// Homogeneous primitive slices — native range, no per-element alloc.
 	case []int:
 		return appendSliceInt(dst, x), nil
 	case []int8:
@@ -123,8 +114,6 @@ func appendAny(dst []byte, v any, esc escapeFn) ([]byte, error) {
 		return appendSliceFloat(dst, x, 64)
 	case []bool:
 		return appendSliceBool(dst, x), nil
-	// Concrete composite-element slices — handled wholesale so elements skip
-	// the reflect.Slice path's per-element rv.Interface() box.
 	case []time.Time:
 		dst = append(dst, '[')
 		for i := range x {
@@ -176,14 +165,12 @@ func appendAny(dst []byte, v any, esc escapeFn) ([]byte, error) {
 				dst = append(dst, ',')
 			}
 			first = false
-			// esc writes body + closing `"`; caller writes the opening `"`.
 			dst = append(dst, '"')
 			dst = esc(dst, k)
 			dst = append(dst, ':', '"')
 			dst = esc(dst, val)
 		}
 		return append(dst, '}'), nil
-	// Homogeneous primitive maps — native range, zero-alloc per entry.
 	case map[string]int:
 		return appendMapInt(dst, x, esc), nil
 	case map[string]int8:
@@ -210,10 +197,9 @@ func appendAny(dst []byte, v any, esc escapeFn) ([]byte, error) {
 		return appendMapFloat(dst, x, 64, esc)
 	case map[string]bool:
 		return appendMapBool(dst, x, esc), nil
-	// Concrete stdlib cases sit before the json.Marshaler dispatch so
-	// they skip its return-alloc and write straight into dst.
+	// Concrete stdlib cases must sit before the json.Marshaler dispatch.
 	case json.RawMessage:
-		// Nil/empty → null (v1 parity); else assumed-valid JSON verbatim.
+		// Nil/empty → null; else assumed-valid JSON verbatim.
 		if len(x) == 0 {
 			return append(dst, 'n', 'u', 'l', 'l'), nil
 		}
@@ -225,8 +211,7 @@ func appendAny(dst []byte, v any, esc escapeFn) ([]byte, error) {
 			return append(dst, 'n', 'u', 'l', 'l'), nil
 		}
 		return appendTime(dst, *x)
-	// Pointer-to-primitive shortcuts — skip the reflect.Pointer deref's
-	// boxing alloc. nil → null.
+	// Pointer-to-primitive shortcuts. nil → null.
 	case *string:
 		if x == nil {
 			return append(dst, 'n', 'u', 'l', 'l'), nil
@@ -269,9 +254,8 @@ func appendAny(dst []byte, v any, esc escapeFn) ([]byte, error) {
 		}
 		return AppendFloat(dst, *x, 64)
 	// Interface dispatch, priority order. Text encoders outrank
-	// json.Marshaler (zero/one alloc vs MarshalJSON's return alloc); a
-	// type whose MarshalJSON shape differs from `"<AppendText body>"`
-	// needs a concrete case above (see `case time.Time:`).
+	// json.Marshaler; a type whose MarshalJSON shape differs from
+	// `"<AppendText body>"` needs a concrete case above (see time.Time).
 	case Marshaler:
 		return x.AppendJSON(dst)
 	case encoding.TextAppender:
@@ -297,8 +281,7 @@ func appendAny(dst []byte, v any, esc escapeFn) ([]byte, error) {
 		}
 		return append(dst, b...), nil
 	}
-	// Reflection path. Recursing through AppendAny per element keeps
-	// nested ggen Marshalers / TextAppenders on their fast path.
+	// Reflection path for types the type switch above doesn't match.
 	rv := reflect.ValueOf(v)
 	switch rv.Kind() {
 	case reflect.Pointer, reflect.Interface:
@@ -306,8 +289,8 @@ func appendAny(dst []byte, v any, esc escapeFn) ([]byte, error) {
 			return append(dst, 'n', 'u', 'l', 'l'), nil
 		}
 		return appendAny(dst, rv.Elem().Interface(), esc)
-	// Named primitives (`type MyEnum int`, …) — the type switch matches
-	// only predeclared types exactly, so named variants land here.
+	// Named primitives (`type MyEnum int`, …) land here — the type switch
+	// matches only predeclared types exactly.
 	case reflect.Bool:
 		return strconv.AppendBool(dst, rv.Bool()), nil
 	case reflect.String:
@@ -324,12 +307,11 @@ func appendAny(dst []byte, v any, esc escapeFn) ([]byte, error) {
 	case reflect.Struct:
 		return appendStruct(dst, rv, esc)
 	case reflect.Slice, reflect.Array:
-		// uint8-elem slices/arrays go base64 (stdlib parity, e.g. `type
-		// Bytes []byte`).
+		// uint8-elem slices/arrays marshal as base64 (e.g. `type Bytes []byte`).
 		if rv.Type().Elem().Kind() == reflect.Uint8 {
 			dst = append(dst, '"')
 			if rv.Kind() == reflect.Array {
-				// reflect.Value.Bytes panics on arrays — copy via Slice.
+				// reflect.Value.Bytes panics on arrays — slice first.
 				rv = rv.Slice(0, rv.Len())
 			}
 			dst = base64.StdEncoding.AppendEncode(dst, rv.Bytes())
@@ -355,9 +337,8 @@ func appendAny(dst []byte, v any, esc escapeFn) ([]byte, error) {
 		dst = append(dst, '{')
 		elemKind := rv.Type().Elem().Kind()
 		iter := rv.MapRange()
-		// Reused addressable scratch — iter.Key()/iter.Value() allocate a fresh
-		// reflect.Value per entry; SetIterKey/SetIterValue copy into these two
-		// instead, so the per-entry Value allocs become 2 fixed (opt [11]).
+		// Reused addressable scratch — SetIterKey/SetIterValue copy into these
+		// instead of allocating a fresh reflect.Value per entry.
 		kv := reflect.New(rv.Type().Key()).Elem()
 		vv := reflect.New(rv.Type().Elem()).Elem()
 		first := true
@@ -382,9 +363,8 @@ func appendAny(dst []byte, v any, esc escapeFn) ([]byte, error) {
 	return dst, &json.UnsupportedTypeError{Type: rv.Type()}
 }
 
-// Primitive slice/map fast-path helpers, generic over element type so
-// all int / uint / float sizes share one body. Reached only from the
-// concrete-type cases in AppendAny.
+// Primitive slice/map helpers, generic over element type so all int /
+// uint / float sizes share one body.
 
 func appendSliceInt[V int | int8 | int16 | int32 | int64](dst []byte, s []V) []byte {
 	dst = append(dst, '[')
@@ -525,10 +505,9 @@ func appendPtrUint[V uint | uint8 | uint16 | uint32 | uint64](dst []byte, p *V) 
 	return strconv.AppendUint(dst, uint64(*p), 10)
 }
 
-// appendReflectValue emits rv to dst when its Kind is already known.
-// Primitive kinds read straight off the reflect.Value, skipping the
-// per-value interface alloc rv.Interface() costs. Non-primitive kinds
-// fall back to AppendAny via Interface() for full dispatch.
+// appendReflectValue emits rv to dst given its already-known Kind.
+// Primitive kinds read straight off the reflect.Value; non-primitive kinds
+// fall back to AppendAny via Interface().
 func appendReflectValue(dst []byte, rv reflect.Value, kind reflect.Kind, esc escapeFn) ([]byte, error) {
 	switch kind {
 	case reflect.String:
@@ -548,8 +527,7 @@ func appendReflectValue(dst []byte, rv reflect.Value, kind reflect.Kind, esc esc
 	return appendAny(dst, rv.Interface(), esc)
 }
 
-// fieldInfo describes one JSON-visible field of a struct type, with its
-// emit-side flags pre-parsed at type-info build time.
+// fieldInfo describes one JSON-visible field of a struct type.
 type fieldInfo struct {
 	name      string
 	index     []int
@@ -560,8 +538,7 @@ type fieldInfo struct {
 }
 
 // structInfo is the cached, flattened field list for a struct type.
-// Anonymous embedded structs are walked at build time so emit-side has
-// no recursion-into-embeds branch.
+// Anonymous embedded structs are flattened in at build time.
 type structInfo struct {
 	fields []fieldInfo
 }

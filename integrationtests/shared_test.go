@@ -27,8 +27,8 @@ type Node struct {
 	Children []Node            `json:"children"`
 }
 
-// WideStruct exercises the bitmask-seen-flag path: 40 required fields cross
-// seenBitmaskThreshold (32), so codegen packs seen-flags into a bitmask.
+// WideStruct exercises the bitmask seen-flag path: 40 required fields, past the
+// 32-field threshold.
 //
 //ggen:generate
 type WideStruct struct {

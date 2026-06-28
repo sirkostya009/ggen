@@ -271,4 +271,4 @@ func isError(t types.Type) bool {
 	return false
 }
 
-var _ = token.NoPos // keep go/token import in case future refactor needs positions
+var _ = token.NoPos // keeps the go/token import

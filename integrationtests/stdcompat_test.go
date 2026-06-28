@@ -331,10 +331,9 @@ func timeFormatsStdCompat(when time.Time) TimeFormatsStdCompat {
 	}
 }
 
-// TestStdCompat_TimeFormatsStdCompat round-trips the jsonv2-accepted time
-// formats. UTC is required so RFC1123/RFC850/UnixDate emit the literal `UTC`
-// token jsonv2 expects; non-zero nanos exercises the `format:unix` fractional
-// decimal path.
+// Round-trips the jsonv2-accepted time formats. UTC is required so
+// RFC1123/RFC850/UnixDate emit the literal `UTC` token jsonv2 expects;
+// non-zero nanos exercises the `format:unix` fractional decimal path.
 func TestStdCompat_TimeFormatsStdCompat(t *testing.T) {
 	t.Parallel()
 	when := time.Date(2026, 5, 14, 12, 34, 56, 789000000, time.UTC)
@@ -496,9 +495,9 @@ type AnyWire struct {
 	V any `json:"v"`
 }
 
-// TestStdCompat_FloatWire pins ggen float output byte-for-byte against jsonv2
-// across magnitude boundaries — crossCompat masks formatting differences
-// (`1e+06` vs `1000000` decode equal).
+// ggen float output is byte-for-byte identical to jsonv2 across magnitude
+// boundaries — crossCompat masks formatting differences (`1e+06` vs `1000000`
+// decode equal).
 func TestStdCompat_FloatWire(t *testing.T) {
 	t.Parallel()
 	for _, v := range []float64{
@@ -514,10 +513,10 @@ func TestStdCompat_FloatWire(t *testing.T) {
 	}
 }
 
-// TestStdCompat_AnyWire pins the encode.AppendAny wire shape against jsonv2:
-// HTML-special bytes in any-held strings/slices/maps must emit literally, and
-// floats through the any path use the same fixed AppendFloat. Single-key maps
-// keep iteration order deterministic for the byte compare.
+// The encode.AppendAny wire shape matches jsonv2: HTML-special bytes in
+// any-held strings/slices/maps emit literally, and floats through the any path
+// use the same AppendFloat. Single-key maps keep iteration order deterministic
+// for the byte compare.
 func TestStdCompat_AnyWire(t *testing.T) {
 	t.Parallel()
 	cases := []any{
@@ -595,11 +594,10 @@ func crossCompatMerge[T ggenCompat[T]](t *testing.T, name string, mk func() T, p
 	})
 }
 
-// TestStdCompatMerge_Parity pins that ggen's decode-into-receiver merge agrees
-// with jsonv2 everywhere they should match: scalar persistence, slice replace,
-// null → nil, nested-struct merge, `*T`/`**T` reuse, exact-length array
-// overwrite, empty `[]` on a non-nil receiver. Divergences live in
-// TestStdCompatMerge_IntentionalDivergences.
+// ggen's decode-into-receiver merge agrees with jsonv2 everywhere they should
+// match: scalar persistence, slice replace, null → nil, nested-struct merge,
+// `*T`/`**T` reuse, exact-length array overwrite, empty `[]` on a non-nil
+// receiver. Divergences live in TestStdCompatMerge_IntentionalDivergences.
 func TestStdCompatMerge_Parity(t *testing.T) {
 	t.Parallel()
 
@@ -654,9 +652,9 @@ func TestStdCompatMerge_Parity(t *testing.T) {
 		`{"rgb":[1,2,3]}`)
 }
 
-// TestStdCompatMerge_IntentionalDivergences pins where ggen deliberately
-// differs from jsonv2 merge — consequences of ggen's container reset-at-entry
-// and strict scalar parsing. Inverse of TestStdCompatMerge_Parity.
+// Where ggen deliberately differs from jsonv2 merge — consequences of ggen's
+// container reset-at-entry and strict scalar parsing. Inverse of
+// TestStdCompatMerge_Parity.
 func TestStdCompatMerge_IntentionalDivergences(t *testing.T) {
 	t.Parallel()
 

@@ -1,21 +1,14 @@
-// The url-encoding mode bits, the 256-byte urlTable, and the bodies of
-// AppendURL / appendUserinfo / appendURLEscape are ported from Go's
-// net/url (BSD-style license; encoding_table.go + url.go's escape /
-// Userinfo.String / URL.String / EscapedPath / EscapedFragment). The
-// duplication is intentional: net/url neither exports the table nor
-// offers an append-style escape, so String() would allocate per call.
+// The url-encoding mode bits, urlTable, and the bodies of AppendURL /
+// appendUserinfo / appendURLEscape are ported from Go's net/url (BSD-style
+// license) to provide an append-style, allocation-free URL.String.
 
 package encode
 
 import "net/url"
 
-// AppendURL appends u's URL wire form (as url.URL.String) to dst, zero
-// allocation. Bytes match URL.String(). For EscapedPath/EscapedFragment
-// it prefers a non-empty RawPath/RawFragment when they're a valid
-// encoding (validURLEncoded), skipping the unescape+compare round-trip.
-//
-// Output never contains a raw `"` or `\` (every applicable escape mode
-// percent-encodes both), so it's safe to drop between JSON quotes.
+// AppendURL appends u's wire form to dst, byte-for-byte equal to
+// url.URL.String, with zero allocation. The output never contains a raw `"`
+// or `\`, so it's safe to drop between JSON quotes.
 func AppendURL(dst []byte, u url.URL) []byte {
 	if u.Scheme != "" {
 		dst = append(dst, u.Scheme...)
@@ -38,8 +31,7 @@ func AppendURL(dst []byte, u url.URL) []byte {
 				dst = appendURLEscape(dst, u.Host, urlEncodeHost)
 			}
 		}
-		// Prefer RawPath only when it's a valid encoding of Path; raw
-		// UTF-8 there fails validURLEncoded and falls through to escape.
+		// Prefer RawPath only when it's a valid encoding of Path.
 		switch {
 		case u.RawPath != "" && validURLEncoded(u.RawPath, urlEncodePath):
 			dst = append(dst, u.RawPath...)
@@ -76,7 +68,6 @@ func AppendURL(dst []byte, u url.URL) []byte {
 }
 
 // appendUserinfo emits username[:password] with per-mode escaping.
-// Mirrors (*url.Userinfo).String.
 func appendUserinfo(dst []byte, u *url.Userinfo) []byte {
 	if u == nil {
 		return dst
@@ -89,9 +80,8 @@ func appendUserinfo(dst []byte, u *url.Userinfo) []byte {
 	return dst
 }
 
-// appendURLEscape is the byte-append counterpart of url.escape: writes
-// s into dst, percent-escaping each byte for which shouldEscape returns
-// true under the given mode. Space in encodeQueryComponent becomes '+'.
+// appendURLEscape writes s into dst, percent-escaping each byte that needs
+// escaping under mode. Space in encodeQueryComponent becomes '+'.
 func appendURLEscape(dst []byte, s string, mode urlEncoding) []byte {
 	const upperhex = "0123456789ABCDEF"
 	for i := 0; i < len(s); i++ {
@@ -108,10 +98,9 @@ func appendURLEscape(dst []byte, s string, mode urlEncoding) []byte {
 	return dst
 }
 
-// validURLEncoded is the byte-only counterpart of net/url's
-// validEncoded — true iff s is already a valid encoded form for the
-// given mode (every char is either an unreserved/sub-delim, an `@`/`:`,
-// or part of a %XX escape).
+// validURLEncoded reports whether s is already a valid encoded form for the
+// given mode (every char is an unreserved/sub-delim, an `@`/`:`, or part of
+// a %XX escape).
 func validURLEncoded(s string, mode urlEncoding) bool {
 	for i := 0; i < len(s); i++ {
 		switch s[i] {
@@ -130,8 +119,7 @@ func validURLEncoded(s string, mode urlEncoding) bool {
 	return true
 }
 
-// Same predicate for fragments — mirror upstream
-// `(*URL).EscapedFragment` validation.
+// validURLEncodedFragment is validURLEncoded for the fragment mode.
 func validURLEncodedFragment(s string) bool {
 	return validURLEncoded(s, urlEncodeFragment)
 }
@@ -154,8 +142,7 @@ func containsColon(s string) bool {
 	return false
 }
 
-// URL-encoding mode bits + lookup table — copied verbatim from
-// net/url/encoding_table.go (not exported upstream).
+// URL-encoding mode bits + lookup table, ported from net/url.
 type urlEncoding uint8
 
 const (

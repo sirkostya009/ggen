@@ -12,8 +12,8 @@ import (
 )
 
 // smallPool recycles bytes.Buffer for the per-renderer temp buffers.
-// bytes.Buffer.String() copies (unlike strings.Builder), so reusing the
-// buf after Put can't corrupt prior callers' returned strings.
+// bytes.Buffer.String() copies, so reusing the buf after Put can't corrupt
+// prior callers' returned strings.
 var smallPool = sync.Pool{New: func() any {
 	b := new(bytes.Buffer)
 	b.Grow(512)
@@ -44,7 +44,7 @@ func generateTo(w io.Writer, pkg string, structs []StructInfo) error {
 			}
 		}
 	}
-	// Default: sort fields alphabetically by JSON name (opt out with nosortkeys).
+	// Sort fields alphabetically by JSON name (opt out with nosortkeys).
 	// Inline fields stay at the end so comma emission stays tidy.
 	for i := range structs {
 		if structs[i].NoSort {
@@ -245,7 +245,7 @@ func collectImports(structs []StructInfo, bodies [][]byte) ([]string, []string) 
 	if anyValidation || anyRequired {
 		add("github.com/sirkostya009/ggen/decode/validation")
 	}
-	_ = anyString // body-scan picks up unsafe usage; flag kept for future gates
+	_ = anyString // body-scan picks up unsafe usage; flag unused here
 	// Stdlib-helper imports are emission-driven: scanning the rendered bodies
 	// for the import-qualified token is exact and avoids a per-kind walk over
 	// arbitrarily-nested container types.
@@ -488,12 +488,6 @@ func isNumeric(k TypeKind) bool {
 // for numeric / bool elements (their textual form carries no `,`/`]`/`:`/`}`).
 func scalarCountable(k TypeKind) bool { return isNumeric(k) || k == KindBool }
 
-func renderModsShape(b *bytes.Buffer, mods []ModRule, ref, goType string, kind TypeKind, posVar string) {
-	for _, m := range mods {
-		renderOneMod(b, m, ref, goType, kind, posVar)
-	}
-}
-
 // renderOneMod emits one mod (transform) against ref. posVar selects the
 // return shape for a fallible mod ("" = stream 2-tuple, else bytes 3-tuple). A
 // custom mod is pure (`func(T)T`), error-form (`func(T)(T,error)`, parse error),
@@ -698,8 +692,7 @@ func isRuneRule(name string) bool {
 
 // asciiImplyingRule reports whether passing this validator guarantees the
 // value is pure ASCII — so one byte per rune, i.e. utf8.RuneCountInString ==
-// len. Enables tier (c) of opt #44 (drop the rune walk for a rune rule that
-// FOLLOWS one of these in the same run).
+// len. Lets a rune rule that FOLLOWS one of these in the same run drop the walk.
 func asciiImplyingRule(name string) bool {
 	switch name {
 	case "alphanum", "numeric", "ascii", "hexadecimal":
@@ -711,11 +704,9 @@ func asciiImplyingRule(name string) bool {
 // emitValRun emits a contiguous run of validators against an unchanged ref
 // (callers split runs at mods, which mutate ref). Rune-count rules
 // (runes/minrunes/maxrunes) emit through emitRuneRule, which avoids the O(len)
-// utf8.RuneCountInString walk via byte-length gating (the rune count R of a B-
-// byte UTF-8 string satisfies ceil(B/4) <= R <= B). If an ASCII-implying rule
-// already passed earlier in this run AND we're not accumulating (multierr —
-// where a failed earlier rule doesn't stop us reaching this one on non-ASCII
-// input), the count is exactly len and the walk is dropped entirely (tier c).
+// utf8.RuneCountInString walk via byte-length gating. If an ASCII-implying rule
+// already passed earlier in this run AND we're not in multierr mode, the count
+// is exactly len and the walk is dropped entirely.
 func emitValRun(b *bytes.Buffer, run []ValidationRule, ref, jsonName string, kind TypeKind, multiErr bool, onErr func(string) string) {
 	asciiSeen := false
 	for _, v := range run {
@@ -731,10 +722,9 @@ func emitValRun(b *bytes.Buffer, run []ValidationRule, ref, jsonName string, kin
 }
 
 // emitRuneRule emits a single rune-count rule (runes/minrunes/maxrunes).
-// useLen drops the walk entirely (tier c — count is len). Otherwise byte-length
-// gates resolve the fail-free and pass-free cases in O(1); only the ambiguous
-// band walks. The failure literal's Got reports the real rune count (a cold
-// walk on the fail path; the live `rc` inside a band).
+// useLen drops the walk entirely (count is len). Otherwise byte-length gates
+// resolve the fail-free and pass-free cases in O(1); only the ambiguous band
+// walks. The failure literal's Got reports the real rune count.
 func emitRuneRule(b *bytes.Buffer, v ValidationRule, ref, jsonName string, onErr func(string) string, useLen bool) {
 	errLit := func(got string) string {
 		switch v.Name {
@@ -748,7 +738,7 @@ func emitRuneRule(b *bytes.Buffer, v ValidationRule, ref, jsonName string, onErr
 	}
 	walk := fmt.Sprintf("utf8.RuneCountInString(%s)", ref)
 
-	// Tier (c): every byte is a rune, so the count is len(ref) — no walk.
+	// Every byte is a rune, so the count is len(ref) — no walk.
 	if useLen {
 		l := fmt.Sprintf("len(%s)", ref)
 		op := map[string]string{"runes": "!=", "minrunes": "<", "maxrunes": ">"}[v.Name]
@@ -756,9 +746,8 @@ func emitRuneRule(b *bytes.Buffer, v ValidationRule, ref, jsonName string, onErr
 		return
 	}
 
-	// Tier (b): byte-length gate. n parsed from the (applicability-validated)
-	// integer value; on the off chance it doesn't parse, fall back to a plain
-	// unconditional walk.
+	// Byte-length gate. On the off chance the value doesn't parse as an
+	// integer, fall back to an unconditional walk.
 	n, err := strconv.Atoi(v.Value)
 	if err != nil {
 		op := map[string]string{"runes": "!=", "minrunes": "<", "maxrunes": ">"}[v.Name]
@@ -767,23 +756,21 @@ func emitRuneRule(b *bytes.Buffer, v ValidationRule, ref, jsonName string, onErr
 	}
 	switch v.Name {
 	case "minrunes":
-		// R >= n. Fail-free: len < n (R <= len < n). Pass-free: len >= 4n-3
-		// (R >= ceil(len/4) >= n). Band [n, 4n-3) walks. n<=1 → band empty.
+		// R >= n. Fail-free below len n, pass-free at/above 4n-3; walk the band.
 		fmt.Fprintf(b, "if len(%s) < %d {\n\t%s\n}", ref, n, onErr(errLit(walk)))
 		if 4*n-3 > n {
 			fmt.Fprintf(b, " else if len(%s) < %d {\n\tif rc := %s; rc < %d {\n\t\t%s\n\t}\n}", ref, 4*n-3, walk, n, onErr(errLit("rc")))
 		}
 		b.WriteString("\n")
 	case "maxrunes":
-		// R <= n. Pass-free: len <= n (R <= len). Fail-free: len > 4n
-		// (R >= ceil(len/4) > n). Band (n, 4n] walks. n<1 → no band.
+		// R <= n. Pass-free at/below len n, fail-free above 4n; walk the band.
 		fmt.Fprintf(b, "if len(%s) > %d {\n\t%s\n}", ref, 4*n, onErr(errLit(walk)))
 		if n >= 1 {
 			fmt.Fprintf(b, " else if len(%s) > %d {\n\tif rc := %s; rc > %d {\n\t\t%s\n\t}\n}", ref, n, walk, n, onErr(errLit("rc")))
 		}
 		b.WriteString("\n")
 	case "runes":
-		// R == n. Fail-free: len < n OR len > 4n. Band [n, 4n] walks.
+		// R == n. Fail-free outside [n, 4n]; walk the band.
 		fmt.Fprintf(b, "if len(%s) < %d || len(%s) > %d {\n\t%s\n} else if rc := %s; rc != %d {\n\t%s\n}\n",
 			ref, n, ref, 4*n, onErr(errLit(walk)), walk, n, onErr(errLit("rc")))
 	}
@@ -1362,8 +1349,7 @@ dst = append(dst, '"')
 		// big.Float as JSON string — jsonv2 wire format.
 		fmt.Fprintf(b, "dst = append(dst, '\"')\ndst = (&%s).Append(dst, 'g', -1)\ndst = append(dst, '\"')\n", ref)
 	case KindBigRat:
-		// JSON string "num/denom" (or "n" when whole). AppendText cuts ~3
-		// allocs vs RatString() with the same wire shape.
+		// JSON string "num/denom" (or "n" when whole), via AppendText.
 		fmt.Fprintf(b, "dst = append(dst, '\"')\nif dst, err = (&%s).AppendText(dst); err != nil { return dst, err }\ndst = append(dst, '\"')\n", ref)
 	case KindSQLNull:
 		if f.SQLNullInner != nil {
@@ -2150,7 +2136,8 @@ const defaultPreallocCap = 4
 
 // userPreallocHint extracts an explicit sizing hint from the hintlen / len /
 // minlen ladder. Returns -1 for "unset" so callers distinguish hintlen=0
-// (opt-out) from no hint. `maxlen` is NOT used (see "tried and rejected").
+// (opt-out) from no hint. `maxlen` is NOT used — it's a bound, not an
+// expected size.
 func userPreallocHint(f FieldInfo) int {
 	if f.HintLen >= 0 {
 		return f.HintLen
@@ -2401,8 +2388,7 @@ func emitReceiverReset(b *bytes.Buffer, s StructInfo) {
 func renderDecode(b *bytes.Buffer, s StructInfo) {
 	// Named results home the values in the caller's return slot, so every
 	// `return result, …` is register-set + RET with no struct copy; the
-	// `result = recv` prologue seeds the merge source. Naming `i`/`err` drops
-	// their prelude. See perf-candidates [15] / opt #38.
+	// `result = recv` prologue seeds the merge source.
 	fmt.Fprintf(b, "func (recv %s) DecodeFrom(data []byte) (result %s, i int, err error) {\n", s.Name, s.Name)
 	b.WriteString("result = recv\n")
 	if s.IsAlias {
@@ -2584,8 +2570,8 @@ func renderMap(b *bytes.Buffer, f FieldInfo, ref, posVar string, topLevel bool) 
 	// At dispatch level the null branch breaks to the comma handling rather
 	// than nesting the object read in an else.
 	flat := nullBreakOK(f)
-	// No leading WS skip — the value-entry already skipped it (opt [18]; the
-	// alias path adds an explicit skip before calling).
+	// No leading WS skip — the value-entry already skipped it (the alias path
+	// adds an explicit skip before calling).
 	inlineNullPeek(b, posVar)
 	fmt.Fprintf(b, "%s = nil\n", ref)
 	if flat {
@@ -3737,7 +3723,7 @@ func renderField(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	}
 	// `nullzero`: accept an explicit JSON null → Go zero on a non-pointer value
 	// field. Flat-break at dispatch level; else nest in an else so the shared
-	// validateAndMod runs on the zero too (opt #34).
+	// validateAndMod runs on the zero too.
 	nz := nullZeroApplies(f)
 	flat := nz && nullBreakOK(f)
 	if nz {
@@ -3866,7 +3852,7 @@ func peelSliceField(f FieldInfo) FieldInfo {
 	}
 	inner := FieldInfo{
 		GoType:      innerGoType,
-		Kind:        f.ElemKind, // the layer we're now inside
+		Kind:        f.ElemKind, // the layer one level down
 		ArrayLen:    f.ElemArrayLen,
 		ElemPointer: innerPointer,
 		ElemType:    innerElem,
@@ -3876,7 +3862,7 @@ func peelSliceField(f FieldInfo) FieldInfo {
 		NoValidate:  f.NoValidate,
 		AllowDups:   f.AllowDups,
 		// HintLen=-1 ("unset") so preallocCap falls through to the kind
-		// default — the zero-value 0 would read as opt-out (opt #25).
+		// default — the zero-value 0 would read as opt-out.
 		HintLen: -1,
 	}
 	if innerKind == KindArray {
@@ -3941,8 +3927,8 @@ func emitByteArrayRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth i
 // Data locals (evN, idxN, slabN) carry the depth suffix to avoid collisions.
 // topLevel marks a whole-value decode (a top-level container alias): there's
 // nothing to parse after the array, so each exit returns directly instead of
-// falling through to a trailing `return` (opt [16] follow-up). Always false for
-// struct fields and nested elements (their caller has more to parse).
+// falling through to a trailing `return`. Always false for struct fields and
+// nested elements (their caller has more to parse).
 func emitByteSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth int, topLevel bool) {
 	isArray := f.Kind == KindArray
 	arrayN := f.ArrayLen
@@ -3956,7 +3942,7 @@ func emitByteSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth i
 	evvar := fmt.Sprintf("ev%d", depth)
 	ivar := fmt.Sprintf("idx%d", depth)
 	// No leading WS skip — every value-entry site (after `:`/`[`/`,`, and the
-	// alias path explicitly) already skipped it (opt [18]).
+	// alias path explicitly) already skipped it.
 	// `null` → nil out the slice (arrays don't accept null). At dispatch level
 	// flat-break; a nested slot whose parent consumed the null (NullDone)
 	// skips the peek.
@@ -3990,7 +3976,7 @@ func emitByteSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth i
 		countable := !f.ElemPointer && scalarCountable(f.ElemKind) && userPreallocHint(f) < 0
 		// When the non-empty arm's prealloc would also be just `dst = T{}`
 		// (no count, no cap, no slab), both empty-peek arms are byte-identical,
-		// so emit one `if dst == nil` and skip the peek (opt [18]).
+		// so emit one `if dst == nil` and skip the peek.
 		if !f.ElemPointer && !countable && sCap <= 0 {
 			fmt.Fprintf(b, "if %s == nil { %s = %s{} }\n", dst, dst, f.GoType)
 		} else {
@@ -4005,7 +3991,7 @@ func emitByteSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth i
 			switch {
 			case countable:
 				// Exact-cap from a one-shot delimiter scan (scalar elems carry no
-				// `,`/`]`): kills the growth chain with no over-cap cost (opt #42).
+				// `,`/`]`): kills the growth chain with no over-cap cost.
 				// Reused slots keep their backing; malformed input falls to cap 1.
 				cntVar := fmt.Sprintf("cnt%d", depth)
 				fmt.Fprintf(b, `if %[1]s == nil {
@@ -4029,11 +4015,11 @@ if e := bytes.IndexByte(data[%[2]s:], ']'); e >= 0 { %[4]s = bytes.Count(data[%[
 	// dst[ivar] for arrays; pre-grown slab/dst tail for slices). err is hoisted
 	// at the DecodeFrom function level.
 	directStruct := f.ElemKind == KindStruct && isGenerated(f.ElemType)
-	_ = evvar // legacy name no longer used at this scope
+	_ = evvar // unused at this scope
 	// Do-while: the empty `[]` and truncation cases are caught by this one-time
 	// guard (preserving ErrBadArray below); inside, the comma handler's
 	// continue/break drives iteration, so the per-element `data!=']'` re-check is
-	// redundant (opt [16]).
+	// redundant.
 	fmt.Fprintf(b, "if %s < len(data) && data[%s] != ']' {\nfor {\n", kvar, kvar)
 	if isArray {
 		// Strict tuple: reject excess elements.
@@ -4155,7 +4141,7 @@ if e := bytes.IndexByte(data[%[2]s:], ']'); e >= 0 { %[4]s = bytes.Count(data[%[
 			// Hoist the nested slot into a depth-local `rowN` so the inner loop
 			// writes a local header (no per-element parent-backing barrier);
 			// `target = rowN` publishes the finished row. Seed from the carried
-			// slot ([:0] reset) so the inner decode reuses its backing (opt #43).
+			// slot ([:0] reset) so the inner decode reuses its backing.
 			row := fmt.Sprintf("row%d", depth)
 			fmt.Fprintf(b, "%s := %s\n", row, target)
 			if inner.Kind == KindSlice {

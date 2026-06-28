@@ -152,15 +152,15 @@ func TestUnmarshalStream_tinyInitial(t *testing.T) {
 	}
 }
 
-// HugeStringStruct slams ReadMore(0) and stringSlow with a multi-MiB body.
+// HugeStringStruct exercises the stream slow path with a multi-MiB body.
 //
 //ggen:generate
 type HugeStringStruct struct {
 	Big string `json:"big"`
 }
 
-// TestUnmarshalStream_SingleHugeString: a 2 MiB string through a tiny buffer
-// decodes losslessly across many grow + compaction cycles.
+// A 2 MiB string through a tiny buffer decodes losslessly across many grow +
+// compaction cycles.
 func TestUnmarshalStream_SingleHugeString(t *testing.T) {
 	t.Parallel()
 	const size = 2 * 1024 * 1024
@@ -181,8 +181,7 @@ func TestUnmarshalStream_SingleHugeString(t *testing.T) {
 	}
 }
 
-// TestUnmarshalStream_MassiveWhitespace: SkipSpace consumes ~300 KB of
-// whitespace across compaction cycles (pins the keep>0 cursor adjustment).
+// SkipSpace consumes ~300 KB of whitespace across compaction cycles.
 func TestUnmarshalStream_MassiveWhitespace(t *testing.T) {
 	t.Parallel()
 	gap := strings.Repeat("\n \t", 100_000)
@@ -214,8 +213,8 @@ type SequentialStringsStruct struct {
 	H string `json:"h"`
 }
 
-// TestUnmarshalStream_ValuesSurviveCompaction: earlier decoded values stay
-// correct after later compactions (a string path aliasing s.buf would fail).
+// Earlier decoded values stay correct after later compactions (a string path
+// aliasing s.buf would fail).
 func TestUnmarshalStream_ValuesSurviveCompaction(t *testing.T) {
 	t.Parallel()
 	in := []byte(`{"a":"AAAAAAAA","b":"BBBBBBBB","c":"CCCCCCCC","d":"DDDDDDDD",` +
@@ -238,8 +237,8 @@ func TestUnmarshalStream_ValuesSurviveCompaction(t *testing.T) {
 	}
 }
 
-// TestUnmarshalStream_RawJSONAcrossBoundary: a json.RawMessage value spanning
-// multiple ReadMore boundaries captures intact (Shift-gated offsets).
+// A json.RawMessage value spanning multiple ReadMore boundaries captures
+// intact.
 func TestUnmarshalStream_RawJSONAcrossBoundary(t *testing.T) {
 	t.Parallel()
 	bigInner := `{"deeply":{"nested":{"arr":[` +
@@ -259,8 +258,7 @@ func TestUnmarshalStream_RawJSONAcrossBoundary(t *testing.T) {
 	}
 }
 
-// TestUnmarshalStream_InlineMapKeyClone: inline-map keys must be cloned on
-// insertion, else compactions corrupt them.
+// Inline-map keys must be cloned on insertion, else compactions corrupt them.
 func TestUnmarshalStream_InlineMapKeyClone(t *testing.T) {
 	t.Parallel()
 	in := []byte(`{"name":"alice","kAlpha":1,"kBravoo":2,"kCharlie":3,` +
@@ -307,8 +305,8 @@ func TestUnmarshalStream_UnknownKeyErrorClone(t *testing.T) {
 	}
 }
 
-// TestUnmarshalStream_TinyBufManyKeys: 40-field object through a 1-byte reader
-// + buf, stressing the dispatch-loop compaction + bitmask seen-flag path.
+// A 40-field object through a 1-byte reader + buf stresses dispatch-loop
+// compaction and the bitmask seen-flag path.
 func TestUnmarshalStream_TinyBufManyKeys(t *testing.T) {
 	t.Parallel()
 	var parts []string
@@ -336,8 +334,8 @@ func formatField(i int) string {
 	return `"f` + n + `":"v` + n + `"`
 }
 
-// TestUnmarshalStream_HintBufSmallerThanValue: a hint buf smaller than the
-// value forces repeated slow-path grow + compaction.
+// A hint buf smaller than the value forces repeated slow-path grow +
+// compaction.
 func TestUnmarshalStream_HintBufSmallerThanValue(t *testing.T) {
 	t.Parallel()
 	for _, hint := range []int{1, 4, 16, 64, 256} {
@@ -357,8 +355,7 @@ func TestUnmarshalStream_HintBufSmallerThanValue(t *testing.T) {
 	}
 }
 
-// TestUnmarshalStream_PartialReadAtBoundaries: variable burst-then-stall chunk
-// sizes, modeling a network reader.
+// Variable burst-then-stall chunk sizes, modeling a network reader.
 func TestUnmarshalStream_PartialReadAtBoundaries(t *testing.T) {
 	t.Parallel()
 	r := &burstReader{data: complexPayload, sizes: []int{3, 1, 7, 1, 13, 1, 50, 1}}
@@ -401,8 +398,8 @@ func (b *burstReader) Read(p []byte) (int, error) {
 	return want, nil
 }
 
-// TestUnmarshalStream_BytesEqualsStream: any payload the bytes path accepts,
-// the stream path decodes equal — catches chunk-boundary-sensitive bugs.
+// Any payload the bytes path accepts, the stream path decodes equal — catches
+// chunk-boundary-sensitive bugs.
 func TestUnmarshalStream_BytesEqualsStream(t *testing.T) {
 	t.Parallel()
 	seeds := [][]byte{
@@ -435,8 +432,7 @@ func TestUnmarshalStream_BytesEqualsStream(t *testing.T) {
 	}
 }
 
-// TestUnmarshalStream_AcceptedByBytes_AlsoAcceptedByStream: same property over
-// the fuzz seed set.
+// Same property as BytesEqualsStream, over the fuzz seed set.
 func TestUnmarshalStream_AcceptedByBytes_AlsoAcceptedByStream(t *testing.T) {
 	t.Parallel()
 	for _, seed := range fuzzSeeds {
@@ -460,8 +456,8 @@ func TestUnmarshalStream_AcceptedByBytes_AlsoAcceptedByStream(t *testing.T) {
 	}
 }
 
-// TestStream_parseErrorFieldName: the stream path threads field-name context
-// into the ParseError like the bytes path.
+// The stream path threads field-name context into the ParseError like the
+// bytes path.
 func TestStream_parseErrorFieldName(t *testing.T) {
 	t.Parallel()
 	var s scan.Stream
@@ -494,8 +490,8 @@ func decodeBothPaths[T decode.Decoder[T]](payload string) (bytesErr, streamErr e
 	return bytesErr, streamErr
 }
 
-// TestTrailingCommaRejected: a trailing comma before a container close is
-// rejected on every container shape and both paths.
+// A trailing comma before a container close is rejected on every container
+// shape and both paths.
 func TestTrailingCommaRejected(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -528,8 +524,8 @@ func TestTrailingCommaRejected(t *testing.T) {
 	}
 }
 
-// TestTruncatedAfterComma: input ending right after an element comma errors on
-// both paths without panicking the stream path at EOF.
+// Input ending right after an element comma errors on both paths without
+// panicking the stream path at EOF.
 func TestTruncatedAfterComma(t *testing.T) {
 	t.Parallel()
 	for _, payload := range []string{`{"tags":["a",`, `{"props":{"a":"b",`} {
@@ -564,8 +560,8 @@ type ValidationPosStruct struct {
 // buffer compacts before B is validated.
 var posPayload = []byte(`{"a":"` + strings.Repeat("x", 64) + `","b":"yy"}`)
 
-// TestValidationError_Pos pins validation.*Error.Pos as a full-payload byte
-// offset, identical on bytes and stream paths despite stream compaction.
+// validation.*Error.Pos is a full-payload byte offset, identical on bytes and
+// stream paths despite stream compaction.
 func TestValidationError_Pos(t *testing.T) {
 	t.Parallel()
 	// Bytes path — Pos sits just past the closing quote of "yy".

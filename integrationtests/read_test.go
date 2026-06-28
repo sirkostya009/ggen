@@ -114,8 +114,8 @@ func TestRead_notObject(t *testing.T) {
 	}
 }
 
-// TestRead_parseErrorTopLevel: top-level malformed JSON gives a *ParseError
-// carrying the scan sentinel (errors.Is works) but no Field path.
+// Top-level malformed JSON gives a *ParseError carrying the scan sentinel
+// (errors.Is works) but no Field path.
 func TestRead_parseErrorTopLevel(t *testing.T) {
 	t.Parallel()
 	_, _, err := (Address{}).DecodeFrom([]byte(`not-an-object`))
@@ -134,8 +134,7 @@ func TestRead_parseErrorTopLevel(t *testing.T) {
 	}
 }
 
-// TestRead_parseErrorFieldName: wrong field type populates the ParseError path
-// with the failing JSON key.
+// A wrong field type populates the ParseError path with the failing JSON key.
 func TestRead_parseErrorFieldName(t *testing.T) {
 	t.Parallel()
 	_, _, err := (Address{}).DecodeFrom([]byte(`{"street":123,"city":"C","zipCode":"12345"}`))
@@ -154,8 +153,7 @@ func TestRead_parseErrorFieldName(t *testing.T) {
 	}
 }
 
-// TestRead_validationNotWrapped: validation.* errors stay typed, not wrapped
-// in a ParseError.
+// validation.* errors stay typed, not wrapped in a ParseError.
 func TestRead_validationNotWrapped(t *testing.T) {
 	t.Parallel()
 	_, _, err := (Address{}).DecodeFrom([]byte(`{"street":"","city":"C","zipCode":"12345"}`))

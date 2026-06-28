@@ -33,8 +33,8 @@ var fuzzSeeds = [][]byte{
 	[]byte(`{"props":{"k":"v",}}`),
 }
 
-// FuzzStreamEqualsBytes: bytes and stream paths agree when both succeed.
-// The chunk size varies boundary alignment.
+// Bytes and stream paths agree when both succeed; chunk size varies
+// boundary alignment.
 func FuzzStreamEqualsBytes(f *testing.F) {
 	for _, s := range fuzzSeeds {
 		f.Add(s, uint8(1))
@@ -68,8 +68,8 @@ func FuzzStreamEqualsBytes(f *testing.F) {
 	})
 }
 
-// FuzzBoundaryNoPanic: BoundaryStruct (float/int/string, no validation)
-// must be panic-free on any input.
+// BoundaryStruct (float/int/string, no validation) must be panic-free on any
+// input.
 func FuzzBoundaryNoPanic(f *testing.F) {
 	for _, s := range [][]byte{
 		[]byte(`{"f":1.0,"i":1,"str":"a"}`),
@@ -92,8 +92,8 @@ func FuzzBoundaryNoPanic(f *testing.F) {
 	})
 }
 
-// FuzzStreamHugeStringNoPanic: large strings through tiny bufs exercise the
-// slow-path grow loop; must stay panic-free.
+// Large strings through tiny bufs exercise the slow-path grow loop; must stay
+// panic-free.
 func FuzzStreamHugeStringNoPanic(f *testing.F) {
 	f.Add(uint16(1), uint32(1024))
 	f.Add(uint16(4), uint32(65536))
@@ -125,10 +125,9 @@ func FuzzStreamHugeStringNoPanic(f *testing.F) {
 	})
 }
 
-// PrimStruct holds one field per primitive kind. FuzzPrimitivesCompat fuzzes
-// the typed VALUES rather than payload bytes, so every input is a well-formed
-// payload that drives the numeric/bool/string value-parsers across their full
-// domain — boundaries the byte-soup fuzzers reach only by luck.
+// PrimStruct holds one field per primitive kind, fuzzed by value (not payload
+// bytes) so every input is a well-formed payload driving the value-parsers
+// across their full domain.
 //
 //ggen:generate
 type PrimStruct struct {
@@ -150,8 +149,7 @@ type PrimStruct struct {
 
 // FuzzPrimitivesCompat builds a payload from fuzzed typed values via stdlib,
 // then asserts ggen and stdlib decode it identically: both accept or both
-// reject, and on success the decoded structs are equal. A divergence is either
-// a ggen value-parsing bug or an accept/reject mismatch on valid JSON.
+// reject, and on success the decoded structs are equal.
 func FuzzPrimitivesCompat(f *testing.F) {
 	add := func(p PrimStruct) {
 		f.Add(p.B, p.I, p.I8, p.I16, p.I32, p.I64, p.U, p.U8, p.U16, p.U32, p.U64, p.F32, p.F64, p.Str)

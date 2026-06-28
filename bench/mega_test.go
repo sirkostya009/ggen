@@ -32,8 +32,7 @@ type memProfileSample struct {
 
 // snapshotMemProfile drains runtime.MemProfile and aggregates records by
 // their top non-runtime stack frame. Caller diffs two snapshots for deltas.
-// Needs MemProfileRate=1 before the region (the 512 KB default misses small
-// per-iter allocs); inuseZero=true captures the full cumulative count.
+// Set MemProfileRate=1 before the region or small per-iter allocs are missed.
 func snapshotMemProfile() map[string]memProfileSample {
 	records := make([]runtime.MemProfileRecord, 4096)
 	for {
@@ -90,7 +89,6 @@ func reportTopAllocs(b *testing.B, pre, post map[string]memProfileSample, top in
 		}
 		diffs = append(diffs, diff{site, dObjs})
 	}
-	// Descending — biggest contributors first; truncate to top-N.
 	slices.SortFunc(diffs, func(a, b diff) int {
 		return int(b.allocObjects - a.allocObjects)
 	})
@@ -185,10 +183,8 @@ func BenchmarkMega_Marshal(b *testing.B) {
 		})
 	}
 
-	// ggen_presized: cheapest ggen marshal — caller reuses a pre-grown
-	// buffer across calls. The delta vs ggen is the one-shot allocator
-	// cost pooling saves. A subbench since no other codec row has the
-	// concept of caller-owned buffer reuse.
+	// ggen_presized: ggen marshal reusing a caller-owned pre-grown buffer
+	// across calls. No other codec row has caller-owned buffer reuse.
 	b.Run("ggen_presized", func(b *testing.B) {
 		buf := make([]byte, 0, MegaValue.JSONSize())
 		runBench(b, int64(len(MegaPayload)),
@@ -204,12 +200,10 @@ func BenchmarkMega_Marshal(b *testing.B) {
 	})
 }
 
-// BenchmarkRetention measures retained heap per held output. Each goroutine
-// accumulates decoded *Node into a local sink; sinks merge after RunParallel
-// so every value survives to the post-loop GC pair. HeapInuse delta / iters
-// = retain_KB/op (heap cost of one held response); retain_MiB is the total
-// live-set. Use a fixed iter count (-benchtime=1000x) for comparable numbers.
-// Uses slowPayload (~36 KiB) to keep retained memory tractable.
+// BenchmarkRetention measures retained heap per held output. HeapInuse delta /
+// iters = retain_KB/op (heap cost of one held response); retain_MiB is the
+// total live-set. Use a fixed iter count (-benchtime=1000x) for comparable
+// numbers. Uses slowPayload (~36 KiB) to keep retained memory tractable.
 func BenchmarkRetention(b *testing.B) {
 	var retentionCodecs = []struct {
 		name string
@@ -424,9 +418,8 @@ func BenchmarkMega_Reader(b *testing.B) {
 	}
 }
 
-// BenchmarkDeepNested_Unmarshal — single 50-level chain. Each codec's
-// stack-frame / recursion cost shows up here without being drowned out
-// by the fanout work mega does.
+// BenchmarkDeepNested_Unmarshal — single 50-level chain, isolating per-codec
+// recursion cost from mega's fanout work.
 func BenchmarkDeepNested_Unmarshal(b *testing.B) {
 	var codecs = []struct {
 		name string
@@ -451,9 +444,8 @@ func BenchmarkDeepNested_Unmarshal(b *testing.B) {
 	}
 }
 
-// BenchmarkMapHeavy_Unmarshal — 1024-entry string→string map. Tests the
-// map decoder's prealloc heuristic vs every codec's runtime map growth
-// chain. Each codec's per-entry hash + alloc + insert cost shows up.
+// BenchmarkMapHeavy_Unmarshal — 1024-entry string→string map. Measures
+// per-entry hash + alloc + insert cost.
 func BenchmarkMapHeavy_Unmarshal(b *testing.B) {
 	var codecs = []struct {
 		name string

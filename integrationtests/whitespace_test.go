@@ -43,11 +43,10 @@ func wsify(s string) string {
 	return b.String()
 }
 
-// TestWhitespace_Tolerance: decoding a whitespace-laden payload must yield the
-// same value as the compact form, across every container shape (slice, map,
-// nested slice, fixed array, slice-of-array, array-of-slice, nested struct).
-// Pins the whitespace-skip behaviour so a codegen change to those skips can't
-// silently regress (the rest of the suite uses compact JSON).
+// Decoding a whitespace-laden payload yields the same value as the compact
+// form, across every container shape (slice, map, nested slice, fixed array,
+// slice-of-array, array-of-slice, nested struct) — the rest of the suite uses
+// compact JSON.
 func TestWhitespace_Tolerance(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -71,7 +70,7 @@ func TestWhitespace_Tolerance(t *testing.T) {
 			func(p []byte) (any, error) { v, _, e := Node{}.DecodeFrom(p); return v, e },
 		},
 		// Top-level container aliases — exercise the alias decode path's leading
-		// whitespace handling (opt [18] moved the skip there).
+		// whitespace handling.
 		{
 			"alias_slice",
 			`["a","b","c"]`,
