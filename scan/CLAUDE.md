@@ -30,8 +30,8 @@ Primitives: `SkipSpace`, `String`, `Int64`, `Uint64`, `Float64`, `Bool`,
   `encoding/json.Valid`) + `TestSkipNumber_StreamMatchesBytes`. Number-VALUE fields
   (`float64`, `json.Number`) still use `Float64`/`Number`.
 - **`String()` zero-copy alias** via `unsafe.String(unsafe.SliceData(data[start:]),
-  len)` when no escapes; falls back to `stringSlow` (`utf8.AppendRune` for `\uXXXX`
-  + surrogates). `bytes.IndexByte` (SIMD) finds the closing `"`; a second IndexByte
+  len)` when no escapes; falls back to `stringSlow` (`utf8.AppendRune` for `\uXXXX` +
+  surrogates). `bytes.IndexByte` (SIMD) finds the closing `"`; a second IndexByte
   over the span detects a preceding `\`. Truncated `\u…`/trailing `\` →
   `ErrBadString` via fallthrough to `stringSlow`.
 - **`stringSlow` scratch cap = first-quote span (`closeIdx`)**, NOT the remaining
@@ -64,6 +64,7 @@ wrong once the window compacts) — see `decode/validation/CLAUDE.md`.
 
 **`ReadMore(keep int) error` — the only I/O primitive.** One Read per call, never
 loops. `keep` = lowest offset the caller still needs; bytes before may be discarded:
+
 - `keep == 0` — grow without shift (bigger backing if full). Offsets stable, aliases
   survive.
 - `keep == len(buf)` — reset to `[:0]`, refill from 0 (full compaction).
@@ -126,6 +127,7 @@ prelude — value strings are often long, where SIMD `IndexByte` wins). Escapes 
 back to `stringSlow` (owned copy). Generated decoders call it where the value string
 is **fully consumed before the next stream op AND retains none of its bytes past that
 point**:
+
 - base64/base32/hex `[]byte` (decoded into independent dst by `AppendDecode`)
 - `time.Time`/`time.Duration` text formats (parse → value; error builds fresh string)
 - `net.IP` (`ParseIP` copies; `&net.ParseError{Text:…}` clones `sv`)
@@ -167,10 +169,10 @@ trick `(x-0x2020…20) &^ x & 0x8080…80` (a lane below `0x20` borrows into its
 control byte present). A scalar tail handles the final `< 8` bytes. `KeyView`'s scalar
 prelude (short keys `≤ stringPreludeWindow`) untouched; SWAR runs only post-prelude.
 
-Conservative tier only — SWAR replaces the *control-char* pass; quote + backslash
+Conservative tier only — SWAR replaces the _control-char_ pass; quote + backslash
 locate stay on SIMD `bytes.IndexByte` (folding backslash into SWAR loses to AVX2
-`IndexByte` on long spans — rejected). Byte-identical: error identity (`ErrBadString`)
-+ `stringSlow` handoff at first `\` unchanged; pinned by
+`IndexByte` on long spans — rejected). Byte-identical: error identity (`ErrBadString`) +
+`stringSlow` handoff at first `\` unchanged; pinned by
 `TestHasCtrlByte_DifferentialExhaustive` (control byte at every position × word-phase
 alignment vs naive loop) + `_Boundary` (0x1f vs 0x20 at the lane seam).
 

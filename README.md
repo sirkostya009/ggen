@@ -333,22 +333,22 @@ Everything after the decode stage operates on the value. **Mods (transforms) and
 validators run in declared order**, so `lte=10 @Double` validates the raw value
 before doubling it, while `@Double lte=10` doubles first.
 
-| validators                            | error                                          | checks                                          |
-| ------------------------------------- | ---------------------------------------------- | ----------------------------------------------- |
-| `notempty`                            | `NotEmptyError`                                | string non-empty / slice / map non-zero length  |
-| `len=N`, `minlen=N`, `maxlen=N`       | `LenError`, `MinLenError`, `MaxLenError`       | byte-length / element-count bounds              |
-| `runes=N`, `minrunes=N`, `maxrunes=N` | `RunesError`, `MinRunesError`, `MaxRunesError` | rune-count bounds (utf8 aware)                  |
-| `gt=N`, `gte=N`, `lt=N`, `lte=N`      | `GTError`, `GTEError`, `LTError`, `LTEError`   | numeric comparison                              |
-| `eq=X`, `neq=X`                       | `EqError`, `NeqError`                          | equality (numeric or string operand)            |
-| `multiple=N`                          | `MultipleError`                                | numeric — multiple of N                         |
-| `oneof=a\|b\|c`                       | `OneOfError`                                   | one of the listed alternatives                  |
-| `email`, `url`, `ascii`, `printable`, `alphanum`, `numeric`, `lower`, `upper`, `hexadecimal` | `EmailError`, … | string-shape predicates    |
-| `starts=X`, `ends=X`, `contains=X`    | `StartsError`, `EndsError`, `ContainsError`    | substring tests on strings                      |
+| validators                                                                                   | error                                          | checks                                         |
+| -------------------------------------------------------------------------------------------- | ---------------------------------------------- | ---------------------------------------------- |
+| `notempty`                                                                                   | `NotEmptyError`                                | string non-empty / slice / map non-zero length |
+| `len=N`, `minlen=N`, `maxlen=N`                                                              | `LenError`, `MinLenError`, `MaxLenError`       | byte-length / element-count bounds             |
+| `runes=N`, `minrunes=N`, `maxrunes=N`                                                        | `RunesError`, `MinRunesError`, `MaxRunesError` | rune-count bounds (utf8 aware)                 |
+| `gt=N`, `gte=N`, `lt=N`, `lte=N`                                                             | `GTError`, `GTEError`, `LTError`, `LTEError`   | numeric comparison                             |
+| `eq=X`, `neq=X`                                                                              | `EqError`, `NeqError`                          | equality (numeric or string operand)           |
+| `multiple=N`                                                                                 | `MultipleError`                                | numeric — multiple of N                        |
+| `oneof=a\|b\|c`                                                                              | `OneOfError`                                   | one of the listed alternatives                 |
+| `email`, `url`, `ascii`, `printable`, `alphanum`, `numeric`, `lower`, `upper`, `hexadecimal` | `EmailError`, …                                | string-shape predicates                        |
+| `starts=X`, `ends=X`, `contains=X`                                                           | `StartsError`, `EndsError`, `ContainsError`    | substring tests on strings                     |
 
-| mods                                                                       | target  |
-| -------------------------------------------------------------------------- | ------- |
-| `trim`, `lower`, `upper`, `trimleft=X`, `trimright=X`, `replace=old\|new`  | string  |
-| `clamp=lo\|hi` (either side may be empty: `clamp=0\|`, `clamp=\|100`)      | numeric |
+| mods                                                                      | target  |
+| ------------------------------------------------------------------------- | ------- |
+| `trim`, `lower`, `upper`, `trimleft=X`, `trimright=X`, `replace=old\|new` | string  |
+| `clamp=lo\|hi` (either side may be empty: `clamp=0\|`, `clamp=\|100`)     | numeric |
 
 #### `inner:` / `keys:` — container levels
 
@@ -369,14 +369,14 @@ Lookup map[string]int `json:"lookup" pipe:"keys:minrunes=2 inner:gte=0"`
 ggen looks up the function at codegen and classifies it by signature — no
 runtime registry, no `any` boxing, and the Go compiler catches mismatches:
 
-| signature              | role                                                              |
-| ---------------------- | ----------------------------------------------------------------- |
-| `func(T) error`        | validator → `CustomError{Name, Value, Cause}`                     |
-| `func(T) bool`         | validator → `PredicateError` (false = fail; message-capable)      |
-| `func(T) T`            | mod (pure transform)                                              |
-| `func(T) (T, error)`   | mod (fallible; non-nil error → parse error, even under multierr)  |
-| `func(T) (T, bool)`    | mod (fallible; false → `ModError` parse error; message-capable)   |
-| `func(W) T` (W ≠ T)    | converter (decode-stage variant only — see above)                |
+| signature            | role                                                             |
+| -------------------- | ---------------------------------------------------------------- |
+| `func(T) error`      | validator → `CustomError{Name, Value, Cause}`                    |
+| `func(T) bool`       | validator → `PredicateError` (false = fail; message-capable)     |
+| `func(T) T`          | mod (pure transform)                                             |
+| `func(T) (T, error)` | mod (fallible; non-nil error → parse error, even under multierr) |
+| `func(T) (T, bool)`  | mod (fallible; false → `ModError` parse error; message-capable)  |
+| `func(W) T` (W ≠ T)  | converter (decode-stage variant only — see above)                |
 
 `func(bool) bool` is rejected (ambiguous — use `func(bool) error`). The bool
 forms take an inline message: `@MustBeEven:'value must be even'`.
@@ -445,15 +445,15 @@ get the underlying message.
 
 ## supported kinds
 
-| category  | go types                                                         | wire   | notes                                                                              |
-| --------- | ---------------------------------------------------------------- | ------ | ---------------------------------------------------------------------------------- |
-| primitive | `string`, `bool`, `int*`, `uint*`, `float*`                      | scalar | `*T` for any of these — `null` ↔ `nil`; multi-level `**T`/… also native            |
+| category  | go types                                                         | wire   | notes                                                                                            |
+| --------- | ---------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------ |
+| primitive | `string`, `bool`, `int*`, `uint*`, `float*`                      | scalar | `*T` for any of these — `null` ↔ `nil`; multi-level `**T`/… also native                          |
 | slice     | `[]T`                                                            | array  | nil → `null`; `[]*T` decodes into a single contiguous slab (N allocs → ~log N); `[]**T`/… native |
-| array     | `[N]T`                                                           | tuple  | strict element count — mismatch → `validation.LenError`; `[N]*T` uses a fixed slab |
-| map       | `map[string]V`                                                   | object | string keys only; `map[string]*V` / `**V` / … values decode natively, `null` ↔ `nil` |
-| struct    | named / embedded                                                 | object | embedded fields are promoted, same as `encoding/json`                              |
-| cross-pkg | foreign struct / named type                                      | varies | static method-set probe at codegen — see _cross-package interfaces_ below          |
-| alias     | `//ggen:generate type X ...` (see [type aliases](#type-aliases)) | varies | full method surface generated; strategy picked from the underlying type            |
+| array     | `[N]T`                                                           | tuple  | strict element count — mismatch → `validation.LenError`; `[N]*T` uses a fixed slab               |
+| map       | `map[string]V`                                                   | object | string keys only; `map[string]*V` / `**V` / … values decode natively, `null` ↔ `nil`             |
+| struct    | named / embedded                                                 | object | embedded fields are promoted, same as `encoding/json`                                            |
+| cross-pkg | foreign struct / named type                                      | varies | static method-set probe at codegen — see _cross-package interfaces_ below                        |
+| alias     | `//ggen:generate type X ...` (see [type aliases](#type-aliases)) | varies | full method surface generated; strategy picked from the underlying type                          |
 
 ### cross-package interfaces
 
@@ -530,21 +530,21 @@ cost only lands on `Body`, not on `Author`.
 ggen treats a number of stdlib types as first-class, with special encoding and
 decoding rules:
 
-| type                 | wire                | format hints                                                                                        |
-| -------------------- | ------------------- | --------------------------------------------------------------------------------------------------- |
-| `time.Time`          | RFC3339Nano string  | `format:unix`, `unixmilli`, `unixmicro`, `unixnano`, `RFC3339`, custom layout `format:'2006-01-02'` |
-| `time.Duration`      | string `"1h30m"`    | `format:sec`, `milli`, `micro`, `nano`, `units` (default)                                           |
-| `[]byte`             | base64 string       | `format:base64` (default), `base64url`, `base32`, `base32hex`, `base16`/`hex`, `array`              |
-| `net.IP`             | text                | —                                                                                                   |
-| `netip.Addr`         | text                | —                                                                                                   |
-| `netip.Prefix`       | text                | —                                                                                                   |
-| `json.RawMessage`    | passthrough         | zero-copy alias on decode                                                                           |
-| `jsontext.Value`     | passthrough         | zero-copy alias on decode                                                                           |
-| `net/url.URL`        | string              | `url.Parse` on decode, `String()` on encode                                                         |
-| `math/big.Int`       | JSON number         | arbitrary precision                                                                                 |
-| `math/big.Float`     | JSON string         | arbitrary precision (matches jsonv2)                                                                |
-| `math/big.Rat`       | JSON string         | `"22/7"`                                                                                            |
-| `database/sql.NullX` | inner value or null | `NullString`, `NullInt64`/`32`/`16`, `NullByte`, `NullBool`, `NullFloat64`, `NullTime`              |
+| type                   | wire                | format hints                                                                                                  |
+| ---------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `time.Time`            | RFC3339Nano string  | `format:unix`, `unixmilli`, `unixmicro`, `unixnano`, `RFC3339`, custom layout `format:'2006-01-02'`           |
+| `time.Duration`        | string `"1h30m"`    | `format:sec`, `milli`, `micro`, `nano`, `units` (default)                                                     |
+| `[]byte`               | base64 string       | `format:base64` (default), `base64url`, `base32`, `base32hex`, `base16`/`hex`, `array`                        |
+| `net.IP`               | text                | —                                                                                                             |
+| `netip.Addr`           | text                | —                                                                                                             |
+| `netip.Prefix`         | text                | —                                                                                                             |
+| `json.RawMessage`      | passthrough         | zero-copy alias on decode                                                                                     |
+| `jsontext.Value`       | passthrough         | zero-copy alias on decode                                                                                     |
+| `net/url.URL`          | string              | `url.Parse` on decode, `String()` on encode                                                                   |
+| `math/big.Int`         | JSON number         | arbitrary precision                                                                                           |
+| `math/big.Float`       | JSON string         | arbitrary precision (matches jsonv2)                                                                          |
+| `math/big.Rat`         | JSON string         | `"22/7"`                                                                                                      |
+| `database/sql.NullX`   | inner value or null | `NullString`, `NullInt64`/`32`/`16`, `NullByte`, `NullBool`, `NullFloat64`, `NullTime`                        |
 | `database/sql.Null[T]` | inner value or null | generic form (Go 1.22); any `T` ggen handles as a field (primitive, `time.Time`, `uuid.UUID`, named types, …) |
 
 `any` also works, similar to how the standard json treats it.

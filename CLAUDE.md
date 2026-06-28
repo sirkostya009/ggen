@@ -3,7 +3,7 @@
 Code generator. Parses annotated Go structs, emits methods on them. Hand-rolls a
 byte scan over the caller's `[]byte` or `*scan.Stream`; the bytes path aliases
 input via `unsafe.String` — no copy, no tokens, no AST. This file documents the
-**CLI / codegen surface** and the *why* behind generated-code shape. Runtime
+**CLI / codegen surface** and the _why_ behind generated-code shape. Runtime
 internals, benchmarks, and integration-test conventions live in each package's
 own CLAUDE.md (see "Repo layout"). This is NOT the user-facing doc — that is
 `README.md` / `SKILL.md`.
@@ -69,21 +69,21 @@ single-package mode. Processing is post-order over the matched import subgraph
 
 ### Flags (all opt-in, apply to every struct in the pass)
 
-| Flag | Effect |
-| --- | --- |
-| `-o <path>` | override output path (single file / single dir only) |
-| `-pkg <name>` | override package name in output |
-| `-marshal` | emit `MarshalJSON` method |
-| `-unmarshal` | emit `UnmarshalJSON` method |
-| `-multierr` | accumulate validation failures into `validation.Errors`, returned at end of parse; parse errors still return immediately |
-| `-allowdups` | allow duplicate keys, first-wins (later skipped). Default: `validation.DuplicateKeyError` |
-| `-novalidate` | skip validation rules, required-field checks, mods |
-| `-ignoreunknown` | silently skip unknown JSON keys. Default: `validation.UnknownKeyError`. Overridden when an inline map field is present |
-| `-nullzero` | accept explicit JSON `null` on every non-pointer value field → Go zero. Default hard-errors (see null kind-gating). No-op on already-null-aware kinds |
-| `-nosortkeys` | emit fields in Go declaration order. Default: alphabetical. Inline map fields stay last |
-| `-usenumber` | decode JSON numbers into `any` fields as `json.Number` instead of `float64` (mirrors stdlib `UseNumber()`) |
-| `-htmlescape` | opt INTO HTML-safe escaping (`<`, `>`, `&` → `\uXXXX`) on marshal. Default = literal |
-| `-dry` | parse + validate annotated structs, surface every error, emit no file. Composes with `-v`. Rejects `-o`/`-pkg` |
+| Flag             | Effect                                                                                                                                                |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-o <path>`      | override output path (single file / single dir only)                                                                                                  |
+| `-pkg <name>`    | override package name in output                                                                                                                       |
+| `-marshal`       | emit `MarshalJSON` method                                                                                                                             |
+| `-unmarshal`     | emit `UnmarshalJSON` method                                                                                                                           |
+| `-multierr`      | accumulate validation failures into `validation.Errors`, returned at end of parse; parse errors still return immediately                              |
+| `-allowdups`     | allow duplicate keys, first-wins (later skipped). Default: `validation.DuplicateKeyError`                                                             |
+| `-novalidate`    | skip validation rules, required-field checks, mods                                                                                                    |
+| `-ignoreunknown` | silently skip unknown JSON keys. Default: `validation.UnknownKeyError`. Overridden when an inline map field is present                                |
+| `-nullzero`      | accept explicit JSON `null` on every non-pointer value field → Go zero. Default hard-errors (see null kind-gating). No-op on already-null-aware kinds |
+| `-nosortkeys`    | emit fields in Go declaration order. Default: alphabetical. Inline map fields stay last                                                               |
+| `-usenumber`     | decode JSON numbers into `any` fields as `json.Number` instead of `float64` (mirrors stdlib `UseNumber()`)                                            |
+| `-htmlescape`    | opt INTO HTML-safe escaping (`<`, `>`, `&` → `\uXXXX`) on marshal. Default = literal                                                                  |
+| `-dry`           | parse + validate annotated structs, surface every error, emit no file. Composes with `-v`. Rejects `-o`/`-pkg`                                        |
 
 ### Per-struct annotations
 
@@ -334,21 +334,22 @@ Accepted underlying kinds:
   `_s.X`, cast to alias. `htmlescape` flips the string-append helper
 - **struct** (`type LocalUUID uuid.UUID`): methods don't propagate from the RHS,
   so probing uses `inspectType` on the RHS named type. Three-step ladder:
-    1. *ggen-method delegation* — if underlying has AppendJSON+DecodeFrom: cast →
+    1. _ggen-method delegation_ — if underlying has AppendJSON+DecodeFrom: cast →
        method → cast back (cheapest)
-    2. *field introspection* — plain struct with ≥1 exported field: walk
+    2. _field introspection_ — plain struct with ≥1 exported field: walk
        `*types.Struct`, synthesize FieldInfo per exported field
        (`extractFieldFromTypes`), `IsAlias` flips false, regular struct codegen
        runs (field access via `result.X` is sound — identical layout). **Preferred
        over JSON/Text marshaler delegation even when those exist** — hand-rolled
        codegen beats reflective marshaler calls
-    3. *JSON/Text marshaler delegation* — opaque struct (no exported fields, e.g.
+    3. _JSON/Text marshaler delegation_ — opaque struct (no exported fields, e.g.
        `time.Time`) with a JSON or Text marshaler pair: cast → method → cast back
 
     Wire-shape implication: an alias of a struct with both exported fields AND a
     custom MarshalJSON uses the introspected field shape, NOT the underlying's
     MarshalJSON. For the underlying's exact shape, declare with no exported fields
     (forces delegation) or write your own marshal hook.
+
 - **slice / map / array** (`type Tags []string`, `type Lookup map[string]int`,
   `type Tuple [3]int`): synthetic FieldInfo handed to field-level emitters with
   `result` (decode) / `s` (encode) as ref. All field-level features carry over.
@@ -428,7 +429,7 @@ via `types.RelativeTo(s.typesPkg)`.
 ## Wire-format divergences from stdlib
 
 Two kinds intentionally diverge from `encoding/json` v1 + v2. ggen marshal output
-is *not* a subset of either for these — feeding through stdlib reshapes the value,
+is _not_ a subset of either for these — feeding through stdlib reshapes the value,
 and decoding stdlib JSON won't work for these fields. Round-trip within ggen is
 fine.
 
@@ -487,8 +488,8 @@ Backlog and commit messages cite these by number — numbering is stable.
    dispatches: `any` → `scan.Any`/`s.Any`; `string` → `scan.String`/`s.String`;
    ggen struct → its `DecodeFrom`/`DecodeFromStream`; else `scan.SkipValue` +
    `json.Unmarshal` over the captured span.
-9. **Marshal output cap.** `JSONSize()` upper bound → single `make([]byte,0,cap)`
-   + `AppendJSON`. 1 alloc per top-level Marshal.
+9. **Marshal output cap.** `JSONSize()` upper bound → single `make([]byte,0,cap)` +
+    `AppendJSON`. 1 alloc per top-level Marshal.
 10. **Recursive nested-container emitter.** `emitByteSliceRead`/
     `emitStreamSliceRead`/`emitAppendSlice`/`emitSizeSlice` take a depth param and
     unify slice+array. When `ElemKind` = KindSlice/KindArray they recurse via
@@ -600,7 +601,7 @@ Backlog and commit messages cite these by number — numbering is stable.
     level (`renderAppendValue` on `(*X)`) — no dead `if X == nil { null }` rung.
 36. **Brace-less value emitters.** Decode value emitters write locals straight into
     the caller's scope — no `{ … }` wrapper per value (slice/array/map, time/
-    duration/netip/url/big*/raw/sqlnull/any/string-tag/struct/bytes, cross-pkg
+    duration/netip/url/big\*/raw/sqlnull/any/string-tag/struct/bytes, cross-pkg
     fallbacks, inline catch-all). Sound because every call site owns its scope.
     Stream emitters renamed `var v` temps (`sv`/`f`/`u`) so a pointer-leaf caller
     can declare `var v <leaf>` in the same scope; colliding locals get unique
@@ -756,8 +757,8 @@ benchmarks under `bench/`.
 
 ### Keeping docs in sync
 
-This file = implementation-detail doc (the *why*). `README.md` + `SKILL.md` =
-user-facing surface (*what*/*how*). **All three move together** — every change
+This file = implementation-detail doc (the _why_). `README.md` + `SKILL.md` =
+user-facing surface (_what_/_how_). **All three move together** — every change
 touching user-visible surface (CLI/annotation flags, codegen behaviour, wire
 format, generated method surface, field tag syntax, new Go kind/wire-shape, new
 runtime API) must propagate to **both** README and SKILL in the same commit.

@@ -75,24 +75,24 @@ Each line self-contained, pattern: `<level>: [file:line:col:] <msg> [(hint)]`. L
 
 Most flags have matching annotation token (no leading dash). Annotations space-separated after `//ggen:generate`.
 
-| CLI flag         | annotation      | effect                                                                                                 |
-| ---------------- | --------------- | ------------------------------------------------------------------------------------------------------ |
-| `-o <path>`      | —               | override output path (single-file / single-package only)                                               |
-| `-pkg <name>`    | —               | override the package name in the generated file                                                        |
-| `-marshal`       | `marshal`       | also emit `MarshalJSON` so the type satisfies `encoding/json.Marshaler`                                |
-| `-unmarshal`     | `unmarshal`     | also emit `UnmarshalJSON` for `encoding/json.Unmarshaler`                                              |
-| `-multierr`      | `multierr`      | accumulate every validation failure into `validation.Errors` (slice) instead of returning on the first |
-| `-allowdups`     | `allowdups`     | accept duplicate JSON keys, first-wins (default: error on second occurrence)                           |
-| `-novalidate`    | `novalidate`    | drop validation, required-field checks, and mods                                                       |
-| `-ignoreunknown` | `ignoreunknown` | silently drop unknown JSON keys (default: error). Overridden when an inline catch-all map is present   |
+| CLI flag         | annotation      | effect                                                                                                                                                                        |
+| ---------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-o <path>`      | —               | override output path (single-file / single-package only)                                                                                                                      |
+| `-pkg <name>`    | —               | override the package name in the generated file                                                                                                                               |
+| `-marshal`       | `marshal`       | also emit `MarshalJSON` so the type satisfies `encoding/json.Marshaler`                                                                                                       |
+| `-unmarshal`     | `unmarshal`     | also emit `UnmarshalJSON` for `encoding/json.Unmarshaler`                                                                                                                     |
+| `-multierr`      | `multierr`      | accumulate every validation failure into `validation.Errors` (slice) instead of returning on the first                                                                        |
+| `-allowdups`     | `allowdups`     | accept duplicate JSON keys, first-wins (default: error on second occurrence)                                                                                                  |
+| `-novalidate`    | `novalidate`    | drop validation, required-field checks, and mods                                                                                                                              |
+| `-ignoreunknown` | `ignoreunknown` | silently drop unknown JSON keys (default: error). Overridden when an inline catch-all map is present                                                                          |
 | `-nullzero`      | `nullzero`      | accept explicit JSON `null` on every non-pointer value field, decoding it to the Go zero (default: error). A per-field `nullzero` decode variant in `pipe:` opts in one field |
-| `-nosortkeys`    | `nosortkeys`    | emit struct fields in declaration order (default: alphabetical, compresses better)                     |
-| `-usenumber`     | `usenumber`     | decode JSON numbers in `any` fields as `json.Number` instead of `float64`                              |
-| `-htmlescape`    | `htmlescape`    | escape `<`, `>`, `&` to `\uXXXX` (default: literal, matches `encoding/json` v2)                        |
-| `-dry`           | —               | parse + validate every annotated struct, surface all errors, emit no file. Rejects `-o`/`-pkg`         |
-| `-v`             | —               | info-level progress (e.g. `wrote <file>`)                                                              |
-| `-vv`            | —               | debug-level: per-package / per-struct diagnostics                                                      |
-| `-vvv`           | —               | trace-level diagnostics                                                                                |
+| `-nosortkeys`    | `nosortkeys`    | emit struct fields in declaration order (default: alphabetical, compresses better)                                                                                            |
+| `-usenumber`     | `usenumber`     | decode JSON numbers in `any` fields as `json.Number` instead of `float64`                                                                                                     |
+| `-htmlescape`    | `htmlescape`    | escape `<`, `>`, `&` to `\uXXXX` (default: literal, matches `encoding/json` v2)                                                                                               |
+| `-dry`           | —               | parse + validate every annotated struct, surface all errors, emit no file. Rejects `-o`/`-pkg`                                                                                |
+| `-v`             | —               | info-level progress (e.g. `wrote <file>`)                                                                                                                                     |
+| `-vv`            | —               | debug-level: per-package / per-struct diagnostics                                                                                                                             |
+| `-vvv`           | —               | trace-level diagnostics                                                                                                                                                       |
 
 CLI flags apply to all structs in pass. Annotations apply to struct they on.
 
@@ -147,7 +147,7 @@ natural JSON shape. List `/`-separated variants to accept more (one per shape):
 
 - `.` — native decode of the field type.
 - `nullzero` — accept JSON `null` → Go zero. Allows non-pointer values to
-	accept `null` values as Go-zero.
+  accept `null` values as Go-zero.
 - `@Conv` — converter `func(W) T` / `(T,error)` / `(T,bool)`; ggen scans input
   `W` (primitive or ggen struct), then calls it. Needs a `/`, leading `.`, or
   `~` to read as a converter. Encode is unaffected (marshals as native T).
@@ -159,25 +159,25 @@ Price int `json:"price" pipe:". / @FromMoney"`                // FromMoney(Money
 
 **Value steps** run in declared order. Validators:
 
-| step                                                                                         | applies to | checks                          |
-| -------------------------------------------------------------------------------------------- | ---------- | ------------------------------- |
-| `notempty`                                                                                   | str/container | non-empty / non-zero length  |
-| `len=N`, `minlen=N`, `maxlen=N`                                                              | str/container | byte length / element count  |
-| `runes=N`, `minrunes=N`, `maxrunes=N`                                                        | string     | rune count (utf8 aware)         |
-| `gt=N`, `gte=N`, `lt=N`, `lte=N`                                                             | numeric    | comparison                      |
-| `eq=X`, `neq=X`                                                                              | str/numeric | equality                       |
-| `multiple=N`                                                                                 | integer    | `% N == 0`                      |
-| `oneof=a\|b\|c`                                                                              | str/numeric | one of the alternatives        |
-| `email`, `url`, `ascii`, `printable`, `alphanum`, `numeric`, `lower`, `upper`, `hexadecimal` | string     | character-class predicate       |
-| `starts=X`, `ends=X`, `contains=X`                                                           | string     | substring test                  |
+| step                                                                                         | applies to    | checks                      |
+| -------------------------------------------------------------------------------------------- | ------------- | --------------------------- |
+| `notempty`                                                                                   | str/container | non-empty / non-zero length |
+| `len=N`, `minlen=N`, `maxlen=N`                                                              | str/container | byte length / element count |
+| `runes=N`, `minrunes=N`, `maxrunes=N`                                                        | string        | rune count (utf8 aware)     |
+| `gt=N`, `gte=N`, `lt=N`, `lte=N`                                                             | numeric       | comparison                  |
+| `eq=X`, `neq=X`                                                                              | str/numeric   | equality                    |
+| `multiple=N`                                                                                 | integer       | `% N == 0`                  |
+| `oneof=a\|b\|c`                                                                              | str/numeric   | one of the alternatives     |
+| `email`, `url`, `ascii`, `printable`, `alphanum`, `numeric`, `lower`, `upper`, `hexadecimal` | string        | character-class predicate   |
+| `starts=X`, `ends=X`, `contains=X`                                                           | string        | substring test              |
 
 Mods (transforms):
 
-| step                        | applies to | effect                          |
-| ----------------------------| ---------- | ------------------------------- |
-| `trim`, `lower`, `upper`    | string     | whitespace / case               |
-| `trimleft=X`, `trimright=X` | string     | strip prefix / suffix           |
-| `replace=old\|new`          | string     | substring replace               |
+| step                        | applies to | effect                                                                      |
+| --------------------------- | ---------- | --------------------------------------------------------------------------- |
+| `trim`, `lower`, `upper`    | string     | whitespace / case                                                           |
+| `trimleft=X`, `trimright=X` | string     | strip prefix / suffix                                                       |
+| `replace=old\|new`          | string     | substring replace                                                           |
 | `clamp=lo\|hi`              | numeric    | bound into `[lo,hi]` (either side may be empty: `clamp=0\|`, `clamp=\|100`) |
 
 Container levels: `inner:` scopes to one level down, `keys:` to map keys. A
@@ -188,14 +188,14 @@ the whole container.
 
 **Custom funcs** (`@FuncName` / `@pkg.FuncName`, classified by signature):
 
-| signature              | role                                                   |
-| ---------------------- | ------------------------------------------------------ |
-| `func(T) error`        | validator → `CustomError{Value, Cause}`                |
-| `func(T) bool`         | validator → `PredicateError` (message-capable)         |
-| `func(T) T`            | mod (pure)                                             |
-| `func(T) (T, error)`   | mod (fallible; error → parse error)                    |
-| `func(T) (T, bool)`    | mod (fallible; false → `ModError`; message-capable)    |
-| `func(W) T` (W ≠ T)    | converter (decode-stage variant only)                  |
+| signature            | role                                                |
+| -------------------- | --------------------------------------------------- |
+| `func(T) error`      | validator → `CustomError{Value, Cause}`             |
+| `func(T) bool`       | validator → `PredicateError` (message-capable)      |
+| `func(T) T`          | mod (pure)                                          |
+| `func(T) (T, error)` | mod (fallible; error → parse error)                 |
+| `func(T) (T, bool)`  | mod (fallible; false → `ModError`; message-capable) |
+| `func(W) T` (W ≠ T)  | converter (decode-stage variant only)               |
 
 `func(bool) bool` is rejected. Bool forms take an inline message:
 `@MustBeEven:'value must be even'`. Cross-package via `@pkg.Func` (resolves
@@ -374,17 +374,17 @@ Build tag propagation: struct in file behind `//go:build foo` land in `<dir>_foo
 
 ## Common user intents → flags
 
-| User says                                                 | Reach for                                                                           |
-| --------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| "still want `json.Marshal(u)` to work"                    | `-marshal` (and/or `-unmarshal`)                                                    |
-| "collect all errors, not just the first"                  | `-multierr`                                                                         |
-| "skip unknown keys silently"                              | `-ignoreunknown` or a `json:",inline"` catch-all map                                |
-| "accept `null` on a scalar instead of erroring"           | a `nullzero` decode variant in `pipe:` per field, or `-nullzero` / `//ggen:generate nullzero` for all   |
-| "fastest possible decode, I trust the input"              | `-novalidate`                                                                       |
-| "wire output embedded directly in HTML"                   | `-htmlescape` (or per-type via alias `//ggen:generate htmlescape`)                  |
-| "exact-precision numbers (big ints, no float64)"          | `-usenumber` for `any` fields; or use `math/big.Int`                                |
-| "duplicate keys should be accepted (first wins)"          | `-allowdups`                                                                        |
-| "keep field order matching declaration"                   | `-nosortkeys`                                                                       |
-| "i want only some strings to have html escaping"          | `//ggen:generate htmlescape` `type HTMLString string`                               |
-| "this struct has json tags but I want it to parse faster" | `//ggen:generate` `type Alias OtherStruct`                                          |
-| "validate annotations in CI without writing files"        | `-dry` (parse + validate every annotated struct, surface every error, emit no file) |
+| User says                                                 | Reach for                                                                                             |
+| --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| "still want `json.Marshal(u)` to work"                    | `-marshal` (and/or `-unmarshal`)                                                                      |
+| "collect all errors, not just the first"                  | `-multierr`                                                                                           |
+| "skip unknown keys silently"                              | `-ignoreunknown` or a `json:",inline"` catch-all map                                                  |
+| "accept `null` on a scalar instead of erroring"           | a `nullzero` decode variant in `pipe:` per field, or `-nullzero` / `//ggen:generate nullzero` for all |
+| "fastest possible decode, I trust the input"              | `-novalidate`                                                                                         |
+| "wire output embedded directly in HTML"                   | `-htmlescape` (or per-type via alias `//ggen:generate htmlescape`)                                    |
+| "exact-precision numbers (big ints, no float64)"          | `-usenumber` for `any` fields; or use `math/big.Int`                                                  |
+| "duplicate keys should be accepted (first wins)"          | `-allowdups`                                                                                          |
+| "keep field order matching declaration"                   | `-nosortkeys`                                                                                         |
+| "i want only some strings to have html escaping"          | `//ggen:generate htmlescape` `type HTMLString string`                                                 |
+| "this struct has json tags but I want it to parse faster" | `//ggen:generate` `type Alias OtherStruct`                                                            |
+| "validate annotations in CI without writing files"        | `-dry` (parse + validate every annotated struct, surface every error, emit no file)                   |
