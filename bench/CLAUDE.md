@@ -11,7 +11,7 @@
 - `bench/types_easyjson.go` — generated easyjson methods. Regen: `easyjson
   bench/types.go`.
 - `bench/mega_test.go` — 4-way Mega benches (jsonv2/sonic/easyjson/ggen) for
-  Unmarshal/Marshal/Reader. Hosts `BenchmarkRetention`.
+  Unmarshal/Marshal/Reader.
 - `bench/small_test.go` — small-value (~2.9 KiB ValidPayload) Unmarshal + Reader.
 - `bench/slowstream_test.go` — slow-reader benchmarks.
 - `bench/simple_test.go` — `BenchmarkNoAlloc_Unmarshal` + `_Reader`.
@@ -47,9 +47,6 @@
   ggen_readall, jsonv2-baseline on a payload failing ggen validation early),
   same `runBench` harness (`-cpu=N` scales near-linearly). Invalid is where
   streaming pays: fail-fast bails on first bad field, ReadAll must drain first.
-- **Retention** — each goroutine holds produced `*Node` in a local sink; sinks
-  merge after `b.RunParallel`; GC ×2; `runtime.MemStats.HeapInuse` delta / `b.N`
-  = `retain_KB/op` (process-global, parallel-safe). Run with `-benchtime=1000x`.
 
 ## easyjson method leakage
 
@@ -85,88 +82,74 @@ if a struct opts into ggen `marshal`/`unmarshal` hooks.
 
 AMD Ryzen AI MAX+ 395, Go 1.26, GOEXPERIMENT=jsonv2. Node carries scalars,
 slices, string-keyed maps, fixed tuples, slab `[]*T`, nested slices, pointers,
-time, base64 bytes, `any`, `json.RawMessage`. Reference only (32 threads, no cpu
-limit), not the core-pinned discipline below.
+time, base64 bytes, `any`, `json.RawMessage`. Core-pinned per the discipline
+below: `GOMAXPROCS=1 taskset -c 24 … -benchtime=500x -count=1 -cpu=1`.
 
 ### Unmarshal
 
-| path       | ns/op      | B/op    | allocs     | MB/s     |
-| ---------- | ---------- | ------- | ---------- | -------- |
-| jsonv2     | 4042 K     | 17.7 MB | 316832     | 1451     |
-| sonic      | 2038 K     | 20.8 MB | 137770     | 2878     |
-| sonic_fast | 1971 K     | 20.8 MB | 137770     | 2976     |
-| easyjson   | 3158 K     | 17.0 MB | 245856     | 1857     |
-| **ggen**   | **2245 K** | 14.4 MB | **101927** | **2612** |
+| path       | ns/op       | B/op    | allocs    | MB/s    |
+| ---------- | ----------- | ------- | --------- | ------- |
+| jsonv2     | 34928 K     | 17.7 MB | 316830    | 168     |
+| sonic      | 17198 K     | 20.8 MB | 137770    | 341     |
+| sonic_fast | 16934 K     | 20.8 MB | 137770    | 346     |
+| easyjson   | 26178 K     | 17.0 MB | 245855    | 224     |
+| **ggen**   | **14697 K** | 11.4 MB | **64599** | **399** |
 
 ### Marshal
 
-| path              | ns/op     | B/op    | allocs | MB/s      |
-| ----------------- | --------- | ------- | ------ | --------- |
-| jsonv2            | 1286 K    | 6.7 MB  | 7409   | 4559      |
-| sonic             | 989 K     | 33.6 MB | 5116   | 5927      |
-| sonic_fast        | 952 K     | 33.6 MB | 5113   | 6161      |
-| easyjson          | 962 K     | 6.2 MB  | 7597   | 6095      |
-| **ggen**          | 655 K     | 11.8 MB | **2**  | 8951      |
-| **ggen_presized** | **564 K** | **1 B** | **0**  | **10393** |
+| path              | ns/op      | B/op    | allocs | MB/s    |
+| ----------------- | ---------- | ------- | ------ | ------- |
+| jsonv2            | 14896 K    | 6.0 MB  | 7407   | 393     |
+| sonic             | 12353 K    | 33.6 MB | 5112   | 475     |
+| sonic_fast        | 11882 K    | 33.6 MB | 5111   | 494     |
+| easyjson          | 10773 K    | 6.1 MB  | 7586   | 544     |
+| **ggen**          | 9623 K     | 11.9 MB | **1**  | 609     |
+| **ggen_presized** | **6598 K** | **0 B** | **0**  | **889** |
 
 `ggen_presized` = same `AppendJSON`, once-pre-sized buffer (0 allocs, 0 GC). The
-2 allocs on plain `ggen` = output buffer + 1 misc.
+1 alloc on plain `ggen` = output buffer.
 
 ### Reader input (streaming)
 
-| path                         | ns/op  | B/op    | allocs |
-| ---------------------------- | ------ | ------- | ------ |
-| jsonv2.UnmarshalRead         | 4237 K | 17.7 MB | 316834 |
-| sonic.NewDecoder             | 2358 K | 39.0 MB | 137791 |
-| sonic_fast.NewDecoder        | 2311 K | 39.0 MB | 137790 |
-| easyjson.UnmarshalFromReader | 3204 K | 31.5 MB | 245886 |
-| **ggen UnmarshalStream**     | 2900 K | 17.7 MB | 256587 |
-| **ggen ReadAllUnmarshal**    | 2274 K | 29.0 MB | 101956 |
+| path                         | ns/op   | B/op    | allocs |
+| ---------------------------- | ------- | ------- | ------ |
+| jsonv2.UnmarshalRead         | 36588 K | 17.7 MB | 316830 |
+| sonic.NewDecoder             | 20779 K | 39.0 MB | 137793 |
+| sonic_fast.NewDecoder        | 20126 K | 39.0 MB | 137794 |
+| easyjson.UnmarshalFromReader | 30042 K | 31.5 MB | 245886 |
+| **ggen UnmarshalStream**     | 22262 K | 17.1 MB | 251735 |
+| **ggen ReadAllUnmarshal**    | 17686 K | 25.9 MB | 64628  |
 
 ggen Stream copies each scanned string to its own heap alloc (hence the alloc
 count); `ReadAllUnmarshal` is the cleanest io.Reader pattern (bytes-path shape,
 one `io.ReadAll` buffer).
 
-### Residency (retained heap per decoded item, slowPayload ~36 KiB)
-
-| codec           | per-item  | factor over JSON payload |
-| --------------- | --------- | ------------------------ |
-| **ggen_bytes**  | 66.1 KiB  | 1.89× (lowest)           |
-| easyjson        | 78.3 KiB  | 2.23×                    |
-| stdjson         | 79.5 KiB  | 2.27×                    |
-| **ggen_stream** | 87.0 KiB  | 2.48×                    |
-| ggen_readall    | 107.1 KiB | 3.05×                    |
-| sonic           | 111.3 KiB | 3.17×                    |
-| sonic_fast      | 112.0 KiB | 3.19×                    |
-
-Run `GGEN_BENCH_TOPALLOCS=1` to surface the top-5 allocation sites.
-
 ### `B/op` notes
 
-- **Marshal `ggen`:** B/op ≈ output buffer (the alloc `JSONSize()` sizes — per
-  map entry `4 + 2*len(k) + value-bound`, else flat 128 for nested/struct) +
-  1 misc.
+- **Marshal `ggen`:** B/op ≈ output buffer (the single alloc `JSONSize()` sizes
+  — per map entry `4 + 2*len(k) + value-bound`, else flat 128 for nested/struct).
 - **Marshal `ggen_presized`:** caller-owned buffer + AppendAny concrete-type
   fast paths for every primitive shape (`[]any`/`[]string`/`[]int*`/
   `[]uint16/32/64`/`[]float*`/`[]bool`, `map[string]any/string/int*/uint*/
   float*/bool` — bypass reflect.MapIter boxing) → 0 allocs, 0 GC.
-- **Unmarshal:** ggen B/op > easyjson because `unsafe.String` aliases keep the
-  whole input buffer alive (counted live per iteration); allocs still ~3.4×
-  below easyjson.
+- **Unmarshal:** ggen B/op < easyjson, and allocs ~3.8× below easyjson — the
+  `unsafe.String` aliases avoid copying every string out of the input.
 
 ## Running benchmarks
 
 **ALWAYS pin to a dedicated core and disable parallelism** — every perf claim
-must come from `GOMAXPROCS=1 taskset -c 25 … -cpu=1`. The default multi-core run
-is layout/scheduler-noise-dominated (sub-1% deltas flip sign). Use **core 25**.
+must come from `GOMAXPROCS=1 taskset -c 24 … -cpu=1`. The default multi-core run
+is layout/scheduler-noise-dominated (sub-1% deltas flip sign). Use **core 24**.
+The env vars (`GOEXPERIMENT`, `GOMAXPROCS`) must precede `taskset` — `taskset`
+treats the first non-flag token as the command, so `taskset … GOEXPERIMENT=… go`
+tries to exec the env assignment.
 
 ```sh
-(cd bench && GOMAXPROCS=1 taskset -c 25 GOEXPERIMENT=jsonv2 go test -run=^$ -bench=. -cpu=1 -count=12 ./...)
-# fixed iter count for comparable retention numbers:
-(cd bench && GOMAXPROCS=1 taskset -c 25 GOEXPERIMENT=jsonv2 go test -run=^$ -bench=Retention -benchtime=1000x -cpu=1 ./...)
+(cd bench && GOEXPERIMENT=jsonv2 GOMAXPROCS=1 taskset -c 24 go test -run=^$ -bench=. -benchtime=500x -count=1 -cpu=1 .)
 ```
 
-For an A/B, build both as test binaries and interleave under the same pin
-(`go test -c -o old.test` / `new.test`, alternate runs), then `benchstat` over
-`-count=12`+ samples — never a single default-layout A/B. `./...` from root does
-NOT cross module boundaries — `cd` into `bench/` first.
+`-benchtime=500x` fixes the iteration count so rows are directly comparable. For
+an A/B, build both as test binaries and interleave under the same pin (`go test
+-c -o old.test` / `new.test`, alternate runs), then `benchstat` over `-count=12`+
+samples — never a single default-layout A/B. `./...` from root does NOT cross
+module boundaries — `cd` into `bench/` first.
