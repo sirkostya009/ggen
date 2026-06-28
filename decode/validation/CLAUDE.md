@@ -77,5 +77,5 @@ Use the typed pointer struct, or `err.(validation.Error).Rule()` for the name.
 
 `OneOfError.Allowed` points to a deduped package-level frozen `[]string`
 (`var _oneof_N = []string{...}`) emitted once per unique allowed-set, so error
-construction never allocates the allowed slice (see root CLAUDE.md optimization
+construction never allocates the allowed slice (see cli/CLAUDE.md optimization
 #13).
