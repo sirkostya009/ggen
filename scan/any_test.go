@@ -89,6 +89,67 @@ func TestAnyNumber_StdlibParity(t *testing.T) {
 	}
 }
 
+// TestAnyCopy_ParityAndDecoupled checks AnyCopy returns the same value as the
+// stdlib AND that every string is copied: after the source buffer is scribbled
+// over, the decoded value is unchanged (an aliasing decode would corrupt it).
+func TestAnyCopy_ParityAndDecoupled(t *testing.T) {
+	t.Parallel()
+	for _, tc := range anyCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			var want any
+			if err := json.Unmarshal([]byte(tc.in), &want); err != nil {
+				t.Fatalf("stdlib: %v", err)
+			}
+			buf := []byte(tc.in)
+			got, _, err := AnyCopy(buf, 0)
+			if err != nil {
+				t.Fatalf("scan.AnyCopy: %v", err)
+			}
+			if !reflect.DeepEqual(got, want) {
+				t.Fatalf("parity mismatch\n got: %#v\nwant: %#v", got, want)
+			}
+			for i := range buf {
+				buf[i] = ' '
+			}
+			if !reflect.DeepEqual(got, want) {
+				t.Errorf("AnyCopy aliased the input: value changed after source mutation\n got: %#v\nwant: %#v", got, want)
+			}
+		})
+	}
+}
+
+// TestAnyNumberCopy_ParityAndDecoupled is the AnyNumberCopy counterpart — the
+// json.Number span is cloned too, so it survives the scribble.
+func TestAnyNumberCopy_ParityAndDecoupled(t *testing.T) {
+	t.Parallel()
+	for _, tc := range anyCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			dec := json.NewDecoder(strings.NewReader(tc.in))
+			dec.UseNumber()
+			var want any
+			if err := dec.Decode(&want); err != nil {
+				t.Fatalf("stdlib UseNumber: %v", err)
+			}
+			buf := []byte(tc.in)
+			got, _, err := AnyNumberCopy(buf, 0)
+			if err != nil {
+				t.Fatalf("scan.AnyNumberCopy: %v", err)
+			}
+			if !reflect.DeepEqual(got, want) {
+				t.Fatalf("parity mismatch\n got: %#v\nwant: %#v", got, want)
+			}
+			for i := range buf {
+				buf[i] = ' '
+			}
+			if !reflect.DeepEqual(got, want) {
+				t.Errorf("AnyNumberCopy aliased the input: value changed after source mutation\n got: %#v\nwant: %#v", got, want)
+			}
+		})
+	}
+}
+
 // payload covers the shape mix scan.Any walks: nested object, array of
 // scalars + nested array, mixed numeric (int + float + large int), strings
 // (no escapes — hits zero-copy alias path), booleans, null.

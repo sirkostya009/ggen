@@ -4,8 +4,11 @@
 
 - `bench/types.go` — ggen-annotated `Node` + easyjson-annotated `NodePlain` /
   `AddrPlain` (see "easyjson method leakage"); plus the `Account` family
-  (`AccountValue`/`AccountPayload`) + easyjson-only `Easy*` mirror. Untagged, so
-  ggen methods land in `bench_ggen.go`.
+  (`AccountValue`/`AccountPayload`) + easyjson-only `Easy*` mirror; plus
+  `CopyNode`/`CopyAddr` — wire-identical mirrors of `Node`/`Addr` carrying
+  `//ggen:generate copy`, so the `ggen_copy` Unmarshal row decodes the same
+  `MegaPayload` through the copy-mode bytes path. Untagged, so ggen methods land
+  in `bench_ggen.go`.
 - `bench/bench_ggen.go` — generated ggen methods. Regen: `(cd bench &&
   GOEXPERIMENT=jsonv2 ../ggen ./...)`.
 - `bench/types_easyjson.go` — generated easyjson methods. Regen: `easyjson
@@ -94,6 +97,13 @@ below: `GOMAXPROCS=1 taskset -c 24 … -benchtime=500x -count=1 -cpu=1`.
 | sonic_fast | 16934 K     | 20.8 MB | 137770    | 346     |
 | easyjson   | 26178 K     | 17.0 MB | 245855    | 224     |
 | **ggen**   | **14697 K** | 11.4 MB | **64599** | **399** |
+
+A sixth `ggen_copy` row (CopyNode, `-copy` mode) isolates the copy-out cost vs
+the aliasing `ggen` row: every retained string / map key+value / slice elem /
+`json.RawMessage` / any-embedded string becomes its own heap alloc (allocs jump
+to the same order as the stream path), so B/op and allocs rise while ns/op is
+broadly comparable. Numbers omitted here — interleave a core-pinned benchstat
+(per the discipline above) before quoting any.
 
 ### Marshal
 

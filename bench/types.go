@@ -75,6 +75,40 @@ type NodePlain struct {
 	Raw       json.RawMessage   `json:"raw"`
 }
 
+// CopyAddr mirrors Addr under -copy: its string fields are copied out of the
+// input instead of aliasing it. Pointed to by CopyNode's Refs / Parent.
+//
+//ggen:generate copy
+type CopyAddr struct {
+	Street string `json:"street"`
+	City   string `json:"city"`
+}
+
+// CopyNode is Node generated under -copy (`//ggen:generate copy`): the bytes
+// path copies every retained string, map key/value, json.RawMessage, and
+// any-embedded string out of the input rather than aliasing it. Wire-identical
+// to Node, so it decodes the same MegaPayload — the `ggen_copy` Unmarshal row
+// measures the copy-mode cost against the aliasing `ggen` row.
+//
+//ggen:generate copy
+type CopyNode struct {
+	ID        int64             `json:"id" pipe:"required gte=0"`
+	Name      string            `json:"name" pipe:"required minlen=1 maxlen=128"`
+	Score     float64           `json:"score" pipe:"gte=0 lte=100"`
+	Active    bool              `json:"active"`
+	Tags      []string          `json:"tags" pipe:"maxlen=64 inner:(minlen=1 maxlen=64)"`
+	Props     map[string]string `json:"props" pipe:"maxlen=64"`
+	Children  []CopyNode        `json:"children" pipe:"maxlen=16"`
+	Coords    [2]float64        `json:"coords"`
+	Refs      []*CopyAddr       `json:"refs" pipe:"maxlen=16"`
+	Matrix    [][]int           `json:"matrix" pipe:"maxlen=16 inner:maxlen=32"`
+	Parent    *CopyAddr         `json:"parent,omitzero"`
+	CreatedAt time.Time         `json:"createdAt"`
+	Blob      []byte            `json:"blob"`
+	Extra     any               `json:"extra"`
+	Raw       json.RawMessage   `json:"raw"`
+}
+
 // nodeToPlain deep-converts a Node tree into NodePlain for the marshal
 // benches. One-shot at init.
 func nodeToPlain(n Node) NodePlain {

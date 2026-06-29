@@ -122,6 +122,7 @@ type FieldInfo struct {
 	NoValidate bool   // propagated from parent struct: skip validation + mods
 	UseNumber  bool   // propagated from parent struct: scan numbers into json.Number on KindAny fields
 	HTMLEscape bool   // propagated from parent struct: HTML-safe escape <, >, & when emitting strings (default: literal, matches jsonv2)
+	Copy       bool   // propagated from parent struct: bytes-path decode copies retained strings/RawMessage/any instead of aliasing data
 	Ignored    bool
 
 	// SQLNullInner, when non-nil, marks a generic database/sql.Null[T] (Go
@@ -153,6 +154,7 @@ type StructInfo struct {
 	NoSort        bool   // opt out of codegen-time struct-field sort by JSON name
 	UseNumber     bool   // decode JSON numbers into `any` fields as json.Number instead of float64
 	HTMLEscape    bool   // HTML-safe escape <, >, & in emitted strings (default: literal, matches jsonv2)
+	Copy          bool   // bytes-path DecodeFrom copies retained strings/RawMessage/any out of data instead of aliasing it (matches the stream path's lifetime semantics)
 	Test          bool   // declared in a *_test.go file — route output to *_ggen_test.go
 
 	// IsAlias marks a top-level named type aliasing a primitive or struct

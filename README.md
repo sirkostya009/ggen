@@ -20,23 +20,24 @@ goos: linux
 goarch: amd64
 pkg: github.com/sirkostya009/ggen/bench
 cpu: AMD RYZEN AI MAX+ 395 w/ Radeon 8060S
-BenchmarkMega_Unmarshal/jsonv2         500   34928413 ns/op   167.90 MB/s   289 gc   17697504 B/op   316830 allocs/op
-BenchmarkMega_Unmarshal/sonic          500   17197947 ns/op   341.01 MB/s   242 gc   20790020 B/op   137770 allocs/op
-BenchmarkMega_Unmarshal/sonic_fast     500   16933806 ns/op   346.33 MB/s   244 gc   20790020 B/op   137770 allocs/op
-BenchmarkMega_Unmarshal/easyjson       500   26177979 ns/op   224.03 MB/s   239 gc   16980371 B/op   245855 allocs/op
-BenchmarkMega_Unmarshal/ggen           500   14697470 ns/op   399.02 MB/s   182 gc   11391569 B/op    64599 allocs/op
-BenchmarkMega_Marshal/jsonv2           500   14895790 ns/op   393.49 MB/s    88 gc    5976776 B/op     7407 allocs/op
-BenchmarkMega_Marshal/sonic            500   12352691 ns/op   474.76 MB/s   491 gc   33621191 B/op     5112 allocs/op
-BenchmarkMega_Marshal/sonic_fast       500   11882282 ns/op   493.56 MB/s   494 gc   33621066 B/op     5111 allocs/op
-BenchmarkMega_Marshal/easyjson         500   10773293 ns/op   544.37 MB/s    99 gc    6116252 B/op     7586 allocs/op
-BenchmarkMega_Marshal/ggen             500    9623030 ns/op   609.44 MB/s   234 gc   11894784 B/op        1 allocs/op
-BenchmarkMega_Marshal/ggen_presized    500    6597505 ns/op   888.92 MB/s     0 gc          0 B/op        0 allocs/op
-BenchmarkMega_Reader/jsonv2            500   36588150 ns/op   160.29 MB/s   296 gc   17697517 B/op   316830 allocs/op
-BenchmarkMega_Reader/sonic             500   20779266 ns/op   282.23 MB/s   494 gc   38983454 B/op   137793 allocs/op
-BenchmarkMega_Reader/sonic_fast        500   20126312 ns/op   291.39 MB/s   500 gc   38983459 B/op   137794 allocs/op
-BenchmarkMega_Reader/easyjson          500   30041565 ns/op   195.22 MB/s   387 gc   31521221 B/op   245886 allocs/op
-BenchmarkMega_Reader/ggen_stream       500   22262001 ns/op   263.44 MB/s   254 gc   17112024 B/op   251735 allocs/op
-BenchmarkMega_Reader/ggen_readall      500   17686105 ns/op   331.60 MB/s   353 gc   25932124 B/op    64628 allocs/op
+BenchmarkMega_Unmarshal/jsonv2         500   34726287 ns/op   168.88 MB/s   283 gc   17696991 B/op   316830 allocs/op
+BenchmarkMega_Unmarshal/sonic          500   17790607 ns/op   329.65 MB/s   243 gc   20790020 B/op   137770 allocs/op
+BenchmarkMega_Unmarshal/sonic_fast     500   17196652 ns/op   341.03 MB/s   241 gc   20790019 B/op   137770 allocs/op
+BenchmarkMega_Unmarshal/easyjson       500   25844323 ns/op   226.92 MB/s   235 gc   16979473 B/op   245855 allocs/op
+BenchmarkMega_Unmarshal/ggen           500   14185226 ns/op   413.43 MB/s   176 gc   11391569 B/op    64599 allocs/op
+BenchmarkMega_Unmarshal/ggen_copy      500   17230444 ns/op   340.36 MB/s   213 gc   14087313 B/op   214407 allocs/op
+BenchmarkMega_Marshal/jsonv2           500   15677143 ns/op   373.88 MB/s    86 gc    5976776 B/op     7407 allocs/op
+BenchmarkMega_Marshal/sonic            500   13102979 ns/op   447.58 MB/s   496 gc   33621206 B/op     5112 allocs/op
+BenchmarkMega_Marshal/sonic_fast       500   12607842 ns/op   465.16 MB/s   487 gc   33621071 B/op     5111 allocs/op
+BenchmarkMega_Marshal/easyjson         500   11002786 ns/op   533.01 MB/s    96 gc    6116199 B/op     7586 allocs/op
+BenchmarkMega_Marshal/ggen             500    9225406 ns/op   635.70 MB/s   167 gc   11894784 B/op        1 allocs/op
+BenchmarkMega_Marshal/ggen_presized    500    6808990 ns/op   861.31 MB/s     0 gc          0 B/op        0 allocs/op
+BenchmarkMega_Reader/jsonv2            500   35083440 ns/op   167.16 MB/s   284 gc   17697305 B/op   316830 allocs/op
+BenchmarkMega_Reader/sonic             500   20048676 ns/op   292.52 MB/s   492 gc   38983453 B/op   137793 allocs/op
+BenchmarkMega_Reader/sonic_fast        500   20148021 ns/op   291.08 MB/s   498 gc   38983457 B/op   137793 allocs/op
+BenchmarkMega_Reader/easyjson          500   27880232 ns/op   210.35 MB/s   420 gc   31521405 B/op   245886 allocs/op
+BenchmarkMega_Reader/ggen_stream       500   21151592 ns/op   277.27 MB/s   247 gc   17116509 B/op   251735 allocs/op
+BenchmarkMega_Reader/ggen_readall      500   17636487 ns/op   332.53 MB/s   344 gc   25932124 B/op    64628 allocs/op
 ```
 
 The fast decode numbers come from ggen's zero-copy strategy for strings and
@@ -48,6 +49,12 @@ This has one side effect worth considering: if a decoded struct's strings are
 held by something long-lived, the aliasing pins the whole backing buffer and
 can balloon memory usage (Go's GC isn't compacting). Streams don't have this
 problem — they always copy, reusing the underlying buffer.
+
+If you need the bytes path to copy too — to reuse/mutate the input buffer right
+after decoding, or to avoid pinning a large buffer — generate with `-copy` (or
+`//ggen:generate copy` per type). Decoded strings, `json.RawMessage`, and
+strings inside `any` fields are then copied out of the input instead of aliased,
+giving the decoded value an independent lifetime (at the cost of more allocs).
 
 ### slow-network streaming
 
@@ -236,6 +243,7 @@ unmarshal multierr`.
 | `-nosortkeys`    | `nosortkeys`      | emit struct fields in declaration order (default: alphabetical by JSON name, compresses better)                                                                                             |
 | `-usenumber`     | `usenumber`       | decode numbers in `any` fields as `json.Number` instead of `float64`                                                                                                                        |
 | `-htmlescape`    | `htmlescape`      | escape `<`, `>`, `&` to `\uXXXX` for safe embedding in HTML (default: literal, matches `encoding/json` v2 — v2 dropped HTML escaping as a default)                                          |
+| `-copy`          | `copy`            | copy decoded strings and `json.RawMessage` (and strings inside `any` fields) out of the input buffer instead of aliasing it, so you may reuse or mutate the input after `DecodeFrom` returns (default: zero-copy aliasing — faster, but the input must stay alive and unmodified for as long as the decoded values are used). Decode-only; allocates more |
 | `-dry`           | —                 | parse and validate every annotated struct, surface every error, emit no file. Useful in CI/pre-commit to fail fast on broken tags or annotations. Rejects `-o` / `-pkg`                     |
 
 ## struct tags

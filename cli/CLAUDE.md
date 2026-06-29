@@ -67,6 +67,7 @@ single-package mode. Processing is post-order over the matched import subgraph
 | `-nosortkeys`    | emit fields in Go declaration order. Default: alphabetical. Inline map fields stay last                                                               |
 | `-usenumber`     | decode JSON numbers into `any` fields as `json.Number` instead of `float64` (mirrors stdlib `UseNumber()`)                                            |
 | `-htmlescape`    | opt INTO HTML-safe escaping (`<`, `>`, `&` → `\uXXXX`) on marshal. Default = literal                                                                  |
+| `-copy`          | bytes-path `DecodeFrom` copies retained strings / map keys+values / slice elems / `json.RawMessage` / any-embedded strings out of `data` instead of aliasing it. Decouples decoded values from the input buffer (matches the stream path's lifetime). Decode-only; alloc-heavier |
 | `-dry`           | parse + validate annotated structs, surface every error, emit no file. Composes with `-v`. Rejects `-o`/`-pkg`                                        |
 
 ### Per-struct annotations
@@ -76,7 +77,7 @@ mirrors `//go:generate`) followed by space-separated tokens. Apply only to the
 annotated struct:
 
 `marshal`, `unmarshal`, `multierr`, `allowdups`, `novalidate`, `ignoreunknown`,
-`nullzero`, `nosortkeys`, `usenumber`, `htmlescape`.
+`nullzero`, `nosortkeys`, `usenumber`, `htmlescape`, `copy`.
 
 ## Struct tags (on fields)
 
@@ -181,6 +182,8 @@ Cases covered in `TestCLI/InvalidRuleApplication`.
 
 ```go
 // DecodeFrom is a zero-copy parser. Strings and RawMessage are aliased into data
+// (unless -copy / //ggen:generate copy — then they are copied out, decoupling
+// the result from data at the cost of per-string allocs, like the stream path).
 func (result T) DecodeFrom(data []byte) (T, int, error)
 // DecodeFromStream is a buffered io.Reader wrapper with an intermediate buffer.
 // Useful for slow streams or lower memory usage. Breaks zero-copying — all strings
@@ -690,7 +693,24 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
 ## Design decisions (the why)
 
 1. **`unsafe.String` boosts perf** by avoiding GC pressure — can backfire if
-   parsed strings are referenced long-term after the input is mutated.
+   parsed strings are referenced long-term after the input is mutated. The
+   `-copy` mode (`StructInfo.Copy`, propagated to `FieldInfo.Copy` like
+   `HTMLEscape`/`UseNumber` and through `peelSliceField`/`elemPtrField`/
+   `sqlNullInnerField`) opts the BYTES path out of that aliasing, matching the
+   stream path's lifetime. It changes only RETAINED-string sites:
+   `inlineScanString`/`inlineScanStringVar` take a `cp bool` — when set the hot
+   path emits `string(data[s:e])` instead of `unsafe.String(…)` (escape fallback
+   already owns its copy); `renderRawJSON` emits `append(ref[:0], data[…]…)`
+   (reused backing) instead of the alias; `renderAny` switches to
+   `scan.AnyCopy`/`AnyNumberCopy` (clone every nested string + object key);
+   `unknownKey` clones the inline-map key + copies its string/any value and
+   `strings.Clone`s the `UnknownKeyError` path segment. TRANSIENT scans stay
+   aliasing (`cp=false`): the dispatch key (matched + discarded) and the
+   parse-feeds for time/url/netip/big\*/`[]byte` (the conversion owns its
+   output). Per-struct granularity ⇒ an inline-map / nested-struct VALUE only
+   copies if that value's own struct also has `copy` (the whole-pass `-copy`
+   flag covers every struct, so no gap there). Wire-identical to non-copy;
+   alloc-heavier (one alloc per retained string, like the stream path).
 2. **Struct fields sorted alphabetically at codegen time** (default). Zero runtime
    cost; deterministic, compresses better.
 3. **No runtime reflection anywhere.** Even the cross-package fallback uses

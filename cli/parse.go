@@ -67,6 +67,7 @@ type annotationFlags struct {
 	nosortkeys    bool // opt out: emit fields in declaration order instead of JSON-name sorted
 	usenumber     bool // opt in: decode JSON numbers into `any` fields as json.Number instead of float64
 	htmlescape    bool // opt in: HTML-safe escape <, >, & in emitted strings (default: literal, matches jsonv2)
+	copy          bool // opt in: bytes-path DecodeFrom copies strings/RawMessage/any instead of aliasing data
 }
 
 type structSet struct {
@@ -276,6 +277,8 @@ func parseAnnotation(groups ...*ast.CommentGroup) (annotationFlags, bool) {
 					flags.usenumber = true
 				case "htmlescape":
 					flags.htmlescape = true
+				case "copy":
+					flags.copy = true
 				}
 			}
 			return flags, true
@@ -358,6 +361,7 @@ func (s *structSet) resolveFiltered(wanted []string, allowExpand func(string) bo
 			info.NoSort = flags.nosortkeys
 			info.UseNumber = flags.usenumber
 			info.HTMLEscape = flags.htmlescape
+			info.Copy = flags.copy
 		}
 		_, info.Test = s.fromTest[name]
 		info.BuildTag = s.structBuildTag[name]

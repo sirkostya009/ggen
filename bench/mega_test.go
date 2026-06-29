@@ -51,6 +51,9 @@ func BenchmarkMega_Unmarshal(b *testing.B) {
 		{"sonic_fast", func(p []byte) error { var v NodePlain; return sonic.ConfigFastest.Unmarshal(p, &v) }},
 		{"easyjson", func(p []byte) error { var v Node; return v.UnmarshalJSON(p) }},
 		{"ggen", func(p []byte) error { _, _, err := Node{}.DecodeFrom(p); return err }},
+		// ggen_copy: -copy mode (CopyNode) — bytes path copies strings/raw/any
+		// out of the input instead of aliasing. The delta vs ggen is copy cost.
+		{"ggen_copy", func(p []byte) error { _, _, err := CopyNode{}.DecodeFrom(p); return err }},
 	}
 
 	for _, c := range unmarshalCodecs {

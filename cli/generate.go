@@ -2332,26 +2332,34 @@ for %[1]s < len(data) && data[%[1]s] >= '0' && data[%[1]s] <= '9' {
 `, posVar, field, stmt)
 }
 
-// inlineScanString emits a zero-copy string reader that assigns into dst and
-// advances posOut past the closing quote. The hot path aliases via
-// unsafe.String; escapes fall back to scan.String. The loop also stops on any
-// control byte (<0x20), which RFC 8259 / jsonv2 reject. Brace-less: `ke` lands
-// in the caller's scope (renderMap's value scan uses inlineScanStringVar to
-// avoid colliding with the key scan's `ke`).
-func inlineScanString(b *bytes.Buffer, posIn, dst, posOut, field string) {
-	inlineScanStringVar(b, posIn, dst, posOut, field, "ke")
+// inlineScanString emits a string reader that assigns into dst and advances
+// posOut past the closing quote. The hot path aliases via unsafe.String (or
+// copies via string(...) when cp is set — the -copy mode, so the result no
+// longer references data); escapes fall back to scan.String (already an owned
+// copy). The loop also stops on any control byte (<0x20), which RFC 8259 /
+// jsonv2 reject. Brace-less: `ke` lands in the caller's scope (renderMap's
+// value scan uses inlineScanStringVar to avoid colliding with the key scan's
+// `ke`). cp is set only at sites whose string is RETAINED past the scan (field
+// value, map key/value, slice/array elem); transient parse-feeds (time, url,
+// netip, big*) stay aliasing regardless — their conversion owns its output.
+func inlineScanString(b *bytes.Buffer, posIn, dst, posOut, field string, cp bool) {
+	inlineScanStringVar(b, posIn, dst, posOut, field, "ke", cp)
 }
 
 // inlineScanStringVar is inlineScanString with a caller-chosen name for the
 // closing-quote cursor local.
-func inlineScanStringVar(b *bytes.Buffer, posIn, dst, posOut, field, ke string) {
+func inlineScanStringVar(b *bytes.Buffer, posIn, dst, posOut, field, ke string, cp bool) {
+	hot := "unsafe.String(unsafe.SliceData(data[%[1]s+1:]), %[5]s-%[1]s-1)"
+	if cp {
+		hot = "string(data[%[1]s+1:%[5]s])"
+	}
 	fmt.Fprintf(b, `if %[1]s >= len(data) || data[%[1]s] != '"' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrExpectString) }
 %[5]s := %[1]s + 1
 for %[5]s < len(data) && data[%[5]s] != '"' && data[%[5]s] != '\\' && data[%[5]s] >= 0x20 { %[5]s++ }
 if %[5]s >= len(data) { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrUnterminated) }
 if data[%[5]s] < 0x20 { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrBadString) }
 if data[%[5]s] == '"' {
-	%[3]s = unsafe.String(unsafe.SliceData(data[%[1]s+1:]), %[5]s-%[1]s-1)
+	%[3]s = `+hot+`
 	%[4]s = %[5]s + 1
 } else {
 	%[3]s, %[4]s, err = scan.String(data, %[1]s)
@@ -2425,7 +2433,9 @@ i++
 	b.WriteString("if i < len(data) && data[i] == '}' {\ni++\n")
 	renderPostLoop(b, s)
 	b.WriteString("return result, i, nil\n}\nfor {\nvar key string\n")
-	inlineScanString(b, "i", "key", "i", `""`)
+	// The dispatch key is transient (matched + discarded). Copy-mode retention
+	// is handled where the key is stored: inline catch-all map + UnknownKeyError.
+	inlineScanString(b, "i", "key", "i", `""`, false)
 	inlineSkipWS(b, "i")
 	b.WriteString(`if i >= len(data) || data[i] != ':' { return result, i, decode.NewParseErr("", i, scan.ErrBadObject) }
 i++
@@ -2599,7 +2609,7 @@ func renderMap(b *bytes.Buffer, f FieldInfo, ref, posVar string, topLevel bool) 
 	for {
 		var mk string
 `, posVar, ref, f.GoType, makeExpr)
-	inlineScanString(b, posVar, "mk", posVar, field)
+	inlineScanString(b, posVar, "mk", posVar, field, f.Copy)
 	keyValidateAndMod(b, f, "mk")
 	inlineSkipWS(b, posVar)
 	fmt.Fprintf(b, `		if %[1]s >= len(data) || data[%[1]s] != ':' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrBadObject) }
@@ -2637,7 +2647,7 @@ func renderMap(b *bytes.Buffer, f FieldInfo, ref, posVar string, topLevel bool) 
 	switch f.ElemKind {
 	case KindString:
 		// Straight into the slot; end-var `ve` since the key scan owns `ke`.
-		inlineScanStringVar(b, posVar, mapTarget, posVar, field, "ve")
+		inlineScanStringVar(b, posVar, mapTarget, posVar, field, "ve", f.Copy)
 	case KindBool:
 		fmt.Fprintf(b, `%[2]s, %[1]s, err = scan.Bool(data, %[1]s)
 if err != nil { return result, %[1]s, decode.NewParseErr(%[3]s, %[1]s, err) }
@@ -2775,7 +2785,7 @@ if %[1]s >= len(data) || data[%[1]s] != ']' { return result, %[1]s, decode.NewPa
 	if enc == "" {
 		// hex path. ref was pre-reset to [:0]; realloc only when cap is short.
 		b.WriteString("var s string\n")
-		inlineScanString(b, posVar, "s", posVar, field)
+		inlineScanString(b, posVar, "s", posVar, field, false)
 		fmt.Fprintf(b, `if cap(%[1]s) < hex.DecodedLen(len(s)) { %[1]s = make([]byte, 0, hex.DecodedLen(len(s))) }
 %[1]s, err = hex.AppendDecode(%[1]s, unsafe.Slice(unsafe.StringData(s), len(s)))
 if err != nil { return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, err) }
@@ -2783,7 +2793,7 @@ if err != nil { return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, err) }
 		return
 	}
 	b.WriteString("var s string\n")
-	inlineScanString(b, posVar, "s", posVar, field)
+	inlineScanString(b, posVar, "s", posVar, field, false)
 	fmt.Fprintf(b, `if cap(%[1]s) < %[2]s(len(s)) { %[1]s = make([]byte, 0, %[2]s(len(s))) }
 %[1]s, err = %[3]s.AppendDecode(%[1]s, unsafe.Slice(unsafe.StringData(s), len(s)))
 if err != nil { return result, %[4]s, decode.NewParseErr(%[5]s, %[4]s, err) }
@@ -2820,7 +2830,7 @@ if err != nil { return result, %[1]s, decode.NewParseErr(%[4]s, %[1]s, err) }
 		return
 	}
 	b.WriteString("var s string\n")
-	inlineScanString(b, posVar, "s", posVar, field)
+	inlineScanString(b, posVar, "s", posVar, field, false)
 	fmt.Fprintf(b, `%[1]s, err = time.Parse(%[2]s, s)
 if err != nil { return result, %[3]s, decode.NewParseErr(%[4]s, %[3]s, err) }
 `, ref, layout, posVar, field)
@@ -2852,7 +2862,7 @@ if err != nil { return result, %[1]s, decode.NewParseErr(%[4]s, %[1]s, err) }
 		return
 	}
 	b.WriteString("var s string\n")
-	inlineScanString(b, posVar, "s", posVar, field)
+	inlineScanString(b, posVar, "s", posVar, field, false)
 	fmt.Fprintf(b, `%[1]s, err = time.ParseDuration(s)
 if err != nil { return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, err) }
 `, ref, posVar, field)
@@ -2862,7 +2872,7 @@ if err != nil { return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, err) }
 func renderNetIP(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	field := fieldLit(f)
 	b.WriteString("var s string\n")
-	inlineScanString(b, posVar, "s", posVar, field)
+	inlineScanString(b, posVar, "s", posVar, field, false)
 	fmt.Fprintf(b, `%[1]s = net.ParseIP(s)
 if %[1]s == nil { return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, &net.ParseError{Type: "IP address", Text: s}) }
 `, ref, posVar, field)
@@ -2871,7 +2881,7 @@ if %[1]s == nil { return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, &net.Pa
 func renderNetipAddr(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	field := fieldLit(f)
 	b.WriteString("var s string\n")
-	inlineScanString(b, posVar, "s", posVar, field)
+	inlineScanString(b, posVar, "s", posVar, field, false)
 	fmt.Fprintf(b, `%[1]s, err = netip.ParseAddr(s)
 if err != nil { return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, err) }
 `, ref, posVar, field)
@@ -2880,7 +2890,7 @@ if err != nil { return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, err) }
 func renderNetipPrefix(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	field := fieldLit(f)
 	b.WriteString("var s string\n")
-	inlineScanString(b, posVar, "s", posVar, field)
+	inlineScanString(b, posVar, "s", posVar, field, false)
 	fmt.Fprintf(b, `%[1]s, err = netip.ParsePrefix(s)
 if err != nil { return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, err) }
 `, ref, posVar, field)
@@ -3028,13 +3038,20 @@ s.Shift = prevPin
 %[2]s`, ref, chk)
 }
 
-// renderRawJSON aliases data[start:end] into the field — zero copy. Works for
-// json.RawMessage and jsontext.Value (both underlying []byte).
+// renderRawJSON captures the value's raw span. Default aliases data[start:end]
+// into the field — zero copy. Under -copy it copies the span into the field's
+// own (reused) backing so the value survives a later mutation of data. Works
+// for json.RawMessage and jsontext.Value (both underlying []byte).
 func renderRawJSON(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	chk := bytesErrCheck(fieldLit(f), posVar)
+	span := "data[start:%[1]s]"
+	if f.Copy {
+		// append over the existing backing (reused across decodes; nil → fresh).
+		span = "append(%[2]s[:0], data[start:%[1]s]...)"
+	}
 	fmt.Fprintf(b, `start := %[1]s
 %[1]s, err = scan.SkipValue(data, start)
-%[3]s%[2]s = data[start:%[1]s]
+%[3]s%[2]s = `+span+`
 `, posVar, ref, chk)
 }
 
@@ -3043,7 +3060,7 @@ func renderRawJSON(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 func renderURL(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	field := fieldLit(f)
 	b.WriteString("var s string\n")
-	inlineScanString(b, posVar, "s", posVar, field)
+	inlineScanString(b, posVar, "s", posVar, field, false)
 	fmt.Fprintf(b, `var u *url.URL
 u, err = url.Parse(s)
 if err != nil { return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, err) }
@@ -3071,7 +3088,7 @@ if _, ok := (&%[2]s).SetString(unsafe.String(unsafe.SliceData(data[start:]), %[1
 func renderBigFloat(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	field := fieldLit(f)
 	b.WriteString("var s string\n")
-	inlineScanString(b, posVar, "s", posVar, field)
+	inlineScanString(b, posVar, "s", posVar, field, false)
 	fmt.Fprintf(b, `if _, _, err := (&%[1]s).Parse(s, 10); err != nil {
 	return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, err)
 }
@@ -3083,7 +3100,7 @@ func renderBigFloat(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 func renderBigRat(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	field := fieldLit(f)
 	b.WriteString("var s string\n")
-	inlineScanString(b, posVar, "s", posVar, field)
+	inlineScanString(b, posVar, "s", posVar, field, false)
 	fmt.Fprintf(b, `if _, ok := (&%[1]s).SetString(s); !ok {
 	return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, scan.ErrBadNumber)
 }
@@ -3100,6 +3117,7 @@ func sqlNullInnerField(f FieldInfo) FieldInfo {
 	inner.NoValidate = f.NoValidate
 	inner.UseNumber = f.UseNumber
 	inner.HTMLEscape = f.HTMLEscape
+	inner.Copy = f.Copy
 	inner.AtDispatch = false
 	return inner
 }
@@ -3134,7 +3152,7 @@ func renderSQLNull(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	switch spec.Inner {
 	case KindString:
 		inner.WriteString("var nv string\n")
-		inlineScanString(&inner, posVar, "nv", posVar, field)
+		inlineScanString(&inner, posVar, "nv", posVar, field, f.Copy)
 	case KindBool:
 		inner.WriteString("var nv bool\n")
 		fmt.Fprintf(&inner, "nv, %[1]s, err = scan.Bool(data, %[1]s)\n", posVar)
@@ -3186,11 +3204,16 @@ func sqlTypeName(goType string) string {
 	return goType
 }
 
-// renderAny decodes into a reflective any via scan.Any / scan.AnyNumber.
+// renderAny decodes into a reflective any via scan.Any / scan.AnyNumber. Under
+// -copy the Copy variants clone every nested string (values + object keys) so
+// the tree survives a later mutation of data.
 func renderAny(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	fn := "scan.Any"
 	if f.UseNumber {
 		fn = "scan.AnyNumber"
+	}
+	if f.Copy {
+		fn += "Copy"
 	}
 	chk := bytesErrCheck(fieldLit(f), posVar)
 	fmt.Fprintf(b, `%[1]s, %[2]s, err = %[3]s(data, %[2]s)
@@ -3291,9 +3314,16 @@ func seenSet(s StructInfo, f FieldInfo) string {
 // unknownKey emits the default branch of the key switch, in precedence order:
 // inline catch-all map → absorb; s.IgnoreUnknown → SkipValue; else
 // UnknownKeyError. The bytes-path `key` aliases data and stays valid for the
-// whole function, so it embeds directly into decode.NewParseErr (no clone).
+// whole function, so by default it embeds directly into the stored map key /
+// decode.NewParseErr (no clone). Under -copy every retained `key` is cloned
+// (keyExpr) and inline-map string/any VALUES are copied too, so the absorbed
+// entries survive a later mutation of data — matching the stream path.
 func unknownKey(s StructInfo, posVar string) string {
-	chk := bytesErrCheck("key", posVar)
+	keyExpr := "key"
+	if s.Copy {
+		keyExpr = "strings.Clone(key)"
+	}
+	chk := bytesErrCheck(keyExpr, posVar)
 	if inline := s.InlineField(); inline.Inline {
 		initMap := fmt.Sprintf("if result.%s == nil { result.%s = make(%s) }\n",
 			inline.GoName, inline.GoName, inline.GoType)
@@ -3303,9 +3333,19 @@ func unknownKey(s StructInfo, posVar string) string {
 			if s.UseNumber {
 				anyFn = "scan.AnyNumber"
 			}
-			return initMap + fmt.Sprintf(`result.%[1]s[key], %[2]s, err = %[3]s(data, %[2]s)
-%[4]s`, inline.GoName, posVar, anyFn, chk)
+			if s.Copy {
+				anyFn += "Copy"
+			}
+			return initMap + fmt.Sprintf(`result.%[1]s[%[5]s], %[2]s, err = %[3]s(data, %[2]s)
+%[4]s`, inline.GoName, posVar, anyFn, chk, keyExpr)
 		case KindString:
+			if s.Copy {
+				// scan.String aliases; clone the value (and the key) out of data.
+				return initMap + fmt.Sprintf(`var _sv string
+_sv, %[1]s, err = scan.String(data, %[1]s)
+%[3]sresult.%[2]s[%[4]s] = strings.Clone(_sv)
+`, posVar, inline.GoName, chk, keyExpr)
+			}
 			return initMap + fmt.Sprintf(`result.%[2]s[key], %[1]s, err = scan.String(data, %[1]s)
 %[3]s`, posVar, inline.GoName, chk)
 		case KindStruct:
@@ -3314,27 +3354,27 @@ func unknownKey(s StructInfo, posVar string) string {
 var _in int
 _iv, _in, err = _iv.DecodeFrom(data[%[2]s:])
 %[2]s += _in
-%[4]sresult.%[3]s[key] = _iv
-`, inline.ElemType, posVar, inline.GoName, nestedDecodeErrCheck("key", s.MultiErr, true))
+%[4]sresult.%[3]s[%[5]s] = _iv
+`, inline.ElemType, posVar, inline.GoName, nestedDecodeErrCheck(keyExpr, s.MultiErr, true), keyExpr)
 			}
 		}
 		return initMap + fmt.Sprintf(`_vstart := %[1]s
 %[1]s, err = scan.SkipValue(data, %[1]s)
 %[4]svar _iv %[2]s
-if err = json.Unmarshal(data[_vstart:%[1]s], &_iv); err != nil { return result, %[1]s, decode.NewParseErr(key, %[1]s, err) }
-result.%[3]s[key] = _iv
-`, posVar, inline.ElemType, inline.GoName, chk)
+if err = json.Unmarshal(data[_vstart:%[1]s], &_iv); err != nil { return result, %[1]s, decode.NewParseErr(%[5]s, %[1]s, err) }
+result.%[3]s[%[5]s] = _iv
+`, posVar, inline.ElemType, inline.GoName, chk, keyExpr)
 	}
 	if s.IgnoreUnknown {
 		return fmt.Sprintf(`%[1]s, err = scan.SkipValue(data, %[1]s)
 %[2]s`, posVar, chk)
 	}
 	if s.MultiErr {
-		return fmt.Sprintf(`errs = append(errs, &validation.UnknownKeyError{Pos: %[1]s, Path: []string{key}})
+		return fmt.Sprintf(`errs = append(errs, &validation.UnknownKeyError{Pos: %[1]s, Path: []string{%[3]s}})
 %[1]s, err = scan.SkipValue(data, %[1]s)
-%[2]s`, posVar, chk)
+%[2]s`, posVar, chk, keyExpr)
 	}
-	return fmt.Sprintf("return result, %[1]s, &validation.UnknownKeyError{Pos: %[1]s, Path: []string{key}}\n", posVar)
+	return fmt.Sprintf("return result, %[1]s, &validation.UnknownKeyError{Pos: %[1]s, Path: []string{%[2]s}}\n", posVar, keyExpr)
 }
 
 // renderPipe emits an ordered value-stage step list (mods and validators
@@ -3405,7 +3445,9 @@ func renderStringTag(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	// Brace-less: `sv` / `u` / `n` / `f` land in the caller's scope. The `:=`
 	// parse shadows the function-level err; checked immediately.
 	b.WriteString("var sv string\n")
-	inlineScanString(b, posVar, "sv", posVar, field)
+	// Only the KindString case retains sv (ref = sv); numeric `,string` parses
+	// it into an independent value, so the copy is needed for strings only.
+	inlineScanString(b, posVar, "sv", posVar, field, f.Copy && f.Kind == KindString)
 	errCheck := fmt.Sprintf("if err != nil { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, err) }\n", posVar, field)
 	switch f.Kind {
 	case KindBool:
@@ -3484,6 +3526,7 @@ func elemPtrField(f FieldInfo, jsonName string) FieldInfo {
 		NoValidate:  f.NoValidate,
 		AllowDups:   f.AllowDups,
 		UseNumber:   f.UseNumber,
+		Copy:        f.Copy,
 		Validation:  f.ElemValidation,
 		Mods:        f.ElemMods,
 		Iface:       f.ElemIface,
@@ -3749,7 +3792,7 @@ func renderField(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	field := fieldLit(f)
 	switch f.Kind {
 	case KindString:
-		inlineScanString(b, posVar, ref, posVar, field)
+		inlineScanString(b, posVar, ref, posVar, field, f.Copy)
 	case KindBool:
 		fmt.Fprintf(b, "%[1]s, %[2]s, err = scan.Bool(data, %[2]s)\n", ref, posVar)
 		fmt.Fprintf(b, "if err != nil { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, err) }\n", posVar, field)
@@ -3861,6 +3904,7 @@ func peelSliceField(f FieldInfo) FieldInfo {
 		MultiErr:    f.MultiErr,
 		NoValidate:  f.NoValidate,
 		AllowDups:   f.AllowDups,
+		Copy:        f.Copy,
 		// HintLen=-1 ("unset") so preallocCap falls through to the kind
 		// default — the zero-value 0 would read as opt-out.
 		HintLen: -1,
@@ -4079,7 +4123,7 @@ if e := bytes.IndexByte(data[%[2]s:], ']'); e >= 0 { %[4]s = bytes.Count(data[%[
 	} else {
 		switch f.ElemKind {
 		case KindString:
-			inlineScanString(b, kvar, target, kvar, field)
+			inlineScanString(b, kvar, target, kvar, field, f.Copy)
 		case KindBool:
 			fmt.Fprintf(b, "%s, %s, err = scan.Bool(data, %s)\n", target, kvar, kvar)
 			b.WriteString(errCheck)
