@@ -147,6 +147,19 @@ one `io.ReadAll` buffer).
 
 ## Running benchmarks
 
+**THE canonical invocation is ALWAYS `-benchtime=500x -count=1 -cpu=1`.** Not
+`-count=5`, not `-count=8`, not `-count=12` — `-count=1`. One pass, fixed
+iteration count, single-threaded. That is the run for every number quoted in any
+doc, the README, or a chat reply. Anything else wastes minutes and is not what
+this repo expects.
+
+**NEVER tail, head, grep, truncate, sample, or otherwise reduce the output IN
+ANY SHAPE OR FORM.** Print every benchmark line in full, verbatim. Do not pipe
+through `tail`/`head`/`grep`/`sed`/`awk` to "trim" rows, do not show "the
+relevant ones" — show ALL of them. A truncated benchmark result is worse than
+none: it hides regressions in the rows you dropped. If the output is long, it is
+long; emit it whole.
+
 **ALWAYS pin to a dedicated core and disable parallelism** — every perf claim
 must come from `GOMAXPROCS=1 taskset -c 24 … -cpu=1`. The default multi-core run
 is layout/scheduler-noise-dominated (sub-1% deltas flip sign). Use **core 24**.
@@ -158,8 +171,9 @@ tries to exec the env assignment.
 (cd bench && GOEXPERIMENT=jsonv2 GOMAXPROCS=1 taskset -c 24 go test -run=^$ -bench=. -benchtime=500x -count=1 -cpu=1 .)
 ```
 
-`-benchtime=500x` fixes the iteration count so rows are directly comparable. For
-an A/B, build both as test binaries and interleave under the same pin (`go test
--c -o old.test` / `new.test`, alternate runs), then `benchstat` over `-count=12`+
-samples — never a single default-layout A/B. `./...` from root does NOT cross
-module boundaries — `cd` into `bench/` first.
+`-benchtime=500x` fixes the iteration count so rows are directly comparable.
+`-count=1` is the rule, not a starting point. ONLY when explicitly asked for a
+rigorous A/B do you build both sides as test binaries and interleave under the
+same pin (`go test -c -o old.test` / `new.test`, alternate runs) + `benchstat`
+over more samples — and even then you emit the full output, never truncated.
+`./...` from root does NOT cross module boundaries — `cd` into `bench/` first.
