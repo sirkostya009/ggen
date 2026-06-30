@@ -15,7 +15,7 @@ type Errors []Error                           // multierr return; Unwrap() []err
 
 `Rule` constants: `Required`, `NotEmpty`, `Len`, `MinLen`, `MaxLen`, `Runes`,
 `MinRunes`, `MaxRunes`, `GT`, `GTE`, `LT`, `LTE`, `Eq`, `Neq`, `OneOf`,
-`Email`, `URL`, `ASCII`, `Printable`, `Alphanum`, `Numeric`, `Lower`, `Upper`,
+`URL`, `Alphanum`, `Numeric`, `Lower`, `Upper`,
 `Hexadecimal`, `Starts`, `Ends`, `Contains`, `Multiple`, `DuplicateKey`,
 `UnknownKey`, `Custom`, `Predicate`, `MultiErr`.
 
@@ -50,9 +50,9 @@ the remaining fields:
 - **equality**: `EqError`/`NeqError{Want any, Value any}` (string + numeric)
 - **oneof**: `OneOfError{Allowed []string, Value any}` — `Allowed` points to a
   frozen package-level slice (see "Frozen OneOf slices")
-- **patterns**: `EmailError`/`URLError`/`ASCIIError`/`PrintableError`/
-  `AlphanumError`/`NumericError`/`LowerError`/`UpperError`/`HexadecimalError
-  {Value string}` (`URLError` also has `Cause error` + `Unwrap()`)
+- **patterns**: `URLError`/`AlphanumError`/`NumericError`/`LowerError`/
+  `UpperError`/`HexadecimalError{Value string}` (`URLError` also has
+  `Cause error` + `Unwrap()`)
 - **prefix/suffix/contains**: `StartsError`/`EndsError`/`ContainsError{Want, Value string}`
 - **other**: `MultipleError{Of float64, Value any}`, `DuplicateKeyError`,
   `UnknownKeyError`, `CustomError{Name string, Value any, Cause error}` (exposes

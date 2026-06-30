@@ -137,9 +137,8 @@ later stage := step ( WS step )*            // value steps, inner:/keys: levels
       `matchParen`). Levels carried as `FieldInfo.Levels [][]Step` (`Levels[0]` =
       per-elem), peeled by `peelSliceField`, emitted via `elemSteps`.
     - validators: `notempty`; `len/minlen/maxlen=N`; `runes/minrunes/maxrunes=N`;
-      `gt/gte/lt/lte/eq/neq=N`; `multiple=N`; `oneof=a|b|c`; `email`/`url`/`ascii`/
-      `printable`/`alphanum`/`numeric`/`lower`/`upper`/`hexadecimal`;
-      `starts/ends/contains=X`.
+      `gt/gte/lt/lte/eq/neq=N`; `multiple=N`; `oneof=a|b|c`; `url`/`alphanum`/
+      `numeric`/`lower`/`upper`/`hexadecimal`; `starts/ends/contains=X`.
     - mods: `trim`, `lower`, `upper`, `trimleft=X`, `trimright=X`,
       `replace=old|new`, `clamp=lo|hi`.
 - **Custom funcs** (`@FuncName` / `@pkg.FuncName`) — classified by signature in
@@ -668,8 +667,8 @@ recv` prologue. The named first result homes the value in the caller's return
     `len<=N`, fail-free `len>4N`, band `(N,4N]`; `runes=N` fail-free `len<N ||
 len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
     (cold walk on the fail path, live `rc` inside a band). **Tier (c) — ASCII
-    subsumption:** if an ASCII-implying rule (`alphanum`/`numeric`/`ascii`/
-    `hexadecimal`) passed earlier in the same run, `R == len` exactly so the walk
+    subsumption:** if an ASCII-implying rule (`alphanum`/`numeric`/`hexadecimal`)
+    passed earlier in the same run, `R == len` exactly so the walk
     is dropped entirely. Gated on `asciiSeen && !multiErr` in declared order
     (charset rule must precede the rune rule; skipped under multierr where a failed
     earlier rule doesn't stop reaching the rune rule on non-ASCII input).

@@ -104,7 +104,7 @@ package api
 type User struct {
     ID    int      `json:"id"`
     Name  string   `json:"name"   pipe:"required minlen=1 maxlen=64"`
-    Email string   `json:"email"  pipe:"trim lower email"`
+    Email string   `json:"email"  pipe:"trim lower contains=@"`
     Tags  []string `json:"tags,omitempty" pipe:"inner:notempty"`
 }
 ```
@@ -229,22 +229,22 @@ Flags apply globally to the whole pass; annotations apply locally to a struct.
 Multiple annotation tokens are space-separated: `//ggen:generate marshal
 unmarshal multierr`.
 
-| CLI flag         | struct annotation | effect                                                                                                                                                                                      |
-| ---------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `-o <path>`      | —                 | override output path (single-file or single-package mode only)                                                                                                                              |
-| `-pkg <name>`    | —                 | override the package name in the generated file                                                                                                                                             |
-| `-marshal`       | `marshal`         | also emit a `MarshalJSON` hook so the type satisfies `encoding/json.Marshaler`                                                                                                              |
-| `-unmarshal`     | `unmarshal`       | also emit an `UnmarshalJSON` hook for `encoding/json.Unmarshaler`                                                                                                                           |
-| `-multierr`      | `multierr`        | accumulate every validation failure into `validation.Errors` instead of returning on the first one                                                                                          |
-| `-allowdups`     | `allowdups`       | accept duplicate JSON keys with first-wins semantics — the first occurrence is parsed, later ones are skipped via `scan.SkipValue` without being decoded (default: error on the second hit) |
-| `-novalidate`    | `novalidate`      | drop validation, required-field checks, and mods entirely — fastest decode path                                                                                                             |
-| `-ignoreunknown` | `ignoreunknown`   | silently drop unknown JSON keys (default: error). overridden by an inline catch-all map field                                                                                               |
-| `-nullzero`      | `nullzero`        | accept an explicit JSON `null` on every non-pointer value field, decoding it to the Go zero value (default: error). a per-field `nullzero` decode variant in `pipe:` opts in a single field |
-| `-nosortkeys`    | `nosortkeys`      | emit struct fields in declaration order (default: alphabetical by JSON name, compresses better)                                                                                             |
-| `-usenumber`     | `usenumber`       | decode numbers in `any` fields as `json.Number` instead of `float64`                                                                                                                        |
-| `-htmlescape`    | `htmlescape`      | escape `<`, `>`, `&` to `\uXXXX` for safe embedding in HTML (default: literal, matches `encoding/json` v2 — v2 dropped HTML escaping as a default)                                          |
+| CLI flag         | struct annotation | effect                                                                                                                                                                                                                                                                                                                                                    |
+| ---------------- | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-o <path>`      | —                 | override output path (single-file or single-package mode only)                                                                                                                                                                                                                                                                                            |
+| `-pkg <name>`    | —                 | override the package name in the generated file                                                                                                                                                                                                                                                                                                           |
+| `-marshal`       | `marshal`         | also emit a `MarshalJSON` hook so the type satisfies `encoding/json.Marshaler`                                                                                                                                                                                                                                                                            |
+| `-unmarshal`     | `unmarshal`       | also emit an `UnmarshalJSON` hook for `encoding/json.Unmarshaler`                                                                                                                                                                                                                                                                                         |
+| `-multierr`      | `multierr`        | accumulate every validation failure into `validation.Errors` instead of returning on the first one                                                                                                                                                                                                                                                        |
+| `-allowdups`     | `allowdups`       | accept duplicate JSON keys with first-wins semantics — the first occurrence is parsed, later ones are skipped via `scan.SkipValue` without being decoded (default: error on the second hit)                                                                                                                                                               |
+| `-novalidate`    | `novalidate`      | drop validation, required-field checks, and mods entirely — fastest decode path                                                                                                                                                                                                                                                                           |
+| `-ignoreunknown` | `ignoreunknown`   | silently drop unknown JSON keys (default: error). overridden by an inline catch-all map field                                                                                                                                                                                                                                                             |
+| `-nullzero`      | `nullzero`        | accept an explicit JSON `null` on every non-pointer value field, decoding it to the Go zero value (default: error). a per-field `nullzero` decode variant in `pipe:` opts in a single field                                                                                                                                                               |
+| `-nosortkeys`    | `nosortkeys`      | emit struct fields in declaration order (default: alphabetical by JSON name, compresses better)                                                                                                                                                                                                                                                           |
+| `-usenumber`     | `usenumber`       | decode numbers in `any` fields as `json.Number` instead of `float64`                                                                                                                                                                                                                                                                                      |
+| `-htmlescape`    | `htmlescape`      | escape `<`, `>`, `&` to `\uXXXX` for safe embedding in HTML (default: literal, matches `encoding/json` v2 — v2 dropped HTML escaping as a default)                                                                                                                                                                                                        |
 | `-copy`          | `copy`            | copy decoded strings and `json.RawMessage` (and strings inside `any` fields) out of the input buffer instead of aliasing it, so you may reuse or mutate the input after `DecodeFrom` returns (default: zero-copy aliasing — faster, but the input must stay alive and unmodified for as long as the decoded values are used). Decode-only; allocates more |
-| `-dry`           | —                 | parse and validate every annotated struct, surface every error, emit no file. Useful in CI/pre-commit to fail fast on broken tags or annotations. Rejects `-o` / `-pkg`                     |
+| `-dry`           | —                 | parse and validate every annotated struct, surface every error, emit no file. Useful in CI/pre-commit to fail fast on broken tags or annotations. Rejects `-o` / `-pkg`                                                                                                                                                                                   |
 
 ## struct tags
 
@@ -273,7 +273,7 @@ that run **in the order you write them**.
 
 ```go
 Name  string `json:"name"  pipe:"required trim minlen=1 maxlen=50"`
-Email string `json:"email" pipe:"trim lower email"`
+Email string `json:"email" pipe:"trim lower contains=@"`
 Tags  []string `json:"tags" pipe:"optional inner:notempty minlen=1"`
 ```
 
@@ -323,17 +323,17 @@ Everything after the decode stage operates on the value. **Mods (transforms) and
 validators run in declared order**, so `lte=10 @Double` validates the raw value
 before doubling it, while `@Double lte=10` doubles first.
 
-| validators                                                                                   | error                                          | checks                                         |
-| -------------------------------------------------------------------------------------------- | ---------------------------------------------- | ---------------------------------------------- |
-| `notempty`                                                                                   | `NotEmptyError`                                | string non-empty / slice / map non-zero length |
-| `len=N`, `minlen=N`, `maxlen=N`                                                              | `LenError`, `MinLenError`, `MaxLenError`       | byte-length / element-count bounds             |
-| `runes=N`, `minrunes=N`, `maxrunes=N`                                                        | `RunesError`, `MinRunesError`, `MaxRunesError` | rune-count bounds (utf8 aware)                 |
-| `gt=N`, `gte=N`, `lt=N`, `lte=N`                                                             | `GTError`, `GTEError`, `LTError`, `LTEError`   | numeric comparison                             |
-| `eq=X`, `neq=X`                                                                              | `EqError`, `NeqError`                          | equality (numeric or string operand)           |
-| `multiple=N`                                                                                 | `MultipleError`                                | numeric — multiple of N                        |
-| `oneof=a\|b\|c`                                                                              | `OneOfError`                                   | one of the listed alternatives                 |
-| `email`, `url`, `ascii`, `printable`, `alphanum`, `numeric`, `lower`, `upper`, `hexadecimal` | `EmailError`, …                                | string-shape predicates                        |
-| `starts=X`, `ends=X`, `contains=X`                                                           | `StartsError`, `EndsError`, `ContainsError`    | substring tests on strings                     |
+| validators                                                    | error                                          | checks                                         |
+| ------------------------------------------------------------- | ---------------------------------------------- | ---------------------------------------------- |
+| `notempty`                                                    | `NotEmptyError`                                | string non-empty / slice / map non-zero length |
+| `len=N`, `minlen=N`, `maxlen=N`                               | `LenError`, `MinLenError`, `MaxLenError`       | byte-length / element-count bounds             |
+| `runes=N`, `minrunes=N`, `maxrunes=N`                         | `RunesError`, `MinRunesError`, `MaxRunesError` | rune-count bounds (utf8 aware)                 |
+| `gt=N`, `gte=N`, `lt=N`, `lte=N`                              | `GTError`, `GTEError`, `LTError`, `LTEError`   | numeric comparison                             |
+| `eq=X`, `neq=X`                                               | `EqError`, `NeqError`                          | equality (numeric or string operand)           |
+| `multiple=N`                                                  | `MultipleError`                                | numeric — multiple of N                        |
+| `oneof=a\|b\|c`                                               | `OneOfError`                                   | one of the listed alternatives                 |
+| `url`, `alphanum`, `numeric`, `lower`, `upper`, `hexadecimal` | `URLError`, `AlphanumError`, …                 | string-shape predicates                        |
+| `starts=X`, `ends=X`, `contains=X`                            | `StartsError`, `EndsError`, `ContainsError`    | substring tests on strings                     |
 
 | mods                                                                      | target  |
 | ------------------------------------------------------------------------- | ------- |
@@ -561,7 +561,7 @@ potentially slow network streams.
 ```go
 //ggen:generate
 type CreateUser struct {
-    Email string `json:"email" pipe:"required email"`
+    Email string `json:"email" pipe:"required contains=@"`
     Bio   string `json:"bio"   pipe:"maxlen=4096"`
 }
 

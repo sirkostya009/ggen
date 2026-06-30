@@ -149,12 +149,11 @@ func nodeToPlain(n Node) NodePlain {
 }
 
 // Validated exercises per-field validation rules for fail-fast streaming
-// benchmarks — Email (alphabetically first) is corrupted to force early
-// rejection.
+// benchmarks — Email is corrupted to force early rejection.
 //
 //ggen:generate
 type Validated struct {
-	Email string   `json:"email" pipe:"required email"`
+	Email string   `json:"email" pipe:"required contains=@"`
 	Name  string   `json:"name"  pipe:"required minlen=1 maxlen=64"`
 	Age   int      `json:"age"   pipe:"gte=0 lte=150"`
 	Tags  []string `json:"tags" pipe:"inner:(notempty minlen=1 maxlen=32)"`
@@ -196,8 +195,8 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
-	// Same shape, but Email is malformed — fails the email rule on the
-	// first decoded field (sorted order: age, bio, then email trips).
+	// Same shape, but Email is malformed (no '@') — fails the contains rule
+	// on the first decoded field (sorted order: age, bio, then email trips).
 	InvalidPayload, err = encode.Marshal(Validated{
 		Email: "not-an-email",
 		Name:  "alice",
@@ -462,7 +461,7 @@ var (
 //
 //ggen:generate
 type ValidationHeavy struct {
-	Email    string  `json:"email" pipe:"required email maxrunes=128"`
+	Email    string  `json:"email" pipe:"required contains=@ maxrunes=128"`
 	Username string  `json:"username" pipe:"required minrunes=3 maxrunes=32 alphanum lower"`
 	Phone    string  `json:"phone" pipe:"minrunes=7 maxrunes=20 numeric"`
 	Age      int     `json:"age" pipe:"gte=0 lte=130"`

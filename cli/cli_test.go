@@ -607,23 +607,23 @@ type Tagged struct {
 
 //ggen:generate
 type Test1 struct {
-	A int `+"`"+`json:"a" pipe:"ascii"`+"`"+`
+	A int `+"`"+`json:"a" pipe:"alphanum"`+"`"+`
 }
 
 //ggen:generate
 type Test2 struct {
-	B int `+"`"+`json:"b" pipe:"email"`+"`"+`
+	B int `+"`"+`json:"b" pipe:"numeric"`+"`"+`
 }
 `)
 		out, err := runCLI(t, bin, dir, "multi.go", "Test1", "Test2")
 		if err == nil {
 			t.Fatalf("expected non-zero exit, got:\n%s", out)
 		}
-		if !strings.Contains(out, "`ascii`") {
-			t.Errorf("ascii diagnostic missing, got:\n%s", out)
+		if !strings.Contains(out, "`alphanum`") {
+			t.Errorf("alphanum diagnostic missing, got:\n%s", out)
 		}
-		if !strings.Contains(out, "`email`") {
-			t.Errorf("email diagnostic missing, got:\n%s", out)
+		if !strings.Contains(out, "`numeric`") {
+			t.Errorf("numeric diagnostic missing, got:\n%s", out)
 		}
 	})
 
@@ -635,8 +635,8 @@ type Test2 struct {
 
 //ggen:generate
 type Multi struct {
-	A int `+"`"+`json:"a" pipe:"ascii"`+"`"+`
-	B int `+"`"+`json:"b" pipe:"email"`+"`"+`
+	A int `+"`"+`json:"a" pipe:"alphanum"`+"`"+`
+	B int `+"`"+`json:"b" pipe:"numeric"`+"`"+`
 	C string `+"`"+`json:"c" pipe:"gt=0"`+"`"+`
 }
 `)
@@ -644,7 +644,7 @@ type Multi struct {
 		if err == nil {
 			t.Fatalf("expected non-zero exit, got:\n%s", out)
 		}
-		for _, want := range []string{"`ascii`", "`email`", "`gt`"} {
+		for _, want := range []string{"`alphanum`", "`numeric`", "`gt`"} {
 			if !strings.Contains(out, want) {
 				t.Errorf("missing diagnostic %s, got:\n%s", want, out)
 			}
@@ -660,16 +660,16 @@ type Multi struct {
 
 //ggen:generate
 type Bad struct {
-	A int `+"`"+`json:"a" pipe:"trim ascii"`+"`"+`
+	A int `+"`"+`json:"a" pipe:"trim alphanum"`+"`"+`
 }
 `)
 		out, err := runCLI(t, bin, dir, "multi.go")
 		if err == nil {
 			t.Fatalf("expected non-zero exit, got:\n%s", out)
 		}
-		// Both ascii (val) and trim (mod) must appear, each with its own
+		// Both alphanum (val) and trim (mod) must appear, each with its own
 		// position prefix.
-		for _, want := range []string{"`ascii`", "`trim`"} {
+		for _, want := range []string{"`alphanum`", "`trim`"} {
 			if !strings.Contains(out, want) {
 				t.Errorf("missing diagnostic for %s, got:\n%s", want, out)
 			}
@@ -691,14 +691,14 @@ type Bad struct {
 
 //ggen:generate
 type A struct {
-	N int `+"`"+`json:"n" pipe:"ascii"`+"`"+`
+	N int `+"`"+`json:"n" pipe:"alphanum"`+"`"+`
 }
 `)
 		writeFixture(t, filepath.Join(base, "b", "msg.go"), `package b
 
 //ggen:generate
 type B struct {
-	N int `+"`"+`json:"n" pipe:"email"`+"`"+`
+	N int `+"`"+`json:"n" pipe:"numeric"`+"`"+`
 }
 `)
 		writeFixture(t, filepath.Join(base, "c", "msg.go"), `package c
@@ -712,11 +712,11 @@ type C struct {
 		if err == nil {
 			t.Fatalf("walk with broken packages must exit non-zero, got:\n%s", out)
 		}
-		if !strings.Contains(out, "`ascii`") {
-			t.Errorf("package a's ascii error missing, got:\n%s", out)
+		if !strings.Contains(out, "`alphanum`") {
+			t.Errorf("package a's alphanum error missing, got:\n%s", out)
 		}
-		if !strings.Contains(out, "`email`") {
-			t.Errorf("package b's email error missing, got:\n%s", out)
+		if !strings.Contains(out, "`numeric`") {
+			t.Errorf("package b's numeric error missing, got:\n%s", out)
 		}
 		// The clean package still writes — the walk continued past the broken ones.
 		if !strings.Contains(out, "wrote") || !strings.Contains(out, "c_ggen.go") {
@@ -817,13 +817,13 @@ type C struct {
 
 //ggen:generate
 type Multi struct {
-	A int `+"`"+`json:"a" pipe:"ascii"`+"`"+`
-	B int `+"`"+`json:"b" pipe:"email"`+"`"+`
+	A int `+"`"+`json:"a" pipe:"alphanum"`+"`"+`
+	B int `+"`"+`json:"b" pipe:"numeric"`+"`"+`
 	C string `+"`"+`json:"c" pipe:"gt=0"`+"`"+`
 }
 `)
 					return dir, []string{"-dry", "multi.go"},
-						[]string{"`ascii`", "`email`", "`gt`"},
+						[]string{"`alphanum`", "`numeric`", "`gt`"},
 						[]string{filepath.Join(dir, "multi_ggen.go")}
 				},
 			},
@@ -836,18 +836,18 @@ type Multi struct {
 
 //ggen:generate
 type A struct {
-	N int `+"`"+`json:"n" pipe:"ascii"`+"`"+`
+	N int `+"`"+`json:"n" pipe:"alphanum"`+"`"+`
 }
 `)
 					writeFixture(t, filepath.Join(base, "b", "msg.go"), `package b
 
 //ggen:generate
 type B struct {
-	N int `+"`"+`json:"n" pipe:"email"`+"`"+`
+	N int `+"`"+`json:"n" pipe:"numeric"`+"`"+`
 }
 `)
 					return base, []string{"-dry", "./..."},
-						[]string{"`ascii`", "`email`"},
+						[]string{"`alphanum`", "`numeric`"},
 						[]string{
 							filepath.Join(base, "a", "a_ggen.go"),
 							filepath.Join(base, "b", "b_ggen.go"),
@@ -1750,11 +1750,13 @@ type Msg struct {
 		// Each entry runs ggen on a single-file fixture; the CLI must exit
 		// non-zero and the diagnostic must contain wantDiag.
 		cases := []bad{
+			// ----- removed string validators are now unknown rules -----
+			{"ascii_unknown", "S string", `json:"s" pipe:"ascii"`, "`ascii` is not a known validation rule"},
+			{"email_unknown", "S string", `json:"s" pipe:"email"`, "`email` is not a known validation rule"},
+			{"printable_unknown", "S string", `json:"s" pipe:"printable"`, "`printable` is not a known validation rule"},
+
 			// ----- string-only rules on non-strings -----
-			{"ascii_on_int", "N int", `json:"n" pipe:"ascii"`, "`ascii` is inapplicable to int"},
-			{"email_on_int", "N int", `json:"n" pipe:"email"`, "`email` is inapplicable to int"},
 			{"url_on_bool", "B bool", `json:"b" pipe:"url"`, "`url` is inapplicable to bool"},
-			{"printable_on_float", "F float64", `json:"f" pipe:"printable"`, "`printable` is inapplicable to float64"},
 			{"alphanum_on_int", "N int", `json:"n" pipe:"alphanum"`, "`alphanum` is inapplicable to int"},
 			{"numericrule_on_int", "N int", `json:"n" pipe:"numeric"`, "`numeric` is inapplicable to int"},
 			{"lower_on_int", "N int", `json:"n" pipe:"lower"`, "`lower` is inapplicable to int"},
@@ -1767,7 +1769,6 @@ type Msg struct {
 			{"minrunes_on_int", "N int", `json:"n" pipe:"minrunes=3"`, "`minrunes` is inapplicable to int"},
 			{"maxrunes_on_int", "N int", `json:"n" pipe:"maxrunes=3"`, "`maxrunes` is inapplicable to int"},
 			{"runes_on_bytes", "B []byte", `json:"b" pipe:"runes=3"`, "`runes` is inapplicable to []byte"},
-			{"ascii_on_bytes", "B []byte", `json:"b" pipe:"ascii"`, "`ascii` is inapplicable to []byte"},
 			{"starts_empty", "S string", `json:"s" pipe:"starts="`, `requires a non-empty value`},
 			{"ends_empty", "S string", `json:"s" pipe:"ends="`, `requires a non-empty value`},
 			{"contains_empty", "S string", `json:"s" pipe:"contains="`, `requires a non-empty value`},
@@ -1847,11 +1848,11 @@ type Msg struct {
 
 			// ----- inner: element kind mismatch -----
 			// []int element is int — string rules invalid on the element.
-			{"dive_ascii_on_int_elem", "X []int", `json:"x" pipe:"inner:ascii"`, "`ascii` is inapplicable to int"},
-			{"dive_email_on_int_elem", "X []int", `json:"x" pipe:"inner:email"`, "`email` is inapplicable to int"},
+			{"dive_alphanum_on_int_elem", "X []int", `json:"x" pipe:"inner:alphanum"`, "`alphanum` is inapplicable to int"},
+			{"dive_numeric_on_int_elem", "X []int", `json:"x" pipe:"inner:numeric"`, "`numeric` is inapplicable to int"},
 			{"dive_len_on_int_elem", "X []int", `json:"x" pipe:"inner:len=3"`, "`len` is inapplicable to int"},
 			// map[string]int value is int.
-			{"dive_ascii_on_int_mapval", "M map[string]int", `json:"m" pipe:"inner:ascii"`, "`ascii` is inapplicable to int"},
+			{"dive_alphanum_on_int_mapval", "M map[string]int", `json:"m" pipe:"inner:alphanum"`, "`alphanum` is inapplicable to int"},
 			// []string element is string — numeric rules invalid.
 			{"dive_gt_on_string_elem", "X []string", `json:"x" pipe:"inner:gt=1"`, "`gt` is inapplicable to string"},
 

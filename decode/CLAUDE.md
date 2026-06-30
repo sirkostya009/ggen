@@ -19,7 +19,7 @@ func UnmarshalSliceStream[T Decoder[T]](r io.Reader, buf []byte) ([]T, []byte, e
 
 ## `decode/validators.go`
 
-Helper predicates for generated validation branches. Each maps 1:1 to rule name (`isASCII`, `isAlphanum`, `isHexadecimal`, …).
+Helper predicates for generated validation branches. Each maps 1:1 to rule name (`IsAlphanum`, `IsNumeric`, `IsHex`, `IsURL`, …).
 
 ## `decode/parse_error.go`
 

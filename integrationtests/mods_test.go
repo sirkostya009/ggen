@@ -16,7 +16,7 @@ import (
 //
 //ggen:generate
 type ModStruct struct {
-	Email string   `json:"email" pipe:"trim lower email"`
+	Email string   `json:"email" pipe:"trim lower"`
 	Tags  []string `json:"tags" pipe:"inner:(trim lower)"`
 	SKU   string   `json:"sku" pipe:"trimleft=SKU-"`
 }
@@ -71,7 +71,7 @@ func TestMods_trimleft(t *testing.T) {
 //
 //ggen:generate
 type FallibleModStruct struct {
-	Email string `json:"email" pipe:"required @RejectShort email minlen=10"`
+	Email string `json:"email" pipe:"required @RejectShort contains=@ minlen=10"`
 }
 
 // FallibleModMultierrStruct: same fields in multierr mode — a fallible mod
@@ -79,7 +79,7 @@ type FallibleModStruct struct {
 //
 //ggen:generate multierr
 type FallibleModMultierrStruct struct {
-	Email string `json:"email" pipe:"required @RejectShort email minlen=10"`
+	Email string `json:"email" pipe:"required @RejectShort contains=@ minlen=10"`
 }
 
 func RejectShort(s string) (string, error) {
@@ -89,7 +89,7 @@ func RejectShort(s string) (string, error) {
 	return s, nil
 }
 
-// The mod runs first, so its error surfaces ahead of the email/minlen
+// The mod runs first, so its error surfaces ahead of the contains/minlen
 // validators that would also fail.
 func TestFallibleMod_shortCircuitsValidation(t *testing.T) {
 	t.Parallel()
@@ -101,7 +101,7 @@ func TestFallibleMod_shortCircuitsValidation(t *testing.T) {
 		t.Errorf("expected mod error, got: %v", err)
 	}
 	// Validation messages must not appear.
-	if strings.Contains(err.Error(), "valid email") || strings.Contains(err.Error(), "below minimum") {
+	if strings.Contains(err.Error(), "does not contain") || strings.Contains(err.Error(), "below minimum") {
 		t.Errorf("validation ran despite mod failure: %v", err)
 	}
 }
@@ -125,7 +125,7 @@ func TestFallibleMod_multierrStillShortCircuits(t *testing.T) {
 // A passing mod is a gate, not a bypass — downstream validation still runs.
 func TestFallibleMod_passLetsValidationRun(t *testing.T) {
 	t.Parallel()
-	// "abcdef" passes RejectShort (len >= 3) but fails minlen=10 + email.
+	// "abcdef" passes RejectShort (len >= 3) but fails contains=@ + minlen=10.
 	_, _, err := FallibleModStruct{}.DecodeFrom([]byte(`{"email":"abcdef"}`))
 	if err == nil {
 		t.Fatal("expected validation error after mod passed")
@@ -205,7 +205,7 @@ type NestedMultierrStruct struct {
 
 func TestNestedMultierr_drainsInnerValidationErrors(t *testing.T) {
 	t.Parallel()
-	// "abcdef" passes the mod but fails inner minlen=10 + email; outer also
+	// "abcdef" passes the mod but fails inner contains=@ + minlen=10; outer also
 	// fails on name (required/minlen=2) and code (lte=100). Inner returns a
 	// validation.Errors aggregate the outer must drain.
 	in := []byte(`{"inner":{"email":"abcdef"},"name":"","code":200}`)
@@ -241,7 +241,7 @@ func pathOf(e validation.Error) []string {
 		return p.pathSegments()
 	}
 	switch v := e.(type) {
-	case *validation.EmailError:
+	case *validation.ContainsError:
 		return v.Path
 	case *validation.MinLenError:
 		return v.Path

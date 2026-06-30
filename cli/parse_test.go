@@ -220,8 +220,8 @@ func TestGenerate_newValidators(t *testing.T) {
 	structs := []StructInfo{{
 		Name: "V",
 		Fields: []FieldInfo{
-			{GoName: "Email", JSONName: "email", GoType: "string", Kind: KindString,
-				Validation: []ValidationRule{{Name: "email"}}},
+			{GoName: "Code", JSONName: "code", GoType: "string", Kind: KindString,
+				Validation: []ValidationRule{{Name: "alphanum"}}},
 			{GoName: "URL", JSONName: "url", GoType: "string", Kind: KindString,
 				Validation: []ValidationRule{{Name: "url"}}},
 			{GoName: "Role", JSONName: "role", GoType: "string", Kind: KindString,
@@ -240,7 +240,7 @@ func TestGenerate_newValidators(t *testing.T) {
 	}
 	s := string(code)
 	for _, want := range []string{
-		`decode.IsEmail`,
+		`decode.IsAlphanum`,
 		`decode.IsURL`,
 		`case "a", "b", "c"`,
 		`validation.GT`,

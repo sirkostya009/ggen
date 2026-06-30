@@ -50,10 +50,7 @@ const (
 	Eq           Rule = "eq"
 	Neq          Rule = "neq"
 	OneOf        Rule = "oneof"
-	Email        Rule = "email"
 	URL          Rule = "url"
-	ASCII        Rule = "ascii"
-	Printable    Rule = "printable"
 	Alphanum     Rule = "alphanum"
 	Numeric      Rule = "numeric"
 	Lower        Rule = "lower"
@@ -276,18 +273,6 @@ func (e *OneOfError) prependPath(s string) { e.Path = prepend(e.Path, s) }
 
 // --- format predicates ---
 
-type EmailError struct {
-	Pos   int
-	Path  []string
-	Value string
-}
-
-func (e *EmailError) Error() string {
-	return fmt.Sprintf("%s: %q is not a valid email", strings.Join(e.Path, "."), e.Value)
-}
-func (*EmailError) Rule() Rule             { return Email }
-func (e *EmailError) prependPath(s string) { e.Path = prepend(e.Path, s) }
-
 type URLError struct {
 	Pos   int
 	Path  []string
@@ -301,30 +286,6 @@ func (e *URLError) Error() string {
 func (*URLError) Rule() Rule             { return URL }
 func (e *URLError) Unwrap() error        { return e.Cause }
 func (e *URLError) prependPath(s string) { e.Path = prepend(e.Path, s) }
-
-type ASCIIError struct {
-	Pos   int
-	Path  []string
-	Value string
-}
-
-func (e *ASCIIError) Error() string {
-	return fmt.Sprintf("%s: %q contains non-ASCII bytes", strings.Join(e.Path, "."), e.Value)
-}
-func (*ASCIIError) Rule() Rule             { return ASCII }
-func (e *ASCIIError) prependPath(s string) { e.Path = prepend(e.Path, s) }
-
-type PrintableError struct {
-	Pos   int
-	Path  []string
-	Value string
-}
-
-func (e *PrintableError) Error() string {
-	return fmt.Sprintf("%s: %q contains non-printable bytes", strings.Join(e.Path, "."), e.Value)
-}
-func (*PrintableError) Rule() Rule             { return Printable }
-func (e *PrintableError) prependPath(s string) { e.Path = prepend(e.Path, s) }
 
 type AlphanumError struct {
 	Pos   int

@@ -103,7 +103,7 @@ func isUnknownValRule(name string) bool {
 		"gt", "gte", "lt", "lte",
 		"multiple",
 		"eq", "neq", "oneof",
-		"email", "url", "ascii", "printable", "alphanum", "numeric",
+		"url", "alphanum", "numeric",
 		"lower", "upper", "hexadecimal",
 		"starts", "ends", "contains":
 		return false
@@ -285,7 +285,7 @@ func checkOneValRule(r ValidationRule, source string, kind TypeKind, typeName, f
 		}
 		return nil
 
-	case "email", "url", "ascii", "printable", "alphanum", "numeric",
+	case "url", "alphanum", "numeric",
 		"lower", "upper", "hexadecimal":
 		if kind != KindString {
 			return mismatch(r, source, fieldDesc, typeName,

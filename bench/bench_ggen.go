@@ -4972,8 +4972,8 @@ func (recv Validated) DecodeFrom(data []byte) (result Validated, i int, err erro
 					return result, i, decode.NewParseErr("email", i, err)
 				}
 			}
-			if !decode.IsEmail(result.Email) {
-				return result, i, &validation.EmailError{Pos: i, Path: []string{"email"}, Value: result.Email}
+			if !strings.Contains(result.Email, "@") {
+				return result, i, &validation.ContainsError{Pos: i, Path: []string{"email"}, Want: "@", Value: result.Email}
 			}
 		case "name":
 			if seenName {
@@ -5209,8 +5209,8 @@ func (recv Validated) DecodeFromStream(s *scan.Stream) (result Validated, err er
 			if err != nil {
 				return result, decode.NewParseErr("email", s.Pos, err)
 			}
-			if !decode.IsEmail(result.Email) {
-				return result, &validation.EmailError{Pos: s.Offset(), Path: []string{"email"}, Value: result.Email}
+			if !strings.Contains(result.Email, "@") {
+				return result, &validation.ContainsError{Pos: s.Offset(), Path: []string{"email"}, Want: "@", Value: result.Email}
 			}
 		case "name":
 			err = s.ConsumeColon()
@@ -6186,8 +6186,8 @@ func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, i i
 					return result, i, decode.NewParseErr("email", i, err)
 				}
 			}
-			if !decode.IsEmail(result.Email) {
-				return result, i, &validation.EmailError{Pos: i, Path: []string{"email"}, Value: result.Email}
+			if !strings.Contains(result.Email, "@") {
+				return result, i, &validation.ContainsError{Pos: i, Path: []string{"email"}, Want: "@", Value: result.Email}
 			}
 			if len(result.Email) > 512 {
 				return result, i, &validation.MaxRunesError{Pos: i, Path: []string{"email"}, Limit: 128, Got: utf8.RuneCountInString(result.Email)}
@@ -6563,8 +6563,8 @@ func (recv ValidationHeavy) DecodeFromStream(s *scan.Stream) (result ValidationH
 			if err != nil {
 				return result, decode.NewParseErr("email", s.Pos, err)
 			}
-			if !decode.IsEmail(result.Email) {
-				return result, &validation.EmailError{Pos: s.Offset(), Path: []string{"email"}, Value: result.Email}
+			if !strings.Contains(result.Email, "@") {
+				return result, &validation.ContainsError{Pos: s.Offset(), Path: []string{"email"}, Want: "@", Value: result.Email}
 			}
 			if len(result.Email) > 512 {
 				return result, &validation.MaxRunesError{Pos: s.Offset(), Path: []string{"email"}, Limit: 128, Got: utf8.RuneCountInString(result.Email)}

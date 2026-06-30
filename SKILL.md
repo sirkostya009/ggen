@@ -89,7 +89,7 @@ Most flags have matching annotation token (no leading dash). Annotations space-s
 | `-nosortkeys`    | `nosortkeys`    | emit struct fields in declaration order (default: alphabetical, compresses better)                                                                                            |
 | `-usenumber`     | `usenumber`     | decode JSON numbers in `any` fields as `json.Number` instead of `float64`                                                                                                     |
 | `-htmlescape`    | `htmlescape`    | escape `<`, `>`, `&` to `\uXXXX` (default: literal, matches `encoding/json` v2)                                                                                               |
-| `-copy`          | `copy`          | bytes-path `DecodeFrom` copies strings / `json.RawMessage` / any-embedded strings out of the input instead of aliasing it, so the input may be reused or mutated after decode (default: zero-copy aliasing — faster; input must stay alive + unmodified). Decode-only; more allocs |
+| `-copy`          | `copy`          | bytes-path `DecodeFrom` copies strings / `json.RawMessage` / any-embedded strings out of the input instead of aliasing it, so input is safe to store long term after decode   |
 | `-dry`           | —               | parse + validate every annotated struct, surface all errors, emit no file. Rejects `-o`/`-pkg`                                                                                |
 | `-v`             | —               | info-level progress (e.g. `wrote <file>`)                                                                                                                                     |
 | `-vv`            | —               | debug-level: per-package / per-struct diagnostics                                                                                                                             |
@@ -108,7 +108,7 @@ Trigger: `//ggen:generate` (no space between `//` and `ggen`, mirror `//go:gener
 type User struct {
 	ID    int      `json:"id"`
 	Name  string   `json:"name"   pipe:"required minlen=1 maxlen=64"`
-	Email string   `json:"email"  pipe:"trim lower email"`
+	Email string   `json:"email"  pipe:"trim lower"`
 	Tags  []string `json:"tags,omitempty" pipe:"inner:notempty"`
 }
 
@@ -136,7 +136,7 @@ with spaces are single-quoted. `|` is an intra-rule arg separator.
 
 ```go
 Name  string	`json:"name"  pipe:"required trim minlen=1 maxlen=50"`
-Email string	`json:"email" pipe:"trim lower email"`
+Email string	`json:"email" pipe:"trim lower contains=@"`
 Aliases map[string][]string	`json:"aliases" pipe:"keys:(minrunes=2 maxrunes=32) inner:maxlen=10 inner:notempty"`
 ```
 
@@ -160,17 +160,17 @@ Price int `json:"price" pipe:". / @FromMoney"`                // FromMoney(Money
 
 **Value steps** run in declared order. Validators:
 
-| step                                                                                         | applies to    | checks                      |
-| -------------------------------------------------------------------------------------------- | ------------- | --------------------------- |
-| `notempty`                                                                                   | str/container | non-empty / non-zero length |
-| `len=N`, `minlen=N`, `maxlen=N`                                                              | str/container | byte length / element count |
-| `runes=N`, `minrunes=N`, `maxrunes=N`                                                        | string        | rune count (utf8 aware)     |
-| `gt=N`, `gte=N`, `lt=N`, `lte=N`                                                             | numeric       | comparison                  |
-| `eq=X`, `neq=X`                                                                              | str/numeric   | equality                    |
-| `multiple=N`                                                                                 | integer       | `% N == 0`                  |
-| `oneof=a\|b\|c`                                                                              | str/numeric   | one of the alternatives     |
-| `email`, `url`, `ascii`, `printable`, `alphanum`, `numeric`, `lower`, `upper`, `hexadecimal` | string        | character-class predicate   |
-| `starts=X`, `ends=X`, `contains=X`                                                           | string        | substring test              |
+| step                                                          | applies to    | checks                      |
+| ------------------------------------------------------------- | ------------- | --------------------------- |
+| `notempty`                                                    | str/container | non-empty / non-zero length |
+| `len=N`, `minlen=N`, `maxlen=N`                               | str/container | byte length / element count |
+| `runes=N`, `minrunes=N`, `maxrunes=N`                         | string        | utf8 rune count             |
+| `gt=N`, `gte=N`, `lt=N`, `lte=N`                              | numeric       | comparison                  |
+| `eq=X`, `neq=X`                                               | str/numeric   | equality                    |
+| `multiple=N`                                                  | integer       | `% N == 0`                  |
+| `oneof=a\|b\|c`                                               | str/numeric   | one of the alternatives     |
+| `url`, `alphanum`, `numeric`, `lower`, `upper`, `hexadecimal` | string        | character-class predicate   |
+| `starts=X`, `ends=X`, `contains=X`                            | string        | substring test              |
 
 Mods (transforms):
 
@@ -389,3 +389,4 @@ Build tag propagation: struct in file behind `//go:build foo` land in `<dir>_foo
 | "i want only some strings to have html escaping"          | `//ggen:generate htmlescape` `type HTMLString string`                                                 |
 | "this struct has json tags but I want it to parse faster" | `//ggen:generate` `type Alias OtherStruct`                                                            |
 | "validate annotations in CI without writing files"        | `-dry` (parse + validate every annotated struct, surface every error, emit no file)                   |
+| string field is going to be stored in global state        | `-copy` to avoid keeping a reference to potentially huge payload on a bytes path                      |

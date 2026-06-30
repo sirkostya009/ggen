@@ -101,9 +101,6 @@ func (recv ModStruct) DecodeFrom(data []byte) (result ModStruct, i int, err erro
 			}
 			result.Email = strings.TrimSpace(result.Email)
 			result.Email = strings.ToLower(result.Email)
-			if !decode.IsEmail(result.Email) {
-				return result, i, &validation.EmailError{Pos: i, Path: []string{"email"}, Value: result.Email}
-			}
 		case "sku":
 			if seenSKU {
 				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"sku"}}
@@ -277,9 +274,6 @@ func (recv ModStruct) DecodeFromStream(s *scan.Stream) (result ModStruct, err er
 			}
 			result.Email = strings.TrimSpace(result.Email)
 			result.Email = strings.ToLower(result.Email)
-			if !decode.IsEmail(result.Email) {
-				return result, &validation.EmailError{Pos: s.Offset(), Path: []string{"email"}, Value: result.Email}
-			}
 		case "sku":
 			err = s.ConsumeColon()
 			if err != nil {
@@ -539,8 +533,8 @@ func (recv FallibleModStruct) DecodeFrom(data []byte) (result FallibleModStruct,
 			} else {
 				result.Email = v
 			}
-			if !decode.IsEmail(result.Email) {
-				return result, i, &validation.EmailError{Pos: i, Path: []string{"email"}, Value: result.Email}
+			if !strings.Contains(result.Email, "@") {
+				return result, i, &validation.ContainsError{Pos: i, Path: []string{"email"}, Want: "@", Value: result.Email}
 			}
 			if len(result.Email) < 10 {
 				return result, i, &validation.MinLenError{Pos: i, Path: []string{"email"}, Limit: 10, Got: len(result.Email)}
@@ -621,8 +615,8 @@ func (recv FallibleModStruct) DecodeFromStream(s *scan.Stream) (result FallibleM
 			} else {
 				result.Email = v
 			}
-			if !decode.IsEmail(result.Email) {
-				return result, &validation.EmailError{Pos: s.Offset(), Path: []string{"email"}, Value: result.Email}
+			if !strings.Contains(result.Email, "@") {
+				return result, &validation.ContainsError{Pos: s.Offset(), Path: []string{"email"}, Want: "@", Value: result.Email}
 			}
 			if len(result.Email) < 10 {
 				return result, &validation.MinLenError{Pos: s.Offset(), Path: []string{"email"}, Limit: 10, Got: len(result.Email)}
@@ -770,8 +764,8 @@ func (recv FallibleModMultierrStruct) DecodeFrom(data []byte) (result FallibleMo
 				} else {
 					result.Email = v
 				}
-				if !decode.IsEmail(result.Email) {
-					errs = append(errs, &validation.EmailError{Pos: i, Path: []string{"email"}, Value: result.Email})
+				if !strings.Contains(result.Email, "@") {
+					errs = append(errs, &validation.ContainsError{Pos: i, Path: []string{"email"}, Want: "@", Value: result.Email})
 				}
 				if len(result.Email) < 10 {
 					errs = append(errs, &validation.MinLenError{Pos: i, Path: []string{"email"}, Limit: 10, Got: len(result.Email)})
@@ -868,8 +862,8 @@ func (recv FallibleModMultierrStruct) DecodeFromStream(s *scan.Stream) (result F
 				} else {
 					result.Email = v
 				}
-				if !decode.IsEmail(result.Email) {
-					errs = append(errs, &validation.EmailError{Pos: s.Offset(), Path: []string{"email"}, Value: result.Email})
+				if !strings.Contains(result.Email, "@") {
+					errs = append(errs, &validation.ContainsError{Pos: s.Offset(), Path: []string{"email"}, Want: "@", Value: result.Email})
 				}
 				if len(result.Email) < 10 {
 					errs = append(errs, &validation.MinLenError{Pos: s.Offset(), Path: []string{"email"}, Limit: 10, Got: len(result.Email)})

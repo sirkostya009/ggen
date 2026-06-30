@@ -317,7 +317,7 @@ func collectFieldImports(f FieldInfo, add func(string), anyString, anyValidation
 				add("unicode/utf8")
 			case "starts", "ends", "contains":
 				add("strings")
-			case "email", "url", "ascii", "printable", "alphanum",
+			case "url", "alphanum",
 				"numeric", "lower", "upper", "hexadecimal":
 				add("github.com/sirkostya009/ggen/decode")
 			}
@@ -695,7 +695,7 @@ func isRuneRule(name string) bool {
 // len. Lets a rune rule that FOLLOWS one of these in the same run drop the walk.
 func asciiImplyingRule(name string) bool {
 	switch name {
-	case "alphanum", "numeric", "ascii", "hexadecimal":
+	case "alphanum", "numeric", "hexadecimal":
 		return true
 	}
 	return false
@@ -843,19 +843,10 @@ func renderOneVal(b *bytes.Buffer, v ValidationRule, ref, jsonName string, kind 
 			ref, cases,
 			onErr(fmt.Sprintf("&validation.OneOfError{Path: []string{%q}, Allowed: %s, Value: %s}", jsonName, varName, ref)))
 
-	case "email":
-		fmt.Fprintf(b, "if !decode.IsEmail(%s) {\n\t%s\n}\n", ref,
-			onErr(fmt.Sprintf("&validation.EmailError{Path: []string{%q}, Value: %s}", jsonName, ref)))
 	case "url":
 		fmt.Fprintf(b, "if !decode.IsURL(%s) {\n\t%s\n}\n", ref,
 			onErr(fmt.Sprintf("&validation.URLError{Path: []string{%q}, Value: %s}", jsonName, ref)))
 
-	case "ascii":
-		fmt.Fprintf(b, "if !decode.IsASCII(%s) {\n\t%s\n}\n", ref,
-			onErr(fmt.Sprintf("&validation.ASCIIError{Path: []string{%q}, Value: %s}", jsonName, ref)))
-	case "printable":
-		fmt.Fprintf(b, "if !decode.IsPrintable(%s) {\n\t%s\n}\n", ref,
-			onErr(fmt.Sprintf("&validation.PrintableError{Path: []string{%q}, Value: %s}", jsonName, ref)))
 	case "alphanum":
 		fmt.Fprintf(b, "if !decode.IsAlphanum(%s) {\n\t%s\n}\n", ref,
 			onErr(fmt.Sprintf("&validation.AlphanumError{Path: []string{%q}, Value: %s}", jsonName, ref)))

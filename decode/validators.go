@@ -1,50 +1,9 @@
 package decode
 
-// IsEmail reports whether s matches a loose email format: non-space chars,
-// exactly one '@' in the middle, and at least one '.' in the domain.
-func IsEmail(s string) bool {
-	at, dot := -1, -1
-	for i := 0; i < len(s); i++ {
-		switch c := s[i]; c {
-		case ' ', '\t', '\n', '\r':
-			return false
-		case '@':
-			if at >= 0 {
-				return false
-			}
-			at = i
-		case '.':
-			if at >= 0 { // only dots after the '@' count toward the domain
-				dot = i
-			}
-		}
-	}
-	if at <= 0 || at >= len(s)-1 {
-		return false
-	}
-	return dot > at+1 && dot < len(s)-1
-}
-
-// IsASCII reports whether every byte in s is in the range 0..127.
-func IsASCII(s string) bool {
-	for i := 0; i < len(s); i++ {
-		if s[i] > 127 {
-			return false
-		}
-	}
-	return true
-}
-
-// IsPrintable reports whether every byte in s is printable ASCII (>= 0x20, not DEL).
-func IsPrintable(s string) bool {
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		if c < 0x20 || c == 0x7f {
-			return false
-		}
-	}
-	return true
-}
+import (
+	"strings"
+	"unicode"
+)
 
 // IsAlphanum reports whether every byte in s is an ASCII letter or digit.
 func IsAlphanum(s string) bool {
@@ -73,20 +32,20 @@ func IsNumeric(s string) bool {
 	return true
 }
 
-// IsLower reports whether s contains no uppercase ASCII letters.
+// IsLower reports whether s contains no uppercase unicode characters.
 func IsLower(s string) bool {
-	for i := 0; i < len(s); i++ {
-		if c := s[i]; c >= 'A' && c <= 'Z' {
+	for _, r := range s {
+		if !unicode.IsLower(r) {
 			return false
 		}
 	}
 	return true
 }
 
-// IsUpper reports whether s contains no lowercase ASCII letters.
+// IsUpper reports whether s contains no lowercase unicode characters.
 func IsUpper(s string) bool {
-	for i := 0; i < len(s); i++ {
-		if c := s[i]; c >= 'a' && c <= 'z' {
+	for _, r := range s {
+		if !unicode.IsUpper(r) {
 			return false
 		}
 	}
@@ -109,20 +68,6 @@ func IsHex(s string) bool {
 
 // IsURL reports whether s starts with "scheme://...". Does not allocate a *url.URL.
 func IsURL(s string) bool {
-	colon := -1
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		if c == ':' {
-			colon = i
-			break
-		}
-		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '+' || c == '-' || c == '.' {
-			continue
-		}
-		return false
-	}
-	if colon <= 0 || colon+3 > len(s) {
-		return false
-	}
-	return s[colon+1] == '/' && s[colon+2] == '/'
+	schema, rest, ok := strings.Cut(s, "://")
+	return ok && len(schema) > 0 && len(rest) > 0
 }

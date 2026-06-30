@@ -24,9 +24,6 @@ memory-latency-bound, so CPU-only shaves routinely vanish in wall clock.
   caller-owned dst); (c) explicit `AppendAnySized(dst, v, hint)`. Pick when a
   real workload pins slice marshal as a hotspot — map wins dominate today.
 
-- **IsASCII SWAR.** Untried half of the [4] charset-predicate work (single-pass
-  IsEmail landed; the class-bitmask half is rejected, below).
-
 Rejected from past hunts, do not retry without a new argument: **[17]** positional
 next-key predictor (payload-order-dependent), **[23]** indexed marshal loop
 (go1.26 already folds the range copy) + pointer-receiver cores (vetoed — public
@@ -37,8 +34,8 @@ surface pinned by `Decoder[T]`).
 - **Improve fuzz coverage.** Current surface (`integrationtests/fuzz_test.go`):
   three fuzzers over `Node` — `FuzzScanNoPanic` (panic safety), `FuzzRoundtrip`
   (encode→decode fixed-point), `FuzzCompat` (ggen ↔ jsonv2 agreement). Gaps:
-  per-feature fuzzers for alias types, every validation rule (oneof/runes/ascii/
-  email/…) with rule-specific generators, streaming path (chunked reader, varied
+  per-feature fuzzers for alias types, every validation rule (oneof/runes/
+  alphanum/…) with rule-specific generators, streaming path (chunked reader, varied
   chunk sizes), `[N]T` strict-length arrays, `KindAny`/`KindRawJSON` edge cases,
   `omitempty`/`omitzero` round-trip, multierr accumulation. Add seeds for tricky
   inputs (truncated `\uXXXX`, surrogate pairs, `null` mid-value, trailing-garbage).
@@ -96,13 +93,12 @@ surface pinned by `Decoder[T]`).
   it. Don't re-propose [22].
 
 - **256-byte class-bitmask charset predicates ([4] half).** Replace the range-check
-  loops in IsAlphanum/IsNumeric/IsHex/IsPrintable/IsLower/IsUpper with a shared
+  loops in IsAlphanum/IsNumeric/IsHex/IsLower/IsUpper with a shared
   `[256]uint8` class table (`table[c]&mask`). Regressed the long-string case — the
   per-byte L1 load can't hide behind the loop the way branch-predicted range
   comparisons (pure ALU, no memory traffic, perfectly predicted on valid input)
   do. Lesson: adding memory traffic to a tight branch-predictable loop loses. Keep
-  the range checks. (The single-pass IsEmail half of [4] is a real win and landed
-  — different mechanism, eliminates a rescan pass not a per-byte swap.)
+  the range checks.
 
 - **Fused span-scan + Eisel-Lemire in `Float64`.** Walk the number span once,
   accumulate mantissa + exp10, run `eiselLemire64` vendored from Go's `strconv`
@@ -267,7 +263,7 @@ surface pinned by `Decoder[T]`).
 # Future
 
 - **Validation-derived encode hints.** Use field rules for encode shortcuts:
-  `ascii` → skip the escape table; `lte=N` → fixed-width digit formatter instead of
+  `alphanum` → skip the escape table; `lte=N` → fixed-width digit formatter instead of
   `strconv.AppendInt`; similar for `oneof`/`len`. Real wins on hot fields, but
   couples encode shape to decode-time validation — the same field would marshal
   differently based on its rules, blurring the marshal contract. (Decode-side

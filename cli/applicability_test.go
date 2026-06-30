@@ -92,10 +92,7 @@ var valSpecs = []valSpec{
 	// oneof: numeric parts must be parseable; "1|2|3" works for both
 	// string and numeric kinds.
 	{"oneof", "1|2|3", stringOrNumeric},
-	{"email", "", stringOnly},
 	{"url", "", stringOnly},
-	{"ascii", "", stringOnly},
-	{"printable", "", stringOnly},
 	{"alphanum", "", stringOnly},
 	{"numeric", "", stringOnly},
 	{"lower", "", stringOnly},
@@ -383,8 +380,8 @@ func TestCheckOneModRule_ValueShape(t *testing.T) {
 func TestCheckValRules_KindStructSkipped(t *testing.T) {
 	t.Parallel()
 	rules := []ValidationRule{
-		{Name: "ascii"},
-		{Name: "email"},
+		{Name: "alphanum"},
+		{Name: "numeric"},
 		{Name: "gt", Value: "5"},
 		{Name: "multiple", Value: "2"},
 		{Name: "len", Value: "5"},
@@ -415,7 +412,7 @@ func TestCheckModRules_KindStructSkipped(t *testing.T) {
 func TestCheckValRules_CustomSkipped(t *testing.T) {
 	t.Parallel()
 	rules := []ValidationRule{
-		// Custom=true skips the matrix despite the int/ascii mismatch.
+		// Custom=true skips the matrix despite the int/alphanum mismatch.
 		{Name: "@MyCheck", Custom: true, FuncName: "MyCheck"},
 	}
 	if err := checkValRules(rules, "ggen", KindInt, "int", "field f"); err != nil {
@@ -638,14 +635,14 @@ func TestCheckRuleApplicability_Structural(t *testing.T) {
 			"`inner:` tag prefix is only valid on slice/array/map fields",
 		},
 		{
-			"dive_on_slice_int_with_ascii",
+			"dive_on_slice_int_with_alphanum",
 			FieldInfo{
 				GoName: "X", GoType: "[]int", JSONName: "x",
 				Kind: KindSlice, ElemKind: KindInt, ElemType: "int",
-				ElemValidation: []ValidationRule{{Name: "ascii"}},
+				ElemValidation: []ValidationRule{{Name: "alphanum"}},
 				HintLen:        -1,
 			},
-			"`ascii` is inapplicable to int",
+			"`alphanum` is inapplicable to int",
 		},
 		{
 			"dive_on_slice_int_with_gt_ok",
@@ -658,11 +655,11 @@ func TestCheckRuleApplicability_Structural(t *testing.T) {
 			"",
 		},
 		{
-			"dive_on_map_value_string_with_email_ok",
+			"dive_on_map_value_string_with_alphanum_ok",
 			FieldInfo{
 				GoName: "M", GoType: "map[string]string", JSONName: "m",
 				Kind: KindMap, ElemKind: KindString, ElemType: "string",
-				ElemValidation: []ValidationRule{{Name: "email"}},
+				ElemValidation: []ValidationRule{{Name: "alphanum"}},
 				HintLen:        -1,
 			},
 			"",
@@ -747,21 +744,21 @@ func TestCheckRuleApplicability_Structural(t *testing.T) {
 
 		// pointer fields: rules apply to the pointee, fi.Kind == pointee kind.
 		{
-			"pointer_int_ascii_rejects",
+			"pointer_int_alphanum_rejects",
 			FieldInfo{
 				GoName: "P", GoType: "*int", JSONName: "p",
 				Pointer: true, PointeeType: "int", Kind: KindInt,
-				Validation: []ValidationRule{{Name: "ascii"}},
+				Validation: []ValidationRule{{Name: "alphanum"}},
 				HintLen:    -1,
 			},
-			"`ascii` is inapplicable to *int",
+			"`alphanum` is inapplicable to *int",
 		},
 		{
-			"pointer_string_email_ok",
+			"pointer_string_alphanum_ok",
 			FieldInfo{
 				GoName: "P", GoType: "*string", JSONName: "p",
 				Pointer: true, PointeeType: "string", Kind: KindString,
-				Validation: []ValidationRule{{Name: "email"}},
+				Validation: []ValidationRule{{Name: "alphanum"}},
 				HintLen:    -1,
 			},
 			"",
@@ -794,7 +791,7 @@ func TestCheckRuleApplicability_FieldNameInDiagnostic(t *testing.T) {
 	// Format: "<Struct>.<Field>: `<rule>` is inapplicable to <type>".
 	fi := FieldInfo{
 		StructName: "Box", GoName: "Score", GoType: "int", JSONName: "score", Kind: KindInt,
-		Validation: []ValidationRule{{Name: "ascii"}},
+		Validation: []ValidationRule{{Name: "alphanum"}},
 		HintLen:    -1,
 	}
 	err := checkRuleApplicability(fi)
@@ -807,10 +804,10 @@ func TestCheckRuleApplicability_FieldNameInDiagnostic(t *testing.T) {
 	if strings.Contains(err.Error(), "field Score") || strings.Contains(err.Error(), "field score") {
 		t.Errorf("error %q must NOT use the old `field <name>` shape", err.Error())
 	}
-	if !strings.Contains(err.Error(), "`ascii`") {
+	if !strings.Contains(err.Error(), "`alphanum`") {
 		t.Errorf("error %q must contain the rule name in backticks", err.Error())
 	}
-	if strings.Contains(err.Error(), "cannot be applied") || strings.Contains(err.Error(), "rule \"ascii\"") {
+	if strings.Contains(err.Error(), "cannot be applied") || strings.Contains(err.Error(), "rule \"alphanum\"") {
 		t.Errorf("error %q should use new `is inapplicable to` form", err.Error())
 	}
 }
