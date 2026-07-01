@@ -243,7 +243,7 @@ func collectImports(structs []StructInfo, bodies [][]byte) ([]string, []string) 
 	_ = anyMarshal   // MarshalJSON hook uses encode.Marshal; encode resolved elsewhere
 	_ = anyUnmarshal // UnmarshalJSON hook expands inline via zero.DecodeFrom
 	if anyValidation || anyRequired {
-		add("github.com/sirkostya009/ggen/decode/validation")
+		add("github.com/sirkostya009/ggen/validation")
 	}
 	_ = anyString // body-scan picks up unsafe usage; flag unused here
 	// Stdlib-helper imports are emission-driven: scanning the rendered bodies
@@ -281,6 +281,10 @@ func scanBodiesForStdImports(bodies [][]byte, add func(string)) {
 		{[]byte("fmt."), "fmt"},
 		{[]byte("time."), "time"},
 		{[]byte("encode."), "github.com/sirkostya009/ggen/encode"},
+		// decode.NewParseErr / decode.ModError appear in nearly every body;
+		// the body-scan reliably adds the import iff the token is present
+		// (covers alias-only files the struct-walk above skips).
+		{[]byte("decode."), "github.com/sirkostya009/ggen/decode"},
 	}
 	for _, body := range bodies {
 		for i := range table {
@@ -319,7 +323,7 @@ func collectFieldImports(f FieldInfo, add func(string), anyString, anyValidation
 				add("strings")
 			case "url", "alphanum",
 				"numeric", "lower", "upper", "hexadecimal":
-				add("github.com/sirkostya009/ggen/decode")
+				add("github.com/sirkostya009/ggen/validation")
 			}
 		}
 	}
@@ -491,7 +495,7 @@ func scalarCountable(k TypeKind) bool { return isNumeric(k) || k == KindBool }
 // renderOneMod emits one mod (transform) against ref. posVar selects the
 // return shape for a fallible mod ("" = stream 2-tuple, else bytes 3-tuple). A
 // custom mod is pure (`func(T)T`), error-form (`func(T)(T,error)`, parse error),
-// or bool-form (`func(T)(T,bool)`, false → validation.ModError parse error).
+// or bool-form (`func(T)(T,bool)`, false → decode.ModError parse error).
 func renderOneMod(b *bytes.Buffer, m ModRule, ref, goType string, kind TypeKind, posVar string) {
 	// A primitive alias generated this pass (e.g. `type AliasString string`)
 	// reports KindStruct; look up its underlying kind so the cast logic fires.
@@ -527,7 +531,7 @@ func renderOneMod(b *bytes.Buffer, m ModRule, ref, goType string, kind TypeKind,
 					return "return result, " + errExpr
 				}
 				if m.BoolForm {
-					modErr := fmt.Sprintf("&validation.ModError{%sName: %q, Msg: %q, Value: %s}",
+					modErr := fmt.Sprintf("&decode.ModError{%sName: %q, Msg: %q, Value: %s}",
 						posLit(posVar), strings.TrimPrefix(m.Name, "@"), m.Msg, ref)
 					fmt.Fprintf(b, "if v, ok := %s(%s); !ok {\n\t%s\n} else {\n\t%s = v\n}\n",
 						call, ref, ret(modErr), ref)
@@ -844,23 +848,23 @@ func renderOneVal(b *bytes.Buffer, v ValidationRule, ref, jsonName string, kind 
 			onErr(fmt.Sprintf("&validation.OneOfError{Path: []string{%q}, Allowed: %s, Value: %s}", jsonName, varName, ref)))
 
 	case "url":
-		fmt.Fprintf(b, "if !decode.IsURL(%s) {\n\t%s\n}\n", ref,
+		fmt.Fprintf(b, "if !validation.IsURL(%s) {\n\t%s\n}\n", ref,
 			onErr(fmt.Sprintf("&validation.URLError{Path: []string{%q}, Value: %s}", jsonName, ref)))
 
 	case "alphanum":
-		fmt.Fprintf(b, "if !decode.IsAlphanum(%s) {\n\t%s\n}\n", ref,
+		fmt.Fprintf(b, "if !validation.IsAlphanum(%s) {\n\t%s\n}\n", ref,
 			onErr(fmt.Sprintf("&validation.AlphanumError{Path: []string{%q}, Value: %s}", jsonName, ref)))
 	case "numeric":
-		fmt.Fprintf(b, "if !decode.IsNumeric(%s) {\n\t%s\n}\n", ref,
+		fmt.Fprintf(b, "if !validation.IsNumeric(%s) {\n\t%s\n}\n", ref,
 			onErr(fmt.Sprintf("&validation.NumericError{Path: []string{%q}, Value: %s}", jsonName, ref)))
 	case "lower":
-		fmt.Fprintf(b, "if !decode.IsLower(%s) {\n\t%s\n}\n", ref,
+		fmt.Fprintf(b, "if !validation.IsLower(%s) {\n\t%s\n}\n", ref,
 			onErr(fmt.Sprintf("&validation.LowerError{Path: []string{%q}, Value: %s}", jsonName, ref)))
 	case "upper":
-		fmt.Fprintf(b, "if !decode.IsUpper(%s) {\n\t%s\n}\n", ref,
+		fmt.Fprintf(b, "if !validation.IsUpper(%s) {\n\t%s\n}\n", ref,
 			onErr(fmt.Sprintf("&validation.UpperError{Path: []string{%q}, Value: %s}", jsonName, ref)))
 	case "hexadecimal":
-		fmt.Fprintf(b, "if !decode.IsHex(%s) {\n\t%s\n}\n", ref,
+		fmt.Fprintf(b, "if !validation.IsHex(%s) {\n\t%s\n}\n", ref,
 			onErr(fmt.Sprintf("&validation.HexadecimalError{Path: []string{%q}, Value: %s}", jsonName, ref)))
 
 	case "starts":

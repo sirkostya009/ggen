@@ -496,7 +496,7 @@ err` (elided by the compiler).
 any`. Every error carries a `Pos int` (byte offset relative to the full
     payload — bytes cursor `i`, or `s.Offset()` on the stream path, NOT the raw
     `s.Pos` which the compacting window invalidates). Injected by `withPos`/
-    `posLit`. See `decode/validation/CLAUDE.md`.
+    `posLit`. See `validation/CLAUDE.md`.
 14. **Parse-error wrapping at every error return.** Codegen embeds the JSON field
     name directly as the first arg of every error return:
     `return result, i, decode.NewParseErr("street", i, err)`. The field literal is

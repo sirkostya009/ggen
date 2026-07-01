@@ -1,9 +1,18 @@
-# decode/validation — typed validation error structs
+# validation — typed rule errors + format predicates
 
-Runtime subpackage. One concrete error struct per validation rule (plus
+Runtime package, top-level sibling of `decode` (validation is not a sub-concern
+of parsing — hard parse failures wrap in `decode.ParseError`; only rule-level
+failures land here). One concrete error struct per validation rule (plus
 `Error` interface + `Errors` slice). Codegen emits typed literals at the
 failure site — no field-stuffed generic error, no per-error rule-name compare
 at the use site.
+
+## `validation/predicates.go`
+
+Format predicates for generated validation branches, each 1:1 with a rule name:
+`IsAlphanum`, `IsNumeric`, `IsHex`, `IsURL`, `IsLower`, `IsUpper`. Emitted as
+`validation.IsX(ref)` guards paired with the matching typed error
+(`validation.URLError`, …) — one package for both.
 
 ## Surface
 
@@ -57,8 +66,8 @@ the remaining fields:
 - **other**: `MultipleError{Of float64, Value any}`, `DuplicateKeyError`,
   `UnknownKeyError`, `CustomError{Name string, Value any, Cause error}` (exposes
   `Unwrap()`; `Name` is the bare func identifier). Custom bool-form validators
-  fail with `PredicateError{Name, Msg, Value}`; fallible bool-form mods with
-  `ModError{Name, Msg, Value}` (a parse error, wrapped by `decode.NewParseErr`)
+  fail with `PredicateError{Name, Msg, Value}`; fallible bool-form mods fail with
+  `decode.ModError` (a parse error — lives in the `decode` package, not here)
 
 ## Inspecting failures
 

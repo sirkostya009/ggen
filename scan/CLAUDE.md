@@ -69,7 +69,7 @@ full discard), so `buf[0]` always sits at absolute offset `consumed`. `Offset()`
 returns `consumed + Pos` = absolute cursor, stable across the whole stream. `Reset`
 zeroes `consumed`; no-shift mode never advances it. Generated decoders use it to
 stamp `validation.*Error.Pos` with a full-payload-relative offset (raw `Pos` is
-wrong once the window compacts) — see `decode/validation/CLAUDE.md`.
+wrong once the window compacts) — see `validation/CLAUDE.md`.
 
 **`ReadMore(keep int) error` — the only I/O primitive.** One Read per call, never
 loops. `keep` = lowest offset the caller still needs; bytes before may be discarded:

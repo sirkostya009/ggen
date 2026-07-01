@@ -6,7 +6,7 @@ import (
 	"strings"
 	"unsafe"
 
-	"github.com/sirkostya009/ggen/decode/validation"
+	"github.com/sirkostya009/ggen/validation"
 )
 
 // ParseError wraps a low-level parse failure with positional and structural

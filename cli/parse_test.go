@@ -240,8 +240,8 @@ func TestGenerate_newValidators(t *testing.T) {
 	}
 	s := string(code)
 	for _, want := range []string{
-		`decode.IsAlphanum`,
-		`decode.IsURL`,
+		`validation.IsAlphanum`,
+		`validation.IsURL`,
 		`case "a", "b", "c"`,
 		`validation.GT`,
 	} {

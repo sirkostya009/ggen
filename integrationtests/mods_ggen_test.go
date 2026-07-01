@@ -9,10 +9,10 @@ import (
 	"unsafe"
 
 	"github.com/sirkostya009/ggen/decode"
-	"github.com/sirkostya009/ggen/decode/validation"
 	"github.com/sirkostya009/ggen/encode"
 	"github.com/sirkostya009/ggen/integrationtests/thirdparty"
 	"github.com/sirkostya009/ggen/scan"
+	"github.com/sirkostya009/ggen/validation"
 )
 
 func (recv ModStruct) DecodeFrom(data []byte) (result ModStruct, i int, err error) {

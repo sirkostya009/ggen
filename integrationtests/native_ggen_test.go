@@ -13,9 +13,9 @@ import (
 	"unsafe"
 
 	"github.com/sirkostya009/ggen/decode"
-	"github.com/sirkostya009/ggen/decode/validation"
 	"github.com/sirkostya009/ggen/encode"
 	"github.com/sirkostya009/ggen/scan"
+	"github.com/sirkostya009/ggen/validation"
 )
 
 func (recv NativeTypes) DecodeFrom(data []byte) (result NativeTypes, i int, err error) {

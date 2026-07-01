@@ -9,9 +9,9 @@ import (
 	"unsafe"
 
 	"github.com/sirkostya009/ggen/decode"
-	"github.com/sirkostya009/ggen/decode/validation"
 	"github.com/sirkostya009/ggen/encode"
 	"github.com/sirkostya009/ggen/scan"
+	"github.com/sirkostya009/ggen/validation"
 )
 
 func (recv MapStruct) DecodeFrom(data []byte) (result MapStruct, i int, err error) {

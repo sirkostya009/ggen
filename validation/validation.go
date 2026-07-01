@@ -467,24 +467,6 @@ func (e *PredicateError) Error() string {
 func (*PredicateError) Rule() Rule             { return Predicate }
 func (e *PredicateError) prependPath(s string) { e.Path = prepend(e.Path, s) }
 
-// ModError is the failure of a fallible bool-form mod/converter
-// (`func(W) (T, bool)`) whose bool was false. It is a parse error, wrapped by
-// decode.NewParseErr. Msg is the optional inline tag message (empty renders a
-// default).
-type ModError struct {
-	Pos   int
-	Name  string
-	Msg   string
-	Value any
-}
-
-func (e *ModError) Error() string {
-	if e.Msg != "" {
-		return e.Msg
-	}
-	return fmt.Sprintf("transform %q rejected %v", e.Name, e.Value)
-}
-
 // --- aggregate ---
 
 // Errors is a flat slice of validation failures from a multierr decoder.

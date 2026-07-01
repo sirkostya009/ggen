@@ -71,7 +71,7 @@ type ModRule struct {
 	Fallible  bool // returns a two-tuple (T, error) or (T, bool)
 
 	// BoolForm marks `func(T) (T, bool)` (vs the error form); a false return
-	// emits validation.ModError. Msg is the optional inline message, bool-form only.
+	// emits decode.ModError. Msg is the optional inline message, bool-form only.
 	BoolForm bool
 	Msg      string
 }

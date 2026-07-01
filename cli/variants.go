@@ -197,7 +197,7 @@ func emitConvAssign(b *bytes.Buffer, v Variant, ref, tmp, posVar string) {
 		return
 	}
 	if v.BoolForm {
-		modErr := fmt.Sprintf("&validation.ModError{%sName: %q, Msg: %q, Value: %s}", posLit(posVar), v.FuncName, v.Msg, tmp)
+		modErr := fmt.Sprintf("&decode.ModError{%sName: %q, Msg: %q, Value: %s}", posLit(posVar), v.FuncName, v.Msg, tmp)
 		fmt.Fprintf(b, "if cv, ok := %s(%s); !ok {\nreturn result, %s, %s\n} else {\n%s = cv\n}\n", call, tmp, posVar, modErr, ref)
 		return
 	}
@@ -212,7 +212,7 @@ func emitConvAssignStream(b *bytes.Buffer, v Variant, ref, tmp string) {
 		return
 	}
 	if v.BoolForm {
-		modErr := fmt.Sprintf("&validation.ModError{Pos: s.Offset(), Name: %q, Msg: %q, Value: %s}", v.FuncName, v.Msg, tmp)
+		modErr := fmt.Sprintf("&decode.ModError{Pos: s.Offset(), Name: %q, Msg: %q, Value: %s}", v.FuncName, v.Msg, tmp)
 		fmt.Fprintf(b, "if cv, ok := %s(%s); !ok {\nreturn result, %s\n} else {\n%s = cv\n}\n", call, tmp, modErr, ref)
 		return
 	}

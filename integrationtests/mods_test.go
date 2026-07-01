@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sirkostya009/ggen/decode/validation"
+	"github.com/sirkostya009/ggen/validation"
 	_ "github.com/sirkostya009/ggen/integrationtests/thirdparty"
 )
 

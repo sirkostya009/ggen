@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sirkostya009/ggen/decode/validation"
+	"github.com/sirkostya009/ggen/validation"
 )
 
 // MultiErrStruct collects all validation failures rather than stopping first.

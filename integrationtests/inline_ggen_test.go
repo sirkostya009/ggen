@@ -7,9 +7,9 @@ import (
 	"unsafe"
 
 	"github.com/sirkostya009/ggen/decode"
-	"github.com/sirkostya009/ggen/decode/validation"
 	"github.com/sirkostya009/ggen/encode"
 	"github.com/sirkostya009/ggen/scan"
+	"github.com/sirkostya009/ggen/validation"
 )
 
 func (recv InlineStruct) DecodeFrom(data []byte) (result InlineStruct, i int, err error) {

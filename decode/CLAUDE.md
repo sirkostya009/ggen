@@ -17,9 +17,18 @@ func ReadSlice[T Decoder[T]](r io.Reader) ([]T, error)               // io.ReadA
 func UnmarshalSliceStream[T Decoder[T]](r io.Reader, buf []byte) ([]T, []byte, error)
 ```
 
-## `decode/validators.go`
+## `decode/mod_error.go`
 
-Helper predicates for generated validation branches. Each maps 1:1 to rule name (`IsAlphanum`, `IsNumeric`, `IsHex`, `IsURL`, …).
+```go
+type ModError struct { Pos int; Name, Msg string; Value any }
+func (e *ModError) Error() string
+```
+
+Failure of a fallible bool-form mod/converter (`func(W) (T, bool)`) whose bool
+was false. It is a **parse error** (not a validation rule failure — it lives here,
+not in `validation`), wrapped by `NewParseErr`. `Msg` is the optional inline tag
+message (empty renders a default). Emitted at every bool-form mod site
+(`renderOneMod` / the `variants.go` converter path).
 
 ## `decode/parse_error.go`
 

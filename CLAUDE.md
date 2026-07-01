@@ -17,7 +17,7 @@ schema/
 ├── go.work             ← workspace tying all four modules together
 ├── cli/                → see cli/CLAUDE.md            ← CLI module / generator (github.com/sirkostya009/ggen/cli, package main)
 ├── decode/             → see decode/CLAUDE.md           ┐
-├── decode/validation/  → see decode/validation/CLAUDE.md │ runtime library
+├── validation/         → see validation/CLAUDE.md       │ runtime library
 ├── encode/             → see encode/CLAUDE.md           │ (root module
 ├── scan/               → see scan/CLAUDE.md             ┘  github.com/sirkostya009/ggen)
 ├── integrationtests/   → see integrationtests/CLAUDE.md  (own Go module)
@@ -26,7 +26,7 @@ schema/
 ```
 
 Four modules under one `go.work`: root (`github.com/sirkostya009/ggen` — runtime
-library `decode`/`encode`/`scan` only, no external deps), `cli/` (the generator,
+library `decode`/`encode`/`scan`/`validation` only, no external deps), `cli/` (the generator,
 depends on `golang.org/x/tools`), `bench/`, `integrationtests/`. The CLI doesn't
 import the runtime packages — it emits their import paths as string literals into
 generated code.

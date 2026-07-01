@@ -13,9 +13,9 @@ import (
 	"unsafe"
 
 	"github.com/sirkostya009/ggen/decode"
-	"github.com/sirkostya009/ggen/decode/validation"
 	"github.com/sirkostya009/ggen/encode"
 	"github.com/sirkostya009/ggen/scan"
+	"github.com/sirkostya009/ggen/validation"
 )
 
 var ggenOneof0 = []string{"en", "es", "fr", "de", "uk"}
@@ -6306,7 +6306,7 @@ func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, i i
 					return result, i, &validation.MaxRunesError{Pos: i, Path: []string{"phone"}, Limit: 20, Got: rc}
 				}
 			}
-			if !decode.IsNumeric(result.Phone) {
+			if !validation.IsNumeric(result.Phone) {
 				return result, i, &validation.NumericError{Pos: i, Path: []string{"phone"}, Value: result.Phone}
 			}
 		case "role":
@@ -6383,7 +6383,7 @@ func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, i i
 					return result, i, decode.NewParseErr("url", i, err)
 				}
 			}
-			if !decode.IsURL(result.URL) {
+			if !validation.IsURL(result.URL) {
 				return result, i, &validation.URLError{Pos: i, Path: []string{"url"}, Value: result.URL}
 			}
 		case "username":
@@ -6427,7 +6427,7 @@ func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, i i
 					return result, i, &validation.MaxRunesError{Pos: i, Path: []string{"username"}, Limit: 32, Got: rc}
 				}
 			}
-			if !decode.IsAlphanum(result.Username) {
+			if !validation.IsAlphanum(result.Username) {
 				return result, i, &validation.AlphanumError{Pos: i, Path: []string{"username"}, Value: result.Username}
 			}
 			result.Username = strings.ToLower(result.Username)
@@ -6641,7 +6641,7 @@ func (recv ValidationHeavy) DecodeFromStream(s *scan.Stream) (result ValidationH
 					return result, &validation.MaxRunesError{Pos: s.Offset(), Path: []string{"phone"}, Limit: 20, Got: rc}
 				}
 			}
-			if !decode.IsNumeric(result.Phone) {
+			if !validation.IsNumeric(result.Phone) {
 				return result, &validation.NumericError{Pos: s.Offset(), Path: []string{"phone"}, Value: result.Phone}
 			}
 		case "role":
@@ -6694,7 +6694,7 @@ func (recv ValidationHeavy) DecodeFromStream(s *scan.Stream) (result ValidationH
 			if err != nil {
 				return result, decode.NewParseErr("url", s.Pos, err)
 			}
-			if !decode.IsURL(result.URL) {
+			if !validation.IsURL(result.URL) {
 				return result, &validation.URLError{Pos: s.Offset(), Path: []string{"url"}, Value: result.URL}
 			}
 		case "username":
@@ -6724,7 +6724,7 @@ func (recv ValidationHeavy) DecodeFromStream(s *scan.Stream) (result ValidationH
 					return result, &validation.MaxRunesError{Pos: s.Offset(), Path: []string{"username"}, Limit: 32, Got: rc}
 				}
 			}
-			if !decode.IsAlphanum(result.Username) {
+			if !validation.IsAlphanum(result.Username) {
 				return result, &validation.AlphanumError{Pos: s.Offset(), Path: []string{"username"}, Value: result.Username}
 			}
 			result.Username = strings.ToLower(result.Username)
@@ -7491,7 +7491,7 @@ func (recv RuneGated) DecodeFrom(data []byte) (result RuneGated, i int, err erro
 					return result, i, decode.NewParseErr("asciiRunes", i, err)
 				}
 			}
-			if !decode.IsAlphanum(result.AsciiRunes) {
+			if !validation.IsAlphanum(result.AsciiRunes) {
 				return result, i, &validation.AlphanumError{Pos: i, Path: []string{"asciiRunes"}, Value: result.AsciiRunes}
 			}
 			if len(result.AsciiRunes) > 1000000 {
@@ -7604,7 +7604,7 @@ func (recv RuneGated) DecodeFromStream(s *scan.Stream) (result RuneGated, err er
 			if err != nil {
 				return result, decode.NewParseErr("asciiRunes", s.Pos, err)
 			}
-			if !decode.IsAlphanum(result.AsciiRunes) {
+			if !validation.IsAlphanum(result.AsciiRunes) {
 				return result, &validation.AlphanumError{Pos: s.Offset(), Path: []string{"asciiRunes"}, Value: result.AsciiRunes}
 			}
 			if len(result.AsciiRunes) > 1000000 {
