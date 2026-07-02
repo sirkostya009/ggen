@@ -206,6 +206,54 @@ func parseHex4(b []byte) (rune, bool) {
 	return r, true
 }
 
+// skipString advances past a JSON string at data[i] (must start with '"')
+// without decoding — escapes are validated only enough to find the end.
+// Used by SkipValue/skipObject where the value is discarded; avoids the
+// scratch alloc + unescape work String would do on escaped strings.
+func skipString(data []byte, i int) (int, error) {
+	j := i + 1
+	for {
+		rel := bytes.IndexByte(data[j:], '"')
+		// Bound the backslash probe to the closing quote candidate.
+		bsEnd := len(data)
+		if rel >= 0 {
+			bsEnd = j + rel
+		}
+		bsRel := bytes.IndexByte(data[j:bsEnd], '\\')
+		if rel >= 0 && bsRel < 0 {
+			end := j + rel
+			if hasCtrlByte(data[j:end]) {
+				return 0, ErrBadString
+			}
+			return end + 1, nil
+		}
+		if bsRel < 0 {
+			return 0, ErrUnterminated
+		}
+		bs := j + bsRel
+		if hasCtrlByte(data[j:bs]) {
+			return 0, ErrBadString
+		}
+		if bs+1 >= len(data) {
+			return 0, ErrBadString
+		}
+		switch data[bs+1] {
+		case '"', '\\', '/', 'b', 'f', 'n', 'r', 't':
+			j = bs + 2
+		case 'u':
+			if bs+6 > len(data) {
+				return 0, ErrBadString
+			}
+			if _, ok := parseHex4(data[bs+2 : bs+6]); !ok {
+				return 0, ErrBadString
+			}
+			j = bs + 6
+		default:
+			return 0, ErrBadString
+		}
+	}
+}
+
 // Limits for int64/uint64 accumulation. SignedNeg is |MinInt64| (1<<63).
 // Exported — generated code references them in inlined scan loops.
 const (
@@ -394,8 +442,7 @@ func SkipValue(data []byte, i int) (int, error) {
 	}
 	switch data[i] {
 	case '"':
-		_, j, err := String(data, i)
-		return j, err
+		return skipString(data, i)
 	case 't', 'f':
 		_, j, err := Bool(data, i)
 		return j, err
@@ -448,7 +495,7 @@ func skipObject(data []byte, i int) (int, error) {
 		if i >= len(data) || data[i] != '"' {
 			return 0, ErrBadObject
 		}
-		_, j, err := String(data, i)
+		j, err := skipString(data, i)
 		if err != nil {
 			return 0, err
 		}

@@ -234,9 +234,13 @@ func (s *Stream) ArrayOpen() error {
 // String decodes a JSON string. Always copies the body out of the
 // buffer — the result is owned, no dependency on the buffer.
 func (s *Stream) String() (string, error) {
-	v, err := s.StringView()
+	v, owned, err := s.stringView()
 	if err != nil {
 		return "", err
+	}
+	if owned {
+		// stringSlow already copied into fresh scratch — no second clone.
+		return v, nil
 	}
 	return strings.Clone(v), nil
 }
@@ -249,17 +253,25 @@ func (s *Stream) String() (string, error) {
 // invalidated by the next compacting ReadMore, so a consumer that keeps a
 // substring MUST use [Stream.String], which copies.
 func (s *Stream) StringView() (string, error) {
+	v, _, err := s.stringView()
+	return v, err
+}
+
+// stringView is the shared scan behind StringView / String. owned reports
+// whether v already lives in fresh scratch (stringSlow escape path) vs
+// aliasing s.buf.
+func (s *Stream) stringView() (v string, owned bool, err error) {
 	i := s.Pos
 	if i >= len(s.buf) {
 		if err := s.ReadMore(i); err != nil {
-			return "", err
+			return "", false, err
 		}
 		if s.Shift {
 			i = 0
 		}
 	}
 	if s.buf[i] != '"' {
-		return "", ErrExpectString
+		return "", false, ErrExpectString
 	}
 	start := i + 1
 	j := start
@@ -267,10 +279,11 @@ func (s *Stream) StringView() (string, error) {
 		rel := bytes.IndexByte(s.buf[j:], '"')
 		if rel < 0 {
 			if bsRel := bytes.IndexByte(s.buf[j:], '\\'); bsRel >= 0 {
-				return s.stringSlow(start, j+bsRel)
+				v, err := s.stringSlow(start, j+bsRel)
+				return v, true, err
 			}
 			if hasCtrlByte(s.buf[j:]) {
-				return "", ErrBadString
+				return "", false, ErrBadString
 			}
 			j = len(s.buf)
 			err := s.ReadMore(start)
@@ -279,19 +292,20 @@ func (s *Stream) StringView() (string, error) {
 				start = 0
 			}
 			if err != nil {
-				return "", ErrUnterminated
+				return "", false, ErrUnterminated
 			}
 			continue
 		}
 		end := j + rel
 		if bsRel := bytes.IndexByte(s.buf[j:end], '\\'); bsRel >= 0 {
-			return s.stringSlow(start, j+bsRel)
+			v, err := s.stringSlow(start, j+bsRel)
+			return v, true, err
 		}
 		if hasCtrlByte(s.buf[j:end]) {
-			return "", ErrBadString
+			return "", false, ErrBadString
 		}
 		s.Pos = end + 1
-		return unsafe.String(unsafe.SliceData(s.buf[start:]), end-start), nil
+		return unsafe.String(unsafe.SliceData(s.buf[start:]), end-start), false, nil
 	}
 }
 
@@ -581,8 +595,20 @@ func (s *Stream) Int64() (int64, error) {
 	}
 	var u uint64
 	buf := s.buf
+	// digits counts unchecked-prefix consumption across refills. First ≤18
+	// digits can't overflow int64 (see bytes-path Int64); the checked loop
+	// only ever consumes once digits hits 18 — an unchecked exit below 18
+	// means the buffered bytes ran out, so the checked loop no-ops into the
+	// refill.
+	digits := 0
 scan:
 	for {
+		de := min(i+18-digits, len(buf))
+		for i < de && buf[i] >= '0' && buf[i] <= '9' {
+			u = u*10 + uint64(buf[i]-'0')
+			i++
+			digits++
+		}
 		for i < len(buf) {
 			c := buf[i]
 			if c < '0' || c > '9' {
@@ -635,8 +661,16 @@ func (s *Stream) Uint64() (uint64, error) {
 	}
 	var n uint64
 	buf := s.buf
+	// First ≤19 digits can't overflow uint64 — see Int64's prefix comment.
+	digits := 0
 scan:
 	for {
+		de := min(i+19-digits, len(buf))
+		for i < de && buf[i] >= '0' && buf[i] <= '9' {
+			n = n*10 + uint64(buf[i]-'0')
+			i++
+			digits++
+		}
 		for i < len(buf) {
 			c := buf[i]
 			if c < '0' || c > '9' {

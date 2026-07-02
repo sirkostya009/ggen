@@ -172,3 +172,55 @@ func TestStringEscapeAllocBounded(t *testing.T) {
 		t.Errorf("16 escaped-string decodes allocated %d bytes, want <16KiB (buffer sized off whole payload?)", total)
 	}
 }
+
+// TestSkipString_ParityWithString: skipString must agree with String on end
+// position for every accepted input, and reject everything String rejects
+// (error values may differ only where noted — none today).
+func TestSkipString_ParityWithString(t *testing.T) {
+	t.Parallel()
+	for _, tc := range stringHappyCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			_, wantPos, wantErr := String([]byte(tc.in), 0)
+			gotPos, gotErr := skipString([]byte(tc.in), 0)
+			if gotErr != wantErr || gotPos != wantPos {
+				t.Errorf("skipString(%q) = (%d, %v), String = (%d, %v)",
+					tc.in, gotPos, gotErr, wantPos, wantErr)
+			}
+		})
+	}
+	errCases := []struct {
+		name string
+		in   string
+	}{
+		{"unterminated", `"abc`},
+		{"control_char", "\"a\x01b\""},
+		{"control_after_escape", "\"a\\n\x01b\""},
+		{"bad_escape", `"\x"`},
+		{"truncated_unicode", `"\u00`},
+		{"bad_hex", `"\u00ZZ"`},
+		{"trailing_backslash", `"a\`},
+	}
+	for _, tc := range errCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if _, err := skipString([]byte(tc.in), 0); err == nil {
+				t.Errorf("skipString(%q) accepted malformed input", tc.in)
+			}
+		})
+	}
+}
+
+// TestSkipValue_EscapedStringNoAlloc pins that skipping an escaped string
+// never allocates (String's stringSlow scratch would).
+func TestSkipValue_EscapedStringNoAlloc(t *testing.T) {
+	data := []byte(`"a\nbéc\t` + strings.Repeat("x", 100) + `"`)
+	allocs := testing.AllocsPerRun(100, func() {
+		if _, err := SkipValue(data, 0); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if allocs != 0 {
+		t.Errorf("SkipValue over escaped string allocated %v/op, want 0", allocs)
+	}
+}
