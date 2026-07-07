@@ -26,6 +26,9 @@ func BenchmarkNoAlloc_Unmarshal(b *testing.B) {
 		{"sonic_fast", func(p []byte) error { var v Account; return sonic.ConfigFastest.Unmarshal(p, &v) }},
 		{"easyjson", func(p []byte) error { var v EasyAccount; return v.UnmarshalJSON(p) }},
 		{"ggen", func(p []byte) error { _, _, err := Account{}.DecodeFrom(p); return err }},
+		// ggen_copy: -copy mode (CopyAccount) — bytes path copies strings out
+		// of the input; no longer zero-alloc, isolates the copy-out cost.
+		{"ggen_copy", func(p []byte) error { _, _, err := CopyAccount{}.DecodeFrom(p); return err }},
 	}
 	for _, c := range codecs {
 		b.Run(c.name, func(b *testing.B) {

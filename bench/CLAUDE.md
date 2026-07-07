@@ -7,7 +7,9 @@
   (`AccountValue`/`AccountPayload`) + easyjson-only `Easy*` mirror; plus
   `CopyNode`/`CopyAddr` — wire-identical mirrors of `Node`/`Addr` carrying
   `//ggen:generate copy`, so the `ggen_copy` Unmarshal row decodes the same
-  `MegaPayload` through the copy-mode bytes path. Untagged, so ggen methods land
+  `MegaPayload` through the copy-mode bytes path (same pattern:
+  `CopyAccount` family for NoAlloc, `CopyValidated` for Small, `CopyClaim`
+  for Tiny — every decode bench family carries a `ggen_copy` row). Untagged, so ggen methods land
   in `bench_ggen.go`.
 - `bench/bench_ggen.go` — generated ggen methods. Regen: `(cd bench &&
   GOEXPERIMENT=jsonv2 ../ggen ./...)`.
@@ -18,6 +20,8 @@
 - `bench/small_test.go` — small-value (~2.9 KiB ValidPayload) Unmarshal + Reader.
 - `bench/slowstream_test.go` — slow-reader benchmarks.
 - `bench/simple_test.go` — `BenchmarkNoAlloc_Unmarshal` + `_Reader`.
+- `bench/skip_test.go` — `BenchmarkSkipHeavy_Unmarshal` (compact/pretty
+  envelope, ~100% skipped content via ignoreunknown).
 
 ## What each bench family measures
 
@@ -144,6 +148,77 @@ one `io.ReadAll` buffer).
   float*/bool` — bypass reflect.MapIter boxing) → 0 allocs, 0 GC.
 - **Unmarshal:** ggen B/op < easyjson, and allocs ~3.8× below easyjson — the
   `unsafe.String` aliases avoid copying every string out of the input.
+
+### SIMD tier (`ggen -simd`, bytes path)
+
+Generated-code A/B, both binaries `GOEXPERIMENT=jsonv2,simd` (same toolchain —
+the experiment alone shifts codegen, so a scalar binary built WITHOUT it is a
+confounded baseline), differing only in the generated file (scalar vs
+`-simd=avx512`). Interleaved core-24 pinned runs (10× each side), benchstat
+n=10, 2026-07:
+
+| bench                 | scalar   | avx512   | delta        |
+| --------------------- | -------- | -------- | ------------ |
+| NoAlloc_Unmarshal/ggen| 1311 n   | 758 n    | −42.2%       |
+| Small_Unmarshal/ggen  | 878 n    | 122 n    | −86.1%       |
+| Mega_Unmarshal/ggen   | 14.49 m  | 13.27 m  | −8.4%        |
+| Tiny_Unmarshal/ggen   | 62.95 n  | 62.81 n  | flat         |
+| Mega_Marshal/ggen     | 10.12 m  | 10.45 m  | +3.2% (±7%)  |
+| Tiny_Marshal/ggen     | 93.5 n   | 93.5 n   | flat         |
+
+B/op + allocs identical to scalar in all rows. Small (~2.9 KiB, one 2800 B Bio
+string) rides the fused tier scan at 22 GiB/s; NoAlloc stacks the inline
+vector key/value classify (opt #46), the exact-short float fast path, and the
+scanner instruction shaves. Tiny is flat because all-short-key structs emit a
+bounded scalar key window instead of the vector classify — the old ~+7%
+opt-in floor is gone. Mega_Marshal's +3.2% sits inside its ±7% run noise (a
+direct controlled A/B of the gated encode tier alone measured flat, p=0.39);
+the encode tiers are length-gated so sub-lane strings take the scalar walk —
+their win only shows on ≥64 B strings (`BenchmarkEscapeScan` in encode/:
+3.6× at 64 B, ~10× at 256 B+), which no repo marshal bench carries.
+
+Per-change stacked deltas at the avx512 tier (each an interleaved n=10
+benchstat vs the previous step): exact-short float −7.6% NoAlloc; scanner
+shaves −2.9% NoAlloc; inline vector scan −22% NoAlloc / −8.8% Mega / −8%
+Tiny.
+
+**Stream tier** (fused per-window locate in `Stream.String*`/`StringView*`/
+`KeyView*`, see scan/CLAUDE.md) — interleaved n=10 at avx512 vs the bytes-only
+tier build: Mega_Reader/ggen_stream −5.2%, NoAlloc_Reader/ggen_stream −7.7%,
+Small_Reader/ggen_stream_512 −19.8%, _full −26.5%. The remaining stream gap
+vs bytes is string-copy mallocs + ReadMore, not scan work.
+
+**Skip tier** (`SkipHeavy_Unmarshal`, `bench/skip_test.go`: SkipEnvelope with
+`ignoreunknown` vs a Mega-sized blob under an unknown key; `compact` +
+`pretty` = json.Indent 2-space) — scalar vs avx512, interleaved n=10:
+compact −21.6%, pretty −29.9%; Mega_Unmarshal gained a further −8.3% (RawJSON
+capture). The emitted `inlineSkipWS` tier handoff alone is −3.3% on a pretty
+full Mega decode and ~+1% on Tiny (accepted). Codec context (verified
+empirically 2026-07): sonic skips via a stored structural bitmap (6-21 MB
+B/op per call); sonic_fast does NOT grammar-validate skipped content
+(missing colons/commas, `truu`, bad escapes, ctrl bytes all pass) and
+ConfigDefault still passes bad escapes + ctrl in skipped strings — at the
+grammar-checking level (`sonic` row) ggen matches/beats it at 0 allocs.
+A same-semantics on-the-fly block-skip (rolling quote parity + depth
+counter, no stored bitmap) could reach sonic_fast throughput but drops
+grammar validation of skipped spans — rejected as default, possible opt-in
+(`fastskip`) if ever wanted.
+
+**Stream skip tier + skip-tree compaction** (SkipHeavy `ggen_stream` row:
+fresh 4 KiB buffer, the blob streams through refill + compaction) —
+interleaved n=10 at avx512, tier + compacting refills vs scalar grow-only:
+compact −32.6% (8.92 → 6.01 ms), pretty −25.6% (13.81 → 10.27 ms), B/op
+8.4 MB → 127 KB (grow-only refills doubled the buffer every mid-number
+window edge — see scan/CLAUDE.md), allocs 12 → 6; Mega_Reader flat
+(string-copy mallocs dominate). The pretty stream row also flushed out a
+scalar `(*Stream).skipObject` bug — no WS skip after the key-separator
+comma — fixed + pinned by `TestStreamSkipValue_MatchesBytes`.
+
+**avx2 vs avx512** (full tier set, interleaved n=10): avx512 geomean −5% —
+Small −23.3%, NoAlloc −4.2%, Tiny −1%, Mega flat; avx2 wins
+SkipHeavy/pretty by 5.75% (skip work is short-span-dominated, where Zen5's
+double-pumped 512-bit ops cost 2× µops for no coverage gain). Recommend
+avx512 by default, avx2 for skip-dominated workloads.
 
 ## Running benchmarks
 

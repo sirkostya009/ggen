@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"testing/iotest"
 )
 
 // chunkedReader returns one byte per Read until exhausted. Forces every
@@ -335,4 +336,50 @@ func TestIntegerScanNoShiftRefill(t *testing.T) {
 			t.Errorf("Pos = %d, want 5", s.Pos)
 		}
 	})
+}
+
+// TestStreamSkipValue_MatchesBytes pins stream SkipValue against the bytes
+// tree over compact + pretty-printed values and truncations — the stream
+// skipObject comma branch used to miss the separator whitespace skip, so any
+// indented object with 2+ keys failed ErrExpectString (never caught: stream
+// skip was only ever exercised on compact payloads).
+func TestStreamSkipValue_MatchesBytes(t *testing.T) {
+	t.Parallel()
+	seeds := []string{
+		`{"a":1,"b":2}`,
+		`{"a":{"x":true,"y":[1,2]},"b":"s","c":null}`,
+		`[{"a":1,"b":2},{"c":3}]`,
+	}
+	var cases [][]byte
+	for _, s := range seeds {
+		cases = append(cases, []byte(s))
+		var v any
+		if err := json.Unmarshal([]byte(s), &v); err != nil {
+			t.Fatal(err)
+		}
+		for _, indent := range []string{" ", "  ", "\t"} {
+			pretty, err := json.MarshalIndent(v, "", indent)
+			if err != nil {
+				t.Fatal(err)
+			}
+			cases = append(cases, pretty)
+		}
+		for cut := range len(s) {
+			cases = append(cases, []byte(s[:cut]))
+		}
+	}
+	for _, in := range cases {
+		wantPos, wantErr := SkipValue(in, 0)
+		for _, chunk := range []int{1, 7, 64} {
+			var s Stream
+			s.Reset(iotest.OneByteReader(bytes.NewReader(in)), make([]byte, 0, chunk))
+			gotErr := s.SkipValue()
+			if (wantErr == nil) != (gotErr == nil) {
+				t.Fatalf("stream(%q, chunk=%d) err=%v, bytes err=%v", in, chunk, gotErr, wantErr)
+			}
+			if wantErr == nil && s.Offset() != wantPos {
+				t.Fatalf("stream(%q, chunk=%d) offset=%d, bytes pos=%d", in, chunk, s.Offset(), wantPos)
+			}
+		}
+	}
 }

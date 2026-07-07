@@ -78,6 +78,22 @@ surface pinned by `Decoder[T]`).
 
 # Tried Rejected
 
+- **SWAR 8-digit integer parse (Lemire IsDigits8/Parse8) — in-situ.** Fully
+  implemented 2026-07 across bytes `Int64`/`Uint64`, stream mirrors, and the
+  emitted inline digit loops; bit-exact (a 400k-run reference differential
+  caught an OR-vs-XOR classifier bug — `,`=0x2C passed the naive combined
+  nibble check; the test survives as `TestInt_ReferenceDifferential`).
+  Interleaved A/B REGRESSED both tiers: Mega +7.5% (avx512) / +4.7%
+  (scalar) despite 18-19-digit Int63 IDs, NoAlloc +7-8.5%, Mega_Reader +2%;
+  only scalar Tiny won (−4%). The 3-dependent-multiply Parse8 chain
+  (~9-12 cy) + IsDigits8 + the extra loop branch lose to 8 predictable
+  1-cycle scalar iterations that OOO-overlap with surrounding decode work —
+  the standalone "−33% on 19-20-digit runs" microbench measured the parse
+  function in isolation, where nothing competes for the pipeline. Same
+  lesson as "removing decode inliners" and "direct-write AppendInt": don't
+  trust per-call micro-benches for code embedded in the generated hot loop.
+  Don't retry without an in-situ interleaved win.
+
 - **Branchless register-bitmap escape predicate ([14] alternative).** Test "needs
   escape" via two uint64 bitmaps (escaped bytes all < 0x80): `(escLo>>c |
   escHi>>(c-64)) & 1`. ~2.9× slower than the `[256]bool` table. Asm shows it's
@@ -176,6 +192,11 @@ surface pinned by `Decoder[T]`).
   per-number on 17-digit floats: wasted mantissa accumulation + full ParseFloat
   redo. Half-measures on the number path are worse than nothing — ship fused
   Float64 only with the EL arm (which itself was then rejected, above).
+  SUPERSEDED 2026-07 by the LENGTH-GATED variant (`scan.exactShort`, ≤16 B
+  span gate in `Float64`) — the gate structurally excludes 17-digit floats
+  (shortest form ≥ 18 chars), so the regression class never enters; −7.6%
+  NoAlloc. Same "the gate is the point" precedent as the SWAR scan. See
+  scan/CLAUDE.md.
 
 - **`inlineNullPeek` → uint32 compare.** Mechanism real (`scan.Null` ships it) but
   the peeks are ~0.07% of decode; never a perf bet. Idiom cleanup at best.
@@ -278,12 +299,41 @@ surface pinned by `Decoder[T]`).
   Shelved unless multi-GB request bodies show up; `bytes.NewReader(Marshal(v))` is
   a one-liner users can write.
 
-- **SIMD / AVX2 vectorization for hot scanning loops.** Sonic narrows the Mega
-  Unmarshal gap partly via hand-written AMD64 AVX2 for quote-scan, WS-skip, number
-  parse; ggen does these byte-at-a-time. Candidates: verify `bytes.IndexByte`
-  vectorizes (closing-quote scan); AVX2 WS skip via `golang.org/x/sys/cpu` + Plan9
-  asm; number parsing probably not worth it (strconv is tuned). Might claw back
-  10-15% on string-heavy payloads at the cost of per-arch source, `go vet`-
-  incompatible asm, and lost portability. Try only if a profile shows the byte-scan
-  loop dominant AND the codegen complexity is acceptable. Don't speculatively add
-  asm to keep up with sonic — the gap is small and portability is a feature.
+- **SIMD phase 3 (phases 1+2 SHIPPED — see cli/CLAUDE.md #46, scan/CLAUDE.md,
+  encode/CLAUDE.md, `.claude/simd-plan.md`, bench numbers in bench/CLAUDE.md).**
+  Phase 2 (2026-07) landed: exact-short float fast path (scalar, −7.6%
+  NoAlloc), scanner instruction shaves (Min/Equal unsigned-compare trick,
+  scalar-register mask OR at 512-bit, −2.9%), inline vector string/key
+  classify in generated code (−22% NoAlloc, −8.8% Mega, short-key scalar
+  window killed the old Tiny +7% floor), gated encode escape tiers
+  (macro-flat, 3.6–10× micro on ≥64 B strings). Headline scalar→avx512:
+  NoAlloc −42%, Small −86%, Mega −8.4%, Tiny flat. Remaining candidates:
+  1. **`skipString`/`SkipValue` tier** — SHIPPED 2026-07 (with vector
+     whitespace-run skip + inlineSkipWS handoff; SkipHeavy compact −21.6% /
+     pretty −29.9%, Mega −8.3%, pretty full-decode −3.3%).
+  2. **validation charset rules** (`IsAlphanum` etc.) — mechanism proven
+     (17× at 8 KB, break-even ~10-12 B) but no in-repo beneficiary; scalar
+     gates mandatory if revived.
+  3. **integer SWAR digit parse** — REJECTED 2026-07 after full in-situ
+     implementation + A/B (see Tried Rejected). The −33% microbench never
+     survives the inline hot-loop context.
+  4. **stream path** — SHIPPED 2026-07: per-window fused locate
+     (`structuralIndexAVX*` + per-tier `stringView*` cores in
+     `scan/simd_stream_amd64.go`); Mega_Reader −5.2%, Small_Reader −20/−26%.
+     Stream SKIP tier also shipped (`simd_skip_stream_amd64.go`) together
+     with skip-tree compacting refills (grow-only ReadMore(0) doubled the
+     buffer at every mid-number window edge): SkipHeavy ggen_stream compact
+     −32.6% / pretty −25.6%, B/op 8.4 MB → 127 KB; flushed out + fixed the
+     scalar stream skipObject comma-WS bug (pretty objects with 2+ keys
+     failed ErrExpectString — stream skip had never seen indented input).
+     Remaining stream cost is copy mallocs + ReadMore, and stream Int64
+     (13.7% flat of Mega_Reader — scalar refill bookkeeping, not
+     SIMD-addressable).
+  AVX512-vs-AVX2 ANSWERED 2026-07: avx512 geomean −5% (Small −23%,
+  NoAlloc −4%, Tiny −1%) — the default recommendation; avx2 wins skip-heavy
+  pretty payloads by ~6% (short-span work, double-pumped 512-bit µop tax).
+  GFNI classify REJECTED: the structural/WS byte classes are not GF(2)-affine
+  subspaces (kernel closure over {ctrl,'"','\\'} pulls in 0x20 — a linear
+  map cannot separate them), and on the one expressible shape (ctrl detect =
+  top-3-bit select + Equal-zero) vgf2p8affineqb measured ~3% SLOWER than
+  Min/Equal on Zen5. Don't retry without a class that IS an affine subspace.

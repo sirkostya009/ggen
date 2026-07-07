@@ -6,6 +6,7 @@
 package bench
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"math/rand"
@@ -160,10 +161,40 @@ type Validated struct {
 	Bio   string   `json:"bio"   pipe:"maxlen=4096"`
 }
 
+// CopyValidated is Validated under -copy (`//ggen:generate copy`) — the
+// ggen_copy row of BenchmarkSmall_Unmarshal decodes the same ValidPayload
+// through the copy-mode bytes path (the 2800 B Bio makes the per-string
+// copy tax maximally visible).
+//
+//ggen:generate copy
+type CopyValidated struct {
+	Email string   `json:"email" pipe:"required contains=@"`
+	Name  string   `json:"name"  pipe:"required minlen=1 maxlen=64"`
+	Age   int      `json:"age"   pipe:"gte=0 lte=150"`
+	Tags  []string `json:"tags" pipe:"inner:(notempty minlen=1 maxlen=32)"`
+	Bio   string   `json:"bio"   pipe:"maxlen=4096"`
+}
+
+// SkipEnvelope drives BenchmarkSkipHeavy_Unmarshal: one matched field, the
+// rest of the payload (a Mega-sized blob) is skipped via ignoreunknown —
+// isolates scan.SkipValue over compact vs pretty-printed (whitespace-rich)
+// input.
+//
+//ggen:generate ignoreunknown
+type SkipEnvelope struct {
+	ID int64 `json:"id"`
+}
+
 var (
 	MegaValue      Node
 	MegaValuePlain NodePlain // converted copy for stdjson/jsonv2/sonic marshal rows
 	MegaPayload    []byte
+
+	// SkipPayload wraps MegaPayload as an unknown key next to a matched one;
+	// SkipPayloadPretty is the same envelope json.Indent-ed (2-space) — the
+	// whitespace-rich shape where byte-stepping skip loops are detrimental.
+	SkipPayload       []byte
+	SkipPayloadPretty []byte
 
 	// ValidPayload + InvalidPayload — same-size bodies for fail-fast
 	// streaming benchmarks; the invalid one fails on the first decoded
@@ -181,6 +212,13 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
+
+	SkipPayload = []byte(`{"id":123,"blob":` + string(MegaPayload) + `}`)
+	var pretty bytes.Buffer
+	if err := json.Indent(&pretty, SkipPayload, "", "  "); err != nil {
+		panic(err)
+	}
+	SkipPayloadPretty = pretty.Bytes()
 
 	// ~3 KiB body; Bio padded so a slow reader delivers it in chunks.
 	bio := randString(rand.New(rand.NewSource(3)), 2800)
@@ -424,6 +462,20 @@ func randProps(r *rand.Rand, n int) map[string]string {
 //
 //ggen:generate
 type Claim struct {
+	Sub string `json:"sub" pipe:"required"`
+	Iss string `json:"iss" pipe:"required"`
+	Exp int64  `json:"exp" pipe:"gte=0"`
+	Iat int64  `json:"iat" pipe:"gte=0"`
+	Nbf int64  `json:"nbf,omitempty"`
+	Aud string `json:"aud,omitempty"`
+	Jti string `json:"jti"`
+}
+
+// CopyClaim is Claim under -copy (`//ggen:generate copy`) for the ggen_copy
+// row of BenchmarkTiny_Unmarshal.
+//
+//ggen:generate copy
+type CopyClaim struct {
 	Sub string `json:"sub" pipe:"required"`
 	Iss string `json:"iss" pipe:"required"`
 	Exp int64  `json:"exp" pipe:"gte=0"`
@@ -725,6 +777,91 @@ type Company struct {
 
 //ggen:generate
 type Preferences struct {
+	Theme              string `json:"theme"`
+	Language           string `json:"language"`
+	Timezone           string `json:"timezone"`
+	Currency           string `json:"currency"`
+	EmailNotifications bool   `json:"emailNotifications"`
+	PushNotifications  bool   `json:"pushNotifications"`
+	SMSNotifications   bool   `json:"smsNotifications"`
+	ItemsPerPage       uint8  `json:"itemsPerPage"`
+	AutoSave           bool   `json:"autoSave"`
+	BetaFeatures       bool   `json:"betaFeatures"`
+}
+
+// Copy* mirror the Account family under -copy (`//ggen:generate copy`), like
+// CopyNode mirrors Node: every retained string is copied out of the input
+// instead of aliased. Wire-identical to Account, so the `ggen_copy` NoAlloc
+// row decodes the same AccountPayload. Geo is reused as-is (no strings).
+//
+//ggen:generate copy
+type CopyAccount struct {
+	ID          uint64  `json:"id"`
+	Username    string  `json:"username"`
+	Email       string  `json:"email"`
+	FirstName   string  `json:"firstName"`
+	LastName    string  `json:"lastName"`
+	MiddleName  string  `json:"middleName"`
+	DisplayName string  `json:"displayName"`
+	Phone       string  `json:"phone"`
+	Age         uint8   `json:"age"`
+	Verified    bool    `json:"verified"`
+	Active      bool    `json:"active"`
+	Premium     bool    `json:"premium"`
+	Suspended   bool    `json:"suspended"`
+	Deleted     bool    `json:"deleted"`
+	Balance     float64 `json:"balance"`
+	Reputation  int32   `json:"reputation"`
+	TrustScore  float64 `json:"trustScore"`
+
+	CreatedAt    int64  `json:"createdAt"`
+	UpdatedAt    int64  `json:"updatedAt"`
+	LastLogin    int64  `json:"lastLogin"`
+	LoginCount   uint32 `json:"loginCount"`
+	FailedLogins uint16 `json:"failedLogins"`
+
+	Bio       string `json:"bio"`
+	AvatarURL string `json:"avatarUrl"`
+	BannerURL string `json:"bannerUrl"`
+	Locale    string `json:"locale"`
+
+	FollowerCount  int `json:"followerCount"`
+	FollowingCount int `json:"followingCount"`
+	PostCount      int `json:"postCount"`
+
+	StorageUsed      int64 `json:"storageUsed"`
+	StorageQuota     int64 `json:"storageQuota"`
+	TwoFactorEnabled bool  `json:"twoFactorEnabled"`
+
+	Address     CopyPostalAddress `json:"address"`
+	Company     CopyCompany       `json:"company"`
+	Preferences CopyPreferences   `json:"preferences"`
+}
+
+//ggen:generate copy
+type CopyPostalAddress struct {
+	Line1      string `json:"line1"`
+	Line2      string `json:"line2"`
+	City       string `json:"city"`
+	State      string `json:"state"`
+	PostalCode string `json:"postalCode"`
+	Country    string `json:"country"`
+	Geo        Geo    `json:"geo"`
+}
+
+//ggen:generate copy
+type CopyCompany struct {
+	Name       string `json:"name"`
+	Department string `json:"department"`
+	Title      string `json:"title"`
+	EmployeeID string `json:"employeeId"`
+	Headcount  int    `json:"headcount"`
+	Founded    int16  `json:"founded"`
+	IsPublic   bool   `json:"isPublic"`
+}
+
+//ggen:generate copy
+type CopyPreferences struct {
 	Theme              string `json:"theme"`
 	Language           string `json:"language"`
 	Timezone           string `json:"timezone"`

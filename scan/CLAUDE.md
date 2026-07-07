@@ -37,11 +37,45 @@ Primitives: `SkipSpace`, `String`, `Int64`, `Uint64`, `Float64`, `Bool`,
   Pinned by `TestSkipNumber_AcceptSetMatchesJSONGrammar` (differential vs
   `encoding/json.Valid`) + `TestSkipNumber_StreamMatchesBytes`. Number-VALUE fields
   (`float64`, `json.Number`) still use `Float64`/`Number`.
+- **`Float64` exact-short fast path.** Spans ≤ 16 bytes of the form
+  `[-]digits[.digits]` skip `strconv.ParseFloat`'s re-scan: `exactShort`
+  accumulates a uint64 mantissa in one pass and, when `mant < 2^52` and
+  ≤ 22 fractional digits, both mantissa and `exactPow10[frac]` are exact
+  floats so the single IEEE divide is correctly rounded — bit-identical to
+  ParseFloat (same argument as strconv's `atof64exact`). Exponents, second
+  dots, or wide mantissas bail to ParseFloat. The ≤16 B gate structurally
+  excludes shortest-form 17-significant-digit floats (≥ 18 chars) — the
+  input class that sank the ungated fused variant (see backlog). −7.6%
+  NoAlloc. Pinned by `TestExactShort_ParseFloatDifferential` (1M randomized
+  spans, bit-identity incl. -0 + accept/reject parity).
 - **`String()` zero-copy alias** via `unsafe.String(unsafe.SliceData(data[start:]),
   len)` when no escapes; falls back to `stringSlow` (`utf8.AppendRune` for `\uXXXX` +
   surrogates). `bytes.IndexByte` (SIMD) finds the closing `"`; a second IndexByte
   over the span detects a preceding `\`. Truncated `\u…`/trailing `\` →
   `ErrBadString` via fallthrough to `stringSlow`.
+- **`StringAVX`/`StringAVX2`/`StringAVX512` — fused SIMD siblings of `String`**
+  (`simd_amd64.go`, `//go:build goexperiment.simd`, `simd/archsimd`). One
+  vector pass per 16/32/64 bytes classifies closing `"`, `\`, and control
+  bytes simultaneously (fused classify → mask → `ToBits` → `TrailingZeros`) —
+  replacing `String`'s three passes (IndexByte ×2 + SWAR ctrl). Instruction
+  shape per tier: 16/32-lane ctrl test is `min(v,0x1F)==v` (VPMINUB+VPCMPEQB —
+  unsigned `Less` is EMULATED below 512-bit and re-broadcasts 0x80 every
+  iteration); the 64-lane variant ToBits each compare (KMOVQ) and ORs in
+  scalar registers (512-bit `Mask.Or` round-trips the vector domain via
+  VPMOVM2B+VPORD+VPMOVB2M). Both shaves measured −2.9% NoAlloc at avx512. Shared scalar `classifyStructural` tail keeps alias return /
+  `stringSlow` handoff / error identity byte-identical to `String` (pinned by
+  `TestStringSIMD_Parity`: fixed cases at every vector-phase alignment + 2000
+  randomized bodies, all three tiers). Tail loads via `Load*SlicePart`
+  (zero-fill); padding zeroes register as ctrl bytes, filtered by the
+  `k < len(rest)` position check. NO runtime feature probing — generated code
+  calls one tier directly (`ggen -simd`, see `cli/CLAUDE.md` opt #46); wrong
+  CPU faults. 4.2× vs `String` on a 4 KiB clean string, ~1.1× at 8 B.
+- **`stringSlow` rejects ctrl bytes in the pre-escape prefix.** The prefix
+  `data[start:j]` (escape-free span before the first `\`) is `hasCtrlByte`-
+  checked before copying — it used to land in scratch unvalidated, silently
+  accepting `"a\x01b\nc"` that stdlib rejects (the no-escape path always
+  checked). Stream `(*Stream).stringSlow` has the same guard. Pinned by
+  `TestString_CtrlBeforeEscapeRejected`.
 - **`stringSlow` scratch cap = first-quote span (`closeIdx`)**, NOT the remaining
   payload (a payload-sized cap made M escaped strings allocate O(N·M)). Returns
   `unsafe.String` over write-once scratch — 1 alloc per escaped string. Stream
@@ -176,6 +210,87 @@ that lose to a scalar loop on the short spans dispatch keys occupy. A key longer
 the window, an escape, or a not-yet-buffered quote falls through to the `IndexByte`
 loop, which RESUMES at the window end (`j = we`) so the validated prefix is never
 re-scanned. Error identity byte-identical. NOT applied to `Stream.String`.
+
+### Stream SIMD tiers (`simd_stream_amd64.go`, `//go:build goexperiment.simd`)
+
+The bytes-path contiguity precondition fails across refills, but each buffered
+WINDOW is contiguous — so the stream tiers keep `stringView`'s
+refill/compaction loop bit-identical and only swap the three-pass locate
+(IndexByte ×2 + `hasCtrlByte` SWAR) for one fused pass: per-tier
+`structuralIndexAVX{,2,512}(b) int` returns the first `"`/`\`/ctrl index (or
+-1 → refill), classified by a switch identical to the scalar arms. Per tier:
+a `stringView*` core (three near-identical copies — the tier callee must be a
+direct call, no func-pointer dispatch) + thin `String*`/`StringView*`/
+`KeyView*` shells with the scalar trio's exact contracts (owned copy / alias /
+alias). `KeyView*` drops the scalar prelude — ggen keeps plain `KeyView` for
+all-short-key structs (same ≤5-byte gate as the bytes-path key window) and
+swaps call NAMES at generate time otherwise (`tierStreamStringCalls`, an
+assignment-shaped rewrite over the stream-decode body only). Measured at
+avx512: Mega_Reader −5.2%, NoAlloc_Reader −7.7%, Small_Reader −20/−26%.
+Parity pinned by `TestStreamStringSIMD_Parity` (lane-seam bodies × chunked
+readers 1..64 B forcing mid-string refills, all tiers, error identity).
+
+### Skip-tree SIMD tiers (`simd_skip_amd64.go`, `//go:build goexperiment.simd`)
+
+`SkipValueAVX{,2,512}` + `skipArray*`/`skipObject*`/`skipString*`/`SkipSpace*`
+— per-tier copies of the scalar skip tree whose only changes are (a)
+`SkipSpace*`: scalar first-byte exit, then whole-lane whitespace classify
+(`eq ' '|'\t'|'\n'|'\r'` → first zero bit = first non-WS) — indent runs in
+pretty-printed JSON skip a lane at a time instead of byte-stepping; (b)
+`skipString*`: fused `structuralIndex*` locate + shared `skipStringTail`
+escape switch (identical to scalar skipString's). Error identity scalar-exact
+incl. the truncated-string split via `ctrlHitErr` (scalar returns
+ErrUnterminated for an unterminated tail with no backslash WITHOUT checking
+ctrl bytes; ErrBadString otherwise) — the same helper now also fixes
+`classifyStructural`'s ctrl arm, which used to return ErrBadString
+unconditionally. ggen swaps `scan.SkipValue` → tier in bytes decode bodies
+and emits a guarded `scan.SkipSpace*` handoff in `inlineSkipWS` (one WS byte
+consumed inline so compact/single-space payloads stay call-free). Measured
+at avx512 (SkipHeavy bench): compact −21.6%, pretty −29.9%; pretty
+full-decode −3.3% from the inlineSkipWS handoff alone; Mega another −8.3%
+(RawJSON capture rides the tier). Pinned by `TestSkipValueSIMD_Parity`
+(truncations at every byte + malformed mutations + indent widths at lane
+seams) and `TestSkipSpaceSIMD_Parity` (every run length 0..130).
+
+### Stream skip tiers (`simd_skip_stream_amd64.go`, `//go:build goexperiment.simd`)
+
+`(*Stream).SkipValueAVX{,2,512}` + `skipArray*`/`skipObject*`/`skipString*`/
+`SkipSpace*` — the stream mirror of the bytes skip tier: per-window
+`structuralIndex*` locate in skipString (escape/refill arm factored into
+`skipStringStreamTail`, Shift bookkeeping identical to scalar), vector
+whitespace-run skip in `SkipSpace*`'s slow path (same inlinable shell shape
+as scalar `SkipSpace`), refill/compaction copied bit-exactly. Generated
+stream decoders swap `= s.SkipValue()` / `= s.SkipSpace()` to a tier
+(`tierStreamStringCalls`). Measured at avx512: SkipHeavy ggen_stream
+compact −32.6%, pretty −25.6%; Mega_Reader flat (copy mallocs dominate).
+Pinned by `TestStreamSkipValueSIMD_Parity` (chunked readers × shift modes ×
+truncations at every byte).
+
+**Skip-tree compaction (scalar + tiers, shipped with the tier).** The skip
+tree used to refill with grow-only `ReadMore(0)`, and readers fill the whole
+window, so every refill landed with `len == cap` and DOUBLED the buffer —
+skipping a 5.9 MB blob through a 4 KiB stream buffer allocated 8.4 MB/op.
+Skipped bytes are discardable, so every skip refill now compacts:
+`SkipValue`/`skipArray`/`skipObject` bound checks pass `s.Pos` (== len(buf)
+⇒ free full-discard, no memmove) + Shift-gated `s.Pos = 0`; `skipString`'s
+clean-window refill full-discards (`ReadMore(len(buf))`); `skipNumber`
+refills via `refillSkip(&i)` — the hot `i < len(s.buf)` bounds check stays
+inline, the cold helper compacts + rebases (a pointer-arg `hasByteAt`
+variant broke inlining and cost +40% — the split is load-bearing).
+`ReadMore` no-ops the keep under `Shift=false`, so RawJSON capture is
+unaffected. 8.4 MB/op → 127 KB/op, 12 → 6 allocs. NOTE: raw `Pos` across a
+Shift=true `SkipValue` is now buffer-relative (like SkipSpace/Int64) — use
+`Offset()`; `TestSkipNumber_StreamMatchesBytes` asserts via Offset.
+
+**Stream `skipObject` comma-WS bug (fixed 2026-07).** The comma branch did
+`s.Pos++; continue` straight into the next key's skipString — no separator
+whitespace skip (the bytes mirror always had `SkipSpace(data, i+1)`), so
+skipping any pretty-printed object with 2+ keys failed `ErrExpectString`.
+Never surfaced: stream skip had only ever run on compact payloads, and the
+tier parity tests replicated the scalar bug faithfully. Caught by the
+SkipHeavy pretty stream row; pinned by `TestStreamSkipValue_MatchesBytes`
+(stream-vs-BYTES differential over indented objects + truncations — parity
+against the scalar stream alone cannot catch shared bugs).
 
 ### `hasCtrlByte` — SWAR control-byte validation
 

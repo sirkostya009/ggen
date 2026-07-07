@@ -29,6 +29,9 @@ func BenchmarkSmall_Unmarshal(b *testing.B) {
 		{"sonic", func(p []byte) error { var v Validated; return sonic.Unmarshal(p, &v) }},
 		{"sonic_fast", func(p []byte) error { var v Validated; return sonic.ConfigFastest.Unmarshal(p, &v) }},
 		{"ggen", func(p []byte) error { _, _, err := Validated{}.DecodeFrom(p); return err }},
+		// ggen_copy: -copy mode (CopyValidated) — copies strings out of the
+		// input; the 2800 B Bio dominates, isolating the copy-out cost.
+		{"ggen_copy", func(p []byte) error { _, _, err := CopyValidated{}.DecodeFrom(p); return err }},
 	}
 	for _, c := range codecs {
 		b.Run(c.name, func(b *testing.B) {
@@ -129,6 +132,9 @@ func BenchmarkTiny_Unmarshal(b *testing.B) {
 		{"sonic_fast", func(p []byte) error { var v Claim; return sonic.ConfigFastest.Unmarshal(p, &v) }},
 		{"easyjson", func(p []byte) error { var v EasyClaim; return v.UnmarshalJSON(p) }},
 		{"ggen", func(p []byte) error { _, _, err := Claim{}.DecodeFrom(p); return err }},
+		// ggen_copy: -copy mode (CopyClaim) — per-string copy tax at the
+		// dispatch-overhead floor.
+		{"ggen_copy", func(p []byte) error { _, _, err := CopyClaim{}.DecodeFrom(p); return err }},
 	}
 	for _, c := range codecs {
 		b.Run(c.name, func(b *testing.B) {

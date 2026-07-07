@@ -69,6 +69,7 @@ single-package mode. Processing is post-order over the matched import subgraph
 | `-htmlescape`    | opt INTO HTML-safe escaping (`<`, `>`, `&` → `\uXXXX`) on marshal. Default = literal                                                                  |
 | `-copy`          | bytes-path `DecodeFrom` copies retained strings / map keys+values / slice elems / `json.RawMessage` / any-embedded strings out of `data` instead of aliasing it. Decouples decoded values from the input buffer (matches the stream path's lifetime). Decode-only; alloc-heavier |
 | `-dry`           | parse + validate annotated structs, surface every error, emit no file. Composes with `-v`. Rejects `-o`/`-pkg`                                        |
+| `-simd <tier>`   | `off`/`avx`/`avx2`/`avx512` — bytes-path string-scan tier (see opt #46). Resolved by `resolveSIMD` (main.go): `GOEXPERIMENT=simd` in ggen's OWN env auto-selects `avx`; `avx`/`avx2`/`avx512` error without the env var (emitted code imports `simd/archsimd`, which only exists under the experiment). Generate-time only — sets `scanStringFn` (`"scan.String"` → `"scan.StringAVX2"` etc); no per-struct annotation |
 
 ### Per-struct annotations
 
@@ -688,6 +689,63 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
     `renderAliasContainerDecode`) and `return result, i, nil` at each exit instead
     of falling through. Pinned by `TestWhitespace_Tolerance` + the bytes-vs-stream
     fuzzer. Stream not done.
+46. **SIMD string-scan tier (bytes path, opt-in via `-simd`).** When
+    `scanStringFn != "scan.String"`, `inlineScanStringVar` swaps its unbounded
+    scalar hot loop for an **inline fused vector classify** (no call): one
+    `LoadUint8x{16,32}Slice` + Equal/Equal/Min-Equal → ToBits → TrailingZeros
+    finds the first structural byte; a quote hit takes the inline alias/copy
+    path, anything else (escape, ctrl, span ≥ lane) falls to the direct
+    `scan.StringAVX`/`AVX2`/`AVX512` call, which restarts at `posIn` — error
+    identity byte-identical. Lane by tier: avx → 16 B, avx2/avx512 → 32 B
+    inline (64 B inline never pays). Full-lane loads only — `Load*SlicePart`
+    is a real CALL, not an intrinsic — so a string starting within one lane
+    of the payload end takes a **bounded scalar tail loop** instead (< lane
+    iterations; without it, tiny payloads whose fields all sit near EOF paid
+    a tier call per string — measured Tiny +26%). Broadcast constants are
+    emitted per site; gc CSEs them across sites and hoists them out of loops.
+    **Short-key override:** for the dispatch KEY scan, when every declared
+    JSON name is ≤ 5 bytes (`maxJSONNameLen`), the vector classify's
+    dependency chain (~load+3 compares+movemask+tzcnt) loses to a handful of
+    predictable scalar iterations, so `inlineScanStringWin` emits a bounded
+    scalar window sized `maxKey+1` instead (unknown longer keys fall to the
+    tier call). That flipped Tiny_Unmarshal from +15% to −8%. The 6 direct
+    `scan.String` emit sites (alias, map value, TextUnmarshaler feed, …) swap
+    the callee name. **Marshal side:** `appendStrFn` appends the same tier
+    suffix (`simdSuffix`), routing every string-append site to
+    `encode.AppendString{,NoHTML}{AVX,AVX2,AVX512}` — length-gated fused
+    escape scans (see `encode/CLAUDE.md`). `-copy` detaches via
+    `strings.Clone` around the tier call (escape-path strings are already
+    owned — the double copy there is accepted `-copy` overhead). The tier is
+    FIXED at generate time: no runtime CPU probing, no dispatch branch; wrong
+    CPU ⇒ SIGILL, missing `GOEXPERIMENT=simd` ⇒ compile error — both loud,
+    both the contract of the opt-in. Generated files pull `simd/archsimd` +
+    `math/bits` via the body-scan import table. Numbers in `bench/CLAUDE.md`
+    (headline: NoAlloc −22%, Mega −8.8%, Tiny −8% at avx512 vs the shipped
+    prelude shape). **Stream side:** `tierStreamStringCalls` post-passes the
+    rendered DecodeFromStream body (assignment-shaped rewrite, so encode
+    bodies can't collide), swapping `= s.String()`/`StringView()`/`KeyView()`
+    to the per-tier Stream methods (`scan/simd_stream_amd64.go` — fused
+    locate per buffered window, refill loop unchanged). KeyView keeps the
+    scalar prelude on all-short-key structs via the same `maxJSONNameLen ≤ 5`
+    gate. Mega_Reader −5.2%, NoAlloc_Reader −7.7%, Small_Reader −20/−26% at
+    avx512. **Skip side:** bytes decode bodies render through a scratch
+    buffer and a post-pass rewrites `scan.SkipValue(` → the tier skip tree
+    (`scan/simd_skip_amd64.go` — vector whitespace runs + fused skipString;
+    SkipHeavy compact −21.6% / pretty −29.9%, Mega −8.3%); `inlineSkipWS`
+    consumes one WS byte inline (compact and single-space payloads stay
+    call-free) then hands 2+ runs to `scan.SkipSpace<tier>` (pretty
+    full-decode −3.3%; costs Tiny ~+1%, accepted). Stream decode bodies get
+    the same swaps via `tierStreamStringCalls` (`= s.SkipValue()` /
+    `= s.SkipSpace()` → per-tier Stream methods,
+    `scan/simd_skip_stream_amd64.go`): SkipHeavy ggen_stream compact −23.8% /
+    pretty −22.6%, Mega_Reader flat. **Tier choice:** avx512
+    is the default recommendation (Small −23%, NoAlloc −4% vs avx2); avx2
+    wins skip-heavy pretty payloads by ~6% (skip lives on short spans where
+    Zen5's double-pumped 512-bit ops cost 2× µops for no coverage gain).
+    GFNI classify was explored and rejected — the structural/WS byte classes
+    are not GF(2)-affine subspaces (kernel closure over {ctrl,'"','\\'}
+    pulls in 0x20), and on the one expressible shape (ctrl detect) it
+    measured slightly slower than Min/Equal.
 
 ## Design decisions (the why)
 

@@ -61,7 +61,10 @@ func TestSkipNumber_StreamMatchesBytes(t *testing.T) {
 		var s Stream
 		s.Reset(&chunkedReader{data: []byte(tok)}, make([]byte, 0, 4))
 		sErr := s.SkipValue()
-		streamOK := sErr == nil && s.Pos == len(tok)
+		// Offset, not raw Pos — the skip tree compacts under Shift (like
+		// SkipSpace/Int64), so Pos is buffer-relative. Raw-span consumers
+		// (RawJSON capture) run under Shift=false where compaction no-ops.
+		streamOK := sErr == nil && s.Offset() == len(tok)
 		if streamOK != bytesOK {
 			t.Errorf("%q: stream accepted=%v, bytes accepted=%v", tok, streamOK, bytesOK)
 		}

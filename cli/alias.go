@@ -21,7 +21,7 @@ func renderAliasDecode(b *bytes.Buffer, s StructInfo) {
 	const wrap = `if err != nil { return result, i, decode.NewParseErr("", i, err) }`
 	switch s.AliasKind {
 	case KindString:
-		fmt.Fprintf(b, "var v string\nv, i, err = scan.String(data, i)\n%s\nresult = %s(v)\n", wrap, s.Name)
+		fmt.Fprintf(b, "var v string\nv, i, err = "+scanStringFn+"(data, i)\n%s\nresult = %s(v)\n", wrap, s.Name)
 	case KindBool:
 		fmt.Fprintf(b, "var v bool\nv, i, err = scan.Bool(data, i)\n%s\nresult = %s(v)\n", wrap, s.Name)
 	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
@@ -175,7 +175,7 @@ result = %[2]s(u)
 return result, nil
 `, s.AliasUnderlying, s.Name)
 		} else {
-			fmt.Fprintf(b, `ts, tj, err := scan.String(data, i)
+			fmt.Fprintf(b, `ts, tj, err := `+scanStringFn+`(data, i)
 if err != nil { return result, i, decode.NewParseErr("", i, err) }
 var u %[1]s
 if err := u.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts))); err != nil { return result, tj, decode.NewParseErr("", tj, err) }

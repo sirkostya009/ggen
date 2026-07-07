@@ -468,10 +468,14 @@ func (s *Stream) skipString() error {
 		if hasCtrlByte(s.buf[j:]) {
 			return ErrBadString
 		}
+		// Everything buffered is validated and being DISCARDED — full
+		// compaction keeps the window at chunk size instead of growing the
+		// buffer toward the skipped string's length (ReadMore no-ops the
+		// keep under Shift=false, so RawJSON capture is unaffected).
 		j = len(s.buf)
-		err := s.ReadMore(start)
+		err := s.ReadMore(j)
 		if s.Shift {
-			j -= start
+			j = 0
 			start = 0
 		}
 		if err != nil {
@@ -484,6 +488,9 @@ func (s *Stream) skipString() error {
 // from the already-scanned prefix. Every ReadMore in the loop passes 0
 // (grow-only) so offsets stay stable across reads.
 func (s *Stream) stringSlow(start, j int) (string, error) {
+	if hasCtrlByte(s.buf[start:j]) {
+		return "", ErrBadString
+	}
 	buf := make([]byte, 0, 32)
 	buf = append(buf, s.buf[start:j]...)
 	for {
@@ -738,25 +745,30 @@ scan:
 	return v, nil
 }
 
-// hasByteAt ensures buf[i] is buffered, issuing one grow-only refill
-// (ReadMore(0), offsets stay valid) at the buffered tail. False at EOS.
-func (s *Stream) hasByteAt(i int) bool {
-	if i < len(s.buf) {
-		return true
+// refillSkip refills the window mid-skip. Skip-path exclusive: bytes
+// before *i are consumed and discardable, so the refill compacts from *i
+// (ReadMore no-ops the keep under Shift=false) and rebases *i — without
+// compaction every mid-number refill lands with len == cap (readers fill
+// the whole window) and doubles the buffer. Callers keep the hot
+// `i < len(s.buf)` bounds check inline and call this only on exhaustion.
+func (s *Stream) refillSkip(i *int) bool {
+	err := s.ReadMore(*i)
+	if s.Shift {
+		*i = 0
 	}
-	return s.ReadMore(0) == nil && i < len(s.buf)
+	return err == nil && *i < len(s.buf)
 }
 
 // skipNumber is the stream mirror of the bytes-path [skipNumber] — same
 // RFC 8259 grammar, same accept-set.
 func (s *Stream) skipNumber() error {
 	i := s.Pos
-	if !s.hasByteAt(i) {
+	if i >= len(s.buf) && !s.refillSkip(&i) {
 		return ErrBadNumber
 	}
 	if s.buf[i] == '-' {
 		i++
-		if !s.hasByteAt(i) {
+		if i >= len(s.buf) && !s.refillSkip(&i) {
 			return ErrBadNumber
 		}
 	}
@@ -764,32 +776,50 @@ func (s *Stream) skipNumber() error {
 		i++
 	} else if s.buf[i] >= '1' && s.buf[i] <= '9' {
 		i++
-		for s.hasByteAt(i) && s.buf[i] >= '0' && s.buf[i] <= '9' {
+		for {
+			if i >= len(s.buf) && !s.refillSkip(&i) {
+				break
+			}
+			if s.buf[i] < '0' || s.buf[i] > '9' {
+				break
+			}
 			i++
 		}
 	} else {
 		return ErrBadNumber
 	}
-	if s.hasByteAt(i) && s.buf[i] == '.' {
+	if (i < len(s.buf) || s.refillSkip(&i)) && s.buf[i] == '.' {
 		i++
-		if !s.hasByteAt(i) || s.buf[i] < '0' || s.buf[i] > '9' {
+		if (i >= len(s.buf) && !s.refillSkip(&i)) || s.buf[i] < '0' || s.buf[i] > '9' {
 			return ErrBadNumber
 		}
 		i++
-		for s.hasByteAt(i) && s.buf[i] >= '0' && s.buf[i] <= '9' {
+		for {
+			if i >= len(s.buf) && !s.refillSkip(&i) {
+				break
+			}
+			if s.buf[i] < '0' || s.buf[i] > '9' {
+				break
+			}
 			i++
 		}
 	}
-	if s.hasByteAt(i) && (s.buf[i] == 'e' || s.buf[i] == 'E') {
+	if (i < len(s.buf) || s.refillSkip(&i)) && (s.buf[i] == 'e' || s.buf[i] == 'E') {
 		i++
-		if s.hasByteAt(i) && (s.buf[i] == '+' || s.buf[i] == '-') {
+		if (i < len(s.buf) || s.refillSkip(&i)) && (s.buf[i] == '+' || s.buf[i] == '-') {
 			i++
 		}
-		if !s.hasByteAt(i) || s.buf[i] < '0' || s.buf[i] > '9' {
+		if (i >= len(s.buf) && !s.refillSkip(&i)) || s.buf[i] < '0' || s.buf[i] > '9' {
 			return ErrBadNumber
 		}
 		i++
-		for s.hasByteAt(i) && s.buf[i] >= '0' && s.buf[i] <= '9' {
+		for {
+			if i >= len(s.buf) && !s.refillSkip(&i) {
+				break
+			}
+			if s.buf[i] < '0' || s.buf[i] > '9' {
+				break
+			}
 			i++
 		}
 	}
@@ -840,8 +870,11 @@ func (s *Stream) SkipValue() error {
 		return err
 	}
 	if s.Pos >= len(s.buf) {
-		if err := s.ReadMore(0); err != nil {
+		if err := s.ReadMore(s.Pos); err != nil {
 			return ErrUnexpectedEnd
+		}
+		if s.Shift {
+			s.Pos = 0
 		}
 	}
 	switch s.buf[s.Pos] {
@@ -882,8 +915,11 @@ func (s *Stream) skipArray() error {
 		return err
 	}
 	if s.Pos >= len(s.buf) {
-		if err := s.ReadMore(0); err != nil {
+		if err := s.ReadMore(s.Pos); err != nil {
 			return ErrBadArray
+		}
+		if s.Shift {
+			s.Pos = 0
 		}
 	}
 	if s.buf[s.Pos] == ']' {
@@ -919,8 +955,11 @@ func (s *Stream) skipObject() error {
 		return err
 	}
 	if s.Pos >= len(s.buf) {
-		if err := s.ReadMore(0); err != nil {
+		if err := s.ReadMore(s.Pos); err != nil {
 			return ErrBadObject
+		}
+		if s.Shift {
+			s.Pos = 0
 		}
 	}
 	if s.buf[s.Pos] == '}' {
@@ -956,6 +995,12 @@ func (s *Stream) skipObject() error {
 		}
 		if s.buf[s.Pos] == ',' {
 			s.Pos++
+			// The loop head expects the next key's opening quote directly —
+			// skip separator whitespace here (the bytes-path mirror does the
+			// same); without it pretty-printed input fails ErrExpectString.
+			if err := s.SkipSpace(); err != nil {
+				return err
+			}
 			continue
 		}
 		if s.buf[s.Pos] == '}' {

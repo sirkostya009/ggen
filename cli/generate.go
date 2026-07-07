@@ -273,6 +273,8 @@ func scanBodiesForStdImports(bodies [][]byte, add func(string)) {
 		path  string
 	}{
 		{[]byte("strconv."), "strconv"},
+		{[]byte("archsimd."), "simd/archsimd"},
+		{[]byte("bits."), "math/bits"},
 		{[]byte("math."), "math"},
 		{[]byte("unsafe."), "unsafe"},
 		{[]byte("strings."), "strings"},
@@ -1609,9 +1611,9 @@ func renderSize(b *bytes.Buffer, s StructInfo) {
 // already written the opening `"`.
 func appendStrFn(htmlEscape bool) string {
 	if htmlEscape {
-		return "encode.AppendString"
+		return "encode.AppendString" + simdSuffix
 	}
-	return "encode.AppendStringNoHTML"
+	return "encode.AppendStringNoHTML" + simdSuffix
 }
 
 // emitNoCloseAfterComma emits the bytes-path guard inside an element loop's
@@ -2203,6 +2205,16 @@ func fieldLit(f FieldInfo) string { return strconv.Quote(f.JSONName) }
 // inlineSkipWS emits an inline whitespace-skipping loop that mutates posVar
 // directly, avoiding the scan.SkipSpace call overhead.
 func inlineSkipWS(b *bytes.Buffer, posVar string) {
+	// SIMD tier: consume one whitespace byte inline (compact JSON exits on
+	// one compare, a single separator space stays call-free), then hand a
+	// 2+ run to the vector tier — pretty-printed indent runs skip a lane at
+	// a time instead of byte-stepping.
+	if simdSuffix != "" {
+		fmt.Fprintf(b,
+			"if %[1]s < len(data) && data[%[1]s] <= ' ' && (data[%[1]s] == ' ' || data[%[1]s] == '\\t' || data[%[1]s] == '\\n' || data[%[1]s] == '\\r') {\n%[1]s++\nif %[1]s < len(data) && data[%[1]s] <= ' ' { %[1]s = scan.SkipSpace%[2]s(data, %[1]s) }\n}\n",
+			posVar, simdSuffix)
+		return
+	}
 	// `data[i] <= ' '` gates the 4-way test so compact JSON exits on one
 	// compare. Boolean-identical accept set (every whitespace char is <= ' ').
 	fmt.Fprintf(b,
@@ -2341,9 +2353,91 @@ func inlineScanString(b *bytes.Buffer, posIn, dst, posOut, field string, cp bool
 	inlineScanStringVar(b, posIn, dst, posOut, field, "ke", cp)
 }
 
+// maxJSONNameLen returns the longest declared JSON key name on s (0 when no
+// named fields — inline catch-alls carry arbitrary keys and are excluded).
+func maxJSONNameLen(s StructInfo) int {
+	n := 0
+	for _, f := range s.Fields {
+		if f.Inline {
+			continue
+		}
+		n = max(n, len(f.JSONName))
+	}
+	return n
+}
+
 // inlineScanStringVar is inlineScanString with a caller-chosen name for the
 // closing-quote cursor local.
 func inlineScanStringVar(b *bytes.Buffer, posIn, dst, posOut, field, ke string, cp bool) {
+	inlineScanStringWin(b, posIn, dst, posOut, field, ke, cp, 0)
+}
+
+// inlineScanStringWin is inlineScanStringVar with a scalar-window override for
+// the SIMD tier: window > 0 swaps the inline vector classify for a bounded
+// scalar loop over the first `window` bytes — used by the key-dispatch scan
+// when every declared key is short enough that the vector dependency chain
+// loses to a handful of predictable scalar iterations. window == 0 emits the
+// vector shape. Ignored on the scalar tier.
+func inlineScanStringWin(b *bytes.Buffer, posIn, dst, posOut, field, ke string, cp bool, window int) {
+	// SIMD tier: an inline fused vector classify (no call) handles any string
+	// shorter than one lane — one load + Equal/Equal/Min-Equal classify →
+	// ToBits → TrailingZeros finds the first structural byte ('"', '\',
+	// ctrl). Quote hit → inline alias/copy; anything else (escape, ctrl,
+	// span ≥ lane, string near the payload end where a full-lane load would
+	// overread) falls through to the fused scan.StringAVX* call, which
+	// restarts at posIn — error identity byte-identical. Full-lane loads
+	// only: Load*SlicePart is a real CALL, not an intrinsic. Broadcasts are
+	// emitted per site; gc CSEs them across sites and hoists them out of
+	// loops. cp detaches the alias via strings.Clone (escape-path strings
+	// are already owned; the extra clone there is accepted -copy overhead).
+	if scanStringFn != "scan.String" {
+		lane, vecT, tzFn := 32, "Uint8x32", "TrailingZeros32"
+		if scanStringFn == "scan.StringAVX" {
+			lane, vecT, tzFn = 16, "Uint8x16", "TrailingZeros16"
+		}
+		hot := "unsafe.String(unsafe.SliceData(data[%[1]s+1:]), %[5]s-%[1]s-1)"
+		fall := `%[3]s, %[4]s, err = ` + scanStringFn + `(data, %[1]s)
+	if err != nil { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, err) }`
+		if cp {
+			hot = "string(data[%[1]s+1:%[5]s])"
+			fall = `var %[5]sv string
+	%[5]sv, %[4]s, err = ` + scanStringFn + `(data, %[1]s)
+	if err != nil { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, err) }
+	%[3]s = strings.Clone(%[5]sv)`
+		}
+		if window > 0 {
+			fmt.Fprintf(b, `if %[1]s >= len(data) || data[%[1]s] != '"' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrExpectString) }
+%[5]s := %[1]s + 1
+%[5]sw := %[5]s + %[6]d
+if %[5]sw > len(data) { %[5]sw = len(data) }
+for %[5]s < %[5]sw && data[%[5]s] != '"' && data[%[5]s] != '\\' && data[%[5]s] >= 0x20 { %[5]s++ }
+if %[5]s < len(data) && data[%[5]s] == '"' {
+	%[3]s = `+hot+`
+	%[4]s = %[5]s + 1
+} else {
+	`+fall+`
+}
+`, posIn, field, dst, posOut, ke, window)
+			return
+		}
+		fmt.Fprintf(b, `if %[1]s >= len(data) || data[%[1]s] != '"' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrExpectString) }
+%[5]s := %[1]s + 1
+if %[5]s+%[6]d <= len(data) {
+	%[5]sV := archsimd.Load%[7]sSlice(data[%[5]s:])
+	%[5]sM := %[5]sV.Equal(archsimd.Broadcast%[7]s('"')).Or(%[5]sV.Equal(archsimd.Broadcast%[7]s('\\'))).Or(%[5]sV.Min(archsimd.Broadcast%[7]s(0x1F)).Equal(%[5]sV)).ToBits()
+	if %[5]sM != 0 { %[5]s += bits.%[8]s(%[5]sM) }
+} else {
+	for %[5]s < len(data) && data[%[5]s] != '"' && data[%[5]s] != '\\' && data[%[5]s] >= 0x20 { %[5]s++ }
+}
+if %[5]s < len(data) && data[%[5]s] == '"' {
+	%[3]s = `+hot+`
+	%[4]s = %[5]s + 1
+} else {
+	`+fall+`
+}
+`, posIn, field, dst, posOut, ke, lane, vecT, tzFn)
+		return
+	}
 	hot := "unsafe.String(unsafe.SliceData(data[%[1]s+1:]), %[5]s-%[1]s-1)"
 	if cp {
 		hot = "string(data[%[1]s+1:%[5]s])"
@@ -2357,7 +2451,7 @@ if data[%[5]s] == '"' {
 	%[3]s = `+hot+`
 	%[4]s = %[5]s + 1
 } else {
-	%[3]s, %[4]s, err = scan.String(data, %[1]s)
+	%[3]s, %[4]s, err = `+scanStringFn+`(data, %[1]s)
 	if err != nil { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, err) }
 }
 `, posIn, field, dst, posOut, ke)
@@ -2388,7 +2482,20 @@ func emitReceiverReset(b *bytes.Buffer, s StructInfo) {
 // renderDecode emits the body of DecodeFrom: a loop reading each JSON key,
 // dispatching to per-field scan code, handling ',' / '}'. Zero-copy and
 // zero-alloc on the happy path; whitespace skipping inlined at each hot site.
-func renderDecode(b *bytes.Buffer, s StructInfo) {
+func renderDecode(bOut *bytes.Buffer, s StructInfo) {
+	// Rendered into a temp buffer so the SIMD tier can rewrite the
+	// scan.SkipValue callee post-emit (unique token, no collision risk) —
+	// the tier skip tree vector-skips whitespace runs + fuses skipString.
+	var scratch bytes.Buffer
+	b := bOut
+	if simdSuffix != "" {
+		b = &scratch
+	}
+	defer func() {
+		if simdSuffix != "" {
+			bOut.WriteString(strings.ReplaceAll(scratch.String(), "scan.SkipValue(", "scan.SkipValue"+simdSuffix+"("))
+		}
+	}()
 	// Named results home the values in the caller's return slot, so every
 	// `return result, …` is register-set + RET with no struct copy; the
 	// `result = recv` prologue seeds the merge source.
@@ -2430,7 +2537,15 @@ i++
 	b.WriteString("return result, i, nil\n}\nfor {\nvar key string\n")
 	// The dispatch key is transient (matched + discarded). Copy-mode retention
 	// is handled where the key is stored: inline catch-all map + UnknownKeyError.
-	inlineScanString(b, "i", "key", "i", `""`, false)
+	// SIMD tier, all-short-keys struct: the vector classify's dependency chain
+	// (~load+3 compares+movemask+tzcnt) loses to a ≤5-iteration predictable
+	// scalar loop, so key scans get a bounded scalar window sized to the
+	// longest declared key instead (unknown longer keys fall to the tier call).
+	if maxKey := maxJSONNameLen(s); scanStringFn != "scan.String" && maxKey <= 5 {
+		inlineScanStringWin(b, "i", "key", "i", `""`, "ke", false, maxKey+1)
+	} else {
+		inlineScanString(b, "i", "key", "i", `""`, false)
+	}
 	inlineSkipWS(b, "i")
 	b.WriteString(`if i >= len(data) || data[i] != ':' { return result, i, decode.NewParseErr("", i, scan.ErrBadObject) }
 i++
@@ -2915,7 +3030,7 @@ func renderCrossPkgStructDecode(f FieldInfo, ref, posVar string) string {
 		case f.Iface.TextUnmarshaler:
 			chk := bytesErrCheck(fieldLit(f), posVar)
 			return fmt.Sprintf(`var ts string
-ts, %[1]s, err = scan.String(data, %[1]s)
+ts, %[1]s, err = `+scanStringFn+`(data, %[1]s)
 %[3]serr = %[2]s.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts)))
 %[3]s`, posVar, ref, chk)
 
@@ -3337,11 +3452,11 @@ func unknownKey(s StructInfo, posVar string) string {
 			if s.Copy {
 				// scan.String aliases; clone the value (and the key) out of data.
 				return initMap + fmt.Sprintf(`var _sv string
-_sv, %[1]s, err = scan.String(data, %[1]s)
+_sv, %[1]s, err = `+scanStringFn+`(data, %[1]s)
 %[3]sresult.%[2]s[%[4]s] = strings.Clone(_sv)
 `, posVar, inline.GoName, chk, keyExpr)
 			}
-			return initMap + fmt.Sprintf(`result.%[2]s[key], %[1]s, err = scan.String(data, %[1]s)
+			return initMap + fmt.Sprintf(`result.%[2]s[key], %[1]s, err = `+scanStringFn+`(data, %[1]s)
 %[3]s`, posVar, inline.GoName, chk)
 		case KindStruct:
 			if isGenerated(inline.ElemType) {
@@ -4230,15 +4345,39 @@ if e := bytes.IndexByte(data[%[2]s:], ']'); e >= 0 { %[4]s = bytes.Count(data[%[
 // scan.Stream methods that pull more bytes on demand.
 func renderStreamDecode(b *bytes.Buffer, s StructInfo) {
 	// Named-result return slot — see DecodeFrom above.
-	fmt.Fprintf(b, "func (recv %s) DecodeFromStream(s *scan.Stream) (result %s, err error) {\n", s.Name, s.Name)
-	b.WriteString("result = recv\n")
+	var body bytes.Buffer
+	fmt.Fprintf(&body, "func (recv %s) DecodeFromStream(s *scan.Stream) (result %s, err error) {\n", s.Name, s.Name)
+	body.WriteString("result = recv\n")
 	if s.IsAlias {
-		renderAliasStreamDecode(b, s)
-		b.WriteString("}\n\n")
-		return
+		renderAliasStreamDecode(&body, s)
+	} else {
+		renderStreamDecodeStruct(&body, s)
 	}
-	renderStreamDecodeStruct(b, s)
-	b.WriteString("}\n\n")
+	body.WriteString("}\n\n")
+	b.WriteString(tierStreamStringCalls(body.String(), s))
+}
+
+// tierStreamStringCalls rewrites the stream-decode body's string-scan calls
+// to the fixed SIMD tier when one is selected: `= s.String()` / `StringView`
+// / `KeyView` become their fused per-tier Stream methods (assignment-shaped
+// only, so nothing else can match; encode bodies are never passed through).
+// KeyView keeps the scalar-prelude original on all-short-key structs — same
+// gate and rationale as the bytes-path key window (the prelude beats the
+// vector dependency chain on ≤5-byte keys).
+func tierStreamStringCalls(body string, s StructInfo) string {
+	if simdSuffix == "" {
+		return body
+	}
+	body = strings.ReplaceAll(body, "= s.String()", "= s.String"+simdSuffix+"()")
+	body = strings.ReplaceAll(body, "= s.StringView()", "= s.StringView"+simdSuffix+"()")
+	// Skip tree + dispatch whitespace: same shells/fast paths as the scalar
+	// pair on compact input, vector runs on whitespace-rich streams.
+	body = strings.ReplaceAll(body, "= s.SkipValue()", "= s.SkipValue"+simdSuffix+"()")
+	body = strings.ReplaceAll(body, "= s.SkipSpace()", "= s.SkipSpace"+simdSuffix+"()")
+	if maxJSONNameLen(s) > 5 {
+		body = strings.ReplaceAll(body, "= s.KeyView()", "= s.KeyView"+simdSuffix+"()")
+	}
+	return body
 }
 
 func renderStreamDecodeStruct(b *bytes.Buffer, s StructInfo) {

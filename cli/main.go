@@ -23,7 +23,41 @@ var (
 	cliFlags annotationFlags
 	cliDry   bool
 	cliLog   Logger
+
+	// scanStringFn is the bytes-path string scanner emitted into generated
+	// code. Under GOEXPERIMENT=simd it defaults to the fused AVX tier;
+	// -simd picks a wider tier (or off). The tier is fixed at generate time —
+	// generated code carries no runtime probing or branching.
+	scanStringFn = "scan.String"
+	// simdSuffix is the tier suffix ("", "AVX", "AVX2", "AVX512") appended to
+	// the encode escape helpers (appendStrFn) — set alongside scanStringFn.
+	simdSuffix = ""
 )
+
+// resolveSIMD maps the -simd flag + GOEXPERIMENT env to the emitted scanner
+// name. avx/avx2/avx512 require GOEXPERIMENT=simd (the emitted code can't
+// build without it); an empty flag auto-enables the AVX tier when the
+// experiment is on.
+func resolveSIMD(simdFlag string) error {
+	exp := slices.Contains(strings.Split(os.Getenv("GOEXPERIMENT"), ","), "simd")
+	switch simdFlag {
+	case "off":
+	case "":
+		if exp {
+			scanStringFn = "scan.StringAVX"
+			simdSuffix = "AVX"
+		}
+	case "avx", "avx2", "avx512":
+		if !exp {
+			return fmt.Errorf("-simd=%s requires GOEXPERIMENT=simd (generated code imports simd/archsimd, which only exists under the experiment)", simdFlag)
+		}
+		simdSuffix = strings.ToUpper(simdFlag)
+		scanStringFn = "scan.String" + simdSuffix
+	default:
+		return fmt.Errorf("-simd=%s: unknown tier (off|avx|avx2|avx512)", simdFlag)
+	}
+	return nil
+}
 
 func main() {
 	var (
@@ -47,6 +81,8 @@ func main() {
 	flag.BoolVar(&cliFlags.htmlescape, "htmlescape", false, "HTML-safe escape <, >, & in emitted strings (default: literal, matches stdlib jsonv2)")
 	flag.BoolVar(&cliFlags.copy, "copy", false, "bytes-path DecodeFrom copies strings, json.RawMessage, and any-embedded strings out of the input instead of aliasing it (mutating data after decode no longer corrupts decoded values)")
 	flag.BoolVar(&cliDry, "dry", false, "dry run: parse and validate every annotated struct, surface all errors, emit no file")
+	var simdFlag string
+	flag.StringVar(&simdFlag, "simd", "", "SIMD tier for bytes-path string scans: off|avx|avx2|avx512 (default: avx when GOEXPERIMENT=simd is set, else off; generated code then requires GOEXPERIMENT=simd to build and a matching CPU to run — no runtime probing)")
 	flag.BoolVar(&v, "v", false, "\nverbose: info-level progress (wrote <file>)")
 	flag.BoolVar(&vv, "vv", false, "more verbose: per-package / per-struct debug")
 	flag.BoolVar(&vvv, "vvv", false, "trace-level diagnostics")
@@ -81,6 +117,10 @@ func main() {
 		level = LevelInfo
 	}
 	cliLog = NewLogger(level)
+
+	if err := resolveSIMD(simdFlag); err != nil {
+		cliLog.Fatal(err)
+	}
 
 	if len(positional) < 1 {
 		flag.Usage()

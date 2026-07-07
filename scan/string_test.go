@@ -224,3 +224,24 @@ func TestSkipValue_EscapedStringNoAlloc(t *testing.T) {
 		t.Errorf("SkipValue over escaped string allocated %v/op, want 0", allocs)
 	}
 }
+
+// TestString_CtrlBeforeEscapeRejected pins the stringSlow prefix fix: an
+// unescaped control byte BEFORE the first backslash must reject (stdlib
+// parity) — the prefix used to be copied into scratch unchecked.
+func TestString_CtrlBeforeEscapeRejected(t *testing.T) {
+	t.Parallel()
+	in := []byte("\"a\x01b\\nc\"")
+	if _, _, err := String(in, 0); err != ErrBadString {
+		t.Errorf("String = %v, want ErrBadString", err)
+	}
+	var v string
+	if err := json.Unmarshal(in, &v); err == nil {
+		t.Errorf("stdlib accepted %q — parity assumption broken", in)
+	}
+	// Stream path shares the fix via (*Stream).stringSlow.
+	var s Stream
+	s.Reset(bytes.NewReader(in), nil)
+	if _, err := s.String(); err != ErrBadString {
+		t.Errorf("Stream.String = %v, want ErrBadString", err)
+	}
+}

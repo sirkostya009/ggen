@@ -95,6 +95,22 @@ append(dst, '"')` at slice/map/standalone sites).
 - `AppendStringNoHTML` — default, standard escapes only, emits `<`, `>`, `&`
   literally (stdlib jsonv2).
 
+**SIMD tiers** (`simd_amd64.go`, `//go:build goexperiment.simd`):
+`AppendString{,NoHTML}{AVX,AVX2,AVX512}` — same caller contract, fused vector
+needs-escape classify per 16/32/64 bytes (Equal `"`/`\` + ctrl via
+min(v,0x1F)==v below 512-bit / native unsigned Less + scalar-register mask OR
+at 512; HTML variants add Equal `<`/`>`/`&`), set bits iterated `m &= m-1`
+with clean spans bulk-appended between them. **Length-gated:** strings shorter
+than one lane delegate straight to the scalar walk — without the gate the
+broadcast setup + call shape REGRESSED every repo marshal bench (Mega +6.5%,
+Tiny +14%); gated they are macro-flat and ~3.6×/10× faster at 64 B/≥256 B
+(BenchmarkEscapeScan). Tail (< lane bytes after full-lane iterations) runs the
+scalar table walk — `Load*SlicePart` is a real CALL and its zero padding would
+classify as ctrl and emit spurious escapes. ggen emits the tier names when run
+under `-simd` (shared `simdSuffix`, see cli/CLAUDE.md opt #46); no runtime
+probing. Byte-parity pinned by `TestAppendStringSIMD_Parity` (lane-seam
+directed cases + 3000 randomized bodies, all six functions).
+
 The hot-scan escape test is a `[256]bool` table lookup (`needEscapeNoHTML` /
 `needEscapeHTML`), not a comparison chain: the table wins because one independent
 L1 load pipelines across bytes, beating the dependent `&&` chain (3-deep NoHTML /

@@ -124,6 +124,9 @@ func hasCtrlByte(b []byte) bool {
 // scratch (the span to the first quote candidate, not the payload). The
 // returned string aliases the write-once scratch via unsafe.String.
 func stringSlow(data []byte, start, j, capHint int) (string, int, error) {
+	if hasCtrlByte(data[start:j]) {
+		return "", 0, ErrBadString
+	}
 	buf := make([]byte, 0, capHint)
 	buf = append(buf, data[start:j]...)
 	for j < len(data) {
@@ -350,12 +353,71 @@ func Float64(data []byte, i int) (float64, int, error) {
 	if i == start {
 		return 0, 0, ErrBadNumber
 	}
+	// Short spans skip ParseFloat's re-scan when exactly representable.
+	// Shortest-form 17-significant-digit floats are ≥ 18 chars, so the
+	// gate structurally excludes the inputs that made the ungated variant
+	// regress (see backlog).
+	if i-start <= 16 {
+		if v, ok := exactShort(data[start:i]); ok {
+			return v, i, nil
+		}
+	}
 	raw := unsafe.String(unsafe.SliceData(data[start:]), i-start)
 	v, err := strconv.ParseFloat(raw, 64)
 	if err != nil {
 		return 0, 0, err
 	}
 	return v, i, nil
+}
+
+// exactPow10[k] = 10^k, exactly representable for k ≤ 22.
+var exactPow10 = [23]float64{
+	1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11,
+	1e12, 1e13, 1e14, 1e15, 1e16, 1e17, 1e18, 1e19, 1e20, 1e21, 1e22,
+}
+
+// exactShort parses [-]digits[.digits] when the result is exact: mantissa
+// < 2^52 and ≤ 22 fractional digits, so mantissa and pow10 are both exact
+// floats and the single IEEE divide is correctly rounded — bit-identical to
+// strconv.ParseFloat (same argument as strconv's atof64exact). Exponents,
+// second dots, or wide mantissas return ok=false for the ParseFloat path.
+// Caller bounds len(s) ≤ 16, so uint64 accumulation cannot overflow.
+func exactShort(s []byte) (float64, bool) {
+	i := 0
+	neg := s[0] == '-'
+	if neg {
+		i = 1
+	}
+	var mant uint64
+	digits, frac := 0, 0
+	sawDot := false
+	for ; i < len(s); i++ {
+		c := s[i]
+		if c >= '0' && c <= '9' {
+			mant = mant*10 + uint64(c-'0')
+			digits++
+			if sawDot {
+				frac++
+			}
+			continue
+		}
+		if c == '.' && !sawDot {
+			sawDot = true
+			continue
+		}
+		return 0, false
+	}
+	if digits == 0 || mant>>52 != 0 {
+		return 0, false
+	}
+	f := float64(mant)
+	if frac > 0 {
+		f /= exactPow10[frac]
+	}
+	if neg {
+		f = -f
+	}
+	return f, true
 }
 
 // skipNumber validates and consumes a JSON number per the RFC 8259 grammar

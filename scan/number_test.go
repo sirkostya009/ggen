@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"math"
+	"math/rand"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -243,5 +245,153 @@ func TestNumber_StdlibParity(t *testing.T) {
 				t.Errorf("position = %d, want %d", j, len(in))
 			}
 		})
+	}
+}
+
+// TestExactShort_ParseFloatDifferential exhaustively cross-checks the
+// exactShort fast path in Float64 against strconv.ParseFloat over randomized
+// short spans — bit-identity (incl. -0) and identical accept/reject.
+func TestExactShort_ParseFloatDifferential(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewSource(1))
+	chars := []byte("0123456789.-eE+")
+	check := func(s string) {
+		t.Helper()
+		got, gotOK := exactShort([]byte(s))
+		want, err := strconv.ParseFloat(s, 64)
+		if !gotOK {
+			return // bail is always legal — ParseFloat path takes over
+		}
+		if err != nil {
+			t.Fatalf("exactShort(%q) accepted, ParseFloat rejects: %v", s, err)
+		}
+		if math.Float64bits(got) != math.Float64bits(want) {
+			t.Fatalf("exactShort(%q) = %v (%#x), ParseFloat = %v (%#x)",
+				s, got, math.Float64bits(got), want, math.Float64bits(want))
+		}
+	}
+	// Directed cases at the exactness boundaries.
+	for _, s := range []string{
+		"0", "-0", "0.0", "-0.0", "1.", "-1.", ".5", "-.5", ".",
+		"4503599627370495", "4503599627370496", // 2^52-1, 2^52
+		"9007199254740991", "999999999999999.9", "0.000000000000001",
+		"-4503599627370495", "1234567890.12345", "00000000000000.1",
+	} {
+		check(s)
+	}
+	for range 500000 {
+		n := 1 + rng.Intn(16)
+		b := make([]byte, n)
+		for i := range b {
+			b[i] = chars[rng.Intn(len(chars))]
+		}
+		check(string(b))
+	}
+	// Digit-heavy spans (the alphabet above rarely forms long valid numbers).
+	for range 500000 {
+		n := 1 + rng.Intn(16)
+		b := make([]byte, 0, n+1)
+		if rng.Intn(4) == 0 {
+			b = append(b, '-')
+		}
+		dot := -1
+		if rng.Intn(2) == 0 {
+			dot = rng.Intn(n)
+		}
+		for i := range n {
+			if i == dot {
+				b = append(b, '.')
+			} else {
+				b = append(b, byte('0'+rng.Intn(10)))
+			}
+		}
+		check(string(b))
+	}
+}
+
+// TestInt_ReferenceDifferential pins Int64/Uint64 against a plain per-digit
+// reference implementation over randomized digit runs (1..25 digits, leading
+// zeros, signs, non-digit tails) — value, end position, and error identity.
+// (Kept from the rejected SWAR-chunk experiment; it caught a real classifier
+// bug there and guards the unchecked-prefix window generally.)
+func TestInt_ReferenceDifferential(t *testing.T) {
+	t.Parallel()
+	refInt := func(data []byte, i int) (int64, int, error) {
+		neg := false
+		if i < len(data) && data[i] == '-' {
+			neg = true
+			i++
+		}
+		if i >= len(data) || data[i] < '0' || data[i] > '9' {
+			return 0, 0, ErrBadNumber
+		}
+		limit := uint64(math.MaxInt64)
+		if neg {
+			limit = SignedNeg
+		}
+		var u uint64
+		for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+			d := uint64(data[i] - '0')
+			if u > limit/10 || (u == limit/10 && d > limit%10) {
+				return 0, 0, ErrNumberOverflow
+			}
+			u = u*10 + d
+			i++
+		}
+		if i < len(data) {
+			c := data[i]
+			if c == '.' || c == 'e' || c == 'E' {
+				return 0, 0, ErrBadNumber
+			}
+		}
+		if neg {
+			if u == SignedNeg {
+				return math.MinInt64, i, nil
+			}
+			return -int64(u), i, nil
+		}
+		return int64(u), i, nil
+	}
+	refUint := func(data []byte, i int) (uint64, int, error) {
+		if i >= len(data) || data[i] < '0' || data[i] > '9' {
+			return 0, 0, ErrBadNumber
+		}
+		var n uint64
+		for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+			d := uint64(data[i] - '0')
+			if n > Uint64Limit/10 || (n == Uint64Limit/10 && d > Uint64Limit%10) {
+				return 0, 0, ErrNumberOverflow
+			}
+			n = n*10 + d
+			i++
+		}
+		return n, i, nil
+	}
+	rng := rand.New(rand.NewSource(3))
+	tails := []byte{',', '}', ']', ' ', '.', 'e', 'x', 'a', '/', ':'}
+	for round := range 400000 {
+		nd := 1 + rng.Intn(25)
+		b := make([]byte, 0, nd+2)
+		if round%3 == 0 {
+			b = append(b, '-')
+		}
+		for range nd {
+			b = append(b, byte('0'+rng.Intn(10)))
+		}
+		if rng.Intn(2) == 0 {
+			b = append(b, tails[rng.Intn(len(tails))])
+		}
+		gi, gp, ge := Int64(b, 0)
+		wi, wp, we := refInt(b, 0)
+		if gi != wi || gp != wp || ge != we {
+			t.Fatalf("Int64(%q) = (%d,%d,%v), ref (%d,%d,%v)", b, gi, gp, ge, wi, wp, we)
+		}
+		if b[0] != '-' {
+			gu, gp, ge := Uint64(b, 0)
+			wu, wp, we := refUint(b, 0)
+			if gu != wu || gp != wp || ge != we {
+				t.Fatalf("Uint64(%q) = (%d,%d,%v), ref (%d,%d,%v)", b, gu, gp, ge, wu, wp, we)
+			}
+		}
 	}
 }
