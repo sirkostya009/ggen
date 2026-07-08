@@ -123,10 +123,18 @@ loops. `keep` = lowest offset the caller still needs; bytes before may be discar
   into freed tail. **Aliases into buffer invalidated when `keep > 0`.**
 
 **Aggressive compaction inside Stream methods.** `SkipSpace`, `ConsumeColon`,
-`Int64`/`Uint64`, `String`/`KeyView` pass non-zero `keep` (current cursor, or
-value-start `start` for spans outlasting the loop) so the buffer stays bounded
-~`max(chunk_size, value_size)`; each updates locals after shift (`i = 0`, or
-`j -= start; start = 0` for the string body) then writes final `s.Pos`.
+`Int64`/`Uint64`, `String`/`KeyView`, `Float64`/`Number` pass non-zero `keep`
+(current cursor, or value-start `start` for spans outlasting the loop) so the
+buffer stays bounded ~`max(chunk_size, value_size)`; each updates locals after
+shift (`i = 0`, or `j -= start; start = 0` for the string/number body) then
+writes final `s.Pos`. `Float64`/`Number` USED to refill mid-number with grow-only
+`ReadMore(0)`; since readers fill the whole window, every mid-number window edge
+landed with `len == cap` and DOUBLED the buffer (a 64 B buffer ballooned to 1 MB
+on a 50k-short-float stream). They now compact from `start` + rebase `i` like
+`stringView` (pinned by `TestFloatNumberBufBounded` / `TestFloatScanNoShiftRefill`)
+— same class as the skip-tree compaction fix. `Float64` also gained the ≤16 B
+`exactShort` gate the bytes path has (skips `strconv.ParseFloat`'s re-scan;
+bit-identical).
 
 **`Shift` field** (defaults true via `Reset`) flips off around `SkipValue` in
 RawJSON capture + `json.Unmarshal` fallback spans, where generated code needs stable
@@ -234,9 +242,15 @@ readers 1..64 B forcing mid-string refills, all tiers, error identity).
 
 `SkipValueAVX{,2,512}` + `skipArray*`/`skipObject*`/`skipString*`/`SkipSpace*`
 — per-tier copies of the scalar skip tree whose only changes are (a)
-`SkipSpace*`: scalar first-byte exit, then whole-lane whitespace classify
-(`eq ' '|'\t'|'\n'|'\r'` → first zero bit = first non-WS) — indent runs in
-pretty-printed JSON skip a lane at a time instead of byte-stepping; (b)
+`SkipSpace*`: an **inlinable shell** (`if i >= len || data[i] > ' ' { return i }`)
+over a cold vector body (`skipSpaceAVX*Slow`) — scalar first-byte exit, then
+whole-lane whitespace classify (`eq ' '|'\t'|'\n'|'\r'` → first zero bit = first
+non-WS) — indent runs in pretty-printed JSON skip a lane at a time instead of
+byte-stepping. The shell splits so the early-out inlines into the tree's 8
+`SkipSpace*` call sites per tier: on compact (whitespace-free) JSON that early-out
+was 22% flat of SkipHeavy/compact as a non-inlined call + prologue + ret (the
+vector body unreachable there yet blocking inlining); splitting it recovered
+−9.7% on the compact ggen row (avx512, interleaved n=8). (b)
 `skipString*`: fused `structuralIndex*` locate + shared `skipStringTail`
 escape switch (identical to scalar skipString's). Error identity scalar-exact
 incl. the truncated-string split via `ctrlHitErr` (scalar returns

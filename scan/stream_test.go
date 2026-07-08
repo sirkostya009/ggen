@@ -338,6 +338,98 @@ func TestIntegerScanNoShiftRefill(t *testing.T) {
 	})
 }
 
+// TestFloatNumberBufBounded pins the compacting mid-number refill: a
+// float/number straddling window edges must refill from the value start, not
+// grow-only from 0 — else every mid-number refill lands with len == cap and
+// DOUBLES the buffer (a 64 B buffer ballooned to 1 MB on a 50k short-float
+// stream before the fix). Same class the skip-tree compaction already fixed.
+func TestFloatNumberBufBounded(t *testing.T) {
+	t.Parallel()
+	build := func(elem string) string {
+		var sb strings.Builder
+		sb.WriteByte('[')
+		for i := range 50000 {
+			if i > 0 {
+				sb.WriteByte(',')
+			}
+			sb.WriteString(elem) // 16 chars — straddles the 64 B window
+		}
+		sb.WriteByte(']')
+		return sb.String()
+	}
+	drive := func(t *testing.T, data string, scan func(s *Stream) error) {
+		var s Stream
+		s.Reset(strings.NewReader(data), make([]byte, 0, 64))
+		if err := s.SkipSpace(); err != nil {
+			t.Fatal(err)
+		}
+		s.Pos++ // consume '['
+		for {
+			if err := s.SkipSpace(); err != nil {
+				t.Fatal(err)
+			}
+			if err := scan(&s); err != nil {
+				t.Fatal(err)
+			}
+			if err := s.SkipSpace(); err != nil {
+				t.Fatal(err)
+			}
+			if s.Pos < len(s.Bytes()) && s.Bytes()[s.Pos] == ',' {
+				s.Pos++
+				continue
+			}
+			break
+		}
+		if c := cap(s.Bytes()); c > 4096 {
+			t.Fatalf("buffer ballooned to cap=%d (started 64) — compacting refill regressed", c)
+		}
+	}
+	t.Run("float64", func(t *testing.T) {
+		t.Parallel()
+		drive(t, build("123456789.123456"), func(s *Stream) error { _, err := s.Float64(); return err })
+	})
+	t.Run("number", func(t *testing.T) {
+		t.Parallel()
+		drive(t, build("123456789.123456"), func(s *Stream) error { _, err := s.Number(); return err })
+	})
+}
+
+// TestFloatScanNoShiftRefill mirrors TestIntegerScanNoShiftRefill for the
+// number path: under Shift=false the compacting refill must move no bytes and
+// keep the cursor, so a value split across refills still scans correctly.
+func TestFloatScanNoShiftRefill(t *testing.T) {
+	t.Parallel()
+	t.Run("float64", func(t *testing.T) {
+		t.Parallel()
+		var s Stream
+		s.Reset(strings.NewReader("3.14159 "), make([]byte, 0, 3))
+		s.Shift = false
+		v, err := s.Float64()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if v != 3.14159 {
+			t.Errorf("Float64 = %v, want 3.14159", v)
+		}
+		if s.Pos != 7 {
+			t.Errorf("Pos = %d, want 7", s.Pos)
+		}
+	})
+	t.Run("number", func(t *testing.T) {
+		t.Parallel()
+		var s Stream
+		s.Reset(strings.NewReader("-12.5e3 "), make([]byte, 0, 3))
+		s.Shift = false
+		n, err := s.Number()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n != "-12.5e3" {
+			t.Errorf("Number = %q, want -12.5e3", n)
+		}
+	})
+}
+
 // TestStreamSkipValue_MatchesBytes pins stream SkipValue against the bytes
 // tree over compact + pretty-printed values and truncations — the stream
 // skipObject comma branch used to miss the separator whitespace skip, so any

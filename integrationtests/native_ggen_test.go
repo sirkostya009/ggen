@@ -99,16 +99,14 @@ func (recv NativeTypes) DecodeFrom(data []byte) (result NativeTypes, i int, err 
 				return result, i, decode.NewParseErr("addr", i, scan.ErrExpectString)
 			}
 			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 				ke++
 			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("addr", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("addr", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
+			if ke < len(data) && data[ke] == '"' {
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
@@ -136,16 +134,14 @@ func (recv NativeTypes) DecodeFrom(data []byte) (result NativeTypes, i int, err 
 				return result, i, decode.NewParseErr("blob", i, scan.ErrExpectString)
 			}
 			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 				ke++
 			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("blob", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("blob", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
+			if ke < len(data) && data[ke] == '"' {
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
@@ -217,16 +213,14 @@ func (recv NativeTypes) DecodeFrom(data []byte) (result NativeTypes, i int, err 
 				return result, i, decode.NewParseErr("cidr", i, scan.ErrExpectString)
 			}
 			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 				ke++
 			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("cidr", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("cidr", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
+			if ke < len(data) && data[ke] == '"' {
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
@@ -249,16 +243,14 @@ func (recv NativeTypes) DecodeFrom(data []byte) (result NativeTypes, i int, err 
 				return result, i, decode.NewParseErr("createdAt", i, scan.ErrExpectString)
 			}
 			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 				ke++
 			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("createdAt", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("createdAt", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
+			if ke < len(data) && data[ke] == '"' {
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
@@ -286,16 +278,14 @@ func (recv NativeTypes) DecodeFrom(data []byte) (result NativeTypes, i int, err 
 				return result, i, decode.NewParseErr("hexBlob", i, scan.ErrExpectString)
 			}
 			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 				ke++
 			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("hexBlob", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("hexBlob", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
+			if ke < len(data) && data[ke] == '"' {
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
@@ -321,16 +311,14 @@ func (recv NativeTypes) DecodeFrom(data []byte) (result NativeTypes, i int, err 
 				return result, i, decode.NewParseErr("issuedAt", i, scan.ErrExpectString)
 			}
 			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 				ke++
 			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("issuedAt", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("issuedAt", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
+			if ke < len(data) && data[ke] == '"' {
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
@@ -353,16 +341,14 @@ func (recv NativeTypes) DecodeFrom(data []byte) (result NativeTypes, i int, err 
 				return result, i, decode.NewParseErr("legacyIP", i, scan.ErrExpectString)
 			}
 			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 				ke++
 			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("legacyIP", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("legacyIP", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
+			if ke < len(data) && data[ke] == '"' {
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
@@ -396,16 +382,14 @@ func (recv NativeTypes) DecodeFrom(data []byte) (result NativeTypes, i int, err 
 				return result, i, decode.NewParseErr("unitDur", i, scan.ErrExpectString)
 			}
 			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 				ke++
 			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("unitDur", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("unitDur", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
+			if ke < len(data) && data[ke] == '"' {
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {

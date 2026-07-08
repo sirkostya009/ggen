@@ -20,11 +20,24 @@ import (
 	"simd/archsimd"
 )
 
+// The SkipSpace* tiers are an inlinable shell over a cold vector body. The
+// shell exits on the common non-whitespace byte without a call; only an
+// actual whitespace run enters the vector body. The tier skip tree calls
+// SkipSpace* at 8 sites per tier, so on compact (whitespace-free) JSON the
+// inlined early-out replaces a call + prologue + ret at every site — that
+// overhead was 22% flat of SkipHeavy/compact before the split (the whole
+// vector body was unreachable there yet still blocked inlining). Same
+// no-temp early-out shape as the scalar/stream SkipSpace shells.
+
 // SkipSpaceAVX is SkipSpace with a 16-byte vector run skip.
 func SkipSpaceAVX(data []byte, i int) int {
 	if i >= len(data) || data[i] > ' ' {
 		return i
 	}
+	return skipSpaceAVXSlow(data, i)
+}
+
+func skipSpaceAVXSlow(data []byte, i int) int {
 	sp := archsimd.BroadcastUint8x16(' ')
 	tb := archsimd.BroadcastUint8x16('\t')
 	nl := archsimd.BroadcastUint8x16('\n')
@@ -47,6 +60,10 @@ func SkipSpaceAVX2(data []byte, i int) int {
 	if i >= len(data) || data[i] > ' ' {
 		return i
 	}
+	return skipSpaceAVX2Slow(data, i)
+}
+
+func skipSpaceAVX2Slow(data []byte, i int) int {
 	sp := archsimd.BroadcastUint8x32(' ')
 	tb := archsimd.BroadcastUint8x32('\t')
 	nl := archsimd.BroadcastUint8x32('\n')
@@ -69,6 +86,10 @@ func SkipSpaceAVX512(data []byte, i int) int {
 	if i >= len(data) || data[i] > ' ' {
 		return i
 	}
+	return skipSpaceAVX512Slow(data, i)
+}
+
+func skipSpaceAVX512Slow(data []byte, i int) int {
 	sp := archsimd.BroadcastUint8x64(' ')
 	tb := archsimd.BroadcastUint8x64('\t')
 	nl := archsimd.BroadcastUint8x64('\n')

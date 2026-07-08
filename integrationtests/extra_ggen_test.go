@@ -173,16 +173,14 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 							return result, i, decode.NewParseErr("hintedTags", i, scan.ErrExpectString)
 						}
 						ke := i + 1
-						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+						kew := ke + 32
+						if kew > len(data) {
+							kew = len(data)
+						}
+						for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 							ke++
 						}
-						if ke >= len(data) {
-							return result, i, decode.NewParseErr("hintedTags", i, scan.ErrUnterminated)
-						}
-						if data[ke] < 0x20 {
-							return result, i, decode.NewParseErr("hintedTags", i, scan.ErrBadString)
-						}
-						if data[ke] == '"' {
+						if ke < len(data) && data[ke] == '"' {
 							result.HintedTags[len(result.HintedTags)-1] = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 							i = ke + 1
 						} else {
@@ -248,16 +246,14 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 						return result, i, decode.NewParseErr("keyedMap", i, scan.ErrExpectString)
 					}
 					ke := i + 1
-					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					kew := ke + 32
+					if kew > len(data) {
+						kew = len(data)
+					}
+					for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 						ke++
 					}
-					if ke >= len(data) {
-						return result, i, decode.NewParseErr("keyedMap", i, scan.ErrUnterminated)
-					}
-					if data[ke] < 0x20 {
-						return result, i, decode.NewParseErr("keyedMap", i, scan.ErrBadString)
-					}
-					if data[ke] == '"' {
+					if ke < len(data) && data[ke] == '"' {
 						mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 						i = ke + 1
 					} else {
@@ -664,16 +660,14 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 										return result, i, decode.NewParseErr("triple[][]", i, scan.ErrExpectString)
 									}
 									ke := i + 1
-									for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+									kew := ke + 32
+									if kew > len(data) {
+										kew = len(data)
+									}
+									for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 										ke++
 									}
-									if ke >= len(data) {
-										return result, i, decode.NewParseErr("triple[][]", i, scan.ErrUnterminated)
-									}
-									if data[ke] < 0x20 {
-										return result, i, decode.NewParseErr("triple[][]", i, scan.ErrBadString)
-									}
-									if data[ke] == '"' {
+									if ke < len(data) && data[ke] == '"' {
 										row1[len(row1)-1] = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 										i = ke + 1
 									} else {
@@ -1924,16 +1918,14 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 								return result, i, decode.NewParseErr("pair[]", i, scan.ErrExpectString)
 							}
 							ke := i + 1
-							for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+							kew := ke + 32
+							if kew > len(data) {
+								kew = len(data)
+							}
+							for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 								ke++
 							}
-							if ke >= len(data) {
-								return result, i, decode.NewParseErr("pair[]", i, scan.ErrUnterminated)
-							}
-							if data[ke] < 0x20 {
-								return result, i, decode.NewParseErr("pair[]", i, scan.ErrBadString)
-							}
-							if data[ke] == '"' {
+							if ke < len(data) && data[ke] == '"' {
 								row0[len(row0)-1] = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 								i = ke + 1
 							} else {

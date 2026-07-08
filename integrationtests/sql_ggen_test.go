@@ -84,16 +84,14 @@ func (recv SQLNullStringStruct) DecodeFrom(data []byte) (result SQLNullStringStr
 					return result, i, decode.NewParseErr("s", i, scan.ErrExpectString)
 				}
 				ke := i + 1
-				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				kew := ke + 32
+				if kew > len(data) {
+					kew = len(data)
+				}
+				for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 					ke++
 				}
-				if ke >= len(data) {
-					return result, i, decode.NewParseErr("s", i, scan.ErrUnterminated)
-				}
-				if data[ke] < 0x20 {
-					return result, i, decode.NewParseErr("s", i, scan.ErrBadString)
-				}
-				if data[ke] == '"' {
+				if ke < len(data) && data[ke] == '"' {
 					nv = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 					i = ke + 1
 				} else {
@@ -1685,16 +1683,14 @@ func (recv SQLNullTimeStruct) DecodeFrom(data []byte) (result SQLNullTimeStruct,
 					return result, i, decode.NewParseErr("t", i, scan.ErrExpectString)
 				}
 				ke := i + 1
-				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				kew := ke + 32
+				if kew > len(data) {
+					kew = len(data)
+				}
+				for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 					ke++
 				}
-				if ke >= len(data) {
-					return result, i, decode.NewParseErr("t", i, scan.ErrUnterminated)
-				}
-				if data[ke] < 0x20 {
-					return result, i, decode.NewParseErr("t", i, scan.ErrBadString)
-				}
-				if data[ke] == '"' {
+				if ke < len(data) && data[ke] == '"' {
 					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 					i = ke + 1
 				} else {
@@ -1919,16 +1915,14 @@ func (recv SQLNullGenStringStruct) DecodeFrom(data []byte) (result SQLNullGenStr
 					return result, i, decode.NewParseErr("s", i, scan.ErrExpectString)
 				}
 				ke := i + 1
-				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				kew := ke + 32
+				if kew > len(data) {
+					kew = len(data)
+				}
+				for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 					ke++
 				}
-				if ke >= len(data) {
-					return result, i, decode.NewParseErr("s", i, scan.ErrUnterminated)
-				}
-				if data[ke] < 0x20 {
-					return result, i, decode.NewParseErr("s", i, scan.ErrBadString)
-				}
-				if data[ke] == '"' {
+				if ke < len(data) && data[ke] == '"' {
 					nv = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 					i = ke + 1
 				} else {
@@ -3032,16 +3026,14 @@ func (recv SQLNullGenTimeStruct) DecodeFrom(data []byte) (result SQLNullGenTimeS
 					return result, i, decode.NewParseErr("t", i, scan.ErrExpectString)
 				}
 				ke := i + 1
-				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				kew := ke + 32
+				if kew > len(data) {
+					kew = len(data)
+				}
+				for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 					ke++
 				}
-				if ke >= len(data) {
-					return result, i, decode.NewParseErr("t", i, scan.ErrUnterminated)
-				}
-				if data[ke] < 0x20 {
-					return result, i, decode.NewParseErr("t", i, scan.ErrBadString)
-				}
-				if data[ke] == '"' {
+				if ke < len(data) && data[ke] == '"' {
 					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 					i = ke + 1
 				} else {
@@ -4185,16 +4177,14 @@ func (recv SQLNullStruct) DecodeFrom(data []byte) (result SQLNullStruct, i int, 
 					return result, i, decode.NewParseErr("s", i, scan.ErrExpectString)
 				}
 				ke := i + 1
-				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				kew := ke + 32
+				if kew > len(data) {
+					kew = len(data)
+				}
+				for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 					ke++
 				}
-				if ke >= len(data) {
-					return result, i, decode.NewParseErr("s", i, scan.ErrUnterminated)
-				}
-				if data[ke] < 0x20 {
-					return result, i, decode.NewParseErr("s", i, scan.ErrBadString)
-				}
-				if data[ke] == '"' {
+				if ke < len(data) && data[ke] == '"' {
 					nv = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 					i = ke + 1
 				} else {
@@ -4221,16 +4211,14 @@ func (recv SQLNullStruct) DecodeFrom(data []byte) (result SQLNullStruct, i int, 
 					return result, i, decode.NewParseErr("t", i, scan.ErrExpectString)
 				}
 				ke := i + 1
-				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				kew := ke + 32
+				if kew > len(data) {
+					kew = len(data)
+				}
+				for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 					ke++
 				}
-				if ke >= len(data) {
-					return result, i, decode.NewParseErr("t", i, scan.ErrUnterminated)
-				}
-				if data[ke] < 0x20 {
-					return result, i, decode.NewParseErr("t", i, scan.ErrBadString)
-				}
-				if data[ke] == '"' {
+				if ke < len(data) && data[ke] == '"' {
 					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 					i = ke + 1
 				} else {

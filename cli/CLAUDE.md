@@ -746,6 +746,26 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
     are not GF(2)-affine subspaces (kernel closure over {ctrl,'"','\\'}
     pulls in 0x20), and on the one expressible shape (ctrl detect) it
     measured slightly slower than Min/Equal.
+47. **Scalar-tier bounded string-value scan (`scalarStringWindow` = 32).** On the
+    default (non-`-simd`) build, `inlineScanStringWin`'s scalar branch used to walk
+    every string body one byte at a time (3 compares/byte). It now bounds the
+    inline loop to `scalarStringWindow` bytes and hands any span that runs past it
+    (or hits an escape/ctrl byte) to `scan.String`, whose `bytes.IndexByte` locate
+    is SIMD/AVX2 — so long strings (bios, URLs) ride the vectorized path while
+    keys/short/medium values (the ≤32 B population that dominates real payloads)
+    stay inline. `scan.String` is the error-identity source of truth
+    (ErrUnterminated/ErrBadString); the bounded loop only fast-paths a clean
+    quote-terminated span, so byte-parity holds (pinned by the bytes-vs-stream
+    fuzzer + whitespace/escape tests). `-copy` clones the `scan.String` alias on
+    the handoff (escape-path strings are already owned). window < 0 = unbounded
+    original loop, used ONLY for the **dispatch key** scan: keys are short and
+    matched against known field names, so a window bound is pure per-key setup with
+    no long span to hand off (it regressed tiny structs +8%). Interleaved A/B vs
+    the unbounded scalar tier: Small_Unmarshal −50.9%, NoAlloc_Unmarshal −19.0%,
+    Tiny/Mega/MapHeavy/ValidationHeavy flat. Window sizing matters: 16 regressed
+    Mega (medium strings paid a `scan.String` CALL per string); 32 keeps Mega's
+    ≤63 B strings inline. The SIMD tier is untouched (window ≥ 0 still routes to
+    the inline vector classify).
 
 ## Design decisions (the why)
 

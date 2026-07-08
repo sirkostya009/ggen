@@ -110,16 +110,14 @@ func (recv MapStruct) DecodeFrom(data []byte) (result MapStruct, i int, err erro
 						return result, i, decode.NewParseErr("addresses", i, scan.ErrExpectString)
 					}
 					ke := i + 1
-					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					kew := ke + 32
+					if kew > len(data) {
+						kew = len(data)
+					}
+					for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 						ke++
 					}
-					if ke >= len(data) {
-						return result, i, decode.NewParseErr("addresses", i, scan.ErrUnterminated)
-					}
-					if data[ke] < 0x20 {
-						return result, i, decode.NewParseErr("addresses", i, scan.ErrBadString)
-					}
-					if data[ke] == '"' {
+					if ke < len(data) && data[ke] == '"' {
 						mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 						i = ke + 1
 					} else {
@@ -198,16 +196,14 @@ func (recv MapStruct) DecodeFrom(data []byte) (result MapStruct, i int, err erro
 							return result, i, decode.NewParseErr("counts", i, scan.ErrExpectString)
 						}
 						ke := i + 1
-						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+						kew := ke + 32
+						if kew > len(data) {
+							kew = len(data)
+						}
+						for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 							ke++
 						}
-						if ke >= len(data) {
-							return result, i, decode.NewParseErr("counts", i, scan.ErrUnterminated)
-						}
-						if data[ke] < 0x20 {
-							return result, i, decode.NewParseErr("counts", i, scan.ErrBadString)
-						}
-						if data[ke] == '"' {
+						if ke < len(data) && data[ke] == '"' {
 							mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 							i = ke + 1
 						} else {
@@ -329,16 +325,14 @@ func (recv MapStruct) DecodeFrom(data []byte) (result MapStruct, i int, err erro
 						return result, i, decode.NewParseErr("labels", i, scan.ErrExpectString)
 					}
 					ke := i + 1
-					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					kew := ke + 32
+					if kew > len(data) {
+						kew = len(data)
+					}
+					for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 						ke++
 					}
-					if ke >= len(data) {
-						return result, i, decode.NewParseErr("labels", i, scan.ErrUnterminated)
-					}
-					if data[ke] < 0x20 {
-						return result, i, decode.NewParseErr("labels", i, scan.ErrBadString)
-					}
-					if data[ke] == '"' {
+					if ke < len(data) && data[ke] == '"' {
 						mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 						i = ke + 1
 					} else {
@@ -361,16 +355,14 @@ func (recv MapStruct) DecodeFrom(data []byte) (result MapStruct, i int, err erro
 						return result, i, decode.NewParseErr("labels", i, scan.ErrExpectString)
 					}
 					ve := i + 1
-					for ve < len(data) && data[ve] != '"' && data[ve] != '\\' && data[ve] >= 0x20 {
+					vew := ve + 32
+					if vew > len(data) {
+						vew = len(data)
+					}
+					for ve < vew && data[ve] != '"' && data[ve] != '\\' && data[ve] >= 0x20 {
 						ve++
 					}
-					if ve >= len(data) {
-						return result, i, decode.NewParseErr("labels", i, scan.ErrUnterminated)
-					}
-					if data[ve] < 0x20 {
-						return result, i, decode.NewParseErr("labels", i, scan.ErrBadString)
-					}
-					if data[ve] == '"' {
+					if ve < len(data) && data[ve] == '"' {
 						result.Labels[mk] = unsafe.String(unsafe.SliceData(data[i+1:]), ve-i-1)
 						i = ve + 1
 					} else {
@@ -1008,16 +1000,14 @@ func (recv MapDiveStruct) DecodeFrom(data []byte) (result MapDiveStruct, i int, 
 						return result, i, decode.NewParseErr("clamped", i, scan.ErrExpectString)
 					}
 					ke := i + 1
-					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					kew := ke + 32
+					if kew > len(data) {
+						kew = len(data)
+					}
+					for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 						ke++
 					}
-					if ke >= len(data) {
-						return result, i, decode.NewParseErr("clamped", i, scan.ErrUnterminated)
-					}
-					if data[ke] < 0x20 {
-						return result, i, decode.NewParseErr("clamped", i, scan.ErrBadString)
-					}
-					if data[ke] == '"' {
+					if ke < len(data) && data[ke] == '"' {
 						mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 						i = ke + 1
 					} else {
@@ -1141,16 +1131,14 @@ func (recv MapDiveStruct) DecodeFrom(data []byte) (result MapDiveStruct, i int, 
 						return result, i, decode.NewParseErr("counts", i, scan.ErrExpectString)
 					}
 					ke := i + 1
-					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					kew := ke + 32
+					if kew > len(data) {
+						kew = len(data)
+					}
+					for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 						ke++
 					}
-					if ke >= len(data) {
-						return result, i, decode.NewParseErr("counts", i, scan.ErrUnterminated)
-					}
-					if data[ke] < 0x20 {
-						return result, i, decode.NewParseErr("counts", i, scan.ErrBadString)
-					}
-					if data[ke] == '"' {
+					if ke < len(data) && data[ke] == '"' {
 						mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 						i = ke + 1
 					} else {
@@ -1274,16 +1262,14 @@ func (recv MapDiveStruct) DecodeFrom(data []byte) (result MapDiveStruct, i int, 
 						return result, i, decode.NewParseErr("names", i, scan.ErrExpectString)
 					}
 					ke := i + 1
-					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					kew := ke + 32
+					if kew > len(data) {
+						kew = len(data)
+					}
+					for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 						ke++
 					}
-					if ke >= len(data) {
-						return result, i, decode.NewParseErr("names", i, scan.ErrUnterminated)
-					}
-					if data[ke] < 0x20 {
-						return result, i, decode.NewParseErr("names", i, scan.ErrBadString)
-					}
-					if data[ke] == '"' {
+					if ke < len(data) && data[ke] == '"' {
 						mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 						i = ke + 1
 					} else {
@@ -1306,16 +1292,14 @@ func (recv MapDiveStruct) DecodeFrom(data []byte) (result MapDiveStruct, i int, 
 						return result, i, decode.NewParseErr("names", i, scan.ErrExpectString)
 					}
 					ve := i + 1
-					for ve < len(data) && data[ve] != '"' && data[ve] != '\\' && data[ve] >= 0x20 {
+					vew := ve + 32
+					if vew > len(data) {
+						vew = len(data)
+					}
+					for ve < vew && data[ve] != '"' && data[ve] != '\\' && data[ve] >= 0x20 {
 						ve++
 					}
-					if ve >= len(data) {
-						return result, i, decode.NewParseErr("names", i, scan.ErrUnterminated)
-					}
-					if data[ve] < 0x20 {
-						return result, i, decode.NewParseErr("names", i, scan.ErrBadString)
-					}
-					if data[ve] == '"' {
+					if ve < len(data) && data[ve] == '"' {
 						result.Names[mk] = unsafe.String(unsafe.SliceData(data[i+1:]), ve-i-1)
 						i = ve + 1
 					} else {
@@ -1940,16 +1924,14 @@ func (recv Derived) DecodeFrom(data []byte) (result Derived, i int, err error) {
 				return result, i, decode.NewParseErr("id", i, scan.ErrExpectString)
 			}
 			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 				ke++
 			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("id", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("id", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
+			if ke < len(data) && data[ke] == '"' {
 				result.ID = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
@@ -1967,16 +1949,14 @@ func (recv Derived) DecodeFrom(data []byte) (result Derived, i int, err error) {
 				return result, i, decode.NewParseErr("meta", i, scan.ErrExpectString)
 			}
 			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 				ke++
 			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("meta", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("meta", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
+			if ke < len(data) && data[ke] == '"' {
 				result.Meta = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
@@ -1994,16 +1974,14 @@ func (recv Derived) DecodeFrom(data []byte) (result Derived, i int, err error) {
 				return result, i, decode.NewParseErr("name", i, scan.ErrExpectString)
 			}
 			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 				ke++
 			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("name", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("name", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
+			if ke < len(data) && data[ke] == '"' {
 				result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {

@@ -76,16 +76,14 @@ func (recv InlineStruct) DecodeFrom(data []byte) (result InlineStruct, i int, er
 				return result, i, decode.NewParseErr("name", i, scan.ErrExpectString)
 			}
 			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 				ke++
 			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("name", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("name", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
+			if ke < len(data) && data[ke] == '"' {
 				result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
@@ -308,16 +306,14 @@ func (recv InlineStringsStruct) DecodeFrom(data []byte) (result InlineStringsStr
 				return result, i, decode.NewParseErr("name", i, scan.ErrExpectString)
 			}
 			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 				ke++
 			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("name", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("name", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
+			if ke < len(data) && data[ke] == '"' {
 				result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
@@ -539,16 +535,14 @@ func (recv InlineStructsStruct) DecodeFrom(data []byte) (result InlineStructsStr
 				return result, i, decode.NewParseErr("name", i, scan.ErrExpectString)
 			}
 			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 				ke++
 			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("name", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("name", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
+			if ke < len(data) && data[ke] == '"' {
 				result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {

@@ -78,6 +78,66 @@ surface pinned by `Decoder[T]`).
 
 # Tried Rejected
 
+- **`VPERMB` whitespace classify in `skipSpaceAVX512Slow` (opt audit #10).**
+  Replaced the avx512 4×Broadcast+4×Equal+4×ToBits+3×OR classify with one VPERMB
+  LUT lookup (`wsClassLUT.Permute(v).Equal(v)`, `wsClassLUT[c&0x3F]==c` iff c is
+  WS; correct per exhaustive 256-byte probe + SIMD parity). Measured across three
+  indent widths (control-normalized against the compact row, which never runs the
+  classify): 2-space +0.35% (loss), 4-space ~neutral, 8-space −1.16% (win). The
+  effect is ~1% — comparable to the build-to-build code-LAYOUT noise (a 4-space
+  A/B showed the whitespace-free compact row swinging +3.1% between the two
+  separately-compiled binaries, i.e. pure layout drift). It only clears zero on a
+  pathological 8-space/91%-whitespace/65 MB payload, and even there it's near the
+  noise floor. The whitespace skip is memory-bandwidth-bound (loads dominate), so
+  VPERMB's fewer µops don't convert to wall-clock, and its permute→equal latency
+  loses to the 4×Equal chain's ILP on short (typical) runs. The shipped SkipSpace*
+  inlinable shell (audit #4) already took the real compact win (−9.7%). Don't
+  retry without a cache-resident, run-length-heavy payload where the classify
+  (not the loads) is the bottleneck.
+
+- **Vector number-skip tier `skipNumberAVX512` (opt audit #19).** Mirrored scalar
+  `skipNumber`'s RFC-8259 grammar in a tier fn with the 3 digit runs vectorized via
+  `skipDigitsAVX512` (8-byte scalar prefix gate → 64-byte range classify
+  `v.GreaterEqual('0') & v.LessEqual('9')`). Byte-exact (SkipValue/SkipNumber SIMD
+  parity + exhaustive per-byte probe pass). But interleaved A/B REGRESSED
+  SkipHeavy/compact/ggen +11.36% at avx512. Root cause pinned by a probe: making
+  `skipDigitsAVX512` a PURE-SCALAR loop (no vector) INLINES (small) and is flat/
+  −1.4%; the vector loop makes it too big to inline, so it becomes ~3 non-inlinable
+  CALLS per number. 0.48 × (skipNumber's 23.5% flat) ≈ +11.3%, matching the
+  measurement — it was pure call overhead, not the vector. Even inlined (×3
+  literal duplication), SkipHeavy's ≤19-digit numbers are too short: swapping ~10
+  OOO-overlapped scalar iterations for one vector load+classify is break-even; the
+  vector only wins at ≥40-digit runs, which real JSON doesn't have. Don't retry —
+  the shape is wrong, and the inlining tax makes it strictly worse.
+
+- **SWAR 8-byte clean-span in the scalar encode escape walk (opt audit #3).**
+  Rewrote `AppendString`/`AppendStringNoHTML` to classify 8 bytes/iter via a
+  uint64 load (`hasless(<0x20) | haszero(^'"') | haszero(^'\\')`, HTML +3 terms)
+  instead of the per-byte `[256]bool` table probe. Byte-exact (pinned by an
+  exhaustive escape-at-every-word-seam parity test). Direct micro WON big
+  (`BenchmarkEscScalar` clean strings: −15% @8B … −48% @256B, geomean −33.6%,
+  p=0.000), but interleaved Mega_Marshal REGRESSED +3.4% (ggen) / +3.1%
+  (presized), p≤0.001. Same lesson as the SWAR int-parse rejection: the SWAR
+  mask is a ~10-16-op dependency chain; in the memory-bound marshal walk the
+  predicted per-byte loop OOO-overlaps with the tree walk and the table stays
+  L1-hot, while Mega's strings are short-skewed (keys 4-11 B, tags 4-13 B) so
+  SWAR barely engages yet adds per-call setup. Don't retry without a length gate
+  AND an in-situ win (the micro is not the test).
+
+- **Window-gated inline stream int digit loops (opt audit #7).** Emitted, at each
+  struct-field stream int site, a gated inline scan over `s.Bytes()` (when
+  `s.Pos+21 <= len`, local cursor committing `s.Pos` only on success — matching
+  `(*Stream).Int64/Uint64` error identity + position; window-edge/leading-zero
+  runs fall back to the refill-capable call). Correct: `FuzzStreamEqualsBytes`
+  3.75M execs clean. But interleaved A/B showed NO win — NoAlloc_Reader/ggen_stream
+  (the best case, most int fields) +4.75% (p=0.060, directional regression),
+  Small_Reader stream flat. Stream Int64 is 13% flat of Mega_Reader but the tier
+  is memory-bound (string-copy mallocs + ReadMore dominate — backlog already
+  notes "not SIMD-addressable"), so removing the per-call bookkeeping doesn't move
+  wall-clock and the extra generated code adds slight overhead. Consistent with
+  the shipped stream tier measuring "Mega_Reader flat" and the rejected
+  "Stream-path `_s.SkipSpace` inliner". Don't retry on this tier.
+
 - **SWAR 8-digit integer parse (Lemire IsDigits8/Parse8) — in-situ.** Fully
   implemented 2026-07 across bytes `Int64`/`Uint64`, stream mirrors, and the
   emitted inline digit loops; bit-exact (a 400k-run reference differential

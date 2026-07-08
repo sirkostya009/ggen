@@ -169,16 +169,14 @@ func (recv NullZeroTags) DecodeFrom(data []byte) (result NullZeroTags, i int, er
 				return result, i, decode.NewParseErr("nzStr", i, scan.ErrExpectString)
 			}
 			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 				ke++
 			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("nzStr", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("nzStr", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
+			if ke < len(data) && data[ke] == '"' {
 				result.NZStr = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
@@ -196,16 +194,14 @@ func (recv NullZeroTags) DecodeFrom(data []byte) (result NullZeroTags, i int, er
 				return result, i, decode.NewParseErr("strict", i, scan.ErrExpectString)
 			}
 			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 				ke++
 			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("strict", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("strict", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
+			if ke < len(data) && data[ke] == '"' {
 				result.Strict = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
@@ -598,16 +594,14 @@ func (recv NullZeroValidated) DecodeFrom(data []byte) (result NullZeroValidated,
 					return result, i, decode.NewParseErr("name", i, scan.ErrExpectString)
 				}
 				ke := i + 1
-				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				kew := ke + 32
+				if kew > len(data) {
+					kew = len(data)
+				}
+				for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 					ke++
 				}
-				if ke >= len(data) {
-					return result, i, decode.NewParseErr("name", i, scan.ErrUnterminated)
-				}
-				if data[ke] < 0x20 {
-					return result, i, decode.NewParseErr("name", i, scan.ErrBadString)
-				}
-				if data[ke] == '"' {
+				if ke < len(data) && data[ke] == '"' {
 					result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 					i = ke + 1
 				} else {
@@ -865,16 +859,14 @@ func (recv NullZeroWhole) DecodeFrom(data []byte) (result NullZeroWhole, i int, 
 				return result, i, decode.NewParseErr("a", i, scan.ErrExpectString)
 			}
 			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 				ke++
 			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("a", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("a", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
+			if ke < len(data) && data[ke] == '"' {
 				result.A = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {

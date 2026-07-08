@@ -82,16 +82,14 @@ func (recv PtrNameStruct) DecodeFrom(data []byte) (result PtrNameStruct, i int, 
 				return result, i, decode.NewParseErr("name", i, scan.ErrExpectString)
 			}
 			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 				ke++
 			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("name", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("name", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
+			if ke < len(data) && data[ke] == '"' {
 				v = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
@@ -1574,16 +1572,14 @@ func (recv PointerStruct) DecodeFrom(data []byte) (result PointerStruct, i int, 
 				return result, i, decode.NewParseErr("name", i, scan.ErrExpectString)
 			}
 			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 				ke++
 			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("name", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("name", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
+			if ke < len(data) && data[ke] == '"' {
 				v = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
@@ -2662,16 +2658,14 @@ func (recv PtrPPPPStruct) DecodeFrom(data []byte) (result PtrPPPPStruct, i int, 
 				return result, i, decode.NewParseErr("pppp", i, scan.ErrExpectString)
 			}
 			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 				ke++
 			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("pppp", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("pppp", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
+			if ke < len(data) && data[ke] == '"' {
 				v = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
@@ -3312,16 +3306,14 @@ func (recv NPtrStruct) DecodeFrom(data []byte) (result NPtrStruct, i int, err er
 				return result, i, decode.NewParseErr("pppp", i, scan.ErrExpectString)
 			}
 			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 				ke++
 			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("pppp", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("pppp", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
+			if ke < len(data) && data[ke] == '"' {
 				v = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
@@ -5877,16 +5869,14 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 						return result, i, decode.NewParseErr("mp", i, scan.ErrExpectString)
 					}
 					ke := i + 1
-					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					kew := ke + 32
+					if kew > len(data) {
+						kew = len(data)
+					}
+					for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 						ke++
 					}
-					if ke >= len(data) {
-						return result, i, decode.NewParseErr("mp", i, scan.ErrUnterminated)
-					}
-					if data[ke] < 0x20 {
-						return result, i, decode.NewParseErr("mp", i, scan.ErrBadString)
-					}
-					if data[ke] == '"' {
+					if ke < len(data) && data[ke] == '"' {
 						mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 						i = ke + 1
 					} else {
@@ -6009,16 +5999,14 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 						return result, i, decode.NewParseErr("mpa", i, scan.ErrExpectString)
 					}
 					ke := i + 1
-					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					kew := ke + 32
+					if kew > len(data) {
+						kew = len(data)
+					}
+					for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 						ke++
 					}
-					if ke >= len(data) {
-						return result, i, decode.NewParseErr("mpa", i, scan.ErrUnterminated)
-					}
-					if data[ke] < 0x20 {
-						return result, i, decode.NewParseErr("mpa", i, scan.ErrBadString)
-					}
-					if data[ke] == '"' {
+					if ke < len(data) && data[ke] == '"' {
 						mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 						i = ke + 1
 					} else {
@@ -6103,16 +6091,14 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 						return result, i, decode.NewParseErr("mpp", i, scan.ErrExpectString)
 					}
 					ke := i + 1
-					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					kew := ke + 32
+					if kew > len(data) {
+						kew = len(data)
+					}
+					for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 						ke++
 					}
-					if ke >= len(data) {
-						return result, i, decode.NewParseErr("mpp", i, scan.ErrUnterminated)
-					}
-					if data[ke] < 0x20 {
-						return result, i, decode.NewParseErr("mpp", i, scan.ErrBadString)
-					}
-					if data[ke] == '"' {
+					if ke < len(data) && data[ke] == '"' {
 						mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 						i = ke + 1
 					} else {

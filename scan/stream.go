@@ -704,16 +704,24 @@ scan:
 	return n, nil
 }
 
-// Float64 scans a JSON number span then delegates to strconv.ParseFloat.
+// Float64 scans a JSON number span then delegates to strconv.ParseFloat
+// (or the exact-short fast path for ≤16 B spans).
 func (s *Stream) Float64() (float64, error) {
 	i := s.Pos
 	if i >= len(s.buf) {
-		if err := s.ReadMore(0); err != nil {
+		if err := s.ReadMore(i); err != nil {
 			return 0, err
+		}
+		if s.Shift {
+			i = 0
 		}
 	}
 	start := i
-	// buf hoisted into a local; ReadMore(0) is grow-only so the span stays stable.
+	// buf hoisted into a local; refills compact from start (bytes before it
+	// are consumed) and rebase — without compaction every mid-number refill
+	// lands with len == cap (readers fill the whole window) and doubles the
+	// buffer. The span s.buf[start:i] is re-sliced after the loop, so the
+	// rebase keeps it valid; Shift=false is a no-op in ReadMore.
 	buf := s.buf
 	if buf[i] == '-' {
 		i++
@@ -728,13 +736,28 @@ scan:
 			}
 			break scan
 		}
-		if err := s.ReadMore(0); err != nil {
+		err := s.ReadMore(start)
+		if s.Shift {
+			i -= start
+			start = 0
+		}
+		if err != nil {
 			break
 		}
 		buf = s.buf
 	}
 	if i == start {
 		return 0, ErrBadNumber
+	}
+	// Short spans skip ParseFloat's re-scan when exactly representable —
+	// mirror of the bytes-path scan.Float64 gate (exactShort is bit-identical
+	// to ParseFloat on the accepted shape; the ≤16 B bound excludes the
+	// 17-significant-digit floats that made the ungated variant regress).
+	if i-start <= 16 {
+		if v, ok := exactShort(s.buf[start:i]); ok {
+			s.Pos = i
+			return v, nil
+		}
 	}
 	raw := unsafe.String(unsafe.SliceData(s.buf[start:]), i-start)
 	v, err := strconv.ParseFloat(raw, 64)
@@ -1187,7 +1210,8 @@ func (s *Stream) Number() (json.Number, error) {
 		}
 	}
 	start := i
-	// buf hoisted into a local; ReadMore(0) is grow-only so the span stays stable.
+	// buf hoisted into a local; refills compact from start and rebase (see
+	// Float64) so a number straddling window edges can't balloon the buffer.
 	buf := s.buf
 	if buf[i] == '-' {
 		i++
@@ -1202,7 +1226,12 @@ scan:
 			}
 			break scan
 		}
-		if err := s.ReadMore(0); err != nil {
+		err := s.ReadMore(start)
+		if s.Shift {
+			i -= start
+			start = 0
+		}
+		if err != nil {
 			break
 		}
 		buf = s.buf

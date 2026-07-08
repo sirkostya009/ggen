@@ -2349,6 +2349,13 @@ for %[1]s < len(data) && data[%[1]s] >= '0' && data[%[1]s] <= '9' {
 // `ke`). cp is set only at sites whose string is RETAINED past the scan (field
 // value, map key/value, slice/array elem); transient parse-feeds (time, url,
 // netip, big*) stay aliasing regardless — their conversion owns its output.
+// scalarStringWindow bounds the scalar-tier inline string byte-scan: a span
+// that runs past this many bytes (or hits an escape/ctrl) hands off to
+// scan.String's SIMD IndexByte locate instead of walking the whole body one
+// byte at a time. Sized so keys and short values stay inline while long
+// strings (bios, URLs, descriptions) take the vectorized path.
+const scalarStringWindow = 32
+
 func inlineScanString(b *bytes.Buffer, posIn, dst, posOut, field string, cp bool) {
 	inlineScanStringVar(b, posIn, dst, posOut, field, "ke", cp)
 }
@@ -2438,11 +2445,21 @@ if %[5]s < len(data) && data[%[5]s] == '"' {
 `, posIn, field, dst, posOut, ke, lane, vecT, tzFn)
 		return
 	}
+	// Scalar tier. window < 0 = unbounded original loop (dispatch keys: short,
+	// matched against known field names, so a window bound is pure per-key setup
+	// with no long span to hand off — it regressed tiny structs). window >= 0 =
+	// bound the inline byte loop and hand any string that runs past it (or hits
+	// an escape/ctrl byte) to scan.String, whose bytes.IndexByte locate is
+	// SIMD/AVX2 and crushes the per-byte loop on long spans (bios, URLs). scan.String
+	// is the error-identity source of truth (ErrUnterminated/ErrBadString); the
+	// bounded loop only fast-paths a clean quote-terminated span. Same shape as
+	// the SIMD window>0 template above.
 	hot := "unsafe.String(unsafe.SliceData(data[%[1]s+1:]), %[5]s-%[1]s-1)"
 	if cp {
 		hot = "string(data[%[1]s+1:%[5]s])"
 	}
-	fmt.Fprintf(b, `if %[1]s >= len(data) || data[%[1]s] != '"' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrExpectString) }
+	if window < 0 {
+		fmt.Fprintf(b, `if %[1]s >= len(data) || data[%[1]s] != '"' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrExpectString) }
 %[5]s := %[1]s + 1
 for %[5]s < len(data) && data[%[5]s] != '"' && data[%[5]s] != '\\' && data[%[5]s] >= 0x20 { %[5]s++ }
 if %[5]s >= len(data) { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrUnterminated) }
@@ -2451,10 +2468,36 @@ if data[%[5]s] == '"' {
 	%[3]s = `+hot+`
 	%[4]s = %[5]s + 1
 } else {
-	%[3]s, %[4]s, err = `+scanStringFn+`(data, %[1]s)
+	%[3]s, %[4]s, err = scan.String(data, %[1]s)
 	if err != nil { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, err) }
 }
 `, posIn, field, dst, posOut, ke)
+		return
+	}
+	fall := `%[3]s, %[4]s, err = scan.String(data, %[1]s)
+	if err != nil { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, err) }`
+	if cp {
+		fall = `var %[5]sv string
+	%[5]sv, %[4]s, err = scan.String(data, %[1]s)
+	if err != nil { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, err) }
+	%[3]s = strings.Clone(%[5]sv)`
+	}
+	win := window
+	if win == 0 {
+		win = scalarStringWindow
+	}
+	fmt.Fprintf(b, `if %[1]s >= len(data) || data[%[1]s] != '"' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrExpectString) }
+%[5]s := %[1]s + 1
+%[5]sw := %[5]s + %[6]d
+if %[5]sw > len(data) { %[5]sw = len(data) }
+for %[5]s < %[5]sw && data[%[5]s] != '"' && data[%[5]s] != '\\' && data[%[5]s] >= 0x20 { %[5]s++ }
+if %[5]s < len(data) && data[%[5]s] == '"' {
+	%[3]s = `+hot+`
+	%[4]s = %[5]s + 1
+} else {
+	`+fall+`
+}
+`, posIn, field, dst, posOut, ke, win)
 }
 
 // emitReceiverReset emits the per-container reset at the top of DecodeFrom /
@@ -2544,7 +2587,10 @@ i++
 	if maxKey := maxJSONNameLen(s); scanStringFn != "scan.String" && maxKey <= 5 {
 		inlineScanStringWin(b, "i", "key", "i", `""`, "ke", false, maxKey+1)
 	} else {
-		inlineScanString(b, "i", "key", "i", `""`, false)
+		// Dispatch keys are short (matched against known field names): scan
+		// unbounded (window -1) so tiny structs don't pay per-key window setup.
+		// On the SIMD tier this still routes to the inline vector classify.
+		inlineScanStringWin(b, "i", "key", "i", `""`, "ke", false, -1)
 	}
 	inlineSkipWS(b, "i")
 	b.WriteString(`if i >= len(data) || data[i] != ':' { return result, i, decode.NewParseErr("", i, scan.ErrBadObject) }

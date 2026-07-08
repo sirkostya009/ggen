@@ -672,7 +672,7 @@ func init() {
 	var deep Node
 	deep.ID = 1
 	deep.Name = "leaf"
-	for i := 0; i < 50; i++ {
+	for i := range 50 {
 		deep = Node{
 			ID:       int64(i + 1),
 			Name:     "level-" + strconv.Itoa(i),

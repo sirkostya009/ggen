@@ -220,6 +220,27 @@ SkipHeavy/pretty by 5.75% (skip work is short-span-dominated, where Zen5's
 double-pumped 512-bit ops cost 2× µops for no coverage gain). Recommend
 avx512 by default, avx2 for skip-dominated workloads.
 
+### Scalar-path optimizations (2026-07, interleaved n=6-8 core-24)
+
+- **Scalar string window (cli/CLAUDE.md opt #47).** Default (non-`-simd`) build:
+  Small_Unmarshal/ggen −50.9%, ggen_copy −44.8%; NoAlloc_Unmarshal/ggen −19.0%,
+  ggen_copy −9.5%; Tiny_Unmarshal, Mega_Unmarshal, MapHeavy, ValidationHeavy all
+  flat (Mega ggen p=0.065, ggen_copy p=0.093 — not significant). Closes most of
+  the scalar↔avx512 gap for users who can't enable `GOEXPERIMENT=simd`.
+- **SkipSpace* inlinable shell (scan/CLAUDE.md).** avx512 SkipHeavy/compact/ggen
+  −9.7% (compact is whitespace-free, so this is pure call-overhead removal);
+  B/op + allocs unchanged.
+- **Stream `Float64`/`Number` compacting refill + `exactShort`.** Throughput
+  within noise on the repo Reader benches (float fields are full-entropy, so
+  `exactShort` rarely fires and the small payloads don't balloon), but a residency
+  fix: a 50k-short-float stream through a 64 B buffer stayed at cap 64 vs
+  ballooning to 1 MB before (`TestFloatNumberBufBounded`).
+
+Two audit candidates were implemented + interleaved-A/B'd and REJECTED — see
+`.claude/backlog.md` Tried Rejected: SWAR encode escape walk (micro −33% but
+Mega_Marshal +3.4% in-situ) and window-gated inline stream int loops (no win,
+NoAlloc_Reader +4.75%, memory-bound tier).
+
 ## Running benchmarks
 
 **THE canonical invocation is ALWAYS `-benchtime=500x -count=1 -cpu=1`.** Not

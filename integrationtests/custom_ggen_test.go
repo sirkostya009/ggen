@@ -152,16 +152,14 @@ func (recv MultiErrStruct) DecodeFrom(data []byte) (result MultiErrStruct, i int
 					return result, i, decode.NewParseErr("name", i, scan.ErrExpectString)
 				}
 				ke := i + 1
-				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				kew := ke + 32
+				if kew > len(data) {
+					kew = len(data)
+				}
+				for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 					ke++
 				}
-				if ke >= len(data) {
-					return result, i, decode.NewParseErr("name", i, scan.ErrUnterminated)
-				}
-				if data[ke] < 0x20 {
-					return result, i, decode.NewParseErr("name", i, scan.ErrBadString)
-				}
-				if data[ke] == '"' {
+				if ke < len(data) && data[ke] == '"' {
 					result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 					i = ke + 1
 				} else {
@@ -190,16 +188,14 @@ func (recv MultiErrStruct) DecodeFrom(data []byte) (result MultiErrStruct, i int
 					return result, i, decode.NewParseErr("role", i, scan.ErrExpectString)
 				}
 				ke := i + 1
-				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				kew := ke + 32
+				if kew > len(data) {
+					kew = len(data)
+				}
+				for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 					ke++
 				}
-				if ke >= len(data) {
-					return result, i, decode.NewParseErr("role", i, scan.ErrUnterminated)
-				}
-				if data[ke] < 0x20 {
-					return result, i, decode.NewParseErr("role", i, scan.ErrBadString)
-				}
-				if data[ke] == '"' {
+				if ke < len(data) && data[ke] == '"' {
 					result.Role = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 					i = ke + 1
 				} else {
@@ -513,16 +509,14 @@ func (recv CustomBothStruct) DecodeFrom(data []byte) (result CustomBothStruct, i
 						return result, i, decode.NewParseErr("tags", i, scan.ErrExpectString)
 					}
 					ke := i + 1
-					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					kew := ke + 32
+					if kew > len(data) {
+						kew = len(data)
+					}
+					for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 						ke++
 					}
-					if ke >= len(data) {
-						return result, i, decode.NewParseErr("tags", i, scan.ErrUnterminated)
-					}
-					if data[ke] < 0x20 {
-						return result, i, decode.NewParseErr("tags", i, scan.ErrBadString)
-					}
-					if data[ke] == '"' {
+					if ke < len(data) && data[ke] == '"' {
 						result.Tags[len(result.Tags)-1] = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 						i = ke + 1
 					} else {

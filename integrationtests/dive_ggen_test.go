@@ -268,16 +268,14 @@ func (recv DiveStruct) DecodeFrom(data []byte) (result DiveStruct, i int, err er
 							return result, i, decode.NewParseErr("tags", i, scan.ErrExpectString)
 						}
 						ke := i + 1
-						for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+						kew := ke + 32
+						if kew > len(data) {
+							kew = len(data)
+						}
+						for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 							ke++
 						}
-						if ke >= len(data) {
-							return result, i, decode.NewParseErr("tags", i, scan.ErrUnterminated)
-						}
-						if data[ke] < 0x20 {
-							return result, i, decode.NewParseErr("tags", i, scan.ErrBadString)
-						}
-						if data[ke] == '"' {
+						if ke < len(data) && data[ke] == '"' {
 							result.Tags[len(result.Tags)-1] = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 							i = ke + 1
 						} else {
@@ -336,16 +334,14 @@ func (recv DiveStruct) DecodeFrom(data []byte) (result DiveStruct, i int, err er
 				return result, i, decode.NewParseErr("title", i, scan.ErrExpectString)
 			}
 			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 				ke++
 			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("title", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("title", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
+			if ke < len(data) && data[ke] == '"' {
 				result.Title = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
@@ -855,16 +851,14 @@ func (recv CustomDiveStruct) DecodeFrom(data []byte) (result CustomDiveStruct, i
 						return result, i, decode.NewParseErr("lookup", i, scan.ErrExpectString)
 					}
 					ke := i + 1
-					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					kew := ke + 32
+					if kew > len(data) {
+						kew = len(data)
+					}
+					for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 						ke++
 					}
-					if ke >= len(data) {
-						return result, i, decode.NewParseErr("lookup", i, scan.ErrUnterminated)
-					}
-					if data[ke] < 0x20 {
-						return result, i, decode.NewParseErr("lookup", i, scan.ErrBadString)
-					}
-					if data[ke] == '"' {
+					if ke < len(data) && data[ke] == '"' {
 						mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 						i = ke + 1
 					} else {
@@ -985,16 +979,14 @@ func (recv CustomDiveStruct) DecodeFrom(data []byte) (result CustomDiveStruct, i
 						return result, i, decode.NewParseErr("mixed", i, scan.ErrExpectString)
 					}
 					ke := i + 1
-					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					kew := ke + 32
+					if kew > len(data) {
+						kew = len(data)
+					}
+					for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 						ke++
 					}
-					if ke >= len(data) {
-						return result, i, decode.NewParseErr("mixed", i, scan.ErrUnterminated)
-					}
-					if data[ke] < 0x20 {
-						return result, i, decode.NewParseErr("mixed", i, scan.ErrBadString)
-					}
-					if data[ke] == '"' {
+					if ke < len(data) && data[ke] == '"' {
 						mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 						i = ke + 1
 					} else {
@@ -1176,16 +1168,14 @@ func (recv CustomDiveStruct) DecodeFrom(data []byte) (result CustomDiveStruct, i
 						return result, i, decode.NewParseErr("tags", i, scan.ErrExpectString)
 					}
 					ke := i + 1
-					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					kew := ke + 32
+					if kew > len(data) {
+						kew = len(data)
+					}
+					for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 						ke++
 					}
-					if ke >= len(data) {
-						return result, i, decode.NewParseErr("tags", i, scan.ErrUnterminated)
-					}
-					if data[ke] < 0x20 {
-						return result, i, decode.NewParseErr("tags", i, scan.ErrBadString)
-					}
-					if data[ke] == '"' {
+					if ke < len(data) && data[ke] == '"' {
 						result.Tags[len(result.Tags)-1] = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 						i = ke + 1
 					} else {
@@ -1250,16 +1240,14 @@ func (recv CustomDiveStruct) DecodeFrom(data []byte) (result CustomDiveStruct, i
 						return result, i, decode.NewParseErr("trim", i, scan.ErrExpectString)
 					}
 					ke := i + 1
-					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					kew := ke + 32
+					if kew > len(data) {
+						kew = len(data)
+					}
+					for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 						ke++
 					}
-					if ke >= len(data) {
-						return result, i, decode.NewParseErr("trim", i, scan.ErrUnterminated)
-					}
-					if data[ke] < 0x20 {
-						return result, i, decode.NewParseErr("trim", i, scan.ErrBadString)
-					}
-					if data[ke] == '"' {
+					if ke < len(data) && data[ke] == '"' {
 						result.Trim[len(result.Trim)-1] = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 						i = ke + 1
 					} else {

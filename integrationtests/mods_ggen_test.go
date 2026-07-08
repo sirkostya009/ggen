@@ -81,16 +81,14 @@ func (recv ModStruct) DecodeFrom(data []byte) (result ModStruct, i int, err erro
 				return result, i, decode.NewParseErr("email", i, scan.ErrExpectString)
 			}
 			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 				ke++
 			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("email", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("email", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
+			if ke < len(data) && data[ke] == '"' {
 				result.Email = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
@@ -110,16 +108,14 @@ func (recv ModStruct) DecodeFrom(data []byte) (result ModStruct, i int, err erro
 				return result, i, decode.NewParseErr("sku", i, scan.ErrExpectString)
 			}
 			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 				ke++
 			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("sku", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("sku", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
+			if ke < len(data) && data[ke] == '"' {
 				result.SKU = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
@@ -162,16 +158,14 @@ func (recv ModStruct) DecodeFrom(data []byte) (result ModStruct, i int, err erro
 						return result, i, decode.NewParseErr("tags", i, scan.ErrExpectString)
 					}
 					ke := i + 1
-					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					kew := ke + 32
+					if kew > len(data) {
+						kew = len(data)
+					}
+					for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 						ke++
 					}
-					if ke >= len(data) {
-						return result, i, decode.NewParseErr("tags", i, scan.ErrUnterminated)
-					}
-					if data[ke] < 0x20 {
-						return result, i, decode.NewParseErr("tags", i, scan.ErrBadString)
-					}
-					if data[ke] == '"' {
+					if ke < len(data) && data[ke] == '"' {
 						result.Tags[len(result.Tags)-1] = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 						i = ke + 1
 					} else {
@@ -510,16 +504,14 @@ func (recv FallibleModStruct) DecodeFrom(data []byte) (result FallibleModStruct,
 				return result, i, decode.NewParseErr("email", i, scan.ErrExpectString)
 			}
 			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 				ke++
 			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("email", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("email", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
+			if ke < len(data) && data[ke] == '"' {
 				result.Email = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
@@ -741,16 +733,14 @@ func (recv FallibleModMultierrStruct) DecodeFrom(data []byte) (result FallibleMo
 					return result, i, decode.NewParseErr("email", i, scan.ErrExpectString)
 				}
 				ke := i + 1
-				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				kew := ke + 32
+				if kew > len(data) {
+					kew = len(data)
+				}
+				for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 					ke++
 				}
-				if ke >= len(data) {
-					return result, i, decode.NewParseErr("email", i, scan.ErrUnterminated)
-				}
-				if data[ke] < 0x20 {
-					return result, i, decode.NewParseErr("email", i, scan.ErrBadString)
-				}
-				if data[ke] == '"' {
+				if ke < len(data) && data[ke] == '"' {
 					result.Email = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 					i = ke + 1
 				} else {
@@ -992,16 +982,14 @@ func (recv CrossPkgModStruct) DecodeFrom(data []byte) (result CrossPkgModStruct,
 				return result, i, decode.NewParseErr("code", i, scan.ErrExpectString)
 			}
 			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 				ke++
 			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("code", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("code", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
+			if ke < len(data) && data[ke] == '"' {
 				result.Code = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
@@ -1022,16 +1010,14 @@ func (recv CrossPkgModStruct) DecodeFrom(data []byte) (result CrossPkgModStruct,
 				return result, i, decode.NewParseErr("nonEmpty", i, scan.ErrExpectString)
 			}
 			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 				ke++
 			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("nonEmpty", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("nonEmpty", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
+			if ke < len(data) && data[ke] == '"' {
 				result.NonEmpty = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
@@ -1054,16 +1040,14 @@ func (recv CrossPkgModStruct) DecodeFrom(data []byte) (result CrossPkgModStruct,
 				return result, i, decode.NewParseErr("tag", i, scan.ErrExpectString)
 			}
 			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 				ke++
 			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("tag", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("tag", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
+			if ke < len(data) && data[ke] == '"' {
 				result.Tag = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
@@ -1382,16 +1366,14 @@ func (recv NestedMultierrStruct) DecodeFrom(data []byte) (result NestedMultierrS
 					return result, i, decode.NewParseErr("name", i, scan.ErrExpectString)
 				}
 				ke := i + 1
-				for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				kew := ke + 32
+				if kew > len(data) {
+					kew = len(data)
+				}
+				for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 					ke++
 				}
-				if ke >= len(data) {
-					return result, i, decode.NewParseErr("name", i, scan.ErrUnterminated)
-				}
-				if data[ke] < 0x20 {
-					return result, i, decode.NewParseErr("name", i, scan.ErrBadString)
-				}
-				if data[ke] == '"' {
+				if ke < len(data) && data[ke] == '"' {
 					result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 					i = ke + 1
 				} else {

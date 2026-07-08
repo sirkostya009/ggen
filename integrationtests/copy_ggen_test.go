@@ -149,23 +149,23 @@ func (recv CopyDoc) DecodeFrom(data []byte) (result CopyDoc, i int, err error) {
 				return result, i, decode.NewParseErr("name", i, scan.ErrExpectString)
 			}
 			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 				ke++
 			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("name", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("name", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
+			if ke < len(data) && data[ke] == '"' {
 				result.Name = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				result.Name, i, err = scan.String(data, i)
+				var kev string
+				kev, i, err = scan.String(data, i)
 				if err != nil {
 					return result, i, decode.NewParseErr("name", i, err)
 				}
+				result.Name = strings.Clone(kev)
 			}
 		case "props":
 			if seenProps {
@@ -200,23 +200,23 @@ func (recv CopyDoc) DecodeFrom(data []byte) (result CopyDoc, i int, err error) {
 						return result, i, decode.NewParseErr("props", i, scan.ErrExpectString)
 					}
 					ke := i + 1
-					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					kew := ke + 32
+					if kew > len(data) {
+						kew = len(data)
+					}
+					for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 						ke++
 					}
-					if ke >= len(data) {
-						return result, i, decode.NewParseErr("props", i, scan.ErrUnterminated)
-					}
-					if data[ke] < 0x20 {
-						return result, i, decode.NewParseErr("props", i, scan.ErrBadString)
-					}
-					if data[ke] == '"' {
+					if ke < len(data) && data[ke] == '"' {
 						mk = string(data[i+1 : ke])
 						i = ke + 1
 					} else {
-						mk, i, err = scan.String(data, i)
+						var kev string
+						kev, i, err = scan.String(data, i)
 						if err != nil {
 							return result, i, decode.NewParseErr("props", i, err)
 						}
+						mk = strings.Clone(kev)
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -232,23 +232,23 @@ func (recv CopyDoc) DecodeFrom(data []byte) (result CopyDoc, i int, err error) {
 						return result, i, decode.NewParseErr("props", i, scan.ErrExpectString)
 					}
 					ve := i + 1
-					for ve < len(data) && data[ve] != '"' && data[ve] != '\\' && data[ve] >= 0x20 {
+					vew := ve + 32
+					if vew > len(data) {
+						vew = len(data)
+					}
+					for ve < vew && data[ve] != '"' && data[ve] != '\\' && data[ve] >= 0x20 {
 						ve++
 					}
-					if ve >= len(data) {
-						return result, i, decode.NewParseErr("props", i, scan.ErrUnterminated)
-					}
-					if data[ve] < 0x20 {
-						return result, i, decode.NewParseErr("props", i, scan.ErrBadString)
-					}
-					if data[ve] == '"' {
+					if ve < len(data) && data[ve] == '"' {
 						result.Props[mk] = string(data[i+1 : ve])
 						i = ve + 1
 					} else {
-						result.Props[mk], i, err = scan.String(data, i)
+						var vev string
+						vev, i, err = scan.String(data, i)
 						if err != nil {
 							return result, i, decode.NewParseErr("props", i, err)
 						}
+						result.Props[mk] = strings.Clone(vev)
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -390,23 +390,23 @@ func (recv CopyDoc) DecodeFrom(data []byte) (result CopyDoc, i int, err error) {
 						return result, i, decode.NewParseErr("tags", i, scan.ErrExpectString)
 					}
 					ke := i + 1
-					for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					kew := ke + 32
+					if kew > len(data) {
+						kew = len(data)
+					}
+					for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 						ke++
 					}
-					if ke >= len(data) {
-						return result, i, decode.NewParseErr("tags", i, scan.ErrUnterminated)
-					}
-					if data[ke] < 0x20 {
-						return result, i, decode.NewParseErr("tags", i, scan.ErrBadString)
-					}
-					if data[ke] == '"' {
+					if ke < len(data) && data[ke] == '"' {
 						result.Tags[len(result.Tags)-1] = string(data[i+1 : ke])
 						i = ke + 1
 					} else {
-						result.Tags[len(result.Tags)-1], i, err = scan.String(data, i)
+						var kev string
+						kev, i, err = scan.String(data, i)
 						if err != nil {
 							return result, i, decode.NewParseErr("tags", i, err)
 						}
+						result.Tags[len(result.Tags)-1] = strings.Clone(kev)
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -1181,23 +1181,23 @@ func (recv CopyRef) DecodeFrom(data []byte) (result CopyRef, i int, err error) {
 				return result, i, decode.NewParseErr("label", i, scan.ErrExpectString)
 			}
 			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 				ke++
 			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("label", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("label", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
+			if ke < len(data) && data[ke] == '"' {
 				result.Label = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				result.Label, i, err = scan.String(data, i)
+				var kev string
+				kev, i, err = scan.String(data, i)
 				if err != nil {
 					return result, i, decode.NewParseErr("label", i, err)
 				}
+				result.Label = strings.Clone(kev)
 			}
 		default:
 			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{strings.Clone(key)}}
@@ -1370,16 +1370,14 @@ func (recv AliasDoc) DecodeFrom(data []byte) (result AliasDoc, i int, err error)
 				return result, i, decode.NewParseErr("name", i, scan.ErrExpectString)
 			}
 			ke := i + 1
-			for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 				ke++
 			}
-			if ke >= len(data) {
-				return result, i, decode.NewParseErr("name", i, scan.ErrUnterminated)
-			}
-			if data[ke] < 0x20 {
-				return result, i, decode.NewParseErr("name", i, scan.ErrBadString)
-			}
-			if data[ke] == '"' {
+			if ke < len(data) && data[ke] == '"' {
 				result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
