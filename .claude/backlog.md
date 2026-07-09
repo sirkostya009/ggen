@@ -24,27 +24,19 @@ memory-latency-bound, so CPU-only shaves routinely vanish in wall clock.
   caller-owned dst); (c) explicit `AppendAnySized(dst, v, hint)`. Pick when a
   real workload pins slice marshal as a hotspot — map wins dominate today.
 
-- **Single-copy `-copy` escape strings (bytes path). MEASURED, postponed.** In
-  `-copy` mode an escaped retained string double-allocates: the codegen emits
-  `sv, i, err = scan.String(...)` (escape arm → `stringSlow` returns a fresh owned
-  scratch, alloc #1) then `dst = strings.Clone(sv)` (alloc #2) — but the clone is
-  redundant, `stringSlow` already owns the bytes and holds no alias into `data`.
-  On the escape path the -copy detach is structurally FREE; only the clean-span
-  path (`string(data[s:e])`) genuinely needs a copy. Quantified on
-  `EscapeHeavy/ggen_copy` (4 escaped fields): 4→8 allocs, +12.3 KB/op, +11.7% ns
-  vs the aliasing `ggen` row — the extra allocs are exactly one redundant clone
-  per escaped field. Fix mirrors the stream path, which already solved this:
-  `stringView` returns `(v string, owned bool, err)` and `Stream.String` returns
-  the `stringSlow` result directly when `owned` (no second clone). Add an
-  owned-signaling `scan.String` sibling (or a `(string,bool,int,error)` return)
-  and have copy-mode codegen skip `strings.Clone` when owned. Systemic across
-  every stringSlow-backed copy site (field/slice-elem/map-key/map-value/
-  any-string via `AnyCopy`), not just the string field. Documented as accepted
-  overhead at `cli/generate.go` (the `strings.Clone` escape comment). Correctness
-  is NOT at stake (pinned by `TestCopy_EscapedDecouples` +
-  `EscapeHeavy/ggen_copy`'s scribble guard) — this is a pure alloc shave on the
-  escape-heavy × copy × retained intersection, a narrow population. Postponed;
-  ship the owned-flag variant only when a real copy-mode escape hotspot appears.
+- **Single-copy `-copy` escape strings — SHIPPED (both tiers, via `scan.Detach`).**
+  Was: escaped retained strings under `-copy` double-allocated (`scan.String`/
+  `StringAVX*` escape arm → `stringSlow` owned scratch, then a redundant
+  `strings.Clone`). Fixed with `scan.Detach(s, data)` — a tier-agnostic helper
+  that clones IFF `s` aliases `data` (a pointer-range test; the `stringSlow`
+  escape result is a distinct heap alloc → skipped, non-moving GC makes the test
+  sound). Copy-mode codegen (scalar + SIMD fall) reuses the SAME aliasing tier
+  func then calls `Detach`; `AnyCopy`/`AnyNumberCopy` do likewise. Reuses the AVX
+  tier functions directly — NO per-tier `StringCopyAVX*`. `EscapeHeavy/ggen_copy`
+  now equals the aliasing `ggen` row in both tiers (scalar 4 allocs, avx512 4
+  allocs). See opt #49. (Same pass fixed a pre-existing SIMD gap: `StringAVX*`'s
+  `classifyStructural` sized `stringSlow` off the first quote, not the real
+  unescaped close via `stringSpanEnd` — SIMD escape decode 44→4 allocs.)
 
 Rejected from past hunts, do not retry without a new argument: **[17]** positional
 next-key predictor (payload-order-dependent), **[23]** indexed marshal loop

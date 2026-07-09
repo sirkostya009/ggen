@@ -756,8 +756,8 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
     stay inline. `scan.String` is the error-identity source of truth
     (ErrUnterminated/ErrBadString); the bounded loop only fast-paths a clean
     quote-terminated span, so byte-parity holds (pinned by the bytes-vs-stream
-    fuzzer + whitespace/escape tests). `-copy` clones the `scan.String` alias on
-    the handoff (escape-path strings are already owned). window < 0 = unbounded
+    fuzzer + whitespace/escape tests). `-copy` detaches the handoff via
+    `scan.Detach` (opt #49) — clones only when it aliased. window < 0 = unbounded
     original loop, used ONLY for the **dispatch key** scan: keys are short and
     matched against known field names, so a window bound is pure per-key setup with
     no long span to hand off (it regressed tiny structs +8%). Interleaved A/B vs
@@ -781,6 +781,26 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
     `renderAppendMap`'s value switch was missing `int8/16/32`, `uint/uint8/16/32`,
     `float32`, so `map[string]uint8` (etc.) marshaled `{"k":}` with no value —
     those kinds now emit the value.
+49. **Single-copy `-copy` escape strings (both tiers, via `scan.Detach`).** In
+    `-copy` mode a RETAINED escaped string used to double-allocate: the fall path
+    emitted `sv, i, err = scan.String(...)` (escape arm → `stringSlow` returns a
+    fresh owned scratch) then `dst = strings.Clone(sv)` — the clone is redundant,
+    `stringSlow` already owns the bytes. `scan.Detach(s, data)` (scan.go) clones
+    IFF `s` aliases `data` (a `uintptr` pointer-range test; a `stringSlow` scratch
+    is a distinct heap alloc → skipped, non-moving GC makes it sound) — so the
+    copy fall calls the SAME aliasing tier func then `Detach`, dropping the clone
+    on escapes. **Tier-agnostic: reuses `scan.String`/`StringAVX*` directly, NO
+    per-tier `StringCopyAVX*` variant.** Wired at the copy fall
+    (`inlineScanStringWin`, both scalar + SIMD blocks), the inline-map string value
+    (`unknownKey`), and `scan.AnyCopy`/`AnyNumberCopy` (values + object keys).
+    `EscapeHeavy/ggen_copy`: 8→4 allocs — identical to the aliasing `ggen` row at
+    both scalar and avx512 (on escapes the -copy detach is FREE — stringSlow
+    already owns). Same pass fixed a pre-existing SIMD gap: `StringAVX*`'s
+    `classifyStructural` sized `stringSlow` off the first quote (an escaped `\"`),
+    not the real unescaped close via `stringSpanEnd` — SIMD escape decode 44→4
+    allocs. Wire-identical; pinned by `TestDetach` (scan), `TestStringSIMD_Parity`,
+    `TestCopy_EscapedDecouples` (integ, every copy site), and
+    `EscapeHeavy/ggen_copy`'s scribble guard.
 
 ## Design decisions (the why)
 
@@ -790,13 +810,16 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
    `HTMLEscape`/`UseNumber` and through `peelSliceField`/`elemPtrField`/
    `sqlNullInnerField`) opts the BYTES path out of that aliasing, matching the
    stream path's lifetime. It changes only RETAINED-string sites:
-   `inlineScanString`/`inlineScanStringVar` take a `cp bool` — when set the hot
-   path emits `string(data[s:e])` instead of `unsafe.String(…)` (escape fallback
-   already owns its copy); `renderRawJSON` emits `append(ref[:0], data[…]…)`
-   (reused backing) instead of the alias; `renderAny` switches to
-   `scan.AnyCopy`/`AnyNumberCopy` (clone every nested string + object key);
-   `unknownKey` clones the inline-map key + copies its string/any value and
-   `strings.Clone`s the `UnknownKeyError` path segment. TRANSIENT scans stay
+   `inlineScanString`/`inlineScanStringVar` take a `cp bool` — when set the clean
+   hot path emits `string(data[s:e])` instead of `unsafe.String(…)` and the
+   escape/long-span fall calls the tier func then `scan.Detach` (opt #49 — clones
+   only when the result aliased `data`, so the owned escape scratch isn't
+   re-cloned; both scalar + SIMD, no per-tier variant); `renderRawJSON` emits
+   `append(ref[:0], data[…]…)` (reused backing) instead of the alias; `renderAny`
+   switches to `scan.AnyCopy`/`AnyNumberCopy` (detach every nested string + object
+   key via `Detach`, no double-copy); `unknownKey` clones the inline-map key +
+   detaches its string value via `Detach` and `strings.Clone`s the
+   `UnknownKeyError` path segment. TRANSIENT scans stay
    aliasing (`cp=false`): the dispatch key (matched + discarded) and the
    parse-feeds for time/url/netip/big\*/`[]byte` (the conversion owns its
    output). Per-struct granularity ⇒ an inline-map / nested-struct VALUE only

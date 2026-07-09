@@ -23,9 +23,10 @@ import (
 
 // classifyStructural finishes a fused scan: rest[k] is the first structural
 // byte in the string body. Mirrors scan.String's semantics exactly — alias
-// return on '"', stringSlow handoff on '\\' (same capHint), and on a control
-// byte the scalar error split: ErrUnterminated when the tail carries neither
-// a closing quote nor a backslash (scalar returns it without the ctrl
+// return on '"', stringSlow handoff on '\\' (scratch sized off the real
+// unescaped closing quote via stringSpanEnd, as scan.String does), and on a
+// control byte the scalar error split: ErrUnterminated when the tail carries
+// neither a closing quote nor a backslash (scalar returns it without the ctrl
 // check), ErrBadString otherwise.
 func classifyStructural(data, rest []byte, start, k int) (string, int, error) {
 	switch rest[k] {
@@ -36,7 +37,10 @@ func classifyStructural(data, rest []byte, start, k int) (string, int, error) {
 		if closeIdx < 0 {
 			return stringSlow(data, start, start+k, k+16)
 		}
-		return stringSlow(data, start, start+k, k+closeIdx)
+		// closeIdx is the FIRST '"', possibly an escaped `\"`; size off the real
+		// unescaped closing quote so an early escaped quote doesn't under-allocate
+		// the scratch into the growth chain (matches scan.String).
+		return stringSlow(data, start, start+k, stringSpanEnd(data, start)-start)
 	default:
 		return "", 0, ctrlHitErr(rest[k:])
 	}

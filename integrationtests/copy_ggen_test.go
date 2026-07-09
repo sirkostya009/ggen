@@ -160,12 +160,11 @@ func (recv CopyDoc) DecodeFrom(data []byte) (result CopyDoc, i int, err error) {
 				result.Name = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				var kev string
-				kev, i, err = scan.String(data, i)
+				result.Name, i, err = scan.String(data, i)
 				if err != nil {
 					return result, i, decode.NewParseErr("name", i, err)
 				}
-				result.Name = strings.Clone(kev)
+				result.Name = scan.Detach(result.Name, data)
 			}
 		case "props":
 			if seenProps {
@@ -211,12 +210,11 @@ func (recv CopyDoc) DecodeFrom(data []byte) (result CopyDoc, i int, err error) {
 						mk = string(data[i+1 : ke])
 						i = ke + 1
 					} else {
-						var kev string
-						kev, i, err = scan.String(data, i)
+						mk, i, err = scan.String(data, i)
 						if err != nil {
 							return result, i, decode.NewParseErr("props", i, err)
 						}
-						mk = strings.Clone(kev)
+						mk = scan.Detach(mk, data)
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -243,12 +241,11 @@ func (recv CopyDoc) DecodeFrom(data []byte) (result CopyDoc, i int, err error) {
 						result.Props[mk] = string(data[i+1 : ve])
 						i = ve + 1
 					} else {
-						var vev string
-						vev, i, err = scan.String(data, i)
+						result.Props[mk], i, err = scan.String(data, i)
 						if err != nil {
 							return result, i, decode.NewParseErr("props", i, err)
 						}
-						result.Props[mk] = strings.Clone(vev)
+						result.Props[mk] = scan.Detach(result.Props[mk], data)
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -401,12 +398,11 @@ func (recv CopyDoc) DecodeFrom(data []byte) (result CopyDoc, i int, err error) {
 						result.Tags[len(result.Tags)-1] = string(data[i+1 : ke])
 						i = ke + 1
 					} else {
-						var kev string
-						kev, i, err = scan.String(data, i)
+						result.Tags[len(result.Tags)-1], i, err = scan.String(data, i)
 						if err != nil {
 							return result, i, decode.NewParseErr("tags", i, err)
 						}
-						result.Tags[len(result.Tags)-1] = strings.Clone(kev)
+						result.Tags[len(result.Tags)-1] = scan.Detach(result.Tags[len(result.Tags)-1], data)
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -1192,12 +1188,11 @@ func (recv CopyRef) DecodeFrom(data []byte) (result CopyRef, i int, err error) {
 				result.Label = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				var kev string
-				kev, i, err = scan.String(data, i)
+				result.Label, i, err = scan.String(data, i)
 				if err != nil {
 					return result, i, decode.NewParseErr("label", i, err)
 				}
-				result.Label = strings.Clone(kev)
+				result.Label = scan.Detach(result.Label, data)
 			}
 		default:
 			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{strings.Clone(key)}}

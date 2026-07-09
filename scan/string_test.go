@@ -91,6 +91,52 @@ func TestString_ErrorParity(t *testing.T) {
 	}
 }
 
+// TestDetach pins scan.Detach: it returns the SAME string value but detached
+// from data — Detach(String(data,…), data) equals the decoded string and
+// survives a scribble of the source, whether String aliased (clean path → Detach
+// clones) or owned it (escape path → Detach is a no-op). The alloc contract
+// (clone IFF the string aliases data) is what makes -copy single-copy on escapes.
+func TestDetach(t *testing.T) {
+	// Value + scribble-survival across clean (aliased) and escaped (owned) inputs.
+	cases := []struct{ in, want string }{
+		{`"hello"`, "hello"},  // clean → String aliases → Detach clones
+		{`"xéy"`, "xéy"},      // clean multibyte → aliased
+		{`"a\nb"`, "a\nb"},    // escape → stringSlow owns → Detach no-op
+		{`"😀"`, "😀"},         // surrogate escape → owned
+		{`""`, ""},            // empty
+	}
+	for _, tc := range cases {
+		src := []byte(tc.in)
+		s, _, err := String(src, 0)
+		if err != nil {
+			t.Fatalf("String(%q): %v", tc.in, err)
+		}
+		got := Detach(s, src)
+		for i := range src {
+			src[i] = 'Z' // corrupts any still-aliasing string
+		}
+		if got != tc.want {
+			t.Errorf("Detach(%q): got %q after scribble, want %q", tc.in, got, tc.want)
+		}
+	}
+
+	// Alloc contract: clone (1 alloc) iff the string aliases data; a non-aliasing
+	// (already-owned) string is returned untouched (0 allocs) — the escape-path win.
+	owned := string(make([]byte, 64)) // heap string, not in any decode buffer
+	buf := []byte("an unrelated buffer entirely")
+	if n := testing.AllocsPerRun(100, func() { _ = Detach(owned, buf) }); n != 0 {
+		t.Errorf("Detach of a non-aliasing string allocated %v times, want 0", n)
+	}
+	clean := []byte(`"a clean aliased span with some length"`)
+	aliased, _, err := String(clean, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := testing.AllocsPerRun(100, func() { _ = Detach(aliased, clean) }); n != 1 {
+		t.Errorf("Detach of an aliasing string allocated %v times, want 1", n)
+	}
+}
+
 // TestString_LoneSurrogateParity: stdlib substitutes U+FFFD for an
 // unpaired surrogate. scan's stringSlow path emits the rune via
 // utf8.AppendRune which also yields U+FFFD for invalid runes — outputs

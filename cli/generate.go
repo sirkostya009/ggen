@@ -2440,8 +2440,12 @@ func inlineScanStringWin(b *bytes.Buffer, posIn, dst, posOut, field, ke string, 
 	// restarts at posIn — error identity byte-identical. Full-lane loads
 	// only: Load*SlicePart is a real CALL, not an intrinsic. Broadcasts are
 	// emitted per site; gc CSEs them across sites and hoists them out of
-	// loops. cp detaches the alias via strings.Clone (escape-path strings
-	// are already owned; the extra clone there is accepted -copy overhead).
+	// loops. In cp mode the happy path copies inline (string(data[…])); the
+	// escape/long-span fall calls the SAME aliasing tier func and detaches via
+	// scan.Detach — one clone only when the result aliases data (a stringSlow
+	// escape result is already owned, so Detach skips the clone, killing the
+	// escape double-copy). Reuses the tier StringAVX* directly — no per-tier
+	// StringCopy variant.
 	if scanStringFn != "scan.String" {
 		lane, vecT, tzFn := 32, "Uint8x32", "TrailingZeros32"
 		if scanStringFn == "scan.StringAVX" {
@@ -2452,10 +2456,7 @@ func inlineScanStringWin(b *bytes.Buffer, posIn, dst, posOut, field, ke string, 
 	if err != nil { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, err) }`
 		if cp {
 			hot = "string(data[%[1]s+1:%[5]s])"
-			fall = `var %[5]sv string
-	%[5]sv, %[4]s, err = ` + scanStringFn + `(data, %[1]s)
-	if err != nil { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, err) }
-	%[3]s = strings.Clone(%[5]sv)`
+			fall += "\n\t" + `%[3]s = scan.Detach(%[3]s, data)`
 		}
 		if window > 0 {
 			fmt.Fprintf(b, `if %[1]s >= len(data) || data[%[1]s] != '"' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrExpectString) }
@@ -2522,10 +2523,7 @@ if data[%[5]s] == '"' {
 	fall := `%[3]s, %[4]s, err = scan.String(data, %[1]s)
 	if err != nil { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, err) }`
 	if cp {
-		fall = `var %[5]sv string
-	%[5]sv, %[4]s, err = scan.String(data, %[1]s)
-	if err != nil { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, err) }
-	%[3]s = strings.Clone(%[5]sv)`
+		fall += "\n\t" + `%[3]s = scan.Detach(%[3]s, data)`
 	}
 	win := window
 	if win == 0 {
@@ -3541,10 +3539,12 @@ func unknownKey(s StructInfo, posVar string) string {
 %[4]s`, inline.GoName, posVar, anyFn, chk, keyExpr)
 		case KindString:
 			if s.Copy {
-				// scan.String aliases; clone the value (and the key) out of data.
+				// tier func + scan.Detach: reuse the tier locate, clone the value
+				// only when it aliases data (an owned stringSlow escape result
+				// skips the clone — no double-copy). Key stays cloned (keyExpr).
 				return initMap + fmt.Sprintf(`var _sv string
 _sv, %[1]s, err = `+scanStringFn+`(data, %[1]s)
-%[3]sresult.%[2]s[%[4]s] = strings.Clone(_sv)
+%[3]sresult.%[2]s[%[4]s] = scan.Detach(_sv, data)
 `, posVar, inline.GoName, chk, keyExpr)
 			}
 			return initMap + fmt.Sprintf(`result.%[2]s[key], %[1]s, err = `+scanStringFn+`(data, %[1]s)

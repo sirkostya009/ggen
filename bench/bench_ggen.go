@@ -2464,12 +2464,11 @@ func (recv CopyAddr) DecodeFrom(data []byte) (result CopyAddr, i int, err error)
 				result.City = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				var kev string
-				kev, i, err = scan.String(data, i)
+				result.City, i, err = scan.String(data, i)
 				if err != nil {
 					return result, i, decode.NewParseErr("city", i, err)
 				}
-				result.City = strings.Clone(kev)
+				result.City = scan.Detach(result.City, data)
 			}
 		case "street":
 			if seenStreet {
@@ -2491,12 +2490,11 @@ func (recv CopyAddr) DecodeFrom(data []byte) (result CopyAddr, i int, err error)
 				result.Street = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				var kev string
-				kev, i, err = scan.String(data, i)
+				result.Street, i, err = scan.String(data, i)
 				if err != nil {
 					return result, i, decode.NewParseErr("street", i, err)
 				}
-				result.Street = strings.Clone(kev)
+				result.Street = scan.Detach(result.Street, data)
 			}
 		default:
 			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{strings.Clone(key)}}
@@ -3147,12 +3145,11 @@ func (recv CopyNode) DecodeFrom(data []byte) (result CopyNode, i int, err error)
 				result.Name = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				var kev string
-				kev, i, err = scan.String(data, i)
+				result.Name, i, err = scan.String(data, i)
 				if err != nil {
 					return result, i, decode.NewParseErr("name", i, err)
 				}
-				result.Name = strings.Clone(kev)
+				result.Name = scan.Detach(result.Name, data)
 			}
 			if len(result.Name) < 1 {
 				return result, i, &validation.MinLenError{Pos: i, Path: []string{"name"}, Limit: 1, Got: len(result.Name)}
@@ -3228,12 +3225,11 @@ func (recv CopyNode) DecodeFrom(data []byte) (result CopyNode, i int, err error)
 							mk = string(data[i+1 : ke])
 							i = ke + 1
 						} else {
-							var kev string
-							kev, i, err = scan.String(data, i)
+							mk, i, err = scan.String(data, i)
 							if err != nil {
 								return result, i, decode.NewParseErr("props", i, err)
 							}
-							mk = strings.Clone(kev)
+							mk = scan.Detach(mk, data)
 						}
 						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
@@ -3260,12 +3256,11 @@ func (recv CopyNode) DecodeFrom(data []byte) (result CopyNode, i int, err error)
 							result.Props[mk] = string(data[i+1 : ve])
 							i = ve + 1
 						} else {
-							var vev string
-							vev, i, err = scan.String(data, i)
+							result.Props[mk], i, err = scan.String(data, i)
 							if err != nil {
 								return result, i, decode.NewParseErr("props", i, err)
 							}
-							result.Props[mk] = strings.Clone(vev)
+							result.Props[mk] = scan.Detach(result.Props[mk], data)
 						}
 						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
@@ -3439,12 +3434,11 @@ func (recv CopyNode) DecodeFrom(data []byte) (result CopyNode, i int, err error)
 							result.Tags[len(result.Tags)-1] = string(data[i+1 : ke])
 							i = ke + 1
 						} else {
-							var kev string
-							kev, i, err = scan.String(data, i)
+							result.Tags[len(result.Tags)-1], i, err = scan.String(data, i)
 							if err != nil {
 								return result, i, decode.NewParseErr("tags", i, err)
 							}
-							result.Tags[len(result.Tags)-1] = strings.Clone(kev)
+							result.Tags[len(result.Tags)-1] = scan.Detach(result.Tags[len(result.Tags)-1], data)
 						}
 						if len(result.Tags[len(result.Tags)-1]) < 1 {
 							return result, i, &validation.MinLenError{Pos: i, Path: []string{"tags[]"}, Limit: 1, Got: len(result.Tags[len(result.Tags)-1])}
@@ -5521,12 +5515,11 @@ func (recv CopyValidated) DecodeFrom(data []byte) (result CopyValidated, i int, 
 				result.Bio = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				var kev string
-				kev, i, err = scan.String(data, i)
+				result.Bio, i, err = scan.String(data, i)
 				if err != nil {
 					return result, i, decode.NewParseErr("bio", i, err)
 				}
-				result.Bio = strings.Clone(kev)
+				result.Bio = scan.Detach(result.Bio, data)
 			}
 			if len(result.Bio) > 4096 {
 				return result, i, &validation.MaxLenError{Pos: i, Path: []string{"bio"}, Limit: 4096, Got: len(result.Bio)}
@@ -5551,12 +5544,11 @@ func (recv CopyValidated) DecodeFrom(data []byte) (result CopyValidated, i int, 
 				result.Email = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				var kev string
-				kev, i, err = scan.String(data, i)
+				result.Email, i, err = scan.String(data, i)
 				if err != nil {
 					return result, i, decode.NewParseErr("email", i, err)
 				}
-				result.Email = strings.Clone(kev)
+				result.Email = scan.Detach(result.Email, data)
 			}
 			if !strings.Contains(result.Email, "@") {
 				return result, i, &validation.ContainsError{Pos: i, Path: []string{"email"}, Want: "@", Value: result.Email}
@@ -5581,12 +5573,11 @@ func (recv CopyValidated) DecodeFrom(data []byte) (result CopyValidated, i int, 
 				result.Name = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				var kev string
-				kev, i, err = scan.String(data, i)
+				result.Name, i, err = scan.String(data, i)
 				if err != nil {
 					return result, i, decode.NewParseErr("name", i, err)
 				}
-				result.Name = strings.Clone(kev)
+				result.Name = scan.Detach(result.Name, data)
 			}
 			if len(result.Name) < 1 {
 				return result, i, &validation.MinLenError{Pos: i, Path: []string{"name"}, Limit: 1, Got: len(result.Name)}
@@ -5638,12 +5629,11 @@ func (recv CopyValidated) DecodeFrom(data []byte) (result CopyValidated, i int, 
 						result.Tags[len(result.Tags)-1] = string(data[i+1 : ke])
 						i = ke + 1
 					} else {
-						var kev string
-						kev, i, err = scan.String(data, i)
+						result.Tags[len(result.Tags)-1], i, err = scan.String(data, i)
 						if err != nil {
 							return result, i, decode.NewParseErr("tags", i, err)
 						}
-						result.Tags[len(result.Tags)-1] = strings.Clone(kev)
+						result.Tags[len(result.Tags)-1] = scan.Detach(result.Tags[len(result.Tags)-1], data)
 					}
 					if len(result.Tags[len(result.Tags)-1]) == 0 {
 						return result, i, &validation.NotEmptyError{Pos: i, Path: []string{"tags[]"}}
@@ -6606,12 +6596,11 @@ func (recv CopyEscapeDoc) DecodeFrom(data []byte) (result CopyEscapeDoc, i int, 
 				result.A = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				var kev string
-				kev, i, err = scan.String(data, i)
+				result.A, i, err = scan.String(data, i)
 				if err != nil {
 					return result, i, decode.NewParseErr("a", i, err)
 				}
-				result.A = strings.Clone(kev)
+				result.A = scan.Detach(result.A, data)
 			}
 		case "b":
 			if seenB {
@@ -6633,12 +6622,11 @@ func (recv CopyEscapeDoc) DecodeFrom(data []byte) (result CopyEscapeDoc, i int, 
 				result.B = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				var kev string
-				kev, i, err = scan.String(data, i)
+				result.B, i, err = scan.String(data, i)
 				if err != nil {
 					return result, i, decode.NewParseErr("b", i, err)
 				}
-				result.B = strings.Clone(kev)
+				result.B = scan.Detach(result.B, data)
 			}
 		case "c":
 			if seenC {
@@ -6660,12 +6648,11 @@ func (recv CopyEscapeDoc) DecodeFrom(data []byte) (result CopyEscapeDoc, i int, 
 				result.C = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				var kev string
-				kev, i, err = scan.String(data, i)
+				result.C, i, err = scan.String(data, i)
 				if err != nil {
 					return result, i, decode.NewParseErr("c", i, err)
 				}
-				result.C = strings.Clone(kev)
+				result.C = scan.Detach(result.C, data)
 			}
 		case "d":
 			if seenD {
@@ -6687,12 +6674,11 @@ func (recv CopyEscapeDoc) DecodeFrom(data []byte) (result CopyEscapeDoc, i int, 
 				result.D = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				var kev string
-				kev, i, err = scan.String(data, i)
+				result.D, i, err = scan.String(data, i)
 				if err != nil {
 					return result, i, decode.NewParseErr("d", i, err)
 				}
-				result.D = strings.Clone(kev)
+				result.D = scan.Detach(result.D, data)
 			}
 		default:
 			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{strings.Clone(key)}}
@@ -7523,12 +7509,11 @@ func (recv CopyClaim) DecodeFrom(data []byte) (result CopyClaim, i int, err erro
 				result.Aud = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				var kev string
-				kev, i, err = scan.String(data, i)
+				result.Aud, i, err = scan.String(data, i)
 				if err != nil {
 					return result, i, decode.NewParseErr("aud", i, err)
 				}
-				result.Aud = strings.Clone(kev)
+				result.Aud = scan.Detach(result.Aud, data)
 			}
 		case "exp":
 			if seenExp {
@@ -7658,12 +7643,11 @@ func (recv CopyClaim) DecodeFrom(data []byte) (result CopyClaim, i int, err erro
 				result.Iss = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				var kev string
-				kev, i, err = scan.String(data, i)
+				result.Iss, i, err = scan.String(data, i)
 				if err != nil {
 					return result, i, decode.NewParseErr("iss", i, err)
 				}
-				result.Iss = strings.Clone(kev)
+				result.Iss = scan.Detach(result.Iss, data)
 			}
 		case "jti":
 			if seenJti {
@@ -7685,12 +7669,11 @@ func (recv CopyClaim) DecodeFrom(data []byte) (result CopyClaim, i int, err erro
 				result.Jti = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				var kev string
-				kev, i, err = scan.String(data, i)
+				result.Jti, i, err = scan.String(data, i)
 				if err != nil {
 					return result, i, decode.NewParseErr("jti", i, err)
 				}
-				result.Jti = strings.Clone(kev)
+				result.Jti = scan.Detach(result.Jti, data)
 			}
 		case "nbf":
 			if seenNbf {
@@ -7763,12 +7746,11 @@ func (recv CopyClaim) DecodeFrom(data []byte) (result CopyClaim, i int, err erro
 				result.Sub = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				var kev string
-				kev, i, err = scan.String(data, i)
+				result.Sub, i, err = scan.String(data, i)
 				if err != nil {
 					return result, i, decode.NewParseErr("sub", i, err)
 				}
-				result.Sub = strings.Clone(kev)
+				result.Sub = scan.Detach(result.Sub, data)
 			}
 		default:
 			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{strings.Clone(key)}}
@@ -13913,12 +13895,11 @@ func (recv CopyAccount) DecodeFrom(data []byte) (result CopyAccount, i int, err 
 				result.AvatarURL = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				var kev string
-				kev, i, err = scan.String(data, i)
+				result.AvatarURL, i, err = scan.String(data, i)
 				if err != nil {
 					return result, i, decode.NewParseErr("avatarUrl", i, err)
 				}
-				result.AvatarURL = strings.Clone(kev)
+				result.AvatarURL = scan.Detach(result.AvatarURL, data)
 			}
 		case "balance":
 			if seen&(1<<4) != 0 {
@@ -13949,12 +13930,11 @@ func (recv CopyAccount) DecodeFrom(data []byte) (result CopyAccount, i int, err 
 				result.BannerURL = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				var kev string
-				kev, i, err = scan.String(data, i)
+				result.BannerURL, i, err = scan.String(data, i)
 				if err != nil {
 					return result, i, decode.NewParseErr("bannerUrl", i, err)
 				}
-				result.BannerURL = strings.Clone(kev)
+				result.BannerURL = scan.Detach(result.BannerURL, data)
 			}
 		case "bio":
 			if seen&(1<<6) != 0 {
@@ -13976,12 +13956,11 @@ func (recv CopyAccount) DecodeFrom(data []byte) (result CopyAccount, i int, err 
 				result.Bio = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				var kev string
-				kev, i, err = scan.String(data, i)
+				result.Bio, i, err = scan.String(data, i)
 				if err != nil {
 					return result, i, decode.NewParseErr("bio", i, err)
 				}
-				result.Bio = strings.Clone(kev)
+				result.Bio = scan.Detach(result.Bio, data)
 			}
 		case "company":
 			if seen&(1<<7) != 0 {
@@ -14074,12 +14053,11 @@ func (recv CopyAccount) DecodeFrom(data []byte) (result CopyAccount, i int, err 
 				result.DisplayName = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				var kev string
-				kev, i, err = scan.String(data, i)
+				result.DisplayName, i, err = scan.String(data, i)
 				if err != nil {
 					return result, i, decode.NewParseErr("displayName", i, err)
 				}
-				result.DisplayName = strings.Clone(kev)
+				result.DisplayName = scan.Detach(result.DisplayName, data)
 			}
 		case "email":
 			if seen&(1<<11) != 0 {
@@ -14101,12 +14079,11 @@ func (recv CopyAccount) DecodeFrom(data []byte) (result CopyAccount, i int, err 
 				result.Email = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				var kev string
-				kev, i, err = scan.String(data, i)
+				result.Email, i, err = scan.String(data, i)
 				if err != nil {
 					return result, i, decode.NewParseErr("email", i, err)
 				}
-				result.Email = strings.Clone(kev)
+				result.Email = scan.Detach(result.Email, data)
 			}
 		case "failedLogins":
 			if seen&(1<<12) != 0 {
@@ -14157,12 +14134,11 @@ func (recv CopyAccount) DecodeFrom(data []byte) (result CopyAccount, i int, err 
 				result.FirstName = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				var kev string
-				kev, i, err = scan.String(data, i)
+				result.FirstName, i, err = scan.String(data, i)
 				if err != nil {
 					return result, i, decode.NewParseErr("firstName", i, err)
 				}
-				result.FirstName = strings.Clone(kev)
+				result.FirstName = scan.Detach(result.FirstName, data)
 			}
 		case "followerCount":
 			if seen&(1<<14) != 0 {
@@ -14363,12 +14339,11 @@ func (recv CopyAccount) DecodeFrom(data []byte) (result CopyAccount, i int, err 
 				result.LastName = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				var kev string
-				kev, i, err = scan.String(data, i)
+				result.LastName, i, err = scan.String(data, i)
 				if err != nil {
 					return result, i, decode.NewParseErr("lastName", i, err)
 				}
-				result.LastName = strings.Clone(kev)
+				result.LastName = scan.Detach(result.LastName, data)
 			}
 		case "locale":
 			if seen&(1<<19) != 0 {
@@ -14390,12 +14365,11 @@ func (recv CopyAccount) DecodeFrom(data []byte) (result CopyAccount, i int, err 
 				result.Locale = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				var kev string
-				kev, i, err = scan.String(data, i)
+				result.Locale, i, err = scan.String(data, i)
 				if err != nil {
 					return result, i, decode.NewParseErr("locale", i, err)
 				}
-				result.Locale = strings.Clone(kev)
+				result.Locale = scan.Detach(result.Locale, data)
 			}
 		case "loginCount":
 			if seen&(1<<20) != 0 {
@@ -14446,12 +14420,11 @@ func (recv CopyAccount) DecodeFrom(data []byte) (result CopyAccount, i int, err 
 				result.MiddleName = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				var kev string
-				kev, i, err = scan.String(data, i)
+				result.MiddleName, i, err = scan.String(data, i)
 				if err != nil {
 					return result, i, decode.NewParseErr("middleName", i, err)
 				}
-				result.MiddleName = strings.Clone(kev)
+				result.MiddleName = scan.Detach(result.MiddleName, data)
 			}
 		case "phone":
 			if seen&(1<<22) != 0 {
@@ -14473,12 +14446,11 @@ func (recv CopyAccount) DecodeFrom(data []byte) (result CopyAccount, i int, err 
 				result.Phone = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				var kev string
-				kev, i, err = scan.String(data, i)
+				result.Phone, i, err = scan.String(data, i)
 				if err != nil {
 					return result, i, decode.NewParseErr("phone", i, err)
 				}
-				result.Phone = strings.Clone(kev)
+				result.Phone = scan.Detach(result.Phone, data)
 			}
 		case "postCount":
 			if seen&(1<<23) != 0 {
@@ -14805,12 +14777,11 @@ func (recv CopyAccount) DecodeFrom(data []byte) (result CopyAccount, i int, err 
 				result.Username = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				var kev string
-				kev, i, err = scan.String(data, i)
+				result.Username, i, err = scan.String(data, i)
 				if err != nil {
 					return result, i, decode.NewParseErr("username", i, err)
 				}
-				result.Username = strings.Clone(kev)
+				result.Username = scan.Detach(result.Username, data)
 			}
 		case "verified":
 			if seen&(1<<34) != 0 {
@@ -15568,12 +15539,11 @@ func (recv CopyPostalAddress) DecodeFrom(data []byte) (result CopyPostalAddress,
 				result.City = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				var kev string
-				kev, i, err = scan.String(data, i)
+				result.City, i, err = scan.String(data, i)
 				if err != nil {
 					return result, i, decode.NewParseErr("city", i, err)
 				}
-				result.City = strings.Clone(kev)
+				result.City = scan.Detach(result.City, data)
 			}
 		case "country":
 			if seenCountry {
@@ -15595,12 +15565,11 @@ func (recv CopyPostalAddress) DecodeFrom(data []byte) (result CopyPostalAddress,
 				result.Country = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				var kev string
-				kev, i, err = scan.String(data, i)
+				result.Country, i, err = scan.String(data, i)
 				if err != nil {
 					return result, i, decode.NewParseErr("country", i, err)
 				}
-				result.Country = strings.Clone(kev)
+				result.Country = scan.Detach(result.Country, data)
 			}
 		case "geo":
 			if seenGeo {
@@ -15633,12 +15602,11 @@ func (recv CopyPostalAddress) DecodeFrom(data []byte) (result CopyPostalAddress,
 				result.Line1 = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				var kev string
-				kev, i, err = scan.String(data, i)
+				result.Line1, i, err = scan.String(data, i)
 				if err != nil {
 					return result, i, decode.NewParseErr("line1", i, err)
 				}
-				result.Line1 = strings.Clone(kev)
+				result.Line1 = scan.Detach(result.Line1, data)
 			}
 		case "line2":
 			if seenLine2 {
@@ -15660,12 +15628,11 @@ func (recv CopyPostalAddress) DecodeFrom(data []byte) (result CopyPostalAddress,
 				result.Line2 = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				var kev string
-				kev, i, err = scan.String(data, i)
+				result.Line2, i, err = scan.String(data, i)
 				if err != nil {
 					return result, i, decode.NewParseErr("line2", i, err)
 				}
-				result.Line2 = strings.Clone(kev)
+				result.Line2 = scan.Detach(result.Line2, data)
 			}
 		case "postalCode":
 			if seenPostalCode {
@@ -15687,12 +15654,11 @@ func (recv CopyPostalAddress) DecodeFrom(data []byte) (result CopyPostalAddress,
 				result.PostalCode = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				var kev string
-				kev, i, err = scan.String(data, i)
+				result.PostalCode, i, err = scan.String(data, i)
 				if err != nil {
 					return result, i, decode.NewParseErr("postalCode", i, err)
 				}
-				result.PostalCode = strings.Clone(kev)
+				result.PostalCode = scan.Detach(result.PostalCode, data)
 			}
 		case "state":
 			if seenState {
@@ -15714,12 +15680,11 @@ func (recv CopyPostalAddress) DecodeFrom(data []byte) (result CopyPostalAddress,
 				result.State = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				var kev string
-				kev, i, err = scan.String(data, i)
+				result.State, i, err = scan.String(data, i)
 				if err != nil {
 					return result, i, decode.NewParseErr("state", i, err)
 				}
-				result.State = strings.Clone(kev)
+				result.State = scan.Detach(result.State, data)
 			}
 		default:
 			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{strings.Clone(key)}}
@@ -16013,12 +15978,11 @@ func (recv CopyCompany) DecodeFrom(data []byte) (result CopyCompany, i int, err 
 				result.Department = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				var kev string
-				kev, i, err = scan.String(data, i)
+				result.Department, i, err = scan.String(data, i)
 				if err != nil {
 					return result, i, decode.NewParseErr("department", i, err)
 				}
-				result.Department = strings.Clone(kev)
+				result.Department = scan.Detach(result.Department, data)
 			}
 		case "employeeId":
 			if seenEmployeeID {
@@ -16040,12 +16004,11 @@ func (recv CopyCompany) DecodeFrom(data []byte) (result CopyCompany, i int, err 
 				result.EmployeeID = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				var kev string
-				kev, i, err = scan.String(data, i)
+				result.EmployeeID, i, err = scan.String(data, i)
 				if err != nil {
 					return result, i, decode.NewParseErr("employeeId", i, err)
 				}
-				result.EmployeeID = strings.Clone(kev)
+				result.EmployeeID = scan.Detach(result.EmployeeID, data)
 			}
 		case "founded":
 			if seenFounded {
@@ -16181,12 +16144,11 @@ func (recv CopyCompany) DecodeFrom(data []byte) (result CopyCompany, i int, err 
 				result.Name = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				var kev string
-				kev, i, err = scan.String(data, i)
+				result.Name, i, err = scan.String(data, i)
 				if err != nil {
 					return result, i, decode.NewParseErr("name", i, err)
 				}
-				result.Name = strings.Clone(kev)
+				result.Name = scan.Detach(result.Name, data)
 			}
 		case "title":
 			if seenTitle {
@@ -16208,12 +16170,11 @@ func (recv CopyCompany) DecodeFrom(data []byte) (result CopyCompany, i int, err 
 				result.Title = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				var kev string
-				kev, i, err = scan.String(data, i)
+				result.Title, i, err = scan.String(data, i)
 				if err != nil {
 					return result, i, decode.NewParseErr("title", i, err)
 				}
-				result.Title = strings.Clone(kev)
+				result.Title = scan.Detach(result.Title, data)
 			}
 		default:
 			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{strings.Clone(key)}}
@@ -16530,12 +16491,11 @@ func (recv CopyPreferences) DecodeFrom(data []byte) (result CopyPreferences, i i
 				result.Currency = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				var kev string
-				kev, i, err = scan.String(data, i)
+				result.Currency, i, err = scan.String(data, i)
 				if err != nil {
 					return result, i, decode.NewParseErr("currency", i, err)
 				}
-				result.Currency = strings.Clone(kev)
+				result.Currency = scan.Detach(result.Currency, data)
 			}
 		case "emailNotifications":
 			if seenEmailNotifications {
@@ -16595,12 +16555,11 @@ func (recv CopyPreferences) DecodeFrom(data []byte) (result CopyPreferences, i i
 				result.Language = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				var kev string
-				kev, i, err = scan.String(data, i)
+				result.Language, i, err = scan.String(data, i)
 				if err != nil {
 					return result, i, decode.NewParseErr("language", i, err)
 				}
-				result.Language = strings.Clone(kev)
+				result.Language = scan.Detach(result.Language, data)
 			}
 		case "pushNotifications":
 			if seenPushNotifications {
@@ -16640,12 +16599,11 @@ func (recv CopyPreferences) DecodeFrom(data []byte) (result CopyPreferences, i i
 				result.Theme = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				var kev string
-				kev, i, err = scan.String(data, i)
+				result.Theme, i, err = scan.String(data, i)
 				if err != nil {
 					return result, i, decode.NewParseErr("theme", i, err)
 				}
-				result.Theme = strings.Clone(kev)
+				result.Theme = scan.Detach(result.Theme, data)
 			}
 		case "timezone":
 			if seenTimezone {
@@ -16667,12 +16625,11 @@ func (recv CopyPreferences) DecodeFrom(data []byte) (result CopyPreferences, i i
 				result.Timezone = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				var kev string
-				kev, i, err = scan.String(data, i)
+				result.Timezone, i, err = scan.String(data, i)
 				if err != nil {
 					return result, i, decode.NewParseErr("timezone", i, err)
 				}
-				result.Timezone = strings.Clone(kev)
+				result.Timezone = scan.Detach(result.Timezone, data)
 			}
 		default:
 			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{strings.Clone(key)}}

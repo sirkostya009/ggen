@@ -100,6 +100,26 @@ func String(data []byte, i int) (string, int, error) {
 	return unsafe.String(unsafe.SliceData(rest), closeIdx), start + closeIdx + 1, nil
 }
 
+// Detach returns an owned copy of s when s aliases data — the zero-copy
+// clean-path result of String / StringAVX* — and s unchanged when it does not (a
+// stringSlow-owned escape result, already detached from data). It lets -copy
+// REUSE the aliasing String / StringAVX{,2,512} tier functions and clone exactly
+// once: the escape arm skips the redundant clone that unconditionally
+// strings.Clone-ing every result would pay. Sound because Go's GC is non-moving
+// (pointers are stable) and a stringSlow scratch is a distinct heap allocation
+// that never overlaps data's backing, so the pointer-range test can't false-hit.
+func Detach(s string, data []byte) string {
+	if len(s) == 0 {
+		return s
+	}
+	sp := uintptr(unsafe.Pointer(unsafe.StringData(s)))
+	dp := uintptr(unsafe.Pointer(unsafe.SliceData(data)))
+	if sp >= dp && sp < dp+uintptr(len(data)) {
+		return strings.Clone(s) // aliases data → detach
+	}
+	return s // owned scratch → already detached
+}
+
 // hasCtrlByte reports whether b contains a JSON control character (< 0x20,
 // illegal unescaped in a string). Scans 8 bytes/iteration via SWAR.
 func hasCtrlByte(b []byte) bool {
@@ -858,7 +878,7 @@ func AnyCopy(data []byte, i int) (any, int, error) {
 		if err != nil {
 			return nil, 0, err
 		}
-		return strings.Clone(s), j, nil
+		return Detach(s, data), j, nil
 	case c == '-' || (c >= '0' && c <= '9'):
 		v, j, err := Float64(data, i)
 		return v, j, err
@@ -919,7 +939,7 @@ func anyObjectCopy(data []byte, i int) (map[string]any, int, error) {
 		if err != nil {
 			return nil, 0, err
 		}
-		out[strings.Clone(key)] = v
+		out[Detach(key, data)] = v
 		i = SkipSpace(data, k)
 		if i >= len(data) {
 			return nil, 0, ErrBadObject
@@ -958,7 +978,7 @@ func AnyNumberCopy(data []byte, i int) (any, int, error) {
 		if err != nil {
 			return nil, 0, err
 		}
-		return strings.Clone(s), j, nil
+		return Detach(s, data), j, nil
 	case c == '-' || (c >= '0' && c <= '9'):
 		n, j, err := Number(data, i)
 		if err != nil {
@@ -1022,7 +1042,7 @@ func anyNumberObjectCopy(data []byte, i int) (map[string]any, int, error) {
 		if err != nil {
 			return nil, 0, err
 		}
-		out[strings.Clone(key)] = v
+		out[Detach(key, data)] = v
 		i = SkipSpace(data, k)
 		if i >= len(data) {
 			return nil, 0, ErrBadObject
