@@ -1319,7 +1319,7 @@ type Msg struct {
 		if got := strings.Count(body, "json.Unmarshal(data[start:i], &result.Tag)"); got != 1 {
 			t.Errorf("expected 1 json.Unmarshal on &result.Tag in DecodeFrom, got %d:\n%s", got, body)
 		}
-		if got := strings.Count(body, "json.Unmarshal(s.Bytes()[start:s.Pos], &result.Tag)"); got != 1 {
+		if got := strings.Count(body, "json.Unmarshal(span, &result.Tag)"); got != 1 {
 			t.Errorf("expected 1 json.Unmarshal on &result.Tag in DecodeFromStream, got %d:\n%s", got, body)
 		}
 		if !strings.Contains(body, "json.Marshal(s.Tag)") {

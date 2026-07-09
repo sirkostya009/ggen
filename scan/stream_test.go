@@ -222,50 +222,36 @@ func TestStream_ReadMoreKeepMid_Memmoves(t *testing.T) {
 	}
 }
 
-// TestStream_ShiftDisabled_GrowOnly: with Shift=false, ReadMore must
-// behave as if keep=0 regardless of the caller's keep argument. Used
-// by RawJSON capture and json.Unmarshal fallback paths.
-func TestStream_ShiftDisabled_GrowOnly(t *testing.T) {
-	t.Parallel()
-	var s Stream
-	r := bytes.NewReader([]byte("ABCDEFGHIJKLMNOPQRSTUVWXYZ"))
-	s.Reset(r, make([]byte, 0, 8))
-	s.Shift = false
-	if err := s.ReadMore(0); err != nil {
-		t.Fatalf("ReadMore: %v", err)
-	}
-	originalLen := len(s.Bytes())
-	if originalLen == 0 {
-		t.Fatal("empty buffer")
-	}
-	if err := s.ReadMore(4); err != nil {
-		t.Fatalf("ReadMore with shift=false: %v", err)
-	}
-	if len(s.Bytes()) < originalLen {
-		t.Errorf("Shift=false caused shift: lenBefore=%d lenAfter=%d", originalLen, len(s.Bytes()))
-	}
-	if s.Bytes()[0] != 'A' {
-		t.Errorf("Shift=false shifted anyway: buf[0]=%c want A", s.Bytes()[0])
-	}
-}
-
 // TestStream_EOFAfterContent: reader returns content then io.EOF on the
 // same call (io.Reader interface allows this). Stream must consume the
-// content and surface EOF on the NEXT call only.
+// content and surface EOF on the NEXT call only. ReadMore is stateless —
+// the deferred EOF comes from re-Reading the drained reader (io.Reader EOF
+// is stable), not a Stream flag — so both reader shapes are pinned:
+// separate-call EOF (bytes.Reader) and data+EOF-same-call (DataErrReader).
 func TestStream_EOFAfterContent(t *testing.T) {
 	t.Parallel()
-	var s Stream
-	r := bytes.NewReader([]byte("ABC"))
-	s.Reset(r, make([]byte, 0, 8))
-	if err := s.ReadMore(0); err != nil {
-		t.Fatalf("first ReadMore: %v", err)
-	}
-	if string(s.Bytes()) != "ABC" {
-		t.Errorf("first ReadMore content = %q", s.Bytes())
-	}
-	err := s.ReadMore(0)
-	if err != io.ErrUnexpectedEOF {
-		t.Errorf("second ReadMore err = %v, want io.ErrUnexpectedEOF", err)
+	for _, tc := range []struct {
+		name string
+		r    io.Reader
+	}{
+		{"eof on separate call", bytes.NewReader([]byte("ABC"))},
+		{"data+eof same call", iotest.DataErrReader(bytes.NewReader([]byte("ABC")))},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			var s Stream
+			s.Reset(tc.r, make([]byte, 0, 8))
+			if err := s.ReadMore(0); err != nil {
+				t.Fatalf("first ReadMore: %v", err)
+			}
+			if string(s.Bytes()) != "ABC" {
+				t.Errorf("first ReadMore content = %q", s.Bytes())
+			}
+			err := s.ReadMore(0)
+			if err != io.ErrUnexpectedEOF {
+				t.Errorf("second ReadMore err = %v, want io.ErrUnexpectedEOF", err)
+			}
+		})
 	}
 }
 
@@ -284,59 +270,6 @@ func TestStream_PathologicalZeroRead(t *testing.T) {
 type zeroReader struct{}
 
 func (zeroReader) Read(p []byte) (int, error) { return 0, nil }
-
-// TestIntegerScanNoShiftRefill: Int64/Uint64 must stay position-correct
-// when a mid-number refill happens in no-shift mode. ReadMore coerces
-// keep to 0 when !s.Shift and moves no bytes, so the local cursor must
-// NOT reset to 0 — resetting re-reads already-consumed digits.
-func TestIntegerScanNoShiftRefill(t *testing.T) {
-	t.Parallel()
-	t.Run("int64", func(t *testing.T) {
-		t.Parallel()
-		var s Stream
-		s.Reset(strings.NewReader("12345 "), make([]byte, 0, 3))
-		s.Shift = false
-		n, err := s.Int64()
-		if err != nil {
-			t.Fatal(err)
-		}
-		if n != 12345 {
-			t.Errorf("Int64 = %d, want 12345", n)
-		}
-		if s.Pos != 5 {
-			t.Errorf("Pos = %d, want 5", s.Pos)
-		}
-	})
-	t.Run("int64 negative", func(t *testing.T) {
-		t.Parallel()
-		var s Stream
-		s.Reset(strings.NewReader("-1234 "), make([]byte, 0, 3))
-		s.Shift = false
-		n, err := s.Int64()
-		if err != nil {
-			t.Fatal(err)
-		}
-		if n != -1234 {
-			t.Errorf("Int64 = %d, want -1234", n)
-		}
-	})
-	t.Run("uint64", func(t *testing.T) {
-		t.Parallel()
-		var s Stream
-		s.Reset(strings.NewReader("67890 "), make([]byte, 0, 3))
-		s.Shift = false
-		n, err := s.Uint64()
-		if err != nil {
-			t.Fatal(err)
-		}
-		if n != 67890 {
-			t.Errorf("Uint64 = %d, want 67890", n)
-		}
-		if s.Pos != 5 {
-			t.Errorf("Pos = %d, want 5", s.Pos)
-		}
-	})
-}
 
 // TestFloatNumberBufBounded pins the compacting mid-number refill: a
 // float/number straddling window edges must refill from the value start, not
@@ -394,38 +327,83 @@ func TestFloatNumberBufBounded(t *testing.T) {
 	})
 }
 
-// TestFloatScanNoShiftRefill mirrors TestIntegerScanNoShiftRefill for the
-// number path: under Shift=false the compacting refill must move no bytes and
-// keep the cursor, so a value split across refills still scans correctly.
-func TestFloatScanNoShiftRefill(t *testing.T) {
+// TestStreamCaptureValue pins CaptureValue: byte-exact spans across chunked
+// refills, correct stop at the value's real end when input continues, errors
+// surfacing only at EOF, and the first-refill prefix compaction (a capture
+// starting mid-window must reuse the consumed prefix as tail capacity instead
+// of dragging it through every grow).
+func TestStreamCaptureValue(t *testing.T) {
 	t.Parallel()
-	t.Run("float64", func(t *testing.T) {
-		t.Parallel()
+	values := []string{
+		`123`, `-45.67e8`, `"plain"`, `"esc\n\tA😀"`, `true`, `null`,
+		`[1,2,3,[4,5,[6,7]],8]`, `{"a":1,"b":[2,3],"c":{"d":"e"}}`,
+		`"` + strings.Repeat("a", 5000) + `"`,
+	}
+	for _, v := range values {
+		// 1-byte reads: value split at every offset.
 		var s Stream
-		s.Reset(strings.NewReader("3.14159 "), make([]byte, 0, 3))
-		s.Shift = false
-		v, err := s.Float64()
+		s.Reset(&chunkedReader{data: []byte(v)}, make([]byte, 0, 8))
+		got, err := s.CaptureValue()
 		if err != nil {
+			t.Fatalf("%.20q chunked: %v", v, err)
+		}
+		if string(got) != v {
+			t.Fatalf("%.20q chunked: got %.20q", v, got)
+		}
+		// Trailing input: must stop at the value's real end.
+		var s2 Stream
+		s2.Reset(strings.NewReader(v+` ,"next"`), make([]byte, 0, 16))
+		got2, err := s2.CaptureValue()
+		if err != nil {
+			t.Fatalf("%.20q trailing: %v", v, err)
+		}
+		if string(got2) != v {
+			t.Fatalf("%.20q trailing: got %.20q", v, got2)
+		}
+		if s2.Offset() != len(v) {
+			t.Fatalf("%.20q trailing: Offset=%d want %d", v, s2.Offset(), len(v))
+		}
+	}
+
+	t.Run("prefix compaction", func(t *testing.T) {
+		t.Parallel()
+		// Two ~700 B values through a 1024 B window: capturing the second
+		// starts at Pos≈702 with the window full. The first refill must
+		// compact the consumed prefix — the second value then fits in the
+		// freed space and the buffer NEVER grows. Grow-only (the old shape)
+		// would double to 2048.
+		v := `"` + strings.Repeat("a", 698) + `"`
+		payload := `[` + v + `,` + v + `]`
+		var s Stream
+		s.Reset(strings.NewReader(payload), make([]byte, 0, 1024))
+		if err := s.ArrayOpen(); err != nil {
 			t.Fatal(err)
 		}
-		if v != 3.14159 {
-			t.Errorf("Float64 = %v, want 3.14159", v)
+		for k := range 2 {
+			got, err := s.CaptureValue()
+			if err != nil {
+				t.Fatalf("capture %d: %v", k, err)
+			}
+			if string(got) != v {
+				t.Fatalf("capture %d: got %.20q", k, got)
+			}
+			if s.Pos < len(s.Bytes()) && s.Bytes()[s.Pos] == ',' {
+				s.Pos++
+			}
 		}
-		if s.Pos != 7 {
-			t.Errorf("Pos = %d, want 7", s.Pos)
+		if c := cap(s.Bytes()); c != 1024 {
+			t.Fatalf("buffer grew to cap=%d (want 1024) — prefix compaction regressed", c)
 		}
 	})
-	t.Run("number", func(t *testing.T) {
+
+	t.Run("errors at EOF", func(t *testing.T) {
 		t.Parallel()
-		var s Stream
-		s.Reset(strings.NewReader("-12.5e3 "), make([]byte, 0, 3))
-		s.Shift = false
-		n, err := s.Number()
-		if err != nil {
-			t.Fatal(err)
-		}
-		if n != "-12.5e3" {
-			t.Errorf("Number = %q, want -12.5e3", n)
+		for _, in := range []string{`"abc`, `{"a":1`, `[1,2,@]`, ``} {
+			var s Stream
+			s.Reset(strings.NewReader(in), make([]byte, 0, 8))
+			if _, err := s.CaptureValue(); err == nil {
+				t.Fatalf("%q: expected error", in)
+			}
 		}
 	})
 }

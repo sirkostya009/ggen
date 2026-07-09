@@ -1,7 +1,8 @@
 # TODO
 
-House rule: nothing lands without an interleaved core-pinned benchstat — Mega is
-memory-latency-bound, so CPU-only shaves routinely vanish in wall clock.
+House rule: nothing lands without a core-pinned before/after bench (one pass per
+side, NEVER alternating-pair loops) — Mega is memory-latency-bound, so CPU-only
+shaves routinely vanish in wall clock.
 
 ## Open perf candidates (source-verified, UNMEASURED — prune freely)
 

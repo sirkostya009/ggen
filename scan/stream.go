@@ -13,9 +13,8 @@ import (
 )
 
 // Stream wraps an io.Reader. The cursor lives in [Stream.Pos] — every
-// scan primitive consumes from there and updates it on return. Callers
-// slicing raw spans (RawJSON capture, json.Unmarshal fallback) snapshot
-// Pos before the scan and read it again after.
+// scan primitive consumes from there and updates it on return. Raw spans
+// (RawJSON capture, json.Unmarshal fallback) come from [Stream.CaptureValue].
 //
 //	var s scan.Stream
 //	s.Reset(r, buf)
@@ -34,16 +33,6 @@ type Stream struct {
 	// consumed and the cursor's absolute offset is consumed + Pos (see
 	// Offset). Pos alone is buffer-relative.
 	consumed int
-	// Err is the sticky reader error; once set (non-EOF) ReadMore returns
-	// it without touching the reader.
-	Err error
-	// EOF flips true once the reader signals io.EOF.
-	EOF bool
-	// Shift controls in-place compaction. True (default) → ReadMore honors
-	// keep > 0 and memmoves the kept suffix to offset 0; false → keep
-	// treated as 0 (grow-only). Flip off for spans needing stable absolute
-	// offsets (RawJSON capture, json.Unmarshal fallback), then restore.
-	Shift bool
 }
 
 // Offset returns the absolute byte offset of the cursor within the full
@@ -53,8 +42,8 @@ type Stream struct {
 func (s *Stream) Offset() int { return s.consumed + s.Pos }
 
 // NewStream allocates a Stream bound to r with buf as the initial
-// backing slice (see Reset for buf / Shift semantics). Use Reset
-// directly to recycle an existing Stream without the heap alloc.
+// backing slice (see Reset for buf semantics). Use Reset directly to
+// recycle an existing Stream without the heap alloc.
 func NewStream(r io.Reader, buf []byte) *Stream {
 	s := &Stream{}
 	s.Reset(r, buf)
@@ -65,11 +54,8 @@ func NewStream(r io.Reader, buf []byte) *Stream {
 // buf is truncated to length 0 — its capacity is retained for parse
 // working area. Pass nil to start with no backing (ReadMore allocates
 // on first pull); pass a pre-sized slice to avoid growth allocs.
-// Shift defaults to true so generated decoders compact the buffer
-// across long streams; flip it off for RawJSON-style stable-offset
-// spans.
 func (s *Stream) Reset(r io.Reader, buf []byte) {
-	*s = Stream{buf: buf[:0], r: r, Shift: true}
+	*s = Stream{buf: buf[:0], r: r}
 }
 
 // Bytes returns the current backing buffer. Mutating the slice
@@ -93,10 +79,7 @@ func (s *Stream) Bytes() []byte { return s.buf }
 //
 // NEVER loops the Read call: one chunk in, return what the reader gave.
 func (s *Stream) ReadMore(keep int) error {
-	if !s.Shift {
-		keep = 0
-	}
-	// Shift first, even on a subsequent Read error — callers adjust their
+	// Compact first, even on a subsequent Read error — callers adjust their
 	// offsets unconditionally after a keep > 0 call.
 	if keep > 0 {
 		if keep >= len(s.buf) {
@@ -108,12 +91,6 @@ func (s *Stream) ReadMore(keep int) error {
 			s.buf = s.buf[:len(s.buf)-keep]
 		}
 	}
-	if s.Err != nil {
-		return s.Err
-	}
-	if s.EOF {
-		return io.ErrUnexpectedEOF
-	}
 	if keep == 0 && cap(s.buf) == len(s.buf) {
 		bigger := make([]byte, len(s.buf), max(cap(s.buf)*2, 1024))
 		copy(bigger, s.buf)
@@ -121,20 +98,16 @@ func (s *Stream) ReadMore(keep int) error {
 	}
 	n, err := s.r.Read(s.buf[len(s.buf):cap(s.buf)])
 	s.buf = s.buf[:len(s.buf)+n]
-	if err == io.EOF {
-		s.EOF = true
-		if n == 0 {
+	if n == 0 {
+		// No progress is terminal for this call: drained (io.EOF), a real
+		// error, or a pathological (0, nil) reader — don't spin.
+		if err == nil || err == io.EOF {
 			return io.ErrUnexpectedEOF
 		}
-		return nil
-	}
-	if err != nil {
-		s.Err = err
 		return err
 	}
-	if n == 0 {
-		// Pathological (0, nil) reader — treat as EOF, don't spin.
-		return io.ErrUnexpectedEOF
+	if err != nil && err != io.EOF {
+		return err
 	}
 	return nil
 }
@@ -142,7 +115,6 @@ func (s *Stream) ReadMore(keep int) error {
 // SkipSpace advances Pos past whitespace, pulling more bytes as needed.
 // Compacts in-place (consumed WS overwritten via ReadMore(Pos)), so the
 // caller must hold no aliases at offsets < Pos (e.g. a prior KeyView key).
-// No-shift mode (RawJSON capture) leaves Pos put.
 func (s *Stream) SkipSpace() error {
 	// Inlinable fast path: cursor in-bounds on a non-whitespace byte. The
 	// no-temp shape is load-bearing — adding an `i := s.Pos` temp pushes it
@@ -175,15 +147,13 @@ func (s *Stream) skipSpaceSlow() error {
 			s.Pos = i
 			return err
 		}
-		if s.Shift {
-			i = 0
-		}
+		i = 0
 		buf = s.buf
 	}
 }
 
 // ConsumeColon skips whitespace, consumes ':', then skips whitespace
-// again. Shifts in-place via SkipSpace, invalidating caller aliases at
+// again. Compacts in-place via SkipSpace, invalidating caller aliases at
 // offsets < Pos — use only after the key is dispatched / consumed.
 func (s *Stream) ConsumeColon() error {
 	if err := s.SkipSpace(); err != nil {
@@ -194,9 +164,7 @@ func (s *Stream) ConsumeColon() error {
 		if err := s.ReadMore(i); err != nil {
 			return err
 		}
-		if s.Shift {
-			i = 0
-		}
+		i = 0
 	}
 	if s.buf[i] != ':' {
 		return ErrBadObject
@@ -266,9 +234,7 @@ func (s *Stream) stringView() (v string, owned bool, err error) {
 		if err := s.ReadMore(i); err != nil {
 			return "", false, err
 		}
-		if s.Shift {
-			i = 0
-		}
+		i = 0
 	}
 	if s.buf[i] != '"' {
 		return "", false, ErrExpectString
@@ -287,10 +253,8 @@ func (s *Stream) stringView() (v string, owned bool, err error) {
 			}
 			j = len(s.buf)
 			err := s.ReadMore(start)
-			if s.Shift {
-				j -= start
-				start = 0
-			}
+			j -= start
+			start = 0
 			if err != nil {
 				return "", false, ErrUnterminated
 			}
@@ -322,9 +286,7 @@ func (s *Stream) KeyView() (string, error) {
 		if err := s.ReadMore(i); err != nil {
 			return "", err
 		}
-		if s.Shift {
-			i = 0
-		}
+		i = 0
 	}
 	if s.buf[i] != '"' {
 		return "", ErrExpectString
@@ -360,10 +322,8 @@ func (s *Stream) KeyView() (string, error) {
 			}
 			j = len(s.buf)
 			err := s.ReadMore(start)
-			if s.Shift {
-				j -= start
-				start = 0
-			}
+			j -= start
+			start = 0
 			if err != nil {
 				return "", ErrUnterminated
 			}
@@ -394,9 +354,7 @@ func (s *Stream) skipString() error {
 		if err := s.ReadMore(i); err != nil {
 			return err
 		}
-		if s.Shift {
-			i = 0
-		}
+		i = 0
 	}
 	if s.buf[i] != '"' {
 		return ErrExpectString
@@ -433,11 +391,9 @@ func (s *Stream) skipString() error {
 				if err := s.ReadMore(bs); err != nil {
 					return ErrBadString
 				}
-				if s.Shift {
-					j -= bs
-					start = 0
-					bs = 0
-				}
+				j -= bs
+				start = 0
+				bs = 0
 			}
 			switch s.buf[bs+1] {
 			case '"', '\\', '/', 'b', 'f', 'n', 'r', 't':
@@ -448,11 +404,9 @@ func (s *Stream) skipString() error {
 					if err := s.ReadMore(bs); err != nil {
 						return ErrBadString
 					}
-					if s.Shift {
-						j -= bs
-						start = 0
-						bs = 0
-					}
+					j -= bs
+					start = 0
+					bs = 0
 				}
 				if _, ok := parseHex4(s.buf[bs+2 : bs+6]); !ok {
 					return ErrBadString
@@ -470,14 +424,11 @@ func (s *Stream) skipString() error {
 		}
 		// Everything buffered is validated and being DISCARDED — full
 		// compaction keeps the window at chunk size instead of growing the
-		// buffer toward the skipped string's length (ReadMore no-ops the
-		// keep under Shift=false, so RawJSON capture is unaffected).
+		// buffer toward the skipped string's length.
 		j = len(s.buf)
 		err := s.ReadMore(j)
-		if s.Shift {
-			j = 0
-			start = 0
-		}
+		j = 0
+		start = 0
 		if err != nil {
 			return ErrUnterminated
 		}
@@ -497,16 +448,13 @@ func (s *Stream) stringSlow(start, j int) (string, error) {
 	// so s.buf can COMPACT (discard consumed bytes) on refill instead of growing
 	// to hold the whole raw string. Every ReadMore keeps from the cursor j and
 	// rebases it, exactly like Int64/Float64/Number, so a multi-MB escaped string
-	// streams through a bounded buffer. Shift=false (RawJSON capture) makes
-	// ReadMore no-op the keep, staying grow-only there with stable offsets.
-	// Multi-byte reads (\X, \uXXXX, surrogate pair) buffer their whole span via a
-	// compacting ensure-loop before indexing s.buf[j+k].
+	// streams through a bounded buffer. Multi-byte reads (\X, \uXXXX, surrogate
+	// pair) buffer their whole span via a compacting ensure-loop before indexing
+	// s.buf[j+k].
 	for {
 		if j >= len(s.buf) {
 			err := s.ReadMore(j)
-			if s.Shift {
-				j = 0
-			}
+			j = 0
 			if err != nil {
 				return "", ErrUnterminated
 			}
@@ -519,9 +467,7 @@ func (s *Stream) stringSlow(start, j int) (string, error) {
 		if c == '\\' {
 			for j+1 >= len(s.buf) {
 				err := s.ReadMore(j)
-				if s.Shift {
-					j = 0
-				}
+				j = 0
 				if err != nil {
 					return "", ErrBadString
 				}
@@ -549,9 +495,7 @@ func (s *Stream) stringSlow(start, j int) (string, error) {
 			case 'u':
 				for j+6 > len(s.buf) {
 					err := s.ReadMore(j)
-					if s.Shift {
-						j = 0
-					}
+					j = 0
 					if err != nil {
 						return "", ErrBadString
 					}
@@ -569,9 +513,7 @@ func (s *Stream) stringSlow(start, j int) (string, error) {
 					// surrogate keeps r → RuneError, matching the bytes path.
 					for j+6 > len(s.buf) {
 						err := s.ReadMore(j)
-						if s.Shift {
-							j = 0
-						}
+						j = 0
 						if err != nil {
 							break
 						}
@@ -607,9 +549,7 @@ func (s *Stream) Int64() (int64, error) {
 		if err := s.ReadMore(i); err != nil {
 			return 0, err
 		}
-		if s.Shift {
-			i = 0
-		}
+		i = 0
 	}
 	neg := false
 	if s.buf[i] == '-' {
@@ -619,9 +559,7 @@ func (s *Stream) Int64() (int64, error) {
 			if err := s.ReadMore(i); err != nil {
 				return 0, err
 			}
-			if s.Shift {
-				i = 0
-			}
+			i = 0
 		}
 	}
 	if s.buf[i] < '0' || s.buf[i] > '9' {
@@ -663,10 +601,7 @@ scan:
 			i++
 		}
 		err := s.ReadMore(i)
-		// No-shift mode moves no bytes — resetting i would re-read digits.
-		if s.Shift {
-			i = 0
-		}
+		i = 0
 		if err != nil {
 			break
 		}
@@ -690,9 +625,7 @@ func (s *Stream) Uint64() (uint64, error) {
 		if err := s.ReadMore(i); err != nil {
 			return 0, err
 		}
-		if s.Shift {
-			i = 0
-		}
+		i = 0
 	}
 	if s.buf[i] < '0' || s.buf[i] > '9' {
 		return 0, ErrBadNumber
@@ -722,10 +655,7 @@ scan:
 			i++
 		}
 		err := s.ReadMore(i)
-		// See Int64: no-shift refills move no bytes; keep the cursor.
-		if s.Shift {
-			i = 0
-		}
+		i = 0
 		if err != nil {
 			break
 		}
@@ -743,16 +673,14 @@ func (s *Stream) Float64() (float64, error) {
 		if err := s.ReadMore(i); err != nil {
 			return 0, err
 		}
-		if s.Shift {
-			i = 0
-		}
+		i = 0
 	}
 	start := i
 	// buf hoisted into a local; refills compact from start (bytes before it
 	// are consumed) and rebase — without compaction every mid-number refill
 	// lands with len == cap (readers fill the whole window) and doubles the
 	// buffer. The span s.buf[start:i] is re-sliced after the loop, so the
-	// rebase keeps it valid; Shift=false is a no-op in ReadMore.
+	// rebase keeps it valid.
 	buf := s.buf
 	if buf[i] == '-' {
 		i++
@@ -768,10 +696,8 @@ scan:
 			break scan
 		}
 		err := s.ReadMore(start)
-		if s.Shift {
-			i -= start
-			start = 0
-		}
+		i -= start
+		start = 0
 		if err != nil {
 			break
 		}
@@ -801,15 +727,13 @@ scan:
 
 // refillSkip refills the window mid-skip. Skip-path exclusive: bytes
 // before *i are consumed and discardable, so the refill compacts from *i
-// (ReadMore no-ops the keep under Shift=false) and rebases *i — without
-// compaction every mid-number refill lands with len == cap (readers fill
-// the whole window) and doubles the buffer. Callers keep the hot
-// `i < len(s.buf)` bounds check inline and call this only on exhaustion.
+// and rebases *i — without compaction every mid-number refill lands with
+// len == cap (readers fill the whole window) and doubles the buffer.
+// Callers keep the hot `i < len(s.buf)` bounds check inline and call this
+// only on exhaustion.
 func (s *Stream) refillSkip(i *int) bool {
 	err := s.ReadMore(*i)
-	if s.Shift {
-		*i = 0
-	}
+	*i = 0
 	return err == nil && *i < len(s.buf)
 }
 
@@ -889,9 +813,7 @@ func (s *Stream) Bool() (bool, error) {
 		if err := s.ReadMore(i); err != nil {
 			return false, err
 		}
-		if s.Shift {
-			i = 0
-		}
+		i = 0
 	}
 	first := s.buf[i]
 	var want string
@@ -927,9 +849,7 @@ func (s *Stream) SkipValue() error {
 		if err := s.ReadMore(s.Pos); err != nil {
 			return ErrUnexpectedEnd
 		}
-		if s.Shift {
-			s.Pos = 0
-		}
+		s.Pos = 0
 	}
 	switch s.buf[s.Pos] {
 	case '"':
@@ -964,6 +884,62 @@ func (s *Stream) SkipValue() error {
 	return ErrBadValue
 }
 
+// CaptureValue returns the raw bytes of the next JSON value as a slice into the
+// Stream's buffer — valid only until the next Stream op, so copy it if you retain
+// it (json.Unmarshal / UnmarshalText / SetString consume it in place, no copy
+// needed). It buffers the whole value contiguously and locates its end with the
+// BYTES-path SkipValue — reused verbatim (SIMD tiers included), no streaming
+// skip. A skip failure on a partial window is indistinguishable from truncation
+// (no error position), so any error means "read more" and only surfaces once EOF
+// says no more bytes can fix it — malformed input therefore buffers the stream's
+// remainder before erroring. A huge value grows s.buf to its size, which is
+// inherent: the raw bytes must be contiguous to hand off anyway.
+func (s *Stream) CaptureValue() ([]byte, error) {
+	start := s.Pos
+	// eof: the reader drained during this capture (ReadMore returned
+	// io.ErrUnexpectedEOF) — no more bytes can arrive, so the next skip's
+	// verdict is final. Purely local; Stream carries no reader state.
+	eof := false
+	for {
+		end, err := SkipValue(s.buf, start)
+		// Trust the end only when a byte past it is buffered (end < len) or the
+		// stream is drained — else a value ending at the window edge (e.g. a
+		// number "123" that may continue "1234") could be cut short.
+		if err == nil && (end < len(s.buf) || eof) {
+			s.Pos = end
+			return s.buf[start:end], nil
+		}
+		if eof {
+			s.Pos = start
+			return nil, err
+		}
+		// First refill compacts the consumed prefix (keep=start): the dead
+		// bytes before the value become free tail capacity instead of being
+		// dragged through every grow. start rebases to 0; later refills are
+		// pure grow. Entry deliberately does NOT compact — the value may
+		// already be fully buffered, and ReadMore always Reads (could block).
+		if e := s.ReadMore(start); e != nil {
+			if e != io.ErrUnexpectedEOF {
+				s.Pos = 0
+				return nil, e
+			}
+			eof = true
+		}
+		start = 0
+		// Fill the spare capacity before re-skipping, so a byte-dribble
+		// reader can't make the re-skip O(n²): skips land on a doubling window.
+		for !eof && len(s.buf) < cap(s.buf) {
+			if e := s.ReadMore(0); e != nil {
+				if e != io.ErrUnexpectedEOF {
+					s.Pos = 0
+					return nil, e
+				}
+				eof = true
+			}
+		}
+	}
+}
+
 func (s *Stream) skipArray() error {
 	if err := s.SkipSpace(); err != nil {
 		return err
@@ -972,9 +948,7 @@ func (s *Stream) skipArray() error {
 		if err := s.ReadMore(s.Pos); err != nil {
 			return ErrBadArray
 		}
-		if s.Shift {
-			s.Pos = 0
-		}
+		s.Pos = 0
 	}
 	if s.buf[s.Pos] == ']' {
 		s.Pos++
@@ -1012,9 +986,7 @@ func (s *Stream) skipObject() error {
 		if err := s.ReadMore(s.Pos); err != nil {
 			return ErrBadObject
 		}
-		if s.Shift {
-			s.Pos = 0
-		}
+		s.Pos = 0
 	}
 	if s.buf[s.Pos] == '}' {
 		s.Pos++
@@ -1075,9 +1047,7 @@ func (s *Stream) Any() (any, error) {
 		if err := s.ReadMore(s.Pos); err != nil {
 			return nil, err
 		}
-		if s.Shift {
-			s.Pos = 0
-		}
+		s.Pos = 0
 	}
 	switch c := s.buf[s.Pos]; {
 	case c == 'n':
@@ -1118,9 +1088,7 @@ func (s *Stream) anyArray() ([]any, error) {
 		if err := s.ReadMore(s.Pos); err != nil {
 			return nil, err
 		}
-		if s.Shift {
-			s.Pos = 0
-		}
+		s.Pos = 0
 	}
 	if s.buf[s.Pos] == ']' {
 		s.Pos++
@@ -1140,9 +1108,7 @@ func (s *Stream) anyArray() ([]any, error) {
 			if err := s.ReadMore(s.Pos); err != nil {
 				return nil, err
 			}
-			if s.Shift {
-				s.Pos = 0
-			}
+			s.Pos = 0
 		}
 		if s.buf[s.Pos] == ',' {
 			s.Pos++
@@ -1168,9 +1134,7 @@ func (s *Stream) anyObject() (map[string]any, error) {
 		if err := s.ReadMore(s.Pos); err != nil {
 			return nil, err
 		}
-		if s.Shift {
-			s.Pos = 0
-		}
+		s.Pos = 0
 	}
 	if s.buf[s.Pos] == '}' {
 		s.Pos++
@@ -1209,9 +1173,7 @@ func (s *Stream) anyObject() (map[string]any, error) {
 			if err := s.ReadMore(s.Pos); err != nil {
 				return nil, err
 			}
-			if s.Shift {
-				s.Pos = 0
-			}
+			s.Pos = 0
 		}
 		if s.buf[s.Pos] == ',' {
 			s.Pos++
@@ -1236,9 +1198,7 @@ func (s *Stream) Number() (json.Number, error) {
 		if err := s.ReadMore(i); err != nil {
 			return "", err
 		}
-		if s.Shift {
-			i = 0
-		}
+		i = 0
 	}
 	start := i
 	// buf hoisted into a local; refills compact from start and rebase (see
@@ -1258,10 +1218,8 @@ scan:
 			break scan
 		}
 		err := s.ReadMore(start)
-		if s.Shift {
-			i -= start
-			start = 0
-		}
+		i -= start
+		start = 0
 		if err != nil {
 			break
 		}
@@ -1284,9 +1242,7 @@ func (s *Stream) AnyNumber() (any, error) {
 		if err := s.ReadMore(s.Pos); err != nil {
 			return nil, err
 		}
-		if s.Shift {
-			s.Pos = 0
-		}
+		s.Pos = 0
 	}
 	switch c := s.buf[s.Pos]; {
 	case c == 'n':
@@ -1327,9 +1283,7 @@ func (s *Stream) anyNumberArray() ([]any, error) {
 		if err := s.ReadMore(s.Pos); err != nil {
 			return nil, err
 		}
-		if s.Shift {
-			s.Pos = 0
-		}
+		s.Pos = 0
 	}
 	if s.buf[s.Pos] == ']' {
 		s.Pos++
@@ -1349,9 +1303,7 @@ func (s *Stream) anyNumberArray() ([]any, error) {
 			if err := s.ReadMore(s.Pos); err != nil {
 				return nil, err
 			}
-			if s.Shift {
-				s.Pos = 0
-			}
+			s.Pos = 0
 		}
 		if s.buf[s.Pos] == ',' {
 			s.Pos++
@@ -1377,9 +1329,7 @@ func (s *Stream) anyNumberObject() (map[string]any, error) {
 		if err := s.ReadMore(s.Pos); err != nil {
 			return nil, err
 		}
-		if s.Shift {
-			s.Pos = 0
-		}
+		s.Pos = 0
 	}
 	if s.buf[s.Pos] == '}' {
 		s.Pos++
@@ -1418,9 +1368,7 @@ func (s *Stream) anyNumberObject() (map[string]any, error) {
 			if err := s.ReadMore(s.Pos); err != nil {
 				return nil, err
 			}
-			if s.Shift {
-				s.Pos = 0
-			}
+			s.Pos = 0
 		}
 		if s.buf[s.Pos] == ',' {
 			s.Pos++

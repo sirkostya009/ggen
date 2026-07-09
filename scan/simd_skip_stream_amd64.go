@@ -56,9 +56,7 @@ func (s *Stream) skipSpaceSlowAVX() error {
 			}
 			return err
 		}
-		if s.Shift {
-			i = 0
-		}
+		i = 0
 		buf = s.buf
 	}
 }
@@ -102,9 +100,7 @@ func (s *Stream) skipSpaceSlowAVX2() error {
 			}
 			return err
 		}
-		if s.Shift {
-			i = 0
-		}
+		i = 0
 		buf = s.buf
 	}
 }
@@ -148,26 +144,22 @@ func (s *Stream) skipSpaceSlowAVX512() error {
 			}
 			return err
 		}
-		if s.Shift {
-			i = 0
-		}
+		i = 0
 		buf = s.buf
 	}
 }
 
 // skipStringStreamTail validates the escape at s.buf[bs] mid-skip, refilling
 // as needed — the shared cold arm of the stream skipString tiers (same
-// semantics as the scalar escape branch, incl. Shift adjustments). Returns
+// semantics as the scalar escape branch, incl. cursor rebase). Returns
 // the updated (j, start) scan cursors.
 func (s *Stream) skipStringStreamTail(start, bs int) (int, int, error) {
 	if bs+1 >= len(s.buf) {
 		if err := s.ReadMore(bs); err != nil {
 			return 0, 0, ErrBadString
 		}
-		if s.Shift {
-			start = 0
-			bs = 0
-		}
+		start = 0
+		bs = 0
 	}
 	switch s.buf[bs+1] {
 	case '"', '\\', '/', 'b', 'f', 'n', 'r', 't':
@@ -177,10 +169,8 @@ func (s *Stream) skipStringStreamTail(start, bs int) (int, int, error) {
 			if err := s.ReadMore(bs); err != nil {
 				return 0, 0, ErrBadString
 			}
-			if s.Shift {
-				start = 0
-				bs = 0
-			}
+			start = 0
+			bs = 0
 		}
 		if _, ok := parseHex4(s.buf[bs+2 : bs+6]); !ok {
 			return 0, 0, ErrBadString
@@ -198,9 +188,7 @@ func (s *Stream) skipStringAVX() error {
 		if err := s.ReadMore(i); err != nil {
 			return err
 		}
-		if s.Shift {
-			i = 0
-		}
+		i = 0
 	}
 	if s.buf[i] != '"' {
 		return ErrExpectString
@@ -213,10 +201,8 @@ func (s *Stream) skipStringAVX() error {
 			// Skipped bytes are discardable — full compaction (see scalar).
 			j = len(s.buf)
 			err := s.ReadMore(j)
-			if s.Shift {
-				j = 0
-				start = 0
-			}
+			j = 0
+			start = 0
 			if err != nil {
 				return ErrUnterminated
 			}
@@ -245,9 +231,7 @@ func (s *Stream) skipStringAVX2() error {
 		if err := s.ReadMore(i); err != nil {
 			return err
 		}
-		if s.Shift {
-			i = 0
-		}
+		i = 0
 	}
 	if s.buf[i] != '"' {
 		return ErrExpectString
@@ -260,10 +244,8 @@ func (s *Stream) skipStringAVX2() error {
 			// Skipped bytes are discardable — full compaction (see scalar).
 			j = len(s.buf)
 			err := s.ReadMore(j)
-			if s.Shift {
-				j = 0
-				start = 0
-			}
+			j = 0
+			start = 0
 			if err != nil {
 				return ErrUnterminated
 			}
@@ -292,9 +274,7 @@ func (s *Stream) skipStringAVX512() error {
 		if err := s.ReadMore(i); err != nil {
 			return err
 		}
-		if s.Shift {
-			i = 0
-		}
+		i = 0
 	}
 	if s.buf[i] != '"' {
 		return ErrExpectString
@@ -307,10 +287,8 @@ func (s *Stream) skipStringAVX512() error {
 			// Skipped bytes are discardable — full compaction (see scalar).
 			j = len(s.buf)
 			err := s.ReadMore(j)
-			if s.Shift {
-				j = 0
-				start = 0
-			}
+			j = 0
+			start = 0
 			if err != nil {
 				return ErrUnterminated
 			}
@@ -360,9 +338,7 @@ func (s *Stream) SkipValueAVX() error {
 		if err := s.ReadMore(s.Pos); err != nil {
 			return ErrUnexpectedEnd
 		}
-		if s.Shift {
-			s.Pos = 0
-		}
+		s.Pos = 0
 	}
 	switch s.buf[s.Pos] {
 	case '"':
@@ -392,9 +368,7 @@ func (s *Stream) skipArrayAVX() error {
 		if err := s.ReadMore(s.Pos); err != nil {
 			return ErrBadArray
 		}
-		if s.Shift {
-			s.Pos = 0
-		}
+		s.Pos = 0
 	}
 	if s.buf[s.Pos] == ']' {
 		s.Pos++
@@ -432,9 +406,7 @@ func (s *Stream) skipObjectAVX() error {
 		if err := s.ReadMore(s.Pos); err != nil {
 			return ErrBadObject
 		}
-		if s.Shift {
-			s.Pos = 0
-		}
+		s.Pos = 0
 	}
 	if s.buf[s.Pos] == '}' {
 		s.Pos++
@@ -492,9 +464,7 @@ func (s *Stream) SkipValueAVX2() error {
 		if err := s.ReadMore(s.Pos); err != nil {
 			return ErrUnexpectedEnd
 		}
-		if s.Shift {
-			s.Pos = 0
-		}
+		s.Pos = 0
 	}
 	switch s.buf[s.Pos] {
 	case '"':
@@ -524,9 +494,7 @@ func (s *Stream) skipArrayAVX2() error {
 		if err := s.ReadMore(s.Pos); err != nil {
 			return ErrBadArray
 		}
-		if s.Shift {
-			s.Pos = 0
-		}
+		s.Pos = 0
 	}
 	if s.buf[s.Pos] == ']' {
 		s.Pos++
@@ -564,9 +532,7 @@ func (s *Stream) skipObjectAVX2() error {
 		if err := s.ReadMore(s.Pos); err != nil {
 			return ErrBadObject
 		}
-		if s.Shift {
-			s.Pos = 0
-		}
+		s.Pos = 0
 	}
 	if s.buf[s.Pos] == '}' {
 		s.Pos++
@@ -624,9 +590,7 @@ func (s *Stream) SkipValueAVX512() error {
 		if err := s.ReadMore(s.Pos); err != nil {
 			return ErrUnexpectedEnd
 		}
-		if s.Shift {
-			s.Pos = 0
-		}
+		s.Pos = 0
 	}
 	switch s.buf[s.Pos] {
 	case '"':
@@ -648,6 +612,108 @@ func (s *Stream) SkipValueAVX512() error {
 	return ErrBadValue
 }
 
+// CaptureValueAVX / AVX2 / AVX512 are Stream.CaptureValue over the fused
+// bytes-path skip tiers — the value is located by the vector skip, capture is
+// still just grow-and-slice. See Stream.CaptureValue.
+func (s *Stream) CaptureValueAVX() ([]byte, error) {
+	start := s.Pos
+	eof := false
+	for {
+		end, err := SkipValueAVX(s.buf, start)
+		if err == nil && (end < len(s.buf) || eof) {
+			s.Pos = end
+			return s.buf[start:end], nil
+		}
+		if eof {
+			s.Pos = start
+			return nil, err
+		}
+		if e := s.ReadMore(start); e != nil {
+			if e != io.ErrUnexpectedEOF {
+				s.Pos = 0
+				return nil, e
+			}
+			eof = true
+		}
+		start = 0
+		for !eof && len(s.buf) < cap(s.buf) {
+			if e := s.ReadMore(0); e != nil {
+				if e != io.ErrUnexpectedEOF {
+					s.Pos = 0
+					return nil, e
+				}
+				eof = true
+			}
+		}
+	}
+}
+
+func (s *Stream) CaptureValueAVX2() ([]byte, error) {
+	start := s.Pos
+	eof := false
+	for {
+		end, err := SkipValueAVX2(s.buf, start)
+		if err == nil && (end < len(s.buf) || eof) {
+			s.Pos = end
+			return s.buf[start:end], nil
+		}
+		if eof {
+			s.Pos = start
+			return nil, err
+		}
+		if e := s.ReadMore(start); e != nil {
+			if e != io.ErrUnexpectedEOF {
+				s.Pos = 0
+				return nil, e
+			}
+			eof = true
+		}
+		start = 0
+		for !eof && len(s.buf) < cap(s.buf) {
+			if e := s.ReadMore(0); e != nil {
+				if e != io.ErrUnexpectedEOF {
+					s.Pos = 0
+					return nil, e
+				}
+				eof = true
+			}
+		}
+	}
+}
+
+func (s *Stream) CaptureValueAVX512() ([]byte, error) {
+	start := s.Pos
+	eof := false
+	for {
+		end, err := SkipValueAVX512(s.buf, start)
+		if err == nil && (end < len(s.buf) || eof) {
+			s.Pos = end
+			return s.buf[start:end], nil
+		}
+		if eof {
+			s.Pos = start
+			return nil, err
+		}
+		if e := s.ReadMore(start); e != nil {
+			if e != io.ErrUnexpectedEOF {
+				s.Pos = 0
+				return nil, e
+			}
+			eof = true
+		}
+		start = 0
+		for !eof && len(s.buf) < cap(s.buf) {
+			if e := s.ReadMore(0); e != nil {
+				if e != io.ErrUnexpectedEOF {
+					s.Pos = 0
+					return nil, e
+				}
+				eof = true
+			}
+		}
+	}
+}
+
 func (s *Stream) skipArrayAVX512() error {
 	if err := s.SkipSpaceAVX512(); err != nil {
 		return err
@@ -656,9 +722,7 @@ func (s *Stream) skipArrayAVX512() error {
 		if err := s.ReadMore(s.Pos); err != nil {
 			return ErrBadArray
 		}
-		if s.Shift {
-			s.Pos = 0
-		}
+		s.Pos = 0
 	}
 	if s.buf[s.Pos] == ']' {
 		s.Pos++
@@ -696,9 +760,7 @@ func (s *Stream) skipObjectAVX512() error {
 		if err := s.ReadMore(s.Pos); err != nil {
 			return ErrBadObject
 		}
-		if s.Shift {
-			s.Pos = 0
-		}
+		s.Pos = 0
 	}
 	if s.buf[s.Pos] == '}' {
 		s.Pos++

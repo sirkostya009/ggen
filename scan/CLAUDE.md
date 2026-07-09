@@ -134,7 +134,7 @@ toward 0 as a compacting `ReadMore` (keep > 0) slides the window. Unexported
 `consumed int` accumulates every discarded prefix (`+= keep`, or `+= len(buf)` on
 full discard), so `buf[0]` always sits at absolute offset `consumed`. `Offset()`
 returns `consumed + Pos` = absolute cursor, stable across the whole stream. `Reset`
-zeroes `consumed`; no-shift mode never advances it. Generated decoders use it to
+zeroes `consumed`. Generated decoders use it to
 stamp `validation.*Error.Pos` with a full-payload-relative offset (raw `Pos` is
 wrong once the window compacts) — see `validation/CLAUDE.md`.
 
@@ -147,17 +147,31 @@ loops. `keep` = lowest offset the caller still needs; bytes before may be discar
 - `0 < keep < len(buf)` — in-place `memmove` `buf[keep:n]` → `buf[0:n-keep]`, read
   into freed tail. **Aliases into buffer invalidated when `keep > 0`.**
 
+**Stateless — Stream carries NO reader state (no sticky error, no EOF flag);
+the reader is its own state.** Data+`io.EOF` on one Read delivers the bytes
+(nil); the next call re-Reads the drained reader, gets `(0, io.EOF)` again
+(io.Reader EOF is stable across the ecosystem), and surfaces
+`io.ErrUnexpectedEOF` — pinned by `TestStream_EOFAfterContent` (bytes.Reader +
+`iotest.DataErrReader`). A failing reader re-fails on the next call — every
+ReadMore error path in every primitive aborts or exits its loop, and the
+number-scanner "swallow" (`break` on refill error) only fires with the buffer
+exhausted, so the next primitive re-hits the reader; a transient error that
+loses no bytes even resumes losslessly (stickiness would have killed a decode
+the reader could finish). The old sticky `Err`/`EOF` fields were deleted with
+the `Shift` flag — the only cross-refill EOF consumer is `CaptureValue`, which
+tracks it as a local (`ReadMore == io.ErrUnexpectedEOF` ⇒ drained).
+
 **Aggressive compaction inside Stream methods.** `SkipSpace`, `ConsumeColon`,
 `Int64`/`Uint64`, `String`/`KeyView`, `Float64`/`Number` pass non-zero `keep`
 (current cursor, or value-start `start` for spans outlasting the loop) so the
 buffer stays bounded ~`max(chunk_size, value_size)`; each updates locals after
-shift (`i = 0`, or `j -= start; start = 0` for the string/number body) then
+compaction (`i = 0`, or `j -= start; start = 0` for the string/number body) then
 writes final `s.Pos`. `Float64`/`Number` USED to refill mid-number with grow-only
 `ReadMore(0)`; since readers fill the whole window, every mid-number window edge
 landed with `len == cap` and DOUBLED the buffer (a 64 B buffer ballooned to 1 MB
 on a 50k-short-float stream). They now compact from `start` + rebase `i` like
-`stringView` (pinned by `TestFloatNumberBufBounded` / `TestFloatScanNoShiftRefill`)
-— same class as the skip-tree compaction fix. The escape decoder `stringSlow` got
+`stringView` (pinned by `TestFloatNumberBufBounded`) — same class as the skip-tree
+compaction fix. The escape decoder `stringSlow` got
 the same treatment: it copies into an owned scratch and aliases THAT (not `s.buf`),
 so every refill compacts from the cursor `j` + rebases (`\X`/`\uXXXX`/surrogate
 each ensure their whole span first) — grow-only ballooned a multi-MB escaped
@@ -166,12 +180,31 @@ string (a 64 B buffer → 256 KB on a 200 KB escaped string; pinned by
 `exactShort` gate the bytes path has (skips `strconv.ParseFloat`'s re-scan;
 bit-identical).
 
-**`Shift` field** (defaults true via `Reset`) flips off around `SkipValue` in
-RawJSON capture + `json.Unmarshal` fallback spans, where generated code needs stable
-absolute offsets to slice `s.Bytes()[start:s.Pos]`. Bookkeeping branches check
-`s.Shift` before resetting cursor — including `Int64`/`Uint64`'s mid-digit-loop
-refill (an ungated `i = 0` there re-read consumed digits under no-shift; pinned by
-`TestIntegerScanNoShiftRefill`).
+**`CaptureValue() ([]byte, error)` — raw-span capture, no mode flag.** RawJSON
+capture, `json.Unmarshal`/`UnmarshalJSON` fallback, and `big.Int` all need the
+value's raw bytes contiguous to hand off. Rather than a `Shift` field that flipped
+compaction OFF so the stream skip's window could be sliced (the OLD design — a
+one-bit mode threaded through ~65 `if s.Shift` rebase gates + 8 codegen save/restore
+sites), `CaptureValue` grows the window (grow-only `ReadMore(0)`, which needs no
+flag) until the value is whole, then locates its end with the **bytes-path**
+`SkipValue` — reused verbatim, so there is NO streaming capture-skip and no new
+SIMD skip: tiers are thin wrappers (`CaptureValueAVX{,2,512}`) calling the bytes
+`SkipValueAVX*`. It trusts the skip's end only when a byte past it is buffered
+(`end < len(buf)`) or the reader has drained (local `eof`, set when ReadMore
+returns `io.ErrUnexpectedEOF`), else refills — so a number `123` at the window
+edge isn't cut short before a possible `1234`. A skip ERROR on a partial window
+is indistinguishable from truncation (no error position), so it also means "read
+more" and only surfaces once drained — malformed input buffers the stream
+remainder before erroring. The FIRST refill compacts the consumed prefix (`ReadMore(start)`,
+rebase `start = 0`) so the window grows for the value only, never dragging dead
+bytes through each doubling; entry deliberately does not compact (the value may
+already be fully buffered and ReadMore always Reads — could block a live socket).
+Fills spare capacity between re-skips so a byte-dribble reader stays O(n) not
+O(n²). Returns a buffer alias (valid until the next Stream op — RawMessage copies
+it, `json.Unmarshal`/`SetString` consume it in place). The whole stream skip now
+compacts unconditionally — the `if s.Shift` gates are gone, replaced by plain
+rebases. Pinned by `TestStreamCaptureValue` (correctness × chunk sizes, trailing
+input, prefix-compaction cap bound, EOF errors) + the bytes-vs-stream fuzzer.
 
 **Dispatch-loop shift points.** Generated code adds two: `ReadMore(s.Pos); s.Pos =
 0` after `ObjectOpen+SkipSpace`, and after per-iteration value decode + SkipSpace.
@@ -199,8 +232,7 @@ generated code relies on.
 `Float64`, `Number` hoist `buf := s.buf` and run a nested loop (`for i < len(buf)`)
 so the hot scan compares against a registerized `len(buf)` instead of reloading the
 `s.buf` header through the `*Stream` pointer each iteration; refill (outer loop)
-reloads `buf = s.buf` after the shift. Byte-identical — Shift-gated cursor reset
-(`if s.Shift { i = 0 }`) and no-shift cursor-keep preserved.
+reloads `buf = s.buf` after the compaction + `i = 0` rebase.
 
 ### Stream copies vs bytes-path aliases
 
@@ -301,13 +333,13 @@ seams) and `TestSkipSpaceSIMD_Parity` (every run length 0..130).
 `(*Stream).SkipValueAVX{,2,512}` + `skipArray*`/`skipObject*`/`skipString*`/
 `SkipSpace*` — the stream mirror of the bytes skip tier: per-window
 `structuralIndex*` locate in skipString (escape/refill arm factored into
-`skipStringStreamTail`, Shift bookkeeping identical to scalar), vector
+`skipStringStreamTail`, cursor rebase identical to scalar), vector
 whitespace-run skip in `SkipSpace*`'s slow path (same inlinable shell shape
 as scalar `SkipSpace`), refill/compaction copied bit-exactly. Generated
-stream decoders swap `= s.SkipValue()` / `= s.SkipSpace()` to a tier
-(`tierStreamStringCalls`). Measured at avx512: SkipHeavy ggen_stream
+stream decoders swap `= s.SkipValue()` / `= s.SkipSpace()` / `= s.CaptureValue()`
+to a tier (`tierStreamStringCalls`). Measured at avx512: SkipHeavy ggen_stream
 compact −32.6%, pretty −25.6%; Mega_Reader flat (copy mallocs dominate).
-Pinned by `TestStreamSkipValueSIMD_Parity` (chunked readers × shift modes ×
+Pinned by `TestStreamSkipValueSIMD_Parity` (chunked readers ×
 truncations at every byte).
 
 **Skip-tree compaction (scalar + tiers, shipped with the tier).** The skip
@@ -316,15 +348,15 @@ window, so every refill landed with `len == cap` and DOUBLED the buffer —
 skipping a 5.9 MB blob through a 4 KiB stream buffer allocated 8.4 MB/op.
 Skipped bytes are discardable, so every skip refill now compacts:
 `SkipValue`/`skipArray`/`skipObject` bound checks pass `s.Pos` (== len(buf)
-⇒ free full-discard, no memmove) + Shift-gated `s.Pos = 0`; `skipString`'s
+⇒ free full-discard, no memmove) + `s.Pos = 0` rebase; `skipString`'s
 clean-window refill full-discards (`ReadMore(len(buf))`); `skipNumber`
 refills via `refillSkip(&i)` — the hot `i < len(s.buf)` bounds check stays
 inline, the cold helper compacts + rebases (a pointer-arg `hasByteAt`
 variant broke inlining and cost +40% — the split is load-bearing).
-`ReadMore` no-ops the keep under `Shift=false`, so RawJSON capture is
-unaffected. 8.4 MB/op → 127 KB/op, 12 → 6 allocs. NOTE: raw `Pos` across a
-Shift=true `SkipValue` is now buffer-relative (like SkipSpace/Int64) — use
-`Offset()`; `TestSkipNumber_StreamMatchesBytes` asserts via Offset.
+8.4 MB/op → 127 KB/op, 12 → 6 allocs. NOTE: raw `Pos` across a `SkipValue`
+is buffer-relative (like SkipSpace/Int64) — use `Offset()`;
+`TestSkipNumber_StreamMatchesBytes` asserts via Offset. (RawJSON capture no
+longer rides the stream skip — see `CaptureValue`, which uses the bytes skip.)
 
 **Stream `skipObject` comma-WS bug (fixed 2026-07).** The comma branch did
 `s.Pos++; continue` straight into the next key's skipString — no separator
@@ -359,7 +391,7 @@ alignment vs naive loop) + `_Boundary` (0x1f vs 0x20 at the lane seam).
 All three string scanners (`String`, `KeyView`, `skipString`) bound the backslash
 IndexByte to the closing quote; a whole-tail probe runs only when the quote is not
 yet buffered. `skipString` once probed the full tail per skipped string — `SkipValue`
-went O(payload²) when the buffer held the whole payload (Shift=false RawJSON capture).
+went O(payload²) when the buffer held the whole payload (a large fully-buffered value).
 The bound restores linearity; allocs identical.
 
 ## Design rationale

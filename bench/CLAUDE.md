@@ -1,5 +1,15 @@
 # bench — perf benchmarks vs jsonv2 / sonic / easyjson
 
+## Benchmarks are a compass, NOT a target
+
+Bench values are like tests: they exist to cover common cases or bugs found
+spontaneously during development — they are NOT actual use cases and will
+practically never coincide with a real-world workload. Treat a bench delta as a
+directional signal of where performance is going, nothing more. NEVER optimize
+against a benchmark's specific values — shaping code to a payload's particular
+string lengths, key mix, or nesting is fitting to the fixture, not to users.
+The numbers below are for science only.
+
 ## Files
 
 - `bench/types.go` — ggen-annotated `Node` + easyjson-annotated `NodePlain` /
@@ -283,8 +293,9 @@ tries to exec the env assignment.
 ```
 
 `-benchtime=500x` fixes the iteration count so rows are directly comparable.
-`-count=1` is the rule, not a starting point. ONLY when explicitly asked for a
-rigorous A/B do you build both sides as test binaries and interleave under the
-same pin (`go test -c -o old.test` / `new.test`, alternate runs) + `benchstat`
-over more samples — and even then you emit the full output, never truncated.
+`-count=1` is the rule, not a starting point. For an A/B, build both sides as
+test binaries (`go test -c -o old.test` / `new.test`) and run each side ONCE
+under the same pin — **NEVER loop alternating old/new pairs** (no
+`for i in …; do old; new; done` marathons; they waste minutes for numbers that
+are a compass either way). One pass per side, full output, compare directly.
 `./...` from root does NOT cross module boundaries — `cd` into `bench/` first.

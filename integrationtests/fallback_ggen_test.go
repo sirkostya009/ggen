@@ -167,15 +167,11 @@ func (recv FallbackStruct) DecodeFromStream(s *scan.Stream) (result FallbackStru
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"extra"}}
 			}
 			seenExtra = true
-			start := s.Pos
-			prevPin := s.Shift
-			s.Shift = false
-			err = s.SkipValue()
-			s.Shift = prevPin
+			span, err := s.CaptureValue()
 			if err != nil {
 				return result, decode.NewParseErr("extra", s.Pos, err)
 			}
-			err = json.Unmarshal(s.Bytes()[start:s.Pos], &result.Extra)
+			err = json.Unmarshal(span, &result.Extra)
 			if err != nil {
 				return result, decode.NewParseErr("extra", s.Pos, err)
 			}

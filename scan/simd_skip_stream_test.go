@@ -57,23 +57,20 @@ func TestStreamSkipValueSIMD_Parity(t *testing.T) {
 			cases = append(cases, b)
 		}
 	}
-	run := func(fn func(*Stream) error, payload []byte, chunk int, shift bool) (int, error) {
+	run := func(fn func(*Stream) error, payload []byte, chunk int) (int, error) {
 		var s Stream
 		s.Reset(&chunkReader{bytes.NewReader(payload), chunk}, make([]byte, 0, 8))
-		s.Shift = shift
 		err := fn(&s)
 		return s.Offset(), err
 	}
 	for _, in := range cases {
 		for _, chunk := range []int{1, 3, 7, 64} {
-			for _, shift := range []bool{true, false} {
-				wantOff, wantErr := run((*Stream).SkipValue, in, chunk, shift)
-				for _, tier := range tiers {
-					gotOff, gotErr := run(tier.fn, in, chunk, shift)
-					if wantErr != gotErr || (wantErr == nil && gotOff != wantOff) {
-						t.Fatalf("%s(%q, chunk=%d, shift=%v) = (%d, %v), scalar (%d, %v)",
-							tier.name, in, chunk, shift, gotOff, gotErr, wantOff, wantErr)
-					}
+			wantOff, wantErr := run((*Stream).SkipValue, in, chunk)
+			for _, tier := range tiers {
+				gotOff, gotErr := run(tier.fn, in, chunk)
+				if wantErr != gotErr || (wantErr == nil && gotOff != wantOff) {
+					t.Fatalf("%s(%q, chunk=%d) = (%d, %v), scalar (%d, %v)",
+						tier.name, in, chunk, gotOff, gotErr, wantOff, wantErr)
 				}
 			}
 		}

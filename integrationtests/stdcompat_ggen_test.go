@@ -4952,16 +4952,11 @@ func (recv richSubset) DecodeFromStream(s *scan.Stream) (result richSubset, err 
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"big"}}
 			}
 			seenBig = true
-			start := s.Pos
-			prevPin := s.Shift
-			s.Shift = false
-			err = s.SkipValue()
-			s.Shift = prevPin
+			span, err := s.CaptureValue()
 			if err != nil {
 				return result, decode.NewParseErr("big", s.Pos, err)
 			}
-			buf := s.Bytes()
-			if _, ok := (&result.Big).SetString(unsafe.String(unsafe.SliceData(buf[start:]), s.Pos-start), 10); !ok {
+			if _, ok := (&result.Big).SetString(unsafe.String(unsafe.SliceData(span), len(span)), 10); !ok {
 				return result, decode.NewParseErr("big", s.Pos, scan.ErrBadNumber)
 			}
 		case "bigF":
@@ -5043,16 +5038,11 @@ func (recv richSubset) DecodeFromStream(s *scan.Stream) (result richSubset, err 
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"raw1"}}
 			}
 			seenRaw1 = true
-			start := s.Pos
-			prevPin := s.Shift
-			s.Shift = false
-			err = s.SkipValue()
-			s.Shift = prevPin
+			span, err := s.CaptureValue()
 			if err != nil {
 				return result, decode.NewParseErr("raw1", s.Pos, err)
 			}
-			raw := s.Bytes()[start:s.Pos]
-			result.Raw1 = append(make([]byte, 0, len(raw)), raw...)
+			result.Raw1 = append(make([]byte, 0, len(span)), span...)
 		case "raw2":
 			err = s.ConsumeColon()
 			if err != nil {
@@ -5062,16 +5052,11 @@ func (recv richSubset) DecodeFromStream(s *scan.Stream) (result richSubset, err 
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"raw2"}}
 			}
 			seenRaw2 = true
-			start := s.Pos
-			prevPin := s.Shift
-			s.Shift = false
-			err = s.SkipValue()
-			s.Shift = prevPin
+			span, err := s.CaptureValue()
 			if err != nil {
 				return result, decode.NewParseErr("raw2", s.Pos, err)
 			}
-			raw := s.Bytes()[start:s.Pos]
-			result.Raw2 = append(make([]byte, 0, len(raw)), raw...)
+			result.Raw2 = append(make([]byte, 0, len(span)), span...)
 		default:
 			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}

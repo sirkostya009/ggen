@@ -959,16 +959,12 @@ func (recv OpaqueAlias) DecodeFrom(data []byte) (result OpaqueAlias, i int, err 
 
 func (recv OpaqueAlias) DecodeFromStream(s *scan.Stream) (result OpaqueAlias, err error) {
 	result = recv
-	start := s.Pos
-	prevPin := s.Shift
-	s.Shift = false
-	err = s.SkipValue()
-	s.Shift = prevPin
+	span, err := s.CaptureValue()
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
 	var u OpaqueWithMethods
-	if err := u.UnmarshalJSON(s.Bytes()[start:s.Pos]); err != nil {
+	if err := u.UnmarshalJSON(span); err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
 	result = OpaqueAlias(u)

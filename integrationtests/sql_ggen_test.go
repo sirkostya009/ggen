@@ -3353,15 +3353,11 @@ func (recv SQLNullGenAccountStruct) DecodeFromStream(s *scan.Stream) (result SQL
 				s.Pos += 4
 			} else {
 				var nv SQLAccountID
-				start := s.Pos
-				prevPin := s.Shift
-				s.Shift = false
-				err = s.SkipValue()
-				s.Shift = prevPin
+				span, err := s.CaptureValue()
 				if err != nil {
 					return result, decode.NewParseErr("a", s.Pos, err)
 				}
-				err = json.Unmarshal(s.Bytes()[start:s.Pos], &nv)
+				err = json.Unmarshal(span, &nv)
 				if err != nil {
 					return result, decode.NewParseErr("a", s.Pos, err)
 				}
@@ -3576,15 +3572,11 @@ func (recv SQLNullGenLabelStruct) DecodeFromStream(s *scan.Stream) (result SQLNu
 				s.Pos += 4
 			} else {
 				var nv SQLLabel
-				start := s.Pos
-				prevPin := s.Shift
-				s.Shift = false
-				err = s.SkipValue()
-				s.Shift = prevPin
+				span, err := s.CaptureValue()
 				if err != nil {
 					return result, decode.NewParseErr("l", s.Pos, err)
 				}
-				err = json.Unmarshal(s.Bytes()[start:s.Pos], &nv)
+				err = json.Unmarshal(span, &nv)
 				if err != nil {
 					return result, decode.NewParseErr("l", s.Pos, err)
 				}

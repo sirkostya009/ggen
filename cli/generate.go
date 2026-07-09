@@ -3200,12 +3200,8 @@ func renderCrossPkgStructStreamDecode(f FieldInfo, ref, posVar string) string {
 %[2]s`, ref, nestedDecodeErrCheck(fieldLit(f), f.MultiErr, false))
 
 		case f.Iface.JSONUnmarshaler:
-			return fmt.Sprintf(`start := s.Pos
-prevPin := s.Shift
-s.Shift = false
-err = s.SkipValue()
-s.Shift = prevPin
-%[2]serr = %[1]s.UnmarshalJSON(s.Bytes()[start:s.Pos])
+			return fmt.Sprintf(`span, err := s.CaptureValue()
+%[2]serr = %[1]s.UnmarshalJSON(span)
 %[2]s`, ref, chk)
 
 		case f.Iface.TextUnmarshaler:
@@ -3218,22 +3214,14 @@ ts, err = s.StringView()
 %[2]s`, ref, chk)
 
 		default:
-			return fmt.Sprintf(`start := s.Pos
-prevPin := s.Shift
-s.Shift = false
-err = s.SkipValue()
-s.Shift = prevPin
-%[2]serr = json.Unmarshal(s.Bytes()[start:s.Pos], &%[1]s)
+			return fmt.Sprintf(`span, err := s.CaptureValue()
+%[2]serr = json.Unmarshal(span, &%[1]s)
 %[2]s`, ref, chk)
 		}
 	}
 	// Unresolved (AST-only) — plain encoding/json fallback.
-	return fmt.Sprintf(`start := s.Pos
-prevPin := s.Shift
-s.Shift = false
-err = s.SkipValue()
-s.Shift = prevPin
-%[2]serr = json.Unmarshal(s.Bytes()[start:s.Pos], &%[1]s)
+	return fmt.Sprintf(`span, err := s.CaptureValue()
+%[2]serr = json.Unmarshal(span, &%[1]s)
 %[2]s`, ref, chk)
 }
 
@@ -4469,6 +4457,7 @@ func tierStreamStringCalls(body string, s StructInfo) string {
 	// pair on compact input, vector runs on whitespace-rich streams.
 	body = strings.ReplaceAll(body, "= s.SkipValue()", "= s.SkipValue"+simdSuffix+"()")
 	body = strings.ReplaceAll(body, "= s.SkipSpace()", "= s.SkipSpace"+simdSuffix+"()")
+	body = strings.ReplaceAll(body, "= s.CaptureValue()", "= s.CaptureValue"+simdSuffix+"()")
 	if maxJSONNameLen(s) > 5 {
 		body = strings.ReplaceAll(body, "= s.KeyView()", "= s.KeyView"+simdSuffix+"()")
 	}
@@ -4693,13 +4682,9 @@ mv, err = mv.DecodeFromStream(s)
 %s%s = mv
 `, f.ElemType, nestedDecodeErrCheck(fieldLit(f), f.MultiErr, false), mapTarget)
 		} else {
-			fmt.Fprintf(b, `start := s.Pos
-prevPin := s.Shift
-s.Shift = false
-err = s.SkipValue()
-s.Shift = prevPin
+			fmt.Fprintf(b, `span, err := s.CaptureValue()
 %[3]svar mv %[1]s
-if err := json.Unmarshal(s.Bytes()[start:s.Pos], &mv); err != nil { return result, decode.NewParseErr(%[4]s, s.Pos, err) }
+if err := json.Unmarshal(span, &mv); err != nil { return result, decode.NewParseErr(%[4]s, s.Pos, err) }
 %[2]s = mv
 `, f.ElemType, mapTarget, chk, field)
 		}
@@ -4950,18 +4935,13 @@ sv, err = s.StringView()
 %[2]s`, ref, chk)
 }
 
-// renderStreamRawJSON copies the buffer span into the field. SkipValue runs
-// with s.Shift = false so in-place compaction doesn't invalidate `start`.
+// renderStreamRawJSON copies the captured span into the field (CaptureValue
+// returns a buffer alias, so the append detaches it).
 func renderStreamRawJSON(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	_ = posVar
 	chk := streamErrCheck(fieldLit(f))
-	fmt.Fprintf(b, `start := s.Pos
-prevPin := s.Shift
-s.Shift = false
-err = s.SkipValue()
-s.Shift = prevPin
-%[2]sraw := s.Bytes()[start:s.Pos]
-%[1]s = append(make([]byte, 0, len(raw)), raw...)
+	fmt.Fprintf(b, `span, err := s.CaptureValue()
+%[2]s%[1]s = append(make([]byte, 0, len(span)), span...)
 `, ref, chk)
 }
 
@@ -4979,13 +4959,8 @@ func renderStreamBigInt(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	_ = posVar
 	field := fieldLit(f)
 	chk := streamErrCheck(field)
-	fmt.Fprintf(b, `start := s.Pos
-prevPin := s.Shift
-s.Shift = false
-err = s.SkipValue()
-s.Shift = prevPin
-%[2]sbuf := s.Bytes()
-if _, ok := (&%[1]s).SetString(unsafe.String(unsafe.SliceData(buf[start:]), s.Pos-start), 10); !ok {
+	fmt.Fprintf(b, `span, err := s.CaptureValue()
+%[2]sif _, ok := (&%[1]s).SetString(unsafe.String(unsafe.SliceData(span), len(span)), 10); !ok {
 	return result, decode.NewParseErr(%[3]s, s.Pos, scan.ErrBadNumber)
 }
 `, ref, chk, field)
@@ -5142,13 +5117,9 @@ _iv, err = _iv.DecodeFromStream(s)
 `, inline.ElemType, inline.GoName, nestedDecodeErrCheck("ownKey", s.MultiErr, false))
 			}
 		}
-		return prelude + fmt.Sprintf(`start := s.Pos
-prevPin := s.Shift
-s.Shift = false
-err = s.SkipValue()
-s.Shift = prevPin
+		return prelude + fmt.Sprintf(`span, err := s.CaptureValue()
 %[3]svar _iv %[1]s
-if err = json.Unmarshal(s.Bytes()[start:s.Pos], &_iv); err != nil { return result, decode.NewParseErr(ownKey, s.Pos, err) }
+if err = json.Unmarshal(span, &_iv); err != nil { return result, decode.NewParseErr(ownKey, s.Pos, err) }
 result.%[2]s[ownKey] = _iv
 `, inline.ElemType, inline.GoName, chk)
 	}

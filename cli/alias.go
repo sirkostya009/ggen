@@ -144,14 +144,10 @@ return result, nil
 `, s.AliasUnderlying, s.Name)
 	case s.AliasIface.JSONUnmarshaler:
 		if stream {
-			fmt.Fprintf(b, `start := s.Pos
-prevPin := s.Shift
-s.Shift = false
-err = s.SkipValue()
-s.Shift = prevPin
+			fmt.Fprintf(b, `span, err := s.CaptureValue()
 if err != nil { return result, decode.NewParseErr("", s.Pos, err) }
 var u %[1]s
-if err := u.UnmarshalJSON(s.Bytes()[start:s.Pos]); err != nil { return result, decode.NewParseErr("", s.Pos, err) }
+if err := u.UnmarshalJSON(span); err != nil { return result, decode.NewParseErr("", s.Pos, err) }
 result = %[2]s(u)
 return result, nil
 `, s.AliasUnderlying, s.Name)

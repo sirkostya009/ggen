@@ -724,16 +724,11 @@ func (recv CopyDoc) DecodeFromStream(s *scan.Stream) (result CopyDoc, err error)
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"raw"}}
 			}
 			seenRaw = true
-			start := s.Pos
-			prevPin := s.Shift
-			s.Shift = false
-			err = s.SkipValue()
-			s.Shift = prevPin
+			span, err := s.CaptureValue()
 			if err != nil {
 				return result, decode.NewParseErr("raw", s.Pos, err)
 			}
-			raw := s.Bytes()[start:s.Pos]
-			result.Raw = append(make([]byte, 0, len(raw)), raw...)
+			result.Raw = append(make([]byte, 0, len(span)), span...)
 		case "refs":
 			err = s.ConsumeColon()
 			if err != nil {

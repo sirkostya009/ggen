@@ -33,6 +33,15 @@ generated code.
 
 ## Conventions
 
+### Breaking changes are permitted — and expected
+
+Nothing here ships to external consumers under a stability guarantee. Breaking the
+public surface (exported types/fields/functions, wire shape, generated method set)
+is not just allowed but REQUIRED when it yields a simpler, faster, or cleaner
+result — do not preserve a wart, a dead field, or an awkward API for
+backward-compatibility's sake. Delete outright; don't leave deprecated shims. Pick
+the best end-state and reshape callers + generated code + regen to match.
+
 ### How to regenerate
 
 Build the binary into the project dir (`./ggen`), never `/tmp` — it stays

@@ -97,9 +97,7 @@ func (s *Stream) stringViewAVX() (v string, owned bool, err error) {
 		if err := s.ReadMore(i); err != nil {
 			return "", false, err
 		}
-		if s.Shift {
-			i = 0
-		}
+		i = 0
 	}
 	if s.buf[i] != '"' {
 		return "", false, ErrExpectString
@@ -111,10 +109,8 @@ func (s *Stream) stringViewAVX() (v string, owned bool, err error) {
 		if k < 0 {
 			j = len(s.buf)
 			err := s.ReadMore(start)
-			if s.Shift {
-				j -= start
-				start = 0
-			}
+			j -= start
+			start = 0
 			if err != nil {
 				return "", false, ErrUnterminated
 			}
@@ -141,9 +137,7 @@ func (s *Stream) stringViewAVX2() (v string, owned bool, err error) {
 		if err := s.ReadMore(i); err != nil {
 			return "", false, err
 		}
-		if s.Shift {
-			i = 0
-		}
+		i = 0
 	}
 	if s.buf[i] != '"' {
 		return "", false, ErrExpectString
@@ -155,10 +149,8 @@ func (s *Stream) stringViewAVX2() (v string, owned bool, err error) {
 		if k < 0 {
 			j = len(s.buf)
 			err := s.ReadMore(start)
-			if s.Shift {
-				j -= start
-				start = 0
-			}
+			j -= start
+			start = 0
 			if err != nil {
 				return "", false, ErrUnterminated
 			}
@@ -185,9 +177,7 @@ func (s *Stream) stringViewAVX512() (v string, owned bool, err error) {
 		if err := s.ReadMore(i); err != nil {
 			return "", false, err
 		}
-		if s.Shift {
-			i = 0
-		}
+		i = 0
 	}
 	if s.buf[i] != '"' {
 		return "", false, ErrExpectString
@@ -199,10 +189,8 @@ func (s *Stream) stringViewAVX512() (v string, owned bool, err error) {
 		if k < 0 {
 			j = len(s.buf)
 			err := s.ReadMore(start)
-			if s.Shift {
-				j -= start
-				start = 0
-			}
+			j -= start
+			start = 0
 			if err != nil {
 				return "", false, ErrUnterminated
 			}

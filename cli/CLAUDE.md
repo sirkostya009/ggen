@@ -199,8 +199,11 @@ func (s T) AppendJSON(dst []byte) ([]byte, error)
 value's first byte and returns bytes consumed; caller advances its own cursor
 (`i += n` after reslicing `data[i:]`). Stream-path `DecodeFromStream` takes/returns
 no cursor — the cursor is `s.Pos`, owned by the Stream and advanced in-place by
-every scan primitive. To capture a raw span: `start := s.Pos; s.SkipValue(); raw
-:= s.Bytes()[start:s.Pos]`.
+every scan primitive. To capture a raw span (RawMessage, json.Unmarshal fallback,
+big.Int): `span, err := s.CaptureValue()` — grows the window to buffer the whole
+value, returns a buffer alias (copy it if retained; `json.Unmarshal`/`SetString`
+consume it in place). Replaced the old `Shift=false` + `s.Bytes()[start:s.Pos]`
+slice dance — see scan/CLAUDE.md.
 
 **Decode-into-receiver semantics.** The receiver passed in IS the merge source.
 Scalar fields persist across JSON omission (stdlib-merge shape); container fields
