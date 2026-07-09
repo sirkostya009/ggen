@@ -484,9 +484,9 @@ func (s *Stream) skipString() error {
 	}
 }
 
-// stringSlow handles escape sequences into a fresh local buffer copied
-// from the already-scanned prefix. Every ReadMore in the loop passes 0
-// (grow-only) so offsets stay stable across reads.
+// stringSlow handles escape sequences into a fresh owned scratch buffer,
+// seeded from the already-scanned prefix. The window compacts on refill
+// (see loop comment); the result aliases the scratch, never s.buf.
 func (s *Stream) stringSlow(start, j int) (string, error) {
 	if hasCtrlByte(s.buf[start:j]) {
 		return "", ErrBadString

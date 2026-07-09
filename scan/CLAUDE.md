@@ -157,7 +157,12 @@ writes final `s.Pos`. `Float64`/`Number` USED to refill mid-number with grow-onl
 landed with `len == cap` and DOUBLED the buffer (a 64 B buffer ballooned to 1 MB
 on a 50k-short-float stream). They now compact from `start` + rebase `i` like
 `stringView` (pinned by `TestFloatNumberBufBounded` / `TestFloatScanNoShiftRefill`)
-— same class as the skip-tree compaction fix. `Float64` also gained the ≤16 B
+— same class as the skip-tree compaction fix. The escape decoder `stringSlow` got
+the same treatment: it copies into an owned scratch and aliases THAT (not `s.buf`),
+so every refill compacts from the cursor `j` + rebases (`\X`/`\uXXXX`/surrogate
+each ensure their whole span first) — grow-only ballooned a multi-MB escaped
+string (a 64 B buffer → 256 KB on a 200 KB escaped string; pinned by
+`TestStreamStringSlowBufBounded`). `Float64` also gained the ≤16 B
 `exactShort` gate the bytes path has (skips `strconv.ParseFloat`'s re-scan;
 bit-identical).
 

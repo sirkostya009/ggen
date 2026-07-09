@@ -504,3 +504,45 @@ func TestStreamStringSurrogateAcrossRefill(t *testing.T) {
 		}
 	}
 }
+
+// TestStreamStringSlowBufBounded pins the compacting escape refill: a long
+// escaped string must stream through a bounded window, not grow-only. stringSlow
+// decodes into its own scratch and aliases THAT (not s.buf), so every ReadMore
+// keeps from the cursor + rebases (like Float64/Number) — else each mid-string
+// refill lands with len == cap (readers fill the whole window) and DOUBLES the
+// buffer (a 64 B buffer ballooned to 256 KB on a 200 KB escaped string before the
+// fix). Same class the float/number/skip-tree compaction already fixed. Every
+// escape kind — simple, \uXXXX, surrogate pair — routes through stringSlow's
+// distinct ensure-loops, so all three must stay bounded. Value checked against
+// the (fully buffered, correct) bytes path.
+func TestStreamStringSlowBufBounded(t *testing.T) {
+	t.Parallel()
+	cases := map[string]string{
+		"leading-escape-then-plain": "\\n" + strings.Repeat("a", 200000),
+		"all-simple-escapes":        strings.Repeat("\\n", 100000),
+		"all-unicode-escapes":       strings.Repeat("\\u0041", 40000),
+		"all-surrogate-pairs":       strings.Repeat("\\uD83D\\uDE00", 20000),
+	}
+	for name, body := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			payload := `"` + body + `"`
+			want, _, err := String([]byte(payload), 0)
+			if err != nil {
+				t.Fatalf("bytes String: %v", err)
+			}
+			var s Stream
+			s.Reset(strings.NewReader(payload), make([]byte, 0, 64))
+			got, err := s.String()
+			if err != nil {
+				t.Fatalf("stream String: %v", err)
+			}
+			if got != want {
+				t.Fatalf("stream != bytes")
+			}
+			if c := cap(s.Bytes()); c > 4096 {
+				t.Fatalf("buffer ballooned to cap=%d (started 64) — compacting escape refill regressed", c)
+			}
+		})
+	}
+}
