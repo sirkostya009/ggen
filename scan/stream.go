@@ -493,9 +493,21 @@ func (s *Stream) stringSlow(start, j int) (string, error) {
 	}
 	buf := make([]byte, 0, 32)
 	buf = append(buf, s.buf[start:j]...)
+	// `start` is dead now — the decoded output lives in the owned scratch `buf`,
+	// so s.buf can COMPACT (discard consumed bytes) on refill instead of growing
+	// to hold the whole raw string. Every ReadMore keeps from the cursor j and
+	// rebases it, exactly like Int64/Float64/Number, so a multi-MB escaped string
+	// streams through a bounded buffer. Shift=false (RawJSON capture) makes
+	// ReadMore no-op the keep, staying grow-only there with stable offsets.
+	// Multi-byte reads (\X, \uXXXX, surrogate pair) buffer their whole span via a
+	// compacting ensure-loop before indexing s.buf[j+k].
 	for {
 		if j >= len(s.buf) {
-			if err := s.ReadMore(0); err != nil {
+			err := s.ReadMore(j)
+			if s.Shift {
+				j = 0
+			}
+			if err != nil {
 				return "", ErrUnterminated
 			}
 		}
@@ -505,8 +517,12 @@ func (s *Stream) stringSlow(start, j int) (string, error) {
 			return unsafe.String(unsafe.SliceData(buf), len(buf)), nil
 		}
 		if c == '\\' {
-			if j+1 >= len(s.buf) {
-				if err := s.ReadMore(0); err != nil {
+			for j+1 >= len(s.buf) {
+				err := s.ReadMore(j)
+				if s.Shift {
+					j = 0
+				}
+				if err != nil {
 					return "", ErrBadString
 				}
 			}
@@ -531,12 +547,13 @@ func (s *Stream) stringSlow(start, j int) (string, error) {
 				buf = append(buf, '\t')
 				j += 2
 			case 'u':
-				for k := range 4 {
-					pos := j + 2 + k
-					if pos >= len(s.buf) {
-						if err := s.ReadMore(0); err != nil {
-							return "", ErrBadString
-						}
+				for j+6 > len(s.buf) {
+					err := s.ReadMore(j)
+					if s.Shift {
+						j = 0
+					}
+					if err != nil {
+						return "", ErrBadString
 					}
 				}
 				r, ok := parseHex4(s.buf[j+2 : j+6])
@@ -545,6 +562,20 @@ func (s *Stream) stringSlow(start, j int) (string, error) {
 				}
 				j += 6
 				if utf16.IsSurrogate(r) {
+					// Buffer the potential low-surrogate escape (\uXXXX, 6 bytes)
+					// before pairing — it may straddle a refill boundary, and
+					// without this the pair silently splits into two lone
+					// surrogates (😀 → ��). Tolerate EOF: a trailing lone
+					// surrogate keeps r → RuneError, matching the bytes path.
+					for j+6 > len(s.buf) {
+						err := s.ReadMore(j)
+						if s.Shift {
+							j = 0
+						}
+						if err != nil {
+							break
+						}
+					}
 					if j+6 <= len(s.buf) && s.buf[j] == '\\' && s.buf[j+1] == 'u' {
 						if r2, ok := parseHex4(s.buf[j+2 : j+6]); ok {
 							if dec := utf16.DecodeRune(r, r2); dec != utf8.RuneError {

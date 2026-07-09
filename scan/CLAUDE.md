@@ -81,6 +81,17 @@ Primitives: `SkipSpace`, `String`, `Int64`, `Uint64`, `Float64`, `Bool`,
   `unsafe.String` over write-once scratch — 1 alloc per escaped string. Stream
   `stringSlow` mirrors the alias return (cap bounded at 32). Pinned by
   `TestStringEscapeAllocBounded`.
+- **`(*Stream).stringSlow` buffers the low surrogate before pairing.** A
+  `\uXXXX\uXXXX` surrogate pair (😀) whose low half straddles a refill boundary
+  used to silently split into two lone surrogates (😀 → ��): the pair-continuation
+  check tested `j+6 <= len(s.buf)` but never `ReadMore`d to bring the low
+  surrogate in (the high-surrogate read does). Now it pulls the 6 bytes in first
+  (tolerating EOF → trailing lone surrogate stays RuneError, matching the bytes
+  path). The bytes path was always correct (whole payload buffered). Escaped
+  strings never reached any fuzz/bench payload (all asciiLetters), so this shipped
+  undetected until the EscapeHeavy bench; pinned by
+  `TestStreamStringSurrogateAcrossRefill` (surrogate at every offset × tiny bufs
+  vs the bytes path) + escape seeds in `FuzzStreamEqualsBytes`.
 - **`Any`/`AnyNumber` + `AnyCopy`/`AnyNumberCopy`.** `Any` decodes a value into a
   Go `any` with stdlib defaults (`null→nil`, bool, `number→float64`,
   `string`-alias, `[]any`, `map[string]any`); `AnyNumber` is the `json.Number`

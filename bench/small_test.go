@@ -78,11 +78,9 @@ func BenchmarkSmall_Reader(b *testing.B) {
 		}},
 		{"ggen_stream_512", 512, func(s *readerState) error {
 			s.r.Reset(ValidPayload)
-			var err error
 			var _st scan.Stream
-			_st.Reset(&s.r, s.buf[:0])
-			_, err = Validated{}.DecodeFromStream(&_st)
-			s.buf = _st.Bytes()
+			_st.Reset(&s.r, make([]byte, 0, 512))
+			_, err := Validated{}.DecodeFromStream(&_st)
 			return err
 		}},
 		{"ggen_stream_full", len(ValidPayload), func(s *readerState) error {

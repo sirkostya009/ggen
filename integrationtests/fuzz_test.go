@@ -11,6 +11,7 @@ import (
 	"bytes"
 	jsonv2 "encoding/json/v2"
 	"math"
+	"reflect"
 	"testing"
 	"unicode/utf8"
 
@@ -31,6 +32,12 @@ var fuzzSeeds = [][]byte{
 	[]byte(`{"name":"\""}`),
 	[]byte(`{"tags":["a","b",]}`),
 	[]byte(`{"props":{"k":"v",}}`),
+	// Escape/unescape path — raw-string backslashes are JSON escapes: surrogate
+	// pairs (😀), BMP \uXXXX, two-char. Long enough that small chunk
+	// sizes straddle escapes across stream refill boundaries.
+	[]byte(`{"name":"a\ud83d\ude00b\u00e9c\n\t\"\\"}`),
+	[]byte(`{"name":"aaaaaaaaaaaaaaaaaaaaaaaa\ud83d\ude00bbbbbbbb","tags":["x\ud83d\ude00y","\u00e9\u00e9"]}`),
+	[]byte(`{"name":"\u00e9\u00e9\u00e9","props":{"k\ud83d\ude00":"v\u00e9"}}`),
 }
 
 // Bytes and stream paths agree when both succeed; chunk size varies
@@ -62,8 +69,16 @@ func FuzzStreamEqualsBytes(f *testing.F) {
 		wantOut, _ := encode.Marshal(want)
 		gotOut, _ := encode.Marshal(got)
 		if !bytes.Equal(wantOut, gotOut) {
-			t.Fatalf("stream/bytes divergence chunk=%d:\n bytes:  %s\n stream: %s\n in:     %s",
-				chunkSize, wantOut, gotOut, data)
+			// Map marshal order is nondeterministic, so a byte diff may be pure
+			// key order. Re-check order-insensitively (parse both to any) before
+			// failing — a real content divergence still trips.
+			var wa, ga any
+			_ = jsonv2.Unmarshal(wantOut, &wa)
+			_ = jsonv2.Unmarshal(gotOut, &ga)
+			if !reflect.DeepEqual(wa, ga) {
+				t.Fatalf("stream/bytes divergence chunk=%d:\n bytes:  %s\n stream: %s\n in:     %s",
+					chunkSize, wantOut, gotOut, data)
+			}
 		}
 	})
 }

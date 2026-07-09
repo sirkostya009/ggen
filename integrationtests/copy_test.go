@@ -142,6 +142,53 @@ func TestCopy_NestedDecouples(t *testing.T) {
 	}
 }
 
+// TestCopy_EscapedDecouples proves -copy decouples AND correctly unescapes at
+// every retained-string site when the value routes through scan.stringSlow (the
+// escape path — a fresh owned scratch that -copy then redundantly clones). The
+// ASCII-only NestedDecouples payloads never reach stringSlow, so this pins the
+// escape arm: field string, slice elem, map key + value, any-string, pointer
+// leaf — each carries a two-char escape / \uXXXX / surrogate pair, and every
+// decoded value must equal the unescaped Go string both before and after the
+// source is scribbled.
+func TestCopy_EscapedDecouples(t *testing.T) {
+	const js = `{"name":"a\nb\"c\\dé😀","tags":["té","plain"],"props":{"k\ny":"v\"w"},"extra":"x😀","refs":[{"label":"r\t0"}]}`
+
+	wantName := "a\nb\"c\\dé\U0001F600"
+	wantTag0 := "té"
+	wantPropKey, wantPropVal := "k\ny", "v\"w"
+	wantExtra := "x\U0001F600"
+	wantLabel := "r\t0"
+
+	src := []byte(js)
+	cd, _, err := CopyDoc{}.DecodeFrom(src)
+	if err != nil {
+		t.Fatalf("CopyDoc escaped decode: %v", err)
+	}
+
+	check := func(when string) {
+		if cd.Name != wantName {
+			t.Errorf("%s: Name = %q, want %q", when, cd.Name, wantName)
+		}
+		if len(cd.Tags) == 0 || cd.Tags[0] != wantTag0 {
+			t.Errorf("%s: Tags[0] = %q, want %q", when, cd.Tags, wantTag0)
+		}
+		if cd.Props[wantPropKey] != wantPropVal {
+			t.Errorf("%s: Props[%q] = %q, want %q", when, wantPropKey, cd.Props[wantPropKey], wantPropVal)
+		}
+		if s, ok := cd.Extra.(string); !ok || s != wantExtra {
+			t.Errorf("%s: Extra = %#v, want %q", when, cd.Extra, wantExtra)
+		}
+		if len(cd.Refs) == 0 || cd.Refs[0] == nil || cd.Refs[0].Label != wantLabel {
+			t.Errorf("%s: Refs[0].Label = %#v, want %q", when, cd.Refs, wantLabel)
+		}
+	}
+	check("before scribble")
+	for i := range src {
+		src[i] = 'Z'
+	}
+	check("after scribble") // any aliased escape-path string shows scribbled bytes here
+}
+
 // copyFingerprint collects the CONTENT of every retained string reachable from
 // d (cloned, independent of the source buffer), sorted. Compared before/after a
 // scribble: any aliased field shows scribbled bytes in the second call.

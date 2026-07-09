@@ -595,6 +595,9 @@ func (recv SQLNullInt32Struct) DecodeFrom(data []byte) (result SQLNullInt32Struc
 				} else {
 					n = int64(u)
 				}
+				if n < math.MinInt32 || n > math.MaxInt32 {
+					return result, i, decode.NewParseErr("i32", i, scan.ErrNumberOverflow)
+				}
 				nv = int32(n)
 
 				result.I32 = sql.NullInt32{Int32: nv, Valid: true}
@@ -841,6 +844,9 @@ func (recv SQLNullInt16Struct) DecodeFrom(data []byte) (result SQLNullInt16Struc
 					}
 				} else {
 					n = int64(u)
+				}
+				if n < math.MinInt16 || n > math.MaxInt16 {
+					return result, i, decode.NewParseErr("i16", i, scan.ErrNumberOverflow)
 				}
 				nv = int16(n)
 
@@ -4100,6 +4106,9 @@ func (recv SQLNullStruct) DecodeFrom(data []byte) (result SQLNullStruct, i int, 
 				} else {
 					n = int64(u)
 				}
+				if n < math.MinInt16 || n > math.MaxInt16 {
+					return result, i, decode.NewParseErr("i16", i, scan.ErrNumberOverflow)
+				}
 				nv = int16(n)
 
 				result.I16 = sql.NullInt16{Int16: nv, Valid: true}
@@ -4158,6 +4167,9 @@ func (recv SQLNullStruct) DecodeFrom(data []byte) (result SQLNullStruct, i int, 
 					}
 				} else {
 					n = int64(u)
+				}
+				if n < math.MinInt32 || n > math.MaxInt32 {
+					return result, i, decode.NewParseErr("i32", i, scan.ErrNumberOverflow)
 				}
 				nv = int32(n)
 

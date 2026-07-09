@@ -2102,12 +2102,16 @@ dst = append(dst, ':')
 		fmt.Fprintf(b, "dst = append(dst, '\"')\ndst = %s(dst, v)\n", appendStr)
 	case KindBool:
 		b.WriteString("dst = strconv.AppendBool(dst, v)\n")
-	case KindInt:
+	case KindInt, KindInt8, KindInt16, KindInt32:
 		b.WriteString("dst = strconv.AppendInt(dst, int64(v), 10)\n")
 	case KindInt64:
 		b.WriteString("dst = strconv.AppendInt(dst, v, 10)\n")
+	case KindUint, KindUint8, KindUint16, KindUint32:
+		b.WriteString("dst = strconv.AppendUint(dst, uint64(v), 10)\n")
 	case KindUint64:
 		b.WriteString("dst = strconv.AppendUint(dst, v, 10)\n")
+	case KindFloat32:
+		b.WriteString("if dst, err = encode.AppendFloat(dst, float64(v), 32); err != nil { return dst, err }\n")
 	case KindFloat64:
 		b.WriteString("if dst, err = encode.AppendFloat(dst, v, 64); err != nil { return dst, err }\n")
 	case KindStruct:
@@ -2254,11 +2258,51 @@ func zeroLit(elemType string, kind TypeKind) string {
 // (via castFn if non-empty) and advances posVar, with overflow detection.
 // field is the JSON-path expression for decode.NewParseErr (a quoted literal,
 // `""` for boundaries, or a runtime expr like `key` for unknown-key handlers).
+// narrowIntBounds returns the (min, max) literal bounds a fixed-width integer
+// type narrower than 64-bit imposes — the types a bare Go conversion silently
+// truncates. ok=false for int/int64/uint/uint64 (64-bit on target platforms, so
+// the MaxInt64/MaxUint64 scan bound already covers them).
+func narrowIntBounds(typ string) (lo, hi string, ok bool) {
+	switch typ {
+	case "int8":
+		return "math.MinInt8", "math.MaxInt8", true
+	case "int16":
+		return "math.MinInt16", "math.MaxInt16", true
+	case "int32":
+		return "math.MinInt32", "math.MaxInt32", true
+	case "uint8":
+		return "", "math.MaxUint8", true
+	case "uint16":
+		return "", "math.MaxUint16", true
+	case "uint32":
+		return "", "math.MaxUint32", true
+	}
+	return "", "", false
+}
+
+// narrowIntGuard emits an in-range check before the truncating cast to a narrow
+// integer target: an out-of-range value returns ErrNumberOverflow instead of
+// silently wrapping (`uint8` ← 300 = 44), matching encoding/json v1 + jsonv2
+// which both reject. wideVar holds the scanned int64/uint64; errRet is the
+// caller's overflow return. Empty for non-narrow types (one predicted compare
+// on the happy path).
+func narrowIntGuard(wideVar, typ, errRet string) string {
+	lo, hi, ok := narrowIntBounds(typ)
+	if !ok {
+		return ""
+	}
+	if lo == "" {
+		return fmt.Sprintf("if %s > %s { %s }\n", wideVar, hi, errRet)
+	}
+	return fmt.Sprintf("if %s < %s || %s > %s { %s }\n", wideVar, lo, wideVar, hi, errRet)
+}
+
 func inlineScanInt64(b *bytes.Buffer, posVar, dst, castFn, field string) {
 	assign := ""
 	switch {
 	case castFn != "":
-		assign = dst + " = " + castFn + "(n)"
+		errRet := fmt.Sprintf("return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrNumberOverflow)", posVar, field)
+		assign = narrowIntGuard("n", castFn, errRet) + dst + " = " + castFn + "(n)"
 	case dst != "n":
 		assign = dst + " = n"
 	}
@@ -2308,7 +2352,8 @@ func inlineScanUint64(b *bytes.Buffer, posVar, dst, castFn, field string) {
 	assign := ""
 	switch {
 	case castFn != "":
-		assign = dst + " = " + castFn + "(n)"
+		errRet := fmt.Sprintf("return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrNumberOverflow)", posVar, field)
+		assign = narrowIntGuard("n", castFn, errRet) + dst + " = " + castFn + "(n)"
 	case dst != "n":
 		assign = dst + " = n"
 	}
@@ -3880,6 +3925,9 @@ func renderField(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 				valExpr = castFn + "(n)"
 			}
 			var cascade bytes.Buffer
+			// Guard the narrowing cast: an out-of-range leaf overflows, not wraps.
+			errRet := fmt.Sprintf("return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrNumberOverflow)", posVar, fieldLit(f))
+			cascade.WriteString(narrowIntGuard("n", castFn, errRet))
 			if f.TargetNil {
 				fmt.Fprintf(&cascade, "%s = %s\n", ref, newChain(valExpr, depth))
 			} else {
@@ -3901,6 +3949,7 @@ func renderField(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 				emitPointerSeed(b, ref, depth, leaf.Kind)
 			}
 			renderField(b, leaf, "v", posVar)
+			b.WriteString(narrowIntGuard("v", castFn, fmt.Sprintf("return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrNumberOverflow)", posVar, fieldLit(f))))
 			if f.TargetNil {
 				// Target is a known-nil `var x *T` — straight new-chain assign.
 				fmt.Fprintf(b, "%s = %s\n", ref, newChain(valExpr, depth))
@@ -4610,20 +4659,22 @@ func renderStreamMap(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 			fmt.Fprintf(b, `%s, err = s.Int64()
 %s`, mapTarget, chk)
 		} else {
+			g := narrowIntGuard("iv", f.ElemType, fmt.Sprintf("return result, decode.NewParseErr(%s, s.Pos, scan.ErrNumberOverflow)", field))
 			fmt.Fprintf(b, `var iv int64
 iv, err = s.Int64()
-%[3]s%[1]s = %[2]s(iv)
-`, mapTarget, f.ElemType, chk)
+%[3]s%[4]s%[1]s = %[2]s(iv)
+`, mapTarget, f.ElemType, chk, g)
 		}
 	case KindUint, KindUint8, KindUint16, KindUint32, KindUint64:
 		if f.ElemType == "uint64" {
 			fmt.Fprintf(b, `%s, err = s.Uint64()
 %s`, mapTarget, chk)
 		} else {
+			g := narrowIntGuard("uv", f.ElemType, fmt.Sprintf("return result, decode.NewParseErr(%s, s.Pos, scan.ErrNumberOverflow)", field))
 			fmt.Fprintf(b, `var uv uint64
 uv, err = s.Uint64()
-%[3]s%[1]s = %[2]s(uv)
-`, mapTarget, f.ElemType, chk)
+%[3]s%[4]s%[1]s = %[2]s(uv)
+`, mapTarget, f.ElemType, chk, g)
 		}
 	case KindFloat32, KindFloat64:
 		if f.ElemKind == KindFloat64 {
@@ -5209,9 +5260,9 @@ func renderStreamField(f FieldInfo, ref, posVar string) string {
 		leaf.AtDispatch = false
 		leaf.TargetNil = false
 		// Widened numeric leaf: scan into a wide temp, cast at the assign.
-		scanType, valExpr := leafType, "v"
+		scanType, valExpr, narrowCast := leafType, "v", ""
 		if wide, wideKind, cast := widenedLeafCast(leaf.Kind, leafType); wide != "" {
-			leaf.Kind, leaf.GoType, scanType, valExpr = wideKind, wide, wide, cast+"(v)"
+			leaf.Kind, leaf.GoType, scanType, valExpr, narrowCast = wideKind, wide, wide, cast+"(v)", cast
 		}
 		// At dispatch level the null branch breaks to the comma handling.
 		flat := nullBreakOK(f)
@@ -5232,6 +5283,7 @@ func renderStreamField(f FieldInfo, ref, posVar string) string {
 			emitPointerSeed(b, ref, depth, leaf.Kind)
 		}
 		b.WriteString(renderStreamField(leaf, "v", posVar))
+		b.WriteString(narrowIntGuard("v", narrowCast, fmt.Sprintf("return result, decode.NewParseErr(%s, s.Pos, scan.ErrNumberOverflow)", field)))
 		if f.TargetNil {
 			// Target is a known-nil `var x *T` — straight new-chain assign.
 			fmt.Fprintf(b, "%s = %s\n", ref, newChain(valExpr, depth))
@@ -5255,10 +5307,15 @@ func renderStreamField(f FieldInfo, ref, posVar string) string {
 %[3]s`, ref, method, chk)
 	}
 	widenedScan := func(wideType, wideVar, method, castTo string) {
+		guard := ""
+		if method == "Int64" || method == "Uint64" {
+			errRet := fmt.Sprintf("return result, decode.NewParseErr(%s, s.Pos, scan.ErrNumberOverflow)", field)
+			guard = narrowIntGuard(wideVar, castTo, errRet)
+		}
 		fmt.Fprintf(b, `var %[1]s %[2]s
 %[1]s, err = s.%[3]s()
-%[6]s%[4]s = %[5]s(%[1]s)
-`, wideVar, wideType, method, ref, castTo, chk)
+%[6]s%[7]s%[4]s = %[5]s(%[1]s)
+`, wideVar, wideType, method, ref, castTo, chk, guard)
 	}
 	// `nullzero`: see renderField.
 	nz := nullZeroApplies(f)
@@ -5467,20 +5524,22 @@ func emitStreamSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth
 				fmt.Fprintf(b, `%s, err = s.Int64()
 %s`, target, chk)
 			} else {
+				g := narrowIntGuard("iv", f.ElemType, fmt.Sprintf("return result, decode.NewParseErr(%s, s.Pos, scan.ErrNumberOverflow)", field))
 				fmt.Fprintf(b, `var iv int64
 iv, err = s.Int64()
-%[3]s%[1]s = %[2]s(iv)
-`, target, f.ElemType, chk)
+%[3]s%[4]s%[1]s = %[2]s(iv)
+`, target, f.ElemType, chk, g)
 			}
 		case KindUint, KindUint8, KindUint16, KindUint32, KindUint64:
 			if f.ElemType == "uint64" {
 				fmt.Fprintf(b, `%s, err = s.Uint64()
 %s`, target, chk)
 			} else {
+				g := narrowIntGuard("uv", f.ElemType, fmt.Sprintf("return result, decode.NewParseErr(%s, s.Pos, scan.ErrNumberOverflow)", field))
 				fmt.Fprintf(b, `var uv uint64
 uv, err = s.Uint64()
-%[3]s%[1]s = %[2]s(uv)
-`, target, f.ElemType, chk)
+%[3]s%[4]s%[1]s = %[2]s(uv)
+`, target, f.ElemType, chk, g)
 			}
 		case KindFloat32, KindFloat64:
 			if f.ElemKind == KindFloat64 {

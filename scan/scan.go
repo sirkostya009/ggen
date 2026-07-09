@@ -88,7 +88,11 @@ func String(data []byte, i int) (string, int, error) {
 		return "", 0, ErrUnterminated
 	}
 	if bsIdx := bytes.IndexByte(rest[:closeIdx], '\\'); bsIdx >= 0 {
-		return stringSlow(data, start, start+bsIdx, closeIdx)
+		// closeIdx is the FIRST '"', which may be an escaped `\"` — sizing the
+		// scratch off it under-allocates for a string with an early escaped quote
+		// (the scratch then doubles up to the real length). Size off the real
+		// unescaped closing quote instead; decoded length ≤ that raw span.
+		return stringSlow(data, start, start+bsIdx, stringSpanEnd(data, start)-start)
 	}
 	if hasCtrlByte(rest[:closeIdx]) {
 		return "", 0, ErrBadString
@@ -117,6 +121,32 @@ func hasCtrlByte(b []byte) bool {
 		}
 	}
 	return false
+}
+
+// stringSpanEnd returns the offset of the unescaped closing '"' at or after
+// start (or len(data) if unterminated), skipping escaped quotes via a
+// trailing-backslash parity count. Used to size stringSlow's scratch exactly —
+// the decoded length never exceeds this raw span. One extra SIMD IndexByte pass
+// on the (uncommon) escape path, cheaper than the scratch growth chain it
+// replaces.
+func stringSpanEnd(data []byte, start int) int {
+	i := start
+	for i < len(data) {
+		q := bytes.IndexByte(data[i:], '"')
+		if q < 0 {
+			return len(data)
+		}
+		i += q
+		bs := 0
+		for k := i - 1; k >= start && data[k] == '\\'; k-- {
+			bs++
+		}
+		if bs&1 == 0 {
+			return i
+		}
+		i++
+	}
+	return len(data)
 }
 
 // stringSlow handles strings with at least one escape sequence.

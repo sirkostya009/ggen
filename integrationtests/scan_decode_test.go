@@ -6,6 +6,7 @@ package integrationtests
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"io"
 	"strconv"
@@ -13,8 +14,8 @@ import (
 	"testing"
 
 	"github.com/sirkostya009/ggen/decode"
-	"github.com/sirkostya009/ggen/validation"
 	"github.com/sirkostya009/ggen/scan"
+	"github.com/sirkostya009/ggen/validation"
 )
 
 // chunkReader delivers payload max bytes per Read, stressing Stream.ReadMore's
@@ -587,5 +588,78 @@ func TestValidationError_Pos(t *testing.T) {
 	// Same payload, same Pos.
 	if sMin.Pos != bMin.Pos {
 		t.Errorf("stream: Pos %d != bytes Pos %d (must be relative to full payload)", sMin.Pos, bMin.Pos)
+	}
+}
+
+// NarrowInts carries fixed-width integer fields narrower than 64-bit across the
+// field / map-value / slice-elem / pointer shapes, so the codegen overflow
+// guard is exercised on every emit site + both decode paths.
+//
+//ggen:generate
+type NarrowInts struct {
+	I8   int8             `json:"i8"`
+	I16  int16            `json:"i16"`
+	I32  int32            `json:"i32"`
+	U8   uint8            `json:"u8"`
+	U16  uint16           `json:"u16"`
+	U32  uint32           `json:"u32"`
+	MapU map[string]uint8 `json:"mapU"`
+	SliI []int16          `json:"sliI"`
+	PtrU *uint8           `json:"ptrU"`
+}
+
+// TestNarrowIntOverflow pins the overflow guard: an out-of-range value for a
+// narrow integer target must be REJECTED with ErrNumberOverflow, not silently
+// truncated (uint8 ← 256 = 0, the pre-fix bug), matching encoding/json — on the
+// bytes path, the stream path, and every field/map/slice/pointer emit site.
+func TestNarrowIntOverflow(t *testing.T) {
+	cases := []struct {
+		name    string
+		payload string
+		reject  bool
+	}{
+		{"u8_over", `{"u8":256}`, true},
+		{"u8_max", `{"u8":255}`, false},
+		{"i8_over", `{"i8":128}`, true},
+		{"i8_under", `{"i8":-129}`, true},
+		{"i8_bounds", `{"i8":-128}`, false},
+		{"i8_max", `{"i8":127}`, false},
+		{"u16_over", `{"u16":65536}`, true},
+		{"i16_over", `{"i16":32768}`, true},
+		{"i16_under", `{"i16":-32769}`, true},
+		{"u32_over", `{"u32":4294967296}`, true},
+		{"i32_over", `{"i32":2147483648}`, true},
+		{"i32_under", `{"i32":-2147483649}`, true},
+		{"map_over", `{"mapU":{"k":300}}`, true},
+		{"map_ok", `{"mapU":{"k":200}}`, false},
+		{"slice_over", `{"sliI":[1,32768]}`, true},
+		{"slice_ok", `{"sliI":[-5,100]}`, false},
+		{"ptr_over", `{"ptrU":256}`, true},
+		{"ptr_ok", `{"ptrU":42}`, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var std NarrowInts
+			stdReject := json.Unmarshal([]byte(c.payload), &std) != nil
+			if stdReject != c.reject {
+				t.Fatalf("encoding/json reject=%v, want %v", stdReject, c.reject)
+			}
+			_, _, bErr := NarrowInts{}.DecodeFrom([]byte(c.payload))
+			if (bErr != nil) != c.reject {
+				t.Errorf("bytes: reject=%v want %v (err=%v)", bErr != nil, c.reject, bErr)
+			}
+			if c.reject && bErr != nil && !errors.Is(bErr, scan.ErrNumberOverflow) {
+				t.Errorf("bytes: err=%v, want ErrNumberOverflow", bErr)
+			}
+			var s scan.Stream
+			s.Reset(strings.NewReader(c.payload), make([]byte, 0, 8))
+			_, sErr := NarrowInts{}.DecodeFromStream(&s)
+			if (sErr != nil) != c.reject {
+				t.Errorf("stream: reject=%v want %v (err=%v)", sErr != nil, c.reject, sErr)
+			}
+			if c.reject && sErr != nil && !errors.Is(sErr, scan.ErrNumberOverflow) {
+				t.Errorf("stream: err=%v, want ErrNumberOverflow", sErr)
+			}
+		})
 	}
 }

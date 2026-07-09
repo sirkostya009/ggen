@@ -211,6 +211,9 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			} else {
 				n = int64(u)
 			}
+			if n < math.MinInt16 || n > math.MaxInt16 {
+				return result, i, decode.NewParseErr("i16", i, scan.ErrNumberOverflow)
+			}
 			result.I16 = int16(n)
 		case "i32":
 			if seenI32 {
@@ -261,6 +264,9 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 				}
 			} else {
 				n = int64(u)
+			}
+			if n < math.MinInt32 || n > math.MaxInt32 {
+				return result, i, decode.NewParseErr("i32", i, scan.ErrNumberOverflow)
 			}
 			result.I32 = int32(n)
 		case "i64":
@@ -364,6 +370,9 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			} else {
 				n = int64(u)
 			}
+			if n < math.MinInt8 || n > math.MaxInt8 {
+				return result, i, decode.NewParseErr("i8", i, scan.ErrNumberOverflow)
+			}
 			result.I8 = int8(n)
 		case "str":
 			if seenStr {
@@ -441,6 +450,9 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 				n = n*10 + d
 				i++
 			}
+			if n > math.MaxUint16 {
+				return result, i, decode.NewParseErr("u16", i, scan.ErrNumberOverflow)
+			}
 			result.U16 = uint16(n)
 		case "u32":
 			if seenU32 {
@@ -466,6 +478,9 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 				}
 				n = n*10 + d
 				i++
+			}
+			if n > math.MaxUint32 {
+				return result, i, decode.NewParseErr("u32", i, scan.ErrNumberOverflow)
 			}
 			result.U32 = uint32(n)
 		case "u64":
@@ -518,6 +533,9 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 				}
 				n = n*10 + d
 				i++
+			}
+			if n > math.MaxUint8 {
+				return result, i, decode.NewParseErr("u8", i, scan.ErrNumberOverflow)
 			}
 			result.U8 = uint8(n)
 		default:
@@ -655,6 +673,9 @@ func (recv PrimStruct) DecodeFromStream(s *scan.Stream) (result PrimStruct, err 
 			if err != nil {
 				return result, decode.NewParseErr("i16", s.Pos, err)
 			}
+			if iv < math.MinInt16 || iv > math.MaxInt16 {
+				return result, decode.NewParseErr("i16", s.Pos, scan.ErrNumberOverflow)
+			}
 			result.I16 = int16(iv)
 		case "i32":
 			err = s.ConsumeColon()
@@ -669,6 +690,9 @@ func (recv PrimStruct) DecodeFromStream(s *scan.Stream) (result PrimStruct, err 
 			iv, err = s.Int64()
 			if err != nil {
 				return result, decode.NewParseErr("i32", s.Pos, err)
+			}
+			if iv < math.MinInt32 || iv > math.MaxInt32 {
+				return result, decode.NewParseErr("i32", s.Pos, scan.ErrNumberOverflow)
 			}
 			result.I32 = int32(iv)
 		case "i64":
@@ -697,6 +721,9 @@ func (recv PrimStruct) DecodeFromStream(s *scan.Stream) (result PrimStruct, err 
 			iv, err = s.Int64()
 			if err != nil {
 				return result, decode.NewParseErr("i8", s.Pos, err)
+			}
+			if iv < math.MinInt8 || iv > math.MaxInt8 {
+				return result, decode.NewParseErr("i8", s.Pos, scan.ErrNumberOverflow)
 			}
 			result.I8 = int8(iv)
 		case "str":
@@ -741,6 +768,9 @@ func (recv PrimStruct) DecodeFromStream(s *scan.Stream) (result PrimStruct, err 
 			if err != nil {
 				return result, decode.NewParseErr("u16", s.Pos, err)
 			}
+			if uv > math.MaxUint16 {
+				return result, decode.NewParseErr("u16", s.Pos, scan.ErrNumberOverflow)
+			}
 			result.U16 = uint16(uv)
 		case "u32":
 			err = s.ConsumeColon()
@@ -755,6 +785,9 @@ func (recv PrimStruct) DecodeFromStream(s *scan.Stream) (result PrimStruct, err 
 			uv, err = s.Uint64()
 			if err != nil {
 				return result, decode.NewParseErr("u32", s.Pos, err)
+			}
+			if uv > math.MaxUint32 {
+				return result, decode.NewParseErr("u32", s.Pos, scan.ErrNumberOverflow)
 			}
 			result.U32 = uint32(uv)
 		case "u64":
@@ -783,6 +816,9 @@ func (recv PrimStruct) DecodeFromStream(s *scan.Stream) (result PrimStruct, err 
 			uv, err = s.Uint64()
 			if err != nil {
 				return result, decode.NewParseErr("u8", s.Pos, err)
+			}
+			if uv > math.MaxUint8 {
+				return result, decode.NewParseErr("u8", s.Pos, scan.ErrNumberOverflow)
 			}
 			result.U8 = uint8(uv)
 		default:

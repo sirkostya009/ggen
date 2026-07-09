@@ -766,6 +766,21 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
     Mega (medium strings paid a `scan.String` CALL per string); 32 keeps Mega's
     ≤63 B strings inline. The SIMD tier is untouched (window ≥ 0 still routes to
     the inline vector classify).
+48. **Narrow-integer overflow guard (`narrowIntGuard`).** Fixed-width int fields
+    smaller than 64-bit (`int8/16/32`, `uint8/16/32`) scan into a wide int64/uint64
+    then cast. A bare cast silently TRUNCATES (`uint8` ← 300 = 44, nil error) —
+    diverging from encoding/json v1 AND jsonv2, which both reject. Now every
+    narrow cast is preceded by an in-range check returning `scan.ErrNumberOverflow`
+    (one predicted compare on the happy path, ~0 cost). Emitted at ALL narrow
+    sites: struct field, map value, slice/array element, and pointer leaf (fast +
+    slow), bytes + stream (`inlineScanInt64`/`Uint64`, `widenedScan`, the stream
+    map/slice widen branches, the pointer cascade). `int`/`uint` stay unguarded
+    (64-bit on target platforms — no truncation). Pinned by
+    `TestNarrowIntOverflow` (integrationtests, differential vs encoding/json over
+    field/map/slice/pointer × bytes/stream). Same audit also fixed a MARSHAL bug:
+    `renderAppendMap`'s value switch was missing `int8/16/32`, `uint/uint8/16/32`,
+    `float32`, so `map[string]uint8` (etc.) marshaled `{"k":}` with no value —
+    those kinds now emit the value.
 
 ## Design decisions (the why)
 

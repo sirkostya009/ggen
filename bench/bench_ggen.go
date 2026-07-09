@@ -6215,6 +6215,646 @@ func (s SkipEnvelope) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
+func (recv EscapeDoc) DecodeFrom(data []byte) (result EscapeDoc, i int, err error) {
+	result = recv
+	seenA := false
+	seenB := false
+	seenC := false
+	seenD := false
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+	}
+	i++
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		i++
+		return result, i, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
+		}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
+			}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		}
+		i++
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch key {
+		case "a":
+			if seenA {
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"a"}}
+			}
+			seenA = true
+			if i >= len(data) || data[i] != '"' {
+				return result, i, decode.NewParseErr("a", i, scan.ErrExpectString)
+			}
+			ke := i + 1
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke < len(data) && data[ke] == '"' {
+				result.A = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				result.A, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("a", i, err)
+				}
+			}
+		case "b":
+			if seenB {
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"b"}}
+			}
+			seenB = true
+			if i >= len(data) || data[i] != '"' {
+				return result, i, decode.NewParseErr("b", i, scan.ErrExpectString)
+			}
+			ke := i + 1
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke < len(data) && data[ke] == '"' {
+				result.B = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				result.B, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("b", i, err)
+				}
+			}
+		case "c":
+			if seenC {
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"c"}}
+			}
+			seenC = true
+			if i >= len(data) || data[i] != '"' {
+				return result, i, decode.NewParseErr("c", i, scan.ErrExpectString)
+			}
+			ke := i + 1
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke < len(data) && data[ke] == '"' {
+				result.C = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				result.C, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("c", i, err)
+				}
+			}
+		case "d":
+			if seenD {
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"d"}}
+			}
+			seenD = true
+			if i >= len(data) || data[i] != '"' {
+				return result, i, decode.NewParseErr("d", i, scan.ErrExpectString)
+			}
+			ke := i + 1
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke < len(data) && data[ke] == '"' {
+				result.D = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				result.D, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("d", i, err)
+				}
+			}
+		default:
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			i++
+			return result, i, nil
+		}
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+	}
+}
+
+func (recv EscapeDoc) DecodeFromStream(s *scan.Stream) (result EscapeDoc, err error) {
+	result = recv
+	seenA := false
+	seenB := false
+	seenC := false
+	seenD := false
+	err = s.ObjectOpen()
+	if err != nil {
+		return result, decode.NewParseErr("", s.Pos, err)
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, decode.NewParseErr("", s.Pos, err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView()
+		if err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		switch key {
+		case "a":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("a", s.Pos, err)
+			}
+			if seenA {
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"a"}}
+			}
+			seenA = true
+			result.A, err = s.String()
+			if err != nil {
+				return result, decode.NewParseErr("a", s.Pos, err)
+			}
+		case "b":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("b", s.Pos, err)
+			}
+			if seenB {
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"b"}}
+			}
+			seenB = true
+			result.B, err = s.String()
+			if err != nil {
+				return result, decode.NewParseErr("b", s.Pos, err)
+			}
+		case "c":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("c", s.Pos, err)
+			}
+			if seenC {
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"c"}}
+			}
+			seenC = true
+			result.C, err = s.String()
+			if err != nil {
+				return result, decode.NewParseErr("c", s.Pos, err)
+			}
+		case "d":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("d", s.Pos, err)
+			}
+			if seenD {
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"d"}}
+			}
+			seenD = true
+			result.D, err = s.String()
+			if err != nil {
+				return result, decode.NewParseErr("d", s.Pos, err)
+			}
+		default:
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+		}
+
+		err = s.SkipSpace()
+		if err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, decode.NewParseErr("", s.Pos, err)
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, decode.NewParseErr("", s.Pos, err)
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			return result, nil
+		}
+		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+	}
+}
+
+func (s EscapeDoc) JSONSize() int {
+	size := 29
+	size += len(s.A) * 2
+	size += len(s.B) * 2
+	size += len(s.C) * 2
+	size += len(s.D) * 2
+	return size
+}
+
+func (s EscapeDoc) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"a\":\""...)
+	dst = encode.AppendStringNoHTML(dst, s.A)
+	dst = append(dst, ",\"b\":\""...)
+	dst = encode.AppendStringNoHTML(dst, s.B)
+	dst = append(dst, ",\"c\":\""...)
+	dst = encode.AppendStringNoHTML(dst, s.C)
+	dst = append(dst, ",\"d\":\""...)
+	dst = encode.AppendStringNoHTML(dst, s.D)
+	return append(dst, '}'), nil
+}
+
+func (recv CopyEscapeDoc) DecodeFrom(data []byte) (result CopyEscapeDoc, i int, err error) {
+	result = recv
+	seenA := false
+	seenB := false
+	seenC := false
+	seenD := false
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+	}
+	i++
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		i++
+		return result, i, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
+		}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
+			}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		}
+		i++
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch key {
+		case "a":
+			if seenA {
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"a"}}
+			}
+			seenA = true
+			if i >= len(data) || data[i] != '"' {
+				return result, i, decode.NewParseErr("a", i, scan.ErrExpectString)
+			}
+			ke := i + 1
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke < len(data) && data[ke] == '"' {
+				result.A = string(data[i+1 : ke])
+				i = ke + 1
+			} else {
+				var kev string
+				kev, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("a", i, err)
+				}
+				result.A = strings.Clone(kev)
+			}
+		case "b":
+			if seenB {
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"b"}}
+			}
+			seenB = true
+			if i >= len(data) || data[i] != '"' {
+				return result, i, decode.NewParseErr("b", i, scan.ErrExpectString)
+			}
+			ke := i + 1
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke < len(data) && data[ke] == '"' {
+				result.B = string(data[i+1 : ke])
+				i = ke + 1
+			} else {
+				var kev string
+				kev, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("b", i, err)
+				}
+				result.B = strings.Clone(kev)
+			}
+		case "c":
+			if seenC {
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"c"}}
+			}
+			seenC = true
+			if i >= len(data) || data[i] != '"' {
+				return result, i, decode.NewParseErr("c", i, scan.ErrExpectString)
+			}
+			ke := i + 1
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke < len(data) && data[ke] == '"' {
+				result.C = string(data[i+1 : ke])
+				i = ke + 1
+			} else {
+				var kev string
+				kev, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("c", i, err)
+				}
+				result.C = strings.Clone(kev)
+			}
+		case "d":
+			if seenD {
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"d"}}
+			}
+			seenD = true
+			if i >= len(data) || data[i] != '"' {
+				return result, i, decode.NewParseErr("d", i, scan.ErrExpectString)
+			}
+			ke := i + 1
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				ke++
+			}
+			if ke < len(data) && data[ke] == '"' {
+				result.D = string(data[i+1 : ke])
+				i = ke + 1
+			} else {
+				var kev string
+				kev, i, err = scan.String(data, i)
+				if err != nil {
+					return result, i, decode.NewParseErr("d", i, err)
+				}
+				result.D = strings.Clone(kev)
+			}
+		default:
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{strings.Clone(key)}}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			i++
+			return result, i, nil
+		}
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+	}
+}
+
+func (recv CopyEscapeDoc) DecodeFromStream(s *scan.Stream) (result CopyEscapeDoc, err error) {
+	result = recv
+	seenA := false
+	seenB := false
+	seenC := false
+	seenD := false
+	err = s.ObjectOpen()
+	if err != nil {
+		return result, decode.NewParseErr("", s.Pos, err)
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, decode.NewParseErr("", s.Pos, err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView()
+		if err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		switch key {
+		case "a":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("a", s.Pos, err)
+			}
+			if seenA {
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"a"}}
+			}
+			seenA = true
+			result.A, err = s.String()
+			if err != nil {
+				return result, decode.NewParseErr("a", s.Pos, err)
+			}
+		case "b":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("b", s.Pos, err)
+			}
+			if seenB {
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"b"}}
+			}
+			seenB = true
+			result.B, err = s.String()
+			if err != nil {
+				return result, decode.NewParseErr("b", s.Pos, err)
+			}
+		case "c":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("c", s.Pos, err)
+			}
+			if seenC {
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"c"}}
+			}
+			seenC = true
+			result.C, err = s.String()
+			if err != nil {
+				return result, decode.NewParseErr("c", s.Pos, err)
+			}
+		case "d":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("d", s.Pos, err)
+			}
+			if seenD {
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"d"}}
+			}
+			seenD = true
+			result.D, err = s.String()
+			if err != nil {
+				return result, decode.NewParseErr("d", s.Pos, err)
+			}
+		default:
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+		}
+
+		err = s.SkipSpace()
+		if err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, decode.NewParseErr("", s.Pos, err)
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, decode.NewParseErr("", s.Pos, err)
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			return result, nil
+		}
+		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+	}
+}
+
+func (s CopyEscapeDoc) JSONSize() int {
+	size := 29
+	size += len(s.A) * 2
+	size += len(s.B) * 2
+	size += len(s.C) * 2
+	size += len(s.D) * 2
+	return size
+}
+
+func (s CopyEscapeDoc) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"a\":\""...)
+	dst = encode.AppendStringNoHTML(dst, s.A)
+	dst = append(dst, ",\"b\":\""...)
+	dst = encode.AppendStringNoHTML(dst, s.B)
+	dst = append(dst, ",\"c\":\""...)
+	dst = encode.AppendStringNoHTML(dst, s.C)
+	dst = append(dst, ",\"d\":\""...)
+	dst = encode.AppendStringNoHTML(dst, s.D)
+	return append(dst, '}'), nil
+}
+
 func (recv Claim) DecodeFrom(data []byte) (result Claim, i int, err error) {
 	result = recv
 	seenAud := false
@@ -9895,6 +10535,9 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 				n = n*10 + d
 				i++
 			}
+			if n > math.MaxUint8 {
+				return result, i, decode.NewParseErr("age", i, scan.ErrNumberOverflow)
+			}
 			result.Age = uint8(n)
 		case "avatarUrl":
 			if seen&(1<<3) != 0 {
@@ -10125,6 +10768,9 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 				}
 				n = n*10 + d
 				i++
+			}
+			if n > math.MaxUint16 {
+				return result, i, decode.NewParseErr("failedLogins", i, scan.ErrNumberOverflow)
 			}
 			result.FailedLogins = uint16(n)
 		case "firstName":
@@ -10406,6 +11052,9 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 				n = n*10 + d
 				i++
 			}
+			if n > math.MaxUint32 {
+				return result, i, decode.NewParseErr("loginCount", i, scan.ErrNumberOverflow)
+			}
 			result.LoginCount = uint32(n)
 		case "middleName":
 			if seen&(1<<21) != 0 {
@@ -10577,6 +11226,9 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 				}
 			} else {
 				n = int64(u)
+			}
+			if n < math.MinInt32 || n > math.MaxInt32 {
+				return result, i, decode.NewParseErr("reputation", i, scan.ErrNumberOverflow)
 			}
 			result.Reputation = int32(n)
 		case "storageQuota":
@@ -10885,6 +11537,9 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 			if err != nil {
 				return result, decode.NewParseErr("age", s.Pos, err)
 			}
+			if uv > math.MaxUint8 {
+				return result, decode.NewParseErr("age", s.Pos, scan.ErrNumberOverflow)
+			}
 			result.Age = uint8(uv)
 		case "avatarUrl":
 			err = s.ConsumeColon()
@@ -11017,6 +11672,9 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 			if err != nil {
 				return result, decode.NewParseErr("failedLogins", s.Pos, err)
 			}
+			if uv > math.MaxUint16 {
+				return result, decode.NewParseErr("failedLogins", s.Pos, scan.ErrNumberOverflow)
+			}
 			result.FailedLogins = uint16(uv)
 		case "firstName":
 			err = s.ConsumeColon()
@@ -11127,6 +11785,9 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 			if err != nil {
 				return result, decode.NewParseErr("loginCount", s.Pos, err)
 			}
+			if uv > math.MaxUint32 {
+				return result, decode.NewParseErr("loginCount", s.Pos, scan.ErrNumberOverflow)
+			}
 			result.LoginCount = uint32(uv)
 		case "middleName":
 			err = s.ConsumeColon()
@@ -11208,6 +11869,9 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 			iv, err = s.Int64()
 			if err != nil {
 				return result, decode.NewParseErr("reputation", s.Pos, err)
+			}
+			if iv < math.MinInt32 || iv > math.MaxInt32 {
+				return result, decode.NewParseErr("reputation", s.Pos, scan.ErrNumberOverflow)
 			}
 			result.Reputation = int32(iv)
 		case "storageQuota":
@@ -12301,6 +12965,9 @@ func (recv Company) DecodeFrom(data []byte) (result Company, i int, err error) {
 			} else {
 				n = int64(u)
 			}
+			if n < math.MinInt16 || n > math.MaxInt16 {
+				return result, i, decode.NewParseErr("founded", i, scan.ErrNumberOverflow)
+			}
 			result.Founded = int16(n)
 		case "headcount":
 			if seenHeadcount {
@@ -12509,6 +13176,9 @@ func (recv Company) DecodeFromStream(s *scan.Stream) (result Company, err error)
 			iv, err = s.Int64()
 			if err != nil {
 				return result, decode.NewParseErr("founded", s.Pos, err)
+			}
+			if iv < math.MinInt16 || iv > math.MaxInt16 {
+				return result, decode.NewParseErr("founded", s.Pos, scan.ErrNumberOverflow)
 			}
 			result.Founded = int16(iv)
 		case "headcount":
@@ -12763,6 +13433,9 @@ func (recv Preferences) DecodeFrom(data []byte) (result Preferences, i int, err 
 				n = n*10 + d
 				i++
 			}
+			if n > math.MaxUint8 {
+				return result, i, decode.NewParseErr("itemsPerPage", i, scan.ErrNumberOverflow)
+			}
 			result.ItemsPerPage = uint8(n)
 		case "language":
 			if seenLanguage {
@@ -12983,6 +13656,9 @@ func (recv Preferences) DecodeFromStream(s *scan.Stream) (result Preferences, er
 			uv, err = s.Uint64()
 			if err != nil {
 				return result, decode.NewParseErr("itemsPerPage", s.Pos, err)
+			}
+			if uv > math.MaxUint8 {
+				return result, decode.NewParseErr("itemsPerPage", s.Pos, scan.ErrNumberOverflow)
 			}
 			result.ItemsPerPage = uint8(uv)
 		case "language":
@@ -13212,6 +13888,9 @@ func (recv CopyAccount) DecodeFrom(data []byte) (result CopyAccount, i int, err 
 				}
 				n = n*10 + d
 				i++
+			}
+			if n > math.MaxUint8 {
+				return result, i, decode.NewParseErr("age", i, scan.ErrNumberOverflow)
 			}
 			result.Age = uint8(n)
 		case "avatarUrl":
@@ -13453,6 +14132,9 @@ func (recv CopyAccount) DecodeFrom(data []byte) (result CopyAccount, i int, err 
 				}
 				n = n*10 + d
 				i++
+			}
+			if n > math.MaxUint16 {
+				return result, i, decode.NewParseErr("failedLogins", i, scan.ErrNumberOverflow)
 			}
 			result.FailedLogins = uint16(n)
 		case "firstName":
@@ -13740,6 +14422,9 @@ func (recv CopyAccount) DecodeFrom(data []byte) (result CopyAccount, i int, err 
 				n = n*10 + d
 				i++
 			}
+			if n > math.MaxUint32 {
+				return result, i, decode.NewParseErr("loginCount", i, scan.ErrNumberOverflow)
+			}
 			result.LoginCount = uint32(n)
 		case "middleName":
 			if seen&(1<<21) != 0 {
@@ -13915,6 +14600,9 @@ func (recv CopyAccount) DecodeFrom(data []byte) (result CopyAccount, i int, err 
 				}
 			} else {
 				n = int64(u)
+			}
+			if n < math.MinInt32 || n > math.MaxInt32 {
+				return result, i, decode.NewParseErr("reputation", i, scan.ErrNumberOverflow)
 			}
 			result.Reputation = int32(n)
 		case "storageQuota":
@@ -14225,6 +14913,9 @@ func (recv CopyAccount) DecodeFromStream(s *scan.Stream) (result CopyAccount, er
 			if err != nil {
 				return result, decode.NewParseErr("age", s.Pos, err)
 			}
+			if uv > math.MaxUint8 {
+				return result, decode.NewParseErr("age", s.Pos, scan.ErrNumberOverflow)
+			}
 			result.Age = uint8(uv)
 		case "avatarUrl":
 			err = s.ConsumeColon()
@@ -14357,6 +15048,9 @@ func (recv CopyAccount) DecodeFromStream(s *scan.Stream) (result CopyAccount, er
 			if err != nil {
 				return result, decode.NewParseErr("failedLogins", s.Pos, err)
 			}
+			if uv > math.MaxUint16 {
+				return result, decode.NewParseErr("failedLogins", s.Pos, scan.ErrNumberOverflow)
+			}
 			result.FailedLogins = uint16(uv)
 		case "firstName":
 			err = s.ConsumeColon()
@@ -14467,6 +15161,9 @@ func (recv CopyAccount) DecodeFromStream(s *scan.Stream) (result CopyAccount, er
 			if err != nil {
 				return result, decode.NewParseErr("loginCount", s.Pos, err)
 			}
+			if uv > math.MaxUint32 {
+				return result, decode.NewParseErr("loginCount", s.Pos, scan.ErrNumberOverflow)
+			}
 			result.LoginCount = uint32(uv)
 		case "middleName":
 			err = s.ConsumeColon()
@@ -14548,6 +15245,9 @@ func (recv CopyAccount) DecodeFromStream(s *scan.Stream) (result CopyAccount, er
 			iv, err = s.Int64()
 			if err != nil {
 				return result, decode.NewParseErr("reputation", s.Pos, err)
+			}
+			if iv < math.MinInt32 || iv > math.MaxInt32 {
+				return result, decode.NewParseErr("reputation", s.Pos, scan.ErrNumberOverflow)
 			}
 			result.Reputation = int32(iv)
 		case "storageQuota":
@@ -15397,6 +16097,9 @@ func (recv CopyCompany) DecodeFrom(data []byte) (result CopyCompany, i int, err 
 			} else {
 				n = int64(u)
 			}
+			if n < math.MinInt16 || n > math.MaxInt16 {
+				return result, i, decode.NewParseErr("founded", i, scan.ErrNumberOverflow)
+			}
 			result.Founded = int16(n)
 		case "headcount":
 			if seenHeadcount {
@@ -15609,6 +16312,9 @@ func (recv CopyCompany) DecodeFromStream(s *scan.Stream) (result CopyCompany, er
 			iv, err = s.Int64()
 			if err != nil {
 				return result, decode.NewParseErr("founded", s.Pos, err)
+			}
+			if iv < math.MinInt16 || iv > math.MaxInt16 {
+				return result, decode.NewParseErr("founded", s.Pos, scan.ErrNumberOverflow)
 			}
 			result.Founded = int16(iv)
 		case "headcount":
@@ -15865,6 +16571,9 @@ func (recv CopyPreferences) DecodeFrom(data []byte) (result CopyPreferences, i i
 				n = n*10 + d
 				i++
 			}
+			if n > math.MaxUint8 {
+				return result, i, decode.NewParseErr("itemsPerPage", i, scan.ErrNumberOverflow)
+			}
 			result.ItemsPerPage = uint8(n)
 		case "language":
 			if seenLanguage {
@@ -16091,6 +16800,9 @@ func (recv CopyPreferences) DecodeFromStream(s *scan.Stream) (result CopyPrefere
 			uv, err = s.Uint64()
 			if err != nil {
 				return result, decode.NewParseErr("itemsPerPage", s.Pos, err)
+			}
+			if uv > math.MaxUint8 {
+				return result, decode.NewParseErr("itemsPerPage", s.Pos, scan.ErrNumberOverflow)
 			}
 			result.ItemsPerPage = uint8(uv)
 		case "language":

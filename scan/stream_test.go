@@ -475,3 +475,32 @@ func TestStreamSkipValue_MatchesBytes(t *testing.T) {
 		}
 	}
 }
+
+// TestStreamStringSurrogateAcrossRefill pins the stream stringSlow surrogate
+// fix: a \uXXXX\uXXXX pair straddling a tiny-buffer refill boundary must
+// assemble into the astral rune, not split into two lone surrogates (😀 → ��).
+// Positioned at every offset so the pair lands across a ReadMore at some cap;
+// checked against the (fully-buffered, correct) bytes path. Regression guard for
+// a bug the escape-free fuzz/bench payloads never exercised.
+func TestStreamStringSurrogateAcrossRefill(t *testing.T) {
+	t.Parallel()
+	for pad := 0; pad < 48; pad++ {
+		body := strings.Repeat("a", pad) + `😀` + strings.Repeat("b", 6)
+		payload := `"` + body + `"`
+		want, _, err := String([]byte(payload), 0)
+		if err != nil {
+			t.Fatalf("pad=%d bytes String: %v", pad, err)
+		}
+		for _, cap := range []int{8, 10, 13, 16, 32, 512} {
+			var s Stream
+			s.Reset(strings.NewReader(payload), make([]byte, 0, cap))
+			got, err := s.String()
+			if err != nil {
+				t.Fatalf("pad=%d cap=%d stream String: %v", pad, cap, err)
+			}
+			if got != want {
+				t.Fatalf("pad=%d cap=%d: stream=%q != bytes=%q", pad, cap, got, want)
+			}
+		}
+	}
+}

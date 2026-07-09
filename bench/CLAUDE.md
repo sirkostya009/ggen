@@ -22,6 +22,8 @@
 - `bench/simple_test.go` — `BenchmarkNoAlloc_Unmarshal` + `_Reader`.
 - `bench/skip_test.go` — `BenchmarkSkipHeavy_Unmarshal` (compact/pretty
   envelope, ~100% skipped content via ignoreunknown).
+- `bench/escape_test.go` — `BenchmarkEscapeHeavy_Unmarshal` (escape-dense strings;
+  exercises the unescape path).
 
 ## What each bench family measures
 
@@ -41,8 +43,21 @@
   via the `setup` closure in `runBench`. Reports `gc` (NumGC delta) alongside
   ns/op·B/op·allocs/op.
 - **Small** (~2.9 KiB) — per-call buffer/streaming overhead is visible. Two
-  ggen-stream Reader rows (512-byte vs payload-sized buf) isolate the
-  buffer-grow chain from steady-state throughput.
+  ggen-stream Reader rows: `_512` allocates a FRESH 512 B buffer per iteration
+  (< payload) so the grow/refill/compaction chain runs every call; `_full` reuses
+  a payload-sized buffer (steady-state, no grow). `_512` must NOT carry the grown
+  buffer forward — that settles it at payload size and degenerates into the
+  one-shot bytes path (the chain would run on 1 of N iterations; fixed 2026-07,
+  matches `NoAlloc_Reader/ggen_stream`).
+- **EscapeHeavy** (`EscapeDoc`, ~19 KiB, ~12% escapes: `\n \" \\ \uXXXX` +
+  surrogate pairs) — the ONLY tier that drives the unescape path (`scan.stringSlow`,
+  `\uXXXX` + surrogate assembly, scratch alloc); every other decode payload is
+  asciiLetters-only. Its correctness guard (ggen bytes + stream == jsonv2) found a
+  real stream bug: surrogate pairs straddling a refill boundary corrupted (😀 →
+  ��, see scan/CLAUDE.md). **sonic caveat:** unlike the skip tier, decode must
+  produce the unescaped value, but sonic's escape handling still differs
+  (ConfigFastest is lax) — read the sonic rows as context, not a like-for-like
+  race; jsonv2 is the honest baseline.
 - **ValidationHeavy** (short fields) — per-field validation cost
   (`ggen_validated` vs `ggen_noval` + non-validating jsonv2/sonic/easyjson).
   **RuneGated** companion (~8 KB strings): one ggen row isolating opt #44's
