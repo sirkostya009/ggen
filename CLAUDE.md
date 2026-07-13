@@ -50,7 +50,7 @@ discoverable, avoids cross-session collisions, and matches the test harness path
 ```sh
 go build -o ggen ./cli
 ./ggen ./decode/... ./encode/... ./scan/...
-easyjson bench/types.go
+easyjson bench/mega.go bench/small.go bench/simple.go
 GOEXPERIMENT=jsonv2 go generate work
 ```
 
@@ -58,9 +58,9 @@ The binary builds from the `cli/` module to project-root `./ggen` (so the
 `../ggen` references in `bench/` and `integrationtests/` resolve). ggen is
 module-scoped — `./...` visits only the invoked module's packages; `cli/`,
 `bench/`, `integrationtests/` each carry their own `go.mod` and must be regen'd
-from inside (one invocation per module). In `integrationtests/`, each annotated
-source carries `//go:generate ../ggen $GOFILE` and emits a sibling
-`<file>_ggen_test.go`.
+from inside (one invocation per module). In `bench/` and `integrationtests/`,
+each annotated source carries `//go:generate ../ggen $GOFILE` and emits a
+sibling `<file>_ggen.go` (bench) / `<file>_ggen_test.go` (integrationtests).
 
 ### Keeping docs in sync
 

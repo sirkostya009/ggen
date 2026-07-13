@@ -7,28 +7,21 @@ import (
 	"encoding/json/jsontext"
 	jsonv2 "encoding/json/v2"
 	"io"
-	"math/rand"
 	"testing"
 	"time"
 
 	"github.com/bytedance/sonic"
 	"github.com/mailru/easyjson"
-	"github.com/sirkostya009/ggen/encode"
 	"github.com/sirkostya009/ggen/scan"
 )
 
 // slowPayload — a few-dozen-KiB Node tree, separate from MegaPayload so the
-// per-iteration I/O cost stays tractable. Built once at init with a fixed seed.
+// per-iteration I/O cost stays tractable. Built once at init; the counter
+// offset keeps its content distinct from MegaValue's.
 var slowPayload []byte
 
 func init() {
-	r := rand.New(rand.NewSource(2))
-	v := buildNode(r, 3, []int{2, 2, 2, 0})
-	out, err := encode.Marshal(v)
-	if err != nil {
-		panic(err)
-	}
-	slowPayload = out
+	slowPayload = mustMarshal(buildNode(&gen{n: 1 << 41}, 3, []int{2, 2, 2, 0}))
 }
 
 // slowReader serves a []byte with a chunk size + per-Read delay that ramp

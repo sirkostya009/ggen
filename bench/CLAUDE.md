@@ -12,19 +12,32 @@ The numbers below are for science only.
 
 ## Files
 
-- `bench/types.go` — ggen-annotated `Node` + easyjson-annotated `NodePlain` /
-  `AddrPlain` (see "easyjson method leakage"); plus the `Account` family
-  (`AccountValue`/`AccountPayload`) + easyjson-only `Easy*` mirror; plus
-  `CopyNode`/`CopyAddr` — wire-identical mirrors of `Node`/`Addr` carrying
-  `//ggen:generate copy`, so the `ggen_copy` Unmarshal row decodes the same
-  `MegaPayload` through the copy-mode bytes path (same pattern:
-  `CopyAccount` family for NoAlloc, `CopyValidated` for Small, `CopyClaim`
-  for Tiny — every decode bench family carries a `ggen_copy` row). Untagged, so ggen methods land
-  in `bench_ggen.go`.
-- `bench/bench_ggen.go` — generated ggen methods. Regen: `(cd bench &&
-  GOEXPERIMENT=jsonv2 ../ggen ./...)`.
-- `bench/types_easyjson.go` — generated easyjson methods. Regen: `easyjson
-  bench/types.go`.
+- Types + payload builders live in per-family non-test files, each paired with
+  its `_test.go`: `bench/mega.go` (Node family + DeepNested + MapHeavy),
+  `bench/small.go` (Validated + Claim + ValidationHeavy + RuneGated + HTML),
+  `bench/simple.go` (Account family), `bench/skip.go`, `bench/escape.go`;
+  `bench/doc.go` holds the package doc + the deterministic `gen` counter
+  source + `mustMarshal`. Non-test so easyjson's bootstrap (which compiles the
+  non-test build) sees them; untagged, so ggen methods land in sibling
+  non-test `<file>_ggen.go` files.
+  Every value is built deterministically at init — no `math/rand`, no clock —
+  so every run parses byte-identical payloads: multi-entry maps exist only in
+  MapHeavy, whose payload is `canonicalize`d after encode (stdlib v1
+  round-trip, sorted keys — see `doc.go`); every other map (Node's Props,
+  map-shaped `any`) is single-entry, immune to Go's randomized iteration
+  order — and small enough to stay out of the ns/op signal.
+  Each family pairs ggen and easyjson types (see "easyjson method leakage")
+  plus `Copy*` wire-identical mirrors carrying `//ggen:generate copy`, so the
+  `ggen_copy` Unmarshal rows decode the same payloads through the copy-mode
+  bytes path (`CopyNode`/`CopyAddr` for Mega, `CopyAccount` family for
+  NoAlloc, `CopyValidated` for Small, `CopyClaim` for Tiny — every decode
+  bench family carries a `ggen_copy` row).
+- `bench/{mega,small,simple,skip,escape}_ggen.go` — generated ggen methods,
+  one per annotated source (each carries `//go:generate ../ggen $GOFILE`,
+  same as integrationtests). Regen: `(cd bench && GOEXPERIMENT=jsonv2 go
+  generate .)`.
+- `bench/{mega,small,simple}_easyjson.go` — generated easyjson methods.
+  Regen: `easyjson bench/mega.go bench/small.go bench/simple.go`.
 - `bench/mega_test.go` — 4-way Mega benches (jsonv2/sonic/easyjson/ggen) for
   Unmarshal/Marshal/Reader.
 - `bench/small_test.go` — small-value (~2.9 KiB ValidPayload) Unmarshal + Reader.
@@ -46,7 +59,7 @@ The numbers below are for science only.
   the stream genuinely refills + compacts mid-decode (a payload-sized/grown
   buffer reads in one shot, degenerating into the bytes path) — copies strings
   out of the buffer, so NOT zero-alloc.
-- **Mega** (`_Unmarshal`/`_Marshal`/`_Reader`, ~5.6 MiB deep `Node` tree).
+- **Mega** (`_Unmarshal`/`_Marshal`/`_Reader`, ~4.4 MiB deep `Node` tree).
   `_Reader` includes `ggen_ReadAllUnmarshal` (`io.ReadAll` then bytes decode —
   cheapest io.Reader pattern). Inner loop under `b.RunParallel` (`-cpu=1`
   serial, `-cpu=N` N-way, same path); stateful codecs get per-goroutine state
@@ -101,7 +114,7 @@ type EasyClaim struct { Sub string `json:"sub"`; ... }   // same fields
 ```
 
 `NodePlain`/`AddrPlain` exist for the same reason at mega level (self-referential
-field types meant `type AddrPlain Addr` wasn't enough — see `bench/types.go`);
+field types meant `type AddrPlain Addr` wasn't enough — see `bench/mega.go`);
 for non-recursive structs a parallel struct declaration is cleanest.
 
 **Symptom when forgotten:** a supposedly-reflection row matches easyjson's allocs
@@ -110,10 +123,12 @@ and ns/op almost exactly when it should be 3-10× slower. ggen's own
 only stdlib-interface methods cause cross-codec pickup — same isolation applies
 if a struct opts into ggen `marshal`/`unmarshal` hooks.
 
-## Headline results (~5.6 MiB deep Node tree, full validation)
+## Headline results (~4.4 MiB deep Node tree, full validation)
 
-AMD Ryzen AI MAX+ 395, Go 1.26, GOEXPERIMENT=jsonv2. Node carries scalars,
-slices, string-keyed maps, fixed tuples, slab `[]*T`, nested slices, pointers,
+AMD Ryzen AI MAX+ 395, Go 1.26, GOEXPERIMENT=jsonv2; re-measured 2026-07 on
+the deterministic payload (older quotes used the pre-deterministic fixture
+and are not comparable). Node carries scalars, slices, single-entry
+string-keyed maps, fixed tuples, slab `[]*T`, nested slices, pointers,
 time, base64 bytes, `any`, `json.RawMessage`. Core-pinned per the discipline
 below: `GOMAXPROCS=1 taskset -c 24 … -benchtime=500x -count=1 -cpu=1`.
 
@@ -121,11 +136,11 @@ below: `GOMAXPROCS=1 taskset -c 24 … -benchtime=500x -count=1 -cpu=1`.
 
 | path       | ns/op       | B/op    | allocs    | MB/s    |
 | ---------- | ----------- | ------- | --------- | ------- |
-| jsonv2     | 34928 K     | 17.7 MB | 316830    | 168     |
-| sonic      | 17198 K     | 20.8 MB | 137770    | 341     |
-| sonic_fast | 16934 K     | 20.8 MB | 137770    | 346     |
-| easyjson   | 26178 K     | 17.0 MB | 245855    | 224     |
-| **ggen**   | **14697 K** | 11.4 MB | **64599** | **399** |
+| jsonv2     | 24634 K     | 13.6 MB | 234397    | 189     |
+| sonic      | 11872 K     | 16.6 MB | 127484    | 393     |
+| sonic_fast | 11737 K     | 16.6 MB | 127484    | 397     |
+| easyjson   | 18725 K     | 12.9 MB | 164283    | 249     |
+| **ggen**   | **10065 K** | 8.4 MB  | **54990** | **463** |
 
 A sixth `ggen_copy` row (CopyNode, `-copy` mode) isolates the copy-out cost vs
 the aliasing `ggen` row: every retained string / map key+value / slice elem /
@@ -138,12 +153,12 @@ broadly comparable. Numbers omitted here — interleave a core-pinned benchstat
 
 | path              | ns/op      | B/op    | allocs | MB/s    |
 | ----------------- | ---------- | ------- | ------ | ------- |
-| jsonv2            | 14896 K    | 6.0 MB  | 7407   | 393     |
-| sonic             | 12353 K    | 33.6 MB | 5112   | 475     |
-| sonic_fast        | 11882 K    | 33.6 MB | 5111   | 494     |
-| easyjson          | 10773 K    | 6.1 MB  | 7586   | 544     |
-| **ggen**          | 9623 K     | 11.9 MB | **1**  | 609     |
-| **ggen_presized** | **6598 K** | **0 B** | **0**  | **889** |
+| jsonv2            | 10971 K    | 4.8 MB  | 7497   | 425     |
+| sonic             | 8133 K     | 26.9 MB | 5107   | 573     |
+| sonic_fast        | 7441 K     | 26.9 MB | 5106   | 626     |
+| easyjson          | 7242 K     | 4.9 MB  | 6914   | 644     |
+| **ggen**          | 5928 K     | 9.7 MB  | **1**  | 786     |
+| **ggen_presized** | **4791 K** | **0 B** | **0**  | **973** |
 
 `ggen_presized` = same `AppendJSON`, once-pre-sized buffer (0 allocs, 0 GC). The
 1 alloc on plain `ggen` = output buffer.
@@ -152,12 +167,12 @@ broadly comparable. Numbers omitted here — interleave a core-pinned benchstat
 
 | path                         | ns/op   | B/op    | allocs |
 | ---------------------------- | ------- | ------- | ------ |
-| jsonv2.UnmarshalRead         | 36588 K | 17.7 MB | 316830 |
-| sonic.NewDecoder             | 20779 K | 39.0 MB | 137793 |
-| sonic_fast.NewDecoder        | 20126 K | 39.0 MB | 137794 |
-| easyjson.UnmarshalFromReader | 30042 K | 31.5 MB | 245886 |
-| **ggen UnmarshalStream**     | 22262 K | 17.1 MB | 251735 |
-| **ggen ReadAllUnmarshal**    | 17686 K | 25.9 MB | 64628  |
+| jsonv2.UnmarshalRead         | 25216 K | 13.6 MB | 234397 |
+| sonic.NewDecoder             | 15829 K | 34.8 MB | 127506 |
+| sonic_fast.NewDecoder        | 15675 K | 34.8 MB | 127506 |
+| easyjson.UnmarshalFromReader | 20126 K | 23.3 MB | 164313 |
+| **ggen UnmarshalStream**     | 14940 K | 13.0 MB | 169760 |
+| **ggen ReadAllUnmarshal**    | 11853 K | 18.9 MB | 55018  |
 
 ggen Stream copies each scanned string to its own heap alloc (hence the alloc
 count); `ReadAllUnmarshal` is the cleanest io.Reader pattern (bytes-path shape,
@@ -273,6 +288,16 @@ NoAlloc_Reader +4.75%, memory-bound tier).
 iteration count, single-threaded. That is the run for every number quoted in any
 doc, the README, or a chat reply. Anything else wastes minutes and is not what
 this repo expects.
+
+**Noise floor (measured 2026-07 on a non-busy box).** A core-pinned Mega
+`-benchtime=500x -count=10` pass on an otherwise-idle machine spreads ~1%
+min→max on the ggen rows (Unmarshal 0.8%, Marshal 0.8%, stream/readall ~1%);
+reflection/codec rows sit at 1.5-3%, with Reader/sonic worst at ~4.4% (thermal
+creep across the 20-minute sustained run — long hot passes also read ~2-5%
+slower than a short count=1 pass). B/op and allocs/op repeat bit-identical
+every sample — the payloads are deterministic, so any alloc delta is a real
+code change, and ns/op deltas under ~1% are noise even on an idle box; expect
+worse on a loaded one.
 
 **NEVER tail, head, grep, truncate, sample, or otherwise reduce the output IN
 ANY SHAPE OR FORM.** Print every benchmark line in full, verbatim. Do not pipe
