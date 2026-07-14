@@ -51,7 +51,12 @@ The numbers below are for science only.
 ## What each bench family measures
 
 - **NoAlloc** (`Account`, wide denormalized record, all nested VALUE structs, no
-  slice/map/pointer/`any`/`json.RawMessage`) — bytes decode makes zero allocs
+  slice/map/pointer/`any`/`json.RawMessage`; profile strings are
+  Ukrainian-localized Cyrillic, so this row also carries the decode UTF-8
+  validation walk — opt #50: +74% scalar vs pre-validation; at avx512 the
+  vector validator (`validUTF8x16`, scan/CLAUDE.md) cuts it to +40% (1264 →
+  2819 with scalar utf8.Valid → 1773 ns with the Lemire pass; RuneGated
+  +52% → +11%), still 2.7-5× ahead of jsonv2) — bytes decode makes zero allocs
   (strings alias input, structs decode in place, scalars land in receiver),
   vs easyjson's ~25 allocs (it copies strings out of the input); isolates scan +
   key-dispatch + per-field-assign. Warms up 64 iters. `_Reader`:
@@ -74,8 +79,11 @@ The numbers below are for science only.
   matches `NoAlloc_Reader/ggen_stream`).
 - **EscapeHeavy** (`EscapeDoc`, ~19 KiB, ~12% escapes: `\n \" \\ \uXXXX` +
   surrogate pairs) — the ONLY tier that drives the unescape path (`scan.stringSlow`,
-  `\uXXXX` + surrogate assembly, scratch alloc); every other decode payload is
-  asciiLetters-only. Its correctness guard (ggen bytes + stream == jsonv2) found a
+  `\uXXXX` + surrogate assembly, scratch alloc); no other decode payload
+  carries escapes. (Non-ASCII content is a separate axis: the NoAlloc/Account
+  profile strings are Ukrainian-localized Cyrillic and RuneGated is multi-byte
+  by design, so those two rows — NOT this one — carry the decode UTF-8
+  validation cost, opt #50; Mega/Small/Tiny values are asciiLetters.) Its correctness guard (ggen bytes + stream == jsonv2) found a
   real stream bug: surrogate pairs straddling a refill boundary corrupted (😀 →
   ��, see scan/CLAUDE.md). **sonic caveat:** unlike the skip tier, decode must
   produce the unescaped value, but sonic's escape handling still differs

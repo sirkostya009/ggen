@@ -36,7 +36,7 @@ func (recv AnyStruct) DecodeFrom(data []byte) (result AnyStruct, i int, err erro
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -49,7 +49,7 @@ func (recv AnyStruct) DecodeFrom(data []byte) (result AnyStruct, i int, err erro
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -87,14 +87,14 @@ func (recv AnyStruct) DecodeFrom(data []byte) (result AnyStruct, i int, err erro
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.Name, i, err = scan.String(data, i)
+				result.Name, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("name", i, err)
 				}
@@ -147,7 +147,7 @@ func (recv AnyStruct) DecodeFromStream(s *scan.Stream) (result AnyStruct, err er
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -174,7 +174,7 @@ func (recv AnyStruct) DecodeFromStream(s *scan.Stream) (result AnyStruct, err er
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"name"}}
 			}
 			seenName = true
-			result.Name, err = s.String()
+			result.Name, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("name", s.Pos, err)
 			}
@@ -251,7 +251,7 @@ func (recv AnyNumberStruct) DecodeFrom(data []byte) (result AnyNumberStruct, i i
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -264,7 +264,7 @@ func (recv AnyNumberStruct) DecodeFrom(data []byte) (result AnyNumberStruct, i i
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -302,14 +302,14 @@ func (recv AnyNumberStruct) DecodeFrom(data []byte) (result AnyNumberStruct, i i
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.Name, i, err = scan.String(data, i)
+				result.Name, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("name", i, err)
 				}
@@ -362,7 +362,7 @@ func (recv AnyNumberStruct) DecodeFromStream(s *scan.Stream) (result AnyNumberSt
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -389,7 +389,7 @@ func (recv AnyNumberStruct) DecodeFromStream(s *scan.Stream) (result AnyNumberSt
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"name"}}
 			}
 			seenName = true
-			result.Name, err = s.String()
+			result.Name, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("name", s.Pos, err)
 			}

@@ -48,7 +48,7 @@ func (recv Address) DecodeFrom(data []byte) (result Address, i int, err error) {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -61,7 +61,7 @@ func (recv Address) DecodeFrom(data []byte) (result Address, i int, err error) {
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -90,14 +90,14 @@ func (recv Address) DecodeFrom(data []byte) (result Address, i int, err error) {
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.City = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.City, i, err = scan.String(data, i)
+				result.City, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("city", i, err)
 				}
@@ -118,14 +118,14 @@ func (recv Address) DecodeFrom(data []byte) (result Address, i int, err error) {
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.Street = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.Street, i, err = scan.String(data, i)
+				result.Street, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("street", i, err)
 				}
@@ -149,14 +149,14 @@ func (recv Address) DecodeFrom(data []byte) (result Address, i int, err error) {
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.ZipCode = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.ZipCode, i, err = scan.String(data, i)
+				result.ZipCode, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("zipCode", i, err)
 				}
@@ -231,7 +231,7 @@ func (recv Address) DecodeFromStream(s *scan.Stream) (result Address, err error)
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -245,7 +245,7 @@ func (recv Address) DecodeFromStream(s *scan.Stream) (result Address, err error)
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"city"}}
 			}
 			seenCity = true
-			result.City, err = s.String()
+			result.City, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("city", s.Pos, err)
 			}
@@ -261,7 +261,7 @@ func (recv Address) DecodeFromStream(s *scan.Stream) (result Address, err error)
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"street"}}
 			}
 			seenStreet = true
-			result.Street, err = s.String()
+			result.Street, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("street", s.Pos, err)
 			}
@@ -280,7 +280,7 @@ func (recv Address) DecodeFromStream(s *scan.Stream) (result Address, err error)
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"zipCode"}}
 			}
 			seenZipCode = true
-			result.ZipCode, err = s.String()
+			result.ZipCode, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("zipCode", s.Pos, err)
 			}
@@ -385,7 +385,7 @@ func (recv Node) DecodeFrom(data []byte) (result Node, i int, err error) {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -398,7 +398,7 @@ func (recv Node) DecodeFrom(data []byte) (result Node, i int, err error) {
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -536,14 +536,14 @@ func (recv Node) DecodeFrom(data []byte) (result Node, i int, err error) {
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.Name, i, err = scan.String(data, i)
+				result.Name, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("name", i, err)
 				}
@@ -585,14 +585,14 @@ func (recv Node) DecodeFrom(data []byte) (result Node, i int, err error) {
 					if kew > len(data) {
 						kew = len(data)
 					}
-					for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 						ke++
 					}
 					if ke < len(data) && data[ke] == '"' {
 						mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 						i = ke + 1
 					} else {
-						mk, i, err = scan.String(data, i)
+						mk, i, err = scan.String(data, i, true)
 						if err != nil {
 							return result, i, decode.NewParseErr("props", i, err)
 						}
@@ -615,14 +615,14 @@ func (recv Node) DecodeFrom(data []byte) (result Node, i int, err error) {
 					if vew > len(data) {
 						vew = len(data)
 					}
-					for ve < vew && data[ve] != '"' && data[ve] != '\\' && data[ve] >= 0x20 {
+					for ve < vew && data[ve] != '"' && data[ve] != '\\' && data[ve] >= 0x20 && data[ve] < 0x80 {
 						ve++
 					}
 					if ve < len(data) && data[ve] == '"' {
 						result.Props[mk] = unsafe.String(unsafe.SliceData(data[i+1:]), ve-i-1)
 						i = ve + 1
 					} else {
-						result.Props[mk], i, err = scan.String(data, i)
+						result.Props[mk], i, err = scan.String(data, i, true)
 						if err != nil {
 							return result, i, decode.NewParseErr("props", i, err)
 						}
@@ -693,14 +693,14 @@ func (recv Node) DecodeFrom(data []byte) (result Node, i int, err error) {
 					if kew > len(data) {
 						kew = len(data)
 					}
-					for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 						ke++
 					}
 					if ke < len(data) && data[ke] == '"' {
 						result.Tags[len(result.Tags)-1] = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 						i = ke + 1
 					} else {
-						result.Tags[len(result.Tags)-1], i, err = scan.String(data, i)
+						result.Tags[len(result.Tags)-1], i, err = scan.String(data, i, true)
 						if err != nil {
 							return result, i, decode.NewParseErr("tags", i, err)
 						}
@@ -787,7 +787,7 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -914,7 +914,7 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"name"}}
 			}
 			seenName = true
-			result.Name, err = s.String()
+			result.Name, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("name", s.Pos, err)
 			}
@@ -975,7 +975,7 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 			}
 			for s.Bytes()[s.Pos] != '}' {
 				var mk string
-				mk, err = s.String()
+				mk, err = s.String(true)
 				if err != nil {
 					return result, decode.NewParseErr("props", s.Pos, err)
 				}
@@ -996,7 +996,7 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 				if err != nil {
 					return result, decode.NewParseErr("props", s.Pos, err)
 				}
-				result.Props[mk], err = s.String()
+				result.Props[mk], err = s.String(true)
 				if err != nil {
 					return result, decode.NewParseErr("props", s.Pos, err)
 				}
@@ -1096,7 +1096,7 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 			}
 			for s.Bytes()[s.Pos] != ']' {
 				result.Tags = append(result.Tags, "")
-				result.Tags[len(result.Tags)-1], err = s.String()
+				result.Tags[len(result.Tags)-1], err = s.String(true)
 				if err != nil {
 					return result, decode.NewParseErr("tags", s.Pos, err)
 				}
@@ -1391,7 +1391,7 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -1404,7 +1404,7 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -1433,14 +1433,14 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.F1 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F1, i, err = scan.String(data, i)
+				result.F1, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("f1", i, err)
 				}
@@ -1458,14 +1458,14 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.F10 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F10, i, err = scan.String(data, i)
+				result.F10, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("f10", i, err)
 				}
@@ -1483,14 +1483,14 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.F11 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F11, i, err = scan.String(data, i)
+				result.F11, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("f11", i, err)
 				}
@@ -1508,14 +1508,14 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.F12 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F12, i, err = scan.String(data, i)
+				result.F12, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("f12", i, err)
 				}
@@ -1533,14 +1533,14 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.F13 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F13, i, err = scan.String(data, i)
+				result.F13, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("f13", i, err)
 				}
@@ -1558,14 +1558,14 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.F14 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F14, i, err = scan.String(data, i)
+				result.F14, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("f14", i, err)
 				}
@@ -1583,14 +1583,14 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.F15 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F15, i, err = scan.String(data, i)
+				result.F15, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("f15", i, err)
 				}
@@ -1608,14 +1608,14 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.F16 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F16, i, err = scan.String(data, i)
+				result.F16, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("f16", i, err)
 				}
@@ -1633,14 +1633,14 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.F17 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F17, i, err = scan.String(data, i)
+				result.F17, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("f17", i, err)
 				}
@@ -1658,14 +1658,14 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.F18 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F18, i, err = scan.String(data, i)
+				result.F18, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("f18", i, err)
 				}
@@ -1683,14 +1683,14 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.F19 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F19, i, err = scan.String(data, i)
+				result.F19, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("f19", i, err)
 				}
@@ -1708,14 +1708,14 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.F2 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F2, i, err = scan.String(data, i)
+				result.F2, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("f2", i, err)
 				}
@@ -1733,14 +1733,14 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.F20 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F20, i, err = scan.String(data, i)
+				result.F20, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("f20", i, err)
 				}
@@ -1758,14 +1758,14 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.F21 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F21, i, err = scan.String(data, i)
+				result.F21, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("f21", i, err)
 				}
@@ -1783,14 +1783,14 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.F22 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F22, i, err = scan.String(data, i)
+				result.F22, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("f22", i, err)
 				}
@@ -1808,14 +1808,14 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.F23 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F23, i, err = scan.String(data, i)
+				result.F23, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("f23", i, err)
 				}
@@ -1833,14 +1833,14 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.F24 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F24, i, err = scan.String(data, i)
+				result.F24, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("f24", i, err)
 				}
@@ -1858,14 +1858,14 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.F25 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F25, i, err = scan.String(data, i)
+				result.F25, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("f25", i, err)
 				}
@@ -1883,14 +1883,14 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.F26 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F26, i, err = scan.String(data, i)
+				result.F26, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("f26", i, err)
 				}
@@ -1908,14 +1908,14 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.F27 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F27, i, err = scan.String(data, i)
+				result.F27, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("f27", i, err)
 				}
@@ -1933,14 +1933,14 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.F28 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F28, i, err = scan.String(data, i)
+				result.F28, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("f28", i, err)
 				}
@@ -1958,14 +1958,14 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.F29 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F29, i, err = scan.String(data, i)
+				result.F29, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("f29", i, err)
 				}
@@ -1983,14 +1983,14 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.F3 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F3, i, err = scan.String(data, i)
+				result.F3, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("f3", i, err)
 				}
@@ -2008,14 +2008,14 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.F30 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F30, i, err = scan.String(data, i)
+				result.F30, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("f30", i, err)
 				}
@@ -2033,14 +2033,14 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.F31 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F31, i, err = scan.String(data, i)
+				result.F31, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("f31", i, err)
 				}
@@ -2058,14 +2058,14 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.F32 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F32, i, err = scan.String(data, i)
+				result.F32, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("f32", i, err)
 				}
@@ -2083,14 +2083,14 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.F33 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F33, i, err = scan.String(data, i)
+				result.F33, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("f33", i, err)
 				}
@@ -2108,14 +2108,14 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.F34 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F34, i, err = scan.String(data, i)
+				result.F34, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("f34", i, err)
 				}
@@ -2133,14 +2133,14 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.F35 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F35, i, err = scan.String(data, i)
+				result.F35, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("f35", i, err)
 				}
@@ -2158,14 +2158,14 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.F36 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F36, i, err = scan.String(data, i)
+				result.F36, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("f36", i, err)
 				}
@@ -2183,14 +2183,14 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.F37 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F37, i, err = scan.String(data, i)
+				result.F37, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("f37", i, err)
 				}
@@ -2208,14 +2208,14 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.F38 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F38, i, err = scan.String(data, i)
+				result.F38, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("f38", i, err)
 				}
@@ -2233,14 +2233,14 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.F39 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F39, i, err = scan.String(data, i)
+				result.F39, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("f39", i, err)
 				}
@@ -2258,14 +2258,14 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.F4 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F4, i, err = scan.String(data, i)
+				result.F4, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("f4", i, err)
 				}
@@ -2283,14 +2283,14 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.F40 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F40, i, err = scan.String(data, i)
+				result.F40, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("f40", i, err)
 				}
@@ -2308,14 +2308,14 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.F5 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F5, i, err = scan.String(data, i)
+				result.F5, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("f5", i, err)
 				}
@@ -2333,14 +2333,14 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.F6 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F6, i, err = scan.String(data, i)
+				result.F6, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("f6", i, err)
 				}
@@ -2358,14 +2358,14 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.F7 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F7, i, err = scan.String(data, i)
+				result.F7, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("f7", i, err)
 				}
@@ -2383,14 +2383,14 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.F8 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F8, i, err = scan.String(data, i)
+				result.F8, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("f8", i, err)
 				}
@@ -2408,14 +2408,14 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.F9 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F9, i, err = scan.String(data, i)
+				result.F9, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("f9", i, err)
 				}
@@ -2707,7 +2707,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -2721,7 +2721,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f1"}}
 			}
 			seen |= 1 << 0
-			result.F1, err = s.String()
+			result.F1, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("f1", s.Pos, err)
 			}
@@ -2734,7 +2734,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f10"}}
 			}
 			seen |= 1 << 1
-			result.F10, err = s.String()
+			result.F10, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("f10", s.Pos, err)
 			}
@@ -2747,7 +2747,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f11"}}
 			}
 			seen |= 1 << 2
-			result.F11, err = s.String()
+			result.F11, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("f11", s.Pos, err)
 			}
@@ -2760,7 +2760,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f12"}}
 			}
 			seen |= 1 << 3
-			result.F12, err = s.String()
+			result.F12, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("f12", s.Pos, err)
 			}
@@ -2773,7 +2773,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f13"}}
 			}
 			seen |= 1 << 4
-			result.F13, err = s.String()
+			result.F13, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("f13", s.Pos, err)
 			}
@@ -2786,7 +2786,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f14"}}
 			}
 			seen |= 1 << 5
-			result.F14, err = s.String()
+			result.F14, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("f14", s.Pos, err)
 			}
@@ -2799,7 +2799,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f15"}}
 			}
 			seen |= 1 << 6
-			result.F15, err = s.String()
+			result.F15, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("f15", s.Pos, err)
 			}
@@ -2812,7 +2812,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f16"}}
 			}
 			seen |= 1 << 7
-			result.F16, err = s.String()
+			result.F16, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("f16", s.Pos, err)
 			}
@@ -2825,7 +2825,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f17"}}
 			}
 			seen |= 1 << 8
-			result.F17, err = s.String()
+			result.F17, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("f17", s.Pos, err)
 			}
@@ -2838,7 +2838,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f18"}}
 			}
 			seen |= 1 << 9
-			result.F18, err = s.String()
+			result.F18, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("f18", s.Pos, err)
 			}
@@ -2851,7 +2851,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f19"}}
 			}
 			seen |= 1 << 10
-			result.F19, err = s.String()
+			result.F19, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("f19", s.Pos, err)
 			}
@@ -2864,7 +2864,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f2"}}
 			}
 			seen |= 1 << 11
-			result.F2, err = s.String()
+			result.F2, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("f2", s.Pos, err)
 			}
@@ -2877,7 +2877,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f20"}}
 			}
 			seen |= 1 << 12
-			result.F20, err = s.String()
+			result.F20, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("f20", s.Pos, err)
 			}
@@ -2890,7 +2890,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f21"}}
 			}
 			seen |= 1 << 13
-			result.F21, err = s.String()
+			result.F21, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("f21", s.Pos, err)
 			}
@@ -2903,7 +2903,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f22"}}
 			}
 			seen |= 1 << 14
-			result.F22, err = s.String()
+			result.F22, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("f22", s.Pos, err)
 			}
@@ -2916,7 +2916,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f23"}}
 			}
 			seen |= 1 << 15
-			result.F23, err = s.String()
+			result.F23, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("f23", s.Pos, err)
 			}
@@ -2929,7 +2929,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f24"}}
 			}
 			seen |= 1 << 16
-			result.F24, err = s.String()
+			result.F24, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("f24", s.Pos, err)
 			}
@@ -2942,7 +2942,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f25"}}
 			}
 			seen |= 1 << 17
-			result.F25, err = s.String()
+			result.F25, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("f25", s.Pos, err)
 			}
@@ -2955,7 +2955,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f26"}}
 			}
 			seen |= 1 << 18
-			result.F26, err = s.String()
+			result.F26, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("f26", s.Pos, err)
 			}
@@ -2968,7 +2968,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f27"}}
 			}
 			seen |= 1 << 19
-			result.F27, err = s.String()
+			result.F27, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("f27", s.Pos, err)
 			}
@@ -2981,7 +2981,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f28"}}
 			}
 			seen |= 1 << 20
-			result.F28, err = s.String()
+			result.F28, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("f28", s.Pos, err)
 			}
@@ -2994,7 +2994,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f29"}}
 			}
 			seen |= 1 << 21
-			result.F29, err = s.String()
+			result.F29, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("f29", s.Pos, err)
 			}
@@ -3007,7 +3007,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f3"}}
 			}
 			seen |= 1 << 22
-			result.F3, err = s.String()
+			result.F3, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("f3", s.Pos, err)
 			}
@@ -3020,7 +3020,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f30"}}
 			}
 			seen |= 1 << 23
-			result.F30, err = s.String()
+			result.F30, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("f30", s.Pos, err)
 			}
@@ -3033,7 +3033,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f31"}}
 			}
 			seen |= 1 << 24
-			result.F31, err = s.String()
+			result.F31, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("f31", s.Pos, err)
 			}
@@ -3046,7 +3046,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f32"}}
 			}
 			seen |= 1 << 25
-			result.F32, err = s.String()
+			result.F32, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("f32", s.Pos, err)
 			}
@@ -3059,7 +3059,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f33"}}
 			}
 			seen |= 1 << 26
-			result.F33, err = s.String()
+			result.F33, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("f33", s.Pos, err)
 			}
@@ -3072,7 +3072,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f34"}}
 			}
 			seen |= 1 << 27
-			result.F34, err = s.String()
+			result.F34, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("f34", s.Pos, err)
 			}
@@ -3085,7 +3085,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f35"}}
 			}
 			seen |= 1 << 28
-			result.F35, err = s.String()
+			result.F35, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("f35", s.Pos, err)
 			}
@@ -3098,7 +3098,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f36"}}
 			}
 			seen |= 1 << 29
-			result.F36, err = s.String()
+			result.F36, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("f36", s.Pos, err)
 			}
@@ -3111,7 +3111,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f37"}}
 			}
 			seen |= 1 << 30
-			result.F37, err = s.String()
+			result.F37, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("f37", s.Pos, err)
 			}
@@ -3124,7 +3124,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f38"}}
 			}
 			seen |= 1 << 31
-			result.F38, err = s.String()
+			result.F38, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("f38", s.Pos, err)
 			}
@@ -3137,7 +3137,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f39"}}
 			}
 			seen |= 1 << 32
-			result.F39, err = s.String()
+			result.F39, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("f39", s.Pos, err)
 			}
@@ -3150,7 +3150,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f4"}}
 			}
 			seen |= 1 << 33
-			result.F4, err = s.String()
+			result.F4, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("f4", s.Pos, err)
 			}
@@ -3163,7 +3163,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f40"}}
 			}
 			seen |= 1 << 34
-			result.F40, err = s.String()
+			result.F40, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("f40", s.Pos, err)
 			}
@@ -3176,7 +3176,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f5"}}
 			}
 			seen |= 1 << 35
-			result.F5, err = s.String()
+			result.F5, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("f5", s.Pos, err)
 			}
@@ -3189,7 +3189,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f6"}}
 			}
 			seen |= 1 << 36
-			result.F6, err = s.String()
+			result.F6, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("f6", s.Pos, err)
 			}
@@ -3202,7 +3202,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f7"}}
 			}
 			seen |= 1 << 37
-			result.F7, err = s.String()
+			result.F7, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("f7", s.Pos, err)
 			}
@@ -3215,7 +3215,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f8"}}
 			}
 			seen |= 1 << 38
-			result.F8, err = s.String()
+			result.F8, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("f8", s.Pos, err)
 			}
@@ -3228,7 +3228,7 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f9"}}
 			}
 			seen |= 1 << 39
-			result.F9, err = s.String()
+			result.F9, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("f9", s.Pos, err)
 			}

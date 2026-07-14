@@ -44,7 +44,7 @@ func (recv base32Wrap) DecodeFrom(data []byte) (result base32Wrap, i int, err er
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -57,7 +57,7 @@ func (recv base32Wrap) DecodeFrom(data []byte) (result base32Wrap, i int, err er
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -92,14 +92,14 @@ func (recv base32Wrap) DecodeFrom(data []byte) (result base32Wrap, i int, err er
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				s, i, err = scan.String(data, i)
+				s, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("b", i, err)
 				}
@@ -161,7 +161,7 @@ func (recv base32Wrap) DecodeFromStream(s *scan.Stream) (result base32Wrap, err 
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -196,7 +196,7 @@ func (recv base32Wrap) DecodeFromStream(s *scan.Stream) (result base32Wrap, err 
 				break
 			}
 			var sv string
-			sv, err = s.StringView()
+			sv, err = s.StringView(true)
 			if err != nil {
 				return result, decode.NewParseErr("b", s.Pos, err)
 			}
@@ -281,7 +281,7 @@ func (recv TimeLayout) DecodeFrom(data []byte) (result TimeLayout, i int, err er
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -294,7 +294,7 @@ func (recv TimeLayout) DecodeFrom(data []byte) (result TimeLayout, i int, err er
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -324,14 +324,14 @@ func (recv TimeLayout) DecodeFrom(data []byte) (result TimeLayout, i int, err er
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				s, i, err = scan.String(data, i)
+				s, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("layout", i, err)
 				}
@@ -387,7 +387,7 @@ func (recv TimeLayout) DecodeFromStream(s *scan.Stream) (result TimeLayout, err 
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -402,7 +402,7 @@ func (recv TimeLayout) DecodeFromStream(s *scan.Stream) (result TimeLayout, err 
 			}
 			seenLayout = true
 			var sv string
-			sv, err = s.StringView()
+			sv, err = s.StringView(true)
 			if err != nil {
 				return result, decode.NewParseErr("layout", s.Pos, err)
 			}
@@ -477,7 +477,7 @@ func (recv TimeStamp) DecodeFrom(data []byte) (result TimeStamp, i int, err erro
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -490,7 +490,7 @@ func (recv TimeStamp) DecodeFrom(data []byte) (result TimeStamp, i int, err erro
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -520,14 +520,14 @@ func (recv TimeStamp) DecodeFrom(data []byte) (result TimeStamp, i int, err erro
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				s, i, err = scan.String(data, i)
+				s, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("stamp", i, err)
 				}
@@ -583,7 +583,7 @@ func (recv TimeStamp) DecodeFromStream(s *scan.Stream) (result TimeStamp, err er
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -598,7 +598,7 @@ func (recv TimeStamp) DecodeFromStream(s *scan.Stream) (result TimeStamp, err er
 			}
 			seenStamp = true
 			var sv string
-			sv, err = s.StringView()
+			sv, err = s.StringView(true)
 			if err != nil {
 				return result, decode.NewParseErr("stamp", s.Pos, err)
 			}
@@ -673,7 +673,7 @@ func (recv TimeStampMilli) DecodeFrom(data []byte) (result TimeStampMilli, i int
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -686,7 +686,7 @@ func (recv TimeStampMilli) DecodeFrom(data []byte) (result TimeStampMilli, i int
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -716,14 +716,14 @@ func (recv TimeStampMilli) DecodeFrom(data []byte) (result TimeStampMilli, i int
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				s, i, err = scan.String(data, i)
+				s, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("stampMilli", i, err)
 				}
@@ -779,7 +779,7 @@ func (recv TimeStampMilli) DecodeFromStream(s *scan.Stream) (result TimeStampMil
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -794,7 +794,7 @@ func (recv TimeStampMilli) DecodeFromStream(s *scan.Stream) (result TimeStampMil
 			}
 			seenStampMilli = true
 			var sv string
-			sv, err = s.StringView()
+			sv, err = s.StringView(true)
 			if err != nil {
 				return result, decode.NewParseErr("stampMilli", s.Pos, err)
 			}
@@ -869,7 +869,7 @@ func (recv TimeStampMicro) DecodeFrom(data []byte) (result TimeStampMicro, i int
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -882,7 +882,7 @@ func (recv TimeStampMicro) DecodeFrom(data []byte) (result TimeStampMicro, i int
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -912,14 +912,14 @@ func (recv TimeStampMicro) DecodeFrom(data []byte) (result TimeStampMicro, i int
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				s, i, err = scan.String(data, i)
+				s, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("stampMicro", i, err)
 				}
@@ -975,7 +975,7 @@ func (recv TimeStampMicro) DecodeFromStream(s *scan.Stream) (result TimeStampMic
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -990,7 +990,7 @@ func (recv TimeStampMicro) DecodeFromStream(s *scan.Stream) (result TimeStampMic
 			}
 			seenStampMicro = true
 			var sv string
-			sv, err = s.StringView()
+			sv, err = s.StringView(true)
 			if err != nil {
 				return result, decode.NewParseErr("stampMicro", s.Pos, err)
 			}
@@ -1065,7 +1065,7 @@ func (recv TimeStampNano) DecodeFrom(data []byte) (result TimeStampNano, i int, 
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -1078,7 +1078,7 @@ func (recv TimeStampNano) DecodeFrom(data []byte) (result TimeStampNano, i int, 
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -1108,14 +1108,14 @@ func (recv TimeStampNano) DecodeFrom(data []byte) (result TimeStampNano, i int, 
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				s, i, err = scan.String(data, i)
+				s, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("stampNano", i, err)
 				}
@@ -1171,7 +1171,7 @@ func (recv TimeStampNano) DecodeFromStream(s *scan.Stream) (result TimeStampNano
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -1186,7 +1186,7 @@ func (recv TimeStampNano) DecodeFromStream(s *scan.Stream) (result TimeStampNano
 			}
 			seenStampNano = true
 			var sv string
-			sv, err = s.StringView()
+			sv, err = s.StringView(true)
 			if err != nil {
 				return result, decode.NewParseErr("stampNano", s.Pos, err)
 			}
@@ -1261,7 +1261,7 @@ func (recv TimeCustomTiny) DecodeFrom(data []byte) (result TimeCustomTiny, i int
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -1274,7 +1274,7 @@ func (recv TimeCustomTiny) DecodeFrom(data []byte) (result TimeCustomTiny, i int
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -1304,14 +1304,14 @@ func (recv TimeCustomTiny) DecodeFrom(data []byte) (result TimeCustomTiny, i int
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				s, i, err = scan.String(data, i)
+				s, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("customTiny", i, err)
 				}
@@ -1367,7 +1367,7 @@ func (recv TimeCustomTiny) DecodeFromStream(s *scan.Stream) (result TimeCustomTi
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -1382,7 +1382,7 @@ func (recv TimeCustomTiny) DecodeFromStream(s *scan.Stream) (result TimeCustomTi
 			}
 			seenCustomTiny = true
 			var sv string
-			sv, err = s.StringView()
+			sv, err = s.StringView(true)
 			if err != nil {
 				return result, decode.NewParseErr("customTiny", s.Pos, err)
 			}
@@ -1457,7 +1457,7 @@ func (recv TimeCustomLong) DecodeFrom(data []byte) (result TimeCustomLong, i int
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -1470,7 +1470,7 @@ func (recv TimeCustomLong) DecodeFrom(data []byte) (result TimeCustomLong, i int
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -1500,14 +1500,14 @@ func (recv TimeCustomLong) DecodeFrom(data []byte) (result TimeCustomLong, i int
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				s, i, err = scan.String(data, i)
+				s, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("customLong", i, err)
 				}
@@ -1563,7 +1563,7 @@ func (recv TimeCustomLong) DecodeFromStream(s *scan.Stream) (result TimeCustomLo
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -1578,7 +1578,7 @@ func (recv TimeCustomLong) DecodeFromStream(s *scan.Stream) (result TimeCustomLo
 			}
 			seenCustomLong = true
 			var sv string
-			sv, err = s.StringView()
+			sv, err = s.StringView(true)
 			if err != nil {
 				return result, decode.NewParseErr("customLong", s.Pos, err)
 			}
@@ -1678,7 +1678,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -1691,7 +1691,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -1721,14 +1721,14 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				s, i, err = scan.String(data, i)
+				s, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("ansic", i, err)
 				}
@@ -1751,14 +1751,14 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				s, i, err = scan.String(data, i)
+				s, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("customLong", i, err)
 				}
@@ -1781,14 +1781,14 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				s, i, err = scan.String(data, i)
+				s, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("customTiny", i, err)
 				}
@@ -1811,14 +1811,14 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				s, i, err = scan.String(data, i)
+				s, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("dateOnly", i, err)
 				}
@@ -1841,14 +1841,14 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				s, i, err = scan.String(data, i)
+				s, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("dateTime", i, err)
 				}
@@ -1871,14 +1871,14 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				s, i, err = scan.String(data, i)
+				s, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("default", i, err)
 				}
@@ -1901,14 +1901,14 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				s, i, err = scan.String(data, i)
+				s, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("kitchen", i, err)
 				}
@@ -1931,14 +1931,14 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				s, i, err = scan.String(data, i)
+				s, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("layout", i, err)
 				}
@@ -1961,14 +1961,14 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				s, i, err = scan.String(data, i)
+				s, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("rfc1123", i, err)
 				}
@@ -1991,14 +1991,14 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				s, i, err = scan.String(data, i)
+				s, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("rfc1123Z", i, err)
 				}
@@ -2021,14 +2021,14 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				s, i, err = scan.String(data, i)
+				s, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("rfc3339", i, err)
 				}
@@ -2051,14 +2051,14 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				s, i, err = scan.String(data, i)
+				s, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("rfc3339Nano", i, err)
 				}
@@ -2081,14 +2081,14 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				s, i, err = scan.String(data, i)
+				s, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("rfc822", i, err)
 				}
@@ -2111,14 +2111,14 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				s, i, err = scan.String(data, i)
+				s, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("rfc822Z", i, err)
 				}
@@ -2141,14 +2141,14 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				s, i, err = scan.String(data, i)
+				s, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("rfc850", i, err)
 				}
@@ -2171,14 +2171,14 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				s, i, err = scan.String(data, i)
+				s, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("rubyDate", i, err)
 				}
@@ -2201,14 +2201,14 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				s, i, err = scan.String(data, i)
+				s, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("stamp", i, err)
 				}
@@ -2231,14 +2231,14 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				s, i, err = scan.String(data, i)
+				s, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("stampMicro", i, err)
 				}
@@ -2261,14 +2261,14 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				s, i, err = scan.String(data, i)
+				s, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("stampMilli", i, err)
 				}
@@ -2291,14 +2291,14 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				s, i, err = scan.String(data, i)
+				s, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("stampNano", i, err)
 				}
@@ -2321,14 +2321,14 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				s, i, err = scan.String(data, i)
+				s, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("timeOnly", i, err)
 				}
@@ -2364,14 +2364,14 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				s, i, err = scan.String(data, i)
+				s, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("unixDate", i, err)
 				}
@@ -2485,7 +2485,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -2500,7 +2500,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 			}
 			seenANSIC = true
 			var sv string
-			sv, err = s.StringView()
+			sv, err = s.StringView(true)
 			if err != nil {
 				return result, decode.NewParseErr("ansic", s.Pos, err)
 			}
@@ -2518,7 +2518,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 			}
 			seenCustomLong = true
 			var sv string
-			sv, err = s.StringView()
+			sv, err = s.StringView(true)
 			if err != nil {
 				return result, decode.NewParseErr("customLong", s.Pos, err)
 			}
@@ -2536,7 +2536,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 			}
 			seenCustomTiny = true
 			var sv string
-			sv, err = s.StringView()
+			sv, err = s.StringView(true)
 			if err != nil {
 				return result, decode.NewParseErr("customTiny", s.Pos, err)
 			}
@@ -2554,7 +2554,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 			}
 			seenDateOnly = true
 			var sv string
-			sv, err = s.StringView()
+			sv, err = s.StringView(true)
 			if err != nil {
 				return result, decode.NewParseErr("dateOnly", s.Pos, err)
 			}
@@ -2572,7 +2572,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 			}
 			seenDateTime = true
 			var sv string
-			sv, err = s.StringView()
+			sv, err = s.StringView(true)
 			if err != nil {
 				return result, decode.NewParseErr("dateTime", s.Pos, err)
 			}
@@ -2590,7 +2590,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 			}
 			seenDefault = true
 			var sv string
-			sv, err = s.StringView()
+			sv, err = s.StringView(true)
 			if err != nil {
 				return result, decode.NewParseErr("default", s.Pos, err)
 			}
@@ -2608,7 +2608,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 			}
 			seenKitchen = true
 			var sv string
-			sv, err = s.StringView()
+			sv, err = s.StringView(true)
 			if err != nil {
 				return result, decode.NewParseErr("kitchen", s.Pos, err)
 			}
@@ -2626,7 +2626,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 			}
 			seenLayout = true
 			var sv string
-			sv, err = s.StringView()
+			sv, err = s.StringView(true)
 			if err != nil {
 				return result, decode.NewParseErr("layout", s.Pos, err)
 			}
@@ -2644,7 +2644,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 			}
 			seenRFC1123 = true
 			var sv string
-			sv, err = s.StringView()
+			sv, err = s.StringView(true)
 			if err != nil {
 				return result, decode.NewParseErr("rfc1123", s.Pos, err)
 			}
@@ -2662,7 +2662,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 			}
 			seenRFC1123Z = true
 			var sv string
-			sv, err = s.StringView()
+			sv, err = s.StringView(true)
 			if err != nil {
 				return result, decode.NewParseErr("rfc1123Z", s.Pos, err)
 			}
@@ -2680,7 +2680,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 			}
 			seenRFC3339 = true
 			var sv string
-			sv, err = s.StringView()
+			sv, err = s.StringView(true)
 			if err != nil {
 				return result, decode.NewParseErr("rfc3339", s.Pos, err)
 			}
@@ -2698,7 +2698,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 			}
 			seenRFC3339Nano = true
 			var sv string
-			sv, err = s.StringView()
+			sv, err = s.StringView(true)
 			if err != nil {
 				return result, decode.NewParseErr("rfc3339Nano", s.Pos, err)
 			}
@@ -2716,7 +2716,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 			}
 			seenRFC822 = true
 			var sv string
-			sv, err = s.StringView()
+			sv, err = s.StringView(true)
 			if err != nil {
 				return result, decode.NewParseErr("rfc822", s.Pos, err)
 			}
@@ -2734,7 +2734,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 			}
 			seenRFC822Z = true
 			var sv string
-			sv, err = s.StringView()
+			sv, err = s.StringView(true)
 			if err != nil {
 				return result, decode.NewParseErr("rfc822Z", s.Pos, err)
 			}
@@ -2752,7 +2752,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 			}
 			seenRFC850 = true
 			var sv string
-			sv, err = s.StringView()
+			sv, err = s.StringView(true)
 			if err != nil {
 				return result, decode.NewParseErr("rfc850", s.Pos, err)
 			}
@@ -2770,7 +2770,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 			}
 			seenRubyDate = true
 			var sv string
-			sv, err = s.StringView()
+			sv, err = s.StringView(true)
 			if err != nil {
 				return result, decode.NewParseErr("rubyDate", s.Pos, err)
 			}
@@ -2788,7 +2788,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 			}
 			seenStamp = true
 			var sv string
-			sv, err = s.StringView()
+			sv, err = s.StringView(true)
 			if err != nil {
 				return result, decode.NewParseErr("stamp", s.Pos, err)
 			}
@@ -2806,7 +2806,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 			}
 			seenStampMicro = true
 			var sv string
-			sv, err = s.StringView()
+			sv, err = s.StringView(true)
 			if err != nil {
 				return result, decode.NewParseErr("stampMicro", s.Pos, err)
 			}
@@ -2824,7 +2824,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 			}
 			seenStampMilli = true
 			var sv string
-			sv, err = s.StringView()
+			sv, err = s.StringView(true)
 			if err != nil {
 				return result, decode.NewParseErr("stampMilli", s.Pos, err)
 			}
@@ -2842,7 +2842,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 			}
 			seenStampNano = true
 			var sv string
-			sv, err = s.StringView()
+			sv, err = s.StringView(true)
 			if err != nil {
 				return result, decode.NewParseErr("stampNano", s.Pos, err)
 			}
@@ -2860,7 +2860,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 			}
 			seenTimeOnly = true
 			var sv string
-			sv, err = s.StringView()
+			sv, err = s.StringView(true)
 			if err != nil {
 				return result, decode.NewParseErr("timeOnly", s.Pos, err)
 			}
@@ -2896,7 +2896,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 			}
 			seenUnixDate = true
 			var sv string
-			sv, err = s.StringView()
+			sv, err = s.StringView(true)
 			if err != nil {
 				return result, decode.NewParseErr("unixDate", s.Pos, err)
 			}
@@ -3068,7 +3068,7 @@ func (recv BoundaryStruct) DecodeFrom(data []byte) (result BoundaryStruct, i int
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -3081,7 +3081,7 @@ func (recv BoundaryStruct) DecodeFrom(data []byte) (result BoundaryStruct, i int
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -3170,14 +3170,14 @@ func (recv BoundaryStruct) DecodeFrom(data []byte) (result BoundaryStruct, i int
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.Str = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.Str, i, err = scan.String(data, i)
+				result.Str, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("str", i, err)
 				}
@@ -3231,7 +3231,7 @@ func (recv BoundaryStruct) DecodeFromStream(s *scan.Stream) (result BoundaryStru
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -3271,7 +3271,7 @@ func (recv BoundaryStruct) DecodeFromStream(s *scan.Stream) (result BoundaryStru
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"str"}}
 			}
 			seenStr = true
-			result.Str, err = s.String()
+			result.Str, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("str", s.Pos, err)
 			}

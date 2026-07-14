@@ -89,6 +89,7 @@ Most flags have matching annotation token (no leading dash). Annotations space-s
 | `-nosortkeys`    | `nosortkeys`    | emit struct fields in declaration order (default: alphabetical, compresses better)                                                                                                                                                                                                       |
 | `-usenumber`     | `usenumber`     | decode JSON numbers in `any` fields as `json.Number` instead of `float64`                                                                                                                                                                                                                |
 | `-htmlescape`    | `htmlescape`    | escape `<`, `>`, `&` to `\uXXXX` (default: literal, matches `encoding/json` v2)                                                                                                                                                                                                          |
+| `-allowinvalidutf8` | `allowinvalidutf8` | skip decode UTF-8 validation: invalid bytes pass raw into strings/keys/raw spans, unpaired surrogates → U+FFFD (default: reject, jsonv2 parity). Grammar checks stay |
 | `-copy`          | `copy`          | bytes-path `DecodeFrom` copies strings / `json.RawMessage` / any-embedded strings out of the input instead of aliasing it, so input is safe to store long term after decode                                                                                                              |
 | `-dry`           | —               | parse + validate every annotated struct, surface all errors, emit no file. Rejects `-o`/`-pkg`                                                                                                                                                                                           |
 | `-simd <tier>`   | —               | SIMD tier for string scans + marshal escape scans: `off`/`avx`/`avx2`/`avx512`. `GOEXPERIMENT=simd` at ggen invocation auto-selects `avx`; wider tiers are explicit opt-ins. Tier is baked in at generate time; output requires `GOEXPERIMENT=simd` to build + a matching CPU |
@@ -373,6 +374,7 @@ Build tag propagation: struct in file behind `//go:build foo` land in `<dir>_foo
 5. **Build under right `GOEXPERIMENT`.** Files behind `goexperiment.jsonv2` invisible without `GOEXPERIMENT=jsonv2 ggen ./...`.
 6. **Test files first-class inputs.** Annotated structs in `_test.go` files route to `_ggen_test.go` so methods don't bundle into library build.
 7. **`hint:` only safe prealloc hint.** Don't expect `maxlen` to size container — it doesn't (intentional, retained-heap reasons). Use `hint:"N"` when know typical size.
+8. **Decode reject invalid UTF-8; encode not validate.** Decode: malformed UTF-8 bytes or unpaired `\uXXXX` surrogates in string values/keys → `scan.ErrInvalidUTF8` (jsonv2 parity; v1 instead silently replace with U+FFFD). ASCII strings pay nothing. Captured raw spans (`json.RawMessage`/`jsontext.Value`) byte-validated too. Exceptions: skipped content (`ignoreunknown`) grammar-checked only; unpaired surrogate ESCAPE inside raw span pass (ASCII text there; jsonv2 reject). Opt out per struct: `allowinvalidutf8`. Encode: invalid bytes in struct strings emitted raw onto wire (v1 replace, v2 replace+error) — validate at boundary if populating structs from untrusted bytes.
 
 ## Common user intents → flags
 
@@ -382,7 +384,8 @@ Build tag propagation: struct in file behind `//go:build foo` land in `<dir>_foo
 | "collect all errors, not just the first"                  | `-multierr`                                                                                           |
 | "skip unknown keys silently"                              | `-ignoreunknown` or a `json:",inline"` catch-all map                                                  |
 | "accept `null` on a scalar instead of erroring"           | a `nullzero` decode variant in `pipe:` per field, or `-nullzero` / `//ggen:generate nullzero` for all |
-| "fastest possible decode, I trust the input"              | `-novalidate`                                                                                         |
+| "fastest possible decode, I trust the input"              | `-novalidate` (+ `-allowinvalidutf8` if input may carry non-UTF-8 strings)                            |
+| "payload has broken UTF-8 / lone surrogates, decode anyway" | `-allowinvalidutf8` or `//ggen:generate allowinvalidutf8` per struct                                |
 | "wire output embedded directly in HTML"                   | `-htmlescape` (or per-type via alias `//ggen:generate htmlescape`)                                    |
 | "exact-precision numbers (big ints, no float64)"          | `-usenumber` for `any` fields; or use `math/big.Int`                                                  |
 | "duplicate keys should be accepted (first wins)"          | `-allowdups`                                                                                          |

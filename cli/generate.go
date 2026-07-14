@@ -2389,7 +2389,10 @@ for %[1]s < len(data) && data[%[1]s] >= '0' && data[%[1]s] <= '9' {
 // copies via string(...) when cp is set — the -copy mode, so the result no
 // longer references data); escapes fall back to scan.String (already an owned
 // copy). The loop also stops on any control byte (<0x20), which RFC 8259 /
-// jsonv2 reject. Brace-less: `ke` lands in the caller's scope (renderMap's
+// jsonv2 reject, and on any non-ASCII byte (>=0x80) — the inline fast paths
+// alias without validating, so non-ASCII spans hand off to scan.String*, which
+// UTF-8-validates (ErrInvalidUTF8, jsonv2 parity). Pure-ASCII short strings —
+// the dominant population — stay inline. Brace-less: `ke` lands in the caller's scope (renderMap's
 // value scan uses inlineScanStringVar to avoid colliding with the key scan's
 // `ke`). cp is set only at sites whose string is RETAINED past the scan (field
 // value, map key/value, slice/array elem); transient parse-feeds (time, url,
@@ -2401,8 +2404,25 @@ for %[1]s < len(data) && data[%[1]s] >= '0' && data[%[1]s] <= '9' {
 // strings (bios, URLs, descriptions) take the vectorized path.
 const scalarStringWindow = 32
 
-func inlineScanString(b *bytes.Buffer, posIn, dst, posOut, field string, cp bool) {
-	inlineScanStringVar(b, posIn, dst, posOut, field, "ke", cp)
+// vArg renders the validate literal for string-scan calls: "false" when the
+// struct opted out via allowinvalidutf8, else "true".
+func vArg(f FieldInfo) string {
+	if f.AllowInvalidUTF8 {
+		return "false"
+	}
+	return "true"
+}
+
+// vArgS is vArg at struct level (dispatch-key scans).
+func vArgS(s StructInfo) string {
+	if s.AllowInvalidUTF8 {
+		return "false"
+	}
+	return "true"
+}
+
+func inlineScanString(b *bytes.Buffer, posIn, dst, posOut, field string, cp bool, validate bool) {
+	inlineScanStringVar(b, posIn, dst, posOut, field, "ke", cp, validate)
 }
 
 // maxJSONNameLen returns the longest declared JSON key name on s (0 when no
@@ -2420,8 +2440,8 @@ func maxJSONNameLen(s StructInfo) int {
 
 // inlineScanStringVar is inlineScanString with a caller-chosen name for the
 // closing-quote cursor local.
-func inlineScanStringVar(b *bytes.Buffer, posIn, dst, posOut, field, ke string, cp bool) {
-	inlineScanStringWin(b, posIn, dst, posOut, field, ke, cp, 0)
+func inlineScanStringVar(b *bytes.Buffer, posIn, dst, posOut, field, ke string, cp bool, validate bool) {
+	inlineScanStringWin(b, posIn, dst, posOut, field, ke, cp, validate, 0)
 }
 
 // inlineScanStringWin is inlineScanStringVar with a scalar-window override for
@@ -2430,13 +2450,22 @@ func inlineScanStringVar(b *bytes.Buffer, posIn, dst, posOut, field, ke string, 
 // when every declared key is short enough that the vector dependency chain
 // loses to a handful of predictable scalar iterations. window == 0 emits the
 // vector shape. Ignored on the scalar tier.
-func inlineScanStringWin(b *bytes.Buffer, posIn, dst, posOut, field, ke string, cp bool, window int) {
+func inlineScanStringWin(b *bytes.Buffer, posIn, dst, posOut, field, ke string, cp bool, validate bool, window int) {
+	// allowinvalidutf8: permissive shapes are byte-identical to the
+	// pre-validation emitter - no <0x80 window bail, Min-Equal ctrl-only
+	// vector classify, validate=false at the runtime calls.
+	vLit, win80 := "true", " && data[%[5]s] < 0x80"
+	if !validate {
+		vLit, win80 = "false", ""
+	}
 	// SIMD tier: an inline fused vector classify (no call) handles any string
-	// shorter than one lane — one load + Equal/Equal/Min-Equal classify →
-	// ToBits → TrailingZeros finds the first structural byte ('"', '\',
-	// ctrl). Quote hit → inline alias/copy; anything else (escape, ctrl,
-	// span ≥ lane, string near the payload end where a full-lane load would
-	// overread) falls through to the fused scan.StringAVX* call, which
+	// shorter than one lane — one load + Equal/Equal/range classify → ToBits
+	// → TrailingZeros finds the first structural byte ('"', '\', ctrl, or
+	// non-ASCII: (v-0x20) >= 0x60 folds ctrl AND >=0x80 into one Sub+Max+Equal,
+	// same op count as the old Min-Equal ctrl term alone). Quote hit → inline
+	// alias/copy; anything else (escape, ctrl, non-ASCII needing UTF-8
+	// validation, span ≥ lane, string near the payload end where a full-lane
+	// load would overread) falls through to the fused scan.StringAVX* call, which
 	// restarts at posIn — error identity byte-identical. Full-lane loads
 	// only: Load*SlicePart is a real CALL, not an intrinsic. Broadcasts are
 	// emitted per site; gc CSEs them across sites and hoists them out of
@@ -2452,7 +2481,7 @@ func inlineScanStringWin(b *bytes.Buffer, posIn, dst, posOut, field, ke string, 
 			lane, vecT, tzFn = 16, "Uint8x16", "TrailingZeros16"
 		}
 		hot := "unsafe.String(unsafe.SliceData(data[%[1]s+1:]), %[5]s-%[1]s-1)"
-		fall := `%[3]s, %[4]s, err = ` + scanStringFn + `(data, %[1]s)
+		fall := `%[3]s, %[4]s, err = ` + scanStringFn + `(data, %[1]s, ` + vLit + `)
 	if err != nil { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, err) }`
 		if cp {
 			hot = "string(data[%[1]s+1:%[5]s])"
@@ -2463,7 +2492,7 @@ func inlineScanStringWin(b *bytes.Buffer, posIn, dst, posOut, field, ke string, 
 %[5]s := %[1]s + 1
 %[5]sw := %[5]s + %[6]d
 if %[5]sw > len(data) { %[5]sw = len(data) }
-for %[5]s < %[5]sw && data[%[5]s] != '"' && data[%[5]s] != '\\' && data[%[5]s] >= 0x20 { %[5]s++ }
+for %[5]s < %[5]sw && data[%[5]s] != '"' && data[%[5]s] != '\\' && data[%[5]s] >= 0x20`+win80+` { %[5]s++ }
 if %[5]s < len(data) && data[%[5]s] == '"' {
 	%[3]s = `+hot+`
 	%[4]s = %[5]s + 1
@@ -2473,14 +2502,21 @@ if %[5]s < len(data) && data[%[5]s] == '"' {
 `, posIn, field, dst, posOut, ke, window)
 			return
 		}
+		classify := `%[5]sD := %[5]sV.Sub(archsimd.Broadcast%[7]s(0x20))
+	%[5]sM := %[5]sV.Equal(archsimd.Broadcast%[7]s('"')).Or(%[5]sV.Equal(archsimd.Broadcast%[7]s('\\'))).Or(%[5]sD.Max(archsimd.Broadcast%[7]s(0x60)).Equal(%[5]sD)).ToBits()`
+		if !validate {
+			// Permissive: old Min-Equal ctrl-only classify (high bytes stay
+			// inline — no validation to route to).
+			classify = `%[5]sM := %[5]sV.Equal(archsimd.Broadcast%[7]s('"')).Or(%[5]sV.Equal(archsimd.Broadcast%[7]s('\\'))).Or(%[5]sV.Min(archsimd.Broadcast%[7]s(0x1F)).Equal(%[5]sV)).ToBits()`
+		}
 		fmt.Fprintf(b, `if %[1]s >= len(data) || data[%[1]s] != '"' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrExpectString) }
 %[5]s := %[1]s + 1
 if %[5]s+%[6]d <= len(data) {
 	%[5]sV := archsimd.Load%[7]sSlice(data[%[5]s:])
-	%[5]sM := %[5]sV.Equal(archsimd.Broadcast%[7]s('"')).Or(%[5]sV.Equal(archsimd.Broadcast%[7]s('\\'))).Or(%[5]sV.Min(archsimd.Broadcast%[7]s(0x1F)).Equal(%[5]sV)).ToBits()
+	`+classify+`
 	if %[5]sM != 0 { %[5]s += bits.%[8]s(%[5]sM) }
 } else {
-	for %[5]s < len(data) && data[%[5]s] != '"' && data[%[5]s] != '\\' && data[%[5]s] >= 0x20 { %[5]s++ }
+	for %[5]s < len(data) && data[%[5]s] != '"' && data[%[5]s] != '\\' && data[%[5]s] >= 0x20`+win80+` { %[5]s++ }
 }
 if %[5]s < len(data) && data[%[5]s] == '"' {
 	%[3]s = `+hot+`
@@ -2507,20 +2543,20 @@ if %[5]s < len(data) && data[%[5]s] == '"' {
 	if window < 0 {
 		fmt.Fprintf(b, `if %[1]s >= len(data) || data[%[1]s] != '"' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrExpectString) }
 %[5]s := %[1]s + 1
-for %[5]s < len(data) && data[%[5]s] != '"' && data[%[5]s] != '\\' && data[%[5]s] >= 0x20 { %[5]s++ }
+for %[5]s < len(data) && data[%[5]s] != '"' && data[%[5]s] != '\\' && data[%[5]s] >= 0x20`+win80+` { %[5]s++ }
 if %[5]s >= len(data) { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrUnterminated) }
 if data[%[5]s] < 0x20 { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrBadString) }
 if data[%[5]s] == '"' {
 	%[3]s = `+hot+`
 	%[4]s = %[5]s + 1
 } else {
-	%[3]s, %[4]s, err = scan.String(data, %[1]s)
+	%[3]s, %[4]s, err = scan.String(data, %[1]s, `+vLit+`)
 	if err != nil { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, err) }
 }
 `, posIn, field, dst, posOut, ke)
 		return
 	}
-	fall := `%[3]s, %[4]s, err = scan.String(data, %[1]s)
+	fall := `%[3]s, %[4]s, err = scan.String(data, %[1]s, ` + vLit + `)
 	if err != nil { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, err) }`
 	if cp {
 		fall += "\n\t" + `%[3]s = scan.Detach(%[3]s, data)`
@@ -2533,7 +2569,7 @@ if data[%[5]s] == '"' {
 %[5]s := %[1]s + 1
 %[5]sw := %[5]s + %[6]d
 if %[5]sw > len(data) { %[5]sw = len(data) }
-for %[5]s < %[5]sw && data[%[5]s] != '"' && data[%[5]s] != '\\' && data[%[5]s] >= 0x20 { %[5]s++ }
+for %[5]s < %[5]sw && data[%[5]s] != '"' && data[%[5]s] != '\\' && data[%[5]s] >= 0x20`+win80+` { %[5]s++ }
 if %[5]s < len(data) && data[%[5]s] == '"' {
 	%[3]s = `+hot+`
 	%[4]s = %[5]s + 1
@@ -2628,12 +2664,12 @@ i++
 	// scalar loop, so key scans get a bounded scalar window sized to the
 	// longest declared key instead (unknown longer keys fall to the tier call).
 	if maxKey := maxJSONNameLen(s); scanStringFn != "scan.String" && maxKey <= 5 {
-		inlineScanStringWin(b, "i", "key", "i", `""`, "ke", false, maxKey+1)
+		inlineScanStringWin(b, "i", "key", "i", `""`, "ke", false, !s.AllowInvalidUTF8, maxKey+1)
 	} else {
 		// Dispatch keys are short (matched against known field names): scan
 		// unbounded (window -1) so tiny structs don't pay per-key window setup.
 		// On the SIMD tier this still routes to the inline vector classify.
-		inlineScanStringWin(b, "i", "key", "i", `""`, "ke", false, -1)
+		inlineScanStringWin(b, "i", "key", "i", `""`, "ke", false, !s.AllowInvalidUTF8, -1)
 	}
 	inlineSkipWS(b, "i")
 	b.WriteString(`if i >= len(data) || data[i] != ':' { return result, i, decode.NewParseErr("", i, scan.ErrBadObject) }
@@ -2808,7 +2844,7 @@ func renderMap(b *bytes.Buffer, f FieldInfo, ref, posVar string, topLevel bool) 
 	for {
 		var mk string
 `, posVar, ref, f.GoType, makeExpr)
-	inlineScanString(b, posVar, "mk", posVar, field, f.Copy)
+	inlineScanString(b, posVar, "mk", posVar, field, f.Copy, !f.AllowInvalidUTF8)
 	keyValidateAndMod(b, f, "mk")
 	inlineSkipWS(b, posVar)
 	fmt.Fprintf(b, `		if %[1]s >= len(data) || data[%[1]s] != ':' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrBadObject) }
@@ -2846,7 +2882,7 @@ func renderMap(b *bytes.Buffer, f FieldInfo, ref, posVar string, topLevel bool) 
 	switch f.ElemKind {
 	case KindString:
 		// Straight into the slot; end-var `ve` since the key scan owns `ke`.
-		inlineScanStringVar(b, posVar, mapTarget, posVar, field, "ve", f.Copy)
+		inlineScanStringVar(b, posVar, mapTarget, posVar, field, "ve", f.Copy, !f.AllowInvalidUTF8)
 	case KindBool:
 		fmt.Fprintf(b, `%[2]s, %[1]s, err = scan.Bool(data, %[1]s)
 if err != nil { return result, %[1]s, decode.NewParseErr(%[3]s, %[1]s, err) }
@@ -2984,7 +3020,7 @@ if %[1]s >= len(data) || data[%[1]s] != ']' { return result, %[1]s, decode.NewPa
 	if enc == "" {
 		// hex path. ref was pre-reset to [:0]; realloc only when cap is short.
 		b.WriteString("var s string\n")
-		inlineScanString(b, posVar, "s", posVar, field, false)
+		inlineScanString(b, posVar, "s", posVar, field, false, !f.AllowInvalidUTF8)
 		fmt.Fprintf(b, `if cap(%[1]s) < hex.DecodedLen(len(s)) { %[1]s = make([]byte, 0, hex.DecodedLen(len(s))) }
 %[1]s, err = hex.AppendDecode(%[1]s, unsafe.Slice(unsafe.StringData(s), len(s)))
 if err != nil { return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, err) }
@@ -2992,7 +3028,7 @@ if err != nil { return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, err) }
 		return
 	}
 	b.WriteString("var s string\n")
-	inlineScanString(b, posVar, "s", posVar, field, false)
+	inlineScanString(b, posVar, "s", posVar, field, false, !f.AllowInvalidUTF8)
 	fmt.Fprintf(b, `if cap(%[1]s) < %[2]s(len(s)) { %[1]s = make([]byte, 0, %[2]s(len(s))) }
 %[1]s, err = %[3]s.AppendDecode(%[1]s, unsafe.Slice(unsafe.StringData(s), len(s)))
 if err != nil { return result, %[4]s, decode.NewParseErr(%[5]s, %[4]s, err) }
@@ -3029,7 +3065,7 @@ if err != nil { return result, %[1]s, decode.NewParseErr(%[4]s, %[1]s, err) }
 		return
 	}
 	b.WriteString("var s string\n")
-	inlineScanString(b, posVar, "s", posVar, field, false)
+	inlineScanString(b, posVar, "s", posVar, field, false, !f.AllowInvalidUTF8)
 	fmt.Fprintf(b, `%[1]s, err = time.Parse(%[2]s, s)
 if err != nil { return result, %[3]s, decode.NewParseErr(%[4]s, %[3]s, err) }
 `, ref, layout, posVar, field)
@@ -3061,7 +3097,7 @@ if err != nil { return result, %[1]s, decode.NewParseErr(%[4]s, %[1]s, err) }
 		return
 	}
 	b.WriteString("var s string\n")
-	inlineScanString(b, posVar, "s", posVar, field, false)
+	inlineScanString(b, posVar, "s", posVar, field, false, !f.AllowInvalidUTF8)
 	fmt.Fprintf(b, `%[1]s, err = time.ParseDuration(s)
 if err != nil { return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, err) }
 `, ref, posVar, field)
@@ -3071,7 +3107,7 @@ if err != nil { return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, err) }
 func renderNetIP(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	field := fieldLit(f)
 	b.WriteString("var s string\n")
-	inlineScanString(b, posVar, "s", posVar, field, false)
+	inlineScanString(b, posVar, "s", posVar, field, false, !f.AllowInvalidUTF8)
 	fmt.Fprintf(b, `%[1]s = net.ParseIP(s)
 if %[1]s == nil { return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, &net.ParseError{Type: "IP address", Text: s}) }
 `, ref, posVar, field)
@@ -3080,7 +3116,7 @@ if %[1]s == nil { return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, &net.Pa
 func renderNetipAddr(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	field := fieldLit(f)
 	b.WriteString("var s string\n")
-	inlineScanString(b, posVar, "s", posVar, field, false)
+	inlineScanString(b, posVar, "s", posVar, field, false, !f.AllowInvalidUTF8)
 	fmt.Fprintf(b, `%[1]s, err = netip.ParseAddr(s)
 if err != nil { return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, err) }
 `, ref, posVar, field)
@@ -3089,7 +3125,7 @@ if err != nil { return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, err) }
 func renderNetipPrefix(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	field := fieldLit(f)
 	b.WriteString("var s string\n")
-	inlineScanString(b, posVar, "s", posVar, field, false)
+	inlineScanString(b, posVar, "s", posVar, field, false, !f.AllowInvalidUTF8)
 	fmt.Fprintf(b, `%[1]s, err = netip.ParsePrefix(s)
 if err != nil { return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, err) }
 `, ref, posVar, field)
@@ -3119,7 +3155,7 @@ func renderCrossPkgStructDecode(f FieldInfo, ref, posVar string) string {
 		case f.Iface.TextUnmarshaler:
 			chk := bytesErrCheck(fieldLit(f), posVar)
 			return fmt.Sprintf(`var ts string
-ts, %[1]s, err = `+scanStringFn+`(data, %[1]s)
+ts, %[1]s, err = `+scanStringFn+`(data, %[1]s, `+vArg(f)+`)
 %[3]serr = %[2]s.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts)))
 %[3]s`, posVar, ref, chk)
 
@@ -3209,7 +3245,7 @@ func renderCrossPkgStructStreamDecode(f FieldInfo, ref, posVar string) string {
 			// contract), and the bytes path already passes an aliased slice
 			// here — see Stream.StringView.
 			return fmt.Sprintf(`var ts string
-ts, err = s.StringView()
+ts, err = s.StringView(`+vArg(f)+`)
 %[2]serr = %[1]s.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts)))
 %[2]s`, ref, chk)
 
@@ -3236,9 +3272,13 @@ func renderRawJSON(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 		// append over the existing backing (reused across decodes; nil → fresh).
 		span = "append(%[2]s[:0], data[start:%[1]s]...)"
 	}
+	check := "err = scan.CheckUTF8(data[start:%[1]s])\n%[3]s"
+	if f.AllowInvalidUTF8 {
+		check = ""
+	}
 	fmt.Fprintf(b, `start := %[1]s
 %[1]s, err = scan.SkipValue(data, start)
-%[3]s%[2]s = `+span+`
+%[3]s`+check+`%[2]s = `+span+`
 `, posVar, ref, chk)
 }
 
@@ -3247,7 +3287,7 @@ func renderRawJSON(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 func renderURL(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	field := fieldLit(f)
 	b.WriteString("var s string\n")
-	inlineScanString(b, posVar, "s", posVar, field, false)
+	inlineScanString(b, posVar, "s", posVar, field, false, !f.AllowInvalidUTF8)
 	fmt.Fprintf(b, `var u *url.URL
 u, err = url.Parse(s)
 if err != nil { return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, err) }
@@ -3275,7 +3315,7 @@ if _, ok := (&%[2]s).SetString(unsafe.String(unsafe.SliceData(data[start:]), %[1
 func renderBigFloat(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	field := fieldLit(f)
 	b.WriteString("var s string\n")
-	inlineScanString(b, posVar, "s", posVar, field, false)
+	inlineScanString(b, posVar, "s", posVar, field, false, !f.AllowInvalidUTF8)
 	fmt.Fprintf(b, `if _, _, err := (&%[1]s).Parse(s, 10); err != nil {
 	return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, err)
 }
@@ -3287,7 +3327,7 @@ func renderBigFloat(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 func renderBigRat(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	field := fieldLit(f)
 	b.WriteString("var s string\n")
-	inlineScanString(b, posVar, "s", posVar, field, false)
+	inlineScanString(b, posVar, "s", posVar, field, false, !f.AllowInvalidUTF8)
 	fmt.Fprintf(b, `if _, ok := (&%[1]s).SetString(s); !ok {
 	return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, scan.ErrBadNumber)
 }
@@ -3339,7 +3379,7 @@ func renderSQLNull(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	switch spec.Inner {
 	case KindString:
 		inner.WriteString("var nv string\n")
-		inlineScanString(&inner, posVar, "nv", posVar, field, f.Copy)
+		inlineScanString(&inner, posVar, "nv", posVar, field, f.Copy, !f.AllowInvalidUTF8)
 	case KindBool:
 		inner.WriteString("var nv bool\n")
 		fmt.Fprintf(&inner, "nv, %[1]s, err = scan.Bool(data, %[1]s)\n", posVar)
@@ -3531,11 +3571,11 @@ func unknownKey(s StructInfo, posVar string) string {
 				// only when it aliases data (an owned stringSlow escape result
 				// skips the clone — no double-copy). Key stays cloned (keyExpr).
 				return initMap + fmt.Sprintf(`var _sv string
-_sv, %[1]s, err = `+scanStringFn+`(data, %[1]s)
+_sv, %[1]s, err = `+scanStringFn+`(data, %[1]s, `+vArg(inline)+`)
 %[3]sresult.%[2]s[%[4]s] = scan.Detach(_sv, data)
 `, posVar, inline.GoName, chk, keyExpr)
 			}
-			return initMap + fmt.Sprintf(`result.%[2]s[key], %[1]s, err = `+scanStringFn+`(data, %[1]s)
+			return initMap + fmt.Sprintf(`result.%[2]s[key], %[1]s, err = `+scanStringFn+`(data, %[1]s, `+vArg(inline)+`)
 %[3]s`, posVar, inline.GoName, chk)
 		case KindStruct:
 			if isGenerated(inline.ElemType) {
@@ -3636,7 +3676,7 @@ func renderStringTag(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	b.WriteString("var sv string\n")
 	// Only the KindString case retains sv (ref = sv); numeric `,string` parses
 	// it into an independent value, so the copy is needed for strings only.
-	inlineScanString(b, posVar, "sv", posVar, field, f.Copy && f.Kind == KindString)
+	inlineScanString(b, posVar, "sv", posVar, field, f.Copy && f.Kind == KindString, !f.AllowInvalidUTF8)
 	errCheck := fmt.Sprintf("if err != nil { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, err) }\n", posVar, field)
 	switch f.Kind {
 	case KindBool:
@@ -3985,7 +4025,7 @@ func renderField(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	field := fieldLit(f)
 	switch f.Kind {
 	case KindString:
-		inlineScanString(b, posVar, ref, posVar, field, f.Copy)
+		inlineScanString(b, posVar, ref, posVar, field, f.Copy, !f.AllowInvalidUTF8)
 	case KindBool:
 		fmt.Fprintf(b, "%[1]s, %[2]s, err = scan.Bool(data, %[2]s)\n", ref, posVar)
 		fmt.Fprintf(b, "if err != nil { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, err) }\n", posVar, field)
@@ -4316,7 +4356,7 @@ if e := bytes.IndexByte(data[%[2]s:], ']'); e >= 0 { %[4]s = bytes.Count(data[%[
 	} else {
 		switch f.ElemKind {
 		case KindString:
-			inlineScanString(b, kvar, target, kvar, field, f.Copy)
+			inlineScanString(b, kvar, target, kvar, field, f.Copy, !f.AllowInvalidUTF8)
 		case KindBool:
 			fmt.Fprintf(b, "%s, %s, err = scan.Bool(data, %s)\n", target, kvar, kvar)
 			b.WriteString(errCheck)
@@ -4451,15 +4491,15 @@ func tierStreamStringCalls(body string, s StructInfo) string {
 	if simdSuffix == "" {
 		return body
 	}
-	body = strings.ReplaceAll(body, "= s.String()", "= s.String"+simdSuffix+"()")
-	body = strings.ReplaceAll(body, "= s.StringView()", "= s.StringView"+simdSuffix+"()")
+	body = strings.ReplaceAll(body, "= s.String(", "= s.String"+simdSuffix+"(")
+	body = strings.ReplaceAll(body, "= s.StringView(", "= s.StringView"+simdSuffix+"(")
 	// Skip tree + dispatch whitespace: same shells/fast paths as the scalar
 	// pair on compact input, vector runs on whitespace-rich streams.
 	body = strings.ReplaceAll(body, "= s.SkipValue()", "= s.SkipValue"+simdSuffix+"()")
 	body = strings.ReplaceAll(body, "= s.SkipSpace()", "= s.SkipSpace"+simdSuffix+"()")
 	body = strings.ReplaceAll(body, "= s.CaptureValue()", "= s.CaptureValue"+simdSuffix+"()")
 	if maxJSONNameLen(s) > 5 {
-		body = strings.ReplaceAll(body, "= s.KeyView()", "= s.KeyView"+simdSuffix+"()")
+		body = strings.ReplaceAll(body, "= s.KeyView(", "= s.KeyView"+simdSuffix+"(")
 	}
 	return body
 }
@@ -4499,7 +4539,7 @@ s.Pos++
 }
 for {
 	var key string
-	key, err = s.KeyView()
+	key, err = s.KeyView(`+vArgS(s)+`)
 	%[1]s%[3]s
 	err = s.SkipSpace()
 	%[1]s%[5]sc := s.Bytes()[s.Pos]
@@ -4607,7 +4647,7 @@ func renderStreamMap(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	}
 	for s.Bytes()[s.Pos] != '}' {
 		var mk string
-		mk, err = s.String()
+		mk, err = s.String(`+vArg(f)+`)
 		%[4]s`, ref, f.GoType, makeExpr, chk, badLit, rm)
 	keyValidateAndModStream(b, f, "mk")
 	fmt.Fprintf(b, `		err = s.SkipSpace()
@@ -4638,8 +4678,8 @@ func renderStreamMap(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	}
 	switch f.ElemKind {
 	case KindString:
-		fmt.Fprintf(b, `%s, err = s.String()
-%s`, mapTarget, chk)
+		fmt.Fprintf(b, `%s, err = s.String(%s)
+%s`, mapTarget, vArg(f), chk)
 	case KindBool:
 		fmt.Fprintf(b, `%s, err = s.Bool()
 %s`, mapTarget, chk)
@@ -4821,14 +4861,14 @@ s.Pos++
 	// stream op and retains no bytes — see Stream.StringView.
 	if enc == "" {
 		fmt.Fprintf(b, `var sv string
-sv, err = s.StringView()
+sv, err = s.StringView(`+vArg(f)+`)
 %[2]sif cap(%[1]s) < hex.DecodedLen(len(sv)) { %[1]s = make([]byte, 0, hex.DecodedLen(len(sv))) }
 %[1]s, err = hex.AppendDecode(%[1]s, unsafe.Slice(unsafe.StringData(sv), len(sv)))
 %[2]s`, ref, chk)
 		return
 	}
 	fmt.Fprintf(b, `var sv string
-sv, err = s.StringView()
+sv, err = s.StringView(`+vArg(f)+`)
 %[4]sif cap(%[1]s) < %[2]s(len(sv)) { %[1]s = make([]byte, 0, %[2]s(len(sv))) }
 %[1]s, err = %[3]s.AppendDecode(%[1]s, unsafe.Slice(unsafe.StringData(sv), len(sv)))
 %[4]s`, ref, dlen, enc, chk)
@@ -4864,7 +4904,7 @@ n, err = s.Int64()
 	// `sv` not `v`: pointer-leaf caller declares `var v time.Time` here.
 	// StringView aliases s.buf; time.Parse retains none of it — see Stream.StringView.
 	fmt.Fprintf(b, `var sv string
-sv, err = s.StringView()
+sv, err = s.StringView(`+vArg(f)+`)
 %[3]s%[1]s, err = time.Parse(%[2]s, sv)
 %[3]s`, ref, layout, chk)
 }
@@ -4895,7 +4935,7 @@ n, err = s.Int64()
 	}
 	// StringView: ParseDuration retains no input — see Stream.StringView.
 	fmt.Fprintf(b, `var sv string
-sv, err = s.StringView()
+sv, err = s.StringView(`+vArg(f)+`)
 %[2]s%[1]s, err = time.ParseDuration(sv)
 %[2]s`, ref, chk)
 }
@@ -4907,7 +4947,7 @@ func renderStreamNetIP(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	// StringView: net.ParseIP copies into a fresh IP; the error literal
 	// retains sv, so it clones (string(sv)) — see Stream.StringView.
 	fmt.Fprintf(b, `var sv string
-sv, err = s.StringView()
+sv, err = s.StringView(`+vArg(f)+`)
 %[2]s%[1]s = net.ParseIP(sv)
 if %[1]s == nil { return result, decode.NewParseErr(%[3]s, s.Pos, &net.ParseError{Type: "IP address", Text: string(sv)}) }
 `, ref, chk, field)
@@ -4919,7 +4959,7 @@ func renderStreamNetipAddr(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	// StringView: netip.Addr is a value type and zones are deep-copied by
 	// unique — no input bytes retained on success — see Stream.StringView.
 	fmt.Fprintf(b, `var sv string
-sv, err = s.StringView()
+sv, err = s.StringView(`+vArg(f)+`)
 %[2]s%[1]s, err = netip.ParseAddr(sv)
 %[2]s`, ref, chk)
 }
@@ -4930,7 +4970,7 @@ func renderStreamNetipPrefix(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	// StringView: netip.Prefix is a value type, no input bytes retained on
 	// success — see Stream.StringView.
 	fmt.Fprintf(b, `var sv string
-sv, err = s.StringView()
+sv, err = s.StringView(`+vArg(f)+`)
 %[2]s%[1]s, err = netip.ParsePrefix(sv)
 %[2]s`, ref, chk)
 }
@@ -4940,8 +4980,12 @@ sv, err = s.StringView()
 func renderStreamRawJSON(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	_ = posVar
 	chk := streamErrCheck(fieldLit(f))
+	check := "err = scan.CheckUTF8(span)\n%[2]s"
+	if f.AllowInvalidUTF8 {
+		check = ""
+	}
 	fmt.Fprintf(b, `span, err := s.CaptureValue()
-%[2]s%[1]s = append(make([]byte, 0, len(span)), span...)
+%[2]s`+check+`%[1]s = append(make([]byte, 0, len(span)), span...)
 `, ref, chk)
 }
 
@@ -4949,7 +4993,7 @@ func renderStreamURL(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	_ = posVar
 	chk := streamErrCheck(fieldLit(f))
 	fmt.Fprintf(b, `var sv string
-sv, err = s.String()
+sv, err = s.String(`+vArg(f)+`)
 %[2]su, err := url.Parse(sv)
 %[2]s%[1]s = *u
 `, ref, chk)
@@ -4972,7 +5016,7 @@ func renderStreamBigFloat(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	chk := streamErrCheck(field)
 	// StringView: (*big.Float).Parse retains no input — see Stream.StringView.
 	fmt.Fprintf(b, `var sv string
-sv, err = s.StringView()
+sv, err = s.StringView(`+vArg(f)+`)
 %[2]sif _, _, err := (&%[1]s).Parse(sv, 10); err != nil {
 	return result, decode.NewParseErr(%[3]s, s.Pos, err)
 }
@@ -4985,7 +5029,7 @@ func renderStreamBigRat(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	chk := streamErrCheck(field)
 	// StringView: (*big.Rat).SetString retains no input — see Stream.StringView.
 	fmt.Fprintf(b, `var sv string
-sv, err = s.StringView()
+sv, err = s.StringView(`+vArg(f)+`)
 %[2]sif _, ok := (&%[1]s).SetString(sv); !ok {
 	return result, decode.NewParseErr(%[3]s, s.Pos, scan.ErrBadNumber)
 }
@@ -5024,9 +5068,13 @@ func renderStreamSQLNull(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	var inner bytes.Buffer
 	var valExpr string
 	scanTmpl := func(typ, method string) {
+		args := ""
+		if method == "String" {
+			args = vArg(f)
+		}
 		fmt.Fprintf(&inner, `var nv %[1]s
-nv, err = s.%[2]s()
-%[3]s`, typ, method, chk)
+nv, err = s.%[2]s(%[4]s)
+%[3]s`, typ, method, chk, args)
 	}
 	switch spec.Inner {
 	case KindString:
@@ -5107,7 +5155,7 @@ err = s.ConsumeColon()
 			return prelude + fmt.Sprintf(`result.%[1]s[ownKey], err = %[2]s()
 %[3]s`, inline.GoName, anyFn, chk)
 		case KindString:
-			return prelude + fmt.Sprintf(`result.%[1]s[ownKey], err = s.String()
+			return prelude + fmt.Sprintf(`result.%[1]s[ownKey], err = s.String(`+vArg(inline)+`)
 %[2]s`, inline.GoName, chk)
 		case KindStruct:
 			if isGenerated(inline.ElemType) {
@@ -5145,7 +5193,7 @@ func renderStreamStringTag(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	chk := streamErrCheck(field)
 	// Brace-less — see renderStringTag.
 	b.WriteString("var sv string\n")
-	b.WriteString("sv, err = s.KeyView()\n")
+	fmt.Fprintf(b, "sv, err = s.KeyView(%s)\n", vArg(f))
 	b.WriteString(chk)
 	switch f.Kind {
 	case KindBool:
@@ -5274,8 +5322,12 @@ func renderStreamField(f FieldInfo, ref, posVar string) string {
 		return b.String()
 	}
 	primScan := func(method string) {
-		fmt.Fprintf(b, `%[1]s, err = s.%[2]s()
-%[3]s`, ref, method, chk)
+		args := ""
+		if method == "String" {
+			args = vArg(f)
+		}
+		fmt.Fprintf(b, `%[1]s, err = s.%[2]s(%[4]s)
+%[3]s`, ref, method, chk, args)
 	}
 	widenedScan := func(wideType, wideVar, method, castTo string) {
 		guard := ""
@@ -5485,8 +5537,8 @@ func emitStreamSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth
 	} else {
 		switch f.ElemKind {
 		case KindString:
-			fmt.Fprintf(b, `%s, err = s.String()
-%s`, target, chk)
+			fmt.Fprintf(b, `%s, err = s.String(%s)
+%s`, target, vArg(f), chk)
 		case KindBool:
 			fmt.Fprintf(b, `%s, err = s.Bool()
 %s`, target, chk)

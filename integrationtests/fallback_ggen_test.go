@@ -37,7 +37,7 @@ func (recv FallbackStruct) DecodeFrom(data []byte) (result FallbackStruct, i int
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -50,7 +50,7 @@ func (recv FallbackStruct) DecodeFrom(data []byte) (result FallbackStruct, i int
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -93,14 +93,14 @@ func (recv FallbackStruct) DecodeFrom(data []byte) (result FallbackStruct, i int
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.ID = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.ID, i, err = scan.String(data, i)
+				result.ID, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("id", i, err)
 				}
@@ -153,7 +153,7 @@ func (recv FallbackStruct) DecodeFromStream(s *scan.Stream) (result FallbackStru
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -184,7 +184,7 @@ func (recv FallbackStruct) DecodeFromStream(s *scan.Stream) (result FallbackStru
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"id"}}
 			}
 			seenID = true
-			result.ID, err = s.String()
+			result.ID, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("id", s.Pos, err)
 			}
@@ -264,7 +264,7 @@ func (recv FastFallbackStruct) DecodeFrom(data []byte) (result FastFallbackStruc
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -277,7 +277,7 @@ func (recv FastFallbackStruct) DecodeFrom(data []byte) (result FastFallbackStruc
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -317,14 +317,14 @@ func (recv FastFallbackStruct) DecodeFrom(data []byte) (result FastFallbackStruc
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.ID = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.ID, i, err = scan.String(data, i)
+				result.ID, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("id", i, err)
 				}
@@ -377,7 +377,7 @@ func (recv FastFallbackStruct) DecodeFromStream(s *scan.Stream) (result FastFall
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -404,7 +404,7 @@ func (recv FastFallbackStruct) DecodeFromStream(s *scan.Stream) (result FastFall
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"id"}}
 			}
 			seenID = true
-			result.ID, err = s.String()
+			result.ID, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("id", s.Pos, err)
 			}
@@ -485,7 +485,7 @@ func (recv TextFallbackStruct) DecodeFrom(data []byte) (result TextFallbackStruc
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -498,7 +498,7 @@ func (recv TextFallbackStruct) DecodeFrom(data []byte) (result TextFallbackStruc
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -527,14 +527,14 @@ func (recv TextFallbackStruct) DecodeFrom(data []byte) (result TextFallbackStruc
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.ID = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.ID, i, err = scan.String(data, i)
+				result.ID, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("id", i, err)
 				}
@@ -545,7 +545,7 @@ func (recv TextFallbackStruct) DecodeFrom(data []byte) (result TextFallbackStruc
 			}
 			seenTag = true
 			var ts string
-			ts, i, err = scan.String(data, i)
+			ts, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("tag", i, err)
 			}
@@ -601,7 +601,7 @@ func (recv TextFallbackStruct) DecodeFromStream(s *scan.Stream) (result TextFall
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -615,7 +615,7 @@ func (recv TextFallbackStruct) DecodeFromStream(s *scan.Stream) (result TextFall
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"id"}}
 			}
 			seenID = true
-			result.ID, err = s.String()
+			result.ID, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("id", s.Pos, err)
 			}
@@ -629,7 +629,7 @@ func (recv TextFallbackStruct) DecodeFromStream(s *scan.Stream) (result TextFall
 			}
 			seenTag = true
 			var ts string
-			ts, err = s.StringView()
+			ts, err = s.StringView(true)
 			if err != nil {
 				return result, decode.NewParseErr("tag", s.Pos, err)
 			}

@@ -41,7 +41,7 @@ func TestString_StdlibParity(t *testing.T) {
 			if err := json.Unmarshal([]byte(tc.in), &want); err != nil {
 				t.Fatalf("stdlib: %v", err)
 			}
-			got, j, err := String([]byte(tc.in), 0)
+			got, j, err := String([]byte(tc.in), 0, true)
 			if err != nil {
 				t.Fatalf("scan.String: %v", err)
 			}
@@ -77,7 +77,7 @@ func TestString_ErrorParity(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			_, _, err := String([]byte(tc.in), 0)
+			_, _, err := String([]byte(tc.in), 0, true)
 			if !errors.Is(err, tc.want) {
 				t.Errorf("scan: got %v, want %v", err, tc.want)
 			}
@@ -107,7 +107,7 @@ func TestDetach(t *testing.T) {
 	}
 	for _, tc := range cases {
 		src := []byte(tc.in)
-		s, _, err := String(src, 0)
+		s, _, err := String(src, 0, true)
 		if err != nil {
 			t.Fatalf("String(%q): %v", tc.in, err)
 		}
@@ -128,7 +128,7 @@ func TestDetach(t *testing.T) {
 		t.Errorf("Detach of a non-aliasing string allocated %v times, want 0", n)
 	}
 	clean := []byte(`"a clean aliased span with some length"`)
-	aliased, _, err := String(clean, 0)
+	aliased, _, err := String(clean, 0, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,10 +137,9 @@ func TestDetach(t *testing.T) {
 	}
 }
 
-// TestString_LoneSurrogateParity: stdlib substitutes U+FFFD for an
-// unpaired surrogate. scan's stringSlow path emits the rune via
-// utf8.AppendRune which also yields U+FFFD for invalid runes — outputs
-// must match exactly.
+// TestString_LoneSurrogateParity: jsonv2 rejects unpaired surrogate escapes
+// ("invalid surrogate pair"); scan matches with ErrInvalidUTF8. encoding/json
+// v1 instead substitutes U+FFFD silently — an intentional divergence from v1.
 func TestString_LoneSurrogateParity(t *testing.T) {
 	t.Parallel()
 	cases := []string{
@@ -148,23 +147,49 @@ func TestString_LoneSurrogateParity(t *testing.T) {
 		`"\uDC00"`,       // lone low surrogate
 		`"\uD83D\uD83D"`, // two highs (invalid pair)
 		`"a\uD83Db"`,     // lone surrogate sandwiched
-		`"😀"`,            // valid pair (sanity baseline)
 	}
 	for _, in := range cases {
 		t.Run(in, func(t *testing.T) {
 			t.Parallel()
-			var want string
-			if err := json.Unmarshal([]byte(in), &want); err != nil {
-				t.Fatalf("stdlib: %v", err)
-			}
-			got, _, err := String([]byte(in), 0)
-			if err != nil {
-				t.Fatalf("scan: %v", err)
-			}
-			if got != want {
-				t.Errorf("mismatch\n got: %q (% x)\nwant: %q (% x)", got, got, want, want)
+			if _, _, err := String([]byte(in), 0, true); !errors.Is(err, ErrInvalidUTF8) {
+				t.Errorf("want ErrInvalidUTF8, got %v", err)
 			}
 		})
+	}
+	// Valid pair (sanity baseline) still decodes to the astral rune.
+	if got, _, err := String([]byte(`"😀"`), 0, true); err != nil || got != "😀" {
+		t.Errorf("valid pair: got %q err=%v", got, err)
+	}
+}
+
+// TestString_InvalidUTF8Rejected: raw malformed UTF-8 inside a string literal
+// errors with ErrInvalidUTF8 on both the clean-span and escape paths (jsonv2
+// parity; v1 would silently substitute U+FFFD).
+func TestString_InvalidUTF8Rejected(t *testing.T) {
+	t.Parallel()
+	cases := []struct{ name, in string }{
+		{"lone_ff", "\"ab\xffcd\""},
+		{"truncated_2byte", "\"ab\xc3\""},
+		{"truncated_3byte_mid", "\"a\xe2(z\""},
+		{"overlong", "\"\xc0\x80\""},
+		{"utf8_surrogate", "\"\xed\xa0\x80\""},
+		{"invalid_after_escape", "\"a\\n\xffz\""},
+		{"invalid_before_escape", "\"\xff\\tz\""},
+		{"long_span_invalid", `"` + strings.Repeat("x", 64) + "\xfe" + `"`},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			if _, _, err := String([]byte(c.in), 0, true); !errors.Is(err, ErrInvalidUTF8) {
+				t.Errorf("want ErrInvalidUTF8, got %v", err)
+			}
+		})
+	}
+	// Valid multi-byte UTF-8 passes both paths untouched.
+	for _, in := range []string{"\"héllo wörld żółć\"", "\"a\\né😀\""} {
+		if got, _, err := String([]byte(in), 0, true); err != nil || got == "" {
+			t.Errorf("%q: got %q err=%v", in, got, err)
+		}
 	}
 }
 
@@ -173,7 +198,7 @@ func TestString_LoneSurrogateParity(t *testing.T) {
 func TestString_ZeroCopyAlias(t *testing.T) {
 	t.Parallel()
 	data := []byte(`"hello world"`)
-	s, _, err := String(data, 0)
+	s, _, err := String(data, 0, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -195,7 +220,7 @@ func TestStringEscapeAllocBounded(t *testing.T) {
 	payload := append([]byte(`"ab\nc"`), bytes.Repeat([]byte{' '}, 1<<20)...)
 	var got string
 	allocs := testing.AllocsPerRun(100, func() {
-		s, _, err := String(payload, 0)
+		s, _, err := String(payload, 0, true)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -211,7 +236,7 @@ func TestStringEscapeAllocBounded(t *testing.T) {
 	runtime.GC()
 	runtime.ReadMemStats(&m0)
 	for range 16 {
-		String(payload, 0)
+		String(payload, 0, true)
 	}
 	runtime.ReadMemStats(&m1)
 	if total := m1.TotalAlloc - m0.TotalAlloc; total > 16*1024 {
@@ -227,7 +252,7 @@ func TestSkipString_ParityWithString(t *testing.T) {
 	for _, tc := range stringHappyCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			_, wantPos, wantErr := String([]byte(tc.in), 0)
+			_, wantPos, wantErr := String([]byte(tc.in), 0, true)
 			gotPos, gotErr := skipString([]byte(tc.in), 0)
 			if gotErr != wantErr || gotPos != wantPos {
 				t.Errorf("skipString(%q) = (%d, %v), String = (%d, %v)",
@@ -277,7 +302,7 @@ func TestSkipValue_EscapedStringNoAlloc(t *testing.T) {
 func TestString_CtrlBeforeEscapeRejected(t *testing.T) {
 	t.Parallel()
 	in := []byte("\"a\x01b\\nc\"")
-	if _, _, err := String(in, 0); err != ErrBadString {
+	if _, _, err := String(in, 0, true); err != ErrBadString {
 		t.Errorf("String = %v, want ErrBadString", err)
 	}
 	var v string
@@ -287,7 +312,7 @@ func TestString_CtrlBeforeEscapeRejected(t *testing.T) {
 	// Stream path shares the fix via (*Stream).stringSlow.
 	var s Stream
 	s.Reset(bytes.NewReader(in), nil)
-	if _, err := s.String(); err != ErrBadString {
+	if _, err := s.String(true); err != ErrBadString {
 		t.Errorf("Stream.String = %v, want ErrBadString", err)
 	}
 }

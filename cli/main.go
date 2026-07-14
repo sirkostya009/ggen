@@ -80,6 +80,7 @@ func main() {
 	flag.BoolVar(&cliFlags.usenumber, "usenumber", false, "decode JSON numbers into `any` fields as json.Number instead of float64 (mirrors json.Decoder.UseNumber)")
 	flag.BoolVar(&cliFlags.htmlescape, "htmlescape", false, "HTML-safe escape <, >, & in emitted strings (default: literal, matches stdlib jsonv2)")
 	flag.BoolVar(&cliFlags.copy, "copy", false, "bytes-path DecodeFrom copies strings, json.RawMessage, and any-embedded strings out of the input instead of aliasing it (mutating data after decode no longer corrupts decoded values)")
+	flag.BoolVar(&cliFlags.allowinvalidutf8, "allowinvalidutf8", false, "skip decode-side UTF-8 validation (default: reject invalid UTF-8 / unpaired surrogates, jsonv2 parity); permissive structs pass raw bytes through like encoding/json v1 minus the U+FFFD substitution on raw bytes")
 	flag.BoolVar(&cliDry, "dry", false, "dry run: parse and validate every annotated struct, surface all errors, emit no file")
 	var simdFlag string
 	flag.StringVar(&simdFlag, "simd", "", "SIMD tier for bytes-path string scans: off|avx|avx2|avx512 (default: avx when GOEXPERIMENT=simd is set, else off; generated code then requires GOEXPERIMENT=simd to build and a matching CPU to run — no runtime probing)")
@@ -215,6 +216,9 @@ func applyCLIFlags(structs []StructInfo) {
 		if cliFlags.copy {
 			structs[i].Copy = true
 		}
+		if cliFlags.allowinvalidutf8 {
+			structs[i].AllowInvalidUTF8 = true
+		}
 		for j := range structs[i].Fields {
 			structs[i].Fields[j].MultiErr = structs[i].MultiErr
 			structs[i].Fields[j].AllowDups = structs[i].AllowDups
@@ -222,6 +226,7 @@ func applyCLIFlags(structs []StructInfo) {
 			structs[i].Fields[j].UseNumber = structs[i].UseNumber
 			structs[i].Fields[j].HTMLEscape = structs[i].HTMLEscape
 			structs[i].Fields[j].Copy = structs[i].Copy
+			structs[i].Fields[j].AllowInvalidUTF8 = structs[i].AllowInvalidUTF8
 			// OR, not assign: a per-field json:",nullzero" must survive when the
 			// struct flag is off.
 			structs[i].Fields[j].NullZero = structs[i].Fields[j].NullZero || structs[i].NullZero

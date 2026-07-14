@@ -52,7 +52,45 @@ Primitives: `SkipSpace`, `String`, `Int64`, `Uint64`, `Float64`, `Bool`,
   len)` when no escapes; falls back to `stringSlow` (`utf8.AppendRune` for `\uXXXX` +
   surrogates). `bytes.IndexByte` (SIMD) finds the closing `"`; a second IndexByte
   over the span detects a preceding `\`. Truncated `\u…`/trailing `\` →
-  `ErrBadString` via fallthrough to `stringSlow`.
+  `ErrBadString` via fallthrough to `stringSlow`. **UTF-8 validated** (jsonv2
+  parity, `ErrInvalidUTF8`): the clean span goes through `checkSpan` — the SWAR
+  ctrl walk fused with a high-bit accumulate, so pure-ASCII spans never pay the
+  `utf8.Valid` rune walk; only spans that actually contain ≥0x80 bytes run it.
+  `stringSlow` rejects unpaired `\uXXXX` surrogates (v1 would silently emit
+  U+FFFD) and gates a final `utf8.Valid(buf)` on RAW segment bytes having a
+  high bit (escape outputs are valid by construction — `EscapeHeavy` stays on
+  the no-walk path). Stream mirrors (`ctrlOrHigh` accumulates `high` across
+  refill chunks, one `utf8.Valid` over the FULL contiguous span at return — a
+  rune may straddle the chunk cursor, so per-chunk validation would
+  false-error). SIMD tiers accumulate a lane OR (`acc = acc.Or(v)`, 1 VPOR/
+  lane) and test it once at the '"' classify; stream tiers use the
+  `structuralIndexHigh*` variants (skip tiers keep the plain ones — skipped
+  spans are DELIBERATELY not UTF-8-validated, `ignoreunknown` stays
+  permissive). Under `goexperiment.simd` the non-ASCII second pass runs
+  `validUTF8x16` (`simd_utf8_amd64.go`) instead of `utf8.Valid` — the
+  Lemire/simdjson range-lookup validator on 16-byte lanes (AVX1-safe VPSHUFB/
+  VPALIGNR, shared by all three tiers since `classifyStructural` is): three
+  nibble LUTs classify each (prev1, cur) byte pair, XOR against a
+  saturating-sub "3rd/4th continuation required" mask cancels the one legal
+  0x80 case, errors accumulate vectorially; zero-padded tail + one all-zero
+  epilogue block catch truncated runes. ~6.5× over the scalar DFA (4 KB
+  Cyrillic 3456→~530 ns; NoAlloc avx512 −37%, RuneGated −29%, ASCII rows
+  flat). Accept-set parity with `utf8.Valid` pinned by
+  `TestValidUTF8SIMD_Parity` (exhaustive 1-2-byte × boundary offsets +
+  directed overlong/surrogate/too-large/truncation classes) +
+  `FuzzValidUTF8SIMD`; `TestConcatShiftSemantics` pins the VPALIGNR operand
+  order the prev1/2/3 shifts depend on. Scalar builds, `stringSlow`, and
+  `CheckUTF8` keep `utf8.Valid`. Micro cost-split guards:
+  `BenchmarkStringUTF8Cost{,AVX512}` (utf8cost bench files). Captured raw spans validate via `CheckUTF8` (SWAR high-bit
+  detect, `utf8.Valid` from the first high word — sound because the preceding
+  byte is ASCII, i.e. a rune boundary), emitted by codegen at
+  `json.RawMessage`/`jsontext.Value` sites, bytes + stream; unpaired surrogate
+  ESCAPES inside raw spans are ASCII text and pass (residual jsonv2
+  divergence, see backlog). Encode side still does NOT validate (see
+  encode/CLAUDE.md). All string scanners take a trailing `validate bool`
+  (generated code passes a literal; `allowinvalidutf8` structs pass false —
+  raw bytes through, surrogate escapes → U+FFFD, no CheckUTF8 at raw sites).
+  The branch is span-level (never in the per-byte loops) — measured flat.
 - **`Detach(s, data)` — the `-copy` single-copy detacher.** Returns an owned copy
   of `s` when `s` aliases `data` (the `unsafe.String` clean-path result of
   `String`/`StringAVX*`), else `s` unchanged (a `stringSlow`-owned escape result,

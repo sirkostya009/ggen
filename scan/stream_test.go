@@ -72,7 +72,7 @@ func TestStream_StringChunked(t *testing.T) {
 			}
 			var s Stream
 			s.Reset(&chunkedReader{data: []byte(tc.in)}, nil)
-			got, err := s.String()
+			got, err := s.String(true)
 			if err != nil {
 				t.Fatalf("Stream.String: %v", err)
 			}
@@ -465,14 +465,14 @@ func TestStreamStringSurrogateAcrossRefill(t *testing.T) {
 	for pad := 0; pad < 48; pad++ {
 		body := strings.Repeat("a", pad) + `😀` + strings.Repeat("b", 6)
 		payload := `"` + body + `"`
-		want, _, err := String([]byte(payload), 0)
+		want, _, err := String([]byte(payload), 0, true)
 		if err != nil {
 			t.Fatalf("pad=%d bytes String: %v", pad, err)
 		}
 		for _, cap := range []int{8, 10, 13, 16, 32, 512} {
 			var s Stream
 			s.Reset(strings.NewReader(payload), make([]byte, 0, cap))
-			got, err := s.String()
+			got, err := s.String(true)
 			if err != nil {
 				t.Fatalf("pad=%d cap=%d stream String: %v", pad, cap, err)
 			}
@@ -505,13 +505,13 @@ func TestStreamStringSlowBufBounded(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			payload := `"` + body + `"`
-			want, _, err := String([]byte(payload), 0)
+			want, _, err := String([]byte(payload), 0, true)
 			if err != nil {
 				t.Fatalf("bytes String: %v", err)
 			}
 			var s Stream
 			s.Reset(strings.NewReader(payload), make([]byte, 0, 64))
-			got, err := s.String()
+			got, err := s.String(true)
 			if err != nil {
 				t.Fatalf("stream String: %v", err)
 			}
@@ -522,5 +522,57 @@ func TestStreamStringSlowBufBounded(t *testing.T) {
 				t.Fatalf("buffer ballooned to cap=%d (started 64) — compacting escape refill regressed", c)
 			}
 		})
+	}
+}
+
+// TestStreamStringInvalidUTF8: the stream string paths (String/StringView/
+// KeyView + stringSlow) reject invalid UTF-8 with ErrInvalidUTF8 (jsonv2
+// parity), across refill boundaries; valid multi-byte runes straddling a
+// refill still pass (the utf8.Valid runs over the full contiguous span, never
+// per chunk).
+func TestStreamStringInvalidUTF8(t *testing.T) {
+	t.Parallel()
+	invalid := []struct{ name, payload string }{
+		{"raw_ff", "\"ab\xffcd\""},
+		{"truncated_rune", "\"ab\xe2(z\""},
+		{"lone_surrogate", `"\uD83D"`},
+		{"surrogate_pair_split_escape", `"a\uD83Dz"`},
+		{"invalid_after_escape", "\"a\\n\xffz\""},
+		{"long_span_invalid", `"` + strings.Repeat("x", 40) + "\xfe" + `"`},
+	}
+	methods := []struct {
+		name string
+		fn   func(*Stream, bool) (string, error)
+	}{
+		{"String", (*Stream).String},
+		{"StringView", (*Stream).StringView},
+		{"KeyView", (*Stream).KeyView},
+	}
+	for _, c := range invalid {
+		for _, m := range methods {
+			for _, bufCap := range []int{8, 64, 512} {
+				var s Stream
+				s.Reset(&chunkedReader{data: []byte(c.payload)}, make([]byte, 0, bufCap))
+				if _, err := m.fn(&s, true); err != ErrInvalidUTF8 {
+					t.Errorf("%s/%s cap=%d: want ErrInvalidUTF8, got %v", c.name, m.name, bufCap, err)
+				}
+			}
+		}
+	}
+	// Valid multi-byte runes straddling one-byte refills decode intact.
+	valid := []string{"\"héllo wörld żółć\"", "\"a😀b\"", "\"a\\né😀\"", `"żółć"`}
+	for _, payload := range valid {
+		want, _, err := String([]byte(payload), 0, true)
+		if err != nil {
+			t.Fatalf("bytes %q: %v", payload, err)
+		}
+		for _, m := range methods {
+			var s Stream
+			s.Reset(&chunkedReader{data: []byte(payload)}, make([]byte, 0, 8))
+			got, err := m.fn(&s, true)
+			if err != nil || got != want {
+				t.Errorf("%s(%q): got %q err=%v want %q", m.name, payload, got, err, want)
+			}
+		}
 	}
 }

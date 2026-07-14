@@ -68,6 +68,7 @@ type annotationFlags struct {
 	usenumber     bool // opt in: decode JSON numbers into `any` fields as json.Number instead of float64
 	htmlescape    bool // opt in: HTML-safe escape <, >, & in emitted strings (default: literal, matches jsonv2)
 	copy          bool // opt in: bytes-path DecodeFrom copies strings/RawMessage/any instead of aliasing data
+	allowinvalidutf8 bool // opt out: skip decode UTF-8 validation for this struct
 }
 
 type structSet struct {
@@ -279,6 +280,8 @@ func parseAnnotation(groups ...*ast.CommentGroup) (annotationFlags, bool) {
 					flags.htmlescape = true
 				case "copy":
 					flags.copy = true
+				case "allowinvalidutf8":
+					flags.allowinvalidutf8 = true
 				}
 			}
 			return flags, true
@@ -362,6 +365,7 @@ func (s *structSet) resolveFiltered(wanted []string, allowExpand func(string) bo
 			info.UseNumber = flags.usenumber
 			info.HTMLEscape = flags.htmlescape
 			info.Copy = flags.copy
+			info.AllowInvalidUTF8 = flags.allowinvalidutf8
 		}
 		_, info.Test = s.fromTest[name]
 		info.BuildTag = s.structBuildTag[name]

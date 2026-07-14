@@ -40,7 +40,7 @@ func (recv HugeStringStruct) DecodeFrom(data []byte) (result HugeStringStruct, i
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -53,7 +53,7 @@ func (recv HugeStringStruct) DecodeFrom(data []byte) (result HugeStringStruct, i
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -82,14 +82,14 @@ func (recv HugeStringStruct) DecodeFrom(data []byte) (result HugeStringStruct, i
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.Big = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.Big, i, err = scan.String(data, i)
+				result.Big, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("big", i, err)
 				}
@@ -141,7 +141,7 @@ func (recv HugeStringStruct) DecodeFromStream(s *scan.Stream) (result HugeString
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -155,7 +155,7 @@ func (recv HugeStringStruct) DecodeFromStream(s *scan.Stream) (result HugeString
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"big"}}
 			}
 			seenBig = true
-			result.Big, err = s.String()
+			result.Big, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("big", s.Pos, err)
 			}
@@ -234,7 +234,7 @@ func (recv SequentialStringsStruct) DecodeFrom(data []byte) (result SequentialSt
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -247,7 +247,7 @@ func (recv SequentialStringsStruct) DecodeFrom(data []byte) (result SequentialSt
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -276,14 +276,14 @@ func (recv SequentialStringsStruct) DecodeFrom(data []byte) (result SequentialSt
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.A = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.A, i, err = scan.String(data, i)
+				result.A, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("a", i, err)
 				}
@@ -301,14 +301,14 @@ func (recv SequentialStringsStruct) DecodeFrom(data []byte) (result SequentialSt
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.B = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.B, i, err = scan.String(data, i)
+				result.B, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("b", i, err)
 				}
@@ -326,14 +326,14 @@ func (recv SequentialStringsStruct) DecodeFrom(data []byte) (result SequentialSt
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.C = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.C, i, err = scan.String(data, i)
+				result.C, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("c", i, err)
 				}
@@ -351,14 +351,14 @@ func (recv SequentialStringsStruct) DecodeFrom(data []byte) (result SequentialSt
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.D = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.D, i, err = scan.String(data, i)
+				result.D, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("d", i, err)
 				}
@@ -376,14 +376,14 @@ func (recv SequentialStringsStruct) DecodeFrom(data []byte) (result SequentialSt
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.E = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.E, i, err = scan.String(data, i)
+				result.E, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("e", i, err)
 				}
@@ -401,14 +401,14 @@ func (recv SequentialStringsStruct) DecodeFrom(data []byte) (result SequentialSt
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.F = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F, i, err = scan.String(data, i)
+				result.F, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("f", i, err)
 				}
@@ -426,14 +426,14 @@ func (recv SequentialStringsStruct) DecodeFrom(data []byte) (result SequentialSt
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.G = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.G, i, err = scan.String(data, i)
+				result.G, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("g", i, err)
 				}
@@ -451,14 +451,14 @@ func (recv SequentialStringsStruct) DecodeFrom(data []byte) (result SequentialSt
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.H = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.H, i, err = scan.String(data, i)
+				result.H, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("h", i, err)
 				}
@@ -517,7 +517,7 @@ func (recv SequentialStringsStruct) DecodeFromStream(s *scan.Stream) (result Seq
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -531,7 +531,7 @@ func (recv SequentialStringsStruct) DecodeFromStream(s *scan.Stream) (result Seq
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"a"}}
 			}
 			seenA = true
-			result.A, err = s.String()
+			result.A, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("a", s.Pos, err)
 			}
@@ -544,7 +544,7 @@ func (recv SequentialStringsStruct) DecodeFromStream(s *scan.Stream) (result Seq
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"b"}}
 			}
 			seenB = true
-			result.B, err = s.String()
+			result.B, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("b", s.Pos, err)
 			}
@@ -557,7 +557,7 @@ func (recv SequentialStringsStruct) DecodeFromStream(s *scan.Stream) (result Seq
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"c"}}
 			}
 			seenC = true
-			result.C, err = s.String()
+			result.C, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("c", s.Pos, err)
 			}
@@ -570,7 +570,7 @@ func (recv SequentialStringsStruct) DecodeFromStream(s *scan.Stream) (result Seq
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"d"}}
 			}
 			seenD = true
-			result.D, err = s.String()
+			result.D, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("d", s.Pos, err)
 			}
@@ -583,7 +583,7 @@ func (recv SequentialStringsStruct) DecodeFromStream(s *scan.Stream) (result Seq
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"e"}}
 			}
 			seenE = true
-			result.E, err = s.String()
+			result.E, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("e", s.Pos, err)
 			}
@@ -596,7 +596,7 @@ func (recv SequentialStringsStruct) DecodeFromStream(s *scan.Stream) (result Seq
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f"}}
 			}
 			seenF = true
-			result.F, err = s.String()
+			result.F, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("f", s.Pos, err)
 			}
@@ -609,7 +609,7 @@ func (recv SequentialStringsStruct) DecodeFromStream(s *scan.Stream) (result Seq
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"g"}}
 			}
 			seenG = true
-			result.G, err = s.String()
+			result.G, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("g", s.Pos, err)
 			}
@@ -622,7 +622,7 @@ func (recv SequentialStringsStruct) DecodeFromStream(s *scan.Stream) (result Seq
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"h"}}
 			}
 			seenH = true
-			result.H, err = s.String()
+			result.H, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("h", s.Pos, err)
 			}
@@ -715,7 +715,7 @@ func (recv UnknownErrorStruct) DecodeFrom(data []byte) (result UnknownErrorStruc
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -728,7 +728,7 @@ func (recv UnknownErrorStruct) DecodeFrom(data []byte) (result UnknownErrorStruc
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -757,14 +757,14 @@ func (recv UnknownErrorStruct) DecodeFrom(data []byte) (result UnknownErrorStruc
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.Name, i, err = scan.String(data, i)
+				result.Name, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("name", i, err)
 				}
@@ -816,7 +816,7 @@ func (recv UnknownErrorStruct) DecodeFromStream(s *scan.Stream) (result UnknownE
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -830,7 +830,7 @@ func (recv UnknownErrorStruct) DecodeFromStream(s *scan.Stream) (result UnknownE
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"name"}}
 			}
 			seenName = true
-			result.Name, err = s.String()
+			result.Name, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("name", s.Pos, err)
 			}
@@ -903,7 +903,7 @@ func (recv ValidationPosStruct) DecodeFrom(data []byte) (result ValidationPosStr
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -916,7 +916,7 @@ func (recv ValidationPosStruct) DecodeFrom(data []byte) (result ValidationPosStr
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -945,14 +945,14 @@ func (recv ValidationPosStruct) DecodeFrom(data []byte) (result ValidationPosStr
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.A = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.A, i, err = scan.String(data, i)
+				result.A, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("a", i, err)
 				}
@@ -970,14 +970,14 @@ func (recv ValidationPosStruct) DecodeFrom(data []byte) (result ValidationPosStr
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.B = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.B, i, err = scan.String(data, i)
+				result.B, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("b", i, err)
 				}
@@ -1033,7 +1033,7 @@ func (recv ValidationPosStruct) DecodeFromStream(s *scan.Stream) (result Validat
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -1047,7 +1047,7 @@ func (recv ValidationPosStruct) DecodeFromStream(s *scan.Stream) (result Validat
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"a"}}
 			}
 			seenA = true
-			result.A, err = s.String()
+			result.A, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("a", s.Pos, err)
 			}
@@ -1060,7 +1060,7 @@ func (recv ValidationPosStruct) DecodeFromStream(s *scan.Stream) (result Validat
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"b"}}
 			}
 			seenB = true
-			result.B, err = s.String()
+			result.B, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("b", s.Pos, err)
 			}
@@ -1152,7 +1152,7 @@ func (recv NarrowInts) DecodeFrom(data []byte) (result NarrowInts, i int, err er
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -1165,7 +1165,7 @@ func (recv NarrowInts) DecodeFrom(data []byte) (result NarrowInts, i int, err er
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -1380,14 +1380,14 @@ func (recv NarrowInts) DecodeFrom(data []byte) (result NarrowInts, i int, err er
 					if kew > len(data) {
 						kew = len(data)
 					}
-					for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 						ke++
 					}
 					if ke < len(data) && data[ke] == '"' {
 						mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 						i = ke + 1
 					} else {
-						mk, i, err = scan.String(data, i)
+						mk, i, err = scan.String(data, i, true)
 						if err != nil {
 							return result, i, decode.NewParseErr("mapU", i, err)
 						}
@@ -1734,7 +1734,7 @@ func (recv NarrowInts) DecodeFromStream(s *scan.Stream) (result NarrowInts, err 
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -1850,7 +1850,7 @@ func (recv NarrowInts) DecodeFromStream(s *scan.Stream) (result NarrowInts, err 
 			}
 			for s.Bytes()[s.Pos] != '}' {
 				var mk string
-				mk, err = s.String()
+				mk, err = s.String(true)
 				if err != nil {
 					return result, decode.NewParseErr("mapU", s.Pos, err)
 				}

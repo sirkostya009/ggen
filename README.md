@@ -56,6 +56,27 @@ after decoding, or to avoid pinning a large buffer — generate with `-copy` (or
 strings inside `any` fields are then copied out of the input instead of aliased,
 giving the decoded value an independent lifetime (at the cost of more allocs).
 
+Two more contracts in the same spirit:
+
+- **Decode rejects invalid UTF-8** (jsonv2 parity). Malformed UTF-8 bytes and
+  unpaired `\uXXXX` surrogate escapes in string values or object keys fail the
+  decode with `scan.ErrInvalidUTF8` — matching jsonv2, which also errors
+  (`encoding/json` v1 instead silently replaces such bytes with U+FFFD; ggen
+  intentionally sides with v2). Pure-ASCII strings pay nothing for this check;
+  non-ASCII strings pay one UTF-8 walk. Captured raw spans (`json.RawMessage` /
+  `jsontext.Value`) are byte-validated too. Two deliberate exceptions: content
+  that is only *skipped* (unknown keys under `ignoreunknown`) is
+  grammar-checked but not UTF-8-validated, and an unpaired `\uXXXX` surrogate
+  *escape* inside a raw span passes — it is plain ASCII text there (jsonv2
+  escape-parses raw strings and rejects it). Per-struct opt-out:
+  `-allowinvalidutf8` / `//ggen:generate allowinvalidutf8` restores the
+  permissive pass-through (see the flag table).
+- **Encode never validates UTF-8.** Invalid bytes in your strings are emitted
+  raw onto the wire (stdlib v1 would replace with U+FFFD, jsonv2 would
+  replace + error). Your structs are your own data — validate at the boundary
+  if you populate them from untrusted bytes. On valid UTF-8, output is
+  byte-identical to the stdlib.
+
 ### simd
 
 Code generated with `-simd=avx512` (see the flag table below) against sonic.
@@ -276,6 +297,7 @@ unmarshal multierr`.
 | `-nosortkeys`    | `nosortkeys`      | emit struct fields in declaration order (default: alphabetical by JSON name, compresses better)                                                                                                                                                                                                                                                                                                                                                                                 |
 | `-usenumber`     | `usenumber`       | decode numbers in `any` fields as `json.Number` instead of `float64`                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `-htmlescape`    | `htmlescape`      | escape `<`, `>`, `&` to `\uXXXX` for safe embedding in HTML (default: literal, matches `encoding/json` v2 — v2 dropped HTML escaping as a default)                                                                                                                                                                                                                                                                                                                              |
+| `-allowinvalidutf8` | `allowinvalidutf8` | skip decode-side UTF-8 validation for this struct: invalid bytes flow into string fields / keys / raw spans untouched, unpaired `\uXXXX` surrogates decode to U+FFFD (default: reject with `scan.ErrInvalidUTF8`, jsonv2 parity). Grammar checks unaffected. Decode-only |
 | `-copy`          | `copy`            | copy decoded strings and `json.RawMessage` (and strings inside `any` fields) out of the input buffer instead of aliasing it, so you may reuse or mutate the input after `DecodeFrom` returns (default: zero-copy aliasing — faster, but the input must stay alive and unmodified for as long as the decoded values are used). Decode-only; allocates more                                                                                                                       |
 | `-dry`           | —                 | parse and validate every annotated struct, surface every error, emit no file. Useful in CI/pre-commit to fail fast on broken tags or annotations. Rejects `-o` / `-pkg`                                                                                                                                                                                                                                                                                                         |
 | `-simd <tier>`   | —                 | SIMD tier for string scans and marshal escape scans: `off`, `avx`, `avx2`, `avx512`. Running ggen under `GOEXPERIMENT=simd` auto-selects `avx`; `avx2`/`avx512` are explicit opt-ins (and require the env var). The tier is baked into the generated code — no runtime CPU probing or branching — so generated code `GOEXPERIMENT=simd` to build and a CPU with that instruction set to run. You can get from 1% to 90% performance improvement depending on payload |

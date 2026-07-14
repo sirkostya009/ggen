@@ -17,7 +17,7 @@ import (
 func (recv AliasString) DecodeFrom(data []byte) (result AliasString, i int, err error) {
 	result = recv
 	var v string
-	v, i, err = scan.String(data, i)
+	v, i, err = scan.String(data, i, true)
 	if err != nil {
 		return result, i, decode.NewParseErr("", i, err)
 	}
@@ -28,7 +28,7 @@ func (recv AliasString) DecodeFrom(data []byte) (result AliasString, i int, err 
 func (recv AliasString) DecodeFromStream(s *scan.Stream) (result AliasString, err error) {
 	result = recv
 	var v string
-	v, err = s.String()
+	v, err = s.String(true)
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -49,7 +49,7 @@ func (s AliasString) AppendJSON(dst []byte) ([]byte, error) {
 func (recv AliasHTML) DecodeFrom(data []byte) (result AliasHTML, i int, err error) {
 	result = recv
 	var v string
-	v, i, err = scan.String(data, i)
+	v, i, err = scan.String(data, i, true)
 	if err != nil {
 		return result, i, decode.NewParseErr("", i, err)
 	}
@@ -60,7 +60,7 @@ func (recv AliasHTML) DecodeFrom(data []byte) (result AliasHTML, i int, err erro
 func (recv AliasHTML) DecodeFromStream(s *scan.Stream) (result AliasHTML, err error) {
 	result = recv
 	var v string
-	v, err = s.String()
+	v, err = s.String(true)
 	if err != nil {
 		return result, decode.NewParseErr("", s.Pos, err)
 	}
@@ -222,7 +222,7 @@ func (recv PlainAlias) DecodeFrom(data []byte) (result PlainAlias, i int, err er
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -235,7 +235,7 @@ func (recv PlainAlias) DecodeFrom(data []byte) (result PlainAlias, i int, err er
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -315,14 +315,14 @@ func (recv PlainAlias) DecodeFrom(data []byte) (result PlainAlias, i int, err er
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.Title = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.Title, i, err = scan.String(data, i)
+				result.Title, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("title", i, err)
 				}
@@ -375,7 +375,7 @@ func (recv PlainAlias) DecodeFromStream(s *scan.Stream) (result PlainAlias, err 
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -404,7 +404,7 @@ func (recv PlainAlias) DecodeFromStream(s *scan.Stream) (result PlainAlias, err 
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"title"}}
 			}
 			seenTitle = true
-			result.Title, err = s.String()
+			result.Title, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("title", s.Pos, err)
 			}
@@ -479,7 +479,7 @@ func (recv SamePkgAlias) DecodeFrom(data []byte) (result SamePkgAlias, i int, er
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -492,7 +492,7 @@ func (recv SamePkgAlias) DecodeFrom(data []byte) (result SamePkgAlias, i int, er
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -572,14 +572,14 @@ func (recv SamePkgAlias) DecodeFrom(data []byte) (result SamePkgAlias, i int, er
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.Y = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.Y, i, err = scan.String(data, i)
+				result.Y, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("Y", i, err)
 				}
@@ -632,7 +632,7 @@ func (recv SamePkgAlias) DecodeFromStream(s *scan.Stream) (result SamePkgAlias, 
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -661,7 +661,7 @@ func (recv SamePkgAlias) DecodeFromStream(s *scan.Stream) (result SamePkgAlias, 
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"Y"}}
 			}
 			seenY = true
-			result.Y, err = s.String()
+			result.Y, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("Y", s.Pos, err)
 			}
@@ -736,7 +736,7 @@ func (recv CrossPkgTaggedAlias) DecodeFrom(data []byte) (result CrossPkgTaggedAl
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -749,7 +749,7 @@ func (recv CrossPkgTaggedAlias) DecodeFrom(data []byte) (result CrossPkgTaggedAl
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -778,14 +778,14 @@ func (recv CrossPkgTaggedAlias) DecodeFrom(data []byte) (result CrossPkgTaggedAl
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.Name, i, err = scan.String(data, i)
+				result.Name, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("Name", i, err)
 				}
@@ -803,14 +803,14 @@ func (recv CrossPkgTaggedAlias) DecodeFrom(data []byte) (result CrossPkgTaggedAl
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.Tag = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.Tag, i, err = scan.String(data, i)
+				result.Tag, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("Tag", i, err)
 				}
@@ -863,7 +863,7 @@ func (recv CrossPkgTaggedAlias) DecodeFromStream(s *scan.Stream) (result CrossPk
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -877,7 +877,7 @@ func (recv CrossPkgTaggedAlias) DecodeFromStream(s *scan.Stream) (result CrossPk
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"Name"}}
 			}
 			seenName = true
-			result.Name, err = s.String()
+			result.Name, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("Name", s.Pos, err)
 			}
@@ -890,7 +890,7 @@ func (recv CrossPkgTaggedAlias) DecodeFromStream(s *scan.Stream) (result CrossPk
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"Tag"}}
 			}
 			seenTag = true
-			result.Tag, err = s.String()
+			result.Tag, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("Tag", s.Pos, err)
 			}
@@ -1013,14 +1013,14 @@ func (recv AliasTags) DecodeFrom(data []byte) (result AliasTags, i int, err erro
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result[len(result)-1] = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result[len(result)-1], i, err = scan.String(data, i)
+				result[len(result)-1], i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("", i, err)
 				}
@@ -1100,7 +1100,7 @@ func (recv AliasTags) DecodeFromStream(s *scan.Stream) (result AliasTags, err er
 		}
 		for s.Bytes()[s.Pos] != ']' {
 			result = append(result, "")
-			result[len(result)-1], err = s.String()
+			result[len(result)-1], err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("", s.Pos, err)
 			}
@@ -1197,14 +1197,14 @@ func (recv AliasLookup) DecodeFrom(data []byte) (result AliasLookup, i int, err 
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				mk, i, err = scan.String(data, i)
+				mk, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("", i, err)
 				}
@@ -1340,7 +1340,7 @@ func (recv AliasLookup) DecodeFromStream(s *scan.Stream) (result AliasLookup, er
 		}
 		for s.Bytes()[s.Pos] != '}' {
 			var mk string
-			mk, err = s.String()
+			mk, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("", s.Pos, err)
 			}
@@ -1617,7 +1617,7 @@ func (recv AliasFieldExample) DecodeFrom(data []byte) (result AliasFieldExample,
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -1630,7 +1630,7 @@ func (recv AliasFieldExample) DecodeFrom(data []byte) (result AliasFieldExample,
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -1742,7 +1742,7 @@ func (recv AliasFieldExample) DecodeFromStream(s *scan.Stream) (result AliasFiel
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}

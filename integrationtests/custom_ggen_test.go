@@ -48,7 +48,7 @@ func (recv MultiErrStruct) DecodeFrom(data []byte) (result MultiErrStruct, i int
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -61,7 +61,7 @@ func (recv MultiErrStruct) DecodeFrom(data []byte) (result MultiErrStruct, i int
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -156,14 +156,14 @@ func (recv MultiErrStruct) DecodeFrom(data []byte) (result MultiErrStruct, i int
 				if kew > len(data) {
 					kew = len(data)
 				}
-				for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 					ke++
 				}
 				if ke < len(data) && data[ke] == '"' {
 					result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 					i = ke + 1
 				} else {
-					result.Name, i, err = scan.String(data, i)
+					result.Name, i, err = scan.String(data, i, true)
 					if err != nil {
 						return result, i, decode.NewParseErr("name", i, err)
 					}
@@ -192,14 +192,14 @@ func (recv MultiErrStruct) DecodeFrom(data []byte) (result MultiErrStruct, i int
 				if kew > len(data) {
 					kew = len(data)
 				}
-				for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 					ke++
 				}
 				if ke < len(data) && data[ke] == '"' {
 					result.Role = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 					i = ke + 1
 				} else {
-					result.Role, i, err = scan.String(data, i)
+					result.Role, i, err = scan.String(data, i, true)
 					if err != nil {
 						return result, i, decode.NewParseErr("role", i, err)
 					}
@@ -276,7 +276,7 @@ func (recv MultiErrStruct) DecodeFromStream(s *scan.Stream) (result MultiErrStru
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -321,7 +321,7 @@ func (recv MultiErrStruct) DecodeFromStream(s *scan.Stream) (result MultiErrStru
 				}
 			} else {
 				seenName = true
-				result.Name, err = s.String()
+				result.Name, err = s.String(true)
 				if err != nil {
 					return result, decode.NewParseErr("name", s.Pos, err)
 				}
@@ -346,7 +346,7 @@ func (recv MultiErrStruct) DecodeFromStream(s *scan.Stream) (result MultiErrStru
 				}
 			} else {
 				seenRole = true
-				result.Role, err = s.String()
+				result.Role, err = s.String(true)
 				if err != nil {
 					return result, decode.NewParseErr("role", s.Pos, err)
 				}
@@ -447,7 +447,7 @@ func (recv CustomBothStruct) DecodeFrom(data []byte) (result CustomBothStruct, i
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -460,7 +460,7 @@ func (recv CustomBothStruct) DecodeFrom(data []byte) (result CustomBothStruct, i
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -513,14 +513,14 @@ func (recv CustomBothStruct) DecodeFrom(data []byte) (result CustomBothStruct, i
 					if kew > len(data) {
 						kew = len(data)
 					}
-					for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 						ke++
 					}
 					if ke < len(data) && data[ke] == '"' {
 						result.Tags[len(result.Tags)-1] = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 						i = ke + 1
 					} else {
-						result.Tags[len(result.Tags)-1], i, err = scan.String(data, i)
+						result.Tags[len(result.Tags)-1], i, err = scan.String(data, i, true)
 						if err != nil {
 							return result, i, decode.NewParseErr("tags", i, err)
 						}
@@ -599,7 +599,7 @@ func (recv CustomBothStruct) DecodeFromStream(s *scan.Stream) (result CustomBoth
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -661,7 +661,7 @@ func (recv CustomBothStruct) DecodeFromStream(s *scan.Stream) (result CustomBoth
 			}
 			for s.Bytes()[s.Pos] != ']' {
 				result.Tags = append(result.Tags, "")
-				result.Tags[len(result.Tags)-1], err = s.String()
+				result.Tags[len(result.Tags)-1], err = s.String(true)
 				if err != nil {
 					return result, decode.NewParseErr("tags", s.Pos, err)
 				}

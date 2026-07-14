@@ -10,8 +10,10 @@ package integrationtests
 import (
 	"bytes"
 	jsonv2 "encoding/json/v2"
+	"errors"
 	"math"
 	"reflect"
+	"strings"
 	"testing"
 	"unicode/utf8"
 
@@ -38,6 +40,12 @@ var fuzzSeeds = [][]byte{
 	[]byte(`{"name":"a\ud83d\ude00b\u00e9c\n\t\"\\"}`),
 	[]byte(`{"name":"aaaaaaaaaaaaaaaaaaaaaaaa\ud83d\ude00bbbbbbbb","tags":["x\ud83d\ude00y","\u00e9\u00e9"]}`),
 	[]byte(`{"name":"\u00e9\u00e9\u00e9","props":{"k\ud83d\ude00":"v\u00e9"}}`),
+	// Invalid UTF-8 / unpaired surrogates \u2014 both paths must reject identically.
+	[]byte("{\"name\":\"a\xffb\"}"),
+	[]byte("{\"name\":\"a\xe2(z\"}"),
+	[]byte(`{"name":"\ud83d"}`),
+	[]byte(`{"name":"\udc00x"}`),
+	[]byte("{\"name\":\"h\u00e9llo \u017c\u00f3\u0142\u0107\"}"),
 }
 
 // Bytes and stream paths agree when both succeed; chunk size varies
@@ -182,11 +190,31 @@ func FuzzPrimitivesCompat(f *testing.F) {
 		F32: math.MaxFloat32, F64: math.MaxFloat64, Str: ""})
 	add(PrimStruct{I8: math.MaxInt8, I16: math.MaxInt16, I32: math.MaxInt32, I64: math.MaxInt64,
 		F32: math.SmallestNonzeroFloat32, F64: math.SmallestNonzeroFloat64, Str: "\"\\\n\t é\U0001f600"})
+	// Invalid UTF-8 seeds — routed to the reject-parity branch below.
+	add(PrimStruct{Str: "a\xffb"})
+	add(PrimStruct{Str: "a\xe2(z"})
+	add(PrimStruct{Str: "\xed\xa0\x80"})
 	f.Fuzz(func(t *testing.T, b bool, i int, i8 int8, i16 int16, i32 int32, i64 int64,
 		u uint, u8 uint8, u16 uint16, u32 uint32, u64 uint64, f32 float32, f64 float64, str string) {
-		// Invalid UTF-8 has no shared canonical JSON encoding (covered by the
-		// byte-level fuzzers); skip so the payload is well-formed by construction.
+		// Invalid UTF-8 can't round-trip through jsonv2.Marshal (it errors), so
+		// build the payload by hand and assert REJECT parity: both ggen and
+		// jsonv2 must refuse it (ggen with scan.ErrInvalidUTF8). Only when the
+		// raw bytes keep the payload structurally well-formed — a quote/
+		// backslash/ctrl byte would change what is being tested.
 		if !utf8.ValidString(str) {
+			if strings.ContainsAny(str, "\"\\") || strings.ContainsFunc(str, func(r rune) bool { return r < 0x20 }) {
+				return
+			}
+			payload := []byte(`{"str":"` + str + `"}`)
+			_, _, gerr := PrimStruct{}.DecodeFrom(payload)
+			var sv PrimStruct
+			serr := jsonv2.Unmarshal(payload, &sv)
+			if gerr == nil || serr == nil {
+				t.Fatalf("invalid UTF-8 accepted:\n ggen err:   %v\n stdlib err: %v\n payload: %q", gerr, serr, payload)
+			}
+			if !errors.Is(gerr, scan.ErrInvalidUTF8) {
+				t.Fatalf("want scan.ErrInvalidUTF8, got %v (payload %q)", gerr, payload)
+			}
 			return
 		}
 		want := PrimStruct{B: b, I: i, I8: i8, I16: i16, I32: i32, I64: i64,

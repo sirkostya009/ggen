@@ -10,7 +10,7 @@ import (
 
 var stringTiers = []struct {
 	name string
-	fn   func([]byte, int) (string, int, error)
+	fn   func([]byte, int, bool) (string, int, error)
 }{
 	{"AVX", StringAVX},
 	{"AVX2", StringAVX2},
@@ -36,6 +36,10 @@ func TestStringSIMD_Parity(t *testing.T) {
 			[]byte(`"`+body+`\n`+body+`"`), // escape mid-string
 			[]byte(`"`+"\x1f"+body+`"`),    // ctrl first
 			[]byte(`"a`+"\x01"+`b\nc"`),    // ctrl before escape
+			[]byte(`"`+body+"\xff"+`"`),    // invalid UTF-8 at phase boundary
+			[]byte(`"`+"\xff"+body+`"`),    // invalid UTF-8 first
+			[]byte(`"`+body+"é😀"+`"`),      // valid multi-byte at phase boundary
+			[]byte(`"`+body+"\xe2("+`"`),   // truncated 3-byte rune
 		)
 	}
 	rng := rand.New(rand.NewSource(1))
@@ -51,8 +55,8 @@ func TestStringSIMD_Parity(t *testing.T) {
 	}
 	for _, tier := range stringTiers {
 		for _, c := range cases {
-			s1, p1, e1 := String(c, 0)
-			s2, p2, e2 := tier.fn(c, 0)
+			s1, p1, e1 := String(c, 0, true)
+			s2, p2, e2 := tier.fn(c, 0, true)
 			if e1 != e2 {
 				t.Fatalf("%s %q: err %v vs %v", tier.name, c, e1, e2)
 			}

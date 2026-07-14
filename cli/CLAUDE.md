@@ -67,6 +67,7 @@ single-package mode. Processing is post-order over the matched import subgraph
 | `-nosortkeys`    | emit fields in Go declaration order. Default: alphabetical. Inline map fields stay last                                                               |
 | `-usenumber`     | decode JSON numbers into `any` fields as `json.Number` instead of `float64` (mirrors stdlib `UseNumber()`)                                            |
 | `-htmlescape`    | opt INTO HTML-safe escaping (`<`, `>`, `&` → `\uXXXX`) on marshal. Default = literal                                                                  |
+| `-allowinvalidutf8` | skip decode UTF-8 validation (opt #50) for every struct in the pass: string scans pass `validate=false` (raw bytes through, surrogates → U+FFFD), inline windows/classify revert to the pre-validation shapes, raw-span `CheckUTF8` not emitted. Decode-only |
 | `-copy`          | bytes-path `DecodeFrom` copies retained strings / map keys+values / slice elems / `json.RawMessage` / any-embedded strings out of `data` instead of aliasing it. Decouples decoded values from the input buffer (matches the stream path's lifetime). Decode-only; alloc-heavier |
 | `-dry`           | parse + validate annotated structs, surface every error, emit no file. Composes with `-v`. Rejects `-o`/`-pkg`                                        |
 | `-simd <tier>`   | `off`/`avx`/`avx2`/`avx512` — bytes-path string-scan tier (see opt #46). Resolved by `resolveSIMD` (main.go): `GOEXPERIMENT=simd` in ggen's OWN env auto-selects `avx`; `avx`/`avx2`/`avx512` error without the env var (emitted code imports `simd/archsimd`, which only exists under the experiment). Generate-time only — sets `scanStringFn` (`"scan.String"` → `"scan.StringAVX2"` etc); no per-struct annotation |
@@ -78,7 +79,7 @@ mirrors `//go:generate`) followed by space-separated tokens. Apply only to the
 annotated struct:
 
 `marshal`, `unmarshal`, `multierr`, `allowdups`, `novalidate`, `ignoreunknown`,
-`nullzero`, `nosortkeys`, `usenumber`, `htmlescape`, `copy`.
+`nullzero`, `nosortkeys`, `usenumber`, `htmlescape`, `copy`, `allowinvalidutf8`.
 
 ## Struct tags (on fields)
 
@@ -804,6 +805,52 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
     allocs. Wire-identical; pinned by `TestDetach` (scan), `TestStringSIMD_Parity`,
     `TestCopy_EscapedDecouples` (integ, every copy site), and
     `EscapeHeavy/ggen_copy`'s scribble guard.
+
+50. **Decode-side UTF-8 validation (jsonv2 parity, `scan.ErrInvalidUTF8`).**
+    Every string-PRODUCING decode path rejects malformed UTF-8 and unpaired
+    `\uXXXX` surrogates (v1 would silently substitute U+FFFD; ggen sides with
+    jsonv2, which errors). Runtime mechanics live in scan/CLAUDE.md (fused
+    high-bit accumulate → `utf8.Valid` only on non-ASCII spans). Codegen side:
+    every inline string fast path must BAIL to the validating runtime func on
+    non-ASCII — the scalar windows (value window, dispatch-key unbounded loop,
+    SIMD near-EOF tail) add `data[ke] < 0x80` to the loop condition (high byte
+    exits → not '"' → `scan.String*` fall), and the inline vector classify
+    folds ctrl AND ≥0x80 into ONE range term (`d := v.Sub(0x20); d.Max(0x60).
+    Equal(d)` — `(v-0x20) >= 0x60 ⇔ v < 0x20 || v >= 0x80`), replacing the old
+    Min-Equal ctrl term at the SAME op count, so ASCII fast paths pay ~zero
+    (an unfused extra Max-Equal-Or term first measured DeepNested +13% at
+    avx512; the fold brought it back to +2.8%). Captured raw spans
+    (`renderRawJSON`/`renderStreamRawJSON`) emit `scan.CheckUTF8(span)` after
+    the capture — byte-level validation, jsonv2 parity (Mega, which carries
+    RawMessage fields, absorbs it inside its ~+2% delta). Skipped spans
+    (`ignoreunknown`) are DELIBERATELY grammar-checked only; unpaired
+    surrogate ESCAPES inside raw spans pass (ASCII text there — residual v2
+    divergence, see backlog). Not tied to `-novalidate` (a parse correctness
+    rule, not a validation rule); the opt-out is `allowinvalidutf8` (flag /
+    annotation, htmlescape-style granularity): the runtime scanners take a
+    `validate bool` (span-level branch, measured flat at both tiers — the
+    per-byte loops never test it), permissive structs emit `false` plus the
+    PRE-VALIDATION inline shapes (no `< 0x80` window bail, Min-Equal ctrl-only
+    vector classify, no `CheckUTF8`), so their generated code is byte-identical
+    to the pre-#50 emitter. Permissive semantics = raw bytes pass through
+    (NOT v1's U+FFFD substitution — that would cost a copy on the alias path);
+    unpaired surrogate escapes DO substitute U+FFFD (stringSlow owns its
+    scratch anyway). `any` fields keep validating (scan.Any internals pin
+    validate=true). Pinned by `TestAllowInvalidUTF8` (integ: every string
+    shape + raw, bytes + stream, grammar-errors-still-reject, strict control). Cost (interleaved core-24 A/B,
+    500x): ASCII rows flat (Small/Mega_Reader/SkipHeavy/MapHeavy; Mega bytes
+    ~+2-4% at avx512 from the tier-func lane OR + raw-span check), unicode-
+    heavy rows pay the validation walk — scalar tier via `utf8.Valid`
+    (NoAlloc +74% — its payload is Ukrainian-localized; RuneGated +35%), SIMD
+    tiers via the vectorized `validUTF8x16` Lemire pass (scan/CLAUDE.md),
+    which cut the avx512 penalty from +123%/+52% to +40%/+11% (NoAlloc
+    2819→1773 ns) — all stay 2.7-5× ahead of jsonv2; EscapeHeavy IMPROVED
+    −26/−31% (surrogate-arm restructure). Pinned by
+    `TestString_InvalidUTF8Rejected`/`TestString_LoneSurrogateParity` (scan),
+    `TestStreamStringInvalidUTF8` (stream, incl. rune-straddles-refill),
+    SIMD parity corpora, `TestInvalidUTF8Rejected` (integ differential vs
+    jsonv2), and `FuzzPrimitivesCompat`'s reject-parity branch (the old
+    fuzz blind spot that hid this bug — it SKIPPED invalid-UTF-8 strings).
 
 ## Design decisions (the why)
 

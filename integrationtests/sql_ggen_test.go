@@ -41,7 +41,7 @@ func (recv SQLNullStringStruct) DecodeFrom(data []byte) (result SQLNullStringStr
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -54,7 +54,7 @@ func (recv SQLNullStringStruct) DecodeFrom(data []byte) (result SQLNullStringStr
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -88,14 +88,14 @@ func (recv SQLNullStringStruct) DecodeFrom(data []byte) (result SQLNullStringStr
 				if kew > len(data) {
 					kew = len(data)
 				}
-				for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 					ke++
 				}
 				if ke < len(data) && data[ke] == '"' {
 					nv = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 					i = ke + 1
 				} else {
-					nv, i, err = scan.String(data, i)
+					nv, i, err = scan.String(data, i, true)
 					if err != nil {
 						return result, i, decode.NewParseErr("s", i, err)
 					}
@@ -150,7 +150,7 @@ func (recv SQLNullStringStruct) DecodeFromStream(s *scan.Stream) (result SQLNull
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -184,7 +184,7 @@ func (recv SQLNullStringStruct) DecodeFromStream(s *scan.Stream) (result SQLNull
 				s.Pos += 4
 			} else {
 				var nv string
-				nv, err = s.String()
+				nv, err = s.String(true)
 				if err != nil {
 					return result, decode.NewParseErr("s", s.Pos, err)
 				}
@@ -264,7 +264,7 @@ func (recv SQLNullInt64Struct) DecodeFrom(data []byte) (result SQLNullInt64Struc
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -277,7 +277,7 @@ func (recv SQLNullInt64Struct) DecodeFrom(data []byte) (result SQLNullInt64Struc
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -399,7 +399,7 @@ func (recv SQLNullInt64Struct) DecodeFromStream(s *scan.Stream) (result SQLNullI
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -511,7 +511,7 @@ func (recv SQLNullInt32Struct) DecodeFrom(data []byte) (result SQLNullInt32Struc
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -524,7 +524,7 @@ func (recv SQLNullInt32Struct) DecodeFrom(data []byte) (result SQLNullInt32Struc
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -649,7 +649,7 @@ func (recv SQLNullInt32Struct) DecodeFromStream(s *scan.Stream) (result SQLNullI
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -761,7 +761,7 @@ func (recv SQLNullInt16Struct) DecodeFrom(data []byte) (result SQLNullInt16Struc
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -774,7 +774,7 @@ func (recv SQLNullInt16Struct) DecodeFrom(data []byte) (result SQLNullInt16Struc
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -899,7 +899,7 @@ func (recv SQLNullInt16Struct) DecodeFromStream(s *scan.Stream) (result SQLNullI
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -1011,7 +1011,7 @@ func (recv SQLNullByteStruct) DecodeFrom(data []byte) (result SQLNullByteStruct,
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -1024,7 +1024,7 @@ func (recv SQLNullByteStruct) DecodeFrom(data []byte) (result SQLNullByteStruct,
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -1121,7 +1121,7 @@ func (recv SQLNullByteStruct) DecodeFromStream(s *scan.Stream) (result SQLNullBy
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -1233,7 +1233,7 @@ func (recv SQLNullBoolStruct) DecodeFrom(data []byte) (result SQLNullBoolStruct,
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -1246,7 +1246,7 @@ func (recv SQLNullBoolStruct) DecodeFrom(data []byte) (result SQLNullBoolStruct,
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -1326,7 +1326,7 @@ func (recv SQLNullBoolStruct) DecodeFromStream(s *scan.Stream) (result SQLNullBo
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -1438,7 +1438,7 @@ func (recv SQLNullFloat64Struct) DecodeFrom(data []byte) (result SQLNullFloat64S
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -1451,7 +1451,7 @@ func (recv SQLNullFloat64Struct) DecodeFrom(data []byte) (result SQLNullFloat64S
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -1531,7 +1531,7 @@ func (recv SQLNullFloat64Struct) DecodeFromStream(s *scan.Stream) (result SQLNul
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -1645,7 +1645,7 @@ func (recv SQLNullTimeStruct) DecodeFrom(data []byte) (result SQLNullTimeStruct,
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -1658,7 +1658,7 @@ func (recv SQLNullTimeStruct) DecodeFrom(data []byte) (result SQLNullTimeStruct,
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -1693,14 +1693,14 @@ func (recv SQLNullTimeStruct) DecodeFrom(data []byte) (result SQLNullTimeStruct,
 				if kew > len(data) {
 					kew = len(data)
 				}
-				for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 					ke++
 				}
 				if ke < len(data) && data[ke] == '"' {
 					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 					i = ke + 1
 				} else {
-					s, i, err = scan.String(data, i)
+					s, i, err = scan.String(data, i, true)
 					if err != nil {
 						return result, i, decode.NewParseErr("t", i, err)
 					}
@@ -1759,7 +1759,7 @@ func (recv SQLNullTimeStruct) DecodeFromStream(s *scan.Stream) (result SQLNullTi
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -1794,7 +1794,7 @@ func (recv SQLNullTimeStruct) DecodeFromStream(s *scan.Stream) (result SQLNullTi
 			} else {
 				var nv time.Time
 				var sv string
-				sv, err = s.StringView()
+				sv, err = s.StringView(true)
 				if err != nil {
 					return result, decode.NewParseErr("t", s.Pos, err)
 				}
@@ -1878,7 +1878,7 @@ func (recv SQLNullGenStringStruct) DecodeFrom(data []byte) (result SQLNullGenStr
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -1891,7 +1891,7 @@ func (recv SQLNullGenStringStruct) DecodeFrom(data []byte) (result SQLNullGenStr
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -1925,14 +1925,14 @@ func (recv SQLNullGenStringStruct) DecodeFrom(data []byte) (result SQLNullGenStr
 				if kew > len(data) {
 					kew = len(data)
 				}
-				for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 					ke++
 				}
 				if ke < len(data) && data[ke] == '"' {
 					nv = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 					i = ke + 1
 				} else {
-					nv, i, err = scan.String(data, i)
+					nv, i, err = scan.String(data, i, true)
 					if err != nil {
 						return result, i, decode.NewParseErr("s", i, err)
 					}
@@ -1987,7 +1987,7 @@ func (recv SQLNullGenStringStruct) DecodeFromStream(s *scan.Stream) (result SQLN
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -2021,7 +2021,7 @@ func (recv SQLNullGenStringStruct) DecodeFromStream(s *scan.Stream) (result SQLN
 				s.Pos += 4
 			} else {
 				var nv string
-				nv, err = s.String()
+				nv, err = s.String(true)
 				if err != nil {
 					return result, decode.NewParseErr("s", s.Pos, err)
 				}
@@ -2101,7 +2101,7 @@ func (recv SQLNullGenIntStruct) DecodeFrom(data []byte) (result SQLNullGenIntStr
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -2114,7 +2114,7 @@ func (recv SQLNullGenIntStruct) DecodeFrom(data []byte) (result SQLNullGenIntStr
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -2236,7 +2236,7 @@ func (recv SQLNullGenIntStruct) DecodeFromStream(s *scan.Stream) (result SQLNull
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -2350,7 +2350,7 @@ func (recv SQLNullGenUint64Struct) DecodeFrom(data []byte) (result SQLNullGenUin
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -2363,7 +2363,7 @@ func (recv SQLNullGenUint64Struct) DecodeFrom(data []byte) (result SQLNullGenUin
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -2460,7 +2460,7 @@ func (recv SQLNullGenUint64Struct) DecodeFromStream(s *scan.Stream) (result SQLN
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -2572,7 +2572,7 @@ func (recv SQLNullGenFloat32Struct) DecodeFrom(data []byte) (result SQLNullGenFl
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -2585,7 +2585,7 @@ func (recv SQLNullGenFloat32Struct) DecodeFrom(data []byte) (result SQLNullGenFl
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -2667,7 +2667,7 @@ func (recv SQLNullGenFloat32Struct) DecodeFromStream(s *scan.Stream) (result SQL
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -2783,7 +2783,7 @@ func (recv SQLNullGenBoolStruct) DecodeFrom(data []byte) (result SQLNullGenBoolS
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -2796,7 +2796,7 @@ func (recv SQLNullGenBoolStruct) DecodeFrom(data []byte) (result SQLNullGenBoolS
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -2876,7 +2876,7 @@ func (recv SQLNullGenBoolStruct) DecodeFromStream(s *scan.Stream) (result SQLNul
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -2988,7 +2988,7 @@ func (recv SQLNullGenTimeStruct) DecodeFrom(data []byte) (result SQLNullGenTimeS
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -3001,7 +3001,7 @@ func (recv SQLNullGenTimeStruct) DecodeFrom(data []byte) (result SQLNullGenTimeS
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -3036,14 +3036,14 @@ func (recv SQLNullGenTimeStruct) DecodeFrom(data []byte) (result SQLNullGenTimeS
 				if kew > len(data) {
 					kew = len(data)
 				}
-				for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 					ke++
 				}
 				if ke < len(data) && data[ke] == '"' {
 					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 					i = ke + 1
 				} else {
-					s, i, err = scan.String(data, i)
+					s, i, err = scan.String(data, i, true)
 					if err != nil {
 						return result, i, decode.NewParseErr("t", i, err)
 					}
@@ -3102,7 +3102,7 @@ func (recv SQLNullGenTimeStruct) DecodeFromStream(s *scan.Stream) (result SQLNul
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -3137,7 +3137,7 @@ func (recv SQLNullGenTimeStruct) DecodeFromStream(s *scan.Stream) (result SQLNul
 			} else {
 				var nv time.Time
 				var sv string
-				sv, err = s.StringView()
+				sv, err = s.StringView(true)
 				if err != nil {
 					return result, decode.NewParseErr("t", s.Pos, err)
 				}
@@ -3221,7 +3221,7 @@ func (recv SQLNullGenAccountStruct) DecodeFrom(data []byte) (result SQLNullGenAc
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -3234,7 +3234,7 @@ func (recv SQLNullGenAccountStruct) DecodeFrom(data []byte) (result SQLNullGenAc
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -3319,7 +3319,7 @@ func (recv SQLNullGenAccountStruct) DecodeFromStream(s *scan.Stream) (result SQL
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -3440,7 +3440,7 @@ func (recv SQLNullGenLabelStruct) DecodeFrom(data []byte) (result SQLNullGenLabe
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -3453,7 +3453,7 @@ func (recv SQLNullGenLabelStruct) DecodeFrom(data []byte) (result SQLNullGenLabe
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -3538,7 +3538,7 @@ func (recv SQLNullGenLabelStruct) DecodeFromStream(s *scan.Stream) (result SQLNu
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -3659,7 +3659,7 @@ func (recv SQLNullGenUUIDStruct) DecodeFrom(data []byte) (result SQLNullGenUUIDS
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -3672,7 +3672,7 @@ func (recv SQLNullGenUUIDStruct) DecodeFrom(data []byte) (result SQLNullGenUUIDS
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -3699,7 +3699,7 @@ func (recv SQLNullGenUUIDStruct) DecodeFrom(data []byte) (result SQLNullGenUUIDS
 			} else {
 				var nv uuid.UUID
 				var ts string
-				ts, i, err = scan.String(data, i)
+				ts, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("id", i, err)
 				}
@@ -3757,7 +3757,7 @@ func (recv SQLNullGenUUIDStruct) DecodeFromStream(s *scan.Stream) (result SQLNul
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -3792,7 +3792,7 @@ func (recv SQLNullGenUUIDStruct) DecodeFromStream(s *scan.Stream) (result SQLNul
 			} else {
 				var nv uuid.UUID
 				var ts string
-				ts, err = s.StringView()
+				ts, err = s.StringView(true)
 				if err != nil {
 					return result, decode.NewParseErr("id", s.Pos, err)
 				}
@@ -3887,7 +3887,7 @@ func (recv SQLNullStruct) DecodeFrom(data []byte) (result SQLNullStruct, i int, 
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -3900,7 +3900,7 @@ func (recv SQLNullStruct) DecodeFrom(data []byte) (result SQLNullStruct, i int, 
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -4185,14 +4185,14 @@ func (recv SQLNullStruct) DecodeFrom(data []byte) (result SQLNullStruct, i int, 
 				if kew > len(data) {
 					kew = len(data)
 				}
-				for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 					ke++
 				}
 				if ke < len(data) && data[ke] == '"' {
 					nv = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 					i = ke + 1
 				} else {
-					nv, i, err = scan.String(data, i)
+					nv, i, err = scan.String(data, i, true)
 					if err != nil {
 						return result, i, decode.NewParseErr("s", i, err)
 					}
@@ -4219,14 +4219,14 @@ func (recv SQLNullStruct) DecodeFrom(data []byte) (result SQLNullStruct, i int, 
 				if kew > len(data) {
 					kew = len(data)
 				}
-				for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 					ke++
 				}
 				if ke < len(data) && data[ke] == '"' {
 					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 					i = ke + 1
 				} else {
-					s, i, err = scan.String(data, i)
+					s, i, err = scan.String(data, i, true)
 					if err != nil {
 						return result, i, decode.NewParseErr("t", i, err)
 					}
@@ -4292,7 +4292,7 @@ func (recv SQLNullStruct) DecodeFromStream(s *scan.Stream) (result SQLNullStruct
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -4542,7 +4542,7 @@ func (recv SQLNullStruct) DecodeFromStream(s *scan.Stream) (result SQLNullStruct
 				s.Pos += 4
 			} else {
 				var nv string
-				nv, err = s.String()
+				nv, err = s.String(true)
 				if err != nil {
 					return result, decode.NewParseErr("s", s.Pos, err)
 				}
@@ -4579,7 +4579,7 @@ func (recv SQLNullStruct) DecodeFromStream(s *scan.Stream) (result SQLNullStruct
 			} else {
 				var nv time.Time
 				var sv string
-				sv, err = s.StringView()
+				sv, err = s.StringView(true)
 				if err != nil {
 					return result, decode.NewParseErr("t", s.Pos, err)
 				}

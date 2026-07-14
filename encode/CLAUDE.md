@@ -95,6 +95,17 @@ append(dst, '"')` at slice/map/standalone sites).
 - `AppendStringNoHTML` — default, standard escapes only, emits `<`, `>`, `&`
   literally (stdlib jsonv2).
 
+**Neither validates UTF-8** — invalid bytes are emitted raw (invalid-UTF-8
+JSON), where stdlib v1 replaces with U+FFFD and jsonv2 replaces + errors.
+Deliberate: skipping validation avoids the per-rune DecodeRune walk (jsontext's
+`AppendQuote` is 2.6× slower on non-ASCII because of it — see
+`bench/stdappend_test.go`); divergence only fires on already-corrupt input,
+i.e. the caller's own strings. NOTE the DECODE side is the opposite: it
+REJECTS invalid UTF-8 with `scan.ErrInvalidUTF8` (jsonv2 parity — see
+scan/CLAUDE.md). Documented as a README/SKILL.md pitfall. Known v1-parity hole in `AppendString`:
+v1 defaults also include `EscapeForJS` (U+2028/U+2029 → `\u2028`/`\u2029`); we
+emit those runes raw. Both forms are legal JSON — wire bytes just differ.
+
 **SIMD tiers** (`simd_amd64.go`, `//go:build goexperiment.simd`):
 `AppendString{,NoHTML}{AVX,AVX2,AVX512}` — same caller contract, fused vector
 needs-escape classify per 16/32/64 bytes (Equal `"`/`\` + ctrl via

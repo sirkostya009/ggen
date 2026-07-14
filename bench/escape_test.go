@@ -14,7 +14,7 @@ import (
 // BenchmarkEscapeHeavy_Unmarshal decodes EscapeDoc from escape-dense strings
 // (~12% of bytes are escapes: \n \" \\ \uXXXX + surrogate pairs), exercising the
 // unescape path — scan.stringSlow, \uXXXX + surrogate assembly, scratch alloc —
-// that the asciiLetters-only Mega/Small/Account payloads never touch. Without
+// that the escape-free Mega/Small/Account payloads never touch. Without
 // this row an escape-path regression (or a broken single-copy escape change)
 // ships silently.
 //

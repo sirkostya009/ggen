@@ -38,7 +38,7 @@ func (recv EscapeDoc) DecodeFrom(data []byte) (result EscapeDoc, i int, err erro
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -51,7 +51,7 @@ func (recv EscapeDoc) DecodeFrom(data []byte) (result EscapeDoc, i int, err erro
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -80,14 +80,14 @@ func (recv EscapeDoc) DecodeFrom(data []byte) (result EscapeDoc, i int, err erro
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.A = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.A, i, err = scan.String(data, i)
+				result.A, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("a", i, err)
 				}
@@ -105,14 +105,14 @@ func (recv EscapeDoc) DecodeFrom(data []byte) (result EscapeDoc, i int, err erro
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.B = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.B, i, err = scan.String(data, i)
+				result.B, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("b", i, err)
 				}
@@ -130,14 +130,14 @@ func (recv EscapeDoc) DecodeFrom(data []byte) (result EscapeDoc, i int, err erro
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.C = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.C, i, err = scan.String(data, i)
+				result.C, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("c", i, err)
 				}
@@ -155,14 +155,14 @@ func (recv EscapeDoc) DecodeFrom(data []byte) (result EscapeDoc, i int, err erro
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.D = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.D, i, err = scan.String(data, i)
+				result.D, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("d", i, err)
 				}
@@ -217,7 +217,7 @@ func (recv EscapeDoc) DecodeFromStream(s *scan.Stream) (result EscapeDoc, err er
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -231,7 +231,7 @@ func (recv EscapeDoc) DecodeFromStream(s *scan.Stream) (result EscapeDoc, err er
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"a"}}
 			}
 			seenA = true
-			result.A, err = s.String()
+			result.A, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("a", s.Pos, err)
 			}
@@ -244,7 +244,7 @@ func (recv EscapeDoc) DecodeFromStream(s *scan.Stream) (result EscapeDoc, err er
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"b"}}
 			}
 			seenB = true
-			result.B, err = s.String()
+			result.B, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("b", s.Pos, err)
 			}
@@ -257,7 +257,7 @@ func (recv EscapeDoc) DecodeFromStream(s *scan.Stream) (result EscapeDoc, err er
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"c"}}
 			}
 			seenC = true
-			result.C, err = s.String()
+			result.C, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("c", s.Pos, err)
 			}
@@ -270,7 +270,7 @@ func (recv EscapeDoc) DecodeFromStream(s *scan.Stream) (result EscapeDoc, err er
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"d"}}
 			}
 			seenD = true
-			result.D, err = s.String()
+			result.D, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("d", s.Pos, err)
 			}
@@ -354,7 +354,7 @@ func (recv CopyEscapeDoc) DecodeFrom(data []byte) (result CopyEscapeDoc, i int, 
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -367,7 +367,7 @@ func (recv CopyEscapeDoc) DecodeFrom(data []byte) (result CopyEscapeDoc, i int, 
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -396,14 +396,14 @@ func (recv CopyEscapeDoc) DecodeFrom(data []byte) (result CopyEscapeDoc, i int, 
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.A = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				result.A, i, err = scan.String(data, i)
+				result.A, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("a", i, err)
 				}
@@ -422,14 +422,14 @@ func (recv CopyEscapeDoc) DecodeFrom(data []byte) (result CopyEscapeDoc, i int, 
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.B = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				result.B, i, err = scan.String(data, i)
+				result.B, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("b", i, err)
 				}
@@ -448,14 +448,14 @@ func (recv CopyEscapeDoc) DecodeFrom(data []byte) (result CopyEscapeDoc, i int, 
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.C = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				result.C, i, err = scan.String(data, i)
+				result.C, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("c", i, err)
 				}
@@ -474,14 +474,14 @@ func (recv CopyEscapeDoc) DecodeFrom(data []byte) (result CopyEscapeDoc, i int, 
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.D = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				result.D, i, err = scan.String(data, i)
+				result.D, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("d", i, err)
 				}
@@ -537,7 +537,7 @@ func (recv CopyEscapeDoc) DecodeFromStream(s *scan.Stream) (result CopyEscapeDoc
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -551,7 +551,7 @@ func (recv CopyEscapeDoc) DecodeFromStream(s *scan.Stream) (result CopyEscapeDoc
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"a"}}
 			}
 			seenA = true
-			result.A, err = s.String()
+			result.A, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("a", s.Pos, err)
 			}
@@ -564,7 +564,7 @@ func (recv CopyEscapeDoc) DecodeFromStream(s *scan.Stream) (result CopyEscapeDoc
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"b"}}
 			}
 			seenB = true
-			result.B, err = s.String()
+			result.B, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("b", s.Pos, err)
 			}
@@ -577,7 +577,7 @@ func (recv CopyEscapeDoc) DecodeFromStream(s *scan.Stream) (result CopyEscapeDoc
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"c"}}
 			}
 			seenC = true
-			result.C, err = s.String()
+			result.C, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("c", s.Pos, err)
 			}
@@ -590,7 +590,7 @@ func (recv CopyEscapeDoc) DecodeFromStream(s *scan.Stream) (result CopyEscapeDoc
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"d"}}
 			}
 			seenD = true
-			result.D, err = s.String()
+			result.D, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("d", s.Pos, err)
 			}

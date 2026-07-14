@@ -7,6 +7,7 @@ package integrationtests
 import (
 	"bytes"
 	"encoding/json"
+	jsonv2 "encoding/json/v2"
 	"errors"
 	"io"
 	"strconv"
@@ -659,6 +660,106 @@ func TestNarrowIntOverflow(t *testing.T) {
 			}
 			if c.reject && sErr != nil && !errors.Is(sErr, scan.ErrNumberOverflow) {
 				t.Errorf("stream: err=%v, want ErrNumberOverflow", sErr)
+			}
+		})
+	}
+}
+
+// TestInvalidUTF8Rejected pins the decode UTF-8 contract through GENERATED
+// code (inline window fast path, scan.String fall, escape arm, stream path):
+// invalid UTF-8 / unpaired surrogates in string values reject with
+// scan.ErrInvalidUTF8, matching jsonv2 (encoding/json v1 instead replaces
+// with U+FFFD — an intentional divergence from v1). Valid multi-byte UTF-8
+// decodes identically to jsonv2.
+func TestInvalidUTF8Rejected(t *testing.T) {
+	long := strings.Repeat("x", 40) // past the 32 B inline window → scan.String fall
+	cases := []struct {
+		name    string
+		payload string
+		reject  bool
+	}{
+		{"short_raw_ff", "{\"street\":\"a\xffb\",\"city\":\"Y\",\"zipCode\":\"12345\"}", true},
+		{"long_raw_ff", "{\"street\":\"" + long + "\xff\",\"city\":\"Y\",\"zipCode\":\"12345\"}", true},
+		{"truncated_rune", "{\"street\":\"a\xe2(z\",\"city\":\"Y\",\"zipCode\":\"12345\"}", true},
+		{"lone_surrogate_escape", `{"street":"\uD83D","city":"Y","zipCode":"12345"}`, true},
+		{"invalid_in_escape_string", "{\"street\":\"a\\n\xff\",\"city\":\"Y\",\"zipCode\":\"12345\"}", true},
+		{"valid_unicode_short", `{"street":"żółć","city":"Y","zipCode":"12345"}`, false},
+		{"valid_unicode_long", `{"street":"` + long + `é😀","city":"Y","zipCode":"12345"}`, false},
+		{"valid_escaped_pair", `{"street":"a😀b","city":"Y","zipCode":"12345"}`, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var v2 Address
+			v2Reject := jsonv2.Unmarshal([]byte(c.payload), &v2) != nil
+			if v2Reject != c.reject {
+				t.Fatalf("jsonv2 reject=%v, want %v", v2Reject, c.reject)
+			}
+			got, _, bErr := Address{}.DecodeFrom([]byte(c.payload))
+			if (bErr != nil) != c.reject {
+				t.Errorf("bytes: reject=%v want %v (err=%v)", bErr != nil, c.reject, bErr)
+			}
+			if c.reject && bErr != nil && !errors.Is(bErr, scan.ErrInvalidUTF8) {
+				t.Errorf("bytes: err=%v, want ErrInvalidUTF8", bErr)
+			}
+			if !c.reject && got.Street != v2.Street {
+				t.Errorf("bytes: street %q != jsonv2 %q", got.Street, v2.Street)
+			}
+			for _, bufCap := range []int{8, 512} {
+				var s scan.Stream
+				s.Reset(&chunkReader{data: []byte(c.payload), max: 3}, make([]byte, 0, bufCap))
+				sGot, sErr := Address{}.DecodeFromStream(&s)
+				if (sErr != nil) != c.reject {
+					t.Errorf("stream cap=%d: reject=%v want %v (err=%v)", bufCap, sErr != nil, c.reject, sErr)
+				}
+				if c.reject && sErr != nil && !errors.Is(sErr, scan.ErrInvalidUTF8) {
+					t.Errorf("stream cap=%d: err=%v, want ErrInvalidUTF8", bufCap, sErr)
+				}
+				if !c.reject && sGot.Street != v2.Street {
+					t.Errorf("stream cap=%d: street %q != jsonv2 %q", bufCap, sGot.Street, v2.Street)
+				}
+			}
+		})
+	}
+}
+
+// TestRawCaptureInvalidUTF8: captured raw spans (json.RawMessage /
+// jsontext.Value) reject invalid UTF-8 BYTES with scan.ErrInvalidUTF8 (jsonv2
+// rejects those too), bytes + stream. Residual divergence: unpaired \uXXXX
+// surrogate ESCAPES inside a raw span are ASCII text and pass (jsonv2
+// escape-parses raw strings and rejects) — see backlog.
+func TestRawCaptureInvalidUTF8(t *testing.T) {
+	cases := []struct {
+		name    string
+		payload string
+		reject  bool
+	}{
+		{"raw_string_invalid", "{\"raw1\":\"a\xffb\"}", true},
+		{"raw_nested_invalid", "{\"raw1\":{\"k\":\"a\xffb\"}}", true},
+		{"raw2_invalid", "{\"raw2\":[\"a\xe2(z\"]}", true},
+		{"raw_clean", `{"raw1":{"k":[1,"ok",null]}}`, false},
+		{"raw_valid_unicode", "{\"raw1\":\"żółć\"}", false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var v2 RichTypes
+			if v2Reject := jsonv2.Unmarshal([]byte(c.payload), &v2) != nil; v2Reject != c.reject {
+				t.Fatalf("jsonv2 reject=%v, want %v", v2Reject, c.reject)
+			}
+			_, _, bErr := RichTypes{}.DecodeFrom([]byte(c.payload))
+			if (bErr != nil) != c.reject {
+				t.Errorf("bytes: reject=%v want %v (err=%v)", bErr != nil, c.reject, bErr)
+			}
+			if c.reject && bErr != nil && !errors.Is(bErr, scan.ErrInvalidUTF8) {
+				t.Errorf("bytes: err=%v, want ErrInvalidUTF8", bErr)
+			}
+			var s scan.Stream
+			s.Reset(&chunkReader{data: []byte(c.payload), max: 3}, make([]byte, 0, 8))
+			_, sErr := RichTypes{}.DecodeFromStream(&s)
+			if (sErr != nil) != c.reject {
+				t.Errorf("stream: reject=%v want %v (err=%v)", sErr != nil, c.reject, sErr)
+			}
+			if c.reject && sErr != nil && !errors.Is(sErr, scan.ErrInvalidUTF8) {
+				t.Errorf("stream: err=%v, want ErrInvalidUTF8", sErr)
 			}
 		})
 	}

@@ -45,7 +45,7 @@ func (recv RichTypes) DecodeFrom(data []byte) (result RichTypes, i int, err erro
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -58,7 +58,7 @@ func (recv RichTypes) DecodeFrom(data []byte) (result RichTypes, i int, err erro
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -101,14 +101,14 @@ func (recv RichTypes) DecodeFrom(data []byte) (result RichTypes, i int, err erro
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				s, i, err = scan.String(data, i)
+				s, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("bigF", i, err)
 				}
@@ -130,14 +130,14 @@ func (recv RichTypes) DecodeFrom(data []byte) (result RichTypes, i int, err erro
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				s, i, err = scan.String(data, i)
+				s, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("bigR", i, err)
 				}
@@ -151,7 +151,7 @@ func (recv RichTypes) DecodeFrom(data []byte) (result RichTypes, i int, err erro
 			}
 			seenGofrsID = true
 			var ts string
-			ts, i, err = scan.String(data, i)
+			ts, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("gofrsId", i, err)
 			}
@@ -165,7 +165,7 @@ func (recv RichTypes) DecodeFrom(data []byte) (result RichTypes, i int, err erro
 			}
 			seenID = true
 			var ts string
-			ts, i, err = scan.String(data, i)
+			ts, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("id", i, err)
 			}
@@ -183,6 +183,10 @@ func (recv RichTypes) DecodeFrom(data []byte) (result RichTypes, i int, err erro
 			if err != nil {
 				return result, i, decode.NewParseErr("raw1", i, err)
 			}
+			err = scan.CheckUTF8(data[start:i])
+			if err != nil {
+				return result, i, decode.NewParseErr("raw1", i, err)
+			}
 			result.Raw1 = data[start:i]
 		case "raw2":
 			if seenRaw2 {
@@ -191,6 +195,10 @@ func (recv RichTypes) DecodeFrom(data []byte) (result RichTypes, i int, err erro
 			seenRaw2 = true
 			start := i
 			i, err = scan.SkipValue(data, start)
+			if err != nil {
+				return result, i, decode.NewParseErr("raw2", i, err)
+			}
+			err = scan.CheckUTF8(data[start:i])
 			if err != nil {
 				return result, i, decode.NewParseErr("raw2", i, err)
 			}
@@ -209,14 +217,14 @@ func (recv RichTypes) DecodeFrom(data []byte) (result RichTypes, i int, err erro
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				s, i, err = scan.String(data, i)
+				s, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("site", i, err)
 				}
@@ -281,7 +289,7 @@ func (recv RichTypes) DecodeFromStream(s *scan.Stream) (result RichTypes, err er
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -312,7 +320,7 @@ func (recv RichTypes) DecodeFromStream(s *scan.Stream) (result RichTypes, err er
 			}
 			seenBigF = true
 			var sv string
-			sv, err = s.StringView()
+			sv, err = s.StringView(true)
 			if err != nil {
 				return result, decode.NewParseErr("bigF", s.Pos, err)
 			}
@@ -329,7 +337,7 @@ func (recv RichTypes) DecodeFromStream(s *scan.Stream) (result RichTypes, err er
 			}
 			seenBigR = true
 			var sv string
-			sv, err = s.StringView()
+			sv, err = s.StringView(true)
 			if err != nil {
 				return result, decode.NewParseErr("bigR", s.Pos, err)
 			}
@@ -346,7 +354,7 @@ func (recv RichTypes) DecodeFromStream(s *scan.Stream) (result RichTypes, err er
 			}
 			seenGofrsID = true
 			var ts string
-			ts, err = s.StringView()
+			ts, err = s.StringView(true)
 			if err != nil {
 				return result, decode.NewParseErr("gofrsId", s.Pos, err)
 			}
@@ -364,7 +372,7 @@ func (recv RichTypes) DecodeFromStream(s *scan.Stream) (result RichTypes, err er
 			}
 			seenID = true
 			var ts string
-			ts, err = s.StringView()
+			ts, err = s.StringView(true)
 			if err != nil {
 				return result, decode.NewParseErr("id", s.Pos, err)
 			}
@@ -385,6 +393,10 @@ func (recv RichTypes) DecodeFromStream(s *scan.Stream) (result RichTypes, err er
 			if err != nil {
 				return result, decode.NewParseErr("raw1", s.Pos, err)
 			}
+			err = scan.CheckUTF8(span)
+			if err != nil {
+				return result, decode.NewParseErr("raw1", s.Pos, err)
+			}
 			result.Raw1 = append(make([]byte, 0, len(span)), span...)
 		case "raw2":
 			err = s.ConsumeColon()
@@ -399,6 +411,10 @@ func (recv RichTypes) DecodeFromStream(s *scan.Stream) (result RichTypes, err er
 			if err != nil {
 				return result, decode.NewParseErr("raw2", s.Pos, err)
 			}
+			err = scan.CheckUTF8(span)
+			if err != nil {
+				return result, decode.NewParseErr("raw2", s.Pos, err)
+			}
 			result.Raw2 = append(make([]byte, 0, len(span)), span...)
 		case "site":
 			err = s.ConsumeColon()
@@ -410,7 +426,7 @@ func (recv RichTypes) DecodeFromStream(s *scan.Stream) (result RichTypes, err er
 			}
 			seenSite = true
 			var sv string
-			sv, err = s.String()
+			sv, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("site", s.Pos, err)
 			}

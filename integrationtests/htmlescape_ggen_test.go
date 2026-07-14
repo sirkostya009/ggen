@@ -35,7 +35,7 @@ func (recv HTMLRawStruct) DecodeFrom(data []byte) (result HTMLRawStruct, i int, 
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -48,7 +48,7 @@ func (recv HTMLRawStruct) DecodeFrom(data []byte) (result HTMLRawStruct, i int, 
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -77,14 +77,14 @@ func (recv HTMLRawStruct) DecodeFrom(data []byte) (result HTMLRawStruct, i int, 
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.Note = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.Note, i, err = scan.String(data, i)
+				result.Note, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("note", i, err)
 				}
@@ -136,7 +136,7 @@ func (recv HTMLRawStruct) DecodeFromStream(s *scan.Stream) (result HTMLRawStruct
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -150,7 +150,7 @@ func (recv HTMLRawStruct) DecodeFromStream(s *scan.Stream) (result HTMLRawStruct
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"note"}}
 			}
 			seenNote = true
-			result.Note, err = s.String()
+			result.Note, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("note", s.Pos, err)
 			}
@@ -222,7 +222,7 @@ func (recv HTMLEscapeStruct) DecodeFrom(data []byte) (result HTMLEscapeStruct, i
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -235,7 +235,7 @@ func (recv HTMLEscapeStruct) DecodeFrom(data []byte) (result HTMLEscapeStruct, i
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -264,14 +264,14 @@ func (recv HTMLEscapeStruct) DecodeFrom(data []byte) (result HTMLEscapeStruct, i
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.Note = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.Note, i, err = scan.String(data, i)
+				result.Note, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("note", i, err)
 				}
@@ -323,7 +323,7 @@ func (recv HTMLEscapeStruct) DecodeFromStream(s *scan.Stream) (result HTMLEscape
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -337,7 +337,7 @@ func (recv HTMLEscapeStruct) DecodeFromStream(s *scan.Stream) (result HTMLEscape
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"note"}}
 			}
 			seenNote = true
-			result.Note, err = s.String()
+			result.Note, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("note", s.Pos, err)
 			}

@@ -24,6 +24,7 @@ import (
 var (
 	ErrExpectString   = errors.New("scan: expected string")
 	ErrBadString      = errors.New("scan: invalid string")
+	ErrInvalidUTF8    = errors.New("scan: invalid UTF-8")
 	ErrUnterminated   = errors.New("scan: unterminated string")
 	ErrBadNumber      = errors.New("scan: invalid number")
 	ErrNumberOverflow = errors.New("scan: integer overflow")
@@ -71,8 +72,12 @@ func ArrayOpen(data []byte, i int) (int, error) {
 
 // String decodes a JSON string at data[i] (must start with '"'). Returns an
 // unsafe.String aliasing the input when there are no escapes (zero-copy);
-// otherwise decodes into a fresh allocation.
-func String(data []byte, i int) (string, int, error) {
+// otherwise decodes into a fresh allocation. validate controls UTF-8
+// checking (jsonv2 parity, ErrInvalidUTF8); false — the allowinvalidutf8
+// opt-out — passes raw bytes through and substitutes U+FFFD for unpaired
+// surrogate escapes (encoding/json v1 shape). Grammar checks (ctrl bytes,
+// escape forms) run either way.
+func String(data []byte, i int, validate bool) (string, int, error) {
 	if i >= len(data) || data[i] != '"' {
 		return "", 0, ErrExpectString
 	}
@@ -83,7 +88,7 @@ func String(data []byte, i int) (string, int, error) {
 		// No closing quote but a backslash present → stringSlow so a
 		// truncated `\u…` / trailing `\` surfaces as ErrBadString.
 		if bsIdx := bytes.IndexByte(rest, '\\'); bsIdx >= 0 {
-			return stringSlow(data, start, start+bsIdx, bsIdx+16)
+			return stringSlow(data, start, start+bsIdx, bsIdx+16, validate)
 		}
 		return "", 0, ErrUnterminated
 	}
@@ -92,9 +97,13 @@ func String(data []byte, i int) (string, int, error) {
 		// scratch off it under-allocates for a string with an early escaped quote
 		// (the scratch then doubles up to the real length). Size off the real
 		// unescaped closing quote instead; decoded length ≤ that raw span.
-		return stringSlow(data, start, start+bsIdx, stringSpanEnd(data, start)-start)
+		return stringSlow(data, start, start+bsIdx, stringSpanEnd(data, start)-start, validate)
 	}
-	if hasCtrlByte(rest[:closeIdx]) {
+	if validate {
+		if err := checkSpan(rest[:closeIdx]); err != nil {
+			return "", 0, err
+		}
+	} else if hasCtrlByte(rest[:closeIdx]) {
 		return "", 0, ErrBadString
 	}
 	return unsafe.String(unsafe.SliceData(rest), closeIdx), start + closeIdx + 1, nil
@@ -118,6 +127,101 @@ func Detach(s string, data []byte) string {
 		return strings.Clone(s) // aliases data → detach
 	}
 	return s // owned scratch → already detached
+}
+
+// checkSpan validates a clean (escape-free) string span: ErrBadString on a
+// control byte (< 0x20), ErrInvalidUTF8 on malformed UTF-8. The SWAR ctrl walk
+// (same kernel as hasCtrlByte) accumulates a high-bit flag as it goes, so
+// pure-ASCII spans — the common case — never pay the utf8.Valid rune walk.
+func checkSpan(b []byte) error {
+	const (
+		ones uint64 = 0x0101010101010101
+		high uint64 = 0x8080808080808080
+		sub  uint64 = 0x20 * ones
+	)
+	var hi uint64
+	i := 0
+	for ; i+8 <= len(b); i += 8 {
+		x := binary.LittleEndian.Uint64(b[i:])
+		if (x-sub)&^x&high != 0 {
+			return ErrBadString
+		}
+		hi |= x
+	}
+	var t byte
+	for ; i < len(b); i++ {
+		c := b[i]
+		if c < 0x20 {
+			return ErrBadString
+		}
+		t |= c
+	}
+	if hi&high != 0 || t&0x80 != 0 {
+		if !utf8.Valid(b) {
+			return ErrInvalidUTF8
+		}
+	}
+	return nil
+}
+
+// ctrlOrHigh is hasCtrlByte fused with a high-bit (≥ 0x80) accumulate. The
+// stream string scans check chunks incrementally as they buffer, so they can't
+// utf8-validate per chunk (a rune may straddle a refill boundary) — they
+// accumulate `high` across chunks and run utf8.Valid once over the full span.
+// high is meaningless when ctrl is true (the caller errors).
+func ctrlOrHigh(b []byte) (ctrl, high bool) {
+	const (
+		ones uint64 = 0x0101010101010101
+		high64 uint64 = 0x8080808080808080
+		sub  uint64 = 0x20 * ones
+	)
+	var hi uint64
+	i := 0
+	for ; i+8 <= len(b); i += 8 {
+		x := binary.LittleEndian.Uint64(b[i:])
+		if (x-sub)&^x&high64 != 0 {
+			return true, false
+		}
+		hi |= x
+	}
+	var t byte
+	for ; i < len(b); i++ {
+		c := b[i]
+		if c < 0x20 {
+			return true, false
+		}
+		t |= c
+	}
+	return false, hi&high64 != 0 || t&0x80 != 0
+}
+
+// CheckUTF8 reports ErrInvalidUTF8 when b contains invalid UTF-8. Called by
+// generated code on captured raw spans (json.RawMessage / jsontext.Value) —
+// jsonv2 rejects invalid UTF-8 inside raw values too. SWAR high-bit detect:
+// pure-ASCII spans never run the rune walk, and the walk starts at the first
+// high-bit word (sound — the byte before it is ASCII, so a rune boundary).
+// Unpaired \uXXXX surrogate ESCAPES inside the span are ASCII text and pass —
+// a residual jsonv2 divergence (v2 escape-parses raw strings; see backlog).
+func CheckUTF8(b []byte) error {
+	const high uint64 = 0x8080808080808080
+	i := 0
+	for ; i+8 <= len(b); i += 8 {
+		if binary.LittleEndian.Uint64(b[i:])&high != 0 {
+			if !utf8.Valid(b[i:]) {
+				return ErrInvalidUTF8
+			}
+			return nil
+		}
+	}
+	for ; i < len(b); i++ {
+		if b[i] >= 0x80 {
+			if !utf8.Valid(b[i:]) {
+				return ErrInvalidUTF8
+			}
+			return nil
+		}
+	}
+	return nil
 }
 
 // hasCtrlByte reports whether b contains a JSON control character (< 0x20,
@@ -173,15 +277,25 @@ func stringSpanEnd(data []byte, start int) int {
 // data[start:j] is escape-free; data[j] is the first '\\'. capHint sizes the
 // scratch (the span to the first quote candidate, not the payload). The
 // returned string aliases the write-once scratch via unsafe.String.
-func stringSlow(data []byte, start, j, capHint int) (string, int, error) {
-	if hasCtrlByte(data[start:j]) {
+func stringSlow(data []byte, start, j, capHint int, validate bool) (string, int, error) {
+	bad, rawHigh := ctrlOrHigh(data[start:j])
+	if bad {
 		return "", 0, ErrBadString
 	}
 	buf := make([]byte, 0, capHint)
 	buf = append(buf, data[start:j]...)
+	var rawHi byte
 	for j < len(data) {
 		c := data[j]
 		if c == '"' {
+			// Escape outputs are valid encodings by construction (surrogates
+			// error below; AppendRune otherwise), so only RAW bytes copied
+			// through can make buf invalid — skip the walk when they were all
+			// ASCII. Whole-buf Valid is exact: raw segments always start/end at
+			// rune boundaries (escape bytes '\'/'"' can't be continuations).
+			if validate && (rawHigh || rawHi&0x80 != 0) && !utf8.Valid(buf) {
+				return "", 0, ErrInvalidUTF8
+			}
 			return unsafe.String(unsafe.SliceData(buf), len(buf)), j + 1, nil
 		}
 		if c == '\\' {
@@ -217,13 +331,20 @@ func stringSlow(data []byte, start, j, capHint int) (string, int, error) {
 					return "", 0, ErrBadString
 				}
 				j += 6
-				if utf16.IsSurrogate(r) && j+6 <= len(data) && data[j] == '\\' && data[j+1] == 'u' {
-					r2, ok := parseHex4(data[j+2 : j+6])
-					if ok {
-						if dec := utf16.DecodeRune(r, r2); dec != utf8.RuneError {
-							r = dec
-							j += 6
+				if utf16.IsSurrogate(r) {
+					if j+6 <= len(data) && data[j] == '\\' && data[j+1] == 'u' {
+						if r2, ok := parseHex4(data[j+2 : j+6]); ok {
+							if dec := utf16.DecodeRune(r, r2); dec != utf8.RuneError {
+								r = dec
+								j += 6
+							}
 						}
+					}
+					// Still a surrogate → lone/unpaired: jsonv2 rejects;
+					// permissive mode keeps v1's U+FFFD substitution
+					// (AppendRune encodes RuneError for surrogates).
+					if validate && utf16.IsSurrogate(r) {
+						return "", 0, ErrInvalidUTF8
 					}
 				}
 				buf = utf8.AppendRune(buf, r)
@@ -235,6 +356,7 @@ func stringSlow(data []byte, start, j, capHint int) (string, int, error) {
 		if c < 0x20 {
 			return "", 0, ErrBadString
 		}
+		rawHi |= c
 		buf = append(buf, c)
 		j++
 	}
@@ -655,7 +777,7 @@ func Any(data []byte, i int) (any, int, error) {
 		v, j, err := Bool(data, i)
 		return v, j, err
 	case c == '"':
-		s, j, err := String(data, i)
+		s, j, err := String(data, i, true)
 		return s, j, err
 	case c == '-' || (c >= '0' && c <= '9'):
 		v, j, err := Float64(data, i)
@@ -704,7 +826,7 @@ func anyObject(data []byte, i int) (map[string]any, int, error) {
 	}
 	out := make(map[string]any, 4)
 	for {
-		key, j, err := String(data, i)
+		key, j, err := String(data, i, true)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -774,7 +896,7 @@ func AnyNumber(data []byte, i int) (any, int, error) {
 		v, j, err := Bool(data, i)
 		return v, j, err
 	case c == '"':
-		s, j, err := String(data, i)
+		s, j, err := String(data, i, true)
 		return s, j, err
 	case c == '-' || (c >= '0' && c <= '9'):
 		v, j, err := Number(data, i)
@@ -823,7 +945,7 @@ func anyNumberObject(data []byte, i int) (map[string]any, int, error) {
 	}
 	out := make(map[string]any, 4)
 	for {
-		key, j, err := String(data, i)
+		key, j, err := String(data, i, true)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -874,7 +996,7 @@ func AnyCopy(data []byte, i int) (any, int, error) {
 		v, j, err := Bool(data, i)
 		return v, j, err
 	case c == '"':
-		s, j, err := String(data, i)
+		s, j, err := String(data, i, true)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -926,7 +1048,7 @@ func anyObjectCopy(data []byte, i int) (map[string]any, int, error) {
 	}
 	out := make(map[string]any, 4)
 	for {
-		key, j, err := String(data, i)
+		key, j, err := String(data, i, true)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -974,7 +1096,7 @@ func AnyNumberCopy(data []byte, i int) (any, int, error) {
 		v, j, err := Bool(data, i)
 		return v, j, err
 	case c == '"':
-		s, j, err := String(data, i)
+		s, j, err := String(data, i, true)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -1029,7 +1151,7 @@ func anyNumberObjectCopy(data []byte, i int) (map[string]any, int, error) {
 	}
 	out := make(map[string]any, 4)
 	for {
-		key, j, err := String(data, i)
+		key, j, err := String(data, i, true)
 		if err != nil {
 			return nil, 0, err
 		}

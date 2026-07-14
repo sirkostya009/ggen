@@ -31,7 +31,7 @@ func TestStreamStringSIMD_Parity(t *testing.T) {
 	t.Parallel()
 	tiers := []struct {
 		name string
-		fn   func(*Stream) (string, error)
+		fn   func(*Stream, bool) (string, error)
 	}{
 		{"AVX", (*Stream).StringAVX},
 		{"AVX2", (*Stream).StringAVX2},
@@ -66,10 +66,10 @@ func TestStreamStringSIMD_Parity(t *testing.T) {
 		}
 		bodies = append(bodies, string(b))
 	}
-	decode := func(fn func(*Stream) (string, error), payload []byte, chunk int) (string, error) {
+	decode := func(fn func(*Stream, bool) (string, error), payload []byte, chunk int) (string, error) {
 		var s Stream
 		s.Reset(&chunkReader{bytes.NewReader(payload), chunk}, make([]byte, 0, 8))
-		return fn(&s)
+		return fn(&s, true)
 	}
 	for _, body := range bodies {
 		payload := []byte(`"` + body + `"`)

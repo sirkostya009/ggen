@@ -44,6 +44,38 @@ next-key predictor (payload-order-dependent), **[23]** indexed marshal loop
 (go1.26 already folds the range copy) + pointer-receiver cores (vetoed — public
 surface pinned by `Decoder[T]`).
 
+- **Raw-span surrogate-escape validation (residual jsonv2 divergence).**
+  Decode-side UTF-8 validation SHIPPED for every string-producing path AND
+  captured raw spans (`scan.CheckUTF8` at RawMessage/jsontext.Value sites —
+  cli/CLAUDE.md opt #50). Two DECIDED exceptions (2026-07): skipped spans
+  (`ignoreunknown`/`SkipValue`) stay grammar-checked only — intentional, keeps
+  the skip tiers on the plain non-accumulating kernels; and unpaired `\uXXXX`
+  surrogate ESCAPES inside a raw span pass (they're ASCII text there; jsonv2
+  escape-parses raw strings and rejects — pinned as a divergence in
+  `TestRawCaptureInvalidUTF8`). Closing the latter means surrogate-pairing
+  escape parsing inside the skip walk under capture — only bother if a real
+  consumer feeds captured raw spans back into a strict v2 decoder.
+
+- **Vectorized UTF-8 validation — SHIPPED for the SIMD tiers (2026-07).**
+  `validUTF8x16` (scan/simd_utf8_amd64.go, Lemire/simdjson nibble-LUT
+  algorithm on 16-byte lanes, AVX1-safe) replaces the scalar `utf8.Valid`
+  second pass in `classifyStructural` + the stream cores: ~6.5× on the
+  validation component (4 KB Cyrillic 3456→~530 ns), NoAlloc avx512 penalty
+  +123%→+40%, RuneGated +52%→+11%, ASCII rows flat. Fusing into the parser
+  loop itself was measured NOT worth it — the two-pass separation costs <10%
+  of the validation bill at any width (L1-hot span; see
+  BenchmarkStringUTF8Cost{,AVX512}); the DFA/lookup work IS the bill, so
+  vectorizing pass 2 ≈ full fusion without quote-masking/carry complexity.
+  Remaining candidates: scalar tier keeps `utf8.Valid` (no experiment — a
+  scalar fused walk would forfeit the IndexByte locate and regress ASCII);
+  `stringSlow` final check + `CheckUTF8` raw spans also keep `utf8.Valid`
+  (span-level cold-ish, could route to the vector under simd builds if a
+  profile ever shows them); a 32/64-lane widening of validUTF8x16 (Grouped
+  shuffles exist) if the 16-byte version ever bottlenecks. The `allowinvalidutf8` opt-out SHIPPED
+  (2026-07, flag + per-struct annotation, htmlescape-style granularity —
+  see cli/CLAUDE.md opt #50): permissive structs emit pre-validation code
+  shapes + `validate=false` scanner calls; raw bytes pass through.
+
 ## Tooling / coverage
 
 - **Improve fuzz coverage.** Current surface (`integrationtests/fuzz_test.go`):

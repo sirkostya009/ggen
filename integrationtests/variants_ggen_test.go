@@ -37,7 +37,7 @@ func (recv Money) DecodeFrom(data []byte) (result Money, i int, err error) {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -50,7 +50,7 @@ func (recv Money) DecodeFrom(data []byte) (result Money, i int, err error) {
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -164,7 +164,7 @@ func (recv Money) DecodeFromStream(s *scan.Stream) (result Money, err error) {
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -253,7 +253,7 @@ func (recv LooseThing) DecodeFrom(data []byte) (result LooseThing, i int, err er
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -266,7 +266,7 @@ func (recv LooseThing) DecodeFrom(data []byte) (result LooseThing, i int, err er
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -351,14 +351,14 @@ func (recv LooseThing) DecodeFrom(data []byte) (result LooseThing, i int, err er
 				if kew > len(data) {
 					kew = len(data)
 				}
-				for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 					ke++
 				}
 				if ke < len(data) && data[ke] == '"' {
 					_cv1 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 					i = ke + 1
 				} else {
-					_cv1, i, err = scan.String(data, i)
+					_cv1, i, err = scan.String(data, i, true)
 					if err != nil {
 						return result, i, decode.NewParseErr("count", i, err)
 					}
@@ -449,14 +449,14 @@ func (recv LooseThing) DecodeFrom(data []byte) (result LooseThing, i int, err er
 				if kew > len(data) {
 					kew = len(data)
 				}
-				for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 					ke++
 				}
 				if ke < len(data) && data[ke] == '"' {
 					_cv2 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 					i = ke + 1
 				} else {
-					_cv2, i, err = scan.String(data, i)
+					_cv2, i, err = scan.String(data, i, true)
 					if err != nil {
 						return result, i, decode.NewParseErr("opt", i, err)
 					}
@@ -589,7 +589,7 @@ func (recv LooseThing) DecodeFromStream(s *scan.Stream) (result LooseThing, err 
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -618,7 +618,7 @@ func (recv LooseThing) DecodeFromStream(s *scan.Stream) (result LooseThing, err 
 				result.Count = int(iv)
 			case '"':
 				var _cv1 string
-				_cv1, err = s.String()
+				_cv1, err = s.String(true)
 				if err != nil {
 					return result, decode.NewParseErr("count", s.Pos, err)
 				}
@@ -670,7 +670,7 @@ func (recv LooseThing) DecodeFromStream(s *scan.Stream) (result LooseThing, err 
 				result.Opt = int(iv)
 			case '"':
 				var _cv2 string
-				_cv2, err = s.String()
+				_cv2, err = s.String(true)
 				if err != nil {
 					return result, decode.NewParseErr("opt", s.Pos, err)
 				}
@@ -788,7 +788,7 @@ func (recv ElemInterleave) DecodeFrom(data []byte) (result ElemInterleave, i int
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -801,7 +801,7 @@ func (recv ElemInterleave) DecodeFrom(data []byte) (result ElemInterleave, i int
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -970,7 +970,7 @@ func (recv ElemInterleave) DecodeFromStream(s *scan.Stream) (result ElemInterlea
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}

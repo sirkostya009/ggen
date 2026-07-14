@@ -55,7 +55,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -68,7 +68,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -177,14 +177,14 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 						if kew > len(data) {
 							kew = len(data)
 						}
-						for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+						for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 							ke++
 						}
 						if ke < len(data) && data[ke] == '"' {
 							result.HintedTags[len(result.HintedTags)-1] = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 							i = ke + 1
 						} else {
-							result.HintedTags[len(result.HintedTags)-1], i, err = scan.String(data, i)
+							result.HintedTags[len(result.HintedTags)-1], i, err = scan.String(data, i, true)
 							if err != nil {
 								return result, i, decode.NewParseErr("hintedTags", i, err)
 							}
@@ -250,14 +250,14 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 					if kew > len(data) {
 						kew = len(data)
 					}
-					for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 						ke++
 					}
 					if ke < len(data) && data[ke] == '"' {
 						mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 						i = ke + 1
 					} else {
-						mk, i, err = scan.String(data, i)
+						mk, i, err = scan.String(data, i, true)
 						if err != nil {
 							return result, i, decode.NewParseErr("keyedMap", i, err)
 						}
@@ -664,14 +664,14 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 									if kew > len(data) {
 										kew = len(data)
 									}
-									for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+									for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 										ke++
 									}
 									if ke < len(data) && data[ke] == '"' {
 										row1[len(row1)-1] = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 										i = ke + 1
 									} else {
-										row1[len(row1)-1], i, err = scan.String(data, i)
+										row1[len(row1)-1], i, err = scan.String(data, i, true)
 										if err != nil {
 											return result, i, decode.NewParseErr("triple[][]", i, err)
 										}
@@ -810,7 +810,7 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -892,7 +892,7 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 				}
 				for s.Bytes()[s.Pos] != ']' {
 					result.HintedTags = append(result.HintedTags, "")
-					result.HintedTags[len(result.HintedTags)-1], err = s.String()
+					result.HintedTags[len(result.HintedTags)-1], err = s.String(true)
 					if err != nil {
 						return result, decode.NewParseErr("hintedTags", s.Pos, err)
 					}
@@ -983,7 +983,7 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 			}
 			for s.Bytes()[s.Pos] != '}' {
 				var mk string
-				mk, err = s.String()
+				mk, err = s.String(true)
 				if err != nil {
 					return result, decode.NewParseErr("keyedMap", s.Pos, err)
 				}
@@ -1459,7 +1459,7 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 					}
 					for s.Bytes()[s.Pos] != ']' {
 						row1 = append(row1, "")
-						row1[len(row1)-1], err = s.String()
+						row1[len(row1)-1], err = s.String(true)
 						if err != nil {
 							return result, decode.NewParseErr("triple[][]", s.Pos, err)
 						}
@@ -1825,7 +1825,7 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -1838,7 +1838,7 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -1922,14 +1922,14 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 							if kew > len(data) {
 								kew = len(data)
 							}
-							for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+							for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 								ke++
 							}
 							if ke < len(data) && data[ke] == '"' {
 								row0[len(row0)-1] = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 								i = ke + 1
 							} else {
-								row0[len(row0)-1], i, err = scan.String(data, i)
+								row0[len(row0)-1], i, err = scan.String(data, i, true)
 								if err != nil {
 									return result, i, decode.NewParseErr("pair[]", i, err)
 								}
@@ -2306,7 +2306,7 @@ func (recv TupleStruct) DecodeFromStream(s *scan.Stream) (result TupleStruct, er
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -2407,7 +2407,7 @@ func (recv TupleStruct) DecodeFromStream(s *scan.Stream) (result TupleStruct, er
 				}
 				for s.Bytes()[s.Pos] != ']' {
 					row0 = append(row0, "")
-					row0[len(row0)-1], err = s.String()
+					row0[len(row0)-1], err = s.String(true)
 					if err != nil {
 						return result, decode.NewParseErr("pair[]", s.Pos, err)
 					}

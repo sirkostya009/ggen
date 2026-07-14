@@ -21,7 +21,7 @@ func renderAliasDecode(b *bytes.Buffer, s StructInfo) {
 	const wrap = `if err != nil { return result, i, decode.NewParseErr("", i, err) }`
 	switch s.AliasKind {
 	case KindString:
-		fmt.Fprintf(b, "var v string\nv, i, err = "+scanStringFn+"(data, i)\n%s\nresult = %s(v)\n", wrap, s.Name)
+		fmt.Fprintf(b, "var v string\nv, i, err = "+scanStringFn+"(data, i, "+vArgS(s)+")\n%s\nresult = %s(v)\n", wrap, s.Name)
 	case KindBool:
 		fmt.Fprintf(b, "var v bool\nv, i, err = scan.Bool(data, i)\n%s\nresult = %s(v)\n", wrap, s.Name)
 	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
@@ -48,7 +48,7 @@ func renderAliasStreamDecode(b *bytes.Buffer, s StructInfo) {
 	const wrap = `if err != nil { return result, decode.NewParseErr("", s.Pos, err) }`
 	switch s.AliasKind {
 	case KindString:
-		fmt.Fprintf(b, "var v string\nv, err = s.String()\n%s\nresult = %s(v)\n", wrap, s.Name)
+		fmt.Fprintf(b, "var v string\nv, err = s.String("+vArgS(s)+")\n%s\nresult = %s(v)\n", wrap, s.Name)
 	case KindBool:
 		fmt.Fprintf(b, "var v bool\nv, err = s.Bool()\n%s\nresult = %s(v)\n", wrap, s.Name)
 	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
@@ -163,7 +163,7 @@ return result, k, nil
 		}
 	case s.AliasIface.TextUnmarshaler:
 		if stream {
-			fmt.Fprintf(b, `ts, err := s.String()
+			fmt.Fprintf(b, `ts, err := s.String(`+vArgS(s)+`)
 if err != nil { return result, decode.NewParseErr("", s.Pos, err) }
 var u %[1]s
 if err := u.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts))); err != nil { return result, decode.NewParseErr("", s.Pos, err) }
@@ -171,7 +171,7 @@ result = %[2]s(u)
 return result, nil
 `, s.AliasUnderlying, s.Name)
 		} else {
-			fmt.Fprintf(b, `ts, tj, err := `+scanStringFn+`(data, i)
+			fmt.Fprintf(b, `ts, tj, err := `+scanStringFn+`(data, i, `+vArgS(s)+`)
 if err != nil { return result, i, decode.NewParseErr("", i, err) }
 var u %[1]s
 if err := u.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts))); err != nil { return result, tj, decode.NewParseErr("", tj, err) }

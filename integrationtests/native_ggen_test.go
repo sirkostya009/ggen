@@ -60,7 +60,7 @@ func (recv NativeTypes) DecodeFrom(data []byte) (result NativeTypes, i int, err 
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -73,7 +73,7 @@ func (recv NativeTypes) DecodeFrom(data []byte) (result NativeTypes, i int, err 
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -103,14 +103,14 @@ func (recv NativeTypes) DecodeFrom(data []byte) (result NativeTypes, i int, err 
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				s, i, err = scan.String(data, i)
+				s, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("addr", i, err)
 				}
@@ -138,14 +138,14 @@ func (recv NativeTypes) DecodeFrom(data []byte) (result NativeTypes, i int, err 
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				s, i, err = scan.String(data, i)
+				s, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("blob", i, err)
 				}
@@ -217,14 +217,14 @@ func (recv NativeTypes) DecodeFrom(data []byte) (result NativeTypes, i int, err 
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				s, i, err = scan.String(data, i)
+				s, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("cidr", i, err)
 				}
@@ -247,14 +247,14 @@ func (recv NativeTypes) DecodeFrom(data []byte) (result NativeTypes, i int, err 
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				s, i, err = scan.String(data, i)
+				s, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("createdAt", i, err)
 				}
@@ -282,14 +282,14 @@ func (recv NativeTypes) DecodeFrom(data []byte) (result NativeTypes, i int, err 
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				s, i, err = scan.String(data, i)
+				s, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("hexBlob", i, err)
 				}
@@ -315,14 +315,14 @@ func (recv NativeTypes) DecodeFrom(data []byte) (result NativeTypes, i int, err 
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				s, i, err = scan.String(data, i)
+				s, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("issuedAt", i, err)
 				}
@@ -345,14 +345,14 @@ func (recv NativeTypes) DecodeFrom(data []byte) (result NativeTypes, i int, err 
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				s, i, err = scan.String(data, i)
+				s, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("legacyIP", i, err)
 				}
@@ -386,14 +386,14 @@ func (recv NativeTypes) DecodeFrom(data []byte) (result NativeTypes, i int, err 
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				s, i, err = scan.String(data, i)
+				s, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("unitDur", i, err)
 				}
@@ -481,7 +481,7 @@ func (recv NativeTypes) DecodeFromStream(s *scan.Stream) (result NativeTypes, er
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -496,7 +496,7 @@ func (recv NativeTypes) DecodeFromStream(s *scan.Stream) (result NativeTypes, er
 			}
 			seenAddr = true
 			var sv string
-			sv, err = s.StringView()
+			sv, err = s.StringView(true)
 			if err != nil {
 				return result, decode.NewParseErr("addr", s.Pos, err)
 			}
@@ -534,7 +534,7 @@ func (recv NativeTypes) DecodeFromStream(s *scan.Stream) (result NativeTypes, er
 				break
 			}
 			var sv string
-			sv, err = s.StringView()
+			sv, err = s.StringView(true)
 			if err != nil {
 				return result, decode.NewParseErr("blob", s.Pos, err)
 			}
@@ -630,7 +630,7 @@ func (recv NativeTypes) DecodeFromStream(s *scan.Stream) (result NativeTypes, er
 			}
 			seenCidr = true
 			var sv string
-			sv, err = s.StringView()
+			sv, err = s.StringView(true)
 			if err != nil {
 				return result, decode.NewParseErr("cidr", s.Pos, err)
 			}
@@ -648,7 +648,7 @@ func (recv NativeTypes) DecodeFromStream(s *scan.Stream) (result NativeTypes, er
 			}
 			seenCreatedAt = true
 			var sv string
-			sv, err = s.StringView()
+			sv, err = s.StringView(true)
 			if err != nil {
 				return result, decode.NewParseErr("createdAt", s.Pos, err)
 			}
@@ -686,7 +686,7 @@ func (recv NativeTypes) DecodeFromStream(s *scan.Stream) (result NativeTypes, er
 				break
 			}
 			var sv string
-			sv, err = s.StringView()
+			sv, err = s.StringView(true)
 			if err != nil {
 				return result, decode.NewParseErr("hexBlob", s.Pos, err)
 			}
@@ -707,7 +707,7 @@ func (recv NativeTypes) DecodeFromStream(s *scan.Stream) (result NativeTypes, er
 			}
 			seenIssuedAt = true
 			var sv string
-			sv, err = s.StringView()
+			sv, err = s.StringView(true)
 			if err != nil {
 				return result, decode.NewParseErr("issuedAt", s.Pos, err)
 			}
@@ -725,7 +725,7 @@ func (recv NativeTypes) DecodeFromStream(s *scan.Stream) (result NativeTypes, er
 			}
 			seenLegacyIP = true
 			var sv string
-			sv, err = s.StringView()
+			sv, err = s.StringView(true)
 			if err != nil {
 				return result, decode.NewParseErr("legacyIP", s.Pos, err)
 			}
@@ -758,7 +758,7 @@ func (recv NativeTypes) DecodeFromStream(s *scan.Stream) (result NativeTypes, er
 			}
 			seenUnitDur = true
 			var sv string
-			sv, err = s.StringView()
+			sv, err = s.StringView(true)
 			if err != nil {
 				return result, decode.NewParseErr("unitDur", s.Pos, err)
 			}

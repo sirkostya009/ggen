@@ -200,9 +200,10 @@ func (s *Stream) ArrayOpen() error {
 }
 
 // String decodes a JSON string. Always copies the body out of the
-// buffer — the result is owned, no dependency on the buffer.
-func (s *Stream) String() (string, error) {
-	v, owned, err := s.stringView()
+// buffer — the result is owned, no dependency on the buffer. validate as in
+// scan.String (false = allowinvalidutf8 opt-out).
+func (s *Stream) String(validate bool) (string, error) {
+	v, owned, err := s.stringView(validate)
 	if err != nil {
 		return "", err
 	}
@@ -220,15 +221,15 @@ func (s *Stream) String() (string, error) {
 // Stream op AND retains none of its bytes past that point. The alias is
 // invalidated by the next compacting ReadMore, so a consumer that keeps a
 // substring MUST use [Stream.String], which copies.
-func (s *Stream) StringView() (string, error) {
-	v, _, err := s.stringView()
+func (s *Stream) StringView(validate bool) (string, error) {
+	v, _, err := s.stringView(validate)
 	return v, err
 }
 
 // stringView is the shared scan behind StringView / String. owned reports
 // whether v already lives in fresh scratch (stringSlow escape path) vs
 // aliasing s.buf.
-func (s *Stream) stringView() (v string, owned bool, err error) {
+func (s *Stream) stringView(validate bool) (v string, owned bool, err error) {
 	i := s.Pos
 	if i >= len(s.buf) {
 		if err := s.ReadMore(i); err != nil {
@@ -241,16 +242,19 @@ func (s *Stream) stringView() (v string, owned bool, err error) {
 	}
 	start := i + 1
 	j := start
+	sawHigh := false
 	for {
 		rel := bytes.IndexByte(s.buf[j:], '"')
 		if rel < 0 {
 			if bsRel := bytes.IndexByte(s.buf[j:], '\\'); bsRel >= 0 {
-				v, err := s.stringSlow(start, j+bsRel)
+				v, err := s.stringSlow(start, j+bsRel, validate)
 				return v, true, err
 			}
-			if hasCtrlByte(s.buf[j:]) {
+			bad, hi := ctrlOrHigh(s.buf[j:])
+			if bad {
 				return "", false, ErrBadString
 			}
+			sawHigh = sawHigh || hi
 			j = len(s.buf)
 			err := s.ReadMore(start)
 			j -= start
@@ -262,11 +266,17 @@ func (s *Stream) stringView() (v string, owned bool, err error) {
 		}
 		end := j + rel
 		if bsRel := bytes.IndexByte(s.buf[j:end], '\\'); bsRel >= 0 {
-			v, err := s.stringSlow(start, j+bsRel)
+			v, err := s.stringSlow(start, j+bsRel, validate)
 			return v, true, err
 		}
-		if hasCtrlByte(s.buf[j:end]) {
+		bad, hi := ctrlOrHigh(s.buf[j:end])
+		if bad {
 			return "", false, ErrBadString
+		}
+		// Full-span check — a rune may straddle the chunk cursor j, so per-chunk
+		// validation would false-error; ReadMore(start) keeps the span contiguous.
+		if validate && (sawHigh || hi) && !utf8.Valid(s.buf[start:end]) {
+			return "", false, ErrInvalidUTF8
 		}
 		s.Pos = end + 1
 		return unsafe.String(unsafe.SliceData(s.buf[start:]), end-start), false, nil
@@ -280,7 +290,7 @@ func (s *Stream) stringView() (v string, owned bool, err error) {
 // USE ONLY for short-lived dispatch where the string never escapes the
 // call frame (object-key matching). For values stored in the decoded
 // struct use [Stream.String]. Escapes fall back to the copy path.
-func (s *Stream) KeyView() (string, error) {
+func (s *Stream) KeyView(validate bool) (string, error) {
 	i := s.Pos
 	if i >= len(s.buf) {
 		if err := s.ReadMore(i); err != nil {
@@ -297,29 +307,37 @@ func (s *Stream) KeyView() (string, error) {
 	// here. A longer key / escape / not-yet-buffered quote falls to the
 	// IndexByte loop, which resumes at the window end (j = we).
 	we := min(start+stringPreludeWindow, len(s.buf))
+	var hb byte
 	for k := start; k < we; k++ {
 		c := s.buf[k]
 		if c == '"' {
+			if validate && hb&0x80 != 0 && !utf8.Valid(s.buf[start:k]) {
+				return "", ErrInvalidUTF8
+			}
 			s.Pos = k + 1
 			return unsafe.String(unsafe.SliceData(s.buf[start:]), k-start), nil
 		}
 		if c == '\\' {
-			return s.stringSlow(start, k)
+			return s.stringSlow(start, k, validate)
 		}
 		if c < 0x20 {
 			return "", ErrBadString
 		}
+		hb |= c
 	}
+	sawHigh := hb&0x80 != 0
 	j := we
 	for {
 		rel := bytes.IndexByte(s.buf[j:], '"')
 		if rel < 0 {
 			if bsRel := bytes.IndexByte(s.buf[j:], '\\'); bsRel >= 0 {
-				return s.stringSlow(start, j+bsRel)
+				return s.stringSlow(start, j+bsRel, validate)
 			}
-			if hasCtrlByte(s.buf[j:]) {
+			bad, hi := ctrlOrHigh(s.buf[j:])
+			if bad {
 				return "", ErrBadString
 			}
+			sawHigh = sawHigh || hi
 			j = len(s.buf)
 			err := s.ReadMore(start)
 			j -= start
@@ -331,10 +349,15 @@ func (s *Stream) KeyView() (string, error) {
 		}
 		end := j + rel
 		if bsRel := bytes.IndexByte(s.buf[j:end], '\\'); bsRel >= 0 {
-			return s.stringSlow(start, j+bsRel)
+			return s.stringSlow(start, j+bsRel, validate)
 		}
-		if hasCtrlByte(s.buf[j:end]) {
+		bad, hi := ctrlOrHigh(s.buf[j:end])
+		if bad {
 			return "", ErrBadString
+		}
+		// Full-span check — see stringView (rune may straddle j).
+		if validate && (sawHigh || hi) && !utf8.Valid(s.buf[start:end]) {
+			return "", ErrInvalidUTF8
 		}
 		s.Pos = end + 1
 		return unsafe.String(unsafe.SliceData(s.buf[start:]), end-start), nil
@@ -438,12 +461,14 @@ func (s *Stream) skipString() error {
 // stringSlow handles escape sequences into a fresh owned scratch buffer,
 // seeded from the already-scanned prefix. The window compacts on refill
 // (see loop comment); the result aliases the scratch, never s.buf.
-func (s *Stream) stringSlow(start, j int) (string, error) {
-	if hasCtrlByte(s.buf[start:j]) {
+func (s *Stream) stringSlow(start, j int, validate bool) (string, error) {
+	bad, rawHigh := ctrlOrHigh(s.buf[start:j])
+	if bad {
 		return "", ErrBadString
 	}
 	buf := make([]byte, 0, 32)
 	buf = append(buf, s.buf[start:j]...)
+	var rawHi byte
 	// `start` is dead now — the decoded output lives in the owned scratch `buf`,
 	// so s.buf can COMPACT (discard consumed bytes) on refill instead of growing
 	// to hold the whole raw string. Every ReadMore keeps from the cursor j and
@@ -461,6 +486,13 @@ func (s *Stream) stringSlow(start, j int) (string, error) {
 		}
 		c := s.buf[j]
 		if c == '"' {
+			// Escape outputs are valid encodings by construction (surrogates
+			// error below), so only RAW bytes copied through can make buf
+			// invalid — skip the walk when they were all ASCII. buf is the
+			// assembled output, so refill boundaries can't split a rune here.
+			if validate && (rawHigh || rawHi&0x80 != 0) && !utf8.Valid(buf) {
+				return "", ErrInvalidUTF8
+			}
 			s.Pos = j + 1
 			return unsafe.String(unsafe.SliceData(buf), len(buf)), nil
 		}
@@ -509,8 +541,9 @@ func (s *Stream) stringSlow(start, j int) (string, error) {
 					// Buffer the potential low-surrogate escape (\uXXXX, 6 bytes)
 					// before pairing — it may straddle a refill boundary, and
 					// without this the pair silently splits into two lone
-					// surrogates (😀 → ��). Tolerate EOF: a trailing lone
-					// surrogate keeps r → RuneError, matching the bytes path.
+					// surrogates (😀 → ��). Tolerate EOF here: a trailing lone
+					// surrogate keeps r a surrogate and errors below, matching
+					// the bytes path.
 					for j+6 > len(s.buf) {
 						err := s.ReadMore(j)
 						j = 0
@@ -526,6 +559,11 @@ func (s *Stream) stringSlow(start, j int) (string, error) {
 							}
 						}
 					}
+					// Still a surrogate → lone/unpaired: jsonv2 rejects;
+					// permissive mode keeps the U+FFFD substitution.
+					if validate && utf16.IsSurrogate(r) {
+						return "", ErrInvalidUTF8
+					}
 				}
 				buf = utf8.AppendRune(buf, r)
 			default:
@@ -536,6 +574,7 @@ func (s *Stream) stringSlow(start, j int) (string, error) {
 		if c < 0x20 {
 			return "", ErrBadString
 		}
+		rawHi |= c
 		buf = append(buf, c)
 		j++
 	}
@@ -1068,7 +1107,7 @@ func (s *Stream) Any() (any, error) {
 	case c == 't' || c == 'f':
 		return s.Bool()
 	case c == '"':
-		return s.String()
+		return s.String(true)
 	case c == '-' || (c >= '0' && c <= '9'):
 		return s.Float64()
 	case c == '[':
@@ -1142,7 +1181,7 @@ func (s *Stream) anyObject() (map[string]any, error) {
 	}
 	out := make(map[string]any, 4)
 	for {
-		key, err := s.String()
+		key, err := s.String(true)
 		if err != nil {
 			return nil, err
 		}
@@ -1263,7 +1302,7 @@ func (s *Stream) AnyNumber() (any, error) {
 	case c == 't' || c == 'f':
 		return s.Bool()
 	case c == '"':
-		return s.String()
+		return s.String(true)
 	case c == '-' || (c >= '0' && c <= '9'):
 		return s.Number()
 	case c == '[':
@@ -1337,7 +1376,7 @@ func (s *Stream) anyNumberObject() (map[string]any, error) {
 	}
 	out := make(map[string]any, 4)
 	for {
-		key, err := s.String()
+		key, err := s.String(true)
 		if err != nil {
 			return nil, err
 		}

@@ -54,7 +54,7 @@ func (recv Validated) DecodeFrom(data []byte) (result Validated, i int, err erro
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -67,7 +67,7 @@ func (recv Validated) DecodeFrom(data []byte) (result Validated, i int, err erro
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -153,14 +153,14 @@ func (recv Validated) DecodeFrom(data []byte) (result Validated, i int, err erro
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.Bio = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.Bio, i, err = scan.String(data, i)
+				result.Bio, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("bio", i, err)
 				}
@@ -181,14 +181,14 @@ func (recv Validated) DecodeFrom(data []byte) (result Validated, i int, err erro
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.Email = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.Email, i, err = scan.String(data, i)
+				result.Email, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("email", i, err)
 				}
@@ -209,14 +209,14 @@ func (recv Validated) DecodeFrom(data []byte) (result Validated, i int, err erro
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.Name, i, err = scan.String(data, i)
+				result.Name, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("name", i, err)
 				}
@@ -264,14 +264,14 @@ func (recv Validated) DecodeFrom(data []byte) (result Validated, i int, err erro
 					if kew > len(data) {
 						kew = len(data)
 					}
-					for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 						ke++
 					}
 					if ke < len(data) && data[ke] == '"' {
 						result.Tags[len(result.Tags)-1] = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 						i = ke + 1
 					} else {
-						result.Tags[len(result.Tags)-1], i, err = scan.String(data, i)
+						result.Tags[len(result.Tags)-1], i, err = scan.String(data, i, true)
 						if err != nil {
 							return result, i, decode.NewParseErr("tags", i, err)
 						}
@@ -371,7 +371,7 @@ func (recv Validated) DecodeFromStream(s *scan.Stream) (result Validated, err er
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -406,7 +406,7 @@ func (recv Validated) DecodeFromStream(s *scan.Stream) (result Validated, err er
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"bio"}}
 			}
 			seenBio = true
-			result.Bio, err = s.String()
+			result.Bio, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("bio", s.Pos, err)
 			}
@@ -422,7 +422,7 @@ func (recv Validated) DecodeFromStream(s *scan.Stream) (result Validated, err er
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"email"}}
 			}
 			seenEmail = true
-			result.Email, err = s.String()
+			result.Email, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("email", s.Pos, err)
 			}
@@ -438,7 +438,7 @@ func (recv Validated) DecodeFromStream(s *scan.Stream) (result Validated, err er
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"name"}}
 			}
 			seenName = true
-			result.Name, err = s.String()
+			result.Name, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("name", s.Pos, err)
 			}
@@ -505,7 +505,7 @@ func (recv Validated) DecodeFromStream(s *scan.Stream) (result Validated, err er
 			}
 			for s.Bytes()[s.Pos] != ']' {
 				result.Tags = append(result.Tags, "")
-				result.Tags[len(result.Tags)-1], err = s.String()
+				result.Tags[len(result.Tags)-1], err = s.String(true)
 				if err != nil {
 					return result, decode.NewParseErr("tags", s.Pos, err)
 				}
@@ -660,7 +660,7 @@ func (recv CopyValidated) DecodeFrom(data []byte) (result CopyValidated, i int, 
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -673,7 +673,7 @@ func (recv CopyValidated) DecodeFrom(data []byte) (result CopyValidated, i int, 
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -759,14 +759,14 @@ func (recv CopyValidated) DecodeFrom(data []byte) (result CopyValidated, i int, 
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.Bio = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				result.Bio, i, err = scan.String(data, i)
+				result.Bio, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("bio", i, err)
 				}
@@ -788,14 +788,14 @@ func (recv CopyValidated) DecodeFrom(data []byte) (result CopyValidated, i int, 
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.Email = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				result.Email, i, err = scan.String(data, i)
+				result.Email, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("email", i, err)
 				}
@@ -817,14 +817,14 @@ func (recv CopyValidated) DecodeFrom(data []byte) (result CopyValidated, i int, 
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.Name = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				result.Name, i, err = scan.String(data, i)
+				result.Name, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("name", i, err)
 				}
@@ -873,14 +873,14 @@ func (recv CopyValidated) DecodeFrom(data []byte) (result CopyValidated, i int, 
 					if kew > len(data) {
 						kew = len(data)
 					}
-					for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 						ke++
 					}
 					if ke < len(data) && data[ke] == '"' {
 						result.Tags[len(result.Tags)-1] = string(data[i+1 : ke])
 						i = ke + 1
 					} else {
-						result.Tags[len(result.Tags)-1], i, err = scan.String(data, i)
+						result.Tags[len(result.Tags)-1], i, err = scan.String(data, i, true)
 						if err != nil {
 							return result, i, decode.NewParseErr("tags", i, err)
 						}
@@ -981,7 +981,7 @@ func (recv CopyValidated) DecodeFromStream(s *scan.Stream) (result CopyValidated
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -1016,7 +1016,7 @@ func (recv CopyValidated) DecodeFromStream(s *scan.Stream) (result CopyValidated
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"bio"}}
 			}
 			seenBio = true
-			result.Bio, err = s.String()
+			result.Bio, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("bio", s.Pos, err)
 			}
@@ -1032,7 +1032,7 @@ func (recv CopyValidated) DecodeFromStream(s *scan.Stream) (result CopyValidated
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"email"}}
 			}
 			seenEmail = true
-			result.Email, err = s.String()
+			result.Email, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("email", s.Pos, err)
 			}
@@ -1048,7 +1048,7 @@ func (recv CopyValidated) DecodeFromStream(s *scan.Stream) (result CopyValidated
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"name"}}
 			}
 			seenName = true
-			result.Name, err = s.String()
+			result.Name, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("name", s.Pos, err)
 			}
@@ -1115,7 +1115,7 @@ func (recv CopyValidated) DecodeFromStream(s *scan.Stream) (result CopyValidated
 			}
 			for s.Bytes()[s.Pos] != ']' {
 				result.Tags = append(result.Tags, "")
-				result.Tags[len(result.Tags)-1], err = s.String()
+				result.Tags[len(result.Tags)-1], err = s.String(true)
 				if err != nil {
 					return result, decode.NewParseErr("tags", s.Pos, err)
 				}
@@ -1269,7 +1269,7 @@ func (recv Claim) DecodeFrom(data []byte) (result Claim, i int, err error) {
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -1282,7 +1282,7 @@ func (recv Claim) DecodeFrom(data []byte) (result Claim, i int, err error) {
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -1311,14 +1311,14 @@ func (recv Claim) DecodeFrom(data []byte) (result Claim, i int, err error) {
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.Aud = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.Aud, i, err = scan.String(data, i)
+				result.Aud, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("aud", i, err)
 				}
@@ -1444,14 +1444,14 @@ func (recv Claim) DecodeFrom(data []byte) (result Claim, i int, err error) {
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.Iss = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.Iss, i, err = scan.String(data, i)
+				result.Iss, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("iss", i, err)
 				}
@@ -1469,14 +1469,14 @@ func (recv Claim) DecodeFrom(data []byte) (result Claim, i int, err error) {
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.Jti = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.Jti, i, err = scan.String(data, i)
+				result.Jti, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("jti", i, err)
 				}
@@ -1545,14 +1545,14 @@ func (recv Claim) DecodeFrom(data []byte) (result Claim, i int, err error) {
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.Sub = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.Sub, i, err = scan.String(data, i)
+				result.Sub, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("sub", i, err)
 				}
@@ -1622,7 +1622,7 @@ func (recv Claim) DecodeFromStream(s *scan.Stream) (result Claim, err error) {
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -1636,7 +1636,7 @@ func (recv Claim) DecodeFromStream(s *scan.Stream) (result Claim, err error) {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"aud"}}
 			}
 			seenAud = true
-			result.Aud, err = s.String()
+			result.Aud, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("aud", s.Pos, err)
 			}
@@ -1681,7 +1681,7 @@ func (recv Claim) DecodeFromStream(s *scan.Stream) (result Claim, err error) {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"iss"}}
 			}
 			seenIss = true
-			result.Iss, err = s.String()
+			result.Iss, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("iss", s.Pos, err)
 			}
@@ -1694,7 +1694,7 @@ func (recv Claim) DecodeFromStream(s *scan.Stream) (result Claim, err error) {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"jti"}}
 			}
 			seenJti = true
-			result.Jti, err = s.String()
+			result.Jti, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("jti", s.Pos, err)
 			}
@@ -1720,7 +1720,7 @@ func (recv Claim) DecodeFromStream(s *scan.Stream) (result Claim, err error) {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"sub"}}
 			}
 			seenSub = true
-			result.Sub, err = s.String()
+			result.Sub, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("sub", s.Pos, err)
 			}
@@ -1853,7 +1853,7 @@ func (recv CopyClaim) DecodeFrom(data []byte) (result CopyClaim, i int, err erro
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -1866,7 +1866,7 @@ func (recv CopyClaim) DecodeFrom(data []byte) (result CopyClaim, i int, err erro
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -1895,14 +1895,14 @@ func (recv CopyClaim) DecodeFrom(data []byte) (result CopyClaim, i int, err erro
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.Aud = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				result.Aud, i, err = scan.String(data, i)
+				result.Aud, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("aud", i, err)
 				}
@@ -2029,14 +2029,14 @@ func (recv CopyClaim) DecodeFrom(data []byte) (result CopyClaim, i int, err erro
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.Iss = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				result.Iss, i, err = scan.String(data, i)
+				result.Iss, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("iss", i, err)
 				}
@@ -2055,14 +2055,14 @@ func (recv CopyClaim) DecodeFrom(data []byte) (result CopyClaim, i int, err erro
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.Jti = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				result.Jti, i, err = scan.String(data, i)
+				result.Jti, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("jti", i, err)
 				}
@@ -2132,14 +2132,14 @@ func (recv CopyClaim) DecodeFrom(data []byte) (result CopyClaim, i int, err erro
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.Sub = string(data[i+1 : ke])
 				i = ke + 1
 			} else {
-				result.Sub, i, err = scan.String(data, i)
+				result.Sub, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("sub", i, err)
 				}
@@ -2210,7 +2210,7 @@ func (recv CopyClaim) DecodeFromStream(s *scan.Stream) (result CopyClaim, err er
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -2224,7 +2224,7 @@ func (recv CopyClaim) DecodeFromStream(s *scan.Stream) (result CopyClaim, err er
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"aud"}}
 			}
 			seenAud = true
-			result.Aud, err = s.String()
+			result.Aud, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("aud", s.Pos, err)
 			}
@@ -2269,7 +2269,7 @@ func (recv CopyClaim) DecodeFromStream(s *scan.Stream) (result CopyClaim, err er
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"iss"}}
 			}
 			seenIss = true
-			result.Iss, err = s.String()
+			result.Iss, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("iss", s.Pos, err)
 			}
@@ -2282,7 +2282,7 @@ func (recv CopyClaim) DecodeFromStream(s *scan.Stream) (result CopyClaim, err er
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"jti"}}
 			}
 			seenJti = true
-			result.Jti, err = s.String()
+			result.Jti, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("jti", s.Pos, err)
 			}
@@ -2308,7 +2308,7 @@ func (recv CopyClaim) DecodeFromStream(s *scan.Stream) (result CopyClaim, err er
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"sub"}}
 			}
 			seenSub = true
-			result.Sub, err = s.String()
+			result.Sub, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("sub", s.Pos, err)
 			}
@@ -2447,7 +2447,7 @@ func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, i i
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -2460,7 +2460,7 @@ func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, i i
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -2546,14 +2546,14 @@ func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, i i
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.Country = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.Country, i, err = scan.String(data, i)
+				result.Country, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("country", i, err)
 				}
@@ -2577,14 +2577,14 @@ func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, i i
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.Email = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.Email, i, err = scan.String(data, i)
+				result.Email, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("email", i, err)
 				}
@@ -2612,14 +2612,14 @@ func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, i i
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.Lang = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.Lang, i, err = scan.String(data, i)
+				result.Lang, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("lang", i, err)
 				}
@@ -2642,14 +2642,14 @@ func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, i i
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.Name, i, err = scan.String(data, i)
+				result.Name, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("name", i, err)
 				}
@@ -2677,14 +2677,14 @@ func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, i i
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.Phone = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.Phone, i, err = scan.String(data, i)
+				result.Phone, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("phone", i, err)
 				}
@@ -2719,14 +2719,14 @@ func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, i i
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.Role = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.Role, i, err = scan.String(data, i)
+				result.Role, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("role", i, err)
 				}
@@ -2764,14 +2764,14 @@ func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, i i
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.URL = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.URL, i, err = scan.String(data, i)
+				result.URL, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("url", i, err)
 				}
@@ -2792,14 +2792,14 @@ func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, i i
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.Username = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.Username, i, err = scan.String(data, i)
+				result.Username, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("username", i, err)
 				}
@@ -2896,7 +2896,7 @@ func (recv ValidationHeavy) DecodeFromStream(s *scan.Stream) (result ValidationH
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -2931,7 +2931,7 @@ func (recv ValidationHeavy) DecodeFromStream(s *scan.Stream) (result ValidationH
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"country"}}
 			}
 			seenCountry = true
-			result.Country, err = s.String()
+			result.Country, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("country", s.Pos, err)
 			}
@@ -2950,7 +2950,7 @@ func (recv ValidationHeavy) DecodeFromStream(s *scan.Stream) (result ValidationH
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"email"}}
 			}
 			seenEmail = true
-			result.Email, err = s.String()
+			result.Email, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("email", s.Pos, err)
 			}
@@ -2973,7 +2973,7 @@ func (recv ValidationHeavy) DecodeFromStream(s *scan.Stream) (result ValidationH
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"lang"}}
 			}
 			seenLang = true
-			result.Lang, err = s.String()
+			result.Lang, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("lang", s.Pos, err)
 			}
@@ -2991,7 +2991,7 @@ func (recv ValidationHeavy) DecodeFromStream(s *scan.Stream) (result ValidationH
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"name"}}
 			}
 			seenName = true
-			result.Name, err = s.String()
+			result.Name, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("name", s.Pos, err)
 			}
@@ -3014,7 +3014,7 @@ func (recv ValidationHeavy) DecodeFromStream(s *scan.Stream) (result ValidationH
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"phone"}}
 			}
 			seenPhone = true
-			result.Phone, err = s.String()
+			result.Phone, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("phone", s.Pos, err)
 			}
@@ -3044,7 +3044,7 @@ func (recv ValidationHeavy) DecodeFromStream(s *scan.Stream) (result ValidationH
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"role"}}
 			}
 			seenRole = true
-			result.Role, err = s.String()
+			result.Role, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("role", s.Pos, err)
 			}
@@ -3081,7 +3081,7 @@ func (recv ValidationHeavy) DecodeFromStream(s *scan.Stream) (result ValidationH
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"url"}}
 			}
 			seenURL = true
-			result.URL, err = s.String()
+			result.URL, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("url", s.Pos, err)
 			}
@@ -3097,7 +3097,7 @@ func (recv ValidationHeavy) DecodeFromStream(s *scan.Stream) (result ValidationH
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"username"}}
 			}
 			seenUsername = true
-			result.Username, err = s.String()
+			result.Username, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("username", s.Pos, err)
 			}
@@ -3232,7 +3232,7 @@ func (recv NoValidationHeavy) DecodeFrom(data []byte) (result NoValidationHeavy,
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -3245,7 +3245,7 @@ func (recv NoValidationHeavy) DecodeFrom(data []byte) (result NoValidationHeavy,
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -3325,14 +3325,14 @@ func (recv NoValidationHeavy) DecodeFrom(data []byte) (result NoValidationHeavy,
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.Country = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.Country, i, err = scan.String(data, i)
+				result.Country, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("country", i, err)
 				}
@@ -3350,14 +3350,14 @@ func (recv NoValidationHeavy) DecodeFrom(data []byte) (result NoValidationHeavy,
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.Email = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.Email, i, err = scan.String(data, i)
+				result.Email, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("email", i, err)
 				}
@@ -3375,14 +3375,14 @@ func (recv NoValidationHeavy) DecodeFrom(data []byte) (result NoValidationHeavy,
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.Lang = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.Lang, i, err = scan.String(data, i)
+				result.Lang, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("lang", i, err)
 				}
@@ -3400,14 +3400,14 @@ func (recv NoValidationHeavy) DecodeFrom(data []byte) (result NoValidationHeavy,
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.Name, i, err = scan.String(data, i)
+				result.Name, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("name", i, err)
 				}
@@ -3425,14 +3425,14 @@ func (recv NoValidationHeavy) DecodeFrom(data []byte) (result NoValidationHeavy,
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.Phone = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.Phone, i, err = scan.String(data, i)
+				result.Phone, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("phone", i, err)
 				}
@@ -3450,14 +3450,14 @@ func (recv NoValidationHeavy) DecodeFrom(data []byte) (result NoValidationHeavy,
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.Role = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.Role, i, err = scan.String(data, i)
+				result.Role, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("role", i, err)
 				}
@@ -3484,14 +3484,14 @@ func (recv NoValidationHeavy) DecodeFrom(data []byte) (result NoValidationHeavy,
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.URL = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.URL, i, err = scan.String(data, i)
+				result.URL, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("url", i, err)
 				}
@@ -3509,14 +3509,14 @@ func (recv NoValidationHeavy) DecodeFrom(data []byte) (result NoValidationHeavy,
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.Username = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.Username, i, err = scan.String(data, i)
+				result.Username, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("username", i, err)
 				}
@@ -3577,7 +3577,7 @@ func (recv NoValidationHeavy) DecodeFromStream(s *scan.Stream) (result NoValidat
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -3606,7 +3606,7 @@ func (recv NoValidationHeavy) DecodeFromStream(s *scan.Stream) (result NoValidat
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"country"}}
 			}
 			seenCountry = true
-			result.Country, err = s.String()
+			result.Country, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("country", s.Pos, err)
 			}
@@ -3619,7 +3619,7 @@ func (recv NoValidationHeavy) DecodeFromStream(s *scan.Stream) (result NoValidat
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"email"}}
 			}
 			seenEmail = true
-			result.Email, err = s.String()
+			result.Email, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("email", s.Pos, err)
 			}
@@ -3632,7 +3632,7 @@ func (recv NoValidationHeavy) DecodeFromStream(s *scan.Stream) (result NoValidat
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"lang"}}
 			}
 			seenLang = true
-			result.Lang, err = s.String()
+			result.Lang, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("lang", s.Pos, err)
 			}
@@ -3645,7 +3645,7 @@ func (recv NoValidationHeavy) DecodeFromStream(s *scan.Stream) (result NoValidat
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"name"}}
 			}
 			seenName = true
-			result.Name, err = s.String()
+			result.Name, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("name", s.Pos, err)
 			}
@@ -3658,7 +3658,7 @@ func (recv NoValidationHeavy) DecodeFromStream(s *scan.Stream) (result NoValidat
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"phone"}}
 			}
 			seenPhone = true
-			result.Phone, err = s.String()
+			result.Phone, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("phone", s.Pos, err)
 			}
@@ -3671,7 +3671,7 @@ func (recv NoValidationHeavy) DecodeFromStream(s *scan.Stream) (result NoValidat
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"role"}}
 			}
 			seenRole = true
-			result.Role, err = s.String()
+			result.Role, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("role", s.Pos, err)
 			}
@@ -3697,7 +3697,7 @@ func (recv NoValidationHeavy) DecodeFromStream(s *scan.Stream) (result NoValidat
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"url"}}
 			}
 			seenURL = true
-			result.URL, err = s.String()
+			result.URL, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("url", s.Pos, err)
 			}
@@ -3710,7 +3710,7 @@ func (recv NoValidationHeavy) DecodeFromStream(s *scan.Stream) (result NoValidat
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"username"}}
 			}
 			seenUsername = true
-			result.Username, err = s.String()
+			result.Username, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("username", s.Pos, err)
 			}
@@ -3810,7 +3810,7 @@ func (recv RuneGated) DecodeFrom(data []byte) (result RuneGated, i int, err erro
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -3823,7 +3823,7 @@ func (recv RuneGated) DecodeFrom(data []byte) (result RuneGated, i int, err erro
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -3852,14 +3852,14 @@ func (recv RuneGated) DecodeFrom(data []byte) (result RuneGated, i int, err erro
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.AsciiRunes = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.AsciiRunes, i, err = scan.String(data, i)
+				result.AsciiRunes, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("asciiRunes", i, err)
 				}
@@ -3883,14 +3883,14 @@ func (recv RuneGated) DecodeFrom(data []byte) (result RuneGated, i int, err erro
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.LongRunes = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.LongRunes, i, err = scan.String(data, i)
+				result.LongRunes, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("longRunes", i, err)
 				}
@@ -3957,7 +3957,7 @@ func (recv RuneGated) DecodeFromStream(s *scan.Stream) (result RuneGated, err er
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -3971,7 +3971,7 @@ func (recv RuneGated) DecodeFromStream(s *scan.Stream) (result RuneGated, err er
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"asciiRunes"}}
 			}
 			seenAsciiRunes = true
-			result.AsciiRunes, err = s.String()
+			result.AsciiRunes, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("asciiRunes", s.Pos, err)
 			}
@@ -3990,7 +3990,7 @@ func (recv RuneGated) DecodeFromStream(s *scan.Stream) (result RuneGated, err er
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"longRunes"}}
 			}
 			seenLongRunes = true
-			result.LongRunes, err = s.String()
+			result.LongRunes, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("longRunes", s.Pos, err)
 			}
@@ -4079,7 +4079,7 @@ func (recv HTMLEscape) DecodeFrom(data []byte) (result HTMLEscape, i int, err er
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -4092,7 +4092,7 @@ func (recv HTMLEscape) DecodeFrom(data []byte) (result HTMLEscape, i int, err er
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -4121,14 +4121,14 @@ func (recv HTMLEscape) DecodeFrom(data []byte) (result HTMLEscape, i int, err er
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.Note = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.Note, i, err = scan.String(data, i)
+				result.Note, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("note", i, err)
 				}
@@ -4180,7 +4180,7 @@ func (recv HTMLEscape) DecodeFromStream(s *scan.Stream) (result HTMLEscape, err 
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -4194,7 +4194,7 @@ func (recv HTMLEscape) DecodeFromStream(s *scan.Stream) (result HTMLEscape, err 
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"note"}}
 			}
 			seenNote = true
-			result.Note, err = s.String()
+			result.Note, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("note", s.Pos, err)
 			}
@@ -4266,7 +4266,7 @@ func (recv HTMLPlain) DecodeFrom(data []byte) (result HTMLPlain, i int, err erro
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -4279,7 +4279,7 @@ func (recv HTMLPlain) DecodeFrom(data []byte) (result HTMLPlain, i int, err erro
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -4308,14 +4308,14 @@ func (recv HTMLPlain) DecodeFrom(data []byte) (result HTMLPlain, i int, err erro
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.Note = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.Note, i, err = scan.String(data, i)
+				result.Note, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("note", i, err)
 				}
@@ -4367,7 +4367,7 @@ func (recv HTMLPlain) DecodeFromStream(s *scan.Stream) (result HTMLPlain, err er
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -4381,7 +4381,7 @@ func (recv HTMLPlain) DecodeFromStream(s *scan.Stream) (result HTMLPlain, err er
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"note"}}
 			}
 			seenNote = true
-			result.Note, err = s.String()
+			result.Note, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("note", s.Pos, err)
 			}

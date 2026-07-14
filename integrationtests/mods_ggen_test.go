@@ -43,7 +43,7 @@ func (recv ModStruct) DecodeFrom(data []byte) (result ModStruct, i int, err erro
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -56,7 +56,7 @@ func (recv ModStruct) DecodeFrom(data []byte) (result ModStruct, i int, err erro
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -85,14 +85,14 @@ func (recv ModStruct) DecodeFrom(data []byte) (result ModStruct, i int, err erro
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.Email = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.Email, i, err = scan.String(data, i)
+				result.Email, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("email", i, err)
 				}
@@ -112,14 +112,14 @@ func (recv ModStruct) DecodeFrom(data []byte) (result ModStruct, i int, err erro
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.SKU = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.SKU, i, err = scan.String(data, i)
+				result.SKU, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("sku", i, err)
 				}
@@ -162,14 +162,14 @@ func (recv ModStruct) DecodeFrom(data []byte) (result ModStruct, i int, err erro
 					if kew > len(data) {
 						kew = len(data)
 					}
-					for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+					for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 						ke++
 					}
 					if ke < len(data) && data[ke] == '"' {
 						result.Tags[len(result.Tags)-1] = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 						i = ke + 1
 					} else {
-						result.Tags[len(result.Tags)-1], i, err = scan.String(data, i)
+						result.Tags[len(result.Tags)-1], i, err = scan.String(data, i, true)
 						if err != nil {
 							return result, i, decode.NewParseErr("tags", i, err)
 						}
@@ -248,7 +248,7 @@ func (recv ModStruct) DecodeFromStream(s *scan.Stream) (result ModStruct, err er
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -262,7 +262,7 @@ func (recv ModStruct) DecodeFromStream(s *scan.Stream) (result ModStruct, err er
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"email"}}
 			}
 			seenEmail = true
-			result.Email, err = s.String()
+			result.Email, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("email", s.Pos, err)
 			}
@@ -277,7 +277,7 @@ func (recv ModStruct) DecodeFromStream(s *scan.Stream) (result ModStruct, err er
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"sku"}}
 			}
 			seenSKU = true
-			result.SKU, err = s.String()
+			result.SKU, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("sku", s.Pos, err)
 			}
@@ -339,7 +339,7 @@ func (recv ModStruct) DecodeFromStream(s *scan.Stream) (result ModStruct, err er
 			}
 			for s.Bytes()[s.Pos] != ']' {
 				result.Tags = append(result.Tags, "")
-				result.Tags[len(result.Tags)-1], err = s.String()
+				result.Tags[len(result.Tags)-1], err = s.String(true)
 				if err != nil {
 					return result, decode.NewParseErr("tags", s.Pos, err)
 				}
@@ -466,7 +466,7 @@ func (recv FallibleModStruct) DecodeFrom(data []byte) (result FallibleModStruct,
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -479,7 +479,7 @@ func (recv FallibleModStruct) DecodeFrom(data []byte) (result FallibleModStruct,
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -508,14 +508,14 @@ func (recv FallibleModStruct) DecodeFrom(data []byte) (result FallibleModStruct,
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.Email = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.Email, i, err = scan.String(data, i)
+				result.Email, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("email", i, err)
 				}
@@ -584,7 +584,7 @@ func (recv FallibleModStruct) DecodeFromStream(s *scan.Stream) (result FallibleM
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -598,7 +598,7 @@ func (recv FallibleModStruct) DecodeFromStream(s *scan.Stream) (result FallibleM
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"email"}}
 			}
 			seenEmail = true
-			result.Email, err = s.String()
+			result.Email, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("email", s.Pos, err)
 			}
@@ -691,7 +691,7 @@ func (recv FallibleModMultierrStruct) DecodeFrom(data []byte) (result FallibleMo
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -704,7 +704,7 @@ func (recv FallibleModMultierrStruct) DecodeFrom(data []byte) (result FallibleMo
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -737,14 +737,14 @@ func (recv FallibleModMultierrStruct) DecodeFrom(data []byte) (result FallibleMo
 				if kew > len(data) {
 					kew = len(data)
 				}
-				for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 					ke++
 				}
 				if ke < len(data) && data[ke] == '"' {
 					result.Email = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 					i = ke + 1
 				} else {
-					result.Email, i, err = scan.String(data, i)
+					result.Email, i, err = scan.String(data, i, true)
 					if err != nil {
 						return result, i, decode.NewParseErr("email", i, err)
 					}
@@ -825,7 +825,7 @@ func (recv FallibleModMultierrStruct) DecodeFromStream(s *scan.Stream) (result F
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -843,7 +843,7 @@ func (recv FallibleModMultierrStruct) DecodeFromStream(s *scan.Stream) (result F
 				}
 			} else {
 				seenEmail = true
-				result.Email, err = s.String()
+				result.Email, err = s.String(true)
 				if err != nil {
 					return result, decode.NewParseErr("email", s.Pos, err)
 				}
@@ -944,7 +944,7 @@ func (recv CrossPkgModStruct) DecodeFrom(data []byte) (result CrossPkgModStruct,
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -957,7 +957,7 @@ func (recv CrossPkgModStruct) DecodeFrom(data []byte) (result CrossPkgModStruct,
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -986,14 +986,14 @@ func (recv CrossPkgModStruct) DecodeFrom(data []byte) (result CrossPkgModStruct,
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.Code = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.Code, i, err = scan.String(data, i)
+				result.Code, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("code", i, err)
 				}
@@ -1014,14 +1014,14 @@ func (recv CrossPkgModStruct) DecodeFrom(data []byte) (result CrossPkgModStruct,
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.NonEmpty = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.NonEmpty, i, err = scan.String(data, i)
+				result.NonEmpty, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("nonEmpty", i, err)
 				}
@@ -1044,14 +1044,14 @@ func (recv CrossPkgModStruct) DecodeFrom(data []byte) (result CrossPkgModStruct,
 			if kew > len(data) {
 				kew = len(data)
 			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
 				result.Tag = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.Tag, i, err = scan.String(data, i)
+				result.Tag, i, err = scan.String(data, i, true)
 				if err != nil {
 					return result, i, decode.NewParseErr("tag", i, err)
 				}
@@ -1106,7 +1106,7 @@ func (recv CrossPkgModStruct) DecodeFromStream(s *scan.Stream) (result CrossPkgM
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -1120,7 +1120,7 @@ func (recv CrossPkgModStruct) DecodeFromStream(s *scan.Stream) (result CrossPkgM
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"code"}}
 			}
 			seenCode = true
-			result.Code, err = s.String()
+			result.Code, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("code", s.Pos, err)
 			}
@@ -1136,7 +1136,7 @@ func (recv CrossPkgModStruct) DecodeFromStream(s *scan.Stream) (result CrossPkgM
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"nonEmpty"}}
 			}
 			seenNonEmpty = true
-			result.NonEmpty, err = s.String()
+			result.NonEmpty, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("nonEmpty", s.Pos, err)
 			}
@@ -1154,7 +1154,7 @@ func (recv CrossPkgModStruct) DecodeFromStream(s *scan.Stream) (result CrossPkgM
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"tag"}}
 			}
 			seenTag = true
-			result.Tag, err = s.String()
+			result.Tag, err = s.String(true)
 			if err != nil {
 				return result, decode.NewParseErr("tag", s.Pos, err)
 			}
@@ -1242,7 +1242,7 @@ func (recv NestedMultierrStruct) DecodeFrom(data []byte) (result NestedMultierrS
 			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
 		}
 		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
 		if ke >= len(data) {
@@ -1255,7 +1255,7 @@ func (recv NestedMultierrStruct) DecodeFrom(data []byte) (result NestedMultierrS
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i)
+			key, i, err = scan.String(data, i, true)
 			if err != nil {
 				return result, i, decode.NewParseErr("", i, err)
 			}
@@ -1370,14 +1370,14 @@ func (recv NestedMultierrStruct) DecodeFrom(data []byte) (result NestedMultierrS
 				if kew > len(data) {
 					kew = len(data)
 				}
-				for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
+				for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 					ke++
 				}
 				if ke < len(data) && data[ke] == '"' {
 					result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 					i = ke + 1
 				} else {
-					result.Name, i, err = scan.String(data, i)
+					result.Name, i, err = scan.String(data, i, true)
 					if err != nil {
 						return result, i, decode.NewParseErr("name", i, err)
 					}
@@ -1452,7 +1452,7 @@ func (recv NestedMultierrStruct) DecodeFromStream(s *scan.Stream) (result Nested
 	}
 	for {
 		var key string
-		key, err = s.KeyView()
+		key, err = s.KeyView(true)
 		if err != nil {
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
@@ -1520,7 +1520,7 @@ func (recv NestedMultierrStruct) DecodeFromStream(s *scan.Stream) (result Nested
 				}
 			} else {
 				seenName = true
-				result.Name, err = s.String()
+				result.Name, err = s.String(true)
 				if err != nil {
 					return result, decode.NewParseErr("name", s.Pos, err)
 				}
