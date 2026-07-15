@@ -331,6 +331,10 @@ func (s *Stream) skipNull() error {
 
 // SkipValueAVX is Stream.SkipValue over the fused AVX skip tree.
 func (s *Stream) SkipValueAVX() error {
+	return s.skipValueAVX(0)
+}
+
+func (s *Stream) skipValueAVX(depth int) error {
 	if err := s.SkipSpaceAVX(); err != nil {
 		return err
 	}
@@ -352,15 +356,18 @@ func (s *Stream) SkipValueAVX() error {
 		return s.skipNumber()
 	case '[':
 		s.Pos++
-		return s.skipArrayAVX()
+		return s.skipArrayAVX(depth + 1)
 	case '{':
 		s.Pos++
-		return s.skipObjectAVX()
+		return s.skipObjectAVX(depth + 1)
 	}
 	return ErrBadValue
 }
 
-func (s *Stream) skipArrayAVX() error {
+func (s *Stream) skipArrayAVX(depth int) error {
+	if depth > MaxDepth {
+		return ErrMaxDepth
+	}
 	if err := s.SkipSpaceAVX(); err != nil {
 		return err
 	}
@@ -375,7 +382,7 @@ func (s *Stream) skipArrayAVX() error {
 		return nil
 	}
 	for {
-		if err := s.SkipValueAVX(); err != nil {
+		if err := s.skipValueAVX(depth); err != nil {
 			return err
 		}
 		if err := s.SkipSpaceAVX(); err != nil {
@@ -398,7 +405,10 @@ func (s *Stream) skipArrayAVX() error {
 	}
 }
 
-func (s *Stream) skipObjectAVX() error {
+func (s *Stream) skipObjectAVX(depth int) error {
+	if depth > MaxDepth {
+		return ErrMaxDepth
+	}
 	if err := s.SkipSpaceAVX(); err != nil {
 		return err
 	}
@@ -428,7 +438,7 @@ func (s *Stream) skipObjectAVX() error {
 			return ErrBadObject
 		}
 		s.Pos++
-		if err := s.SkipValueAVX(); err != nil {
+		if err := s.skipValueAVX(depth); err != nil {
 			return err
 		}
 		if err := s.SkipSpaceAVX(); err != nil {
@@ -457,6 +467,10 @@ func (s *Stream) skipObjectAVX() error {
 
 // SkipValueAVX2 is Stream.SkipValue over the fused AVX2 skip tree.
 func (s *Stream) SkipValueAVX2() error {
+	return s.skipValueAVX2(0)
+}
+
+func (s *Stream) skipValueAVX2(depth int) error {
 	if err := s.SkipSpaceAVX2(); err != nil {
 		return err
 	}
@@ -478,15 +492,18 @@ func (s *Stream) SkipValueAVX2() error {
 		return s.skipNumber()
 	case '[':
 		s.Pos++
-		return s.skipArrayAVX2()
+		return s.skipArrayAVX2(depth + 1)
 	case '{':
 		s.Pos++
-		return s.skipObjectAVX2()
+		return s.skipObjectAVX2(depth + 1)
 	}
 	return ErrBadValue
 }
 
-func (s *Stream) skipArrayAVX2() error {
+func (s *Stream) skipArrayAVX2(depth int) error {
+	if depth > MaxDepth {
+		return ErrMaxDepth
+	}
 	if err := s.SkipSpaceAVX2(); err != nil {
 		return err
 	}
@@ -501,7 +518,7 @@ func (s *Stream) skipArrayAVX2() error {
 		return nil
 	}
 	for {
-		if err := s.SkipValueAVX2(); err != nil {
+		if err := s.skipValueAVX2(depth); err != nil {
 			return err
 		}
 		if err := s.SkipSpaceAVX2(); err != nil {
@@ -524,7 +541,10 @@ func (s *Stream) skipArrayAVX2() error {
 	}
 }
 
-func (s *Stream) skipObjectAVX2() error {
+func (s *Stream) skipObjectAVX2(depth int) error {
+	if depth > MaxDepth {
+		return ErrMaxDepth
+	}
 	if err := s.SkipSpaceAVX2(); err != nil {
 		return err
 	}
@@ -554,7 +574,7 @@ func (s *Stream) skipObjectAVX2() error {
 			return ErrBadObject
 		}
 		s.Pos++
-		if err := s.SkipValueAVX2(); err != nil {
+		if err := s.skipValueAVX2(depth); err != nil {
 			return err
 		}
 		if err := s.SkipSpaceAVX2(); err != nil {
@@ -583,6 +603,10 @@ func (s *Stream) skipObjectAVX2() error {
 
 // SkipValueAVX512 is Stream.SkipValue over the fused AVX-512 skip tree.
 func (s *Stream) SkipValueAVX512() error {
+	return s.skipValueAVX512(0)
+}
+
+func (s *Stream) skipValueAVX512(depth int) error {
 	if err := s.SkipSpaceAVX512(); err != nil {
 		return err
 	}
@@ -604,10 +628,10 @@ func (s *Stream) SkipValueAVX512() error {
 		return s.skipNumber()
 	case '[':
 		s.Pos++
-		return s.skipArrayAVX512()
+		return s.skipArrayAVX512(depth + 1)
 	case '{':
 		s.Pos++
-		return s.skipObjectAVX512()
+		return s.skipObjectAVX512(depth + 1)
 	}
 	return ErrBadValue
 }
@@ -714,7 +738,10 @@ func (s *Stream) CaptureValueAVX512() ([]byte, error) {
 	}
 }
 
-func (s *Stream) skipArrayAVX512() error {
+func (s *Stream) skipArrayAVX512(depth int) error {
+	if depth > MaxDepth {
+		return ErrMaxDepth
+	}
 	if err := s.SkipSpaceAVX512(); err != nil {
 		return err
 	}
@@ -729,7 +756,7 @@ func (s *Stream) skipArrayAVX512() error {
 		return nil
 	}
 	for {
-		if err := s.SkipValueAVX512(); err != nil {
+		if err := s.skipValueAVX512(depth); err != nil {
 			return err
 		}
 		if err := s.SkipSpaceAVX512(); err != nil {
@@ -752,7 +779,10 @@ func (s *Stream) skipArrayAVX512() error {
 	}
 }
 
-func (s *Stream) skipObjectAVX512() error {
+func (s *Stream) skipObjectAVX512(depth int) error {
+	if depth > MaxDepth {
+		return ErrMaxDepth
+	}
 	if err := s.SkipSpaceAVX512(); err != nil {
 		return err
 	}
@@ -782,7 +812,7 @@ func (s *Stream) skipObjectAVX512() error {
 			return ErrBadObject
 		}
 		s.Pos++
-		if err := s.SkipValueAVX512(); err != nil {
+		if err := s.skipValueAVX512(depth); err != nil {
 			return err
 		}
 		if err := s.SkipSpaceAVX512(); err != nil {

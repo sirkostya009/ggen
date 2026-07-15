@@ -25,6 +25,7 @@ func BenchmarkGenerate(b *testing.B) {
 
 	for b.Loop() {
 		generatedTypes = nil
+		cyclicTypes = nil
 		generatedAliasKinds = nil
 		_, err := generate(pkg, structs)
 		if err != nil {

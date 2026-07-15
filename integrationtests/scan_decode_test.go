@@ -764,3 +764,54 @@ func TestRawCaptureInvalidUTF8(t *testing.T) {
 		})
 	}
 }
+
+// TestMaxDepthNoCrash: deeply-nested payloads that formerly overflowed the
+// goroutine stack (fatal, unrecoverable) now return scan.ErrMaxDepth cleanly
+// through generated code — self-referential struct (Node.Children), any field,
+// ignoreunknown skip, and RawMessage capture, bytes + stream.
+func TestMaxDepthNoCrash(t *testing.T) {
+	const n = 2_000_000 // well past MaxDepth and past the old ~2.5MB crash point
+	arr := strings.Repeat("[", n) + strings.Repeat("]", n)
+	cases := []struct {
+		name     string
+		payload  string
+		decode   func([]byte) error
+	}{
+		{"recursive_struct", strings.Repeat(`{"children":[`, n) + strings.Repeat(`]}`, n),
+			func(d []byte) error { _, _, err := Node{}.DecodeFrom(d); return err }},
+		{"any_field", `{"data":` + arr + `}`,
+			func(d []byte) error { _, _, err := AnyHolder{}.DecodeFrom(d); return err }},
+		{"ignoreunknown_skip", `{"zz":` + arr + `}`,
+			func(d []byte) error { _, _, err := IgnoreUnknownStruct{}.DecodeFrom(d); return err }},
+		{"raw_capture", `{"raw":` + arr + `}`,
+			func(d []byte) error { _, _, err := RawHolder{}.DecodeFrom(d); return err }},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if err := c.decode([]byte(c.payload)); !errors.Is(err, scan.ErrMaxDepth) {
+				t.Errorf("bytes: want ErrMaxDepth, got %v", err)
+			}
+		})
+	}
+	// Stream path: recursive struct + skip, deep enough to exceed the cap.
+	rec := strings.Repeat(`{"children":[`, n) + strings.Repeat(`]}`, n)
+	var s scan.Stream
+	s.Reset(strings.NewReader(rec), make([]byte, 0, 4096))
+	if _, err := (Node{}).DecodeFromStream(&s); !errors.Is(err, scan.ErrMaxDepth) {
+		t.Errorf("stream recursive: want ErrMaxDepth, got %v", err)
+	}
+	s.Reset(strings.NewReader(`{"zz":`+arr+`}`), make([]byte, 0, 4096))
+	if _, err := (IgnoreUnknownStruct{}).DecodeFromStream(&s); !errors.Is(err, scan.ErrMaxDepth) {
+		t.Errorf("stream skip: want ErrMaxDepth, got %v", err)
+	}
+}
+
+//ggen:generate
+type AnyHolder struct {
+	Data any `json:"data"`
+}
+
+//ggen:generate
+type RawHolder struct {
+	Raw json.RawMessage `json:"raw"`
+}

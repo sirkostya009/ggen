@@ -375,6 +375,7 @@ Build tag propagation: struct in file behind `//go:build foo` land in `<dir>_foo
 6. **Test files first-class inputs.** Annotated structs in `_test.go` files route to `_ggen_test.go` so methods don't bundle into library build.
 7. **`hint:` only safe prealloc hint.** Don't expect `maxlen` to size container — it doesn't (intentional, retained-heap reasons). Use `hint:"N"` when know typical size.
 8. **Decode reject invalid UTF-8; encode not validate.** Decode: malformed UTF-8 bytes or unpaired `\uXXXX` surrogates in string values/keys → `scan.ErrInvalidUTF8` (jsonv2 parity; v1 instead silently replace with U+FFFD). ASCII strings pay nothing. Captured raw spans (`json.RawMessage`/`jsontext.Value`) byte-validated too. Exceptions: skipped content (`ignoreunknown`) grammar-checked only; unpaired surrogate ESCAPE inside raw span pass (ASCII text there; jsonv2 reject). Opt out per struct: `allowinvalidutf8`. Encode: invalid bytes in struct strings emitted raw onto wire (v1 replace, v2 replace+error) — validate at boundary if populating structs from untrusted bytes.
+9. **Container nesting capped at `scan.MaxDepth` (10000, jsonv2 parity).** Deeper nesting → `scan.ErrMaxDepth`, NOT a stack-overflow crash. Applies to every recursive path (nested containers, `any`, `ignoreunknown` skip, RawMessage, self-referential structs), bytes + stream. Untrusted deeply-nested input is safe.
 
 ## Common user intents → flags
 

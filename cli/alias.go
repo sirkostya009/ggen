@@ -128,16 +128,26 @@ func renderAliasAppendJSON(b *bytes.Buffer, s StructInfo) {
 func renderAliasStructDecode(b *bytes.Buffer, s StructInfo, stream bool) {
 	switch {
 	case s.AliasIface.ByteDecoder && !stream:
+		// Cyclic underlying: thread depth through the delegation, else an
+		// alias hop inside a type cycle would reset the budget.
+		call := "DecodeFrom(data[i:])"
+		if isCyclic(s.AliasUnderlying) {
+			call = "decodeFromDepth(data[i:], _depth+1)"
+		}
 		fmt.Fprintf(b, `var u %[1]s
-v, _n, err := u.DecodeFrom(data[i:])
+v, _n, err := u.`+call+`
 i += _n
 if err != nil { return result, i, decode.NewParseErr("", i, err) }
 result = %[2]s(v)
 return result, i, nil
 `, s.AliasUnderlying, s.Name)
 	case s.AliasIface.StreamDecoder && stream:
+		call := "DecodeFromStream(s)"
+		if isCyclic(s.AliasUnderlying) {
+			call = "decodeFromStreamDepth(s, _depth+1)"
+		}
 		fmt.Fprintf(b, `var u %[1]s
-v, err := u.DecodeFromStream(s)
+v, err := u.`+call+`
 if err != nil { return result, decode.NewParseErr("", s.Pos, err) }
 result = %[2]s(v)
 return result, nil

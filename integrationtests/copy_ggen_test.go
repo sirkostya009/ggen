@@ -12,8 +12,15 @@ import (
 	"github.com/sirkostya009/ggen/validation"
 )
 
-func (recv CopyDoc) DecodeFrom(data []byte) (result CopyDoc, i int, err error) {
+func (recv CopyDoc) DecodeFrom(data []byte) (CopyDoc, int, error) {
+	return recv.decodeFromDepth(data, 0)
+}
+
+func (recv CopyDoc) decodeFromDepth(data []byte, _depth int) (result CopyDoc, i int, err error) {
 	result = recv
+	if _depth > scan.MaxDepth {
+		return result, 0, scan.ErrMaxDepth
+	}
 	if result.Children != nil {
 		result.Children = result.Children[:0]
 	}
@@ -106,7 +113,7 @@ func (recv CopyDoc) DecodeFrom(data []byte) (result CopyDoc, i int, err error) {
 				for {
 					result.Children = append(result.Children, CopyDoc{})
 					var _n int
-					result.Children[len(result.Children)-1], _n, err = result.Children[len(result.Children)-1].DecodeFrom(data[i:])
+					result.Children[len(result.Children)-1], _n, err = result.Children[len(result.Children)-1].decodeFromDepth(data[i:], _depth+1)
 					i += _n
 					if err != nil {
 						return result, i, decode.NewParseErr("children", i, err)
@@ -452,8 +459,15 @@ func (recv CopyDoc) DecodeFrom(data []byte) (result CopyDoc, i int, err error) {
 	}
 }
 
-func (recv CopyDoc) DecodeFromStream(s *scan.Stream) (result CopyDoc, err error) {
+func (recv CopyDoc) DecodeFromStream(s *scan.Stream) (CopyDoc, error) {
+	return recv.decodeFromStreamDepth(s, 0)
+}
+
+func (recv CopyDoc) decodeFromStreamDepth(s *scan.Stream, _depth int) (result CopyDoc, err error) {
 	result = recv
+	if _depth > scan.MaxDepth {
+		return result, scan.ErrMaxDepth
+	}
 	if result.Children != nil {
 		result.Children = result.Children[:0]
 	}
@@ -555,7 +569,7 @@ func (recv CopyDoc) DecodeFromStream(s *scan.Stream) (result CopyDoc, err error)
 			}
 			for s.Bytes()[s.Pos] != ']' {
 				result.Children = append(result.Children, CopyDoc{})
-				result.Children[len(result.Children)-1], err = result.Children[len(result.Children)-1].DecodeFromStream(s)
+				result.Children[len(result.Children)-1], err = result.Children[len(result.Children)-1].decodeFromStreamDepth(s, _depth+1)
 				if err != nil {
 					return result, decode.NewParseErr("children", s.Pos, err)
 				}
@@ -1121,6 +1135,7 @@ func (s CopyDoc) AppendJSON(dst []byte) ([]byte, error) {
 
 func (recv CopyRef) DecodeFrom(data []byte) (result CopyRef, i int, err error) {
 	result = recv
+	const _depth = 0
 	seenLabel := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
@@ -1223,6 +1238,7 @@ func (recv CopyRef) DecodeFrom(data []byte) (result CopyRef, i int, err error) {
 
 func (recv CopyRef) DecodeFromStream(s *scan.Stream) (result CopyRef, err error) {
 	result = recv
+	const _depth = 0
 	seenLabel := false
 	err = s.ObjectOpen()
 	if err != nil {
@@ -1309,6 +1325,7 @@ func (s CopyRef) AppendJSON(dst []byte) ([]byte, error) {
 
 func (recv AliasDoc) DecodeFrom(data []byte) (result AliasDoc, i int, err error) {
 	result = recv
+	const _depth = 0
 	seenName := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
@@ -1410,6 +1427,7 @@ func (recv AliasDoc) DecodeFrom(data []byte) (result AliasDoc, i int, err error)
 
 func (recv AliasDoc) DecodeFromStream(s *scan.Stream) (result AliasDoc, err error) {
 	result = recv
+	const _depth = 0
 	seenName := false
 	err = s.ObjectOpen()
 	if err != nil {

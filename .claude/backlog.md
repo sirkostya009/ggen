@@ -105,6 +105,27 @@ surface pinned by `Decoder[T]`).
 
 ## Open design questions
 
+- **Number-grammar strictness in the VALUE decoders (jsonv2 divergence).**
+  `scan.Int64`/`Float64` accept malformed JSON numbers the grammar (and jsonv2)
+  reject: leading zeros (`01`), bare/trailing dot (`.5`, `1.`), leading `+`.
+  Root cause — `Float64` hands a loose `[0-9.eE+-]` span to
+  `strconv.ParseFloat` (a Go-number parser, not JSON); `Int64`'s digit loop has
+  no leading-zero rule. **Asymmetry already in-tree:** the SKIP path
+  (`skipNumber`, used for RawMessage / `ignoreunknown`) IS strict and rejects
+  all of these, so `{"raw":01}` rejects but `{"i":01}` accepts. Fixing means a
+  leading-zero check in the int loop + a strict JSON-number span validator
+  before `ParseFloat` (or fold the `skipNumber` grammar into `Float64`). DEFERRED
+  (2026-07, user call): correctly-formed numbers are unaffected — this only
+  fires on malformed input, and the strictening has a real hot-path cost to
+  measure (the exact-short float gate + `ParseFloat` handoff would grow a
+  pre-validation pass). Surfaced by the post-UTF-8 divergence audit; that same
+  audit's headline find (unbounded recursion depth) SHIPPED as opt #51.
+  Lower-severity audit leftovers, same batch: duplicate keys go undetected
+  inside skipped / `any` / raw / nested scopes (ggen's `seenX` flags only cover
+  KNOWN top-level keys; jsonv2 rejects dups everywhere) and base64
+  `StdEncoding` silently strips embedded `\r`/`\n` (stdlib default; jsonv2
+  rejects). Both minor; bundle with this if the number path is ever strictened.
+
 - **Revisit `validation.CustomError` shape.** Today `{Field, Name string, Cause
   error}` + `Unwrap()`. Rough edges: `Name` doubles as rule identifier and
   user-facing label (split into `Rule` + `Name`); no `Value any` field like the

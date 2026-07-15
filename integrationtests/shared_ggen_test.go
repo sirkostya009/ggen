@@ -16,6 +16,7 @@ import (
 
 func (recv Address) DecodeFrom(data []byte) (result Address, i int, err error) {
 	result = recv
+	const _depth = 0
 	seenCity := false
 	seenStreet := false
 	seenZipCode := false
@@ -199,6 +200,7 @@ func (recv Address) DecodeFrom(data []byte) (result Address, i int, err error) {
 
 func (recv Address) DecodeFromStream(s *scan.Stream) (result Address, err error) {
 	result = recv
+	const _depth = 0
 	seenCity := false
 	seenStreet := false
 	seenZipCode := false
@@ -347,8 +349,15 @@ func (s Address) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv Node) DecodeFrom(data []byte) (result Node, i int, err error) {
+func (recv Node) DecodeFrom(data []byte) (Node, int, error) {
+	return recv.decodeFromDepth(data, 0)
+}
+
+func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, err error) {
 	result = recv
+	if _depth > scan.MaxDepth {
+		return result, 0, scan.ErrMaxDepth
+	}
 	if result.Children != nil {
 		result.Children = result.Children[:0]
 	}
@@ -447,7 +456,7 @@ func (recv Node) DecodeFrom(data []byte) (result Node, i int, err error) {
 				for {
 					result.Children = append(result.Children, Node{})
 					var _n int
-					result.Children[len(result.Children)-1], _n, err = result.Children[len(result.Children)-1].DecodeFrom(data[i:])
+					result.Children[len(result.Children)-1], _n, err = result.Children[len(result.Children)-1].decodeFromDepth(data[i:], _depth+1)
 					i += _n
 					if err != nil {
 						return result, i, decode.NewParseErr("children", i, err)
@@ -749,8 +758,15 @@ func (recv Node) DecodeFrom(data []byte) (result Node, i int, err error) {
 	}
 }
 
-func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
+func (recv Node) DecodeFromStream(s *scan.Stream) (Node, error) {
+	return recv.decodeFromStreamDepth(s, 0)
+}
+
+func (recv Node) decodeFromStreamDepth(s *scan.Stream, _depth int) (result Node, err error) {
 	result = recv
+	if _depth > scan.MaxDepth {
+		return result, scan.ErrMaxDepth
+	}
 	if result.Children != nil {
 		result.Children = result.Children[:0]
 	}
@@ -862,7 +878,7 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 			}
 			for s.Bytes()[s.Pos] != ']' {
 				result.Children = append(result.Children, Node{})
-				result.Children[len(result.Children)-1], err = result.Children[len(result.Children)-1].DecodeFromStream(s)
+				result.Children[len(result.Children)-1], err = result.Children[len(result.Children)-1].decodeFromStreamDepth(s, _depth+1)
 				if err != nil {
 					return result, decode.NewParseErr("children", s.Pos, err)
 				}
@@ -1250,6 +1266,7 @@ func (s Node) AppendJSON(dst []byte) ([]byte, error) {
 
 func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err error) {
 	result = recv
+	const _depth = 0
 	var seen uint64
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
@@ -2566,6 +2583,7 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 
 func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err error) {
 	result = recv
+	const _depth = 0
 	var seen uint64
 	err = s.ObjectOpen()
 	if err != nil {

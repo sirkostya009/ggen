@@ -76,6 +76,12 @@ Two more contracts in the same spirit:
   replace + error). Your structs are your own data — validate at the boundary
   if you populate them from untrusted bytes. On valid UTF-8, output is
   byte-identical to the stdlib.
+- **Nesting is depth-capped** at 10000 (jsonv2 parity). A pathologically deep
+  payload (`[[[[…` or `{"k":{"k":…`) returns a clean `scan.ErrMaxDepth` instead
+  of overflowing the goroutine stack — so untrusted input can't crash the
+  process. Covers every recursive path (nested containers, `any` fields,
+  skipped unknown keys, raw messages, self-referential structs), bytes and
+  streaming alike.
 
 ### simd
 

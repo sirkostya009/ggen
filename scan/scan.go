@@ -33,8 +33,16 @@ var (
 	ErrBadValue       = errors.New("scan: invalid value")
 	ErrBadArray       = errors.New("scan: invalid array")
 	ErrBadObject      = errors.New("scan: invalid object")
+	ErrMaxDepth       = errors.New("scan: exceeded max depth")
 	ErrUnexpectedEnd  = errors.New("scan: unexpected end of input")
 )
+
+// MaxDepth bounds container nesting on every recursive decode path
+// (SkipValue, Any, and generated decoders for self-referential structs) —
+// without it a few MB of "[[[[…" is a fatal, unrecoverable goroutine
+// stack overflow. Matches jsonv2's limit; the check is one predictable
+// compare per container OPEN, nothing on scalar values.
+const MaxDepth = 10000
 
 // SkipSpace advances past JSON whitespace (space, tab, CR, LF).
 func SkipSpace(data []byte, i int) int {
@@ -670,6 +678,10 @@ func Null(data []byte, i int) (int, bool) {
 
 // SkipValue skips any JSON value (literal, number, string, array, object).
 func SkipValue(data []byte, i int) (int, error) {
+	return skipValue(data, i, 0)
+}
+
+func skipValue(data []byte, i, depth int) (int, error) {
 	i = SkipSpace(data, i)
 	if i >= len(data) {
 		return 0, ErrUnexpectedEnd
@@ -688,20 +700,23 @@ func SkipValue(data []byte, i int) (int, error) {
 	case '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
 		return skipNumber(data, i)
 	case '[':
-		return skipArray(data, i+1)
+		return skipArray(data, i+1, depth+1)
 	case '{':
-		return skipObject(data, i+1)
+		return skipObject(data, i+1, depth+1)
 	}
 	return 0, ErrBadValue
 }
 
-func skipArray(data []byte, i int) (int, error) {
+func skipArray(data []byte, i, depth int) (int, error) {
+	if depth > MaxDepth {
+		return 0, ErrMaxDepth
+	}
 	i = SkipSpace(data, i)
 	if i < len(data) && data[i] == ']' {
 		return i + 1, nil
 	}
 	for {
-		j, err := SkipValue(data, i)
+		j, err := skipValue(data, i, depth)
 		if err != nil {
 			return 0, err
 		}
@@ -720,7 +735,10 @@ func skipArray(data []byte, i int) (int, error) {
 	}
 }
 
-func skipObject(data []byte, i int) (int, error) {
+func skipObject(data []byte, i, depth int) (int, error) {
+	if depth > MaxDepth {
+		return 0, ErrMaxDepth
+	}
 	i = SkipSpace(data, i)
 	if i < len(data) && data[i] == '}' {
 		return i + 1, nil
@@ -738,7 +756,7 @@ func skipObject(data []byte, i int) (int, error) {
 			return 0, ErrBadObject
 		}
 		j = SkipSpace(data, j+1)
-		k, err := SkipValue(data, j)
+		k, err := skipValue(data, j, depth)
 		if err != nil {
 			return 0, err
 		}
@@ -762,6 +780,10 @@ func skipObject(data []byte, i int) (int, error) {
 // string→string, array→[]any, object→map[string]any. Strings alias
 // the input via the same zero-copy path used by [String].
 func Any(data []byte, i int) (any, int, error) {
+	return anyValue(data, i, 0)
+}
+
+func anyValue(data []byte, i, depth int) (any, int, error) {
 	i = SkipSpace(data, i)
 	if i >= len(data) {
 		return nil, 0, ErrUnexpectedEnd
@@ -783,14 +805,17 @@ func Any(data []byte, i int) (any, int, error) {
 		v, j, err := Float64(data, i)
 		return v, j, err
 	case c == '[':
-		return anyArray(data, i)
+		return anyArray(data, i, depth+1)
 	case c == '{':
-		return anyObject(data, i)
+		return anyObject(data, i, depth+1)
 	}
 	return nil, 0, ErrBadLiteral
 }
 
-func anyArray(data []byte, i int) ([]any, int, error) {
+func anyArray(data []byte, i, depth int) ([]any, int, error) {
+	if depth > MaxDepth {
+		return nil, 0, ErrMaxDepth
+	}
 	i++ // consume '['
 	i = SkipSpace(data, i)
 	if i < len(data) && data[i] == ']' {
@@ -798,7 +823,7 @@ func anyArray(data []byte, i int) ([]any, int, error) {
 	}
 	out := make([]any, 0, 4)
 	for {
-		v, j, err := Any(data, i)
+		v, j, err := anyValue(data, i, depth)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -818,7 +843,10 @@ func anyArray(data []byte, i int) ([]any, int, error) {
 	}
 }
 
-func anyObject(data []byte, i int) (map[string]any, int, error) {
+func anyObject(data []byte, i, depth int) (map[string]any, int, error) {
+	if depth > MaxDepth {
+		return nil, 0, ErrMaxDepth
+	}
 	i++ // consume '{'
 	i = SkipSpace(data, i)
 	if i < len(data) && data[i] == '}' {
@@ -835,7 +863,7 @@ func anyObject(data []byte, i int) (map[string]any, int, error) {
 			return nil, 0, ErrBadObject
 		}
 		j = SkipSpace(data, j+1)
-		v, k, err := Any(data, j)
+		v, k, err := anyValue(data, j, depth)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -881,6 +909,10 @@ func Number(data []byte, i int) (json.Number, int, error) {
 // (preserving exact digits) instead of float64. Mirrors stdlib's
 // json.Decoder.UseNumber() option.
 func AnyNumber(data []byte, i int) (any, int, error) {
+	return anyNumberValue(data, i, 0)
+}
+
+func anyNumberValue(data []byte, i, depth int) (any, int, error) {
 	i = SkipSpace(data, i)
 	if i >= len(data) {
 		return nil, 0, ErrUnexpectedEnd
@@ -902,14 +934,17 @@ func AnyNumber(data []byte, i int) (any, int, error) {
 		v, j, err := Number(data, i)
 		return v, j, err
 	case c == '[':
-		return anyNumberArray(data, i)
+		return anyNumberArray(data, i, depth+1)
 	case c == '{':
-		return anyNumberObject(data, i)
+		return anyNumberObject(data, i, depth+1)
 	}
 	return nil, 0, ErrBadLiteral
 }
 
-func anyNumberArray(data []byte, i int) ([]any, int, error) {
+func anyNumberArray(data []byte, i, depth int) ([]any, int, error) {
+	if depth > MaxDepth {
+		return nil, 0, ErrMaxDepth
+	}
 	i++
 	i = SkipSpace(data, i)
 	if i < len(data) && data[i] == ']' {
@@ -917,7 +952,7 @@ func anyNumberArray(data []byte, i int) ([]any, int, error) {
 	}
 	out := make([]any, 0, 4)
 	for {
-		v, j, err := AnyNumber(data, i)
+		v, j, err := anyNumberValue(data, i, depth)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -937,7 +972,10 @@ func anyNumberArray(data []byte, i int) ([]any, int, error) {
 	}
 }
 
-func anyNumberObject(data []byte, i int) (map[string]any, int, error) {
+func anyNumberObject(data []byte, i, depth int) (map[string]any, int, error) {
+	if depth > MaxDepth {
+		return nil, 0, ErrMaxDepth
+	}
 	i++
 	i = SkipSpace(data, i)
 	if i < len(data) && data[i] == '}' {
@@ -954,7 +992,7 @@ func anyNumberObject(data []byte, i int) (map[string]any, int, error) {
 			return nil, 0, ErrBadObject
 		}
 		j = SkipSpace(data, j+1)
-		v, k, err := AnyNumber(data, j)
+		v, k, err := anyNumberValue(data, j, depth)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -981,6 +1019,10 @@ func anyNumberObject(data []byte, i int) (map[string]any, int, error) {
 // json.Number). Strings with escapes already own their bytes; the clone is
 // still applied (one extra copy on the rare escape path).
 func AnyCopy(data []byte, i int) (any, int, error) {
+	return anyCopyValue(data, i, 0)
+}
+
+func anyCopyValue(data []byte, i, depth int) (any, int, error) {
 	i = SkipSpace(data, i)
 	if i >= len(data) {
 		return nil, 0, ErrUnexpectedEnd
@@ -1005,14 +1047,17 @@ func AnyCopy(data []byte, i int) (any, int, error) {
 		v, j, err := Float64(data, i)
 		return v, j, err
 	case c == '[':
-		return anyArrayCopy(data, i)
+		return anyArrayCopy(data, i, depth+1)
 	case c == '{':
-		return anyObjectCopy(data, i)
+		return anyObjectCopy(data, i, depth+1)
 	}
 	return nil, 0, ErrBadLiteral
 }
 
-func anyArrayCopy(data []byte, i int) ([]any, int, error) {
+func anyArrayCopy(data []byte, i, depth int) ([]any, int, error) {
+	if depth > MaxDepth {
+		return nil, 0, ErrMaxDepth
+	}
 	i++ // consume '['
 	i = SkipSpace(data, i)
 	if i < len(data) && data[i] == ']' {
@@ -1020,7 +1065,7 @@ func anyArrayCopy(data []byte, i int) ([]any, int, error) {
 	}
 	out := make([]any, 0, 4)
 	for {
-		v, j, err := AnyCopy(data, i)
+		v, j, err := anyCopyValue(data, i, depth)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -1040,7 +1085,10 @@ func anyArrayCopy(data []byte, i int) ([]any, int, error) {
 	}
 }
 
-func anyObjectCopy(data []byte, i int) (map[string]any, int, error) {
+func anyObjectCopy(data []byte, i, depth int) (map[string]any, int, error) {
+	if depth > MaxDepth {
+		return nil, 0, ErrMaxDepth
+	}
 	i++ // consume '{'
 	i = SkipSpace(data, i)
 	if i < len(data) && data[i] == '}' {
@@ -1057,7 +1105,7 @@ func anyObjectCopy(data []byte, i int) (map[string]any, int, error) {
 			return nil, 0, ErrBadObject
 		}
 		j = SkipSpace(data, j+1)
-		v, k, err := AnyCopy(data, j)
+		v, k, err := anyCopyValue(data, j, depth)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -1081,6 +1129,10 @@ func anyObjectCopy(data []byte, i int) (map[string]any, int, error) {
 // -usenumber combination). The json.Number span is cloned too, since [Number]
 // aliases the input like [String].
 func AnyNumberCopy(data []byte, i int) (any, int, error) {
+	return anyNumberCopyValue(data, i, 0)
+}
+
+func anyNumberCopyValue(data []byte, i, depth int) (any, int, error) {
 	i = SkipSpace(data, i)
 	if i >= len(data) {
 		return nil, 0, ErrUnexpectedEnd
@@ -1108,14 +1160,17 @@ func AnyNumberCopy(data []byte, i int) (any, int, error) {
 		}
 		return json.Number(strings.Clone(string(n))), j, nil
 	case c == '[':
-		return anyNumberArrayCopy(data, i)
+		return anyNumberArrayCopy(data, i, depth+1)
 	case c == '{':
-		return anyNumberObjectCopy(data, i)
+		return anyNumberObjectCopy(data, i, depth+1)
 	}
 	return nil, 0, ErrBadLiteral
 }
 
-func anyNumberArrayCopy(data []byte, i int) ([]any, int, error) {
+func anyNumberArrayCopy(data []byte, i, depth int) ([]any, int, error) {
+	if depth > MaxDepth {
+		return nil, 0, ErrMaxDepth
+	}
 	i++
 	i = SkipSpace(data, i)
 	if i < len(data) && data[i] == ']' {
@@ -1123,7 +1178,7 @@ func anyNumberArrayCopy(data []byte, i int) ([]any, int, error) {
 	}
 	out := make([]any, 0, 4)
 	for {
-		v, j, err := AnyNumberCopy(data, i)
+		v, j, err := anyNumberCopyValue(data, i, depth)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -1143,7 +1198,10 @@ func anyNumberArrayCopy(data []byte, i int) ([]any, int, error) {
 	}
 }
 
-func anyNumberObjectCopy(data []byte, i int) (map[string]any, int, error) {
+func anyNumberObjectCopy(data []byte, i, depth int) (map[string]any, int, error) {
+	if depth > MaxDepth {
+		return nil, 0, ErrMaxDepth
+	}
 	i++
 	i = SkipSpace(data, i)
 	if i < len(data) && data[i] == '}' {
@@ -1160,7 +1218,7 @@ func anyNumberObjectCopy(data []byte, i int) (map[string]any, int, error) {
 			return nil, 0, ErrBadObject
 		}
 		j = SkipSpace(data, j+1)
-		v, k, err := AnyNumberCopy(data, j)
+		v, k, err := anyNumberCopyValue(data, j, depth)
 		if err != nil {
 			return nil, 0, err
 		}

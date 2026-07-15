@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"go/format"
 	"io"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -29,6 +30,104 @@ func getSmall() *bytes.Buffer {
 func putSmall(b *bytes.Buffer) { smallPool.Put(b) }
 
 // generateTo renders the full set of structs into Go source and writes it to w.
+// cyclicTypes marks generated structs that sit on a type-graph cycle
+// (directly or mutually self-referential). Their decode methods get a
+// depth-guarded core + thin public shim so payload nesting is bounded by
+// scan.MaxDepth instead of the goroutine stack (a few MB of `{"kids":[…`
+// is otherwise a fatal, unrecoverable stack overflow). Seeded by the caller
+// alongside generatedTypes; computed from the bucket as a fallback.
+var cyclicTypes map[string]struct{}
+
+var goIdentRe = regexp.MustCompile(`[A-Za-z_][A-Za-z0-9_]*`)
+
+// computeCyclicTypes over-approximates the reference graph by scraping type
+// identifiers out of each field's type strings and intersecting with the
+// generated set — an extra hit only costs a struct an unnecessary (correct)
+// depth shim, so precision is not load-bearing.
+func computeCyclicTypes(structs []StructInfo) map[string]struct{} {
+	names := make(map[string]struct{}, len(structs))
+	for _, s := range structs {
+		names[s.Name] = struct{}{}
+	}
+	adj := make(map[string]map[string]struct{}, len(structs))
+	var collect func(f FieldInfo, out map[string]struct{})
+	collect = func(f FieldInfo, out map[string]struct{}) {
+		for _, t := range []string{f.GoType, f.ElemType, f.PointeeType} {
+			for _, id := range goIdentRe.FindAllString(t, -1) {
+				if _, ok := names[id]; ok {
+					out[id] = struct{}{}
+				}
+			}
+		}
+		if f.SQLNullInner != nil {
+			collect(*f.SQLNullInner, out)
+		}
+	}
+	for _, s := range structs {
+		out := make(map[string]struct{})
+		for _, f := range s.Fields {
+			collect(f, out)
+		}
+		if s.IsAlias {
+			for _, id := range goIdentRe.FindAllString(s.AliasUnderlying, -1) {
+				if _, ok := names[id]; ok {
+					out[id] = struct{}{}
+				}
+			}
+		}
+		adj[s.Name] = out
+	}
+	cyc := make(map[string]struct{})
+	for name := range adj {
+		// name is cyclic iff it can reach itself.
+		seen := map[string]struct{}{}
+		stack := make([]string, 0, 8)
+		for n := range adj[name] {
+			stack = append(stack, n)
+		}
+		for len(stack) > 0 {
+			n := stack[len(stack)-1]
+			stack = stack[:len(stack)-1]
+			if n == name {
+				cyc[name] = struct{}{}
+				stack = nil
+				break
+			}
+			if _, ok := seen[n]; ok {
+				continue
+			}
+			seen[n] = struct{}{}
+			for m := range adj[n] {
+				stack = append(stack, m)
+			}
+		}
+	}
+	return cyc
+}
+
+func isCyclic(typeName string) bool {
+	_, ok := cyclicTypes[typeName]
+	return ok
+}
+
+// decodeCallFor renders the bytes-path nested-decode call for a generated
+// callee: cyclic types go through the depth core (uniform `_depth+1` — every
+// decoder has `_depth` in scope, a const 0 in acyclic ones).
+func decodeCallFor(typeName string) string {
+	if isCyclic(typeName) {
+		return "decodeFromDepth(data[%[2]s:], _depth+1)"
+	}
+	return "DecodeFrom(data[%[2]s:])"
+}
+
+// streamDecodeCallFor is decodeCallFor for the stream path.
+func streamDecodeCallFor(typeName string) string {
+	if isCyclic(typeName) {
+		return "decodeFromStreamDepth(s, _depth+1)"
+	}
+	return "DecodeFromStream(s)"
+}
+
 func generateTo(w io.Writer, pkg string, structs []StructInfo) error {
 	resetOneofRegistry()
 	// generatedTypes is seeded by the caller with every struct in the same Go
@@ -43,6 +142,9 @@ func generateTo(w io.Writer, pkg string, structs []StructInfo) error {
 				generatedAliasKinds[s.Name] = s.AliasKind
 			}
 		}
+	}
+	if cyclicTypes == nil {
+		cyclicTypes = computeCyclicTypes(structs)
 	}
 	// Sort fields alphabetically by JSON name (opt out with nosortkeys).
 	// Inline fields stay at the end so comma emission stays tidy.
@@ -2621,8 +2723,23 @@ func renderDecode(bOut *bytes.Buffer, s StructInfo) {
 	// Named results home the values in the caller's return slot, so every
 	// `return result, …` is register-set + RET with no struct copy; the
 	// `result = recv` prologue seeds the merge source.
-	fmt.Fprintf(b, "func (recv %s) DecodeFrom(data []byte) (result %s, i int, err error) {\n", s.Name, s.Name)
-	b.WriteString("result = recv\n")
+	if isCyclic(s.Name) {
+		// Self-referential type: bound payload nesting at scan.MaxDepth via a
+		// depth-threaded core; the public method is a thin seed-0 shim so the
+		// surface (and acyclic callers) stay unchanged.
+		fmt.Fprintf(b, "func (recv %s) DecodeFrom(data []byte) (%s, int, error) {\n\treturn recv.decodeFromDepth(data, 0)\n}\n\n", s.Name, s.Name)
+		fmt.Fprintf(b, "func (recv %s) decodeFromDepth(data []byte, _depth int) (result %s, i int, err error) {\n", s.Name, s.Name)
+		b.WriteString("result = recv\n")
+		b.WriteString("if _depth > scan.MaxDepth {\n\treturn result, 0, scan.ErrMaxDepth\n}\n")
+	} else {
+		fmt.Fprintf(b, "func (recv %s) DecodeFrom(data []byte) (result %s, i int, err error) {\n", s.Name, s.Name)
+		b.WriteString("result = recv\n")
+		if len(cyclicTypes) > 0 {
+			// Lets call sites into cyclic types uniformly pass _depth+1; folds
+			// to a constant here (unused consts are legal).
+			b.WriteString("const _depth = 0\n")
+		}
+	}
 	if s.IsAlias {
 		renderAliasDecode(b, s)
 		b.WriteString("}\n\n")
@@ -2917,7 +3034,7 @@ if err != nil { return result, %[1]s, decode.NewParseErr(%[3]s, %[1]s, err) }
 			// (bytes consumed) advances posVar.
 			fmt.Fprintf(b, `var mv %[1]s
 var _n int
-mv, _n, err = mv.DecodeFrom(data[%[2]s:])
+mv, _n, err = mv.`+decodeCallFor(f.ElemType)+`
 %[2]s += _n
 %[4]s%[3]s = mv
 `, f.ElemType, posVar, mapTarget, nestedDecodeErrCheck(fieldLit(f), f.MultiErr, true))
@@ -3581,7 +3698,7 @@ _sv, %[1]s, err = `+scanStringFn+`(data, %[1]s, `+vArg(inline)+`)
 			if isGenerated(inline.ElemType) {
 				return initMap + fmt.Sprintf(`var _iv %[1]s
 var _in int
-_iv, _in, err = _iv.DecodeFrom(data[%[2]s:])
+_iv, _in, err = _iv.`+decodeCallFor(inline.ElemType)+`
 %[2]s += _in
 %[4]sresult.%[3]s[%[5]s] = _iv
 `, inline.ElemType, posVar, inline.GoName, nestedDecodeErrCheck(keyExpr, s.MultiErr, true), keyExpr)
@@ -4050,9 +4167,10 @@ if err != nil { return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, err) }
 	case KindStruct:
 		if isGenerated(f.GoType) {
 			// Value-receiver DecodeFrom merges the field's current value;
-			// `_n` (bytes consumed) advances posVar.
+			// `_n` (bytes consumed) advances posVar. Cyclic types route to the
+			// depth core so payload nesting stays bounded.
 			fmt.Fprintf(b, `var _n int
-%[1]s, _n, err = %[1]s.DecodeFrom(data[%[2]s:])
+%[1]s, _n, err = %[1]s.`+decodeCallFor(f.GoType)+`
 %[2]s += _n
 %[3]s`, ref, posVar, nestedDecodeErrCheck(fieldLit(f), f.MultiErr, true))
 		} else {
@@ -4385,7 +4503,7 @@ if e := bytes.IndexByte(data[%[2]s:], ']'); e >= 0 { %[4]s = bytes.Count(data[%[
 		case KindStruct:
 			if directStruct {
 				fmt.Fprintf(b, `var _n int
-%[1]s, _n, err = %[1]s.DecodeFrom(data[%[2]s:])
+%[1]s, _n, err = %[1]s.`+decodeCallFor(f.ElemType)+`
 %[2]s += _n
 `, target, kvar)
 				b.WriteString(nestedDecodeErrCheck(fieldLit(f), f.MultiErr, true))
@@ -4469,8 +4587,18 @@ if e := bytes.IndexByte(data[%[2]s:], ']'); e >= 0 { %[4]s = bytes.Count(data[%[
 func renderStreamDecode(b *bytes.Buffer, s StructInfo) {
 	// Named-result return slot — see DecodeFrom above.
 	var body bytes.Buffer
-	fmt.Fprintf(&body, "func (recv %s) DecodeFromStream(s *scan.Stream) (result %s, err error) {\n", s.Name, s.Name)
+	if isCyclic(s.Name) {
+		fmt.Fprintf(&body, "func (recv %s) DecodeFromStream(s *scan.Stream) (%s, error) {\n\treturn recv.decodeFromStreamDepth(s, 0)\n}\n\n", s.Name, s.Name)
+		fmt.Fprintf(&body, "func (recv %s) decodeFromStreamDepth(s *scan.Stream, _depth int) (result %s, err error) {\n", s.Name, s.Name)
+	} else {
+		fmt.Fprintf(&body, "func (recv %s) DecodeFromStream(s *scan.Stream) (result %s, err error) {\n", s.Name, s.Name)
+	}
 	body.WriteString("result = recv\n")
+	if isCyclic(s.Name) {
+		body.WriteString("if _depth > scan.MaxDepth {\n\treturn result, scan.ErrMaxDepth\n}\n")
+	} else if len(cyclicTypes) > 0 {
+		body.WriteString("const _depth = 0\n")
+	}
 	if s.IsAlias {
 		renderAliasStreamDecode(&body, s)
 	} else {
@@ -4718,7 +4846,7 @@ fv, err = s.Float64()
 	case KindStruct:
 		if isGenerated(f.ElemType) {
 			fmt.Fprintf(b, `var mv %s
-mv, err = mv.DecodeFromStream(s)
+mv, err = mv.`+streamDecodeCallFor(f.ElemType)+`
 %s%s = mv
 `, f.ElemType, nestedDecodeErrCheck(fieldLit(f), f.MultiErr, false), mapTarget)
 		} else {
@@ -5160,7 +5288,7 @@ err = s.ConsumeColon()
 		case KindStruct:
 			if isGenerated(inline.ElemType) {
 				return prelude + fmt.Sprintf(`var _iv %[1]s
-_iv, err = _iv.DecodeFromStream(s)
+_iv, err = _iv.`+streamDecodeCallFor(inline.ElemType)+`
 %[3]sresult.%[2]s[ownKey] = _iv
 `, inline.ElemType, inline.GoName, nestedDecodeErrCheck("ownKey", s.MultiErr, false))
 			}
@@ -5365,7 +5493,7 @@ func renderStreamField(f FieldInfo, ref, posVar string) string {
 		primScan("Float64")
 	case KindStruct:
 		if isGenerated(f.GoType) {
-			fmt.Fprintf(b, `%[1]s, err = %[1]s.DecodeFromStream(s)
+			fmt.Fprintf(b, `%[1]s, err = %[1]s.`+streamDecodeCallFor(f.GoType)+`
 %[2]s`, ref, nestedDecodeErrCheck(fieldLit(f), f.MultiErr, false))
 		} else {
 			b.WriteString(renderCrossPkgStructStreamDecode(f, ref, posVar))
@@ -5576,7 +5704,7 @@ fv, err = s.Float64()
 			}
 		case KindStruct:
 			if directStruct {
-				fmt.Fprintf(b, `%[1]s, err = %[1]s.DecodeFromStream(s)
+				fmt.Fprintf(b, `%[1]s, err = %[1]s.`+streamDecodeCallFor(f.ElemType)+`
 %[2]s`, target, nestedDecodeErrCheck(fieldLit(f), f.MultiErr, false))
 			}
 		case KindSlice, KindArray:

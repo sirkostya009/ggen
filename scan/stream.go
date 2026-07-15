@@ -881,6 +881,10 @@ func (s *Stream) Bool() (bool, error) {
 
 // SkipValue skips an arbitrary JSON value (literal/number/string/array/object).
 func (s *Stream) SkipValue() error {
+	return s.skipValueDepth(0)
+}
+
+func (s *Stream) skipValueDepth(depth int) error {
 	if err := s.SkipSpace(); err != nil {
 		return err
 	}
@@ -915,10 +919,10 @@ func (s *Stream) SkipValue() error {
 		return s.skipNumber()
 	case '[':
 		s.Pos++
-		return s.skipArray()
+		return s.skipArray(depth + 1)
 	case '{':
 		s.Pos++
-		return s.skipObject()
+		return s.skipObject(depth + 1)
 	}
 	return ErrBadValue
 }
@@ -979,7 +983,10 @@ func (s *Stream) CaptureValue() ([]byte, error) {
 	}
 }
 
-func (s *Stream) skipArray() error {
+func (s *Stream) skipArray(depth int) error {
+	if depth > MaxDepth {
+		return ErrMaxDepth
+	}
 	if err := s.SkipSpace(); err != nil {
 		return err
 	}
@@ -994,7 +1001,7 @@ func (s *Stream) skipArray() error {
 		return nil
 	}
 	for {
-		if err := s.SkipValue(); err != nil {
+		if err := s.skipValueDepth(depth); err != nil {
 			return err
 		}
 		if err := s.SkipSpace(); err != nil {
@@ -1017,7 +1024,10 @@ func (s *Stream) skipArray() error {
 	}
 }
 
-func (s *Stream) skipObject() error {
+func (s *Stream) skipObject(depth int) error {
+	if depth > MaxDepth {
+		return ErrMaxDepth
+	}
 	if err := s.SkipSpace(); err != nil {
 		return err
 	}
@@ -1047,7 +1057,7 @@ func (s *Stream) skipObject() error {
 			return ErrBadObject
 		}
 		s.Pos++
-		if err := s.SkipValue(); err != nil {
+		if err := s.skipValueDepth(depth); err != nil {
 			return err
 		}
 		if err := s.SkipSpace(); err != nil {
@@ -1079,6 +1089,10 @@ func (s *Stream) skipObject() error {
 // Any is the stream-buffered counterpart of [Any]. Mirrors stdlib
 // encoding/json defaults for the JSON-to-any mapping.
 func (s *Stream) Any() (any, error) {
+	return s.anyValueDepth(0)
+}
+
+func (s *Stream) anyValueDepth(depth int) (any, error) {
 	if err := s.SkipSpace(); err != nil {
 		return nil, err
 	}
@@ -1111,14 +1125,17 @@ func (s *Stream) Any() (any, error) {
 	case c == '-' || (c >= '0' && c <= '9'):
 		return s.Float64()
 	case c == '[':
-		return s.anyArray()
+		return s.anyArray(depth + 1)
 	case c == '{':
-		return s.anyObject()
+		return s.anyObject(depth + 1)
 	}
 	return nil, ErrBadLiteral
 }
 
-func (s *Stream) anyArray() ([]any, error) {
+func (s *Stream) anyArray(depth int) ([]any, error) {
+	if depth > MaxDepth {
+		return nil, ErrMaxDepth
+	}
 	s.Pos++ // consume '['
 	if err := s.SkipSpace(); err != nil {
 		return nil, err
@@ -1135,7 +1152,7 @@ func (s *Stream) anyArray() ([]any, error) {
 	}
 	out := make([]any, 0, 4)
 	for {
-		v, err := s.Any()
+		v, err := s.anyValueDepth(depth)
 		if err != nil {
 			return nil, err
 		}
@@ -1164,7 +1181,10 @@ func (s *Stream) anyArray() ([]any, error) {
 	}
 }
 
-func (s *Stream) anyObject() (map[string]any, error) {
+func (s *Stream) anyObject(depth int) (map[string]any, error) {
+	if depth > MaxDepth {
+		return nil, ErrMaxDepth
+	}
 	s.Pos++ // consume '{'
 	if err := s.SkipSpace(); err != nil {
 		return nil, err
@@ -1200,7 +1220,7 @@ func (s *Stream) anyObject() (map[string]any, error) {
 		if err := s.SkipSpace(); err != nil {
 			return nil, err
 		}
-		v, err := s.Any()
+		v, err := s.anyValueDepth(depth)
 		if err != nil {
 			return nil, err
 		}
@@ -1274,6 +1294,10 @@ scan:
 // AnyNumber is the [Stream.Any] variant that decodes JSON numbers as
 // json.Number instead of float64.
 func (s *Stream) AnyNumber() (any, error) {
+	return s.anyNumberValueDepth(0)
+}
+
+func (s *Stream) anyNumberValueDepth(depth int) (any, error) {
 	if err := s.SkipSpace(); err != nil {
 		return nil, err
 	}
@@ -1306,14 +1330,17 @@ func (s *Stream) AnyNumber() (any, error) {
 	case c == '-' || (c >= '0' && c <= '9'):
 		return s.Number()
 	case c == '[':
-		return s.anyNumberArray()
+		return s.anyNumberArray(depth + 1)
 	case c == '{':
-		return s.anyNumberObject()
+		return s.anyNumberObject(depth + 1)
 	}
 	return nil, ErrBadLiteral
 }
 
-func (s *Stream) anyNumberArray() ([]any, error) {
+func (s *Stream) anyNumberArray(depth int) ([]any, error) {
+	if depth > MaxDepth {
+		return nil, ErrMaxDepth
+	}
 	s.Pos++
 	if err := s.SkipSpace(); err != nil {
 		return nil, err
@@ -1330,7 +1357,7 @@ func (s *Stream) anyNumberArray() ([]any, error) {
 	}
 	out := make([]any, 0, 4)
 	for {
-		v, err := s.AnyNumber()
+		v, err := s.anyNumberValueDepth(depth)
 		if err != nil {
 			return nil, err
 		}
@@ -1359,7 +1386,10 @@ func (s *Stream) anyNumberArray() ([]any, error) {
 	}
 }
 
-func (s *Stream) anyNumberObject() (map[string]any, error) {
+func (s *Stream) anyNumberObject(depth int) (map[string]any, error) {
+	if depth > MaxDepth {
+		return nil, ErrMaxDepth
+	}
 	s.Pos++
 	if err := s.SkipSpace(); err != nil {
 		return nil, err
@@ -1395,7 +1425,7 @@ func (s *Stream) anyNumberObject() (map[string]any, error) {
 		if err := s.SkipSpace(); err != nil {
 			return nil, err
 		}
-		v, err := s.AnyNumber()
+		v, err := s.anyNumberValueDepth(depth)
 		if err != nil {
 			return nil, err
 		}

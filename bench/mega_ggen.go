@@ -19,6 +19,7 @@ import (
 
 func (recv Addr) DecodeFrom(data []byte) (result Addr, i int, err error) {
 	result = recv
+	const _depth = 0
 	seenCity := false
 	seenStreet := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -146,6 +147,7 @@ func (recv Addr) DecodeFrom(data []byte) (result Addr, i int, err error) {
 
 func (recv Addr) DecodeFromStream(s *scan.Stream) (result Addr, err error) {
 	result = recv
+	const _depth = 0
 	seenCity := false
 	seenStreet := false
 	err = s.ObjectOpen()
@@ -247,8 +249,15 @@ func (s Addr) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv Node) DecodeFrom(data []byte) (result Node, i int, err error) {
+func (recv Node) DecodeFrom(data []byte) (Node, int, error) {
+	return recv.decodeFromDepth(data, 0)
+}
+
+func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, err error) {
 	result = recv
+	if _depth > scan.MaxDepth {
+		return result, 0, scan.ErrMaxDepth
+	}
 	if result.Blob != nil {
 		result.Blob = result.Blob[:0]
 	}
@@ -407,7 +416,7 @@ func (recv Node) DecodeFrom(data []byte) (result Node, i int, err error) {
 					for {
 						result.Children = append(result.Children, Node{})
 						var _n int
-						result.Children[len(result.Children)-1], _n, err = result.Children[len(result.Children)-1].DecodeFrom(data[i:])
+						result.Children[len(result.Children)-1], _n, err = result.Children[len(result.Children)-1].decodeFromDepth(data[i:], _depth+1)
 						i += _n
 						if err != nil {
 							return result, i, decode.NewParseErr("children", i, err)
@@ -1124,8 +1133,15 @@ func (recv Node) DecodeFrom(data []byte) (result Node, i int, err error) {
 	}
 }
 
-func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
+func (recv Node) DecodeFromStream(s *scan.Stream) (Node, error) {
+	return recv.decodeFromStreamDepth(s, 0)
+}
+
+func (recv Node) decodeFromStreamDepth(s *scan.Stream, _depth int) (result Node, err error) {
 	result = recv
+	if _depth > scan.MaxDepth {
+		return result, scan.ErrMaxDepth
+	}
 	if result.Blob != nil {
 		result.Blob = result.Blob[:0]
 	}
@@ -1300,7 +1316,7 @@ func (recv Node) DecodeFromStream(s *scan.Stream) (result Node, err error) {
 				}
 				for s.Bytes()[s.Pos] != ']' {
 					result.Children = append(result.Children, Node{})
-					result.Children[len(result.Children)-1], err = result.Children[len(result.Children)-1].DecodeFromStream(s)
+					result.Children[len(result.Children)-1], err = result.Children[len(result.Children)-1].decodeFromStreamDepth(s, _depth+1)
 					if err != nil {
 						return result, decode.NewParseErr("children", s.Pos, err)
 					}
@@ -2392,6 +2408,7 @@ func (s Node) AppendJSON(dst []byte) ([]byte, error) {
 
 func (recv CopyAddr) DecodeFrom(data []byte) (result CopyAddr, i int, err error) {
 	result = recv
+	const _depth = 0
 	seenCity := false
 	seenStreet := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -2521,6 +2538,7 @@ func (recv CopyAddr) DecodeFrom(data []byte) (result CopyAddr, i int, err error)
 
 func (recv CopyAddr) DecodeFromStream(s *scan.Stream) (result CopyAddr, err error) {
 	result = recv
+	const _depth = 0
 	seenCity := false
 	seenStreet := false
 	err = s.ObjectOpen()
@@ -2622,8 +2640,15 @@ func (s CopyAddr) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv CopyNode) DecodeFrom(data []byte) (result CopyNode, i int, err error) {
+func (recv CopyNode) DecodeFrom(data []byte) (CopyNode, int, error) {
+	return recv.decodeFromDepth(data, 0)
+}
+
+func (recv CopyNode) decodeFromDepth(data []byte, _depth int) (result CopyNode, i int, err error) {
 	result = recv
+	if _depth > scan.MaxDepth {
+		return result, 0, scan.ErrMaxDepth
+	}
 	if result.Blob != nil {
 		result.Blob = result.Blob[:0]
 	}
@@ -2782,7 +2807,7 @@ func (recv CopyNode) DecodeFrom(data []byte) (result CopyNode, i int, err error)
 					for {
 						result.Children = append(result.Children, CopyNode{})
 						var _n int
-						result.Children[len(result.Children)-1], _n, err = result.Children[len(result.Children)-1].DecodeFrom(data[i:])
+						result.Children[len(result.Children)-1], _n, err = result.Children[len(result.Children)-1].decodeFromDepth(data[i:], _depth+1)
 						i += _n
 						if err != nil {
 							return result, i, decode.NewParseErr("children", i, err)
@@ -3503,8 +3528,15 @@ func (recv CopyNode) DecodeFrom(data []byte) (result CopyNode, i int, err error)
 	}
 }
 
-func (recv CopyNode) DecodeFromStream(s *scan.Stream) (result CopyNode, err error) {
+func (recv CopyNode) DecodeFromStream(s *scan.Stream) (CopyNode, error) {
+	return recv.decodeFromStreamDepth(s, 0)
+}
+
+func (recv CopyNode) decodeFromStreamDepth(s *scan.Stream, _depth int) (result CopyNode, err error) {
 	result = recv
+	if _depth > scan.MaxDepth {
+		return result, scan.ErrMaxDepth
+	}
 	if result.Blob != nil {
 		result.Blob = result.Blob[:0]
 	}
@@ -3679,7 +3711,7 @@ func (recv CopyNode) DecodeFromStream(s *scan.Stream) (result CopyNode, err erro
 				}
 				for s.Bytes()[s.Pos] != ']' {
 					result.Children = append(result.Children, CopyNode{})
-					result.Children[len(result.Children)-1], err = result.Children[len(result.Children)-1].DecodeFromStream(s)
+					result.Children[len(result.Children)-1], err = result.Children[len(result.Children)-1].decodeFromStreamDepth(s, _depth+1)
 					if err != nil {
 						return result, decode.NewParseErr("children", s.Pos, err)
 					}
@@ -4771,6 +4803,7 @@ func (s CopyNode) AppendJSON(dst []byte) ([]byte, error) {
 
 func (recv MapHeavy) DecodeFrom(data []byte) (result MapHeavy, i int, err error) {
 	result = recv
+	const _depth = 0
 	if result.Labels != nil {
 		clear(result.Labels)
 	}
@@ -4949,6 +4982,7 @@ func (recv MapHeavy) DecodeFrom(data []byte) (result MapHeavy, i int, err error)
 
 func (recv MapHeavy) DecodeFromStream(s *scan.Stream) (result MapHeavy, err error) {
 	result = recv
+	const _depth = 0
 	if result.Labels != nil {
 		clear(result.Labels)
 	}

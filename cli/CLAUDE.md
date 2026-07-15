@@ -852,6 +852,48 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
     jsonv2), and `FuzzPrimitivesCompat`'s reject-parity branch (the old
     fuzz blind spot that hid this bug — it SKIPPED invalid-UTF-8 strings).
 
+51. **Recursion depth cap (`scan.MaxDepth` = 10000, jsonv2 parity).** Every
+    recursive decode path was unbounded → a few MB of `[[[[…` / `{"k":{"k":…`
+    was a FATAL, unrecoverable goroutine stack overflow (not a `recover`-able
+    panic — the process dies). Now capped:
+    - **Runtime** (`scan.go`, `stream.go`, both SIMD skip files): `SkipValue`
+      and the four `Any` families keep their public signatures but delegate to
+      a `depth`-threaded core (`skipValue`/`anyValue`/`skipValueAVX*`/stream
+      mirrors); each container-OPEN checks `depth > MaxDepth` → `ErrMaxDepth`.
+      One predictable compare per `[`/`{`, nothing on scalar values.
+    - **Codegen**: only SELF-REFERENTIAL structs change shape. `computeCyclicTypes`
+      (generate.go) scrapes type identifiers out of every field's
+      `GoType`/`ElemType`/`PointeeType`/`SQLNullInner`/alias-underlying and
+      finds which generated types can reach themselves (over-approx — a false
+      hit only costs an unneeded, still-correct shim). A cyclic struct T emits
+      `DecodeFrom(data)` → `recv.decodeFromDepth(data, 0)` shim + a
+      `decodeFromDepth(data, _depth int)` core that guards `_depth > MaxDepth`;
+      nested calls into cyclic callees pass `_depth+1` (`decodeCallFor`/
+      `streamDecodeCallFor`; alias delegation threads it too). ACYCLIC structs
+      (the common case) are byte-identical to before — a folded `const _depth =
+      0` keeps the call sites uniform. Seeded/cleared alongside `generatedTypes`
+      in `main.go` (+ `bench_test`).
+    - **Cost** (core-24, 500x, min-of-8 floor — single passes read noisier,
+      esp. scalar DeepNested which swung 14.2→22.0µs on the SAME binary):
+      everything flat EXCEPT DeepNested (a 50-level pure-recursion cache-
+      resident microbench — the maximally depth-sensitive shape) at +4.7%
+      scalar (13767→14409) / +10.3% avx512 (16043→17699), i.e. ~13 ns/level
+      scalar, ~33 ns/level avx512. Mega (realistic ~4.4 MB tree, shallow
+      nesting) is FLAT both tiers — the per-container compare vanishes against
+      memory latency. The avx512 ~2.5× per-level amplification is NOT a spill
+      (asm: post cores' frames are 1456 vs 1424 B — near-identical, `_depth`
+      does not spill); it's a scheduling/regime effect — DeepNested's avx512
+      path is already the weaker regime (PRE avx512 16043 > PRE scalar 13767:
+      the inline vector string classify doesn't pay on 50 tiny Node strings,
+      same "SIMD loses on short strings" effect as Tiny), so its fuller OOO
+      window has less slack to hide the added `_depth+1`/compare µops, while
+      the scalar byte-loop absorbs them. Accepted: a few % on
+      pathologically-deep-but-legal recursion to turn a fatal process crash
+      into a clean error. Pinned by `TestMaxDepth` (scan, every runtime path) +
+      `TestMaxDepthNoCrash` (integ: recursive struct, `any`, ignoreunknown-
+      skip, RawMessage, bytes + stream — the exact inputs that formerly
+      crashed).
+
 ## Design decisions (the why)
 
 1. **`unsafe.String` boosts perf** by avoiding GC pressure — can backfire if

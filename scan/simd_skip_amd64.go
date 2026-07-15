@@ -201,6 +201,10 @@ func skipStringAVX512(data []byte, i int) (int, error) {
 
 // SkipValueAVX is SkipValue over the fused AVX skip tree.
 func SkipValueAVX(data []byte, i int) (int, error) {
+	return skipValueAVX(data, i, 0)
+}
+
+func skipValueAVX(data []byte, i, depth int) (int, error) {
 	i = SkipSpaceAVX(data, i)
 	if i >= len(data) {
 		return 0, ErrUnexpectedEnd
@@ -219,20 +223,23 @@ func SkipValueAVX(data []byte, i int) (int, error) {
 	case '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
 		return skipNumber(data, i)
 	case '[':
-		return skipArrayAVX(data, i+1)
+		return skipArrayAVX(data, i+1, depth+1)
 	case '{':
-		return skipObjectAVX(data, i+1)
+		return skipObjectAVX(data, i+1, depth+1)
 	}
 	return 0, ErrBadValue
 }
 
-func skipArrayAVX(data []byte, i int) (int, error) {
+func skipArrayAVX(data []byte, i, depth int) (int, error) {
+	if depth > MaxDepth {
+		return 0, ErrMaxDepth
+	}
 	i = SkipSpaceAVX(data, i)
 	if i < len(data) && data[i] == ']' {
 		return i + 1, nil
 	}
 	for {
-		j, err := SkipValueAVX(data, i)
+		j, err := skipValueAVX(data, i, depth)
 		if err != nil {
 			return 0, err
 		}
@@ -251,7 +258,10 @@ func skipArrayAVX(data []byte, i int) (int, error) {
 	}
 }
 
-func skipObjectAVX(data []byte, i int) (int, error) {
+func skipObjectAVX(data []byte, i, depth int) (int, error) {
+	if depth > MaxDepth {
+		return 0, ErrMaxDepth
+	}
 	i = SkipSpaceAVX(data, i)
 	if i < len(data) && data[i] == '}' {
 		return i + 1, nil
@@ -269,7 +279,7 @@ func skipObjectAVX(data []byte, i int) (int, error) {
 			return 0, ErrBadObject
 		}
 		j = SkipSpaceAVX(data, j+1)
-		k, err := SkipValueAVX(data, j)
+		k, err := skipValueAVX(data, j, depth)
 		if err != nil {
 			return 0, err
 		}
@@ -290,6 +300,10 @@ func skipObjectAVX(data []byte, i int) (int, error) {
 
 // SkipValueAVX2 is SkipValue over the fused AVX2 skip tree.
 func SkipValueAVX2(data []byte, i int) (int, error) {
+	return skipValueAVX2(data, i, 0)
+}
+
+func skipValueAVX2(data []byte, i, depth int) (int, error) {
 	i = SkipSpaceAVX2(data, i)
 	if i >= len(data) {
 		return 0, ErrUnexpectedEnd
@@ -308,20 +322,23 @@ func SkipValueAVX2(data []byte, i int) (int, error) {
 	case '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
 		return skipNumber(data, i)
 	case '[':
-		return skipArrayAVX2(data, i+1)
+		return skipArrayAVX2(data, i+1, depth+1)
 	case '{':
-		return skipObjectAVX2(data, i+1)
+		return skipObjectAVX2(data, i+1, depth+1)
 	}
 	return 0, ErrBadValue
 }
 
-func skipArrayAVX2(data []byte, i int) (int, error) {
+func skipArrayAVX2(data []byte, i, depth int) (int, error) {
+	if depth > MaxDepth {
+		return 0, ErrMaxDepth
+	}
 	i = SkipSpaceAVX2(data, i)
 	if i < len(data) && data[i] == ']' {
 		return i + 1, nil
 	}
 	for {
-		j, err := SkipValueAVX2(data, i)
+		j, err := skipValueAVX2(data, i, depth)
 		if err != nil {
 			return 0, err
 		}
@@ -340,7 +357,10 @@ func skipArrayAVX2(data []byte, i int) (int, error) {
 	}
 }
 
-func skipObjectAVX2(data []byte, i int) (int, error) {
+func skipObjectAVX2(data []byte, i, depth int) (int, error) {
+	if depth > MaxDepth {
+		return 0, ErrMaxDepth
+	}
 	i = SkipSpaceAVX2(data, i)
 	if i < len(data) && data[i] == '}' {
 		return i + 1, nil
@@ -358,7 +378,7 @@ func skipObjectAVX2(data []byte, i int) (int, error) {
 			return 0, ErrBadObject
 		}
 		j = SkipSpaceAVX2(data, j+1)
-		k, err := SkipValueAVX2(data, j)
+		k, err := skipValueAVX2(data, j, depth)
 		if err != nil {
 			return 0, err
 		}
@@ -379,6 +399,10 @@ func skipObjectAVX2(data []byte, i int) (int, error) {
 
 // SkipValueAVX512 is SkipValue over the fused AVX-512 skip tree.
 func SkipValueAVX512(data []byte, i int) (int, error) {
+	return skipValueAVX512(data, i, 0)
+}
+
+func skipValueAVX512(data []byte, i, depth int) (int, error) {
 	i = SkipSpaceAVX512(data, i)
 	if i >= len(data) {
 		return 0, ErrUnexpectedEnd
@@ -397,20 +421,23 @@ func SkipValueAVX512(data []byte, i int) (int, error) {
 	case '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
 		return skipNumber(data, i)
 	case '[':
-		return skipArrayAVX512(data, i+1)
+		return skipArrayAVX512(data, i+1, depth+1)
 	case '{':
-		return skipObjectAVX512(data, i+1)
+		return skipObjectAVX512(data, i+1, depth+1)
 	}
 	return 0, ErrBadValue
 }
 
-func skipArrayAVX512(data []byte, i int) (int, error) {
+func skipArrayAVX512(data []byte, i, depth int) (int, error) {
+	if depth > MaxDepth {
+		return 0, ErrMaxDepth
+	}
 	i = SkipSpaceAVX512(data, i)
 	if i < len(data) && data[i] == ']' {
 		return i + 1, nil
 	}
 	for {
-		j, err := SkipValueAVX512(data, i)
+		j, err := skipValueAVX512(data, i, depth)
 		if err != nil {
 			return 0, err
 		}
@@ -429,7 +456,10 @@ func skipArrayAVX512(data []byte, i int) (int, error) {
 	}
 }
 
-func skipObjectAVX512(data []byte, i int) (int, error) {
+func skipObjectAVX512(data []byte, i, depth int) (int, error) {
+	if depth > MaxDepth {
+		return 0, ErrMaxDepth
+	}
 	i = SkipSpaceAVX512(data, i)
 	if i < len(data) && data[i] == '}' {
 		return i + 1, nil
@@ -447,7 +477,7 @@ func skipObjectAVX512(data []byte, i int) (int, error) {
 			return 0, ErrBadObject
 		}
 		j = SkipSpaceAVX512(data, j+1)
-		k, err := SkipValueAVX512(data, j)
+		k, err := skipValueAVX512(data, j, depth)
 		if err != nil {
 			return 0, err
 		}

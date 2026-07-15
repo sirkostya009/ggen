@@ -10,6 +10,15 @@ error)`. Zero-alloc happy path, sentinel errors (`scan.ErrBadObject` etc).
 Primitives: `SkipSpace`, `String`, `Int64`, `Uint64`, `Float64`, `Bool`,
 `ObjectOpen`, `ArrayOpen`, `SkipValue`.
 
+- **Depth cap (`MaxDepth` = 10000).** `SkipValue` and the four `Any` families
+  (`Any`/`AnyNumber`/`AnyCopy`/`AnyNumberCopy`), their stream mirrors, and the
+  SIMD skip tiers keep their public signatures but delegate to a `depth`-carrying
+  core; each container OPEN checks `depth > MaxDepth` → `ErrMaxDepth` (one
+  predictable compare per `[`/`{`, nothing on scalars). Without it a few MB of
+  `[[[[…` is a FATAL goroutine stack overflow, not a recoverable error. Generated
+  decoders for self-referential structs thread the same counter (cli/CLAUDE.md
+  opt #51). Pinned by `TestMaxDepth`.
+
 - **`Int64`/`Uint64` unchecked digit prefix.** First ≤18 (int) / ≤19 (uint) digits
   accumulate with NO per-digit overflow check (`10^18-1 < MaxInt64 < |MinInt64|`,
   `10^19-1 < MaxUint64` — neither `*10+d` nor the value overflows in the prefix); a

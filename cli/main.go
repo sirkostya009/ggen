@@ -340,9 +340,11 @@ func generateDir(dir, outFlag, pkgFlag string) error {
 			generatedAliasKinds[s.Name] = s.AliasKind
 		}
 	}
+	cyclicTypes = computeCyclicTypes(structs)
 	defer func() {
 		generatedTypes = nil
 		generatedAliasKinds = nil
+		cyclicTypes = nil
 	}()
 
 	for _, bk := range bucketKeys(buckets) {
@@ -485,6 +487,7 @@ func generateSingleFile(file string, wanted []string, outFlag, pkgFlag string) e
 	defer func() {
 		generatedTypes = nil
 		generatedAliasKinds = nil
+		cyclicTypes = nil
 	}()
 
 	f, err := os.Create(out)
