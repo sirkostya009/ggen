@@ -1073,7 +1073,8 @@ func (s *structSet) extractEmbedded(parent string, field *ast.Field) ([]FieldInf
 }
 
 func extractField(structName, goName string, field *ast.Field) (FieldInfo, error) {
-	fi := FieldInfo{GoName: goName, StructName: structName}
+	// HintLen -1 = unset; a tagless field must not read as an explicit hint:"0"
+	fi := FieldInfo{GoName: goName, StructName: structName, HintLen: -1}
 
 	if field.Tag != nil {
 		tag := reflect.StructTag(strings.Trim(field.Tag.Value, "`"))
