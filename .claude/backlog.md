@@ -81,6 +81,18 @@ surface pinned by `Decoder[T]`).
   see cli/CLAUDE.md opt #50): permissive structs emit pre-validation code
   shapes + `validate=false` scanner calls; raw bytes pass through.
 
+- **Claw back EscapeHeavy's +12.7% (control-tight regression, and it flipped a
+  sonic loss from 0.93× → 0.82×).** Suspect is concrete: `stringSlow` now does
+  `rawHi |= c` PER BYTE inside the escape copy loop (to decide whether the
+  final `utf8.Valid(buf)` is needed), where the pre-escape prefix already gets
+  the bulk SWAR treatment via `ctrlOrHigh`. Fix shape: validate raw RUNS in
+  bulk instead of accumulating per byte — the loop copies byte-at-a-time
+  between escapes, so hoist each raw run (scan to the next `\` or `"` with
+  IndexByte, `ctrlOrHigh` the run, bulk-append it) rather than touching each
+  byte twice. That also restores bulk copying, which the current per-byte
+  append lost. Measure with the EscapeHeavy family (its avx512 control is
+  0.5% — the most trustworthy row in the suite).
+
 ## Tooling / coverage
 
 - **Improve fuzz coverage.** Current surface (`integrationtests/fuzz_test.go`):
@@ -109,6 +121,37 @@ surface pinned by `Decoder[T]`).
   subpackage with own `main.go`, reuse ggen's parse layer so checks stay in sync.
 
 ## Open design questions
+
+- **`-unsafe` / "turbo" generator mode — trust the input completely, drop every
+  guard.** Motivation: the 2026-07 jsonv2-parity work (opts #50-52) bought real
+  correctness but cost real throughput on some shapes, and there are consumers
+  who own both ends of the wire and want none of it. Idea: one flag /
+  annotation that strips EVERY safety property at generate time, so the emitted
+  code is the fastest thing that can still parse well-formed JSON. Candidates to
+  drop, with what the control-checked sweep says each is worth:
+    - UTF-8 validation (#50) → NoAlloc **−40% scalar / −28% avx512**,
+      RuneGated −35%/−9%, EscapeHeavy −11-13%. Already exists as
+      `allowinvalidutf8`; turbo would imply it.
+    - Recursion depth cap (#51) → DeepNested −5% scalar. Accepts the
+      stack-overflow DoS back.
+    - Strict number grammar (#52) → ~0 (it measured flat-to-faster, so
+      probably NOT worth dropping — keep it even in turbo).
+    - Duplicate-key detection → drops the `seenX` flags + their branches
+      entirely (today only declared keys are checked; see Tried Rejected).
+    - Required-field / validation / mods → already `-novalidate`.
+    - Grammar checks in skip: the `fastskip` idea (rolling quote parity +
+      depth counter, no grammar validation) parked under SIMD phase 3 — this
+      is where it belongs, and it's the biggest single win available:
+      **SkipHeavy is ggen's worst row vs sonic (0.10-0.28×) purely because
+      sonic_fast doesn't validate skipped content.**
+    - Possibly: `unsafe` bounds elision on the hot cursor (needs care — an
+      earlier pointer-arithmetic experiment REGRESSED, see Tried Rejected).
+  Shape: composes as a single `//ggen:generate unsafe` that ORs on the existing
+  opt-outs plus the new ones, so it is one switch rather than six. Must be
+  loudly documented as "well-formed input only — malformed input is UB, may
+  crash the process". Open question whether it also implies `-copy` off,
+  `ignoreunknown`, etc. Worth doing only if a consumer actually asks; the
+  headline number to chase is SkipHeavy, not the UTF-8 rows.
 
 - **base64 `StdEncoding` strips embedded `\r`/`\n` (minor jsonv2 divergence).**
   `{"b":"aG\nVsbG8="}` decodes to "hello" (Go stdlib base64 skips newlines by
