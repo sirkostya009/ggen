@@ -60,7 +60,7 @@ single-package mode. Processing is post-order over the matched import subgraph
 | `-marshal`       | emit `MarshalJSON` method                                                                                                                             |
 | `-unmarshal`     | emit `UnmarshalJSON` method                                                                                                                           |
 | `-multierr`      | accumulate validation failures into `validation.Errors`, returned at end of parse; parse errors still return immediately                              |
-| `-allowdups`     | allow duplicate keys, first-wins (later skipped). Default: `validation.DuplicateKeyError`                                                             |
+| `-allowdups`     | allow duplicate keys, first-wins (later skipped). Default: `validation.DuplicateKeyError`. NOTE the check is scoped to DECLARED keys (the per-field `seenX` flags) — dups inside skipped / `any` / raw / nested scopes are NOT detected, a decided divergence from jsonv2 (see backlog Tried Rejected) |
 | `-novalidate`    | skip validation rules, required-field checks, mods                                                                                                    |
 | `-ignoreunknown` | silently skip unknown JSON keys. Default: `validation.UnknownKeyError`. Overridden when an inline map field is present                                |
 | `-nullzero`      | accept explicit JSON `null` on every non-pointer value field → Go zero. Default hard-errors (see null kind-gating). No-op on already-null-aware kinds |

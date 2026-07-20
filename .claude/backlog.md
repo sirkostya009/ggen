@@ -105,18 +105,6 @@ surface pinned by `Decoder[T]`).
 
 ## Open design questions
 
-- **Duplicate keys undetected outside KNOWN top-level keys (jsonv2 divergence).**
-  ggen's `DuplicateKeyError` comes from the per-field `seenX` flags, so it only
-  covers DECLARED keys of the object being decoded. Dups pass silently inside:
-  `ignoreunknown`-skipped objects, `any`-typed values (the map just overwrites),
-  RawMessage spans, and nested sub-objects generally. jsonv2 rejects duplicate
-  names everywhere by default. Closing it means a seen-set per skipped/any/raw
-  object scope — an allocation per scope on paths that are currently
-  allocation-free, so it needs a real design (sorted small-slice? bloom on short
-  keys? only under an opt-in flag?). Lower confidence this is even wanted —
-  dup-rejection is itself a policy choice, and `-allowdups` already exists for
-  the known-key half. Surfaced by the 2026-07 post-UTF-8 divergence audit.
-
 - **base64 `StdEncoding` strips embedded `\r`/`\n` (minor jsonv2 divergence).**
   `{"b":"aG\nVsbG8="}` decodes to "hello" (Go stdlib base64 skips newlines by
   MIME leniency); jsonv2 rejects. Inherited from the stdlib default, one-line
@@ -125,7 +113,8 @@ surface pinned by `Decoder[T]`).
   audit batch.
 
   (The audit's other two finds SHIPPED: unbounded recursion depth → opt #51;
-  value-decoder number grammar → opt #52.)
+  value-decoder number grammar → opt #52. Its dup-key find was DECIDED as
+  intentional — see Tried Rejected.)
 
 - **Revisit `validation.CustomError` shape.** Today `{Field, Name string, Cause
   error}` + `Unwrap()`. Rough edges: `Name` doubles as rule identifier and
@@ -146,6 +135,21 @@ surface pinned by `Decoder[T]`).
   top-level alias types (needs a non-dispatch null branch in the alias renderers).
 
 # Tried Rejected
+
+- **Duplicate-key detection in skipped / `any` / raw / nested scopes.** ggen's
+  `DuplicateKeyError` comes from the per-field `seenX` flags, so it covers only
+  DECLARED keys of the object being decoded; dups pass silently inside
+  `ignoreunknown`-skipped objects, `any` values (map last-wins), RawMessage
+  spans, and nested sub-objects. jsonv2 rejects dup names everywhere. DECIDED
+  intentional (2026-07, user call): the contract is "the fields ggen actually
+  DECODES are unambiguous; content it never interprets is not policed". A dup
+  inside a skipped span cannot change the decoded value (the span is
+  discarded), `any` last-wins matches Go map semantics, and raw spans are
+  passed through verbatim for the consumer to judge. Enforcing it would need a
+  seen-set per skipped/any/raw object scope — an allocation on paths that are
+  currently allocation-free — to buy strictness with no effect on any decoded
+  result. `-allowdups` already covers the half that DOES matter. Don't
+  reintroduce without a concrete consumer that needs wire-level dup rejection.
 
 - **`VPERMB` whitespace classify in `skipSpaceAVX512Slow` (opt audit #10).**
   Replaced the avx512 4×Broadcast+4×Equal+4×ToBits+3×OR classify with one VPERMB
