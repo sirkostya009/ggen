@@ -65,9 +65,9 @@ Two more contracts in the same spirit:
   intentionally sides with v2). Pure-ASCII strings pay nothing for this check;
   non-ASCII strings pay one UTF-8 walk. Captured raw spans (`json.RawMessage` /
   `jsontext.Value`) are byte-validated too. Two deliberate exceptions: content
-  that is only *skipped* (unknown keys under `ignoreunknown`) is
+  that is only _skipped_ (unknown keys under `ignoreunknown`) is
   grammar-checked but not UTF-8-validated, and an unpaired `\uXXXX` surrogate
-  *escape* inside a raw span passes — it is plain ASCII text there (jsonv2
+  _escape_ inside a raw span passes — it is plain ASCII text there (jsonv2
   escape-parses raw strings and rejects it). Per-struct opt-out:
   `-allowinvalidutf8` / `//ggen:generate allowinvalidutf8` restores the
   permissive pass-through (see the flag table).
@@ -162,10 +162,10 @@ package api
 
 //ggen:generate
 type User struct {
-    ID    int      `json:"id"`
-    Name  string   `json:"name"   pipe:"required minlen=1 maxlen=64"`
-    Email string   `json:"email"  pipe:"trim lower contains=@"`
-    Tags  []string `json:"tags,omitempty" pipe:"inner:notempty"`
+	ID    int      `json:"id"`
+	Name  string   `json:"name"   pipe:"required minlen=1 maxlen=64"`
+	Email string   `json:"email"  pipe:"trim lower contains=@"`
+	Tags  []string `json:"tags,omitempty" pipe:"inner:notempty"`
 }
 ```
 
@@ -266,9 +266,9 @@ expose a small set of helpers for the patterns you'd actually use:
 
 ```go
 import (
-    "github.com/sirkostya009/ggen/decode"
-    "github.com/sirkostya009/ggen/encode"
-    "github.com/sirkostya009/ggen/scan"
+	"github.com/sirkostya009/ggen/decode"
+	"github.com/sirkostya009/ggen/encode"
+	"github.com/sirkostya009/ggen/scan"
 )
 
 // single value
@@ -289,24 +289,24 @@ Flags apply globally to the whole pass; annotations apply locally to a struct.
 Multiple annotation tokens are space-separated: `//ggen:generate marshal
 unmarshal multierr`.
 
-| CLI flag         | struct annotation | effect                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| ---------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `-o <path>`      | —                 | override output path (single-file or single-package mode only)                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `-pkg <name>`    | —                 | override the package name in the generated file                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `-marshal`       | `marshal`         | also emit a `MarshalJSON` hook so the type satisfies `encoding/json.Marshaler`                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `-unmarshal`     | `unmarshal`       | also emit an `UnmarshalJSON` hook for `encoding/json.Unmarshaler`                                                                                                                                                                                                                                                                                                                                                                                                               |
-| `-multierr`      | `multierr`        | accumulate every validation failure into `validation.Errors` instead of returning on the first one                                                                                                                                                                                                                                                                                                                                                                              |
-| `-allowdups`     | `allowdups`       | accept duplicate JSON keys with first-wins semantics — the first occurrence is parsed, later ones are skipped via `scan.SkipValue` without being decoded (default: error on the second hit)                                                                                                                                                                                                                                                                                     |
-| `-novalidate`    | `novalidate`      | drop validation, required-field checks, and mods entirely — fastest decode path                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `-ignoreunknown` | `ignoreunknown`   | silently drop unknown JSON keys (default: error). overridden by an inline catch-all map field                                                                                                                                                                                                                                                                                                                                                                                   |
-| `-nullzero`      | `nullzero`        | accept an explicit JSON `null` on every non-pointer value field, decoding it to the Go zero value (default: error). a per-field `nullzero` decode variant in `pipe:` opts in a single field                                                                                                                                                                                                                                                                                     |
-| `-nosortkeys`    | `nosortkeys`      | emit struct fields in declaration order (default: alphabetical by JSON name, compresses better)                                                                                                                                                                                                                                                                                                                                                                                 |
-| `-usenumber`     | `usenumber`       | decode numbers in `any` fields as `json.Number` instead of `float64`                                                                                                                                                                                                                                                                                                                                                                                                            |
-| `-htmlescape`    | `htmlescape`      | escape `<`, `>`, `&` to `\uXXXX` for safe embedding in HTML (default: literal, matches `encoding/json` v2 — v2 dropped HTML escaping as a default)                                                                                                                                                                                                                                                                                                                              |
-| `-allowinvalidutf8` | `allowinvalidutf8` | skip decode-side UTF-8 validation for this struct: invalid bytes flow into string fields / keys / raw spans untouched, unpaired `\uXXXX` surrogates decode to U+FFFD (default: reject with `scan.ErrInvalidUTF8`, jsonv2 parity). Grammar checks unaffected. Decode-only |
-| `-copy`          | `copy`            | copy decoded strings and `json.RawMessage` (and strings inside `any` fields) out of the input buffer instead of aliasing it, so you may reuse or mutate the input after `DecodeFrom` returns (default: zero-copy aliasing — faster, but the input must stay alive and unmodified for as long as the decoded values are used). Decode-only; allocates more                                                                                                                       |
-| `-dry`           | —                 | parse and validate every annotated struct, surface every error, emit no file. Useful in CI/pre-commit to fail fast on broken tags or annotations. Rejects `-o` / `-pkg`                                                                                                                                                                                                                                                                                                         |
-| `-simd <tier>`   | —                 | SIMD tier for string scans and marshal escape scans: `off`, `avx`, `avx2`, `avx512`. Running ggen under `GOEXPERIMENT=simd` auto-selects `avx`; `avx2`/`avx512` are explicit opt-ins (and require the env var). The tier is baked into the generated code — no runtime CPU probing or branching — so generated code `GOEXPERIMENT=simd` to build and a CPU with that instruction set to run. You can get from 1% to 90% performance improvement depending on payload |
+| CLI flag            | struct annotation  | effect                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ------------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-o <path>`         | —                  | override output path (single-file or single-package mode only)                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `-pkg <name>`       | —                  | override the package name in the generated file                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `-marshal`          | `marshal`          | also emit a `MarshalJSON` hook so the type satisfies `encoding/json.Marshaler`                                                                                                                                                                                                                                                                                                                                                                                       |
+| `-unmarshal`        | `unmarshal`        | also emit an `UnmarshalJSON` hook for `encoding/json.Unmarshaler`                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `-multierr`         | `multierr`         | accumulate every validation failure into `validation.Errors` instead of returning on the first one                                                                                                                                                                                                                                                                                                                                                                   |
+| `-allowdups`        | `allowdups`        | accept duplicate JSON keys with first-wins semantics — the first occurrence is parsed, later ones are skipped via `scan.SkipValue` without being decoded (default: error on the second hit)                                                                                                                                                                                                                                                                          |
+| `-novalidate`       | `novalidate`       | drop validation, required-field checks, and mods entirely — fastest decode path                                                                                                                                                                                                                                                                                                                                                                                      |
+| `-ignoreunknown`    | `ignoreunknown`    | silently drop unknown JSON keys (default: error). overridden by an inline catch-all map field                                                                                                                                                                                                                                                                                                                                                                        |
+| `-nullzero`         | `nullzero`         | accept an explicit JSON `null` on every non-pointer value field, decoding it to the Go zero value (default: error). a per-field `nullzero` decode variant in `pipe:` opts in a single field                                                                                                                                                                                                                                                                          |
+| `-nosortkeys`       | `nosortkeys`       | emit struct fields in declaration order (default: alphabetical by JSON name, compresses better)                                                                                                                                                                                                                                                                                                                                                                      |
+| `-usenumber`        | `usenumber`        | decode numbers in `any` fields as `json.Number` instead of `float64`                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `-htmlescape`       | `htmlescape`       | escape `<`, `>`, `&` to `\uXXXX` for safe embedding in HTML (default: literal, matches `encoding/json` v2 — v2 dropped HTML escaping as a default)                                                                                                                                                                                                                                                                                                                   |
+| `-allowinvalidutf8` | `allowinvalidutf8` | skip decode-side UTF-8 validation for this struct: invalid bytes flow into string fields / keys / raw spans untouched, unpaired `\uXXXX` surrogates decode to U+FFFD (default: reject with `scan.ErrInvalidUTF8`, jsonv2 parity). Grammar checks unaffected. Decode-only                                                                                                                                                                                             |
+| `-copy`             | `copy`             | copy decoded strings and `json.RawMessage` (and strings inside `any` fields) out of the input buffer instead of aliasing it, so you may reuse or mutate the input after `DecodeFrom` returns (default: zero-copy aliasing — faster, but the input must stay alive and unmodified for as long as the decoded values are used). Decode-only; allocates more                                                                                                            |
+| `-dry`              | —                  | parse and validate every annotated struct, surface every error, emit no file. Useful in CI/pre-commit to fail fast on broken tags or annotations. Rejects `-o` / `-pkg`                                                                                                                                                                                                                                                                                              |
+| `-simd <tier>`      | —                  | SIMD tier for string scans and marshal escape scans: `off`, `avx`, `avx2`, `avx512`. Running ggen under `GOEXPERIMENT=simd` auto-selects `avx`; `avx2`/`avx512` are explicit opt-ins (and require the env var). The tier is baked into the generated code — no runtime CPU probing or branching — so generated code `GOEXPERIMENT=simd` to build and a CPU with that instruction set to run. You can get from 1% to 90% performance improvement depending on payload |
 
 ## struct tags
 
@@ -436,8 +436,8 @@ forms take an inline message: `@MustBeEven:'value must be even'`.
 ```go
 //ggen:generate
 type Box struct {
-    N int `json:"n" pipe:"@EvenOnly"`        // func(int) error → validator
-    M int `json:"m" pipe:"@MustBeEven:'must be even'"` // func(int) bool
+	N int `json:"n" pipe:"@EvenOnly"`        // func(int) error → validator
+	M int `json:"m" pipe:"@MustBeEven:'must be even'"` // func(int) bool
 }
 func EvenOnly(n int) error { if n%2 != 0 { return errors.New("must be even") }; return nil }
 func MustBeEven(n int) bool { return n%2 == 0 }
@@ -458,9 +458,9 @@ disables preallocation; a negative hint is a generate-time error.
 ```go
 var minlen *validation.MinLenError
 if errors.As(err, &minlen) {
-    // minlen.Path  — root-relative path segments, e.g. ["addr", "zip"]
-    // minlen.Limit, minlen.Got
-    // minlen.Pos   — byte offset of the failure, relative to the full payload
+	// minlen.Path  — root-relative path segments, e.g. ["addr", "zip"]
+	// minlen.Limit, minlen.Got
+	// minlen.Pos   — byte offset of the failure, relative to the full payload
 }
 ```
 
@@ -480,9 +480,9 @@ was working on and a byte offset:
 ```go
 var pe *decode.ParseError
 if errors.As(err, &pe) {
-    // pe.Field — dotted JSON path, e.g. "addr.street"
-    // pe.Pos   — byte offset within the data slice passed to DecodeFrom
-    // pe.Err   — underlying sentinel (scan.ErrBadString, scan.ErrBadObject, …)
+	// pe.Field — dotted JSON path, e.g. "addr.street"
+	// pe.Pos   — byte offset within the data slice passed to DecodeFrom
+	// pe.Err   — underlying sentinel (scan.ErrBadString, scan.ErrBadObject, …)
 }
 
 // The wrap is transparent to errors.Is — the underlying scan sentinel
@@ -567,10 +567,10 @@ type LocalUUID uuid.UUID  // delegates to uuid.UUID's TextMarshaler
 
 //ggen:generate
 type Comment struct {
-    ID     UserID     `json:"id"     pipe:"gte=1"`                           // numeric alias, no quoting; gte runs against int
-    Author string     `json:"author" pipe:"required trim minlen=1"`         // plain string, fast path
-    Body   HtmlString `json:"body"   pipe:"required trim lower maxlen=4096"` // \uXXXX-escaped via the alias; mods cast through string
-    Tags   Tags       `json:"tags"   pipe:"inner:notempty"`                 // inner: runs against each element
+	ID     UserID     `json:"id"     pipe:"gte=1"`                           // numeric alias, no quoting; gte runs against int
+	Author string     `json:"author" pipe:"required trim minlen=1"`         // plain string, fast path
+	Body   HtmlString `json:"body"   pipe:"required trim lower maxlen=4096"` // \uXXXX-escaped via the alias; mods cast through string
+	Tags   Tags       `json:"tags"   pipe:"inner:notempty"`                 // inner: runs against each element
 }
 ```
 
@@ -623,8 +623,8 @@ potentially slow network streams.
 ```go
 //ggen:generate
 type CreateUser struct {
-    Email string `json:"email" pipe:"required contains=@"`
-    Bio   string `json:"bio"   pipe:"maxlen=4096"`
+	Email string `json:"email" pipe:"required contains=@"`
+	Bio   string `json:"bio"   pipe:"maxlen=4096"`
 }
 
 var bufPool = sync.Pool{New: func() any {
@@ -658,13 +658,13 @@ func handler(w http.ResponseWriter, r *http.Request) {
 ```go
 //ggen:generate
 type Order struct {
-    Items []Item `json:"items" pipe:"required minlen=1 maxlen=100 inner:required"`
+	Items []Item `json:"items" pipe:"required minlen=1 maxlen=100 inner:required"`
 }
 
 //ggen:generate
 type Item struct {
-    SKU string `json:"sku" pipe:"required len=12 alphanum upper"`
-    Qty int    `json:"qty" pipe:"required gte=1 lte=999"`
+	SKU string `json:"sku" pipe:"required len=12 alphanum upper"`
+	Qty int    `json:"qty" pipe:"required gte=1 lte=999"`
 }
 ```
 
@@ -673,14 +673,14 @@ type Item struct {
 ```go
 //ggen:generate
 type Event struct {
-    Type string         `json:"type"`
-    Data map[string]any `json:",inline"` // absorbs every unknown key
+	Type string         `json:"type"`
+	Data map[string]any `json:",inline"` // absorbs every unknown key
 }
 ```
 
 ## colophon
 
-this whole project was vibe coded with claude opus 4.7. every line of
+this whole project was vibe coded with claude code. every line of
 the generator, the runtime libraries, the tests, the fuzzers — typed
 by the model, steered by me. i didnt really care about code of the
 generator, instead im laser focused on quality of the _generated_ code.
