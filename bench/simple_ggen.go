@@ -94,6 +94,9 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
 				return result, i, decode.NewParseErr("age", i, scan.ErrBadNumber)
 			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+				return result, i, decode.NewParseErr("age", i, scan.ErrBadNumber)
+			}
 			var n uint64
 			de := i + 19
 			if de > len(data) {
@@ -223,6 +226,9 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
 				return result, i, decode.NewParseErr("createdAt", i, scan.ErrBadNumber)
 			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+				return result, i, decode.NewParseErr("createdAt", i, scan.ErrBadNumber)
+			}
 			limit := uint64(math.MaxInt64)
 			if neg {
 				limit = scan.SignedNeg
@@ -328,6 +334,9 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
 				return result, i, decode.NewParseErr("failedLogins", i, scan.ErrBadNumber)
 			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+				return result, i, decode.NewParseErr("failedLogins", i, scan.ErrBadNumber)
+			}
 			var n uint64
 			de := i + 19
 			if de > len(data) {
@@ -387,6 +396,9 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
 				return result, i, decode.NewParseErr("followerCount", i, scan.ErrBadNumber)
 			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+				return result, i, decode.NewParseErr("followerCount", i, scan.ErrBadNumber)
+			}
 			limit := uint64(math.MaxInt64)
 			if neg {
 				limit = scan.SignedNeg
@@ -438,6 +450,9 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
 				return result, i, decode.NewParseErr("followingCount", i, scan.ErrBadNumber)
 			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+				return result, i, decode.NewParseErr("followingCount", i, scan.ErrBadNumber)
+			}
 			limit := uint64(math.MaxInt64)
 			if neg {
 				limit = scan.SignedNeg
@@ -484,6 +499,9 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
 				return result, i, decode.NewParseErr("id", i, scan.ErrBadNumber)
 			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+				return result, i, decode.NewParseErr("id", i, scan.ErrBadNumber)
+			}
 			var n uint64
 			de := i + 19
 			if de > len(data) {
@@ -513,6 +531,9 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 				i++
 			}
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
+				return result, i, decode.NewParseErr("lastLogin", i, scan.ErrBadNumber)
+			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
 				return result, i, decode.NewParseErr("lastLogin", i, scan.ErrBadNumber)
 			}
 			limit := uint64(math.MaxInt64)
@@ -611,6 +632,9 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
 				return result, i, decode.NewParseErr("loginCount", i, scan.ErrBadNumber)
 			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+				return result, i, decode.NewParseErr("loginCount", i, scan.ErrBadNumber)
+			}
 			var n uint64
 			de := i + 19
 			if de > len(data) {
@@ -695,6 +719,9 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
 				return result, i, decode.NewParseErr("postCount", i, scan.ErrBadNumber)
 			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+				return result, i, decode.NewParseErr("postCount", i, scan.ErrBadNumber)
+			}
 			limit := uint64(math.MaxInt64)
 			if neg {
 				limit = scan.SignedNeg
@@ -766,6 +793,9 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
 				return result, i, decode.NewParseErr("reputation", i, scan.ErrBadNumber)
 			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+				return result, i, decode.NewParseErr("reputation", i, scan.ErrBadNumber)
+			}
 			limit := uint64(math.MaxInt64)
 			if neg {
 				limit = scan.SignedNeg
@@ -820,6 +850,9 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
 				return result, i, decode.NewParseErr("storageQuota", i, scan.ErrBadNumber)
 			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+				return result, i, decode.NewParseErr("storageQuota", i, scan.ErrBadNumber)
+			}
 			limit := uint64(math.MaxInt64)
 			if neg {
 				limit = scan.SignedNeg
@@ -869,6 +902,9 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 				i++
 			}
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
+				return result, i, decode.NewParseErr("storageUsed", i, scan.ErrBadNumber)
+			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
 				return result, i, decode.NewParseErr("storageUsed", i, scan.ErrBadNumber)
 			}
 			limit := uint64(math.MaxInt64)
@@ -947,6 +983,9 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 				i++
 			}
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
+				return result, i, decode.NewParseErr("updatedAt", i, scan.ErrBadNumber)
+			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
 				return result, i, decode.NewParseErr("updatedAt", i, scan.ErrBadNumber)
 			}
 			limit := uint64(math.MaxInt64)
@@ -2504,6 +2543,9 @@ func (recv Company) DecodeFrom(data []byte) (result Company, i int, err error) {
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
 				return result, i, decode.NewParseErr("founded", i, scan.ErrBadNumber)
 			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+				return result, i, decode.NewParseErr("founded", i, scan.ErrBadNumber)
+			}
 			limit := uint64(math.MaxInt64)
 			if neg {
 				limit = scan.SignedNeg
@@ -2556,6 +2598,9 @@ func (recv Company) DecodeFrom(data []byte) (result Company, i int, err error) {
 				i++
 			}
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
+				return result, i, decode.NewParseErr("headcount", i, scan.ErrBadNumber)
+			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
 				return result, i, decode.NewParseErr("headcount", i, scan.ErrBadNumber)
 			}
 			limit := uint64(math.MaxInt64)
@@ -2990,6 +3035,9 @@ func (recv Preferences) DecodeFrom(data []byte) (result Preferences, i int, err 
 			}
 			seenItemsPerPage = true
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
+				return result, i, decode.NewParseErr("itemsPerPage", i, scan.ErrBadNumber)
+			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
 				return result, i, decode.NewParseErr("itemsPerPage", i, scan.ErrBadNumber)
 			}
 			var n uint64
@@ -3448,6 +3496,9 @@ func (recv CopyAccount) DecodeFrom(data []byte) (result CopyAccount, i int, err 
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
 				return result, i, decode.NewParseErr("age", i, scan.ErrBadNumber)
 			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+				return result, i, decode.NewParseErr("age", i, scan.ErrBadNumber)
+			}
 			var n uint64
 			de := i + 19
 			if de > len(data) {
@@ -3580,6 +3631,9 @@ func (recv CopyAccount) DecodeFrom(data []byte) (result CopyAccount, i int, err 
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
 				return result, i, decode.NewParseErr("createdAt", i, scan.ErrBadNumber)
 			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+				return result, i, decode.NewParseErr("createdAt", i, scan.ErrBadNumber)
+			}
 			limit := uint64(math.MaxInt64)
 			if neg {
 				limit = scan.SignedNeg
@@ -3687,6 +3741,9 @@ func (recv CopyAccount) DecodeFrom(data []byte) (result CopyAccount, i int, err 
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
 				return result, i, decode.NewParseErr("failedLogins", i, scan.ErrBadNumber)
 			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+				return result, i, decode.NewParseErr("failedLogins", i, scan.ErrBadNumber)
+			}
 			var n uint64
 			de := i + 19
 			if de > len(data) {
@@ -3747,6 +3804,9 @@ func (recv CopyAccount) DecodeFrom(data []byte) (result CopyAccount, i int, err 
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
 				return result, i, decode.NewParseErr("followerCount", i, scan.ErrBadNumber)
 			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+				return result, i, decode.NewParseErr("followerCount", i, scan.ErrBadNumber)
+			}
 			limit := uint64(math.MaxInt64)
 			if neg {
 				limit = scan.SignedNeg
@@ -3798,6 +3858,9 @@ func (recv CopyAccount) DecodeFrom(data []byte) (result CopyAccount, i int, err 
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
 				return result, i, decode.NewParseErr("followingCount", i, scan.ErrBadNumber)
 			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+				return result, i, decode.NewParseErr("followingCount", i, scan.ErrBadNumber)
+			}
 			limit := uint64(math.MaxInt64)
 			if neg {
 				limit = scan.SignedNeg
@@ -3844,6 +3907,9 @@ func (recv CopyAccount) DecodeFrom(data []byte) (result CopyAccount, i int, err 
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
 				return result, i, decode.NewParseErr("id", i, scan.ErrBadNumber)
 			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+				return result, i, decode.NewParseErr("id", i, scan.ErrBadNumber)
+			}
 			var n uint64
 			de := i + 19
 			if de > len(data) {
@@ -3873,6 +3939,9 @@ func (recv CopyAccount) DecodeFrom(data []byte) (result CopyAccount, i int, err 
 				i++
 			}
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
+				return result, i, decode.NewParseErr("lastLogin", i, scan.ErrBadNumber)
+			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
 				return result, i, decode.NewParseErr("lastLogin", i, scan.ErrBadNumber)
 			}
 			limit := uint64(math.MaxInt64)
@@ -3973,6 +4042,9 @@ func (recv CopyAccount) DecodeFrom(data []byte) (result CopyAccount, i int, err 
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
 				return result, i, decode.NewParseErr("loginCount", i, scan.ErrBadNumber)
 			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+				return result, i, decode.NewParseErr("loginCount", i, scan.ErrBadNumber)
+			}
 			var n uint64
 			de := i + 19
 			if de > len(data) {
@@ -4059,6 +4131,9 @@ func (recv CopyAccount) DecodeFrom(data []byte) (result CopyAccount, i int, err 
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
 				return result, i, decode.NewParseErr("postCount", i, scan.ErrBadNumber)
 			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+				return result, i, decode.NewParseErr("postCount", i, scan.ErrBadNumber)
+			}
 			limit := uint64(math.MaxInt64)
 			if neg {
 				limit = scan.SignedNeg
@@ -4130,6 +4205,9 @@ func (recv CopyAccount) DecodeFrom(data []byte) (result CopyAccount, i int, err 
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
 				return result, i, decode.NewParseErr("reputation", i, scan.ErrBadNumber)
 			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+				return result, i, decode.NewParseErr("reputation", i, scan.ErrBadNumber)
+			}
 			limit := uint64(math.MaxInt64)
 			if neg {
 				limit = scan.SignedNeg
@@ -4184,6 +4262,9 @@ func (recv CopyAccount) DecodeFrom(data []byte) (result CopyAccount, i int, err 
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
 				return result, i, decode.NewParseErr("storageQuota", i, scan.ErrBadNumber)
 			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+				return result, i, decode.NewParseErr("storageQuota", i, scan.ErrBadNumber)
+			}
 			limit := uint64(math.MaxInt64)
 			if neg {
 				limit = scan.SignedNeg
@@ -4233,6 +4314,9 @@ func (recv CopyAccount) DecodeFrom(data []byte) (result CopyAccount, i int, err 
 				i++
 			}
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
+				return result, i, decode.NewParseErr("storageUsed", i, scan.ErrBadNumber)
+			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
 				return result, i, decode.NewParseErr("storageUsed", i, scan.ErrBadNumber)
 			}
 			limit := uint64(math.MaxInt64)
@@ -4311,6 +4395,9 @@ func (recv CopyAccount) DecodeFrom(data []byte) (result CopyAccount, i int, err 
 				i++
 			}
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
+				return result, i, decode.NewParseErr("updatedAt", i, scan.ErrBadNumber)
+			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
 				return result, i, decode.NewParseErr("updatedAt", i, scan.ErrBadNumber)
 			}
 			limit := uint64(math.MaxInt64)
@@ -5617,6 +5704,9 @@ func (recv CopyCompany) DecodeFrom(data []byte) (result CopyCompany, i int, err 
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
 				return result, i, decode.NewParseErr("founded", i, scan.ErrBadNumber)
 			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+				return result, i, decode.NewParseErr("founded", i, scan.ErrBadNumber)
+			}
 			limit := uint64(math.MaxInt64)
 			if neg {
 				limit = scan.SignedNeg
@@ -5669,6 +5759,9 @@ func (recv CopyCompany) DecodeFrom(data []byte) (result CopyCompany, i int, err 
 				i++
 			}
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
+				return result, i, decode.NewParseErr("headcount", i, scan.ErrBadNumber)
+			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
 				return result, i, decode.NewParseErr("headcount", i, scan.ErrBadNumber)
 			}
 			limit := uint64(math.MaxInt64)
@@ -6106,6 +6199,9 @@ func (recv CopyPreferences) DecodeFrom(data []byte) (result CopyPreferences, i i
 			}
 			seenItemsPerPage = true
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
+				return result, i, decode.NewParseErr("itemsPerPage", i, scan.ErrBadNumber)
+			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
 				return result, i, decode.NewParseErr("itemsPerPage", i, scan.ErrBadNumber)
 			}
 			var n uint64

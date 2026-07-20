@@ -604,6 +604,18 @@ func (s *Stream) Int64() (int64, error) {
 	if s.buf[i] < '0' || s.buf[i] > '9' {
 		return 0, ErrBadNumber
 	}
+	// RFC 8259: no leading zeros. A '0' first digit must end the integer part;
+	// peek one byte (refilling if the window ends here) to catch "01".
+	if s.buf[i] == '0' {
+		if i+1 >= len(s.buf) {
+			if err := s.ReadMore(i); err == nil {
+				i = 0
+			}
+		}
+		if i+1 < len(s.buf) && s.buf[i+1] >= '0' && s.buf[i+1] <= '9' {
+			return 0, ErrBadNumber
+		}
+	}
 	limit := uint64(math.MaxInt64)
 	if neg {
 		limit = SignedNeg
@@ -668,6 +680,17 @@ func (s *Stream) Uint64() (uint64, error) {
 	}
 	if s.buf[i] < '0' || s.buf[i] > '9' {
 		return 0, ErrBadNumber
+	}
+	// RFC 8259: no leading zeros — see Int64.
+	if s.buf[i] == '0' {
+		if i+1 >= len(s.buf) {
+			if err := s.ReadMore(i); err == nil {
+				i = 0
+			}
+		}
+		if i+1 < len(s.buf) && s.buf[i+1] >= '0' && s.buf[i+1] <= '9' {
+			return 0, ErrBadNumber
+		}
 	}
 	var n uint64
 	buf := s.buf
@@ -743,6 +766,13 @@ scan:
 		buf = s.buf
 	}
 	if i == start {
+		return 0, ErrBadNumber
+	}
+	// The refill loop collects a LOOSE [0-9.eE+-] span (it doubles as the
+	// extent finder across refills), so validate the assembled — now
+	// contiguous — span against the RFC 8259 grammar before parsing, matching
+	// the bytes path. Short, L1-hot second pass on the stream tier.
+	if end, gerr := skipNumber(s.buf[start:i], 0); gerr != nil || end != i-start {
 		return 0, ErrBadNumber
 	}
 	// Short spans skip ParseFloat's re-scan when exactly representable —
@@ -1284,7 +1314,10 @@ scan:
 		}
 		buf = s.buf
 	}
-	if i == start || (i == start+1 && s.buf[start] == '-') {
+	if i == start {
+		return "", ErrBadNumber
+	}
+	if end, gerr := skipNumber(s.buf[start:i], 0); gerr != nil || end != i-start {
 		return "", ErrBadNumber
 	}
 	s.Pos = i

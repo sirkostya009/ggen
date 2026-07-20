@@ -2418,6 +2418,7 @@ func inlineScanInt64Stmt(b *bytes.Buffer, posVar, field, stmt string) {
 	fmt.Fprintf(b, `neg := false
 if %[1]s < len(data) && data[%[1]s] == '-' { neg = true; %[1]s++ }
 if %[1]s >= len(data) || data[%[1]s] < '0' || data[%[1]s] > '9' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrBadNumber) }
+if data[%[1]s] == '0' && %[1]s+1 < len(data) && data[%[1]s+1] >= '0' && data[%[1]s+1] <= '9' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrBadNumber) }
 limit := uint64(math.MaxInt64)
 if neg { limit = scan.SignedNeg }
 var u uint64
@@ -2467,6 +2468,7 @@ func inlineScanUint64(b *bytes.Buffer, posVar, dst, castFn, field string) {
 // see inlineScanInt64Stmt.
 func inlineScanUint64Stmt(b *bytes.Buffer, posVar, field, stmt string) {
 	fmt.Fprintf(b, `if %[1]s >= len(data) || data[%[1]s] < '0' || data[%[1]s] > '9' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrBadNumber) }
+if data[%[1]s] == '0' && %[1]s+1 < len(data) && data[%[1]s+1] >= '0' && data[%[1]s+1] <= '9' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrBadNumber) }
 var n uint64
 de := %[1]s + 19
 if de > len(data) { de = len(data) }
@@ -3804,21 +3806,24 @@ default: return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, scan.ErrBadBool)
 }
 `, ref, posVar, field)
 	case KindFloat32, KindFloat64:
-		b.WriteString("f, err := strconv.ParseFloat(sv, 64)\n" + errCheck)
+		b.WriteString("f, err := strconv.ParseFloat(sv, 64)\n")
+		b.WriteString(errCheck)
 		if f.Kind == KindFloat32 {
 			fmt.Fprintf(b, "%s = float32(f)\n", ref)
 		} else {
 			fmt.Fprintf(b, "%s = f\n", ref)
 		}
 	case KindUint, KindUint8, KindUint16, KindUint32, KindUint64:
-		b.WriteString("u, err := strconv.ParseUint(sv, 10, 64)\n" + errCheck)
+		b.WriteString("u, err := strconv.ParseUint(sv, 10, 64)\n")
+		b.WriteString(errCheck)
 		if f.Kind == KindUint64 {
 			fmt.Fprintf(b, "%s = u\n", ref)
 		} else {
 			fmt.Fprintf(b, "%s = %s(u)\n", ref, f.GoType)
 		}
 	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
-		b.WriteString("n, err := strconv.ParseInt(sv, 10, 64)\n" + errCheck)
+		b.WriteString("n, err := strconv.ParseInt(sv, 10, 64)\n")
+		b.WriteString(errCheck)
 		if f.Kind == KindInt64 {
 			fmt.Fprintf(b, "%s = n\n", ref)
 		} else {
@@ -5332,21 +5337,24 @@ default: return result, decode.NewParseErr(%[2]s, s.Pos, scan.ErrBadBool)
 }
 `, ref, field)
 	case KindFloat32, KindFloat64:
-		b.WriteString("f, err := strconv.ParseFloat(sv, 64)\n" + chk)
+		b.WriteString("f, err := strconv.ParseFloat(sv, 64)\n")
+		b.WriteString(chk)
 		if f.Kind == KindFloat32 {
 			fmt.Fprintf(b, "%s = float32(f)\n", ref)
 		} else {
 			fmt.Fprintf(b, "%s = f\n", ref)
 		}
 	case KindUint, KindUint8, KindUint16, KindUint32, KindUint64:
-		b.WriteString("u, err := strconv.ParseUint(sv, 10, 64)\n" + chk)
+		b.WriteString("u, err := strconv.ParseUint(sv, 10, 64)\n")
+		b.WriteString(chk)
 		if f.Kind == KindUint64 {
 			fmt.Fprintf(b, "%s = u\n", ref)
 		} else {
 			fmt.Fprintf(b, "%s = %s(u)\n", ref, f.GoType)
 		}
 	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
-		b.WriteString("n, err := strconv.ParseInt(sv, 10, 64)\n" + chk)
+		b.WriteString("n, err := strconv.ParseInt(sv, 10, 64)\n")
+		b.WriteString(chk)
 		if f.Kind == KindInt64 {
 			fmt.Fprintf(b, "%s = n\n", ref)
 		} else {

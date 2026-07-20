@@ -105,26 +105,27 @@ surface pinned by `Decoder[T]`).
 
 ## Open design questions
 
-- **Number-grammar strictness in the VALUE decoders (jsonv2 divergence).**
-  `scan.Int64`/`Float64` accept malformed JSON numbers the grammar (and jsonv2)
-  reject: leading zeros (`01`), bare/trailing dot (`.5`, `1.`), leading `+`.
-  Root cause — `Float64` hands a loose `[0-9.eE+-]` span to
-  `strconv.ParseFloat` (a Go-number parser, not JSON); `Int64`'s digit loop has
-  no leading-zero rule. **Asymmetry already in-tree:** the SKIP path
-  (`skipNumber`, used for RawMessage / `ignoreunknown`) IS strict and rejects
-  all of these, so `{"raw":01}` rejects but `{"i":01}` accepts. Fixing means a
-  leading-zero check in the int loop + a strict JSON-number span validator
-  before `ParseFloat` (or fold the `skipNumber` grammar into `Float64`). DEFERRED
-  (2026-07, user call): correctly-formed numbers are unaffected — this only
-  fires on malformed input, and the strictening has a real hot-path cost to
-  measure (the exact-short float gate + `ParseFloat` handoff would grow a
-  pre-validation pass). Surfaced by the post-UTF-8 divergence audit; that same
-  audit's headline find (unbounded recursion depth) SHIPPED as opt #51.
-  Lower-severity audit leftovers, same batch: duplicate keys go undetected
-  inside skipped / `any` / raw / nested scopes (ggen's `seenX` flags only cover
-  KNOWN top-level keys; jsonv2 rejects dups everywhere) and base64
-  `StdEncoding` silently strips embedded `\r`/`\n` (stdlib default; jsonv2
-  rejects). Both minor; bundle with this if the number path is ever strictened.
+- **Duplicate keys undetected outside KNOWN top-level keys (jsonv2 divergence).**
+  ggen's `DuplicateKeyError` comes from the per-field `seenX` flags, so it only
+  covers DECLARED keys of the object being decoded. Dups pass silently inside:
+  `ignoreunknown`-skipped objects, `any`-typed values (the map just overwrites),
+  RawMessage spans, and nested sub-objects generally. jsonv2 rejects duplicate
+  names everywhere by default. Closing it means a seen-set per skipped/any/raw
+  object scope — an allocation per scope on paths that are currently
+  allocation-free, so it needs a real design (sorted small-slice? bloom on short
+  keys? only under an opt-in flag?). Lower confidence this is even wanted —
+  dup-rejection is itself a policy choice, and `-allowdups` already exists for
+  the known-key half. Surfaced by the 2026-07 post-UTF-8 divergence audit.
+
+- **base64 `StdEncoding` strips embedded `\r`/`\n` (minor jsonv2 divergence).**
+  `{"b":"aG\nVsbG8="}` decodes to "hello" (Go stdlib base64 skips newlines by
+  MIME leniency); jsonv2 rejects. Inherited from the stdlib default, one-line
+  fix if wanted (pre-check the span for `\r`/`\n` before `AppendDecode`), but it
+  costs a scan on every `[]byte` field for an input class nobody sends. Same
+  audit batch.
+
+  (The audit's other two finds SHIPPED: unbounded recursion depth → opt #51;
+  value-decoder number grammar → opt #52.)
 
 - **Revisit `validation.CustomError` shape.** Today `{Field, Name string, Cause
   error}` + `Unwrap()`. Rough edges: `Name` doubles as rule identifier and

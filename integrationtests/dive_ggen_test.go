@@ -90,6 +90,9 @@ func (recv DiveStruct) DecodeFrom(data []byte) (result DiveStruct, i int, err er
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
 				return result, i, decode.NewParseErr("count", i, scan.ErrBadNumber)
 			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+				return result, i, decode.NewParseErr("count", i, scan.ErrBadNumber)
+			}
 			limit := uint64(math.MaxInt64)
 			if neg {
 				limit = scan.SignedNeg
@@ -170,6 +173,9 @@ func (recv DiveStruct) DecodeFrom(data []byte) (result DiveStruct, i int, err er
 						i++
 					}
 					if i >= len(data) || data[i] < '0' || data[i] > '9' {
+						return result, i, decode.NewParseErr("scores", i, scan.ErrBadNumber)
+					}
+					if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
 						return result, i, decode.NewParseErr("scores", i, scan.ErrBadNumber)
 					}
 					limit := uint64(math.MaxInt64)
@@ -888,6 +894,9 @@ func (recv CustomDiveStruct) DecodeFrom(data []byte) (result CustomDiveStruct, i
 					if i >= len(data) || data[i] < '0' || data[i] > '9' {
 						return result, i, decode.NewParseErr("lookup", i, scan.ErrBadNumber)
 					}
+					if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+						return result, i, decode.NewParseErr("lookup", i, scan.ErrBadNumber)
+					}
 					limit := uint64(math.MaxInt64)
 					if neg {
 						limit = scan.SignedNeg
@@ -1014,6 +1023,9 @@ func (recv CustomDiveStruct) DecodeFrom(data []byte) (result CustomDiveStruct, i
 					if i >= len(data) || data[i] < '0' || data[i] > '9' {
 						return result, i, decode.NewParseErr("mixed", i, scan.ErrBadNumber)
 					}
+					if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+						return result, i, decode.NewParseErr("mixed", i, scan.ErrBadNumber)
+					}
 					limit := uint64(math.MaxInt64)
 					if neg {
 						limit = scan.SignedNeg
@@ -1087,6 +1099,9 @@ func (recv CustomDiveStruct) DecodeFrom(data []byte) (result CustomDiveStruct, i
 					i++
 				}
 				if i >= len(data) || data[i] < '0' || data[i] > '9' {
+					return result, i, decode.NewParseErr("ptr", i, scan.ErrBadNumber)
+				}
+				if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
 					return result, i, decode.NewParseErr("ptr", i, scan.ErrBadNumber)
 				}
 				limit := uint64(math.MaxInt64)

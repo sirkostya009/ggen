@@ -319,6 +319,9 @@ func (recv PtrCountStruct) DecodeFrom(data []byte) (result PtrCountStruct, i int
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
 				return result, i, decode.NewParseErr("count", i, scan.ErrBadNumber)
 			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+				return result, i, decode.NewParseErr("count", i, scan.ErrBadNumber)
+			}
 			limit := uint64(math.MaxInt64)
 			if neg {
 				limit = scan.SignedNeg
@@ -1495,6 +1498,9 @@ func (recv PointerStruct) DecodeFrom(data []byte) (result PointerStruct, i int, 
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
 				return result, i, decode.NewParseErr("count", i, scan.ErrBadNumber)
 			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+				return result, i, decode.NewParseErr("count", i, scan.ErrBadNumber)
+			}
 			limit := uint64(math.MaxInt64)
 			if neg {
 				limit = scan.SignedNeg
@@ -2125,6 +2131,9 @@ func (recv PtrPPStruct) DecodeFrom(data []byte) (result PtrPPStruct, i int, err 
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
 				return result, i, decode.NewParseErr("pp", i, scan.ErrBadNumber)
 			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+				return result, i, decode.NewParseErr("pp", i, scan.ErrBadNumber)
+			}
 			limit := uint64(math.MaxInt64)
 			if neg {
 				limit = scan.SignedNeg
@@ -2387,6 +2396,9 @@ func (recv PtrPPPStruct) DecodeFrom(data []byte) (result PtrPPPStruct, i int, er
 				i++
 			}
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
+				return result, i, decode.NewParseErr("ppp", i, scan.ErrBadNumber)
+			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
 				return result, i, decode.NewParseErr("ppp", i, scan.ErrBadNumber)
 			}
 			limit := uint64(math.MaxInt64)
@@ -3183,6 +3195,9 @@ func (recv NPtrStruct) DecodeFrom(data []byte) (result NPtrStruct, i int, err er
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
 				return result, i, decode.NewParseErr("pp", i, scan.ErrBadNumber)
 			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+				return result, i, decode.NewParseErr("pp", i, scan.ErrBadNumber)
+			}
 			limit := uint64(math.MaxInt64)
 			if neg {
 				limit = scan.SignedNeg
@@ -3243,6 +3258,9 @@ func (recv NPtrStruct) DecodeFrom(data []byte) (result NPtrStruct, i int, err er
 				i++
 			}
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
+				return result, i, decode.NewParseErr("ppp", i, scan.ErrBadNumber)
+			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
 				return result, i, decode.NewParseErr("ppp", i, scan.ErrBadNumber)
 			}
 			limit := uint64(math.MaxInt64)
@@ -5767,6 +5785,9 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 						if i >= len(data) || data[i] < '0' || data[i] > '9' {
 							return result, i, decode.NewParseErr("app[]", i, scan.ErrBadNumber)
 						}
+						if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+							return result, i, decode.NewParseErr("app[]", i, scan.ErrBadNumber)
+						}
 						limit := uint64(math.MaxInt64)
 						if neg {
 							limit = scan.SignedNeg
@@ -5905,6 +5926,9 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 							i++
 						}
 						if i >= len(data) || data[i] < '0' || data[i] > '9' {
+							return result, i, decode.NewParseErr("mp.value", i, scan.ErrBadNumber)
+						}
+						if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
 							return result, i, decode.NewParseErr("mp.value", i, scan.ErrBadNumber)
 						}
 						limit := uint64(math.MaxInt64)
@@ -6129,6 +6153,9 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 						if i >= len(data) || data[i] < '0' || data[i] > '9' {
 							return result, i, decode.NewParseErr("mpp.value", i, scan.ErrBadNumber)
 						}
+						if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+							return result, i, decode.NewParseErr("mpp.value", i, scan.ErrBadNumber)
+						}
 						limit := uint64(math.MaxInt64)
 						if neg {
 							limit = scan.SignedNeg
@@ -6274,6 +6301,9 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 								if i >= len(data) || data[i] < '0' || data[i] > '9' {
 									return result, i, decode.NewParseErr("nspp[][]", i, scan.ErrBadNumber)
 								}
+								if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+									return result, i, decode.NewParseErr("nspp[][]", i, scan.ErrBadNumber)
+								}
 								limit := uint64(math.MaxInt64)
 								if neg {
 									limit = scan.SignedNeg
@@ -6393,6 +6423,9 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 							i++
 						}
 						if i >= len(data) || data[i] < '0' || data[i] > '9' {
+							return result, i, decode.NewParseErr("spp[]", i, scan.ErrBadNumber)
+						}
+						if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
 							return result, i, decode.NewParseErr("spp[]", i, scan.ErrBadNumber)
 						}
 						limit := uint64(math.MaxInt64)

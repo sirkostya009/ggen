@@ -45,7 +45,13 @@ Primitives: `SkipSpace`, `String`, `Int64`, `Uint64`, `Float64`, `Bool`,
   `ErrBadNumber`, not `*strconv.NumError`. Stream mirror `(*Stream).skipNumber`.
   Pinned by `TestSkipNumber_AcceptSetMatchesJSONGrammar` (differential vs
   `encoding/json.Valid`) + `TestSkipNumber_StreamMatchesBytes`. Number-VALUE fields
-  (`float64`, `json.Number`) still use `Float64`/`Number`.
+  (`float64`, `json.Number`) use `Float64`/`Number`, which enforce the SAME
+  grammar (cli/CLAUDE.md opt #52) — `Float64` inlines it (routing through the
+  `skipNumber` CALL measured slower: "removing decode inliners" again),
+  `Number` + the stream mirrors validate their assembled span via `skipNumber`.
+  `Int64`/`Uint64` (and the inline codegen emitters) carry the leading-zero
+  rule. Before #52 the skip path was strict while the value path was lax, so
+  `{"raw":01}` rejected and `{"i":01}` accepted the same bytes.
 - **`Float64` exact-short fast path.** Spans ≤ 16 bytes of the form
   `[-]digits[.digits]` skip `strconv.ParseFloat`'s re-scan: `exactShort`
   accumulates a uint64 mantissa in one pass and, when `mant < 2^52` and

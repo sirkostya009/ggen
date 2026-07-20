@@ -96,6 +96,9 @@ func (recv Validated) DecodeFrom(data []byte) (result Validated, i int, err erro
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
 				return result, i, decode.NewParseErr("age", i, scan.ErrBadNumber)
 			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+				return result, i, decode.NewParseErr("age", i, scan.ErrBadNumber)
+			}
 			limit := uint64(math.MaxInt64)
 			if neg {
 				limit = scan.SignedNeg
@@ -700,6 +703,9 @@ func (recv CopyValidated) DecodeFrom(data []byte) (result CopyValidated, i int, 
 				i++
 			}
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
+				return result, i, decode.NewParseErr("age", i, scan.ErrBadNumber)
+			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
 				return result, i, decode.NewParseErr("age", i, scan.ErrBadNumber)
 			}
 			limit := uint64(math.MaxInt64)
@@ -1336,6 +1342,9 @@ func (recv Claim) DecodeFrom(data []byte) (result Claim, i int, err error) {
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
 				return result, i, decode.NewParseErr("exp", i, scan.ErrBadNumber)
 			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+				return result, i, decode.NewParseErr("exp", i, scan.ErrBadNumber)
+			}
 			limit := uint64(math.MaxInt64)
 			if neg {
 				limit = scan.SignedNeg
@@ -1388,6 +1397,9 @@ func (recv Claim) DecodeFrom(data []byte) (result Claim, i int, err error) {
 				i++
 			}
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
+				return result, i, decode.NewParseErr("iat", i, scan.ErrBadNumber)
+			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
 				return result, i, decode.NewParseErr("iat", i, scan.ErrBadNumber)
 			}
 			limit := uint64(math.MaxInt64)
@@ -1492,6 +1504,9 @@ func (recv Claim) DecodeFrom(data []byte) (result Claim, i int, err error) {
 				i++
 			}
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
+				return result, i, decode.NewParseErr("nbf", i, scan.ErrBadNumber)
+			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
 				return result, i, decode.NewParseErr("nbf", i, scan.ErrBadNumber)
 			}
 			limit := uint64(math.MaxInt64)
@@ -1921,6 +1936,9 @@ func (recv CopyClaim) DecodeFrom(data []byte) (result CopyClaim, i int, err erro
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
 				return result, i, decode.NewParseErr("exp", i, scan.ErrBadNumber)
 			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+				return result, i, decode.NewParseErr("exp", i, scan.ErrBadNumber)
+			}
 			limit := uint64(math.MaxInt64)
 			if neg {
 				limit = scan.SignedNeg
@@ -1973,6 +1991,9 @@ func (recv CopyClaim) DecodeFrom(data []byte) (result CopyClaim, i int, err erro
 				i++
 			}
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
+				return result, i, decode.NewParseErr("iat", i, scan.ErrBadNumber)
+			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
 				return result, i, decode.NewParseErr("iat", i, scan.ErrBadNumber)
 			}
 			limit := uint64(math.MaxInt64)
@@ -2079,6 +2100,9 @@ func (recv CopyClaim) DecodeFrom(data []byte) (result CopyClaim, i int, err erro
 				i++
 			}
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
+				return result, i, decode.NewParseErr("nbf", i, scan.ErrBadNumber)
+			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
 				return result, i, decode.NewParseErr("nbf", i, scan.ErrBadNumber)
 			}
 			limit := uint64(math.MaxInt64)
@@ -2487,6 +2511,9 @@ func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, i i
 				i++
 			}
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
+				return result, i, decode.NewParseErr("age", i, scan.ErrBadNumber)
+			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
 				return result, i, decode.NewParseErr("age", i, scan.ErrBadNumber)
 			}
 			limit := uint64(math.MaxInt64)
@@ -3272,6 +3299,9 @@ func (recv NoValidationHeavy) DecodeFrom(data []byte) (result NoValidationHeavy,
 				i++
 			}
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
+				return result, i, decode.NewParseErr("age", i, scan.ErrBadNumber)
+			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
 				return result, i, decode.NewParseErr("age", i, scan.ErrBadNumber)
 			}
 			limit := uint64(math.MaxInt64)

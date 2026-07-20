@@ -185,11 +185,15 @@ func BenchmarkMega_Reader(b *testing.B) {
 // BenchmarkDeepNested_Unmarshal — single 50-level chain, isolating per-codec
 // recursion cost from mega's fanout work. As the maximally depth-sensitive
 // bench it's also the one that shows the recursion depth-cap cost (cli
-// CLAUDE.md opt #51): min-of-8 floor +4.7% scalar / +10.3% avx512 vs uncapped
-// (~13 / ~33 ns per level), from the per-level depth thread + `> scan.MaxDepth`
-// compare in Node's decodeFromDepth core. It's noisy at count=1 (scalar swung
-// 14.2→22.0µs on one binary). Mega (realistic shallow nesting) is flat — the
-// compare hides under memory latency there.
+// CLAUDE.md opt #51): +5.4% scalar, +0.4% (flat) avx512 vs uncapped, from the
+// per-level depth thread + `> scan.MaxDepth` compare in Node's
+// decodeFromDepth core. Mega (realistic shallow nesting) is flat — the compare
+// hides under memory latency there.
+//
+// THIS ROW IS THE NOISE CANARY: tiny (µs), cache-resident, and it swung
+// 16.8→24.6µs on an UNCHANGED binary when the box ran a capped power profile.
+// Always warm up first and check the jsonv2 row as an in-run control before
+// believing any delta here (see bench/CLAUDE.md "Running benchmarks").
 func BenchmarkDeepNested_Unmarshal(b *testing.B) {
 	var codecs = []struct {
 		name string

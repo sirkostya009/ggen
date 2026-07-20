@@ -455,6 +455,11 @@ func Int64(data []byte, i int) (int64, int, error) {
 	if i >= len(data) || data[i] < '0' || data[i] > '9' {
 		return 0, 0, ErrBadNumber
 	}
+	// RFC 8259 forbids leading zeros ("01"): a leading '0' must END the integer
+	// part. One compare on the first byte, predicted not-taken for most input.
+	if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+		return 0, 0, ErrBadNumber
+	}
 	limit := uint64(math.MaxInt64)
 	if neg {
 		limit = SignedNeg
@@ -497,6 +502,10 @@ func Uint64(data []byte, i int) (uint64, int, error) {
 	if i >= len(data) || data[i] < '0' || data[i] > '9' {
 		return 0, 0, ErrBadNumber
 	}
+	// No leading zeros — see Int64.
+	if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+		return 0, 0, ErrBadNumber
+	}
 	var n uint64
 	// First ≤19 digits can't overflow uint64; a 20th resumes the checked
 	// loop. See Int64.
@@ -519,19 +528,51 @@ func Uint64(data []byte, i int) (uint64, int, error) {
 // Float64 scans a JSON number into a float64 using strconv over the raw span.
 func Float64(data []byte, i int) (float64, int, error) {
 	start := i
-	if i < len(data) && data[i] == '-' {
+	// RFC 8259 grammar, INLINE (mirrors skipNumber — duplicated on purpose:
+	// routing through the skipNumber CALL cost DeepNested/avx512 +25%, the
+	// classic "removing decode inliners" regression; this is the hot float
+	// path). The old loose [0-9.eE+-] span handed Go-number-isms strconv
+	// accepts but JSON forbids (".5", "1.", "+1", "01") to ParseFloat, while
+	// the SKIP path was already strict — decode and skip disagreed.
+	n := len(data)
+	if i < n && data[i] == '-' {
 		i++
 	}
-	for i < len(data) {
-		c := data[i]
-		if c >= '0' && c <= '9' || c == '.' || c == 'e' || c == 'E' || c == '+' || c == '-' {
-			i++
-			continue
-		}
-		break
-	}
-	if i == start {
+	if i >= n {
 		return 0, 0, ErrBadNumber
+	}
+	if data[i] == '0' {
+		i++
+	} else if data[i] >= '1' && data[i] <= '9' {
+		i++
+		for i < n && data[i] >= '0' && data[i] <= '9' {
+			i++
+		}
+	} else {
+		return 0, 0, ErrBadNumber
+	}
+	if i < n && data[i] == '.' {
+		i++
+		if i >= n || data[i] < '0' || data[i] > '9' {
+			return 0, 0, ErrBadNumber
+		}
+		i++
+		for i < n && data[i] >= '0' && data[i] <= '9' {
+			i++
+		}
+	}
+	if i < n && (data[i] == 'e' || data[i] == 'E') {
+		i++
+		if i < n && (data[i] == '+' || data[i] == '-') {
+			i++
+		}
+		if i >= n || data[i] < '0' || data[i] > '9' {
+			return 0, 0, ErrBadNumber
+		}
+		i++
+		for i < n && data[i] >= '0' && data[i] <= '9' {
+			i++
+		}
 	}
 	// Short spans skip ParseFloat's re-scan when exactly representable.
 	// Shortest-form 17-significant-digit floats are ≥ 18 chars, so the
@@ -888,19 +929,9 @@ func anyObject(data []byte, i, depth int) (map[string]any, int, error) {
 // data while the result is in use). Same byte rules as [Float64], no parse.
 func Number(data []byte, i int) (json.Number, int, error) {
 	start := i
-	if i < len(data) && data[i] == '-' {
-		i++
-	}
-	for i < len(data) {
-		c := data[i]
-		if c >= '0' && c <= '9' || c == '.' || c == 'e' || c == 'E' || c == '+' || c == '-' {
-			i++
-			continue
-		}
-		break
-	}
-	if i == start || (i == start+1 && data[start] == '-') {
-		return "", 0, ErrBadNumber
+	i, err := skipNumber(data, i) // strict grammar — see Float64
+	if err != nil {
+		return "", 0, err
 	}
 	return json.Number(unsafe.String(unsafe.SliceData(data[start:]), i-start)), i, nil
 }

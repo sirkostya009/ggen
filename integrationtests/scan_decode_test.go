@@ -815,3 +815,80 @@ type AnyHolder struct {
 type RawHolder struct {
 	Raw json.RawMessage `json:"raw"`
 }
+
+// NumGrammar carries one field per number decode path: inline int/uint
+// emitters, float64, and json.Number.
+//
+//ggen:generate
+type NumGrammar struct {
+	I int         `json:"i"`
+	U uint        `json:"u"`
+	F float64     `json:"f"`
+	N json.Number `json:"n"`
+}
+
+// TestNumberGrammarStrict pins the VALUE decoders to the RFC 8259 number
+// grammar, matching jsonv2. These forms are Go-number-isms that
+// strconv.ParseFloat accepts but JSON forbids; ggen used to accept them while
+// its own SKIP path (skipNumber, used for RawMessage/ignoreunknown) already
+// rejected them — so decoding and skipping disagreed on the same bytes.
+func TestNumberGrammarStrict(t *testing.T) {
+	cases := []struct {
+		name    string
+		payload string
+		reject  bool
+	}{
+		{"int_leading_zero", `{"i":01}`, true},
+		{"int_multi_leading_zero", `{"i":0007}`, true},
+		{"int_neg_leading_zero", `{"i":-01}`, true},
+		{"int_plain_zero", `{"i":0}`, false},
+		{"int_neg_zero", `{"i":-0}`, false},
+		{"int_plain", `{"i":123}`, false},
+		{"uint_leading_zero", `{"u":01}`, true},
+		{"uint_plain_zero", `{"u":0}`, false},
+		{"float_bare_dot", `{"f":.5}`, true},
+		{"float_trailing_dot", `{"f":1.}`, true},
+		{"float_leading_plus", `{"f":+1}`, true},
+		{"float_leading_zero", `{"f":01.5}`, true},
+		{"float_exp_no_digits", `{"f":1e}`, true},
+		{"float_plain", `{"f":1.5}`, false},
+		{"float_exp", `{"f":1.5e-3}`, false},
+		{"float_zero_frac", `{"f":0.5}`, false},
+		{"number_leading_zero", `{"n":012}`, true},
+		{"number_bare_dot", `{"n":.5}`, true},
+		{"number_plain", `{"n":12.5}`, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var v2 NumGrammar
+			if v2Reject := jsonv2.Unmarshal([]byte(c.payload), &v2) != nil; v2Reject != c.reject {
+				t.Fatalf("jsonv2 reject=%v, want %v", v2Reject, c.reject)
+			}
+			got, _, bErr := NumGrammar{}.DecodeFrom([]byte(c.payload))
+			if (bErr != nil) != c.reject {
+				t.Errorf("bytes: reject=%v want %v (err=%v)", bErr != nil, c.reject, bErr)
+			}
+			if !c.reject && got != v2 {
+				t.Errorf("bytes: %+v != jsonv2 %+v", got, v2)
+			}
+			for _, bufCap := range []int{8, 512} {
+				var s scan.Stream
+				s.Reset(&chunkReader{data: []byte(c.payload), max: 3}, make([]byte, 0, bufCap))
+				sGot, sErr := NumGrammar{}.DecodeFromStream(&s)
+				if (sErr != nil) != c.reject {
+					t.Errorf("stream cap=%d: reject=%v want %v (err=%v)", bufCap, sErr != nil, c.reject, sErr)
+				}
+				if !c.reject && sErr == nil && sGot != v2 {
+					t.Errorf("stream cap=%d: %+v != jsonv2 %+v", bufCap, sGot, v2)
+				}
+			}
+			// Skip path (RawMessage capture) must agree with the value path —
+			// this asymmetry is exactly what the fix removes.
+			raw := `{"raw":` + c.payload[strings.Index(c.payload, ":")+1:]
+			_, _, rErr := RawHolder{}.DecodeFrom([]byte(raw))
+			if (rErr != nil) != c.reject {
+				t.Errorf("skip/raw: reject=%v want %v (err=%v)", rErr != nil, c.reject, rErr)
+			}
+		})
+	}
+}

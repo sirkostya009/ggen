@@ -123,6 +123,9 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
 				return result, i, decode.NewParseErr("i", i, scan.ErrBadNumber)
 			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+				return result, i, decode.NewParseErr("i", i, scan.ErrBadNumber)
+			}
 			limit := uint64(math.MaxInt64)
 			if neg {
 				limit = scan.SignedNeg
@@ -172,6 +175,9 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 				i++
 			}
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
+				return result, i, decode.NewParseErr("i16", i, scan.ErrBadNumber)
+			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
 				return result, i, decode.NewParseErr("i16", i, scan.ErrBadNumber)
 			}
 			limit := uint64(math.MaxInt64)
@@ -228,6 +234,9 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
 				return result, i, decode.NewParseErr("i32", i, scan.ErrBadNumber)
 			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+				return result, i, decode.NewParseErr("i32", i, scan.ErrBadNumber)
+			}
 			limit := uint64(math.MaxInt64)
 			if neg {
 				limit = scan.SignedNeg
@@ -282,6 +291,9 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
 				return result, i, decode.NewParseErr("i64", i, scan.ErrBadNumber)
 			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+				return result, i, decode.NewParseErr("i64", i, scan.ErrBadNumber)
+			}
 			limit := uint64(math.MaxInt64)
 			if neg {
 				limit = scan.SignedNeg
@@ -331,6 +343,9 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 				i++
 			}
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
+				return result, i, decode.NewParseErr("i8", i, scan.ErrBadNumber)
+			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
 				return result, i, decode.NewParseErr("i8", i, scan.ErrBadNumber)
 			}
 			limit := uint64(math.MaxInt64)
@@ -407,6 +422,9 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
 				return result, i, decode.NewParseErr("u", i, scan.ErrBadNumber)
 			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+				return result, i, decode.NewParseErr("u", i, scan.ErrBadNumber)
+			}
 			var n uint64
 			de := i + 19
 			if de > len(data) {
@@ -431,6 +449,9 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			}
 			seenU16 = true
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
+				return result, i, decode.NewParseErr("u16", i, scan.ErrBadNumber)
+			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
 				return result, i, decode.NewParseErr("u16", i, scan.ErrBadNumber)
 			}
 			var n uint64
@@ -462,6 +483,9 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
 				return result, i, decode.NewParseErr("u32", i, scan.ErrBadNumber)
 			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+				return result, i, decode.NewParseErr("u32", i, scan.ErrBadNumber)
+			}
 			var n uint64
 			de := i + 19
 			if de > len(data) {
@@ -491,6 +515,9 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
 				return result, i, decode.NewParseErr("u64", i, scan.ErrBadNumber)
 			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+				return result, i, decode.NewParseErr("u64", i, scan.ErrBadNumber)
+			}
 			var n uint64
 			de := i + 19
 			if de > len(data) {
@@ -515,6 +542,9 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			}
 			seenU8 = true
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
+				return result, i, decode.NewParseErr("u8", i, scan.ErrBadNumber)
+			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
 				return result, i, decode.NewParseErr("u8", i, scan.ErrBadNumber)
 			}
 			var n uint64

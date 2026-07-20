@@ -79,6 +79,9 @@ func (recv Money) DecodeFrom(data []byte) (result Money, i int, err error) {
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
 				return result, i, decode.NewParseErr("amount", i, scan.ErrBadNumber)
 			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+				return result, i, decode.NewParseErr("amount", i, scan.ErrBadNumber)
+			}
 			limit := uint64(math.MaxInt64)
 			if neg {
 				limit = scan.SignedNeg
@@ -303,6 +306,9 @@ func (recv LooseThing) DecodeFrom(data []byte) (result LooseThing, i int, err er
 				if i >= len(data) || data[i] < '0' || data[i] > '9' {
 					return result, i, decode.NewParseErr("count", i, scan.ErrBadNumber)
 				}
+				if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+					return result, i, decode.NewParseErr("count", i, scan.ErrBadNumber)
+				}
 				limit := uint64(math.MaxInt64)
 				if neg {
 					limit = scan.SignedNeg
@@ -401,6 +407,9 @@ func (recv LooseThing) DecodeFrom(data []byte) (result LooseThing, i int, err er
 				if i >= len(data) || data[i] < '0' || data[i] > '9' {
 					return result, i, decode.NewParseErr("opt", i, scan.ErrBadNumber)
 				}
+				if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+					return result, i, decode.NewParseErr("opt", i, scan.ErrBadNumber)
+				}
 				limit := uint64(math.MaxInt64)
 				if neg {
 					limit = scan.SignedNeg
@@ -488,6 +497,9 @@ func (recv LooseThing) DecodeFrom(data []byte) (result LooseThing, i int, err er
 					i++
 				}
 				if i >= len(data) || data[i] < '0' || data[i] > '9' {
+					return result, i, decode.NewParseErr("price", i, scan.ErrBadNumber)
+				}
+				if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
 					return result, i, decode.NewParseErr("price", i, scan.ErrBadNumber)
 				}
 				limit := uint64(math.MaxInt64)
@@ -856,6 +868,9 @@ func (recv ElemInterleave) DecodeFrom(data []byte) (result ElemInterleave, i int
 						i++
 					}
 					if i >= len(data) || data[i] < '0' || data[i] > '9' {
+						return result, i, decode.NewParseErr("nums", i, scan.ErrBadNumber)
+					}
+					if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
 						return result, i, decode.NewParseErr("nums", i, scan.ErrBadNumber)
 					}
 					limit := uint64(math.MaxInt64)

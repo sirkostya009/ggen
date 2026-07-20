@@ -873,26 +873,55 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
       (the common case) are byte-identical to before — a folded `const _depth =
       0` keeps the call sites uniform. Seeded/cleared alongside `generatedTypes`
       in `main.go` (+ `bench_test`).
-    - **Cost** (core-24, 500x, min-of-8 floor — single passes read noisier,
-      esp. scalar DeepNested which swung 14.2→22.0µs on the SAME binary):
-      everything flat EXCEPT DeepNested (a 50-level pure-recursion cache-
-      resident microbench — the maximally depth-sensitive shape) at +4.7%
-      scalar (13767→14409) / +10.3% avx512 (16043→17699), i.e. ~13 ns/level
-      scalar, ~33 ns/level avx512. Mega (realistic ~4.4 MB tree, shallow
+    - **Cost** (core-24, 500x, count=2, machine in `performance` profile, each
+      A/B warmed first and validated with the **jsonv2 row as an in-run
+      control** — see bench/CLAUDE.md): everything flat EXCEPT DeepNested (a
+      50-level pure-recursion cache-resident microbench — the maximally
+      depth-sensitive shape) at **+5.4% scalar** (8809→9294) and **+0.4%
+      avx512** (10501→10548, i.e. flat). Mega (realistic ~4.4 MB tree, shallow
       nesting) is FLAT both tiers — the per-container compare vanishes against
-      memory latency. The avx512 ~2.5× per-level amplification is NOT a spill
-      (asm: post cores' frames are 1456 vs 1424 B — near-identical, `_depth`
-      does not spill); it's a scheduling/regime effect — DeepNested's avx512
-      path is already the weaker regime (PRE avx512 16043 > PRE scalar 13767:
-      the inline vector string classify doesn't pay on 50 tiny Node strings,
-      same "SIMD loses on short strings" effect as Tiny), so its fuller OOO
-      window has less slack to hide the added `_depth+1`/compare µops, while
-      the scalar byte-loop absorbs them. Accepted: a few % on
-      pathologically-deep-but-legal recursion to turn a fatal process crash
-      into a clean error. Pinned by `TestMaxDepth` (scan, every runtime path) +
-      `TestMaxDepthNoCrash` (integ: recursive struct, `any`, ignoreunknown-
-      skip, RawMessage, bytes + stream — the exact inputs that formerly
-      crashed).
+      memory latency. Accepted: ~5% on pathologically-deep-but-legal recursion
+      on one tier to turn a fatal process crash into a clean error. Pinned by
+      `TestMaxDepth` (scan, every runtime path) + `TestMaxDepthNoCrash` (integ:
+      recursive struct, `any`, ignoreunknown-skip, RawMessage, bytes + stream —
+      the exact inputs that formerly crashed).
+      **Measurement history (cautionary):** this was first reported as "+4.7%
+      scalar / +10.3% avx512" with a mechanistic OOO-slack explanation for the
+      avx512 amplification. The avx512 figure was pure machine artifact — the
+      box was under a capped power profile (3 GHz ceiling / 2 GHz floor) and
+      the first-measured binary ate the frequency ramp, inflating whichever
+      side ran first by up to 50%. The invented mechanism explained noise. Only
+      the scalar number survived re-measurement.
+
+52. **Value-decoder number grammar (RFC 8259 / jsonv2 parity).** The VALUE
+    decoders accepted Go-number-isms `strconv` allows but JSON forbids —
+    leading zeros (`01`), bare/trailing dot (`.5`, `1.`), leading `+` — because
+    `Float64` handed a loose `[0-9.eE+-]` span to `strconv.ParseFloat` (a Go
+    parser, not a JSON one) and the int digit loops had no leading-zero rule.
+    ggen was inconsistent WITH ITSELF: the SKIP path (`skipNumber`, used for
+    RawMessage / `ignoreunknown`) was already strict, so `{"raw":01}` rejected
+    while `{"i":01}` accepted the same bytes. Now:
+    - `Int64`/`Uint64` (runtime) + BOTH inline codegen emitters
+      (`inlineScanInt64Stmt`/`Uint64Stmt`) gained the leading-zero rule. The
+      emitter half is REQUIRED, not optional — without it the generated inline
+      fast path would accept `01` while its own `scan.Int64` fall path rejects
+      it, recreating the asymmetry one level down.
+    - `Float64` enforces the grammar INLINE (duplicated from `skipNumber` on
+      purpose — see below); `Number` and the stream `Float64`/`Number` validate
+      their assembled span via `skipNumber` (the stream refill loop doubles as
+      the extent finder, so its span is only contiguous at the end).
+    - All four `Any` families inherit it through `Float64`/`Number`.
+    **Perf:** routing `Float64` through the `skipNumber` CALL measured
+    consistently worse than inlining the grammar (20.8 vs 18.7 µs DeepNested,
+    control-matched) — another instance of the backlog's "removing decode
+    inliners" rejection, hence the deliberate duplication. Final shape is
+    flat-to-FASTER (avx512 −1.5%, scalar ~−3% on DeepNested): the strict digit
+    loops test 2 conditions per byte (`>='0' && <='9'`) where the loose scan
+    tested 6, offsetting the added structural checks. Pinned by
+    `TestNumberGrammarStrict` (integ: 19 cases × bytes / chunked stream / the
+    skip+RawMessage path, differential vs jsonv2 — the skip row is what proves
+    the asymmetry is gone) plus updated `scan` lattice + reference-differential
+    tests (their zero-padded inputs are now correctly rejected).
 
 ## Design decisions (the why)
 

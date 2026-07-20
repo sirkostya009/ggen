@@ -97,6 +97,9 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
 				return result, i, decode.NewParseErr("clampedScore", i, scan.ErrBadNumber)
 			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+				return result, i, decode.NewParseErr("clampedScore", i, scan.ErrBadNumber)
+			}
 			limit := uint64(math.MaxInt64)
 			if neg {
 				limit = scan.SignedNeg
@@ -296,6 +299,9 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 					if i >= len(data) || data[i] < '0' || data[i] > '9' {
 						return result, i, decode.NewParseErr("keyedMap", i, scan.ErrBadNumber)
 					}
+					if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+						return result, i, decode.NewParseErr("keyedMap", i, scan.ErrBadNumber)
+					}
 					limit := uint64(math.MaxInt64)
 					if neg {
 						limit = scan.SignedNeg
@@ -441,6 +447,9 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 								i++
 							}
 							if i >= len(data) || data[i] < '0' || data[i] > '9' {
+								return result, i, decode.NewParseErr("nestedInts[]", i, scan.ErrBadNumber)
+							}
+							if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
 								return result, i, decode.NewParseErr("nestedInts[]", i, scan.ErrBadNumber)
 							}
 							limit := uint64(math.MaxInt64)
@@ -2051,6 +2060,9 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 					if i >= len(data) || data[i] < '0' || data[i] > '9' {
 						return result, i, decode.NewParseErr("rgb", i, scan.ErrBadNumber)
 					}
+					if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+						return result, i, decode.NewParseErr("rgb", i, scan.ErrBadNumber)
+					}
 					limit := uint64(math.MaxInt64)
 					if neg {
 						limit = scan.SignedNeg
@@ -2168,6 +2180,9 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 								i++
 							}
 							if i >= len(data) || data[i] < '0' || data[i] > '9' {
+								return result, i, decode.NewParseErr("segments[]", i, scan.ErrBadNumber)
+							}
+							if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
 								return result, i, decode.NewParseErr("segments[]", i, scan.ErrBadNumber)
 							}
 							limit := uint64(math.MaxInt64)

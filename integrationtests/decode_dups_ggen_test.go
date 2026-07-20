@@ -88,6 +88,9 @@ func (recv AllowDupsStruct) DecodeFrom(data []byte) (result AllowDupsStruct, i i
 				if i >= len(data) || data[i] < '0' || data[i] > '9' {
 					return result, i, decode.NewParseErr("n", i, scan.ErrBadNumber)
 				}
+				if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+					return result, i, decode.NewParseErr("n", i, scan.ErrBadNumber)
+				}
 				limit := uint64(math.MaxInt64)
 				if neg {
 					limit = scan.SignedNeg

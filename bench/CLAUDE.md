@@ -314,6 +314,29 @@ relevant ones" — show ALL of them. A truncated benchmark result is worse than
 none: it hides regressions in the rows you dropped. If the output is long, it is
 long; emit it whole.
 
+**ALWAYS check the machine's power profile, warm up, and use a CONTROL ROW.**
+Learned the hard way (2026-07): under a capped power profile (`scaling_max_freq`
+pinned to 3 GHz with a 2 GHz floor, core idling at 625 MHz) the FIRST binary
+measured eats the frequency ramp and reads up to **50% slow** — which silently
+inverts A/B results. DeepNested/ggen swung 16.8 → 24.6 µs on an UNCHANGED
+binary; a depth-cap "+10.3% avx512 regression" and a number-grammar "+25%
+regression" were both pure artifact, and one even got a plausible-sounding
+mechanistic explanation written for it before re-measurement killed it.
+
+Protocol, in order:
+
+1. `cat /sys/firmware/acpi/platform_profile` and
+   `/sys/devices/system/cpu/cpu24/cpufreq/{scaling_governor,scaling_max_freq}` —
+   want `performance` and the full boost ceiling (~5187 MHz here, NOT 3000).
+2. Run one throwaway pass and DISCARD it, so no side eats the ramp.
+3. Include an **untouched third-party row as an in-run control** — the
+   `jsonv2` row of the same bench family is ideal: ggen changes can't affect it,
+   so if it differs between the two binaries, the comparison is INVALID and the
+   ggen delta means nothing. Every A/B below is control-checked this way.
+   (`-bench='DeepNested_Unmarshal/(jsonv2|ggen)$'` gets both rows.)
+
+Only after the control matches is a delta real.
+
 **ALWAYS pin to a dedicated core and disable parallelism** — every perf claim
 must come from `GOMAXPROCS=1 taskset -c 24 … -cpu=1`. The default multi-core run
 is layout/scheduler-noise-dominated (sub-1% deltas flip sign). Use **core 24**.

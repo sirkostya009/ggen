@@ -543,6 +543,9 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
 				return result, i, decode.NewParseErr("id", i, scan.ErrBadNumber)
 			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+				return result, i, decode.NewParseErr("id", i, scan.ErrBadNumber)
+			}
 			limit := uint64(math.MaxInt64)
 			if neg {
 				limit = scan.SignedNeg
@@ -670,6 +673,9 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 									i++
 								}
 								if i >= len(data) || data[i] < '0' || data[i] > '9' {
+									return result, i, decode.NewParseErr("matrix[]", i, scan.ErrBadNumber)
+								}
+								if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
 									return result, i, decode.NewParseErr("matrix[]", i, scan.ErrBadNumber)
 								}
 								limit := uint64(math.MaxInt64)
@@ -2934,6 +2940,9 @@ func (recv CopyNode) decodeFromDepth(data []byte, _depth int) (result CopyNode, 
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
 				return result, i, decode.NewParseErr("id", i, scan.ErrBadNumber)
 			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+				return result, i, decode.NewParseErr("id", i, scan.ErrBadNumber)
+			}
 			limit := uint64(math.MaxInt64)
 			if neg {
 				limit = scan.SignedNeg
@@ -3061,6 +3070,9 @@ func (recv CopyNode) decodeFromDepth(data []byte, _depth int) (result CopyNode, 
 									i++
 								}
 								if i >= len(data) || data[i] < '0' || data[i] > '9' {
+									return result, i, decode.NewParseErr("matrix[]", i, scan.ErrBadNumber)
+								}
+								if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
 									return result, i, decode.NewParseErr("matrix[]", i, scan.ErrBadNumber)
 								}
 								limit := uint64(math.MaxInt64)

@@ -264,6 +264,9 @@ func (recv PlainAlias) DecodeFrom(data []byte) (result PlainAlias, i int, err er
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
 				return result, i, decode.NewParseErr("count", i, scan.ErrBadNumber)
 			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+				return result, i, decode.NewParseErr("count", i, scan.ErrBadNumber)
+			}
 			limit := uint64(math.MaxInt64)
 			if neg {
 				limit = scan.SignedNeg
@@ -519,6 +522,9 @@ func (recv SamePkgAlias) DecodeFrom(data []byte) (result SamePkgAlias, i int, er
 				i++
 			}
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
+				return result, i, decode.NewParseErr("X", i, scan.ErrBadNumber)
+			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
 				return result, i, decode.NewParseErr("X", i, scan.ErrBadNumber)
 			}
 			limit := uint64(math.MaxInt64)
@@ -1227,6 +1233,9 @@ func (recv AliasLookup) DecodeFrom(data []byte) (result AliasLookup, i int, err 
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
 				return result, i, decode.NewParseErr("", i, scan.ErrBadNumber)
 			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+				return result, i, decode.NewParseErr("", i, scan.ErrBadNumber)
+			}
 			limit := uint64(math.MaxInt64)
 			if neg {
 				limit = scan.SignedNeg
@@ -1447,6 +1456,9 @@ func (recv AliasTuple) DecodeFrom(data []byte) (result AliasTuple, i int, err er
 				i++
 			}
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
+				return result, i, decode.NewParseErr("", i, scan.ErrBadNumber)
+			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
 				return result, i, decode.NewParseErr("", i, scan.ErrBadNumber)
 			}
 			limit := uint64(math.MaxInt64)

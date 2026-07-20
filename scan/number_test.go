@@ -125,8 +125,17 @@ func TestInt64_OverflowBoundaryLattice(t *testing.T) {
 		"9223372036854775807":                    math.MaxInt64,        // MaxInt64 (19 digits)
 		"-9223372036854775808":                   math.MinInt64,        // MinInt64
 		"-9223372036854775807":                   -9223372036854775807, // MinInt64+1
-		"0000000000000000007":                    7,                    // 18 leading zeros + 7
-		"00000000000000000009223372036854775807": math.MaxInt64,        // zeros push MaxInt64 past window
+	}
+	// Leading zeros are invalid JSON (RFC 8259) and now rejected — they used to
+	// be accepted and doubled as unchecked-window coverage. The window is still
+	// covered by the 17/18/19-digit rows above.
+	for _, in := range []string{"01", "-01", "0000000000000000007", "00000000000000000009223372036854775807"} {
+		t.Run("leadingzero/"+in, func(t *testing.T) {
+			t.Parallel()
+			if _, _, err := Int64([]byte(in), 0); !errors.Is(err, ErrBadNumber) {
+				t.Errorf("Int64(%q): got %v, want ErrBadNumber", in, err)
+			}
+		})
 	}
 	for in, want := range ok {
 		t.Run("ok/"+in, func(t *testing.T) {
@@ -168,7 +177,6 @@ func TestUint64_OverflowBoundaryLattice(t *testing.T) {
 		"9999999999999999999":                       9999999999999999999,  // 19 nines, valid
 		"10000000000000000000":                      10000000000000000000, // 20 digits, valid
 		"18446744073709551615":                      math.MaxUint64,       // MaxUint64 (20 digits)
-		"00000000000000000000018446744073709551615": math.MaxUint64,       // leading zeros past window
 	}
 	for in, want := range ok {
 		t.Run("ok/"+in, func(t *testing.T) {
@@ -325,6 +333,10 @@ func TestInt_ReferenceDifferential(t *testing.T) {
 		if i >= len(data) || data[i] < '0' || data[i] > '9' {
 			return 0, 0, ErrBadNumber
 		}
+		// RFC 8259: no leading zeros (mirrors Int64).
+		if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+			return 0, 0, ErrBadNumber
+		}
 		limit := uint64(math.MaxInt64)
 		if neg {
 			limit = SignedNeg
@@ -354,6 +366,10 @@ func TestInt_ReferenceDifferential(t *testing.T) {
 	}
 	refUint := func(data []byte, i int) (uint64, int, error) {
 		if i >= len(data) || data[i] < '0' || data[i] > '9' {
+			return 0, 0, ErrBadNumber
+		}
+		// RFC 8259: no leading zeros (mirrors Uint64).
+		if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
 			return 0, 0, ErrBadNumber
 		}
 		var n uint64
