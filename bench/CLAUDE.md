@@ -53,10 +53,13 @@ The numbers below are for science only.
 - **NoAlloc** (`Account`, wide denormalized record, all nested VALUE structs, no
   slice/map/pointer/`any`/`json.RawMessage`; profile strings are
   Ukrainian-localized Cyrillic, so this row also carries the decode UTF-8
-  validation walk — opt #50: +74% scalar vs pre-validation; at avx512 the
-  vector validator (`validUTF8x16`, scan/CLAUDE.md) cuts it to +40% (1264 →
-  2819 with scalar utf8.Valid → 1773 ns with the Lemire pass; RuneGated
-  +52% → +11%), still 2.7-5× ahead of jsonv2) — bytes decode makes zero allocs
+  validation walk — opt #50. Control-checked sweep (2026-07): **+67.7% scalar
+  / +38.7% avx512** vs pre-validation; the avx512 figure is low because the
+  vector validator (`validUTF8x16`, scan/CLAUDE.md) replaces the scalar
+  `utf8.Valid` second pass. Still 2.7-5× ahead of jsonv2, which validates too.
+  NOTE this family's control rows drift 3.6-6% on the current box, so treat the
+  precision as soft — the effect is far larger than the drift, so the direction
+  is solid) — bytes decode makes zero allocs
   (strings alias input, structs decode in place, scalars land in receiver),
   vs easyjson's ~25 allocs (it copies strings out of the input); isolates scan +
   key-dispatch + per-field-assign. Warms up 64 iters. `_Reader`:
@@ -336,6 +339,31 @@ Protocol, in order:
    (`-bench='DeepNested_Unmarshal/(jsonv2|ggen)$'` gets both rows.)
 
 Only after the control matches is a delta real.
+
+### Control-checked sweep, 2026-07 (pre-UTF8 `03c6503` → `ca1c7d9`)
+
+Cumulative cost of the three jsonv2-parity fixes (UTF-8 validation #50,
+recursion depth cap #51, number grammar #52), each family tagged with its own
+worst control drift. **A family whose control drifts >3% cannot be measured on
+this box** — quote nothing from it.
+
+| family | scalar | avx512 | control | verdict |
+| ------ | ------ | ------ | ------- | ------- |
+| Mega_Unmarshal   | +4.8%* | +1.8%  | 1.9% (avx) | flat at avx512 |
+| Mega_Reader      | +1.4…2.3% | +0.9…1.9% | 0.9-1.6% | flat |
+| SkipHeavy (×4)   | −0.2…+3.3% | −1.7…+0.6% | 1.4-2.8% | flat |
+| MapHeavy         | −2.4%  | −3.1%* | 0.4% (sca) | flat/better |
+| **EscapeHeavy**  | +11.2%* | **+12.7%** | **0.5% (avx)** | **real regression** |
+| NoAlloc          | +67.7%* | +38.7%* | 3.6-13.6% | real (effect ≫ drift) |
+| RuneGated        | +54.4% | +9.5%  | NO CONTROL ROW | directional only |
+| Small/Tiny/DeepNested/ValidationHeavy | — | — | 4-27% | **unmeasurable** |
+
+`*` = that tier's control drifted >3%; the other tier's figure is the reliable one.
+
+EscapeHeavy is the one genuine regression: the escape path gained a
+`utf8.Valid` over assembled output + surrogate rejection, and its payload is
+~12% escapes with surrogate pairs. NoAlloc/RuneGated pay the UTF-8 walk on
+Cyrillic strings by design (the vector validator is why avx512 ≪ scalar there).
 
 **ALWAYS pin to a dedicated core and disable parallelism** — every perf claim
 must come from `GOMAXPROCS=1 taskset -c 24 … -cpu=1`. The default multi-core run

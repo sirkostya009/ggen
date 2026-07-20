@@ -60,8 +60,13 @@ surface pinned by `Decoder[T]`).
   `validUTF8x16` (scan/simd_utf8_amd64.go, Lemire/simdjson nibble-LUT
   algorithm on 16-byte lanes, AVX1-safe) replaces the scalar `utf8.Valid`
   second pass in `classifyStructural` + the stream cores: ~6.5× on the
-  validation component (4 KB Cyrillic 3456→~530 ns), NoAlloc avx512 penalty
-  +123%→+40%, RuneGated +52%→+11%, ASCII rows flat. Fusing into the parser
+  validation component (4 KB Cyrillic 3456→~530 ns). Control-checked re-measure
+  (2026-07, performance profile — see bench/CLAUDE.md): cumulative pre-UTF8 →
+  now, NoAlloc +67.7% scalar / +38.7% avx512, RuneGated +54.4% / +9.5% — the
+  vector pass is why the avx512 penalties are a fraction of the scalar ones.
+  ASCII rows flat; EscapeHeavy regressed +12.7% avx512 (escape path gained a
+  utf8.Valid + surrogate rejection — an earlier note wrongly claimed it
+  improved). Fusing into the parser
   loop itself was measured NOT worth it — the two-pass separation costs <10%
   of the validation bill at any width (L1-hot span; see
   BenchmarkStringUTF8Cost{,AVX512}); the DFA/lookup work IS the bill, so

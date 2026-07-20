@@ -837,15 +837,32 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
     unpaired surrogate escapes DO substitute U+FFFD (stringSlow owns its
     scratch anyway). `any` fields keep validating (scan.Any internals pin
     validate=true). Pinned by `TestAllowInvalidUTF8` (integ: every string
-    shape + raw, bytes + stream, grammar-errors-still-reject, strict control). Cost (interleaved core-24 A/B,
-    500x): ASCII rows flat (Small/Mega_Reader/SkipHeavy/MapHeavy; Mega bytes
-    ~+2-4% at avx512 from the tier-func lane OR + raw-span check), unicode-
-    heavy rows pay the validation walk — scalar tier via `utf8.Valid`
-    (NoAlloc +74% — its payload is Ukrainian-localized; RuneGated +35%), SIMD
-    tiers via the vectorized `validUTF8x16` Lemire pass (scan/CLAUDE.md),
-    which cut the avx512 penalty from +123%/+52% to +40%/+11% (NoAlloc
-    2819→1773 ns) — all stay 2.7-5× ahead of jsonv2; EscapeHeavy IMPROVED
-    −26/−31% (surrogate-arm restructure). Pinned by
+    shape + raw, bytes + stream, grammar-errors-still-reject, strict control). **Cost** — RE-MEASURED 2026-07 on a `performance`-profile box with a
+    warmup pass and per-family **control rows** (jsonv2/sonic/easyjson, which
+    ggen changes cannot affect; if a control drifts >3% that family's delta is
+    not trustworthy — see bench/CLAUDE.md). Baseline = pre-UTF8 `03c6503`,
+    cumulative through the depth cap (#51) and number grammar (#52), which are
+    themselves flat-to-faster on these rows:
+    - **Trustworthy** (control ≤2%): Mega_Unmarshal avx512 +1.8% (ctl 1.9% —
+      i.e. flat), Mega_Reader +0.9…+2.3%, SkipHeavy −1.7…+3.3% (flat; skip
+      paths aren't UTF-8-validated), MapHeavy −2.4/−3.1%, and **EscapeHeavy
+      avx512 +12.7% / +13.2% copy with a 0.5% control** — the escape path
+      gained a `utf8.Valid` over assembled output plus surrogate rejection, and
+      this payload is ~12% escapes incl. surrogate pairs.
+      (An earlier revision of this note claimed EscapeHeavy *IMPROVED* −26/−31%
+      from the "surrogate-arm restructure". That was a bad-regime artifact —
+      the box was under a capped power profile. It regressed; the number above
+      is the control-checked one.)
+    - **Real but control-drifted** (effect ≫ drift, so directionally solid,
+      precision soft): the unicode-heavy rows paying the validation walk —
+      NoAlloc **+67.7% scalar / +38.7% avx512** (its payload is
+      Ukrainian-localized Cyrillic), RuneGated **+54.4% scalar / +9.5% avx512**
+      (single-row bench — it has NO control row at all). The SIMD tiers use the
+      vectorized `validUTF8x16` Lemire pass (scan/CLAUDE.md), which is why the
+      avx512 penalties are far below the scalar ones. All still 2.7-5× ahead of
+      jsonv2, which does the same validation.
+    - **Not measurable on this box**: Small, Tiny, DeepNested, ValidationHeavy
+      — controls drift 4-27%, so no ggen delta there means anything. Pinned by
     `TestString_InvalidUTF8Rejected`/`TestString_LoneSurrogateParity` (scan),
     `TestStreamStringInvalidUTF8` (stream, incl. rune-straddles-refill),
     SIMD parity corpora, `TestInvalidUTF8Rejected` (integ differential vs
