@@ -40,54 +40,11 @@ BenchmarkMega_Reader/ggen_stream       500   15054303 ns/op   309.57 MB/s   125 
 BenchmarkMega_Reader/ggen_readall      500   12134934 ns/op   384.05 MB/s   162 gc   18895123 B/op    55018 allocs/op
 ```
 
-The fast decode numbers come from ggen's zero-copy strategy for strings and
-`json.RawMessage`. Every time you pass a buffer to `DecodeFrom`, all strings
-and raw byte spans are aliased into it — so **mutating the payload after decode
-mutates the decoded struct too**. Be careful with that.
-
-This has one side effect worth considering: if a decoded struct's strings are
-held by something long-lived, the aliasing pins the whole backing buffer and
-can balloon memory usage (Go's GC isn't compacting). Streams don't have this
-problem — they always copy, reusing the underlying buffer.
-
-If you need the bytes path to copy too — to reuse/mutate the input buffer right
-after decoding, or to avoid pinning a large buffer — generate with `-copy` (or
-`//ggen:generate copy` per type). Decoded strings, `json.RawMessage`, and
-strings inside `any` fields are then copied out of the input instead of aliased,
-giving the decoded value an independent lifetime (at the cost of more allocs).
-
-Two more contracts in the same spirit:
-
-- **Decode rejects invalid UTF-8** (jsonv2 parity). Malformed UTF-8 bytes and
-  unpaired `\uXXXX` surrogate escapes in string values or object keys fail the
-  decode with `scan.ErrInvalidUTF8` — matching jsonv2, which also errors
-  (`encoding/json` v1 instead silently replaces such bytes with U+FFFD; ggen
-  intentionally sides with v2). Pure-ASCII strings pay nothing for this check;
-  non-ASCII strings pay one UTF-8 walk. Captured raw spans (`json.RawMessage` /
-  `jsontext.Value`) are byte-validated too. Two deliberate exceptions: content
-  that is only _skipped_ (unknown keys under `ignoreunknown`) is
-  grammar-checked but not UTF-8-validated, and an unpaired `\uXXXX` surrogate
-  _escape_ inside a raw span passes — it is plain ASCII text there (jsonv2
-  escape-parses raw strings and rejects it). Per-struct opt-out:
-  `-allowinvalidutf8` / `//ggen:generate allowinvalidutf8` restores the
-  permissive pass-through (see the flag table).
-- **Encode never validates UTF-8.** Invalid bytes in your strings are emitted
-  raw onto the wire (stdlib v1 would replace with U+FFFD, jsonv2 would
-  replace + error). Your structs are your own data — validate at the boundary
-  if you populate them from untrusted bytes. On valid UTF-8, output is
-  byte-identical to the stdlib.
-- **Nesting is depth-capped** at 10000 (jsonv2 parity). A pathologically deep
-  payload (`[[[[…` or `{"k":{"k":…`) returns a clean `scan.ErrMaxDepth` instead
-  of overflowing the goroutine stack — so untrusted input can't crash the
-  process. Covers every recursive path (nested containers, `any` fields,
-  skipped unknown keys, raw messages, self-referential structs), bytes and
-  streaming alike.
-
 ### simd
 
 Code generated with `-simd=avx512` (see the flag table below) against sonic.
 
-```
+```sh
 BenchmarkMega_Unmarshal/sonic          500     11936692 ns/op    390.43 MB/s   148 gc   16619825 B/op   127484 allocs/op
 BenchmarkMega_Unmarshal/sonic_fast     500     11919286 ns/op    391.00 MB/s   148 gc   16619826 B/op   127484 allocs/op
 BenchmarkMega_Unmarshal/ggen           500      9310070 ns/op    500.58 MB/s    77 gc    8434184 B/op    54990 allocs/op
@@ -110,56 +67,27 @@ ggen decodes 2.2× faster than sonic's fastest config on the flat record and
 4.4× on the tiny object — at zero allocations. When copying payload instead
 of aliasing (`ggen_copy` benchmarks) it still stays ahead of sonic by 1.5×
 on the flat record and 2.4× on the tiny object.
-Small benefits most: its payload is dominated by one long string, decoded at
-22 GB/s, ~19× sonic. Without `-simd` the generated code still beats sonic on
-every row here; the tier widens the flat-record and long-string gaps most.
+Small benefits most: the benchmark is dominated by one long string, decoded at
+22 GB/s, ~19× sonic.
 
-Two caveats worth stating plainly. Decode validates UTF-8 (see the contracts
-above), which sonic's fastest config does not — on payloads dominated by
-non-ASCII text that check is most of ggen's remaining cost, and it is why the
-flat-record gap is 2.2× rather than the 3× an unvalidating decoder would show.
-And on payloads that are mostly *skipped* content, sonic's fastest config is
-several times quicker, because it does not grammar-validate what it skips —
-ggen does. Both are deliberate trades of speed for correctness.
+So ggen is still faster than sonic while also pertaining most of stdlib's
+decoding safety features like unicode and grammar validation.
 
-### slow-network streaming
-
-Another use case is slow or long network streams. Benchmarked against a faked
-`io.Reader` simulating a connection warming up fast:
-
-```sh
-$ cd bench; go test -bench=BenchmarkSlowStream -run=^$ -benchtime=100x .
-BenchmarkSlowStream_Valid/stdjson          100  164467955 ns/op   0.22 MB/s   119005 B/op   1995 allocs/op
-BenchmarkSlowStream_Valid/sonic            100  141136378 ns/op   0.25 MB/s   126978 B/op    830 allocs/op
-BenchmarkSlowStream_Valid/sonic_fast       100  141211472 ns/op   0.25 MB/s   125912 B/op    830 allocs/op
-BenchmarkSlowStream_Valid/easyjson         100  158087304 ns/op   0.23 MB/s   187455 B/op   1542 allocs/op
-BenchmarkSlowStream_Valid/ggen_stream      100  141295185 ns/op   0.25 MB/s    99309 B/op   1554 allocs/op
-BenchmarkSlowStream_Valid/ggen_readall     100  158119251 ns/op   0.23 MB/s   155157 B/op    415 allocs/op
-BenchmarkSlowStream_Invalid/ggen_stream    100   66512301 ns/op   0.04 MB/s     3186 B/op      4 allocs/op
-BenchmarkSlowStream_Invalid/ggen_readall   100   77878279 ns/op   0.04 MB/s     7394 B/op     10 allocs/op
-BenchmarkSlowStream_Invalid/jsonv2         100   82081722 ns/op   0.04 MB/s    16770 B/op     25 allocs/op
-BenchmarkSlowStream_Invalid/sonic          100   66431747 ns/op   0.04 MB/s     3421 B/op      6 allocs/op
-BenchmarkSlowStream_Invalid/sonic_fast     100   66364213 ns/op   0.04 MB/s     3421 B/op      6 allocs/op
-```
-
-The `Invalid` benchmarks exercise the fail-fast advantage — ggen validation
-works over streams and rejects invalid payloads without reading the full
-payload. See [slowstream_test.go](./bench/slowstream_test.go).
-
-## usage
-
-The primary use case for ggen is HTTP servers. The Stream implementation is a
-bit lacking in memory performance, but it's still a faster strategy for slower
-networks — especially when you get lots of invalid payloads that can be
-discarded at parse time.
+## install
 
 Install the CLI and pull in the runtime subpackages your generated code will
 import:
 
 ```sh
 go install github.com/sirkostya009/ggen/cli@latest # CLI binary
-go get github.com/sirkostya009/ggen                 # runtime subpackages
+go get github.com/sirkostya009/ggen                # runtime subpackages
 ```
+
+## usage
+
+The primary use case for ggen is HTTP servers. The Stream implementation is the
+preferred interface for decoding, it was designed to be used with reusable buffers -
+something you can pool and recycle to benefit from an even lower memory usage.
 
 Annotate a struct with `//ggen:generate` and run the CLI:
 
@@ -183,34 +111,24 @@ ggen path/to/file.go # one file; optional struct-name filter as trailing args
 ```
 
 The generated file lives next to the source. Output naming follows the input:
-a package run gets `<dir>_ggen.go` (and `<dir>_ggen_test.go` for annotated
-structs declared in `_test.go` files). A single file gets `<base>_ggen.go`. The
-`-o` flag overrides the path for single-file or single-package mode.
 
-For input files with a `//go:build` constraint, ggen carries that constraint
-into a separate output file: a struct in `tagged.go` guarded by `//go:build
-foo` ends up in `<dir>_foo_ggen.go` with the same `//go:build foo` header, so
-unconstrained builds aren't broken by an "undefined: Tagged" reference.
-Multi-term constraints (e.g. `//go:build foo && bar`) get a slugified filename
-(`<dir>_foo_bar_ggen.go`) with the original expression preserved verbatim in
-the header.
+| pattern                            | output                  | notes                                                  |
+| ---------------------------------- | ----------------------- | ------------------------------------------------------ |
+| `ggen .` / `ggen ./...`            | `<dir>_ggen.go`         | annotated structs in `_test.go` → `<dir>_ggen_test.go` |
+| `ggen path/to/file.go`             | `<base>_ggen.go`        | `-o` overrides (single-file or single-package only)    |
+| source has `//go:build foo`        | `<dir>_foo_ggen.go`     | same `//go:build foo` header carried over              |
+| source has `//go:build foo && bar` | `<dir>_foo_bar_ggen.go` | slugified name, original expression kept verbatim      |
 
-You can use ggen with `go generate` — one `//go:generate` directive per package
-is enough, no need to put one above every annotated struct:
+Build-constrained structs go to their own file so unconstrained builds aren't
+broken by an "undefined: Tagged" reference.
 
-```go
-//go:generate ggen .
-```
+You can use leave a single `//go:generate ggen .` directive per package so that
+ggen runs on `go generate ./...`:
 
 Or, to scope generated output per file, put a `//go:generate ggen $GOFILE` line
 in every file with annotated structs and let single-file mode handle naming:
 
-```go
-//go:generate ggen $GOFILE
-
-// can of course override default naming as well:
-//go:generate ggen $GOFILE -o file_ggen.go
-```
+> [!NOTE] Using flags is possible too: `//go:generate ggen $GOFILE -o name.go`
 
 ### generated methods
 
@@ -223,7 +141,8 @@ func (T) JSONSize() int
 func (T) AppendJSON(dst []byte) ([]byte, error)
 ```
 
-With the `marshal` and `unmarshal` annotations set, respectively:
+`marshal` and `unmarshal` annotations generate methods that make struct implement
+`json.Marshaler` and `json.Unmarshaler` respectively:
 
 ```go
 func (T)  MarshalJSON() ([]byte, error)
@@ -249,21 +168,14 @@ u, err = u.DecodeFromStream(s)
 
 #### merge semantics
 
-Like the stdlib, ggen has merge semantics, but deliberately different ones:
+Like stdlib, ggen has merge semantics, but deliberately different ones:
 
-- Non-nil slices, maps, and pointer fields are **reused** — useful as an
-  optimization on paths where you repeatedly parse the same object shape. Reuse
-  reaches nested slices too: re-decoding a `[][]T` (any depth) reuses the inner
-  rows' backing arrays, not just the outer slice.
-- **All containers are reset regardless of presence** in the payload (the
-  stdlib keeps an omitted container) — a blank payload gives a blank slate while
-  keeping capacity.
-- A JSON `null` aimed at a slice/map/pointer field nils it. A `null` aimed at a
-  non-pointer scalar or struct is a **parse error by default** — use a pointer
-  for a nullable scalar, or opt the field into stdlib-style null handling with a
-  `nullzero` decode variant in its `pipe:` tag (decodes `null` to the Go zero
-  value). `-nullzero` / `//ggen:generate nullzero` turns that on for every value
-  field at once.
+| case                                      | ggen                 | stdlib               | notes                                                                                     |
+| ----------------------------------------- | -------------------- | -------------------- | ----------------------------------------------------------------------------------------- |
+| non-nil slice / map / pointer field       | reused               | reused               | reuse reaches nested slices — `[][]T` at any depth reuses the inner rows' arrays          |
+| key omitted from payload, container field | reset, capacity kept | container kept as-is | a blank payload gives a blank slate                                                       |
+| `null` → slice / map / pointer            | nil'd                | nil'd                | —                                                                                         |
+| `null` → non-pointer scalar or struct     | parse error          | Go zero value        | use a pointer, a per-field `nullzero` decode variant, or `-nullzero` for all value fields |
 
 ### runtime packages
 
@@ -290,7 +202,7 @@ users, buf, err := decode.UnmarshalSliceStream[User](req.Body, buf[:0])
 
 ### flags and annotations
 
-Most CLI flags have a matching per-struct annotation token (no leading dash).
+Most CLI flags have a matching per-struct annotation token without a leading dash.
 Flags apply globally to the whole pass; annotations apply locally to a struct.
 Multiple annotation tokens are space-separated: `//ggen:generate marshal
 unmarshal multierr`.
@@ -340,36 +252,35 @@ The `pipe:` tag is one ordered pipeline: presence, an optional decode stage
 that run **in the order you write them**.
 
 ```go
-Name  string `json:"name"  pipe:"required trim minlen=1 maxlen=50"`
-Email string `json:"email" pipe:"trim lower contains=@"`
-Tags  []string `json:"tags" pipe:"optional inner:notempty minlen=1"`
+Name  string   `json:"name"  pipe:"required trim notempty maxlen=50"`
+Email string   `json:"email" pipe:"trim lower contains=@"`
+Auth  []string `json:"tags"  pipe:"optional inner:starts='Bearer ' minlen=1"`
+Num   int      `json:"age"   pipe:"required gte=10 clamp=10|100"`
 ```
-
-Steps are whitespace-separated. A value or message containing spaces is
-single-quoted (`contains='foo bar'`). The intra-rule arg separator is `|`
-(`oneof=a|b|c`, `clamp=0|100`).
 
 #### presence — `required` / `optional`
 
-`required` asserts the JSON key is present (checked at object close →
-`RequiredError`); `optional` is an explicit "may be absent" marker. They are
-position-independent (write them first by convention). Presence is separate from
-the value: a `required` field whose value is `null` still errors unless you also
-accept `null` (see `nullzero` below). An absent key leaves the Go zero value.
+`required` asserts the JSON key is present, `optional` is an explicit
+"may be absent" marker. They are position-independent
+but prefer writing them first by convention. Presence is separate from the
+value: a `required` field whose value is `null` still errors unless you also
+accept `null`. An absent key leaves the field untouched — zero value or cleared
+merge target.
 
-#### decode stage — JSON-shape variants (`/`)
+#### multiple JSON shapes
 
-By default a field decodes from its type's natural JSON shape. To accept more
-than one shape, list `/`-separated variants; ggen peeks the incoming shape and
-routes to the matching variant (one per JSON shape):
+ggen supports accepting different JSON shapes into a single target field. To do
+so just type your pipeline with a slash separated list of functions. ggen is going
+to automatically infer accepted JSON values based on function's input parameter,
+and will try to use those should it encounter the appropriate value.
+
+Separate multiple with a slash /:
 
 - `.` — native decode of the field type (the plain value).
 - `nullzero` — accept JSON `null`, producing the Go zero value. This is how a
-  non-pointer value field opts into `null`; bare `nullzero` needs no `.`.
-- `@Conv` — a converter `func(W) T` / `func(W) (T, error)` / `func(W) (T, bool)`.
-  ggen scans the input type `W` natively (W decides the shape this variant
-  claims), then calls your func. `W` may be a primitive **or a ggen-decodable
-  struct** — ggen builds it with its own decoder, then converts.
+  non-pointer value field opts into `null`. Bare `nullzero` needs no `.`.
+- `@Conv` — any converter of signature `func(W) T` / `func(W) (T, error)` /
+  `func(W) (T, bool)`. `W` may be a primitive **or a ggen-decodable struct**.
 
 ```go
 // number natively, OR a string-encoded number; then range-checked
@@ -380,16 +291,15 @@ Price int `json:"price" pipe:". / @FromMoney gte=0"`            // FromMoney(Mon
 Opt   int `json:"opt"   pipe:"nullzero / . / @AtoiStrict"`
 ```
 
-A converter needs a signal — `/`, a leading `.` (`./@Conv`), or it's read as a
-value step (below). Variants must claim distinct shapes (one object-rooted, one
-array-rooted, etc.) or codegen errors. Encode is unaffected: the field always
-marshals as its native type.
+You'll need to split the converter from the rest of pipe by either using
+multiple of them separate by a `/` or just one closed with a `~`.
 
-#### value steps — validators + mods, in order
+#### pipeline
 
-Everything after the decode stage operates on the value. **Mods (transforms) and
-validators run in declared order**, so `lte=10 @Double` validates the raw value
-before doubling it, while `@Double lte=10` doubles first.
+Everything after the decode stage operates on field value. One thing to note is
+**pipeline runs in declared order**, so `gte=5 clamp=0|10` rejects anything below
+5 before clamping, while `clamp=5|10 gte=5` clamps first — and then never fails,
+since the clamped value is always in range.
 
 | validators                                                    | error                                          | checks                                         |
 | ------------------------------------------------------------- | ---------------------------------------------- | ---------------------------------------------- |
@@ -408,24 +318,23 @@ before doubling it, while `@Double lte=10` doubles first.
 | `trim`, `lower`, `upper`, `trimleft=X`, `trimright=X`, `replace=old\|new` | string  |
 | `clamp=lo\|hi` (either side may be empty: `clamp=0\|`, `clamp=\|100`)     | numeric |
 
-#### `inner:` / `keys:` — container levels
+#### `inner:` / `keys:`
 
-`inner:` scopes steps to one container level down (per element of a slice/array,
-per value of a map); `keys:` scopes to map keys. A bare prefix takes exactly one
-step (`inner:trim`); group several in parentheses (`inner:(trim maxlen=20)`);
-nest the groups to go deeper (`inner:(minlen=1 inner:(gte=0 lte=100))`). Steps
-written outside any group apply to the whole container.
+`inner:` scopes steps to one container level down. `keys:` scopes to map keys.
+A bare prefix takes exactly one step: `inner:trim`. Group several in parentheses:
+`inner:(trim maxlen=20)`. Nest the groups to go deeper: `inner:(minlen=1 inner:(gte=0 lte=100))`.
+All that isn't paired with `inner:` applies to struct field container value directly.
 
 ```go
 Tags []string `json:"tags" pipe:"inner:(trim maxlen=20) maxlen=100"`
-//                                 per-element trim+bound | whole-slice cap
+//                               per-element trim+bound then whole-slice cap
 Lookup map[string]int `json:"lookup" pipe:"keys:minrunes=2 inner:gte=0"`
 ```
 
-#### custom funcs — `@FuncName` / `@pkg.FuncName`
+#### custom funcs
 
-ggen looks up the function at codegen and classifies it by signature — no
-runtime registry, no `any` boxing, and the Go compiler catches mismatches:
+You can use custom validators and custom transformers with ggen. They're introspected
+at codegen time and are invoked directly from within the generated methods.
 
 | signature            | role                                                             |
 | -------------------- | ---------------------------------------------------------------- |
@@ -436,28 +345,29 @@ runtime registry, no `any` boxing, and the Go compiler catches mismatches:
 | `func(T) (T, bool)`  | mod (fallible; false → `ModError` parse error; message-capable)  |
 | `func(W) T` (W ≠ T)  | converter (decode-stage variant only — see above)                |
 
-`func(bool) bool` is rejected (ambiguous — use `func(bool) error`). The bool
-forms take an inline message: `@MustBeEven:'value must be even'`.
+`func(bool) bool` is rejected (use `func(bool) error` instead).
+
+The bool forms can additionally take an inline message: `@MustBeEven:'value must be even'`.
 
 ```go
 //ggen:generate
 type Box struct {
-	N int `json:"n" pipe:"@EvenOnly"`        // func(int) error → validator
+	N int `json:"n" pipe:"@EvenOnly"`                  // func(int) error → validator
 	M int `json:"m" pipe:"@MustBeEven:'must be even'"` // func(int) bool
 }
 func EvenOnly(n int) error { if n%2 != 0 { return errors.New("must be even") }; return nil }
 func MustBeEven(n int) bool { return n%2 == 0 }
 ```
 
-Cross-package references (`@pkg.FuncName`) resolve through the source file's
+Cross-package references like `@pkg.FuncName` resolve through the source file's
 import block — file-scoped aliases and blank imports (`_ "path"`) both work.
 
-### `hint:"..."` — preallocation
+### `hint:"..."`
 
-`hint:"N"` preallocates a slice/map with cap N (`make([]T, 0, N)`), overriding
-the default cap of 4 and any `minlen`-derived cap. Per-level via `inner:`:
-`hint:"32 inner:8"` sizes the outer cap 32, inner rows cap 8. `hint:"0"`
-disables preallocation; a negative hint is a generate-time error.
+`hint:"N"` tells ggen to preallocate the tagret slice or map with N capacity,
+overriding default 4 or minlen-derived preallocation hint. Can pair with `inner`
+mechanics described above. Setting N to 0 disabled preallocation completely.
+Negative values are not allowed.
 
 ### inspecting errors
 
@@ -466,28 +376,21 @@ var minlen *validation.MinLenError
 if errors.As(err, &minlen) {
 	// minlen.Path  — root-relative path segments, e.g. ["addr", "zip"]
 	// minlen.Limit, minlen.Got
-	// minlen.Pos   — byte offset of the failure, relative to the full payload
+	// minlen.Pos   — byte offset of the failure
 }
 ```
 
-Every validation error carries a `Pos int` — the byte offset of the failure
-relative to the full payload, the same on the bytes and stream paths. (On the
-stream path it accounts for buffer compaction, so it stays meaningful across a
-long stream rather than tracking the sliding `scan.Stream.Pos` window.)
+> [!NOTE] In `-multierr` mode the generated code returns `validation.Errors`, a
+> `validation.Error` slice instead of stopping at first failure.
 
-> In `-multierr` mode the generated code returns `validation.Errors`
-> (`[]validation.Error`) instead of stopping on the first failure. It implements
-> `Unwrap() []error` so `errors.Is` / `errors.As` walk every accumulated error.
-
-Low-level parse failures (malformed JSON, wrong primitive type) come back
-wrapped in `*decode.ParseError`, which carries the JSON field path the decoder
-was working on and a byte offset:
+Low-level parse failures such as malformed JSON or unexpected JSON value come back
+wrapped in `*decode.ParseError` that also carries some parsing metadata:
 
 ```go
 var pe *decode.ParseError
 if errors.As(err, &pe) {
-	// pe.Field — dotted JSON path, e.g. "addr.street"
-	// pe.Pos   — byte offset within the data slice passed to DecodeFrom
+	// pe.Path  — root-relative path segments, e.g. ["addr", "street"]
+	// pe.Pos   — byte offset
 	// pe.Err   — underlying sentinel (scan.ErrBadString, scan.ErrBadObject, …)
 }
 
@@ -496,22 +399,17 @@ if errors.As(err, &pe) {
 if errors.Is(err, scan.ErrBadString) { ... }
 ```
 
-Validation errors are NOT wrapped: their typed pointers (`*validation.MinLenError`
-etc.) remain directly reachable via `errors.As`. `ParseError.Error()` only
-prints the `parse error at <field> (pos <n>)` prefix — call `errors.Unwrap` to
-get the underlying message.
-
 ## supported kinds
 
-| category  | go types                                                         | wire   | notes                                                                                            |
-| --------- | ---------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------ |
-| primitive | `string`, `bool`, `int*`, `uint*`, `float*`                      | scalar | `*T` for any of these — `null` ↔ `nil`; multi-level `**T`/… also native                          |
-| slice     | `[]T`                                                            | array  | nil → `null`; `[]*T` decodes into a single contiguous slab (N allocs → ~log N); `[]**T`/… native |
-| array     | `[N]T`                                                           | tuple  | strict element count — mismatch → `validation.LenError`; `[N]*T` uses a fixed slab               |
-| map       | `map[string]V`                                                   | object | string keys only; `map[string]*V` / `**V` / … values decode natively, `null` ↔ `nil`             |
-| struct    | named / embedded                                                 | object | embedded fields are promoted, same as `encoding/json`                                            |
-| cross-pkg | foreign struct / named type                                      | varies | static method-set probe at codegen — see _cross-package interfaces_ below                        |
-| alias     | `//ggen:generate type X ...` (see [type aliases](#type-aliases)) | varies | full method surface generated; strategy picked from the underlying type                          |
+| category  | go types                                                         | wire   | notes                                                                                      |
+| --------- | ---------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------ |
+| primitive | `string`, `bool`, `int*`, `uint*`, `float*`                      | scalar | `*T` for any of these — `null` ↔ `nil`; multi-level `**T`/… also supported                 |
+| slice     | `[]T`                                                            | array  | nil → `null`; `[]*T` decodes into a single contiguous `[]T` slab. `[]**T`/… also supported |
+| array     | `[N]T`                                                           | tuple  | strict element count — mismatch → `validation.LenError`; `[N]*T` uses a fixed `[N]T` slab  |
+| map       | `map[string]V`                                                   | object | string keys only. `map[string]*V` / `**V` / … values decode natively, `null` ↔ `nil`       |
+| struct    | named / embedded                                                 | object | embedded fields are promoted, same as `encoding/json`                                      |
+| cross-pkg | foreign struct / named type                                      | varies | static method-set probe at codegen — see _cross-package interfaces_ below                  |
+| alias     | `//ggen:generate type X ...` (see [type aliases](#type-aliases)) | varies | full method surface generated; strategy picked from the underlying type                    |
 
 ### cross-package interfaces
 
@@ -519,16 +417,20 @@ For any field whose type is defined outside the package being generated, ggen
 probes the method set at codegen time and emits a direct call — no runtime
 probing. The first method available in order is picked:
 
-| direction | ladder                                                                                |
-| --------- | ------------------------------------------------------------------------------------- |
-| decode    | `DecodeFrom` → `UnmarshalJSON` → `UnmarshalText` → `encoding/json.Unmarshal`          |
-| encode    | `AppendJSON` → `MarshalJSON` → `AppendText` → `MarshalText` → `encoding/json.Marshal` |
+| direction | ladder                                                                                            |
+| --------- | ------------------------------------------------------------------------------------------------- |
+| decode    | `DecodeFrom` (`DecodeFromStream`) → `UnmarshalJSON` → `UnmarshalText` → `encoding/json.Unmarshal` |
+| encode    | `AppendJSON` → `MarshalJSON` → `AppendText` → `MarshalText` → `encoding/json.Marshal`             |
 
-Types like `google/uuid` implement `TextMarshaler`/`TextUnmarshaler`, so the
-ladder routes them through the text path automatically. This means that even
-though a type might have JSON marshalling methods, its wire shape is still a JSON
-string when serialized via ggen methods. `AppendText` is preferred over
-`MarshalText`.
+Types like `uuid.UUID` (Go 1.27's stdlib `uuid`, or `github.com/google/uuid`)
+implement `TextMarshaler`/`TextUnmarshaler` and no JSON methods at all, so the
+ladder routes them through the text path and their wire shape is a JSON string.
+Both expose `AppendText`, which ggen prefers over `MarshalText` — it appends
+into the caller's buffer instead of returning a fresh `[]byte`.
+
+Note the ladder is ordered, not additive: a type carrying BOTH JSON and text
+methods takes the JSON rung, so its wire shape is whatever `MarshalJSON`
+produces, not a string.
 
 `encoding/json.Unmarshal` and `json.Marshal` are used only as a fallback when
 none of the above methods are present on the custom type.
@@ -540,13 +442,13 @@ none of the above methods are present on the custom type.
 decoded like any other ggen type. The codegen strategy is picked automatically
 from the underlying type's shape and method set:
 
-| flavor                           | example                 | strategy                                                                              |
-| -------------------------------- | ----------------------- | ------------------------------------------------------------------------------------- |
-| primitive                        | `type Count int`        | scan + cast; `htmlescape`/`marshal`/`unmarshal` annotations still apply               |
-| struct (exported fields)         | `type Comment Inner`    | field introspection — treats the alias like a regular struct                          |
-| struct (has `DecodeFrom`)        | `type X HasGgenMethods` | cast & delegate to the underlying's existing ggen methods                             |
-| struct (opaque + Marshaler/Text) | `type Local time.Time`  | delegate to underlying's `MarshalJSON`/`MarshalText` (Go 1.24 `AppendText` preferred) |
-| container                        | `type Tags []string`    | same emitters as slice/map/array fields — all field-level features apply              |
+| flavor                           | example                 | strategy                                                                 |
+| -------------------------------- | ----------------------- | ------------------------------------------------------------------------ |
+| primitive                        | `type Count int`        | scan + cast; `htmlescape`/`marshal`/`unmarshal` annotations still apply  |
+| struct (exported fields)         | `type Comment Inner`    | field introspection — treats the alias like a regular struct             |
+| struct (has `DecodeFrom`)        | `type X HasGgenMethods` | cast & delegate to the underlying's existing ggen methods                |
+| struct (opaque + Marshaler/Text) | `type Local time.Time`  | delegate to underlying's `MarshalJSON`/`AppendText`                      |
+| container                        | `type Tags []string`    | same emitters as slice/map/array fields — all field-level features apply |
 
 Aliases of channels, interfaces, and functions are rejected at generate time (no
 sensible JSON shape for those).
@@ -563,20 +465,20 @@ sensible JSON shape for those).
 type HtmlString string
 
 //ggen:generate
-type UserID int64
+type ID int64
 
 //ggen:generate
 type Tags []string
 
 //ggen:generate
-type LocalUUID uuid.UUID  // delegates to uuid.UUID's TextMarshaler
+type LocalUUID uuid.UUID  // delegates to uuid.UUID's TextAppender
 
 //ggen:generate
 type Comment struct {
-	ID     UserID     `json:"id"     pipe:"gte=1"`                           // numeric alias, no quoting; gte runs against int
-	Author string     `json:"author" pipe:"required trim minlen=1"`         // plain string, fast path
+	ID     ID         `json:"id"     pipe:"gte=1"`                           // numeric alias, no quoting; gte runs against int
+	Author string     `json:"author" pipe:"required trim minlen=1"`          // plain string, fast path
 	Body   HtmlString `json:"body"   pipe:"required trim lower maxlen=4096"` // \uXXXX-escaped via the alias; mods cast through string
-	Tags   Tags       `json:"tags"   pipe:"inner:notempty"`                 // inner: runs against each element
+	Tags   Tags       `json:"tags"   pipe:"inner:notempty"`                  // inner: runs against each element
 }
 ```
 
@@ -588,35 +490,34 @@ cost only lands on `Body`, not on `Author`.
 ggen treats a number of stdlib types as first-class, with special encoding and
 decoding rules:
 
-| type                   | wire                | format hints                                                                                                  |
-| ---------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `time.Time`            | RFC3339Nano string  | `format:unix`, `unixmilli`, `unixmicro`, `unixnano`, `RFC3339`, custom layout `format:'2006-01-02'`           |
-| `time.Duration`        | string `"1h30m"`    | `format:sec`, `milli`, `micro`, `nano`, `units` (default)                                                     |
-| `[]byte`               | base64 string       | `format:base64` (default), `base64url`, `base32`, `base32hex`, `base16`/`hex`, `array`                        |
-| `net.IP`               | text                | —                                                                                                             |
-| `netip.Addr`           | text                | —                                                                                                             |
-| `netip.Prefix`         | text                | —                                                                                                             |
-| `json.RawMessage`      | passthrough         | zero-copy alias on decode                                                                                     |
-| `jsontext.Value`       | passthrough         | zero-copy alias on decode                                                                                     |
-| `net/url.URL`          | string              | `url.Parse` on decode, `String()` on encode                                                                   |
-| `math/big.Int`         | JSON number         | arbitrary precision                                                                                           |
-| `math/big.Float`       | JSON string         | arbitrary precision (matches jsonv2)                                                                          |
-| `math/big.Rat`         | JSON string         | `"22/7"`                                                                                                      |
-| `database/sql.NullX`   | inner value or null | `NullString`, `NullInt64`/`32`/`16`, `NullByte`, `NullBool`, `NullFloat64`, `NullTime`                        |
-| `database/sql.Null[T]` | inner value or null | generic form (Go 1.22); any `T` ggen handles as a field (primitive, `time.Time`, `uuid.UUID`, named types, …) |
+| type                               | wire                | notes                                                                                               |
+| ---------------------------------- | ------------------- | --------------------------------------------------------------------------------------------------- |
+| `time.Time`                        | string              | `format:unix`, `unixmilli`, `unixmicro`, `unixnano`, `RFC3339`, custom layout `format:'2006-01-02'` |
+| `time.Duration`                    | string              | `format:sec`, `milli`, `micro`, `nano`, `units` (default)                                           |
+| `[]byte`                           | base64 string       | `format:base64` (default), `base64url`, `base32`, `base32hex`, `base16`/`hex`, `array`              |
+| `net.IP`                           | string              | —                                                                                                   |
+| `netip.Addr`                       | string              | —                                                                                                   |
+| `netip.Prefix`                     | string              | —                                                                                                   |
+| `json.RawMessage`/`jsontext.Value` | passthrough         | —                                                                                                   |
+| `net/url.URL`                      | string              | `url.Parse` on decode, `String()` on encode. incompatible with stdlib                               |
+| `math/big.Int`                     | number              | arbitrary precision                                                                                 |
+| `math/big.Float`                   | string              | arbitrary precision (matches stdlib)                                                                |
+| `math/big.Rat`                     | string              | `"22/7"`                                                                                            |
+| `database/sql.Null*`               | inner value or null | incompatible with stdlib                                                                            |
+| `database/sql.Null[T]`             | inner value or null | ggen handles `T` as a field with extra nullzero semantics                                           |
 
 `any` also works, similar to how the standard json treats it.
 
 #### divergences from stdlib
 
-The `net/url.URL`, `sql.NullX`, and `sql.Null[T]` rows above ship a different
+The `net/url.URL`, `sql.Null*`\*, and `sql.Null[T]` rows above ship a different
 wire shape from `encoding/json` v1/v2 — ggen serializes them the way consumers
 usually expect, diverging from stdlib's exported-field struct dump:
 
-| type          | ggen wire             | stdlib wire (v1 + v2)                          |
-| ------------- | --------------------- | ---------------------------------------------- |
-| `net/url.URL` | `"https://x/p?q=1"`   | `{"Scheme":"https","Host":"x", ... 11 fields}` |
-| `sql.NullX`   | inner value or `null` | `{"<Inner>":val,"Valid":true}`                 |
+| type                      | ggen wire             | stdlib wire (v1 + v2)                          |
+| ------------------------- | --------------------- | ---------------------------------------------- |
+| `net/url.URL`             | `"https://x/p?q=1"`   | `{"Scheme":"https","Host":"x", ... 11 fields}` |
+| `sql.Null*`/`sql.Null[T]` | inner value or `null` | `{"<Inner>":val,"Valid":true}`                 |
 
 ## examples
 
@@ -689,7 +590,7 @@ type Event struct {
 this whole project was vibe coded with claude code. every line of
 the generator, the runtime libraries, the tests, the fuzzers — typed
 by the model, steered by me. i didnt really care about code of the
-generator, instead im laser focused on quality of the _generated_ code.
+generator, instead laser focused on quality of the _generated_ code.
 
 ## license
 

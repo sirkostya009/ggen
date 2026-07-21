@@ -182,6 +182,30 @@ surface pinned by `Decoder[T]`).
 - **`nullzero` follow-up.** Extend the per-field `nullzero` decode variant to
   top-level alias types (needs a non-dispatch null branch in the alias renderers).
 
+- **Consolidate the per-field behaviour knobs into one concept.** Today a field's
+  shape is steered by four unrelated mechanisms with four different syntaxes and
+  four different scopes: `pipe:` value steps (mods `@Func`/`trim`/`clamp`, run
+  in declared order, decode-side only), `pipe:` decode-stage variants
+  (`@Conv` converters + `nullzero`, selected by wire shape, need a `/`/`.`/`~`
+  signal to not be read as a value step), struct-level annotations
+  (`htmlescape`, `-nullzero`, `-copy` — global-or-per-struct, encode AND decode),
+  and type aliases (`//ggen:generate htmlescape type HtmlString string` — the
+  only way to get per-FIELD encode behaviour, and only by minting a type). The
+  seams show: `nullzero` exists as both a struct annotation and a decode variant;
+  `htmlescape` is per-struct or per-alias but never per-field; converters are
+  decode-only with no encode counterpart, so a `@FromMoney` field silently
+  marshals as its native type. Idea: one uniform per-field step vocabulary where
+  a step declares its own stage (decode-shape / value / encode) and scope, so
+  `htmlescape` is just an encode step, `nullzero` just a decode step, and a
+  converter can carry an inverse for marshal. Open questions: does an encode
+  step break the "wire shape is decided by the type, not the tag" invariant the
+  alias design deliberately picked (README says so explicitly)? Is a bidirectional
+  converter pair worth the tag syntax, or is an alias with methods the right
+  answer? Does collapsing the stages cost the grammar its current
+  ability to classify a step without consulting the signature? Big breaking
+  change to the whole user-facing tag surface — only worth it if it comes out
+  genuinely smaller to explain, not merely more uniform.
+
 # Tried Rejected
 
 - **Duplicate-key detection in skipped / `any` / raw / nested scopes.** ggen's
