@@ -542,3 +542,42 @@ surface pinned by `Decoder[T]`).
   map cannot separate them), and on the one expressible shape (ctrl detect =
   top-3-bit select + Equal-zero) vgf2p8affineqb measured ~3% SLOWER than
   Min/Equal on Zen5. Don't retry without a class that IS an affine subspace.
+
+- **Portable width-agnostic `simd` package (go1.27, proposal #78902) — re-audit
+  when mask extraction lands.** Audited 2026-07 against go1.27rc2: replaces
+  NOTHING yet. The mechanism IS the wanted "one kernel, auto width" shape —
+  width-agnostic types (`Uint8s`/`Mask8s`), one width per execution auto-picked
+  from hardware (AVX/AVX2/AVX512/NEON, ≥128-bit), pure-Go emulation floor,
+  `GODEBUG=simd=N` pinning, early compiler rewrite/multiversioning to preserve
+  inlining — but the v0 op set can't express a single ggen kernel. Fatal gaps:
+  `Mask8s` = {And, Or, String, ToArch, ToInt8s} — NO movemask→scalar, no
+  FirstTrue/AnyTrue/CountTrue, so the classify→`ToBits()`→`TrailingZeros`
+  spine (~35 sites across all 6 simd files + the generate.go:2609 inline-
+  classify template) is inexpressible (portable `ToBits` is a sign-reinterpret
+  Int8s→Uint8s, NOT movemask); no PermuteOrZero/ConcatShiftBytesRight/IsZero/
+  reductions, so `validUTF8x16` is out too. The classify HALF is fully covered
+  (Broadcast/Load/LoadPart/Equal/Less/Min/Or/Xor/SubSaturated). The `ToArch()
+  any` escape hatch = boxing + type-assert + build tags — arch-specific again,
+  pointless. Why: v0 ops = intersection(wasm SIMD128 API, amd64 archsimd),
+  scalable-across-widths only; movemask/shuffle are absent-not-rejected and
+  expansion is promised — wasm itself has i8x16.bitmask/any_true/swizzle, so
+  the intersection won't block them forever. RE-AUDIT TRIGGER: mask extraction
+  (movemask / index-of-first-true) + byte shuffle landing in portable `simd`.
+  Even then, weigh: one width-agnostic body erases the measured per-width
+  instruction tuning (Min/Equal ctrl trick below 512 vs native unsigned Less +
+  scalar-register mask OR at 512 — the −2.9% shave lives in exactly that
+  divergence); the emulation floor sits far below the tuned scalar tier
+  (IndexByte+SWAR), so the ladder stays vector-OR-scalar-tier; the real win is
+  deleting the `-simd` tier plumbing (scanStringFn / tierStreamStringCalls /
+  simdSuffix, 3× kernel copies, wrong-CPU faults) while GODEBUG still pins
+  width for A/Bs. House-rule interleaved A/B applies.
+  SEPARATE 1.27 NOTE (bites at any toolchain bump, portable pkg or not):
+  1.27 REVISES archsimd's amd64 API — `Load*Slice` → `Load*`, `Load*SlicePart`
+  → `Load*Part` (Load/LoadArray/LoadPart triple); doc scan also flagged
+  possible PermuteOrZero receiver-set changes + a ConcatShiftBytesRight rename
+  (page too big for a reliable remote scan — verify at bump time). All six
+  simd files + the generate.go emitter strings break mechanically; go.work
+  pins 1.26 so nothing is urgent. archsimd also GAINED arm64 NEON + wasm
+  128-bit tiers: an arm64 tier is writable by porting the x16 kernels near-1:1
+  (NEON TBL/EXT cover validUTF8x16's PSHUFB/VPALIGNR needs if archsimd exposes
+  them) — archsimd, not the portable package, is the cross-arch path today.
