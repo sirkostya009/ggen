@@ -294,7 +294,7 @@ func walkPackages(pattern string, act func(dir string) error) error {
 }
 
 // genGlobalsMu protects the globally-shared generator state touched by
-// generate() (generatedTypes, generatedAliasKinds, the oneof registry, the
+// generate() (generatedTypes, namedKinds, the oneof registry, the
 // pools). Packages parse concurrently but only one goroutine enters the
 // generate+write section; the lock is held for the whole post-parse phase.
 var genGlobalsMu sync.Mutex
@@ -333,17 +333,15 @@ func generateDir(dir, outFlag, pkgFlag string) error {
 	genGlobalsMu.Lock()
 	defer genGlobalsMu.Unlock()
 	generatedTypes = make(map[string]struct{}, len(structs))
-	generatedAliasKinds = make(map[string]TypeKind)
+	namedKinds = make(map[string]TypeKind)
 	for _, s := range structs {
 		generatedTypes[s.Name] = struct{}{}
-		if s.IsAlias && kindPrimitiveName(s.AliasKind) != "" {
-			generatedAliasKinds[s.Name] = s.AliasKind
-		}
 	}
+	seedNamedKinds(structs)
 	cyclicTypes = computeCyclicTypes(structs)
 	defer func() {
 		generatedTypes = nil
-		generatedAliasKinds = nil
+		namedKinds = nil
 		cyclicTypes = nil
 	}()
 
@@ -474,19 +472,17 @@ func generateSingleFile(file string, wanted []string, outFlag, pkgFlag string) e
 	genGlobalsMu.Lock()
 	defer genGlobalsMu.Unlock()
 	generatedTypes = make(map[string]struct{}, len(siblings)+len(structs))
-	generatedAliasKinds = make(map[string]TypeKind)
+	namedKinds = make(map[string]TypeKind)
 	for n := range siblings {
 		generatedTypes[n] = struct{}{}
 	}
 	for _, s := range structs {
 		generatedTypes[s.Name] = struct{}{}
-		if s.IsAlias && kindPrimitiveName(s.AliasKind) != "" {
-			generatedAliasKinds[s.Name] = s.AliasKind
-		}
 	}
+	seedNamedKinds(structs)
 	defer func() {
 		generatedTypes = nil
-		generatedAliasKinds = nil
+		namedKinds = nil
 		cyclicTypes = nil
 	}()
 

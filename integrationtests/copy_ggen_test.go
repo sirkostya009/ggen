@@ -12,6 +12,26 @@ import (
 	"github.com/sirkostya009/ggen/validation"
 )
 
+// ggenCap_66530ca8_0: prealloc cap for []CopyDoc — as many elements as fit under 80 bytes,
+// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
+// else 1. See decode.PreallocCap.
+const ggenCap_66530ca8_0 = (min((80/max(int(unsafe.Sizeof(*new(CopyDoc))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(CopyDoc))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(CopyDoc))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(CopyDoc))), 1)), 1)
+
+// ggenCap_66530ca8_1: prealloc cap for []CopyRef — as many elements as fit under 80 bytes,
+// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
+// else 1. See decode.PreallocCap.
+const ggenCap_66530ca8_1 = (min((80/max(int(unsafe.Sizeof(*new(CopyRef))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(CopyRef))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(CopyRef))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(CopyRef))), 1)), 1)
+
+// ggenCap_66530ca8_2: prealloc cap for []*CopyRef — as many elements as fit under 80 bytes,
+// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
+// else 1. See decode.PreallocCap.
+const ggenCap_66530ca8_2 = (min((80/max(int(unsafe.Sizeof(*new(*CopyRef))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(*CopyRef))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(*CopyRef))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(*CopyRef))), 1)), 1)
+
+// ggenCap_66530ca8_3: prealloc cap for []string — as many elements as fit under 80 bytes,
+// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
+// else 1. See decode.PreallocCap.
+const ggenCap_66530ca8_3 = (min((80/max(int(unsafe.Sizeof(*new(string))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(string))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(string))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(string))), 1)), 1)
+
 func (recv CopyDoc) DecodeFrom(data []byte) (CopyDoc, int, error) {
 	return recv.decodeFromDepth(data, 0)
 }
@@ -106,8 +126,14 @@ func (recv CopyDoc) decodeFromDepth(data []byte, _depth int) (result CopyDoc, i 
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
-			if result.Children == nil {
-				result.Children = []CopyDoc{}
+			if i < len(data) && data[i] == ']' {
+				if result.Children == nil {
+					result.Children = []CopyDoc{}
+				}
+			} else {
+				if result.Children == nil {
+					result.Children = make([]CopyDoc, 0, ggenCap_66530ca8_0)
+				}
 			}
 			if i < len(data) && data[i] != ']' {
 				for {
@@ -313,9 +339,9 @@ func (recv CopyDoc) decodeFromDepth(data []byte, _depth int) (result CopyDoc, i 
 				}
 			} else {
 				if result.Refs == nil {
-					result.Refs = make([]*CopyRef, 0, 4)
+					result.Refs = make([]*CopyRef, 0, ggenCap_66530ca8_2)
 				}
-				slab0 = make([]CopyRef, 0, 4)
+				slab0 = make([]CopyRef, 0, ggenCap_66530ca8_1)
 			}
 			if i < len(data) && data[i] != ']' {
 				for {
@@ -388,7 +414,7 @@ func (recv CopyDoc) decodeFromDepth(data []byte, _depth int) (result CopyDoc, i 
 				}
 			} else {
 				if result.Tags == nil {
-					result.Tags = make([]string, 0, 4)
+					result.Tags = make([]string, 0, ggenCap_66530ca8_3)
 				}
 			}
 			if i < len(data) && data[i] != ']' {
@@ -564,7 +590,7 @@ func (recv CopyDoc) decodeFromStreamDepth(s *scan.Stream, _depth int) (result Co
 				}
 			} else {
 				if result.Children == nil {
-					result.Children = []CopyDoc{}
+					result.Children = make([]CopyDoc, 0, ggenCap_66530ca8_0)
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {
@@ -804,9 +830,9 @@ func (recv CopyDoc) decodeFromStreamDepth(s *scan.Stream, _depth int) (result Co
 				}
 			} else {
 				if result.Refs == nil {
-					result.Refs = make([]*CopyRef, 0, 4)
+					result.Refs = make([]*CopyRef, 0, ggenCap_66530ca8_2)
 				}
-				slab0 = make([]CopyRef, 0, 4)
+				slab0 = make([]CopyRef, 0, ggenCap_66530ca8_1)
 			}
 			for s.Bytes()[s.Pos] != ']' {
 				if s.Pos >= len(s.Bytes()) {
@@ -933,7 +959,7 @@ func (recv CopyDoc) decodeFromStreamDepth(s *scan.Stream, _depth int) (result Co
 				}
 			} else {
 				if result.Tags == nil {
-					result.Tags = make([]string, 0, 4)
+					result.Tags = make([]string, 0, ggenCap_66530ca8_3)
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {

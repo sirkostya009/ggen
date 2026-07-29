@@ -14,6 +14,16 @@ import (
 	"github.com/sirkostya009/ggen/validation"
 )
 
+// ggenCap_c740d997_0: prealloc cap for []Node — as many elements as fit under 80 bytes,
+// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
+// else 1. See decode.PreallocCap.
+const ggenCap_c740d997_0 = (min((80/max(int(unsafe.Sizeof(*new(Node))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(Node))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(Node))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(Node))), 1)), 1)
+
+// ggenCap_c740d997_1: prealloc cap for []string — as many elements as fit under 80 bytes,
+// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
+// else 1. See decode.PreallocCap.
+const ggenCap_c740d997_1 = (min((80/max(int(unsafe.Sizeof(*new(string))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(string))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(string))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(string))), 1)), 1)
+
 func (recv Address) DecodeFrom(data []byte) (result Address, i int, err error) {
 	result = recv
 	const _depth = 0
@@ -449,8 +459,14 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
-			if result.Children == nil {
-				result.Children = []Node{}
+			if i < len(data) && data[i] == ']' {
+				if result.Children == nil {
+					result.Children = []Node{}
+				}
+			} else {
+				if result.Children == nil {
+					result.Children = make([]Node, 0, ggenCap_c740d997_0)
+				}
 			}
 			if i < len(data) && data[i] != ']' {
 				for {
@@ -691,7 +707,7 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 				}
 			} else {
 				if result.Tags == nil {
-					result.Tags = make([]string, 0, 4)
+					result.Tags = make([]string, 0, ggenCap_c740d997_1)
 				}
 			}
 			if i < len(data) && data[i] != ']' {
@@ -876,7 +892,7 @@ func (recv Node) decodeFromStreamDepth(s *scan.Stream, _depth int) (result Node,
 				}
 			} else {
 				if result.Children == nil {
-					result.Children = []Node{}
+					result.Children = make([]Node, 0, ggenCap_c740d997_0)
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {
@@ -1110,7 +1126,7 @@ func (recv Node) decodeFromStreamDepth(s *scan.Stream, _depth int) (result Node,
 				}
 			} else {
 				if result.Tags == nil {
-					result.Tags = make([]string, 0, 4)
+					result.Tags = make([]string, 0, ggenCap_c740d997_1)
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {

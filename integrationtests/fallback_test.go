@@ -121,3 +121,86 @@ func TestTextFallback_unmarshalErrorPropagates(t *testing.T) {
 		t.Errorf("error didn't include UnmarshalText message: %v", err)
 	}
 }
+
+// ---- cross-package ggen types in every field position ----------------
+//
+// A VALUE field never spells the foreign type out, which is why the container
+// and pointer positions were the ones emitting a file that named a package it
+// never imported. The marshal side had its own trap: the AppendJSON signature
+// probe looked for `func([]byte) []byte` while the emitter writes
+// `([]byte, error)`, so every cross-package value fell through to
+// encoding/json.
+
+//ggen:generate
+type CrossPkgShapes struct {
+	One  thirdparty2.External2            `json:"one"`
+	Many []thirdparty2.External2          `json:"many"`
+	Dict map[string]thirdparty2.External2 `json:"dict"`
+	Ptr  *thirdparty2.External2           `json:"ptr"`
+	PPtr **thirdparty2.External2          `json:"pptr"`
+	Slab []*thirdparty2.External2         `json:"slab"`
+	Arr  [2]thirdparty2.External2         `json:"arr"`
+}
+
+func TestCrossPkg_AllPositions(t *testing.T) {
+	const payload = `{
+		"one":{"key":"a","value":1},
+		"many":[{"key":"b","value":2},{"key":"c","value":3}],
+		"dict":{"d":{"key":"d","value":4}},
+		"ptr":{"key":"e","value":5},
+		"pptr":{"key":"f","value":6},
+		"slab":[{"key":"g","value":7}],
+		"arr":[{"key":"h","value":8},{"key":"i","value":9}]
+	}`
+
+	got, _, err := CrossPkgShapes{}.DecodeFrom([]byte(payload))
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.One.Key != "a" || got.One.Value != 1 {
+		t.Errorf("value field: %+v", got.One)
+	}
+	if len(got.Many) != 2 || got.Many[1].Key != "c" {
+		t.Errorf("slice field: %+v", got.Many)
+	}
+	if got.Dict["d"].Value != 4 {
+		t.Errorf("map field: %+v", got.Dict)
+	}
+	if got.Ptr == nil || got.Ptr.Key != "e" {
+		t.Errorf("pointer field: %+v", got.Ptr)
+	}
+	if got.PPtr == nil || *got.PPtr == nil || (*got.PPtr).Key != "f" {
+		t.Errorf("double-pointer field: %+v", got.PPtr)
+	}
+	if len(got.Slab) != 1 || got.Slab[0].Value != 7 {
+		t.Errorf("pointer-slab field: %+v", got.Slab)
+	}
+	if got.Arr[1].Key != "i" {
+		t.Errorf("array field: %+v", got.Arr)
+	}
+
+	// Marshal has to reach the foreign type's own AppendJSON, and round-trip.
+	out, err := got.AppendJSON(nil)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	back, _, err := CrossPkgShapes{}.DecodeFrom(out)
+	if err != nil {
+		t.Fatalf("re-decode %s: %v", out, err)
+	}
+	if back.One != got.One || back.Dict["d"] != got.Dict["d"] || back.Arr != got.Arr {
+		t.Errorf("round-trip mismatch:\n got %+v\nback %+v", got, back)
+	}
+	if size, n := got.JSONSize(), len(out); size < n {
+		t.Errorf("JSONSize %d under-estimates output %d", size, n)
+	}
+}
+
+// The foreign type's methods must be reached through a pointer too: `*T`'s
+// method set contains T's, so the probe has to look at the pointee.
+func TestCrossPkg_PointerUsesGeneratedMethods(t *testing.T) {
+	v, _, err := CrossPkgShapes{}.DecodeFrom([]byte(`{"ptr":{"key":"","value":1}}`))
+	if err == nil {
+		t.Fatalf("expected the foreign type's own `required minlen=1` rule to fire, got %+v", v)
+	}
+}

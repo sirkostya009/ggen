@@ -17,6 +17,83 @@ import (
 	"github.com/sirkostya009/ggen/validation"
 )
 
+// ggenCap_54d0bf8a_0: prealloc cap for []Node — as many elements as fit under 80 bytes,
+// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
+// else 1. See decode.PreallocCap.
+const ggenCap_54d0bf8a_0 = (min((80/max(int(unsafe.Sizeof(*new(Node))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(Node))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(Node))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(Node))), 1)), 1)
+
+// ggenCap_54d0bf8a_1: prealloc cap for []Node — its maxlen=16 bound when that many
+// elements fit a 512-byte span, else the width default.
+const ggenCap_54d0bf8a_1 = (1-min((16*max(int(unsafe.Sizeof(*new(Node))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1))*16 + (1-(1-min((16*max(int(unsafe.Sizeof(*new(Node))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1)))*ggenCap_54d0bf8a_0
+
+// ggenCap_54d0bf8a_2: prealloc cap for [][]int — as many elements as fit under 80 bytes,
+// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
+// else 1. See decode.PreallocCap.
+const ggenCap_54d0bf8a_2 = (min((80/max(int(unsafe.Sizeof(*new([]int))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new([]int))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new([]int))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new([]int))), 1)), 1)
+
+// ggenCap_54d0bf8a_3: prealloc cap for [][]int — its maxlen=16 bound when that many
+// elements fit a 512-byte span, else the width default.
+const ggenCap_54d0bf8a_3 = (1-min((16*max(int(unsafe.Sizeof(*new([]int))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1))*16 + (1-(1-min((16*max(int(unsafe.Sizeof(*new([]int))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1)))*ggenCap_54d0bf8a_2
+
+// ggenCap_54d0bf8a_4: prealloc cap for []int — as many elements as fit under 80 bytes,
+// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
+// else 1. See decode.PreallocCap.
+const ggenCap_54d0bf8a_4 = (min((80/max(int(unsafe.Sizeof(*new(int))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(int))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(int))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(int))), 1)), 1)
+
+// ggenCap_54d0bf8a_5: prealloc cap for []Addr — as many elements as fit under 80 bytes,
+// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
+// else 1. See decode.PreallocCap.
+const ggenCap_54d0bf8a_5 = (min((80/max(int(unsafe.Sizeof(*new(Addr))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(Addr))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(Addr))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(Addr))), 1)), 1)
+
+// ggenCap_54d0bf8a_6: prealloc cap for []Addr — its maxlen=16 bound when that many
+// elements fit a 512-byte span, else the width default.
+const ggenCap_54d0bf8a_6 = (1-min((16*max(int(unsafe.Sizeof(*new(Addr))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1))*16 + (1-(1-min((16*max(int(unsafe.Sizeof(*new(Addr))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1)))*ggenCap_54d0bf8a_5
+
+// ggenCap_54d0bf8a_7: prealloc cap for []*Addr — as many elements as fit under 80 bytes,
+// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
+// else 1. See decode.PreallocCap.
+const ggenCap_54d0bf8a_7 = (min((80/max(int(unsafe.Sizeof(*new(*Addr))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(*Addr))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(*Addr))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(*Addr))), 1)), 1)
+
+// ggenCap_54d0bf8a_8: prealloc cap for []*Addr — its maxlen=16 bound when that many
+// elements fit a 512-byte span, else the width default.
+const ggenCap_54d0bf8a_8 = (1-min((16*max(int(unsafe.Sizeof(*new(*Addr))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1))*16 + (1-(1-min((16*max(int(unsafe.Sizeof(*new(*Addr))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1)))*ggenCap_54d0bf8a_7
+
+// ggenCap_54d0bf8a_9: prealloc cap for []string — as many elements as fit under 80 bytes,
+// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
+// else 1. See decode.PreallocCap.
+const ggenCap_54d0bf8a_9 = (min((80/max(int(unsafe.Sizeof(*new(string))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(string))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(string))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(string))), 1)), 1)
+
+// ggenCap_54d0bf8a_10: prealloc cap for []string — its maxlen=64 bound when that many
+// elements fit a 512-byte span, else the width default.
+const ggenCap_54d0bf8a_10 = (1-min((64*max(int(unsafe.Sizeof(*new(string))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1))*64 + (1-(1-min((64*max(int(unsafe.Sizeof(*new(string))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1)))*ggenCap_54d0bf8a_9
+
+// ggenCap_54d0bf8a_11: prealloc cap for []CopyNode — as many elements as fit under 80 bytes,
+// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
+// else 1. See decode.PreallocCap.
+const ggenCap_54d0bf8a_11 = (min((80/max(int(unsafe.Sizeof(*new(CopyNode))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(CopyNode))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(CopyNode))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(CopyNode))), 1)), 1)
+
+// ggenCap_54d0bf8a_12: prealloc cap for []CopyNode — its maxlen=16 bound when that many
+// elements fit a 512-byte span, else the width default.
+const ggenCap_54d0bf8a_12 = (1-min((16*max(int(unsafe.Sizeof(*new(CopyNode))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1))*16 + (1-(1-min((16*max(int(unsafe.Sizeof(*new(CopyNode))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1)))*ggenCap_54d0bf8a_11
+
+// ggenCap_54d0bf8a_13: prealloc cap for []CopyAddr — as many elements as fit under 80 bytes,
+// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
+// else 1. See decode.PreallocCap.
+const ggenCap_54d0bf8a_13 = (min((80/max(int(unsafe.Sizeof(*new(CopyAddr))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(CopyAddr))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(CopyAddr))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(CopyAddr))), 1)), 1)
+
+// ggenCap_54d0bf8a_14: prealloc cap for []CopyAddr — its maxlen=16 bound when that many
+// elements fit a 512-byte span, else the width default.
+const ggenCap_54d0bf8a_14 = (1-min((16*max(int(unsafe.Sizeof(*new(CopyAddr))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1))*16 + (1-(1-min((16*max(int(unsafe.Sizeof(*new(CopyAddr))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1)))*ggenCap_54d0bf8a_13
+
+// ggenCap_54d0bf8a_15: prealloc cap for []*CopyAddr — as many elements as fit under 80 bytes,
+// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
+// else 1. See decode.PreallocCap.
+const ggenCap_54d0bf8a_15 = (min((80/max(int(unsafe.Sizeof(*new(*CopyAddr))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(*CopyAddr))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(*CopyAddr))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(*CopyAddr))), 1)), 1)
+
+// ggenCap_54d0bf8a_16: prealloc cap for []*CopyAddr — its maxlen=16 bound when that many
+// elements fit a 512-byte span, else the width default.
+const ggenCap_54d0bf8a_16 = (1-min((16*max(int(unsafe.Sizeof(*new(*CopyAddr))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1))*16 + (1-(1-min((16*max(int(unsafe.Sizeof(*new(*CopyAddr))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1)))*ggenCap_54d0bf8a_15
+
 func (recv Addr) DecodeFrom(data []byte) (result Addr, i int, err error) {
 	result = recv
 	const _depth = 0
@@ -409,8 +486,14 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 					i++
 				}
-				if result.Children == nil {
-					result.Children = []Node{}
+				if i < len(data) && data[i] == ']' {
+					if result.Children == nil {
+						result.Children = []Node{}
+					}
+				} else {
+					if result.Children == nil {
+						result.Children = make([]Node, 0, ggenCap_54d0bf8a_1)
+					}
 				}
 				if i < len(data) && data[i] != ']' {
 					for {
@@ -609,7 +692,7 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 					}
 				} else {
 					if result.Matrix == nil {
-						result.Matrix = make([][]int, 0, 4)
+						result.Matrix = make([][]int, 0, ggenCap_54d0bf8a_3)
 					}
 				}
 				if i < len(data) && data[i] != ']' {
@@ -960,9 +1043,9 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 					}
 				} else {
 					if result.Refs == nil {
-						result.Refs = make([]*Addr, 0, 4)
+						result.Refs = make([]*Addr, 0, ggenCap_54d0bf8a_8)
 					}
-					slab0 = make([]Addr, 0, 4)
+					slab0 = make([]Addr, 0, ggenCap_54d0bf8a_6)
 				}
 				if i < len(data) && data[i] != ']' {
 					for {
@@ -1053,7 +1136,7 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 					}
 				} else {
 					if result.Tags == nil {
-						result.Tags = make([]string, 0, 4)
+						result.Tags = make([]string, 0, ggenCap_54d0bf8a_10)
 					}
 				}
 				if i < len(data) && data[i] != ']' {
@@ -1317,7 +1400,7 @@ func (recv Node) decodeFromStreamDepth(s *scan.Stream, _depth int) (result Node,
 					}
 				} else {
 					if result.Children == nil {
-						result.Children = []Node{}
+						result.Children = make([]Node, 0, ggenCap_54d0bf8a_1)
 					}
 				}
 				for s.Bytes()[s.Pos] != ']' {
@@ -1515,7 +1598,7 @@ func (recv Node) decodeFromStreamDepth(s *scan.Stream, _depth int) (result Node,
 					}
 				} else {
 					if result.Matrix == nil {
-						result.Matrix = make([][]int, 0, 4)
+						result.Matrix = make([][]int, 0, ggenCap_54d0bf8a_3)
 					}
 				}
 				for s.Bytes()[s.Pos] != ']' {
@@ -1590,7 +1673,7 @@ func (recv Node) decodeFromStreamDepth(s *scan.Stream, _depth int) (result Node,
 						}
 					} else {
 						if row0 == nil {
-							row0 = make([]int, 0, 4)
+							row0 = make([]int, 0, ggenCap_54d0bf8a_4)
 						}
 					}
 					for s.Bytes()[s.Pos] != ']' {
@@ -1903,9 +1986,9 @@ func (recv Node) decodeFromStreamDepth(s *scan.Stream, _depth int) (result Node,
 					}
 				} else {
 					if result.Refs == nil {
-						result.Refs = make([]*Addr, 0, 4)
+						result.Refs = make([]*Addr, 0, ggenCap_54d0bf8a_8)
 					}
-					slab0 = make([]Addr, 0, 4)
+					slab0 = make([]Addr, 0, ggenCap_54d0bf8a_6)
 				}
 				for s.Bytes()[s.Pos] != ']' {
 					if s.Pos >= len(s.Bytes()) {
@@ -2054,7 +2137,7 @@ func (recv Node) decodeFromStreamDepth(s *scan.Stream, _depth int) (result Node,
 					}
 				} else {
 					if result.Tags == nil {
-						result.Tags = make([]string, 0, 4)
+						result.Tags = make([]string, 0, ggenCap_54d0bf8a_10)
 					}
 				}
 				for s.Bytes()[s.Pos] != ']' {
@@ -2806,8 +2889,14 @@ func (recv CopyNode) decodeFromDepth(data []byte, _depth int) (result CopyNode, 
 				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 					i++
 				}
-				if result.Children == nil {
-					result.Children = []CopyNode{}
+				if i < len(data) && data[i] == ']' {
+					if result.Children == nil {
+						result.Children = []CopyNode{}
+					}
+				} else {
+					if result.Children == nil {
+						result.Children = make([]CopyNode, 0, ggenCap_54d0bf8a_12)
+					}
 				}
 				if i < len(data) && data[i] != ']' {
 					for {
@@ -3006,7 +3095,7 @@ func (recv CopyNode) decodeFromDepth(data []byte, _depth int) (result CopyNode, 
 					}
 				} else {
 					if result.Matrix == nil {
-						result.Matrix = make([][]int, 0, 4)
+						result.Matrix = make([][]int, 0, ggenCap_54d0bf8a_3)
 					}
 				}
 				if i < len(data) && data[i] != ']' {
@@ -3360,9 +3449,9 @@ func (recv CopyNode) decodeFromDepth(data []byte, _depth int) (result CopyNode, 
 					}
 				} else {
 					if result.Refs == nil {
-						result.Refs = make([]*CopyAddr, 0, 4)
+						result.Refs = make([]*CopyAddr, 0, ggenCap_54d0bf8a_16)
 					}
-					slab0 = make([]CopyAddr, 0, 4)
+					slab0 = make([]CopyAddr, 0, ggenCap_54d0bf8a_14)
 				}
 				if i < len(data) && data[i] != ']' {
 					for {
@@ -3453,7 +3542,7 @@ func (recv CopyNode) decodeFromDepth(data []byte, _depth int) (result CopyNode, 
 					}
 				} else {
 					if result.Tags == nil {
-						result.Tags = make([]string, 0, 4)
+						result.Tags = make([]string, 0, ggenCap_54d0bf8a_10)
 					}
 				}
 				if i < len(data) && data[i] != ']' {
@@ -3718,7 +3807,7 @@ func (recv CopyNode) decodeFromStreamDepth(s *scan.Stream, _depth int) (result C
 					}
 				} else {
 					if result.Children == nil {
-						result.Children = []CopyNode{}
+						result.Children = make([]CopyNode, 0, ggenCap_54d0bf8a_12)
 					}
 				}
 				for s.Bytes()[s.Pos] != ']' {
@@ -3916,7 +4005,7 @@ func (recv CopyNode) decodeFromStreamDepth(s *scan.Stream, _depth int) (result C
 					}
 				} else {
 					if result.Matrix == nil {
-						result.Matrix = make([][]int, 0, 4)
+						result.Matrix = make([][]int, 0, ggenCap_54d0bf8a_3)
 					}
 				}
 				for s.Bytes()[s.Pos] != ']' {
@@ -3991,7 +4080,7 @@ func (recv CopyNode) decodeFromStreamDepth(s *scan.Stream, _depth int) (result C
 						}
 					} else {
 						if row0 == nil {
-							row0 = make([]int, 0, 4)
+							row0 = make([]int, 0, ggenCap_54d0bf8a_4)
 						}
 					}
 					for s.Bytes()[s.Pos] != ']' {
@@ -4304,9 +4393,9 @@ func (recv CopyNode) decodeFromStreamDepth(s *scan.Stream, _depth int) (result C
 					}
 				} else {
 					if result.Refs == nil {
-						result.Refs = make([]*CopyAddr, 0, 4)
+						result.Refs = make([]*CopyAddr, 0, ggenCap_54d0bf8a_16)
 					}
-					slab0 = make([]CopyAddr, 0, 4)
+					slab0 = make([]CopyAddr, 0, ggenCap_54d0bf8a_14)
 				}
 				for s.Bytes()[s.Pos] != ']' {
 					if s.Pos >= len(s.Bytes()) {
@@ -4455,7 +4544,7 @@ func (recv CopyNode) decodeFromStreamDepth(s *scan.Stream, _depth int) (result C
 					}
 				} else {
 					if result.Tags == nil {
-						result.Tags = make([]string, 0, 4)
+						result.Tags = make([]string, 0, ggenCap_54d0bf8a_10)
 					}
 				}
 				for s.Bytes()[s.Pos] != ']' {

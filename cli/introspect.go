@@ -136,6 +136,20 @@ func inspectType(t types.Type, std stdInterfaces) FieldInterfaces {
 	if hit, ok := std.inspectCache[t]; ok {
 		return hit
 	}
+	// Probe the pointee, not the pointer. `*T`'s method set contains T's, so
+	// everything callable on a `*T` value is what inspectType(T) reports — and
+	// the ggen shapes are receiver-typed (`DecodeFrom` returns T, not *T), so
+	// matching them against `*T` fails outright. Peeling also gets the text /
+	// json UNmarshalers right: those live on `*T`, which this function already
+	// synthesizes below.
+	key := t
+	for {
+		p, ok := t.Underlying().(*types.Pointer)
+		if !ok {
+			break
+		}
+		t = p.Elem()
+	}
 	iface := FieldInterfaces{Resolved: true}
 	ptr := types.NewPointer(t)
 
@@ -190,7 +204,7 @@ func inspectType(t types.Type, std stdInterfaces) FieldInterfaces {
 		}
 	}
 	if std.inspectCache != nil {
-		std.inspectCache[t] = iface
+		std.inspectCache[key] = iface
 	}
 	return iface
 }
@@ -242,12 +256,16 @@ func matchStreamDecoder(sig *types.Signature, recv types.Type) bool {
 	return isError(results.At(1).Type())
 }
 
-// matchAppendJSON reports whether sig is `func(dst []byte) []byte`.
+// matchAppendJSON reports whether sig is `func(dst []byte) ([]byte, error)` —
+// the shape renderAppendJSON emits. A one-result `func([]byte) []byte` is NOT
+// accepted: the emitter at the cross-package call site assigns two results.
 func matchAppendJSON(sig *types.Signature) bool {
-	if sig.Params().Len() != 1 || sig.Results().Len() != 1 {
+	if sig.Params().Len() != 1 || sig.Results().Len() != 2 {
 		return false
 	}
-	return isByteSlice(sig.Params().At(0).Type()) && isByteSlice(sig.Results().At(0).Type())
+	return isByteSlice(sig.Params().At(0).Type()) &&
+		isByteSlice(sig.Results().At(0).Type()) &&
+		isError(sig.Results().At(1).Type())
 }
 
 func isByteSlice(t types.Type) bool {

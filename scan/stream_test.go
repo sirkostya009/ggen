@@ -462,7 +462,7 @@ func TestStreamSkipValue_MatchesBytes(t *testing.T) {
 // a bug the escape-free fuzz/bench payloads never exercised.
 func TestStreamStringSurrogateAcrossRefill(t *testing.T) {
 	t.Parallel()
-	for pad := 0; pad < 48; pad++ {
+	for pad := range 48 {
 		body := strings.Repeat("a", pad) + `😀` + strings.Repeat("b", 6)
 		payload := `"` + body + `"`
 		want, _, err := String([]byte(payload), 0, true)

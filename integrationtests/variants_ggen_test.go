@@ -14,6 +14,11 @@ import (
 	"github.com/sirkostya009/ggen/validation"
 )
 
+// ggenCap_d0e41a21_0: prealloc cap for []int — as many elements as fit under 80 bytes,
+// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
+// else 1. See decode.PreallocCap.
+const ggenCap_d0e41a21_0 = (min((80/max(int(unsafe.Sizeof(*new(int))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(int))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(int))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(int))), 1)), 1)
+
 func (recv Money) DecodeFrom(data []byte) (result Money, i int, err error) {
 	result = recv
 	seenAmount := false
@@ -1042,7 +1047,7 @@ func (recv ElemInterleave) DecodeFromStream(s *scan.Stream) (result ElemInterlea
 				}
 			} else {
 				if result.Nums == nil {
-					result.Nums = make([]int, 0, 4)
+					result.Nums = make([]int, 0, ggenCap_d0e41a21_0)
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {

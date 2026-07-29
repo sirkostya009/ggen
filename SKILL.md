@@ -217,8 +217,9 @@ its level.
 
 ### `hint:"..."` — preallocation
 
-`hint:"N"` → `make([]T, 0, N)` (slice/map only), overriding the default cap 4
-and `minlen`-derived caps. Per-level: `hint:"32 inner:8"`. `hint:"0"` disables;
+`hint:"N"` → `make([]T, 0, N)` (slice/map only), overriding `minlen`-derived
+caps and the default. With no hint: `maxlen=N` when N elements fit 512 B,
+else element width — as many as fit within 80 B, else within 512 B, else 1. Per-level: `hint:"32 inner:8"`. `hint:"0"` disables;
 negative is a generate-time error.
 
 #### Inspecting errors
@@ -237,6 +238,7 @@ Parse failures (malformed JSON, wrong primitive type) wrap in `*decode.ParseErro
 
 ## Supported field kinds
 
+- Named types over a primitive (`type Priority string`, any alias depth) — scanned as the underlying + converted, at every position; the annotation is only needed for the METHODS or for per-type `htmlescape`/`copy` behaviour.
 - Primitives: `string`, `bool`, `int*`, `uint*`, `float*`, plus `*T` for any (`null` ↔ `nil`).
   Nested ptrs `**T`/`***T`/... also native: `null` → nil outer, otherwise value parse first and missing levels alloc'd.
 - `[]T`, `map[string]V` (string keys only), `[N]T` (strict element count — mismatch → `validation.LenError`).
@@ -271,7 +273,7 @@ For fields whose type live outside package being generated, ggen probe method se
 | -------------------------------- | ----------------------- | ----------------------------------------------------------------------------- |
 | primitive                        | `type Count int`        | scan + cast                                                                   |
 | struct (exported fields)         | `type Comment Inner`    | field introspection — treats the alias like a regular struct                  |
-| struct (has `DecodeFrom`)        | `type X HasGgenMethods` | cast + delegate                                                               |
+| struct (has `DecodeFrom`)        | `type X HasGgenMethods` | cast + delegate (an alias carrying its own annotation introspects instead)    |
 | struct (opaque + Marshaler/Text) | `type Local time.Time`  | delegate to underlying's `MarshalJSON`/`MarshalText` (`AppendText` preferred) |
 | container                        | `type Tags []string`    | same emitters as slice/map/array fields                                       |
 
@@ -303,7 +305,7 @@ Bytes-path (`DecodeFrom`) still zero-copy via `unsafe.String` into caller `data`
 
 ### Decode-into-receiver (merge)
 
-Decoders parse values into method non-pointer receiver. Non-nil slices/maps reuse capacity, values overwritten — nested slices too: re-decoding a `[][]T` (any depth) reuses the inner rows' backing arrays, not just the outer slice. Non-nil pointer fields reuse the pointee (struct pointees merge omitted fields; `null` nils the field). Niche, useful for reusing capacity of slice/map/pointer fields when same object reused for multiple (not necessarily _different_) payloads.
+Decoders parse values into method non-pointer receiver. Non-nil slices/maps reuse capacity, values overwritten (through pointer levels too: `*[]T`/`**map[string]T` reset the pointee, never append into it) — nested slices too: re-decoding a `[][]T` (any depth) reuses the inner rows' backing arrays, not just the outer slice. Non-nil pointer fields reuse the pointee (struct pointees merge omitted fields; `null` nils the field). Niche, useful for reusing capacity of slice/map/pointer fields when same object reused for multiple (not necessarily _different_) payloads.
 
 NOT 100% compatible with stdlib — ggen diverges in three ways: ALL containers are reset, regardless of presence (blank payload → blank slate, capacity kept), a PRESENT map key replaces the whole map (clear+refill; stdlib merges entries into it), and an explicit `null` on a non-pointer scalar/native field ERRORS (stdlib zeroes it — only pointer/slice/map/`[]byte`/`sql.Null*`/raw fields accept `null`). Scalars-persist-on-omit, slice-replace, null→nil for slice/map/pointer, nested-struct merge, and `*T`/`**T` reuse all match stdlib.
 

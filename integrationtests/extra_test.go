@@ -8,9 +8,12 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/sirkostya009/ggen/validation"
 	"github.com/sirkostya009/ggen/encode"
 	"github.com/sirkostya009/ggen/scan"
+	"github.com/sirkostya009/ggen/validation"
+	"unsafe"
+
+	"github.com/sirkostya009/ggen/decode"
 )
 
 // ExtraStruct exercises keys:/hint:/clamp/nested-dive.
@@ -297,3 +300,105 @@ func TestNestedMarshalRoundtrip(t *testing.T) {
 }
 
 // TestJSONSize_TupleStruct lives in jsonsize_test.go.
+
+// PreallocWidths pins the WIDTH-DRIVEN default capacity: with no hint the
+// generated make() uses a constant derived from the element size, and that
+// constant must agree with decode.PreallocCap (the runtime spec of the ladder,
+// which the emitted expression only mirrors — it cannot call it, because gc
+// declines to inline into a generated DecodeFrom).
+//
+//ggen:generate
+type PreallocWidths struct {
+	Strs   []string       `json:"strs"`
+	Ints   []int          `json:"ints"`
+	Rows   []PreallocRow  `json:"rows"`
+	Wide   []PreallocWide `json:"wide"`
+	Ptrs   []*PreallocRow `json:"ptrs"`
+	Nested [][]int        `json:"nested"`
+	Hinted []PreallocWide `json:"hinted" hint:"3"`
+	Lened  []PreallocWide `json:"lened"  pipe:"len=6"`
+	Minned []PreallocWide `json:"minned" pipe:"minlen=5"`
+	// maxlen is the exact upper bound: preallocated when that many elements
+	// still fit a 512-byte span, ignored when they do not.
+	MaxFits   []PreallocRow  `json:"maxFits"   pipe:"maxlen=8"`
+	MaxTooBig []PreallocWide `json:"maxTooBig" pipe:"maxlen=8"`
+}
+
+//ggen:generate
+type PreallocRow struct {
+	A, B string `json:"-"`
+	C    string `json:"c"`
+}
+
+//ggen:generate
+type PreallocWide struct {
+	Pad [40]int64 `json:"-"`
+	C   string    `json:"c"`
+}
+
+func TestPrealloc_WidthDrivenCaps(t *testing.T) {
+	t.Parallel()
+	in := []byte(`{"strs":["a"],"ints":[1],"rows":[{"c":"x"}],"wide":[{"c":"x"}],` +
+		`"ptrs":[{"c":"x"}],"nested":[[1]],"hinted":[{"c":"x"}],` +
+		`"lened":[{"c":"x"},{"c":"x"},{"c":"x"},{"c":"x"},{"c":"x"},{"c":"x"}],` +
+		`"minned":[{"c":"x"},{"c":"x"},{"c":"x"},{"c":"x"},{"c":"x"}],` +
+		`"maxFits":[{"c":"x"}],"maxTooBig":[{"c":"x"}]}`)
+	got, _, err := PreallocWidths{}.DecodeFrom(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		name string
+		got  int
+		size uintptr
+	}{
+		{"strs", cap(got.Strs), unsafe.Sizeof(*new(string))},
+		{"rows", cap(got.Rows), unsafe.Sizeof(*new(PreallocRow))},
+		{"wide", cap(got.Wide), unsafe.Sizeof(*new(PreallocWide))},
+		{"ptrs", cap(got.Ptrs), unsafe.Sizeof(*new(*PreallocRow))},
+		{"nested", cap(got.Nested), unsafe.Sizeof(*new([]int))},
+	} {
+		if want := decode.PreallocCap(c.size); c.got != want {
+			t.Errorf("%s: cap = %d, want %d (element %d bytes)", c.name, c.got, want, c.size)
+		}
+		if c.got*int(c.size) > 512 && c.got > 1 {
+			t.Errorf("%s: cap %d × %d bytes overshoots the 512-byte span budget", c.name, c.got, c.size)
+		}
+		if c.got < 1 {
+			t.Errorf("%s: cap %d, want at least 1", c.name, c.got)
+		}
+	}
+	// PreallocRow is 48 B: 8 × 48 = 384 <= 512, so the bound wins over the
+	// width default (10). PreallocWide is 328 B: 8 × 328 blows the span, so the
+	// width default (1) stands.
+	if got, want := cap(got.MaxFits), 8; got != want {
+		t.Errorf("maxlen=8 that fits a span: cap = %d, want %d", got, want)
+	}
+	if got, want := cap(got.MaxTooBig), decode.PreallocCap(unsafe.Sizeof(*new(PreallocWide))); got != want {
+		t.Errorf("maxlen=8 that overshoots a span: cap = %d, want the width default %d", got, want)
+	}
+	// A numeric slice beats the width guess outright: scalar elements carry no
+	// `,`, so the comma pre-count (opt #42) sizes it exactly.
+	if cap(got.Ints) != len(got.Ints) {
+		t.Errorf("[]int should be exact-counted: cap %d, len %d", cap(got.Ints), len(got.Ints))
+	}
+	// Every explicit sizing rule outranks the width guess: hint > len > minlen.
+	// PreallocWide is 328 bytes, so the width ladder would say 1 for all three.
+	for _, c := range []struct {
+		name string
+		got  int
+		want int
+	}{
+		{`hint:"3"`, cap(got.Hinted), 3},
+		{"len=6", cap(got.Lened), 6},
+		{"minlen=5", cap(got.Minned), 5},
+	} {
+		if c.got != c.want {
+			t.Errorf("%s overridden by the width default: cap = %d, want %d", c.name, c.got, c.want)
+		}
+	}
+	// An element too wide for two in a span falls back to one, not zero.
+	if n := decode.PreallocCap(unsafe.Sizeof(*new(PreallocWide))); n != 1 {
+		t.Errorf("a %d-byte element should prealloc 1, got %d", unsafe.Sizeof(*new(PreallocWide)), n)
+	}
+}

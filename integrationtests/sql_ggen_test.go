@@ -4,7 +4,6 @@ package integrationtests
 
 import (
 	"database/sql"
-	"encoding/json"
 	"math"
 	"strconv"
 	"strings"
@@ -3278,15 +3277,57 @@ func (recv SQLNullGenAccountStruct) DecodeFrom(data []byte) (result SQLNullGenAc
 				i += 4
 			} else {
 				var nv SQLAccountID
-				start := i
-				i, err = scan.SkipValue(data, start)
-				if err != nil {
-					return result, i, decode.NewParseErr("a", i, err)
+				var _nvV int64
+				neg := false
+				if i < len(data) && data[i] == '-' {
+					neg = true
+					i++
 				}
-				err = json.Unmarshal(data[start:i], &nv)
-				if err != nil {
-					return result, i, decode.NewParseErr("a", i, err)
+				if i >= len(data) || data[i] < '0' || data[i] > '9' {
+					return result, i, decode.NewParseErr("a", i, scan.ErrBadNumber)
 				}
+				if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+					return result, i, decode.NewParseErr("a", i, scan.ErrBadNumber)
+				}
+				limit := uint64(math.MaxInt64)
+				if neg {
+					limit = scan.SignedNeg
+				}
+				var u uint64
+				de := i + 18
+				if de > len(data) {
+					de = len(data)
+				}
+				for i < de && data[i] >= '0' && data[i] <= '9' {
+					u = u*10 + uint64(data[i]-'0')
+					i++
+				}
+				for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+					d := uint64(data[i] - '0')
+					if u > limit/10 || (u == limit/10 && d > limit%10) {
+						return result, i, decode.NewParseErr("a", i, scan.ErrNumberOverflow)
+					}
+					u = u*10 + d
+					i++
+				}
+				if i < len(data) {
+					c := data[i]
+					if c == '.' || c == 'e' || c == 'E' {
+						return result, i, decode.NewParseErr("a", i, scan.ErrBadNumber)
+					}
+				}
+				var n int64
+				if neg {
+					if u == scan.SignedNeg {
+						n = math.MinInt64
+					} else {
+						n = -int64(u)
+					}
+				} else {
+					n = int64(u)
+				}
+				_nvV = n
+				nv = SQLAccountID(_nvV)
 
 				result.A = sql.Null[SQLAccountID]{V: nv, Valid: true}
 			}
@@ -3371,14 +3412,12 @@ func (recv SQLNullGenAccountStruct) DecodeFromStream(s *scan.Stream) (result SQL
 				s.Pos += 4
 			} else {
 				var nv SQLAccountID
-				span, err := s.CaptureValue()
+				var _nvV int64
+				_nvV, err = s.Int64()
 				if err != nil {
 					return result, decode.NewParseErr("a", s.Pos, err)
 				}
-				err = json.Unmarshal(span, &nv)
-				if err != nil {
-					return result, decode.NewParseErr("a", s.Pos, err)
-				}
+				nv = SQLAccountID(_nvV)
 
 				result.A = sql.Null[SQLAccountID]{V: nv, Valid: true}
 			}
@@ -3414,7 +3453,7 @@ func (recv SQLNullGenAccountStruct) DecodeFromStream(s *scan.Stream) (result SQL
 }
 
 func (s SQLNullGenAccountStruct) JSONSize() int {
-	size := 134
+	size := 26
 	return size
 }
 
@@ -3425,12 +3464,7 @@ func (s SQLNullGenAccountStruct) AppendJSON(dst []byte) ([]byte, error) {
 	if !s.A.Valid {
 		dst = append(dst, "null"...)
 	} else {
-		var bV []byte
-		bV, err = json.Marshal(s.A.V)
-		if err != nil {
-			return dst, err
-		}
-		dst = append(dst, bV...)
+		dst = strconv.AppendInt(dst, int64(s.A.V), 10)
 	}
 	return append(dst, '}'), nil
 }
@@ -3497,15 +3531,28 @@ func (recv SQLNullGenLabelStruct) DecodeFrom(data []byte) (result SQLNullGenLabe
 				i += 4
 			} else {
 				var nv SQLLabel
-				start := i
-				i, err = scan.SkipValue(data, start)
-				if err != nil {
-					return result, i, decode.NewParseErr("l", i, err)
+				var _nvV string
+				if i >= len(data) || data[i] != '"' {
+					return result, i, decode.NewParseErr("l", i, scan.ErrExpectString)
 				}
-				err = json.Unmarshal(data[start:i], &nv)
-				if err != nil {
-					return result, i, decode.NewParseErr("l", i, err)
+				ke := i + 1
+				kew := ke + 32
+				if kew > len(data) {
+					kew = len(data)
 				}
+				for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+					ke++
+				}
+				if ke < len(data) && data[ke] == '"' {
+					_nvV = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					_nvV, i, err = scan.String(data, i, true)
+					if err != nil {
+						return result, i, decode.NewParseErr("l", i, err)
+					}
+				}
+				nv = SQLLabel(_nvV)
 
 				result.L = sql.Null[SQLLabel]{V: nv, Valid: true}
 			}
@@ -3590,14 +3637,12 @@ func (recv SQLNullGenLabelStruct) DecodeFromStream(s *scan.Stream) (result SQLNu
 				s.Pos += 4
 			} else {
 				var nv SQLLabel
-				span, err := s.CaptureValue()
+				var _nvV string
+				_nvV, err = s.String(true)
 				if err != nil {
 					return result, decode.NewParseErr("l", s.Pos, err)
 				}
-				err = json.Unmarshal(span, &nv)
-				if err != nil {
-					return result, decode.NewParseErr("l", s.Pos, err)
-				}
+				nv = SQLLabel(_nvV)
 
 				result.L = sql.Null[SQLLabel]{V: nv, Valid: true}
 			}
@@ -3633,7 +3678,8 @@ func (recv SQLNullGenLabelStruct) DecodeFromStream(s *scan.Stream) (result SQLNu
 }
 
 func (s SQLNullGenLabelStruct) JSONSize() int {
-	size := 134
+	size := 10
+	size += len(string(s.L.V)) * 2
 	return size
 }
 
@@ -3644,12 +3690,8 @@ func (s SQLNullGenLabelStruct) AppendJSON(dst []byte) ([]byte, error) {
 	if !s.L.Valid {
 		dst = append(dst, "null"...)
 	} else {
-		var bV []byte
-		bV, err = json.Marshal(s.L.V)
-		if err != nil {
-			return dst, err
-		}
-		dst = append(dst, bV...)
+		dst = append(dst, '"')
+		dst = encode.AppendStringNoHTML(dst, string(s.L.V))
 	}
 	return append(dst, '}'), nil
 }

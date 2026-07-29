@@ -346,3 +346,112 @@ func TestNPtr_containersStream(t *testing.T) {
 		t.Errorf("MPP = %v", got.MPP)
 	}
 }
+
+// ---- pointers to containers, any depth -------------------------------
+//
+// The receiver reset has to reach THROUGH the stars: decode only allocates a
+// pointee when the pointer itself is nil, so a reused receiver used to APPEND
+// into the carried-in container where the plain `[]T` field replaced it.
+
+//ggen:generate
+type PtrContainers struct {
+	Plain []int                         `json:"plain"`
+	One   *[]int                        `json:"one"`
+	Deep  ***[]int                      `json:"deep"`
+	M1    *map[string]int               `json:"m1"`
+	M3    ***map[string]int             `json:"m3"`
+	Elems *[]PtrContainerElem           `json:"elems"`
+	MElem **map[string]PtrContainerElem `json:"melem"`
+}
+
+//ggen:generate
+type PtrContainerElem struct {
+	K string `json:"k"`
+}
+
+func TestPtrContainer_ResetOnReuse(t *testing.T) {
+	first := []byte(`{"plain":[1,2,3],"one":[1,2,3],"deep":[1,2,3],"m1":{"a":1,"b":2},"m3":{"a":1,"b":2},` +
+		`"elems":[{"k":"a"},{"k":"b"}],"melem":{"a":{"k":"a"},"b":{"k":"b"}}}`)
+	second := []byte(`{"plain":[9],"one":[9],"deep":[9],"m1":{"z":9},"m3":{"z":9},` +
+		`"elems":[{"k":"z"}],"melem":{"z":{"k":"z"}}}`)
+
+	v, _, err := PtrContainers{}.DecodeFrom(first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v, _, err = v.DecodeFrom(second)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got := v.Plain; !reflect.DeepEqual(got, []int{9}) {
+		t.Errorf("[]T: %v", got)
+	}
+	if got := *v.One; !reflect.DeepEqual(got, []int{9}) {
+		t.Errorf("*[]T appended instead of replacing: %v", got)
+	}
+	if got := ***v.Deep; !reflect.DeepEqual(got, []int{9}) {
+		t.Errorf("***[]T appended instead of replacing: %v", got)
+	}
+	if got := *v.M1; !reflect.DeepEqual(got, map[string]int{"z": 9}) {
+		t.Errorf("*map merged instead of replacing: %v", got)
+	}
+	if got := ***v.M3; !reflect.DeepEqual(got, map[string]int{"z": 9}) {
+		t.Errorf("***map merged instead of replacing: %v", got)
+	}
+	if got := *v.Elems; len(got) != 1 || got[0].K != "z" {
+		t.Errorf("*[]struct appended instead of replacing: %v", got)
+	}
+	if got := **v.MElem; len(got) != 1 || got["z"].K != "z" {
+		t.Errorf("**map[string]struct merged instead of replacing: %v", got)
+	}
+}
+
+// A key omitted from the payload still clears the container — same contract as
+// the non-pointer fields (a blank payload gives a blank slate, capacity kept).
+func TestPtrContainer_OmittedKeyClears(t *testing.T) {
+	v, _, err := PtrContainers{}.DecodeFrom([]byte(`{"one":[1,2,3],"m1":{"a":1}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	v, _, err = v.DecodeFrom([]byte(`{}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(*v.One) != 0 {
+		t.Errorf("omitted *[]T not cleared: %v", *v.One)
+	}
+	if len(*v.M1) != 0 {
+		t.Errorf("omitted *map not cleared: %v", *v.M1)
+	}
+}
+
+// Multi-level pointers to containers also have to DECODE — the parse layer
+// peeled one star, so at depth ≥ 2 the element kind fell back to its zero
+// value (KindString) and a `**[]T` emitted a string scan into a T slot.
+func TestPtrContainer_DeepDecodes(t *testing.T) {
+	v, _, err := PtrContainers{}.DecodeFrom([]byte(`{"deep":[4,5],"m3":{"k":7},"melem":{"q":{"k":"q"}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := ***v.Deep; !reflect.DeepEqual(got, []int{4, 5}) {
+		t.Errorf("***[]int: %v", got)
+	}
+	if got := ***v.M3; !reflect.DeepEqual(got, map[string]int{"k": 7}) {
+		t.Errorf("***map: %v", got)
+	}
+	if got := **v.MElem; got["q"].K != "q" {
+		t.Errorf("**map[string]struct: %v", got)
+	}
+	out, err := v.AppendJSON(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	back, _, err := PtrContainers{}.DecodeFrom(out)
+	if err != nil {
+		t.Fatalf("round-trip %s: %v", out, err)
+	}
+	if !reflect.DeepEqual(***back.Deep, ***v.Deep) {
+		t.Errorf("round-trip mismatch: %v vs %v", ***back.Deep, ***v.Deep)
+	}
+}

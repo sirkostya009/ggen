@@ -14,7 +14,12 @@ import (
 	"github.com/sirkostya009/ggen/validation"
 )
 
-var ggenOneof0 = []string{"admin", "user", "guest"}
+// ggenCap_03a07807_0: prealloc cap for []string — as many elements as fit under 80 bytes,
+// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
+// else 1. See decode.PreallocCap.
+const ggenCap_03a07807_0 = (min((80/max(int(unsafe.Sizeof(*new(string))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(string))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(string))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(string))), 1)), 1)
+
+var ggenOneof_03a07807_0 = []string{"admin", "user", "guest"}
 
 func (recv MultiErrStruct) DecodeFrom(data []byte) (result MultiErrStruct, i int, err error) {
 	result = recv
@@ -210,7 +215,7 @@ func (recv MultiErrStruct) DecodeFrom(data []byte) (result MultiErrStruct, i int
 				switch result.Role {
 				case "admin", "user", "guest":
 				default:
-					errs = append(errs, &validation.OneOfError{Pos: i, Path: []string{"role"}, Allowed: ggenOneof0, Value: result.Role})
+					errs = append(errs, &validation.OneOfError{Pos: i, Path: []string{"role"}, Allowed: ggenOneof_03a07807_0, Value: result.Role})
 				}
 			}
 		default:
@@ -356,7 +361,7 @@ func (recv MultiErrStruct) DecodeFromStream(s *scan.Stream) (result MultiErrStru
 				switch result.Role {
 				case "admin", "user", "guest":
 				default:
-					errs = append(errs, &validation.OneOfError{Pos: s.Offset(), Path: []string{"role"}, Allowed: ggenOneof0, Value: result.Role})
+					errs = append(errs, &validation.OneOfError{Pos: s.Offset(), Path: []string{"role"}, Allowed: ggenOneof_03a07807_0, Value: result.Role})
 				}
 
 			}
@@ -502,7 +507,7 @@ func (recv CustomBothStruct) DecodeFrom(data []byte) (result CustomBothStruct, i
 				}
 			} else {
 				if result.Tags == nil {
-					result.Tags = make([]string, 0, 4)
+					result.Tags = make([]string, 0, ggenCap_03a07807_0)
 				}
 			}
 			if i < len(data) && data[i] != ']' {
@@ -659,7 +664,7 @@ func (recv CustomBothStruct) DecodeFromStream(s *scan.Stream) (result CustomBoth
 				}
 			} else {
 				if result.Tags == nil {
-					result.Tags = make([]string, 0, 4)
+					result.Tags = make([]string, 0, ggenCap_03a07807_0)
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {

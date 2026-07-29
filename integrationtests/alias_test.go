@@ -5,14 +5,18 @@ package integrationtests
 // Top-level type aliases — each gets the full struct method surface.
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 
-	"github.com/sirkostya009/ggen/validation"
 	"github.com/sirkostya009/ggen/encode"
 	"github.com/sirkostya009/ggen/integrationtests/thirdparty"
+	"github.com/sirkostya009/ggen/scan"
+	"github.com/sirkostya009/ggen/validation"
 )
 
 //ggen:generate
@@ -446,5 +450,191 @@ func TestAlias_Field_ValidationAndMods(t *testing.T) {
 	}
 	if !strings.Contains(string(out), `"body":"hi"`) || !strings.Contains(string(out), `"count":5`) {
 		t.Errorf("marshal = %s", out)
+	}
+}
+
+// ---- named primitives (annotated and not) ----------------------------
+//
+// Every rule has to resolve the underlying kind: `oneof` used to emit its
+// allowed values as bare identifiers, the string-shape rules passed the named
+// value uncast into string-typed APIs, and `eq`/`neq` emitted nothing at all.
+
+//ggen:generate
+type NPPriority string
+
+// NPTag carries no annotation — ggen still has to resolve `string` under it for
+// the rules, and cast at every stdlib call site.
+type NPTag string
+
+//ggen:generate
+type NamedPrims struct {
+	Pri  NPPriority `json:"pri"  pipe:"oneof=low|medium|high"`
+	Tag  NPTag      `json:"tag"  pipe:"trim lower maxrunes=8 contains=-"`
+	Eq   NPPriority `json:"eq"   pipe:"eq=low"`
+	Neq  NPPriority `json:"neq"  pipe:"neq=low"`
+	Zero NPPriority `json:"zero" pipe:"nullzero / ."`
+}
+
+const npValid = `{"pri":"high","tag":" A-B ","eq":"low","neq":"high","zero":null}`
+
+func TestNamedPrim_Accepts(t *testing.T) {
+	v, _, err := NamedPrims{}.DecodeFrom([]byte(npValid))
+	if err != nil {
+		t.Fatalf("valid payload rejected: %v", err)
+	}
+	if v.Tag != "a-b" {
+		t.Errorf("mods did not run through the named type: %q", v.Tag)
+	}
+	if v.Zero != "" {
+		t.Errorf("nullzero on a named string should give the zero value, got %q", v.Zero)
+	}
+}
+
+func TestNamedPrim_Rejects(t *testing.T) {
+	for _, tc := range []struct {
+		name, body string
+		target     any
+	}{
+		{"oneof", `{"pri":"nope","tag":"a-b","eq":"low","neq":"high","zero":null}`, new(*validation.OneOfError)},
+		{"eq", `{"pri":"low","tag":"a-b","eq":"other","neq":"high","zero":null}`, new(*validation.EqError)},
+		{"neq", `{"pri":"low","tag":"a-b","eq":"low","neq":"low","zero":null}`, new(*validation.NeqError)},
+		{"maxrunes", `{"pri":"low","tag":"aaaaaaaaa-","eq":"low","neq":"high","zero":null}`, new(*validation.MaxRunesError)},
+		{"contains", `{"pri":"low","tag":"abc","eq":"low","neq":"high","zero":null}`, new(*validation.ContainsError)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, _, err := NamedPrims{}.DecodeFrom([]byte(tc.body))
+			if err == nil {
+				t.Fatalf("%s rule did not fire", tc.name)
+			}
+			if !errors.As(err, tc.target) {
+				t.Errorf("wrong error type for %s: %v", tc.name, err)
+			}
+		})
+	}
+}
+
+// maxrunes counts runes, not bytes, through the named type too.
+func TestNamedPrim_RunesNotBytes(t *testing.T) {
+	// 8 runes, 16 bytes — inside maxrunes=8.
+	body := `{"pri":"low","tag":"ыыыыыыы-","eq":"low","neq":"high","zero":null}`
+	_, _, err := NamedPrims{}.DecodeFrom([]byte(body))
+	if err != nil {
+		t.Errorf("8 multibyte runes rejected by maxrunes=8: %v", err)
+	}
+}
+
+// A named primitive is decoded/encoded inline (underlying scan + conversion) at
+// every position, and an alias that carries flags of its own keeps its methods
+// so its behaviour survives — `htmlescape` on one type is documented surface.
+
+//ggen:generate htmlescape
+type NPEscaped string
+
+//ggen:generate
+type NPPlain string
+
+type NPUnannotated string
+
+//ggen:generate
+type NPPositions struct {
+	V   NPPlain            `json:"v"`
+	U   NPUnannotated      `json:"u"`
+	E   NPEscaped          `json:"e"`
+	S   []NPPlain          `json:"s"`
+	M   map[string]NPPlain `json:"m"`
+	P   *NPPlain           `json:"p"`
+	A   [2]NPPlain         `json:"a"`
+	Cnt NPCount            `json:"cnt"`
+}
+
+//ggen:generate
+type NPCount int
+
+func TestNamedPrim_EveryPosition(t *testing.T) {
+	t.Parallel()
+	in := []byte(`{"v":"a","u":"b","e":"<i>","s":["c","d"],"m":{"k":"e"},"p":"f","a":["g","h"],"cnt":7}`)
+	got, _, err := NPPositions{}.DecodeFrom(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := NPPlain("f")
+	want := NPPositions{
+		V: "a", U: "b", E: "<i>", S: []NPPlain{"c", "d"},
+		M: map[string]NPPlain{"k": "e"}, P: &p, A: [2]NPPlain{"g", "h"}, Cnt: 7,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %+v want %+v", got, want)
+	}
+	out, err := got.AppendJSON(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := got.JSONSize(); n < len(out) {
+		t.Errorf("JSONSize %d < %d", n, len(out))
+	}
+	// The htmlescape alias keeps its own encoder, so only IT escapes.
+	if !strings.Contains(string(out), `\u003ci\u003e`) {
+		t.Errorf("htmlescape alias lost its escaping: %s", out)
+	}
+	back, _, err := NPPositions{}.DecodeFrom(out)
+	if err != nil {
+		t.Fatalf("re-decode %s: %v", out, err)
+	}
+	if !reflect.DeepEqual(back.S, got.S) || back.Cnt != got.Cnt || *back.P != *got.P {
+		t.Errorf("round-trip mismatch: %+v", back)
+	}
+	// Stream path agrees.
+	var st scan.Stream
+	st.Reset(bytes.NewReader(in), make([]byte, 0, 8))
+	sv, err := NPPositions{}.DecodeFromStream(&st)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(sv.S, got.S) || sv.V != got.V || sv.M["k"] != got.M["k"] || sv.Cnt != got.Cnt {
+		t.Errorf("stream %+v != bytes %+v", sv, got)
+	}
+}
+
+// A named primitive from ANOTHER package keeps its own generated methods: this
+// pass cannot see the flags it was generated with, so inlining it would apply
+// the parent's (dropping, say, an htmlescape the other package chose). One with
+// no methods at all is inlined like a local one.
+func TestNamedPrim_CrossPackagePrefersMethods(t *testing.T) {
+	t.Parallel()
+	// thirdparty2.External2 is generated in its own pass; a foreign named
+	// primitive without methods reaches the inline path via fallback_test.go's
+	// CrossPkgShapes coverage. Here we pin the DECODE result either way.
+	v, _, err := NPPositions{}.DecodeFrom([]byte(`{"v":"x","cnt":3}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.V != "x" || v.Cnt != 3 {
+		t.Errorf("got %+v", v)
+	}
+}
+
+// json.Number is a named string whose wire shape is a NUMBER — it must not be
+// swept into the named-primitive inline path.
+//
+//ggen:generate
+type NPJSONNumber struct {
+	N json.Number `json:"n"`
+}
+
+func TestNamedPrim_JSONNumberStaysNumeric(t *testing.T) {
+	t.Parallel()
+	v, _, err := NPJSONNumber{}.DecodeFrom([]byte(`{"n":12.5}`))
+	if err != nil {
+		t.Fatalf("json.Number decoded as a string type: %v", err)
+	}
+	if v.N != "12.5" {
+		t.Errorf("N = %q", v.N)
+	}
+	out, err := v.AppendJSON(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(out) != `{"n":12.5}` {
+		t.Errorf("wire = %s, want a bare number", out)
 	}
 }

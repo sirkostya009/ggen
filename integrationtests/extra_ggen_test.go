@@ -16,6 +16,59 @@ import (
 	"github.com/sirkostya009/ggen/validation"
 )
 
+// ggenCap_6350751b_0: prealloc cap for [][]int — as many elements as fit under 80 bytes,
+// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
+// else 1. See decode.PreallocCap.
+const ggenCap_6350751b_0 = (min((80/max(int(unsafe.Sizeof(*new([]int))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new([]int))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new([]int))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new([]int))), 1)), 1)
+
+// ggenCap_6350751b_1: prealloc cap for []int — as many elements as fit under 80 bytes,
+// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
+// else 1. See decode.PreallocCap.
+const ggenCap_6350751b_1 = (min((80/max(int(unsafe.Sizeof(*new(int))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(int))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(int))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(int))), 1)), 1)
+
+// ggenCap_6350751b_2: prealloc cap for [][][]string — as many elements as fit under 80 bytes,
+// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
+// else 1. See decode.PreallocCap.
+const ggenCap_6350751b_2 = (min((80/max(int(unsafe.Sizeof(*new([][]string))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new([][]string))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new([][]string))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new([][]string))), 1)), 1)
+
+// ggenCap_6350751b_3: prealloc cap for [][]string — as many elements as fit under 80 bytes,
+// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
+// else 1. See decode.PreallocCap.
+const ggenCap_6350751b_3 = (min((80/max(int(unsafe.Sizeof(*new([]string))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new([]string))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new([]string))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new([]string))), 1)), 1)
+
+// ggenCap_6350751b_4: prealloc cap for []string — as many elements as fit under 80 bytes,
+// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
+// else 1. See decode.PreallocCap.
+const ggenCap_6350751b_4 = (min((80/max(int(unsafe.Sizeof(*new(string))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(string))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(string))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(string))), 1)), 1)
+
+// ggenCap_6350751b_5: prealloc cap for [][2]int — as many elements as fit under 80 bytes,
+// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
+// else 1. See decode.PreallocCap.
+const ggenCap_6350751b_5 = (min((80/max(int(unsafe.Sizeof(*new([2]int))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new([2]int))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new([2]int))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new([2]int))), 1)), 1)
+
+// ggenCap_6350751b_6: prealloc cap for []PreallocRow — as many elements as fit under 80 bytes,
+// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
+// else 1. See decode.PreallocCap.
+const ggenCap_6350751b_6 = (min((80/max(int(unsafe.Sizeof(*new(PreallocRow))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(PreallocRow))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(PreallocRow))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(PreallocRow))), 1)), 1)
+
+// ggenCap_6350751b_7: prealloc cap for []PreallocRow — its maxlen=8 bound when that many
+// elements fit a 512-byte span, else the width default.
+const ggenCap_6350751b_7 = (1-min((8*max(int(unsafe.Sizeof(*new(PreallocRow))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1))*8 + (1-(1-min((8*max(int(unsafe.Sizeof(*new(PreallocRow))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1)))*ggenCap_6350751b_6
+
+// ggenCap_6350751b_8: prealloc cap for []PreallocWide — as many elements as fit under 80 bytes,
+// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
+// else 1. See decode.PreallocCap.
+const ggenCap_6350751b_8 = (min((80/max(int(unsafe.Sizeof(*new(PreallocWide))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(PreallocWide))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(PreallocWide))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(PreallocWide))), 1)), 1)
+
+// ggenCap_6350751b_9: prealloc cap for []PreallocWide — its maxlen=8 bound when that many
+// elements fit a 512-byte span, else the width default.
+const ggenCap_6350751b_9 = (1-min((8*max(int(unsafe.Sizeof(*new(PreallocWide))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1))*8 + (1-(1-min((8*max(int(unsafe.Sizeof(*new(PreallocWide))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1)))*ggenCap_6350751b_8
+
+// ggenCap_6350751b_10: prealloc cap for []*PreallocRow — as many elements as fit under 80 bytes,
+// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
+// else 1. See decode.PreallocCap.
+const ggenCap_6350751b_10 = (min((80/max(int(unsafe.Sizeof(*new(*PreallocRow))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(*PreallocRow))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(*PreallocRow))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(*PreallocRow))), 1)), 1)
+
 func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err error) {
 	result = recv
 	if result.HintedTags != nil {
@@ -383,7 +436,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 				}
 			} else {
 				if result.NestedInts == nil {
-					result.NestedInts = make([][]int, 0, 4)
+					result.NestedInts = make([][]int, 0, ggenCap_6350751b_0)
 				}
 			}
 			if i < len(data) && data[i] != ']' {
@@ -563,7 +616,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 				}
 			} else {
 				if result.Triple == nil {
-					result.Triple = make([][][]string, 0, 4)
+					result.Triple = make([][][]string, 0, ggenCap_6350751b_2)
 				}
 			}
 			if i < len(data) && data[i] != ']' {
@@ -611,7 +664,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 						}
 					} else {
 						if row0 == nil {
-							row0 = make([][]string, 0, 4)
+							row0 = make([][]string, 0, ggenCap_6350751b_3)
 						}
 					}
 					if i < len(data) && data[i] != ']' {
@@ -659,7 +712,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 								}
 							} else {
 								if row1 == nil {
-									row1 = make([]string, 0, 4)
+									row1 = make([]string, 0, ggenCap_6350751b_4)
 								}
 							}
 							if i < len(data) && data[i] != ']' {
@@ -1113,7 +1166,7 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 				}
 			} else {
 				if result.NestedInts == nil {
-					result.NestedInts = make([][]int, 0, 4)
+					result.NestedInts = make([][]int, 0, ggenCap_6350751b_0)
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {
@@ -1188,7 +1241,7 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 					}
 				} else {
 					if row0 == nil {
-						row0 = make([]int, 0, 4)
+						row0 = make([]int, 0, ggenCap_6350751b_1)
 					}
 				}
 				for s.Bytes()[s.Pos] != ']' {
@@ -1313,7 +1366,7 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 				}
 			} else {
 				if result.Triple == nil {
-					result.Triple = make([][][]string, 0, 4)
+					result.Triple = make([][][]string, 0, ggenCap_6350751b_2)
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {
@@ -1388,7 +1441,7 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 					}
 				} else {
 					if row0 == nil {
-						row0 = make([][]string, 0, 4)
+						row0 = make([][]string, 0, ggenCap_6350751b_3)
 					}
 				}
 				for s.Bytes()[s.Pos] != ']' {
@@ -1463,7 +1516,7 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 						}
 					} else {
 						if row1 == nil {
-							row1 = make([]string, 0, 4)
+							row1 = make([]string, 0, ggenCap_6350751b_4)
 						}
 					}
 					for s.Bytes()[s.Pos] != ']' {
@@ -1917,7 +1970,7 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 						}
 					} else {
 						if row0 == nil {
-							row0 = make([]string, 0, 4)
+							row0 = make([]string, 0, ggenCap_6350751b_4)
 						}
 					}
 					if i < len(data) && data[i] != ']' {
@@ -2154,8 +2207,14 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
-			if result.Segments == nil {
-				result.Segments = [][2]int{}
+			if i < len(data) && data[i] == ']' {
+				if result.Segments == nil {
+					result.Segments = [][2]int{}
+				}
+			} else {
+				if result.Segments == nil {
+					result.Segments = make([][2]int, 0, ggenCap_6350751b_5)
+				}
 			}
 			if i < len(data) && data[i] != ']' {
 				for {
@@ -2417,7 +2476,7 @@ func (recv TupleStruct) DecodeFromStream(s *scan.Stream) (result TupleStruct, er
 					}
 				} else {
 					if row0 == nil {
-						row0 = make([]string, 0, 4)
+						row0 = make([]string, 0, ggenCap_6350751b_4)
 					}
 				}
 				for s.Bytes()[s.Pos] != ']' {
@@ -2671,7 +2730,7 @@ func (recv TupleStruct) DecodeFromStream(s *scan.Stream) (result TupleStruct, er
 				}
 			} else {
 				if result.Segments == nil {
-					result.Segments = [][2]int{}
+					result.Segments = make([][2]int, 0, ggenCap_6350751b_5)
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {
@@ -2910,5 +2969,2829 @@ func (s TupleStruct) AppendJSON(dst []byte) ([]byte, error) {
 		}
 		dst = append(dst, ']')
 	}
+	return append(dst, '}'), nil
+}
+
+func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int, err error) {
+	result = recv
+	if result.Hinted != nil {
+		result.Hinted = result.Hinted[:0]
+	}
+	if result.Ints != nil {
+		result.Ints = result.Ints[:0]
+	}
+	if result.Lened != nil {
+		result.Lened = result.Lened[:0]
+	}
+	if result.MaxFits != nil {
+		result.MaxFits = result.MaxFits[:0]
+	}
+	if result.MaxTooBig != nil {
+		result.MaxTooBig = result.MaxTooBig[:0]
+	}
+	if result.Minned != nil {
+		result.Minned = result.Minned[:0]
+	}
+	if result.Nested != nil {
+		result.Nested = result.Nested[:0]
+	}
+	if result.Ptrs != nil {
+		result.Ptrs = result.Ptrs[:0]
+	}
+	if result.Rows != nil {
+		result.Rows = result.Rows[:0]
+	}
+	if result.Strs != nil {
+		result.Strs = result.Strs[:0]
+	}
+	if result.Wide != nil {
+		result.Wide = result.Wide[:0]
+	}
+	seenHinted := false
+	seenInts := false
+	seenLened := false
+	seenMaxFits := false
+	seenMaxTooBig := false
+	seenMinned := false
+	seenNested := false
+	seenPtrs := false
+	seenRows := false
+	seenStrs := false
+	seenWide := false
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+	}
+	i++
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		i++
+		return result, i, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
+		}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i, true)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
+			}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		}
+		i++
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch key {
+		case "hinted":
+			if seenHinted {
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"hinted"}}
+			}
+			seenHinted = true
+			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+				i += 4
+				result.Hinted = nil
+				break
+			}
+			if i >= len(data) || data[i] != '[' {
+				return result, i, scan.ErrBadArray
+			}
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			if i < len(data) && data[i] == ']' {
+				if result.Hinted == nil {
+					result.Hinted = []PreallocWide{}
+				}
+			} else {
+				if result.Hinted == nil {
+					result.Hinted = make([]PreallocWide, 0, 3)
+				}
+			}
+			if i < len(data) && data[i] != ']' {
+				for {
+					result.Hinted = append(result.Hinted, PreallocWide{})
+					var _n int
+					result.Hinted[len(result.Hinted)-1], _n, err = result.Hinted[len(result.Hinted)-1].DecodeFrom(data[i:])
+					i += _n
+					if err != nil {
+						return result, i, decode.NewParseErr("hinted", i, err)
+					}
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i < len(data) && data[i] == ',' {
+						i++
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i >= len(data) || data[i] == ']' {
+							return result, i, scan.ErrBadArray
+						}
+						continue
+					}
+					break
+				}
+			}
+			if i >= len(data) || data[i] != ']' {
+				return result, i, scan.ErrBadArray
+			}
+			i++
+		case "ints":
+			if seenInts {
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"ints"}}
+			}
+			seenInts = true
+			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+				i += 4
+				result.Ints = nil
+				break
+			}
+			if i >= len(data) || data[i] != '[' {
+				return result, i, scan.ErrBadArray
+			}
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			if i < len(data) && data[i] == ']' {
+				if result.Ints == nil {
+					result.Ints = []int{}
+				}
+			} else {
+				if result.Ints == nil {
+					cnt0 := 1
+					if e := bytes.IndexByte(data[i:], ']'); e >= 0 {
+						cnt0 = bytes.Count(data[i:i+e], []byte{','}) + 1
+					}
+					result.Ints = make([]int, 0, cnt0)
+				}
+			}
+			if i < len(data) && data[i] != ']' {
+				for {
+					result.Ints = append(result.Ints, 0)
+					neg := false
+					if i < len(data) && data[i] == '-' {
+						neg = true
+						i++
+					}
+					if i >= len(data) || data[i] < '0' || data[i] > '9' {
+						return result, i, decode.NewParseErr("ints", i, scan.ErrBadNumber)
+					}
+					if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+						return result, i, decode.NewParseErr("ints", i, scan.ErrBadNumber)
+					}
+					limit := uint64(math.MaxInt64)
+					if neg {
+						limit = scan.SignedNeg
+					}
+					var u uint64
+					de := i + 18
+					if de > len(data) {
+						de = len(data)
+					}
+					for i < de && data[i] >= '0' && data[i] <= '9' {
+						u = u*10 + uint64(data[i]-'0')
+						i++
+					}
+					for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+						d := uint64(data[i] - '0')
+						if u > limit/10 || (u == limit/10 && d > limit%10) {
+							return result, i, decode.NewParseErr("ints", i, scan.ErrNumberOverflow)
+						}
+						u = u*10 + d
+						i++
+					}
+					if i < len(data) {
+						c := data[i]
+						if c == '.' || c == 'e' || c == 'E' {
+							return result, i, decode.NewParseErr("ints", i, scan.ErrBadNumber)
+						}
+					}
+					var n int64
+					if neg {
+						if u == scan.SignedNeg {
+							n = math.MinInt64
+						} else {
+							n = -int64(u)
+						}
+					} else {
+						n = int64(u)
+					}
+					result.Ints[len(result.Ints)-1] = int(n)
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i < len(data) && data[i] == ',' {
+						i++
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i >= len(data) || data[i] == ']' {
+							return result, i, scan.ErrBadArray
+						}
+						continue
+					}
+					break
+				}
+			}
+			if i >= len(data) || data[i] != ']' {
+				return result, i, scan.ErrBadArray
+			}
+			i++
+		case "lened":
+			if seenLened {
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"lened"}}
+			}
+			seenLened = true
+			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+				i += 4
+				result.Lened = nil
+			} else {
+				if i >= len(data) || data[i] != '[' {
+					return result, i, scan.ErrBadArray
+				}
+				i++
+				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+					i++
+				}
+				if i < len(data) && data[i] == ']' {
+					if result.Lened == nil {
+						result.Lened = []PreallocWide{}
+					}
+				} else {
+					if result.Lened == nil {
+						result.Lened = make([]PreallocWide, 0, 6)
+					}
+				}
+				if i < len(data) && data[i] != ']' {
+					for {
+						result.Lened = append(result.Lened, PreallocWide{})
+						var _n int
+						result.Lened[len(result.Lened)-1], _n, err = result.Lened[len(result.Lened)-1].DecodeFrom(data[i:])
+						i += _n
+						if err != nil {
+							return result, i, decode.NewParseErr("lened", i, err)
+						}
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i < len(data) && data[i] == ',' {
+							i++
+							for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
+							}
+							if i >= len(data) || data[i] == ']' {
+								return result, i, scan.ErrBadArray
+							}
+							continue
+						}
+						break
+					}
+				}
+				if i >= len(data) || data[i] != ']' {
+					return result, i, scan.ErrBadArray
+				}
+				i++
+			}
+			if len(result.Lened) != 6 {
+				return result, i, &validation.LenError{Pos: i, Path: []string{"lened"}, Want: 6, Got: len(result.Lened)}
+			}
+		case "maxFits":
+			if seenMaxFits {
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"maxFits"}}
+			}
+			seenMaxFits = true
+			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+				i += 4
+				result.MaxFits = nil
+			} else {
+				if i >= len(data) || data[i] != '[' {
+					return result, i, scan.ErrBadArray
+				}
+				i++
+				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+					i++
+				}
+				if i < len(data) && data[i] == ']' {
+					if result.MaxFits == nil {
+						result.MaxFits = []PreallocRow{}
+					}
+				} else {
+					if result.MaxFits == nil {
+						result.MaxFits = make([]PreallocRow, 0, ggenCap_6350751b_7)
+					}
+				}
+				if i < len(data) && data[i] != ']' {
+					for {
+						result.MaxFits = append(result.MaxFits, PreallocRow{})
+						var _n int
+						result.MaxFits[len(result.MaxFits)-1], _n, err = result.MaxFits[len(result.MaxFits)-1].DecodeFrom(data[i:])
+						i += _n
+						if err != nil {
+							return result, i, decode.NewParseErr("maxFits", i, err)
+						}
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i < len(data) && data[i] == ',' {
+							i++
+							for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
+							}
+							if i >= len(data) || data[i] == ']' {
+								return result, i, scan.ErrBadArray
+							}
+							continue
+						}
+						break
+					}
+				}
+				if i >= len(data) || data[i] != ']' {
+					return result, i, scan.ErrBadArray
+				}
+				i++
+			}
+			if len(result.MaxFits) > 8 {
+				return result, i, &validation.MaxLenError{Pos: i, Path: []string{"maxFits"}, Limit: 8, Got: len(result.MaxFits)}
+			}
+		case "maxTooBig":
+			if seenMaxTooBig {
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"maxTooBig"}}
+			}
+			seenMaxTooBig = true
+			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+				i += 4
+				result.MaxTooBig = nil
+			} else {
+				if i >= len(data) || data[i] != '[' {
+					return result, i, scan.ErrBadArray
+				}
+				i++
+				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+					i++
+				}
+				if i < len(data) && data[i] == ']' {
+					if result.MaxTooBig == nil {
+						result.MaxTooBig = []PreallocWide{}
+					}
+				} else {
+					if result.MaxTooBig == nil {
+						result.MaxTooBig = make([]PreallocWide, 0, ggenCap_6350751b_9)
+					}
+				}
+				if i < len(data) && data[i] != ']' {
+					for {
+						result.MaxTooBig = append(result.MaxTooBig, PreallocWide{})
+						var _n int
+						result.MaxTooBig[len(result.MaxTooBig)-1], _n, err = result.MaxTooBig[len(result.MaxTooBig)-1].DecodeFrom(data[i:])
+						i += _n
+						if err != nil {
+							return result, i, decode.NewParseErr("maxTooBig", i, err)
+						}
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i < len(data) && data[i] == ',' {
+							i++
+							for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
+							}
+							if i >= len(data) || data[i] == ']' {
+								return result, i, scan.ErrBadArray
+							}
+							continue
+						}
+						break
+					}
+				}
+				if i >= len(data) || data[i] != ']' {
+					return result, i, scan.ErrBadArray
+				}
+				i++
+			}
+			if len(result.MaxTooBig) > 8 {
+				return result, i, &validation.MaxLenError{Pos: i, Path: []string{"maxTooBig"}, Limit: 8, Got: len(result.MaxTooBig)}
+			}
+		case "minned":
+			if seenMinned {
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"minned"}}
+			}
+			seenMinned = true
+			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+				i += 4
+				result.Minned = nil
+			} else {
+				if i >= len(data) || data[i] != '[' {
+					return result, i, scan.ErrBadArray
+				}
+				i++
+				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+					i++
+				}
+				if i < len(data) && data[i] == ']' {
+					if result.Minned == nil {
+						result.Minned = []PreallocWide{}
+					}
+				} else {
+					if result.Minned == nil {
+						result.Minned = make([]PreallocWide, 0, 5)
+					}
+				}
+				if i < len(data) && data[i] != ']' {
+					for {
+						result.Minned = append(result.Minned, PreallocWide{})
+						var _n int
+						result.Minned[len(result.Minned)-1], _n, err = result.Minned[len(result.Minned)-1].DecodeFrom(data[i:])
+						i += _n
+						if err != nil {
+							return result, i, decode.NewParseErr("minned", i, err)
+						}
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i < len(data) && data[i] == ',' {
+							i++
+							for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
+							}
+							if i >= len(data) || data[i] == ']' {
+								return result, i, scan.ErrBadArray
+							}
+							continue
+						}
+						break
+					}
+				}
+				if i >= len(data) || data[i] != ']' {
+					return result, i, scan.ErrBadArray
+				}
+				i++
+			}
+			if len(result.Minned) < 5 {
+				return result, i, &validation.MinLenError{Pos: i, Path: []string{"minned"}, Limit: 5, Got: len(result.Minned)}
+			}
+		case "nested":
+			if seenNested {
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"nested"}}
+			}
+			seenNested = true
+			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+				i += 4
+				result.Nested = nil
+				break
+			}
+			if i >= len(data) || data[i] != '[' {
+				return result, i, scan.ErrBadArray
+			}
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			if i < len(data) && data[i] == ']' {
+				if result.Nested == nil {
+					result.Nested = [][]int{}
+				}
+			} else {
+				if result.Nested == nil {
+					result.Nested = make([][]int, 0, ggenCap_6350751b_0)
+				}
+			}
+			if i < len(data) && data[i] != ']' {
+				for {
+					if len(result.Nested) < cap(result.Nested) {
+						result.Nested = result.Nested[:len(result.Nested)+1]
+					} else {
+						result.Nested = append(result.Nested, nil)
+					}
+					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+						i += 4
+						result.Nested[len(result.Nested)-1] = nil
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i < len(data) && data[i] == ',' {
+							i++
+							for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
+							}
+							if i >= len(data) || data[i] == ']' {
+								return result, i, scan.ErrBadArray
+							}
+							continue
+						}
+						break
+					}
+					row0 := result.Nested[len(result.Nested)-1]
+					if row0 != nil {
+						row0 = row0[:0]
+					}
+					if i >= len(data) || data[i] != '[' {
+						return result, i, scan.ErrBadArray
+					}
+					i++
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i < len(data) && data[i] == ']' {
+						if row0 == nil {
+							row0 = []int{}
+						}
+					} else {
+						if row0 == nil {
+							cnt1 := 1
+							if e := bytes.IndexByte(data[i:], ']'); e >= 0 {
+								cnt1 = bytes.Count(data[i:i+e], []byte{','}) + 1
+							}
+							row0 = make([]int, 0, cnt1)
+						}
+					}
+					if i < len(data) && data[i] != ']' {
+						for {
+							row0 = append(row0, 0)
+							neg := false
+							if i < len(data) && data[i] == '-' {
+								neg = true
+								i++
+							}
+							if i >= len(data) || data[i] < '0' || data[i] > '9' {
+								return result, i, decode.NewParseErr("nested[]", i, scan.ErrBadNumber)
+							}
+							if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+								return result, i, decode.NewParseErr("nested[]", i, scan.ErrBadNumber)
+							}
+							limit := uint64(math.MaxInt64)
+							if neg {
+								limit = scan.SignedNeg
+							}
+							var u uint64
+							de := i + 18
+							if de > len(data) {
+								de = len(data)
+							}
+							for i < de && data[i] >= '0' && data[i] <= '9' {
+								u = u*10 + uint64(data[i]-'0')
+								i++
+							}
+							for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+								d := uint64(data[i] - '0')
+								if u > limit/10 || (u == limit/10 && d > limit%10) {
+									return result, i, decode.NewParseErr("nested[]", i, scan.ErrNumberOverflow)
+								}
+								u = u*10 + d
+								i++
+							}
+							if i < len(data) {
+								c := data[i]
+								if c == '.' || c == 'e' || c == 'E' {
+									return result, i, decode.NewParseErr("nested[]", i, scan.ErrBadNumber)
+								}
+							}
+							var n int64
+							if neg {
+								if u == scan.SignedNeg {
+									n = math.MinInt64
+								} else {
+									n = -int64(u)
+								}
+							} else {
+								n = int64(u)
+							}
+							row0[len(row0)-1] = int(n)
+							for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
+							}
+							if i < len(data) && data[i] == ',' {
+								i++
+								for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+									i++
+								}
+								if i >= len(data) || data[i] == ']' {
+									return result, i, scan.ErrBadArray
+								}
+								continue
+							}
+							break
+						}
+					}
+					if i >= len(data) || data[i] != ']' {
+						return result, i, scan.ErrBadArray
+					}
+					i++
+					result.Nested[len(result.Nested)-1] = row0
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i < len(data) && data[i] == ',' {
+						i++
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i >= len(data) || data[i] == ']' {
+							return result, i, scan.ErrBadArray
+						}
+						continue
+					}
+					break
+				}
+			}
+			if i >= len(data) || data[i] != ']' {
+				return result, i, scan.ErrBadArray
+			}
+			i++
+		case "ptrs":
+			if seenPtrs {
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"ptrs"}}
+			}
+			seenPtrs = true
+			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+				i += 4
+				result.Ptrs = nil
+				break
+			}
+			if i >= len(data) || data[i] != '[' {
+				return result, i, scan.ErrBadArray
+			}
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			var slab0 []PreallocRow
+			if i < len(data) && data[i] == ']' {
+				if result.Ptrs == nil {
+					result.Ptrs = []*PreallocRow{}
+				}
+			} else {
+				if result.Ptrs == nil {
+					result.Ptrs = make([]*PreallocRow, 0, ggenCap_6350751b_10)
+				}
+				slab0 = make([]PreallocRow, 0, ggenCap_6350751b_6)
+			}
+			if i < len(data) && data[i] != ']' {
+				for {
+					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+						i += 4
+						result.Ptrs = append(result.Ptrs, nil)
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i < len(data) && data[i] == ',' {
+							i++
+							for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
+							}
+							if i >= len(data) || data[i] == ']' {
+								return result, i, scan.ErrBadArray
+							}
+							continue
+						}
+						break
+					}
+					slab0 = append(slab0, PreallocRow{})
+					var _n int
+					slab0[len(slab0)-1], _n, err = slab0[len(slab0)-1].DecodeFrom(data[i:])
+					i += _n
+					if err != nil {
+						return result, i, decode.NewParseErr("ptrs", i, err)
+					}
+					result.Ptrs = append(result.Ptrs, &slab0[len(slab0)-1])
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i < len(data) && data[i] == ',' {
+						i++
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i >= len(data) || data[i] == ']' {
+							return result, i, scan.ErrBadArray
+						}
+						continue
+					}
+					break
+				}
+			}
+			if i >= len(data) || data[i] != ']' {
+				return result, i, scan.ErrBadArray
+			}
+			i++
+		case "rows":
+			if seenRows {
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"rows"}}
+			}
+			seenRows = true
+			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+				i += 4
+				result.Rows = nil
+				break
+			}
+			if i >= len(data) || data[i] != '[' {
+				return result, i, scan.ErrBadArray
+			}
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			if i < len(data) && data[i] == ']' {
+				if result.Rows == nil {
+					result.Rows = []PreallocRow{}
+				}
+			} else {
+				if result.Rows == nil {
+					result.Rows = make([]PreallocRow, 0, ggenCap_6350751b_6)
+				}
+			}
+			if i < len(data) && data[i] != ']' {
+				for {
+					result.Rows = append(result.Rows, PreallocRow{})
+					var _n int
+					result.Rows[len(result.Rows)-1], _n, err = result.Rows[len(result.Rows)-1].DecodeFrom(data[i:])
+					i += _n
+					if err != nil {
+						return result, i, decode.NewParseErr("rows", i, err)
+					}
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i < len(data) && data[i] == ',' {
+						i++
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i >= len(data) || data[i] == ']' {
+							return result, i, scan.ErrBadArray
+						}
+						continue
+					}
+					break
+				}
+			}
+			if i >= len(data) || data[i] != ']' {
+				return result, i, scan.ErrBadArray
+			}
+			i++
+		case "strs":
+			if seenStrs {
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"strs"}}
+			}
+			seenStrs = true
+			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+				i += 4
+				result.Strs = nil
+				break
+			}
+			if i >= len(data) || data[i] != '[' {
+				return result, i, scan.ErrBadArray
+			}
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			if i < len(data) && data[i] == ']' {
+				if result.Strs == nil {
+					result.Strs = []string{}
+				}
+			} else {
+				if result.Strs == nil {
+					result.Strs = make([]string, 0, ggenCap_6350751b_4)
+				}
+			}
+			if i < len(data) && data[i] != ']' {
+				for {
+					result.Strs = append(result.Strs, "")
+					if i >= len(data) || data[i] != '"' {
+						return result, i, decode.NewParseErr("strs", i, scan.ErrExpectString)
+					}
+					ke := i + 1
+					kew := ke + 32
+					if kew > len(data) {
+						kew = len(data)
+					}
+					for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+						ke++
+					}
+					if ke < len(data) && data[ke] == '"' {
+						result.Strs[len(result.Strs)-1] = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						i = ke + 1
+					} else {
+						result.Strs[len(result.Strs)-1], i, err = scan.String(data, i, true)
+						if err != nil {
+							return result, i, decode.NewParseErr("strs", i, err)
+						}
+					}
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i < len(data) && data[i] == ',' {
+						i++
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i >= len(data) || data[i] == ']' {
+							return result, i, scan.ErrBadArray
+						}
+						continue
+					}
+					break
+				}
+			}
+			if i >= len(data) || data[i] != ']' {
+				return result, i, scan.ErrBadArray
+			}
+			i++
+		case "wide":
+			if seenWide {
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"wide"}}
+			}
+			seenWide = true
+			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+				i += 4
+				result.Wide = nil
+				break
+			}
+			if i >= len(data) || data[i] != '[' {
+				return result, i, scan.ErrBadArray
+			}
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			if i < len(data) && data[i] == ']' {
+				if result.Wide == nil {
+					result.Wide = []PreallocWide{}
+				}
+			} else {
+				if result.Wide == nil {
+					result.Wide = make([]PreallocWide, 0, ggenCap_6350751b_8)
+				}
+			}
+			if i < len(data) && data[i] != ']' {
+				for {
+					result.Wide = append(result.Wide, PreallocWide{})
+					var _n int
+					result.Wide[len(result.Wide)-1], _n, err = result.Wide[len(result.Wide)-1].DecodeFrom(data[i:])
+					i += _n
+					if err != nil {
+						return result, i, decode.NewParseErr("wide", i, err)
+					}
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i < len(data) && data[i] == ',' {
+						i++
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i >= len(data) || data[i] == ']' {
+							return result, i, scan.ErrBadArray
+						}
+						continue
+					}
+					break
+				}
+			}
+			if i >= len(data) || data[i] != ']' {
+				return result, i, scan.ErrBadArray
+			}
+			i++
+		default:
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			i++
+			return result, i, nil
+		}
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+	}
+}
+
+func (recv PreallocWidths) DecodeFromStream(s *scan.Stream) (result PreallocWidths, err error) {
+	result = recv
+	if result.Hinted != nil {
+		result.Hinted = result.Hinted[:0]
+	}
+	if result.Ints != nil {
+		result.Ints = result.Ints[:0]
+	}
+	if result.Lened != nil {
+		result.Lened = result.Lened[:0]
+	}
+	if result.MaxFits != nil {
+		result.MaxFits = result.MaxFits[:0]
+	}
+	if result.MaxTooBig != nil {
+		result.MaxTooBig = result.MaxTooBig[:0]
+	}
+	if result.Minned != nil {
+		result.Minned = result.Minned[:0]
+	}
+	if result.Nested != nil {
+		result.Nested = result.Nested[:0]
+	}
+	if result.Ptrs != nil {
+		result.Ptrs = result.Ptrs[:0]
+	}
+	if result.Rows != nil {
+		result.Rows = result.Rows[:0]
+	}
+	if result.Strs != nil {
+		result.Strs = result.Strs[:0]
+	}
+	if result.Wide != nil {
+		result.Wide = result.Wide[:0]
+	}
+	seenHinted := false
+	seenInts := false
+	seenLened := false
+	seenMaxFits := false
+	seenMaxTooBig := false
+	seenMinned := false
+	seenNested := false
+	seenPtrs := false
+	seenRows := false
+	seenStrs := false
+	seenWide := false
+	err = s.ObjectOpen()
+	if err != nil {
+		return result, decode.NewParseErr("", s.Pos, err)
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, decode.NewParseErr("", s.Pos, err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView(true)
+		if err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		switch key {
+		case "hinted":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("hinted", s.Pos, err)
+			}
+			if seenHinted {
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"hinted"}}
+			}
+			seenHinted = true
+			err = s.SkipSpace()
+			if err != nil {
+				return result, decode.NewParseErr("hinted", s.Pos, err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, decode.NewParseErr("hinted", s.Pos, err)
+				}
+			}
+			if s.Bytes()[s.Pos] == 'n' {
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, decode.NewParseErr("hinted", s.Pos, err)
+						}
+					}
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, decode.NewParseErr("hinted", s.Pos, scan.ErrBadLiteral)
+					}
+				}
+				s.Pos += 4
+				result.Hinted = nil
+				break
+			}
+			err = s.ArrayOpen()
+			if err != nil {
+				return result, decode.NewParseErr("hinted", s.Pos, err)
+			}
+			err = s.SkipSpace()
+			if err != nil {
+				return result, decode.NewParseErr("hinted", s.Pos, err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, decode.NewParseErr("hinted", s.Pos, err)
+				}
+			}
+			if s.Bytes()[s.Pos] == ']' {
+				if result.Hinted == nil {
+					result.Hinted = []PreallocWide{}
+				}
+			} else {
+				if result.Hinted == nil {
+					result.Hinted = make([]PreallocWide, 0, 3)
+				}
+			}
+			for s.Bytes()[s.Pos] != ']' {
+				result.Hinted = append(result.Hinted, PreallocWide{})
+				result.Hinted[len(result.Hinted)-1], err = result.Hinted[len(result.Hinted)-1].DecodeFromStream(s)
+				if err != nil {
+					return result, decode.NewParseErr("hinted", s.Pos, err)
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, decode.NewParseErr("hinted", s.Pos, err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("hinted", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == ',' {
+					s.Pos++
+					err = s.SkipSpace()
+					if err != nil {
+						return result, decode.NewParseErr("hinted", s.Pos, err)
+					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+						return result, decode.NewParseErr("hinted", s.Pos, scan.ErrBadArray)
+					}
+					continue
+				}
+				break
+			}
+			if s.Bytes()[s.Pos] != ']' {
+				return result, decode.NewParseErr("hinted", s.Pos, scan.ErrBadArray)
+			}
+			s.Pos++
+		case "ints":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("ints", s.Pos, err)
+			}
+			if seenInts {
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"ints"}}
+			}
+			seenInts = true
+			err = s.SkipSpace()
+			if err != nil {
+				return result, decode.NewParseErr("ints", s.Pos, err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, decode.NewParseErr("ints", s.Pos, err)
+				}
+			}
+			if s.Bytes()[s.Pos] == 'n' {
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, decode.NewParseErr("ints", s.Pos, err)
+						}
+					}
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, decode.NewParseErr("ints", s.Pos, scan.ErrBadLiteral)
+					}
+				}
+				s.Pos += 4
+				result.Ints = nil
+				break
+			}
+			err = s.ArrayOpen()
+			if err != nil {
+				return result, decode.NewParseErr("ints", s.Pos, err)
+			}
+			err = s.SkipSpace()
+			if err != nil {
+				return result, decode.NewParseErr("ints", s.Pos, err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, decode.NewParseErr("ints", s.Pos, err)
+				}
+			}
+			if s.Bytes()[s.Pos] == ']' {
+				if result.Ints == nil {
+					result.Ints = []int{}
+				}
+			} else {
+				if result.Ints == nil {
+					result.Ints = make([]int, 0, ggenCap_6350751b_1)
+				}
+			}
+			for s.Bytes()[s.Pos] != ']' {
+				result.Ints = append(result.Ints, 0)
+				var iv int64
+				iv, err = s.Int64()
+				if err != nil {
+					return result, decode.NewParseErr("ints", s.Pos, err)
+				}
+				result.Ints[len(result.Ints)-1] = int(iv)
+				err = s.SkipSpace()
+				if err != nil {
+					return result, decode.NewParseErr("ints", s.Pos, err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("ints", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == ',' {
+					s.Pos++
+					err = s.SkipSpace()
+					if err != nil {
+						return result, decode.NewParseErr("ints", s.Pos, err)
+					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+						return result, decode.NewParseErr("ints", s.Pos, scan.ErrBadArray)
+					}
+					continue
+				}
+				break
+			}
+			if s.Bytes()[s.Pos] != ']' {
+				return result, decode.NewParseErr("ints", s.Pos, scan.ErrBadArray)
+			}
+			s.Pos++
+		case "lened":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("lened", s.Pos, err)
+			}
+			if seenLened {
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"lened"}}
+			}
+			seenLened = true
+			err = s.SkipSpace()
+			if err != nil {
+				return result, decode.NewParseErr("lened", s.Pos, err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, decode.NewParseErr("lened", s.Pos, err)
+				}
+			}
+			if s.Bytes()[s.Pos] == 'n' {
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, decode.NewParseErr("lened", s.Pos, err)
+						}
+					}
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, decode.NewParseErr("lened", s.Pos, scan.ErrBadLiteral)
+					}
+				}
+				s.Pos += 4
+				result.Lened = nil
+			} else {
+				err = s.ArrayOpen()
+				if err != nil {
+					return result, decode.NewParseErr("lened", s.Pos, err)
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, decode.NewParseErr("lened", s.Pos, err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("lened", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == ']' {
+					if result.Lened == nil {
+						result.Lened = []PreallocWide{}
+					}
+				} else {
+					if result.Lened == nil {
+						result.Lened = make([]PreallocWide, 0, 6)
+					}
+				}
+				for s.Bytes()[s.Pos] != ']' {
+					result.Lened = append(result.Lened, PreallocWide{})
+					result.Lened[len(result.Lened)-1], err = result.Lened[len(result.Lened)-1].DecodeFromStream(s)
+					if err != nil {
+						return result, decode.NewParseErr("lened", s.Pos, err)
+					}
+					err = s.SkipSpace()
+					if err != nil {
+						return result, decode.NewParseErr("lened", s.Pos, err)
+					}
+					if s.Pos >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, decode.NewParseErr("lened", s.Pos, err)
+						}
+					}
+					if s.Bytes()[s.Pos] == ',' {
+						s.Pos++
+						err = s.SkipSpace()
+						if err != nil {
+							return result, decode.NewParseErr("lened", s.Pos, err)
+						}
+						if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+							return result, decode.NewParseErr("lened", s.Pos, scan.ErrBadArray)
+						}
+						continue
+					}
+					break
+				}
+				if s.Bytes()[s.Pos] != ']' {
+					return result, decode.NewParseErr("lened", s.Pos, scan.ErrBadArray)
+				}
+				s.Pos++
+			}
+			if len(result.Lened) != 6 {
+				return result, &validation.LenError{Pos: s.Offset(), Path: []string{"lened"}, Want: 6, Got: len(result.Lened)}
+			}
+		case "maxFits":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("maxFits", s.Pos, err)
+			}
+			if seenMaxFits {
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"maxFits"}}
+			}
+			seenMaxFits = true
+			err = s.SkipSpace()
+			if err != nil {
+				return result, decode.NewParseErr("maxFits", s.Pos, err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, decode.NewParseErr("maxFits", s.Pos, err)
+				}
+			}
+			if s.Bytes()[s.Pos] == 'n' {
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, decode.NewParseErr("maxFits", s.Pos, err)
+						}
+					}
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, decode.NewParseErr("maxFits", s.Pos, scan.ErrBadLiteral)
+					}
+				}
+				s.Pos += 4
+				result.MaxFits = nil
+			} else {
+				err = s.ArrayOpen()
+				if err != nil {
+					return result, decode.NewParseErr("maxFits", s.Pos, err)
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, decode.NewParseErr("maxFits", s.Pos, err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("maxFits", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == ']' {
+					if result.MaxFits == nil {
+						result.MaxFits = []PreallocRow{}
+					}
+				} else {
+					if result.MaxFits == nil {
+						result.MaxFits = make([]PreallocRow, 0, ggenCap_6350751b_7)
+					}
+				}
+				for s.Bytes()[s.Pos] != ']' {
+					result.MaxFits = append(result.MaxFits, PreallocRow{})
+					result.MaxFits[len(result.MaxFits)-1], err = result.MaxFits[len(result.MaxFits)-1].DecodeFromStream(s)
+					if err != nil {
+						return result, decode.NewParseErr("maxFits", s.Pos, err)
+					}
+					err = s.SkipSpace()
+					if err != nil {
+						return result, decode.NewParseErr("maxFits", s.Pos, err)
+					}
+					if s.Pos >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, decode.NewParseErr("maxFits", s.Pos, err)
+						}
+					}
+					if s.Bytes()[s.Pos] == ',' {
+						s.Pos++
+						err = s.SkipSpace()
+						if err != nil {
+							return result, decode.NewParseErr("maxFits", s.Pos, err)
+						}
+						if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+							return result, decode.NewParseErr("maxFits", s.Pos, scan.ErrBadArray)
+						}
+						continue
+					}
+					break
+				}
+				if s.Bytes()[s.Pos] != ']' {
+					return result, decode.NewParseErr("maxFits", s.Pos, scan.ErrBadArray)
+				}
+				s.Pos++
+			}
+			if len(result.MaxFits) > 8 {
+				return result, &validation.MaxLenError{Pos: s.Offset(), Path: []string{"maxFits"}, Limit: 8, Got: len(result.MaxFits)}
+			}
+		case "maxTooBig":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("maxTooBig", s.Pos, err)
+			}
+			if seenMaxTooBig {
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"maxTooBig"}}
+			}
+			seenMaxTooBig = true
+			err = s.SkipSpace()
+			if err != nil {
+				return result, decode.NewParseErr("maxTooBig", s.Pos, err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, decode.NewParseErr("maxTooBig", s.Pos, err)
+				}
+			}
+			if s.Bytes()[s.Pos] == 'n' {
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, decode.NewParseErr("maxTooBig", s.Pos, err)
+						}
+					}
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, decode.NewParseErr("maxTooBig", s.Pos, scan.ErrBadLiteral)
+					}
+				}
+				s.Pos += 4
+				result.MaxTooBig = nil
+			} else {
+				err = s.ArrayOpen()
+				if err != nil {
+					return result, decode.NewParseErr("maxTooBig", s.Pos, err)
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, decode.NewParseErr("maxTooBig", s.Pos, err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("maxTooBig", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == ']' {
+					if result.MaxTooBig == nil {
+						result.MaxTooBig = []PreallocWide{}
+					}
+				} else {
+					if result.MaxTooBig == nil {
+						result.MaxTooBig = make([]PreallocWide, 0, ggenCap_6350751b_9)
+					}
+				}
+				for s.Bytes()[s.Pos] != ']' {
+					result.MaxTooBig = append(result.MaxTooBig, PreallocWide{})
+					result.MaxTooBig[len(result.MaxTooBig)-1], err = result.MaxTooBig[len(result.MaxTooBig)-1].DecodeFromStream(s)
+					if err != nil {
+						return result, decode.NewParseErr("maxTooBig", s.Pos, err)
+					}
+					err = s.SkipSpace()
+					if err != nil {
+						return result, decode.NewParseErr("maxTooBig", s.Pos, err)
+					}
+					if s.Pos >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, decode.NewParseErr("maxTooBig", s.Pos, err)
+						}
+					}
+					if s.Bytes()[s.Pos] == ',' {
+						s.Pos++
+						err = s.SkipSpace()
+						if err != nil {
+							return result, decode.NewParseErr("maxTooBig", s.Pos, err)
+						}
+						if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+							return result, decode.NewParseErr("maxTooBig", s.Pos, scan.ErrBadArray)
+						}
+						continue
+					}
+					break
+				}
+				if s.Bytes()[s.Pos] != ']' {
+					return result, decode.NewParseErr("maxTooBig", s.Pos, scan.ErrBadArray)
+				}
+				s.Pos++
+			}
+			if len(result.MaxTooBig) > 8 {
+				return result, &validation.MaxLenError{Pos: s.Offset(), Path: []string{"maxTooBig"}, Limit: 8, Got: len(result.MaxTooBig)}
+			}
+		case "minned":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("minned", s.Pos, err)
+			}
+			if seenMinned {
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"minned"}}
+			}
+			seenMinned = true
+			err = s.SkipSpace()
+			if err != nil {
+				return result, decode.NewParseErr("minned", s.Pos, err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, decode.NewParseErr("minned", s.Pos, err)
+				}
+			}
+			if s.Bytes()[s.Pos] == 'n' {
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, decode.NewParseErr("minned", s.Pos, err)
+						}
+					}
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, decode.NewParseErr("minned", s.Pos, scan.ErrBadLiteral)
+					}
+				}
+				s.Pos += 4
+				result.Minned = nil
+			} else {
+				err = s.ArrayOpen()
+				if err != nil {
+					return result, decode.NewParseErr("minned", s.Pos, err)
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, decode.NewParseErr("minned", s.Pos, err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("minned", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == ']' {
+					if result.Minned == nil {
+						result.Minned = []PreallocWide{}
+					}
+				} else {
+					if result.Minned == nil {
+						result.Minned = make([]PreallocWide, 0, 5)
+					}
+				}
+				for s.Bytes()[s.Pos] != ']' {
+					result.Minned = append(result.Minned, PreallocWide{})
+					result.Minned[len(result.Minned)-1], err = result.Minned[len(result.Minned)-1].DecodeFromStream(s)
+					if err != nil {
+						return result, decode.NewParseErr("minned", s.Pos, err)
+					}
+					err = s.SkipSpace()
+					if err != nil {
+						return result, decode.NewParseErr("minned", s.Pos, err)
+					}
+					if s.Pos >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, decode.NewParseErr("minned", s.Pos, err)
+						}
+					}
+					if s.Bytes()[s.Pos] == ',' {
+						s.Pos++
+						err = s.SkipSpace()
+						if err != nil {
+							return result, decode.NewParseErr("minned", s.Pos, err)
+						}
+						if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+							return result, decode.NewParseErr("minned", s.Pos, scan.ErrBadArray)
+						}
+						continue
+					}
+					break
+				}
+				if s.Bytes()[s.Pos] != ']' {
+					return result, decode.NewParseErr("minned", s.Pos, scan.ErrBadArray)
+				}
+				s.Pos++
+			}
+			if len(result.Minned) < 5 {
+				return result, &validation.MinLenError{Pos: s.Offset(), Path: []string{"minned"}, Limit: 5, Got: len(result.Minned)}
+			}
+		case "nested":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("nested", s.Pos, err)
+			}
+			if seenNested {
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"nested"}}
+			}
+			seenNested = true
+			err = s.SkipSpace()
+			if err != nil {
+				return result, decode.NewParseErr("nested", s.Pos, err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, decode.NewParseErr("nested", s.Pos, err)
+				}
+			}
+			if s.Bytes()[s.Pos] == 'n' {
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, decode.NewParseErr("nested", s.Pos, err)
+						}
+					}
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, decode.NewParseErr("nested", s.Pos, scan.ErrBadLiteral)
+					}
+				}
+				s.Pos += 4
+				result.Nested = nil
+				break
+			}
+			err = s.ArrayOpen()
+			if err != nil {
+				return result, decode.NewParseErr("nested", s.Pos, err)
+			}
+			err = s.SkipSpace()
+			if err != nil {
+				return result, decode.NewParseErr("nested", s.Pos, err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, decode.NewParseErr("nested", s.Pos, err)
+				}
+			}
+			if s.Bytes()[s.Pos] == ']' {
+				if result.Nested == nil {
+					result.Nested = [][]int{}
+				}
+			} else {
+				if result.Nested == nil {
+					result.Nested = make([][]int, 0, ggenCap_6350751b_0)
+				}
+			}
+			for s.Bytes()[s.Pos] != ']' {
+				if len(result.Nested) < cap(result.Nested) {
+					result.Nested = result.Nested[:len(result.Nested)+1]
+				} else {
+					result.Nested = append(result.Nested, nil)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("nested", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, decode.NewParseErr("nested", s.Pos, err)
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, decode.NewParseErr("nested", s.Pos, scan.ErrBadLiteral)
+						}
+					}
+					s.Pos += 4
+					result.Nested[len(result.Nested)-1] = nil
+					err = s.SkipSpace()
+					if err != nil {
+						return result, decode.NewParseErr("nested", s.Pos, err)
+					}
+					if s.Pos >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, decode.NewParseErr("nested", s.Pos, err)
+						}
+					}
+					if s.Bytes()[s.Pos] == ',' {
+						s.Pos++
+						err = s.SkipSpace()
+						if err != nil {
+							return result, decode.NewParseErr("nested", s.Pos, err)
+						}
+						if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+							return result, decode.NewParseErr("nested", s.Pos, scan.ErrBadArray)
+						}
+						continue
+					}
+					break
+				}
+				row0 := result.Nested[len(result.Nested)-1]
+				if row0 != nil {
+					row0 = row0[:0]
+				}
+				err = s.ArrayOpen()
+				if err != nil {
+					return result, decode.NewParseErr("nested[]", s.Pos, err)
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, decode.NewParseErr("nested[]", s.Pos, err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("nested[]", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == ']' {
+					if row0 == nil {
+						row0 = []int{}
+					}
+				} else {
+					if row0 == nil {
+						row0 = make([]int, 0, ggenCap_6350751b_1)
+					}
+				}
+				for s.Bytes()[s.Pos] != ']' {
+					row0 = append(row0, 0)
+					var iv int64
+					iv, err = s.Int64()
+					if err != nil {
+						return result, decode.NewParseErr("nested[]", s.Pos, err)
+					}
+					row0[len(row0)-1] = int(iv)
+					err = s.SkipSpace()
+					if err != nil {
+						return result, decode.NewParseErr("nested[]", s.Pos, err)
+					}
+					if s.Pos >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, decode.NewParseErr("nested[]", s.Pos, err)
+						}
+					}
+					if s.Bytes()[s.Pos] == ',' {
+						s.Pos++
+						err = s.SkipSpace()
+						if err != nil {
+							return result, decode.NewParseErr("nested[]", s.Pos, err)
+						}
+						if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+							return result, decode.NewParseErr("nested[]", s.Pos, scan.ErrBadArray)
+						}
+						continue
+					}
+					break
+				}
+				if s.Bytes()[s.Pos] != ']' {
+					return result, decode.NewParseErr("nested[]", s.Pos, scan.ErrBadArray)
+				}
+				s.Pos++
+				result.Nested[len(result.Nested)-1] = row0
+				err = s.SkipSpace()
+				if err != nil {
+					return result, decode.NewParseErr("nested", s.Pos, err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("nested", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == ',' {
+					s.Pos++
+					err = s.SkipSpace()
+					if err != nil {
+						return result, decode.NewParseErr("nested", s.Pos, err)
+					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+						return result, decode.NewParseErr("nested", s.Pos, scan.ErrBadArray)
+					}
+					continue
+				}
+				break
+			}
+			if s.Bytes()[s.Pos] != ']' {
+				return result, decode.NewParseErr("nested", s.Pos, scan.ErrBadArray)
+			}
+			s.Pos++
+		case "ptrs":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("ptrs", s.Pos, err)
+			}
+			if seenPtrs {
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"ptrs"}}
+			}
+			seenPtrs = true
+			err = s.SkipSpace()
+			if err != nil {
+				return result, decode.NewParseErr("ptrs", s.Pos, err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, decode.NewParseErr("ptrs", s.Pos, err)
+				}
+			}
+			if s.Bytes()[s.Pos] == 'n' {
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, decode.NewParseErr("ptrs", s.Pos, err)
+						}
+					}
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, decode.NewParseErr("ptrs", s.Pos, scan.ErrBadLiteral)
+					}
+				}
+				s.Pos += 4
+				result.Ptrs = nil
+				break
+			}
+			err = s.ArrayOpen()
+			if err != nil {
+				return result, decode.NewParseErr("ptrs", s.Pos, err)
+			}
+			err = s.SkipSpace()
+			if err != nil {
+				return result, decode.NewParseErr("ptrs", s.Pos, err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, decode.NewParseErr("ptrs", s.Pos, err)
+				}
+			}
+			var slab0 []PreallocRow
+			if s.Bytes()[s.Pos] == ']' {
+				if result.Ptrs == nil {
+					result.Ptrs = []*PreallocRow{}
+				}
+			} else {
+				if result.Ptrs == nil {
+					result.Ptrs = make([]*PreallocRow, 0, ggenCap_6350751b_10)
+				}
+				slab0 = make([]PreallocRow, 0, ggenCap_6350751b_6)
+			}
+			for s.Bytes()[s.Pos] != ']' {
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("ptrs", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, decode.NewParseErr("ptrs", s.Pos, err)
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, decode.NewParseErr("ptrs", s.Pos, scan.ErrBadLiteral)
+						}
+					}
+					s.Pos += 4
+					result.Ptrs = append(result.Ptrs, nil)
+					err = s.SkipSpace()
+					if err != nil {
+						return result, decode.NewParseErr("ptrs", s.Pos, err)
+					}
+					if s.Pos >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, decode.NewParseErr("ptrs", s.Pos, err)
+						}
+					}
+					if s.Bytes()[s.Pos] == ',' {
+						s.Pos++
+						err = s.SkipSpace()
+						if err != nil {
+							return result, decode.NewParseErr("ptrs", s.Pos, err)
+						}
+						if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+							return result, decode.NewParseErr("ptrs", s.Pos, scan.ErrBadArray)
+						}
+						continue
+					}
+					break
+				}
+				slab0 = append(slab0, PreallocRow{})
+				slab0[len(slab0)-1], err = slab0[len(slab0)-1].DecodeFromStream(s)
+				if err != nil {
+					return result, decode.NewParseErr("ptrs", s.Pos, err)
+				}
+				result.Ptrs = append(result.Ptrs, &slab0[len(slab0)-1])
+				err = s.SkipSpace()
+				if err != nil {
+					return result, decode.NewParseErr("ptrs", s.Pos, err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("ptrs", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == ',' {
+					s.Pos++
+					err = s.SkipSpace()
+					if err != nil {
+						return result, decode.NewParseErr("ptrs", s.Pos, err)
+					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+						return result, decode.NewParseErr("ptrs", s.Pos, scan.ErrBadArray)
+					}
+					continue
+				}
+				break
+			}
+			if s.Bytes()[s.Pos] != ']' {
+				return result, decode.NewParseErr("ptrs", s.Pos, scan.ErrBadArray)
+			}
+			s.Pos++
+		case "rows":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("rows", s.Pos, err)
+			}
+			if seenRows {
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"rows"}}
+			}
+			seenRows = true
+			err = s.SkipSpace()
+			if err != nil {
+				return result, decode.NewParseErr("rows", s.Pos, err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, decode.NewParseErr("rows", s.Pos, err)
+				}
+			}
+			if s.Bytes()[s.Pos] == 'n' {
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, decode.NewParseErr("rows", s.Pos, err)
+						}
+					}
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, decode.NewParseErr("rows", s.Pos, scan.ErrBadLiteral)
+					}
+				}
+				s.Pos += 4
+				result.Rows = nil
+				break
+			}
+			err = s.ArrayOpen()
+			if err != nil {
+				return result, decode.NewParseErr("rows", s.Pos, err)
+			}
+			err = s.SkipSpace()
+			if err != nil {
+				return result, decode.NewParseErr("rows", s.Pos, err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, decode.NewParseErr("rows", s.Pos, err)
+				}
+			}
+			if s.Bytes()[s.Pos] == ']' {
+				if result.Rows == nil {
+					result.Rows = []PreallocRow{}
+				}
+			} else {
+				if result.Rows == nil {
+					result.Rows = make([]PreallocRow, 0, ggenCap_6350751b_6)
+				}
+			}
+			for s.Bytes()[s.Pos] != ']' {
+				result.Rows = append(result.Rows, PreallocRow{})
+				result.Rows[len(result.Rows)-1], err = result.Rows[len(result.Rows)-1].DecodeFromStream(s)
+				if err != nil {
+					return result, decode.NewParseErr("rows", s.Pos, err)
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, decode.NewParseErr("rows", s.Pos, err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("rows", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == ',' {
+					s.Pos++
+					err = s.SkipSpace()
+					if err != nil {
+						return result, decode.NewParseErr("rows", s.Pos, err)
+					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+						return result, decode.NewParseErr("rows", s.Pos, scan.ErrBadArray)
+					}
+					continue
+				}
+				break
+			}
+			if s.Bytes()[s.Pos] != ']' {
+				return result, decode.NewParseErr("rows", s.Pos, scan.ErrBadArray)
+			}
+			s.Pos++
+		case "strs":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("strs", s.Pos, err)
+			}
+			if seenStrs {
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"strs"}}
+			}
+			seenStrs = true
+			err = s.SkipSpace()
+			if err != nil {
+				return result, decode.NewParseErr("strs", s.Pos, err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, decode.NewParseErr("strs", s.Pos, err)
+				}
+			}
+			if s.Bytes()[s.Pos] == 'n' {
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, decode.NewParseErr("strs", s.Pos, err)
+						}
+					}
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, decode.NewParseErr("strs", s.Pos, scan.ErrBadLiteral)
+					}
+				}
+				s.Pos += 4
+				result.Strs = nil
+				break
+			}
+			err = s.ArrayOpen()
+			if err != nil {
+				return result, decode.NewParseErr("strs", s.Pos, err)
+			}
+			err = s.SkipSpace()
+			if err != nil {
+				return result, decode.NewParseErr("strs", s.Pos, err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, decode.NewParseErr("strs", s.Pos, err)
+				}
+			}
+			if s.Bytes()[s.Pos] == ']' {
+				if result.Strs == nil {
+					result.Strs = []string{}
+				}
+			} else {
+				if result.Strs == nil {
+					result.Strs = make([]string, 0, ggenCap_6350751b_4)
+				}
+			}
+			for s.Bytes()[s.Pos] != ']' {
+				result.Strs = append(result.Strs, "")
+				result.Strs[len(result.Strs)-1], err = s.String(true)
+				if err != nil {
+					return result, decode.NewParseErr("strs", s.Pos, err)
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, decode.NewParseErr("strs", s.Pos, err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("strs", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == ',' {
+					s.Pos++
+					err = s.SkipSpace()
+					if err != nil {
+						return result, decode.NewParseErr("strs", s.Pos, err)
+					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+						return result, decode.NewParseErr("strs", s.Pos, scan.ErrBadArray)
+					}
+					continue
+				}
+				break
+			}
+			if s.Bytes()[s.Pos] != ']' {
+				return result, decode.NewParseErr("strs", s.Pos, scan.ErrBadArray)
+			}
+			s.Pos++
+		case "wide":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("wide", s.Pos, err)
+			}
+			if seenWide {
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"wide"}}
+			}
+			seenWide = true
+			err = s.SkipSpace()
+			if err != nil {
+				return result, decode.NewParseErr("wide", s.Pos, err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, decode.NewParseErr("wide", s.Pos, err)
+				}
+			}
+			if s.Bytes()[s.Pos] == 'n' {
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, decode.NewParseErr("wide", s.Pos, err)
+						}
+					}
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, decode.NewParseErr("wide", s.Pos, scan.ErrBadLiteral)
+					}
+				}
+				s.Pos += 4
+				result.Wide = nil
+				break
+			}
+			err = s.ArrayOpen()
+			if err != nil {
+				return result, decode.NewParseErr("wide", s.Pos, err)
+			}
+			err = s.SkipSpace()
+			if err != nil {
+				return result, decode.NewParseErr("wide", s.Pos, err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, decode.NewParseErr("wide", s.Pos, err)
+				}
+			}
+			if s.Bytes()[s.Pos] == ']' {
+				if result.Wide == nil {
+					result.Wide = []PreallocWide{}
+				}
+			} else {
+				if result.Wide == nil {
+					result.Wide = make([]PreallocWide, 0, ggenCap_6350751b_8)
+				}
+			}
+			for s.Bytes()[s.Pos] != ']' {
+				result.Wide = append(result.Wide, PreallocWide{})
+				result.Wide[len(result.Wide)-1], err = result.Wide[len(result.Wide)-1].DecodeFromStream(s)
+				if err != nil {
+					return result, decode.NewParseErr("wide", s.Pos, err)
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, decode.NewParseErr("wide", s.Pos, err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("wide", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == ',' {
+					s.Pos++
+					err = s.SkipSpace()
+					if err != nil {
+						return result, decode.NewParseErr("wide", s.Pos, err)
+					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+						return result, decode.NewParseErr("wide", s.Pos, scan.ErrBadArray)
+					}
+					continue
+				}
+				break
+			}
+			if s.Bytes()[s.Pos] != ']' {
+				return result, decode.NewParseErr("wide", s.Pos, scan.ErrBadArray)
+			}
+			s.Pos++
+		default:
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+		}
+
+		err = s.SkipSpace()
+		if err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, decode.NewParseErr("", s.Pos, err)
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, decode.NewParseErr("", s.Pos, err)
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			return result, nil
+		}
+		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+	}
+}
+
+func (s PreallocWidths) JSONSize() int {
+	size := 148
+	if n := len(s.Hinted); n > 0 {
+		size += n - 1
+	}
+	for i0 := range s.Hinted {
+		size += s.Hinted[i0].JSONSize()
+	}
+	if n := len(s.Ints); n > 0 {
+		size += n - 1
+	}
+	size += len(s.Ints) * 20
+	if n := len(s.Lened); n > 0 {
+		size += n - 1
+	}
+	for i0 := range s.Lened {
+		size += s.Lened[i0].JSONSize()
+	}
+	if n := len(s.MaxFits); n > 0 {
+		size += n - 1
+	}
+	for i0 := range s.MaxFits {
+		size += s.MaxFits[i0].JSONSize()
+	}
+	if n := len(s.MaxTooBig); n > 0 {
+		size += n - 1
+	}
+	for i0 := range s.MaxTooBig {
+		size += s.MaxTooBig[i0].JSONSize()
+	}
+	if n := len(s.Minned); n > 0 {
+		size += n - 1
+	}
+	for i0 := range s.Minned {
+		size += s.Minned[i0].JSONSize()
+	}
+	if n := len(s.Nested); n > 0 {
+		size += n - 1
+	}
+	for i0 := range s.Nested {
+		size += 4
+		if n := len(s.Nested[i0]); n > 0 {
+			size += n - 1
+		}
+		size += len(s.Nested[i0]) * 20
+	}
+	if n := len(s.Ptrs); n > 0 {
+		size += n - 1
+	}
+	for i0 := range s.Ptrs {
+		if s.Ptrs[i0] == nil {
+			size += 4
+		} else {
+			size += (*s.Ptrs[i0]).JSONSize()
+		}
+	}
+	if n := len(s.Rows); n > 0 {
+		size += n - 1
+	}
+	for i0 := range s.Rows {
+		size += s.Rows[i0].JSONSize()
+	}
+	if n := len(s.Strs); n > 0 {
+		size += n - 1
+	}
+	for i0 := range s.Strs {
+		size += len(s.Strs[i0])*2 + 2
+	}
+	if n := len(s.Wide); n > 0 {
+		size += n - 1
+	}
+	for i0 := range s.Wide {
+		size += s.Wide[i0].JSONSize()
+	}
+	return size
+}
+
+func (s PreallocWidths) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"hinted\":"...)
+	if s.Hinted == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '[')
+		if len(s.Hinted) > 0 {
+			if dst, err = s.Hinted[0].AppendJSON(dst); err != nil {
+				return dst, err
+			}
+			for _, v0 := range s.Hinted[1:] {
+				dst = append(dst, ',')
+				if dst, err = v0.AppendJSON(dst); err != nil {
+					return dst, err
+				}
+			}
+		}
+		dst = append(dst, ']')
+	}
+	dst = append(dst, ",\"ints\":"...)
+	if s.Ints == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '[')
+		if len(s.Ints) > 0 {
+			dst = strconv.AppendInt(dst, int64(s.Ints[0]), 10)
+			for _, v0 := range s.Ints[1:] {
+				dst = append(dst, ',')
+				dst = strconv.AppendInt(dst, int64(v0), 10)
+			}
+		}
+		dst = append(dst, ']')
+	}
+	dst = append(dst, ",\"lened\":"...)
+	if s.Lened == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '[')
+		if len(s.Lened) > 0 {
+			if dst, err = s.Lened[0].AppendJSON(dst); err != nil {
+				return dst, err
+			}
+			for _, v0 := range s.Lened[1:] {
+				dst = append(dst, ',')
+				if dst, err = v0.AppendJSON(dst); err != nil {
+					return dst, err
+				}
+			}
+		}
+		dst = append(dst, ']')
+	}
+	dst = append(dst, ",\"maxFits\":"...)
+	if s.MaxFits == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '[')
+		if len(s.MaxFits) > 0 {
+			if dst, err = s.MaxFits[0].AppendJSON(dst); err != nil {
+				return dst, err
+			}
+			for _, v0 := range s.MaxFits[1:] {
+				dst = append(dst, ',')
+				if dst, err = v0.AppendJSON(dst); err != nil {
+					return dst, err
+				}
+			}
+		}
+		dst = append(dst, ']')
+	}
+	dst = append(dst, ",\"maxTooBig\":"...)
+	if s.MaxTooBig == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '[')
+		if len(s.MaxTooBig) > 0 {
+			if dst, err = s.MaxTooBig[0].AppendJSON(dst); err != nil {
+				return dst, err
+			}
+			for _, v0 := range s.MaxTooBig[1:] {
+				dst = append(dst, ',')
+				if dst, err = v0.AppendJSON(dst); err != nil {
+					return dst, err
+				}
+			}
+		}
+		dst = append(dst, ']')
+	}
+	dst = append(dst, ",\"minned\":"...)
+	if s.Minned == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '[')
+		if len(s.Minned) > 0 {
+			if dst, err = s.Minned[0].AppendJSON(dst); err != nil {
+				return dst, err
+			}
+			for _, v0 := range s.Minned[1:] {
+				dst = append(dst, ',')
+				if dst, err = v0.AppendJSON(dst); err != nil {
+					return dst, err
+				}
+			}
+		}
+		dst = append(dst, ']')
+	}
+	dst = append(dst, ",\"nested\":"...)
+	if s.Nested == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '[')
+		if len(s.Nested) > 0 {
+			if s.Nested[0] == nil {
+				dst = append(dst, "null"...)
+			} else {
+				dst = append(dst, '[')
+				if len(s.Nested[0]) > 0 {
+					dst = strconv.AppendInt(dst, int64(s.Nested[0][0]), 10)
+					for _, v1 := range s.Nested[0][1:] {
+						dst = append(dst, ',')
+						dst = strconv.AppendInt(dst, int64(v1), 10)
+					}
+				}
+				dst = append(dst, ']')
+			}
+			for _, v0 := range s.Nested[1:] {
+				dst = append(dst, ',')
+				if v0 == nil {
+					dst = append(dst, "null"...)
+				} else {
+					dst = append(dst, '[')
+					if len(v0) > 0 {
+						dst = strconv.AppendInt(dst, int64(v0[0]), 10)
+						for _, v1 := range v0[1:] {
+							dst = append(dst, ',')
+							dst = strconv.AppendInt(dst, int64(v1), 10)
+						}
+					}
+					dst = append(dst, ']')
+				}
+			}
+		}
+		dst = append(dst, ']')
+	}
+	dst = append(dst, ",\"ptrs\":"...)
+	if s.Ptrs == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '[')
+		if len(s.Ptrs) > 0 {
+			if s.Ptrs[0] == nil {
+				dst = append(dst, "null"...)
+			} else {
+				if dst, err = (*s.Ptrs[0]).AppendJSON(dst); err != nil {
+					return dst, err
+				}
+			}
+			for _, v0 := range s.Ptrs[1:] {
+				dst = append(dst, ',')
+				if v0 == nil {
+					dst = append(dst, "null"...)
+				} else {
+					if dst, err = (*v0).AppendJSON(dst); err != nil {
+						return dst, err
+					}
+				}
+			}
+		}
+		dst = append(dst, ']')
+	}
+	dst = append(dst, ",\"rows\":"...)
+	if s.Rows == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '[')
+		if len(s.Rows) > 0 {
+			if dst, err = s.Rows[0].AppendJSON(dst); err != nil {
+				return dst, err
+			}
+			for _, v0 := range s.Rows[1:] {
+				dst = append(dst, ',')
+				if dst, err = v0.AppendJSON(dst); err != nil {
+					return dst, err
+				}
+			}
+		}
+		dst = append(dst, ']')
+	}
+	dst = append(dst, ",\"strs\":"...)
+	if s.Strs == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '[')
+		if len(s.Strs) > 0 {
+			dst = append(dst, '"')
+			dst = encode.AppendStringNoHTML(dst, s.Strs[0])
+			for _, v0 := range s.Strs[1:] {
+				dst = append(dst, ",\""...)
+				dst = encode.AppendStringNoHTML(dst, v0)
+			}
+		}
+		dst = append(dst, ']')
+	}
+	dst = append(dst, ",\"wide\":"...)
+	if s.Wide == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '[')
+		if len(s.Wide) > 0 {
+			if dst, err = s.Wide[0].AppendJSON(dst); err != nil {
+				return dst, err
+			}
+			for _, v0 := range s.Wide[1:] {
+				dst = append(dst, ',')
+				if dst, err = v0.AppendJSON(dst); err != nil {
+					return dst, err
+				}
+			}
+		}
+		dst = append(dst, ']')
+	}
+	return append(dst, '}'), nil
+}
+
+func (recv PreallocRow) DecodeFrom(data []byte) (result PreallocRow, i int, err error) {
+	result = recv
+	seenC := false
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+	}
+	i++
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		i++
+		return result, i, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
+		}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i, true)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
+			}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		}
+		i++
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch key {
+		case "c":
+			if seenC {
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"c"}}
+			}
+			seenC = true
+			if i >= len(data) || data[i] != '"' {
+				return result, i, decode.NewParseErr("c", i, scan.ErrExpectString)
+			}
+			ke := i + 1
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+				ke++
+			}
+			if ke < len(data) && data[ke] == '"' {
+				result.C = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				result.C, i, err = scan.String(data, i, true)
+				if err != nil {
+					return result, i, decode.NewParseErr("c", i, err)
+				}
+			}
+		default:
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			i++
+			return result, i, nil
+		}
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+	}
+}
+
+func (recv PreallocRow) DecodeFromStream(s *scan.Stream) (result PreallocRow, err error) {
+	result = recv
+	seenC := false
+	err = s.ObjectOpen()
+	if err != nil {
+		return result, decode.NewParseErr("", s.Pos, err)
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, decode.NewParseErr("", s.Pos, err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView(true)
+		if err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		switch key {
+		case "c":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("c", s.Pos, err)
+			}
+			if seenC {
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"c"}}
+			}
+			seenC = true
+			result.C, err = s.String(true)
+			if err != nil {
+				return result, decode.NewParseErr("c", s.Pos, err)
+			}
+		default:
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+		}
+
+		err = s.SkipSpace()
+		if err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, decode.NewParseErr("", s.Pos, err)
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, decode.NewParseErr("", s.Pos, err)
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			return result, nil
+		}
+		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+	}
+}
+
+func (s PreallocRow) JSONSize() int {
+	size := 8
+	size += len(s.C) * 2
+	return size
+}
+
+func (s PreallocRow) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"c\":\""...)
+	dst = encode.AppendStringNoHTML(dst, s.C)
+	return append(dst, '}'), nil
+}
+
+func (recv PreallocWide) DecodeFrom(data []byte) (result PreallocWide, i int, err error) {
+	result = recv
+	seenC := false
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+	}
+	i++
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		i++
+		return result, i, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
+		}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i, true)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
+			}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		}
+		i++
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch key {
+		case "c":
+			if seenC {
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"c"}}
+			}
+			seenC = true
+			if i >= len(data) || data[i] != '"' {
+				return result, i, decode.NewParseErr("c", i, scan.ErrExpectString)
+			}
+			ke := i + 1
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+				ke++
+			}
+			if ke < len(data) && data[ke] == '"' {
+				result.C = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				result.C, i, err = scan.String(data, i, true)
+				if err != nil {
+					return result, i, decode.NewParseErr("c", i, err)
+				}
+			}
+		default:
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			i++
+			return result, i, nil
+		}
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+	}
+}
+
+func (recv PreallocWide) DecodeFromStream(s *scan.Stream) (result PreallocWide, err error) {
+	result = recv
+	seenC := false
+	err = s.ObjectOpen()
+	if err != nil {
+		return result, decode.NewParseErr("", s.Pos, err)
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, decode.NewParseErr("", s.Pos, err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView(true)
+		if err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		switch key {
+		case "c":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("c", s.Pos, err)
+			}
+			if seenC {
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"c"}}
+			}
+			seenC = true
+			result.C, err = s.String(true)
+			if err != nil {
+				return result, decode.NewParseErr("c", s.Pos, err)
+			}
+		default:
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+		}
+
+		err = s.SkipSpace()
+		if err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, decode.NewParseErr("", s.Pos, err)
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, decode.NewParseErr("", s.Pos, err)
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			return result, nil
+		}
+		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+	}
+}
+
+func (s PreallocWide) JSONSize() int {
+	size := 8
+	size += len(s.C) * 2
+	return size
+}
+
+func (s PreallocWide) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"c\":\""...)
+	dst = encode.AppendStringNoHTML(dst, s.C)
 	return append(dst, '}'), nil
 }

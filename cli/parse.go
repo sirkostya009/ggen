@@ -57,17 +57,17 @@ func fileBuildConstraint(f *ast.File) string {
 }
 
 type annotationFlags struct {
-	marshal       bool
-	unmarshal     bool
-	multierr      bool
-	allowdups     bool
-	novalidate    bool
-	ignoreunknown bool // opt in: silently skip unknown JSON keys (default: error)
-	nullzero      bool // opt in: accept explicit JSON null on every non-pointer value field (null → Go zero)
-	nosortkeys    bool // opt out: emit fields in declaration order instead of JSON-name sorted
-	usenumber     bool // opt in: decode JSON numbers into `any` fields as json.Number instead of float64
-	htmlescape    bool // opt in: HTML-safe escape <, >, & in emitted strings (default: literal, matches jsonv2)
-	copy          bool // opt in: bytes-path DecodeFrom copies strings/RawMessage/any instead of aliasing data
+	marshal          bool
+	unmarshal        bool
+	multierr         bool
+	allowdups        bool
+	novalidate       bool
+	ignoreunknown    bool // opt in: silently skip unknown JSON keys (default: error)
+	nullzero         bool // opt in: accept explicit JSON null on every non-pointer value field (null → Go zero)
+	nosortkeys       bool // opt out: emit fields in declaration order instead of JSON-name sorted
+	usenumber        bool // opt in: decode JSON numbers into `any` fields as json.Number instead of float64
+	htmlescape       bool // opt in: HTML-safe escape <, >, & in emitted strings (default: literal, matches jsonv2)
+	copy             bool // opt in: bytes-path DecodeFrom copies strings/RawMessage/any instead of aliasing data
 	allowinvalidutf8 bool // opt out: skip decode UTF-8 validation for this struct
 }
 
@@ -665,7 +665,13 @@ func (s *structSet) extractAliasFromTypes(name string, t types.Type, rhs ast.Exp
 		//      delegation; gives thirdparty structs locally-annotated speed).
 		//   3. Opaque struct (no exported fields) with a marshaler pair — delegate.
 		//   4. Nothing usable — error.
-		if info.AliasIface.AppendJSON && info.AliasIface.ByteDecoder {
+		// Rung 1 only applies when the alias asks for the SAME behaviour the
+		// underlying was generated with. Its own annotation tokens
+		// (`allowdups`, `multierr`, `novalidate`, …) are a request to emit
+		// something different, and a delegating cast cannot honour them —
+		// fall through to field introspection instead of silently dropping
+		// them. CLI-global flags aren't in this map, so they don't block it.
+		if info.AliasIface.AppendJSON && info.AliasIface.ByteDecoder && !reshapesCodegen(s.annotations[name]) {
 			return info, nil
 		}
 		structType := underlying.(*types.Struct)
@@ -762,6 +768,15 @@ func elemKindIsBytes(elem string) bool {
 	return elem == "byte" || elem == "uint8"
 }
 
+// reshapesCodegen reports whether a per-struct annotation changes the shape of
+// the emitted code (as opposed to `marshal`/`unmarshal`, which only add hook
+// methods around whatever the body already does).
+func reshapesCodegen(a annotationFlags) bool {
+	return a.multierr || a.allowdups || a.novalidate || a.ignoreunknown ||
+		a.nullzero || a.nosortkeys || a.usenumber || a.htmlescape || a.copy ||
+		a.allowinvalidutf8
+}
+
 // aliasCanDelegate reports whether the underlying has a marshal+unmarshal pair
 // to delegate to — both directions must reach a call site, not just one.
 func aliasCanDelegate(f FieldInterfaces) bool {
@@ -822,7 +837,17 @@ func (s *structSet) extractFieldFromTypes(structName string, field *types.Var, t
 		fi.Pointer = true
 		fi.PointeeType = types.TypeString(ptr.Elem(), qualifier)
 		fi.Kind = resolveKind(fi.PointeeType)
-		t = ptr.Elem()
+		// Peel EVERY level, not just one: the container switch below is what
+		// fills ElemType/ElemKind, and at depth ≥ 2 it used to see a pointer
+		// and match nothing — leaving ElemKind at its zero value (KindString),
+		// so `**[]T` emitted a string scan into a T slot.
+		for {
+			p, ok := t.(*types.Pointer)
+			if !ok {
+				break
+			}
+			t = p.Elem()
+		}
 	} else {
 		fi.Kind = resolveKind(fi.GoType)
 	}
@@ -1013,6 +1038,8 @@ func (s *structSet) extractStruct(name string, st *ast.StructType) (StructInfo, 
 					if tv, ok := s.typesInfo.Types[expr]; ok {
 						fieldType = tv.Type
 						fi.Iface = inspectType(fieldType, s.stdIfaces)
+						fi.TypeImports = s.foreignImports(fieldType)
+						fi.NamedPrims = s.namedPrims(fieldType)
 					}
 				}
 			}
@@ -1109,6 +1136,17 @@ func extractField(structName, goName string, field *ast.Field) (FieldInfo, error
 		innerExpr = star.X
 		fi.PointeeType = exprToString(innerExpr)
 		fi.Kind = resolveKind(fi.PointeeType)
+		// Peel EVERY level, not just one: the map/array branches below are
+		// what fill ElemType/ElemKind, and at depth ≥ 2 they used to see a
+		// StarExpr and match nothing — leaving ElemKind at its zero value
+		// (KindString), so `**[]T` emitted a string scan into a T slot.
+		for {
+			star, ok := innerExpr.(*ast.StarExpr)
+			if !ok {
+				break
+			}
+			innerExpr = star.X
+		}
 	} else {
 		fi.Kind = resolveKind(goType)
 	}
@@ -1381,6 +1419,97 @@ func (s *structSet) sqlNullGenericInfo(structName string, t types.Type, parent *
 	return &inner, imps, true
 }
 
+// foreignImports returns the sorted import paths of every package outside the
+// one being generated that t names — the field's own type plus every element,
+// key, pointee and type argument. The emitters spell those types out verbatim,
+// so each one has to reach the generated file's import block.
+func (s *structSet) foreignImports(t types.Type) []TypeImport {
+	if t == nil {
+		return nil
+	}
+	pkgs := map[string]string{}
+	s.collectTypeImports(t, pkgs)
+	if len(pkgs) == 0 {
+		return nil
+	}
+	out := make([]TypeImport, 0, len(pkgs))
+	for p, n := range pkgs {
+		out = append(out, TypeImport{Path: p, Name: n})
+	}
+	slices.SortFunc(out, func(a, b TypeImport) int { return strings.Compare(a.Path, b.Path) })
+	return out
+}
+
+// namedPrims returns every named type t mentions whose underlying type is a
+// primitive, keyed by the same type string the emitters spell (`Priority`,
+// `leaf.Name`). Types that carry their own JSON or text methods are skipped —
+// those keep their method-driven wire shape, so the underlying primitive is
+// not what a rule would be checking.
+func (s *structSet) namedPrims(t types.Type) map[string]TypeKind {
+	if t == nil {
+		return nil
+	}
+	out := map[string]TypeKind{}
+	s.collectNamedPrims(t, out, map[types.Type]struct{}{})
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func (s *structSet) collectNamedPrims(t types.Type, out map[string]TypeKind, seen map[types.Type]struct{}) {
+	if t == nil {
+		return
+	}
+	if _, ok := seen[t]; ok {
+		return
+	}
+	seen[t] = struct{}{}
+	switch x := t.(type) {
+	case *types.Named:
+		if b, ok := x.Underlying().(*types.Basic); ok {
+			// Source-syntax name (`leaf.Name`, not `xpkg/leaf.Name`): the key
+			// has to match FieldInfo.GoType, which the AST extractor builds
+			// from the type EXPRESSION. types.RelativeTo only elides the
+			// current package and spells every other one by full path.
+			name := types.TypeString(t, func(p *types.Package) string {
+				if p == s.typesPkg {
+					return ""
+				}
+				return p.Name()
+			})
+			// Types the generator gives a wire shape of their own (time.Duration
+			// is a named int64, …) are NOT plain named primitives: resolveKind
+			// hands them a dedicated kind and their own emitters. Only
+			// KindStruct means "ggen has no idea what this type is".
+			// json.Number is a named STRING whose wire shape is a NUMBER — the
+			// one stdlib type where "named over a primitive" does not imply
+			// "encodes like that primitive". It keeps the encoding/json path.
+			if full := types.TypeString(t, nil); full == "encoding/json.Number" || full == "encoding/json/v2.Number" {
+				return
+			}
+			if k := resolveKind(b.Name()); isSupportedAliasPrimitive(k) && resolveKind(name) == KindStruct {
+				if iface := inspectType(t, s.stdIfaces); !iface.JSONMarshaler && !iface.JSONUnmarshaler &&
+					!iface.TextMarshaler && !iface.TextUnmarshaler && !iface.TextAppender {
+					out[name] = k
+				}
+			}
+		}
+		for t := range x.TypeArgs().Types() {
+			s.collectNamedPrims(t, out, seen)
+		}
+	case *types.Pointer:
+		s.collectNamedPrims(x.Elem(), out, seen)
+	case *types.Slice:
+		s.collectNamedPrims(x.Elem(), out, seen)
+	case *types.Array:
+		s.collectNamedPrims(x.Elem(), out, seen)
+	case *types.Map:
+		s.collectNamedPrims(x.Key(), out, seen)
+		s.collectNamedPrims(x.Elem(), out, seen)
+	}
+}
+
 // collectTypeImports walks a types.Type and records (import path → package
 // name) for every named type defined outside the package being generated.
 // Used to import + name-qualify the inner type referenced by a sql.Null[T]
@@ -1392,8 +1521,8 @@ func (s *structSet) collectTypeImports(t types.Type, out map[string]string) {
 		if obj := x.Obj(); obj != nil && obj.Pkg() != nil && obj.Pkg() != s.typesPkg {
 			out[obj.Pkg().Path()] = obj.Pkg().Name()
 		}
-		for i := range x.TypeArgs().Len() {
-			s.collectTypeImports(x.TypeArgs().At(i), out)
+		for t := range x.TypeArgs().Types() {
+			s.collectTypeImports(t, out)
 		}
 	case *types.Pointer:
 		s.collectTypeImports(x.Elem(), out)

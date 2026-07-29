@@ -18,6 +18,11 @@ import (
 	"github.com/sirkostya009/ggen/validation"
 )
 
+// ggenCap_9d85ebeb_0: prealloc cap for []int16 — as many elements as fit under 80 bytes,
+// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
+// else 1. See decode.PreallocCap.
+const ggenCap_9d85ebeb_0 = (min((80/max(int(unsafe.Sizeof(*new(int16))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(int16))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(int16))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(int16))), 1)), 1)
+
 func (recv HugeStringStruct) DecodeFrom(data []byte) (result HugeStringStruct, i int, err error) {
 	result = recv
 	seenBig := false
@@ -2028,7 +2033,7 @@ func (recv NarrowInts) DecodeFromStream(s *scan.Stream) (result NarrowInts, err 
 				}
 			} else {
 				if result.SliI == nil {
-					result.SliI = make([]int16, 0, 4)
+					result.SliI = make([]int16, 0, ggenCap_9d85ebeb_0)
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {

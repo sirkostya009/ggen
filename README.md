@@ -173,6 +173,7 @@ Like stdlib, ggen has merge semantics, but deliberately different ones:
 | case                                      | ggen                 | stdlib               | notes                                                                                     |
 | ----------------------------------------- | -------------------- | -------------------- | ----------------------------------------------------------------------------------------- |
 | non-nil slice / map / pointer field       | reused               | reused               | reuse reaches nested slices — `[][]T` at any depth reuses the inner rows' arrays          |
+| pointer to a container (`*[]T`, `**map[string]T`, …) | pointee reset, capacity kept | pointee kept as-is | reset reaches through every pointer level, so a reused receiver replaces rather than appends |
 | key omitted from payload, container field | reset, capacity kept | container kept as-is | a blank payload gives a blank slate                                                       |
 | `null` → slice / map / pointer            | nil'd                | nil'd                | —                                                                                         |
 | `null` → non-pointer scalar or struct     | parse error          | Go zero value        | use a pointer, a per-field `nullzero` decode variant, or `-nullzero` for all value fields |
@@ -364,10 +365,21 @@ import block — file-scoped aliases and blank imports (`_ "path"`) both work.
 
 ### `hint:"..."`
 
-`hint:"N"` tells ggen to preallocate the tagret slice or map with N capacity,
-overriding default 4 or minlen-derived preallocation hint. Can pair with `inner`
-mechanics described above. Setting N to 0 disabled preallocation completely.
-Negative values are not allowed.
+`hint:"N"` tells ggen to preallocate the target slice or map with N capacity,
+overriding every default below. Can pair with `inner` mechanics described above.
+Setting N to 0 disables preallocation completely. Negative values are not
+allowed.
+
+With no `hint:`, a slice's capacity comes from the tags first and its ELEMENT
+WIDTH second:
+
+- `len=N` / `minlen=N` — the payload's own stated size wins outright.
+- `maxlen=N` — used as the capacity when N elements fit within 512 bytes; the
+  slice can never grow past the bound, so it cannot over-allocate.
+- otherwise — as many elements as fit within 80 bytes, else within 512, else
+  one. So a slice of wide structs gets a real starting capacity instead of
+  walking the growth chain, and a slice you know holds exactly one element is
+  worth a `hint:"1"`.
 
 ### inspecting errors
 
@@ -410,6 +422,7 @@ if errors.Is(err, scan.ErrBadString) { ... }
 | struct    | named / embedded                                                 | object | embedded fields are promoted, same as `encoding/json`                                      |
 | cross-pkg | foreign struct / named type                                      | varies | static method-set probe at codegen — see _cross-package interfaces_ below                  |
 | alias     | `//ggen:generate type X ...` (see [type aliases](#type-aliases)) | varies | full method surface generated; strategy picked from the underlying type                    |
+| named     | `type Priority string`, `type Count int` (any depth)             | scalar | decoded as the underlying and converted — annotation NOT required, and costs nothing extra |
 
 ### cross-package interfaces
 
@@ -446,12 +459,21 @@ from the underlying type's shape and method set:
 | -------------------------------- | ----------------------- | ------------------------------------------------------------------------ |
 | primitive                        | `type Count int`        | scan + cast; `htmlescape`/`marshal`/`unmarshal` annotations still apply  |
 | struct (exported fields)         | `type Comment Inner`    | field introspection — treats the alias like a regular struct             |
-| struct (has `DecodeFrom`)        | `type X HasGgenMethods` | cast & delegate to the underlying's existing ggen methods                |
+| struct (has `DecodeFrom`)        | `type X HasGgenMethods` | cast & delegate to the underlying's existing ggen methods — unless the alias carries its own annotation (`multierr`, `allowdups`, …), which a delegating cast can't honour, so it falls back to field introspection |
 | struct (opaque + Marshaler/Text) | `type Local time.Time`  | delegate to underlying's `MarshalJSON`/`AppendText`                      |
 | container                        | `type Tags []string`    | same emitters as slice/map/array fields — all field-level features apply |
 
 Aliases of channels, interfaces, and functions are rejected at generate time (no
 sensible JSON shape for those).
+
+A named type over a primitive does NOT need the annotation to be fast: as a
+field, element, map value or pointee it is scanned as its underlying type and
+converted, at any alias depth (`type B S; type S string`). Annotate it when you
+want the METHODS on the type itself, or when you want per-type behaviour —
+an alias carrying its own `htmlescape` / `copy` / `allowinvalidutf8` keeps its
+own encoder and decoder, which is what makes the tip below work. A named type
+from ANOTHER package that has ggen methods always goes through them, since this
+package cannot see which flags it was generated with.
 
 > [!TIP]
 > Pairing a primitive alias with `htmlescape` is a cheap way to split
@@ -542,7 +564,7 @@ func parseRequest[T decode.Decoder[T]](r *http.Request) (T, error) {
 	var zero T
 	s := bufPool.Get().(*scan.Stream)
 	// grow the buf to match incoming content length (if available)
-	b := slices.Grow(s.Bytes(), max(int(r.ContentLength), 0))
+	b := slices.Grow(s.Bytes()[0:], min(max(int(r.ContentLength), 0), 10<<20))
 	// limit actual reader
 	s.Reset(io.LimitReader(r.Body, 10<<20), b)
 	// recycle the buf with stream

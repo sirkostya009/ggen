@@ -13,6 +13,11 @@ import (
 	"github.com/sirkostya009/ggen/validation"
 )
 
+// ggenCap_f73b64cd_0: prealloc cap for []string — as many elements as fit under 80 bytes,
+// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
+// else 1. See decode.PreallocCap.
+const ggenCap_f73b64cd_0 = (min((80/max(int(unsafe.Sizeof(*new(string))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(string))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(string))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(string))), 1)), 1)
+
 func (recv OmitStruct) DecodeFrom(data []byte) (result OmitStruct, i int, err error) {
 	result = recv
 	if result.Extra != nil {
@@ -163,7 +168,7 @@ func (recv OmitStruct) DecodeFrom(data []byte) (result OmitStruct, i int, err er
 				}
 			} else {
 				if result.Extra == nil {
-					result.Extra = make([]string, 0, 4)
+					result.Extra = make([]string, 0, ggenCap_f73b64cd_0)
 				}
 			}
 			if i < len(data) && data[i] != ']' {
@@ -464,7 +469,7 @@ func (recv OmitStruct) DecodeFrom(data []byte) (result OmitStruct, i int, err er
 				}
 			} else {
 				if result.Tags == nil {
-					result.Tags = make([]string, 0, 4)
+					result.Tags = make([]string, 0, ggenCap_f73b64cd_0)
 				}
 			}
 			if i < len(data) && data[i] != ']' {
@@ -665,7 +670,7 @@ func (recv OmitStruct) DecodeFromStream(s *scan.Stream) (result OmitStruct, err 
 				}
 			} else {
 				if result.Extra == nil {
-					result.Extra = make([]string, 0, 4)
+					result.Extra = make([]string, 0, ggenCap_f73b64cd_0)
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {
@@ -994,7 +999,7 @@ func (recv OmitStruct) DecodeFromStream(s *scan.Stream) (result OmitStruct, err 
 				}
 			} else {
 				if result.Tags == nil {
-					result.Tags = make([]string, 0, 4)
+					result.Tags = make([]string, 0, ggenCap_f73b64cd_0)
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {

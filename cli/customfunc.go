@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/types"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -310,12 +311,7 @@ func pipeHasCustom(fi *FieldInfo) bool {
 	if has(fi.Pipe) || has(fi.KeyPipe) {
 		return true
 	}
-	for _, lv := range fi.Levels {
-		if has(lv) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(fi.Levels, has)
 }
 
 // pipeHasConverter reports whether fi has a decode-stage converter variant.

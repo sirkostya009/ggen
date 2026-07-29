@@ -456,9 +456,47 @@ Backlog and commit messages cite these by number — numbering is stable.
 1. **Flat `switch key` dispatch.** One string switch over all JSON names — gc
    lowers it to length-grouped binary search / jump tables. (Manual length-first
    outer switch removed — see backlog.)
-2. **Slice cap from tag hint.** `preallocCap` picks initial cap for
-   `make([]T,0,N)`. Precedence: `hintlen=N` > `len=N` > `max(minlen, default)` >
-   default (`defaultPreallocCap = 4`). Maps via `mapPreallocCap` (no minlen).
+2. **Slice cap from tag hint, then ELEMENT WIDTH.** `preallocCap` picks the
+   initial cap for `make([]T,0,N)`. The 512 is the runtime's
+   `gc.MinSizeForMallocHeader` (`goarch.PtrSize * goarch.PtrBits` = 8×PtrSize²,
+   so 512 on 64-bit and **128 on 32-bit** — the emitted constant derives it
+   from `unsafe.Sizeof(uintptr(0))` rather than hardcoding, and cross-builds
+   for 386 clean). It is a go1.22 allocation-headers boundary, NOT a Green Tea
+   one: staying under it means no 8-byte malloc header, which `roundupsize`
+   adds *before* the size-class lookup — measured, a pointerful element at
+   512 B allocates 512, at 576 B allocates 640. Green Tea (default from 1.26)
+   reuses the same boundary for `gcUsesSpanInlineMarkBits`, but that half does
+   not apply to NOSCAN backings (`tryDeferToSpanScan` fast-tracks them), which
+   is most of what a decoder allocates. Precedence: `hintlen=N` > `len=N` >
+   `minlen` > `maxlen=N` (only when `N × sizeof(E) <= 512`, since an exact
+   upper bound beats a width guess and cannot over-allocate past what the
+   payload may legally contain) > width ladder. That is the ONE narrow
+   rehabilitation of maxlen-as-prealloc, which the backlog killed for
+   unbounded retained over-allocation: the byte gate caps the damage at the
+   same 512 bytes every slice already budgets. `Tags []string maxlen=64` →
+   1024 B, refused, ladder gives 4; `Matrix [][]int maxlen=16` → 384 B,
+   accepted, cap 16. The tail used to be a kind-blind
+   `defaultPreallocCap = 4` for primitives and **0** for struct elements
+   ("sizeof(T) unbounded; start nil, grow"); it is now derived from the element
+   width, which the compiler knows: as many elements as fit strictly under
+   80 bytes (go1.27 fast-alloc), else within a 512-byte Green Tea span, else 1.
+   Spec + tests live in `decode.PreallocCap`; the emitted form is a
+   package-level `const ggenCap_<prefix>_<n>` holding the same ladder written
+   branchlessly over `unsafe.Sizeof(*new(E))`.
+   **It has to be a constant, not a call**: measured on the bench module, gc
+   inlines `decode.PreallocCap` only into small functions — 30 of 34 emitted
+   sites kept a real `CALL`, because the enclosing generated `DecodeFrom` is
+   thousands of nodes past the inliner budget. As a constant expression it
+   folds in the frontend (`MOVL $2`), where the inliner never gets a vote.
+   Maps keep `mapPreallocCap` (no byte budget to reason about).
+   Measured (deterministic columns; wall clock on this box floats ±10% between
+   builds — MapHeavy, whose code does not change, moved 12%):
+   **Mega −15.1% allocs** (54990 → 46706) / +3.3% B/op, wall −4% across three
+   passes; TMS import −7% allocs / +17% B/op; DeepNested (a 50-level chain
+   whose every `[]Node` holds exactly ONE element, and whose `maxlen=16` ×
+   256 B overshoots the span so the ladder stands) **+2× B/op** — the "at
+   least 2 elements" floor is a deliberate memory-for-allocations trade, and
+   `hint:"1"` opts a known one-element slice back out.
 3. **Field marshal order sorted by JSON name** (alphabetical) at codegen time.
    `-nosortkeys` opts back to declaration order.
 4. **Inlined scan primitives in hot path.** Raw byte-compare loops for
@@ -939,6 +977,144 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
     skip+RawMessage path, differential vs jsonv2 — the skip row is what proves
     the asymmetry is gone) plus updated `scan` lattice + reference-differential
     tests (their zero-padded inputs are now correctly rejected).
+
+## Named types, cross-package types (defects fixed 2026-07)
+
+One missing lookup and one stale signature matcher made two whole type families
+second-class. Both were found auditing a real request-schema package against
+ggen; the fixes are pinned by `cli/namedkind_test.go`,
+`integrationtests/namedprim_test.go`, `crosspkg_test.go`, `ptrcontainer_test.go`.
+
+### `namedKinds` + `effectiveKind` (was `generatedAliasKinds`)
+
+A named type over a primitive (`type Priority string`) reports **KindStruct** at
+its use sites. `renderOneMod` resolved the underlying kind and cast through it;
+nothing else did, so every VALIDATOR emitter saw KindStruct:
+
+- `oneof` emitted its allowed values as bare identifiers (`case low, medium:`) —
+  `renderOneofCases` quoted only for `kind == KindString`.
+- rune / substring / charset rules passed the named value uncast into
+  `utf8.RuneCountInString`, `strings.HasPrefix`, `validation.IsURL`, and into the
+  string-typed `Value`/`Want` error fields.
+- `eq`/`neq` were `if KindString {…} else if isNumeric {…}` **with no else** —
+  the rule emitted nothing at all. Clean build, zero enforcement.
+- `zeroLit` fell through to `elemType + "{}"`, so `nullzero` and the
+  slice-element pre-grow emitted `Priority{}`.
+
+`namedKinds` now carries every named primitive in the pass — annotated aliases
+(from `StructInfo.AliasKind`) AND ones the user never annotated (resolved from
+go/types in `structSet.namedPrims`, walking element / key / pointee / type-arg
+positions, skipping types that carry their own JSON or text methods). Every rule
+emitter resolves through `effectiveKind(goType, kind)` and wraps string-typed
+arguments in `primCast`. `seedNamedKinds` fills the map at all three generate
+entry points.
+
+### Named primitives decode INLINE (`inlineNamedPrim`)
+
+A field of a named primitive no longer calls anything: it scans the UNDERLYING
+into a temp and converts at the assign (`var _nvX string; …; result.X = Pri(_nvX)`).
+The conversion is free — identical underlying type, so gc emits no instruction
+for it (asm-diffed: `utf8.RuneCountInString(string(p))` and the plain-string
+form compile to byte-identical bodies). The CALL was not free: delegating to the
+alias's `DecodeFrom` forfeits the inline window scan (opt #47) and pays a
+`scan.String` per field, and an UNANNOTATED named type had no methods to call at
+all so it fell to `SkipValue` + `encoding/json`.
+
+Wired at every position, both paths plus encode and JSONSize: struct field
+(`renderField` / `renderStreamField`), slice + array element
+(`emitByteSliceRead` / `emitStreamSliceRead`, via a `_neN` temp around the elem
+switch), map value (`renderMap` / stream twin, via `_nm`), `renderAppendValue`,
+`emitSliceElement`, `renderAppendMap`, `sizeContribKind`, `sizeSliceContrib`,
+and the map-size loop. Pointer fields reach it through the existing leaf
+recursion. Alias depth is free: `type B S; type S string` resolves in one step
+because go/types' `Underlying()` walks the whole chain.
+
+Three gates, all load-bearing:
+
+- **`f.Kind == KindStruct` only.** `time.Duration` is a named int64 and
+  `net.IP` a named []byte; those carry a dedicated kind and their own wire
+  shape. `collectNamedPrims` refuses to register any type whose own
+  `resolveKind` is not KindStruct, and `inlineNamedPrim` re-checks.
+- **An annotated alias's own flags must match the field's.**
+  `//ggen:generate htmlescape type HtmlString string` is documented surface, and
+  `copy` / `allowinvalidutf8` / `novalidate` likewise change what the alias body
+  emits; inlining those with the PARENT's flags would silently swap behaviour,
+  so `aliasFlags` keeps them on their own methods. A flag set globally on the
+  CLI lands on both sides equally and never blocks inlining.
+
+- **A type generated in ANOTHER pass keeps its methods.** `aliasFlags` only
+  covers this pass, so a foreign alias's flags are invisible here and inlining
+  would apply the parent's. `f.Iface.ByteDecoder || f.Iface.AppendJSON` +
+  `!isGenerated` is the test; its own `DecodeFrom`/`AppendJSON` already encode
+  whatever it was generated with. A foreign named primitive with NO methods is
+  inlined like a local one.
+
+  (Cross-package named primitives were invisible to `namedKinds` entirely until
+  this landed: `collectNamedPrims` keyed them by `types.RelativeTo`, which
+  spells a foreign type by full import path — `xpkg/leaf.Name` — while
+  `FieldInfo.GoType` comes from the AST and reads `leaf.Name`. The key now uses
+  a qualifier that returns `Pkg().Name()`, so the RULE family reaches foreign
+  named primitives too.)
+
+- **`json.Number` is excluded by name.** It is a named `string` whose wire shape
+  is a NUMBER — the one stdlib type where "named over a primitive" does not
+  imply "encodes like that primitive". Pinned by
+  `TestNamedPrim_JSONNumberStaysNumeric`.
+
+`nullzero` stays on the OUTER field (it is gated on `AtDispatch`, which only the
+outer carries, and its zero literal is the named type's).
+
+Measured on a 4-field struct: named 57.3 ns → 44.3 ns, exactly the plain-string
+row (44.4 ns), 0 allocs throughout. On the TMS import shape the
+annotated-vs-unannotated gap (was +15% / +600 B / +5 allocs on the widest
+struct) is now zero on every axis.
+
+### Cross-package types
+
+- **`matchAppendJSON` tested `func([]byte) []byte`** while `renderAppendJSON`
+  has emitted `([]byte, error)` for as long as the ladder existed, so
+  `iface.AppendJSON` was ALWAYS false for a ggen type — rung 1 of the marshal
+  ladder was dead code and every cross-package value fell to `json.Marshal`.
+  Fixing it also activated rung 1 of the ALIAS ladder (`type X HasGgenMethods`
+  → cast & delegate), which had never fired either; an alias carrying its own
+  annotation (`allowdups`, `multierr`, …) now deliberately skips delegation
+  (`reshapesCodegen`) because a delegating cast cannot honour it.
+- **`inspectType` probed the pointer, not the pointee.** `*T`'s method set
+  contains T's, and the ggen shapes are receiver-typed (`DecodeFrom` returns T),
+  so every probe against `*T` failed. It now peels to the base type and
+  synthesizes the pointer itself (which also fixes text/json *Unmarshalers*,
+  which live on `*T`).
+- **Foreign imports were never collected.** The import set is built
+  feature-by-feature from `FieldInfo`, and nothing added the package of an
+  element / pointee / map-value type — so `[]foreign.T`, `map[string]foreign.T`,
+  `*foreign.T` all emitted a file naming a package it never imported.
+  `FieldInfo.TypeImports` (from `structSet.foreignImports`, the same walk
+  `collectTypeImports` does for `sql.Null[T]`) carries them, and
+  `scanBodiesForForeignImports` keeps only the ones a rendered body actually
+  spells — a plain VALUE field never names its type, so importing
+  unconditionally would trip "imported and not used".
+- **Slice/array elements had no cross-package rung at all**: the bytes path
+  emitted a bare `scan.SkipValue` (every element of a `[]foreign.T` silently
+  decoded to its zero value) and the stream path emitted nothing. Both now run
+  the same ladder as the field level via `elemAsField`; map values run it too,
+  instead of always reflecting over the captured span.
+
+### Pointer-to-container at any depth
+
+`emitReceiverReset` skipped pointer fields entirely, but the decode path only
+allocates a pointee when the POINTER is nil — so a reused receiver appended into
+the carried-in container (`*[]T` merged where `[]T` replaced). It now peels every
+level, guards each, and resets through the final deref. Separately, the parse
+layer peeled exactly ONE pointer level before the container switch that fills
+`ElemType`/`ElemKind`, so at depth ≥ 2 the element kind stayed at its zero value
+(KindString) and `**[]T` emitted a string scan into a T slot — both loaders now
+peel to the innermost type.
+
+### `oneof` frozen slices are scoped per output file
+
+`ggenOneof0` restarted at 0 for each output file, so two sources in one package
+that both used `oneof` declared the same package-level var twice. The name now
+carries an FNV-32a of the emitted struct-name set: `ggenOneof_<hash>_<n>`.
 
 ## Design decisions (the why)
 
