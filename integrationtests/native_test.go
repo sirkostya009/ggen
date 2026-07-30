@@ -4,6 +4,7 @@ package integrationtests
 
 import (
 	"bytes"
+	"encoding/json"
 	"net"
 	"net/netip"
 	"strings"
@@ -119,6 +120,39 @@ func TestNativeTypes_format(t *testing.T) {
 	// array blob
 	if !strings.Contains(out, `"byteArray":[7,8,9]`) {
 		t.Errorf("array format missing from: %s", out)
+	}
+}
+
+// BareDuration lives outside NativeTypes: ggen's bare-duration default is the
+// units string (documented), while jsonv2's is int64 nanos — it would fail the
+// crossCompat fixture.
+//
+//ggen:generate
+type BareDuration struct {
+	D time.Duration `json:"d"` // no format: → units is the default
+}
+
+// Bare duration marshals as a QUOTED units string — the opening quote used to
+// be dropped (`{"d":1h30m0s"}`, invalid JSON with a nil error).
+func TestDuration_BareIsQuotedUnits(t *testing.T) {
+	t.Parallel()
+	in := BareDuration{D: time.Hour + 30*time.Minute}
+	bs, err := encode.Marshal(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := `{"d":"1h30m0s"}`; string(bs) != want {
+		t.Errorf("marshal = %s, want %s", bs, want)
+	}
+	if !json.Valid(bs) {
+		t.Errorf("invalid JSON: %s", bs)
+	}
+	got, _, err := BareDuration{}.DecodeFrom(bs)
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.D != in.D {
+		t.Errorf("roundtrip: got %v want %v", got.D, in.D)
 	}
 }
 

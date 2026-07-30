@@ -1809,11 +1809,9 @@ func renderAppendDuration(b *bytes.Buffer, f FieldInfo, ref string) {
 		fmt.Fprintf(b, "dst = strconv.AppendInt(dst, %s.Microseconds(), 10)\n", ref)
 	case "nano":
 		fmt.Fprintf(b, "dst = strconv.AppendInt(dst, %s.Nanoseconds(), 10)\n", ref)
-	case "units":
-		fmt.Fprintf(b, "dst = append(dst, '\"')\ndst =%s(dst, %s.String())\n", appendStrFn(f.HTMLEscape), ref)
 	default:
-		// fall back to units string
-		fmt.Fprintf(b, "dst = %s(dst, %s.String())\n", appendStrFn(f.HTMLEscape), ref)
+		// "" (bare field) and "units"; unknown formats fall back to units too.
+		fmt.Fprintf(b, "dst = append(dst, '\"')\ndst =%s(dst, %s.String())\n", appendStrFn(f.HTMLEscape), ref)
 	}
 }
 
