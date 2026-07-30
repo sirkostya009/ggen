@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 // stringHappyCases: every input is a complete JSON string literal that
@@ -279,6 +280,55 @@ func TestSkipString_ParityWithString(t *testing.T) {
 				t.Errorf("skipString(%q) accepted malformed input", tc.in)
 			}
 		})
+	}
+}
+
+// TestSkipString_EscapeDenseLinear pins the memoized quote candidate: an
+// escape-dense skipped string used to re-run the closing-quote IndexByte to
+// the same far quote per escape — O(n·escapes), ~7 ms for a 48 KB string.
+// Parity (incl. escaped quotes, which force a re-locate) plus a growth guard.
+func TestSkipString_EscapeDenseLinear(t *testing.T) {
+	build := func(n int) []byte {
+		var b strings.Builder
+		b.WriteByte('"')
+		for range n {
+			b.WriteString(`\nx`)
+		}
+		b.WriteByte('"')
+		return []byte(b.String())
+	}
+	cases := [][]byte{
+		build(64),
+		[]byte(`"` + strings.Repeat(`\"y`, 200) + `"`),
+		[]byte(`"` + strings.Repeat(`A\"`, 100) + `zz"`),
+	}
+	for _, in := range cases {
+		_, wantPos, wantErr := String(in, 0, true)
+		gotPos, gotErr := skipString(in, 0)
+		if gotErr != wantErr || gotPos != wantPos {
+			t.Errorf("skipString(%.30q…) = (%d, %v), String = (%d, %v)",
+				in, gotPos, gotErr, wantPos, wantErr)
+		}
+	}
+	// Growth guard: 16× the escapes must cost far less than the quadratic
+	// ~256×; linear is ~16×. 80× splits them with generous noise headroom.
+	fastest := func(data []byte) time.Duration {
+		best := time.Duration(1 << 62)
+		for range 5 {
+			st := time.Now()
+			if _, err := skipString(data, 0); err != nil {
+				t.Fatal(err)
+			}
+			if d := time.Since(st); d < best {
+				best = d
+			}
+		}
+		return best
+	}
+	ts, tb := fastest(build(1000)), fastest(build(16000))
+	if tb > ts*80 {
+		t.Errorf("skipString growth 1k→16k escapes: %v → %v (%.0f×) — quadratic regression",
+			ts, tb, float64(tb)/float64(ts))
 	}
 }
 

@@ -395,20 +395,27 @@ func parseHex4(b []byte) (rune, bool) {
 // scratch alloc + unescape work String would do on escaped strings.
 func skipString(data []byte, i int) (int, error) {
 	j := i + 1
+	// q memoizes the next '"' at or after j (len(data) = none buffered): as j
+	// advances past escapes the candidate stays the first quote ahead, so the
+	// quote probe is O(n) total instead of a rescan to the same far quote per
+	// escape (O(n·escapes) — a DoS on escape-dense skipped strings). Only an
+	// escaped quote (j jumping past q) forces a re-locate.
+	q := -1
 	for {
-		rel := bytes.IndexByte(data[j:], '"')
-		// Bound the backslash probe to the closing quote candidate.
-		bsEnd := len(data)
-		if rel >= 0 {
-			bsEnd = j + rel
+		if q < j {
+			if rel := bytes.IndexByte(data[j:], '"'); rel >= 0 {
+				q = j + rel
+			} else {
+				q = len(data)
+			}
 		}
-		bsRel := bytes.IndexByte(data[j:bsEnd], '\\')
-		if rel >= 0 && bsRel < 0 {
-			end := j + rel
-			if hasCtrlByte(data[j:end]) {
+		// Bound the backslash probe to the closing quote candidate.
+		bsRel := bytes.IndexByte(data[j:q], '\\')
+		if q < len(data) && bsRel < 0 {
+			if hasCtrlByte(data[j:q]) {
 				return 0, ErrBadString
 			}
-			return end + 1, nil
+			return q + 1, nil
 		}
 		if bsRel < 0 {
 			return 0, ErrUnterminated

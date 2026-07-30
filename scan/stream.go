@@ -384,22 +384,28 @@ func (s *Stream) skipString() error {
 	}
 	start := i + 1
 	j := start
+	// q memoizes the next '"' at or after j (len(buf) = none buffered) so the
+	// quote probe is O(n) across escape iterations instead of a rescan to the
+	// same far quote per escape — see the bytes-path skipString. Every refill
+	// shifts indices, so refill sites reset q to -1 (re-locate).
+	q := -1
 	for {
-		rel := bytes.IndexByte(s.buf[j:], '"')
+		if q < j {
+			if rel := bytes.IndexByte(s.buf[j:], '"'); rel >= 0 {
+				q = j + rel
+			} else {
+				q = len(s.buf)
+			}
+		}
 		// Bound the backslash probe to the closing quote (a whole-tail probe
 		// makes SkipValue quadratic on fully buffered payloads).
-		bsEnd := len(s.buf)
-		if rel >= 0 {
-			bsEnd = j + rel
-		}
-		bsRel := bytes.IndexByte(s.buf[j:bsEnd], '\\')
+		bsRel := bytes.IndexByte(s.buf[j:q], '\\')
 		// Closing quote, no backslash before it — fast path.
-		if rel >= 0 && bsRel < 0 {
-			end := j + rel
-			if hasCtrlByte(s.buf[j:end]) {
+		if q < len(s.buf) && bsRel < 0 {
+			if hasCtrlByte(s.buf[j:q]) {
 				return ErrBadString
 			}
-			s.Pos = end + 1
+			s.Pos = q + 1
 			return nil
 		}
 		// Backslash before any closing quote — slow path: validate
@@ -417,6 +423,7 @@ func (s *Stream) skipString() error {
 				j -= bs
 				start = 0
 				bs = 0
+				q = -1
 			}
 			switch s.buf[bs+1] {
 			case '"', '\\', '/', 'b', 'f', 'n', 'r', 't':
@@ -430,6 +437,7 @@ func (s *Stream) skipString() error {
 					j -= bs
 					start = 0
 					bs = 0
+					q = -1
 				}
 				if _, ok := parseHex4(s.buf[bs+2 : bs+6]); !ok {
 					return ErrBadString
@@ -452,6 +460,7 @@ func (s *Stream) skipString() error {
 		err := s.ReadMore(j)
 		j = 0
 		start = 0
+		q = -1
 		if err != nil {
 			return ErrUnterminated
 		}
