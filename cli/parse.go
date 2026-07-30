@@ -1043,6 +1043,15 @@ func (s *structSet) extractStruct(name string, st *ast.StructType) (StructInfo, 
 					}
 				}
 			}
+			// A named-const / const-expr array length (`[size]int`) reads as 0
+			// from the AST — resolve it via go/types or reject loudly; a
+			// silent 0 emits a strict length-0 tuple that rejects everything.
+			if hasNonLiteralArrayLen(field.Type) && !s.fixConstArrayLens(&fi, fieldType) {
+				errs = append(errs, attachPosition(fmt.Errorf(
+					"%s.%s: fixed-array length must be an integer literal here (constant lengths need type info, and pointer-wrapped const-length arrays are unsupported)",
+					name, ident.Name), s.fileSet.Position(field.Pos())))
+				continue
+			}
 			// Generic sql.Null[T] (Go 1.22): treat the V slot as a bare T.
 			// Needs go/types; the AST-only loader keeps primitives on the
 			// SQLNullSpec path and custom inners on the encoding/json fallback.
@@ -1206,6 +1215,78 @@ func extractField(structName, goName string, field *ast.Field) (FieldInfo, error
 		return fi, err
 	}
 	return fi, nil
+}
+
+// hasNonLiteralArrayLen reports whether the type expression contains a fixed
+// array whose length is not a plain INT literal (`[size]T`, `[2*2]T`) — the
+// AST extractor cannot evaluate those, so they must resolve via go/types or
+// be rejected.
+func hasNonLiteralArrayLen(expr ast.Expr) bool {
+	found := false
+	ast.Inspect(expr, func(n ast.Node) bool {
+		if arr, ok := n.(*ast.ArrayType); ok && arr.Len != nil {
+			if lit, ok := arr.Len.(*ast.BasicLit); !ok || lit.Kind != token.INT {
+				found = true
+			}
+		}
+		return !found
+	})
+	return found
+}
+
+// fixConstArrayLens re-derives a container field's shape from go/types when
+// its AST spelling carries a non-literal array length: types evaluates the
+// constant, and types.TypeString re-spells every nested length as a literal,
+// so the string-based depth recursion (stripOneContainer / arrayLenFromType)
+// sees real numbers. The qualifier mirrors AST spelling (bare name in-package,
+// `pkg.Name` foreign). Returns false when the shape can't be re-derived —
+// the caller rejects the field rather than emit a length-0 tuple.
+func (s *structSet) fixConstArrayLens(fi *FieldInfo, t types.Type) bool {
+	if t == nil {
+		return false
+	}
+	qual := func(p *types.Package) string {
+		if p == s.typesPkg {
+			return ""
+		}
+		return p.Name()
+	}
+	var elem types.Type
+	switch c := t.Underlying().(type) {
+	case *types.Array:
+		if fi.Kind != KindArray {
+			return false
+		}
+		fi.ArrayLen = int(c.Len())
+		elem = c.Elem()
+	case *types.Slice:
+		if fi.Kind != KindSlice {
+			return false
+		}
+		elem = c.Elem()
+	case *types.Map:
+		if fi.Kind != KindMap {
+			return false
+		}
+		fi.GoType = types.TypeString(t, qual)
+		// Map values keep their stars on ElemType (the pointer-cascade route).
+		fi.ElemType = types.TypeString(c.Elem(), qual)
+		fi.ElemKind = resolveKind(fi.ElemType)
+		return true
+	default:
+		return false
+	}
+	fi.GoType = types.TypeString(t, qual)
+	// Mirror the AST extractor: one leading `*` is already on ElemPointer.
+	if pe, ok := elem.(*types.Pointer); ok && fi.ElemPointer {
+		elem = pe.Elem()
+	}
+	fi.ElemType = types.TypeString(elem, qual)
+	fi.ElemKind = resolveKind(fi.ElemType)
+	if fi.ElemKind == KindArray {
+		fi.ElemArrayLen = arrayLenFromType(fi.ElemType)
+	}
+	return true
 }
 
 // arrayLenFromType pulls N out of a "[N]T" type string, 0 on parse failure.

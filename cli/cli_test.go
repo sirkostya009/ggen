@@ -1823,6 +1823,9 @@ type Msg struct {
 			{"oneof_empty", "S string", `json:"s" pipe:"oneof"`, `oneof` + "` requires a "}, // matches "rule `oneof` requires a `|`-separated…"
 			{"oneof_numeric_bad_part", "N int", `json:"n" pipe:"oneof=1|two|3"`, `part "two" is not a valid number`},
 
+			// ----- const-expr array length needs type info (AST-only mode) -----
+			{"const_array_len", "A [size]int", `json:"a"`, "fixed-array length must be an integer literal"},
+
 			// ----- hint restricted to slice/map -----
 			{"hint_on_int", "N int", `json:"n" hint:"10"`, "`hint` is only valid on slice/map fields"},
 			{"hint_on_string", "S string", `json:"s" hint:"10"`, "`hint` is only valid on slice/map fields"},

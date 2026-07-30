@@ -1860,9 +1860,14 @@ func (s ExtraStruct) AppendJSON(dst []byte) ([]byte, error) {
 
 func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err error) {
 	result = recv
+	if result.Nested != nil {
+		result.Nested = result.Nested[:0]
+	}
 	if result.Segments != nil {
 		result.Segments = result.Segments[:0]
 	}
+	seenNamed := false
+	seenNested := false
 	seenPair := false
 	seenPoint := false
 	seenRGB := false
@@ -1916,6 +1921,234 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 			i++
 		}
 		switch key {
+		case "named":
+			if seenNamed {
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"named"}}
+			}
+			seenNamed = true
+			if i >= len(data) || data[i] != '[' {
+				return result, i, scan.ErrBadArray
+			}
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			var idx0 int
+			if i < len(data) && data[i] != ']' {
+				for {
+					if idx0 >= 2 {
+						return result, i, &validation.LenError{Pos: i, Path: []string{"named"}, Want: 2, Got: idx0}
+					}
+					neg := false
+					if i < len(data) && data[i] == '-' {
+						neg = true
+						i++
+					}
+					if i >= len(data) || data[i] < '0' || data[i] > '9' {
+						return result, i, decode.NewParseErr("named", i, scan.ErrBadNumber)
+					}
+					if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+						return result, i, decode.NewParseErr("named", i, scan.ErrBadNumber)
+					}
+					limit := uint64(math.MaxInt64)
+					if neg {
+						limit = scan.SignedNeg
+					}
+					var u uint64
+					de := i + 18
+					if de > len(data) {
+						de = len(data)
+					}
+					for i < de && data[i] >= '0' && data[i] <= '9' {
+						u = u*10 + uint64(data[i]-'0')
+						i++
+					}
+					for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+						d := uint64(data[i] - '0')
+						if u > limit/10 || (u == limit/10 && d > limit%10) {
+							return result, i, decode.NewParseErr("named", i, scan.ErrNumberOverflow)
+						}
+						u = u*10 + d
+						i++
+					}
+					if i < len(data) {
+						c := data[i]
+						if c == '.' || c == 'e' || c == 'E' {
+							return result, i, decode.NewParseErr("named", i, scan.ErrBadNumber)
+						}
+					}
+					var n int64
+					if neg {
+						if u == scan.SignedNeg {
+							n = math.MinInt64
+						} else {
+							n = -int64(u)
+						}
+					} else {
+						n = int64(u)
+					}
+					result.Named[idx0] = int(n)
+					idx0++
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i < len(data) && data[i] == ',' {
+						i++
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i >= len(data) || data[i] == ']' {
+							return result, i, scan.ErrBadArray
+						}
+						continue
+					}
+					break
+				}
+			}
+			if i >= len(data) || data[i] != ']' {
+				return result, i, scan.ErrBadArray
+			}
+			if idx0 != 2 {
+				return result, i, &validation.LenError{Pos: i, Path: []string{"named"}, Want: 2, Got: idx0}
+			}
+			i++
+		case "nested":
+			if seenNested {
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"nested"}}
+			}
+			seenNested = true
+			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+				i += 4
+				result.Nested = nil
+				break
+			}
+			if i >= len(data) || data[i] != '[' {
+				return result, i, scan.ErrBadArray
+			}
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			if i < len(data) && data[i] == ']' {
+				if result.Nested == nil {
+					result.Nested = [][2]int{}
+				}
+			} else {
+				if result.Nested == nil {
+					result.Nested = make([][2]int, 0, ggenCap_6350751b_5)
+				}
+			}
+			if i < len(data) && data[i] != ']' {
+				for {
+					result.Nested = append(result.Nested, [2]int{})
+					row0 := result.Nested[len(result.Nested)-1]
+					if i >= len(data) || data[i] != '[' {
+						return result, i, scan.ErrBadArray
+					}
+					i++
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					var idx1 int
+					if i < len(data) && data[i] != ']' {
+						for {
+							if idx1 >= 2 {
+								return result, i, &validation.LenError{Pos: i, Path: []string{"nested[]"}, Want: 2, Got: idx1}
+							}
+							neg := false
+							if i < len(data) && data[i] == '-' {
+								neg = true
+								i++
+							}
+							if i >= len(data) || data[i] < '0' || data[i] > '9' {
+								return result, i, decode.NewParseErr("nested[]", i, scan.ErrBadNumber)
+							}
+							if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+								return result, i, decode.NewParseErr("nested[]", i, scan.ErrBadNumber)
+							}
+							limit := uint64(math.MaxInt64)
+							if neg {
+								limit = scan.SignedNeg
+							}
+							var u uint64
+							de := i + 18
+							if de > len(data) {
+								de = len(data)
+							}
+							for i < de && data[i] >= '0' && data[i] <= '9' {
+								u = u*10 + uint64(data[i]-'0')
+								i++
+							}
+							for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+								d := uint64(data[i] - '0')
+								if u > limit/10 || (u == limit/10 && d > limit%10) {
+									return result, i, decode.NewParseErr("nested[]", i, scan.ErrNumberOverflow)
+								}
+								u = u*10 + d
+								i++
+							}
+							if i < len(data) {
+								c := data[i]
+								if c == '.' || c == 'e' || c == 'E' {
+									return result, i, decode.NewParseErr("nested[]", i, scan.ErrBadNumber)
+								}
+							}
+							var n int64
+							if neg {
+								if u == scan.SignedNeg {
+									n = math.MinInt64
+								} else {
+									n = -int64(u)
+								}
+							} else {
+								n = int64(u)
+							}
+							row0[idx1] = int(n)
+							idx1++
+							for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
+							}
+							if i < len(data) && data[i] == ',' {
+								i++
+								for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+									i++
+								}
+								if i >= len(data) || data[i] == ']' {
+									return result, i, scan.ErrBadArray
+								}
+								continue
+							}
+							break
+						}
+					}
+					if i >= len(data) || data[i] != ']' {
+						return result, i, scan.ErrBadArray
+					}
+					if idx1 != 2 {
+						return result, i, &validation.LenError{Pos: i, Path: []string{"nested[]"}, Want: 2, Got: idx1}
+					}
+					i++
+					result.Nested[len(result.Nested)-1] = row0
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i < len(data) && data[i] == ',' {
+						i++
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i >= len(data) || data[i] == ']' {
+							return result, i, scan.ErrBadArray
+						}
+						continue
+					}
+					break
+				}
+			}
+			if i >= len(data) || data[i] != ']' {
+				return result, i, scan.ErrBadArray
+			}
+			i++
 		case "pair":
 			if seenPair {
 				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"pair"}}
@@ -2353,9 +2586,14 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 
 func (recv TupleStruct) DecodeFromStream(s *scan.Stream) (result TupleStruct, err error) {
 	result = recv
+	if result.Nested != nil {
+		result.Nested = result.Nested[:0]
+	}
 	if result.Segments != nil {
 		result.Segments = result.Segments[:0]
 	}
+	seenNamed := false
+	seenNested := false
 	seenPair := false
 	seenPoint := false
 	seenRGB := false
@@ -2385,6 +2623,208 @@ func (recv TupleStruct) DecodeFromStream(s *scan.Stream) (result TupleStruct, er
 			return result, decode.NewParseErr("", s.Pos, err)
 		}
 		switch key {
+		case "named":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("named", s.Pos, err)
+			}
+			if seenNamed {
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"named"}}
+			}
+			seenNamed = true
+			err = s.ArrayOpen()
+			if err != nil {
+				return result, decode.NewParseErr("named", s.Pos, err)
+			}
+			err = s.SkipSpace()
+			if err != nil {
+				return result, decode.NewParseErr("named", s.Pos, err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, decode.NewParseErr("named", s.Pos, err)
+				}
+			}
+			var idx0 int
+			for s.Bytes()[s.Pos] != ']' {
+				if idx0 >= 2 {
+					return result, &validation.LenError{Pos: s.Offset(), Path: []string{"named"}, Want: 2, Got: idx0}
+				}
+				var iv int64
+				iv, err = s.Int64()
+				if err != nil {
+					return result, decode.NewParseErr("named", s.Pos, err)
+				}
+				result.Named[idx0] = int(iv)
+				idx0++
+				err = s.SkipSpace()
+				if err != nil {
+					return result, decode.NewParseErr("named", s.Pos, err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("named", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == ',' {
+					s.Pos++
+					err = s.SkipSpace()
+					if err != nil {
+						return result, decode.NewParseErr("named", s.Pos, err)
+					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+						return result, decode.NewParseErr("named", s.Pos, scan.ErrBadArray)
+					}
+					continue
+				}
+				break
+			}
+			if s.Bytes()[s.Pos] != ']' {
+				return result, decode.NewParseErr("named", s.Pos, scan.ErrBadArray)
+			}
+			if idx0 != 2 {
+				return result, &validation.LenError{Pos: s.Offset(), Path: []string{"named"}, Want: 2, Got: idx0}
+			}
+			s.Pos++
+		case "nested":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("nested", s.Pos, err)
+			}
+			if seenNested {
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"nested"}}
+			}
+			seenNested = true
+			err = s.SkipSpace()
+			if err != nil {
+				return result, decode.NewParseErr("nested", s.Pos, err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, decode.NewParseErr("nested", s.Pos, err)
+				}
+			}
+			if s.Bytes()[s.Pos] == 'n' {
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, decode.NewParseErr("nested", s.Pos, err)
+						}
+					}
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, decode.NewParseErr("nested", s.Pos, scan.ErrBadLiteral)
+					}
+				}
+				s.Pos += 4
+				result.Nested = nil
+				break
+			}
+			err = s.ArrayOpen()
+			if err != nil {
+				return result, decode.NewParseErr("nested", s.Pos, err)
+			}
+			err = s.SkipSpace()
+			if err != nil {
+				return result, decode.NewParseErr("nested", s.Pos, err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, decode.NewParseErr("nested", s.Pos, err)
+				}
+			}
+			if s.Bytes()[s.Pos] == ']' {
+				if result.Nested == nil {
+					result.Nested = [][2]int{}
+				}
+			} else {
+				if result.Nested == nil {
+					result.Nested = make([][2]int, 0, ggenCap_6350751b_5)
+				}
+			}
+			for s.Bytes()[s.Pos] != ']' {
+				result.Nested = append(result.Nested, [2]int{})
+				row0 := result.Nested[len(result.Nested)-1]
+				err = s.ArrayOpen()
+				if err != nil {
+					return result, decode.NewParseErr("nested[]", s.Pos, err)
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, decode.NewParseErr("nested[]", s.Pos, err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("nested[]", s.Pos, err)
+					}
+				}
+				var idx1 int
+				for s.Bytes()[s.Pos] != ']' {
+					if idx1 >= 2 {
+						return result, &validation.LenError{Pos: s.Offset(), Path: []string{"nested[]"}, Want: 2, Got: idx1}
+					}
+					var iv int64
+					iv, err = s.Int64()
+					if err != nil {
+						return result, decode.NewParseErr("nested[]", s.Pos, err)
+					}
+					row0[idx1] = int(iv)
+					idx1++
+					err = s.SkipSpace()
+					if err != nil {
+						return result, decode.NewParseErr("nested[]", s.Pos, err)
+					}
+					if s.Pos >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, decode.NewParseErr("nested[]", s.Pos, err)
+						}
+					}
+					if s.Bytes()[s.Pos] == ',' {
+						s.Pos++
+						err = s.SkipSpace()
+						if err != nil {
+							return result, decode.NewParseErr("nested[]", s.Pos, err)
+						}
+						if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+							return result, decode.NewParseErr("nested[]", s.Pos, scan.ErrBadArray)
+						}
+						continue
+					}
+					break
+				}
+				if s.Bytes()[s.Pos] != ']' {
+					return result, decode.NewParseErr("nested[]", s.Pos, scan.ErrBadArray)
+				}
+				if idx1 != 2 {
+					return result, &validation.LenError{Pos: s.Offset(), Path: []string{"nested[]"}, Want: 2, Got: idx1}
+				}
+				s.Pos++
+				result.Nested[len(result.Nested)-1] = row0
+				err = s.SkipSpace()
+				if err != nil {
+					return result, decode.NewParseErr("nested", s.Pos, err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("nested", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == ',' {
+					s.Pos++
+					err = s.SkipSpace()
+					if err != nil {
+						return result, decode.NewParseErr("nested", s.Pos, err)
+					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+						return result, decode.NewParseErr("nested", s.Pos, scan.ErrBadArray)
+					}
+					continue
+				}
+				break
+			}
+			if s.Bytes()[s.Pos] != ']' {
+				return result, decode.NewParseErr("nested", s.Pos, scan.ErrBadArray)
+			}
+			s.Pos++
 		case "pair":
 			err = s.ConsumeColon()
 			if err != nil {
@@ -2849,7 +3289,21 @@ func (recv TupleStruct) DecodeFromStream(s *scan.Stream) (result TupleStruct, er
 }
 
 func (s TupleStruct) JSONSize() int {
-	size := 47
+	size := 72
+	if n := len(s.Named); n > 0 {
+		size += n - 1
+	}
+	size += len(s.Named) * 20
+	if n := len(s.Nested); n > 0 {
+		size += n - 1
+	}
+	for i0 := range s.Nested {
+		size += 2
+		if n := len(s.Nested[i0]); n > 0 {
+			size += n - 1
+		}
+		size += len(s.Nested[i0]) * 20
+	}
 	if n := len(s.Pair); n > 0 {
 		size += n - 1
 	}
@@ -2886,7 +3340,44 @@ func (s TupleStruct) JSONSize() int {
 func (s TupleStruct) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
-	dst = append(dst, "{\"pair\":["...)
+	dst = append(dst, "{\"named\":["...)
+	if len(s.Named) > 0 {
+		dst = strconv.AppendInt(dst, int64(s.Named[0]), 10)
+		for _, v0 := range s.Named[1:] {
+			dst = append(dst, ',')
+			dst = strconv.AppendInt(dst, int64(v0), 10)
+		}
+	}
+	dst = append(dst, "],\"nested\":"...)
+	if s.Nested == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '[')
+		if len(s.Nested) > 0 {
+			dst = append(dst, '[')
+			if len(s.Nested[0]) > 0 {
+				dst = strconv.AppendInt(dst, int64(s.Nested[0][0]), 10)
+				for _, v1 := range s.Nested[0][1:] {
+					dst = append(dst, ',')
+					dst = strconv.AppendInt(dst, int64(v1), 10)
+				}
+			}
+			dst = append(dst, ']')
+			for _, v0 := range s.Nested[1:] {
+				dst = append(dst, ",["...)
+				if len(v0) > 0 {
+					dst = strconv.AppendInt(dst, int64(v0[0]), 10)
+					for _, v1 := range v0[1:] {
+						dst = append(dst, ',')
+						dst = strconv.AppendInt(dst, int64(v1), 10)
+					}
+				}
+				dst = append(dst, ']')
+			}
+		}
+		dst = append(dst, ']')
+	}
+	dst = append(dst, ",\"pair\":["...)
 	if len(s.Pair) > 0 {
 		if s.Pair[0] == nil {
 			dst = append(dst, "null"...)

@@ -27,14 +27,20 @@ type ExtraStruct struct {
 	Triple       [][][]string   `json:"triple" pipe:"inner:(minlen=1 inner:(minlen=1 inner:minlen=1))"`
 }
 
+// tupleLen pins the named-const array-length path: the AST reads `[tupleLen]`
+// as 0, so the length must resolve through go/types.
+const tupleLen = 2
+
 // TupleStruct exercises fixed-length arrays [N]T as strict-count JSON tuples.
 //
 //ggen:generate
 type TupleStruct struct {
-	Point    [2]float64  `json:"point"`
-	RGB      [3]int      `json:"rgb" pipe:"inner:(clamp=0|255 gte=0 lte=255)"`
-	Segments [][2]int    `json:"segments"`
-	Pair     [2][]string `json:"pair"`
+	Point    [2]float64      `json:"point"`
+	RGB      [3]int          `json:"rgb" pipe:"inner:(clamp=0|255 gte=0 lte=255)"`
+	Segments [][2]int        `json:"segments"`
+	Pair     [2][]string     `json:"pair"`
+	Named    [tupleLen]int   `json:"named"`
+	Nested   [][tupleLen]int `json:"nested"`
 }
 
 // A hint-sized slice decodes correctly past the default cap.
@@ -224,6 +230,45 @@ func TestTuple_StrictTooMany(t *testing.T) {
 	var ve *validation.LenError
 	if !errors.As(err, &ve) {
 		t.Errorf("got %v, want *validation.LenError", err)
+	}
+}
+
+// A named-const length ([tupleLen]int) used to parse as ArrayLen 0, emitting a
+// strict length-0 tuple that rejected every non-empty payload and silently
+// accepted [] — marshal output couldn't round-trip its own decoder.
+func TestTuple_NamedConstLen(t *testing.T) {
+	t.Parallel()
+	in := []byte(`{"named":[7,8],"nested":[[1,2],[3,4]]}`)
+	got, _, err := TupleStruct{}.DecodeFrom(in)
+	if err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if got.Named != [tupleLen]int{7, 8} {
+		t.Errorf("Named = %v", got.Named)
+	}
+	if !reflect.DeepEqual(got.Nested, [][tupleLen]int{{1, 2}, {3, 4}}) {
+		t.Errorf("Nested = %v", got.Nested)
+	}
+	// Strict count enforced with the RESOLVED length.
+	var ve *validation.LenError
+	_, _, errNamed := TupleStruct{}.DecodeFrom([]byte(`{"named":[7]}`))
+	if !errors.As(errNamed, &ve) {
+		t.Errorf("short named tuple: got %v, want *validation.LenError", errNamed)
+	}
+	_, _, errNested := TupleStruct{}.DecodeFrom([]byte(`{"nested":[[1]]}`))
+	if !errors.As(errNested, &ve) {
+		t.Errorf("short nested tuple: got %v, want *validation.LenError", errNested)
+	}
+	out, err := encode.Marshal(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	back, _, err := TupleStruct{}.DecodeFrom(out)
+	if err != nil {
+		t.Fatalf("re-decode own marshal: %v\n%s", err, out)
+	}
+	if !reflect.DeepEqual(back, got) {
+		t.Errorf("roundtrip mismatch: %+v", back)
 	}
 }
 
