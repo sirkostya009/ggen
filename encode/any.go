@@ -63,7 +63,12 @@ func appendAny(dst []byte, v any, esc escapeFn) ([]byte, error) {
 	case uint64:
 		return strconv.AppendUint(dst, x, 10), nil
 	case json.Number:
-		// Already a valid JSON numeric literal — emit unquoted.
+		// Zero value → 0 (v1 parity; the raw append emitted zero bytes —
+		// {"n":} from an unset field). Non-empty content is assumed a valid
+		// numeric literal and passes verbatim, same trust as RawMessage.
+		if len(x) == 0 {
+			return append(dst, '0'), nil
+		}
 		return append(dst, x...), nil
 	case []any:
 		dst = append(dst, '[')

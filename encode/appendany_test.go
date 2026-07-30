@@ -88,12 +88,18 @@ func TestAppendAny_Numbers(t *testing.T) {
 
 func TestAppendAny_JSONNumber(t *testing.T) {
 	t.Parallel()
-	out, err := AppendAny(nil, json.Number("12345"))
-	if err != nil {
-		t.Fatal(err)
+	for _, ok := range []string{"12345", "-0.5", "1e9", "0", "1E+2"} {
+		out, err := AppendAny(nil, json.Number(ok))
+		if err != nil || string(out) != ok {
+			t.Errorf("json.Number(%q) → %q, %v", ok, out, err)
+		}
 	}
-	if string(out) != "12345" {
-		t.Errorf("json.Number → %q, want 12345", out)
+	// Zero value → 0 (v1 parity); the raw append used to emit ZERO bytes,
+	// producing {"n":} in a struct field. Non-empty content passes verbatim
+	// unvalidated — same trust as RawMessage.
+	out, err := AppendAny(nil, json.Number(""))
+	if err != nil || string(out) != "0" {
+		t.Errorf("zero json.Number → %q, %v, want 0", out, err)
 	}
 }
 
