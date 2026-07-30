@@ -9,6 +9,7 @@ buffer-append helpers generated code calls, and the `AppendAny` walker for `any`
 - `string.go` — `AppendString` (HTML-safe) + `AppendStringNoHTML` (jsonv2 default).
 - `any.go` — `AppendAny` walker + concrete-type fast paths.
 - `url.go` — net/url.URL helpers.
+- `netip_addr.go` — `AppendNetipAddr` (zone-aware netip.Addr string emit).
 
 ## Surface
 
@@ -28,6 +29,7 @@ func WriteSliceTo[T Marshaler](w io.Writer, items []T) error
 
 func BytesToString(buf []byte) string                // unsafe.String over buffer
 func AppendString(dst []byte, s string) []byte       // HTML-safe variant
+func AppendNetipAddr(dst []byte, a netip.Addr) []byte // addr text + closing `"`; zoned text re-escapes (zones are arbitrary bytes)
 func AppendStringNoHTML(dst []byte, s string) []byte // jsonv2-default variant
 func AppendFloat(dst []byte, v float64, bitSize int) ([]byte, error) // stdlib-parity float format
 func AppendAny(dst []byte, v any) ([]byte, error)     // any-walker, NoHTML escaping

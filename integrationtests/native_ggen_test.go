@@ -822,6 +822,9 @@ func (s NativeTypes) JSONSize() int {
 	} else {
 		size += 39
 	}
+	if z := len(s.Addr.Zone()); z > 0 {
+		size += 1 + z*2
+	}
 	size += ((len(s.Blob) + 2) / 3) * 4
 	size += len(s.ByteArray) * 4
 	if s.Cidr.Addr().Is4() {
@@ -844,10 +847,8 @@ func (s NativeTypes) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"addr\":\""...)
-	if dst, err = s.Addr.AppendText(dst); err != nil {
-		return dst, err
-	}
-	dst = append(dst, "\",\"blob\":"...)
+	dst = encode.AppendNetipAddr(dst, s.Addr)
+	dst = append(dst, ",\"blob\":"...)
 	if s.Blob == nil {
 		dst = append(dst, "null"...)
 	} else {

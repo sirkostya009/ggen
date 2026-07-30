@@ -1614,12 +1614,16 @@ func renderAppendValue(b *bytes.Buffer, f FieldInfo, ref string) {
 		renderAppendTime(b, f, ref)
 	case KindDuration:
 		renderAppendDuration(b, f, ref)
-	case KindNetIP, KindNetipAddr, KindNetipPrefix:
-		// All three implement encoding.TextAppender (Go 1.24+).
+	case KindNetIP, KindNetipPrefix:
+		// Both implement encoding.TextAppender (Go 1.24+); their text can
+		// never carry escape-needing bytes (no zone — PrefixFrom strips it).
 		fmt.Fprintf(b, `dst = append(dst, '"')
 if dst, err = %s.AppendText(dst); err != nil { return dst, err }
 dst = append(dst, '"')
 `, ref)
+	case KindNetipAddr:
+		// Zoned text may need escaping — encode.AppendNetipAddr handles it.
+		fmt.Fprintf(b, "dst = append(dst, '\"')\ndst = encode.AppendNetipAddr(dst, %s)\n", ref)
 	case KindRawJSON:
 		// Emit raw bytes verbatim (or "null" if empty/nil).
 		fmt.Fprintf(b, `if len(%s) == 0 {
@@ -1945,10 +1949,13 @@ func foldLeadingQuote(f FieldInfo, ref, prefix string) (newPrefix, code string, 
 	switch f.Kind {
 	case KindString:
 		return prefix + `"`, fmt.Sprintf("dst = %s(dst, %s)\n", appendStrFn(f.HTMLEscape), ref), true
-	case KindNetIP, KindNetipAddr, KindNetipPrefix:
+	case KindNetIP, KindNetipPrefix:
 		return prefix + `"`, fmt.Sprintf(`if dst, err = %s.AppendText(dst); err != nil { return dst, err }
 dst = append(dst, '"')
 `, ref), true
+	case KindNetipAddr:
+		// Zoned text may need escaping — encode.AppendNetipAddr handles it.
+		return prefix + `"`, fmt.Sprintf("dst = encode.AppendNetipAddr(dst, %s)\n", ref), true
 	case KindBytes:
 		// No fold: a nil []byte emits `null` (no opening quote).
 	case KindURL:
@@ -2079,7 +2086,9 @@ func sizeContribKind(f FieldInfo, ref string) (int, string) {
 		// addresses that fit in 4 octets.
 		return 2, fmt.Sprintf("if %s.To4() != nil { size += 15 } else if len(%s) != 0 { size += 39 } else { size += 2 }\n", ref, ref)
 	case KindNetipAddr:
-		return 2, fmt.Sprintf("if %s.Is4() { size += 15 } else { size += 39 }\n", ref)
+		// Zone: '%' separator + worst-case short escapes (×2 / ×6 html);
+		// raw ctrl bytes overshoot like the string budget's documented corner.
+		return 2, fmt.Sprintf("if %[1]s.Is4() { size += 15 } else { size += 39 }\nif z := len(%[1]s.Zone()); z > 0 { size += 1 + z*%[2]d }\n", ref, strMult(f.HTMLEscape))
 	case KindNetipPrefix:
 		// Addr + /N: +4 for "/128" worst case.
 		return 2, fmt.Sprintf("if %s.Addr().Is4() { size += 19 } else { size += 43 }\n", ref)

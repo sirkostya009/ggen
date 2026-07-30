@@ -156,6 +156,36 @@ func TestDuration_BareIsQuotedUnits(t *testing.T) {
 	}
 }
 
+// A netip zone is arbitrary bytes — ParseAddr accepts `%q"z` — and used to
+// drop raw between the JSON quotes: a value ggen itself decoded re-marshaled
+// to invalid JSON with a nil error.
+func TestNetipAddr_ZoneEscaped(t *testing.T) {
+	t.Parallel()
+	got, _, err := NativeTypes{}.DecodeFrom([]byte(`{"addr":"fe80::1%q\"z"}`))
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.Addr.Zone() != `q"z` {
+		t.Fatalf("zone = %q", got.Addr.Zone())
+	}
+	out, err := encode.Marshal(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !json.Valid(out) {
+		t.Errorf("invalid JSON: %s", out)
+	}
+	if !strings.Contains(string(out), `"addr":"fe80::1%q\"z"`) {
+		t.Errorf("zone not escaped: %s", out)
+	}
+	// Zone-free addrs keep the raw fast path byte-identical.
+	got2, _, _ := NativeTypes{}.DecodeFrom([]byte(`{"addr":"2001:db8::1"}`))
+	out2, _ := encode.Marshal(got2)
+	if !strings.Contains(string(out2), `"addr":"2001:db8::1"`) {
+		t.Errorf("zone-free addr changed: %s", out2)
+	}
+}
+
 // null []byte decodes to nil and a nil []byte marshals as null; empty
 // non-nil keeps the empty-string / empty-array form.
 func TestBytes_nullRoundtrip(t *testing.T) {

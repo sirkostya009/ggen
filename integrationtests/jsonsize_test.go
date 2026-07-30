@@ -830,3 +830,21 @@ func TestJSONSize_ContainerAliases_NoRealloc(t *testing.T) {
 	got, err = tuple.AppendJSON(make([]byte, 0, size))
 	check("AliasTuple", size, got, err)
 }
+
+// A zoned netip.Addr was unbudgeted — the '%'+zone bytes exceeded the flat
+// 39 and broke the single-alloc Marshal contract even before escaping.
+func TestJSONSize_NetipZone_NoRealloc(t *testing.T) {
+	t.Parallel()
+	in := NativeTypes{Addr: netip.MustParseAddr("1111:2222:3333:4444:5555:6666:7777:8888%eth0")}
+	size := in.JSONSize()
+	got, err := in.AppendJSON(make([]byte, 0, size))
+	if err != nil {
+		t.Fatalf("AppendJSON: %v", err)
+	}
+	if cap(got) != size {
+		t.Errorf("realloc: JSONSize=%d cap=%d len=%d\nout=%s", size, cap(got), len(got), got)
+	}
+	if len(got) > size {
+		t.Errorf("undersized: len=%d > size=%d", len(got), size)
+	}
+}
