@@ -91,6 +91,16 @@ func TestAppendURL_Construction(t *testing.T) {
 		{"raw_fragment_set", url.URL{Scheme: "https", Host: "ex.com", Fragment: "a b", RawFragment: "a%20b"}},
 		{"fragment_with_special", url.URL{Scheme: "https", Host: "ex.com", Fragment: "<script>"}},
 		{"path_no_host_with_colon_first_seg", url.URL{Path: "this:that"}},
+		// EscapedPath consistency: a stale RawPath (validly encoded but not
+		// an encoding of Path) must lose to escape(Path).
+		{"stale_rawpath", url.URL{Scheme: "https", Host: "ex.com", Path: "/new", RawPath: "/old%20path"}},
+		{"consistent_rawpath", url.URL{Scheme: "https", Host: "ex.com", Path: "/a b", RawPath: "/a%20b"}},
+		{"malformed_rawpath", url.URL{Scheme: "https", Host: "ex.com", Path: "/a b", RawPath: "/a%2"}},
+		// Host-relative '/' insertion applies to the RawPath and "*" branches
+		// too, not just escape(Path).
+		{"rawpath_no_leading_slash", url.URL{Scheme: "https", Host: "ex.com", Path: "a b", RawPath: "a%20b"}},
+		{"asterisk_with_host", url.URL{Scheme: "http", Host: "ex.com", Path: "*"}},
+		{"asterisk_no_host", url.URL{Path: "*"}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -99,6 +109,12 @@ func TestAppendURL_Construction(t *testing.T) {
 			got := string(AppendURL(nil, c.u))
 			if got != want {
 				t.Errorf("mismatch\n want: %q\n  got: %q", want, got)
+			}
+			// Same wire under a non-empty dst — the §4.2 "./" and every
+			// length-relative check must be entry-relative, not absolute.
+			pgot := string(AppendURL([]byte(`{"u":"`), c.u))
+			if pgot != `{"u":"`+want {
+				t.Errorf("prefixed mismatch\n want: %q\n  got: %q", `{"u":"`+want, pgot)
 			}
 		})
 	}

@@ -10,6 +10,7 @@ import "net/url"
 // url.URL.String, with zero allocation. The output never contains a raw `"`
 // or `\`, so it's safe to drop between JSON quotes.
 func AppendURL(dst []byte, u url.URL) []byte {
+	entry := len(dst)
 	if u.Scheme != "" {
 		dst = append(dst, u.Scheme...)
 		dst = append(dst, ':')
@@ -31,24 +32,38 @@ func AppendURL(dst []byte, u url.URL) []byte {
 				dst = appendURLEscape(dst, u.Host, urlEncodeHost)
 			}
 		}
-		// Prefer RawPath only when it's a valid encoding of Path.
+		// Mirror stdlib EscapedPath: RawPath wins only when validly encoded
+		// AND it percent-decodes back to Path (a stale RawPath must not win);
+		// else "*"; else escape(Path). The '/'-insertion and RFC 3986 §4.2
+		// "./" checks probe the escaped path's first byte/segment without
+		// materializing it — escaping preserves a leading '/' and never
+		// creates a ':' or '/', so the raw bytes answer both questions.
+		raw := u.RawPath != "" && validURLEncoded(u.RawPath, urlEncodePath) &&
+			urlUnescapesTo(u.RawPath, u.Path)
+		var p0 byte // first byte of the escaped path; 0 = empty path
+		var seg string
 		switch {
-		case u.RawPath != "" && validURLEncoded(u.RawPath, urlEncodePath):
+		case raw:
+			p0, seg = u.RawPath[0], pathFirstSegment(u.RawPath)
+		case u.Path == "*":
+			p0, seg = '*', "*"
+		case u.Path != "":
+			p0, seg = u.Path[0], pathFirstSegment(u.Path)
+		}
+		if p0 != 0 && p0 != '/' && u.Host != "" {
+			dst = append(dst, '/')
+		}
+		// §4.2 applies only when NOTHING of this URL precedes the path
+		// (entry-relative — an outer JSON prefix must not mask it).
+		if len(dst) == entry && containsColon(seg) {
+			dst = append(dst, '.', '/')
+		}
+		switch {
+		case raw:
 			dst = append(dst, u.RawPath...)
 		case u.Path == "*":
 			dst = append(dst, '*')
 		default:
-			before := len(dst)
-			if u.Path != "" && u.Path[0] != '/' && u.Host != "" {
-				dst = append(dst, '/')
-			}
-			// RFC 3986 §4.2: a relative-path first segment containing
-			// ':' must be prefixed with ./ to disambiguate from scheme.
-			if before == 0 && len(dst) == before {
-				if seg := pathFirstSegment(u.Path); containsColon(seg) {
-					dst = append(dst, '.', '/')
-				}
-			}
 			dst = appendURLEscape(dst, u.Path, urlEncodePath)
 		}
 	}
@@ -122,6 +137,47 @@ func validURLEncoded(s string, mode urlEncoding) bool {
 // validURLEncodedFragment is validURLEncoded for the fragment mode.
 func validURLEncodedFragment(s string) bool {
 	return validURLEncoded(s, urlEncodeFragment)
+}
+
+// urlUnescapesTo reports whether escaped percent-decodes exactly to want —
+// stdlib EscapedPath's unescape(RawPath)==Path consistency check, alloc-free.
+// Malformed %XX returns false (stdlib's unescape errors → escape(Path) wins).
+func urlUnescapesTo(escaped, want string) bool {
+	j := 0
+	for i := 0; i < len(escaped); {
+		c := escaped[i]
+		if c == '%' {
+			if i+2 >= len(escaped) {
+				return false
+			}
+			hi, ok1 := unhexURL(escaped[i+1])
+			lo, ok2 := unhexURL(escaped[i+2])
+			if !ok1 || !ok2 {
+				return false
+			}
+			c = hi<<4 | lo
+			i += 3
+		} else {
+			i++
+		}
+		if j >= len(want) || want[j] != c {
+			return false
+		}
+		j++
+	}
+	return j == len(want)
+}
+
+func unhexURL(c byte) (byte, bool) {
+	switch {
+	case '0' <= c && c <= '9':
+		return c - '0', true
+	case 'a' <= c && c <= 'f':
+		return c - 'a' + 10, true
+	case 'A' <= c && c <= 'F':
+		return c - 'A' + 10, true
+	}
+	return 0, false
 }
 
 func pathFirstSegment(s string) string {
