@@ -316,8 +316,12 @@ func appendAny(dst []byte, v any, esc escapeFn) ([]byte, error) {
 		if rv.Type().Elem().Kind() == reflect.Uint8 {
 			dst = append(dst, '"')
 			if rv.Kind() == reflect.Array {
-				// reflect.Value.Bytes panics on arrays — slice first.
-				rv = rv.Slice(0, rv.Len())
+				// The array came through reflect.ValueOf, so it's
+				// unaddressable — Bytes AND Slice both panic; copy out.
+				b := make([]byte, rv.Len())
+				reflect.Copy(reflect.ValueOf(b), rv)
+				dst = base64.StdEncoding.AppendEncode(dst, b)
+				return append(dst, '"'), nil
 			}
 			dst = base64.StdEncoding.AppendEncode(dst, rv.Bytes())
 			return append(dst, '"'), nil

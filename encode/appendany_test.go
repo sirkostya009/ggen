@@ -321,6 +321,24 @@ func TestAppendAny_Struct_StringOpt(t *testing.T) {
 	checkAny(t, in)
 }
 
+// [N]byte through the any-walker used to panic: the base64 arm called
+// Slice() on the unaddressable reflect.ValueOf array (the comment dodged
+// Bytes()'s panic and walked into Slice()'s identical one).
+func TestAppendAny_ByteArray(t *testing.T) {
+	t.Parallel()
+	out, err := AppendAny(nil, [4]byte{1, 2, 3, 4})
+	if err != nil || string(out) != `"AQIDBA=="` {
+		t.Errorf("[4]byte → %q, %v, want \"AQIDBA==\"", out, err)
+	}
+	checkAny(t, [4]byte{1, 2, 3, 4})
+	type withSum struct {
+		Sum [4]byte `json:"sum"`
+	}
+	checkAny(t, withSum{Sum: [4]byte{9, 8, 7, 6}})
+	type namedArr [3]byte
+	checkAny(t, namedArr{5, 5, 5})
+}
+
 func TestAppendAny_RawMessage(t *testing.T) {
 	t.Parallel()
 	// Non-empty bytes pass through verbatim — no quoting, no escape.
