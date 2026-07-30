@@ -2824,6 +2824,10 @@ for %[1]s < len(data) && data[%[1]s] >= '0' && data[%[1]s] <= '9' {
 	n = n*10 + d
 	%[1]s++
 }
+if %[1]s < len(data) {
+	c := data[%[1]s]
+	if c == '.' || c == 'e' || c == 'E' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrBadNumber) }
+}
 %[3]s
 `, posVar, field, stmt)
 }

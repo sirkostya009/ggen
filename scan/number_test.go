@@ -113,6 +113,30 @@ func TestInt64_RejectsFloatsParity(t *testing.T) {
 	}
 }
 
+// Uint64 twin of the float-rejection parity property above — it used to
+// accept "1.5" as 1 with a nil error where Int64 (and stdlib) reject.
+func TestUint64_RejectsFloatsParity(t *testing.T) {
+	t.Parallel()
+	for _, in := range []string{"1.5", "1e3", "1.0", "1E5"} {
+		t.Run(in, func(t *testing.T) {
+			t.Parallel()
+			_, _, err := Uint64([]byte(in), 0)
+			if !errors.Is(err, ErrBadNumber) {
+				t.Errorf("scan: got %v, want ErrBadNumber", err)
+			}
+			var n uint64
+			if json.Unmarshal([]byte(in), &n) == nil {
+				t.Errorf("stdlib accepted %q into uint64 (got %d); scan rejected — parity violation", in, n)
+			}
+			var s Stream
+			s.Reset(strings.NewReader(in), nil)
+			if _, err := s.Uint64(); !errors.Is(err, ErrBadNumber) {
+				t.Errorf("stream: got %v, want ErrBadNumber", err)
+			}
+		})
+	}
+}
+
 // TestInt64_OverflowBoundaryLattice checks values around the 18/19/20-digit
 // boundary stay bit-exact and every overflow is caught, including leading-zero
 // runs that push significant digits past the 18-byte window.
@@ -380,6 +404,12 @@ func TestInt_ReferenceDifferential(t *testing.T) {
 			}
 			n = n*10 + d
 			i++
+		}
+		if i < len(data) {
+			c := data[i]
+			if c == '.' || c == 'e' || c == 'E' {
+				return 0, 0, ErrBadNumber
+			}
 		}
 		return n, i, nil
 	}

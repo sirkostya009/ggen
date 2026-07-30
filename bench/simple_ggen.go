@@ -114,6 +114,12 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 				n = n*10 + d
 				i++
 			}
+			if i < len(data) {
+				c := data[i]
+				if c == '.' || c == 'e' || c == 'E' {
+					return result, i, decode.NewParseErr("age", i, scan.ErrBadNumber)
+				}
+			}
 			if n > math.MaxUint8 {
 				return result, i, decode.NewParseErr("age", i, scan.ErrNumberOverflow)
 			}
@@ -354,6 +360,12 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 				n = n*10 + d
 				i++
 			}
+			if i < len(data) {
+				c := data[i]
+				if c == '.' || c == 'e' || c == 'E' {
+					return result, i, decode.NewParseErr("failedLogins", i, scan.ErrBadNumber)
+				}
+			}
 			if n > math.MaxUint16 {
 				return result, i, decode.NewParseErr("failedLogins", i, scan.ErrNumberOverflow)
 			}
@@ -519,6 +531,12 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 				n = n*10 + d
 				i++
 			}
+			if i < len(data) {
+				c := data[i]
+				if c == '.' || c == 'e' || c == 'E' {
+					return result, i, decode.NewParseErr("id", i, scan.ErrBadNumber)
+				}
+			}
 			result.ID = n
 		case "lastLogin":
 			if seen&(1<<17) != 0 {
@@ -651,6 +669,12 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 				}
 				n = n*10 + d
 				i++
+			}
+			if i < len(data) {
+				c := data[i]
+				if c == '.' || c == 'e' || c == 'E' {
+					return result, i, decode.NewParseErr("loginCount", i, scan.ErrBadNumber)
+				}
 			}
 			if n > math.MaxUint32 {
 				return result, i, decode.NewParseErr("loginCount", i, scan.ErrNumberOverflow)
@@ -3057,6 +3081,12 @@ func (recv Preferences) DecodeFrom(data []byte) (result Preferences, i int, err 
 				n = n*10 + d
 				i++
 			}
+			if i < len(data) {
+				c := data[i]
+				if c == '.' || c == 'e' || c == 'E' {
+					return result, i, decode.NewParseErr("itemsPerPage", i, scan.ErrBadNumber)
+				}
+			}
 			if n > math.MaxUint8 {
 				return result, i, decode.NewParseErr("itemsPerPage", i, scan.ErrNumberOverflow)
 			}
@@ -3516,6 +3546,12 @@ func (recv CopyAccount) DecodeFrom(data []byte) (result CopyAccount, i int, err 
 				n = n*10 + d
 				i++
 			}
+			if i < len(data) {
+				c := data[i]
+				if c == '.' || c == 'e' || c == 'E' {
+					return result, i, decode.NewParseErr("age", i, scan.ErrBadNumber)
+				}
+			}
 			if n > math.MaxUint8 {
 				return result, i, decode.NewParseErr("age", i, scan.ErrNumberOverflow)
 			}
@@ -3761,6 +3797,12 @@ func (recv CopyAccount) DecodeFrom(data []byte) (result CopyAccount, i int, err 
 				n = n*10 + d
 				i++
 			}
+			if i < len(data) {
+				c := data[i]
+				if c == '.' || c == 'e' || c == 'E' {
+					return result, i, decode.NewParseErr("failedLogins", i, scan.ErrBadNumber)
+				}
+			}
 			if n > math.MaxUint16 {
 				return result, i, decode.NewParseErr("failedLogins", i, scan.ErrNumberOverflow)
 			}
@@ -3927,6 +3969,12 @@ func (recv CopyAccount) DecodeFrom(data []byte) (result CopyAccount, i int, err 
 				n = n*10 + d
 				i++
 			}
+			if i < len(data) {
+				c := data[i]
+				if c == '.' || c == 'e' || c == 'E' {
+					return result, i, decode.NewParseErr("id", i, scan.ErrBadNumber)
+				}
+			}
 			result.ID = n
 		case "lastLogin":
 			if seen&(1<<17) != 0 {
@@ -4061,6 +4109,12 @@ func (recv CopyAccount) DecodeFrom(data []byte) (result CopyAccount, i int, err 
 				}
 				n = n*10 + d
 				i++
+			}
+			if i < len(data) {
+				c := data[i]
+				if c == '.' || c == 'e' || c == 'E' {
+					return result, i, decode.NewParseErr("loginCount", i, scan.ErrBadNumber)
+				}
 			}
 			if n > math.MaxUint32 {
 				return result, i, decode.NewParseErr("loginCount", i, scan.ErrNumberOverflow)
@@ -6220,6 +6274,12 @@ func (recv CopyPreferences) DecodeFrom(data []byte) (result CopyPreferences, i i
 				}
 				n = n*10 + d
 				i++
+			}
+			if i < len(data) {
+				c := data[i]
+				if c == '.' || c == 'e' || c == 'E' {
+					return result, i, decode.NewParseErr("itemsPerPage", i, scan.ErrBadNumber)
+				}
 			}
 			if n > math.MaxUint8 {
 				return result, i, decode.NewParseErr("itemsPerPage", i, scan.ErrNumberOverflow)

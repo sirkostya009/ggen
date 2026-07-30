@@ -707,6 +707,9 @@ scan:
 		for i < len(buf) {
 			c := buf[i]
 			if c < '0' || c > '9' {
+				if c == '.' || c == 'e' || c == 'E' {
+					return 0, ErrBadNumber
+				}
 				break scan
 			}
 			d := uint64(c - '0')

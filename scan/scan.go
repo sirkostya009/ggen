@@ -522,6 +522,12 @@ func Uint64(data []byte, i int) (uint64, int, error) {
 		n = n*10 + d
 		i++
 	}
+	if i < len(data) {
+		c := data[i]
+		if c == '.' || c == 'e' || c == 'E' {
+			return 0, 0, ErrBadNumber
+		}
+	}
 	return n, i, nil
 }
 

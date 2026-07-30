@@ -1440,6 +1440,12 @@ func (recv NarrowInts) DecodeFrom(data []byte) (result NarrowInts, i int, err er
 						n = n*10 + d
 						i++
 					}
+					if i < len(data) {
+						c := data[i]
+						if c == '.' || c == 'e' || c == 'E' {
+							return result, i, decode.NewParseErr("mapU", i, scan.ErrBadNumber)
+						}
+					}
 					if n > math.MaxUint8 {
 						return result, i, decode.NewParseErr("mapU", i, scan.ErrNumberOverflow)
 					}
@@ -1496,6 +1502,12 @@ func (recv NarrowInts) DecodeFrom(data []byte) (result NarrowInts, i int, err er
 				}
 				n = n*10 + d
 				i++
+			}
+			if i < len(data) {
+				c := data[i]
+				if c == '.' || c == 'e' || c == 'E' {
+					return result, i, decode.NewParseErr("ptrU", i, scan.ErrBadNumber)
+				}
 			}
 			if n > math.MaxUint8 {
 				return result, i, decode.NewParseErr("ptrU", i, scan.ErrNumberOverflow)
@@ -1638,6 +1650,12 @@ func (recv NarrowInts) DecodeFrom(data []byte) (result NarrowInts, i int, err er
 				n = n*10 + d
 				i++
 			}
+			if i < len(data) {
+				c := data[i]
+				if c == '.' || c == 'e' || c == 'E' {
+					return result, i, decode.NewParseErr("u16", i, scan.ErrBadNumber)
+				}
+			}
 			if n > math.MaxUint16 {
 				return result, i, decode.NewParseErr("u16", i, scan.ErrNumberOverflow)
 			}
@@ -1670,6 +1688,12 @@ func (recv NarrowInts) DecodeFrom(data []byte) (result NarrowInts, i int, err er
 				n = n*10 + d
 				i++
 			}
+			if i < len(data) {
+				c := data[i]
+				if c == '.' || c == 'e' || c == 'E' {
+					return result, i, decode.NewParseErr("u32", i, scan.ErrBadNumber)
+				}
+			}
 			if n > math.MaxUint32 {
 				return result, i, decode.NewParseErr("u32", i, scan.ErrNumberOverflow)
 			}
@@ -1701,6 +1725,12 @@ func (recv NarrowInts) DecodeFrom(data []byte) (result NarrowInts, i int, err er
 				}
 				n = n*10 + d
 				i++
+			}
+			if i < len(data) {
+				c := data[i]
+				if c == '.' || c == 'e' || c == 'E' {
+					return result, i, decode.NewParseErr("u8", i, scan.ErrBadNumber)
+				}
 			}
 			if n > math.MaxUint8 {
 				return result, i, decode.NewParseErr("u8", i, scan.ErrNumberOverflow)
@@ -2754,6 +2784,12 @@ func (recv NumGrammar) DecodeFrom(data []byte) (result NumGrammar, i int, err er
 				}
 				n = n*10 + d
 				i++
+			}
+			if i < len(data) {
+				c := data[i]
+				if c == '.' || c == 'e' || c == 'E' {
+					return result, i, decode.NewParseErr("u", i, scan.ErrBadNumber)
+				}
 			}
 			result.U = uint(n)
 		default:

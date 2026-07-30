@@ -442,6 +442,12 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 				n = n*10 + d
 				i++
 			}
+			if i < len(data) {
+				c := data[i]
+				if c == '.' || c == 'e' || c == 'E' {
+					return result, i, decode.NewParseErr("u", i, scan.ErrBadNumber)
+				}
+			}
 			result.U = uint(n)
 		case "u16":
 			if seenU16 {
@@ -470,6 +476,12 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 				}
 				n = n*10 + d
 				i++
+			}
+			if i < len(data) {
+				c := data[i]
+				if c == '.' || c == 'e' || c == 'E' {
+					return result, i, decode.NewParseErr("u16", i, scan.ErrBadNumber)
+				}
 			}
 			if n > math.MaxUint16 {
 				return result, i, decode.NewParseErr("u16", i, scan.ErrNumberOverflow)
@@ -503,6 +515,12 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 				n = n*10 + d
 				i++
 			}
+			if i < len(data) {
+				c := data[i]
+				if c == '.' || c == 'e' || c == 'E' {
+					return result, i, decode.NewParseErr("u32", i, scan.ErrBadNumber)
+				}
+			}
 			if n > math.MaxUint32 {
 				return result, i, decode.NewParseErr("u32", i, scan.ErrNumberOverflow)
 			}
@@ -535,6 +553,12 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 				n = n*10 + d
 				i++
 			}
+			if i < len(data) {
+				c := data[i]
+				if c == '.' || c == 'e' || c == 'E' {
+					return result, i, decode.NewParseErr("u64", i, scan.ErrBadNumber)
+				}
+			}
 			result.U64 = n
 		case "u8":
 			if seenU8 {
@@ -563,6 +587,12 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 				}
 				n = n*10 + d
 				i++
+			}
+			if i < len(data) {
+				c := data[i]
+				if c == '.' || c == 'e' || c == 'E' {
+					return result, i, decode.NewParseErr("u8", i, scan.ErrBadNumber)
+				}
 			}
 			if n > math.MaxUint8 {
 				return result, i, decode.NewParseErr("u8", i, scan.ErrNumberOverflow)

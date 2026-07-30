@@ -1081,6 +1081,12 @@ func (recv SQLNullByteStruct) DecodeFrom(data []byte) (result SQLNullByteStruct,
 					n = n*10 + d
 					i++
 				}
+				if i < len(data) {
+					c := data[i]
+					if c == '.' || c == 'e' || c == 'E' {
+						return result, i, decode.NewParseErr("b", i, scan.ErrBadNumber)
+					}
+				}
 				nv = byte(n)
 
 				result.B = sql.NullByte{Byte: nv, Valid: true}
@@ -2425,6 +2431,12 @@ func (recv SQLNullGenUint64Struct) DecodeFrom(data []byte) (result SQLNullGenUin
 					}
 					n = n*10 + d
 					i++
+				}
+				if i < len(data) {
+					c := data[i]
+					if c == '.' || c == 'e' || c == 'E' {
+						return result, i, decode.NewParseErr("u", i, scan.ErrBadNumber)
+					}
 				}
 				nv = n
 
@@ -4008,6 +4020,12 @@ func (recv SQLNullStruct) DecodeFrom(data []byte) (result SQLNullStruct, i int, 
 					}
 					n = n*10 + d
 					i++
+				}
+				if i < len(data) {
+					c := data[i]
+					if c == '.' || c == 'e' || c == 'E' {
+						return result, i, decode.NewParseErr("b", i, scan.ErrBadNumber)
+					}
 				}
 				nv = byte(n)
 
