@@ -25,9 +25,11 @@ func renderAliasDecode(b *bytes.Buffer, s StructInfo) {
 	case KindBool:
 		fmt.Fprintf(b, "var v bool\nv, i, err = scan.Bool(data, i)\n%s\nresult = %s(v)\n", wrap, s.Name)
 	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
-		fmt.Fprintf(b, "var v int64\nv, i, err = scan.Int64(data, i)\n%s\nresult = %s(v)\n", wrap, s.Name)
+		guard := narrowIntGuard("v", s.AliasUnderlying, `return result, i, decode.NewParseErr("", i, scan.ErrNumberOverflow)`)
+		fmt.Fprintf(b, "var v int64\nv, i, err = scan.Int64(data, i)\n%s\n%sresult = %s(v)\n", wrap, guard, s.Name)
 	case KindUint, KindUint8, KindUint16, KindUint32, KindUint64:
-		fmt.Fprintf(b, "var v uint64\nv, i, err = scan.Uint64(data, i)\n%s\nresult = %s(v)\n", wrap, s.Name)
+		guard := narrowIntGuard("v", s.AliasUnderlying, `return result, i, decode.NewParseErr("", i, scan.ErrNumberOverflow)`)
+		fmt.Fprintf(b, "var v uint64\nv, i, err = scan.Uint64(data, i)\n%s\n%sresult = %s(v)\n", wrap, guard, s.Name)
 	case KindFloat32, KindFloat64:
 		fmt.Fprintf(b, "var v float64\nv, i, err = scan.Float64(data, i)\n%s\nresult = %s(v)\n", wrap, s.Name)
 	}
@@ -52,9 +54,11 @@ func renderAliasStreamDecode(b *bytes.Buffer, s StructInfo) {
 	case KindBool:
 		fmt.Fprintf(b, "var v bool\nv, err = s.Bool()\n%s\nresult = %s(v)\n", wrap, s.Name)
 	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
-		fmt.Fprintf(b, "var v int64\nv, err = s.Int64()\n%s\nresult = %s(v)\n", wrap, s.Name)
+		guard := narrowIntGuard("v", s.AliasUnderlying, `return result, decode.NewParseErr("", s.Pos, scan.ErrNumberOverflow)`)
+		fmt.Fprintf(b, "var v int64\nv, err = s.Int64()\n%s\n%sresult = %s(v)\n", wrap, guard, s.Name)
 	case KindUint, KindUint8, KindUint16, KindUint32, KindUint64:
-		fmt.Fprintf(b, "var v uint64\nv, err = s.Uint64()\n%s\nresult = %s(v)\n", wrap, s.Name)
+		guard := narrowIntGuard("v", s.AliasUnderlying, `return result, decode.NewParseErr("", s.Pos, scan.ErrNumberOverflow)`)
+		fmt.Fprintf(b, "var v uint64\nv, err = s.Uint64()\n%s\n%sresult = %s(v)\n", wrap, guard, s.Name)
 	case KindFloat32, KindFloat64:
 		fmt.Fprintf(b, "var v float64\nv, err = s.Float64()\n%s\nresult = %s(v)\n", wrap, s.Name)
 	}

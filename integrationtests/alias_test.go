@@ -32,6 +32,12 @@ type AliasInt int
 type AliasUint64 uint64
 
 //ggen:generate
+type AliasInt8 int8
+
+//ggen:generate
+type AliasUint8 uint8
+
+//ggen:generate
 type AliasFloat64 float64
 
 //ggen:generate
@@ -99,6 +105,36 @@ func TestAlias_Int_Roundtrip(t *testing.T) {
 	}
 	if got != in {
 		t.Errorf("roundtrip = %d, want -42", got)
+	}
+}
+
+// Narrow-int aliases guard the cast (opt #48): 300 into int8 used to decode
+// as 44 with a nil error. Bytes + stream, both signednesses.
+func TestAlias_NarrowInt_Overflow(t *testing.T) {
+	t.Parallel()
+	if got, _, err := AliasInt8(0).DecodeFrom([]byte("-128")); err != nil || got != -128 {
+		t.Errorf("in-range: got %d, %v", got, err)
+	}
+	if got, _, err := AliasUint8(0).DecodeFrom([]byte("255")); err != nil || got != 255 {
+		t.Errorf("in-range: got %d, %v", got, err)
+	}
+	for _, in := range []string{"300", "-300", "128"} {
+		if _, _, err := AliasInt8(0).DecodeFrom([]byte(in)); !errors.Is(err, scan.ErrNumberOverflow) {
+			t.Errorf("int8 %s: got %v, want ErrNumberOverflow", in, err)
+		}
+		var s scan.Stream
+		s.Reset(strings.NewReader(in), nil)
+		if _, err := AliasInt8(0).DecodeFromStream(&s); !errors.Is(err, scan.ErrNumberOverflow) {
+			t.Errorf("int8 stream %s: got %v, want ErrNumberOverflow", in, err)
+		}
+	}
+	if _, _, err := AliasUint8(0).DecodeFrom([]byte("256")); !errors.Is(err, scan.ErrNumberOverflow) {
+		t.Errorf("uint8 256: got %v, want ErrNumberOverflow", err)
+	}
+	var s scan.Stream
+	s.Reset(strings.NewReader("256"), nil)
+	if _, err := AliasUint8(0).DecodeFromStream(&s); !errors.Is(err, scan.ErrNumberOverflow) {
+		t.Errorf("uint8 stream 256: got %v, want ErrNumberOverflow", err)
 	}
 }
 

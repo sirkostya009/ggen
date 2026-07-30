@@ -16,12 +16,12 @@ import (
 	"github.com/sirkostya009/ggen/validation"
 )
 
-// ggenCap_c2108fc8_0: prealloc cap for []NPPlain — as many elements as fit under 80 bytes,
+// ggenCap_9eeac67f_0: prealloc cap for []NPPlain — as many elements as fit under 80 bytes,
 // else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
 // else 1. See decode.PreallocCap.
-const ggenCap_c2108fc8_0 = (min((80/max(int(unsafe.Sizeof(*new(NPPlain))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(NPPlain))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(NPPlain))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(NPPlain))), 1)), 1)
+const ggenCap_9eeac67f_0 = (min((80/max(int(unsafe.Sizeof(*new(NPPlain))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(NPPlain))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(NPPlain))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(NPPlain))), 1)), 1)
 
-var ggenOneof_c2108fc8_0 = []string{"low", "medium", "high"}
+var ggenOneof_9eeac67f_0 = []string{"low", "medium", "high"}
 
 func (recv AliasString) DecodeFrom(data []byte) (result AliasString, i int, err error) {
 	result = recv
@@ -144,6 +144,78 @@ func (s AliasUint64) JSONSize() int {
 }
 
 func (s AliasUint64) AppendJSON(dst []byte) ([]byte, error) {
+	return strconv.AppendUint(dst, uint64(s), 10), nil
+}
+
+func (recv AliasInt8) DecodeFrom(data []byte) (result AliasInt8, i int, err error) {
+	result = recv
+	var v int64
+	v, i, err = scan.Int64(data, i)
+	if err != nil {
+		return result, i, decode.NewParseErr("", i, err)
+	}
+	if v < math.MinInt8 || v > math.MaxInt8 {
+		return result, i, decode.NewParseErr("", i, scan.ErrNumberOverflow)
+	}
+	result = AliasInt8(v)
+	return result, i, nil
+}
+
+func (recv AliasInt8) DecodeFromStream(s *scan.Stream) (result AliasInt8, err error) {
+	result = recv
+	var v int64
+	v, err = s.Int64()
+	if err != nil {
+		return result, decode.NewParseErr("", s.Pos, err)
+	}
+	if v < math.MinInt8 || v > math.MaxInt8 {
+		return result, decode.NewParseErr("", s.Pos, scan.ErrNumberOverflow)
+	}
+	result = AliasInt8(v)
+	return result, nil
+}
+
+func (s AliasInt8) JSONSize() int {
+	return 20
+}
+
+func (s AliasInt8) AppendJSON(dst []byte) ([]byte, error) {
+	return strconv.AppendInt(dst, int64(s), 10), nil
+}
+
+func (recv AliasUint8) DecodeFrom(data []byte) (result AliasUint8, i int, err error) {
+	result = recv
+	var v uint64
+	v, i, err = scan.Uint64(data, i)
+	if err != nil {
+		return result, i, decode.NewParseErr("", i, err)
+	}
+	if v > math.MaxUint8 {
+		return result, i, decode.NewParseErr("", i, scan.ErrNumberOverflow)
+	}
+	result = AliasUint8(v)
+	return result, i, nil
+}
+
+func (recv AliasUint8) DecodeFromStream(s *scan.Stream) (result AliasUint8, err error) {
+	result = recv
+	var v uint64
+	v, err = s.Uint64()
+	if err != nil {
+		return result, decode.NewParseErr("", s.Pos, err)
+	}
+	if v > math.MaxUint8 {
+		return result, decode.NewParseErr("", s.Pos, scan.ErrNumberOverflow)
+	}
+	result = AliasUint8(v)
+	return result, nil
+}
+
+func (s AliasUint8) JSONSize() int {
+	return 20
+}
+
+func (s AliasUint8) AppendJSON(dst []byte) ([]byte, error) {
 	return strconv.AppendUint(dst, uint64(s), 10), nil
 }
 
@@ -2331,7 +2403,7 @@ func (recv NamedPrims) DecodeFrom(data []byte) (result NamedPrims, i int, err er
 			switch result.Pri {
 			case "low", "medium", "high":
 			default:
-				return result, i, &validation.OneOfError{Pos: i, Path: []string{"pri"}, Allowed: ggenOneof_c2108fc8_0, Value: result.Pri}
+				return result, i, &validation.OneOfError{Pos: i, Path: []string{"pri"}, Allowed: ggenOneof_9eeac67f_0, Value: result.Pri}
 			}
 		case "tag":
 			if seenTag {
@@ -2514,7 +2586,7 @@ func (recv NamedPrims) DecodeFromStream(s *scan.Stream) (result NamedPrims, err 
 			switch result.Pri {
 			case "low", "medium", "high":
 			default:
-				return result, &validation.OneOfError{Pos: s.Offset(), Path: []string{"pri"}, Allowed: ggenOneof_c2108fc8_0, Value: result.Pri}
+				return result, &validation.OneOfError{Pos: s.Offset(), Path: []string{"pri"}, Allowed: ggenOneof_9eeac67f_0, Value: result.Pri}
 			}
 		case "tag":
 			err = s.ConsumeColon()
@@ -3060,7 +3132,7 @@ func (recv NPPositions) DecodeFrom(data []byte) (result NPPositions, i int, err 
 				}
 			} else {
 				if result.S == nil {
-					result.S = make([]NPPlain, 0, ggenCap_c2108fc8_0)
+					result.S = make([]NPPlain, 0, ggenCap_9eeac67f_0)
 				}
 			}
 			if i < len(data) && data[i] != ']' {
@@ -3526,7 +3598,7 @@ func (recv NPPositions) DecodeFromStream(s *scan.Stream) (result NPPositions, er
 				}
 			} else {
 				if result.S == nil {
-					result.S = make([]NPPlain, 0, ggenCap_c2108fc8_0)
+					result.S = make([]NPPlain, 0, ggenCap_9eeac67f_0)
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {
