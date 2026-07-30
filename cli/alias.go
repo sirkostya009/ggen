@@ -69,8 +69,8 @@ func renderAliasStreamDecode(b *bytes.Buffer, s StructInfo) {
 func renderAliasSize(s StructInfo) string {
 	switch s.AliasKind {
 	case KindString:
-		// *2 for worst-case escapes + 2 quotes.
-		return "return len(string(s))*2 + 2\n"
+		// Worst-case escapes (×2; ×6 under htmlescape — `<` → <) + 2 quotes.
+		return fmt.Sprintf("return len(string(s))*%d + 2\n", strMult(s.HTMLEscape))
 	case KindBool:
 		return "return 5\n" // "false"
 	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
@@ -83,9 +83,18 @@ func renderAliasSize(s StructInfo) string {
 		// `[]byte` base64 expansion is ~4/3 + padding + quotes
 		return "return len(s)*4/3 + 8\n"
 	case KindSlice, KindMap, KindArray:
-		return "return 1024\n"
+		// Same per-kind machinery as a struct FIELD of this shape — the old
+		// flat 1024 under-reserved any real container (growth chain past it)
+		// and over-reserved small ones.
+		f := s.AliasField
+		f.GoType = s.Name
+		n, code := sizeContrib(f, "s")
+		return fmt.Sprintf("size := %d\n%sreturn size\n", n, code)
 	case KindStruct:
 		switch {
+		case s.AliasIface.AppendJSON && s.AliasIface.JSONSize:
+			// ggen-method delegation pairs with the underlying's real bound.
+			return fmt.Sprintf("return %s(s).JSONSize()\n", s.AliasUnderlying)
 		case s.AliasIface.JSONMarshaler, s.AliasIface.TextMarshaler:
 			// Delegation allocates its own result; a nonzero budget here would
 			// only add a make() alloc in front of it (and a third past-cap).

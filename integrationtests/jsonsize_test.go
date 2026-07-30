@@ -790,3 +790,43 @@ func TestJSONSize_AnyNumberStruct_NoRealloc(t *testing.T) {
 		t.Errorf("realloc: JSONSize=%d cap=%d len=%d\nout=%s", size, cap(got), len(got), got)
 	}
 }
+
+// Container aliases used to return a flat 1024 — a real container past it ran
+// the growth chain, breaking the single-alloc Marshal contract; they now run
+// the same per-kind machinery as a struct field of that shape.
+func TestJSONSize_ContainerAliases_NoRealloc(t *testing.T) {
+	t.Parallel()
+	check := func(name string, size int, got []byte, err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if cap(got) != size {
+			t.Errorf("%s realloc: JSONSize=%d cap=%d len=%d", name, size, cap(got), len(got))
+		}
+		if len(got) > size {
+			t.Errorf("%s undersized: len=%d > size=%d", name, len(got), size)
+		}
+	}
+	// ~6.6 KB wire — far past the old flat 1024.
+	tags := make(AliasTags, 300)
+	for i := range tags {
+		tags[i] = "tag-value-0123456789"
+	}
+	size := tags.JSONSize()
+	got, err := tags.AppendJSON(make([]byte, 0, size))
+	check("AliasTags", size, got, err)
+
+	lookup := AliasLookup{}
+	for _, k := range []string{"alpha", "beta", "gamma", "delta"} {
+		lookup[k] = 1 << 40
+	}
+	size = lookup.JSONSize()
+	got, err = lookup.AppendJSON(make([]byte, 0, size))
+	check("AliasLookup", size, got, err)
+
+	tuple := AliasTuple{math.MaxInt, math.MinInt, 0}
+	size = tuple.JSONSize()
+	got, err = tuple.AppendJSON(make([]byte, 0, size))
+	check("AliasTuple", size, got, err)
+}

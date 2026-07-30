@@ -78,7 +78,7 @@ func (recv AliasHTML) DecodeFromStream(s *scan.Stream) (result AliasHTML, err er
 }
 
 func (s AliasHTML) JSONSize() int {
-	return len(string(s))*2 + 2
+	return len(string(s))*6 + 2
 }
 
 func (s AliasHTML) AppendJSON(dst []byte) ([]byte, error) {
@@ -1444,7 +1444,14 @@ func (recv AliasTags) DecodeFromStream(s *scan.Stream) (result AliasTags, err er
 }
 
 func (s AliasTags) JSONSize() int {
-	return 1024
+	size := 4
+	if n := len(s); n > 0 {
+		size += n - 1
+	}
+	for i0 := range s {
+		size += len(s[i0])*2 + 2
+	}
+	return size
 }
 
 func (s AliasTags) AppendJSON(dst []byte) ([]byte, error) {
@@ -1710,7 +1717,12 @@ func (recv AliasLookup) DecodeFromStream(s *scan.Stream) (result AliasLookup, er
 }
 
 func (s AliasLookup) JSONSize() int {
-	return 1024
+	size := 4
+	size += len(s) * 24
+	for k := range s {
+		size += len(k) * 2
+	}
+	return size
 }
 
 func (s AliasLookup) AppendJSON(dst []byte) ([]byte, error) {
@@ -1889,7 +1901,12 @@ func (recv AliasTuple) DecodeFromStream(s *scan.Stream) (result AliasTuple, err 
 }
 
 func (s AliasTuple) JSONSize() int {
-	return 1024
+	size := 2
+	if n := len(s); n > 0 {
+		size += n - 1
+	}
+	size += len(s) * 20
+	return size
 }
 
 func (s AliasTuple) AppendJSON(dst []byte) ([]byte, error) {
@@ -2730,7 +2747,7 @@ func (recv NPEscaped) DecodeFromStream(s *scan.Stream) (result NPEscaped, err er
 }
 
 func (s NPEscaped) JSONSize() int {
-	return len(string(s))*2 + 2
+	return len(string(s))*6 + 2
 }
 
 func (s NPEscaped) AppendJSON(dst []byte) ([]byte, error) {
