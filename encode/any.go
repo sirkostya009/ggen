@@ -587,10 +587,27 @@ func collectFields(info *structInfo, t reflect.Type, parentIndex []int) {
 			index:     idx,
 			omitEmpty: hasTagOpt(opts, "omitempty"),
 			omitZero:  hasTagOpt(opts, "omitzero"),
-			quoted:    hasTagOpt(opts, "string"),
+			quoted:    hasTagOpt(opts, "string") && quotableKind(sf.Type),
 			inline:    hasTagOpt(opts, "inline"),
 		})
 	}
+}
+
+// quotableKind gates `,string`: numeric kinds only (through one pointer
+// level), matching generated code and jsonv2 — a bare quote wrap around a
+// string or composite emits invalid JSON, and jsonv2 dropped the v1 bool
+// stringification.
+func quotableKind(t reflect.Type) bool {
+	if t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	switch t.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
+		reflect.Float32, reflect.Float64:
+		return true
+	}
+	return false
 }
 
 func hasTagOpt(opts, want string) bool {
@@ -670,7 +687,9 @@ func appendStruct(dst []byte, rv reflect.Value, esc escapeFn) ([]byte, error) {
 		dst = append(dst, '"')
 		dst = esc(dst, f.name)
 		dst = append(dst, ':')
-		if f.quoted {
+		// nil pointer-to-number emits bare null even under ,string.
+		quoted := f.quoted && !(fv.Kind() == reflect.Pointer && fv.IsNil())
+		if quoted {
 			dst = append(dst, '"')
 		}
 		var err error
@@ -678,7 +697,7 @@ func appendStruct(dst []byte, rv reflect.Value, esc escapeFn) ([]byte, error) {
 		if err != nil {
 			return dst, err
 		}
-		if f.quoted {
+		if quoted {
 			dst = append(dst, '"')
 		}
 	}

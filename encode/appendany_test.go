@@ -255,20 +255,30 @@ func TestAppendAny_Struct_Nested(t *testing.T) {
 	checkAny(t, user{Name: "alice", Addr: addr{City: "Lviv"}})
 }
 
-// ,string option wraps numeric/bool primitives in JSON quotes.
+// ,string quotes numeric kinds only (through one pointer level), matching
+// generated code and jsonv2: bool stays bare, string keeps its single
+// encoding (a bare wrap emitted invalid JSON), nil *int stays bare null.
 func TestAppendAny_Struct_StringOpt(t *testing.T) {
 	t.Parallel()
 	type quoted struct {
-		N int  `json:"n,string"`
-		B bool `json:"b,string"`
+		N  int     `json:"n,string"`
+		F  float64 `json:"f,string"`
+		B  bool    `json:"b,string"`
+		S  string  `json:"s,string"`
+		P  *int    `json:"p,string"`
+		NP *int    `json:"np,string"`
 	}
-	out, err := AppendAny(nil, quoted{N: 42, B: true})
+	n := 7
+	in := quoted{N: 42, F: 1.5, B: true, S: "x", P: &n}
+	out, err := AppendAny(nil, in)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(out) != `{"n":"42","b":"true"}` {
-		t.Errorf(",string opt → %q", out)
+	want := `{"n":"42","f":"1.5","b":true,"s":"x","p":"7","np":null}`
+	if string(out) != want {
+		t.Errorf(",string opt:\n got %s\nwant %s", out, want)
 	}
+	checkAny(t, in)
 }
 
 func TestAppendAny_RawMessage(t *testing.T) {
