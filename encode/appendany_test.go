@@ -228,6 +228,20 @@ func TestAppendAny_Struct_Embedded(t *testing.T) {
 	checkAny(t, Derived{Base: Base{ID: "abc", Meta: "m"}, Name: "alice"})
 }
 
+// Fields promoted through a nil embedded pointer are omitted, not a panic.
+func TestAppendAny_Struct_NilEmbeddedPointer(t *testing.T) {
+	t.Parallel()
+	type Base struct {
+		ID string `json:"id"`
+	}
+	type Derived struct {
+		*Base
+		Name string `json:"name"`
+	}
+	checkAny(t, Derived{Name: "alice"})
+	checkAny(t, Derived{Base: &Base{ID: "abc"}, Name: "alice"})
+}
+
 // Nested struct fields hit the recursion path.
 func TestAppendAny_Struct_Nested(t *testing.T) {
 	t.Parallel()

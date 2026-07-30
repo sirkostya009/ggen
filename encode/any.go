@@ -628,7 +628,16 @@ func appendStruct(dst []byte, rv reflect.Value, esc escapeFn) ([]byte, error) {
 	dst = append(dst, '{')
 	first := true
 	for _, f := range info.fields {
-		fv := rv.FieldByIndex(f.index)
+		var fv reflect.Value
+		if len(f.index) == 1 {
+			fv = rv.Field(f.index[0])
+		} else {
+			var err error
+			if fv, err = rv.FieldByIndexErr(f.index); err != nil {
+				// promoted through a nil embedded pointer — stdlib omits
+				continue
+			}
+		}
 		if f.omitEmpty && isJSONEmpty(fv) {
 			continue
 		}
