@@ -447,6 +447,54 @@ var liveReaderCases = [][]string{
 	{`nu`, `ll`},
 }
 
+// TestStreamInt_LeadingZeroPeekTransientError pins the leading-zero peek's
+// error contract: a transient (non-EOF) reader error during the "01" peek
+// used to be swallowed with an un-rebased cursor, so a later refill resumed
+// the digit loop and "01" decoded as 1 with a nil error.
+func TestStreamInt_LeadingZeroPeekTransientError(t *testing.T) {
+	t.Parallel()
+	errTransient := errors.New("transient")
+	// "0" delivered, one transient error, then "1" — malformed "01" overall.
+	mk := func() *flakyReader {
+		return &flakyReader{seq: []any{"0", errTransient, "1"}}
+	}
+	var s Stream
+	s.Reset(mk(), nil)
+	if _, err := s.Int64(); !errors.Is(err, errTransient) {
+		t.Errorf("Int64: got %v, want the transient error propagated", err)
+	}
+	s.Reset(mk(), nil)
+	if _, err := s.Uint64(); !errors.Is(err, errTransient) {
+		t.Errorf("Uint64: got %v, want the transient error propagated", err)
+	}
+	// Bare "0" at EOF stays a valid number (the swallowed-EOF arm).
+	s.Reset(strings.NewReader("0"), nil)
+	if v, err := s.Int64(); err != nil || v != 0 {
+		t.Errorf("bare 0: got %d, %v", v, err)
+	}
+	s.Reset(strings.NewReader("0"), nil)
+	if v, err := s.Uint64(); err != nil || v != 0 {
+		t.Errorf("bare 0 uint: got %d, %v", v, err)
+	}
+}
+
+// flakyReader plays a sequence of string chunks and injected errors.
+type flakyReader struct {
+	seq []any // string or error
+}
+
+func (r *flakyReader) Read(p []byte) (int, error) {
+	if len(r.seq) == 0 {
+		return 0, io.EOF
+	}
+	head := r.seq[0]
+	r.seq = r.seq[1:]
+	if err, ok := head.(error); ok {
+		return 0, err
+	}
+	return copy(p, head.(string)), nil
+}
+
 // liveChunkReader delivers each chunk in one Read, then errors on any further
 // Read — a stand-in for a live socket whose next Read would block forever
 // once the value has been delivered.

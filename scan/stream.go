@@ -617,8 +617,17 @@ func (s *Stream) Int64() (int64, error) {
 	// peek one byte (refilling if the window ends here) to catch "01".
 	if s.buf[i] == '0' {
 		if i+1 >= len(s.buf) {
-			if err := s.ReadMore(i); err == nil {
-				i = 0
+			// ReadMore compacts BEFORE the Read, so rebase unconditionally
+			// (rebasing only on success left a stale cursor). Swallow only the
+			// drained-reader case — bare "0" at EOF is a valid number, the
+			// digit loop then hits the stable EOF; a transient error must
+			// propagate or the "01" rejection is silently lost when a later
+			// refill resumes the digit loop.
+			err := s.ReadMore(i)
+			i = 0
+			if err != nil && err != io.ErrUnexpectedEOF {
+				s.Pos = 0
+				return 0, err
 			}
 		}
 		if i+1 < len(s.buf) && s.buf[i+1] >= '0' && s.buf[i+1] <= '9' {
@@ -690,11 +699,14 @@ func (s *Stream) Uint64() (uint64, error) {
 	if s.buf[i] < '0' || s.buf[i] > '9' {
 		return 0, ErrBadNumber
 	}
-	// RFC 8259: no leading zeros — see Int64.
+	// RFC 8259: no leading zeros — see Int64's peek for the error contract.
 	if s.buf[i] == '0' {
 		if i+1 >= len(s.buf) {
-			if err := s.ReadMore(i); err == nil {
-				i = 0
+			err := s.ReadMore(i)
+			i = 0
+			if err != nil && err != io.ErrUnexpectedEOF {
+				s.Pos = 0
+				return 0, err
 			}
 		}
 		if i+1 < len(s.buf) && s.buf[i+1] >= '0' && s.buf[i+1] <= '9' {
