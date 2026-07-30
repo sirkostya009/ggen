@@ -83,6 +83,8 @@ func renderAliasSize(s StructInfo) string {
 	case KindStruct:
 		switch {
 		case s.AliasIface.JSONMarshaler, s.AliasIface.TextMarshaler:
+			// Delegation allocates its own result; a nonzero budget here would
+			// only add a make() alloc in front of it (and a third past-cap).
 			return "return 0\n"
 		default:
 			return "return 128\n"
@@ -208,9 +210,10 @@ func renderAliasStructAppendJSON(b *bytes.Buffer, s StructInfo) {
 	case s.AliasIface.AppendJSON:
 		fmt.Fprintf(b, "u := %s(s)\nreturn u.AppendJSON(dst)\n", s.AliasUnderlying)
 	case s.AliasIface.JSONMarshaler:
-		// dst is empty (JSONSize returns 0 for this branch) — return
-		// MarshalJSON's slice and err directly to skip the redundant copy.
-		fmt.Fprintf(b, "return %s(s).MarshalJSON()\n", s.AliasUnderlying)
+		fmt.Fprintf(b, `bs, err := %s(s).MarshalJSON()
+if err != nil { return dst, err }
+return append(dst, bs...), nil
+`, s.AliasUnderlying)
 	case s.AliasIface.TextAppender:
 		fmt.Fprintf(b, `u := %s(s)
 dst = append(dst, '"')

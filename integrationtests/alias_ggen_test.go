@@ -16,12 +16,12 @@ import (
 	"github.com/sirkostya009/ggen/validation"
 )
 
-// ggenCap_e311892f_0: prealloc cap for []NPPlain — as many elements as fit under 80 bytes,
+// ggenCap_c2108fc8_0: prealloc cap for []NPPlain — as many elements as fit under 80 bytes,
 // else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
 // else 1. See decode.PreallocCap.
-const ggenCap_e311892f_0 = (min((80/max(int(unsafe.Sizeof(*new(NPPlain))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(NPPlain))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(NPPlain))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(NPPlain))), 1)), 1)
+const ggenCap_c2108fc8_0 = (min((80/max(int(unsafe.Sizeof(*new(NPPlain))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(NPPlain))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(NPPlain))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(NPPlain))), 1)), 1)
 
-var ggenOneof_e311892f_0 = []string{"low", "medium", "high"}
+var ggenOneof_c2108fc8_0 = []string{"low", "medium", "high"}
 
 func (recv AliasString) DecodeFrom(data []byte) (result AliasString, i int, err error) {
 	result = recv
@@ -991,7 +991,229 @@ func (s OpaqueAlias) JSONSize() int {
 }
 
 func (s OpaqueAlias) AppendJSON(dst []byte) ([]byte, error) {
-	return OpaqueWithMethods(s).MarshalJSON()
+	bs, err := OpaqueWithMethods(s).MarshalJSON()
+	if err != nil {
+		return dst, err
+	}
+	return append(dst, bs...), nil
+}
+
+func (recv OpaqueParent) DecodeFrom(data []byte) (result OpaqueParent, i int, err error) {
+	result = recv
+	seenName := false
+	seenO := false
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+	}
+	i++
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		i++
+		return result, i, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
+		}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i, true)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
+			}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		}
+		i++
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch key {
+		case "name":
+			if seenName {
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"name"}}
+			}
+			seenName = true
+			if i >= len(data) || data[i] != '"' {
+				return result, i, decode.NewParseErr("name", i, scan.ErrExpectString)
+			}
+			ke := i + 1
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+				ke++
+			}
+			if ke < len(data) && data[ke] == '"' {
+				result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				result.Name, i, err = scan.String(data, i, true)
+				if err != nil {
+					return result, i, decode.NewParseErr("name", i, err)
+				}
+			}
+		case "o":
+			if seenO {
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"o"}}
+			}
+			seenO = true
+			var _n int
+			result.O, _n, err = result.O.DecodeFrom(data[i:])
+			i += _n
+			if err != nil {
+				return result, i, decode.NewParseErr("o", i, err)
+			}
+		default:
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			i++
+			return result, i, nil
+		}
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+	}
+}
+
+func (recv OpaqueParent) DecodeFromStream(s *scan.Stream) (result OpaqueParent, err error) {
+	result = recv
+	seenName := false
+	seenO := false
+	err = s.ObjectOpen()
+	if err != nil {
+		return result, decode.NewParseErr("", s.Pos, err)
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, decode.NewParseErr("", s.Pos, err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView(true)
+		if err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		switch key {
+		case "name":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("name", s.Pos, err)
+			}
+			if seenName {
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"name"}}
+			}
+			seenName = true
+			result.Name, err = s.String(true)
+			if err != nil {
+				return result, decode.NewParseErr("name", s.Pos, err)
+			}
+		case "o":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("o", s.Pos, err)
+			}
+			if seenO {
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"o"}}
+			}
+			seenO = true
+			result.O, err = result.O.DecodeFromStream(s)
+			if err != nil {
+				return result, decode.NewParseErr("o", s.Pos, err)
+			}
+		default:
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+		}
+
+		err = s.SkipSpace()
+		if err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, decode.NewParseErr("", s.Pos, err)
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, decode.NewParseErr("", s.Pos, err)
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			return result, nil
+		}
+		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+	}
+}
+
+func (s OpaqueParent) JSONSize() int {
+	size := 16
+	size += len(s.Name) * 2
+	size += s.O.JSONSize()
+	return size
+}
+
+func (s OpaqueParent) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"name\":\""...)
+	dst = encode.AppendStringNoHTML(dst, s.Name)
+	dst = append(dst, ",\"o\":"...)
+	if dst, err = s.O.AppendJSON(dst); err != nil {
+		return dst, err
+	}
+	return append(dst, '}'), nil
 }
 
 func (recv AliasTags) DecodeFrom(data []byte) (result AliasTags, i int, err error) {
@@ -2109,7 +2331,7 @@ func (recv NamedPrims) DecodeFrom(data []byte) (result NamedPrims, i int, err er
 			switch result.Pri {
 			case "low", "medium", "high":
 			default:
-				return result, i, &validation.OneOfError{Pos: i, Path: []string{"pri"}, Allowed: ggenOneof_e311892f_0, Value: result.Pri}
+				return result, i, &validation.OneOfError{Pos: i, Path: []string{"pri"}, Allowed: ggenOneof_c2108fc8_0, Value: result.Pri}
 			}
 		case "tag":
 			if seenTag {
@@ -2292,7 +2514,7 @@ func (recv NamedPrims) DecodeFromStream(s *scan.Stream) (result NamedPrims, err 
 			switch result.Pri {
 			case "low", "medium", "high":
 			default:
-				return result, &validation.OneOfError{Pos: s.Offset(), Path: []string{"pri"}, Allowed: ggenOneof_e311892f_0, Value: result.Pri}
+				return result, &validation.OneOfError{Pos: s.Offset(), Path: []string{"pri"}, Allowed: ggenOneof_c2108fc8_0, Value: result.Pri}
 			}
 		case "tag":
 			err = s.ConsumeColon()
@@ -2838,7 +3060,7 @@ func (recv NPPositions) DecodeFrom(data []byte) (result NPPositions, i int, err 
 				}
 			} else {
 				if result.S == nil {
-					result.S = make([]NPPlain, 0, ggenCap_e311892f_0)
+					result.S = make([]NPPlain, 0, ggenCap_c2108fc8_0)
 				}
 			}
 			if i < len(data) && data[i] != ']' {
@@ -3304,7 +3526,7 @@ func (recv NPPositions) DecodeFromStream(s *scan.Stream) (result NPPositions, er
 				}
 			} else {
 				if result.S == nil {
-					result.S = make([]NPPlain, 0, ggenCap_e311892f_0)
+					result.S = make([]NPPlain, 0, ggenCap_c2108fc8_0)
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {

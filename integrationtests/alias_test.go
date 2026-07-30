@@ -313,6 +313,33 @@ func TestAlias_StructDelegation_OpaqueFallback(t *testing.T) {
 }
 
 //ggen:generate
+type OpaqueParent struct {
+	Name string      `json:"name"`
+	O    OpaqueAlias `json:"o"`
+}
+
+// A delegating alias as a FIELD must append to the parent's buffer, not
+// return MarshalJSON's slice bare (that discarded everything before it).
+func TestAlias_StructDelegation_AsField(t *testing.T) {
+	t.Parallel()
+	in := OpaqueParent{Name: "bob", O: OpaqueAlias(OpaqueWithMethods{hidden: "secret"})}
+	out, err := encode.Marshal(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := `{"name":"bob","o":"secret"}`; string(out) != want {
+		t.Errorf("marshal = %s, want %s", out, want)
+	}
+	got, _, err := OpaqueParent{}.DecodeFrom(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Name != "bob" || (OpaqueWithMethods)(got.O).hidden != "secret" {
+		t.Errorf("roundtrip mismatch: %+v", got)
+	}
+}
+
+//ggen:generate
 type AliasTags []string
 
 //ggen:generate
