@@ -1633,7 +1633,7 @@ dst = append(dst, '"')
 }
 `, ref, ref)
 	case KindURL:
-		fmt.Fprintf(b, "dst = append(dst, '\"')\ndst = encode.AppendURL(dst, %s)\ndst = append(dst, '\"')\n", ref)
+		fmt.Fprintf(b, "dst = append(dst, '\"')\ndst = encode.AppendURL(dst, %s)\n", ref)
 	case KindBigInt:
 		fmt.Fprintf(b, "dst = (&%s).Append(dst, 10)\n", ref)
 	case KindBigFloat:
@@ -1959,9 +1959,9 @@ dst = append(dst, '"')
 	case KindBytes:
 		// No fold: a nil []byte emits `null` (no opening quote).
 	case KindURL:
-		// URL output never contains `"` or `\` (both percent-encoded), so
-		// it's safe to drop between JSON quotes without escaping.
-		return prefix + `"`, fmt.Sprintf("dst = encode.AppendURL(dst, %s)\ndst = append(dst, '\"')\n", ref), true
+		// AppendURL writes body + closing quote, escaping when RawQuery/
+		// Opaque/Host smuggled bytes a JSON string can't hold raw.
+		return prefix + `"`, fmt.Sprintf("dst = encode.AppendURL(dst, %s)\n", ref), true
 	case KindBigRat:
 		return prefix + `"`, fmt.Sprintf("if dst, err = (&%s).AppendText(dst); err != nil { return dst, err }\ndst = append(dst, '\"')\n", ref), true
 	case KindBigFloat:
@@ -2097,7 +2097,7 @@ func sizeContribKind(f FieldInfo, ref string) (int, string) {
 	case KindURL:
 		// Component sum, not a flat 256. +8 covers `"`+`://`+`?`+`#`+closing
 		// `"`. Decoded fields (Path/Fragment/userinfo) ×3 for percent-escape.
-		return 8, fmt.Sprintf("size += len(%s.Scheme) + len(%s.Host)*3 + len(%s.Path)*3 + len(%s.RawQuery) + len(%s.Fragment)*3 + len(%s.Opaque)\nif %s.User != nil { pw, _ := %s.User.Password(); size += (len(%s.User.Username()) + len(pw))*3 + 2 }\n",
+		return 8, fmt.Sprintf("size += len(%s.Scheme) + len(%s.Host)*3 + len(%s.Path)*3 + len(%s.RawQuery)*2 + len(%s.Fragment)*3 + len(%s.Opaque)*2\nif %s.User != nil { pw, _ := %s.User.Password(); size += (len(%s.User.Username()) + len(pw))*3 + 2 }\n",
 			ref, ref, ref, ref, ref, ref, ref, ref, ref)
 	case KindBigInt:
 		// log10(2^bits) ≈ bits/3, plus sign/safety.
@@ -2266,7 +2266,7 @@ func sizeMapContrib(f FieldInfo, ref string) (int, string) {
 	case KindNetipPrefix:
 		b.WriteString("if v.Addr().Is4() { size += 21 } else { size += 45 }\n")
 	case KindURL:
-		b.WriteString("size += len(v.Scheme) + len(v.Host)*3 + len(v.Path)*3 + len(v.RawQuery) + len(v.Fragment)*3 + len(v.Opaque) + 8\n")
+		b.WriteString("size += len(v.Scheme) + len(v.Host)*3 + len(v.Path)*3 + len(v.RawQuery)*2 + len(v.Fragment)*3 + len(v.Opaque)*2 + 8\n")
 		b.WriteString("if v.User != nil { pw, _ := v.User.Password(); size += (len(v.User.Username()) + len(pw))*3 + 2 }\n")
 	default:
 		// nested slice/map, KindAny, …: flat estimate.

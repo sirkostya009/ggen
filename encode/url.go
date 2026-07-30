@@ -6,10 +6,19 @@ package encode
 
 import "net/url"
 
-// AppendURL appends u's wire form to dst, byte-for-byte equal to
-// url.URL.String, with zero allocation. The output never contains a raw `"`
-// or `\`, so it's safe to drop between JSON quotes.
+// AppendURL appends u's wire form plus the closing `"` — the CALLER writes
+// the opening `"` (AppendString convention). The body is byte-for-byte
+// url.URL.String, JSON-escaped when it needs it: RawQuery and Opaque pass
+// through String verbatim and Host's char class admits `"`, so a URL ggen
+// itself decoded can carry bytes that would otherwise break the output.
 func AppendURL(dst []byte, u url.URL) []byte {
+	from := len(dst)
+	return closeJSONString(appendURLRaw(dst, u), from)
+}
+
+// appendURLRaw appends u's wire form, byte-for-byte equal to url.URL.String,
+// with zero allocation.
+func appendURLRaw(dst []byte, u url.URL) []byte {
 	entry := len(dst)
 	if u.Scheme != "" {
 		dst = append(dst, u.Scheme...)
@@ -73,7 +82,10 @@ func AppendURL(dst []byte, u url.URL) []byte {
 	}
 	if u.Fragment != "" {
 		dst = append(dst, '#')
-		if u.RawFragment != "" && validURLEncodedFragment(u.RawFragment) {
+		// Mirror stdlib EscapedFragment: RawFragment wins only when it
+		// percent-decodes back to Fragment (stale RawFragment must not win).
+		if u.RawFragment != "" && validURLEncodedFragment(u.RawFragment) &&
+			urlUnescapesTo(u.RawFragment, u.Fragment) {
 			dst = append(dst, u.RawFragment...)
 		} else {
 			dst = appendURLEscape(dst, u.Fragment, urlEncodeFragment)

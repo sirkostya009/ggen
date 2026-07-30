@@ -1,15 +1,16 @@
 package encode
 
 import (
+	"encoding/json"
 	"net/url"
 	"strings"
 	"testing"
 )
 
-// TestAppendURL pins AppendURL byte-for-byte against
-// (*url.URL).String for a representative cross-section of URL shapes.
-// The two outputs must match exactly — ggen-emitted code uses
-// AppendURL in place of String() to avoid the per-call alloc, so any
+// TestAppendURL pins AppendURL against (*url.URL).String for a
+// representative cross-section of URL shapes: the body must match String()
+// byte-for-byte (plus the closing quote AppendURL owns) — ggen-emitted code
+// uses AppendURL in place of String() to avoid the per-call alloc, so any
 // divergence is a silent wire-format regression.
 func TestAppendURL(t *testing.T) {
 	t.Parallel()
@@ -51,7 +52,7 @@ func TestAppendURL(t *testing.T) {
 				}
 				u = *p
 			}
-			want := u.String()
+			want := u.String() + `"`
 			got := string(AppendURL(nil, u))
 			if got != want {
 				t.Errorf("AppendURL(%q) mismatch\n want: %q\n  got: %q", c.raw, want, got)
@@ -68,7 +69,7 @@ func TestAppendURL_AppendsNotOverwrites(t *testing.T) {
 	u, _ := url.Parse("https://example.com/x")
 	dst := []byte("prefix:")
 	got := AppendURL(dst, *u)
-	want := "prefix:" + u.String()
+	want := "prefix:" + u.String() + `"`
 	if string(got) != want {
 		t.Errorf("expected %q, got %q", want, got)
 	}
@@ -105,7 +106,7 @@ func TestAppendURL_Construction(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
-			want := c.u.String()
+			want := c.u.String() + `"`
 			got := string(AppendURL(nil, c.u))
 			if got != want {
 				t.Errorf("mismatch\n want: %q\n  got: %q", want, got)
@@ -136,10 +137,52 @@ func TestAppendURL_LongRandomized(t *testing.T) {
 		if err != nil {
 			t.Fatalf("case %d parse: %v", i, err)
 		}
-		want := u.String()
+		want := u.String() + `"`
 		got := string(AppendURL(nil, *u))
 		if got != want {
 			t.Errorf("case %d mismatch\n want: %q\n  got: %q", i, want, got)
 		}
+	}
+}
+
+// A URL ggen itself accepts can smuggle JSON-breaking bytes: RawQuery and
+// Opaque pass through String verbatim, Host's char class admits `"`, and a
+// stale RawFragment used to win over Fragment. AppendURL must emit a valid
+// JSON string whose unquoted body still equals String().
+func TestAppendURL_JSONSafety(t *testing.T) {
+	t.Parallel()
+	parse := func(raw string) url.URL {
+		u, err := url.Parse(raw)
+		if err != nil {
+			t.Fatalf("parse %q: %v", raw, err)
+		}
+		return *u
+	}
+	cases := []struct {
+		name string
+		u    url.URL
+	}{
+		{"quote_in_query", parse(`http://x/?q="`)},
+		{"backslash_in_query", parse(`http://x/?q=\a`)},
+		{"quote_in_opaque", url.URL{Scheme: "tel", Opaque: `+1"555`}},
+		{"quote_in_host", url.URL{Scheme: "https", Host: `a"b`}},
+		{"stale_rawfragment", url.URL{Scheme: "https", Host: "x", Path: "/", Fragment: "new", RawFragment: "old%20frag"}},
+		{"consistent_rawfragment", url.URL{Scheme: "https", Host: "x", Path: "/", Fragment: "a b", RawFragment: "a%20b"}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			got := append([]byte{'"'}, AppendURL(nil, c.u)...)
+			if !json.Valid(got) {
+				t.Fatalf("invalid JSON: %s", got)
+			}
+			var body string
+			if err := json.Unmarshal(got, &body); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			if want := c.u.String(); body != want {
+				t.Errorf("body = %q, want String() %q", body, want)
+			}
+		})
 	}
 }

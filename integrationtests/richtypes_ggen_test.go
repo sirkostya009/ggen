@@ -480,7 +480,7 @@ func (s RichTypes) JSONSize() int {
 	} else {
 		size += 4
 	}
-	size += len(s.Site.Scheme) + len(s.Site.Host)*3 + len(s.Site.Path)*3 + len(s.Site.RawQuery) + len(s.Site.Fragment)*3 + len(s.Site.Opaque)
+	size += len(s.Site.Scheme) + len(s.Site.Host)*3 + len(s.Site.Path)*3 + len(s.Site.RawQuery)*2 + len(s.Site.Fragment)*3 + len(s.Site.Opaque)*2
 	if s.Site.User != nil {
 		pw, _ := s.Site.User.Password()
 		size += (len(s.Site.User.Username())+len(pw))*3 + 2
@@ -529,5 +529,5 @@ func (s RichTypes) AppendJSON(dst []byte) ([]byte, error) {
 	}
 	dst = append(dst, ",\"site\":\""...)
 	dst = encode.AppendURL(dst, s.Site)
-	return append(dst, "\"}"...), nil
+	return append(dst, '}'), nil
 }
