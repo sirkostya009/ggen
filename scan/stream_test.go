@@ -3,6 +3,7 @@ package scan
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"reflect"
 	"strings"
@@ -406,6 +407,66 @@ func TestStreamCaptureValue(t *testing.T) {
 			}
 		}
 	})
+
+	t.Run("live reader", func(t *testing.T) {
+		t.Parallel()
+		// A keep-alive connection delivers the whole value and then has
+		// nothing in flight — the capture must complete without another
+		// Read (which would block forever; liveChunkReader errors instead).
+		for _, chunks := range liveReaderCases {
+			want := strings.Join(chunks, "")
+			var s Stream
+			s.Reset(&liveChunkReader{chunks: chunks}, nil)
+			got, err := s.CaptureValue()
+			if err != nil {
+				t.Fatalf("%q: %v", want, err)
+			}
+			if string(got) != want {
+				t.Fatalf("%q: got %q", want, got)
+			}
+		}
+		// A bare number at the window edge is genuinely not final — "123"
+		// may continue "1234", so the lookahead Read is required and a live
+		// reader must deliver a delimiter or EOF. Pinned as inherent.
+		var s Stream
+		s.Reset(&liveChunkReader{chunks: []string{`123`}}, nil)
+		if _, err := s.CaptureValue(); !errors.Is(err, errBlockingRead) {
+			t.Fatalf("number: got %v, want the blocking-read probe error", err)
+		}
+	})
+}
+
+// liveReaderCases: each entry is one value delivered across that many Reads.
+// Shared with the SIMD tier twin (simd_skip_stream_test.go).
+var liveReaderCases = [][]string{
+	{`{"a":1}`},
+	{`{"a`, `":1}`},
+	{`"abc`, `def"`},
+	{`[1,`, `2,3]`},
+	{`tr`, `ue`},
+	{`nu`, `ll`},
+}
+
+// liveChunkReader delivers each chunk in one Read, then errors on any further
+// Read — a stand-in for a live socket whose next Read would block forever
+// once the value has been delivered.
+type liveChunkReader struct {
+	chunks []string
+}
+
+var errBlockingRead = errors.New("Read after value delivered — a live reader would block here")
+
+func (r *liveChunkReader) Read(p []byte) (int, error) {
+	if len(r.chunks) == 0 {
+		return 0, errBlockingRead
+	}
+	n := copy(p, r.chunks[0])
+	if n < len(r.chunks[0]) {
+		r.chunks[0] = r.chunks[0][n:]
+	} else {
+		r.chunks = r.chunks[1:]
+	}
+	return n, nil
 }
 
 // TestStreamSkipValue_MatchesBytes pins stream SkipValue against the bytes

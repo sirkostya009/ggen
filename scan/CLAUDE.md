@@ -242,22 +242,30 @@ sites), `CaptureValue` grows the window (grow-only `ReadMore(0)`, which needs no
 flag) until the value is whole, then locates its end with the **bytes-path**
 `SkipValue` — reused verbatim, so there is NO streaming capture-skip and no new
 SIMD skip: tiers are thin wrappers (`CaptureValueAVX{,2,512}`) calling the bytes
-`SkipValueAVX*`. It trusts the skip's end only when a byte past it is buffered
-(`end < len(buf)`) or the reader has drained (local `eof`, set when ReadMore
-returns `io.ErrUnexpectedEOF`), else refills — so a number `123` at the window
-edge isn't cut short before a possible `1234`. A skip ERROR on a partial window
+`SkipValueAVX*`. It trusts the skip's end when a byte past it is buffered
+(`end < len(buf)`), the reader has drained (local `eof`, set when ReadMore
+returns `io.ErrUnexpectedEOF`), **or the value is self-delimiting** (first
+non-WS byte is not `-`/digit — closing quote/bracket/fixed literal make the
+end final even at the window edge); only a NUMBER `123` at the edge refills,
+since it could continue `1234`. A skip ERROR on a partial window
 is indistinguishable from truncation (no error position), so it also means "read
 more" and only surfaces once drained — malformed input buffers the stream
 remainder before erroring. The FIRST refill compacts the consumed prefix (`ReadMore(start)`,
 rebase `start = 0`) so the window grows for the value only, never dragging dead
 bytes through each doubling; entry deliberately does not compact (the value may
 already be fully buffered and ReadMore always Reads — could block a live socket).
-Fills spare capacity between re-skips so a byte-dribble reader stays O(n) not
-O(n²). Returns a buffer alias (valid until the next Stream op — RawMessage copies
+Exactly ONE Read per re-skip: once the arrived bytes may complete the value, a
+second Read on a momentarily-drained live reader (socket with the value fully
+delivered, nothing in flight) would block forever — the old fill-spare-
+capacity-then-re-skip loop was that hang. Eager readers (file, bytes.Reader)
+fill the whole spare tail per Read, so their skips still land on doubling
+windows (O(n)); a short-read regime re-skips per delivery — the price of
+liveness. Returns a buffer alias (valid until the next Stream op — RawMessage copies
 it, `json.Unmarshal`/`SetString` consume it in place). The whole stream skip now
 compacts unconditionally — the `if s.Shift` gates are gone, replaced by plain
 rebases. Pinned by `TestStreamCaptureValue` (correctness × chunk sizes, trailing
-input, prefix-compaction cap bound, EOF errors) + the bytes-vs-stream fuzzer.
+input, prefix-compaction cap bound, EOF errors, live-reader liveness incl. the
+number-at-edge exception) + the bytes-vs-stream fuzzer.
 
 **Dispatch-loop shift points.** Generated code adds two: `ReadMore(s.Pos); s.Pos =
 0` after `ObjectOpen+SkipSpace`, and after per-iteration value decode + SkipSpace.

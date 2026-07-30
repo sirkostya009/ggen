@@ -644,9 +644,15 @@ func (s *Stream) CaptureValueAVX() ([]byte, error) {
 	eof := false
 	for {
 		end, err := SkipValueAVX(s.buf, start)
-		if err == nil && (end < len(s.buf) || eof) {
-			s.Pos = end
-			return s.buf[start:end], nil
+		if err == nil {
+			if end < len(s.buf) || eof {
+				s.Pos = end
+				return s.buf[start:end], nil
+			}
+			if c := s.buf[SkipSpace(s.buf, start)]; c != '-' && (c < '0' || c > '9') {
+				s.Pos = end
+				return s.buf[start:end], nil
+			}
 		}
 		if eof {
 			s.Pos = start
@@ -660,15 +666,6 @@ func (s *Stream) CaptureValueAVX() ([]byte, error) {
 			eof = true
 		}
 		start = 0
-		for !eof && len(s.buf) < cap(s.buf) {
-			if e := s.ReadMore(0); e != nil {
-				if e != io.ErrUnexpectedEOF {
-					s.Pos = 0
-					return nil, e
-				}
-				eof = true
-			}
-		}
 	}
 }
 
@@ -677,9 +674,15 @@ func (s *Stream) CaptureValueAVX2() ([]byte, error) {
 	eof := false
 	for {
 		end, err := SkipValueAVX2(s.buf, start)
-		if err == nil && (end < len(s.buf) || eof) {
-			s.Pos = end
-			return s.buf[start:end], nil
+		if err == nil {
+			if end < len(s.buf) || eof {
+				s.Pos = end
+				return s.buf[start:end], nil
+			}
+			if c := s.buf[SkipSpace(s.buf, start)]; c != '-' && (c < '0' || c > '9') {
+				s.Pos = end
+				return s.buf[start:end], nil
+			}
 		}
 		if eof {
 			s.Pos = start
@@ -693,15 +696,6 @@ func (s *Stream) CaptureValueAVX2() ([]byte, error) {
 			eof = true
 		}
 		start = 0
-		for !eof && len(s.buf) < cap(s.buf) {
-			if e := s.ReadMore(0); e != nil {
-				if e != io.ErrUnexpectedEOF {
-					s.Pos = 0
-					return nil, e
-				}
-				eof = true
-			}
-		}
 	}
 }
 
@@ -710,9 +704,15 @@ func (s *Stream) CaptureValueAVX512() ([]byte, error) {
 	eof := false
 	for {
 		end, err := SkipValueAVX512(s.buf, start)
-		if err == nil && (end < len(s.buf) || eof) {
-			s.Pos = end
-			return s.buf[start:end], nil
+		if err == nil {
+			if end < len(s.buf) || eof {
+				s.Pos = end
+				return s.buf[start:end], nil
+			}
+			if c := s.buf[SkipSpace(s.buf, start)]; c != '-' && (c < '0' || c > '9') {
+				s.Pos = end
+				return s.buf[start:end], nil
+			}
 		}
 		if eof {
 			s.Pos = start
@@ -726,15 +726,6 @@ func (s *Stream) CaptureValueAVX512() ([]byte, error) {
 			eof = true
 		}
 		start = 0
-		for !eof && len(s.buf) < cap(s.buf) {
-			if e := s.ReadMore(0); e != nil {
-				if e != io.ErrUnexpectedEOF {
-					s.Pos = 0
-					return nil, e
-				}
-				eof = true
-			}
-		}
 	}
 }
 

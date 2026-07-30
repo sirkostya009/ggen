@@ -76,3 +76,34 @@ func TestStreamSkipValueSIMD_Parity(t *testing.T) {
 		}
 	}
 }
+
+// Tier twin of TestStreamCaptureValue's "live reader" subtest — the fill loop
+// that blocked on a drained live reader was copied into every tier wrapper.
+func TestStreamCaptureValueSIMD_LiveReader(t *testing.T) {
+	t.Parallel()
+	tiers := []struct {
+		name string
+		fn   func(*Stream) ([]byte, error)
+	}{
+		{"AVX", (*Stream).CaptureValueAVX},
+		{"AVX2", (*Stream).CaptureValueAVX2},
+		{"AVX512", (*Stream).CaptureValueAVX512},
+	}
+	for _, tier := range tiers {
+		t.Run(tier.name, func(t *testing.T) {
+			t.Parallel()
+			for _, chunks := range liveReaderCases {
+				want := strings.Join(chunks, "")
+				var s Stream
+				s.Reset(&liveChunkReader{chunks: append([]string(nil), chunks...)}, nil)
+				got, err := tier.fn(&s)
+				if err != nil {
+					t.Fatalf("%q: %v", want, err)
+				}
+				if string(got) != want {
+					t.Fatalf("%q: got %q", want, got)
+				}
+			}
+		})
+	}
+}

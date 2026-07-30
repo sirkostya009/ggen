@@ -978,12 +978,22 @@ func (s *Stream) CaptureValue() ([]byte, error) {
 	eof := false
 	for {
 		end, err := SkipValue(s.buf, start)
-		// Trust the end only when a byte past it is buffered (end < len) or the
-		// stream is drained — else a value ending at the window edge (e.g. a
-		// number "123" that may continue "1234") could be cut short.
-		if err == nil && (end < len(s.buf) || eof) {
-			s.Pos = end
-			return s.buf[start:end], nil
+		// Trust the end when a byte past it is buffered (end < len) or the
+		// stream is drained — else a NUMBER ending at the window edge (e.g.
+		// "123" that may continue "1234") could be cut short. Every other
+		// value is self-delimiting (closing quote/bracket, fixed literal),
+		// so its clean end is final even at the edge: demanding a lookahead
+		// byte there would block forever on a live reader (socket) that has
+		// delivered the whole value and has nothing in flight.
+		if err == nil {
+			if end < len(s.buf) || eof {
+				s.Pos = end
+				return s.buf[start:end], nil
+			}
+			if c := s.buf[SkipSpace(s.buf, start)]; c != '-' && (c < '0' || c > '9') {
+				s.Pos = end
+				return s.buf[start:end], nil
+			}
 		}
 		if eof {
 			s.Pos = start
@@ -994,6 +1004,11 @@ func (s *Stream) CaptureValue() ([]byte, error) {
 		// dragged through every grow. start rebases to 0; later refills are
 		// pure grow. Entry deliberately does NOT compact — the value may
 		// already be fully buffered, and ReadMore always Reads (could block).
+		// One Read, then re-skip: once these bytes may complete the value, a
+		// second Read on a momentarily-drained live reader would block. An
+		// eager reader (file, bytes.Reader) fills the whole spare tail per
+		// Read, so its skips still land on a doubling window; a short-read
+		// regime re-skips per delivery — the price of liveness.
 		if e := s.ReadMore(start); e != nil {
 			if e != io.ErrUnexpectedEOF {
 				s.Pos = 0
@@ -1002,17 +1017,6 @@ func (s *Stream) CaptureValue() ([]byte, error) {
 			eof = true
 		}
 		start = 0
-		// Fill the spare capacity before re-skipping, so a byte-dribble
-		// reader can't make the re-skip O(n²): skips land on a doubling window.
-		for !eof && len(s.buf) < cap(s.buf) {
-			if e := s.ReadMore(0); e != nil {
-				if e != io.ErrUnexpectedEOF {
-					s.Pos = 0
-					return nil, e
-				}
-				eof = true
-			}
-		}
 	}
 }
 
