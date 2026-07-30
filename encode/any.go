@@ -531,6 +531,7 @@ func appendReflectValue(dst []byte, rv reflect.Value, kind reflect.Kind, esc esc
 type fieldInfo struct {
 	name      string
 	index     []int
+	tagged    bool // name came from an explicit json tag
 	omitEmpty bool
 	omitZero  bool
 	quoted    bool // ,string — wrap primitive value in JSON string
@@ -551,8 +552,65 @@ func cachedStructInfo(t reflect.Type) *structInfo {
 	}
 	info := &structInfo{}
 	collectFields(info, t, nil)
+	info.fields = resolveFieldConflicts(info.fields)
 	structInfoCache.Store(t, info)
 	return info
+}
+
+// resolveFieldConflicts applies stdlib's dominant-field rules to the
+// flattened set: per JSON name the shallowest field wins; at equal depth a
+// single tagged field beats untagged; still-ambiguous names drop entirely.
+// Without it a field shadowing an embedded field emitted duplicate keys.
+func resolveFieldConflicts(fields []fieldInfo) []fieldInfo {
+	byName := make(map[string][]int, len(fields))
+	for i, f := range fields {
+		byName[f.name] = append(byName[f.name], i)
+	}
+	if len(byName) == len(fields) {
+		return fields
+	}
+	drop := make(map[int]bool)
+	for _, idxs := range byName {
+		if len(idxs) == 1 {
+			continue
+		}
+		minD := len(fields[idxs[0]].index)
+		for _, i := range idxs[1:] {
+			minD = min(minD, len(fields[i].index))
+		}
+		winner := -1
+		taggedAtMin := -1
+		nShallow, nTagged := 0, 0
+		for _, i := range idxs {
+			if len(fields[i].index) != minD {
+				continue
+			}
+			nShallow++
+			winner = i
+			if fields[i].tagged {
+				nTagged++
+				taggedAtMin = i
+			}
+		}
+		if nShallow > 1 {
+			winner = -1
+			if nTagged == 1 {
+				winner = taggedAtMin
+			}
+		}
+		for _, i := range idxs {
+			if i != winner {
+				drop[i] = true
+			}
+		}
+	}
+	out := fields[:0]
+	for i, f := range fields {
+		if !drop[i] {
+			out = append(out, f)
+		}
+	}
+	return out
 }
 
 func collectFields(info *structInfo, t reflect.Type, parentIndex []int) {
@@ -579,12 +637,14 @@ func collectFields(info *structInfo, t reflect.Type, parentIndex []int) {
 		if !sf.IsExported() {
 			continue
 		}
-		if name == "" {
+		tagged := name != ""
+		if !tagged {
 			name = sf.Name
 		}
 		info.fields = append(info.fields, fieldInfo{
 			name:      name,
 			index:     idx,
+			tagged:    tagged,
 			omitEmpty: hasTagOpt(opts, "omitempty"),
 			omitZero:  hasTagOpt(opts, "omitzero"),
 			quoted:    hasTagOpt(opts, "string") && quotableKind(sf.Type),

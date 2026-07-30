@@ -242,6 +242,40 @@ func TestAppendAny_Struct_NilEmbeddedPointer(t *testing.T) {
 	checkAny(t, Derived{Base: &Base{ID: "abc"}, Name: "alice"})
 }
 
+// Field shadowing an embedded field: stdlib dominant-field rules — the
+// shallowest wins, equal-depth tagged beats untagged, ambiguous names drop.
+// Flattening used to emit BOTH keys.
+func TestAppendAny_Struct_EmbeddedShadowing(t *testing.T) {
+	t.Parallel()
+	type Base struct {
+		ID   int    `json:"id"`
+		Note string `json:"note"`
+	}
+	type Outer struct {
+		Base
+		ID int `json:"id"` // shadows Base.ID
+	}
+	out, err := AppendAny(nil, Outer{Base: Base{ID: 1, Note: "n"}, ID: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := `{"note":"n","id":2}`; string(out) != want {
+		t.Errorf("shadowed embed:\n got %s\nwant %s", out, want)
+	}
+	checkAny(t, Outer{Base: Base{ID: 1, Note: "n"}, ID: 2})
+
+	// Two embeds carrying the same name at equal depth — ambiguous, dropped.
+	type Other struct {
+		ID int `json:"id"`
+	}
+	type Clash struct {
+		Base
+		Other
+		Name string `json:"name"`
+	}
+	checkAny(t, Clash{Base: Base{ID: 1, Note: "n"}, Other: Other{ID: 2}, Name: "x"})
+}
+
 // Nested struct fields hit the recursion path.
 func TestAppendAny_Struct_Nested(t *testing.T) {
 	t.Parallel()
