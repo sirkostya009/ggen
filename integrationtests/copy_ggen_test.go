@@ -12,25 +12,17 @@ import (
 	"github.com/sirkostya009/ggen/validation"
 )
 
-// ggenCap_66530ca8_0: prealloc cap for []CopyDoc — as many elements as fit under 80 bytes,
-// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
-// else 1. See decode.PreallocCap.
-const ggenCap_66530ca8_0 = (min((80/max(int(unsafe.Sizeof(*new(CopyDoc))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(CopyDoc))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(CopyDoc))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(CopyDoc))), 1)), 1)
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_CopyDoc_Children_CopyDoc = (min((80/max(int(unsafe.Sizeof(*new(CopyDoc))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(CopyDoc))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(CopyDoc))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(CopyDoc))), 1)), 1)
 
-// ggenCap_66530ca8_1: prealloc cap for []CopyRef — as many elements as fit under 80 bytes,
-// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
-// else 1. See decode.PreallocCap.
-const ggenCap_66530ca8_1 = (min((80/max(int(unsafe.Sizeof(*new(CopyRef))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(CopyRef))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(CopyRef))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(CopyRef))), 1)), 1)
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_CopyDoc_Refs_CopyRef = (min((80/max(int(unsafe.Sizeof(*new(CopyRef))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(CopyRef))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(CopyRef))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(CopyRef))), 1)), 1)
 
-// ggenCap_66530ca8_2: prealloc cap for []*CopyRef — as many elements as fit under 80 bytes,
-// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
-// else 1. See decode.PreallocCap.
-const ggenCap_66530ca8_2 = (min((80/max(int(unsafe.Sizeof(*new(*CopyRef))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(*CopyRef))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(*CopyRef))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(*CopyRef))), 1)), 1)
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_CopyDoc_Refs_PtrCopyRef = (min((80/max(int(unsafe.Sizeof(*new(*CopyRef))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(*CopyRef))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(*CopyRef))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(*CopyRef))), 1)), 1)
 
-// ggenCap_66530ca8_3: prealloc cap for []string — as many elements as fit under 80 bytes,
-// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
-// else 1. See decode.PreallocCap.
-const ggenCap_66530ca8_3 = (min((80/max(int(unsafe.Sizeof(*new(string))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(string))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(string))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(string))), 1)), 1)
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_CopyDoc_Tags_string = (min((80/max(int(unsafe.Sizeof(*new(string))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(string))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(string))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(string))), 1)), 1)
 
 func (recv CopyDoc) DecodeFrom(data []byte) (CopyDoc, int, error) {
 	return recv.decodeFromDepth(data, 0)
@@ -132,7 +124,7 @@ func (recv CopyDoc) decodeFromDepth(data []byte, _depth int) (result CopyDoc, i 
 				}
 			} else {
 				if result.Children == nil {
-					result.Children = make([]CopyDoc, 0, ggenCap_66530ca8_0)
+					result.Children = make([]CopyDoc, 0, ggenCap_CopyDoc_Children_CopyDoc)
 				}
 			}
 			if i < len(data) && data[i] != ']' {
@@ -339,9 +331,9 @@ func (recv CopyDoc) decodeFromDepth(data []byte, _depth int) (result CopyDoc, i 
 				}
 			} else {
 				if result.Refs == nil {
-					result.Refs = make([]*CopyRef, 0, ggenCap_66530ca8_2)
+					result.Refs = make([]*CopyRef, 0, ggenCap_CopyDoc_Refs_PtrCopyRef)
 				}
-				slab0 = make([]CopyRef, 0, ggenCap_66530ca8_1)
+				slab0 = make([]CopyRef, 0, ggenCap_CopyDoc_Refs_CopyRef)
 			}
 			if i < len(data) && data[i] != ']' {
 				for {
@@ -414,7 +406,7 @@ func (recv CopyDoc) decodeFromDepth(data []byte, _depth int) (result CopyDoc, i 
 				}
 			} else {
 				if result.Tags == nil {
-					result.Tags = make([]string, 0, ggenCap_66530ca8_3)
+					result.Tags = make([]string, 0, ggenCap_CopyDoc_Tags_string)
 				}
 			}
 			if i < len(data) && data[i] != ']' {
@@ -590,7 +582,7 @@ func (recv CopyDoc) decodeFromStreamDepth(s *scan.Stream, _depth int) (result Co
 				}
 			} else {
 				if result.Children == nil {
-					result.Children = make([]CopyDoc, 0, ggenCap_66530ca8_0)
+					result.Children = make([]CopyDoc, 0, ggenCap_CopyDoc_Children_CopyDoc)
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {
@@ -830,9 +822,9 @@ func (recv CopyDoc) decodeFromStreamDepth(s *scan.Stream, _depth int) (result Co
 				}
 			} else {
 				if result.Refs == nil {
-					result.Refs = make([]*CopyRef, 0, ggenCap_66530ca8_2)
+					result.Refs = make([]*CopyRef, 0, ggenCap_CopyDoc_Refs_PtrCopyRef)
 				}
-				slab0 = make([]CopyRef, 0, ggenCap_66530ca8_1)
+				slab0 = make([]CopyRef, 0, ggenCap_CopyDoc_Refs_CopyRef)
 			}
 			for s.Bytes()[s.Pos] != ']' {
 				if s.Pos >= len(s.Bytes()) {
@@ -959,7 +951,7 @@ func (recv CopyDoc) decodeFromStreamDepth(s *scan.Stream, _depth int) (result Co
 				}
 			} else {
 				if result.Tags == nil {
-					result.Tags = make([]string, 0, ggenCap_66530ca8_3)
+					result.Tags = make([]string, 0, ggenCap_CopyDoc_Tags_string)
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {

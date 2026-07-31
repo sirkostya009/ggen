@@ -12,7 +12,7 @@ import (
 // output as a []byte for in-memory assertions.
 func generate(pkg string, structs []StructInfo) ([]byte, error) {
 	var buf bytes.Buffer
-	if err := generateTo(&buf, pkg, structs); err != nil {
+	if err := generateTo(&buf, pkg, pkg, structs); err != nil {
 		return nil, err
 	}
 	return buf.Bytes(), nil

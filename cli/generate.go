@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"fmt"
 	"go/format"
-	"hash/fnv"
 	"io"
 	"maps"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
@@ -130,8 +130,8 @@ func streamDecodeCallFor(typeName string) string {
 	return "DecodeFromStream(s)"
 }
 
-func generateTo(w io.Writer, pkg string, structs []StructInfo) error {
-	resetOneofRegistry(structs)
+func generateTo(w io.Writer, pkg, scope string, structs []StructInfo) error {
+	resetOneofRegistry(scope)
 	resetCapRegistry()
 	// generatedTypes is seeded by the caller with every struct in the same Go
 	// package across ALL build-tag buckets, so a cross-bucket nested-struct
@@ -261,6 +261,9 @@ func writePrelude(buf *bytes.Buffer, pkg, buildTag string, stdlib, third []strin
 // DecodeFrom + DecodeFromStream + JSONSize + AppendJSON, plus optional
 // MarshalJSON / UnmarshalJSON hooks.
 func renderStructMethods(buf *bytes.Buffer, s StructInfo) {
+	// Cap-const names carry the struct they were registered under
+	// (ggenCap_<Struct>_<Field>_<elemType>) — see capName.
+	currentStructName = s.Name
 	renderDecode(buf, s)
 
 	renderStreamDecode(buf, s)
@@ -937,27 +940,41 @@ var oneofRegistry struct {
 	prefix string
 }
 
-func resetOneofRegistry(structs []StructInfo) {
+func resetOneofRegistry(scope string) {
 	oneofRegistry.names = map[string]string{}
 	oneofRegistry.decls = nil
-	oneofRegistry.prefix = oneofScopePrefix(structs)
+	oneofRegistry.prefix = emitScope(scope)
 }
 
-// oneofScopePrefix hashes the names of the structs in this emit pass. A struct
-// is declared once per package, so any two output files of one package hash
-// differently, and regenerating the same file reproduces the same name.
-func oneofScopePrefix(structs []StructInfo) string {
-	names := make([]string, 0, len(structs))
-	for _, s := range structs {
-		names = append(names, s.Name)
+// emitScope derives the registry-name prefix from the OUTPUT FILENAME —
+// distinct per file within a package by construction, and stable across
+// struct additions/removals (the old struct-name-set hash rehashed every
+// ggenCap/ggenOneof on any set change). The generated-file suffixes are
+// noise, so `extra_ggen_test.go` scopes as just `extra`.
+func emitScope(scope string) string {
+	base := strings.TrimSuffix(filepath.Base(scope), ".go")
+	base = strings.TrimSuffix(base, "_test")
+	base = strings.TrimSuffix(base, "_ggen")
+	return sanitizeIdent(base)
+}
+
+// sanitizeIdent maps an arbitrary type/file string onto identifier chars:
+// alnum kept, `*` spelled Ptr, every other rune becomes exactly one `_` —
+// no collapsing, so distinct keys stay distinct (`[]int` → `__int` vs
+// `int`; a collision would redeclare the const, loud at compile time).
+func sanitizeIdent(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		switch {
+		case r == '*':
+			b.WriteString("Ptr")
+		case r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9':
+			b.WriteRune(r)
+		default:
+			b.WriteByte('_')
+		}
 	}
-	slices.Sort(names)
-	h := fnv.New32a()
-	for _, n := range names {
-		h.Write([]byte(n))
-		h.Write([]byte{0})
-	}
-	return fmt.Sprintf("%08x", h.Sum32())
+	return b.String()
 }
 
 func registerOneOf(parts []string) string {
@@ -2543,10 +2560,11 @@ func preallocCap(f FieldInfo) (slice, slab string) {
 			maxlen = n
 		}
 	}
-	elem := capFor(f.ElemType, maxlen)
+	scope := capScope(f)
+	elem := capFor(scope, f.ElemType, maxlen)
 	if f.ElemPointer {
 		// `[]*T`: the slice holds pointers, the slab holds T values.
-		return capFor("*"+f.ElemType, maxlen), elem
+		return capFor(scope, "*"+f.ElemType, maxlen), elem
 	}
 	switch f.ElemKind {
 	case KindSlice, KindMap:
@@ -2578,16 +2596,30 @@ func preallocCap(f FieldInfo) (slice, slab string) {
 //	B   = 512 / S                    // fits within one 512-byte span
 //	sel = min(A, 2) / 2              // 1 when A >= 2, else 0
 //	cap = sel*A + (1-sel)*max(B, 1)
-func capFor(elemType string, maxlen int) string {
-	base := capForSize(elemType)
+//
+// capScope names the cap consts a field registers: the struct being rendered
+// plus the field's Go name (empty for top-level container aliases, whose
+// struct part IS the alias name). Struct names are package-unique, so the
+// names can't collide across files without any hashing.
+func capScope(f FieldInfo) string {
+	if f.GoName == "" {
+		return currentStructName
+	}
+	return currentStructName + "_" + sanitizeIdent(f.GoName)
+}
+
+var currentStructName string
+
+func capFor(scope, elemType string, maxlen int) string {
+	base := capForSize(scope, elemType)
 	if maxlen < 0 {
 		return base
 	}
-	key := fmt.Sprintf("%s/%d", elemType, maxlen)
+	key := fmt.Sprintf("%s\x00%s/%d", scope, elemType, maxlen)
 	if name, ok := capRegistry.names[key]; ok {
 		return name
 	}
-	name := capName()
+	name := capName(scope, fmt.Sprintf("%s_%d", elemType, maxlen))
 	capRegistry.names[key] = name
 	// fits = 1 when maxlen elements stay within the 512-byte span budget.
 	fits := fmt.Sprintf("(1 - min((%d*%s)/(%s+1), 1))", maxlen, sizeExpr(elemType), spanBudgetExpr)
@@ -2598,20 +2630,20 @@ func capFor(elemType string, maxlen int) string {
 	return name
 }
 
-func capForSize(elemType string) string {
-	if name, ok := capRegistry.names[elemType]; ok {
+func capForSize(scope, elemType string) string {
+	key := scope + "\x00" + elemType
+	if name, ok := capRegistry.names[key]; ok {
 		return name
 	}
-	name := capName()
-	capRegistry.names[elemType] = name
+	name := capName(scope, elemType)
+	capRegistry.names[key] = name
 	a := fmt.Sprintf("(%d/%s)", fastAllocMax, sizeExpr(elemType))
 	b := fmt.Sprintf("(%s/%s)", spanBudgetExpr, sizeExpr(elemType))
 	sel := fmt.Sprintf("(min(%s, 2)/2)", a)
 	capRegistry.decls = append(capRegistry.decls, fmt.Sprintf(
-		"// %s: prealloc cap for []%s — as many elements as fit under %d bytes,\n"+
-			"// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),\n"+
-			"// else 1. See decode.PreallocCap.\nconst %s = %s*%s + (1-%s)*max(%s, 1)",
-		name, elemType, fastAllocMax, name, sel, a, sel, b))
+		"// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.\n"+
+			"const %s = %s*%s + (1-%s)*max(%s, 1)",
+		name, sel, a, sel, b))
 	return name
 }
 
@@ -2637,8 +2669,8 @@ func sizeExpr(elemType string) string {
 	return fmt.Sprintf("max(int(unsafe.Sizeof(*new(%s))), 1)", elemType)
 }
 
-func capName() string {
-	return fmt.Sprintf("ggenCap_%s_%d", oneofRegistry.prefix, len(capRegistry.names))
+func capName(scope, key string) string {
+	return fmt.Sprintf("ggenCap_%s_%s", scope, sanitizeIdent(key))
 }
 
 // capRegistry collects the per-element-type prealloc constants emitted at the
@@ -4758,6 +4790,7 @@ func peelSliceField(f FieldInfo) FieldInfo {
 	}
 	inner := FieldInfo{
 		GoType:      innerGoType,
+		GoName:      f.GoName,   // cap-const names keep the field attribution
 		Kind:        f.ElemKind, // the layer one level down
 		ArrayLen:    f.ElemArrayLen,
 		ElemPointer: innerPointer,

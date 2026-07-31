@@ -19,88 +19,88 @@ import (
 	"github.com/sirkostya009/ggen/validation"
 )
 
-// ggenCap_ee711e83_0: prealloc cap for [][]int — as many elements as fit under 80 bytes,
-// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
-// else 1. See decode.PreallocCap.
-const ggenCap_ee711e83_0 = (min((80/max(int(unsafe.Sizeof(*new([]int))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new([]int))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new([]int))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new([]int))), 1)), 1)
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_ExtraStruct_NestedInts___int = (min((80/max(int(unsafe.Sizeof(*new([]int))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new([]int))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new([]int))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new([]int))), 1)), 1)
 
-// ggenCap_ee711e83_1: prealloc cap for []int — as many elements as fit under 80 bytes,
-// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
-// else 1. See decode.PreallocCap.
-const ggenCap_ee711e83_1 = (min((80/max(int(unsafe.Sizeof(*new(int))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(int))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(int))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(int))), 1)), 1)
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_ExtraStruct_NestedInts_int = (min((80/max(int(unsafe.Sizeof(*new(int))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(int))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(int))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(int))), 1)), 1)
 
-// ggenCap_ee711e83_2: prealloc cap for [][][]string — as many elements as fit under 80 bytes,
-// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
-// else 1. See decode.PreallocCap.
-const ggenCap_ee711e83_2 = (min((80/max(int(unsafe.Sizeof(*new([][]string))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new([][]string))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new([][]string))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new([][]string))), 1)), 1)
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_ExtraStruct_Triple_____string = (min((80/max(int(unsafe.Sizeof(*new([][]string))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new([][]string))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new([][]string))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new([][]string))), 1)), 1)
 
-// ggenCap_ee711e83_3: prealloc cap for [][]string — as many elements as fit under 80 bytes,
-// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
-// else 1. See decode.PreallocCap.
-const ggenCap_ee711e83_3 = (min((80/max(int(unsafe.Sizeof(*new([]string))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new([]string))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new([]string))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new([]string))), 1)), 1)
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_ExtraStruct_Triple___string = (min((80/max(int(unsafe.Sizeof(*new([]string))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new([]string))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new([]string))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new([]string))), 1)), 1)
 
-// ggenCap_ee711e83_4: prealloc cap for []string — as many elements as fit under 80 bytes,
-// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
-// else 1. See decode.PreallocCap.
-const ggenCap_ee711e83_4 = (min((80/max(int(unsafe.Sizeof(*new(string))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(string))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(string))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(string))), 1)), 1)
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_ExtraStruct_Triple_string = (min((80/max(int(unsafe.Sizeof(*new(string))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(string))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(string))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(string))), 1)), 1)
 
-// ggenCap_ee711e83_5: prealloc cap for [][2]int — as many elements as fit under 80 bytes,
-// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
-// else 1. See decode.PreallocCap.
-const ggenCap_ee711e83_5 = (min((80/max(int(unsafe.Sizeof(*new([2]int))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new([2]int))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new([2]int))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new([2]int))), 1)), 1)
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_TupleStruct_Nested__2_int = (min((80/max(int(unsafe.Sizeof(*new([2]int))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new([2]int))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new([2]int))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new([2]int))), 1)), 1)
 
-// ggenCap_ee711e83_6: prealloc cap for []PreallocRow — as many elements as fit under 80 bytes,
-// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
-// else 1. See decode.PreallocCap.
-const ggenCap_ee711e83_6 = (min((80/max(int(unsafe.Sizeof(*new(PreallocRow))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(PreallocRow))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(PreallocRow))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(PreallocRow))), 1)), 1)
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_TupleStruct_Pair_string = (min((80/max(int(unsafe.Sizeof(*new(string))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(string))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(string))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(string))), 1)), 1)
 
-// ggenCap_ee711e83_7: prealloc cap for []PreallocRow — its maxlen=8 bound when that many
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_TupleStruct_Segments__2_int = (min((80/max(int(unsafe.Sizeof(*new([2]int))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new([2]int))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new([2]int))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new([2]int))), 1)), 1)
+
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_PreallocWidths_Ints_int = (min((80/max(int(unsafe.Sizeof(*new(int))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(int))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(int))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(int))), 1)), 1)
+
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_PreallocWidths_MaxFits_PreallocRow = (min((80/max(int(unsafe.Sizeof(*new(PreallocRow))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(PreallocRow))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(PreallocRow))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(PreallocRow))), 1)), 1)
+
+// ggenCap_PreallocWidths_MaxFits_PreallocRow_8: prealloc cap for []PreallocRow — its maxlen=8 bound when that many
 // elements fit a 512-byte span, else the width default.
-const ggenCap_ee711e83_7 = (1-min((8*max(int(unsafe.Sizeof(*new(PreallocRow))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1))*8 + (1-(1-min((8*max(int(unsafe.Sizeof(*new(PreallocRow))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1)))*ggenCap_ee711e83_6
+const ggenCap_PreallocWidths_MaxFits_PreallocRow_8 = (1-min((8*max(int(unsafe.Sizeof(*new(PreallocRow))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1))*8 + (1-(1-min((8*max(int(unsafe.Sizeof(*new(PreallocRow))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1)))*ggenCap_PreallocWidths_MaxFits_PreallocRow
 
-// ggenCap_ee711e83_8: prealloc cap for []PreallocWide — as many elements as fit under 80 bytes,
-// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
-// else 1. See decode.PreallocCap.
-const ggenCap_ee711e83_8 = (min((80/max(int(unsafe.Sizeof(*new(PreallocWide))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(PreallocWide))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(PreallocWide))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(PreallocWide))), 1)), 1)
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_PreallocWidths_MaxTooBig_PreallocWide = (min((80/max(int(unsafe.Sizeof(*new(PreallocWide))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(PreallocWide))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(PreallocWide))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(PreallocWide))), 1)), 1)
 
-// ggenCap_ee711e83_9: prealloc cap for []PreallocWide — its maxlen=8 bound when that many
+// ggenCap_PreallocWidths_MaxTooBig_PreallocWide_8: prealloc cap for []PreallocWide — its maxlen=8 bound when that many
 // elements fit a 512-byte span, else the width default.
-const ggenCap_ee711e83_9 = (1-min((8*max(int(unsafe.Sizeof(*new(PreallocWide))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1))*8 + (1-(1-min((8*max(int(unsafe.Sizeof(*new(PreallocWide))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1)))*ggenCap_ee711e83_8
+const ggenCap_PreallocWidths_MaxTooBig_PreallocWide_8 = (1-min((8*max(int(unsafe.Sizeof(*new(PreallocWide))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1))*8 + (1-(1-min((8*max(int(unsafe.Sizeof(*new(PreallocWide))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1)))*ggenCap_PreallocWidths_MaxTooBig_PreallocWide
 
-// ggenCap_ee711e83_10: prealloc cap for []*PreallocRow — as many elements as fit under 80 bytes,
-// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
-// else 1. See decode.PreallocCap.
-const ggenCap_ee711e83_10 = (min((80/max(int(unsafe.Sizeof(*new(*PreallocRow))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(*PreallocRow))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(*PreallocRow))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(*PreallocRow))), 1)), 1)
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_PreallocWidths_Nested___int = (min((80/max(int(unsafe.Sizeof(*new([]int))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new([]int))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new([]int))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new([]int))), 1)), 1)
 
-// ggenCap_ee711e83_11: prealloc cap for []any — as many elements as fit under 80 bytes,
-// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
-// else 1. See decode.PreallocCap.
-const ggenCap_ee711e83_11 = (min((80/max(int(unsafe.Sizeof(*new(any))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(any))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(any))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(any))), 1)), 1)
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_PreallocWidths_Nested_int = (min((80/max(int(unsafe.Sizeof(*new(int))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(int))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(int))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(int))), 1)), 1)
 
-// ggenCap_ee711e83_12: prealloc cap for [][]byte — as many elements as fit under 80 bytes,
-// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
-// else 1. See decode.PreallocCap.
-const ggenCap_ee711e83_12 = (min((80/max(int(unsafe.Sizeof(*new([]byte))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new([]byte))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new([]byte))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new([]byte))), 1)), 1)
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_PreallocWidths_Ptrs_PreallocRow = (min((80/max(int(unsafe.Sizeof(*new(PreallocRow))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(PreallocRow))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(PreallocRow))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(PreallocRow))), 1)), 1)
 
-// ggenCap_ee711e83_13: prealloc cap for []time.Duration — as many elements as fit under 80 bytes,
-// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
-// else 1. See decode.PreallocCap.
-const ggenCap_ee711e83_13 = (min((80/max(int(unsafe.Sizeof(*new(time.Duration))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(time.Duration))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(time.Duration))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(time.Duration))), 1)), 1)
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_PreallocWidths_Ptrs_PtrPreallocRow = (min((80/max(int(unsafe.Sizeof(*new(*PreallocRow))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(*PreallocRow))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(*PreallocRow))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(*PreallocRow))), 1)), 1)
 
-// ggenCap_ee711e83_14: prealloc cap for []map[string]int — as many elements as fit under 80 bytes,
-// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
-// else 1. See decode.PreallocCap.
-const ggenCap_ee711e83_14 = (min((80/max(int(unsafe.Sizeof(*new(map[string]int))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(map[string]int))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(map[string]int))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(map[string]int))), 1)), 1)
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_PreallocWidths_Rows_PreallocRow = (min((80/max(int(unsafe.Sizeof(*new(PreallocRow))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(PreallocRow))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(PreallocRow))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(PreallocRow))), 1)), 1)
 
-// ggenCap_ee711e83_15: prealloc cap for []json.RawMessage — as many elements as fit under 80 bytes,
-// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
-// else 1. See decode.PreallocCap.
-const ggenCap_ee711e83_15 = (min((80/max(int(unsafe.Sizeof(*new(json.RawMessage))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(json.RawMessage))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(json.RawMessage))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(json.RawMessage))), 1)), 1)
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_PreallocWidths_Strs_string = (min((80/max(int(unsafe.Sizeof(*new(string))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(string))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(string))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(string))), 1)), 1)
 
-// ggenCap_ee711e83_16: prealloc cap for []time.Time — as many elements as fit under 80 bytes,
-// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
-// else 1. See decode.PreallocCap.
-const ggenCap_ee711e83_16 = (min((80/max(int(unsafe.Sizeof(*new(time.Time))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(time.Time))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(time.Time))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(time.Time))), 1)), 1)
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_PreallocWidths_Wide_PreallocWide = (min((80/max(int(unsafe.Sizeof(*new(PreallocWide))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(PreallocWide))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(PreallocWide))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(PreallocWide))), 1)), 1)
+
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_ElemKinds_Anys_any = (min((80/max(int(unsafe.Sizeof(*new(any))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(any))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(any))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(any))), 1)), 1)
+
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_ElemKinds_Blobs___byte = (min((80/max(int(unsafe.Sizeof(*new([]byte))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new([]byte))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new([]byte))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new([]byte))), 1)), 1)
+
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_ElemKinds_Durs_time_Duration = (min((80/max(int(unsafe.Sizeof(*new(time.Duration))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(time.Duration))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(time.Duration))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(time.Duration))), 1)), 1)
+
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_ElemKinds_Maps_map_string_int = (min((80/max(int(unsafe.Sizeof(*new(map[string]int))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(map[string]int))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(map[string]int))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(map[string]int))), 1)), 1)
+
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_ElemKinds_Raws_json_RawMessage = (min((80/max(int(unsafe.Sizeof(*new(json.RawMessage))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(json.RawMessage))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(json.RawMessage))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(json.RawMessage))), 1)), 1)
+
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_ElemKinds_Times_time_Time = (min((80/max(int(unsafe.Sizeof(*new(time.Time))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(time.Time))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(time.Time))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(time.Time))), 1)), 1)
+
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_MapVals_Ints_int = (min((80/max(int(unsafe.Sizeof(*new(int))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(int))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(int))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(int))), 1)), 1)
 
 func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err error) {
 	result = recv
@@ -469,7 +469,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 				}
 			} else {
 				if result.NestedInts == nil {
-					result.NestedInts = make([][]int, 0, ggenCap_ee711e83_0)
+					result.NestedInts = make([][]int, 0, ggenCap_ExtraStruct_NestedInts___int)
 				}
 			}
 			if i < len(data) && data[i] != ']' {
@@ -649,7 +649,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 				}
 			} else {
 				if result.Triple == nil {
-					result.Triple = make([][][]string, 0, ggenCap_ee711e83_2)
+					result.Triple = make([][][]string, 0, ggenCap_ExtraStruct_Triple_____string)
 				}
 			}
 			if i < len(data) && data[i] != ']' {
@@ -697,7 +697,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 						}
 					} else {
 						if row0 == nil {
-							row0 = make([][]string, 0, ggenCap_ee711e83_3)
+							row0 = make([][]string, 0, ggenCap_ExtraStruct_Triple___string)
 						}
 					}
 					if i < len(data) && data[i] != ']' {
@@ -745,7 +745,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 								}
 							} else {
 								if row1 == nil {
-									row1 = make([]string, 0, ggenCap_ee711e83_4)
+									row1 = make([]string, 0, ggenCap_ExtraStruct_Triple_string)
 								}
 							}
 							if i < len(data) && data[i] != ']' {
@@ -1199,7 +1199,7 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 				}
 			} else {
 				if result.NestedInts == nil {
-					result.NestedInts = make([][]int, 0, ggenCap_ee711e83_0)
+					result.NestedInts = make([][]int, 0, ggenCap_ExtraStruct_NestedInts___int)
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {
@@ -1274,7 +1274,7 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 					}
 				} else {
 					if row0 == nil {
-						row0 = make([]int, 0, ggenCap_ee711e83_1)
+						row0 = make([]int, 0, ggenCap_ExtraStruct_NestedInts_int)
 					}
 				}
 				for s.Bytes()[s.Pos] != ']' {
@@ -1399,7 +1399,7 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 				}
 			} else {
 				if result.Triple == nil {
-					result.Triple = make([][][]string, 0, ggenCap_ee711e83_2)
+					result.Triple = make([][][]string, 0, ggenCap_ExtraStruct_Triple_____string)
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {
@@ -1474,7 +1474,7 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 					}
 				} else {
 					if row0 == nil {
-						row0 = make([][]string, 0, ggenCap_ee711e83_3)
+						row0 = make([][]string, 0, ggenCap_ExtraStruct_Triple___string)
 					}
 				}
 				for s.Bytes()[s.Pos] != ']' {
@@ -1549,7 +1549,7 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 						}
 					} else {
 						if row1 == nil {
-							row1 = make([]string, 0, ggenCap_ee711e83_4)
+							row1 = make([]string, 0, ggenCap_ExtraStruct_Triple_string)
 						}
 					}
 					for s.Bytes()[s.Pos] != ']' {
@@ -2068,7 +2068,7 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 				}
 			} else {
 				if result.Nested == nil {
-					result.Nested = make([][2]int, 0, ggenCap_ee711e83_5)
+					result.Nested = make([][2]int, 0, ggenCap_TupleStruct_Nested__2_int)
 				}
 			}
 			if i < len(data) && data[i] != ']' {
@@ -2236,7 +2236,7 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 						}
 					} else {
 						if row0 == nil {
-							row0 = make([]string, 0, ggenCap_ee711e83_4)
+							row0 = make([]string, 0, ggenCap_TupleStruct_Pair_string)
 						}
 					}
 					if i < len(data) && data[i] != ']' {
@@ -2479,7 +2479,7 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 				}
 			} else {
 				if result.Segments == nil {
-					result.Segments = make([][2]int, 0, ggenCap_ee711e83_5)
+					result.Segments = make([][2]int, 0, ggenCap_TupleStruct_Segments__2_int)
 				}
 			}
 			if i < len(data) && data[i] != ']' {
@@ -2771,7 +2771,7 @@ func (recv TupleStruct) DecodeFromStream(s *scan.Stream) (result TupleStruct, er
 				}
 			} else {
 				if result.Nested == nil {
-					result.Nested = make([][2]int, 0, ggenCap_ee711e83_5)
+					result.Nested = make([][2]int, 0, ggenCap_TupleStruct_Nested__2_int)
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {
@@ -2949,7 +2949,7 @@ func (recv TupleStruct) DecodeFromStream(s *scan.Stream) (result TupleStruct, er
 					}
 				} else {
 					if row0 == nil {
-						row0 = make([]string, 0, ggenCap_ee711e83_4)
+						row0 = make([]string, 0, ggenCap_TupleStruct_Pair_string)
 					}
 				}
 				for s.Bytes()[s.Pos] != ']' {
@@ -3203,7 +3203,7 @@ func (recv TupleStruct) DecodeFromStream(s *scan.Stream) (result TupleStruct, er
 				}
 			} else {
 				if result.Segments == nil {
-					result.Segments = make([][2]int, 0, ggenCap_ee711e83_5)
+					result.Segments = make([][2]int, 0, ggenCap_TupleStruct_Segments__2_int)
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {
@@ -3828,7 +3828,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 					}
 				} else {
 					if result.MaxFits == nil {
-						result.MaxFits = make([]PreallocRow, 0, ggenCap_ee711e83_7)
+						result.MaxFits = make([]PreallocRow, 0, ggenCap_PreallocWidths_MaxFits_PreallocRow_8)
 					}
 				}
 				if i < len(data) && data[i] != ']' {
@@ -3886,7 +3886,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 					}
 				} else {
 					if result.MaxTooBig == nil {
-						result.MaxTooBig = make([]PreallocWide, 0, ggenCap_ee711e83_9)
+						result.MaxTooBig = make([]PreallocWide, 0, ggenCap_PreallocWidths_MaxTooBig_PreallocWide_8)
 					}
 				}
 				if i < len(data) && data[i] != ']' {
@@ -4003,7 +4003,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 				}
 			} else {
 				if result.Nested == nil {
-					result.Nested = make([][]int, 0, ggenCap_ee711e83_0)
+					result.Nested = make([][]int, 0, ggenCap_PreallocWidths_Nested___int)
 				}
 			}
 			if i < len(data) && data[i] != ']' {
@@ -4172,9 +4172,9 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 				}
 			} else {
 				if result.Ptrs == nil {
-					result.Ptrs = make([]*PreallocRow, 0, ggenCap_ee711e83_10)
+					result.Ptrs = make([]*PreallocRow, 0, ggenCap_PreallocWidths_Ptrs_PtrPreallocRow)
 				}
-				slab0 = make([]PreallocRow, 0, ggenCap_ee711e83_6)
+				slab0 = make([]PreallocRow, 0, ggenCap_PreallocWidths_Ptrs_PreallocRow)
 			}
 			if i < len(data) && data[i] != ']' {
 				for {
@@ -4247,7 +4247,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 				}
 			} else {
 				if result.Rows == nil {
-					result.Rows = make([]PreallocRow, 0, ggenCap_ee711e83_6)
+					result.Rows = make([]PreallocRow, 0, ggenCap_PreallocWidths_Rows_PreallocRow)
 				}
 			}
 			if i < len(data) && data[i] != ']' {
@@ -4302,7 +4302,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 				}
 			} else {
 				if result.Strs == nil {
-					result.Strs = make([]string, 0, ggenCap_ee711e83_4)
+					result.Strs = make([]string, 0, ggenCap_PreallocWidths_Strs_string)
 				}
 			}
 			if i < len(data) && data[i] != ']' {
@@ -4371,7 +4371,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 				}
 			} else {
 				if result.Wide == nil {
-					result.Wide = make([]PreallocWide, 0, ggenCap_ee711e83_8)
+					result.Wide = make([]PreallocWide, 0, ggenCap_PreallocWidths_Wide_PreallocWide)
 				}
 			}
 			if i < len(data) && data[i] != ']' {
@@ -4637,7 +4637,7 @@ func (recv PreallocWidths) DecodeFromStream(s *scan.Stream) (result PreallocWidt
 				}
 			} else {
 				if result.Ints == nil {
-					result.Ints = make([]int, 0, ggenCap_ee711e83_1)
+					result.Ints = make([]int, 0, ggenCap_PreallocWidths_Ints_int)
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {
@@ -4815,7 +4815,7 @@ func (recv PreallocWidths) DecodeFromStream(s *scan.Stream) (result PreallocWidt
 					}
 				} else {
 					if result.MaxFits == nil {
-						result.MaxFits = make([]PreallocRow, 0, ggenCap_ee711e83_7)
+						result.MaxFits = make([]PreallocRow, 0, ggenCap_PreallocWidths_MaxFits_PreallocRow_8)
 					}
 				}
 				for s.Bytes()[s.Pos] != ']' {
@@ -4905,7 +4905,7 @@ func (recv PreallocWidths) DecodeFromStream(s *scan.Stream) (result PreallocWidt
 					}
 				} else {
 					if result.MaxTooBig == nil {
-						result.MaxTooBig = make([]PreallocWide, 0, ggenCap_ee711e83_9)
+						result.MaxTooBig = make([]PreallocWide, 0, ggenCap_PreallocWidths_MaxTooBig_PreallocWide_8)
 					}
 				}
 				for s.Bytes()[s.Pos] != ']' {
@@ -5086,7 +5086,7 @@ func (recv PreallocWidths) DecodeFromStream(s *scan.Stream) (result PreallocWidt
 				}
 			} else {
 				if result.Nested == nil {
-					result.Nested = make([][]int, 0, ggenCap_ee711e83_0)
+					result.Nested = make([][]int, 0, ggenCap_PreallocWidths_Nested___int)
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {
@@ -5158,7 +5158,7 @@ func (recv PreallocWidths) DecodeFromStream(s *scan.Stream) (result PreallocWidt
 					}
 				} else {
 					if row0 == nil {
-						row0 = make([]int, 0, ggenCap_ee711e83_1)
+						row0 = make([]int, 0, ggenCap_PreallocWidths_Nested_int)
 					}
 				}
 				for s.Bytes()[s.Pos] != ']' {
@@ -5275,9 +5275,9 @@ func (recv PreallocWidths) DecodeFromStream(s *scan.Stream) (result PreallocWidt
 				}
 			} else {
 				if result.Ptrs == nil {
-					result.Ptrs = make([]*PreallocRow, 0, ggenCap_ee711e83_10)
+					result.Ptrs = make([]*PreallocRow, 0, ggenCap_PreallocWidths_Ptrs_PtrPreallocRow)
 				}
-				slab0 = make([]PreallocRow, 0, ggenCap_ee711e83_6)
+				slab0 = make([]PreallocRow, 0, ggenCap_PreallocWidths_Ptrs_PreallocRow)
 			}
 			for s.Bytes()[s.Pos] != ']' {
 				if s.Pos >= len(s.Bytes()) {
@@ -5404,7 +5404,7 @@ func (recv PreallocWidths) DecodeFromStream(s *scan.Stream) (result PreallocWidt
 				}
 			} else {
 				if result.Rows == nil {
-					result.Rows = make([]PreallocRow, 0, ggenCap_ee711e83_6)
+					result.Rows = make([]PreallocRow, 0, ggenCap_PreallocWidths_Rows_PreallocRow)
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {
@@ -5491,7 +5491,7 @@ func (recv PreallocWidths) DecodeFromStream(s *scan.Stream) (result PreallocWidt
 				}
 			} else {
 				if result.Strs == nil {
-					result.Strs = make([]string, 0, ggenCap_ee711e83_4)
+					result.Strs = make([]string, 0, ggenCap_PreallocWidths_Strs_string)
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {
@@ -5578,7 +5578,7 @@ func (recv PreallocWidths) DecodeFromStream(s *scan.Stream) (result PreallocWidt
 				}
 			} else {
 				if result.Wide == nil {
-					result.Wide = make([]PreallocWide, 0, ggenCap_ee711e83_8)
+					result.Wide = make([]PreallocWide, 0, ggenCap_PreallocWidths_Wide_PreallocWide)
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {
@@ -6418,7 +6418,7 @@ func (recv ElemKinds) DecodeFrom(data []byte) (result ElemKinds, i int, err erro
 				}
 			} else {
 				if result.Anys == nil {
-					result.Anys = make([]any, 0, ggenCap_ee711e83_11)
+					result.Anys = make([]any, 0, ggenCap_ElemKinds_Anys_any)
 				}
 			}
 			if i < len(data) && data[i] != ']' {
@@ -6471,7 +6471,7 @@ func (recv ElemKinds) DecodeFrom(data []byte) (result ElemKinds, i int, err erro
 				}
 			} else {
 				if result.Blobs == nil {
-					result.Blobs = make([][]byte, 0, ggenCap_ee711e83_12)
+					result.Blobs = make([][]byte, 0, ggenCap_ElemKinds_Blobs___byte)
 				}
 			}
 			if i < len(data) && data[i] != ']' {
@@ -6553,7 +6553,7 @@ func (recv ElemKinds) DecodeFrom(data []byte) (result ElemKinds, i int, err erro
 				}
 			} else {
 				if result.Durs == nil {
-					result.Durs = make([]time.Duration, 0, ggenCap_ee711e83_13)
+					result.Durs = make([]time.Duration, 0, ggenCap_ElemKinds_Durs_time_Duration)
 				}
 			}
 			if i < len(data) && data[i] != ']' {
@@ -6627,7 +6627,7 @@ func (recv ElemKinds) DecodeFrom(data []byte) (result ElemKinds, i int, err erro
 				}
 			} else {
 				if result.Maps == nil {
-					result.Maps = make([]map[string]int, 0, ggenCap_ee711e83_14)
+					result.Maps = make([]map[string]int, 0, ggenCap_ElemKinds_Maps_map_string_int)
 				}
 			}
 			if i < len(data) && data[i] != ']' {
@@ -6799,7 +6799,7 @@ func (recv ElemKinds) DecodeFrom(data []byte) (result ElemKinds, i int, err erro
 				}
 			} else {
 				if result.Raws == nil {
-					result.Raws = make([]json.RawMessage, 0, ggenCap_ee711e83_15)
+					result.Raws = make([]json.RawMessage, 0, ggenCap_ElemKinds_Raws_json_RawMessage)
 				}
 			}
 			if i < len(data) && data[i] != ']' {
@@ -6858,7 +6858,7 @@ func (recv ElemKinds) DecodeFrom(data []byte) (result ElemKinds, i int, err erro
 				}
 			} else {
 				if result.Times == nil {
-					result.Times = make([]time.Time, 0, ggenCap_ee711e83_16)
+					result.Times = make([]time.Time, 0, ggenCap_ElemKinds_Times_time_Time)
 				}
 			}
 			if i < len(data) && data[i] != ']' {
@@ -7036,7 +7036,7 @@ func (recv ElemKinds) DecodeFromStream(s *scan.Stream) (result ElemKinds, err er
 				}
 			} else {
 				if result.Anys == nil {
-					result.Anys = make([]any, 0, ggenCap_ee711e83_11)
+					result.Anys = make([]any, 0, ggenCap_ElemKinds_Anys_any)
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {
@@ -7123,7 +7123,7 @@ func (recv ElemKinds) DecodeFromStream(s *scan.Stream) (result ElemKinds, err er
 				}
 			} else {
 				if result.Blobs == nil {
-					result.Blobs = make([][]byte, 0, ggenCap_ee711e83_12)
+					result.Blobs = make([][]byte, 0, ggenCap_ElemKinds_Blobs___byte)
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {
@@ -7238,7 +7238,7 @@ func (recv ElemKinds) DecodeFromStream(s *scan.Stream) (result ElemKinds, err er
 				}
 			} else {
 				if result.Durs == nil {
-					result.Durs = make([]time.Duration, 0, ggenCap_ee711e83_13)
+					result.Durs = make([]time.Duration, 0, ggenCap_ElemKinds_Durs_time_Duration)
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {
@@ -7330,7 +7330,7 @@ func (recv ElemKinds) DecodeFromStream(s *scan.Stream) (result ElemKinds, err er
 				}
 			} else {
 				if result.Maps == nil {
-					result.Maps = make([]map[string]int, 0, ggenCap_ee711e83_14)
+					result.Maps = make([]map[string]int, 0, ggenCap_ElemKinds_Maps_map_string_int)
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {
@@ -7514,7 +7514,7 @@ func (recv ElemKinds) DecodeFromStream(s *scan.Stream) (result ElemKinds, err er
 				}
 			} else {
 				if result.Raws == nil {
-					result.Raws = make([]json.RawMessage, 0, ggenCap_ee711e83_15)
+					result.Raws = make([]json.RawMessage, 0, ggenCap_ElemKinds_Raws_json_RawMessage)
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {
@@ -7606,7 +7606,7 @@ func (recv ElemKinds) DecodeFromStream(s *scan.Stream) (result ElemKinds, err er
 				}
 			} else {
 				if result.Times == nil {
-					result.Times = make([]time.Time, 0, ggenCap_ee711e83_16)
+					result.Times = make([]time.Time, 0, ggenCap_ElemKinds_Times_time_Time)
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {
@@ -9206,7 +9206,7 @@ func (recv MapVals) DecodeFromStream(s *scan.Stream) (result MapVals, err error)
 							}
 						} else {
 							if mv == nil {
-								mv = make([]int, 0, ggenCap_ee711e83_1)
+								mv = make([]int, 0, ggenCap_MapVals_Ints_int)
 							}
 						}
 						for s.Bytes()[s.Pos] != ']' {

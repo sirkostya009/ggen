@@ -16,12 +16,10 @@ import (
 	"github.com/sirkostya009/ggen/validation"
 )
 
-// ggenCap_9eeac67f_0: prealloc cap for []NPPlain — as many elements as fit under 80 bytes,
-// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
-// else 1. See decode.PreallocCap.
-const ggenCap_9eeac67f_0 = (min((80/max(int(unsafe.Sizeof(*new(NPPlain))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(NPPlain))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(NPPlain))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(NPPlain))), 1)), 1)
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_NPPositions_S_NPPlain = (min((80/max(int(unsafe.Sizeof(*new(NPPlain))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(NPPlain))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(NPPlain))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(NPPlain))), 1)), 1)
 
-var ggenOneof_9eeac67f_0 = []string{"low", "medium", "high"}
+var ggenOneof_alias_0 = []string{"low", "medium", "high"}
 
 func (recv AliasString) DecodeFrom(data []byte) (result AliasString, i int, err error) {
 	result = recv
@@ -2420,7 +2418,7 @@ func (recv NamedPrims) DecodeFrom(data []byte) (result NamedPrims, i int, err er
 			switch result.Pri {
 			case "low", "medium", "high":
 			default:
-				return result, i, &validation.OneOfError{Pos: i, Path: []string{"pri"}, Allowed: ggenOneof_9eeac67f_0, Value: result.Pri}
+				return result, i, &validation.OneOfError{Pos: i, Path: []string{"pri"}, Allowed: ggenOneof_alias_0, Value: result.Pri}
 			}
 		case "tag":
 			if seenTag {
@@ -2603,7 +2601,7 @@ func (recv NamedPrims) DecodeFromStream(s *scan.Stream) (result NamedPrims, err 
 			switch result.Pri {
 			case "low", "medium", "high":
 			default:
-				return result, &validation.OneOfError{Pos: s.Offset(), Path: []string{"pri"}, Allowed: ggenOneof_9eeac67f_0, Value: result.Pri}
+				return result, &validation.OneOfError{Pos: s.Offset(), Path: []string{"pri"}, Allowed: ggenOneof_alias_0, Value: result.Pri}
 			}
 		case "tag":
 			err = s.ConsumeColon()
@@ -3149,7 +3147,7 @@ func (recv NPPositions) DecodeFrom(data []byte) (result NPPositions, i int, err 
 				}
 			} else {
 				if result.S == nil {
-					result.S = make([]NPPlain, 0, ggenCap_9eeac67f_0)
+					result.S = make([]NPPlain, 0, ggenCap_NPPositions_S_NPPlain)
 				}
 			}
 			if i < len(data) && data[i] != ']' {
@@ -3615,7 +3613,7 @@ func (recv NPPositions) DecodeFromStream(s *scan.Stream) (result NPPositions, er
 				}
 			} else {
 				if result.S == nil {
-					result.S = make([]NPPlain, 0, ggenCap_9eeac67f_0)
+					result.S = make([]NPPlain, 0, ggenCap_NPPositions_S_NPPlain)
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {

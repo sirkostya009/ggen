@@ -1113,8 +1113,17 @@ peel to the innermost type.
 ### `oneof` frozen slices are scoped per output file
 
 `ggenOneof0` restarted at 0 for each output file, so two sources in one package
-that both used `oneof` declared the same package-level var twice. The name now
-carries an FNV-32a of the emitted struct-name set: `ggenOneof_<hash>_<n>`.
+that both used `oneof` declared the same package-level var twice. Names are now
+readable and hash-free. Caps: `ggenCap_<Struct>_<Field>_<elemType>` (maxlen
+variants suffix `_<N>`) — struct names are package-unique, so no file scope or
+hash is needed; dedup narrows from per-file to per-field (a few duplicate
+consts, zero runtime cost). Oneofs: `ggenOneof_<fileScope>_<n>` where fileScope
+= output base minus `_ggen`/`_test`. Type spellings sanitize via
+`sanitizeIdent` (alnum kept, `*` → Ptr, any other rune → exactly one `_`, no
+collapsing so `[]int` → `__int` stays distinct from `int`). Cap names are
+insertion-stable — adding/removing structs or fields never renames another
+field's consts (the old struct-name-set hash prefix churned the whole file on
+any set change). A collision would redeclare a const, loud at compile time.
 
 ## Design decisions (the why)
 

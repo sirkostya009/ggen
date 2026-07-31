@@ -16,50 +16,56 @@ import (
 	"github.com/sirkostya009/ggen/validation"
 )
 
-// ggenCap_9225080e_0: prealloc cap for []Address — as many elements as fit under 80 bytes,
-// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
-// else 1. See decode.PreallocCap.
-const ggenCap_9225080e_0 = (min((80/max(int(unsafe.Sizeof(*new(Address))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(Address))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(Address))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(Address))), 1)), 1)
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_PtrSliceItemsStruct_Items_Address = (min((80/max(int(unsafe.Sizeof(*new(Address))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(Address))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(Address))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(Address))), 1)), 1)
 
-// ggenCap_9225080e_1: prealloc cap for []*Address — as many elements as fit under 80 bytes,
-// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
-// else 1. See decode.PreallocCap.
-const ggenCap_9225080e_1 = (min((80/max(int(unsafe.Sizeof(*new(*Address))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(*Address))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(*Address))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(*Address))), 1)), 1)
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_PtrSliceItemsStruct_Items_PtrAddress = (min((80/max(int(unsafe.Sizeof(*new(*Address))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(*Address))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(*Address))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(*Address))), 1)), 1)
 
-// ggenCap_9225080e_2: prealloc cap for []Node — as many elements as fit under 80 bytes,
-// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
-// else 1. See decode.PreallocCap.
-const ggenCap_9225080e_2 = (min((80/max(int(unsafe.Sizeof(*new(Node))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(Node))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(Node))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(Node))), 1)), 1)
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_PtrSliceNodesStruct_Nodes_Node = (min((80/max(int(unsafe.Sizeof(*new(Node))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(Node))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(Node))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(Node))), 1)), 1)
 
-// ggenCap_9225080e_3: prealloc cap for []*Node — as many elements as fit under 80 bytes,
-// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
-// else 1. See decode.PreallocCap.
-const ggenCap_9225080e_3 = (min((80/max(int(unsafe.Sizeof(*new(*Node))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(*Node))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(*Node))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(*Node))), 1)), 1)
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_PtrSliceNodesStruct_Nodes_PtrNode = (min((80/max(int(unsafe.Sizeof(*new(*Node))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(*Node))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(*Node))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(*Node))), 1)), 1)
 
-// ggenCap_9225080e_4: prealloc cap for [][]**int — as many elements as fit under 80 bytes,
-// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
-// else 1. See decode.PreallocCap.
-const ggenCap_9225080e_4 = (min((80/max(int(unsafe.Sizeof(*new([]**int))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new([]**int))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new([]**int))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new([]**int))), 1)), 1)
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_PtrSliceStruct_Items_Address = (min((80/max(int(unsafe.Sizeof(*new(Address))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(Address))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(Address))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(Address))), 1)), 1)
 
-// ggenCap_9225080e_5: prealloc cap for []*int — as many elements as fit under 80 bytes,
-// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
-// else 1. See decode.PreallocCap.
-const ggenCap_9225080e_5 = (min((80/max(int(unsafe.Sizeof(*new(*int))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(*int))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(*int))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(*int))), 1)), 1)
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_PtrSliceStruct_Items_PtrAddress = (min((80/max(int(unsafe.Sizeof(*new(*Address))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(*Address))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(*Address))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(*Address))), 1)), 1)
 
-// ggenCap_9225080e_6: prealloc cap for []**int — as many elements as fit under 80 bytes,
-// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
-// else 1. See decode.PreallocCap.
-const ggenCap_9225080e_6 = (min((80/max(int(unsafe.Sizeof(*new(**int))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(**int))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(**int))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(**int))), 1)), 1)
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_PtrSliceStruct_Nodes_Node = (min((80/max(int(unsafe.Sizeof(*new(Node))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(Node))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(Node))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(Node))), 1)), 1)
 
-// ggenCap_9225080e_7: prealloc cap for []int — as many elements as fit under 80 bytes,
-// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
-// else 1. See decode.PreallocCap.
-const ggenCap_9225080e_7 = (min((80/max(int(unsafe.Sizeof(*new(int))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(int))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(int))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(int))), 1)), 1)
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_PtrSliceStruct_Nodes_PtrNode = (min((80/max(int(unsafe.Sizeof(*new(*Node))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(*Node))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(*Node))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(*Node))), 1)), 1)
 
-// ggenCap_9225080e_8: prealloc cap for []PtrContainerElem — as many elements as fit under 80 bytes,
-// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
-// else 1. See decode.PreallocCap.
-const ggenCap_9225080e_8 = (min((80/max(int(unsafe.Sizeof(*new(PtrContainerElem))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(PtrContainerElem))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(PtrContainerElem))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(PtrContainerElem))), 1)), 1)
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_NPtrContainersStruct_NSPP___PtrPtrint = (min((80/max(int(unsafe.Sizeof(*new([]**int))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new([]**int))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new([]**int))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new([]**int))), 1)), 1)
+
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_NPtrContainersStruct_NSPP_Ptrint = (min((80/max(int(unsafe.Sizeof(*new(*int))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(*int))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(*int))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(*int))), 1)), 1)
+
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_NPtrContainersStruct_NSPP_PtrPtrint = (min((80/max(int(unsafe.Sizeof(*new(**int))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(**int))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(**int))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(**int))), 1)), 1)
+
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_NPtrContainersStruct_SPP_Ptrint = (min((80/max(int(unsafe.Sizeof(*new(*int))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(*int))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(*int))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(*int))), 1)), 1)
+
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_NPtrContainersStruct_SPP_PtrPtrint = (min((80/max(int(unsafe.Sizeof(*new(**int))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(**int))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(**int))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(**int))), 1)), 1)
+
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_PtrContainers_Deep_int = (min((80/max(int(unsafe.Sizeof(*new(int))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(int))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(int))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(int))), 1)), 1)
+
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_PtrContainers_Elems_PtrContainerElem = (min((80/max(int(unsafe.Sizeof(*new(PtrContainerElem))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(PtrContainerElem))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(PtrContainerElem))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(PtrContainerElem))), 1)), 1)
+
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_PtrContainers_One_int = (min((80/max(int(unsafe.Sizeof(*new(int))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(int))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(int))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(int))), 1)), 1)
+
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_PtrContainers_Plain_int = (min((80/max(int(unsafe.Sizeof(*new(int))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(int))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(int))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(int))), 1)), 1)
 
 func (recv PtrNameStruct) DecodeFrom(data []byte) (result PtrNameStruct, i int, err error) {
 	result = recv
@@ -3822,9 +3828,9 @@ func (recv PtrSliceItemsStruct) DecodeFrom(data []byte) (result PtrSliceItemsStr
 				}
 			} else {
 				if result.Items == nil {
-					result.Items = make([]*Address, 0, ggenCap_9225080e_1)
+					result.Items = make([]*Address, 0, ggenCap_PtrSliceItemsStruct_Items_PtrAddress)
 				}
-				slab0 = make([]Address, 0, ggenCap_9225080e_0)
+				slab0 = make([]Address, 0, ggenCap_PtrSliceItemsStruct_Items_Address)
 			}
 			if i < len(data) && data[i] != ']' {
 				for {
@@ -3982,9 +3988,9 @@ func (recv PtrSliceItemsStruct) DecodeFromStream(s *scan.Stream) (result PtrSlic
 				}
 			} else {
 				if result.Items == nil {
-					result.Items = make([]*Address, 0, ggenCap_9225080e_1)
+					result.Items = make([]*Address, 0, ggenCap_PtrSliceItemsStruct_Items_PtrAddress)
 				}
-				slab0 = make([]Address, 0, ggenCap_9225080e_0)
+				slab0 = make([]Address, 0, ggenCap_PtrSliceItemsStruct_Items_Address)
 			}
 			for s.Bytes()[s.Pos] != ']' {
 				if s.Pos >= len(s.Bytes()) {
@@ -4565,9 +4571,9 @@ func (recv PtrSliceNodesStruct) DecodeFrom(data []byte) (result PtrSliceNodesStr
 				}
 			} else {
 				if result.Nodes == nil {
-					result.Nodes = make([]*Node, 0, ggenCap_9225080e_3)
+					result.Nodes = make([]*Node, 0, ggenCap_PtrSliceNodesStruct_Nodes_PtrNode)
 				}
-				slab0 = make([]Node, 0, ggenCap_9225080e_2)
+				slab0 = make([]Node, 0, ggenCap_PtrSliceNodesStruct_Nodes_Node)
 			}
 			if i < len(data) && data[i] != ']' {
 				for {
@@ -4725,9 +4731,9 @@ func (recv PtrSliceNodesStruct) DecodeFromStream(s *scan.Stream) (result PtrSlic
 				}
 			} else {
 				if result.Nodes == nil {
-					result.Nodes = make([]*Node, 0, ggenCap_9225080e_3)
+					result.Nodes = make([]*Node, 0, ggenCap_PtrSliceNodesStruct_Nodes_PtrNode)
 				}
-				slab0 = make([]Node, 0, ggenCap_9225080e_2)
+				slab0 = make([]Node, 0, ggenCap_PtrSliceNodesStruct_Nodes_Node)
 			}
 			for s.Bytes()[s.Pos] != ']' {
 				if s.Pos >= len(s.Bytes()) {
@@ -4964,9 +4970,9 @@ func (recv PtrSliceStruct) DecodeFrom(data []byte) (result PtrSliceStruct, i int
 				}
 			} else {
 				if result.Items == nil {
-					result.Items = make([]*Address, 0, ggenCap_9225080e_1)
+					result.Items = make([]*Address, 0, ggenCap_PtrSliceStruct_Items_PtrAddress)
 				}
-				slab0 = make([]Address, 0, ggenCap_9225080e_0)
+				slab0 = make([]Address, 0, ggenCap_PtrSliceStruct_Items_Address)
 			}
 			if i < len(data) && data[i] != ']' {
 				for {
@@ -5040,9 +5046,9 @@ func (recv PtrSliceStruct) DecodeFrom(data []byte) (result PtrSliceStruct, i int
 				}
 			} else {
 				if result.Nodes == nil {
-					result.Nodes = make([]*Node, 0, ggenCap_9225080e_3)
+					result.Nodes = make([]*Node, 0, ggenCap_PtrSliceStruct_Nodes_PtrNode)
 				}
-				slab0 = make([]Node, 0, ggenCap_9225080e_2)
+				slab0 = make([]Node, 0, ggenCap_PtrSliceStruct_Nodes_Node)
 			}
 			if i < len(data) && data[i] != ']' {
 				for {
@@ -5274,9 +5280,9 @@ func (recv PtrSliceStruct) DecodeFromStream(s *scan.Stream) (result PtrSliceStru
 				}
 			} else {
 				if result.Items == nil {
-					result.Items = make([]*Address, 0, ggenCap_9225080e_1)
+					result.Items = make([]*Address, 0, ggenCap_PtrSliceStruct_Items_PtrAddress)
 				}
-				slab0 = make([]Address, 0, ggenCap_9225080e_0)
+				slab0 = make([]Address, 0, ggenCap_PtrSliceStruct_Items_Address)
 			}
 			for s.Bytes()[s.Pos] != ']' {
 				if s.Pos >= len(s.Bytes()) {
@@ -5404,9 +5410,9 @@ func (recv PtrSliceStruct) DecodeFromStream(s *scan.Stream) (result PtrSliceStru
 				}
 			} else {
 				if result.Nodes == nil {
-					result.Nodes = make([]*Node, 0, ggenCap_9225080e_3)
+					result.Nodes = make([]*Node, 0, ggenCap_PtrSliceStruct_Nodes_PtrNode)
 				}
-				slab0 = make([]Node, 0, ggenCap_9225080e_2)
+				slab0 = make([]Node, 0, ggenCap_PtrSliceStruct_Nodes_Node)
 			}
 			for s.Bytes()[s.Pos] != ']' {
 				if s.Pos >= len(s.Bytes()) {
@@ -6284,7 +6290,7 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 				}
 			} else {
 				if result.NSPP == nil {
-					result.NSPP = make([][]**int, 0, ggenCap_9225080e_4)
+					result.NSPP = make([][]**int, 0, ggenCap_NPtrContainersStruct_NSPP___PtrPtrint)
 				}
 			}
 			if i < len(data) && data[i] != ']' {
@@ -6329,7 +6335,7 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 						}
 					} else {
 						if row0 == nil {
-							row0 = make([]**int, 0, ggenCap_9225080e_6)
+							row0 = make([]**int, 0, ggenCap_NPtrContainersStruct_NSPP_PtrPtrint)
 						}
 					}
 					if i < len(data) && data[i] != ']' {
@@ -6453,7 +6459,7 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 				}
 			} else {
 				if result.SPP == nil {
-					result.SPP = make([]**int, 0, ggenCap_9225080e_6)
+					result.SPP = make([]**int, 0, ggenCap_NPtrContainersStruct_SPP_PtrPtrint)
 				}
 			}
 			if i < len(data) && data[i] != ']' {
@@ -7136,7 +7142,7 @@ func (recv NPtrContainersStruct) DecodeFromStream(s *scan.Stream) (result NPtrCo
 				}
 			} else {
 				if result.NSPP == nil {
-					result.NSPP = make([][]**int, 0, ggenCap_9225080e_4)
+					result.NSPP = make([][]**int, 0, ggenCap_NPtrContainersStruct_NSPP___PtrPtrint)
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {
@@ -7208,7 +7214,7 @@ func (recv NPtrContainersStruct) DecodeFromStream(s *scan.Stream) (result NPtrCo
 					}
 				} else {
 					if row0 == nil {
-						row0 = make([]**int, 0, ggenCap_9225080e_6)
+						row0 = make([]**int, 0, ggenCap_NPtrContainersStruct_NSPP_PtrPtrint)
 					}
 				}
 				for s.Bytes()[s.Pos] != ']' {
@@ -7344,7 +7350,7 @@ func (recv NPtrContainersStruct) DecodeFromStream(s *scan.Stream) (result NPtrCo
 				}
 			} else {
 				if result.SPP == nil {
-					result.SPP = make([]**int, 0, ggenCap_9225080e_6)
+					result.SPP = make([]**int, 0, ggenCap_NPtrContainersStruct_SPP_PtrPtrint)
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {
@@ -7925,7 +7931,7 @@ func (recv PtrContainers) DecodeFrom(data []byte) (result PtrContainers, i int, 
 					}
 				} else {
 					if v == nil {
-						v = make([]PtrContainerElem, 0, ggenCap_9225080e_8)
+						v = make([]PtrContainerElem, 0, ggenCap_PtrContainers_Elems_PtrContainerElem)
 					}
 				}
 				if i < len(data) && data[i] != ']' {
@@ -8726,7 +8732,7 @@ func (recv PtrContainers) DecodeFromStream(s *scan.Stream) (result PtrContainers
 					}
 				} else {
 					if v == nil {
-						v = make([]int, 0, ggenCap_9225080e_7)
+						v = make([]int, 0, ggenCap_PtrContainers_Deep_int)
 					}
 				}
 				for s.Bytes()[s.Pos] != ']' {
@@ -8848,7 +8854,7 @@ func (recv PtrContainers) DecodeFromStream(s *scan.Stream) (result PtrContainers
 					}
 				} else {
 					if v == nil {
-						v = make([]PtrContainerElem, 0, ggenCap_9225080e_8)
+						v = make([]PtrContainerElem, 0, ggenCap_PtrContainers_Elems_PtrContainerElem)
 					}
 				}
 				for s.Bytes()[s.Pos] != ']' {
@@ -9387,7 +9393,7 @@ func (recv PtrContainers) DecodeFromStream(s *scan.Stream) (result PtrContainers
 					}
 				} else {
 					if v == nil {
-						v = make([]int, 0, ggenCap_9225080e_7)
+						v = make([]int, 0, ggenCap_PtrContainers_One_int)
 					}
 				}
 				for s.Bytes()[s.Pos] != ']' {
@@ -9482,7 +9488,7 @@ func (recv PtrContainers) DecodeFromStream(s *scan.Stream) (result PtrContainers
 				}
 			} else {
 				if result.Plain == nil {
-					result.Plain = make([]int, 0, ggenCap_9225080e_7)
+					result.Plain = make([]int, 0, ggenCap_PtrContainers_Plain_int)
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {

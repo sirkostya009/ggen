@@ -17,82 +17,81 @@ import (
 	"github.com/sirkostya009/ggen/validation"
 )
 
-// ggenCap_54d0bf8a_0: prealloc cap for []Node — as many elements as fit under 80 bytes,
-// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
-// else 1. See decode.PreallocCap.
-const ggenCap_54d0bf8a_0 = (min((80/max(int(unsafe.Sizeof(*new(Node))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(Node))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(Node))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(Node))), 1)), 1)
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_Node_Children_Node = (min((80/max(int(unsafe.Sizeof(*new(Node))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(Node))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(Node))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(Node))), 1)), 1)
 
-// ggenCap_54d0bf8a_1: prealloc cap for []Node — its maxlen=16 bound when that many
+// ggenCap_Node_Children_Node_16: prealloc cap for []Node — its maxlen=16 bound when that many
 // elements fit a 512-byte span, else the width default.
-const ggenCap_54d0bf8a_1 = (1-min((16*max(int(unsafe.Sizeof(*new(Node))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1))*16 + (1-(1-min((16*max(int(unsafe.Sizeof(*new(Node))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1)))*ggenCap_54d0bf8a_0
+const ggenCap_Node_Children_Node_16 = (1-min((16*max(int(unsafe.Sizeof(*new(Node))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1))*16 + (1-(1-min((16*max(int(unsafe.Sizeof(*new(Node))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1)))*ggenCap_Node_Children_Node
 
-// ggenCap_54d0bf8a_2: prealloc cap for [][]int — as many elements as fit under 80 bytes,
-// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
-// else 1. See decode.PreallocCap.
-const ggenCap_54d0bf8a_2 = (min((80/max(int(unsafe.Sizeof(*new([]int))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new([]int))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new([]int))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new([]int))), 1)), 1)
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_Node_Matrix___int = (min((80/max(int(unsafe.Sizeof(*new([]int))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new([]int))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new([]int))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new([]int))), 1)), 1)
 
-// ggenCap_54d0bf8a_3: prealloc cap for [][]int — its maxlen=16 bound when that many
+// ggenCap_Node_Matrix___int_16: prealloc cap for [][]int — its maxlen=16 bound when that many
 // elements fit a 512-byte span, else the width default.
-const ggenCap_54d0bf8a_3 = (1-min((16*max(int(unsafe.Sizeof(*new([]int))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1))*16 + (1-(1-min((16*max(int(unsafe.Sizeof(*new([]int))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1)))*ggenCap_54d0bf8a_2
+const ggenCap_Node_Matrix___int_16 = (1-min((16*max(int(unsafe.Sizeof(*new([]int))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1))*16 + (1-(1-min((16*max(int(unsafe.Sizeof(*new([]int))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1)))*ggenCap_Node_Matrix___int
 
-// ggenCap_54d0bf8a_4: prealloc cap for []int — as many elements as fit under 80 bytes,
-// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
-// else 1. See decode.PreallocCap.
-const ggenCap_54d0bf8a_4 = (min((80/max(int(unsafe.Sizeof(*new(int))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(int))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(int))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(int))), 1)), 1)
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_Node_Matrix_int = (min((80/max(int(unsafe.Sizeof(*new(int))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(int))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(int))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(int))), 1)), 1)
 
-// ggenCap_54d0bf8a_5: prealloc cap for []Addr — as many elements as fit under 80 bytes,
-// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
-// else 1. See decode.PreallocCap.
-const ggenCap_54d0bf8a_5 = (min((80/max(int(unsafe.Sizeof(*new(Addr))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(Addr))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(Addr))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(Addr))), 1)), 1)
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_Node_Refs_Addr = (min((80/max(int(unsafe.Sizeof(*new(Addr))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(Addr))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(Addr))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(Addr))), 1)), 1)
 
-// ggenCap_54d0bf8a_6: prealloc cap for []Addr — its maxlen=16 bound when that many
+// ggenCap_Node_Refs_Addr_16: prealloc cap for []Addr — its maxlen=16 bound when that many
 // elements fit a 512-byte span, else the width default.
-const ggenCap_54d0bf8a_6 = (1-min((16*max(int(unsafe.Sizeof(*new(Addr))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1))*16 + (1-(1-min((16*max(int(unsafe.Sizeof(*new(Addr))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1)))*ggenCap_54d0bf8a_5
+const ggenCap_Node_Refs_Addr_16 = (1-min((16*max(int(unsafe.Sizeof(*new(Addr))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1))*16 + (1-(1-min((16*max(int(unsafe.Sizeof(*new(Addr))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1)))*ggenCap_Node_Refs_Addr
 
-// ggenCap_54d0bf8a_7: prealloc cap for []*Addr — as many elements as fit under 80 bytes,
-// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
-// else 1. See decode.PreallocCap.
-const ggenCap_54d0bf8a_7 = (min((80/max(int(unsafe.Sizeof(*new(*Addr))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(*Addr))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(*Addr))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(*Addr))), 1)), 1)
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_Node_Refs_PtrAddr = (min((80/max(int(unsafe.Sizeof(*new(*Addr))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(*Addr))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(*Addr))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(*Addr))), 1)), 1)
 
-// ggenCap_54d0bf8a_8: prealloc cap for []*Addr — its maxlen=16 bound when that many
+// ggenCap_Node_Refs_PtrAddr_16: prealloc cap for []*Addr — its maxlen=16 bound when that many
 // elements fit a 512-byte span, else the width default.
-const ggenCap_54d0bf8a_8 = (1-min((16*max(int(unsafe.Sizeof(*new(*Addr))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1))*16 + (1-(1-min((16*max(int(unsafe.Sizeof(*new(*Addr))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1)))*ggenCap_54d0bf8a_7
+const ggenCap_Node_Refs_PtrAddr_16 = (1-min((16*max(int(unsafe.Sizeof(*new(*Addr))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1))*16 + (1-(1-min((16*max(int(unsafe.Sizeof(*new(*Addr))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1)))*ggenCap_Node_Refs_PtrAddr
 
-// ggenCap_54d0bf8a_9: prealloc cap for []string — as many elements as fit under 80 bytes,
-// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
-// else 1. See decode.PreallocCap.
-const ggenCap_54d0bf8a_9 = (min((80/max(int(unsafe.Sizeof(*new(string))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(string))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(string))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(string))), 1)), 1)
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_Node_Tags_string = (min((80/max(int(unsafe.Sizeof(*new(string))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(string))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(string))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(string))), 1)), 1)
 
-// ggenCap_54d0bf8a_10: prealloc cap for []string — its maxlen=64 bound when that many
+// ggenCap_Node_Tags_string_64: prealloc cap for []string — its maxlen=64 bound when that many
 // elements fit a 512-byte span, else the width default.
-const ggenCap_54d0bf8a_10 = (1-min((64*max(int(unsafe.Sizeof(*new(string))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1))*64 + (1-(1-min((64*max(int(unsafe.Sizeof(*new(string))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1)))*ggenCap_54d0bf8a_9
+const ggenCap_Node_Tags_string_64 = (1-min((64*max(int(unsafe.Sizeof(*new(string))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1))*64 + (1-(1-min((64*max(int(unsafe.Sizeof(*new(string))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1)))*ggenCap_Node_Tags_string
 
-// ggenCap_54d0bf8a_11: prealloc cap for []CopyNode — as many elements as fit under 80 bytes,
-// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
-// else 1. See decode.PreallocCap.
-const ggenCap_54d0bf8a_11 = (min((80/max(int(unsafe.Sizeof(*new(CopyNode))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(CopyNode))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(CopyNode))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(CopyNode))), 1)), 1)
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_CopyNode_Children_CopyNode = (min((80/max(int(unsafe.Sizeof(*new(CopyNode))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(CopyNode))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(CopyNode))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(CopyNode))), 1)), 1)
 
-// ggenCap_54d0bf8a_12: prealloc cap for []CopyNode — its maxlen=16 bound when that many
+// ggenCap_CopyNode_Children_CopyNode_16: prealloc cap for []CopyNode — its maxlen=16 bound when that many
 // elements fit a 512-byte span, else the width default.
-const ggenCap_54d0bf8a_12 = (1-min((16*max(int(unsafe.Sizeof(*new(CopyNode))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1))*16 + (1-(1-min((16*max(int(unsafe.Sizeof(*new(CopyNode))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1)))*ggenCap_54d0bf8a_11
+const ggenCap_CopyNode_Children_CopyNode_16 = (1-min((16*max(int(unsafe.Sizeof(*new(CopyNode))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1))*16 + (1-(1-min((16*max(int(unsafe.Sizeof(*new(CopyNode))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1)))*ggenCap_CopyNode_Children_CopyNode
 
-// ggenCap_54d0bf8a_13: prealloc cap for []CopyAddr — as many elements as fit under 80 bytes,
-// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
-// else 1. See decode.PreallocCap.
-const ggenCap_54d0bf8a_13 = (min((80/max(int(unsafe.Sizeof(*new(CopyAddr))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(CopyAddr))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(CopyAddr))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(CopyAddr))), 1)), 1)
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_CopyNode_Matrix___int = (min((80/max(int(unsafe.Sizeof(*new([]int))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new([]int))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new([]int))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new([]int))), 1)), 1)
 
-// ggenCap_54d0bf8a_14: prealloc cap for []CopyAddr — its maxlen=16 bound when that many
+// ggenCap_CopyNode_Matrix___int_16: prealloc cap for [][]int — its maxlen=16 bound when that many
 // elements fit a 512-byte span, else the width default.
-const ggenCap_54d0bf8a_14 = (1-min((16*max(int(unsafe.Sizeof(*new(CopyAddr))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1))*16 + (1-(1-min((16*max(int(unsafe.Sizeof(*new(CopyAddr))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1)))*ggenCap_54d0bf8a_13
+const ggenCap_CopyNode_Matrix___int_16 = (1-min((16*max(int(unsafe.Sizeof(*new([]int))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1))*16 + (1-(1-min((16*max(int(unsafe.Sizeof(*new([]int))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1)))*ggenCap_CopyNode_Matrix___int
 
-// ggenCap_54d0bf8a_15: prealloc cap for []*CopyAddr — as many elements as fit under 80 bytes,
-// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
-// else 1. See decode.PreallocCap.
-const ggenCap_54d0bf8a_15 = (min((80/max(int(unsafe.Sizeof(*new(*CopyAddr))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(*CopyAddr))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(*CopyAddr))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(*CopyAddr))), 1)), 1)
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_CopyNode_Matrix_int = (min((80/max(int(unsafe.Sizeof(*new(int))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(int))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(int))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(int))), 1)), 1)
 
-// ggenCap_54d0bf8a_16: prealloc cap for []*CopyAddr — its maxlen=16 bound when that many
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_CopyNode_Refs_CopyAddr = (min((80/max(int(unsafe.Sizeof(*new(CopyAddr))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(CopyAddr))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(CopyAddr))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(CopyAddr))), 1)), 1)
+
+// ggenCap_CopyNode_Refs_CopyAddr_16: prealloc cap for []CopyAddr — its maxlen=16 bound when that many
 // elements fit a 512-byte span, else the width default.
-const ggenCap_54d0bf8a_16 = (1-min((16*max(int(unsafe.Sizeof(*new(*CopyAddr))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1))*16 + (1-(1-min((16*max(int(unsafe.Sizeof(*new(*CopyAddr))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1)))*ggenCap_54d0bf8a_15
+const ggenCap_CopyNode_Refs_CopyAddr_16 = (1-min((16*max(int(unsafe.Sizeof(*new(CopyAddr))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1))*16 + (1-(1-min((16*max(int(unsafe.Sizeof(*new(CopyAddr))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1)))*ggenCap_CopyNode_Refs_CopyAddr
+
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_CopyNode_Refs_PtrCopyAddr = (min((80/max(int(unsafe.Sizeof(*new(*CopyAddr))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(*CopyAddr))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(*CopyAddr))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(*CopyAddr))), 1)), 1)
+
+// ggenCap_CopyNode_Refs_PtrCopyAddr_16: prealloc cap for []*CopyAddr — its maxlen=16 bound when that many
+// elements fit a 512-byte span, else the width default.
+const ggenCap_CopyNode_Refs_PtrCopyAddr_16 = (1-min((16*max(int(unsafe.Sizeof(*new(*CopyAddr))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1))*16 + (1-(1-min((16*max(int(unsafe.Sizeof(*new(*CopyAddr))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1)))*ggenCap_CopyNode_Refs_PtrCopyAddr
+
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_CopyNode_Tags_string = (min((80/max(int(unsafe.Sizeof(*new(string))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(string))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(string))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(string))), 1)), 1)
+
+// ggenCap_CopyNode_Tags_string_64: prealloc cap for []string — its maxlen=64 bound when that many
+// elements fit a 512-byte span, else the width default.
+const ggenCap_CopyNode_Tags_string_64 = (1-min((64*max(int(unsafe.Sizeof(*new(string))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1))*64 + (1-(1-min((64*max(int(unsafe.Sizeof(*new(string))), 1))/((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))+1), 1)))*ggenCap_CopyNode_Tags_string
 
 func (recv Addr) DecodeFrom(data []byte) (result Addr, i int, err error) {
 	result = recv
@@ -492,7 +491,7 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 					}
 				} else {
 					if result.Children == nil {
-						result.Children = make([]Node, 0, ggenCap_54d0bf8a_1)
+						result.Children = make([]Node, 0, ggenCap_Node_Children_Node_16)
 					}
 				}
 				if i < len(data) && data[i] != ']' {
@@ -692,7 +691,7 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 					}
 				} else {
 					if result.Matrix == nil {
-						result.Matrix = make([][]int, 0, ggenCap_54d0bf8a_3)
+						result.Matrix = make([][]int, 0, ggenCap_Node_Matrix___int_16)
 					}
 				}
 				if i < len(data) && data[i] != ']' {
@@ -1043,9 +1042,9 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 					}
 				} else {
 					if result.Refs == nil {
-						result.Refs = make([]*Addr, 0, ggenCap_54d0bf8a_8)
+						result.Refs = make([]*Addr, 0, ggenCap_Node_Refs_PtrAddr_16)
 					}
-					slab0 = make([]Addr, 0, ggenCap_54d0bf8a_6)
+					slab0 = make([]Addr, 0, ggenCap_Node_Refs_Addr_16)
 				}
 				if i < len(data) && data[i] != ']' {
 					for {
@@ -1136,7 +1135,7 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 					}
 				} else {
 					if result.Tags == nil {
-						result.Tags = make([]string, 0, ggenCap_54d0bf8a_10)
+						result.Tags = make([]string, 0, ggenCap_Node_Tags_string_64)
 					}
 				}
 				if i < len(data) && data[i] != ']' {
@@ -1400,7 +1399,7 @@ func (recv Node) decodeFromStreamDepth(s *scan.Stream, _depth int) (result Node,
 					}
 				} else {
 					if result.Children == nil {
-						result.Children = make([]Node, 0, ggenCap_54d0bf8a_1)
+						result.Children = make([]Node, 0, ggenCap_Node_Children_Node_16)
 					}
 				}
 				for s.Bytes()[s.Pos] != ']' {
@@ -1598,7 +1597,7 @@ func (recv Node) decodeFromStreamDepth(s *scan.Stream, _depth int) (result Node,
 					}
 				} else {
 					if result.Matrix == nil {
-						result.Matrix = make([][]int, 0, ggenCap_54d0bf8a_3)
+						result.Matrix = make([][]int, 0, ggenCap_Node_Matrix___int_16)
 					}
 				}
 				for s.Bytes()[s.Pos] != ']' {
@@ -1673,7 +1672,7 @@ func (recv Node) decodeFromStreamDepth(s *scan.Stream, _depth int) (result Node,
 						}
 					} else {
 						if row0 == nil {
-							row0 = make([]int, 0, ggenCap_54d0bf8a_4)
+							row0 = make([]int, 0, ggenCap_Node_Matrix_int)
 						}
 					}
 					for s.Bytes()[s.Pos] != ']' {
@@ -1986,9 +1985,9 @@ func (recv Node) decodeFromStreamDepth(s *scan.Stream, _depth int) (result Node,
 					}
 				} else {
 					if result.Refs == nil {
-						result.Refs = make([]*Addr, 0, ggenCap_54d0bf8a_8)
+						result.Refs = make([]*Addr, 0, ggenCap_Node_Refs_PtrAddr_16)
 					}
-					slab0 = make([]Addr, 0, ggenCap_54d0bf8a_6)
+					slab0 = make([]Addr, 0, ggenCap_Node_Refs_Addr_16)
 				}
 				for s.Bytes()[s.Pos] != ']' {
 					if s.Pos >= len(s.Bytes()) {
@@ -2137,7 +2136,7 @@ func (recv Node) decodeFromStreamDepth(s *scan.Stream, _depth int) (result Node,
 					}
 				} else {
 					if result.Tags == nil {
-						result.Tags = make([]string, 0, ggenCap_54d0bf8a_10)
+						result.Tags = make([]string, 0, ggenCap_Node_Tags_string_64)
 					}
 				}
 				for s.Bytes()[s.Pos] != ']' {
@@ -2896,7 +2895,7 @@ func (recv CopyNode) decodeFromDepth(data []byte, _depth int) (result CopyNode, 
 					}
 				} else {
 					if result.Children == nil {
-						result.Children = make([]CopyNode, 0, ggenCap_54d0bf8a_12)
+						result.Children = make([]CopyNode, 0, ggenCap_CopyNode_Children_CopyNode_16)
 					}
 				}
 				if i < len(data) && data[i] != ']' {
@@ -3096,7 +3095,7 @@ func (recv CopyNode) decodeFromDepth(data []byte, _depth int) (result CopyNode, 
 					}
 				} else {
 					if result.Matrix == nil {
-						result.Matrix = make([][]int, 0, ggenCap_54d0bf8a_3)
+						result.Matrix = make([][]int, 0, ggenCap_CopyNode_Matrix___int_16)
 					}
 				}
 				if i < len(data) && data[i] != ']' {
@@ -3450,9 +3449,9 @@ func (recv CopyNode) decodeFromDepth(data []byte, _depth int) (result CopyNode, 
 					}
 				} else {
 					if result.Refs == nil {
-						result.Refs = make([]*CopyAddr, 0, ggenCap_54d0bf8a_16)
+						result.Refs = make([]*CopyAddr, 0, ggenCap_CopyNode_Refs_PtrCopyAddr_16)
 					}
-					slab0 = make([]CopyAddr, 0, ggenCap_54d0bf8a_14)
+					slab0 = make([]CopyAddr, 0, ggenCap_CopyNode_Refs_CopyAddr_16)
 				}
 				if i < len(data) && data[i] != ']' {
 					for {
@@ -3543,7 +3542,7 @@ func (recv CopyNode) decodeFromDepth(data []byte, _depth int) (result CopyNode, 
 					}
 				} else {
 					if result.Tags == nil {
-						result.Tags = make([]string, 0, ggenCap_54d0bf8a_10)
+						result.Tags = make([]string, 0, ggenCap_CopyNode_Tags_string_64)
 					}
 				}
 				if i < len(data) && data[i] != ']' {
@@ -3808,7 +3807,7 @@ func (recv CopyNode) decodeFromStreamDepth(s *scan.Stream, _depth int) (result C
 					}
 				} else {
 					if result.Children == nil {
-						result.Children = make([]CopyNode, 0, ggenCap_54d0bf8a_12)
+						result.Children = make([]CopyNode, 0, ggenCap_CopyNode_Children_CopyNode_16)
 					}
 				}
 				for s.Bytes()[s.Pos] != ']' {
@@ -4006,7 +4005,7 @@ func (recv CopyNode) decodeFromStreamDepth(s *scan.Stream, _depth int) (result C
 					}
 				} else {
 					if result.Matrix == nil {
-						result.Matrix = make([][]int, 0, ggenCap_54d0bf8a_3)
+						result.Matrix = make([][]int, 0, ggenCap_CopyNode_Matrix___int_16)
 					}
 				}
 				for s.Bytes()[s.Pos] != ']' {
@@ -4081,7 +4080,7 @@ func (recv CopyNode) decodeFromStreamDepth(s *scan.Stream, _depth int) (result C
 						}
 					} else {
 						if row0 == nil {
-							row0 = make([]int, 0, ggenCap_54d0bf8a_4)
+							row0 = make([]int, 0, ggenCap_CopyNode_Matrix_int)
 						}
 					}
 					for s.Bytes()[s.Pos] != ']' {
@@ -4394,9 +4393,9 @@ func (recv CopyNode) decodeFromStreamDepth(s *scan.Stream, _depth int) (result C
 					}
 				} else {
 					if result.Refs == nil {
-						result.Refs = make([]*CopyAddr, 0, ggenCap_54d0bf8a_16)
+						result.Refs = make([]*CopyAddr, 0, ggenCap_CopyNode_Refs_PtrCopyAddr_16)
 					}
-					slab0 = make([]CopyAddr, 0, ggenCap_54d0bf8a_14)
+					slab0 = make([]CopyAddr, 0, ggenCap_CopyNode_Refs_CopyAddr_16)
 				}
 				for s.Bytes()[s.Pos] != ']' {
 					if s.Pos >= len(s.Bytes()) {
@@ -4545,7 +4544,7 @@ func (recv CopyNode) decodeFromStreamDepth(s *scan.Stream, _depth int) (result C
 					}
 				} else {
 					if result.Tags == nil {
-						result.Tags = make([]string, 0, ggenCap_54d0bf8a_10)
+						result.Tags = make([]string, 0, ggenCap_CopyNode_Tags_string_64)
 					}
 				}
 				for s.Bytes()[s.Pos] != ']' {

@@ -355,7 +355,7 @@ func generateDir(dir, outFlag, pkgFlag string) error {
 		if err != nil {
 			return err
 		}
-		err = generateTo(f, outPkg, group)
+		err = generateTo(f, outPkg, out, group)
 		cerr := f.Close()
 		if err != nil {
 			return err
@@ -490,7 +490,7 @@ func generateSingleFile(file string, wanted []string, outFlag, pkgFlag string) e
 	if err != nil {
 		return err
 	}
-	err = generateTo(f, outPkg, structs)
+	err = generateTo(f, outPkg, out, structs)
 	cerr := f.Close()
 	if err != nil {
 		return err

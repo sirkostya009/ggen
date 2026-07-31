@@ -15,10 +15,8 @@ import (
 	"github.com/sirkostya009/ggen/validation"
 )
 
-// ggenCap_0b9fb7d6_0: prealloc cap for []int — as many elements as fit under 80 bytes,
-// else within one span (8*PtrSize^2: 512 on 64-bit, 128 on 32-bit),
-// else 1. See decode.PreallocCap.
-const ggenCap_0b9fb7d6_0 = (min((80/max(int(unsafe.Sizeof(*new(int))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(int))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(int))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(int))), 1)), 1)
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_NullZeroWhole_C_int = (min((80/max(int(unsafe.Sizeof(*new(int))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(int))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(int))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(int))), 1)), 1)
 
 func (recv NullZeroTags) DecodeFrom(data []byte) (result NullZeroTags, i int, err error) {
 	result = recv
@@ -1224,7 +1222,7 @@ func (recv NullZeroWhole) DecodeFromStream(s *scan.Stream) (result NullZeroWhole
 				}
 			} else {
 				if result.C == nil {
-					result.C = make([]int, 0, ggenCap_0b9fb7d6_0)
+					result.C = make([]int, 0, ggenCap_NullZeroWhole_C_int)
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {
