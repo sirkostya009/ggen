@@ -1037,7 +1037,8 @@ func (s CopyDoc) JSONSize() int {
 	size += len(s.Props) * 4
 	for k, v := range s.Props {
 		size += len(k) * 2
-		size += len(v)*2 + 2
+		size += 2
+		size += len(v) * 2
 	}
 	if n := len(s.Raw); n > 0 {
 		size += n

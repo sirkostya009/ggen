@@ -837,7 +837,8 @@ func (s MapStruct) JSONSize() int {
 	size += len(s.Labels) * 4
 	for k, v := range s.Labels {
 		size += len(k) * 2
-		size += len(v)*2 + 2
+		size += 2
+		size += len(v) * 2
 	}
 	return size
 }
@@ -1796,7 +1797,8 @@ func (s MapDiveStruct) JSONSize() int {
 	size += len(s.Names) * 4
 	for k, v := range s.Names {
 		size += len(k) * 2
-		size += len(v)*2 + 2
+		size += 2
+		size += len(v) * 2
 	}
 	return size
 }

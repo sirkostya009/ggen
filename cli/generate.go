@@ -2260,58 +2260,25 @@ func sizeMapContrib(f FieldInfo, ref string) (int, string) {
 		return 4, b.String()
 	}
 
-	// Composite value kinds (nested slice/map, KindBytes, non-generated
-	// structs) never read `v` in their flat fallback — emit a keys-only loop
-	// so `v` isn't declared-and-unused.
-	usesV := false
-	switch f.ElemKind {
-	case KindString, KindBigInt, KindBigRat,
-		KindNetIP, KindNetipAddr, KindNetipPrefix, KindURL:
-		usesV = true
-	case KindStruct:
-		usesV = isGenerated(f.ElemType) || f.ElemIface.JSONSize
-	}
-	if !usesV {
-		fmt.Fprintf(b, "size += len(%s) * %d\n", ref, perEntryFixed+128)
+	// Per-entry value budget via the canonical per-kind machinery — the same
+	// sizeContrib fields and slice elements use (named prims resolve inside
+	// it). A constant-only budget keeps the keys-only loop so `v` is never
+	// declared-and-unused.
+	vf := sliceElemField(f)
+	vf.JSONName = f.JSONName + ".value"
+	vN, vCode := sizeContrib(vf, "v")
+	if vCode == "" {
+		fmt.Fprintf(b, "size += len(%s) * %d\n", ref, perEntryFixed+vN)
 		fmt.Fprintf(b, "for k := range %s { size += len(k) * %d }\n", ref, mult)
 		return 4, b.String()
 	}
-
-	// Variable per-entry: one combined loop over k,v.
 	fmt.Fprintf(b, "size += len(%s) * %d\n", ref, perEntryFixed)
 	fmt.Fprintf(b, "for k, v := range %s {\n", ref)
 	fmt.Fprintf(b, "size += len(k) * %d\n", mult)
-	// A named-primitive value is emitted as its underlying (renderAppendMap),
-	// so budget the underlying rather than calling the alias's JSONSize.
-	if _, kind, ok := inlineNamedPrim(elemAsField(f)); ok {
-		f.ElemKind = kind
+	if vN > 0 {
+		fmt.Fprintf(b, "size += %d\n", vN)
 	}
-	switch f.ElemKind {
-	case KindString:
-		fmt.Fprintf(b, "size += len(v)*%d + %d\n", mult, sizeStrPad)
-	case KindStruct:
-		if isGenerated(f.ElemType) || f.ElemIface.JSONSize {
-			b.WriteString("size += v.JSONSize()\n")
-		} else {
-			b.WriteString("size += 128\n")
-		}
-	case KindBigInt:
-		b.WriteString("size += v.BitLen()/3 + 4\n")
-	case KindBigRat:
-		b.WriteString("size += (v.Num().BitLen() + v.Denom().BitLen())/3 + 8\n")
-	case KindNetIP:
-		b.WriteString("if v.To4() != nil { size += 17 } else if len(v) != 0 { size += 41 } else { size += 4 }\n")
-	case KindNetipAddr:
-		b.WriteString("if v.Is4() { size += 17 } else { size += 41 }\n")
-	case KindNetipPrefix:
-		b.WriteString("if v.Addr().Is4() { size += 21 } else { size += 45 }\n")
-	case KindURL:
-		b.WriteString("size += len(v.Scheme) + len(v.Host)*3 + len(v.Path)*3 + len(v.RawQuery)*2 + len(v.Fragment)*3 + len(v.Opaque)*2 + 8\n")
-		b.WriteString("if v.User != nil { pw, _ := v.User.Password(); size += (len(v.User.Username()) + len(pw))*3 + 2 }\n")
-	default:
-		// nested slice/map, KindAny, …: flat estimate.
-		b.WriteString("size += 128\n")
-	}
+	b.WriteString(vCode)
 	b.WriteString("}\n")
 	return 4, b.String() // nil-map → "null" (4)
 }
@@ -2496,6 +2463,12 @@ dst = append(dst, bs...)
 		}
 	case KindAny:
 		fmt.Fprintf(b, "if dst, err = %s(dst, v); err != nil { return dst, err }\n", appendAnyFn(f.HTMLEscape))
+	default:
+		// Dedicated-kind value — same value emitter the field level uses.
+		// Used to fall through and emit `"k":` with no value (unused `v`).
+		vf := sliceElemField(f)
+		vf.JSONName = f.JSONName + ".value"
+		renderAppendValue(b, vf, vref)
 	}
 	b.WriteString("}\ndst = append(dst, '}')\n}\n")
 }
@@ -3478,10 +3451,16 @@ mv, _n, err = mv.`+decodeCallFor(f.ElemType)+`
 			fmt.Fprintf(b, "%s = mv\n", mapTarget)
 		}
 	default:
-		fmt.Fprintf(b, `mk2, err := scan.SkipValue(data, %[1]s)
-if err != nil { return result, %[1]s, decode.NewParseErr(%[3]s, %[1]s, err) }
-%[2]s = mk2
-`, posVar, posVar, field)
+		// Dedicated-kind value (time/any/bytes/raw/slice/…): decode into a
+		// fresh temp via the field-level emitter, then store. The old arm
+		// skipped the span without storing — `mk` went unused, so the file
+		// didn't even compile. Braced: the key scan owns `ke` in this scope
+		// and the delegated emitters declare their own.
+		vf := sliceElemField(f)
+		vf.JSONName = f.JSONName + ".value"
+		fmt.Fprintf(b, "{\nvar mv %s\n", f.ElemType)
+		renderField(b, vf, "mv", posVar)
+		fmt.Fprintf(b, "%s = mv\n}\n", mapTarget)
 	}
 	if valCast != "" {
 		fmt.Fprintf(b, "%s = %s(%s)\n", valTarget, valCast, mapTarget)
@@ -3716,11 +3695,31 @@ func sliceElemField(f FieldInfo) FieldInfo {
 	ef.KeyValidation, ef.KeyMods, ef.KeyPipe = nil, nil, nil
 	ef.Levels, ef.HintLevels = nil, nil
 	ef.HintLen = -1
-	if ef.Kind == KindMap {
+	ef.ElemPointer = false
+	ef.ElemArrayLen = 0
+	ef.NullDone = false
+	switch ef.Kind {
+	case KindMap:
 		// Mirror the parse layer: stars stay on ElemType (pointer values
 		// route through elemPtrType inside renderMap).
 		ef.ElemType = strings.TrimPrefix(ef.GoType, "map[string]")
 		ef.ElemKind = resolveKind(ef.ElemType)
+	case KindSlice, KindArray:
+		// Re-derive the container's own element shape (elemAsField zeroed
+		// it); mirror peelSliceField's pointer peel.
+		inner, kind, n := stripOneContainer(ef.GoType)
+		if strings.HasPrefix(inner, "*") {
+			ef.ElemPointer = true
+			inner = inner[1:]
+			kind = resolveKind(inner)
+		}
+		ef.ElemType, ef.ElemKind = inner, kind
+		if ef.ElemKind == KindArray {
+			ef.ElemArrayLen = arrayLenFromType(ef.ElemType)
+		}
+		if ef.Kind == KindArray {
+			ef.ArrayLen = n
+		}
 	}
 	return ef
 }
@@ -5402,8 +5401,14 @@ mv, err = mv.`+streamDecodeCallFor(f.ElemType)+`
 			fmt.Fprintf(b, "%s = mv\n", mapTarget)
 		}
 	default:
-		fmt.Fprintf(b, `err = s.SkipValue()
-%s`, chk)
+		// Dedicated-kind value — same field-level delegation as the bytes
+		// twin (the old arm skipped the value, leaving `mk` unused). Braced
+		// for the same scope hygiene.
+		vf := sliceElemField(f)
+		vf.JSONName = f.JSONName + ".value"
+		fmt.Fprintf(b, "{\nvar mv %s\n", f.ElemType)
+		b.WriteString(renderStreamField(vf, "mv", "s.Pos"))
+		fmt.Fprintf(b, "%s = mv\n}\n", mapTarget)
 	}
 	if valCast != "" {
 		fmt.Fprintf(b, "%s = %s(%s)\n", valTarget, valCast, mapTarget)

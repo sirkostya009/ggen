@@ -524,3 +524,72 @@ func TestElemKinds_DedicatedKindElements(t *testing.T) {
 		t.Errorf("roundtrip mismatch")
 	}
 }
+
+// MapVals pins dedicated-kind map VALUES: the decode value switch's default
+// arm skipped the span leaving `mk` unused, and the marshal loop emitted
+// `"k":` with no value — neither compiled (map[string]any included).
+//
+//ggen:generate
+type MapVals struct {
+	Times map[string]time.Time       `json:"times"`
+	Durs  map[string]time.Duration   `json:"durs"`
+	Raws  map[string]json.RawMessage `json:"raws"`
+	Blobs map[string][]byte          `json:"blobs"`
+	Ints  map[string][]int           `json:"ints"`
+	Anys  map[string]any             `json:"anys"`
+}
+
+func TestMapVals_DedicatedKindValues(t *testing.T) {
+	t.Parallel()
+	in := []byte(`{"anys":{"a":1.5,"b":"two","c":null},"blobs":{"x":"aGVsbG8="},"durs":{"d":"1m30s"},"ints":{"i":[1,2,3]},"raws":{"r":{"nested":true}},"times":{"t":"2020-01-01T00:00:00Z"}}`)
+	got, _, err := MapVals{}.DecodeFrom(in)
+	if err != nil {
+		t.Fatalf("bytes decode: %v", err)
+	}
+	if got.Durs["d"] != 90*time.Second {
+		t.Errorf("Durs = %v", got.Durs)
+	}
+	stdin := []byte(`{"anys":{"a":1.5,"b":"two","c":null},"blobs":{"x":"aGVsbG8="},"ints":{"i":[1,2,3]},"raws":{"r":{"nested":true}},"times":{"t":"2020-01-01T00:00:00Z"}}`)
+	var want MapVals
+	if err := json.Unmarshal(stdin, &want); err != nil {
+		t.Fatalf("stdlib: %v", err)
+	}
+	for name, pair := range map[string][2]any{
+		"times": {got.Times, want.Times},
+		"raws":  {got.Raws, want.Raws},
+		"blobs": {got.Blobs, want.Blobs},
+		"ints":  {got.Ints, want.Ints},
+		"anys":  {got.Anys, want.Anys},
+	} {
+		if !reflect.DeepEqual(pair[0], pair[1]) {
+			t.Errorf("%s: got %v, want %v", name, pair[0], pair[1])
+		}
+	}
+	var s scan.Stream
+	s.Reset(&chunkReader{data: in, max: 1}, nil)
+	sgot, err := MapVals{}.DecodeFromStream(&s)
+	if err != nil {
+		t.Fatalf("stream decode: %v", err)
+	}
+	if !reflect.DeepEqual(sgot, got) {
+		t.Errorf("stream mismatch:\n bytes:  %+v\n stream: %+v", got, sgot)
+	}
+	size := got.JSONSize()
+	out, err := got.AppendJSON(make([]byte, 0, size))
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if !json.Valid(out) {
+		t.Fatalf("invalid JSON: %s", out)
+	}
+	if len(out) > size || cap(out) != size {
+		t.Errorf("JSONSize=%d len=%d cap=%d", size, len(out), cap(out))
+	}
+	back, _, err := MapVals{}.DecodeFrom(out)
+	if err != nil {
+		t.Fatalf("re-decode: %v\n%s", err, out)
+	}
+	if !reflect.DeepEqual(back, got) {
+		t.Errorf("roundtrip mismatch")
+	}
+}

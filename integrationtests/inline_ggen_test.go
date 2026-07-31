@@ -444,7 +444,8 @@ func (s InlineStringsStruct) JSONSize() int {
 	size += len(s.Extra) * 4
 	for k, v := range s.Extra {
 		size += len(k) * 2
-		size += len(v)*2 + 2
+		size += 2
+		size += len(v) * 2
 	}
 	return size
 }

@@ -1085,7 +1085,8 @@ func (s OmitStruct) JSONSize() int {
 		size += len(s.Labels) * 4
 		for k, v := range s.Labels {
 			size += len(k) * 2
-			size += len(v)*2 + 2
+			size += 2
+			size += len(v) * 2
 		}
 	}
 	if s.Meta != nil {
@@ -1093,7 +1094,8 @@ func (s OmitStruct) JSONSize() int {
 		size += len(s.Meta) * 4
 		for k, v := range s.Meta {
 			size += len(k) * 2
-			size += len(v)*2 + 2
+			size += 2
+			size += len(v) * 2
 		}
 	}
 	size += len(s.Name) * 2

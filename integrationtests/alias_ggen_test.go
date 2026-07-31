@@ -3725,7 +3725,8 @@ func (s NPPositions) JSONSize() int {
 	size += len(s.M) * 4
 	for k, v := range s.M {
 		size += len(k) * 2
-		size += len(v)*2 + 2
+		size += 2
+		size += len(string(v)) * 2
 	}
 	if s.P == nil {
 		size += 4
