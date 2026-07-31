@@ -4,9 +4,11 @@ package integrationtests
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/sirkostya009/ggen/encode"
 	"github.com/sirkostya009/ggen/scan"
@@ -445,5 +447,80 @@ func TestPrealloc_WidthDrivenCaps(t *testing.T) {
 	// An element too wide for two in a span falls back to one, not zero.
 	if n := decode.PreallocCap(unsafe.Sizeof(*new(PreallocWide))); n != 1 {
 		t.Errorf("a %d-byte element should prealloc 1, got %d", unsafe.Sizeof(*new(PreallocWide)), n)
+	}
+}
+
+// ElemKinds pins dedicated-kind slice ELEMENTS (time/duration/raw/[]byte/
+// map/any): these were accepted at parse time but the element emitters fell
+// through their kind switches — []any/[]time.Duration didn't compile, and
+// the rest pre-grew a zero slot without scanning (ErrBadArray on any
+// non-empty array) with a marshal loop that emitted nothing.
+//
+//ggen:generate
+type ElemKinds struct {
+	Times []time.Time       `json:"times"`
+	Durs  []time.Duration   `json:"durs"`
+	Raws  []json.RawMessage `json:"raws"`
+	Blobs [][]byte          `json:"blobs"`
+	Maps  []map[string]int  `json:"maps"`
+	Anys  []any             `json:"anys"`
+}
+
+func TestElemKinds_DedicatedKindElements(t *testing.T) {
+	t.Parallel()
+	in := []byte(`{"anys":[1.5,"two",true,null,{"k":"v"}],"blobs":["aGVsbG8=","d29ybGQ="],"durs":["1m30s","1h0m0s"],"maps":[{"x":1,"y":2},{"z":3}],"raws":[{"a":1},[true,null],"s"],"times":["2020-01-01T00:00:00Z","2021-06-15T12:30:00Z"]}`)
+	got, _, err := ElemKinds{}.DecodeFrom(in)
+	if err != nil {
+		t.Fatalf("bytes decode: %v", err)
+	}
+	// Durations use ggen's units default (stdlib int64-nanos diverges) —
+	// check them directly, diff the rest against jsonv2.
+	if got.Durs[0] != 90*time.Second || got.Durs[1] != time.Hour {
+		t.Errorf("Durs = %v", got.Durs)
+	}
+	stdin := []byte(`{"anys":[1.5,"two",true,null,{"k":"v"}],"blobs":["aGVsbG8=","d29ybGQ="],"maps":[{"x":1,"y":2},{"z":3}],"raws":[{"a":1},[true,null],"s"],"times":["2020-01-01T00:00:00Z","2021-06-15T12:30:00Z"]}`)
+	var want ElemKinds
+	if err := json.Unmarshal(stdin, &want); err != nil {
+		t.Fatalf("stdlib: %v", err)
+	}
+	for name, pair := range map[string][2]any{
+		"times": {got.Times, want.Times},
+		"raws":  {got.Raws, want.Raws},
+		"blobs": {got.Blobs, want.Blobs},
+		"maps":  {got.Maps, want.Maps},
+		"anys":  {got.Anys, want.Anys},
+	} {
+		if !reflect.DeepEqual(pair[0], pair[1]) {
+			t.Errorf("%s: got %v, want %v", name, pair[0], pair[1])
+		}
+	}
+	// Stream path decodes identically through 1-byte chunks.
+	var s scan.Stream
+	s.Reset(&chunkReader{data: in, max: 1}, nil)
+	sgot, err := ElemKinds{}.DecodeFromStream(&s)
+	if err != nil {
+		t.Fatalf("stream decode: %v", err)
+	}
+	if !reflect.DeepEqual(sgot, got) {
+		t.Errorf("stream mismatch:\n bytes:  %+v\n stream: %+v", got, sgot)
+	}
+	// Marshal: valid JSON, within JSONSize, roundtrips through own decoder.
+	size := got.JSONSize()
+	out, err := got.AppendJSON(make([]byte, 0, size))
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if !json.Valid(out) {
+		t.Fatalf("invalid JSON: %s", out)
+	}
+	if len(out) > size || cap(out) != size {
+		t.Errorf("JSONSize=%d len=%d cap=%d", size, len(out), cap(out))
+	}
+	back, _, err := ElemKinds{}.DecodeFrom(out)
+	if err != nil {
+		t.Fatalf("re-decode: %v\n%s", err, out)
+	}
+	if !reflect.DeepEqual(back, got) {
+		t.Errorf("roundtrip mismatch")
 	}
 }

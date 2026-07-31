@@ -187,7 +187,17 @@ func generateTo(w io.Writer, pkg string, structs []StructInfo) error {
 		buf.Reset()
 	}
 
-	stdlib, third := collectImports(structs, bodies)
+	// The cap/oneof preamble decls spell element TYPES (`unsafe.Sizeof(*new(
+	// json.RawMessage))`) the method bodies may never name — scan them too or
+	// their imports go missing.
+	scanBufs := bodies
+	for _, decl := range capRegistry.decls {
+		scanBufs = append(scanBufs, []byte(decl))
+	}
+	for _, decl := range oneofRegistry.decls {
+		scanBufs = append(scanBufs, []byte(decl))
+	}
+	stdlib, third := collectImports(structs, scanBufs)
 
 	// format.Source needs the whole file in one []byte. Pre-grow to the body
 	// sum so the concat loop avoids a geometric grow.
@@ -396,6 +406,12 @@ func scanBodiesForStdImports(bodies [][]byte, add func(string)) {
 		{[]byte("bytes."), "bytes"},
 		{[]byte("fmt."), "fmt"},
 		{[]byte("time."), "time"},
+		// Element-type spellings (prealloc consts, elem temps) name these
+		// even when no method body does; test-file structs parse AST-only,
+		// so the TypeImports channel can't cover them.
+		{[]byte("jsontext."), "encoding/json/jsontext"},
+		{[]byte("json."), "encoding/json"},
+		{[]byte("big."), "math/big"},
 		{[]byte("encode."), "github.com/sirkostya009/ggen/encode"},
 		// decode.NewParseErr / decode.ModError appear in nearly every body;
 		// the body-scan reliably adds the import iff the token is present
@@ -582,6 +598,17 @@ func collectFieldImports(f FieldInfo, add func(string), anyString, anyValidation
 			collectFieldImports(leaf, add, anyString, anyValidation, anyBytes, anyRequired)
 		} else if f.ElemKind == KindStruct {
 			crossPkgStruct(f.ElemType, f.ElemIface)
+		} else {
+			switch f.ElemKind {
+			case KindSlice, KindArray:
+				// Nested container: the deep element's kind drives imports.
+				collectFieldImports(peelSliceField(f), add, anyString, anyValidation, anyBytes, anyRequired)
+			case KindTime, KindDuration, KindBytes, KindRawJSON, KindNetIP, KindNetipAddr,
+				KindNetipPrefix, KindURL, KindBigInt, KindBigFloat, KindBigRat, KindSQLNull, KindAny, KindMap:
+				// Dedicated-kind element delegates to the field emitters —
+				// same imports as a field of that kind.
+				collectFieldImports(sliceElemField(f), add, anyString, anyValidation, anyBytes, anyRequired)
+			}
 		}
 	case KindAny:
 	case KindRawJSON:
@@ -2178,6 +2205,19 @@ func sizeSliceContrib(f FieldInfo, ref string, depth int) (int, string) {
 		}
 		b.WriteString(innerCode)
 		b.WriteString("}\n")
+	default:
+		// Dedicated-kind element — same per-kind budget the field level uses.
+		elemN, elemCode := sizeContrib(sliceElemField(f), fmt.Sprintf("%s[%s]", ref, ivar))
+		if elemCode == "" {
+			fmt.Fprintf(b, "size += len(%s) * %d\n", ref, elemN)
+		} else {
+			fmt.Fprintf(b, "for %s := range %s {\n", ivar, ref)
+			if elemN > 0 {
+				fmt.Fprintf(b, "size += %d\n", elemN)
+			}
+			b.WriteString(elemCode)
+			b.WriteString("}\n")
+		}
 	}
 	// nil slice → "null" (4 bytes) is wider than `[]` (2); reserve the max.
 	// Arrays can't be nil, so they keep the 2-byte bracket budget.
@@ -2389,6 +2429,10 @@ func emitSliceElement(b *bytes.Buffer, f FieldInfo, vref string, depth int) {
 		}
 	case KindSlice, KindArray:
 		emitAppendSlice(b, peelSliceField(f), vref, depth+1)
+	default:
+		// Dedicated-kind element — same value emitter the field level uses.
+		// Used to fall through and emit NOTHING (unused range var, no value).
+		renderAppendValue(b, sliceElemField(f), vref)
 	}
 }
 
@@ -2455,11 +2499,6 @@ dst = append(dst, bs...)
 	}
 	b.WriteString("}\ndst = append(dst, '}')\n}\n")
 }
-
-// defaultPreallocCap was the kind-blind cap for un-hinted slices. Superseded by
-// the width-driven ladder in decode.PreallocCap (see preallocCap); kept only
-// for the map path, which has no byte budget to reason about.
-const defaultPreallocCap = 4
 
 // userPreallocHint extracts an explicit sizing hint from the hintlen / len /
 // minlen ladder, in that order. Every one of them outranks the width-derived
@@ -2694,6 +2733,13 @@ func zeroLit(elemType string, kind TypeKind) string {
 		zero = "0"
 	case KindSlice, KindMap:
 		return "nil"
+	case KindAny, KindBytes, KindRawJSON, KindNetIP:
+		// `any{}` / composite literals over slice-backed kinds are invalid
+		// or wasteful — their zero is nil.
+		return "nil"
+	case KindDuration:
+		// time.Duration is a named int64 — `time.Duration{}` doesn't compile.
+		return "0"
 	default:
 		return elemType + "{}"
 	}
@@ -3647,6 +3693,35 @@ func elemAsField(f FieldInfo) FieldInfo {
 	ef.PointeeType = ""
 	ef.ElemType = ""
 	ef.ElemKind = KindString
+	return ef
+}
+
+// sliceElemField adapts elemAsField for FULL field-emitter delegation
+// (dedicated-kind elements: time/duration/bytes/raw/netip/url/big/sqlnull/
+// any/map). Element value rules run separately via elemSteps after the value
+// decode, and the element sits inside a loop — never at dispatch — so the
+// outer field's rule buckets and dispatch flags must not leak in. Map
+// elements get their value shape back (elemAsField zeroes it).
+func sliceElemField(f FieldInfo) FieldInfo {
+	ef := elemAsField(f)
+	ef.JSONName = f.JSONName + "[]"
+	ef.AtDispatch = false
+	ef.NullZero = false
+	ef.String = false
+	ef.Inline = false
+	ef.OmitEmpty, ef.OmitZero = false, false
+	ef.Validation, ef.Mods, ef.Pipe = nil, nil, nil
+	ef.ElemValidation, ef.ElemMods = nil, nil
+	ef.InnerValidation, ef.InnerMods = nil, nil
+	ef.KeyValidation, ef.KeyMods, ef.KeyPipe = nil, nil, nil
+	ef.Levels, ef.HintLevels = nil, nil
+	ef.HintLen = -1
+	if ef.Kind == KindMap {
+		// Mirror the parse layer: stars stay on ElemType (pointer values
+		// route through elemPtrType inside renderMap).
+		ef.ElemType = strings.TrimPrefix(ef.GoType, "map[string]")
+		ef.ElemKind = resolveKind(ef.ElemType)
+	}
 	return ef
 }
 
@@ -4963,6 +5038,13 @@ if e := bytes.IndexByte(data[%[2]s:], ']'); e >= 0 { %[4]s = bytes.Count(data[%[
 				// zero value.
 				b.WriteString(renderCrossPkgStructDecode(elemAsField(f), target, kvar))
 			}
+		default:
+			// Dedicated-kind element (time/duration/bytes/raw/netip/url/big/
+			// sqlnull/any/map): the same field-level emitter the struct level
+			// uses, with a sanitized FieldInfo. Used to fall through — the
+			// pre-grown zero slot was never scanned, so every non-empty array
+			// failed ErrBadArray (or the file didn't compile).
+			renderField(b, sliceElemField(f), target, kvar)
 		case KindSlice, KindArray:
 			// Nested container — recurse, peeling one outer [] / [N] off.
 			inner := peelSliceField(f)
@@ -6250,6 +6332,10 @@ break
 			}
 			emitStreamSliceRead(b, inner, row, "s.Pos", depth+1)
 			fmt.Fprintf(b, "%s = %s\n", target, row)
+		default:
+			// Dedicated-kind element — same field-level emitter the struct
+			// level uses; see the bytes twin in emitByteSliceRead.
+			b.WriteString(renderStreamField(sliceElemField(f), target, "s.Pos"))
 		}
 		if elemCast != "" {
 			fmt.Fprintf(b, "%s = %s(%s)\n", elemTarget, elemCast, target)
