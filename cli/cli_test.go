@@ -1739,6 +1739,115 @@ type Msg struct {
 	//
 	// Kind-coupled rules and bad value parameters (`len=abc`, `gt=abc`, …)
 	// must be rejected at parse time with a clear diagnostic.
+	t.Run("FieldCollisions", func(t *testing.T) {
+		t.Parallel()
+		// A parent field shadowing an embedded one resolves stdlib-style
+		// (own wins) — it used to emit duplicate seen-flags and switch
+		// cases, a generated file that doesn't compile.
+		t.Run("embedded_shadow_resolves", func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+			writeFixture(t, filepath.Join(dir, "msg.go"), `package fixture
+
+type Base struct {
+	ID   int    `+"`"+`json:"id"`+"`"+`
+	Note string `+"`"+`json:"note"`+"`"+`
+}
+
+//ggen:generate
+type Outer struct {
+	Base
+	ID int `+"`"+`json:"id"`+"`"+`
+}
+`)
+			out, err := runCLI(t, bin, dir, "msg.go")
+			if err != nil {
+				t.Fatalf("ggen failed: %v\n%s", err, out)
+			}
+			gen, rerr := os.ReadFile(filepath.Join(dir, "msg_ggen.go"))
+			if rerr != nil {
+				t.Fatal(rerr)
+			}
+			if n := strings.Count(string(gen), "seenID := false"); n != 2 { // bytes + stream
+				t.Errorf("seenID declared %d times, want 2 (one per decode path)\n", n)
+			}
+			if !strings.Contains(string(gen), "case \"note\":") {
+				t.Errorf("promoted non-shadowed field lost")
+			}
+		})
+		// Two of the parent's OWN fields sharing a JSON name is a hard error.
+		t.Run("own_duplicate_tags_rejected", func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+			writeFixture(t, filepath.Join(dir, "msg.go"), `package fixture
+
+//ggen:generate
+type Msg struct {
+	A int `+"`"+`json:"same"`+"`"+`
+	B int `+"`"+`json:"same"`+"`"+`
+}
+`)
+			out, err := runCLI(t, bin, dir, "msg.go")
+			if err == nil {
+				t.Fatalf("expected rejection, got success:\n%s", out)
+			}
+			if !strings.Contains(out, "share JSON name") {
+				t.Errorf("diagnostic missing:\n%s", out)
+			}
+		})
+	})
+
+	t.Run("TypedFixtureRejections", func(t *testing.T) {
+		t.Parallel()
+		// These need go/types (a real module): converter input classification
+		// and named-primitive rule applicability.
+		writeMod := func(t *testing.T, dir string) {
+			writeFixture(t, filepath.Join(dir, "go.mod"), "module fixture\n\ngo 1.26\n")
+		}
+		t.Run("converter_container_input", func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+			writeMod(t, dir)
+			writeFixture(t, filepath.Join(dir, "msg.go"), `package fixture
+
+func FromList(v []string) string { return "" }
+
+//ggen:generate
+type Msg struct {
+	S string `+"`"+`json:"s" pipe:"@FromList/."`+"`"+`
+}
+`)
+			out, err := runCLI(t, bin, dir, "msg.go")
+			if err == nil {
+				t.Fatalf("expected rejection, got success:\n%s", out)
+			}
+			if !strings.Contains(out, "container inputs are not supported") {
+				t.Errorf("diagnostic missing:\n%s", out)
+			}
+		})
+		t.Run("named_prim_rule_mismatch", func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+			writeMod(t, dir)
+			writeFixture(t, filepath.Join(dir, "msg.go"), `package fixture
+
+type Pri string
+
+//ggen:generate
+type Msg struct {
+	P Pri `+"`"+`json:"p" pipe:"gt=1"`+"`"+`
+}
+`)
+			out, err := runCLI(t, bin, dir, "msg.go")
+			if err == nil {
+				t.Fatalf("expected rejection, got success:\n%s", out)
+			}
+			if !strings.Contains(out, "inapplicable to Pri") {
+				t.Errorf("diagnostic missing:\n%s", out)
+			}
+		})
+	})
+
 	t.Run("InvalidRuleApplication", func(t *testing.T) {
 		t.Parallel()
 		type bad struct {
@@ -1879,6 +1988,20 @@ type Msg struct {
 			{"clamp_both_empty", "N int", `json:"n" pipe:"clamp=|"`, "requires at least one of lo or hi"},
 			{"clamp_bad_lo", "N int", `json:"n" pipe:"clamp=abc|10"`, "lo \"abc\" is not a valid number"},
 			{"clamp_bad_hi", "N int", `json:"n" pipe:"clamp=0|abc"`, "hi \"abc\" is not a valid number"},
+
+			// ----- emitted-code-would-not-compile class (round-2 audit) -----
+			{"multiple_zero", "N int", `json:"n" pipe:"multiple=0"`, "requires a positive integer"},
+			{"multiple_negative", "N int", `json:"n" pipe:"multiple=-2"`, "requires a positive integer"},
+			{"oneof_dup_string", "S string", `json:"s" pipe:"oneof=a|b|a"`, "is a duplicate"},
+			{"oneof_dup_numeric_value", "N int", `json:"n" pipe:"oneof=1|1.0"`, "is a duplicate"},
+			{"gt_fractional_on_int", "N int", `json:"n" pipe:"gt=1.5"`, "integer field needs an integer bound"},
+			{"gt_inf", "F float64", `json:"f" pipe:"gt=Inf"`, "NaN/Inf are not valid bounds"},
+			{"eq_nan", "F float64", `json:"f" pipe:"eq=NaN"`, "NaN/Inf are not valid bounds"},
+			{"clamp_fractional_on_int", "N int", `json:"n" pipe:"clamp=0|1.5"`, "integer field needs integer bounds"},
+			{"string_tag_on_slice", "X []int", `json:"x,string"`, "only valid on primitive fields"},
+			{"string_tag_on_map", "M map[string]int", `json:"m,string"`, "only valid on primitive fields"},
+			{"inner_depth2_mismatch", "M [][]int", `json:"m" pipe:"inner:(inner:(trim))"`, "is inapplicable to int"},
+			{"inner_deeper_than_type", "X []int", `json:"x" pipe:"inner:(inner:(gte=0))"`, "no element at that depth"},
 		}
 
 		for _, tc := range cases {

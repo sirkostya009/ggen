@@ -1040,6 +1040,17 @@ func (s *structSet) extractStruct(name string, st *ast.StructType) (StructInfo, 
 						fi.Iface = inspectType(fieldType, s.stdIfaces)
 						fi.TypeImports = s.foreignImports(fieldType)
 						fi.NamedPrims = s.namedPrims(fieldType)
+						// Named primitives resolve only now — re-run the
+						// applicability matrix so a kind-mismatched rule on a
+						// `type P string` field rejects here instead of
+						// emitting broken code (generate resolves the same
+						// kinds via effectiveKind and emits real rule code).
+						if extractErr == nil && len(fi.NamedPrims) > 0 {
+							if err := checkRuleApplicability(fi); err != nil {
+								extractErr = err
+								errs = append(errs, attachPosition(err, s.fileSet.Position(field.Pos())))
+							}
+						}
 					}
 				}
 			}
@@ -1075,7 +1086,73 @@ func (s *structSet) extractStruct(name string, st *ast.StructType) (StructInfo, 
 			}
 		}
 	}
+	info.Fields = resolveFieldCollisions(name, info.Fields, &errs)
 	return info, errors.Join(errs...)
+}
+
+// resolveFieldCollisions applies stdlib dominant-field rules over the
+// own+promoted field set: the parent's own field shadows a promoted one
+// sharing its JSON or Go name; promoted-vs-promoted clashes drop both
+// (stdlib ambiguity semantics); two of the parent's OWN fields sharing a
+// JSON name is a hard error. Without this, a shadowing field emitted
+// duplicate seen-flags, duplicate switch cases, and ambiguous selectors —
+// a generated file that doesn't compile.
+func resolveFieldCollisions(parent string, fields []FieldInfo, errs *[]error) []FieldInfo {
+	drop := make(map[int]bool)
+	group := func(key func(FieldInfo) string) {
+		byKey := map[string][]int{}
+		for i, f := range fields {
+			k := key(f)
+			if k == "" {
+				continue
+			}
+			byKey[k] = append(byKey[k], i)
+		}
+		for _, idxs := range byKey {
+			if len(idxs) < 2 {
+				continue
+			}
+			var own, promoted []int
+			for _, i := range idxs {
+				if fields[i].StructName == parent {
+					own = append(own, i)
+				} else {
+					promoted = append(promoted, i)
+				}
+			}
+			switch {
+			case len(own) == 1:
+				// The parent's own field shadows the promoted ones.
+				for _, i := range promoted {
+					drop[i] = true
+				}
+			case len(own) > 1:
+				*errs = append(*errs, fmt.Errorf(
+					"%s: fields %s and %s share JSON name %q",
+					parent, fields[own[0]].GoName, fields[own[1]].GoName, fields[own[0]].JSONName))
+				for _, i := range idxs[1:] {
+					drop[i] = true // keep one so a broken emit doesn't pile on
+				}
+			default:
+				// Promoted-vs-promoted ambiguity: stdlib drops the name.
+				for _, i := range idxs {
+					drop[i] = true
+				}
+			}
+		}
+	}
+	group(func(f FieldInfo) string { return "j\x00" + f.JSONName })
+	group(func(f FieldInfo) string { return "g\x00" + f.GoName })
+	if len(drop) == 0 {
+		return fields
+	}
+	out := fields[:0]
+	for i, f := range fields {
+		if !drop[i] {
+			out = append(out, f)
+		}
+	}
+	return out
 }
 
 // extractEmbedded resolves an embedded field and returns the promoted fields

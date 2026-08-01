@@ -177,7 +177,11 @@ surface pinned by `Decoder[T]`).
 
 - **`pipe:` tag follow-ups.** Foreign-package converter inputs (import plumbing);
   top-level alias-type `pipe:` support (needs a non-dispatch null branch in the
-  alias renderers).
+  alias renderers); CONTAINER converter inputs (`@Conv` with W = []T/map) —
+  currently rejected at parse (2026-08, was silently-broken codegen before), to
+  support: populate converterInputField's ElemType/ElemKind/ElemIface from
+  go/types — the dedicated-kind element delegation (R3/R4, cbf0949/816fd3c)
+  makes the emit side workable now.
 
 - **`nullzero` follow-up.** Extend the per-field `nullzero` decode variant to
   top-level alias types (needs a non-dispatch null branch in the alias renderers).

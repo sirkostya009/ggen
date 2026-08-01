@@ -528,7 +528,7 @@ func TestNeedFloat(t *testing.T) {
 	for _, c := range cases {
 		t.Run("v="+c.value, func(t *testing.T) {
 			t.Parallel()
-			err := needFloat(ValidationRule{Name: "gt", Value: c.value}, "field f")
+			err := needFloat(ValidationRule{Name: "gt", Value: c.value}, "field f", KindFloat64)
 			if c.wantSub == "" {
 				if err != nil {
 					t.Errorf("expected nil, got: %v", err)

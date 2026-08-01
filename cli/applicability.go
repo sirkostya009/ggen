@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 )
@@ -23,10 +24,42 @@ func checkRuleApplicability(fi FieldInfo) error {
 	var errs []error
 	collect := func(err error) { errs = append(errs, err) }
 
+	// A named primitive reports KindStruct here, but generate resolves it via
+	// namedKinds and emits REAL primitive rule code — judge it by the
+	// underlying kind (parse-time twin of effectiveKind). AST-only mode has
+	// no NamedPrims and keeps the historical KindStruct skip.
+	eff := func(typ string, kind TypeKind) TypeKind {
+		if kind == KindStruct {
+			if k, ok := fi.NamedPrims[typ]; ok {
+				return k
+			}
+		}
+		return kind
+	}
+
+	// json:",string" is documented primitives-only; renderStringTag has no
+	// other arms, so anything else emitted non-compiling code. Named
+	// primitives are rejected too — the string-tag emit does not cast.
+	if fi.String {
+		switch fi.Kind { // for pointers fi.Kind is already the pointee kind
+		case KindString, KindBool,
+			KindInt, KindInt8, KindInt16, KindInt32, KindInt64,
+			KindUint, KindUint8, KindUint16, KindUint32, KindUint64,
+			KindFloat32, KindFloat64:
+		default:
+			collect(&richError{
+				Msg:      desc + ": `json:\",string\"` is only valid on primitive fields (got " + fi.GoType + ")",
+				CodeSpan: ",string",
+				BotHint:  "string-tag emit only handles primitive kinds",
+				UserHint: "`,string` wraps primitives, like stdlib; drop it or use a primitive field",
+			})
+		}
+	}
+
 	// Outer rules apply to the field itself. For pointers fi.Kind is the
 	// pointee kind, the right anchor.
-	collect(checkValRules(fi.Validation, "pipe", fi.Kind, fi.GoType, desc))
-	collect(checkModRules(fi.Mods, "pipe", fi.Kind, fi.GoType, desc))
+	collect(checkValRules(fi.Validation, "pipe", eff(fi.GoType, fi.Kind), fi.GoType, desc))
+	collect(checkModRules(fi.Mods, "pipe", eff(fi.GoType, fi.Kind), fi.GoType, desc))
 
 	// keys: only valid on maps. Keyed kind itself is always string.
 	if len(fi.KeyValidation) > 0 || len(fi.KeyMods) > 0 {
@@ -53,8 +86,35 @@ func checkRuleApplicability(fi FieldInfo) error {
 			UserHint: "`inner:` only works with slice/array/map",
 		})
 	}
-	collect(checkValRules(fi.ElemValidation, "pipe inner:", fi.ElemKind, fi.ElemType, desc+" element"))
-	collect(checkModRules(fi.ElemMods, "pipe inner:", fi.ElemKind, fi.ElemType, desc+" element"))
+	collect(checkValRules(fi.ElemValidation, "pipe inner:", eff(fi.ElemType, fi.ElemKind), fi.ElemType, desc+" element"))
+	collect(checkModRules(fi.ElemMods, "pipe inner:", eff(fi.ElemType, fi.ElemKind), fi.ElemType, desc+" element"))
+
+	// Levels >= 2 (`inner:(inner:(...))`) peel the element type per level —
+	// they used to bypass the matrix entirely, so a mismatched rule two
+	// levels down emitted non-compiling code the level-1 check rejects.
+	levelType := fi.ElemType
+	for li := 0; li < max(len(fi.InnerValidation), len(fi.InnerMods)); li++ {
+		var levelKind TypeKind
+		var ok bool
+		levelType, levelKind, ok = peelTypeOnce(levelType)
+		ldesc := fmt.Sprintf("%s element (depth %d)", desc, li+2)
+		if !ok {
+			collect(&richError{
+				Msg:      fmt.Sprintf("%s: `inner:` nested %d deep, but %s has no element at that depth", desc, li+2, fi.GoType),
+				CodeSpan: "inner:",
+				BotHint:  "more inner: levels than container nesting",
+				UserHint: "remove the extra `inner:` level",
+			})
+			break
+		}
+		lk := eff(levelType, levelKind)
+		if li < len(fi.InnerValidation) {
+			collect(checkValRules(fi.InnerValidation[li], "pipe inner:", lk, levelType, ldesc))
+		}
+		if li < len(fi.InnerMods) {
+			collect(checkModRules(fi.InnerMods[li], "pipe inner:", lk, levelType, ldesc))
+		}
+	}
 
 	// hint only meaningful on growable containers (slice/map).
 	if fi.HintLen >= 0 && fi.Kind != KindSlice && fi.Kind != KindMap {
@@ -67,6 +127,24 @@ func checkRuleApplicability(fi FieldInfo) error {
 	}
 
 	return errors.Join(errs...)
+}
+
+// peelTypeOnce strips one container level off a type string (mirroring the
+// stripOneContainer + map-value + pointer peels the emitters apply), for the
+// per-level applicability walk.
+func peelTypeOnce(typ string) (string, TypeKind, bool) {
+	switch {
+	case strings.HasPrefix(typ, "map[string]"):
+		typ = strings.TrimPrefix(typ, "map[string]")
+	default:
+		inner, _, _ := stripOneContainer(typ)
+		if inner == typ {
+			return "", 0, false
+		}
+		typ = inner
+	}
+	typ = strings.TrimPrefix(typ, "*")
+	return typ, resolveKind(typ), true
 }
 
 // canDive reports whether inner: can peel one level off this kind.
@@ -223,7 +301,7 @@ func checkOneValRule(r ValidationRule, source string, kind TypeKind, typeName, f
 				"expected numeric type",
 				userHint)
 		}
-		return needFloat(r, fieldDesc)
+		return needFloat(r, fieldDesc, kind)
 
 	case "multiple":
 		if !isIntegralNumeric(kind) {
@@ -236,12 +314,25 @@ func checkOneValRule(r ValidationRule, source string, kind TypeKind, typeName, f
 				"modulo (multiple=N) only valid on integer types",
 				userHint)
 		}
-		return needInt(r, fieldDesc)
+		if err := needInt(r, fieldDesc); err != nil {
+			return err
+		}
+		// The emit is `ref % N != 0` — a zero divisor is a compile error in
+		// the generated file, and a negative one is meaningless.
+		if n, _ := strconv.Atoi(strings.TrimSpace(r.Value)); n <= 0 {
+			return &richError{
+				Msg:      fmt.Sprintf("%s: `multiple=%s` requires a positive integer", fieldDesc, r.Value),
+				CodeSpan: "multiple=" + r.Value,
+				BotHint:  "non-positive modulo divisor",
+				UserHint: "`multiple=N` needs N >= 1",
+			}
+		}
+		return nil
 
 	case "eq", "neq":
 		switch {
 		case isNumeric(kind):
-			return needFloat(r, fieldDesc)
+			return needFloat(r, fieldDesc, kind)
 		case kind == KindString:
 			return nil
 		default:
@@ -271,9 +362,21 @@ func checkOneValRule(r ValidationRule, source string, kind TypeKind, typeName, f
 				UserHint: fmt.Sprintf("provide values like `%s`", example),
 			}
 		}
+		// Duplicates emit duplicate switch cases — a compile error in the
+		// generated file. Numeric parts compare by VALUE (1 vs 1.0 vs +1).
+		dupErr := func(p string) error {
+			return &richError{
+				Msg:      fmt.Sprintf("%s: `oneof=%s` part %q is a duplicate", fieldDesc, r.Value, p),
+				CodeSpan: p,
+				BotHint:  "duplicate oneof part emits duplicate switch cases",
+				UserHint: "every `oneof=` part must be unique",
+			}
+		}
 		if isNumeric(kind) {
+			seen := map[float64]struct{}{}
 			for p := range strings.SplitSeq(r.Value, "|") {
-				if _, err := strconv.ParseFloat(strings.TrimSpace(p), 64); err != nil {
+				f, err := strconv.ParseFloat(strings.TrimSpace(p), 64)
+				if err != nil {
 					return &richError{
 						Msg:      fmt.Sprintf("%s: `oneof=%s` part %q is not a valid number", fieldDesc, r.Value, p),
 						CodeSpan: p,
@@ -281,6 +384,18 @@ func checkOneValRule(r ValidationRule, source string, kind TypeKind, typeName, f
 						UserHint: "for numeric fields every `oneof=` part must parse as a number",
 					}
 				}
+				if _, dup := seen[f]; dup {
+					return dupErr(p)
+				}
+				seen[f] = struct{}{}
+			}
+		} else {
+			seen := map[string]struct{}{}
+			for p := range strings.SplitSeq(r.Value, "|") {
+				if _, dup := seen[p]; dup {
+					return dupErr(p)
+				}
+				seen[p] = struct{}{}
 			}
 		}
 		return nil
@@ -428,24 +543,47 @@ func checkOneModRule(m ModRule, source string, kind TypeKind, typeName, fieldDes
 				UserHint: "provide at least one bound, e.g. `clamp=0|100` or `clamp=|100`",
 			}
 		}
-		if lo != "" {
-			if _, err := strconv.ParseFloat(lo, 64); err != nil {
+		checkBound := func(name, v string) error {
+			f, err := strconv.ParseFloat(v, 64)
+			if err != nil {
 				return &richError{
-					Msg:      fmt.Sprintf("%s: `clamp` lo %q is not a valid number", fieldDesc, lo),
-					CodeSpan: lo,
-					BotHint:  "non-numeric clamp lo bound",
+					Msg:      fmt.Sprintf("%s: `clamp` %s %q is not a valid number", fieldDesc, name, v),
+					CodeSpan: v,
+					BotHint:  "non-numeric clamp " + name + " bound",
 					UserHint: "both bounds must be numeric, e.g. `clamp=0|100`",
 				}
 			}
+			// Bounds are pasted verbatim into Go comparisons — NaN/Inf have
+			// no constant spelling, and a fractional bound truncates against
+			// an integer kind; both fail the generated build.
+			if math.IsNaN(f) || math.IsInf(f, 0) {
+				return &richError{
+					Msg:      fmt.Sprintf("%s: `clamp` %s %q — NaN/Inf are not valid bounds", fieldDesc, name, v),
+					CodeSpan: v,
+					BotHint:  "NaN/Inf bound has no Go constant spelling",
+					UserHint: "use finite numeric bounds",
+				}
+			}
+			if isIntegralNumeric(kind) {
+				if _, err := strconv.Atoi(v); err != nil {
+					return &richError{
+						Msg:      fmt.Sprintf("%s: `clamp` %s %q — integer field needs integer bounds", fieldDesc, name, v),
+						CodeSpan: v,
+						BotHint:  "fractional clamp bound against integral kind fails the generated build",
+						UserHint: "use whole-number bounds, or make the field a float",
+					}
+				}
+			}
+			return nil
+		}
+		if lo != "" {
+			if err := checkBound("lo", lo); err != nil {
+				return err
+			}
 		}
 		if hi != "" {
-			if _, err := strconv.ParseFloat(hi, 64); err != nil {
-				return &richError{
-					Msg:      fmt.Sprintf("%s: `clamp` hi %q is not a valid number", fieldDesc, hi),
-					CodeSpan: hi,
-					BotHint:  "non-numeric clamp hi bound",
-					UserHint: "both bounds must be numeric, e.g. `clamp=0|100`",
-				}
+			if err := checkBound("hi", hi); err != nil {
+				return err
 			}
 		}
 		return nil
@@ -504,7 +642,7 @@ func needInt(r ValidationRule, fieldDesc string) error {
 	return nil
 }
 
-func needFloat(r ValidationRule, fieldDesc string) error {
+func needFloat(r ValidationRule, fieldDesc string, kind TypeKind) error {
 	v := strings.TrimSpace(r.Value)
 	if v == "" {
 		return &richError{
@@ -514,12 +652,34 @@ func needFloat(r ValidationRule, fieldDesc string) error {
 			UserHint: fmt.Sprintf("provide a numeric value like `%s=5` or `%s=1.5`", r.Name, r.Name),
 		}
 	}
-	if _, err := strconv.ParseFloat(v, 64); err != nil {
+	f, err := strconv.ParseFloat(v, 64)
+	if err != nil {
 		return &richError{
 			Msg:      fmt.Sprintf("%s: `%s=%s` value is not a valid number", fieldDesc, r.Name, r.Value),
 			CodeSpan: r.Name + "=" + r.Value,
 			BotHint:  "non-numeric parameter for numeric rule",
 			UserHint: fmt.Sprintf("use a numeric value like `%s=5` or `%s=1.5`", r.Name, r.Name),
+		}
+	}
+	// The value is pasted verbatim into a Go comparison: NaN/Inf spellings
+	// are not Go constants, and a fractional bound against an integer kind
+	// is an untyped-float truncation error — both fail the generated build.
+	if math.IsNaN(f) || math.IsInf(f, 0) {
+		return &richError{
+			Msg:      fmt.Sprintf("%s: `%s=%s` — NaN/Inf are not valid bounds", fieldDesc, r.Name, r.Value),
+			CodeSpan: r.Name + "=" + r.Value,
+			BotHint:  "NaN/Inf bound has no Go constant spelling",
+			UserHint: "use a finite numeric bound",
+		}
+	}
+	if isIntegralNumeric(kind) {
+		if _, err := strconv.Atoi(v); err != nil {
+			return &richError{
+				Msg:      fmt.Sprintf("%s: `%s=%s` — integer field needs an integer bound", fieldDesc, r.Name, r.Value),
+				CodeSpan: r.Name + "=" + r.Value,
+				BotHint:  "fractional bound against integral kind fails the generated build",
+				UserHint: "use a whole number, or make the field a float",
+			}
 		}
 	}
 	return nil

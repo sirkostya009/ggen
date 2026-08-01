@@ -189,6 +189,13 @@ func classifyConverter(ref string, fieldType types.Type, qualifier types.Qualifi
 	if named, isNamed := w.(*types.Named); isNamed && named.Obj().Pkg() != nil && named.Obj().Pkg() != pkg {
 		return customFunc{}, "", false, fmt.Errorf("converter input %s is from another package; only builtin or same-package input types are supported", w)
 	}
+	// The documented contract is "primitive or ggen-decodable struct" — a
+	// container input synthesizes a FieldInfo with no element shape and the
+	// emitted scan doesn't compile (or silently mis-scans).
+	switch w.Underlying().(type) {
+	case *types.Slice, *types.Array, *types.Map:
+		return customFunc{}, "", false, fmt.Errorf("converter input %s must be a primitive or a ggen-decodable struct — container inputs are not supported", w)
+	}
 	cf = customFunc{PkgImport: pkgImp, PkgName: pkgName, FuncName: funcPart}
 	res := sig.Results()
 	switch res.Len() {
