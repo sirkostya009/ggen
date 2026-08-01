@@ -88,8 +88,13 @@ Field config is partitioned by role across three tags: `json:` (wire shape),
 
 ### `json:`
 
-- `json:"name"` — JSON key name (field is ignored otherwise)
-- `json:"-"` — field explicitly ignored
+- `json:"name"` — JSON key name (field is ignored otherwise). jsonv2 quoting:
+  options split on commas OUTSIDE single quotes, so `json:"'a,b'"` names the
+  field `a,b` and `format:'Jan 2, 2006'` survives its comma; `\'` = literal
+  quote (`parseJSONTag`/`splitTagOpts`, tags.go)
+- `json:"-"` — field explicitly ignored. `-` with options is a parse ERROR
+  (jsonv2 parity — v1 read it as a field named `-`; use `json:"'-'"` for
+  that). Empty options (`a,`, `a,,x`) also error; unknown option words pass
 - `json:",inline"` — catch-all map for unknown keys. Type must be `map[string]V`
   (string-keyed); V may be `any`, a primitive, a ggen-annotated struct, or any
   other type (typed elems use the elem's fast path when available, else

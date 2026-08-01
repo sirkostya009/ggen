@@ -812,7 +812,10 @@ func (s *structSet) extractFieldFromTypes(structName string, field *types.Var, t
 	fi.GoType = types.TypeString(field.Type(), qualifier)
 
 	rt := reflect.StructTag(tag)
-	jsonName, opts, ignored := parseJSONTag(rt.Get("json"))
+	jsonName, opts, ignored, err := parseJSONTag(rt.Get("json"))
+	if err != nil {
+		return fi, fmt.Errorf("field %s: %w", field.Name(), err)
+	}
 	if ignored {
 		fi.Ignored = true
 		return fi, nil
@@ -1191,7 +1194,10 @@ func extractField(structName, goName string, field *ast.Field) (FieldInfo, error
 
 	if field.Tag != nil {
 		tag := reflect.StructTag(strings.Trim(field.Tag.Value, "`"))
-		jsonName, opts, ignored := parseJSONTag(tag.Get("json"))
+		jsonName, opts, ignored, err := parseJSONTag(tag.Get("json"))
+		if err != nil {
+			return fi, fmt.Errorf("field %s: %w", goName, err)
+		}
 		if ignored {
 			fi.Ignored = true
 			return fi, nil

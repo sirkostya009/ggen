@@ -186,6 +186,24 @@ func TestStdCompat_NativeTypes(t *testing.T) {
 // field so TimeFormatsStdCompat / TimeFormatsStruct can embed them via
 // anonymous-field promotion. jsonv2-rejected variants live in wire_test.go.
 
+// A comma inside a quoted custom layout: jsonv2 accepts it (year+month+day
+// round-trips), and ggen's tag parser must split options quote-aware — a
+// naive comma split truncated this to "Jan 2".
+//
+//ggen:generate
+type TimeCustomComma struct {
+	CustomComma time.Time `json:"customComma,format:'Jan 2, 2006'"`
+}
+
+// Verbose custom layout with literals: jsonv2-accepted and value-exact on
+// round-trip (year+nanos+zone all present). Also exercises timeFormatSize's
+// `len(format)+6` fallback at the long end.
+//
+//ggen:generate
+type TimeCustomLong struct {
+	CustomLong time.Time `json:"customLong,format:'2006-Jan-02T15:04:05.000000000_Mon_-0700'"`
+}
+
 //ggen:generate
 type TimeDefault struct {
 	Default time.Time `json:"default"` // empty format → RFC3339Nano
@@ -304,6 +322,8 @@ type TimeFormatsStdCompat struct {
 	TimeDateTime
 	TimeDateOnly
 	TimeTimeOnly
+	TimeCustomComma
+	TimeCustomLong
 }
 
 // timeFormatsStdCompat builds the jsonv2-compatible subset.
@@ -328,6 +348,8 @@ func timeFormatsStdCompat(when time.Time) TimeFormatsStdCompat {
 		TimeDateTime:    TimeDateTime{DateTime: when},
 		TimeDateOnly:    TimeDateOnly{DateOnly: when},
 		TimeTimeOnly:    TimeTimeOnly{TimeOnly: when},
+		TimeCustomComma: TimeCustomComma{CustomComma: when},
+		TimeCustomLong:  TimeCustomLong{CustomLong: when},
 	}
 }
 

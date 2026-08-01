@@ -9722,3 +9722,233 @@ func (s MapVals) AppendJSON(dst []byte) ([]byte, error) {
 	}
 	return append(dst, '}'), nil
 }
+
+func (recv QuotedNames) DecodeFrom(data []byte) (result QuotedNames, i int, err error) {
+	result = recv
+	seenDash := false
+	seenComma := false
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+	}
+	i++
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		i++
+		return result, i, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
+		}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i, true)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
+			}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		}
+		i++
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch key {
+		case "-":
+			if seenDash {
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"-"}}
+			}
+			seenDash = true
+			if i >= len(data) || data[i] != '"' {
+				return result, i, decode.NewParseErr("-", i, scan.ErrExpectString)
+			}
+			ke := i + 1
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+				ke++
+			}
+			if ke < len(data) && data[ke] == '"' {
+				result.Dash = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				result.Dash, i, err = scan.String(data, i, true)
+				if err != nil {
+					return result, i, decode.NewParseErr("-", i, err)
+				}
+			}
+		case "a,b":
+			if seenComma {
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"a,b"}}
+			}
+			seenComma = true
+			if i >= len(data) || data[i] != '"' {
+				return result, i, decode.NewParseErr("a,b", i, scan.ErrExpectString)
+			}
+			ke := i + 1
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+				ke++
+			}
+			if ke < len(data) && data[ke] == '"' {
+				result.Comma = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				result.Comma, i, err = scan.String(data, i, true)
+				if err != nil {
+					return result, i, decode.NewParseErr("a,b", i, err)
+				}
+			}
+		default:
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			i++
+			return result, i, nil
+		}
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+	}
+}
+
+func (recv QuotedNames) DecodeFromStream(s *scan.Stream) (result QuotedNames, err error) {
+	result = recv
+	seenDash := false
+	seenComma := false
+	err = s.ObjectOpen()
+	if err != nil {
+		return result, decode.NewParseErr("", s.Pos, err)
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, decode.NewParseErr("", s.Pos, err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView(true)
+		if err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		switch key {
+		case "-":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("-", s.Pos, err)
+			}
+			if seenDash {
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"-"}}
+			}
+			seenDash = true
+			result.Dash, err = s.String(true)
+			if err != nil {
+				return result, decode.NewParseErr("-", s.Pos, err)
+			}
+		case "a,b":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("a,b", s.Pos, err)
+			}
+			if seenComma {
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"a,b"}}
+			}
+			seenComma = true
+			result.Comma, err = s.String(true)
+			if err != nil {
+				return result, decode.NewParseErr("a,b", s.Pos, err)
+			}
+		default:
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+		}
+
+		err = s.SkipSpace()
+		if err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, decode.NewParseErr("", s.Pos, err)
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, decode.NewParseErr("", s.Pos, err)
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			return result, nil
+		}
+		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+	}
+}
+
+func (s QuotedNames) JSONSize() int {
+	size := 17
+	size += len(s.Dash) * 2
+	size += len(s.Comma) * 2
+	return size
+}
+
+func (s QuotedNames) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"-\":\""...)
+	dst = encode.AppendStringNoHTML(dst, s.Dash)
+	dst = append(dst, ",\"a,b\":\""...)
+	dst = encode.AppendStringNoHTML(dst, s.Comma)
+	return append(dst, '}'), nil
+}

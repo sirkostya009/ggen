@@ -5,6 +5,7 @@ package integrationtests
 import (
 	"bytes"
 	"encoding/json"
+	jsonv2 "encoding/json/v2"
 	"errors"
 	"reflect"
 	"testing"
@@ -606,5 +607,35 @@ func TestNestedValidationPath_Complete(t *testing.T) {
 	}
 	if len(le.Path) != 2 || le.Path[0] != "addr" || le.Path[1] != "zipCode" {
 		t.Errorf("Path = %v, want [addr zipCode]", le.Path)
+	}
+}
+
+// jsonv2 quoted names: '-' is a literal "-" key (only a bare - ignores the
+// field) and quotes protect commas in names.
+//
+//ggen:generate
+type QuotedNames struct {
+	Dash  string `json:"'-'"`
+	Comma string `json:"'a,b'"`
+}
+
+func TestQuotedNames_roundtrip(t *testing.T) {
+	t.Parallel()
+	in := QuotedNames{Dash: "d", Comma: "c"}
+	out, err := encode.Marshal(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := jsonv2.Marshal(in)
+	if err != nil {
+		t.Fatalf("jsonv2 rejects what ggen accepted: %v", err)
+	}
+	var v1, v2 map[string]any
+	if jsonv2.Unmarshal(out, &v1) != nil || jsonv2.Unmarshal(want, &v2) != nil || !reflect.DeepEqual(v1, v2) {
+		t.Fatalf("wire mismatch: ggen %s, jsonv2 %s", out, want)
+	}
+	back, _, err := QuotedNames{}.DecodeFrom(out)
+	if err != nil || back != in {
+		t.Fatalf("decode: %+v %v", back, err)
 	}
 }

@@ -1859,6 +1859,11 @@ type Msg struct {
 		// Each entry runs ggen on a single-file fixture; the CLI must exit
 		// non-zero and the diagnostic must contain wantDiag.
 		cases := []bad{
+			// ----- json tag grammar (jsonv2 parity) -----
+			{"dash_with_options", "F string", `json:"-,"`, `use json:"-" to ignore the field`},
+			{"trailing_comma_tag", "F string", `json:"f,"`, "empty option"},
+			{"empty_option_tag", "F string", `json:"f,,omitempty"`, "empty option"},
+
 			// ----- removed string validators are now unknown rules -----
 			{"ascii_unknown", "S string", `json:"s" pipe:"ascii"`, "`ascii` is not a known validation rule"},
 			{"email_unknown", "S string", `json:"s" pipe:"email"`, "`email` is not a known validation rule"},

@@ -634,9 +634,11 @@ func TestWideStruct_BitmaskSeenFlags(t *testing.T) {
 	}
 }
 
-// --- jsonv2-rejected time formats. Single-field types so TimeFormatsStruct
-// can embed them via anonymous-field promotion. Excluded from cross-compat;
-// covered here for wire shape + JSONSize budget.
+// --- Time formats excluded from cross-compat, single-field types so
+// TimeFormatsStruct can embed them via anonymous-field promotion; covered
+// here for wire shape + JSONSize budget. `Layout` jsonv2 rejects outright
+// (invalid format flag). Stamp/Stamp*/customTiny jsonv2 ACCEPTS on marshal,
+// but the layouts carry no year, so decoded values cannot round-trip.
 
 //ggen:generate
 type TimeLayout struct {
@@ -663,17 +665,13 @@ type TimeStampNano struct {
 	StampNano time.Time `json:"stampNano,format:StampNano"`
 }
 
-// Custom layouts exercise timeFormatSize's `len(format)+6` fallback:
-// smallest realistic format string + a verbose layout with literals.
-
+// Smallest realistic custom layout — exercises timeFormatSize's
+// `len(format)+6` fallback floor. (The verbose-layout sibling lives in the
+// stdcompat subset: TimeCustomLong round-trips under jsonv2.)
+//
 //ggen:generate
 type TimeCustomTiny struct {
 	CustomTiny time.Time `json:"customTiny,format:'2'"`
-}
-
-//ggen:generate
-type TimeCustomLong struct {
-	CustomLong time.Time `json:"customLong,format:'2006-Jan-02T15:04:05.000000000_Mon_-0700'"`
 }
 
 // TimeFormatsStruct is TimeFormatsStdCompat plus the jsonv2-rejected formats
@@ -688,7 +686,6 @@ type TimeFormatsStruct struct {
 	TimeStampMicro
 	TimeStampNano
 	TimeCustomTiny
-	TimeCustomLong
 }
 
 // timeFormatsAll sets every field to the same worst-output moment (max-width
@@ -705,7 +702,6 @@ func timeFormatsAll() TimeFormatsStruct {
 		TimeStampMicro:       TimeStampMicro{StampMicro: when},
 		TimeStampNano:        TimeStampNano{StampNano: when},
 		TimeCustomTiny:       TimeCustomTiny{CustomTiny: when},
-		TimeCustomLong:       TimeCustomLong{CustomLong: when},
 	}
 }
 

@@ -126,7 +126,8 @@ type Order struct { /* ... */ }
 - `json:"name,omitempty"` — skip on marshal when JSON-empty.
 - `json:"name,omitzero"` — skip on marshal when Go-zero.
 - `json:"name,string"` — wrap primitive as JSON string (unwrap on decode).
-- `json:"name,format:X"` — format hint for native types (see kinds below). MUST be last option in tag (jsonv2 rule).
+- `json:"name,format:X"` — format hint for native types (see kinds below). MUST be last option in tag (jsonv2 rule). Quote values with special characters: `format:'Jan 2, 2006'` (`\'` = literal quote).
+- Quoted names (jsonv2): `json:"'a,b'"` → key `a,b`; `json:"'-'"` → key `-`. Only a bare `json:"-"` ignores the field; `json:"-,..."` is a generate-time error.
 
 Only exported fields read/written, same as `encoding/json`.
 

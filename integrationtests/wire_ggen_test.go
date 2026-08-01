@@ -1434,205 +1434,10 @@ func (s TimeCustomTiny) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, "\"}"...), nil
 }
 
-func (recv TimeCustomLong) DecodeFrom(data []byte) (result TimeCustomLong, i int, err error) {
-	result = recv
-	seenCustomLong := false
-	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-		i++
-	}
-	if i >= len(data) || data[i] != '{' {
-		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
-	}
-	i++
-	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-		i++
-	}
-	if i < len(data) && data[i] == '}' {
-		i++
-		return result, i, nil
-	}
-	for {
-		var key string
-		if i >= len(data) || data[i] != '"' {
-			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
-		}
-		ke := i + 1
-		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
-			ke++
-		}
-		if ke >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-		}
-		if data[ke] < 0x20 {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-		}
-		if data[ke] == '"' {
-			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-			i = ke + 1
-		} else {
-			key, i, err = scan.String(data, i, true)
-			if err != nil {
-				return result, i, decode.NewParseErr("", i, err)
-			}
-		}
-		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-			i++
-		}
-		if i >= len(data) || data[i] != ':' {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
-		}
-		i++
-		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-			i++
-		}
-		switch key {
-		case "customLong":
-			if seenCustomLong {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"customLong"}}
-			}
-			seenCustomLong = true
-			var s string
-			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("customLong", i, scan.ErrExpectString)
-			}
-			ke := i + 1
-			kew := ke + 32
-			if kew > len(data) {
-				kew = len(data)
-			}
-			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
-				ke++
-			}
-			if ke < len(data) && data[ke] == '"' {
-				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
-				i = ke + 1
-			} else {
-				s, i, err = scan.String(data, i, true)
-				if err != nil {
-					return result, i, decode.NewParseErr("customLong", i, err)
-				}
-			}
-			result.CustomLong, err = time.Parse("2006-Jan-02T15:04:05.000000000_Mon_-0700", s)
-			if err != nil {
-				return result, i, decode.NewParseErr("customLong", i, err)
-			}
-		default:
-			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
-		}
-		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-			i++
-		}
-		if i >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
-		}
-		if data[i] == ',' {
-			i++
-			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
-				i++
-			}
-			continue
-		}
-		if data[i] == '}' {
-			i++
-			return result, i, nil
-		}
-		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
-	}
-}
-
-func (recv TimeCustomLong) DecodeFromStream(s *scan.Stream) (result TimeCustomLong, err error) {
-	result = recv
-	seenCustomLong := false
-	err = s.ObjectOpen()
-	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
-	}
-	err = s.SkipSpace()
-	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
-	}
-	if s.Pos >= len(s.Bytes()) {
-		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
-		}
-		s.Pos = 0
-	}
-	if s.Bytes()[s.Pos] == '}' {
-		s.Pos++
-		return result, nil
-	}
-	for {
-		var key string
-		key, err = s.KeyView(true)
-		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
-		}
-		switch key {
-		case "customLong":
-			err = s.ConsumeColon()
-			if err != nil {
-				return result, decode.NewParseErr("customLong", s.Pos, err)
-			}
-			if seenCustomLong {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"customLong"}}
-			}
-			seenCustomLong = true
-			var sv string
-			sv, err = s.StringView(true)
-			if err != nil {
-				return result, decode.NewParseErr("customLong", s.Pos, err)
-			}
-			result.CustomLong, err = time.Parse("2006-Jan-02T15:04:05.000000000_Mon_-0700", sv)
-			if err != nil {
-				return result, decode.NewParseErr("customLong", s.Pos, err)
-			}
-		default:
-			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
-		}
-
-		err = s.SkipSpace()
-		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
-		}
-		if s.Pos >= len(s.Bytes()) {
-			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
-			}
-			s.Pos = 0
-		}
-		c := s.Bytes()[s.Pos]
-		if c == ',' {
-			s.Pos++
-			err = s.SkipSpace()
-			if err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
-			}
-			continue
-		}
-		if c == '}' {
-			s.Pos++
-			return result, nil
-		}
-		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
-	}
-}
-
-func (s TimeCustomLong) JSONSize() int {
-	size := 125
-	return size
-}
-
-func (s TimeCustomLong) AppendJSON(dst []byte) ([]byte, error) {
-	var err error
-	_ = err
-	dst = append(dst, "{\"customLong\":\""...)
-	dst = s.CustomLong.AppendFormat(dst, "2006-Jan-02T15:04:05.000000000_Mon_-0700")
-	return append(dst, "\"}"...), nil
-}
-
 func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct, i int, err error) {
 	result = recv
 	seenANSIC := false
+	seenCustomComma := false
 	seenCustomLong := false
 	seenCustomTiny := false
 	seenDateOnly := false
@@ -1736,6 +1541,36 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			result.ANSIC, err = time.Parse(time.ANSIC, s)
 			if err != nil {
 				return result, i, decode.NewParseErr("ansic", i, err)
+			}
+		case "customComma":
+			if seenCustomComma {
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"customComma"}}
+			}
+			seenCustomComma = true
+			var s string
+			if i >= len(data) || data[i] != '"' {
+				return result, i, decode.NewParseErr("customComma", i, scan.ErrExpectString)
+			}
+			ke := i + 1
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+				ke++
+			}
+			if ke < len(data) && data[ke] == '"' {
+				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				s, i, err = scan.String(data, i, true)
+				if err != nil {
+					return result, i, decode.NewParseErr("customComma", i, err)
+				}
+			}
+			result.CustomComma, err = time.Parse("Jan 2, 2006", s)
+			if err != nil {
+				return result, i, decode.NewParseErr("customComma", i, err)
 			}
 		case "customLong":
 			if seenCustomLong {
@@ -2440,6 +2275,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeFormatsStruct, err error) {
 	result = recv
 	seenANSIC := false
+	seenCustomComma := false
 	seenCustomLong := false
 	seenCustomTiny := false
 	seenDateOnly := false
@@ -2507,6 +2343,24 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 			result.ANSIC, err = time.Parse(time.ANSIC, sv)
 			if err != nil {
 				return result, decode.NewParseErr("ansic", s.Pos, err)
+			}
+		case "customComma":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("customComma", s.Pos, err)
+			}
+			if seenCustomComma {
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"customComma"}}
+			}
+			seenCustomComma = true
+			var sv string
+			sv, err = s.StringView(true)
+			if err != nil {
+				return result, decode.NewParseErr("customComma", s.Pos, err)
+			}
+			result.CustomComma, err = time.Parse("Jan 2, 2006", sv)
+			if err != nil {
+				return result, decode.NewParseErr("customComma", s.Pos, err)
 			}
 		case "customLong":
 			err = s.ConsumeColon()
@@ -2981,7 +2835,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 }
 
 func (s TimeFormatsStruct) JSONSize() int {
-	size := 1013
+	size := 1045
 	return size
 }
 
@@ -2990,6 +2844,8 @@ func (s TimeFormatsStruct) AppendJSON(dst []byte) ([]byte, error) {
 	_ = err
 	dst = append(dst, "{\"ansic\":\""...)
 	dst = s.ANSIC.AppendFormat(dst, time.ANSIC)
+	dst = append(dst, "\",\"customComma\":\""...)
+	dst = s.CustomComma.AppendFormat(dst, "Jan 2, 2006")
 	dst = append(dst, "\",\"customLong\":\""...)
 	dst = s.CustomLong.AppendFormat(dst, "2006-Jan-02T15:04:05.000000000_Mon_-0700")
 	dst = append(dst, "\",\"customTiny\":\""...)

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 )
 
@@ -15,23 +16,31 @@ type JSONOptions struct {
 	Inline    bool   // catch-all: map absorbs unknown keys, entries splice into parent object
 }
 
-func parseJSONTag(tag string) (name string, opts JSONOptions, ignored bool) {
+// parseJSONTag follows jsonv2's tag grammar: options split on commas OUTSIDE
+// single-quoted regions (`format:'Jan 2, 2006'`, name `'a,b'`), `\'` is a
+// literal quote, an empty option (trailing comma, `,,`) is malformed, and a
+// bare `-` name with options is rejected — quote it (`'-'`) for a field
+// literally named "-". Unknown option words pass silently (jsonv2 parity).
+func parseJSONTag(tag string) (name string, opts JSONOptions, ignored bool, err error) {
 	if tag == "" {
-		return "", JSONOptions{}, false
+		return "", JSONOptions{}, false, nil
 	}
-	parts := strings.Split(tag, ",")
+	if tag == "-" {
+		return "", JSONOptions{}, true, nil
+	}
+	parts := splitTagOpts(tag)
 	name = strings.TrimSpace(parts[0])
-	if name == "-" {
-		return "", JSONOptions{}, true
+	if name == "-" && len(parts) > 1 {
+		return "", JSONOptions{}, false, fmt.Errorf(`json tag %q: use json:"-" to ignore the field, or json:"'-'" for a field named "-"`, tag)
 	}
+	name = unquoteTagValue(name)
 	for _, opt := range parts[1:] {
 		opt = strings.TrimSpace(opt)
+		if opt == "" {
+			return "", JSONOptions{}, false, fmt.Errorf("json tag %q: empty option", tag)
+		}
 		if rest, ok := strings.CutPrefix(opt, "format:"); ok {
-			// strip single quotes
-			if len(rest) >= 2 && rest[0] == '\'' && rest[len(rest)-1] == '\'' {
-				rest = rest[1 : len(rest)-1]
-			}
-			opts.Format = rest
+			opts.Format = unquoteTagValue(rest)
 			continue
 		}
 		switch opt {
@@ -45,5 +54,35 @@ func parseJSONTag(tag string) (name string, opts JSONOptions, ignored bool) {
 			opts.Inline = true
 		}
 	}
-	return name, opts, false
+	return name, opts, false, nil
+}
+
+// splitTagOpts splits a json tag on commas outside single-quoted regions.
+func splitTagOpts(tag string) []string {
+	var parts []string
+	start, quoted := 0, false
+	for i := 0; i < len(tag); i++ {
+		switch tag[i] {
+		case '\\':
+			if quoted && i+1 < len(tag) && tag[i+1] == '\'' {
+				i++
+			}
+		case '\'':
+			quoted = !quoted
+		case ',':
+			if !quoted {
+				parts = append(parts, tag[start:i])
+				start = i + 1
+			}
+		}
+	}
+	return append(parts, tag[start:])
+}
+
+// unquoteTagValue strips one level of single quotes and unescapes \'.
+func unquoteTagValue(s string) string {
+	if len(s) >= 2 && s[0] == '\'' && s[len(s)-1] == '\'' {
+		s = strings.ReplaceAll(s[1:len(s)-1], `\'`, "'")
+	}
+	return s
 }

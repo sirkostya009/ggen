@@ -244,7 +244,11 @@ skipped silently (no decode wiring, never appear in marshal output) — same as
   otherwise. Overrides `-ignoreunknown`; on marshal the entries are spliced into
   the parent object.
 - `format:X` — type-specific format hint (see _supported kinds_ below). Per
-  jsonv2, this MUST be the last option in the tag.
+  jsonv2, this MUST be the last option in the tag. Single-quote values with
+  special characters (`format:'Jan 2, 2006'`); `\'` is a literal quote.
+- Names follow jsonv2 quoting too: `json:"'a,b'"` names a field `a,b`,
+  `json:"'-'"` names it `-` (only a bare `json:"-"` ignores the field —
+  `json:"-,..."` is rejected at generate time, like jsonv2).
 
 ### `pipe:"..."` — decode, transform, validate
 
