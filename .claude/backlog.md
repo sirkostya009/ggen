@@ -163,6 +163,15 @@ surface pinned by `Decoder[T]`).
   `ignoreunknown`, etc. Worth doing only if a consumer actually asks; the
   headline number to chase is SkipHeavy, not the UTF-8 rows.
 
+- **MaxDepth boundary offset vs jsonv2 (documented divergence, 2026-08).**
+  The depth cap counts only containers inside the any/skip/raw subtree —
+  acyclic generated-struct levels enclosing it are uncounted (`const _depth =
+  0`), so at the EXACT 10000 boundary ggen accepts a document jsonv2 rejects
+  (`{"a":` + 10000×`[`). Boundary-exact parity means threading real depth
+  through every acyclic struct — codegen churn + a runtime add on shapes the
+  cap exists to protect from pathology, for one-off-by-K at a 10000 cliff.
+  DECIDED not worth it; the cap's purpose (no stack overflow) is unaffected.
+
 - **base64 `StdEncoding` strips embedded `\r`/`\n` (minor jsonv2 divergence).**
   `{"b":"aG\nVsbG8="}` decodes to "hello" (Go stdlib base64 skips newlines by
   MIME leniency); jsonv2 rejects. Inherited from the stdlib default, one-line

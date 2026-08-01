@@ -225,8 +225,10 @@ func renderAliasStructAppendJSON(b *bytes.Buffer, s StructInfo) {
 	case s.AliasIface.AppendJSON:
 		fmt.Fprintf(b, "u := %s(s)\nreturn u.AppendJSON(dst)\n", s.AliasUnderlying)
 	case s.AliasIface.JSONMarshaler:
+		// Empty result errors (stdlib parity), like the cross-package arm.
 		fmt.Fprintf(b, `bs, err := %s(s).MarshalJSON()
 if err != nil { return dst, err }
+if len(bs) == 0 { return dst, encode.ErrEmptyMarshalJSON }
 return append(dst, bs...), nil
 `, s.AliasUnderlying)
 	case s.AliasIface.TextAppender:

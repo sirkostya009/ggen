@@ -3854,9 +3854,12 @@ func renderCrossPkgStructAppend(f FieldInfo, ref string) string {
 			return fmt.Sprintf("if dst, err = %s.AppendJSON(dst); err != nil { return dst, err }\n", ref)
 
 		case f.Iface.JSONMarshaler:
+			// Empty result errors (stdlib parity): a bare append would emit
+			// `"k":` with a nil error.
 			return fmt.Sprintf(`var %[1]s []byte
 %[1]s, err = %[2]s.MarshalJSON()
 if err != nil { return dst, err }
+if len(%[1]s) == 0 { return dst, encode.ErrEmptyMarshalJSON }
 dst = append(dst, %[1]s...)
 `, tmp, ref)
 

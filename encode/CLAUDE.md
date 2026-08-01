@@ -62,10 +62,13 @@ payload size, so the size walk is pure overhead).
 
 Output presized from `sliceJSONSize` = SUM of each item's `JSONSize()`, not
 `len*zero.JSONSize()` (the zero size is only the constant-folded base; populated
-items would undersize and run the growth chain). Pointer-typed `T`: one-time
-`reflect.TypeFor[T]().Kind()` probe + per-item `IsNil`, nil elements emit `null`
-(stdlib parity; without it `MarshalSlice[*T]` panics on the zero value's promoted
-`JSONSize()`). Pinned by `TestMarshalSlicePointerElems` /
+items would undersize and run the growth chain). A nil ITEMS slice emits `null`, empty non-nil `[]` (stdlib
+parity). Pointer- and interface-typed `T`: one-time
+`reflect.TypeFor[T]().Kind()` probe + per-item nil check (nil interface or
+typed-nil pointer inside it), nil elements emit `null` (stdlib parity; without
+it the walkers panic on the nil element's promoted `JSONSize()`; nil slice/map
+HEADERS inside an interface still call their own AppendJSON — their emitters
+own nil semantics). Pinned by `TestMarshalSlicePointerElems` /
 `TestMarshalSliceSingleAlloc`.
 
 ## Error propagation

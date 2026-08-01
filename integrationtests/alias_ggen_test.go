@@ -1065,6 +1065,9 @@ func (s OpaqueAlias) AppendJSON(dst []byte) ([]byte, error) {
 	if err != nil {
 		return dst, err
 	}
+	if len(bs) == 0 {
+		return dst, encode.ErrEmptyMarshalJSON
+	}
 	return append(dst, bs...), nil
 }
 

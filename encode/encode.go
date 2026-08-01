@@ -111,23 +111,42 @@ func WriteTo[T Marshaler](w io.Writer, v T) error {
 	return werr
 }
 
-// isPointer reports whether T's kind is a pointer, so slice walkers can
-// nil-check before the value-receiver methods auto-deref.
-func isPointer[T Marshaler]() bool {
-	return reflect.TypeFor[T]().Kind() == reflect.Pointer
+// ErrEmptyMarshalJSON reports a MarshalJSON that returned (empty, nil) —
+// appending nothing would corrupt the output, and stdlib v1/v2 both treat
+// it as a broken marshaler rather than inventing a value.
+var ErrEmptyMarshalJSON = errors.New("encode: MarshalJSON returned empty output")
+
+// isNilable reports whether T can hold a nil that breaks the value-receiver
+// call: a pointer (auto-deref) or an interface (T = encode.Marshaler is
+// explicitly supported — a nil element used to panic in JSONSize/AppendJSON
+// where stdlib emits null).
+func isNilable[T Marshaler]() bool {
+	k := reflect.TypeFor[T]().Kind()
+	return k == reflect.Pointer || k == reflect.Interface
 }
 
-// AppendSlice appends a JSON array of items to dst. Each item emits itself
-// via AppendJSON; nil pointer items emit `null` (stdlib parity). Returns
-// the first error encountered along the way.
+// nilItem reports whether v is nil under a nilable T: a nil interface boxes
+// to an invalid reflect.Value; an interface holding a typed nil pointer is
+// nil for marshal purposes too (stdlib emits null for both).
+func nilItem[T Marshaler](v T) bool {
+	rv := reflect.ValueOf(v)
+	return !rv.IsValid() || (rv.Kind() == reflect.Pointer && rv.IsNil())
+}
+
+// AppendSlice appends a JSON array of items to dst. A nil items slice emits
+// `null` and an empty non-nil one `[]` (stdlib parity); nil pointer /
+// nil-interface items emit `null`. Returns the first error encountered.
 func AppendSlice[T Marshaler](dst []byte, items []T) ([]byte, error) {
+	if items == nil {
+		return append(dst, "null"...), nil
+	}
 	dst = append(dst, '[')
-	isPtr := isPointer[T]()
+	isPtr := isNilable[T]()
 	for i := range items {
 		if i > 0 {
 			dst = append(dst, ',')
 		}
-		if isPtr && reflect.ValueOf(items[i]).IsNil() {
+		if isPtr && nilItem(items[i]) {
 			dst = append(dst, "null"...)
 			continue
 		}
@@ -140,12 +159,16 @@ func AppendSlice[T Marshaler](dst []byte, items []T) ([]byte, error) {
 	return append(dst, ']'), nil
 }
 
-// MarshalSlice returns the JSON encoding of items as an array.
+// MarshalSlice returns the JSON encoding of items as an array (`null` for a
+// nil slice, like AppendSlice).
 func MarshalSlice[T Marshaler](items []T) ([]byte, error) {
+	if items == nil {
+		return []byte("null"), nil
+	}
 	n := 2 + len(items) // brackets + commas
-	isPtr := isPointer[T]()
+	isPtr := isNilable[T]()
 	for i := range items {
-		if isPtr && reflect.ValueOf(items[i]).IsNil() {
+		if isPtr && nilItem(items[i]) {
 			n += 4 // null
 			continue
 		}

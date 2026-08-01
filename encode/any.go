@@ -295,6 +295,12 @@ func appendAny(dst []byte, v any, esc escapeFn) ([]byte, error) {
 		if err != nil {
 			return dst, err
 		}
+		if len(b) == 0 {
+			// A (nil, nil) MarshalJSON would emit NOTHING — `{"k":` with a
+			// nil error. Stdlib v1/v2 both error here (only RawMessage nulls
+			// its nil, via its own MarshalJSON).
+			return dst, ErrEmptyMarshalJSON
+		}
 		return append(dst, b...), nil
 	}
 	// Reflection path for types the type switch above doesn't match.
@@ -527,8 +533,14 @@ func appendPtrUint[V uint | uint8 | uint16 | uint32 | uint64](dst []byte, p *V) 
 
 // appendReflectValue emits rv to dst given its already-known Kind.
 // Primitive kinds read straight off the reflect.Value; non-primitive kinds
-// fall back to AppendAny via Interface().
+// fall back to AppendAny via Interface(). NAMED primitive types box too:
+// their marshalers (json.Number's unquoted case, a MarshalJSON/AppendText on
+// `type Level int`) live in the type switch, and the kind fast path was
+// silently bypassing them.
 func appendReflectValue(dst []byte, rv reflect.Value, kind reflect.Kind, esc escapeFn) ([]byte, error) {
+	if t := rv.Type(); t.PkgPath() != "" {
+		return appendAny(dst, rv.Interface(), esc)
+	}
 	switch kind {
 	case reflect.String:
 		dst = append(dst, '"')

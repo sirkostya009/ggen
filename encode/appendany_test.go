@@ -10,6 +10,7 @@ package encode
 import (
 	"encoding/json"
 	jsonv2 "encoding/json/v2"
+	"errors"
 	"math/rand"
 	"reflect"
 	"strconv"
@@ -947,5 +948,44 @@ func TestAppendAny_TextAppenderEscapes(t *testing.T) {
 	out, _ = AppendAnyHTML(nil, quotedAppender{s: "a<b"})
 	if string(out) != `"a\u003cb"` {
 		t.Errorf("html: got %s", out)
+	}
+}
+
+// Named element types box through the full switch: json.Number stays
+// unquoted, and a named primitive's marshaler is honored — the reflect
+// container walk used to route by KIND, silently bypassing both.
+type levelInt int
+
+func (l levelInt) MarshalJSON() ([]byte, error) {
+	return []byte(`"L` + strconv.Itoa(int(l)) + `"`), nil
+}
+
+func TestAppendAny_NamedElemsInContainers(t *testing.T) {
+	t.Parallel()
+	out, err := AppendAny(nil, []json.Number{"1", "2.5"})
+	if err != nil || string(out) != `[1,2.5]` {
+		t.Errorf("[]json.Number → %s, %v", out, err)
+	}
+	out, _ = AppendAny(nil, map[string]json.Number{"k": "7"})
+	if string(out) != `{"k":7}` {
+		t.Errorf("map json.Number → %s", out)
+	}
+	out, err = AppendAny(nil, []levelInt{1, 2})
+	if err != nil || string(out) != `["L1","L2"]` {
+		t.Errorf("[]levelInt → %s, %v (marshaler bypassed)", out, err)
+	}
+	checkAny(t, []json.Number{"1", "2.5"})
+	checkAny(t, []levelInt{1, 2})
+}
+
+// A (nil, nil) MarshalJSON used to emit ZERO bytes — `{"k":` with nil error.
+type emptyMarshaler struct{}
+
+func (emptyMarshaler) MarshalJSON() ([]byte, error) { return nil, nil }
+
+func TestAppendAny_EmptyMarshalJSON(t *testing.T) {
+	t.Parallel()
+	if _, err := AppendAny(nil, emptyMarshaler{}); !errors.Is(err, ErrEmptyMarshalJSON) {
+		t.Errorf("got %v, want ErrEmptyMarshalJSON (stdlib v1/v2 both error)", err)
 	}
 }

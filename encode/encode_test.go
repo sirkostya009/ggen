@@ -181,3 +181,39 @@ func TestAppendString_TableParity(t *testing.T) {
 		}
 	}
 }
+
+// MarshalSlice/AppendSlice with interface-typed T used to panic on nil
+// elements (the guard only engaged for pointer kinds); stdlib emits null.
+func TestMarshalSlice_NilInterfaceElem(t *testing.T) {
+	t.Parallel()
+	items := []Marshaler{nil, mtItem{}}
+	out, err := MarshalSlice(items)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(out) != `[null,{}]` {
+		t.Errorf("got %s, want [null,{}]", out)
+	}
+}
+
+type mtItem struct{}
+
+func (mtItem) AppendJSON(dst []byte) ([]byte, error) { return append(dst, '{', '}'), nil }
+func (mtItem) JSONSize() int                         { return 2 }
+
+// A nil items slice marshals as null (stdlib parity); empty non-nil as [].
+func TestSliceWalkers_NilVsEmpty(t *testing.T) {
+	t.Parallel()
+	out, err := AppendSlice[mtItem]([]byte("x:"), nil)
+	if err != nil || string(out) != "x:null" {
+		t.Errorf("AppendSlice(nil) = %q, %v", out, err)
+	}
+	out, err = MarshalSlice[mtItem](nil)
+	if err != nil || string(out) != "null" {
+		t.Errorf("MarshalSlice(nil) = %q, %v", out, err)
+	}
+	out, err = MarshalSlice([]mtItem{})
+	if err != nil || string(out) != "[]" {
+		t.Errorf("MarshalSlice(empty) = %q, %v", out, err)
+	}
+}
