@@ -16,12 +16,29 @@ func init() {
 // closeJSONString treats dst[from:] as the raw body of an in-progress JSON
 // string and appends the closing quote, re-escaping the body first when it
 // carries bytes a JSON string must escape. Raw-text emitters (URL
-// query/opaque, netip zones) drop caller-controlled bytes between quotes;
-// the overwhelmingly common clean body costs one table walk.
+// query/opaque, netip zones, TextAppender output) drop caller-controlled
+// bytes between quotes; the overwhelmingly common clean body costs one
+// table walk.
 func closeJSONString(dst []byte, from int) []byte {
 	for _, c := range dst[from:] {
 		if needEscapeNoHTML[c] {
 			return AppendStringNoHTML(dst[:from], string(dst[from:]))
+		}
+	}
+	return append(dst, '"')
+}
+
+// CloseJSONString / CloseJSONStringHTML are the exported pair generated code
+// closes TextAppender output through (the CALLER wrote the opening `"` and
+// recorded from = len(dst) before AppendText).
+func CloseJSONString(dst []byte, from int) []byte {
+	return closeJSONString(dst, from)
+}
+
+func CloseJSONStringHTML(dst []byte, from int) []byte {
+	for _, c := range dst[from:] {
+		if needEscapeHTML[c] {
+			return AppendString(dst[:from], string(dst[from:]))
 		}
 	}
 	return append(dst, '"')

@@ -919,3 +919,33 @@ func TestAppendAny_NoHTMLEscapeDefault(t *testing.T) {
 		}
 	}
 }
+
+// quotedAppender's text carries `"`, `\`, and a ctrl byte — the TextAppender
+// arm used to drop it raw between quotes (the TextMarshaler arm escaped).
+type quotedAppender struct{ s string }
+
+func (q quotedAppender) AppendText(b []byte) ([]byte, error) { return append(b, q.s...), nil }
+
+func TestAppendAny_TextAppenderEscapes(t *testing.T) {
+	t.Parallel()
+	out, err := AppendAny(nil, quotedAppender{s: "a\"b\\c\nd"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := `"a\"b\\c\nd"`; string(out) != want {
+		t.Errorf("got %s want %s", out, want)
+	}
+	if !json.Valid(out) {
+		t.Errorf("invalid JSON: %s", out)
+	}
+	// Clean text stays on the raw fast path.
+	out, _ = AppendAny(nil, quotedAppender{s: "plain"})
+	if string(out) != `"plain"` {
+		t.Errorf("clean: got %s", out)
+	}
+	// HTML variant escapes <>& too.
+	out, _ = AppendAnyHTML(nil, quotedAppender{s: "a<b"})
+	if string(out) != `"a\u003cb"` {
+		t.Errorf("html: got %s", out)
+	}
+}

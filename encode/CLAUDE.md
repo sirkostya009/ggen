@@ -30,6 +30,8 @@ func WriteSliceTo[T Marshaler](w io.Writer, items []T) error
 func BytesToString(buf []byte) string                // unsafe.String over buffer
 func AppendString(dst []byte, s string) []byte       // HTML-safe variant
 func AppendNetipAddr(dst []byte, a netip.Addr) []byte // addr text + closing `"`; zoned text re-escapes (zones are arbitrary bytes)
+func CloseJSONString(dst []byte, from int) []byte     // close raw-appended text (TextAppender output), re-escaping iff dirty
+func CloseJSONStringHTML(dst []byte, from int) []byte // htmlescape variant
 func AppendStringNoHTML(dst []byte, s string) []byte // jsonv2-default variant
 func AppendFloat(dst []byte, v float64, bitSize int) ([]byte, error) // stdlib-parity float format
 func AppendAny(dst []byte, v any) ([]byte, error)     // any-walker, NoHTML escaping

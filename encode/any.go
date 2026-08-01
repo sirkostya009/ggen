@@ -265,10 +265,21 @@ func appendAny(dst []byte, v any, esc escapeFn) ([]byte, error) {
 		return x.AppendJSON(dst)
 	case encoding.TextAppender:
 		dst = append(dst, '"')
+		from := len(dst)
 		var err error
 		dst, err = x.AppendText(dst)
 		if err != nil {
 			return dst, err
+		}
+		// The adjacent TextMarshaler arm escapes; raw AppendText output must
+		// too or a text carrying `"`/`\`/ctrl corrupts the JSON. Checked
+		// against the HTML table (a superset of both) so the clean fast path
+		// stays raw; a dirty body re-escapes through the active esc.
+		for _, c := range dst[from:] {
+			if needEscapeHTML[c] {
+				body := string(dst[from:])
+				return esc(dst[:from], body), nil
+			}
 		}
 		return append(dst, '"'), nil
 	case encoding.TextMarshaler:

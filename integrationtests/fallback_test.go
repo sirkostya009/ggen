@@ -3,6 +3,7 @@ package integrationtests
 //go:generate ../ggen $GOFILE
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -202,5 +203,41 @@ func TestCrossPkg_PointerUsesGeneratedMethods(t *testing.T) {
 	v, _, err := CrossPkgShapes{}.DecodeFrom([]byte(`{"ptr":{"key":"","value":1}}`))
 	if err == nil {
 		t.Fatalf("expected the foreign type's own `required minlen=1` rule to fire, got %+v", v)
+	}
+}
+
+// The cross-package TextAppender marshal arm used to drop AppendText output
+// raw between quotes — a text carrying `"`/`\` emitted invalid JSON with a
+// nil error. thirdparty.QuotedText's text is caller-controlled bytes.
+//
+//ggen:generate
+type TextAppenderStruct struct {
+	T thirdparty.QuotedText `json:"t"`
+}
+
+func TestTextAppender_OutputEscaped(t *testing.T) {
+	t.Parallel()
+	got, _, err := TextAppenderStruct{}.DecodeFrom([]byte(`{"t":"a\"b\\c"}`))
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.T.V != `a"b\c` {
+		t.Fatalf("V = %q", got.T.V)
+	}
+	out, err := encode.Marshal(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !json.Valid(out) {
+		t.Errorf("invalid JSON: %s", out)
+	}
+	if want := `{"t":"a\"b\\c"}`; string(out) != want {
+		t.Errorf("marshal = %s, want %s", out, want)
+	}
+	// Clean text stays byte-identical to the raw fast path.
+	clean := TextAppenderStruct{T: thirdparty.QuotedText{V: "plain"}}
+	out, _ = encode.Marshal(clean)
+	if string(out) != `{"t":"plain"}` {
+		t.Errorf("clean = %s", out)
 	}
 }

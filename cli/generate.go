@@ -1952,6 +1952,15 @@ func appendStrFn(htmlEscape bool) string {
 	return "encode.AppendStringNoHTML" + simdSuffix
 }
 
+// closeStrFn returns the encode-pkg closer for raw text appended between
+// quotes (TextAppender output): closes the string, re-escaping iff dirty.
+func closeStrFn(htmlEscape bool) string {
+	if htmlEscape {
+		return "encode.CloseJSONStringHTML"
+	}
+	return "encode.CloseJSONString"
+}
+
 // emitNoCloseAfterComma emits the bytes-path guard inside an element loop's
 // comma branch: a container close (or EOF) right after a comma is invalid JSON.
 func emitNoCloseAfterComma(b *bytes.Buffer, posVar string, close byte) {
@@ -3820,10 +3829,13 @@ dst = append(dst, %[1]s...)
 
 		case f.Iface.TextAppender:
 			// AppendText (Go 1.24+) preferred over MarshalText — no alloc.
+			// Close via the escape checker: the text may carry `"`/`\`/ctrl.
+			ta := "ta" + strings.ReplaceAll(f.GoName, ".", "")
 			return fmt.Sprintf(`dst = append(dst, '"')
-if dst, err = %s.AppendText(dst); err != nil { return dst, err }
-dst = append(dst, '"')
-`, ref)
+%[1]s := len(dst)
+if dst, err = %[2]s.AppendText(dst); err != nil { return dst, err }
+dst = %[3]s(dst, %[1]s)
+`, ta, ref, closeStrFn(f.HTMLEscape))
 
 		case f.Iface.TextMarshaler:
 			return fmt.Sprintf(`var %[1]s []byte

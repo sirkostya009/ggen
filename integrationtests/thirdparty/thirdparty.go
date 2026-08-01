@@ -58,3 +58,13 @@ func (t *Tagged) UnmarshalText(b []byte) error {
 	t.Tag = after
 	return nil
 }
+
+// QuotedText's text form is caller-controlled bytes (may carry `"` / `\`) —
+// exercises the TextAppender marshal arm's escape-on-close.
+type QuotedText struct {
+	V string
+}
+
+func (q QuotedText) AppendText(b []byte) ([]byte, error) { return append(b, q.V...), nil }
+func (q QuotedText) MarshalText() ([]byte, error)        { return []byte(q.V), nil }
+func (q *QuotedText) UnmarshalText(b []byte) error       { q.V = string(b); return nil }

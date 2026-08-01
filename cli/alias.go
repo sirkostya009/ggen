@@ -230,10 +230,11 @@ return append(dst, bs...), nil
 	case s.AliasIface.TextAppender:
 		fmt.Fprintf(b, `u := %s(s)
 dst = append(dst, '"')
+ts := len(dst)
 var err error
 if dst, err = u.AppendText(dst); err != nil { return dst, err }
-return append(dst, '"'), nil
-`, s.AliasUnderlying)
+return %s(dst, ts), nil
+`, s.AliasUnderlying, closeStrFn(s.HTMLEscape))
 	case s.AliasIface.TextMarshaler:
 		fmt.Fprintf(b, `u := %s(s)
 t, err := u.MarshalText()
