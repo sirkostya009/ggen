@@ -301,7 +301,6 @@ func (recv SQLNullInt64Struct) DecodeFrom(data []byte) (result SQLNullInt64Struc
 				result.I = sql.NullInt64{}
 				i += 4
 			} else {
-				var nv int64
 				neg := false
 				if i < len(data) && data[i] == '-' {
 					neg = true
@@ -350,9 +349,8 @@ func (recv SQLNullInt64Struct) DecodeFrom(data []byte) (result SQLNullInt64Struc
 				} else {
 					n = int64(u)
 				}
-				nv = n
 
-				result.I = sql.NullInt64{Int64: nv, Valid: true}
+				result.I = sql.NullInt64{Int64: n, Valid: true}
 			}
 		default:
 			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
@@ -551,7 +549,6 @@ func (recv SQLNullInt32Struct) DecodeFrom(data []byte) (result SQLNullInt32Struc
 				result.I32 = sql.NullInt32{}
 				i += 4
 			} else {
-				var nv int32
 				neg := false
 				if i < len(data) && data[i] == '-' {
 					neg = true
@@ -603,9 +600,8 @@ func (recv SQLNullInt32Struct) DecodeFrom(data []byte) (result SQLNullInt32Struc
 				if n < math.MinInt32 || n > math.MaxInt32 {
 					return result, i, decode.NewParseErr("i32", i, scan.ErrNumberOverflow)
 				}
-				nv = int32(n)
 
-				result.I32 = sql.NullInt32{Int32: nv, Valid: true}
+				result.I32 = sql.NullInt32{Int32: int32(n), Valid: true}
 			}
 		default:
 			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
@@ -804,7 +800,6 @@ func (recv SQLNullInt16Struct) DecodeFrom(data []byte) (result SQLNullInt16Struc
 				result.I16 = sql.NullInt16{}
 				i += 4
 			} else {
-				var nv int16
 				neg := false
 				if i < len(data) && data[i] == '-' {
 					neg = true
@@ -856,9 +851,8 @@ func (recv SQLNullInt16Struct) DecodeFrom(data []byte) (result SQLNullInt16Struc
 				if n < math.MinInt16 || n > math.MaxInt16 {
 					return result, i, decode.NewParseErr("i16", i, scan.ErrNumberOverflow)
 				}
-				nv = int16(n)
 
-				result.I16 = sql.NullInt16{Int16: nv, Valid: true}
+				result.I16 = sql.NullInt16{Int16: int16(n), Valid: true}
 			}
 		default:
 			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
@@ -1057,7 +1051,6 @@ func (recv SQLNullByteStruct) DecodeFrom(data []byte) (result SQLNullByteStruct,
 				result.B = sql.NullByte{}
 				i += 4
 			} else {
-				var nv byte
 				if i >= len(data) || data[i] < '0' || data[i] > '9' {
 					return result, i, decode.NewParseErr("b", i, scan.ErrBadNumber)
 				}
@@ -1087,9 +1080,8 @@ func (recv SQLNullByteStruct) DecodeFrom(data []byte) (result SQLNullByteStruct,
 						return result, i, decode.NewParseErr("b", i, scan.ErrBadNumber)
 					}
 				}
-				nv = byte(n)
 
-				result.B = sql.NullByte{Byte: nv, Valid: true}
+				result.B = sql.NullByte{Byte: byte(n), Valid: true}
 			}
 		default:
 			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
@@ -2156,7 +2148,6 @@ func (recv SQLNullGenIntStruct) DecodeFrom(data []byte) (result SQLNullGenIntStr
 				result.I = sql.Null[int]{}
 				i += 4
 			} else {
-				var nv int
 				neg := false
 				if i < len(data) && data[i] == '-' {
 					neg = true
@@ -2205,9 +2196,8 @@ func (recv SQLNullGenIntStruct) DecodeFrom(data []byte) (result SQLNullGenIntStr
 				} else {
 					n = int64(u)
 				}
-				nv = int(n)
 
-				result.I = sql.Null[int]{V: nv, Valid: true}
+				result.I = sql.Null[int]{V: int(n), Valid: true}
 			}
 		default:
 			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
@@ -2289,15 +2279,13 @@ func (recv SQLNullGenIntStruct) DecodeFromStream(s *scan.Stream) (result SQLNull
 				result.I = sql.Null[int]{}
 				s.Pos += 4
 			} else {
-				var nv int
 				var iv int64
 				iv, err = s.Int64()
 				if err != nil {
 					return result, decode.NewParseErr("i", s.Pos, err)
 				}
-				nv = int(iv)
 
-				result.I = sql.Null[int]{V: nv, Valid: true}
+				result.I = sql.Null[int]{V: int(iv), Valid: true}
 			}
 		default:
 			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
@@ -2408,7 +2396,6 @@ func (recv SQLNullGenUint64Struct) DecodeFrom(data []byte) (result SQLNullGenUin
 				result.U = sql.Null[uint64]{}
 				i += 4
 			} else {
-				var nv uint64
 				if i >= len(data) || data[i] < '0' || data[i] > '9' {
 					return result, i, decode.NewParseErr("u", i, scan.ErrBadNumber)
 				}
@@ -2438,9 +2425,8 @@ func (recv SQLNullGenUint64Struct) DecodeFrom(data []byte) (result SQLNullGenUin
 						return result, i, decode.NewParseErr("u", i, scan.ErrBadNumber)
 					}
 				}
-				nv = n
 
-				result.U = sql.Null[uint64]{V: nv, Valid: true}
+				result.U = sql.Null[uint64]{V: n, Valid: true}
 			}
 		default:
 			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
@@ -2639,7 +2625,6 @@ func (recv SQLNullGenFloat32Struct) DecodeFrom(data []byte) (result SQLNullGenFl
 				result.F = sql.Null[float32]{}
 				i += 4
 			} else {
-				var nv float32
 				var fv float64
 				fv, i, err = scan.Float64(data, i)
 				if err != nil {
@@ -2648,9 +2633,8 @@ func (recv SQLNullGenFloat32Struct) DecodeFrom(data []byte) (result SQLNullGenFl
 				if math.IsInf(float64(float32(fv)), 0) {
 					return result, i, decode.NewParseErr("f", i, scan.ErrNumberOverflow)
 				}
-				nv = float32(fv)
 
-				result.F = sql.Null[float32]{V: nv, Valid: true}
+				result.F = sql.Null[float32]{V: float32(fv), Valid: true}
 			}
 		default:
 			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
@@ -2732,7 +2716,6 @@ func (recv SQLNullGenFloat32Struct) DecodeFromStream(s *scan.Stream) (result SQL
 				result.F = sql.Null[float32]{}
 				s.Pos += 4
 			} else {
-				var nv float32
 				var fv float64
 				fv, err = s.Float64()
 				if err != nil {
@@ -2741,9 +2724,8 @@ func (recv SQLNullGenFloat32Struct) DecodeFromStream(s *scan.Stream) (result SQL
 				if math.IsInf(float64(float32(fv)), 0) {
 					return result, decode.NewParseErr("f", s.Pos, scan.ErrNumberOverflow)
 				}
-				nv = float32(fv)
 
-				result.F = sql.Null[float32]{V: nv, Valid: true}
+				result.F = sql.Null[float32]{V: float32(fv), Valid: true}
 			}
 		default:
 			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
@@ -3294,8 +3276,6 @@ func (recv SQLNullGenAccountStruct) DecodeFrom(data []byte) (result SQLNullGenAc
 				result.A = sql.Null[SQLAccountID]{}
 				i += 4
 			} else {
-				var nv SQLAccountID
-				var _nvV int64
 				neg := false
 				if i < len(data) && data[i] == '-' {
 					neg = true
@@ -3344,10 +3324,8 @@ func (recv SQLNullGenAccountStruct) DecodeFrom(data []byte) (result SQLNullGenAc
 				} else {
 					n = int64(u)
 				}
-				_nvV = n
-				nv = SQLAccountID(_nvV)
 
-				result.A = sql.Null[SQLAccountID]{V: nv, Valid: true}
+				result.A = sql.Null[SQLAccountID]{V: SQLAccountID(n), Valid: true}
 			}
 		default:
 			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
@@ -3429,15 +3407,13 @@ func (recv SQLNullGenAccountStruct) DecodeFromStream(s *scan.Stream) (result SQL
 				result.A = sql.Null[SQLAccountID]{}
 				s.Pos += 4
 			} else {
-				var nv SQLAccountID
 				var _nvV int64
 				_nvV, err = s.Int64()
 				if err != nil {
 					return result, decode.NewParseErr("a", s.Pos, err)
 				}
-				nv = SQLAccountID(_nvV)
 
-				result.A = sql.Null[SQLAccountID]{V: nv, Valid: true}
+				result.A = sql.Null[SQLAccountID]{V: SQLAccountID(_nvV), Valid: true}
 			}
 		default:
 			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
@@ -3548,7 +3524,6 @@ func (recv SQLNullGenLabelStruct) DecodeFrom(data []byte) (result SQLNullGenLabe
 				result.L = sql.Null[SQLLabel]{}
 				i += 4
 			} else {
-				var nv SQLLabel
 				var _nvV string
 				if i >= len(data) || data[i] != '"' {
 					return result, i, decode.NewParseErr("l", i, scan.ErrExpectString)
@@ -3570,9 +3545,8 @@ func (recv SQLNullGenLabelStruct) DecodeFrom(data []byte) (result SQLNullGenLabe
 						return result, i, decode.NewParseErr("l", i, err)
 					}
 				}
-				nv = SQLLabel(_nvV)
 
-				result.L = sql.Null[SQLLabel]{V: nv, Valid: true}
+				result.L = sql.Null[SQLLabel]{V: SQLLabel(_nvV), Valid: true}
 			}
 		default:
 			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
@@ -3654,15 +3628,13 @@ func (recv SQLNullGenLabelStruct) DecodeFromStream(s *scan.Stream) (result SQLNu
 				result.L = sql.Null[SQLLabel]{}
 				s.Pos += 4
 			} else {
-				var nv SQLLabel
 				var _nvV string
 				_nvV, err = s.String(true)
 				if err != nil {
 					return result, decode.NewParseErr("l", s.Pos, err)
 				}
-				nv = SQLLabel(_nvV)
 
-				result.L = sql.Null[SQLLabel]{V: nv, Valid: true}
+				result.L = sql.Null[SQLLabel]{V: SQLLabel(_nvV), Valid: true}
 			}
 		default:
 			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
@@ -4003,7 +3975,6 @@ func (recv SQLNullStruct) DecodeFrom(data []byte) (result SQLNullStruct, i int, 
 				result.B = sql.NullByte{}
 				i += 4
 			} else {
-				var nv byte
 				if i >= len(data) || data[i] < '0' || data[i] > '9' {
 					return result, i, decode.NewParseErr("b", i, scan.ErrBadNumber)
 				}
@@ -4033,9 +4004,8 @@ func (recv SQLNullStruct) DecodeFrom(data []byte) (result SQLNullStruct, i int, 
 						return result, i, decode.NewParseErr("b", i, scan.ErrBadNumber)
 					}
 				}
-				nv = byte(n)
 
-				result.B = sql.NullByte{Byte: nv, Valid: true}
+				result.B = sql.NullByte{Byte: byte(n), Valid: true}
 			}
 		case "bl":
 			if seenBL {
@@ -4080,7 +4050,6 @@ func (recv SQLNullStruct) DecodeFrom(data []byte) (result SQLNullStruct, i int, 
 				result.I = sql.NullInt64{}
 				i += 4
 			} else {
-				var nv int64
 				neg := false
 				if i < len(data) && data[i] == '-' {
 					neg = true
@@ -4129,9 +4098,8 @@ func (recv SQLNullStruct) DecodeFrom(data []byte) (result SQLNullStruct, i int, 
 				} else {
 					n = int64(u)
 				}
-				nv = n
 
-				result.I = sql.NullInt64{Int64: nv, Valid: true}
+				result.I = sql.NullInt64{Int64: n, Valid: true}
 			}
 		case "i16":
 			if seenI16 {
@@ -4142,7 +4110,6 @@ func (recv SQLNullStruct) DecodeFrom(data []byte) (result SQLNullStruct, i int, 
 				result.I16 = sql.NullInt16{}
 				i += 4
 			} else {
-				var nv int16
 				neg := false
 				if i < len(data) && data[i] == '-' {
 					neg = true
@@ -4194,9 +4161,8 @@ func (recv SQLNullStruct) DecodeFrom(data []byte) (result SQLNullStruct, i int, 
 				if n < math.MinInt16 || n > math.MaxInt16 {
 					return result, i, decode.NewParseErr("i16", i, scan.ErrNumberOverflow)
 				}
-				nv = int16(n)
 
-				result.I16 = sql.NullInt16{Int16: nv, Valid: true}
+				result.I16 = sql.NullInt16{Int16: int16(n), Valid: true}
 			}
 		case "i32":
 			if seenI32 {
@@ -4207,7 +4173,6 @@ func (recv SQLNullStruct) DecodeFrom(data []byte) (result SQLNullStruct, i int, 
 				result.I32 = sql.NullInt32{}
 				i += 4
 			} else {
-				var nv int32
 				neg := false
 				if i < len(data) && data[i] == '-' {
 					neg = true
@@ -4259,9 +4224,8 @@ func (recv SQLNullStruct) DecodeFrom(data []byte) (result SQLNullStruct, i int, 
 				if n < math.MinInt32 || n > math.MaxInt32 {
 					return result, i, decode.NewParseErr("i32", i, scan.ErrNumberOverflow)
 				}
-				nv = int32(n)
 
-				result.I32 = sql.NullInt32{Int32: nv, Valid: true}
+				result.I32 = sql.NullInt32{Int32: int32(n), Valid: true}
 			}
 		case "s":
 			if seenS {

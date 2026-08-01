@@ -2016,7 +2016,6 @@ func (recv AliasFieldExample) DecodeFrom(data []byte) (result AliasFieldExample,
 				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"count"}}
 			}
 			seenCount = true
-			var _nvCount int
 			neg := false
 			if i < len(data) && data[i] == '-' {
 				neg = true
@@ -2065,8 +2064,7 @@ func (recv AliasFieldExample) DecodeFrom(data []byte) (result AliasFieldExample,
 			} else {
 				n = int64(u)
 			}
-			_nvCount = int(n)
-			result.Count = AliasInt(_nvCount)
+			result.Count = AliasInt(int(n))
 			if result.Count < AliasInt(1) {
 				result.Count = AliasInt(1)
 			}
@@ -2170,14 +2168,12 @@ func (recv AliasFieldExample) DecodeFromStream(s *scan.Stream) (result AliasFiel
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"count"}}
 			}
 			seenCount = true
-			var _nvCount int
 			var iv int64
 			iv, err = s.Int64()
 			if err != nil {
 				return result, decode.NewParseErr("count", s.Pos, err)
 			}
-			_nvCount = int(iv)
-			result.Count = AliasInt(_nvCount)
+			result.Count = AliasInt(int(iv))
 			if result.Count < AliasInt(1) {
 				result.Count = AliasInt(1)
 			}
@@ -2920,7 +2916,6 @@ func (recv NPPositions) DecodeFrom(data []byte) (result NPPositions, i int, err 
 				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"cnt"}}
 			}
 			seenCnt = true
-			var _nvCnt int
 			neg := false
 			if i < len(data) && data[i] == '-' {
 				neg = true
@@ -2969,8 +2964,7 @@ func (recv NPPositions) DecodeFrom(data []byte) (result NPPositions, i int, err 
 			} else {
 				n = int64(u)
 			}
-			_nvCnt = int(n)
-			result.Cnt = NPCount(_nvCnt)
+			result.Cnt = NPCount(int(n))
 		case "e":
 			if seenE {
 				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"e"}}
@@ -3386,14 +3380,12 @@ func (recv NPPositions) DecodeFromStream(s *scan.Stream) (result NPPositions, er
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"cnt"}}
 			}
 			seenCnt = true
-			var _nvCnt int
 			var iv int64
 			iv, err = s.Int64()
 			if err != nil {
 				return result, decode.NewParseErr("cnt", s.Pos, err)
 			}
-			_nvCnt = int(iv)
-			result.Cnt = NPCount(_nvCnt)
+			result.Cnt = NPCount(int(iv))
 		case "e":
 			err = s.ConsumeColon()
 			if err != nil {

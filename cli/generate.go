@@ -2818,6 +2818,26 @@ func narrowFloatGuard(wideVar, typ, errRet string) string {
 	return fmt.Sprintf("if math.IsInf(float64(float32(%s)), 0) { %s }\n", wideVar, errRet)
 }
 
+// foldTailAssign inlines a write-once temp: when body ends with `tmp = EXPR`
+// and tmp appears nowhere else in it, the trailing assign is dropped and EXPR
+// returned for the caller to place directly at the single consumer (composite
+// literal / cast site) — kills the `var nv T; …; nv = float32(fv); {V: nv}`
+// chains. Multi-assign tails (`tmp, i, err = …`) and branching writers
+// (inline string scans) don't match and keep their temp.
+func foldTailAssign(body, tmp string) (rest, expr string, ok bool) {
+	trimmed := strings.TrimRight(body, "\n")
+	nl := strings.LastIndexByte(trimmed, '\n')
+	last := trimmed[nl+1:]
+	if !strings.HasPrefix(last, tmp+" = ") {
+		return body, "", false
+	}
+	rest = trimmed[:nl+1]
+	if regexp.MustCompile(`\b` + regexp.QuoteMeta(tmp) + `\b`).MatchString(rest) {
+		return body, "", false
+	}
+	return rest, strings.TrimPrefix(last, tmp+" = "), true
+}
+
 func inlineScanInt64(b *bytes.Buffer, posVar, dst, castFn, field string) {
 	assign := ""
 	switch {
@@ -4007,16 +4027,21 @@ func renderSQLNull(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 		// publish the {V, Valid:true} literal.
 		inner := sqlNullInnerField(f)
 		var dec bytes.Buffer
-		fmt.Fprintf(&dec, "var nv %s\n", inner.GoType)
 		renderField(&dec, inner, "nv", posVar)
+		body, valExpr := dec.String(), "nv"
+		if rest, expr, ok := foldTailAssign(body, "nv"); ok {
+			body, valExpr = rest, expr
+		} else {
+			body = "var nv " + inner.GoType + "\n" + body
+		}
 		fmt.Fprintf(b, `if %[1]s+4 <= len(data) && data[%[1]s] == 'n' && data[%[1]s+1] == 'u' && data[%[1]s+2] == 'l' && data[%[1]s+3] == 'l' {
 	%[2]s = sql.%[3]s{}
 	%[1]s += 4
 } else {
 	%[4]s
-	%[2]s = sql.%[3]s{V: nv, Valid: true}
+	%[2]s = sql.%[3]s{V: %[5]s, Valid: true}
 }
-`, posVar, ref, sqlTypeName(f.GoType), dec.String())
+`, posVar, ref, sqlTypeName(f.GoType), body, valExpr)
 		return
 	}
 	spec, ok := SQLNullSpec(f.GoType)
@@ -4026,30 +4051,29 @@ func renderSQLNull(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	field := fieldLit(f)
 	var inner bytes.Buffer
 	valExpr := "nv"
+	declType := spec.Type
 	switch spec.Inner {
 	case KindString:
-		inner.WriteString("var nv string\n")
+		declType = "string"
 		inlineScanString(&inner, posVar, "nv", posVar, field, f.Copy, !f.AllowInvalidUTF8)
 	case KindBool:
-		inner.WriteString("var nv bool\n")
+		declType = "bool"
 		fmt.Fprintf(&inner, "nv, %[1]s, err = scan.Bool(data, %[1]s)\n", posVar)
 		fmt.Fprintf(&inner, "if err != nil { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, err) }\n", posVar, field)
 	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
-		fmt.Fprintf(&inner, "var nv %s\n", spec.Type)
 		cast := spec.Type
 		if spec.Type == "int64" {
 			cast = ""
 		}
 		inlineScanInt64(&inner, posVar, "nv", cast, field)
 	case KindUint, KindUint8, KindUint16, KindUint32, KindUint64:
-		fmt.Fprintf(&inner, "var nv %s\n", spec.Type)
 		cast := spec.Type
 		if spec.Type == "uint64" {
 			cast = ""
 		}
 		inlineScanUint64(&inner, posVar, "nv", cast, field)
 	case KindFloat32, KindFloat64:
-		inner.WriteString("var nv float64\n")
+		declType = "float64"
 		fmt.Fprintf(&inner, "nv, %[1]s, err = scan.Float64(data, %[1]s)\n", posVar)
 		fmt.Fprintf(&inner, "if err != nil { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, err) }\n", posVar, field)
 		if spec.Type != "float64" {
@@ -4057,8 +4081,18 @@ func renderSQLNull(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 		}
 	case KindTime:
 		tf := FieldInfo{JSONName: f.JSONName, Format: f.Format}
-		inner.WriteString("var nv time.Time\n")
+		declType = "time.Time"
 		renderTime(&inner, tf, "nv", posVar)
+	}
+	body := inner.String()
+	if valExpr == "nv" {
+		if rest, expr, ok := foldTailAssign(body, "nv"); ok {
+			body, valExpr = rest, expr
+		} else {
+			body = "var nv " + declType + "\n" + body
+		}
+	} else {
+		body = "var nv " + declType + "\n" + body
 	}
 	fmt.Fprintf(b, `if %s+4 <= len(data) && data[%s] == 'n' && data[%s+1] == 'u' && data[%s+2] == 'l' && data[%s+3] == 'l' {
 	%s = sql.%s{}
@@ -4069,7 +4103,7 @@ func renderSQLNull(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 }
 `, posVar, posVar, posVar, posVar, posVar,
 		ref, sqlTypeName(f.GoType), posVar,
-		inner.String(),
+		body,
 		ref, sqlTypeName(f.GoType), spec.Field, valExpr)
 }
 
@@ -4585,9 +4619,17 @@ func renderField(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 			}
 		}
 		tmp := "_nv" + f.GoName
-		fmt.Fprintf(b, "var %s %s\n", tmp, prim)
-		renderField(b, namedPrimInner(f, prim, kind), tmp, posVar)
-		fmt.Fprintf(b, "%s = %s(%s)\n", ref, f.GoType, tmp)
+		var nb bytes.Buffer
+		renderField(&nb, namedPrimInner(f, prim, kind), tmp, posVar)
+		if rest, expr, ok := foldTailAssign(nb.String(), tmp); ok {
+			// Write-once temp folds straight into the conversion.
+			b.WriteString(rest)
+			fmt.Fprintf(b, "%s = %s(%s)\n", ref, f.GoType, expr)
+		} else {
+			fmt.Fprintf(b, "var %s %s\n", tmp, prim)
+			b.WriteString(nb.String())
+			fmt.Fprintf(b, "%s = %s(%s)\n", ref, f.GoType, tmp)
+		}
 		if nz && !flat {
 			b.WriteString("}\n")
 		}
@@ -5792,6 +5834,12 @@ func renderStreamSQLNull(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 		rm := streamReadMore(field, "0", false)
 		rmKi := strings.Replace(rm, "if s.Pos >=", "if s.Pos+ki >=", 1)
 		dec := renderStreamField(inner, "nv", posVar)
+		body, valExpr := dec, "nv"
+		if rest, expr, ok := foldTailAssign(body, "nv"); ok {
+			body, valExpr = rest, expr
+		} else {
+			body = "var nv " + inner.GoType + "\n" + body
+		}
 		fmt.Fprintf(b, `%[5]sif s.Bytes()[s.Pos] == 'n' {
 	for ki := 1; ki < 4; ki++ {
 		%[7]sif s.Bytes()[s.Pos+ki] != "null"[ki] { return result, decode.NewParseErr(%[6]s, s.Pos, scan.ErrBadLiteral) }
@@ -5799,11 +5847,10 @@ func renderStreamSQLNull(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	%[1]s = sql.%[2]s{}
 	s.Pos += 4
 } else {
-	var nv %[3]s
-	%[4]s
-	%[1]s = sql.%[2]s{V: nv, Valid: true}
+	%[3]s
+	%[1]s = sql.%[2]s{V: %[4]s, Valid: true}
 }
-`, ref, sqlTypeName(f.GoType), inner.GoType, dec, rm, field, rmKi)
+`, ref, sqlTypeName(f.GoType), body, valExpr, rm, field, rmKi)
 		return
 	}
 	spec, ok := SQLNullSpec(f.GoType)
@@ -5994,9 +6041,15 @@ func renderStreamField(f FieldInfo, ref, posVar string) string {
 			out = nb.String()
 		}
 		tmp := "_nv" + f.GoName
-		out += fmt.Sprintf("var %s %s\n", tmp, prim)
-		out += renderStreamField(namedPrimInner(f, prim, kind), tmp, posVar)
-		out += fmt.Sprintf("%s = %s(%s)\n", ref, f.GoType, tmp)
+		if rest, expr, ok := foldTailAssign(renderStreamField(namedPrimInner(f, prim, kind), tmp, posVar), tmp); ok {
+			// Write-once temp folds straight into the conversion.
+			out += rest
+			out += fmt.Sprintf("%s = %s(%s)\n", ref, f.GoType, expr)
+		} else {
+			out += fmt.Sprintf("var %s %s\n", tmp, prim)
+			out += renderStreamField(namedPrimInner(f, prim, kind), tmp, posVar)
+			out += fmt.Sprintf("%s = %s(%s)\n", ref, f.GoType, tmp)
+		}
 		if nz && !flat {
 			out += "}\n"
 		}
