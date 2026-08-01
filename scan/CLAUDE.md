@@ -210,7 +210,11 @@ ReadMore error path in every primitive aborts or exits its loop, and the
 number-scanner "swallow" (`break` on refill error) only fires with the buffer
 exhausted, so the next primitive re-hits the reader; a transient error that
 loses no bytes even resumes losslessly (stickiness would have killed a decode
-the reader could finish). The old sticky `Err`/`EOF` fields were deleted with
+the reader could finish). ReadMore itself surfaces an error only when the
+Read made NO progress: bytes delivered alongside an error are appended and
+the error deferred to the reader's next call (io.Reader contract — the
+number-scanner swallow used to return a TRUNCATED value with fresh digits
+sitting unread in the buffer). The old sticky `Err`/`EOF` fields were deleted with
 the `Shift` flag — the only cross-refill EOF consumer is `CaptureValue`, which
 tracks it as a local (`ReadMore == io.ErrUnexpectedEOF` ⇒ drained).
 

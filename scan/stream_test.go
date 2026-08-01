@@ -489,8 +489,11 @@ func (r *flakyReader) Read(p []byte) (int, error) {
 	}
 	head := r.seq[0]
 	r.seq = r.seq[1:]
-	if err, ok := head.(error); ok {
-		return 0, err
+	switch h := head.(type) {
+	case error:
+		return 0, h
+	case *bothRead:
+		return copy(p, h.data), h.err
 	}
 	return copy(p, head.(string)), nil
 }
@@ -684,4 +687,54 @@ func TestStreamStringInvalidUTF8(t *testing.T) {
 			}
 		}
 	}
+}
+
+// ReadMore used to surface a simultaneous non-EOF error even when the Read
+// delivered bytes — the number scanners' refill swallow then returned a
+// TRUNCATED value with the fresh digits sitting unread in the buffer.
+func TestStreamReadMore_BytesBeforeError(t *testing.T) {
+	t.Parallel()
+	var s Stream
+	s.Reset(&flakyReader{seq: []any{"1", &bothRead{"23", errFlaky}}}, nil)
+	v, err := s.Int64()
+	if err != nil || v != 123 {
+		t.Errorf("Int64 = %d, %v — want 123 (bytes delivered with the error must be consumed)", v, err)
+	}
+}
+
+// skipSpaceSlow's error paths wrote the PRE-compaction cursor: Offset()
+// double-counted the discarded whitespace run and Pos landed past len(buf).
+func TestStreamSkipSpace_ErrorPos(t *testing.T) {
+	t.Parallel()
+	var s Stream
+	s.Reset(&flakyReader{seq: []any{"  ", errFlaky}}, nil)
+	if err := s.SkipSpace(); !errors.Is(err, errFlaky) {
+		t.Fatalf("got %v, want the reader error", err)
+	}
+	if s.Pos > len(s.Bytes()) {
+		t.Errorf("Pos %d past len(buf) %d", s.Pos, len(s.Bytes()))
+	}
+	if got := s.Offset(); got != 2 {
+		t.Errorf("Offset = %d, want 2 (whitespace run double-counted)", got)
+	}
+}
+
+// The surrogate-pair ensure loop swallowed transient reader errors and
+// mislabeled them as lone surrogates (spurious ErrInvalidUTF8).
+func TestStreamStringSurrogate_TransientError(t *testing.T) {
+	t.Parallel()
+	var s Stream
+	s.Reset(&flakyReader{seq: []any{`"\ud83d`, errFlaky, `\ude00"`}}, nil)
+	if _, err := s.String(true); !errors.Is(err, errFlaky) {
+		t.Errorf("got %v, want the reader error (not ErrInvalidUTF8)", err)
+	}
+}
+
+var errFlaky = errors.New("flaky reader")
+
+// bothRead delivers bytes AND an error from one Read call (io.Reader permits
+// and documents this pairing).
+type bothRead struct {
+	data string
+	err  error
 }

@@ -14,6 +14,16 @@ shaves routinely vanish in wall clock.
   multierr stops collecting dive errors past the bound. Touches every container
   emitter.
 
+- **Stream skip-tree separator/colon/literal refills still grow-only.** The
+  per-iteration ','/']'/'}' bound checks in (*Stream).skipArray/skipObject,
+  the byte-by-byte literal loops (Bool, the 'null' arms), and anyObject's
+  colon check refill with ReadMore(0); at those points len == cap (readers
+  fill the window), so each refill DOUBLES the buffer for bytes that are
+  being discarded. Compacting needs per-site cursor rebases (the literal
+  loops hold j-relative offsets — same class as the 2026-07 skip-tree
+  compaction pass, which deliberately skipped these). Perf only, house-rule
+  bench-gated (SkipHeavy stream rows + B/op).
+
 - **`AppendAny` output prealloc via size precalc.** ggen ties/barely beats
   jsonv2/stdjson on typed slice marshal (`[]int`) but wins 2-4× on maps. Cause:
   bench passes `nil` dst, so `AppendAny` runs the growth chain (0→…→1024), 7-8
@@ -502,6 +512,21 @@ surface pinned by `Decoder[T]`).
   `maxlen` as a sizing hint without an opt-in mechanism (see `hint:`).
 
 # Future
+
+- **Lazy streaming iteration over an unending reader (iter.Seq).** User idea
+  2026-08: parse values lazily off a never-ending stream (stdin, socket,
+  NDJSON log tail) and yield them as they complete — shape sketch:
+  `decode.Iter[T](r io.Reader, buf []byte) iter.Seq2[T, error]` (Go 1.23
+  range-over-func; a channel variant forces a goroutine + handoff cost and
+  loses backpressure/cancellation ergonomics — Seq pulls on demand, caller
+  breaks to stop). Two input shapes worth covering: elements of one huge
+  array (`[a,b,c,…` — UnmarshalSliceStream's loop, yielded instead of
+  appended) and concatenated/NDJSON top-level values (skip inter-value WS,
+  decode, repeat). Builds on the existing Stream machinery; the CaptureValue
+  liveness lesson applies (never Read past a completed value — deliver it
+  first, refill on the NEXT pull, so a quiet socket can't stall a yielded
+  element). Stream-path strings are already copies, so yielded values own
+  their memory and the buffer recycles between pulls.
 
 - **Validation-derived encode hints.** Use field rules for encode shortcuts:
   `alphanum` → skip the escape table; `lte=N` → fixed-width digit formatter instead of

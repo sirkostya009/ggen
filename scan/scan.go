@@ -35,6 +35,7 @@ var (
 	ErrBadObject      = errors.New("scan: invalid object")
 	ErrMaxDepth       = errors.New("scan: exceeded max depth")
 	ErrUnexpectedEnd  = errors.New("scan: unexpected end of input")
+	ErrTrailingData   = errors.New("scan: trailing data after value")
 )
 
 // MaxDepth bounds container nesting on every recursive decode path

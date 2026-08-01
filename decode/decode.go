@@ -41,8 +41,10 @@ func UnmarshalSlice[T Decoder[T]](data []byte) ([]T, error) {
 	i = scan.SkipSpace(data, i)
 	var result []T
 	if i < len(data) && data[i] == ']' {
-		return result, nil
+		return result, trailingCheck(data, i+1)
 	}
+	// Same width-driven prealloc ladder generated slice fields use.
+	result = make([]T, 0, PreallocCap(unsafe.Sizeof(*new(T))))
 	for {
 		var zero T
 		v, n, err := zero.DecodeFrom(data[i:])
@@ -59,10 +61,20 @@ func UnmarshalSlice[T Decoder[T]](data []byte) ([]T, error) {
 			continue
 		}
 		if data[i] == ']' {
-			return result, nil
+			return result, trailingCheck(data, i+1)
 		}
 		return nil, NewParseErr(arrField(len(result)-1), i, scan.ErrBadArray)
 	}
+}
+
+// trailingCheck rejects non-whitespace bytes after the closing bracket —
+// `[1,2]]]` and `[{}]{"junk":` used to decode cleanly with no way for the
+// caller to detect the remainder (jsonv2 whole-input parity).
+func trailingCheck(data []byte, i int) error {
+	if i = scan.SkipSpace(data, i); i < len(data) {
+		return NewParseErr("[]", i, scan.ErrTrailingData)
+	}
+	return nil
 }
 
 // ReadSlice reads an array from r then decodes it via UnmarshalSlice.

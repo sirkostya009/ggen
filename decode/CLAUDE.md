@@ -52,3 +52,5 @@ func NewParseErr(field string, pos int, err error) error
 `Error()` renders `parse error[ at <field>] (pos <n>): <cause>` from a preallocated `[]byte` returned as an `unsafe.String` alias; the cause's `Error()` is called exactly once and appended directly, so chained wraps stay linear.
 
 Slice walkers (`UnmarshalSlice` / `UnmarshalSliceStream`) wrap their OWN bracket/comma `scan.ErrBadArray` failures in `*ParseError`; element-level errors come back already wrapped from the inner `DecodeFrom`.
+
+`UnmarshalSlice` (and `ReadSlice` through it) rejects trailing non-whitespace after the closing `]` with `scan.ErrTrailingData` (jsonv2 whole-input parity — `[1,2]]]` used to decode cleanly with no way to detect the remainder). `UnmarshalSliceStream` is exempt: probing for trailing bytes would block a live reader. The bytes walker also preallocates via the package's own `PreallocCap` ladder instead of growing from nil.

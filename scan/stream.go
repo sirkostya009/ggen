@@ -106,9 +106,10 @@ func (s *Stream) ReadMore(keep int) error {
 		}
 		return err
 	}
-	if err != nil && err != io.EOF {
-		return err
-	}
+	// Bytes arrived — deliver them; a simultaneous non-EOF error re-surfaces
+	// on the reader's next call (io.Reader contract: process n > 0 before
+	// err — the number scanners' refill swallow would otherwise return a
+	// TRUNCATED value with the fresh digits sitting unread in the buffer).
 	return nil
 }
 
@@ -140,11 +141,10 @@ func (s *Stream) skipSpaceSlow() error {
 			i++
 		}
 		if err := s.ReadMore(i); err != nil {
+			s.Pos = 0
 			if err == io.ErrUnexpectedEOF {
-				s.Pos = i
 				return nil
 			}
-			s.Pos = i
 			return err
 		}
 		i = 0
@@ -557,6 +557,12 @@ func (s *Stream) stringSlow(start, j int, validate bool) (string, error) {
 						err := s.ReadMore(j)
 						j = 0
 						if err != nil {
+							if err != io.ErrUnexpectedEOF {
+								// Transient reader error — surfacing
+								// ErrInvalidUTF8 for it would mislabel a
+								// hiccup as a lone surrogate.
+								return "", err
+							}
 							break
 						}
 					}
