@@ -816,7 +816,12 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
     sites: struct field, map value, slice/array element, and pointer leaf (fast +
     slow), bytes + stream (`inlineScanInt64`/`Uint64`, `widenedScan`, the stream
     map/slice widen branches, the pointer cascade). `int`/`uint` stay unguarded
-    (64-bit on target platforms — no truncation). Pinned by
+    (64-bit on target platforms — no truncation). float32 gets the sibling
+    guard (`narrowFloatGuard`, 2026-08): the float64 scan whose float32
+    conversion lands on ±Inf returns ErrNumberOverflow — "converts to Inf"
+    is exactly stdlib's reject boundary, NOT MaxFloat32 (which would wrongly
+    reject values that round down to it). Same site coverage incl. aliases
+    and `,string`. Pinned by `TestNarrowFloatOverflow` +
     `TestNarrowIntOverflow` (integrationtests, differential vs encoding/json over
     field/map/slice/pointer × bytes/stream). Same audit also fixed a MARSHAL bug:
     `renderAppendMap`'s value switch was missing `int8/16/32`, `uint/uint8/16/32`,

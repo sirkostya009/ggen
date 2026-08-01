@@ -2251,6 +2251,9 @@ func (recv Geo) DecodeFrom(data []byte) (result Geo, i int, err error) {
 			if err != nil {
 				return result, i, decode.NewParseErr("accuracy", i, err)
 			}
+			if math.IsInf(float64(float32(fv)), 0) {
+				return result, i, decode.NewParseErr("accuracy", i, scan.ErrNumberOverflow)
+			}
 			result.Accuracy = float32(fv)
 		case "altitude":
 			if seenAltitude {
@@ -2347,6 +2350,9 @@ func (recv Geo) DecodeFromStream(s *scan.Stream) (result Geo, err error) {
 			fv, err = s.Float64()
 			if err != nil {
 				return result, decode.NewParseErr("accuracy", s.Pos, err)
+			}
+			if math.IsInf(float64(float32(fv)), 0) {
+				return result, decode.NewParseErr("accuracy", s.Pos, scan.ErrNumberOverflow)
 			}
 			result.Accuracy = float32(fv)
 		case "altitude":

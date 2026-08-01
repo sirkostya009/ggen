@@ -3,6 +3,7 @@
 package integrationtests
 
 import (
+	"math"
 	"strconv"
 	"strings"
 	"unsafe"
@@ -1339,6 +1340,9 @@ func (recv StringTagStruct) DecodeFrom(data []byte) (result StringTagStruct, i i
 			if err != nil {
 				return result, i, decode.NewParseErr("f32", i, err)
 			}
+			if math.IsInf(float64(float32(f)), 0) {
+				return result, i, decode.NewParseErr("f32", i, scan.ErrNumberOverflow)
+			}
 			result.F32 = float32(f)
 		case "f64":
 			if seenF64 {
@@ -1711,6 +1715,9 @@ func (recv StringTagStruct) DecodeFromStream(s *scan.Stream) (result StringTagSt
 			f, err := strconv.ParseFloat(sv, 64)
 			if err != nil {
 				return result, decode.NewParseErr("f32", s.Pos, err)
+			}
+			if math.IsInf(float64(float32(f)), 0) {
+				return result, decode.NewParseErr("f32", s.Pos, scan.ErrNumberOverflow)
 			}
 			result.F32 = float32(f)
 		case "f64":

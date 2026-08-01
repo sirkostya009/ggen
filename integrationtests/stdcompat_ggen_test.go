@@ -5,6 +5,7 @@
 package integrationtests
 
 import (
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -5397,6 +5398,9 @@ func (recv F32Wire) DecodeFrom(data []byte) (result F32Wire, i int, err error) {
 			if err != nil {
 				return result, i, decode.NewParseErr("v", i, err)
 			}
+			if math.IsInf(float64(float32(fv)), 0) {
+				return result, i, decode.NewParseErr("v", i, scan.ErrNumberOverflow)
+			}
 			result.V = float32(fv)
 		default:
 			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
@@ -5463,6 +5467,9 @@ func (recv F32Wire) DecodeFromStream(s *scan.Stream) (result F32Wire, err error)
 			fv, err = s.Float64()
 			if err != nil {
 				return result, decode.NewParseErr("v", s.Pos, err)
+			}
+			if math.IsInf(float64(float32(fv)), 0) {
+				return result, decode.NewParseErr("v", s.Pos, scan.ErrNumberOverflow)
 			}
 			result.V = float32(fv)
 		default:

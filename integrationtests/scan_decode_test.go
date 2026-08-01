@@ -10,6 +10,7 @@ import (
 	jsonv2 "encoding/json/v2"
 	"errors"
 	"io"
+	"math"
 	"strconv"
 	"strings"
 	"testing"
@@ -773,9 +774,9 @@ func TestMaxDepthNoCrash(t *testing.T) {
 	const n = 2_000_000 // well past MaxDepth and past the old ~2.5MB crash point
 	arr := strings.Repeat("[", n) + strings.Repeat("]", n)
 	cases := []struct {
-		name     string
-		payload  string
-		decode   func([]byte) error
+		name    string
+		payload string
+		decode  func([]byte) error
 	}{
 		{"recursive_struct", strings.Repeat(`{"children":[`, n) + strings.Repeat(`]}`, n),
 			func(d []byte) error { _, _, err := Node{}.DecodeFrom(d); return err }},
@@ -890,5 +891,45 @@ func TestNumberGrammarStrict(t *testing.T) {
 				t.Errorf("skip/raw: reject=%v want %v (err=%v)", rErr != nil, c.reject, rErr)
 			}
 		})
+	}
+}
+
+// NarrowFloats pins the float sibling of the narrow-int guard: float32
+// positions used to bare-cast float64 scans, so 1e39 decoded to +Inf with a
+// nil error while v1 and jsonv2 both reject out-of-range float32.
+//
+//ggen:generate
+type NarrowFloats struct {
+	F  float32            `json:"f"`
+	Fs []float32          `json:"fs"`
+	Fm map[string]float32 `json:"fm"`
+	Fp *float32           `json:"fp"`
+}
+
+func TestNarrowFloatOverflow(t *testing.T) {
+	t.Parallel()
+	bad := []string{
+		`{"f":1e39}`, `{"f":-1e39}`, `{"fs":[1,1e39]}`, `{"fm":{"k":1e39}}`, `{"fp":1e39}`,
+	}
+	for _, in := range bad {
+		if _, _, err := (NarrowFloats{}).DecodeFrom([]byte(in)); !errors.Is(err, scan.ErrNumberOverflow) {
+			t.Errorf("bytes %s: got %v, want ErrNumberOverflow", in, err)
+		}
+		var s scan.Stream
+		s.Reset(&chunkReader{data: []byte(in), max: 1}, nil)
+		if _, err := (NarrowFloats{}).DecodeFromStream(&s); !errors.Is(err, scan.ErrNumberOverflow) {
+			t.Errorf("stream %s: got %v, want ErrNumberOverflow", in, err)
+		}
+		var std NarrowFloats
+		if json.Unmarshal([]byte(in), &std) == nil {
+			t.Errorf("stdlib accepted %s — differential premise broken", in)
+		}
+	}
+	// The float32 rounding boundary: values that round DOWN to MaxFloat32
+	// stay accepted (stdlib does the same — the reject line is "converts to
+	// Inf", not MaxFloat32).
+	got, _, err := (NarrowFloats{}).DecodeFrom([]byte(`{"f":3.4028235e38}`))
+	if err != nil || got.F != math.MaxFloat32 {
+		t.Errorf("boundary: got %v, %v", got.F, err)
 	}
 }

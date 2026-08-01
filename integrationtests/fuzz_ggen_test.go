@@ -100,6 +100,9 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			if err != nil {
 				return result, i, decode.NewParseErr("f32", i, err)
 			}
+			if math.IsInf(float64(float32(fv)), 0) {
+				return result, i, decode.NewParseErr("f32", i, scan.ErrNumberOverflow)
+			}
 			result.F32 = float32(fv)
 		case "f64":
 			if seenF64 {
@@ -689,6 +692,9 @@ func (recv PrimStruct) DecodeFromStream(s *scan.Stream) (result PrimStruct, err 
 			fv, err = s.Float64()
 			if err != nil {
 				return result, decode.NewParseErr("f32", s.Pos, err)
+			}
+			if math.IsInf(float64(float32(fv)), 0) {
+				return result, decode.NewParseErr("f32", s.Pos, scan.ErrNumberOverflow)
 			}
 			result.F32 = float32(fv)
 		case "f64":

@@ -31,7 +31,8 @@ func renderAliasDecode(b *bytes.Buffer, s StructInfo) {
 		guard := narrowIntGuard("v", s.AliasUnderlying, `return result, i, decode.NewParseErr("", i, scan.ErrNumberOverflow)`)
 		fmt.Fprintf(b, "var v uint64\nv, i, err = scan.Uint64(data, i)\n%s\n%sresult = %s(v)\n", wrap, guard, s.Name)
 	case KindFloat32, KindFloat64:
-		fmt.Fprintf(b, "var v float64\nv, i, err = scan.Float64(data, i)\n%s\nresult = %s(v)\n", wrap, s.Name)
+		guard := narrowFloatGuard("v", s.AliasUnderlying, `return result, i, decode.NewParseErr("", i, scan.ErrNumberOverflow)`)
+		fmt.Fprintf(b, "var v float64\nv, i, err = scan.Float64(data, i)\n%s\n%sresult = %s(v)\n", wrap, guard, s.Name)
 	}
 	b.WriteString("return result, i, nil\n")
 }
@@ -60,7 +61,8 @@ func renderAliasStreamDecode(b *bytes.Buffer, s StructInfo) {
 		guard := narrowIntGuard("v", s.AliasUnderlying, `return result, decode.NewParseErr("", s.Pos, scan.ErrNumberOverflow)`)
 		fmt.Fprintf(b, "var v uint64\nv, err = s.Uint64()\n%s\n%sresult = %s(v)\n", wrap, guard, s.Name)
 	case KindFloat32, KindFloat64:
-		fmt.Fprintf(b, "var v float64\nv, err = s.Float64()\n%s\nresult = %s(v)\n", wrap, s.Name)
+		guard := narrowFloatGuard("v", s.AliasUnderlying, `return result, decode.NewParseErr("", s.Pos, scan.ErrNumberOverflow)`)
+		fmt.Fprintf(b, "var v float64\nv, err = s.Float64()\n%s\n%sresult = %s(v)\n", wrap, guard, s.Name)
 	}
 	b.WriteString("return result, nil\n")
 }

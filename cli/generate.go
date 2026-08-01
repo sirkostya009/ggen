@@ -2806,6 +2806,18 @@ func narrowIntGuard(wideVar, typ, errRet string) string {
 	return fmt.Sprintf("if %s < %s || %s > %s { %s }\n", wideVar, lo, wideVar, hi, errRet)
 }
 
+// narrowFloatGuard mirrors narrowIntGuard for float32 targets: a float64
+// whose float32 conversion overflows to ±Inf returns ErrNumberOverflow —
+// stdlib v1 and jsonv2 both reject out-of-range float32, and "converts to
+// Inf" is exactly stdlib's rounding boundary (not MaxFloat32, which would
+// wrongly reject values that round DOWN to it).
+func narrowFloatGuard(wideVar, typ, errRet string) string {
+	if typ != "float32" {
+		return ""
+	}
+	return fmt.Sprintf("if math.IsInf(float64(float32(%s)), 0) { %s }\n", wideVar, errRet)
+}
+
 func inlineScanInt64(b *bytes.Buffer, posVar, dst, castFn, field string) {
 	assign := ""
 	switch {
@@ -3470,8 +3482,9 @@ if err != nil { return result, %[1]s, decode.NewParseErr(%[3]s, %[1]s, err) }
 			fmt.Fprintf(b, `var fv float64
 fv, %[1]s, err = scan.Float64(data, %[1]s)
 if err != nil { return result, %[1]s, decode.NewParseErr(%[3]s, %[1]s, err) }
-%[2]s = float32(fv)
-`, posVar, mapTarget, field)
+%[4]s%[2]s = float32(fv)
+`, posVar, mapTarget, field,
+				narrowFloatGuard("fv", "float32", fmt.Sprintf("return result, %s, decode.NewParseErr(%s, %s, scan.ErrNumberOverflow)", posVar, field, posVar)))
 		}
 	case KindStruct:
 		if isGenerated(f.ElemType) {
@@ -4327,6 +4340,8 @@ default: return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, scan.ErrBadBool)
 		b.WriteString("f, err := strconv.ParseFloat(sv, 64)\n")
 		b.WriteString(errCheck)
 		if f.Kind == KindFloat32 {
+			b.WriteString(narrowFloatGuard("f", "float32",
+				fmt.Sprintf("return result, %s, decode.NewParseErr(%s, %s, scan.ErrNumberOverflow)", posVar, field, posVar)))
 			fmt.Fprintf(b, "%s = float32(f)\n", ref)
 		} else {
 			fmt.Fprintf(b, "%s = f\n", ref)
@@ -4651,6 +4666,7 @@ func renderField(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 			}
 			renderField(b, leaf, "v", posVar)
 			b.WriteString(narrowIntGuard("v", castFn, fmt.Sprintf("return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrNumberOverflow)", posVar, fieldLit(f))))
+			b.WriteString(narrowFloatGuard("v", castFn, fmt.Sprintf("return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrNumberOverflow)", posVar, fieldLit(f))))
 			if f.TargetNil {
 				// Target is a known-nil `var x *T` — straight new-chain assign.
 				fmt.Fprintf(b, "%s = %s\n", ref, newChain(valExpr, depth))
@@ -4714,8 +4730,9 @@ func renderField(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 		fmt.Fprintf(b, `var fv float64
 fv, %[1]s, err = scan.Float64(data, %[1]s)
 if err != nil { return result, %[1]s, decode.NewParseErr(%[3]s, %[1]s, err) }
-%[2]s = float32(fv)
-`, posVar, ref, field)
+%[4]s%[2]s = float32(fv)
+`, posVar, ref, field,
+			narrowFloatGuard("fv", "float32", fmt.Sprintf("return result, %s, decode.NewParseErr(%s, %s, scan.ErrNumberOverflow)", posVar, field, posVar)))
 	case KindFloat64:
 		fmt.Fprintf(b, `%[1]s, %[2]s, err = scan.Float64(data, %[2]s)
 if err != nil { return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, err) }
@@ -5066,6 +5083,8 @@ if e := bytes.IndexByte(data[%[2]s:], ']'); e >= 0 { %[4]s = bytes.Count(data[%[
 				b.WriteString("var fv float64\n")
 				fmt.Fprintf(b, "fv, %s, err = scan.Float64(data, %s)\n", kvar, kvar)
 				b.WriteString(errCheck)
+				b.WriteString(narrowFloatGuard("fv", "float32",
+					fmt.Sprintf("return result, %s, decode.NewParseErr(%s, %s, scan.ErrNumberOverflow)", kvar, field, kvar)))
 				fmt.Fprintf(b, "%s = float32(fv)\n", target)
 			}
 		case KindStruct:
@@ -5431,8 +5450,9 @@ uv, err = s.Uint64()
 		} else {
 			fmt.Fprintf(b, `var fv float64
 fv, err = s.Float64()
-%[2]s%[1]s = float32(fv)
-`, mapTarget, chk)
+%[2]s%[3]s%[1]s = float32(fv)
+`, mapTarget, chk,
+				narrowFloatGuard("fv", "float32", fmt.Sprintf("return result, decode.NewParseErr(%s, s.Pos, scan.ErrNumberOverflow)", field)))
 		}
 	case KindStruct:
 		if isGenerated(f.ElemType) {
@@ -5934,6 +5954,8 @@ default: return result, decode.NewParseErr(%[2]s, s.Pos, scan.ErrBadBool)
 		b.WriteString("f, err := strconv.ParseFloat(sv, 64)\n")
 		b.WriteString(chk)
 		if f.Kind == KindFloat32 {
+			b.WriteString(narrowFloatGuard("f", "float32",
+				fmt.Sprintf("return result, decode.NewParseErr(%s, s.Pos, scan.ErrNumberOverflow)", field)))
 			fmt.Fprintf(b, "%s = float32(f)\n", ref)
 		} else {
 			fmt.Fprintf(b, "%s = f\n", ref)
@@ -6058,6 +6080,7 @@ func renderStreamField(f FieldInfo, ref, posVar string) string {
 		}
 		b.WriteString(renderStreamField(leaf, "v", posVar))
 		b.WriteString(narrowIntGuard("v", narrowCast, fmt.Sprintf("return result, decode.NewParseErr(%s, s.Pos, scan.ErrNumberOverflow)", field)))
+		b.WriteString(narrowFloatGuard("v", narrowCast, fmt.Sprintf("return result, decode.NewParseErr(%s, s.Pos, scan.ErrNumberOverflow)", field)))
 		if f.TargetNil {
 			// Target is a known-nil `var x *T` — straight new-chain assign.
 			fmt.Fprintf(b, "%s = %s\n", ref, newChain(valExpr, depth))
@@ -6086,9 +6109,12 @@ func renderStreamField(f FieldInfo, ref, posVar string) string {
 	}
 	widenedScan := func(wideType, wideVar, method, castTo string) {
 		guard := ""
+		errRet := fmt.Sprintf("return result, decode.NewParseErr(%s, s.Pos, scan.ErrNumberOverflow)", field)
 		if method == "Int64" || method == "Uint64" {
-			errRet := fmt.Sprintf("return result, decode.NewParseErr(%s, s.Pos, scan.ErrNumberOverflow)", field)
 			guard = narrowIntGuard(wideVar, castTo, errRet)
+		}
+		if method == "Float64" {
+			guard = narrowFloatGuard(wideVar, castTo, errRet)
 		}
 		fmt.Fprintf(b, `var %[1]s %[2]s
 %[1]s, err = s.%[3]s()
@@ -6335,8 +6361,9 @@ uv, err = s.Uint64()
 			} else {
 				fmt.Fprintf(b, `var fv float64
 fv, err = s.Float64()
-%[2]s%[1]s = float32(fv)
-`, target, chk)
+%[2]s%[3]s%[1]s = float32(fv)
+`, target, chk,
+					narrowFloatGuard("fv", "float32", fmt.Sprintf("return result, decode.NewParseErr(%s, s.Pos, scan.ErrNumberOverflow)", field)))
 			}
 		case KindStruct:
 			if directStruct {

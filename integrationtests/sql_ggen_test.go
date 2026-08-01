@@ -2645,6 +2645,9 @@ func (recv SQLNullGenFloat32Struct) DecodeFrom(data []byte) (result SQLNullGenFl
 				if err != nil {
 					return result, i, decode.NewParseErr("f", i, err)
 				}
+				if math.IsInf(float64(float32(fv)), 0) {
+					return result, i, decode.NewParseErr("f", i, scan.ErrNumberOverflow)
+				}
 				nv = float32(fv)
 
 				result.F = sql.Null[float32]{V: nv, Valid: true}
@@ -2734,6 +2737,9 @@ func (recv SQLNullGenFloat32Struct) DecodeFromStream(s *scan.Stream) (result SQL
 				fv, err = s.Float64()
 				if err != nil {
 					return result, decode.NewParseErr("f", s.Pos, err)
+				}
+				if math.IsInf(float64(float32(fv)), 0) {
+					return result, decode.NewParseErr("f", s.Pos, scan.ErrNumberOverflow)
 				}
 				nv = float32(fv)
 
