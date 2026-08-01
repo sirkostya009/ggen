@@ -45,7 +45,7 @@ func NewParseErr(field string, pos int, err error) error
 `NewParseErr` is the call-site constructor at every error-return site in generated decoders. Codegen embeds `field` as a compile-time literal per branch (`"street"`, `"addr"`, …) or as a runtime expression for dynamic keys (`key` in the bytes path — aliased into the caller's data, safe on the error path; `strings.Clone(key)` for the stream path, since the underlying buffer may have compacted). Behaviour:
 
 - nil err → nil (zero-cost happy path — no allocation, no field-name probe)
-- `validation.Error` / `validation.Errors` → pass through unchanged (typed pointers stay reachable via `errors.As`)
+- `validation.Error` / `validation.Errors` → prepend the segment onto the Path (typed pointers stay reachable via `errors.As` — the value passes through, only its Path grows; used to pass untouched, which left nested fail-fast validation errors without their outer segments)
 - already a `*ParseError` (deeper wrap) → **mutates** its `Field` in place, prepending the outer field name (`"addr"` + inner `"zip"` → `"addr.zip"`); `Pos` left at the deeper site
 - raw error → wraps as `&ParseError{Field, Pos, Err: err}`
 

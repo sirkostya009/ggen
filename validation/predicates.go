@@ -33,19 +33,23 @@ func IsNumeric(s string) bool {
 }
 
 // IsLower reports whether s contains no uppercase unicode characters.
+// Caseless characters (digits, punctuation, spaces, uncased scripts) pass —
+// the class is "no uppercase", not "every rune lowercase" (the paired
+// LowerError renders "contains uppercase letters").
 func IsLower(s string) bool {
 	for _, r := range s {
-		if !unicode.IsLower(r) {
+		if unicode.IsUpper(r) {
 			return false
 		}
 	}
 	return true
 }
 
-// IsUpper reports whether s contains no lowercase unicode characters.
+// IsUpper reports whether s contains no lowercase unicode characters —
+// mirror of [IsLower].
 func IsUpper(s string) bool {
 	for _, r := range s {
-		if !unicode.IsUpper(r) {
+		if unicode.IsLower(r) {
 			return false
 		}
 	}

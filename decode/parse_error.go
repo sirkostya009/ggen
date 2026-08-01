@@ -57,6 +57,12 @@ func NewParseErr(segment string, pos int, err error) error {
 		return nil
 	}
 	if _, ok := err.(validation.Error); ok {
+		// Complete the path like the *ParseError arm does — pass-through
+		// left fail-fast nested validation errors without their outer
+		// segments. Typed pointers stay reachable via errors.As.
+		if p, ok := err.(interface{ PrependPath(string) }); ok && segment != "" {
+			p.PrependPath(segment)
+		}
 		return err
 	}
 	if pe, ok := errors.AsType[*ParseError](err); ok {

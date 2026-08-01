@@ -593,3 +593,18 @@ func TestMapVals_DedicatedKindValues(t *testing.T) {
 		t.Errorf("roundtrip mismatch")
 	}
 }
+
+// A fail-fast validation error from a NESTED decode used to pass through
+// NewParseErr with its outer segments missing — "zipCode" instead of
+// "addr.zipCode".
+func TestNestedValidationPath_Complete(t *testing.T) {
+	t.Parallel()
+	_, _, err := PtrAddrStruct{}.DecodeFrom([]byte(`{"addr":{"street":"s","city":"c","zipCode":"123"}}`))
+	var le *validation.LenError
+	if !errors.As(err, &le) {
+		t.Fatalf("got %v, want *validation.LenError", err)
+	}
+	if len(le.Path) != 2 || le.Path[0] != "addr" || le.Path[1] != "zipCode" {
+		t.Errorf("Path = %v, want [addr zipCode]", le.Path)
+	}
+}

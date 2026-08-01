@@ -164,6 +164,17 @@ surface pinned by `Decoder[T]`).
   value-decoder number grammar → opt #52. Its dup-key find was DECIDED as
   intentional — see Tried Rejected.)
 
+- **Clean up validation error path-completion plumbing.** The 2026-08 path
+  fixes left structural-assertion smell: `PrependPath` is an exported method on
+  every error type but NOT in the `Error` interface, so `decode.NewParseErr`,
+  `Errors.Append`, and `Errors.PrependPath` each assert
+  `interface{ PrependPath(string) }` inline. Candidates: put `PrependPath` in
+  the interface outright (external implementors just gain a required method —
+  breaking is fine here), or restructure the ~20 error structs around a shared
+  embedded base (`Pos int; Path []string` + one `PrependPath` impl) which also
+  kills the 20 copy-pasted one-liners. Fold into the CustomError-shape revisit
+  below if both happen at once.
+
 - **Revisit `validation.CustomError` shape.** Today `{Field, Name string, Cause
   error}` + `Unwrap()`. Rough edges: `Name` doubles as rule identifier and
   user-facing label (split into `Rule` + `Name`); no `Value any` field like the

@@ -49,7 +49,10 @@ offending value, not at its first byte. The aggregate `Errors` slice has no
 ## Concrete error structs (one per rule)
 
 Pointer-receiver structs, all implement `validation.Error`. Each carries a
-`Pos int` and a root-relative `Path []string` (both first); shapes below list
+`Pos int` and a root-relative `Path []string` (both first) plus an exported
+`PrependPath(segment)` — deliberately NOT part of the `Error` interface
+(implementing `Error` doesn't require it; `decode.NewParseErr` and
+`Errors.Append` assert for it to complete nested paths). Shapes below list
 the remaining fields:
 
 - **presence**: `RequiredError`, `NotEmptyError`

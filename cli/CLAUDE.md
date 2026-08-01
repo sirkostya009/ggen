@@ -547,8 +547,7 @@ any`. Every error carries a `Pos int` (byte offset relative to the full
     `inlineScan*`/dispatch site interpolates the quoted JSON-path literal into its
     `NewParseErr` call. Zero runtime cost on the happy path.
     `NewParseErr(segment, pos, err)` builds `*decode.ParseError{Path []string,
-Pos, Err}` for raw sentinels (a one-segment path), passes `validation.Error`
-    through untouched, and **chains** when err is already a `*ParseError` —
+Pos, Err}` for raw sentinels (a one-segment path), prepends the segment onto a `validation.Error`'s Path (value passes through, reachable via `errors.As`), and **chains** when err is already a `*ParseError` —
     prepending the segment onto `pe.Path` (deeper `Pos` kept) so nested surfaces
     `Error()`-join to `addr.street`. Empty segment leaves the path untouched.
     `errors.Is(err, scan.ErrBadString)` works via `Unwrap()`; `ParseError.Error()`
