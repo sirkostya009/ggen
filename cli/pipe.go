@@ -158,6 +158,32 @@ func tokenizePipe(tag string) ([]ptok, error) {
 	return toks, nil
 }
 
+// splitPipeParts splits a multi-part rule value (oneof/replace/clamp) on `|`
+// outside single-quoted regions, stripping one quote layer per part — so
+// `oneof='New York'|LA` quotes spaces and `replace='a|b'|c` a literal pipe.
+// parseStep leaves multi-part values raw (no whole-value strip) so the quote
+// positions survive to this split.
+func splitPipeParts(s string) []string {
+	var parts []string
+	start, quoted := 0, false
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case '\\':
+			if quoted && i+1 < len(s) && s[i+1] == '\'' {
+				i++
+			}
+		case '\'':
+			quoted = !quoted
+		case '|':
+			if !quoted {
+				parts = append(parts, stripQuotes(s[start:i]))
+				start = i + 1
+			}
+		}
+	}
+	return append(parts, stripQuotes(s[start:]))
+}
+
 // stripQuotes removes a single layer of surrounding single quotes from s and
 // unescapes \' → '. Unquoted input is returned unchanged.
 func stripQuotes(s string) string {
@@ -489,11 +515,26 @@ func parseStep(word string) (Step, error) {
 		return Step{V: ValidationRule{Name: "@" + ref, Msg: msg}}, nil
 	}
 	name, value, _ := strings.Cut(word, "=")
-	value = stripQuotes(value)
+	if !isMultiPartName(name) {
+		// Multi-part values keep their quotes for splitPipeParts; everything
+		// else strips the single layer here.
+		value = stripQuotes(value)
+	}
 	if isModName(name) {
 		return Step{IsMod: true, M: ModRule{Name: name, Value: value}}, nil
 	}
 	return Step{V: ValidationRule{Name: name, Value: value}}, nil
+}
+
+// isMultiPartName reports whether a rule's value is a `|`-separated list,
+// split later by splitPipeParts. Keep in sync with the split sites in
+// applicability.go / generate.go.
+func isMultiPartName(name string) bool {
+	switch name {
+	case "oneof", "replace", "clamp":
+		return true
+	}
+	return false
 }
 
 // isModName reports whether a builtin step name is a mod (transform) rather

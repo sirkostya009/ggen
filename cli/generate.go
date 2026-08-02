@@ -634,7 +634,7 @@ func preregisterOneOfs(structs []StructInfo) {
 	walk := func(rules []ValidationRule) {
 		for _, v := range rules {
 			if v.Name == "oneof" {
-				registerOneOf(strings.Split(v.Value, "|"))
+				registerOneOf(splitPipeParts(v.Value))
 			}
 		}
 	}
@@ -725,7 +725,7 @@ func renderOneMod(b *bytes.Buffer, m ModRule, ref, goType string, kind TypeKind,
 		case "trimright":
 			fmt.Fprintf(b, "%s = %s\n", ref, wrap(fmt.Sprintf("strings.TrimSuffix(%s, %s)", asPrim(ref), strconv.Quote(m.Value))))
 		case "replace":
-			parts := strings.SplitN(m.Value, "|", 2)
+			parts := splitPipeParts(m.Value)
 			if len(parts) == 2 {
 				fmt.Fprintf(b, "%s = %s\n", ref,
 					wrap(fmt.Sprintf("strings.ReplaceAll(%s, %s, %s)", asPrim(ref), strconv.Quote(parts[0]), strconv.Quote(parts[1]))))
@@ -733,12 +733,12 @@ func renderOneMod(b *bytes.Buffer, m ModRule, ref, goType string, kind TypeKind,
 		case "clamp":
 			// clamp=lo|hi — bound the value into [lo, hi]. Constants cast to
 			// the field's type so `<`/`>` are comparable on aliased numerics.
-			lo, hi, ok := strings.Cut(m.Value, "|")
-			if !ok {
+			cparts := splitPipeParts(m.Value)
+			if len(cparts) != 2 {
 				return
 			}
-			lo = strings.TrimSpace(lo)
-			hi = strings.TrimSpace(hi)
+			lo := strings.TrimSpace(cparts[0])
+			hi := strings.TrimSpace(cparts[1])
 			if lo != "" {
 				fmt.Fprintf(b, "if %s < %s { %s = %s }\n", ref, wrap(lo), ref, wrap(lo))
 			}
@@ -1168,8 +1168,7 @@ func renderOneVal(b *bytes.Buffer, v ValidationRule, ref, jsonName, goType strin
 
 	case "oneof":
 		cases := renderOneofCases(kind, v.Value)
-		parts := strings.Split(v.Value, "|")
-		varName := registerOneOf(parts)
+		varName := registerOneOf(splitPipeParts(v.Value))
 		fmt.Fprintf(b, "switch %s {\ncase %s:\ndefault:\n\t%s\n}\n",
 			ref, cases,
 			onErr(fmt.Sprintf("&validation.OneOfError{Path: []string{%q}, Allowed: %s, Value: %s}", jsonName, varName, ref)))
@@ -1233,7 +1232,7 @@ func renderOneVal(b *bytes.Buffer, v ValidationRule, ref, jsonName, goType strin
 }
 
 func renderOneofCases(kind TypeKind, raw string) string {
-	parts := strings.Split(raw, "|")
+	parts := splitPipeParts(raw)
 	out := make([]string, len(parts))
 	for i, p := range parts {
 		if kind == KindString {

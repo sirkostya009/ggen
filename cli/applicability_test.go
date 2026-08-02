@@ -214,6 +214,8 @@ func TestCheckOneValRule_ValueShape(t *testing.T) {
 		{"oneof_num_good", ValidationRule{Name: "oneof", Value: "1|2|3"}, KindInt, "", "int"},
 		{"oneof_num_bad_part", ValidationRule{Name: "oneof", Value: "1|two|3"}, KindInt, `part "two" is not a valid number`, "int"},
 		{"oneof_num_trailing", ValidationRule{Name: "oneof", Value: " 1 | 2 "}, KindInt, "", "int"},
+		{"oneof_quoted_space", ValidationRule{Name: "oneof", Value: "'New York'|LA"}, KindString, "", "string"},
+		{"oneof_quoted_dup", ValidationRule{Name: "oneof", Value: "'LA'|LA"}, KindString, "is a duplicate", "string"},
 
 		// starts/ends/contains: non-empty value required.
 		{"starts_good", ValidationRule{Name: "starts", Value: "x"}, KindString, "", "string"},
@@ -340,13 +342,17 @@ func TestCheckOneModRule_ValueShape(t *testing.T) {
 		{"replace_no_pipe", ModRule{Name: "replace", Value: "foo"}, KindString, "requires `old|new` form"},
 		{"replace_empty_old", ModRule{Name: "replace", Value: "|new"}, KindString, "requires `old|new` form"},
 		{"replace_empty_value", ModRule{Name: "replace"}, KindString, "requires `old|new` form"},
+		{"replace_three_parts", ModRule{Name: "replace", Value: "a|b|c"}, KindString, "requires `old|new` form"},
+		{"replace_quoted_pipe", ModRule{Name: "replace", Value: "'a|b'|c"}, KindString, ""},
 
 		// clamp requires "lo|hi"; at least one bound must be present; each
 		// bound must be a valid number.
 		{"clamp_good", ModRule{Name: "clamp", Value: "0|10"}, KindInt, ""},
 		{"clamp_lo_only", ModRule{Name: "clamp", Value: "0|"}, KindInt, ""},
 		{"clamp_hi_only", ModRule{Name: "clamp", Value: "|10"}, KindInt, ""},
-		{"clamp_no_pipe", ModRule{Name: "clamp", Value: "10"}, KindInt, "is missing the lo`|`hi separator"},
+		{"clamp_no_pipe", ModRule{Name: "clamp", Value: "10"}, KindInt, "needs exactly one lo`|`hi separator"},
+		{"clamp_three_parts", ModRule{Name: "clamp", Value: "0|5|10"}, KindInt, "needs exactly one lo`|`hi separator"},
+		{"clamp_quoted_pipe_lo", ModRule{Name: "clamp", Value: "'1'|10"}, KindInt, ""},
 		{"clamp_both_empty", ModRule{Name: "clamp", Value: "|"}, KindInt, "requires at least one of lo or hi"},
 		{"clamp_bad_lo", ModRule{Name: "clamp", Value: "abc|10"}, KindInt, `lo "abc" is not a valid number`},
 		{"clamp_bad_hi", ModRule{Name: "clamp", Value: "0|abc"}, KindInt, `hi "abc" is not a valid number`},

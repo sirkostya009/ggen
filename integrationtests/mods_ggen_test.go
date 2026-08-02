@@ -18,6 +18,8 @@ import (
 // Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
 const ggenCap_ModStruct_Tags_string = (min((80/max(int(unsafe.Sizeof(*new(string))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(string))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(string))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(string))), 1)), 1)
 
+var ggenOneof_mods_0 = []string{"New York", "Los Angeles", "LA"}
+
 func (recv ModStruct) DecodeFrom(data []byte) (result ModStruct, i int, err error) {
 	result = recv
 	if result.Tags != nil {
@@ -1598,5 +1600,247 @@ func (s NestedMultierrStruct) AppendJSON(dst []byte) ([]byte, error) {
 	}
 	dst = append(dst, ",\"name\":\""...)
 	dst = encode.AppendStringNoHTML(dst, s.Name)
+	return append(dst, '}'), nil
+}
+
+func (recv QuotedParts) DecodeFrom(data []byte) (result QuotedParts, i int, err error) {
+	result = recv
+	seenCity := false
+	seenNote := false
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+	}
+	i++
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		i++
+		return result, i, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
+		}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i, true)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
+			}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		}
+		i++
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch key {
+		case "city":
+			if seenCity {
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"city"}}
+			}
+			seenCity = true
+			if i >= len(data) || data[i] != '"' {
+				return result, i, decode.NewParseErr("city", i, scan.ErrExpectString)
+			}
+			ke := i + 1
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+				ke++
+			}
+			if ke < len(data) && data[ke] == '"' {
+				result.City = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				result.City, i, err = scan.String(data, i, true)
+				if err != nil {
+					return result, i, decode.NewParseErr("city", i, err)
+				}
+			}
+			switch result.City {
+			case "New York", "Los Angeles", "LA":
+			default:
+				return result, i, &validation.OneOfError{Pos: i, Path: []string{"city"}, Allowed: ggenOneof_mods_0, Value: result.City}
+			}
+		case "note":
+			if seenNote {
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"note"}}
+			}
+			seenNote = true
+			if i >= len(data) || data[i] != '"' {
+				return result, i, decode.NewParseErr("note", i, scan.ErrExpectString)
+			}
+			ke := i + 1
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+				ke++
+			}
+			if ke < len(data) && data[ke] == '"' {
+				result.Note = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				result.Note, i, err = scan.String(data, i, true)
+				if err != nil {
+					return result, i, decode.NewParseErr("note", i, err)
+				}
+			}
+			result.Note = strings.ReplaceAll(result.Note, "a|b", "AB")
+		default:
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			i++
+			return result, i, nil
+		}
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+	}
+}
+
+func (recv QuotedParts) DecodeFromStream(s *scan.Stream) (result QuotedParts, err error) {
+	result = recv
+	seenCity := false
+	seenNote := false
+	err = s.ObjectOpen()
+	if err != nil {
+		return result, decode.NewParseErr("", s.Pos, err)
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, decode.NewParseErr("", s.Pos, err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView(true)
+		if err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		switch key {
+		case "city":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("city", s.Pos, err)
+			}
+			if seenCity {
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"city"}}
+			}
+			seenCity = true
+			result.City, err = s.String(true)
+			if err != nil {
+				return result, decode.NewParseErr("city", s.Pos, err)
+			}
+			switch result.City {
+			case "New York", "Los Angeles", "LA":
+			default:
+				return result, &validation.OneOfError{Pos: s.Offset(), Path: []string{"city"}, Allowed: ggenOneof_mods_0, Value: result.City}
+			}
+		case "note":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("note", s.Pos, err)
+			}
+			if seenNote {
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"note"}}
+			}
+			seenNote = true
+			result.Note, err = s.String(true)
+			if err != nil {
+				return result, decode.NewParseErr("note", s.Pos, err)
+			}
+			result.Note = strings.ReplaceAll(result.Note, "a|b", "AB")
+		default:
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+		}
+
+		err = s.SkipSpace()
+		if err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, decode.NewParseErr("", s.Pos, err)
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, decode.NewParseErr("", s.Pos, err)
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			return result, nil
+		}
+		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+	}
+}
+
+func (s QuotedParts) JSONSize() int {
+	size := 21
+	size += len(s.City) * 2
+	size += len(s.Note) * 2
+	return size
+}
+
+func (s QuotedParts) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"city\":\""...)
+	dst = encode.AppendStringNoHTML(dst, s.City)
+	dst = append(dst, ",\"note\":\""...)
+	dst = encode.AppendStringNoHTML(dst, s.Note)
 	return append(dst, '}'), nil
 }

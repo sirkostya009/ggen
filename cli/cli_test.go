@@ -1989,7 +1989,7 @@ type Msg struct {
 			{"trimright_empty", "S string", `json:"s" pipe:"trimright="`, "`trimright` requires a non-empty value"},
 			{"replace_missing_pipe", "S string", `json:"s" pipe:"replace=foo"`, "requires `old|new` form"},
 			{"replace_empty_old", "S string", `json:"s" pipe:"replace=|new"`, "requires `old|new` form"},
-			{"clamp_missing_pipe", "N int", `json:"n" pipe:"clamp=10"`, "is missing the lo`|`hi separator"},
+			{"clamp_missing_pipe", "N int", `json:"n" pipe:"clamp=10"`, "needs exactly one lo`|`hi separator"},
 			{"clamp_both_empty", "N int", `json:"n" pipe:"clamp=|"`, "requires at least one of lo or hi"},
 			{"clamp_bad_lo", "N int", `json:"n" pipe:"clamp=abc|10"`, "lo \"abc\" is not a valid number"},
 			{"clamp_bad_hi", "N int", `json:"n" pipe:"clamp=0|abc"`, "hi \"abc\" is not a valid number"},

@@ -135,7 +135,9 @@ Only exported fields read/written, same as `encoding/json`.
 
 One ordered, whitespace-separated pipeline: presence, an optional decode stage,
 then value steps (mods + validators) that run **in declared order**. Values
-with spaces are single-quoted. `|` is an intra-rule arg separator.
+with spaces are single-quoted. `|` is an intra-rule arg separator
+(`oneof`/`replace`/`clamp`); quote per PART there — quotes scope one part and
+protect a literal pipe: `oneof='New York'|LA`, `replace='a|b'|c`.
 
 ```go
 Name  string	`json:"name"  pipe:"required trim minlen=1 maxlen=50"`

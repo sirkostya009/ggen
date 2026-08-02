@@ -3,7 +3,9 @@ package integrationtests
 //go:generate ../ggen $GOFILE
 
 import (
+	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
@@ -267,5 +269,37 @@ func TestNestedMultierr_innerParseErrorReturnsEarly(t *testing.T) {
 	}
 	if _, ok := err.(validation.Errors); ok {
 		t.Errorf("parse error wrapped in validation.Errors: %v", err)
+	}
+}
+
+// Quoted `|`-parts: quotes scope one part (space or literal pipe inside),
+// and the quote layer must NOT leak into the allowed set / replace args —
+// a whole-value strip + naive split used to emit `'New York'` as the case.
+//
+//ggen:generate
+type QuotedParts struct {
+	City string `json:"city" pipe:"oneof='New York'|'Los Angeles'|LA"`
+	Note string `json:"note" pipe:"replace='a|b'|AB"`
+}
+
+func TestQuotedPipeParts(t *testing.T) {
+	t.Parallel()
+	v, _, err := QuotedParts{}.DecodeFrom([]byte(`{"city":"New York","note":"xa|by"}`))
+	if err != nil {
+		t.Fatalf("quoted-space part must be allowed: %v", err)
+	}
+	if v.Note != "xABy" {
+		t.Errorf("replace 'a|b' -> AB: got %q", v.Note)
+	}
+	if _, _, err = (QuotedParts{}).DecodeFrom([]byte(`{"city":"'New York'","note":""}`)); err == nil {
+		t.Error("literal-quote value must be rejected (quote leak into allowed set)")
+	}
+	var oe *validation.OneOfError
+	_, _, err = QuotedParts{}.DecodeFrom([]byte(`{"city":"Boston","note":""}`))
+	if !errors.As(err, &oe) {
+		t.Fatalf("want OneOfError, got %v", err)
+	}
+	if want := []string{"New York", "Los Angeles", "LA"}; !slices.Equal(oe.Allowed, want) {
+		t.Errorf("Allowed = %q, want %q", oe.Allowed, want)
 	}
 }

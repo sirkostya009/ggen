@@ -2,6 +2,7 @@ package main
 
 import (
 	"reflect"
+	"slices"
 	"testing"
 )
 
@@ -222,5 +223,44 @@ func TestParsePipeTagErrors(t *testing.T) {
 		if _, err := parsePipeTag(tag); err == nil {
 			t.Errorf("parsePipeTag(%q) expected error, got nil", tag)
 		}
+	}
+}
+
+// splitPipeParts: `|` splits outside single quotes only; each part loses one
+// quote layer; \' is a literal quote. Multi-part values reach it raw because
+// parseStep skips the whole-value strip for oneof/replace/clamp.
+func TestSplitPipeParts(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		in   string
+		want []string
+	}{
+		{"a|b|c", []string{"a", "b", "c"}},
+		{"'New York'|LA", []string{"New York", "LA"}},
+		{"'a|b'|c", []string{"a|b", "c"}},
+		{`'it\'s'|x`, []string{"it's", "x"}},
+		{"0|", []string{"0", ""}},
+		{"|100", []string{"", "100"}},
+		{"'a b c'", []string{"a b c"}},
+		{"", []string{""}},
+	}
+	for _, c := range cases {
+		if got := splitPipeParts(c.in); !slices.Equal(got, c.want) {
+			t.Errorf("splitPipeParts(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+// parseStep keeps multi-part values raw (quotes intact for splitPipeParts)
+// but still strips single-value steps.
+func TestParseStep_MultiPartKeepsQuotes(t *testing.T) {
+	t.Parallel()
+	st, err := parseStep("oneof='a b'|c")
+	if err != nil || st.V.Value != "'a b'|c" {
+		t.Errorf("oneof value = %q, %v; want raw with quotes", st.V.Value, err)
+	}
+	st, err = parseStep("starts='a b'")
+	if err != nil || st.V.Value != "a b" {
+		t.Errorf("starts value = %q, %v; want stripped", st.V.Value, err)
 	}
 }

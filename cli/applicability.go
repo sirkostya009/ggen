@@ -374,7 +374,7 @@ func checkOneValRule(r ValidationRule, source string, kind TypeKind, typeName, f
 		}
 		if isNumeric(kind) {
 			seen := map[float64]struct{}{}
-			for p := range strings.SplitSeq(r.Value, "|") {
+			for _, p := range splitPipeParts(r.Value) {
 				f, err := strconv.ParseFloat(strings.TrimSpace(p), 64)
 				if err != nil {
 					return &richError{
@@ -391,7 +391,7 @@ func checkOneValRule(r ValidationRule, source string, kind TypeKind, typeName, f
 			}
 		} else {
 			seen := map[string]struct{}{}
-			for p := range strings.SplitSeq(r.Value, "|") {
+			for _, p := range splitPipeParts(r.Value) {
 				if _, dup := seen[p]; dup {
 					return dupErr(p)
 				}
@@ -507,13 +507,13 @@ func checkOneModRule(m ModRule, source string, kind TypeKind, typeName, fieldDes
 				"expected string",
 				"drop the mod or change the field to `string`")
 		}
-		old, _, ok := strings.Cut(m.Value, "|")
-		if !ok || old == "" {
+		parts := splitPipeParts(m.Value)
+		if len(parts) != 2 || parts[0] == "" {
 			return &richError{
 				Msg:      fmt.Sprintf("%s: `replace` requires `old|new` form (old cannot be empty)", fieldDesc),
 				CodeSpan: "replace=" + m.Value,
 				BotHint:  "malformed replace parameter",
-				UserHint: "use `replace=old|new`, e.g. `replace=foo|bar`",
+				UserHint: "use `replace=old|new`, e.g. `replace=foo|bar`; quote a part containing `|`: `replace='a|b'|c`",
 			}
 		}
 		return nil
@@ -525,16 +525,16 @@ func checkOneModRule(m ModRule, source string, kind TypeKind, typeName, fieldDes
 				"expected numeric type",
 				"for strings use `trim` / `replace` instead")
 		}
-		lo, hi, ok := strings.Cut(m.Value, "|")
-		if !ok {
+		cparts := splitPipeParts(m.Value)
+		if len(cparts) != 2 {
 			return &richError{
-				Msg:      fmt.Sprintf("%s: `clamp` is missing the lo`|`hi separator", fieldDesc),
+				Msg:      fmt.Sprintf("%s: `clamp` needs exactly one lo`|`hi separator", fieldDesc),
 				CodeSpan: "clamp=" + m.Value,
 				BotHint:  "malformed clamp parameter",
 				UserHint: "use `clamp=lo|hi`, leave either bound empty for one-sided: `clamp=0|` or `clamp=|100`",
 			}
 		}
-		lo, hi = strings.TrimSpace(lo), strings.TrimSpace(hi)
+		lo, hi := strings.TrimSpace(cparts[0]), strings.TrimSpace(cparts[1])
 		if lo == "" && hi == "" {
 			return &richError{
 				Msg:      fmt.Sprintf("%s: `clamp` requires at least one of lo or hi", fieldDesc),

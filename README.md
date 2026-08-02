@@ -306,6 +306,11 @@ Everything after the decode stage operates on field value. One thing to note is
 5 before clamping, while `clamp=5|10 gte=5` clamps first — and then never fails,
 since the clamped value is always in range.
 
+Values with spaces are single-quoted (`starts='New '`, `\'` = literal quote).
+In `|`-separated lists (`oneof`, `replace`, `clamp`) quote per **part** —
+quotes scope one part and protect a literal pipe: `oneof='New York'|LA`,
+`replace='a|b'|c`.
+
 | validators                                                    | error                                          | checks                                         |
 | ------------------------------------------------------------- | ---------------------------------------------- | ---------------------------------------------- |
 | `notempty`                                                    | `NotEmptyError`                                | string non-empty / slice / map non-zero length |

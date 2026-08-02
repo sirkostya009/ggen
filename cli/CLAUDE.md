@@ -161,7 +161,12 @@ later stage := step ( WS step )*            // value steps, inner:/keys: levels
 **Lexing/quoting** (`tokenizePipe`): steps are WS-separated; structural glyphs
 `/ ~ ( )` are significant with or without spaces (plus the `inner:`/`keys:` word
 prefixes); a value/message may be single-quoted, required only when it contains
-whitespace; `\'` is a literal quote.
+whitespace; `\'` is a literal quote. Multi-part values (`oneof`/`replace`/
+`clamp`) quote per PART: `parseStep` skips the whole-value strip for them and
+`splitPipeParts` splits on `|` OUTSIDE quotes then strips each part — so
+`oneof='New York'|LA` protects the space and `replace='a|b'|c` a literal
+pipe (a naive whole-strip + split used to leak quote chars into the allowed
+set). `replace`/`clamp` require exactly 2 parts.
 
 ### `hint:` — prealloc capacity only
 
