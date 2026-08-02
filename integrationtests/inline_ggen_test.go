@@ -3,6 +3,7 @@
 package integrationtests
 
 import (
+	"encoding/json"
 	"strings"
 	"unsafe"
 
@@ -704,6 +705,254 @@ func (s InlineStructsStruct) AppendJSON(dst []byte) ([]byte, error) {
 		dst = append(dst, ':')
 		if dst, err = v.AppendJSON(dst); err != nil {
 			return dst, err
+		}
+	}
+	return append(dst, '}'), nil
+}
+
+func (recv InlineRawStruct) DecodeFrom(data []byte) (result InlineRawStruct, i int, err error) {
+	result = recv
+	if result.Extra != nil {
+		clear(result.Extra)
+	}
+	seenName := false
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+	}
+	i++
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		i++
+		return result, i, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
+		}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i, true)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
+			}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		}
+		i++
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch key {
+		case "name":
+			if seenName {
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"name"}}
+			}
+			seenName = true
+			if i >= len(data) || data[i] != '"' {
+				return result, i, decode.NewParseErr("name", i, scan.ErrExpectString)
+			}
+			ke := i + 1
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+				ke++
+			}
+			if ke < len(data) && data[ke] == '"' {
+				result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				result.Name, i, err = scan.String(data, i, true)
+				if err != nil {
+					return result, i, decode.NewParseErr("name", i, err)
+				}
+			}
+		default:
+			if result.Extra == nil {
+				result.Extra = make(map[string]json.RawMessage)
+			}
+			_vstart := i
+			i, err = scan.SkipValue(data, i)
+			if err != nil {
+				return result, i, decode.NewParseErr(key, i, err)
+			}
+			var _iv json.RawMessage
+			if err = json.Unmarshal(data[_vstart:i], &_iv); err != nil {
+				return result, i, decode.NewParseErr(key, i, err)
+			}
+			result.Extra[key] = _iv
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			i++
+			return result, i, nil
+		}
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+	}
+}
+
+func (recv InlineRawStruct) DecodeFromStream(s *scan.Stream) (result InlineRawStruct, err error) {
+	result = recv
+	if result.Extra != nil {
+		clear(result.Extra)
+	}
+	seenName := false
+	err = s.ObjectOpen()
+	if err != nil {
+		return result, decode.NewParseErr("", s.Pos, err)
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, decode.NewParseErr("", s.Pos, err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView(true)
+		if err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		switch key {
+		case "name":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("name", s.Pos, err)
+			}
+			if seenName {
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"name"}}
+			}
+			seenName = true
+			result.Name, err = s.String(true)
+			if err != nil {
+				return result, decode.NewParseErr("name", s.Pos, err)
+			}
+		default:
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr(ownKey, s.Pos, err)
+			}
+			if result.Extra == nil {
+				result.Extra = make(map[string]json.RawMessage)
+			}
+			span, err := s.CaptureValue()
+			if err != nil {
+				return result, decode.NewParseErr(ownKey, s.Pos, err)
+			}
+			var _iv json.RawMessage
+			if err = json.Unmarshal(span, &_iv); err != nil {
+				return result, decode.NewParseErr(ownKey, s.Pos, err)
+			}
+			result.Extra[ownKey] = _iv
+		}
+
+		err = s.SkipSpace()
+		if err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, decode.NewParseErr("", s.Pos, err)
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, decode.NewParseErr("", s.Pos, err)
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			return result, nil
+		}
+		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+	}
+}
+
+func (s InlineRawStruct) JSONSize() int {
+	size := 11
+	size += len(s.Name) * 2
+	size += len(s.Extra) * 4
+	for k, v := range s.Extra {
+		size += len(k) * 2
+		if n := len(v); n > 0 {
+			size += n
+		} else {
+			size += 4
+		}
+	}
+	return size
+}
+
+func (s InlineRawStruct) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, '{')
+	start := len(dst)
+	if len(dst) > start {
+		dst = append(dst, ',')
+	}
+	dst = append(dst, "\"name\":\""...)
+	dst = encode.AppendStringNoHTML(dst, s.Name)
+	for k, v := range s.Extra {
+		if len(dst) > start {
+			dst = append(dst, ',')
+		}
+		dst = append(dst, '"')
+		dst = encode.AppendStringNoHTML(dst, k)
+		dst = append(dst, ':')
+		if len(v) == 0 {
+			dst = append(dst, "null"...)
+		} else {
+			dst = append(dst, v...)
 		}
 	}
 	return append(dst, '}'), nil

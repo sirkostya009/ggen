@@ -3,6 +3,7 @@ package integrationtests
 //go:generate ../ggen $GOFILE
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -28,6 +29,12 @@ type InlineStringsStruct struct {
 type InlineStructsStruct struct {
 	Name  string                  `json:"name"`
 	Extra map[string]InlineStruct `json:",inline"`
+}
+
+//ggen:generate
+type InlineRawStruct struct {
+	Name  string                     `json:"name"`
+	Extra map[string]json.RawMessage `json:",inline"`
 }
 
 func TestInline_decodeAbsorbsUnknown(t *testing.T) {
@@ -306,5 +313,34 @@ func TestInline_TypedStruct_MarshalEmpty(t *testing.T) {
 	out, _ := encode.MarshalString(InlineStructsStruct{Name: "root"})
 	if out != `{"name":"root"}` {
 		t.Errorf("empty-extra marshal = %q", out)
+	}
+}
+
+// An EMPTY RawMessage entry in the inline map must marshal as null — the
+// raw passthrough used to append zero bytes, emitting `"k":` with no value
+// (corrupt JSON). Field-level raw emit and AppendAny already null empties.
+func TestInline_EmptyRawMessageMarshalsNull(t *testing.T) {
+	t.Parallel()
+	out, err := encode.Marshal(InlineRawStruct{
+		Name:  "x",
+		Extra: map[string]json.RawMessage{"a": nil, "b": {}, "c": json.RawMessage(`{"n":1}`)},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(out, &m); err != nil {
+		t.Fatalf("output not valid JSON: %v\nwire: %s", err, out)
+	}
+	if string(m["a"]) != "null" || string(m["b"]) != "null" {
+		t.Errorf("empty raw entries → a=%s b=%s, want null/null", m["a"], m["b"])
+	}
+	if string(m["c"]) != `{"n":1}` {
+		t.Errorf("non-empty raw entry mangled: %s", m["c"])
+	}
+	// Round-trip: decode absorbs unknown keys back into the raw map.
+	back, _, err := InlineRawStruct{}.DecodeFrom(out)
+	if err != nil || string(back.Extra["c"]) != `{"n":1}` {
+		t.Fatalf("decode: %+v %v", back, err)
 	}
 }

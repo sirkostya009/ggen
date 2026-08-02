@@ -1559,11 +1559,13 @@ func inlineValueEmit(f FieldInfo) string {
 			return "if dst, err = v.AppendJSON(dst); err != nil { return dst, err }\n"
 		}
 	case KindRawJSON:
-		// jsontext.Value / json.RawMessage: passthrough.
-		return "dst = append(dst, v...)\n"
+		// jsontext.Value / json.RawMessage: passthrough; empty → `null`
+		// (appending nothing would corrupt the object — field-level raw
+		// emit and AppendAny both null empties).
+		return "if len(v) == 0 { dst = append(dst, \"null\"...) } else { dst = append(dst, v...) }\n"
 	}
 	if f.ElemType == "jsontext.Value" {
-		return "dst = append(dst, v...)\n"
+		return "if len(v) == 0 { dst = append(dst, \"null\"...) } else { dst = append(dst, v...) }\n"
 	}
 	return fmt.Sprintf("if dst, err = %s(dst, v); err != nil { return dst, err }\n", appendAnyFn(f.HTMLEscape))
 }
