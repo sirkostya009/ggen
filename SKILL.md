@@ -237,7 +237,7 @@ if errors.As(err, &e) {
 
 In `multierr` mode generated code return `validation.Errors` (`[]validation.Error`). Implement `Unwrap() []error`.
 
-Parse failures (malformed JSON, wrong primitive type) wrap in `*decode.ParseError` carrying `Field` (dotted JSON path), `Pos` (byte offset), `Err` (underlying `scan.ErrX` sentinel). `errors.Is(err, scan.ErrBadString)` keeps working through the wrap. Validation errors NOT wrapped — typed pointers stay reachable. `ParseError.Error()` only renders the `parse error at <field> (pos <n>)` prefix; `errors.Unwrap` for the underlying message.
+Parse failures (malformed JSON, wrong primitive type) wrap in `*decode.ParseError` carrying `Path` (root-relative segments, `[]string{"addr","street"}`), `Pos` (byte offset), `Err` (underlying `scan.ErrX` sentinel). `errors.Is(err, scan.ErrBadString)` keeps working through the wrap. Validation errors NOT wrapped — typed pointers stay reachable. `ParseError.Error()` renders `parse error at <a.b.c> (pos <n>): <cause>`.
 
 ## Supported field kinds
 

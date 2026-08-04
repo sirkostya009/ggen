@@ -173,8 +173,10 @@ Primitives: `SkipSpace`, `String`, `Int64`, `Uint64`, `Float64`, `Bool`,
 
 `Stream` wraps `io.Reader` with a growable buffer (`buf []byte`, grown via
 `append`). Cursor = exported `Pos int` — every primitive reads/writes `s.Pos`,
-takes no cursor arg, returns none. Capture raw span: `start := s.Pos;
-s.SkipValue(); raw := s.Bytes()[start:s.Pos]`.
+takes no cursor arg, returns none. Capture raw span: `span, err :=
+s.CaptureValue()` (returns a buffer alias — copy if retained). The old
+`start := s.Pos; s.SkipValue(); s.Bytes()[start:s.Pos]` slice dance is DEAD:
+the skip tree compacts unconditionally now, which invalidates `start`.
 
 **Stack-allocatable, no pool.** `var s scan.Stream; s.Reset(r, buf)`. Caller owns
 `buf` lifecycle; `scan.NewStream(r, buf)` is a heap-allocating shorthand. Old

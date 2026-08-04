@@ -53,15 +53,19 @@ func TestStringSIMD_Parity(t *testing.T) {
 		b[n+1] = '"'
 		cases = append(cases, b)
 	}
-	for _, tier := range stringTiers {
-		for _, c := range cases {
-			s1, p1, e1 := String(c, 0, true)
-			s2, p2, e2 := tier.fn(c, 0, true)
-			if e1 != e2 {
-				t.Fatalf("%s %q: err %v vs %v", tier.name, c, e1, e2)
-			}
-			if s1 != s2 || p1 != p2 {
-				t.Fatalf("%s %q: (%q,%d) vs (%q,%d)", tier.name, c, s1, p1, s2, p2)
+	// Both validate arms: strict (jsonv2 reject) AND permissive
+	// (allowinvalidutf8 — raw bytes pass through) must match scalar.
+	for _, validate := range []bool{true, false} {
+		for _, tier := range stringTiers {
+			for _, c := range cases {
+				s1, p1, e1 := String(c, 0, validate)
+				s2, p2, e2 := tier.fn(c, 0, validate)
+				if e1 != e2 {
+					t.Fatalf("%s(validate=%v) %q: err %v vs %v", tier.name, validate, c, e1, e2)
+				}
+				if s1 != s2 || p1 != p2 {
+					t.Fatalf("%s(validate=%v) %q: (%q,%d) vs (%q,%d)", tier.name, validate, c, s1, p1, s2, p2)
+				}
 			}
 		}
 	}
