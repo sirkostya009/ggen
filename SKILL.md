@@ -174,7 +174,7 @@ Price int `json:"price" pipe:". / @FromMoney"`                // FromMoney(Money
 | `eq=X`, `neq=X`                                               | str/numeric   | equality                    |
 | `multiple=N`                                                  | integer       | `% N == 0`                  |
 | `oneof=a\|b\|c`                                               | str/numeric   | one of the alternatives     |
-| `url`, `alphanum`, `numeric`, `lower`, `upper`, `hexadecimal` | string        | character-class predicate   |
+| `url`, `alphanum`, `numeric`, `hexadecimal`                   | string        | character-class predicate   |
 | `starts=X`, `ends=X`, `contains=X`                            | string        | substring test              |
 
 Mods (transforms):

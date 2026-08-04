@@ -95,8 +95,6 @@ var valSpecs = []valSpec{
 	{"url", "", stringOnly},
 	{"alphanum", "", stringOnly},
 	{"numeric", "", stringOnly},
-	{"lower", "", stringOnly},
-	{"upper", "", stringOnly},
 	{"hexadecimal", "", stringOnly},
 	{"starts", "foo", stringOnly},
 	{"ends", "foo", stringOnly},

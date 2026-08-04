@@ -1873,8 +1873,6 @@ type Msg struct {
 			{"url_on_bool", "B bool", `json:"b" pipe:"url"`, "`url` is inapplicable to bool"},
 			{"alphanum_on_int", "N int", `json:"n" pipe:"alphanum"`, "`alphanum` is inapplicable to int"},
 			{"numericrule_on_int", "N int", `json:"n" pipe:"numeric"`, "`numeric` is inapplicable to int"},
-			{"lower_on_int", "N int", `json:"n" pipe:"lower"`, "`lower` is inapplicable to int"},
-			{"upper_on_int", "N int", `json:"n" pipe:"upper"`, "`upper` is inapplicable to int"},
 			{"hexadecimal_on_int", "N int", `json:"n" pipe:"hexadecimal"`, "`hexadecimal` is inapplicable to int"},
 			{"starts_on_int", "N int", `json:"n" pipe:"starts=foo"`, "`starts` is inapplicable to int"},
 			{"ends_on_int", "N int", `json:"n" pipe:"ends=foo"`, "`ends` is inapplicable to int"},

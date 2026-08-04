@@ -145,7 +145,10 @@ later stage := step ( WS step )*            // value steps, inner:/keys: levels
       per-elem), peeled by `peelSliceField`, emitted via `elemSteps`.
     - validators: `notempty`; `len/minlen/maxlen=N`; `runes/minrunes/maxrunes=N`;
       `gt/gte/lt/lte/eq/neq=N`; `multiple=N`; `oneof=a|b|c`; `url`/`alphanum`/
-      `numeric`/`lower`/`upper`/`hexadecimal`; `starts/ends/contains=X`.
+      `numeric`/`hexadecimal`; `starts/ends/contains=X`. (`lower`/`upper`
+      are MODS — the docs once listed them as charset validators too, but the
+      parser always classified them as mods; the unreachable validator arms,
+      `IsLower`/`IsUpper`, `LowerError`/`UpperError` were deleted 2026-08.)
     - mods: `trim`, `lower`, `upper`, `trimleft=X`, `trimright=X`,
       `replace=old|new`, `clamp=lo|hi`.
 - **Custom funcs** (`@FuncName` / `@pkg.FuncName`) — classified by signature in

@@ -320,7 +320,7 @@ quotes scope one part and protect a literal pipe: `oneof='New York'|LA`,
 | `eq=X`, `neq=X`                                               | `EqError`, `NeqError`                          | equality (numeric or string operand)           |
 | `multiple=N`                                                  | `MultipleError`                                | numeric — multiple of N                        |
 | `oneof=a\|b\|c`                                               | `OneOfError`                                   | one of the listed alternatives                 |
-| `url`, `alphanum`, `numeric`, `lower`, `upper`, `hexadecimal` | `URLError`, `AlphanumError`, …                 | string-shape predicates                        |
+| `url`, `alphanum`, `numeric`, `hexadecimal`                   | `URLError`, `AlphanumError`, …                 | string-shape predicates                        |
 | `starts=X`, `ends=X`, `contains=X`                            | `StartsError`, `EndsError`, `ContainsError`    | substring tests on strings                     |
 
 | mods                                                                      | target  |

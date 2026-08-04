@@ -477,7 +477,7 @@ func collectFieldImports(f FieldInfo, add func(string), anyString, anyValidation
 			case "starts", "ends", "contains":
 				add("strings")
 			case "url", "alphanum",
-				"numeric", "lower", "upper", "hexadecimal":
+				"numeric", "hexadecimal":
 				add("github.com/sirkostya009/ggen/validation")
 			}
 		}
@@ -1183,12 +1183,6 @@ func renderOneVal(b *bytes.Buffer, v ValidationRule, ref, jsonName, goType strin
 	case "numeric":
 		fmt.Fprintf(b, "if !validation.IsNumeric(%s) {\n\t%s\n}\n", str,
 			onErr(fmt.Sprintf("&validation.NumericError{Path: []string{%q}, Value: %s}", jsonName, str)))
-	case "lower":
-		fmt.Fprintf(b, "if !validation.IsLower(%s) {\n\t%s\n}\n", str,
-			onErr(fmt.Sprintf("&validation.LowerError{Path: []string{%q}, Value: %s}", jsonName, str)))
-	case "upper":
-		fmt.Fprintf(b, "if !validation.IsUpper(%s) {\n\t%s\n}\n", str,
-			onErr(fmt.Sprintf("&validation.UpperError{Path: []string{%q}, Value: %s}", jsonName, str)))
 	case "hexadecimal":
 		fmt.Fprintf(b, "if !validation.IsHex(%s) {\n\t%s\n}\n", str,
 			onErr(fmt.Sprintf("&validation.HexadecimalError{Path: []string{%q}, Value: %s}", jsonName, str)))

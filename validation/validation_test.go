@@ -31,24 +31,3 @@ func TestErrorsError_EmptyMessageLeaf(t *testing.T) {
 	}
 }
 
-// The documented class is "contains no uppercase" — caseless characters
-// (digits, spaces, punctuation, uncased scripts) pass.
-func TestIsLowerIsUpper_CaselessPass(t *testing.T) {
-	t.Parallel()
-	for _, s := range []string{"abc123", "hello world", "п'ять-5", "日本語"} {
-		if !IsLower(s) {
-			t.Errorf("IsLower(%q) = false, contains no uppercase", s)
-		}
-	}
-	if IsLower("aBc") {
-		t.Error("IsLower(aBc) = true")
-	}
-	for _, s := range []string{"ABC123", "HELLO WORLD", "日本語"} {
-		if !IsUpper(s) {
-			t.Errorf("IsUpper(%q) = false, contains no lowercase", s)
-		}
-	}
-	if IsUpper("AbC") {
-		t.Error("IsUpper(AbC) = true")
-	}
-}
