@@ -18,8 +18,8 @@ import (
 //
 //ggen:generate
 type ModStruct struct {
-	Email string   `json:"email" pipe:"trim lower"`
-	Tags  []string `json:"tags" pipe:"inner:(trim lower)"`
+	Email string   `json:"email" pipe:"trim tolower"`
+	Tags  []string `json:"tags" pipe:"inner:(trim tolower)"`
 	SKU   string   `json:"sku" pipe:"trimleft=SKU-"`
 }
 
@@ -301,5 +301,32 @@ func TestQuotedPipeParts(t *testing.T) {
 	}
 	if want := []string{"New York", "Los Angeles", "LA"}; !slices.Equal(oe.Allowed, want) {
 		t.Errorf("Allowed = %q, want %q", oe.Allowed, want)
+	}
+}
+
+// islower/isupper VALIDATORS (split from the old bare lower/upper, which are
+// now tolower/toupper mods): reject wrong-case content, caseless runes pass.
+//
+//ggen:generate
+type CaseRules struct {
+	Slug string `json:"slug" pipe:"islower"`
+	Code string `json:"code" pipe:"isupper"`
+}
+
+func TestCaseValidators(t *testing.T) {
+	t.Parallel()
+	got, _, err := CaseRules{}.DecodeFrom([]byte(`{"slug":"abc-123","code":"ABC123"}`))
+	if err != nil || got.Slug != "abc-123" {
+		t.Fatalf("caseless+correct case must pass: %+v %v", got, err)
+	}
+	var le *validation.LowerError
+	_, _, err = CaseRules{}.DecodeFrom([]byte(`{"slug":"aBc","code":"OK"}`))
+	if !errors.As(err, &le) || le.Value != "aBc" {
+		t.Errorf("want LowerError{aBc}, got %v", err)
+	}
+	var ue *validation.UpperError
+	_, _, err = CaseRules{}.DecodeFrom([]byte(`{"slug":"ok","code":"AbC"}`))
+	if !errors.As(err, &ue) || ue.Value != "AbC" {
+		t.Errorf("want UpperError{AbC}, got %v", err)
 	}
 }

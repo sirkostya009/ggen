@@ -14,7 +14,7 @@ import (
 //ggen:generate
 type MapStruct struct {
 	Counts    map[string]int     `json:"counts" pipe:"maxlen=10"`
-	Labels    map[string]string  `json:"labels" pipe:"inner:(trim lower)"`
+	Labels    map[string]string  `json:"labels" pipe:"inner:(trim tolower)"`
 	Addresses map[string]Address `json:"addresses"`
 }
 

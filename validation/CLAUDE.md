@@ -10,7 +10,8 @@ at the use site.
 ## `validation/predicates.go`
 
 Format predicates for generated validation branches, each 1:1 with a rule name:
-`IsAlphanum`, `IsNumeric`, `IsHex`, `IsURL`. Emitted as
+`IsAlphanum`, `IsNumeric`, `IsHex`, `IsURL`, `IsLower`, `IsUpper`
+(rules `islower`/`isupper`). Emitted as
 `validation.IsX(ref)` guards paired with the matching typed error
 (`validation.URLError`, …) — one package for both.
 
@@ -24,7 +25,7 @@ type Errors []Error                           // multierr return; Unwrap() []err
 
 `Rule` constants: `Required`, `NotEmpty`, `Len`, `MinLen`, `MaxLen`, `Runes`,
 `MinRunes`, `MaxRunes`, `GT`, `GTE`, `LT`, `LTE`, `Eq`, `Neq`, `OneOf`,
-`URL`, `Alphanum`, `Numeric`,
+`URL`, `Alphanum`, `Numeric`, `Lower` (= "islower"), `Upper` (= "isupper"),
 `Hexadecimal`, `Starts`, `Ends`, `Contains`, `Multiple`, `DuplicateKey`,
 `UnknownKey`, `Custom`, `Predicate`, `MultiErr`.
 
@@ -62,8 +63,8 @@ the remaining fields:
 - **equality**: `EqError`/`NeqError{Want any, Value any}` (string + numeric)
 - **oneof**: `OneOfError{Allowed []string, Value any}` — `Allowed` points to a
   frozen package-level slice (see "Frozen OneOf slices")
-- **patterns**: `URLError`/`AlphanumError`/`NumericError`/
-  `HexadecimalError{Value string}` (`URLError` also has
+- **patterns**: `URLError`/`AlphanumError`/`NumericError`/`LowerError`/
+  `UpperError`/`HexadecimalError{Value string}` (`URLError` also has
   `Cause error` + `Unwrap()`)
 - **prefix/suffix/contains**: `StartsError`/`EndsError`/`ContainsError{Want, Value string}`
 - **other**: `MultipleError{Of float64, Value any}`, `DuplicateKeyError`,

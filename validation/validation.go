@@ -55,6 +55,8 @@ const (
 	URL          Rule = "url"
 	Alphanum     Rule = "alphanum"
 	Numeric      Rule = "numeric"
+	Lower        Rule = "islower"
+	Upper        Rule = "isupper"
 	Hexadecimal  Rule = "hexadecimal"
 	Starts       Rule = "starts"
 	Ends         Rule = "ends"
@@ -310,6 +312,30 @@ func (e *NumericError) Error() string {
 }
 func (*NumericError) Rule() Rule             { return Numeric }
 func (e *NumericError) PrependPath(s string) { e.Path = prepend(e.Path, s) }
+
+type LowerError struct {
+	Pos   int
+	Path  []string
+	Value string
+}
+
+func (e *LowerError) Error() string {
+	return fmt.Sprintf("%s: %q contains uppercase letters", strings.Join(e.Path, "."), e.Value)
+}
+func (*LowerError) Rule() Rule             { return Lower }
+func (e *LowerError) PrependPath(s string) { e.Path = prepend(e.Path, s) }
+
+type UpperError struct {
+	Pos   int
+	Path  []string
+	Value string
+}
+
+func (e *UpperError) Error() string {
+	return fmt.Sprintf("%s: %q contains lowercase letters", strings.Join(e.Path, "."), e.Value)
+}
+func (*UpperError) Rule() Rule             { return Upper }
+func (e *UpperError) PrependPath(s string) { e.Path = prepend(e.Path, s) }
 
 type HexadecimalError struct {
 	Pos   int

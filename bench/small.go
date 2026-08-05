@@ -86,13 +86,13 @@ type EasyClaim struct {
 //ggen:generate
 type ValidationHeavy struct {
 	Email    string  `json:"email" pipe:"required contains=@ maxrunes=128"`
-	Username string  `json:"username" pipe:"required minrunes=3 maxrunes=32 alphanum lower"`
+	Username string  `json:"username" pipe:"required minrunes=3 maxrunes=32 alphanum tolower"`
 	Phone    string  `json:"phone" pipe:"minrunes=7 maxrunes=20 numeric"`
 	Age      int     `json:"age" pipe:"gte=0 lte=130"`
 	Score    float64 `json:"score" pipe:"gte=0 lte=100"`
 	Name     string  `json:"name" pipe:"required minrunes=1 maxrunes=64"`
 	URL      string  `json:"url" pipe:"url"`
-	Country  string  `json:"country" pipe:"runes=2 upper"`
+	Country  string  `json:"country" pipe:"runes=2 toupper"`
 	Lang     string  `json:"lang" pipe:"oneof=en|es|fr|de|uk"`
 	Role     string  `json:"role" pipe:"oneof=admin|user|guest"`
 }

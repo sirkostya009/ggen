@@ -477,7 +477,8 @@ func collectFieldImports(f FieldInfo, add func(string), anyString, anyValidation
 			case "starts", "ends", "contains":
 				add("strings")
 			case "url", "alphanum",
-				"numeric", "hexadecimal":
+				"numeric", "hexadecimal",
+				"islower", "isupper":
 				add("github.com/sirkostya009/ggen/validation")
 			}
 		}
@@ -491,7 +492,7 @@ func collectFieldImports(f FieldInfo, add func(string), anyString, anyValidation
 	walkMods := func(rules []ModRule) {
 		for _, m := range rules {
 			switch m.Name {
-			case "trim", "lower", "upper", "trimleft", "trimright", "replace":
+			case "trim", "tolower", "toupper", "trimleft", "trimright", "replace":
 				add("strings")
 			}
 		}
@@ -716,9 +717,9 @@ func renderOneMod(b *bytes.Buffer, m ModRule, ref, goType string, kind TypeKind,
 		switch m.Name {
 		case "trim":
 			fmt.Fprintf(b, "%s = %s\n", ref, wrap(fmt.Sprintf("strings.TrimSpace(%s)", asPrim(ref))))
-		case "lower":
+		case "tolower":
 			fmt.Fprintf(b, "%s = %s\n", ref, wrap(fmt.Sprintf("strings.ToLower(%s)", asPrim(ref))))
-		case "upper":
+		case "toupper":
 			fmt.Fprintf(b, "%s = %s\n", ref, wrap(fmt.Sprintf("strings.ToUpper(%s)", asPrim(ref))))
 		case "trimleft":
 			fmt.Fprintf(b, "%s = %s\n", ref, wrap(fmt.Sprintf("strings.TrimPrefix(%s, %s)", asPrim(ref), strconv.Quote(m.Value))))
@@ -1183,6 +1184,12 @@ func renderOneVal(b *bytes.Buffer, v ValidationRule, ref, jsonName, goType strin
 	case "numeric":
 		fmt.Fprintf(b, "if !validation.IsNumeric(%s) {\n\t%s\n}\n", str,
 			onErr(fmt.Sprintf("&validation.NumericError{Path: []string{%q}, Value: %s}", jsonName, str)))
+	case "islower":
+		fmt.Fprintf(b, "if !validation.IsLower(%s) {\n\t%s\n}\n", str,
+			onErr(fmt.Sprintf("&validation.LowerError{Path: []string{%q}, Value: %s}", jsonName, str)))
+	case "isupper":
+		fmt.Fprintf(b, "if !validation.IsUpper(%s) {\n\t%s\n}\n", str,
+			onErr(fmt.Sprintf("&validation.UpperError{Path: []string{%q}, Value: %s}", jsonName, str)))
 	case "hexadecimal":
 		fmt.Fprintf(b, "if !validation.IsHex(%s) {\n\t%s\n}\n", str,
 			onErr(fmt.Sprintf("&validation.HexadecimalError{Path: []string{%q}, Value: %s}", jsonName, str)))

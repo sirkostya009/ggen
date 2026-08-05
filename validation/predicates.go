@@ -2,6 +2,7 @@ package validation
 
 import (
 	"strings"
+	"unicode"
 )
 
 // IsAlphanum reports whether every byte in s is an ASCII letter or digit.
@@ -25,6 +26,30 @@ func IsNumeric(s string) bool {
 	}
 	for i := 0; i < len(s); i++ {
 		if c := s[i]; c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+// IsLower reports whether s contains no uppercase unicode characters
+// (`islower`). Caseless characters (digits, punctuation, spaces, uncased
+// scripts) pass — the class is "no uppercase", not "every rune lowercase"
+// (the paired LowerError renders "contains uppercase letters").
+func IsLower(s string) bool {
+	for _, r := range s {
+		if unicode.IsUpper(r) {
+			return false
+		}
+	}
+	return true
+}
+
+// IsUpper reports whether s contains no lowercase unicode characters
+// (`isupper`) — mirror of [IsLower].
+func IsUpper(s string) bool {
+	for _, r := range s {
+		if unicode.IsLower(r) {
 			return false
 		}
 	}

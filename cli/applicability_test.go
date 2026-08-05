@@ -95,6 +95,8 @@ var valSpecs = []valSpec{
 	{"url", "", stringOnly},
 	{"alphanum", "", stringOnly},
 	{"numeric", "", stringOnly},
+	{"islower", "", stringOnly},
+	{"isupper", "", stringOnly},
 	{"hexadecimal", "", stringOnly},
 	{"starts", "foo", stringOnly},
 	{"ends", "foo", stringOnly},
@@ -251,8 +253,8 @@ type modSpec struct {
 
 var modSpecs = []modSpec{
 	{"trim", "", stringOnly},
-	{"lower", "", stringOnly},
-	{"upper", "", stringOnly},
+	{"tolower", "", stringOnly},
+	{"toupper", "", stringOnly},
 	{"trimleft", "foo", stringOnly},
 	{"trimright", "bar", stringOnly},
 	{"replace", "a|b", stringOnly},
@@ -326,8 +328,8 @@ func TestCheckOneModRule_ValueShape(t *testing.T) {
 	cases := []tc{
 		// trim/lower/upper take no value — any value (or none) is accepted.
 		{"trim_no_value", ModRule{Name: "trim"}, KindString, ""},
-		{"lower_no_value", ModRule{Name: "lower"}, KindString, ""},
-		{"upper_no_value", ModRule{Name: "upper"}, KindString, ""},
+		{"tolower_no_value", ModRule{Name: "tolower"}, KindString, ""},
+		{"toupper_no_value", ModRule{Name: "toupper"}, KindString, ""},
 
 		// trimleft/trimright require non-empty value.
 		{"trimleft_good", ModRule{Name: "trimleft", Value: "X"}, KindString, ""},
@@ -739,7 +741,7 @@ func TestCheckRuleApplicability_Structural(t *testing.T) {
 				Validation:     []ValidationRule{{Name: "minlen", Value: "1"}},
 				KeyValidation:  []ValidationRule{{Name: "minrunes", Value: "2"}},
 				ElemValidation: []ValidationRule{{Name: "gte", Value: "0"}},
-				KeyMods:        []ModRule{{Name: "lower"}},
+				KeyMods:        []ModRule{{Name: "tolower"}},
 				ElemMods:       []ModRule{{Name: "clamp", Value: "0|100"}},
 				HintLen:        16,
 			},

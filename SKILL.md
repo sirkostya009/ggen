@@ -110,7 +110,7 @@ Trigger: `//ggen:generate` (no space between `//` and `ggen`, mirror `//go:gener
 type User struct {
 	ID    int      `json:"id"`
 	Name  string   `json:"name"   pipe:"required minlen=1 maxlen=64"`
-	Email string   `json:"email"  pipe:"trim lower"`
+	Email string   `json:"email"  pipe:"trim tolower"`
 	Tags  []string `json:"tags,omitempty" pipe:"inner:notempty"`
 }
 
@@ -141,7 +141,7 @@ protect a literal pipe: `oneof='New York'|LA`, `replace='a|b'|c`.
 
 ```go
 Name  string	`json:"name"  pipe:"required trim minlen=1 maxlen=50"`
-Email string	`json:"email" pipe:"trim lower contains=@"`
+Email string	`json:"email" pipe:"trim tolower contains=@"`
 Aliases map[string][]string	`json:"aliases" pipe:"keys:(minrunes=2 maxrunes=32) inner:maxlen=10 inner:notempty"`
 ```
 
@@ -175,13 +175,14 @@ Price int `json:"price" pipe:". / @FromMoney"`                // FromMoney(Money
 | `multiple=N`                                                  | integer       | `% N == 0`                  |
 | `oneof=a\|b\|c`                                               | str/numeric   | one of the alternatives     |
 | `url`, `alphanum`, `numeric`, `hexadecimal`                   | string        | character-class predicate   |
+| `islower`, `isupper`                                          | string        | no wrong-case letters (caseless runes pass) |
 | `starts=X`, `ends=X`, `contains=X`                            | string        | substring test              |
 
 Mods (transforms):
 
 | step                        | applies to | effect                                                                      |
 | --------------------------- | ---------- | --------------------------------------------------------------------------- |
-| `trim`, `lower`, `upper`    | string     | whitespace / case                                                           |
+| `trim`, `tolower`, `toupper` | string    | whitespace / case                                                           |
 | `trimleft=X`, `trimright=X` | string     | strip prefix / suffix                                                       |
 | `replace=old\|new`          | string     | substring replace                                                           |
 | `clamp=lo\|hi`              | numeric    | bound into `[lo,hi]` (either side may be empty: `clamp=0\|`, `clamp=\|100`) |

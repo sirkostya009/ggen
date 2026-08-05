@@ -474,7 +474,7 @@ func TestAlias_String_ZeroAllocations(t *testing.T) {
 //
 //ggen:generate
 type AliasFieldExample struct {
-	Body  AliasString `json:"body" pipe:"required trim lower minlen=2 maxlen=10"`
+	Body  AliasString `json:"body" pipe:"required trim tolower minlen=2 maxlen=10"`
 	Count AliasInt    `json:"count" pipe:"clamp=1|100 gte=1 lte=100"`
 }
 
@@ -532,7 +532,7 @@ type NPTag string
 //ggen:generate
 type NamedPrims struct {
 	Pri  NPPriority `json:"pri"  pipe:"oneof=low|medium|high"`
-	Tag  NPTag      `json:"tag"  pipe:"trim lower maxrunes=8 contains=-"`
+	Tag  NPTag      `json:"tag"  pipe:"trim tolower maxrunes=8 contains=-"`
 	Eq   NPPriority `json:"eq"   pipe:"eq=low"`
 	Neq  NPPriority `json:"neq"  pipe:"neq=low"`
 	Zero NPPriority `json:"zero" pipe:"nullzero / ."`

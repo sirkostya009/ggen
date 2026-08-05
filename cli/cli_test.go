@@ -1973,8 +1973,13 @@ type Msg struct {
 
 			// ----- mods: string mods on numerics, numeric mods on strings -----
 			{"trim_on_int", "N int", `json:"n" pipe:"trim"`, "`trim` is inapplicable to int"},
-			{"lower_mod_on_int", "N int", `json:"n" pipe:"lower"`, "`lower` is inapplicable to int"},
-			{"upper_mod_on_int", "N int", `json:"n" pipe:"upper"`, "`upper` is inapplicable to int"},
+			{"tolower_mod_on_int", "N int", `json:"n" pipe:"tolower"`, "`tolower` is inapplicable to int"},
+			{"toupper_mod_on_int", "N int", `json:"n" pipe:"toupper"`, "`toupper` is inapplicable to int"},
+			{"islower_on_int", "N int", `json:"n" pipe:"islower"`, "`islower` is inapplicable to int"},
+			{"isupper_on_int", "N int", `json:"n" pipe:"isupper"`, "`isupper` is inapplicable to int"},
+			// bare lower/upper died in the 2026-08 split; the diagnostic points at both successors
+			{"lower_renamed", "S string", `json:"s" pipe:"lower"`, "split into `tolower` (transform) and `islower` (validator)"},
+			{"upper_renamed", "S string", `json:"s" pipe:"upper"`, "split into `toupper` (transform) and `isupper` (validator)"},
 			{"trimleft_on_int", "N int", `json:"n" pipe:"trimleft=foo"`, "`trimleft` is inapplicable to int"},
 			{"trimright_on_int", "N int", `json:"n" pipe:"trimright=foo"`, "`trimright` is inapplicable to int"},
 			{"replace_on_int", "N int", `json:"n" pipe:"replace=a|b"`, "`replace` is inapplicable to int"},

@@ -25,7 +25,7 @@ import (
 type ExtraStruct struct {
 	HintedTags   []string       `json:"hintedTags" pipe:"maxlen=1000" hint:"4"`
 	ClampedScore int            `json:"clampedScore" pipe:"clamp=0|100"`
-	KeyedMap     map[string]int `json:"keyedMap" pipe:"keys:(trim lower minrunes=2 maxrunes=16)"`
+	KeyedMap     map[string]int `json:"keyedMap" pipe:"keys:(trim tolower minrunes=2 maxrunes=16)"`
 	NestedInts   [][]int        `json:"nestedInts" pipe:"inner:(minlen=1 inner:(gte=0 lte=100))"`
 	Triple       [][][]string   `json:"triple" pipe:"inner:(minlen=1 inner:(minlen=1 inner:minlen=1))"`
 }

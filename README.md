@@ -98,7 +98,7 @@ package api
 type User struct {
 	ID    int      `json:"id"`
 	Name  string   `json:"name"   pipe:"required minlen=1 maxlen=64"`
-	Email string   `json:"email"  pipe:"trim lower contains=@"`
+	Email string   `json:"email"  pipe:"trim tolower contains=@"`
 	Tags  []string `json:"tags,omitempty" pipe:"inner:notempty"`
 }
 ```
@@ -258,7 +258,7 @@ that run **in the order you write them**.
 
 ```go
 Name  string   `json:"name"  pipe:"required trim notempty maxlen=50"`
-Email string   `json:"email" pipe:"trim lower contains=@"`
+Email string   `json:"email" pipe:"trim tolower contains=@"`
 Auth  []string `json:"tags"  pipe:"optional inner:starts='Bearer ' minlen=1"`
 Num   int      `json:"age"   pipe:"required gte=10 clamp=10|100"`
 ```
@@ -321,11 +321,12 @@ quotes scope one part and protect a literal pipe: `oneof='New York'|LA`,
 | `multiple=N`                                                  | `MultipleError`                                | numeric — multiple of N                        |
 | `oneof=a\|b\|c`                                               | `OneOfError`                                   | one of the listed alternatives                 |
 | `url`, `alphanum`, `numeric`, `hexadecimal`                   | `URLError`, `AlphanumError`, …                 | string-shape predicates                        |
+| `islower`, `isupper`                                          | `LowerError`, `UpperError`                     | no wrong-case letters (caseless runes pass)    |
 | `starts=X`, `ends=X`, `contains=X`                            | `StartsError`, `EndsError`, `ContainsError`    | substring tests on strings                     |
 
 | mods                                                                      | target  |
 | ------------------------------------------------------------------------- | ------- |
-| `trim`, `lower`, `upper`, `trimleft=X`, `trimright=X`, `replace=old\|new` | string  |
+| `trim`, `tolower`, `toupper`, `trimleft=X`, `trimright=X`, `replace=old\|new` | string  |
 | `clamp=lo\|hi` (either side may be empty: `clamp=0\|`, `clamp=\|100`)     | numeric |
 
 #### `inner:` / `keys:`
@@ -508,7 +509,7 @@ type LocalUUID uuid.UUID  // delegates to uuid.UUID's TextAppender
 type Comment struct {
 	ID     ID         `json:"id"     pipe:"gte=1"`                           // numeric alias, no quoting; gte runs against int
 	Author string     `json:"author" pipe:"required trim minlen=1"`          // plain string, fast path
-	Body   HtmlString `json:"body"   pipe:"required trim lower maxlen=4096"` // \uXXXX-escaped via the alias; mods cast through string
+	Body   HtmlString `json:"body"   pipe:"required trim tolower maxlen=4096"` // \uXXXX-escaped via the alias; mods cast through string
 	Tags   Tags       `json:"tags"   pipe:"inner:notempty"`                  // inner: runs against each element
 }
 ```
@@ -601,7 +602,7 @@ type Order struct {
 
 //ggen:generate
 type Item struct {
-	SKU string `json:"sku" pipe:"required len=12 alphanum upper"`
+	SKU string `json:"sku" pipe:"required len=12 alphanum toupper"`
 	Qty int    `json:"qty" pipe:"required gte=1 lte=999"`
 }
 ```

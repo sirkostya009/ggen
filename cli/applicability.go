@@ -182,6 +182,7 @@ func isUnknownValRule(name string) bool {
 		"multiple",
 		"eq", "neq", "oneof",
 		"url", "alphanum", "numeric", "hexadecimal",
+		"islower", "isupper",
 		"starts", "ends", "contains":
 		return false
 	}
@@ -192,7 +193,7 @@ func isUnknownValRule(name string) bool {
 // mod-rule set. Mirror of isUnknownValRule for mods.
 func isUnknownMod(name string) bool {
 	switch name {
-	case "", "trim", "lower", "upper",
+	case "", "trim", "tolower", "toupper",
 		"trimleft", "trimright",
 		"replace", "clamp":
 		return false
@@ -228,7 +229,7 @@ func checkValRules(rules []ValidationRule, source string, kind TypeKind, typeNam
 		}
 		if isUnknownValRule(r.Name) {
 			unknown = append(unknown, &richError{
-				Msg:      fmt.Sprintf("%s: `%s` is not a known validation rule", fieldDesc, r.Name),
+				Msg:      fmt.Sprintf("%s: `%s` is not a known validation rule%s", fieldDesc, r.Name, renamedCaseHint(r.Name)),
 				CodeSpan: r.Name,
 				Anchor:   anchor,
 			})
@@ -399,7 +400,8 @@ func checkOneValRule(r ValidationRule, source string, kind TypeKind, typeName, f
 		}
 		return nil
 
-	case "url", "alphanum", "numeric", "hexadecimal":
+	case "url", "alphanum", "numeric", "hexadecimal",
+		"islower", "isupper":
 		if kind != KindString {
 			return mismatch(r, source, fieldDesc, typeName,
 				"a string",
@@ -431,9 +433,20 @@ func checkOneValRule(r ValidationRule, source string, kind TypeKind, typeName, f
 	}
 	// Unknown rule — reject; hints omitted (the message is the full diagnostic).
 	return &richError{
-		Msg:      fmt.Sprintf("%s: `%s` is not a known validation rule", fieldDesc, r.Name),
+		Msg:      fmt.Sprintf("%s: `%s` is not a known validation rule%s", fieldDesc, r.Name, renamedCaseHint(r.Name)),
 		CodeSpan: r.Name,
 	}
+}
+
+// renamedCaseHint points old bare `lower`/`upper` steps at their split
+// replacements (2026-08: `tolower`/`toupper` mods, `islower`/`isupper`
+// validators).
+func renamedCaseHint(name string) string {
+	switch name {
+	case "lower", "upper":
+		return fmt.Sprintf(" — it split into `to%[1]s` (transform) and `is%[1]s` (validator)", name)
+	}
+	return ""
 }
 
 func checkModRules(mods []ModRule, source string, kind TypeKind, typeName, fieldDesc string) error {
@@ -472,7 +485,7 @@ func checkModRules(mods []ModRule, source string, kind TypeKind, typeName, field
 
 func checkOneModRule(m ModRule, source string, kind TypeKind, typeName, fieldDesc string) error {
 	switch m.Name {
-	case "trim", "lower", "upper":
+	case "trim", "tolower", "toupper":
 		if kind != KindString {
 			return mismatchMod(m, source, fieldDesc, typeName,
 				"a string",

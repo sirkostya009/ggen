@@ -541,7 +541,7 @@ func isMultiPartName(name string) bool {
 // than a validator. Keep in sync with the mod vocabulary in applicability.go.
 func isModName(name string) bool {
 	switch name {
-	case "trim", "lower", "upper", "trimleft", "trimright", "replace", "clamp":
+	case "trim", "tolower", "toupper", "trimleft", "trimright", "replace", "clamp":
 		return true
 	}
 	return false
