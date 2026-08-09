@@ -9,9 +9,12 @@
 // Same caller contract as the scalar pair: append escaped body + closing '"',
 // caller writes the opening '"'. Emitted by ggen when invoked under
 // GOEXPERIMENT=simd (see cli -simd); tier fixed at generate time, no runtime
-// probing. The ≤ lane-1 byte tail runs the scalar table walk — full-lane
-// vector loads only (Load*SlicePart is a real call, and its zero padding
-// would classify as ctrl and emit spurious escapes).
+// probing. The ≤ lane-1 byte tail is vectorized too, by reloading the LAST
+// full lane at s[len-lane:] — always in bounds behind the len(s) >= lane gate
+// — and shifting its mask right by lane-rem so the already-emitted overlap
+// falls off (simdjson's builder does the same). Full-lane loads only:
+// Load*SlicePart is a real call, and its zero padding would classify as ctrl
+// and emit spurious escapes.
 //
 // Unsigned Less is emulated below 512-bit (re-broadcasts 0x80 per iteration),
 // so the 16/32-lane ctrl test uses min(v,0x1F)==v (VPMINUB+VPCMPEQB); 512-bit
@@ -55,18 +58,22 @@ func byteview(s string) []byte {
 	return unsafe.Slice(unsafe.StringData(s), len(s))
 }
 
-// scalarEscapeTail finishes the final < lane bytes with the table walk and
-// writes the closing quote. start is the beginning of the pending clean span.
-func scalarEscapeTail(dst []byte, s string, start, j int, table *[256]bool) []byte {
-	for ; j < len(s); j++ {
-		if !table[s[j]] {
-			continue
+// escapeTail finishes the final < lane bytes and writes the closing quote.
+// start begins the pending clean span; m is the OVERLAP mask — the last full
+// lane reclassified at s[len(s)-lane:] and right-shifted so bit 0 is s[j], so
+// bits for bytes before j (already emitted) are gone. The reload is always in
+// bounds because every tier gates on len(s) >= lane, which is why the tail
+// needs neither a per-byte table walk nor Load*SlicePart (a real call whose
+// zero padding would classify as ctrl and emit spurious escapes).
+func escapeTail(dst []byte, s string, start, j int, m uint64) []byte {
+	for m != 0 {
+		k := j + bits.TrailingZeros64(m)
+		if start < k {
+			dst = append(dst, s[start:k]...)
 		}
-		if start < j {
-			dst = append(dst, s[start:j]...)
-		}
-		dst = appendEscapedByte(dst, s[j])
-		start = j + 1
+		dst = appendEscapedByte(dst, s[k])
+		start = k + 1
+		m &= m - 1
 	}
 	if start < len(s) {
 		dst = append(dst, s[start:]...)
@@ -96,7 +103,12 @@ func AppendStringNoHTMLAVX(dst []byte, s string) []byte {
 			m &= m - 1
 		}
 	}
-	return scalarEscapeTail(dst, s, start, j, &needEscapeNoHTML)
+	var tm uint64
+	if rem := len(s) - j; rem > 0 {
+		v := archsimd.LoadUint8x16Slice(byteview(s)[len(s)-16:])
+		tm = uint64(v.Equal(q).Or(v.Equal(bs)).Or(v.Min(ctrl).Equal(v)).ToBits()) >> (16 - uint(rem))
+	}
+	return escapeTail(dst, s, start, j, tm)
 }
 
 // AppendStringNoHTMLAVX2 is AppendStringNoHTML scanning 32 bytes/iteration.
@@ -121,7 +133,12 @@ func AppendStringNoHTMLAVX2(dst []byte, s string) []byte {
 			m &= m - 1
 		}
 	}
-	return scalarEscapeTail(dst, s, start, j, &needEscapeNoHTML)
+	var tm uint64
+	if rem := len(s) - j; rem > 0 {
+		v := archsimd.LoadUint8x32Slice(byteview(s)[len(s)-32:])
+		tm = uint64(v.Equal(q).Or(v.Equal(bs)).Or(v.Min(ctrl).Equal(v)).ToBits()) >> (32 - uint(rem))
+	}
+	return escapeTail(dst, s, start, j, tm)
 }
 
 // AppendStringNoHTMLAVX512 is AppendStringNoHTML scanning 64 bytes/iteration.
@@ -146,7 +163,12 @@ func AppendStringNoHTMLAVX512(dst []byte, s string) []byte {
 			m &= m - 1
 		}
 	}
-	return scalarEscapeTail(dst, s, start, j, &needEscapeNoHTML)
+	var tm uint64
+	if rem := len(s) - j; rem > 0 {
+		v := archsimd.LoadUint8x64Slice(byteview(s)[len(s)-64:])
+		tm = (v.Equal(q).ToBits() | v.Equal(bs).ToBits() | v.Less(space).ToBits()) >> (64 - uint(rem))
+	}
+	return escapeTail(dst, s, start, j, tm)
 }
 
 // AppendStringAVX is AppendString (HTML-safe) scanning 16 bytes/iteration.
@@ -175,7 +197,13 @@ func AppendStringAVX(dst []byte, s string) []byte {
 			m &= m - 1
 		}
 	}
-	return scalarEscapeTail(dst, s, start, j, &needEscapeHTML)
+	var tm uint64
+	if rem := len(s) - j; rem > 0 {
+		v := archsimd.LoadUint8x16Slice(byteview(s)[len(s)-16:])
+		tm = uint64(v.Equal(q).Or(v.Equal(bs)).Or(v.Min(ctrl).Equal(v)).
+			Or(v.Equal(lt)).Or(v.Equal(gt)).Or(v.Equal(amp)).ToBits()) >> (16 - uint(rem))
+	}
+	return escapeTail(dst, s, start, j, tm)
 }
 
 // AppendStringAVX2 is AppendString (HTML-safe) scanning 32 bytes/iteration.
@@ -204,7 +232,13 @@ func AppendStringAVX2(dst []byte, s string) []byte {
 			m &= m - 1
 		}
 	}
-	return scalarEscapeTail(dst, s, start, j, &needEscapeHTML)
+	var tm uint64
+	if rem := len(s) - j; rem > 0 {
+		v := archsimd.LoadUint8x32Slice(byteview(s)[len(s)-32:])
+		tm = uint64(v.Equal(q).Or(v.Equal(bs)).Or(v.Min(ctrl).Equal(v)).
+			Or(v.Equal(lt)).Or(v.Equal(gt)).Or(v.Equal(amp)).ToBits()) >> (32 - uint(rem))
+	}
+	return escapeTail(dst, s, start, j, tm)
 }
 
 // AppendStringAVX512 is AppendString (HTML-safe) scanning 64 bytes/iteration.
@@ -233,5 +267,11 @@ func AppendStringAVX512(dst []byte, s string) []byte {
 			m &= m - 1
 		}
 	}
-	return scalarEscapeTail(dst, s, start, j, &needEscapeHTML)
+	var tm uint64
+	if rem := len(s) - j; rem > 0 {
+		v := archsimd.LoadUint8x64Slice(byteview(s)[len(s)-64:])
+		tm = (v.Equal(q).ToBits() | v.Equal(bs).ToBits() | v.Less(space).ToBits() |
+			v.Equal(lt).ToBits() | v.Equal(gt).ToBits() | v.Equal(amp).ToBits()) >> (64 - uint(rem))
+	}
+	return escapeTail(dst, s, start, j, tm)
 }

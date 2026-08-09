@@ -122,9 +122,20 @@ with clean spans bulk-appended between them. **Length-gated:** strings shorter
 than one lane delegate straight to the scalar walk — without the gate the
 broadcast setup + call shape REGRESSED every repo marshal bench (Mega +6.5%,
 Tiny +14%); gated they are macro-flat and ~3.6×/10× faster at 64 B/≥256 B
-(BenchmarkEscapeScan). Tail (< lane bytes after full-lane iterations) runs the
-scalar table walk — `Load*SlicePart` is a real CALL and its zero padding would
-classify as ctrl and emit spurious escapes. ggen emits the tier names when run
+(BenchmarkEscapeScan). The sub-lane tail is vectorized by an **overlapping
+reload** of the last full lane (`s[len-lane:]`, always in bounds behind the
+length gate) whose mask is right-shifted by `lane-rem`, dropping the bits for
+bytes the main loop already emitted — simdjson's builder trick, and it needs no
+caller-buffer padding. It replaced a per-byte table walk over up to lane-1
+bytes: −49% on the 2800 B `BenchmarkEscapeScan/avx512` row (rem 48) and −37…−77%
+across `BenchmarkEscapeTailRem` (rem 16…63); rem 0 unaffected. Macro is
+untouched by construction — sub-lane strings never reach these functions, and
+no repo marshal bench carries ≥64 B strings. `Load*SlicePart` stays unused: it
+is a real CALL and its zero padding would classify as ctrl and emit spurious
+escapes. Overlap correctness (a byte classified in BOTH the main loop and the
+reload must be emitted exactly once) is pinned exhaustively by
+`TestAppendStringSIMD_OverlapTailParity` — every escape byte at every position
+for every length in [lane, 3·lane], all six tiers. ggen emits the tier names when run
 under `-simd` (shared `simdSuffix`, see cli/CLAUDE.md opt #46); no runtime
 probing. Byte-parity pinned by `TestAppendStringSIMD_Parity` (lane-seam
 directed cases + 3000 randomized bodies, all six functions).
