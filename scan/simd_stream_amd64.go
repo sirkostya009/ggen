@@ -302,8 +302,20 @@ func (s *Stream) stringViewAVX512(validate bool) (v string, owned bool, err erro
 		switch s.buf[j+k] {
 		case '"':
 			end := j + k
-			if validate && sawHigh && !validUTF8x16(s.buf[start:end]) {
-				return "", false, ErrInvalidUTF8
+			// 64-lane validator — this core IS the avx512 tier, so 512-bit
+			// code is safe here. Width picked at the call site so short spans
+			// skip the extra frame (see classifyStructural64).
+			if validate && sawHigh {
+				span := s.buf[start:end]
+				ok := true
+				if len(span) < utf8x64MinLen {
+					ok = validUTF8x16(span)
+				} else {
+					ok = validUTF8x64(span)
+				}
+				if !ok {
+					return "", false, ErrInvalidUTF8
+				}
 			}
 			s.Pos = end + 1
 			return unsafe.String(unsafe.SliceData(s.buf[start:]), end-start), false, nil

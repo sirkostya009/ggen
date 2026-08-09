@@ -3,6 +3,7 @@
 package scan
 
 import (
+	"bytes"
 	"math/rand"
 	"strings"
 	"testing"
@@ -85,8 +86,20 @@ func FuzzValidUTF8SIMD(f *testing.F) {
 	f.Add([]byte{0xED, 0xA0, 0x80})
 	f.Add([]byte{0xF4, 0x90, 0x80, 0x80})
 	f.Fuzz(func(t *testing.T, b []byte) {
-		if got, want := validUTF8x16(b), utf8.Valid(b); got != want {
+		want := utf8.Valid(b)
+		if got := validUTF8x16(b); got != want {
 			t.Fatalf("validUTF8x16(% x) = %v, utf8.Valid = %v", b, got, want)
+		}
+		if got := validUTF8x64(b); got != want {
+			t.Fatalf("validUTF8x64(% x) = %v, utf8.Valid = %v", b, got, want)
+		}
+		// Fuzz corpora skew short, and validUTF8x64 delegates below its gate —
+		// pad so the 64-lane path itself is exercised on the same bytes.
+		if len(b) > 0 {
+			padded := append(bytes.Repeat([]byte("x"), utf8x64MinLen), b...)
+			if got, w := validUTF8x64(padded), utf8.Valid(padded); got != w {
+				t.Fatalf("validUTF8x64(padded % x) = %v, utf8.Valid = %v", b, got, w)
+			}
 		}
 	})
 }

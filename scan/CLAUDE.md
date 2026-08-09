@@ -113,7 +113,30 @@ Primitives: `SkipSpace`, `String`, `Int64`, `Uint64`, `Float64`, `Bool`,
   it can never be the 2× a "half the blocks" reading suggests. Pinned by
   `TestValidUTF8SIMD_EOFTruncation` (every proper prefix of every multibyte
   rune at every offset across the block seams, plus the complete-rune
-  no-false-positive cases). ~6.5× over the scalar DFA (4 KB
+  no-false-positive cases).
+  **`validUTF8x64` (`simd_utf8x64_amd64.go`) — 64-lane sibling, avx512 tier
+  only.** Same algorithm and accept set; the differences are width and how
+  prev1/2/3 are obtained. simdutf needs cross-lane shuffles there
+  (VPERMI2D/VPERM2I128, which archsimd has no non-grouped equivalent of above
+  128 bits), but ggen always validates a CONTIGUOUS span, so prevN is just an
+  unaligned load from `b[i-N:]` — three L1-hot loads replace a permute + three
+  VPALIGNRs and shorten the dependency chain. VPSHUFB at 512 bits works per
+  128-bit lane, exactly what a nibble LUT wants, so the tables are repeated 4×
+  (`rep4`). The first block has no predecessor, so it runs one 16-lane classify
+  with `prev = zero` and NO EOF check (the rune may continue into the wide
+  region); the wide loop starts at 16, where every prevN load is in bounds.
+  Kernel: 3× from ~1 KB (4 KB 314→104 ns, 13→39 GB/s), −35% at 128 B. Wired in
+  via a `classifyStructural64` COPY + the avx512 stream core, because the
+  shared `classifyStructural` links into avx/avx2 binaries that must execute no
+  512-bit code (verified: `objdump` shows no zmm in the shared body). Both call
+  sites pick the width THEMSELVES (`utf8x64MinLen` = 128) rather than letting
+  `validUTF8x64` delegate — a short span bouncing through the extra
+  non-inlinable frame measured +12% at 16 B. End-to-end `StringAVX512`:
+  −33% at 256 B, −53% at 1 KB, −57% at 4 KB; ≤64 B flat. Pinned by
+  `TestValidUTF8x64_Parity` (runes and invalid sequences planted at the
+  head/wide seam, block ends and the gate; truncations across every tail
+  remainder; 20k randomized) and the extended `FuzzValidUTF8SIMD`, which pads
+  short inputs past the gate so the 64-lane path is actually exercised. ~6.5× over the scalar DFA (4 KB
   Cyrillic 3456→~530 ns; NoAlloc avx512 −37%, RuneGated −29%, ASCII rows
   flat). Accept-set parity with `utf8.Valid` pinned by
   `TestValidUTF8SIMD_Parity` (exhaustive 1-2-byte × boundary offsets +

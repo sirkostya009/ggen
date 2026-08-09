@@ -51,6 +51,43 @@ func classifyStructural(data, rest []byte, start, k int, hasHigh, validate bool)
 	}
 }
 
+// classifyStructural64 is classifyStructural for the avx512 tier only, routing
+// UTF-8 validation to the 64-lane validator (3× the 16-lane one from ~1 KB,
+// −35% at 128 B; it falls back to validUTF8x16 below its own gate). It exists
+// as a COPY because classifyStructural is shared by all three tiers and links
+// into avx/avx2-tier binaries, which must contain no 512-bit code on a path
+// they execute. Keep the two bodies in sync — the only difference is the
+// validator call.
+func classifyStructural64(data, rest []byte, start, k int, hasHigh, validate bool) (string, int, error) {
+	switch rest[k] {
+	case '"':
+		// Pick the width HERE rather than letting validUTF8x64 delegate: a
+		// short span would otherwise pay an extra (non-inlinable) frame just
+		// to bounce to validUTF8x16, which measured +12% at a 16 B span.
+		if hasHigh {
+			span := rest[:k]
+			ok := true
+			if len(span) < utf8x64MinLen {
+				ok = validUTF8x16(span)
+			} else {
+				ok = validUTF8x64(span)
+			}
+			if !ok {
+				return "", 0, ErrInvalidUTF8
+			}
+		}
+		return unsafe.String(unsafe.SliceData(rest), k), start + k + 1, nil
+	case '\\':
+		closeIdx := bytes.IndexByte(rest[k:], '"')
+		if closeIdx < 0 {
+			return stringSlow(data, start, start+k, k+16, validate)
+		}
+		return stringSlow(data, start, start+k, stringSpanEnd(data, start)-start, validate)
+	default:
+		return "", 0, ctrlHitErr(rest[k:])
+	}
+}
+
 // ctrlHitErr picks the scalar-identical error for a ctrl-byte hit: the
 // scalar scanners return ErrUnterminated for a truncated string with no
 // backslash before checking ctrl bytes. Cold path — malformed input only.
@@ -159,7 +196,7 @@ func StringAVX512(data []byte, i int, validate bool) (string, int, error) {
 		m := v.Equal(quote).ToBits() | v.Equal(bslash).ToBits() | v.Less(space).ToBits()
 		if m != 0 {
 			hi := validate && acc.Less(high).ToBits() != ^uint64(0)
-			return classifyStructural(data, rest, start, j+bits.TrailingZeros64(m), hi, validate)
+			return classifyStructural64(data, rest, start, j+bits.TrailingZeros64(m), hi, validate)
 		}
 	}
 	if j < len(rest) {
@@ -169,7 +206,7 @@ func StringAVX512(data []byte, i int, validate bool) (string, int, error) {
 		if m != 0 {
 			if k := j + bits.TrailingZeros64(m); k < len(rest) {
 				hi := validate && acc.Less(high).ToBits() != ^uint64(0)
-				return classifyStructural(data, rest, start, k, hi, validate)
+				return classifyStructural64(data, rest, start, k, hi, validate)
 			}
 		}
 	}
