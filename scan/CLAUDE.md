@@ -87,8 +87,22 @@ Primitives: `SkipSpace`, `String`, `Int64`, `Uint64`, `Float64`, `Bool`,
   VPALIGNR, shared by all three tiers since `classifyStructural` is): three
   nibble LUTs classify each (prev1, cur) byte pair, XOR against a
   saturating-sub "3rd/4th continuation required" mask cancels the one legal
-  0x80 case, errors accumulate vectorially; zero-padded tail + one all-zero
-  epilogue block catch truncated runes. ~6.5× over the scalar DFA (4 KB
+  0x80 case, errors accumulate vectorially. Truncated runes: a partial final
+  block loads zero-padded (the zeros fail the lead's successor check), and a
+  rune dangling off a FULL final block is caught by one saturating sub against
+  `utf8MaxIncomplete` (simdutf's check_eof — only the last three lanes are
+  constrained, to `0xF0-1`/`0xE0-1`/`0xC0-1`). That replaced running a whole
+  extra all-zero block through the classify to test three bytes. Worth
+  −7…−12% on short spans and ~0 at 4 KB (`BenchmarkValidUTF8Kernel`, which
+  measures the kernel WITHOUT the surrounding string scan — the end-to-end
+  `StringAVX512` rows are too noisy to read a sub-ns delta from). NOTE the
+  win is small because the per-call setup — 3 LUT loads + 5 broadcasts, paid
+  once regardless of length — is what actually dominates a short span
+  (~5-7 ns of a ~6 ns 16 B call); one block's classify is ~1 ns, so removing
+  it can never be the 2× a "half the blocks" reading suggests. Pinned by
+  `TestValidUTF8SIMD_EOFTruncation` (every proper prefix of every multibyte
+  rune at every offset across the block seams, plus the complete-rune
+  no-false-positive cases). ~6.5× over the scalar DFA (4 KB
   Cyrillic 3456→~530 ns; NoAlloc avx512 −37%, RuneGated −29%, ASCII rows
   flat). Accept-set parity with `utf8.Valid` pinned by
   `TestValidUTF8SIMD_Parity` (exhaustive 1-2-byte × boundary offsets +

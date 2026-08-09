@@ -20,9 +20,12 @@
 // XOR accumulates into errAcc.
 //
 // Tail: the last partial block loads zero-padded (zeros classify as ASCII,
-// turning a truncated rune into a lead+non-continuation error), and one final
-// all-zero block runs unconditionally so a lead in the last byte of the last
-// real block still meets its "next byte" check.
+// turning a truncated rune into a lead+non-continuation error). A rune
+// truncated at the very END of a FULL final block has no such successor, so
+// instead of running a whole extra all-zero block through the classify (~19
+// vector ops to check three bytes) the loop exits and one saturating sub
+// against utf8MaxIncomplete tests those three positions directly — simdutf's
+// check_eof. Padded blocks carry zeros there, so it is a no-op for them.
 
 package scan
 
@@ -83,6 +86,16 @@ var utf8Byte2High = [16]uint8{
 	utf8TooShort, utf8TooShort, utf8TooShort, utf8TooShort, // C..F: lead
 }
 
+// utf8MaxIncomplete is the per-lane ceiling a byte may hold without needing a
+// successor byte: only the last three lanes are constrained, to the largest
+// lead that still fits (< 0xF0 three from the end, < 0xE0 two, < 0xC0 one).
+// A saturating sub against it is non-zero exactly when the block ends mid-rune.
+var utf8MaxIncomplete = [16]uint8{
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xF0 - 1, 0xE0 - 1, 0xC0 - 1,
+}
+
 // validUTF8x16 reports whether b is well-formed UTF-8 (same accept set as
 // unicode/utf8.Valid — verified by TestValidUTF8SIMD_Parity).
 func validUTF8x16(b []byte) bool {
@@ -98,16 +111,12 @@ func validUTF8x16(b []byte) bool {
 	zero := archsimd.BroadcastUint8x16(0)
 	prev := zero
 	errAcc := zero
-	// One iteration past the end runs the all-zero epilogue block.
-	for i := 0; i < len(b)+16; i += 16 {
+	for i := 0; i < len(b); i += 16 {
 		var c archsimd.Uint8x16
-		switch {
-		case i+16 <= len(b):
+		if i+16 <= len(b) {
 			c = archsimd.LoadUint8x16Slice(b[i:])
-		case i < len(b):
+		} else {
 			c = archsimd.LoadUint8x16SlicePart(b[i:]) // zero-padded tail
-		default:
-			c = zero
 		}
 		prev1 := c.ConcatShiftBytesRight(15, prev)
 		prev1Hi := prev1.AsUint16x8().ShiftAllRight(4).AsUint8x16().And(nib)
@@ -121,5 +130,8 @@ func validUTF8x16(b []byte) bool {
 		errAcc = errAcc.Or(must23_80.Xor(sc))
 		prev = c
 	}
-	return errAcc.IsZero()
+	// prev is the final block (zero when b is empty): reject a rune left
+	// dangling at end-of-input.
+	maxInc := archsimd.LoadUint8x16Slice(utf8MaxIncomplete[:])
+	return errAcc.Or(prev.SubSaturated(maxInc)).IsZero()
 }
