@@ -549,7 +549,7 @@ func (recv LooseThing) DecodeFrom(data []byte) (result LooseThing, i int, err er
 				_cv1, _n, err = _cv1.DecodeFrom(data[i:])
 				i += _n
 				if err != nil {
-					return result, i, decode.NewParseErr("price", i, err)
+					return result, i, decode.NewParseErrShift("price", i, _n, err)
 				}
 				result.Price = FromMoney(_cv1)
 			default:

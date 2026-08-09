@@ -312,7 +312,7 @@ func (recv FastFallbackStruct) DecodeFrom(data []byte) (result FastFallbackStruc
 			result.Extra, _n, err = result.Extra.DecodeFrom(data[i:])
 			i += _n
 			if err != nil {
-				return result, i, decode.NewParseErr("extra", i, err)
+				return result, i, decode.NewParseErrShift("extra", i, _n, err)
 			}
 		case "id":
 			if seenID {
@@ -972,7 +972,7 @@ func (recv CrossPkgShapes) DecodeFrom(data []byte) (result CrossPkgShapes, i int
 			result.One, _n, err = result.One.DecodeFrom(data[i:])
 			i += _n
 			if err != nil {
-				return result, i, decode.NewParseErr("one", i, err)
+				return result, i, decode.NewParseErrShift("one", i, _n, err)
 			}
 		case "pptr":
 			if seenPPtr {
@@ -992,7 +992,7 @@ func (recv CrossPkgShapes) DecodeFrom(data []byte) (result CrossPkgShapes, i int
 			v, _n, err = v.DecodeFrom(data[i:])
 			i += _n
 			if err != nil {
-				return result, i, decode.NewParseErr("pptr", i, err)
+				return result, i, decode.NewParseErrShift("pptr", i, _n, err)
 			}
 			if result.PPtr == nil {
 				result.PPtr = new(new(v))
@@ -1019,7 +1019,7 @@ func (recv CrossPkgShapes) DecodeFrom(data []byte) (result CrossPkgShapes, i int
 			v, _n, err = v.DecodeFrom(data[i:])
 			i += _n
 			if err != nil {
-				return result, i, decode.NewParseErr("ptr", i, err)
+				return result, i, decode.NewParseErrShift("ptr", i, _n, err)
 			}
 			if result.Ptr == nil {
 				result.Ptr = new(v)

@@ -3624,7 +3624,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 					result.Hinted[len(result.Hinted)-1], _n, err = result.Hinted[len(result.Hinted)-1].DecodeFrom(data[i:])
 					i += _n
 					if err != nil {
-						return result, i, decode.NewParseErr("hinted", i, err)
+						return result, i, decode.NewParseErrShift("hinted", i, _n, err)
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -3780,7 +3780,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 						result.Lened[len(result.Lened)-1], _n, err = result.Lened[len(result.Lened)-1].DecodeFrom(data[i:])
 						i += _n
 						if err != nil {
-							return result, i, decode.NewParseErr("lened", i, err)
+							return result, i, decode.NewParseErrShift("lened", i, _n, err)
 						}
 						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
@@ -3838,7 +3838,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 						result.MaxFits[len(result.MaxFits)-1], _n, err = result.MaxFits[len(result.MaxFits)-1].DecodeFrom(data[i:])
 						i += _n
 						if err != nil {
-							return result, i, decode.NewParseErr("maxFits", i, err)
+							return result, i, decode.NewParseErrShift("maxFits", i, _n, err)
 						}
 						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
@@ -3896,7 +3896,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 						result.MaxTooBig[len(result.MaxTooBig)-1], _n, err = result.MaxTooBig[len(result.MaxTooBig)-1].DecodeFrom(data[i:])
 						i += _n
 						if err != nil {
-							return result, i, decode.NewParseErr("maxTooBig", i, err)
+							return result, i, decode.NewParseErrShift("maxTooBig", i, _n, err)
 						}
 						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
@@ -3954,7 +3954,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 						result.Minned[len(result.Minned)-1], _n, err = result.Minned[len(result.Minned)-1].DecodeFrom(data[i:])
 						i += _n
 						if err != nil {
-							return result, i, decode.NewParseErr("minned", i, err)
+							return result, i, decode.NewParseErrShift("minned", i, _n, err)
 						}
 						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
@@ -4201,7 +4201,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 					slab0[len(slab0)-1], _n, err = slab0[len(slab0)-1].DecodeFrom(data[i:])
 					i += _n
 					if err != nil {
-						return result, i, decode.NewParseErr("ptrs", i, err)
+						return result, i, decode.NewParseErrShift("ptrs", i, _n, err)
 					}
 					result.Ptrs = append(result.Ptrs, &slab0[len(slab0)-1])
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -4257,7 +4257,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 					result.Rows[len(result.Rows)-1], _n, err = result.Rows[len(result.Rows)-1].DecodeFrom(data[i:])
 					i += _n
 					if err != nil {
-						return result, i, decode.NewParseErr("rows", i, err)
+						return result, i, decode.NewParseErrShift("rows", i, _n, err)
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -4381,7 +4381,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 					result.Wide[len(result.Wide)-1], _n, err = result.Wide[len(result.Wide)-1].DecodeFrom(data[i:])
 					i += _n
 					if err != nil {
-						return result, i, decode.NewParseErr("wide", i, err)
+						return result, i, decode.NewParseErrShift("wide", i, _n, err)
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++

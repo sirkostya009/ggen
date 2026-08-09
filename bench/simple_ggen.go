@@ -84,7 +84,7 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			result.Address, _n, err = result.Address.DecodeFrom(data[i:])
 			i += _n
 			if err != nil {
-				return result, i, decode.NewParseErr("address", i, err)
+				return result, i, decode.NewParseErrShift("address", i, _n, err)
 			}
 		case "age":
 			if seen&(1<<2) != 0 {
@@ -217,7 +217,7 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			result.Company, _n, err = result.Company.DecodeFrom(data[i:])
 			i += _n
 			if err != nil {
-				return result, i, decode.NewParseErr("company", i, err)
+				return result, i, decode.NewParseErrShift("company", i, _n, err)
 			}
 		case "createdAt":
 			if seen&(1<<8) != 0 {
@@ -793,7 +793,7 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			result.Preferences, _n, err = result.Preferences.DecodeFrom(data[i:])
 			i += _n
 			if err != nil {
-				return result, i, decode.NewParseErr("preferences", i, err)
+				return result, i, decode.NewParseErrShift("preferences", i, _n, err)
 			}
 		case "premium":
 			if seen&(1<<25) != 0 {
@@ -1870,7 +1870,7 @@ func (recv PostalAddress) DecodeFrom(data []byte) (result PostalAddress, i int, 
 			result.Geo, _n, err = result.Geo.DecodeFrom(data[i:])
 			i += _n
 			if err != nil {
-				return result, i, decode.NewParseErr("geo", i, err)
+				return result, i, decode.NewParseErrShift("geo", i, _n, err)
 			}
 		case "line1":
 			if seenLine1 {
@@ -3522,7 +3522,7 @@ func (recv CopyAccount) DecodeFrom(data []byte) (result CopyAccount, i int, err 
 			result.Address, _n, err = result.Address.DecodeFrom(data[i:])
 			i += _n
 			if err != nil {
-				return result, i, decode.NewParseErr("address", i, err)
+				return result, i, decode.NewParseErrShift("address", i, _n, err)
 			}
 		case "age":
 			if seen&(1<<2) != 0 {
@@ -3658,7 +3658,7 @@ func (recv CopyAccount) DecodeFrom(data []byte) (result CopyAccount, i int, err 
 			result.Company, _n, err = result.Company.DecodeFrom(data[i:])
 			i += _n
 			if err != nil {
-				return result, i, decode.NewParseErr("company", i, err)
+				return result, i, decode.NewParseErrShift("company", i, _n, err)
 			}
 		case "createdAt":
 			if seen&(1<<8) != 0 {
@@ -4241,7 +4241,7 @@ func (recv CopyAccount) DecodeFrom(data []byte) (result CopyAccount, i int, err 
 			result.Preferences, _n, err = result.Preferences.DecodeFrom(data[i:])
 			i += _n
 			if err != nil {
-				return result, i, decode.NewParseErr("preferences", i, err)
+				return result, i, decode.NewParseErrShift("preferences", i, _n, err)
 			}
 		case "premium":
 			if seen&(1<<25) != 0 {
@@ -5321,7 +5321,7 @@ func (recv CopyPostalAddress) DecodeFrom(data []byte) (result CopyPostalAddress,
 			result.Geo, _n, err = result.Geo.DecodeFrom(data[i:])
 			i += _n
 			if err != nil {
-				return result, i, decode.NewParseErr("geo", i, err)
+				return result, i, decode.NewParseErrShift("geo", i, _n, err)
 			}
 		case "line1":
 			if seenLine1 {

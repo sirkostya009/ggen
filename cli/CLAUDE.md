@@ -566,6 +566,17 @@ Pos, Err}` for raw sentinels (a one-segment path), prepends the segment onto a `
     `Error()`-join to `addr.street`. Empty segment leaves the path untouched.
     `errors.Is(err, scan.ErrBadString)` works via `Unwrap()`; `ParseError.Error()`
     calls `e.Err.Error()` once so chained prints stay linear.
+    **Bytes-path NESTED-decode sites use `NewParseErrShift(seg, i, _n, err)`**
+    (2026-08): the callee ran on `data[i-_n:]` (the emit advances `i += _n`
+    BEFORE the check), so its positional errors — chained `*ParseError`,
+    validation typed errors, `validation.Errors` — are rebased by the value
+    start via `AddPos` before wrapping, making every `Pos` a full-payload
+    offset like the stream path's `s.Offset()`. The multierr drain rebases
+    with `validation.ShiftPos(verr, i-_n)`. All emitted from ONE helper
+    (`nestedDecodeErrCheck(field, multierr, bytesPath, nVar)`; `nVar` = the
+    consumed-count local, `_n`/`_in`) + the alias delegation wrap +
+    `decode.UnmarshalSlice`. Sentinel/foreign errors carry no `Pos` → the
+    shift no-ops. Error path only; happy path unchanged.
 15. **Constant-folded `JSONSize()`.** Each field size splits into a compile-time
     constant (folded into `size := N`) and a runtime expression. Pure-primitive
     structs collapse to `return N`.

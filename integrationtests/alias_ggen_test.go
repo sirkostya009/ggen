@@ -1158,7 +1158,7 @@ func (recv OpaqueParent) DecodeFrom(data []byte) (result OpaqueParent, i int, er
 			result.O, _n, err = result.O.DecodeFrom(data[i:])
 			i += _n
 			if err != nil {
-				return result, i, decode.NewParseErr("o", i, err)
+				return result, i, decode.NewParseErrShift("o", i, _n, err)
 			}
 		default:
 			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
@@ -2977,7 +2977,7 @@ func (recv NPPositions) DecodeFrom(data []byte) (result NPPositions, i int, err 
 			result.E, _n, err = result.E.DecodeFrom(data[i:])
 			i += _n
 			if err != nil {
-				return result, i, decode.NewParseErr("e", i, err)
+				return result, i, decode.NewParseErrShift("e", i, _n, err)
 			}
 		case "m":
 			if seenM {

@@ -187,7 +187,10 @@ surface pinned by `Decoder[T]`).
   fixes left structural-assertion smell: `PrependPath` is an exported method on
   every error type but NOT in the `Error` interface, so `decode.NewParseErr`,
   `Errors.Append`, and `Errors.PrependPath` each assert
-  `interface{ PrependPath(string) }` inline. Candidates: put `PrependPath` in
+  `interface{ PrependPath(string) }` inline. (2026-08: `AddPos` joined as a
+  second such method — 29 more one-liners + `interface{ AddPos(int) }`
+  asserts in `NewParseErrShift`/`ShiftPos`/`Errors.AddPos` — strengthening
+  the shared-embedded-base case.) Candidates: put `PrependPath` in
   the interface outright (external implementors just gain a required method —
   breaking is fine here), or restructure the ~20 error structs around a shared
   embedded base (`Pos int; Path []string` + one `PrependPath` impl) which also

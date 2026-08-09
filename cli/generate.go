@@ -3517,7 +3517,7 @@ var _n int
 mv, _n, err = mv.`+decodeCallFor(f.ElemType)+`
 %[2]s += _n
 %[4]s%[3]s = mv
-`, f.ElemType, posVar, mapTarget, nestedDecodeErrCheck(fieldLit(f), f.MultiErr, true))
+`, f.ElemType, posVar, mapTarget, nestedDecodeErrCheck(fieldLit(f), f.MultiErr, true, "_n"))
 		} else {
 			// Cross-package value: run the ladder (its own DecodeFrom /
 			// UnmarshalJSON / UnmarshalText, encoding/json only as the last
@@ -3812,7 +3812,7 @@ func renderCrossPkgStructDecode(f FieldInfo, ref, posVar string) string {
 			return fmt.Sprintf(`var _n int
 %[1]s, _n, err = %[1]s.DecodeFrom(data[%[2]s:])
 %[2]s += _n
-%[3]s`, ref, posVar, nestedDecodeErrCheck(fieldLit(f), f.MultiErr, true))
+%[3]s`, ref, posVar, nestedDecodeErrCheck(fieldLit(f), f.MultiErr, true, "_n"))
 
 		case f.Iface.JSONUnmarshaler:
 			chk := bytesErrCheck(fieldLit(f), posVar)
@@ -3908,7 +3908,7 @@ func renderCrossPkgStructStreamDecode(f FieldInfo, ref, posVar string) string {
 		switch {
 		case f.Iface.StreamDecoder:
 			return fmt.Sprintf(`%[1]s, err = %[1]s.DecodeFromStream(s)
-%[2]s`, ref, nestedDecodeErrCheck(fieldLit(f), f.MultiErr, false))
+%[2]s`, ref, nestedDecodeErrCheck(fieldLit(f), f.MultiErr, false, ""))
 
 		case f.Iface.JSONUnmarshaler:
 			return fmt.Sprintf(`span, err := s.CaptureValue()
@@ -4273,7 +4273,7 @@ var _in int
 _iv, _in, err = _iv.`+decodeCallFor(inline.ElemType)+`
 %[2]s += _in
 %[4]sresult.%[3]s[%[5]s] = _iv
-`, inline.ElemType, posVar, inline.GoName, nestedDecodeErrCheck(keyExpr, s.MultiErr, true), keyExpr)
+`, inline.ElemType, posVar, inline.GoName, nestedDecodeErrCheck(keyExpr, s.MultiErr, true, "_in"), keyExpr)
 			}
 		}
 		return initMap + fmt.Sprintf(`_vstart := %[1]s
@@ -4792,7 +4792,7 @@ if err != nil { return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, err) }
 			fmt.Fprintf(b, `var _n int
 %[1]s, _n, err = %[1]s.`+decodeCallFor(f.GoType)+`
 %[2]s += _n
-%[3]s`, ref, posVar, nestedDecodeErrCheck(fieldLit(f), f.MultiErr, true))
+%[3]s`, ref, posVar, nestedDecodeErrCheck(fieldLit(f), f.MultiErr, true, "_n"))
 		} else {
 			b.WriteString(renderCrossPkgStructDecode(f, ref, posVar))
 		}
@@ -5140,7 +5140,7 @@ if e := bytes.IndexByte(data[%[2]s:], ']'); e >= 0 { %[4]s = bytes.Count(data[%[
 %[1]s, _n, err = %[1]s.`+decodeCallFor(f.ElemType)+`
 %[2]s += _n
 `, target, kvar)
-				b.WriteString(nestedDecodeErrCheck(fieldLit(f), f.MultiErr, true))
+				b.WriteString(nestedDecodeErrCheck(fieldLit(f), f.MultiErr, true, "_n"))
 			} else {
 				// Cross-package / method-carrying element: same ladder the
 				// field level uses. This used to be a bare SkipValue, which
@@ -5506,7 +5506,7 @@ fv, err = s.Float64()
 			fmt.Fprintf(b, `var mv %s
 mv, err = mv.`+streamDecodeCallFor(f.ElemType)+`
 %s%s = mv
-`, f.ElemType, nestedDecodeErrCheck(fieldLit(f), f.MultiErr, false), mapTarget)
+`, f.ElemType, nestedDecodeErrCheck(fieldLit(f), f.MultiErr, false, ""), mapTarget)
 		} else {
 			fmt.Fprintf(b, "var mv %s\n", f.ElemType)
 			b.WriteString(renderCrossPkgStructStreamDecode(elemAsField(f), "mv", ""))
@@ -5567,24 +5567,30 @@ func streamReadMore(field, keep string, resetPos bool) string {
 // *ParseError's path is prepended ("addr" + "street" → "addr.street"). In
 // multierr mode validation failures merge via Errors.Append; parse errors
 // return early. bytesPath selects the 3-tuple vs 2-tuple shape.
-func nestedDecodeErrCheck(field string, multierr, bytesPath bool) string {
+// nVar names the bytes-path consumed-count local (`_n`/`_in`) — the cursor
+// was advanced by it BEFORE this check, so the nested value STARTED at
+// i-nVar and the callee's sub-slice-relative error positions rebase by that
+// (NewParseErrShift / ShiftPos). Stream positions are already global.
+func nestedDecodeErrCheck(field string, multierr, bytesPath bool, nVar string) string {
 	wrap := fmt.Sprintf("decode.NewParseErr(%s, s.Pos, err)", field)
 	ret := fmt.Sprintf("return result, %s", wrap)
+	drain := fmt.Sprintf("errs.Append(%s, verr)", field)
 	if bytesPath {
-		wrap = fmt.Sprintf("decode.NewParseErr(%s, i, err)", field)
+		wrap = fmt.Sprintf("decode.NewParseErrShift(%s, i, %s, err)", field, nVar)
 		ret = fmt.Sprintf("return result, i, %s", wrap)
+		drain = fmt.Sprintf("errs.Append(%s, validation.ShiftPos(verr, i-%s))", field, nVar)
 	}
 	if !multierr {
 		return fmt.Sprintf("if err != nil { %s }\n", ret)
 	}
 	return fmt.Sprintf(`if err != nil {
 	if verr, ok := err.(validation.Error); ok {
-		errs.Append(%[1]s, verr)
+		%[1]s
 	} else {
 		%[2]s
 	}
 }
-`, field, ret)
+`, drain, ret)
 }
 
 // --- stream native-type renderers ---
@@ -5961,7 +5967,7 @@ err = s.ConsumeColon()
 				return prelude + fmt.Sprintf(`var _iv %[1]s
 _iv, err = _iv.`+streamDecodeCallFor(inline.ElemType)+`
 %[3]sresult.%[2]s[ownKey] = _iv
-`, inline.ElemType, inline.GoName, nestedDecodeErrCheck("ownKey", s.MultiErr, false))
+`, inline.ElemType, inline.GoName, nestedDecodeErrCheck("ownKey", s.MultiErr, false, ""))
 			}
 		}
 		return prelude + fmt.Sprintf(`span, err := s.CaptureValue()
@@ -6205,7 +6211,7 @@ func renderStreamField(f FieldInfo, ref, posVar string) string {
 	case KindStruct:
 		if isGenerated(f.GoType) {
 			fmt.Fprintf(b, `%[1]s, err = %[1]s.`+streamDecodeCallFor(f.GoType)+`
-%[2]s`, ref, nestedDecodeErrCheck(fieldLit(f), f.MultiErr, false))
+%[2]s`, ref, nestedDecodeErrCheck(fieldLit(f), f.MultiErr, false, ""))
 		} else {
 			b.WriteString(renderCrossPkgStructStreamDecode(f, ref, posVar))
 		}
@@ -6426,7 +6432,7 @@ fv, err = s.Float64()
 		case KindStruct:
 			if directStruct {
 				fmt.Fprintf(b, `%[1]s, err = %[1]s.`+streamDecodeCallFor(f.ElemType)+`
-%[2]s`, target, nestedDecodeErrCheck(fieldLit(f), f.MultiErr, false))
+%[2]s`, target, nestedDecodeErrCheck(fieldLit(f), f.MultiErr, false, ""))
 			} else {
 				// Cross-package element: the bytes path used to skip it and
 				// this path emitted nothing at all.

@@ -562,7 +562,7 @@ func (recv InlineStructsStruct) DecodeFrom(data []byte) (result InlineStructsStr
 			_iv, _in, err = _iv.DecodeFrom(data[i:])
 			i += _in
 			if err != nil {
-				return result, i, decode.NewParseErr(key, i, err)
+				return result, i, decode.NewParseErrShift(key, i, _in, err)
 			}
 			result.Extra[key] = _iv
 		}

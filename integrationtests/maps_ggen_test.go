@@ -141,7 +141,7 @@ func (recv MapStruct) DecodeFrom(data []byte) (result MapStruct, i int, err erro
 					mv, _n, err = mv.DecodeFrom(data[i:])
 					i += _n
 					if err != nil {
-						return result, i, decode.NewParseErr("addresses", i, err)
+						return result, i, decode.NewParseErrShift("addresses", i, _n, err)
 					}
 					result.Addresses[mk] = mv
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {

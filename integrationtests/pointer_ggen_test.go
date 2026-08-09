@@ -850,7 +850,7 @@ func (recv PtrAddrStruct) DecodeFrom(data []byte) (result PtrAddrStruct, i int, 
 			v, _n, err = v.DecodeFrom(data[i:])
 			i += _n
 			if err != nil {
-				return result, i, decode.NewParseErr("addr", i, err)
+				return result, i, decode.NewParseErrShift("addr", i, _n, err)
 			}
 			if result.Addr == nil {
 				result.Addr = new(v)
@@ -1525,7 +1525,7 @@ func (recv PointerStruct) DecodeFrom(data []byte) (result PointerStruct, i int, 
 			v, _n, err = v.DecodeFrom(data[i:])
 			i += _n
 			if err != nil {
-				return result, i, decode.NewParseErr("addr", i, err)
+				return result, i, decode.NewParseErrShift("addr", i, _n, err)
 			}
 			if result.Addr == nil {
 				result.Addr = new(v)
@@ -2983,7 +2983,7 @@ func (recv PtrAddr2Struct) DecodeFrom(data []byte) (result PtrAddr2Struct, i int
 			v, _n, err = v.DecodeFrom(data[i:])
 			i += _n
 			if err != nil {
-				return result, i, decode.NewParseErr("addr", i, err)
+				return result, i, decode.NewParseErrShift("addr", i, _n, err)
 			}
 			if result.Addr == nil {
 				result.Addr = new(new(v))
@@ -3220,7 +3220,7 @@ func (recv NPtrStruct) DecodeFrom(data []byte) (result NPtrStruct, i int, err er
 			v, _n, err = v.DecodeFrom(data[i:])
 			i += _n
 			if err != nil {
-				return result, i, decode.NewParseErr("addr", i, err)
+				return result, i, decode.NewParseErrShift("addr", i, _n, err)
 			}
 			if result.Addr == nil {
 				result.Addr = new(new(v))
@@ -3857,7 +3857,7 @@ func (recv PtrSliceItemsStruct) DecodeFrom(data []byte) (result PtrSliceItemsStr
 					slab0[len(slab0)-1], _n, err = slab0[len(slab0)-1].DecodeFrom(data[i:])
 					i += _n
 					if err != nil {
-						return result, i, decode.NewParseErr("items", i, err)
+						return result, i, decode.NewParseErrShift("items", i, _n, err)
 					}
 					result.Items = append(result.Items, &slab0[len(slab0)-1])
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -4237,7 +4237,7 @@ func (recv PtrSliceTupleStruct) DecodeFrom(data []byte) (result PtrSliceTupleStr
 					slab0[idx0], _n, err = slab0[idx0].DecodeFrom(data[i:])
 					i += _n
 					if err != nil {
-						return result, i, decode.NewParseErr("tuple", i, err)
+						return result, i, decode.NewParseErrShift("tuple", i, _n, err)
 					}
 					result.Tuple[idx0] = &slab0[idx0]
 					idx0++
@@ -4600,7 +4600,7 @@ func (recv PtrSliceNodesStruct) DecodeFrom(data []byte) (result PtrSliceNodesStr
 					slab0[len(slab0)-1], _n, err = slab0[len(slab0)-1].DecodeFrom(data[i:])
 					i += _n
 					if err != nil {
-						return result, i, decode.NewParseErr("nodes", i, err)
+						return result, i, decode.NewParseErrShift("nodes", i, _n, err)
 					}
 					result.Nodes = append(result.Nodes, &slab0[len(slab0)-1])
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -4999,7 +4999,7 @@ func (recv PtrSliceStruct) DecodeFrom(data []byte) (result PtrSliceStruct, i int
 					slab0[len(slab0)-1], _n, err = slab0[len(slab0)-1].DecodeFrom(data[i:])
 					i += _n
 					if err != nil {
-						return result, i, decode.NewParseErr("items", i, err)
+						return result, i, decode.NewParseErrShift("items", i, _n, err)
 					}
 					result.Items = append(result.Items, &slab0[len(slab0)-1])
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -5075,7 +5075,7 @@ func (recv PtrSliceStruct) DecodeFrom(data []byte) (result PtrSliceStruct, i int
 					slab0[len(slab0)-1], _n, err = slab0[len(slab0)-1].DecodeFrom(data[i:])
 					i += _n
 					if err != nil {
-						return result, i, decode.NewParseErr("nodes", i, err)
+						return result, i, decode.NewParseErrShift("nodes", i, _n, err)
 					}
 					result.Nodes = append(result.Nodes, &slab0[len(slab0)-1])
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -5140,7 +5140,7 @@ func (recv PtrSliceStruct) DecodeFrom(data []byte) (result PtrSliceStruct, i int
 					slab0[idx0], _n, err = slab0[idx0].DecodeFrom(data[i:])
 					i += _n
 					if err != nil {
-						return result, i, decode.NewParseErr("tuple", i, err)
+						return result, i, decode.NewParseErrShift("tuple", i, _n, err)
 					}
 					result.Tuple[idx0] = &slab0[idx0]
 					idx0++
@@ -6110,7 +6110,7 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 						v, _n, err = v.DecodeFrom(data[i:])
 						i += _n
 						if err != nil {
-							return result, i, decode.NewParseErr("mpa.value", i, err)
+							return result, i, decode.NewParseErrShift("mpa.value", i, _n, err)
 						}
 						result.MPA[mk] = new(v)
 					}
@@ -7941,7 +7941,7 @@ func (recv PtrContainers) DecodeFrom(data []byte) (result PtrContainers, i int, 
 						v[len(v)-1], _n, err = v[len(v)-1].DecodeFrom(data[i:])
 						i += _n
 						if err != nil {
-							return result, i, decode.NewParseErr("elems", i, err)
+							return result, i, decode.NewParseErrShift("elems", i, _n, err)
 						}
 						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
@@ -8329,7 +8329,7 @@ func (recv PtrContainers) DecodeFrom(data []byte) (result PtrContainers, i int, 
 						mv, _n, err = mv.DecodeFrom(data[i:])
 						i += _n
 						if err != nil {
-							return result, i, decode.NewParseErr("melem", i, err)
+							return result, i, decode.NewParseErrShift("melem", i, _n, err)
 						}
 						v[mk] = mv
 						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {

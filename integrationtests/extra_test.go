@@ -600,13 +600,43 @@ func TestMapVals_DedicatedKindValues(t *testing.T) {
 // "addr.zipCode".
 func TestNestedValidationPath_Complete(t *testing.T) {
 	t.Parallel()
-	_, _, err := PtrAddrStruct{}.DecodeFrom([]byte(`{"addr":{"street":"s","city":"c","zipCode":"123"}}`))
+	in := []byte(`{"addr":{"street":"s","city":"c","zipCode":"123"}}`)
+	_, _, err := PtrAddrStruct{}.DecodeFrom(in)
 	var le *validation.LenError
 	if !errors.As(err, &le) {
 		t.Fatalf("got %v, want *validation.LenError", err)
 	}
 	if len(le.Path) != 2 || le.Path[0] != "addr" || le.Path[1] != "zipCode" {
 		t.Errorf("Path = %v, want [addr zipCode]", le.Path)
+	}
+	// Pos is a FULL-payload offset (cursor just past the offending value) on
+	// the bytes path too: the nested decoder ran on data[i:], and the call
+	// site rebases its sub-slice-relative positions (NewParseErrShift).
+	if want := bytes.Index(in, []byte(`"123"`)) + len(`"123"`); le.Pos != want {
+		t.Errorf("bytes Pos = %d, want %d (full-payload offset)", le.Pos, want)
+	}
+	var s scan.Stream
+	s.Reset(bytes.NewReader(in), make([]byte, 0, 8))
+	_, serr := PtrAddrStruct{}.DecodeFromStream(&s)
+	var sle *validation.LenError
+	if !errors.As(serr, &sle) {
+		t.Fatalf("stream: got %v, want *validation.LenError", serr)
+	}
+	if sle.Pos != le.Pos {
+		t.Errorf("stream Pos = %d, bytes Pos = %d — paths must agree", sle.Pos, le.Pos)
+	}
+
+	// Nested PARSE errors rebase the same way: Pos = the offending token's
+	// full-payload start, and the chained ParseError keeps the deeper (now
+	// rebased) position.
+	bad := []byte(`{"addr":{"street":"s","city":"c","zipCode":42}}`)
+	_, _, perr := PtrAddrStruct{}.DecodeFrom(bad)
+	var pe *decode.ParseError
+	if !errors.As(perr, &pe) {
+		t.Fatalf("got %v, want *decode.ParseError", perr)
+	}
+	if want := bytes.Index(bad, []byte(`42`)); pe.Pos != want {
+		t.Errorf("nested ParseError Pos = %d, want %d", pe.Pos, want)
 	}
 }
 

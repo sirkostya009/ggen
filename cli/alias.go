@@ -154,7 +154,7 @@ func renderAliasStructDecode(b *bytes.Buffer, s StructInfo, stream bool) {
 		fmt.Fprintf(b, `var u %[1]s
 v, _n, err := u.`+call+`
 i += _n
-if err != nil { return result, i, decode.NewParseErr("", i, err) }
+if err != nil { return result, i, decode.NewParseErrShift("", i, _n, err) }
 result = %[2]s(v)
 return result, i, nil
 `, s.AliasUnderlying, s.Name)

@@ -3,6 +3,7 @@ package integrationtests
 //go:generate ../ggen $GOFILE
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"slices"
@@ -232,6 +233,15 @@ func TestNestedMultierr_drainsInnerValidationErrors(t *testing.T) {
 		if buckets[want] == 0 {
 			t.Errorf("missing %q leaf (chaining/grouping broken): %v", want, leaves)
 		}
+	}
+	// Drained inner leaves carry FULL-payload offsets — the multierr drain
+	// rebases each via validation.ShiftPos at the nested call site.
+	var ce *validation.ContainsError
+	if !errors.As(err, &ce) {
+		t.Fatalf("no ContainsError leaf: %v", leaves)
+	}
+	if want := bytes.Index(in, []byte(`"abcdef"`)) + len(`"abcdef"`); ce.Pos != want {
+		t.Errorf("inner leaf Pos = %d, want %d (full-payload offset)", ce.Pos, want)
 	}
 }
 

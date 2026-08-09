@@ -471,7 +471,7 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 					result.Children[len(result.Children)-1], _n, err = result.Children[len(result.Children)-1].decodeFromDepth(data[i:], _depth+1)
 					i += _n
 					if err != nil {
-						return result, i, decode.NewParseErr("children", i, err)
+						return result, i, decode.NewParseErrShift("children", i, _n, err)
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++

@@ -134,7 +134,7 @@ func (recv CopyDoc) decodeFromDepth(data []byte, _depth int) (result CopyDoc, i 
 					result.Children[len(result.Children)-1], _n, err = result.Children[len(result.Children)-1].decodeFromDepth(data[i:], _depth+1)
 					i += _n
 					if err != nil {
-						return result, i, decode.NewParseErr("children", i, err)
+						return result, i, decode.NewParseErrShift("children", i, _n, err)
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -360,7 +360,7 @@ func (recv CopyDoc) decodeFromDepth(data []byte, _depth int) (result CopyDoc, i 
 					slab0[len(slab0)-1], _n, err = slab0[len(slab0)-1].DecodeFrom(data[i:])
 					i += _n
 					if err != nil {
-						return result, i, decode.NewParseErr("refs", i, err)
+						return result, i, decode.NewParseErrShift("refs", i, _n, err)
 					}
 					result.Refs = append(result.Refs, &slab0[len(slab0)-1])
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {

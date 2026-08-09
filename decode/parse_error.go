@@ -44,6 +44,24 @@ func (e *ParseError) Error() string {
 
 func (e *ParseError) Unwrap() error { return e.Err }
 
+// AddPos rebases the error's byte offset by d (bytes-path nested-decode
+// rebase — see NewParseErrShift).
+func (e *ParseError) AddPos(d int) { e.Pos += d }
+
+// NewParseErrShift is NewParseErr for the bytes path's nested-decode sites.
+// The callee ran on data[pos-n:] (n = bytes it consumed before stopping), so
+// a positional error it returned — *ParseError, validation typed errors,
+// validation.Errors — carries sub-slice-relative offsets; rebase by the
+// value start before wrapping so every Pos is a full-payload offset, as
+// documented. Sentinels and foreign errors carry no Pos and pass through.
+// Stream call sites keep NewParseErr: stream positions are already global.
+func NewParseErrShift(segment string, pos, n int, err error) error {
+	if ap, ok := err.(interface{ AddPos(int) }); ok {
+		ap.AddPos(pos - n)
+	}
+	return NewParseErr(segment, pos, err)
+}
+
 // NewParseErr wraps an error returned by a generated decoder:
 //
 //   - validation.Error  → pass through (stays reachable via errors.As)

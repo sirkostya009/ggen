@@ -49,7 +49,7 @@ func UnmarshalSlice[T Decoder[T]](data []byte) ([]T, error) {
 		var zero T
 		v, n, err := zero.DecodeFrom(data[i:])
 		if err != nil {
-			return nil, NewParseErr(arrField(len(result)), i, err)
+			return nil, NewParseErrShift(arrField(len(result)), i+n, n, err)
 		}
 		result = append(result, v)
 		i = scan.SkipSpace(data, i+n)

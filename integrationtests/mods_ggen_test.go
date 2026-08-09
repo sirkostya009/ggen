@@ -1355,9 +1355,9 @@ func (recv NestedMultierrStruct) DecodeFrom(data []byte) (result NestedMultierrS
 				i += _n
 				if err != nil {
 					if verr, ok := err.(validation.Error); ok {
-						errs.Append("inner", verr)
+						errs.Append("inner", validation.ShiftPos(verr, i-_n))
 					} else {
-						return result, i, decode.NewParseErr("inner", i, err)
+						return result, i, decode.NewParseErrShift("inner", i, _n, err)
 					}
 				}
 			}

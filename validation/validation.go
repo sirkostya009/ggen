@@ -81,6 +81,7 @@ func (e *RequiredError) Error() string {
 }
 func (*RequiredError) Rule() Rule             { return Required }
 func (e *RequiredError) PrependPath(s string) { e.Path = prepend(e.Path, s) }
+func (e *RequiredError) AddPos(d int)       { e.Pos += d }
 
 type NotEmptyError struct {
 	Pos  int
@@ -92,6 +93,7 @@ func (e *NotEmptyError) Error() string {
 }
 func (*NotEmptyError) Rule() Rule             { return NotEmpty }
 func (e *NotEmptyError) PrependPath(s string) { e.Path = prepend(e.Path, s) }
+func (e *NotEmptyError) AddPos(d int)       { e.Pos += d }
 
 // --- length ---
 
@@ -107,6 +109,7 @@ func (e *LenError) Error() string {
 }
 func (*LenError) Rule() Rule             { return Len }
 func (e *LenError) PrependPath(s string) { e.Path = prepend(e.Path, s) }
+func (e *LenError) AddPos(d int)       { e.Pos += d }
 
 type MinLenError struct {
 	Pos   int
@@ -120,6 +123,7 @@ func (e *MinLenError) Error() string {
 }
 func (*MinLenError) Rule() Rule             { return MinLen }
 func (e *MinLenError) PrependPath(s string) { e.Path = prepend(e.Path, s) }
+func (e *MinLenError) AddPos(d int)       { e.Pos += d }
 
 type MaxLenError struct {
 	Pos   int
@@ -133,6 +137,7 @@ func (e *MaxLenError) Error() string {
 }
 func (*MaxLenError) Rule() Rule             { return MaxLen }
 func (e *MaxLenError) PrependPath(s string) { e.Path = prepend(e.Path, s) }
+func (e *MaxLenError) AddPos(d int)       { e.Pos += d }
 
 // --- runes ---
 
@@ -148,6 +153,7 @@ func (e *RunesError) Error() string {
 }
 func (*RunesError) Rule() Rule             { return Runes }
 func (e *RunesError) PrependPath(s string) { e.Path = prepend(e.Path, s) }
+func (e *RunesError) AddPos(d int)       { e.Pos += d }
 
 type MinRunesError struct {
 	Pos   int
@@ -161,6 +167,7 @@ func (e *MinRunesError) Error() string {
 }
 func (*MinRunesError) Rule() Rule             { return MinRunes }
 func (e *MinRunesError) PrependPath(s string) { e.Path = prepend(e.Path, s) }
+func (e *MinRunesError) AddPos(d int)       { e.Pos += d }
 
 type MaxRunesError struct {
 	Pos   int
@@ -174,6 +181,7 @@ func (e *MaxRunesError) Error() string {
 }
 func (*MaxRunesError) Rule() Rule             { return MaxRunes }
 func (e *MaxRunesError) PrependPath(s string) { e.Path = prepend(e.Path, s) }
+func (e *MaxRunesError) AddPos(d int)       { e.Pos += d }
 
 // --- numeric range. Limit is float64; Value holds the originating numeric type.
 
@@ -189,6 +197,7 @@ func (e *GTError) Error() string {
 }
 func (*GTError) Rule() Rule             { return GT }
 func (e *GTError) PrependPath(s string) { e.Path = prepend(e.Path, s) }
+func (e *GTError) AddPos(d int)       { e.Pos += d }
 
 type GTEError struct {
 	Pos   int
@@ -202,6 +211,7 @@ func (e *GTEError) Error() string {
 }
 func (*GTEError) Rule() Rule             { return GTE }
 func (e *GTEError) PrependPath(s string) { e.Path = prepend(e.Path, s) }
+func (e *GTEError) AddPos(d int)       { e.Pos += d }
 
 type LTError struct {
 	Pos   int
@@ -215,6 +225,7 @@ func (e *LTError) Error() string {
 }
 func (*LTError) Rule() Rule             { return LT }
 func (e *LTError) PrependPath(s string) { e.Path = prepend(e.Path, s) }
+func (e *LTError) AddPos(d int)       { e.Pos += d }
 
 type LTEError struct {
 	Pos   int
@@ -228,6 +239,7 @@ func (e *LTEError) Error() string {
 }
 func (*LTEError) Rule() Rule             { return LTE }
 func (e *LTEError) PrependPath(s string) { e.Path = prepend(e.Path, s) }
+func (e *LTEError) AddPos(d int)       { e.Pos += d }
 
 // --- equality. Want/Value are `any` to cover both string and numeric fields.
 
@@ -243,6 +255,7 @@ func (e *EqError) Error() string {
 }
 func (*EqError) Rule() Rule             { return Eq }
 func (e *EqError) PrependPath(s string) { e.Path = prepend(e.Path, s) }
+func (e *EqError) AddPos(d int)       { e.Pos += d }
 
 type NeqError struct {
 	Pos   int
@@ -256,6 +269,7 @@ func (e *NeqError) Error() string {
 }
 func (*NeqError) Rule() Rule             { return Neq }
 func (e *NeqError) PrependPath(s string) { e.Path = prepend(e.Path, s) }
+func (e *NeqError) AddPos(d int)       { e.Pos += d }
 
 // --- oneof. Allowed points to a frozen package-level slice (not owned by the error).
 
@@ -272,6 +286,7 @@ func (e *OneOfError) Error() string {
 }
 func (*OneOfError) Rule() Rule             { return OneOf }
 func (e *OneOfError) PrependPath(s string) { e.Path = prepend(e.Path, s) }
+func (e *OneOfError) AddPos(d int)       { e.Pos += d }
 
 // --- format predicates ---
 
@@ -288,6 +303,7 @@ func (e *URLError) Error() string {
 func (*URLError) Rule() Rule             { return URL }
 func (e *URLError) Unwrap() error        { return e.Cause }
 func (e *URLError) PrependPath(s string) { e.Path = prepend(e.Path, s) }
+func (e *URLError) AddPos(d int)       { e.Pos += d }
 
 type AlphanumError struct {
 	Pos   int
@@ -300,6 +316,7 @@ func (e *AlphanumError) Error() string {
 }
 func (*AlphanumError) Rule() Rule             { return Alphanum }
 func (e *AlphanumError) PrependPath(s string) { e.Path = prepend(e.Path, s) }
+func (e *AlphanumError) AddPos(d int)       { e.Pos += d }
 
 type NumericError struct {
 	Pos   int
@@ -312,6 +329,7 @@ func (e *NumericError) Error() string {
 }
 func (*NumericError) Rule() Rule             { return Numeric }
 func (e *NumericError) PrependPath(s string) { e.Path = prepend(e.Path, s) }
+func (e *NumericError) AddPos(d int)       { e.Pos += d }
 
 type LowerError struct {
 	Pos   int
@@ -324,6 +342,7 @@ func (e *LowerError) Error() string {
 }
 func (*LowerError) Rule() Rule             { return Lower }
 func (e *LowerError) PrependPath(s string) { e.Path = prepend(e.Path, s) }
+func (e *LowerError) AddPos(d int)       { e.Pos += d }
 
 type UpperError struct {
 	Pos   int
@@ -336,6 +355,7 @@ func (e *UpperError) Error() string {
 }
 func (*UpperError) Rule() Rule             { return Upper }
 func (e *UpperError) PrependPath(s string) { e.Path = prepend(e.Path, s) }
+func (e *UpperError) AddPos(d int)       { e.Pos += d }
 
 type HexadecimalError struct {
 	Pos   int
@@ -348,6 +368,7 @@ func (e *HexadecimalError) Error() string {
 }
 func (*HexadecimalError) Rule() Rule             { return Hexadecimal }
 func (e *HexadecimalError) PrependPath(s string) { e.Path = prepend(e.Path, s) }
+func (e *HexadecimalError) AddPos(d int)       { e.Pos += d }
 
 // --- prefix/suffix/contains ---
 
@@ -362,6 +383,7 @@ func (e *StartsError) Error() string {
 }
 func (*StartsError) Rule() Rule             { return Starts }
 func (e *StartsError) PrependPath(s string) { e.Path = prepend(e.Path, s) }
+func (e *StartsError) AddPos(d int)       { e.Pos += d }
 
 type EndsError struct {
 	Pos         int
@@ -374,6 +396,7 @@ func (e *EndsError) Error() string {
 }
 func (*EndsError) Rule() Rule             { return Ends }
 func (e *EndsError) PrependPath(s string) { e.Path = prepend(e.Path, s) }
+func (e *EndsError) AddPos(d int)       { e.Pos += d }
 
 type ContainsError struct {
 	Pos         int
@@ -386,6 +409,7 @@ func (e *ContainsError) Error() string {
 }
 func (*ContainsError) Rule() Rule             { return Contains }
 func (e *ContainsError) PrependPath(s string) { e.Path = prepend(e.Path, s) }
+func (e *ContainsError) AddPos(d int)       { e.Pos += d }
 
 // --- multiple ---
 
@@ -401,6 +425,7 @@ func (e *MultipleError) Error() string {
 }
 func (*MultipleError) Rule() Rule             { return Multiple }
 func (e *MultipleError) PrependPath(s string) { e.Path = prepend(e.Path, s) }
+func (e *MultipleError) AddPos(d int)       { e.Pos += d }
 
 // --- key violations ---
 
@@ -414,6 +439,7 @@ func (e *DuplicateKeyError) Error() string {
 }
 func (*DuplicateKeyError) Rule() Rule             { return DuplicateKey }
 func (e *DuplicateKeyError) PrependPath(s string) { e.Path = prepend(e.Path, s) }
+func (e *DuplicateKeyError) AddPos(d int)       { e.Pos += d }
 
 type UnknownKeyError struct {
 	Pos  int
@@ -425,6 +451,7 @@ func (e *UnknownKeyError) Error() string {
 }
 func (*UnknownKeyError) Rule() Rule             { return UnknownKey }
 func (e *UnknownKeyError) PrependPath(s string) { e.Path = prepend(e.Path, s) }
+func (e *UnknownKeyError) AddPos(d int)       { e.Pos += d }
 
 // --- custom ---
 
@@ -448,6 +475,7 @@ func (e *CustomError) Error() string {
 func (*CustomError) Rule() Rule             { return Custom }
 func (e *CustomError) Unwrap() error        { return e.Cause }
 func (e *CustomError) PrependPath(s string) { e.Path = prepend(e.Path, s) }
+func (e *CustomError) AddPos(d int)       { e.Pos += d }
 
 // PredicateError is the failure for a custom bool-form validator
 // (`func(T) bool`). Name is the func identifier; Msg is the optional inline tag
@@ -468,6 +496,7 @@ func (e *PredicateError) Error() string {
 }
 func (*PredicateError) Rule() Rule             { return Predicate }
 func (e *PredicateError) PrependPath(s string) { e.Path = prepend(e.Path, s) }
+func (e *PredicateError) AddPos(d int)       { e.Pos += d }
 
 // --- aggregate ---
 
@@ -496,6 +525,27 @@ func (es Errors) Error() string {
 func (Errors) Rule() Rule { return MultiErr }
 
 // PrependPath propagates the segment into every leaf.
+// AddPos rebases every leaf's byte offset by d — the bytes-path nested-
+// decode rebase (see ShiftPos).
+func (es Errors) AddPos(d int) {
+	for _, e := range es {
+		if ap, ok := e.(interface{ AddPos(int) }); ok {
+			ap.AddPos(d)
+		}
+	}
+}
+
+// ShiftPos rebases e's Pos by d when e carries one, and returns e. Generated
+// bytes-path code calls it when draining a nested decoder's errors: the
+// callee ran on data[start:], so its positions are sub-slice-relative until
+// shifted by start. Stream positions are already payload-global.
+func ShiftPos(e Error, d int) Error {
+	if ap, ok := e.(interface{ AddPos(int) }); ok {
+		ap.AddPos(d)
+	}
+	return e
+}
+
 func (es Errors) PrependPath(segment string) {
 	for _, e := range es {
 		if p, ok := e.(interface{ PrependPath(string) }); ok {

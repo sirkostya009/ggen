@@ -501,7 +501,7 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 						result.Children[len(result.Children)-1], _n, err = result.Children[len(result.Children)-1].decodeFromDepth(data[i:], _depth+1)
 						i += _n
 						if err != nil {
-							return result, i, decode.NewParseErr("children", i, err)
+							return result, i, decode.NewParseErrShift("children", i, _n, err)
 						}
 						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
@@ -895,7 +895,7 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 			v, _n, err = v.DecodeFrom(data[i:])
 			i += _n
 			if err != nil {
-				return result, i, decode.NewParseErr("parent", i, err)
+				return result, i, decode.NewParseErrShift("parent", i, _n, err)
 			}
 			if result.Parent == nil {
 				result.Parent = new(v)
@@ -1071,7 +1071,7 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 						slab0[len(slab0)-1], _n, err = slab0[len(slab0)-1].DecodeFrom(data[i:])
 						i += _n
 						if err != nil {
-							return result, i, decode.NewParseErr("refs", i, err)
+							return result, i, decode.NewParseErrShift("refs", i, _n, err)
 						}
 						result.Refs = append(result.Refs, &slab0[len(slab0)-1])
 						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -2905,7 +2905,7 @@ func (recv CopyNode) decodeFromDepth(data []byte, _depth int) (result CopyNode, 
 						result.Children[len(result.Children)-1], _n, err = result.Children[len(result.Children)-1].decodeFromDepth(data[i:], _depth+1)
 						i += _n
 						if err != nil {
-							return result, i, decode.NewParseErr("children", i, err)
+							return result, i, decode.NewParseErrShift("children", i, _n, err)
 						}
 						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
@@ -3300,7 +3300,7 @@ func (recv CopyNode) decodeFromDepth(data []byte, _depth int) (result CopyNode, 
 			v, _n, err = v.DecodeFrom(data[i:])
 			i += _n
 			if err != nil {
-				return result, i, decode.NewParseErr("parent", i, err)
+				return result, i, decode.NewParseErrShift("parent", i, _n, err)
 			}
 			if result.Parent == nil {
 				result.Parent = new(v)
@@ -3478,7 +3478,7 @@ func (recv CopyNode) decodeFromDepth(data []byte, _depth int) (result CopyNode, 
 						slab0[len(slab0)-1], _n, err = slab0[len(slab0)-1].DecodeFrom(data[i:])
 						i += _n
 						if err != nil {
-							return result, i, decode.NewParseErr("refs", i, err)
+							return result, i, decode.NewParseErrShift("refs", i, _n, err)
 						}
 						result.Refs = append(result.Refs, &slab0[len(slab0)-1])
 						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {

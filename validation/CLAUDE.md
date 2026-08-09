@@ -37,10 +37,17 @@ the struct-literal opening brace (`withPos`/`posLit` in `generate.go`, wrapping
 the `onErr` closure plus the standalone required / array-len / dup-key /
 unknown-key literals):
 
-- **Bytes path** — the cursor `i`, a true index into `data`.
+- **Bytes path** — the cursor `i`, a true index into `data`. NESTED decoders
+  run on `data[i:]`, so their errors surface sub-slice-relative and the call
+  site rebases them by the value start (`decode.NewParseErrShift`, or
+  `validation.ShiftPos` in the multierr drain) — every error type carries
+  `AddPos(d int)` (sibling of `PrependPath`, `Errors` loops its leaves) to
+  make that mechanical. Pinned by `TestNestedValidationPath_Complete` +
+  `TestNestedMultierr_drainsInnerValidationErrors` (bytes == stream).
 - **Stream path** — `scan.Stream.Offset()` (= `consumed + Pos`), NOT the raw
   buffer-relative `s.Pos`: the stream buffer compacts as it slides, so only
-  `Offset()` stays relative to the whole payload.
+  `Offset()` stays relative to the whole payload. Already global at every
+  depth — stream call sites keep plain `NewParseErr`.
 
 Validation runs *after* the value is scanned, so `Pos` lands just past the
 offending value, not at its first byte. The aggregate `Errors` slice has no
