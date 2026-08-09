@@ -91,17 +91,37 @@ surface pinned by `Decoder[T]`).
   see cli/CLAUDE.md opt #50): permissive structs emit pre-validation code
   shapes + `validate=false` scanner calls; raw bytes pass through.
 
-- **Claw back EscapeHeavy's +12.7% (control-tight regression, and it flipped a
-  sonic loss from 0.93× → 0.82×).** Suspect is concrete: `stringSlow` now does
-  `rawHi |= c` PER BYTE inside the escape copy loop (to decide whether the
-  final `utf8.Valid(buf)` is needed), where the pre-escape prefix already gets
-  the bulk SWAR treatment via `ctrlOrHigh`. Fix shape: validate raw RUNS in
-  bulk instead of accumulating per byte — the loop copies byte-at-a-time
-  between escapes, so hoist each raw run (scan to the next `\` or `"` with
-  IndexByte, `ctrlOrHigh` the run, bulk-append it) rather than touching each
-  byte twice. That also restores bulk copying, which the current per-byte
-  append lost. Measure with the EscapeHeavy family (its avx512 control is
-  0.5% — the most trustworthy row in the suite).
+- **EscapeHeavy claw-back — SHIPPED, but NOT via the run hoist (2026-08).**
+  What landed is a loop-SHAPE change with no new kernel: `stringSlow`'s raw-byte
+  copy (bytes + stream) moved into a WINDOWED inner loop (`escRunWindow` = 16
+  bytes per trip) with the escape dispatch hoisted into the outer loop, so the
+  hot loop body is just classify-and-copy. Measured in situ (core-24 pinned,
+  500x, sonic control flat both fixtures): EscapeHeavy ggen **−5.9%**, ggen_copy
+  −5.8%, ggen_stream −6.0%; EscapeSparse ggen **−27.6%**, ggen_copy −26.2%,
+  ggen_stream −30.2%. B/op + allocs bit-identical. A new `EscapeSparse` bench
+  family (prose density, ~90 B runs) landed with it — the suite had only the
+  ~12%-density fixture, so half the tradeoff space was invisible.
+
+  The simdjson `parse_string` run hoist itself is **REJECTED, measured**: locate
+  the next `\`/`"` with IndexByte, `ctrlOrHigh` the run, bulk-append it →
+  EscapeHeavy **+73.6%** (24.3 → 44.0 µs), stream +65.9%. EscapeHeavy's runs are
+  4-5 bytes (`word`, `text`, `quo`, `te`, `x`, `yz`), so every run paid an
+  IndexByte + ctrlOrHigh + append CALL where the old loop ran 4 predictable
+  iterations; the escaped `\"` also defeats the memoized quote candidate,
+  forcing a re-locate per unit. A minimal variant (per-byte scan, defer only the
+  copy to one bulk append per run) still cost **+20.5%** — `memmove` overhead
+  beats per-byte append at 4-byte runs. A length-gated hybrid (per-byte window,
+  then bulk for the remainder) was also built and measured: it wins on sparse
+  but costs +6…18% on dense, i.e. strictly worse than the plain windowed loop
+  that shipped, which wins on BOTH. Bulk copying is dead here at every density —
+  same lesson as the SWAR int parse and the SWAR encode clean-span: **bulk
+  kernels lose below ~16 byte spans, and above that the windowed loop already
+  captures the win.** Don't retry any of the three shapes.
+
+  Note the original +12.7% regression's cause was the added `utf8.Valid` +
+  surrogate rejection, NOT the copy shape (EscapeHeavy's raw bytes are ASCII, so
+  the `rawHi` gate already skips that walk) — the −5.9% above is a separate win,
+  not a revert of that cost.
 
 ## Tooling / coverage
 

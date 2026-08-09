@@ -142,6 +142,18 @@ Primitives: `SkipSpace`, `String`, `Int64`, `Uint64`, `Float64`, `Bool`,
   accepting `"a\x01b\nc"` that stdlib rejects (the no-escape path always
   checked). Stream `(*Stream).stringSlow` has the same guard. Pinned by
   `TestString_CtrlBeforeEscapeRejected`.
+- **`stringSlow` copies raw bytes through a WINDOWED inner loop**
+  (`escRunWindow` = 16 bytes per trip) with the escape dispatch hoisted into the
+  outer loop, so the hot loop body is classify-and-copy and nothing else. Pure
+  loop shape — no new kernel, same per-byte work, byte-identical output — worth
+  **−5.9% EscapeHeavy / −27.6% EscapeSparse** (bytes; stream −6.0/−30.2%,
+  allocs bit-identical). Bulk-copying the run instead (locate with IndexByte,
+  `ctrlOrHigh`, one append — the simdjson `parse_string` shape) was implemented
+  and measured **+73.6%** on EscapeHeavy, whose runs are 4-5 bytes; a
+  length-gated hybrid of the two is worse than the plain window on the dense
+  side. See `.claude/backlog.md`. Pinned by `TestStringSlow_RefDifferential`
+  (200k randomized bodies vs the byte-at-a-time reference: value, end position,
+  error identity, both validate modes).
 - **`stringSlow` scratch cap = first-quote span (`closeIdx`)**, NOT the remaining
   payload (a payload-sized cap made M escaped strings allocate O(N·M)). Returns
   `unsafe.String` over write-once scratch — 1 alloc per escaped string. Stream

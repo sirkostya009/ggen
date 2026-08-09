@@ -40,6 +40,14 @@ type CopyEscapeDoc struct {
 // unescape path on every string field.
 var EscapeHeavyPayload []byte
 
+// EscapeSparsePayload — EscapeDoc with prose-shaped strings: long escape-free
+// runs (~90 B) punctuated by a single escape, the density real documents carry
+// (a quote or newline every sentence or two) as opposed to EscapeHeavy's
+// synthetic ~12%. Both rows are needed: the unescape loop's per-byte and bulk
+// arms are chosen by run LENGTH, so one fixture alone can only show half the
+// tradeoff.
+var EscapeSparsePayload []byte
+
 func init() {
 	// Escape-dense string — the raw-string backslashes ARE JSON escape sequences:
 	// two-char (\n \" \\), a BMP \uXXXX (é), and a surrogate pair (😀). ~5 escapes
@@ -48,4 +56,11 @@ func init() {
 	escUnit := "word\\ntext\\\"quo\\\\te\\u00e9x\\ud83d\\ude00yz"
 	esc := strings.Repeat(escUnit, 120)
 	EscapeHeavyPayload = []byte(`{"a":"` + esc + `","b":"` + esc + `","c":"` + esc + `","d":"` + esc + `"}`)
+
+	// ~90 raw bytes per escape (one \" and one \n per sentence pair), ~5 KiB
+	// per field like EscapeHeavy so the two rows are directly comparable.
+	sparseUnit := `The quick brown fox jumps over the lazy dog near the riverbank at dawn, ` +
+		`and it said \"hello\" to nobody in particular.\n`
+	sparse := strings.Repeat(sparseUnit, 42)
+	EscapeSparsePayload = []byte(`{"a":"` + sparse + `","b":"` + sparse + `","c":"` + sparse + `","d":"` + sparse + `"}`)
 }

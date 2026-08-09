@@ -45,7 +45,8 @@ The numbers below are for science only.
 - `bench/simple_test.go` — `BenchmarkNoAlloc_Unmarshal` + `_Reader`.
 - `bench/skip_test.go` — `BenchmarkSkipHeavy_Unmarshal` (compact/pretty
   envelope, ~100% skipped content via ignoreunknown).
-- `bench/escape_test.go` — `BenchmarkEscapeHeavy_Unmarshal` (escape-dense strings;
+- `bench/escape_test.go` — `BenchmarkEscapeHeavy_Unmarshal` +
+  `BenchmarkEscapeSparse_Unmarshal` (escape-dense strings;
   exercises the unescape path).
 
 ## What each bench family measures
@@ -92,6 +93,16 @@ The numbers below are for science only.
   produce the unescaped value, but sonic's escape handling still differs
   (ConfigFastest is lax) — read the sonic rows as context, not a like-for-like
   race; jsonv2 is the honest baseline.
+- **EscapeSparse** (`EscapeDoc` again, ~21 KiB, prose density: ~90 raw bytes per
+  escape instead of ~7) — the other end of the unescape axis. `stringSlow`
+  splits its work by raw-RUN length, so EscapeHeavy alone can only show half the
+  tradeoff: the 2026-08 windowed-copy-loop change reads −5.9% on Heavy but
+  −27.6% here, and the bulk-copy shapes it replaced won on this row while
+  costing +73% on Heavy (see `.claude/backlog.md`). Always move the two rows
+  together — a change that helps one can wreck the other. Its jsonv2 row is a
+  noisier control than Heavy's (drifted ~10% between two identical-binary
+  passes); the sonic rows held flat, so cross-check both before trusting a
+  delta.
 - **ValidationHeavy** (short fields) — per-field validation cost
   (`ggen_validated` vs `ggen_noval` + non-validating jsonv2/sonic/easyjson).
   **RuneGated** companion (~8 KB strings): one ggen row isolating opt #44's

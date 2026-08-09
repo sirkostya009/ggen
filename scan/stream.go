@@ -493,6 +493,25 @@ func (s *Stream) stringSlow(start, j int, validate bool) (string, error) {
 				return "", ErrUnterminated
 			}
 		}
+		// Raw bytes copy through a windowed inner loop, escape dispatch hoisted
+		// out — see the bytes-path stringSlow. Bounded by the buffered window
+		// too; a run reaching its edge resumes after the refill at the loop top.
+		we := min(j+escRunWindow, len(s.buf))
+		for j < we {
+			c := s.buf[j]
+			if c == '"' || c == '\\' {
+				break
+			}
+			if c < 0x20 {
+				return "", ErrBadString
+			}
+			rawHi |= c
+			buf = append(buf, c)
+			j++
+		}
+		if j >= len(s.buf) {
+			continue // refill at the loop top
+		}
 		c := s.buf[j]
 		if c == '"' {
 			// Escape outputs are valid encodings by construction (surrogates
@@ -586,12 +605,8 @@ func (s *Stream) stringSlow(start, j int, validate bool) (string, error) {
 			}
 			continue
 		}
-		if c < 0x20 {
-			return "", ErrBadString
-		}
-		rawHi |= c
-		buf = append(buf, c)
-		j++
+		// Neither '"' nor '\\': the inner loop stopped at the window bound
+		// mid-run, so the outer loop simply opens the next window.
 	}
 }
 
