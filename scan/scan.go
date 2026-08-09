@@ -636,12 +636,14 @@ var exactPow10 = [23]float64{
 	1e12, 1e13, 1e14, 1e15, 1e16, 1e17, 1e18, 1e19, 1e20, 1e21, 1e22,
 }
 
-// exactShort parses [-]digits[.digits] when the result is exact: mantissa
-// < 2^52 and ≤ 22 fractional digits, so mantissa and pow10 are both exact
-// floats and the single IEEE divide is correctly rounded — bit-identical to
-// strconv.ParseFloat (same argument as strconv's atof64exact). Exponents,
-// second dots, or wide mantissas return ok=false for the ParseFloat path.
-// Caller bounds len(s) ≤ 16, so uint64 accumulation cannot overflow.
+// exactShort parses [-]digits[.digits][eE[+-]digits] when the result is exact
+// (Clinger 1990): mantissa ≤ 2^53-1 makes float64(mant) exact, and
+// |exp - fracDigits| ≤ 22 makes the power of ten exact, so the single IEEE
+// multiply or divide is correctly rounded — bit-identical to
+// strconv.ParseFloat, which is itself correctly rounded (the same argument as
+// strconv's atof64exact, which gates one bit tighter at 2^52 than exactness
+// requires). Anything outside those bounds returns ok=false for the ParseFloat
+// path. Caller bounds len(s) ≤ 16, so neither accumulator can overflow.
 func exactShort(s []byte) (float64, bool) {
 	i := 0
 	neg := s[0] == '-'
@@ -649,7 +651,7 @@ func exactShort(s []byte) (float64, bool) {
 		i = 1
 	}
 	var mant uint64
-	digits, frac := 0, 0
+	digits, frac, exp := 0, 0, 0
 	sawDot := false
 	for ; i < len(s); i++ {
 		c := s[i]
@@ -665,14 +667,54 @@ func exactShort(s []byte) (float64, bool) {
 			sawDot = true
 			continue
 		}
-		return 0, false
+		if c != 'e' && c != 'E' {
+			return 0, false
+		}
+		i++
+		esign := 1
+		if i < len(s) && (s[i] == '+' || s[i] == '-') {
+			if s[i] == '-' {
+				esign = -1
+			}
+			i++
+		}
+		if i >= len(s) {
+			return 0, false
+		}
+		for ; i < len(s); i++ {
+			d := s[i]
+			if d < '0' || d > '9' {
+				return 0, false
+			}
+			exp = exp*10 + int(d-'0')
+		}
+		exp *= esign
+		break
 	}
-	if digits == 0 || mant>>52 != 0 {
+	// mant>>53 != 0 ⇒ ≥ 2^53, where float64(mant) would start rounding.
+	if digits == 0 || mant>>53 != 0 {
 		return 0, false
 	}
 	f := float64(mant)
-	if frac > 0 {
-		f /= exactPow10[frac]
+	// Exponent-free spans (the common case) keep the original shape: the ≤16 B
+	// gate caps frac at 15, so no range check is needed and the power-of-ten
+	// bookkeeping below stays off the hot path. exp == 0 lands here too —
+	// power is then just -frac.
+	if exp == 0 {
+		if frac > 0 {
+			f /= exactPow10[frac]
+		}
+	} else {
+		power := exp - frac
+		if power < -22 || power > 22 {
+			return 0, false
+		}
+		switch {
+		case power > 0:
+			f *= exactPow10[power]
+		case power < 0:
+			f /= exactPow10[-power]
+		}
 	}
 	if neg {
 		f = -f

@@ -53,16 +53,27 @@ Primitives: `SkipSpace`, `String`, `Int64`, `Uint64`, `Float64`, `Bool`,
   rule. Before #52 the skip path was strict while the value path was lax, so
   `{"raw":01}` rejected and `{"i":01}` accepted the same bytes.
 - **`Float64` exact-short fast path.** Spans ≤ 16 bytes of the form
-  `[-]digits[.digits]` skip `strconv.ParseFloat`'s re-scan: `exactShort`
-  accumulates a uint64 mantissa in one pass and, when `mant < 2^52` and
-  ≤ 22 fractional digits, both mantissa and `exactPow10[frac]` are exact
-  floats so the single IEEE divide is correctly rounded — bit-identical to
-  ParseFloat (same argument as strconv's `atof64exact`). Exponents, second
-  dots, or wide mantissas bail to ParseFloat. The ≤16 B gate structurally
+  `[-]digits[.digits][eE[+-]digits]` skip `strconv.ParseFloat`'s re-scan:
+  `exactShort` accumulates a uint64 mantissa in one pass and, when
+  `mant ≤ 2^53-1` and `|exp - fracDigits| ≤ 22`, both the mantissa and the
+  power of ten are exact floats so the single IEEE multiply/divide is
+  correctly rounded — bit-identical to ParseFloat, which is itself correctly
+  rounded (Clinger 1990; same argument as strconv's `atof64exact`, which
+  gates one bit tighter at 2^52 than exactness requires). Second dots, wider
+  mantissas, or `|power| > 22` bail to ParseFloat. The ≤16 B gate structurally
   excludes shortest-form 17-significant-digit floats (≥ 18 chars) — the
   input class that sank the ungated fused variant (see backlog). −7.6%
-  NoAlloc. Pinned by `TestExactShort_ParseFloatDifferential` (1M randomized
-  spans, bit-identity incl. -0 + accept/reject parity).
+  NoAlloc when it shipped; the 2026-08 exponent arm added −57% on
+  scientific-notation spans and −32% on a mixed number run
+  (`BenchmarkFloat64Forms`). Exponent-FREE spans branch on `exp == 0` and keep
+  the original instruction sequence — the ≤16 B gate caps `frac` at 15, so
+  they need no `|power|` range check; without that split the plain rows
+  measured +5%. Declining an out-of-range exponent costs ~1.6 ns before
+  ParseFloat takes over. Pinned by `TestExactShort_ParseFloatDifferential`
+  (1.5M randomized spans incl. a well-formed-exponent generator, bit-identity
+  incl. -0 + accept/reject parity, plus must-accept/must-decline assertions —
+  the differential only checks ACCEPTED results, so a fast path that silently
+  always bailed would otherwise pass it).
 - **`String()` zero-copy alias** via `unsafe.String(unsafe.SliceData(data[start:]),
   len)` when no escapes; falls back to `stringSlow` (`utf8.AppendRune` for `\uXXXX` +
   surrogates). `bytes.IndexByte` (SIMD) finds the closing `"`; a second IndexByte

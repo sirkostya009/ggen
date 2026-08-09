@@ -302,12 +302,39 @@ func TestExactShort_ParseFloatDifferential(t *testing.T) {
 				s, got, math.Float64bits(got), want, math.Float64bits(want))
 		}
 	}
+	// The differential below only checks ACCEPTED results, so pin that the
+	// arms actually accept: a fast path that silently always bails would
+	// pass every check() while quietly costing the win it exists for.
+	for _, s := range []string{
+		"1e5", "1e-5", "1.5e3", "-2.25e-4", "1e22", "1e-22", "1E7",
+		"9007199254740991", "4503599627370496", "12345.6789e-18",
+	} {
+		if _, ok := exactShort([]byte(s)); !ok {
+			t.Fatalf("exactShort(%q) declined — fast path should cover it", s)
+		}
+	}
+	// ...and that it still declines what it cannot do exactly.
+	for _, s := range []string{"1e23", "1e-23", "9007199254740993", "1e"} {
+		if _, ok := exactShort([]byte(s)); ok {
+			t.Fatalf("exactShort(%q) accepted — outside the exact range", s)
+		}
+	}
 	// Directed cases at the exactness boundaries.
 	for _, s := range []string{
 		"0", "-0", "0.0", "-0.0", "1.", "-1.", ".5", "-.5", ".",
 		"4503599627370495", "4503599627370496", // 2^52-1, 2^52
 		"9007199254740991", "999999999999999.9", "0.000000000000001",
 		"-4503599627370495", "1234567890.12345", "00000000000000.1",
+		// Mantissa gate: exact through 2^53-1, rounds from 2^53 up.
+		"9007199254740992", "9007199254740993", "-9007199254740991",
+		// Exponent arm — the |power| ≤ 22 boundary from both directions,
+		// with frac digits shifting power (power = exp - frac).
+		"1e0", "1e22", "1e23", "1e-22", "1e-23", "-1e22", "1E22",
+		"1e+22", "1e+23", "1.5e3", "1.5e-3", "0e0", "-0e0", "0.0e0",
+		"1.234567890123e5", "12345.6789e-18", "1.2345678e22",
+		"9007199254740991e-22", "1e-1", "5e-324", "1e308", "1e309",
+		// Malformed exponent forms exactShort must decline, not mis-parse.
+		"1e", "1e+", "1e-", "1ee5", "1e5.5", "1e5e5", "e5", "1.e5",
 	} {
 		check(s)
 	}
@@ -318,6 +345,42 @@ func TestExactShort_ParseFloatDifferential(t *testing.T) {
 			b[i] = chars[rng.Intn(len(chars))]
 		}
 		check(string(b))
+	}
+	// Well-formed exponent spans — the random alphabet above almost never
+	// assembles a valid one, so the Clinger arm would go uncovered. Exponents
+	// are drawn to straddle the |power| ≤ 22 acceptance boundary.
+	for range 500000 {
+		b := make([]byte, 0, 16)
+		if rng.Intn(4) == 0 {
+			b = append(b, '-')
+		}
+		for range 1 + rng.Intn(8) {
+			b = append(b, byte('0'+rng.Intn(10)))
+		}
+		if rng.Intn(2) == 0 {
+			b = append(b, '.')
+			for range 1 + rng.Intn(4) {
+				b = append(b, byte('0'+rng.Intn(10)))
+			}
+		}
+		if rng.Intn(8) == 0 {
+			b = append(b, 'E')
+		} else {
+			b = append(b, 'e')
+		}
+		switch rng.Intn(3) {
+		case 0:
+			b = append(b, '+')
+		case 1:
+			b = append(b, '-')
+		}
+		b = append(b, byte('0'+rng.Intn(10)))
+		if rng.Intn(2) == 0 {
+			b = append(b, byte('0'+rng.Intn(10)))
+		}
+		if len(b) <= 16 {
+			check(string(b))
+		}
 	}
 	// Digit-heavy spans (the alphabet above rarely forms long valid numbers).
 	for range 500000 {
