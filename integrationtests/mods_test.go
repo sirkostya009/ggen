@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sirkostya009/ggen/validation"
 	_ "github.com/sirkostya009/ggen/integrationtests/thirdparty"
+	"github.com/sirkostya009/ggen/validation"
 )
 
 // ModStruct exercises pipe mods: transforms applied after decode, before
@@ -338,5 +338,60 @@ func TestCaseValidators(t *testing.T) {
 	_, _, err = CaseRules{}.DecodeFrom([]byte(`{"slug":"ok","code":"AbC"}`))
 	if !errors.As(err, &ue) || ue.Value != "AbC" {
 		t.Errorf("want UpperError{AbC}, got %v", err)
+	}
+}
+
+// A NON-multierr nested struct returns at its first validation failure —
+// mid-value. The parent's multierr drain used to append that error and keep
+// parsing from the desynced cursor, so the inner object's remaining keys
+// were read as the PARENT's (a bogus `unknown key "b"`) and the parent's own
+// later failures vanished. The drain is now gated on the callee actually
+// consuming the value (i.e. being multierr itself).
+//
+//ggen:generate
+type DrainInner struct {
+	A string `json:"a" pipe:"minlen=3"`
+	B string `json:"b"`
+}
+
+//ggen:generate multierr
+type DrainInnerME struct {
+	A string `json:"a" pipe:"minlen=3"`
+	B string `json:"b"`
+}
+
+//ggen:generate multierr
+type DrainOuter struct {
+	I    DrainInner   `json:"i"`
+	IME  DrainInnerME `json:"ime"`
+	Name string       `json:"name" pipe:"minlen=2"`
+	Tail int          `json:"tail" pipe:"lte=10"`
+}
+
+func TestMultierr_NoCursorDesyncOnSingleErrorCallee(t *testing.T) {
+	t.Parallel()
+	// Single-error callee: its failure stops the parse cleanly. No key of the
+	// INNER object may surface as an unknown key of the OUTER.
+	_, _, err := DrainOuter{}.DecodeFrom([]byte(`{"i":{"a":"x","b":"bee"},"name":"","tail":99}`))
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	if msg := err.Error(); strings.Contains(msg, "unknown key") ||
+		strings.Contains(msg, "invalid object") || strings.Contains(msg, "invalid array") {
+		t.Errorf("cursor desync artifact: %v", msg)
+	}
+	if _, ok := errors.AsType[*validation.MinLenError](err); !ok {
+		t.Errorf("inner failure not reported: %v", err)
+	}
+
+	// A multierr callee DOES consume the whole value, so the parent still
+	// collects its own field failures alongside the inner one.
+	_, _, err = DrainOuter{}.DecodeFrom([]byte(`{"ime":{"a":"x","b":"bee"},"name":"","tail":99}`))
+	errs, ok := err.(validation.Errors)
+	if !ok {
+		t.Fatalf("want validation.Errors, got %T: %v", err, err)
+	}
+	if len(errs) < 3 {
+		t.Errorf("got %d leaves, want >= 3 (ime.a + name + tail): %v", len(errs), errs)
 	}
 }

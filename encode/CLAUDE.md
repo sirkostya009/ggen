@@ -174,9 +174,14 @@ that would otherwise catch them:
 3. **Homogeneous string-keyed primitive maps** (`map[string]int*`/`uint*`/
    `float*`/`bool`/`string`/`any`) → generic helpers (`appendMapInt[V]`,
    `appendSliceFloat[V]`, …): one strconv per entry, no reflect.
-4. **Concrete stdlib hooks** — `json.RawMessage` (verbatim), `time.Time`
-   (AppendText), pointer-to-primitive (`*string`/`*bool`/`*int*`/`*uint*`/
-   `*float*`, nil → `null`). MUST sit before `case json.Marshaler`.
+4. **Concrete stdlib hooks** — `json.RawMessage` (verbatim), `big.Int`/`*big.Int`
+   (bare digits), `time.Time` (AppendText), pointer-to-primitive
+   (`*string`/`*bool`/`*int*`/`*uint*`/`*float*`, nil → `null`). MUST sit
+   before `case json.Marshaler`. **`big.Int` is there because go1.24 gave it an
+   `AppendText`**, so the `encoding.TextAppender` dispatch started QUOTING its
+   digits while v1, jsonv2 and ggen's own `KindBigInt` field wire all emit a
+   bare number — exactly the hazard this ordering rule exists for.
+   `big.Float`/`big.Rat` need no case: their text form IS their quoted wire.
 5. **Interface fallbacks** — ggen `Marshaler` / `json.Marshaler` /
    `encoding.TextAppender` / `encoding.TextMarshaler`.
 6. **Reflection** — slices/arrays/maps/pointers/structs (json-tag parsing for
@@ -184,6 +189,14 @@ that would otherwise catch them:
    path. The `reflect.Map` walk reuses two addressable scratch `reflect.Value`s
    via `Value.SetIterKey`/`SetIterValue` (vs `iter.Key()`/`iter.Value()` which
    allocate a fresh Value per entry). Only `any` fields reach this.
+
+### `,string` on `json.Number`
+
+`quotableKind` gates `,string` to numeric reflect kinds, but `json.Number` is a
+named STRING whose wire shape is a NUMBER — the one string kind both stdlib
+versions still quote (unlike bool, which jsonv2 deliberately stopped quoting).
+It is allowed through by type identity, not kind. Pinned by
+`TestAppendAny_NumberStringTag`.
 
 ### `usenumber` mode
 

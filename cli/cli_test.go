@@ -536,6 +536,43 @@ type Tagged struct {
 		mustHaveFile(t, filepath.Join(b, "b_ggen.go"))
 	})
 
+	t.Run("MultipleTargets_AllProcessed", func(t *testing.T) {
+		t.Parallel()
+		// Every positional is its own target in dir/pattern mode (like `go
+		// build ./a ./b`). They used to be silently dropped after the first,
+		// so the repo's own `ggen ./decode/... ./encode/... ./scan/...` regen
+		// line only ever visited decode.
+		base := t.TempDir()
+		writeGoMod(t, base, "multitarget")
+		for _, name := range []string{"a", "b", "c"} {
+			writeFixture(t, filepath.Join(base, name, "msg.go"),
+				strings.ReplaceAll(strings.ReplaceAll(minimalStruct, "fixture", name), "Msg", "Msg"+strings.ToUpper(name)))
+		}
+		if out, err := runCLI(t, bin, base, "./a", "./b/...", "./c"); err != nil {
+			t.Fatalf("ggen ./a ./b/... ./c: %v\n%s", err, out)
+		}
+		for _, name := range []string{"a", "b", "c"} {
+			mustHaveFile(t, filepath.Join(base, name, name+"_ggen.go"))
+		}
+	})
+
+	t.Run("MultipleTargets_RejectsOutFlag", func(t *testing.T) {
+		t.Parallel()
+		base := t.TempDir()
+		writeGoMod(t, base, "multiout")
+		for _, name := range []string{"a", "b"} {
+			writeFixture(t, filepath.Join(base, name, "msg.go"),
+				strings.ReplaceAll(strings.ReplaceAll(minimalStruct, "fixture", name), "Msg", "Msg"+strings.ToUpper(name)))
+		}
+		out, err := runCLI(t, bin, base, "-o", "out.go", "./a", "./b")
+		if err == nil {
+			t.Fatalf("expected rejection of -o with multiple targets:\n%s", out)
+		}
+		if !strings.Contains(out, "multiple targets") {
+			t.Errorf("diagnostic missing:\n%s", out)
+		}
+	})
+
 	t.Run("WalkStopsAtSubModuleBoundary", func(t *testing.T) {
 		t.Parallel()
 		// `ggen ./...` is module-scoped: a subdirectory with its own go.mod
@@ -1859,6 +1896,10 @@ type Msg struct {
 		// Each entry runs ggen on a single-file fixture; the CLI must exit
 		// non-zero and the diagnostic must contain wantDiag.
 		cases := []bad{
+			// ----- unreadable tags (silently dropped every rule before) -----
+			{"pipe_tag_bad_escape", "S string", `json:"s" pipe:"trim replace='don\'t'|x notempty"`, "tag is present but unreadable"},
+			{"json_tag_bad_escape", "S string", `json:"s\'x"`, "tag is present but unreadable"},
+
 			// ----- json tag grammar (jsonv2 parity) -----
 			{"dash_with_options", "F string", `json:"-,"`, `use json:"-" to ignore the field`},
 			{"trailing_comma_tag", "F string", `json:"f,"`, "empty option"},

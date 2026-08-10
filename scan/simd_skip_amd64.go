@@ -201,7 +201,14 @@ func skipStringAVX512(data []byte, i int) (int, error) {
 
 // SkipValueAVX is SkipValue over the fused AVX skip tree.
 func SkipValueAVX(data []byte, i int) (int, error) {
-	return skipValueAVX(data, i, 0)
+	// Position normalized to 0 on error, matching [SkipValue]: the tiers
+	// delegate to the shared scalar skipNumber/skipString, which preserve
+	// their give-up offset for skipValueAt's truncated-vs-malformed test.
+	end, err := skipValueAVX(data, i, 0)
+	if err != nil {
+		return 0, err
+	}
+	return end, nil
 }
 
 func skipValueAVX(data []byte, i, depth int) (int, error) {
@@ -300,7 +307,14 @@ func skipObjectAVX(data []byte, i, depth int) (int, error) {
 
 // SkipValueAVX2 is SkipValue over the fused AVX2 skip tree.
 func SkipValueAVX2(data []byte, i int) (int, error) {
-	return skipValueAVX2(data, i, 0)
+	// Position normalized to 0 on error, matching [SkipValue]: the tiers
+	// delegate to the shared scalar skipNumber/skipString, which preserve
+	// their give-up offset for skipValueAt's truncated-vs-malformed test.
+	end, err := skipValueAVX2(data, i, 0)
+	if err != nil {
+		return 0, err
+	}
+	return end, nil
 }
 
 func skipValueAVX2(data []byte, i, depth int) (int, error) {
@@ -399,7 +413,14 @@ func skipObjectAVX2(data []byte, i, depth int) (int, error) {
 
 // SkipValueAVX512 is SkipValue over the fused AVX-512 skip tree.
 func SkipValueAVX512(data []byte, i int) (int, error) {
-	return skipValueAVX512(data, i, 0)
+	// Position normalized to 0 on error, matching [SkipValue]: the tiers
+	// delegate to the shared scalar skipNumber/skipString, which preserve
+	// their give-up offset for skipValueAt's truncated-vs-malformed test.
+	end, err := skipValueAVX512(data, i, 0)
+	if err != nil {
+		return 0, err
+	}
+	return end, nil
 }
 
 func skipValueAVX512(data []byte, i, depth int) (int, error) {

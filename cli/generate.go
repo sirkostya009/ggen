@@ -40,6 +40,26 @@ func putSmall(b *bytes.Buffer) { smallPool.Put(b) }
 // alongside generatedTypes; computed from the bucket as a fallback.
 var cyclicTypes map[string]struct{}
 
+// multiErrTypes marks generated structs whose decoders ACCUMULATE validation
+// failures (multierr) and therefore always consume the whole value before
+// returning. A parent's multierr drain may only continue past a nested
+// decode's validation error when the callee is in this set — a single-error
+// callee returns mid-value, so continuing would parse from a desynced cursor
+// (bogus ErrBadArray/ErrBadObject masking the real failure, or silently
+// swallowed trailing fields). Seeded alongside generatedTypes.
+var multiErrTypes map[string]struct{}
+
+// seedMultiErrTypes fills multiErrTypes from the pass's structs.
+func seedMultiErrTypes(structs []StructInfo) map[string]struct{} {
+	out := make(map[string]struct{}, len(structs))
+	for _, s := range structs {
+		if s.MultiErr {
+			out[s.Name] = struct{}{}
+		}
+	}
+	return out
+}
+
 var goIdentRe = regexp.MustCompile(`[A-Za-z_][A-Za-z0-9_]*`)
 
 // computeCyclicTypes over-approximates the reference graph by scraping type
@@ -143,6 +163,9 @@ func generateTo(w io.Writer, pkg, scope string, structs []StructInfo) error {
 			generatedTypes[s.Name] = struct{}{}
 		}
 		seedNamedKinds(structs)
+	}
+	if multiErrTypes == nil {
+		multiErrTypes = seedMultiErrTypes(structs)
 	}
 	if cyclicTypes == nil {
 		cyclicTypes = computeCyclicTypes(structs)
@@ -420,6 +443,10 @@ func scanBodiesForStdImports(bodies [][]byte, add func(string)) {
 		// the body-scan reliably adds the import iff the token is present
 		// (covers alias-only files the struct-walk above skips).
 		{[]byte("decode."), "github.com/sirkostya009/ggen/decode"},
+		// Same reason: an ARRAY alias emits validation.LenError from the
+		// strict-length guard with no field rule to flip anyValidation, so
+		// an alias-only package named validation without importing it.
+		{[]byte("validation."), "github.com/sirkostya009/ggen/validation"},
 	}
 	for _, body := range bodies {
 		for i := range table {
@@ -919,6 +946,16 @@ func withPos(errExpr, posVar string) string {
 
 // arrayLenErr builds a typed *validation.LenError literal for the strict
 // fixed-array element-count check.
+// byteArrayLen returns N for a `[N]byte` field folded onto the KindBytes
+// (base64) path, else 0. jsonv2 base64s byte ARRAYS and rejects the v1
+// number-array form; the decoded length must be exactly N.
+func byteArrayLen(f FieldInfo) int {
+	if f.Kind == KindBytes && f.ArrayLen > 0 {
+		return f.ArrayLen
+	}
+	return 0
+}
+
 func arrayLenErr(field string, want int, gotExpr, posVar string) string {
 	return withPos(fmt.Sprintf("&validation.LenError{Path: []string{%q}, Want: %d, Got: %s}", field, want, gotExpr), posVar)
 }
@@ -1711,6 +1748,10 @@ dst = append(dst, '"')
 
 // renderAppendBytes emits marshal code for a []byte field based on format.
 func renderAppendBytes(b *bytes.Buffer, f FieldInfo, ref string) {
+	if byteArrayLen(f) > 0 {
+		renderAppendBytesValue(b, f, ref)
+		return
+	}
 	// nil []byte → null (stdlib v1 parity; decode accepts null → nil).
 	fmt.Fprintf(b, "if %s == nil {\ndst = append(dst, \"null\"...)\n} else {\n", ref)
 	renderAppendBytesValue(b, f, ref)
@@ -1718,6 +1759,9 @@ func renderAppendBytes(b *bytes.Buffer, f FieldInfo, ref string) {
 }
 
 func renderAppendBytesValue(b *bytes.Buffer, f FieldInfo, ref string) {
+	if byteArrayLen(f) > 0 {
+		ref += "[:]" // the encoders take a slice
+	}
 	switch f.Format {
 	case "", "base64":
 		fmt.Fprintf(b, "dst = append(dst, '\"')\ndst =base64.StdEncoding.AppendEncode(dst, %s)\ndst =append(dst, '\"')\n", ref)
@@ -1792,7 +1836,16 @@ func timeFormatSize(format string) int {
 	case "Layout":
 		return 26 + 2
 	}
-	return len(format) + 6
+	// Custom layout: its literal characters land in the output verbatim and
+	// are then JSON-escaped, so budget the worst-case expansion (a control
+	// byte becomes \uXXXX, 6 bytes) for the ones that need it.
+	n := len(format) + 6
+	for i := range len(format) {
+		if c := format[i]; c == '"' || c == '\\' || c < 0x20 {
+			n += 5
+		}
+	}
+	return n
 }
 
 // durationFormatSize returns the JSONSize byte budget for a `time.Duration`
@@ -1845,7 +1898,30 @@ func renderAppendTime(b *bytes.Buffer, f FieldInfo, ref string) {
 		fmt.Fprintf(b, "dst = strconv.AppendInt(dst, %s.%s(), 10)\n", ref, numeric)
 		return
 	}
+	// A CUSTOM layout's non-token characters are copied verbatim by
+	// AppendFormat, so a layout carrying `"` or `\` (or a control byte)
+	// produced invalid — or silently corrupted — JSON when appended raw
+	// between quotes. Close through the same escape-on-dirty helper the
+	// TextAppender sites use. Named time.X constants are fixed, ASCII-safe
+	// text and keep the raw fast path.
+	if isCustomTimeLayout(f.Format) {
+		// Field-suffixed temp: two custom-layout fields share the struct
+		// body's scope (same reason renderAppendMap suffixes its first-entry
+		// flag).
+		tmp := "_tf" + sanitizeIdent(f.GoName)
+		fmt.Fprintf(b, "dst = append(dst, '\"')\n%s := len(dst)\ndst = %s.AppendFormat(dst, %s)\ndst = %s(dst, %s)\n",
+			tmp, ref, layout, closeStrFn(f.HTMLEscape), tmp)
+		return
+	}
 	fmt.Fprintf(b, "dst = append(dst, '\"')\ndst = %s.AppendFormat(dst, %s)\ndst = append(dst, '\"')\n", ref, layout)
+}
+
+// isCustomTimeLayout reports whether format is a user-supplied layout string
+// rather than one of the named time.X constants / numeric forms — i.e. the
+// text lands in the output verbatim and may need JSON escaping.
+func isCustomTimeLayout(format string) bool {
+	layout, numeric := timeLayoutExpr(format)
+	return numeric == "" && !strings.HasPrefix(layout, "time.")
 }
 
 func renderAppendDuration(b *bytes.Buffer, f FieldInfo, ref string) {
@@ -2733,6 +2809,11 @@ func inlineNullPeek(b *bytes.Buffer, posVar string) {
 // placeholder for in-place decode. Slice/map use `nil` (overwritten before
 // observed); arrays/structs need the `T{}` composite literal.
 func zeroLit(elemType string, kind TypeKind) string {
+	// Pointer types carry the POINTEE's kind (KindInt for `*int`), so the
+	// conversion below would emit `*int(0)`. Every pointer zeroes to nil.
+	if strings.HasPrefix(elemType, "*") {
+		return "nil"
+	}
 	// A named primitive (`type Priority string`) reports KindStruct at its use
 	// sites, and `Priority{}` is not a valid literal for it — resolve to the
 	// underlying kind and convert the primitive zero instead.
@@ -3140,6 +3221,9 @@ func emitReceiverReset(b *bytes.Buffer, s StructInfo) {
 		if !f.Pointer {
 			switch f.Kind {
 			case KindSlice, KindBytes:
+				if byteArrayLen(f) > 0 {
+					continue // a fixed array has no header to reset
+				}
 				fmt.Fprintf(b, "if %[1]s != nil { %[1]s = %[1]s[:0] }\n", ref)
 			case KindMap:
 				fmt.Fprintf(b, "if %[1]s != nil { clear(%[1]s) }\n", ref)
@@ -3517,7 +3601,7 @@ var _n int
 mv, _n, err = mv.`+decodeCallFor(f.ElemType)+`
 %[2]s += _n
 %[4]s%[3]s = mv
-`, f.ElemType, posVar, mapTarget, nestedDecodeErrCheck(fieldLit(f), f.MultiErr, true, "_n"))
+`, f.ElemType, posVar, mapTarget, nestedDecodeErrCheck(fieldLit(f), calleeTypeOf(f), f.MultiErr, true, "_n"))
 		} else {
 			// Cross-package value: run the ladder (its own DecodeFrom /
 			// UnmarshalJSON / UnmarshalText, encoding/json only as the last
@@ -3566,6 +3650,12 @@ mv, _n, err = mv.`+decodeCallFor(f.ElemType)+`
 // renderBytes emits bytes decode (base64/hex/array). JSON `null` → nil out
 // the field (stdlib v1/v2 parity).
 func renderBytes(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+	if byteArrayLen(f) > 0 {
+		// A fixed array is never nil, so it has no `null` form (same rule as
+		// every other [N]T).
+		renderBytesValue(b, f, ref, posVar)
+		return
+	}
 	inlineNullPeek(b, posVar)
 	fmt.Fprintf(b, "%s = nil\n", ref)
 	if nullBreakOK(f) {
@@ -3621,6 +3711,27 @@ if %[1]s >= len(data) || data[%[1]s] != ']' { return result, %[1]s, decode.NewPa
 		dlen = "base32.HexEncoding.DecodedLen"
 	case "base16", "hex":
 		enc = "" // hex doesn't share the Encoding API
+	}
+	if n := byteArrayLen(f); n > 0 {
+		// Fixed array: decode into a same-sized scratch (a longer payload
+		// reallocates past its cap and trips the length check) and require
+		// EXACTLY N bytes, the array analogue of the tuple's strict count.
+		dec := enc + ".AppendDecode"
+		if enc == "" {
+			dec = "hex.AppendDecode"
+		}
+		tmp := "_ba" + sanitizeIdent(f.GoName)
+		b.WriteString("var s string\n")
+		inlineScanString(b, posVar, "s", posVar, field, false, !f.AllowInvalidUTF8)
+		fmt.Fprintf(b, `var %[1]s [%[2]d]byte
+var %[1]sd []byte
+%[1]sd, err = %[3]s(%[1]s[:0], unsafe.Slice(unsafe.StringData(s), len(s)))
+if err != nil { return result, %[4]s, decode.NewParseErr(%[5]s, %[4]s, err) }
+if len(%[1]sd) != %[2]d { return result, %[4]s, %[6]s }
+copy(%[7]s[:], %[1]sd)
+`, tmp, n, dec, posVar, field,
+			arrayLenErr(f.JSONName, n, "len("+tmp+"d)", posVar), ref)
+		return
 	}
 	if enc == "" {
 		// hex path. ref was pre-reset to [:0]; realloc only when cap is short.
@@ -3812,7 +3923,7 @@ func renderCrossPkgStructDecode(f FieldInfo, ref, posVar string) string {
 			return fmt.Sprintf(`var _n int
 %[1]s, _n, err = %[1]s.DecodeFrom(data[%[2]s:])
 %[2]s += _n
-%[3]s`, ref, posVar, nestedDecodeErrCheck(fieldLit(f), f.MultiErr, true, "_n"))
+%[3]s`, ref, posVar, nestedDecodeErrCheck(fieldLit(f), calleeTypeOf(f), f.MultiErr, true, "_n"))
 
 		case f.Iface.JSONUnmarshaler:
 			chk := bytesErrCheck(fieldLit(f), posVar)
@@ -3908,7 +4019,7 @@ func renderCrossPkgStructStreamDecode(f FieldInfo, ref, posVar string) string {
 		switch {
 		case f.Iface.StreamDecoder:
 			return fmt.Sprintf(`%[1]s, err = %[1]s.DecodeFromStream(s)
-%[2]s`, ref, nestedDecodeErrCheck(fieldLit(f), f.MultiErr, false, ""))
+%[2]s`, ref, nestedDecodeErrCheck(fieldLit(f), calleeTypeOf(f), f.MultiErr, false, ""))
 
 		case f.Iface.JSONUnmarshaler:
 			return fmt.Sprintf(`span, err := s.CaptureValue()
@@ -4273,7 +4384,7 @@ var _in int
 _iv, _in, err = _iv.`+decodeCallFor(inline.ElemType)+`
 %[2]s += _in
 %[4]sresult.%[3]s[%[5]s] = _iv
-`, inline.ElemType, posVar, inline.GoName, nestedDecodeErrCheck(keyExpr, s.MultiErr, true, "_in"), keyExpr)
+`, inline.ElemType, posVar, inline.GoName, nestedDecodeErrCheck(keyExpr, inline.ElemType, s.MultiErr, true, "_in"), keyExpr)
 			}
 		}
 		return initMap + fmt.Sprintf(`_vstart := %[1]s
@@ -4792,7 +4903,7 @@ if err != nil { return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, err) }
 			fmt.Fprintf(b, `var _n int
 %[1]s, _n, err = %[1]s.`+decodeCallFor(f.GoType)+`
 %[2]s += _n
-%[3]s`, ref, posVar, nestedDecodeErrCheck(fieldLit(f), f.MultiErr, true, "_n"))
+%[3]s`, ref, posVar, nestedDecodeErrCheck(fieldLit(f), calleeTypeOf(f), f.MultiErr, true, "_n"))
 		} else {
 			b.WriteString(renderCrossPkgStructDecode(f, ref, posVar))
 		}
@@ -5070,6 +5181,14 @@ if e := bytes.IndexByte(data[%[2]s:], ']'); e >= 0 { %[4]s = bytes.Count(data[%[
 	case isArray && f.ElemPointer:
 		target = fmt.Sprintf("%s[%s]", slabVar, ivar)
 	case isArray:
+		// A MERGEABLE element (a struct decodes in place through its value
+		// receiver) would otherwise merge into whatever the receiver carried
+		// in that slot — `[2]Inner` kept the old `Y` while the slice form
+		// decoded fresh, and jsonv2 zeroes. The documented contract is
+		// "every slot overwritten", so blank it first.
+		if f.ElemKind == KindStruct && !f.ElemPointer {
+			fmt.Fprintf(b, "%s[%s] = %s\n", dst, ivar, zeroLit(f.ElemType, f.ElemKind))
+		}
 		target = fmt.Sprintf("%s[%s]", dst, ivar)
 	case f.ElemPointer:
 		// Slab holds the pointee type; pre-grow with its zero value.
@@ -5088,9 +5207,12 @@ if e := bytes.IndexByte(data[%[2]s:], ']'); e >= 0 { %[4]s = bytes.Count(data[%[
 	errCheck := fmt.Sprintf("if err != nil { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, err) }\n", kvar, field)
 	if mptr {
 		// Elem rules ride inside the cascade; no slab/post-decode here. Slice
-		// slots are pre-grown nil (TargetNil); array slots keep the cascade.
+		// slots are pre-grown nil (TargetNil); ARRAY slots are overwritten
+		// too — the contract is "every slot overwritten", and seeding from
+		// the carried chain merged `[2]**Inner` where `[]**Inner` and
+		// `[2]*Inner` both decoded fresh.
 		pf := elemPtrField(f, f.JSONName+"[]")
-		pf.TargetNil = !isArray
+		pf.TargetNil = true
 		renderField(b, pf, target, kvar)
 	} else {
 		// Named-primitive ELEMENT (`[]Priority`): scan the underlying into a
@@ -5140,7 +5262,7 @@ if e := bytes.IndexByte(data[%[2]s:], ']'); e >= 0 { %[4]s = bytes.Count(data[%[
 %[1]s, _n, err = %[1]s.`+decodeCallFor(f.ElemType)+`
 %[2]s += _n
 `, target, kvar)
-				b.WriteString(nestedDecodeErrCheck(fieldLit(f), f.MultiErr, true, "_n"))
+				b.WriteString(nestedDecodeErrCheck(fieldLit(f), calleeTypeOf(f), f.MultiErr, true, "_n"))
 			} else {
 				// Cross-package / method-carrying element: same ladder the
 				// field level uses. This used to be a bare SkipValue, which
@@ -5506,7 +5628,7 @@ fv, err = s.Float64()
 			fmt.Fprintf(b, `var mv %s
 mv, err = mv.`+streamDecodeCallFor(f.ElemType)+`
 %s%s = mv
-`, f.ElemType, nestedDecodeErrCheck(fieldLit(f), f.MultiErr, false, ""), mapTarget)
+`, f.ElemType, nestedDecodeErrCheck(fieldLit(f), calleeTypeOf(f), f.MultiErr, false, ""), mapTarget)
 		} else {
 			fmt.Fprintf(b, "var mv %s\n", f.ElemType)
 			b.WriteString(renderCrossPkgStructStreamDecode(elemAsField(f), "mv", ""))
@@ -5571,7 +5693,36 @@ func streamReadMore(field, keep string, resetPos bool) string {
 // was advanced by it BEFORE this check, so the nested value STARTED at
 // i-nVar and the callee's sub-slice-relative error positions rebase by that
 // (NewParseErrShift / ShiftPos). Stream positions are already global.
-func nestedDecodeErrCheck(field string, multierr, bytesPath bool, nVar string) string {
+// calleeTypeOf names the type whose DecodeFrom a field's nested decode calls
+// — the element type for containers, else the field's own (pointer-peeled).
+func calleeTypeOf(f FieldInfo) string {
+	switch f.Kind {
+	case KindSlice, KindArray, KindMap:
+		return f.ElemType
+	}
+	if f.ElemType != "" && (f.ElemKind == KindStruct) {
+		return f.ElemType
+	}
+	if f.PointeeType != "" {
+		return f.PointeeType
+	}
+	return f.GoType
+}
+
+// calleeDrains reports whether a nested callee of type t finishes the whole
+// value before surfacing a validation failure — true only for a MULTIERR
+// callee. A single-error callee returns at its FIRST failure, mid-value, so
+// a parent that drained its error and kept going would resume from a
+// desynced cursor.
+func calleeDrains(t string) bool {
+	_, ok := multiErrTypes[strings.TrimLeft(t, "*")]
+	return ok
+}
+
+// nestedDecodeErrCheck emits the error handling after a nested decode call.
+// callee is the callee's type name ("" when unknown), used to gate the
+// multierr drain — see calleeDrains.
+func nestedDecodeErrCheck(field, callee string, multierr, bytesPath bool, nVar string) string {
 	wrap := fmt.Sprintf("decode.NewParseErr(%s, s.Pos, err)", field)
 	ret := fmt.Sprintf("return result, %s", wrap)
 	drain := fmt.Sprintf("errs.Append(%s, verr)", field)
@@ -5580,7 +5731,9 @@ func nestedDecodeErrCheck(field string, multierr, bytesPath bool, nVar string) s
 		ret = fmt.Sprintf("return result, i, %s", wrap)
 		drain = fmt.Sprintf("errs.Append(%s, validation.ShiftPos(verr, i-%s))", field, nVar)
 	}
-	if !multierr {
+	// Draining is only sound when the callee finished the value; otherwise
+	// its error is a hard stop for this decoder too.
+	if !multierr || !calleeDrains(callee) {
 		return fmt.Sprintf("if err != nil { %s }\n", ret)
 	}
 	return fmt.Sprintf(`if err != nil {
@@ -5596,6 +5749,10 @@ func nestedDecodeErrCheck(field string, multierr, bytesPath bool, nVar string) s
 // --- stream native-type renderers ---
 
 func renderStreamBytes(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+	if byteArrayLen(f) > 0 {
+		renderStreamBytesValue(b, f, ref, posVar) // no `null` form — see renderBytes
+		return
+	}
 	field := fieldLit(f)
 	rm := streamReadMore(field, "0", false)
 	rmKi := strings.Replace(rm, "if s.Pos >=", "if s.Pos+ki >=", 1)
@@ -5655,6 +5812,22 @@ s.Pos++
 		dlen = "base32.HexEncoding.DecodedLen"
 	case "base16", "hex":
 		enc = ""
+	}
+	if n := byteArrayLen(f); n > 0 {
+		dec := enc + ".AppendDecode"
+		if enc == "" {
+			dec = "hex.AppendDecode"
+		}
+		tmp := "_ba" + sanitizeIdent(f.GoName)
+		fmt.Fprintf(b, `var sv string
+sv, err = s.StringView(`+vArg(f)+`)
+%[2]svar %[1]s [%[3]d]byte
+var %[1]sd []byte
+%[1]sd, err = %[4]s(%[1]s[:0], unsafe.Slice(unsafe.StringData(sv), len(sv)))
+%[2]sif len(%[1]sd) != %[3]d { return result, %[5]s }
+copy(%[6]s[:], %[1]sd)
+`, tmp, chk, n, dec, arrayLenErr(f.JSONName, n, "len("+tmp+"d)", "s.Offset()"), ref)
+		return
 	}
 	// `sv` not `v`: a pointer-leaf caller declares `var v []byte` here.
 	// StringView aliases s.buf; AppendDecode consumes it before the next
@@ -5967,7 +6140,7 @@ err = s.ConsumeColon()
 				return prelude + fmt.Sprintf(`var _iv %[1]s
 _iv, err = _iv.`+streamDecodeCallFor(inline.ElemType)+`
 %[3]sresult.%[2]s[ownKey] = _iv
-`, inline.ElemType, inline.GoName, nestedDecodeErrCheck("ownKey", s.MultiErr, false, ""))
+`, inline.ElemType, inline.GoName, nestedDecodeErrCheck("ownKey", inline.ElemType, s.MultiErr, false, ""))
 			}
 		}
 		return prelude + fmt.Sprintf(`span, err := s.CaptureValue()
@@ -6040,6 +6213,19 @@ default: return result, decode.NewParseErr(%[2]s, s.Pos, scan.ErrBadBool)
 }
 
 func renderStreamField(f FieldInfo, ref, posVar string) string {
+	// Converter variant FIRST, exactly like renderField: the converter's
+	// result already has the field's (possibly named) type, so routing a
+	// named-primitive field through the underlying-typed temp below would
+	// assign `cv` (type T) into a temp of T's underlying type.
+	if fieldHasConverter(f) {
+		out := renderVariantDispatchStream(f, ref, posVar)
+		if !f.NoValidate {
+			var vb bytes.Buffer
+			validateAndModStream(&vb, f, ref)
+			out += vb.String()
+		}
+		return out
+	}
 	// Named primitive — see renderField. Same shape on this path: read the
 	// underlying, convert at the assign.
 	if prim, kind, ok := inlineNamedPrim(f); ok && !f.Pointer && !f.String {
@@ -6064,15 +6250,6 @@ func renderStreamField(f FieldInfo, ref, posVar string) string {
 		if nz && !flat {
 			out += "}\n"
 		}
-		if !f.NoValidate {
-			var vb bytes.Buffer
-			validateAndModStream(&vb, f, ref)
-			out += vb.String()
-		}
-		return out
-	}
-	if fieldHasConverter(f) {
-		out := renderVariantDispatchStream(f, ref, posVar)
 		if !f.NoValidate {
 			var vb bytes.Buffer
 			validateAndModStream(&vb, f, ref)
@@ -6211,7 +6388,7 @@ func renderStreamField(f FieldInfo, ref, posVar string) string {
 	case KindStruct:
 		if isGenerated(f.GoType) {
 			fmt.Fprintf(b, `%[1]s, err = %[1]s.`+streamDecodeCallFor(f.GoType)+`
-%[2]s`, ref, nestedDecodeErrCheck(fieldLit(f), f.MultiErr, false, ""))
+%[2]s`, ref, nestedDecodeErrCheck(fieldLit(f), calleeTypeOf(f), f.MultiErr, false, ""))
 		} else {
 			b.WriteString(renderCrossPkgStructStreamDecode(f, ref, posVar))
 		}
@@ -6361,6 +6538,10 @@ func emitStreamSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth
 	case isArray && f.ElemPointer:
 		target = fmt.Sprintf("%s[%s]", slabVar, ivar)
 	case isArray:
+		// Blank a mergeable slot first — see emitByteSliceRead.
+		if f.ElemKind == KindStruct && !f.ElemPointer {
+			fmt.Fprintf(b, "%s[%s] = %s\n", dst, ivar, zeroLit(f.ElemType, f.ElemKind))
+		}
 		target = fmt.Sprintf("%s[%s]", dst, ivar)
 	case f.ElemPointer:
 		fmt.Fprintf(b, "%s = append(%s, %s)\n", slabVar, slabVar, zeroLit(f.ElemType, f.ElemKind))
@@ -6375,9 +6556,12 @@ func emitStreamSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth
 	}
 	if mptr {
 		// Elem rules ride inside the cascade; no slab/post-decode here. Slice
-		// slots are pre-grown nil (TargetNil); array slots keep the cascade.
+		// slots are pre-grown nil (TargetNil); ARRAY slots are overwritten
+		// too — the contract is "every slot overwritten", and seeding from
+		// the carried chain merged `[2]**Inner` where `[]**Inner` and
+		// `[2]*Inner` both decoded fresh.
 		pf := elemPtrField(f, f.JSONName+"[]")
-		pf.TargetNil = !isArray
+		pf.TargetNil = true
 		b.WriteString(renderStreamField(pf, target, "s.Pos"))
 	} else {
 		// Named-primitive ELEMENT — see emitByteSliceRead.
@@ -6432,7 +6616,7 @@ fv, err = s.Float64()
 		case KindStruct:
 			if directStruct {
 				fmt.Fprintf(b, `%[1]s, err = %[1]s.`+streamDecodeCallFor(f.ElemType)+`
-%[2]s`, target, nestedDecodeErrCheck(fieldLit(f), f.MultiErr, false, ""))
+%[2]s`, target, nestedDecodeErrCheck(fieldLit(f), calleeTypeOf(f), f.MultiErr, false, ""))
 			} else {
 				// Cross-package element: the bytes path used to skip it and
 				// this path emitted nothing at all.

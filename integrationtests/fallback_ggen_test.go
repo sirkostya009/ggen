@@ -782,6 +782,7 @@ func (recv CrossPkgShapes) DecodeFrom(data []byte) (result CrossPkgShapes, i int
 					if idx0 >= 2 {
 						return result, i, &validation.LenError{Pos: i, Path: []string{"arr"}, Want: 2, Got: idx0}
 					}
+					result.Arr[idx0] = thirdparty2.External2{}
 					start := i
 					i, err = scan.SkipValue(data, start)
 					if err != nil {
@@ -1199,6 +1200,7 @@ func (recv CrossPkgShapes) DecodeFromStream(s *scan.Stream) (result CrossPkgShap
 				if idx0 >= 2 {
 					return result, &validation.LenError{Pos: s.Offset(), Path: []string{"arr"}, Want: 2, Got: idx0}
 				}
+				result.Arr[idx0] = thirdparty2.External2{}
 				span, err := s.CaptureValue()
 				if err != nil {
 					return result, decode.NewParseErr("arr", s.Pos, err)

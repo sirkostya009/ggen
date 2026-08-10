@@ -264,3 +264,36 @@ func TestParseStep_MultiPartKeepsQuotes(t *testing.T) {
 		t.Errorf("starts value = %q, %v; want stripped", st.V.Value, err)
 	}
 }
+
+// End-to-end through the TOKENIZER: the unit test above feeds splitPipeParts
+// its raw input directly, which hid a real break — tokenizePipe used to
+// unescape \' inside the quoted span, so splitPipeParts then read that bare
+// quote as a delimiter toggle and `oneof='it\'s'|no` collapsed into ONE
+// garbage entry ("'it's'|no") with both intended values silently rejected.
+func TestParsePipeTag_EscapedQuoteInMultiPartValue(t *testing.T) {
+	t.Parallel()
+	pp, err := parsePipeTag(`oneof='it\'s'|no`)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if len(pp.Outer) != 1 {
+		t.Fatalf("got %d steps, want 1: %+v", len(pp.Outer), pp.Outer)
+	}
+	got := splitPipeParts(pp.Outer[0].V.Value)
+	if want := []string{"it's", "no"}; !slices.Equal(got, want) {
+		t.Errorf("oneof parts = %q, want %q (raw value %q)", got, want, pp.Outer[0].V.Value)
+	}
+
+	// Same for a two-part mod value.
+	pp, err = parsePipeTag(`replace='don\'t'|x`)
+	if err != nil {
+		t.Fatalf("replace parse: %v", err)
+	}
+	if len(pp.Outer) != 1 || !pp.Outer[0].IsMod {
+		t.Fatalf("want one mod step, got %+v", pp.Outer)
+	}
+	got = splitPipeParts(pp.Outer[0].M.Value)
+	if want := []string{"don't", "x"}; !slices.Equal(got, want) {
+		t.Errorf("replace parts = %q, want %q", got, want)
+	}
+}

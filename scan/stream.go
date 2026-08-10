@@ -260,7 +260,7 @@ func (s *Stream) stringView(validate bool) (v string, owned bool, err error) {
 			j -= start
 			start = 0
 			if err != nil {
-				return "", false, ErrUnterminated
+				return "", false, notEOF(err, ErrUnterminated)
 			}
 			continue
 		}
@@ -343,7 +343,7 @@ func (s *Stream) KeyView(validate bool) (string, error) {
 			j -= start
 			start = 0
 			if err != nil {
-				return "", ErrUnterminated
+				return "", notEOF(err, ErrUnterminated)
 			}
 			continue
 		}
@@ -418,7 +418,7 @@ func (s *Stream) skipString() error {
 			// Need at least one byte past the backslash for the escape kind.
 			if bs+1 >= len(s.buf) {
 				if err := s.ReadMore(bs); err != nil {
-					return ErrBadString
+					return notEOF(err, ErrBadString)
 				}
 				j -= bs
 				start = 0
@@ -432,7 +432,7 @@ func (s *Stream) skipString() error {
 				// Need 4 hex digits past `\u`.
 				for bs+6 > len(s.buf) {
 					if err := s.ReadMore(bs); err != nil {
-						return ErrBadString
+						return notEOF(err, ErrBadString)
 					}
 					j -= bs
 					start = 0
@@ -462,7 +462,7 @@ func (s *Stream) skipString() error {
 		start = 0
 		q = -1
 		if err != nil {
-			return ErrUnterminated
+			return notEOF(err, ErrUnterminated)
 		}
 	}
 }
@@ -490,7 +490,7 @@ func (s *Stream) stringSlow(start, j int, validate bool) (string, error) {
 			err := s.ReadMore(j)
 			j = 0
 			if err != nil {
-				return "", ErrUnterminated
+				return "", notEOF(err, ErrUnterminated)
 			}
 		}
 		// Raw bytes copy through a windowed inner loop, escape dispatch hoisted
@@ -529,7 +529,7 @@ func (s *Stream) stringSlow(start, j int, validate bool) (string, error) {
 				err := s.ReadMore(j)
 				j = 0
 				if err != nil {
-					return "", ErrBadString
+					return "", notEOF(err, ErrBadString)
 				}
 			}
 			esc := s.buf[j+1]
@@ -557,7 +557,7 @@ func (s *Stream) stringSlow(start, j int, validate bool) (string, error) {
 					err := s.ReadMore(j)
 					j = 0
 					if err != nil {
-						return "", ErrBadString
+						return "", notEOF(err, ErrBadString)
 					}
 				}
 				r, ok := parseHex4(s.buf[j+2 : j+6])
@@ -693,6 +693,13 @@ scan:
 		err := s.ReadMore(i)
 		i = 0
 		if err != nil {
+			// Drained is a legitimate value end (the digits ran to EOF); a
+			// real reader error is NOT — swallowing it returned a TRUNCATED
+			// value with a nil error, silently wrong at top level and a
+			// bogus grammar error one frame up.
+			if err != io.ErrUnexpectedEOF {
+				return 0, err
+			}
 			break
 		}
 		buf = s.buf
@@ -764,6 +771,13 @@ scan:
 		err := s.ReadMore(i)
 		i = 0
 		if err != nil {
+			// Drained is a legitimate value end (the digits ran to EOF); a
+			// real reader error is NOT — swallowing it returned a TRUNCATED
+			// value with a nil error, silently wrong at top level and a
+			// bogus grammar error one frame up.
+			if err != io.ErrUnexpectedEOF {
+				return 0, err
+			}
 			break
 		}
 		buf = s.buf
@@ -806,6 +820,13 @@ scan:
 		i -= start
 		start = 0
 		if err != nil {
+			// Drained is a legitimate value end (the digits ran to EOF); a
+			// real reader error is NOT — swallowing it returned a TRUNCATED
+			// value with a nil error, silently wrong at top level and a
+			// bogus grammar error one frame up.
+			if err != io.ErrUnexpectedEOF {
+				return 0, err
+			}
 			break
 		}
 		buf = s.buf
@@ -814,12 +835,17 @@ scan:
 		return 0, ErrBadNumber
 	}
 	// The refill loop collects a LOOSE [0-9.eE+-] span (it doubles as the
-	// extent finder across refills), so validate the assembled — now
-	// contiguous — span against the RFC 8259 grammar before parsing, matching
-	// the bytes path. Short, L1-hot second pass on the stream tier.
-	if end, gerr := skipNumber(s.buf[start:i], 0); gerr != nil || end != i-start {
+	// extent finder across refills), so run the RFC 8259 grammar over the
+	// assembled — now contiguous — span. The grammar END is authoritative,
+	// NOT the loose scan's: the bytes path is maximal-munch (it stops at the
+	// first byte that cannot extend the number and leaves the rest to the
+	// caller), so truncating here is what keeps the two paths byte-identical
+	// on `1.5.5` / `1e5e` / `01` instead of erroring where bytes succeeds.
+	end, gerr := skipNumber(s.buf[start:i], 0)
+	if gerr != nil || end == 0 {
 		return 0, ErrBadNumber
 	}
+	i = start + end
 	// Short spans skip ParseFloat's re-scan when exactly representable —
 	// mirror of the bytes-path scan.Float64 gate (exactShort is bit-identical
 	// to ParseFloat on the accepted shape; the ≤16 B bound excludes the
@@ -845,23 +871,53 @@ scan:
 // len == cap (readers fill the whole window) and doubles the buffer.
 // Callers keep the hot `i < len(s.buf)` bounds check inline and call this
 // only on exhaustion.
-func (s *Stream) refillSkip(i *int) bool {
+func (s *Stream) refillSkip(i *int, rerr *error) bool {
 	err := s.ReadMore(*i)
 	*i = 0
-	return err == nil && *i < len(s.buf)
+	if err != nil {
+		// A drained window legitimately ends the value; a real reader error
+		// must abort the skip rather than read as "number ended here".
+		if err != io.ErrUnexpectedEOF {
+			*rerr = err
+		}
+		return false
+	}
+	return *i < len(s.buf)
+}
+
+// notEOF keeps a real reader error intact and maps only the drained-window
+// case to the grammar sentinel the caller would report at true end of input.
+// Relabeling a recoverable hiccup as malformed JSON destroys error identity
+// (and contradicts ReadMore's "a transient error that loses no bytes resumes
+// losslessly" contract).
+func notEOF(err, sentinel error) error {
+	if err != io.ErrUnexpectedEOF {
+		return err
+	}
+	return sentinel
+}
+
+// orBadNumber prefers a recorded reader error over the grammar sentinel —
+// a refill that failed for I/O reasons is not a malformed number.
+func orBadNumber(rerr error) error {
+	if rerr != nil {
+		return rerr
+	}
+	return ErrBadNumber
 }
 
 // skipNumber is the stream mirror of the bytes-path [skipNumber] — same
 // RFC 8259 grammar, same accept-set.
 func (s *Stream) skipNumber() error {
 	i := s.Pos
-	if i >= len(s.buf) && !s.refillSkip(&i) {
-		return ErrBadNumber
+	var rerr error // set by refillSkip on a real (non-drained) reader error
+	if i >= len(s.buf) && !s.refillSkip(&i, &rerr) {
+		return orBadNumber(rerr)
 	}
 	if s.buf[i] == '-' {
 		i++
-		if i >= len(s.buf) && !s.refillSkip(&i) {
-			return ErrBadNumber
+		if i >= len(s.buf) && !s.refillSkip(&i, &rerr) {
+			return orBadNumber(rerr)
 		}
 	}
 	if s.buf[i] == '0' {
@@ -869,7 +925,7 @@ func (s *Stream) skipNumber() error {
 	} else if s.buf[i] >= '1' && s.buf[i] <= '9' {
 		i++
 		for {
-			if i >= len(s.buf) && !s.refillSkip(&i) {
+			if i >= len(s.buf) && !s.refillSkip(&i, &rerr) {
 				break
 			}
 			if s.buf[i] < '0' || s.buf[i] > '9' {
@@ -878,16 +934,16 @@ func (s *Stream) skipNumber() error {
 			i++
 		}
 	} else {
-		return ErrBadNumber
+		return orBadNumber(rerr)
 	}
-	if (i < len(s.buf) || s.refillSkip(&i)) && s.buf[i] == '.' {
+	if (i < len(s.buf) || s.refillSkip(&i, &rerr)) && s.buf[i] == '.' {
 		i++
-		if (i >= len(s.buf) && !s.refillSkip(&i)) || s.buf[i] < '0' || s.buf[i] > '9' {
-			return ErrBadNumber
+		if (i >= len(s.buf) && !s.refillSkip(&i, &rerr)) || s.buf[i] < '0' || s.buf[i] > '9' {
+			return orBadNumber(rerr)
 		}
 		i++
 		for {
-			if i >= len(s.buf) && !s.refillSkip(&i) {
+			if i >= len(s.buf) && !s.refillSkip(&i, &rerr) {
 				break
 			}
 			if s.buf[i] < '0' || s.buf[i] > '9' {
@@ -896,17 +952,17 @@ func (s *Stream) skipNumber() error {
 			i++
 		}
 	}
-	if (i < len(s.buf) || s.refillSkip(&i)) && (s.buf[i] == 'e' || s.buf[i] == 'E') {
+	if (i < len(s.buf) || s.refillSkip(&i, &rerr)) && (s.buf[i] == 'e' || s.buf[i] == 'E') {
 		i++
-		if (i < len(s.buf) || s.refillSkip(&i)) && (s.buf[i] == '+' || s.buf[i] == '-') {
+		if (i < len(s.buf) || s.refillSkip(&i, &rerr)) && (s.buf[i] == '+' || s.buf[i] == '-') {
 			i++
 		}
-		if (i >= len(s.buf) && !s.refillSkip(&i)) || s.buf[i] < '0' || s.buf[i] > '9' {
-			return ErrBadNumber
+		if (i >= len(s.buf) && !s.refillSkip(&i, &rerr)) || s.buf[i] < '0' || s.buf[i] > '9' {
+			return orBadNumber(rerr)
 		}
 		i++
 		for {
-			if i >= len(s.buf) && !s.refillSkip(&i) {
+			if i >= len(s.buf) && !s.refillSkip(&i, &rerr) {
 				break
 			}
 			if s.buf[i] < '0' || s.buf[i] > '9' {
@@ -914,6 +970,9 @@ func (s *Stream) skipNumber() error {
 			}
 			i++
 		}
+	}
+	if rerr != nil {
+		return rerr
 	}
 	s.Pos = i
 	return nil
@@ -943,7 +1002,7 @@ func (s *Stream) Bool() (bool, error) {
 		pos := i + 1 + k
 		if pos >= len(s.buf) {
 			if err := s.ReadMore(0); err != nil {
-				return false, ErrBadBool
+				return false, notEOF(err, ErrBadBool)
 			}
 		}
 		if s.buf[pos] != want[k] {
@@ -981,7 +1040,7 @@ func (s *Stream) skipValueDepth(depth int) error {
 			pos := j + 1 + k
 			if pos >= len(s.buf) {
 				if err := s.ReadMore(0); err != nil {
-					return ErrBadLiteral
+					return notEOF(err, ErrBadLiteral)
 				}
 			}
 			if s.buf[pos] != "ull"[k] {
@@ -1041,6 +1100,19 @@ func (s *Stream) CaptureValue() ([]byte, error) {
 			s.Pos = start
 			return nil, err
 		}
+		// A skip that failed at a byte STRICTLY INSIDE the window is final —
+		// no future byte can repair a malformation that sits before bytes we
+		// already hold. Surfacing it now is what keeps a live (never-EOF)
+		// reader from wedging the decode: without this, a fully-delivered
+		// `{"a":}` on a socket blocked in Read forever waiting for bytes that
+		// could not have helped. Only an off-the-end failure is ambiguous
+		// with truncation and keeps reading. Cold path (the tier skip already
+		// failed); skipValueAt is the scalar walk, grammar-identical to every
+		// tier by parity test.
+		if at, aerr := skipValueAt(s.buf, start); aerr != nil && at < len(s.buf) {
+			s.Pos = start
+			return nil, err
+		}
 		// First refill compacts the consumed prefix (keep=start): the dead
 		// bytes before the value become free tail capacity instead of being
 		// dragged through every grow. start rebases to 0; later refills are
@@ -1071,7 +1143,7 @@ func (s *Stream) skipArray(depth int) error {
 	}
 	if s.Pos >= len(s.buf) {
 		if err := s.ReadMore(s.Pos); err != nil {
-			return ErrBadArray
+			return notEOF(err, ErrBadArray)
 		}
 		s.Pos = 0
 	}
@@ -1088,7 +1160,7 @@ func (s *Stream) skipArray(depth int) error {
 		}
 		if s.Pos >= len(s.buf) {
 			if err := s.ReadMore(0); err != nil {
-				return ErrBadArray
+				return notEOF(err, ErrBadArray)
 			}
 		}
 		if s.buf[s.Pos] == ',' {
@@ -1112,7 +1184,7 @@ func (s *Stream) skipObject(depth int) error {
 	}
 	if s.Pos >= len(s.buf) {
 		if err := s.ReadMore(s.Pos); err != nil {
-			return ErrBadObject
+			return notEOF(err, ErrBadObject)
 		}
 		s.Pos = 0
 	}
@@ -1129,7 +1201,7 @@ func (s *Stream) skipObject(depth int) error {
 		}
 		if s.Pos >= len(s.buf) {
 			if err := s.ReadMore(0); err != nil {
-				return ErrBadObject
+				return notEOF(err, ErrBadObject)
 			}
 		}
 		if s.buf[s.Pos] != ':' {
@@ -1144,7 +1216,7 @@ func (s *Stream) skipObject(depth int) error {
 		}
 		if s.Pos >= len(s.buf) {
 			if err := s.ReadMore(0); err != nil {
-				return ErrBadObject
+				return notEOF(err, ErrBadObject)
 			}
 		}
 		if s.buf[s.Pos] == ',' {
@@ -1359,6 +1431,13 @@ scan:
 		i -= start
 		start = 0
 		if err != nil {
+			// Drained is a legitimate value end (the digits ran to EOF); a
+			// real reader error is NOT — swallowing it returned a TRUNCATED
+			// value with a nil error, silently wrong at top level and a
+			// bogus grammar error one frame up.
+			if err != io.ErrUnexpectedEOF {
+				return "", err
+			}
 			break
 		}
 		buf = s.buf
@@ -1366,9 +1445,12 @@ scan:
 	if i == start {
 		return "", ErrBadNumber
 	}
-	if end, gerr := skipNumber(s.buf[start:i], 0); gerr != nil || end != i-start {
+	// Grammar end is authoritative — see Float64 (bytes-path parity).
+	end, gerr := skipNumber(s.buf[start:i], 0)
+	if gerr != nil || end == 0 {
 		return "", ErrBadNumber
 	}
+	i = start + end
 	s.Pos = i
 	return json.Number(string(s.buf[start:i])), nil
 }

@@ -1,9 +1,15 @@
 package integrationtests
 
+//go:generate ../ggen $GOFILE
+
 import (
+	"bytes"
+	jsonv2 "encoding/json/v2"
 	"reflect"
 	"testing"
 	"unsafe"
+
+	"github.com/sirkostya009/ggen/scan"
 )
 
 // Decode-into-receiver tests. The receiver IS the merge source: scalars
@@ -337,5 +343,76 @@ func TestMerge_pointerParseFailureLeavesReceiverUntouched(t *testing.T) {
 	}
 	if got.PP != nil {
 		t.Errorf("PP allocated for a value that never parsed: %v", got.PP)
+	}
+}
+
+// Array slots are OVERWRITTEN, never merged: `[2]Inner` used to keep the
+// receiver's carried field values for keys the payload omitted, while the
+// `[]Inner` and `[2]*Inner` forms decoded fresh — three shapes, three
+// answers. jsonv2 zeroes; the documented contract says "every slot
+// overwritten". Pinned on both paths.
+//
+//ggen:generate
+type ArrMerge struct {
+	AI [2]MergeInner   `json:"ai"`
+	SI []MergeInner    `json:"si"`
+	AP [2]*MergeInner  `json:"ap"`
+	AM [2]**MergeInner `json:"am"`
+}
+
+//ggen:generate
+type MergeInner struct {
+	X int    `json:"x"`
+	Y string `json:"y"`
+}
+
+func carriedArrMerge() ArrMerge {
+	i0, i1 := &MergeInner{1, "keep0"}, &MergeInner{2, "keep1"}
+	p0, p1 := &i0, &i1
+	return ArrMerge{
+		AI: [2]MergeInner{{1, "keep0"}, {2, "keep1"}},
+		SI: []MergeInner{{1, "keep0"}},
+		AP: [2]*MergeInner{{1, "keep0"}, {2, "keep1"}},
+		AM: [2]**MergeInner{p0, p1},
+	}
+}
+
+func TestMerge_ArraySlotsOverwrite(t *testing.T) {
+	t.Parallel()
+	payload := []byte(`{"ai":[{"x":5},{"x":6}],"si":[{"x":5}],"ap":[{"x":5},{"x":6}],"am":[{"x":5},{"x":6}]}`)
+
+	got, _, err := carriedArrMerge().DecodeFrom(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := carriedArrMerge()
+	if err := jsonv2.Unmarshal(payload, &want); err != nil {
+		t.Fatal(err)
+	}
+	for i := range 2 {
+		if got.AI[i] != want.AI[i] {
+			t.Errorf("AI[%d]: ggen %+v, jsonv2 %+v", i, got.AI[i], want.AI[i])
+		}
+		if *got.AP[i] != *want.AP[i] {
+			t.Errorf("AP[%d]: ggen %+v, jsonv2 %+v", i, *got.AP[i], *want.AP[i])
+		}
+		if **got.AM[i] != **want.AM[i] {
+			t.Errorf("AM[%d]: ggen %+v, jsonv2 %+v", i, **got.AM[i], **want.AM[i])
+		}
+	}
+	if got.SI[0] != want.SI[0] {
+		t.Errorf("SI[0]: ggen %+v, jsonv2 %+v", got.SI[0], want.SI[0])
+	}
+
+	var st scan.Stream
+	st.Reset(bytes.NewReader(payload), make([]byte, 0, 8))
+	sg, err := carriedArrMerge().DecodeFromStream(&st)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range 2 {
+		if sg.AI[i] != got.AI[i] || **sg.AM[i] != **got.AM[i] {
+			t.Errorf("stream[%d] diverges: AI %+v vs %+v", i, sg.AI[i], got.AI[i])
+		}
 	}
 }

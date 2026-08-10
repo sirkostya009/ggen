@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	jsonv2 "encoding/json/v2"
 	"errors"
+	"math/big"
 	"math/rand"
 	"reflect"
 	"strconv"
@@ -987,5 +988,57 @@ func TestAppendAny_EmptyMarshalJSON(t *testing.T) {
 	t.Parallel()
 	if _, err := AppendAny(nil, emptyMarshaler{}); !errors.Is(err, ErrEmptyMarshalJSON) {
 		t.Errorf("got %v, want ErrEmptyMarshalJSON (stdlib v1/v2 both error)", err)
+	}
+}
+
+// go1.24 gave big.Int an AppendText, so the TextAppender dispatch started
+// quoting its digits — but v1, jsonv2 and ggen's own KindBigInt field wire
+// all emit a bare number. Concrete cases must precede interface dispatches.
+func TestAppendAny_BigIntStaysNumeric(t *testing.T) {
+	t.Parallel()
+	for _, v := range []any{
+		big.NewInt(123),
+		*big.NewInt(123),
+		map[string]*big.Int{"a": big.NewInt(7)},
+		[]*big.Int{big.NewInt(7)},
+		struct {
+			I *big.Int `json:"i"`
+		}{big.NewInt(9)},
+	} {
+		got, err := AppendAny(nil, v)
+		if err != nil {
+			t.Fatalf("%T: %v", v, err)
+		}
+		want, err := jsonv2.Marshal(v)
+		if err != nil {
+			t.Fatalf("%T: jsonv2: %v", v, err)
+		}
+		if string(got) != string(want) {
+			t.Errorf("%T: ggen %s, jsonv2 %s", v, got, want)
+		}
+	}
+	var np *big.Int
+	if out, _ := AppendAny(nil, np); string(out) != "null" {
+		t.Errorf("nil *big.Int → %s, want null", out)
+	}
+}
+
+// json.Number is a named STRING whose wire shape is a NUMBER — the one
+// string kind both stdlib versions still quote under `,string` (unlike bool,
+// which jsonv2 deliberately stopped quoting).
+func TestAppendAny_NumberStringTag(t *testing.T) {
+	t.Parallel()
+	v := struct {
+		N json.Number `json:"n,string"`
+		F float64     `json:"f,string"`
+		S string      `json:"s,string"`
+	}{N: "12", F: 1.5, S: "x"}
+	got, err := AppendAny(nil, v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, _ := jsonv2.Marshal(v)
+	if string(got) != string(want) {
+		t.Errorf("ggen %s, jsonv2 %s", got, want)
 	}
 }

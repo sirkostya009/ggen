@@ -5877,13 +5877,7 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 						} else {
 							n = int64(u)
 						}
-						if result.APP[idx0] == nil {
-							result.APP[idx0] = new(new(int(n)))
-						} else if (*result.APP[idx0]) == nil {
-							(*result.APP[idx0]) = new(int(n))
-						} else {
-							(*(*result.APP[idx0])) = int(n)
-						}
+						result.APP[idx0] = new(new(int(n)))
 					}
 					idx0++
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -6662,13 +6656,7 @@ func (recv NPtrContainersStruct) DecodeFromStream(s *scan.Stream) (result NPtrCo
 					if err != nil {
 						return result, decode.NewParseErr("app[]", s.Pos, err)
 					}
-					if result.APP[idx0] == nil {
-						result.APP[idx0] = new(new(int(v)))
-					} else if (*result.APP[idx0]) == nil {
-						(*result.APP[idx0]) = new(int(v))
-					} else {
-						(*(*result.APP[idx0])) = int(v)
-					}
+					result.APP[idx0] = new(new(int(v)))
 				}
 				idx0++
 				err = s.SkipSpace()

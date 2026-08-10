@@ -34,6 +34,7 @@ go get github.com/sirkostya009/ggen                 # runtime subpackages
 ggen .                 # current package
 ggen ./...             # every package matched by the pattern — module-scoped, same as `go build ./...`
 ggen ./pkg/...         # subtree pattern (relative paths must start with `./`)
+ggen ./a ./b/...       # several targets in one run, each processed
 ggen <dir>             # one package
 ggen <file.go>         # one file
 ggen <file.go> Foo Bar # one file, only structs named Foo or Bar, will fully overwrite existing <file_ggen.go> file
@@ -126,7 +127,7 @@ type Order struct { /* ... */ }
 - `json:"name,omitempty"` — skip on marshal when JSON-empty.
 - `json:"name,omitzero"` — skip on marshal when Go-zero.
 - `json:"name,string"` — wrap primitive as JSON string (unwrap on decode).
-- `json:"name,format:X"` — format hint for native types (see kinds below). MUST be last option in tag (jsonv2 rule). Quote values with special characters: `format:'Jan 2, 2006'` (`\'` = literal quote).
+- `json:"name,format:X"` — format hint for native types (see kinds below). MUST be last option in tag (jsonv2 rule). Quote values with special characters: `format:'Jan 2, 2006'`. Literal quote = `\\'` (a bare `\'` is an invalid Go string escape — ggen errors instead of dropping the tag).
 - Quoted names (jsonv2): `json:"'a,b'"` → key `a,b`; `json:"'-'"` → key `-`. Only a bare `json:"-"` ignores the field; `json:"-,..."` is a generate-time error.
 
 Only exported fields read/written, same as `encoding/json`.
@@ -250,6 +251,8 @@ Parse failures (malformed JSON, wrong primitive type) wrap in `*decode.ParseErro
 - Nested struct (same package: direct call; cross-package: see below).
 - Embedded struct — fields promoted to parent JSON object.
 - `any` / `interface{}` — full stdlib-compatible decode shape, plus `usenumber` for `json.Number` numbers.
+- `rune` (int32) / `byte` (uint8) decode as numbers, like their underlying kinds.
+- `[N]byte` — base64 string with a STRICT decoded length (jsonv2 parity; `encoding/json` v1 instead emits a number array and rejects the string). Honors the same `format:` set as `[]byte`; `format:array` opts into the v1 number-array shape. Wrong decoded length → `validation.LenError`.
 - `[]byte` — `format:base64` (default), `base64url`, `base32`, `base32hex`, `base16`/`hex`, `array`. `null` ↔ `nil` (nil marshals as `null`, empty non-nil as `""`/`[]`).
 - `time.Time` — `format:RFC3339Nano` (default), `RFC3339`, `unix`, `unixmilli`, `unixmicro`, `unixnano`, other `time.X` constants, or custom layout `format:'2006-01-02'`.
 - `time.Duration` — `format:units` (default, `"1h30m"`), `sec`, `milli`, `micro`, `nano`.

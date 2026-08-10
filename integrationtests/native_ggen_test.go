@@ -1095,3 +1095,428 @@ func (s BareDuration) AppendJSON(dst []byte) ([]byte, error) {
 	dst = encode.AppendStringNoHTML(dst, s.D.String())
 	return append(dst, '}'), nil
 }
+
+func (recv ByteArrays) DecodeFrom(data []byte) (result ByteArrays, i int, err error) {
+	result = recv
+	seenArr := false
+	seenB := false
+	seenHex := false
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+	}
+	i++
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		i++
+		return result, i, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
+		}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i, true)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
+			}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		}
+		i++
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch key {
+		case "arr":
+			if seenArr {
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"arr"}}
+			}
+			seenArr = true
+			if i >= len(data) || data[i] != '[' {
+				return result, i, scan.ErrBadArray
+			}
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			var idx0 int
+			if i < len(data) && data[i] != ']' {
+				for {
+					if idx0 >= 4 {
+						return result, i, &validation.LenError{Pos: i, Path: []string{"arr"}, Want: 4, Got: idx0}
+					}
+					if i >= len(data) || data[i] < '0' || data[i] > '9' {
+						return result, i, decode.NewParseErr("arr", i, scan.ErrBadNumber)
+					}
+					if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+						return result, i, decode.NewParseErr("arr", i, scan.ErrBadNumber)
+					}
+					var n uint64
+					de := i + 19
+					if de > len(data) {
+						de = len(data)
+					}
+					for i < de && data[i] >= '0' && data[i] <= '9' {
+						n = n*10 + uint64(data[i]-'0')
+						i++
+					}
+					for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+						d := uint64(data[i] - '0')
+						if n > scan.Uint64Limit/10 || (n == scan.Uint64Limit/10 && d > scan.Uint64Limit%10) {
+							return result, i, decode.NewParseErr("arr", i, scan.ErrNumberOverflow)
+						}
+						n = n*10 + d
+						i++
+					}
+					if i < len(data) {
+						c := data[i]
+						if c == '.' || c == 'e' || c == 'E' {
+							return result, i, decode.NewParseErr("arr", i, scan.ErrBadNumber)
+						}
+					}
+					result.Arr[idx0] = byte(n)
+					idx0++
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i < len(data) && data[i] == ',' {
+						i++
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i >= len(data) || data[i] == ']' {
+							return result, i, scan.ErrBadArray
+						}
+						continue
+					}
+					break
+				}
+			}
+			if i >= len(data) || data[i] != ']' {
+				return result, i, scan.ErrBadArray
+			}
+			if idx0 != 4 {
+				return result, i, &validation.LenError{Pos: i, Path: []string{"arr"}, Want: 4, Got: idx0}
+			}
+			i++
+		case "b":
+			if seenB {
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"b"}}
+			}
+			seenB = true
+			var s string
+			if i >= len(data) || data[i] != '"' {
+				return result, i, decode.NewParseErr("b", i, scan.ErrExpectString)
+			}
+			ke := i + 1
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+				ke++
+			}
+			if ke < len(data) && data[ke] == '"' {
+				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				s, i, err = scan.String(data, i, true)
+				if err != nil {
+					return result, i, decode.NewParseErr("b", i, err)
+				}
+			}
+			var _baB [4]byte
+			var _baBd []byte
+			_baBd, err = base64.StdEncoding.AppendDecode(_baB[:0], unsafe.Slice(unsafe.StringData(s), len(s)))
+			if err != nil {
+				return result, i, decode.NewParseErr("b", i, err)
+			}
+			if len(_baBd) != 4 {
+				return result, i, &validation.LenError{Pos: i, Path: []string{"b"}, Want: 4, Got: len(_baBd)}
+			}
+			copy(result.B[:], _baBd)
+		case "hex":
+			if seenHex {
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"hex"}}
+			}
+			seenHex = true
+			var s string
+			if i >= len(data) || data[i] != '"' {
+				return result, i, decode.NewParseErr("hex", i, scan.ErrExpectString)
+			}
+			ke := i + 1
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+				ke++
+			}
+			if ke < len(data) && data[ke] == '"' {
+				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				s, i, err = scan.String(data, i, true)
+				if err != nil {
+					return result, i, decode.NewParseErr("hex", i, err)
+				}
+			}
+			var _baHex [3]byte
+			var _baHexd []byte
+			_baHexd, err = hex.AppendDecode(_baHex[:0], unsafe.Slice(unsafe.StringData(s), len(s)))
+			if err != nil {
+				return result, i, decode.NewParseErr("hex", i, err)
+			}
+			if len(_baHexd) != 3 {
+				return result, i, &validation.LenError{Pos: i, Path: []string{"hex"}, Want: 3, Got: len(_baHexd)}
+			}
+			copy(result.Hex[:], _baHexd)
+		default:
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			i++
+			return result, i, nil
+		}
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+	}
+}
+
+func (recv ByteArrays) DecodeFromStream(s *scan.Stream) (result ByteArrays, err error) {
+	result = recv
+	seenArr := false
+	seenB := false
+	seenHex := false
+	err = s.ObjectOpen()
+	if err != nil {
+		return result, decode.NewParseErr("", s.Pos, err)
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, decode.NewParseErr("", s.Pos, err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView(true)
+		if err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		switch key {
+		case "arr":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("arr", s.Pos, err)
+			}
+			if seenArr {
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"arr"}}
+			}
+			seenArr = true
+			err = s.ArrayOpen()
+			if err != nil {
+				return result, decode.NewParseErr("arr", s.Pos, err)
+			}
+			err = s.SkipSpace()
+			if err != nil {
+				return result, decode.NewParseErr("arr", s.Pos, err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, decode.NewParseErr("arr", s.Pos, err)
+				}
+			}
+			var idx0 int
+			for s.Bytes()[s.Pos] != ']' {
+				if idx0 >= 4 {
+					return result, &validation.LenError{Pos: s.Offset(), Path: []string{"arr"}, Want: 4, Got: idx0}
+				}
+				var uv uint64
+				uv, err = s.Uint64()
+				if err != nil {
+					return result, decode.NewParseErr("arr", s.Pos, err)
+				}
+				result.Arr[idx0] = byte(uv)
+				idx0++
+				err = s.SkipSpace()
+				if err != nil {
+					return result, decode.NewParseErr("arr", s.Pos, err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, decode.NewParseErr("arr", s.Pos, err)
+					}
+				}
+				if s.Bytes()[s.Pos] == ',' {
+					s.Pos++
+					err = s.SkipSpace()
+					if err != nil {
+						return result, decode.NewParseErr("arr", s.Pos, err)
+					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+						return result, decode.NewParseErr("arr", s.Pos, scan.ErrBadArray)
+					}
+					continue
+				}
+				break
+			}
+			if s.Bytes()[s.Pos] != ']' {
+				return result, decode.NewParseErr("arr", s.Pos, scan.ErrBadArray)
+			}
+			if idx0 != 4 {
+				return result, &validation.LenError{Pos: s.Offset(), Path: []string{"arr"}, Want: 4, Got: idx0}
+			}
+			s.Pos++
+		case "b":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("b", s.Pos, err)
+			}
+			if seenB {
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"b"}}
+			}
+			seenB = true
+			var sv string
+			sv, err = s.StringView(true)
+			if err != nil {
+				return result, decode.NewParseErr("b", s.Pos, err)
+			}
+			var _baB [4]byte
+			var _baBd []byte
+			_baBd, err = base64.StdEncoding.AppendDecode(_baB[:0], unsafe.Slice(unsafe.StringData(sv), len(sv)))
+			if err != nil {
+				return result, decode.NewParseErr("b", s.Pos, err)
+			}
+			if len(_baBd) != 4 {
+				return result, &validation.LenError{Pos: s.Offset(), Path: []string{"b"}, Want: 4, Got: len(_baBd)}
+			}
+			copy(result.B[:], _baBd)
+		case "hex":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("hex", s.Pos, err)
+			}
+			if seenHex {
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"hex"}}
+			}
+			seenHex = true
+			var sv string
+			sv, err = s.StringView(true)
+			if err != nil {
+				return result, decode.NewParseErr("hex", s.Pos, err)
+			}
+			var _baHex [3]byte
+			var _baHexd []byte
+			_baHexd, err = hex.AppendDecode(_baHex[:0], unsafe.Slice(unsafe.StringData(sv), len(sv)))
+			if err != nil {
+				return result, decode.NewParseErr("hex", s.Pos, err)
+			}
+			if len(_baHexd) != 3 {
+				return result, &validation.LenError{Pos: s.Offset(), Path: []string{"hex"}, Want: 3, Got: len(_baHexd)}
+			}
+			copy(result.Hex[:], _baHexd)
+		default:
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+		}
+
+		err = s.SkipSpace()
+		if err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, decode.NewParseErr("", s.Pos, err)
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, decode.NewParseErr("", s.Pos, err)
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			return result, nil
+		}
+		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+	}
+}
+
+func (s ByteArrays) JSONSize() int {
+	size := 30
+	if n := len(s.Arr); n > 0 {
+		size += n - 1
+	}
+	size += len(s.Arr) * 20
+	size += ((len(s.B) + 2) / 3) * 4
+	size += len(s.Hex) * 2
+	return size
+}
+
+func (s ByteArrays) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"arr\":["...)
+	if len(s.Arr) > 0 {
+		dst = strconv.AppendUint(dst, uint64(s.Arr[0]), 10)
+		for _, v0 := range s.Arr[1:] {
+			dst = append(dst, ',')
+			dst = strconv.AppendUint(dst, uint64(v0), 10)
+		}
+	}
+	dst = append(dst, "],\"b\":\""...)
+	dst = base64.StdEncoding.AppendEncode(dst, s.B[:])
+	dst = append(dst, '"')
+	dst = append(dst, ",\"hex\":\""...)
+	dst = hex.AppendEncode(dst, s.Hex[:])
+	dst = append(dst, '"')
+	return append(dst, '}'), nil
+}

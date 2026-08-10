@@ -209,8 +209,10 @@ func (s TimeCustomComma) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"customComma\":\""...)
+	_tfCustomComma := len(dst)
 	dst = s.CustomComma.AppendFormat(dst, "Jan 2, 2006")
-	return append(dst, "\"}"...), nil
+	dst = encode.CloseJSONString(dst, _tfCustomComma)
+	return append(dst, '}'), nil
 }
 
 func (recv TimeCustomLong) DecodeFrom(data []byte) (result TimeCustomLong, i int, err error) {
@@ -405,8 +407,10 @@ func (s TimeCustomLong) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"customLong\":\""...)
+	_tfCustomLong := len(dst)
 	dst = s.CustomLong.AppendFormat(dst, "2006-Jan-02T15:04:05.000000000_Mon_-0700")
-	return append(dst, "\"}"...), nil
+	dst = encode.CloseJSONString(dst, _tfCustomLong)
+	return append(dst, '}'), nil
 }
 
 func (recv TimeDefault) DecodeFrom(data []byte) (result TimeDefault, i int, err error) {
@@ -5161,10 +5165,14 @@ func (s TimeFormatsStdCompat) AppendJSON(dst []byte) ([]byte, error) {
 	dst = append(dst, "{\"ansic\":\""...)
 	dst = s.ANSIC.AppendFormat(dst, time.ANSIC)
 	dst = append(dst, "\",\"customComma\":\""...)
+	_tfCustomComma := len(dst)
 	dst = s.CustomComma.AppendFormat(dst, "Jan 2, 2006")
-	dst = append(dst, "\",\"customLong\":\""...)
+	dst = encode.CloseJSONString(dst, _tfCustomComma)
+	dst = append(dst, ",\"customLong\":\""...)
+	_tfCustomLong := len(dst)
 	dst = s.CustomLong.AppendFormat(dst, "2006-Jan-02T15:04:05.000000000_Mon_-0700")
-	dst = append(dst, "\",\"dateOnly\":\""...)
+	dst = encode.CloseJSONString(dst, _tfCustomLong)
+	dst = append(dst, ",\"dateOnly\":\""...)
 	dst = s.DateOnly.AppendFormat(dst, time.DateOnly)
 	dst = append(dst, "\",\"dateTime\":\""...)
 	dst = s.DateTime.AppendFormat(dst, time.DateTime)

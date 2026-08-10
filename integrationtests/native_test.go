@@ -5,6 +5,8 @@ package integrationtests
 import (
 	"bytes"
 	"encoding/json"
+	jsonv2 "encoding/json/v2"
+	"errors"
 	"net"
 	"net/netip"
 	"strings"
@@ -12,6 +14,8 @@ import (
 	"time"
 
 	"github.com/sirkostya009/ggen/encode"
+	"github.com/sirkostya009/ggen/scan"
+	"github.com/sirkostya009/ggen/validation"
 )
 
 // NativeTypes exercises the format tag with native types: time.Time,
@@ -215,6 +219,64 @@ func TestBytes_nullRoundtrip(t *testing.T) {
 	for _, want := range []string{`"blob":""`, `"hexBlob":""`, `"byteArray":[]`} {
 		if !strings.Contains(out, want) {
 			t.Errorf("empty []byte wire missing %s: %s", want, out)
+		}
+	}
+}
+
+// [N]byte is a base64 STRING with a strict decoded length — jsonv2 parity
+// (encoding/json v1 emits a number array and rejects the string form, so
+// ggen's old array shape was unreadable by v2). format:array opts back into
+// the v1 shape; every other []byte format applies too.
+//
+//ggen:generate
+type ByteArrays struct {
+	B   [4]byte `json:"b"`
+	Hex [3]byte `json:"hex,format:hex"`
+	Arr [4]byte `json:"arr,format:array"`
+}
+
+func TestByteArray_Base64StrictLen(t *testing.T) {
+	t.Parallel()
+	in := ByteArrays{B: [4]byte{1, 2, 3, 255}, Hex: [3]byte{0xde, 0xad, 0xbe}, Arr: [4]byte{9, 8, 7, 6}}
+	out, err := encode.Marshal(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(out, []byte(`"b":"AQID/w=="`)) ||
+		!bytes.Contains(out, []byte(`"hex":"deadbe"`)) ||
+		!bytes.Contains(out, []byte(`"arr":[9,8,7,6]`)) {
+		t.Fatalf("wire: %s", out)
+	}
+
+	// jsonv2 reads ggen's default form back.
+	var v2 struct {
+		B [4]byte `json:"b"`
+	}
+	if err := jsonv2.Unmarshal(out, &v2); err != nil || v2.B != in.B {
+		t.Errorf("jsonv2 cannot read ggen wire: %v %v", v2.B, err)
+	}
+
+	back, _, err := ByteArrays{}.DecodeFrom(out)
+	if err != nil || back != in {
+		t.Fatalf("roundtrip: %+v %v", back, err)
+	}
+	var st scan.Stream
+	st.Reset(bytes.NewReader(out), make([]byte, 0, 4))
+	sb, err := ByteArrays{}.DecodeFromStream(&st)
+	if err != nil || sb != in {
+		t.Fatalf("stream roundtrip: %+v %v", sb, err)
+	}
+
+	// Strict length, both directions, both paths.
+	for _, bad := range []string{`{"b":"AQID"}`, `{"b":"AQIDBAU="}`} {
+		var le *validation.LenError
+		if _, _, err := (ByteArrays{}).DecodeFrom([]byte(bad)); !errors.As(err, &le) {
+			t.Errorf("%s bytes: want LenError, got %v", bad, err)
+		}
+		var s2 scan.Stream
+		s2.Reset(bytes.NewReader([]byte(bad)), make([]byte, 0, 4))
+		if _, err := (ByteArrays{}).DecodeFromStream(&s2); !errors.As(err, &le) {
+			t.Errorf("%s stream: want LenError, got %v", bad, err)
 		}
 	}
 }

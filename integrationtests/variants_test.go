@@ -98,3 +98,62 @@ func TestVariants_StreamPath(t *testing.T) {
 		t.Errorf("stream got {Count:%d Price:%d Opt:%d}, want {7 42 0}", got.Count, got.Price, got.Opt)
 	}
 }
+
+// A converter on a NAMED-PRIMITIVE field: the stream path used to route the
+// field through an underlying-typed temp before the converter check and
+// assign the named-typed result into it (non-compiling), and the native
+// variant claimed the OBJECT shape because a named primitive reports
+// KindStruct — so `{"s":42}` hit the dispatch default.
+type Score int
+
+func ScoreFromString(s string) (Score, error) { return Score(len(s)), nil }
+
+// A pointer field in a converter dispatch: the nullzero arm emitted
+// `*int(0)` (zeroLit converted through the POINTER spelling).
+func PtrFromString(s string) (*int, error) { n := len(s); return &n, nil }
+
+//ggen:generate
+type ConvNamed struct {
+	S Score `json:"s" pipe:". / @ScoreFromString"`
+	N *int  `json:"n" pipe:"nullzero / . / @PtrFromString"`
+}
+
+func TestVariants_NamedPrimAndPointer(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		payload string
+		wantS   Score
+		wantN   any // nil or int
+	}{
+		{`{"s":42,"n":7}`, 42, 7},        // both native
+		{`{"s":"abc","n":"abcd"}`, 3, 4}, // both converted
+		{`{"s":1,"n":null}`, 1, nil},     // nullzero arm
+	}
+	for _, c := range cases {
+		for _, path := range []string{"bytes", "stream"} {
+			var got ConvNamed
+			var err error
+			if path == "bytes" {
+				got, _, err = ConvNamed{}.DecodeFrom([]byte(c.payload))
+			} else {
+				var s scan.Stream
+				s.Reset(bytes.NewReader([]byte(c.payload)), make([]byte, 0, 4))
+				got, err = ConvNamed{}.DecodeFromStream(&s)
+			}
+			if err != nil {
+				t.Errorf("%s %s: %v", path, c.payload, err)
+				continue
+			}
+			if got.S != c.wantS {
+				t.Errorf("%s %s: S = %d, want %d", path, c.payload, got.S, c.wantS)
+			}
+			if c.wantN == nil {
+				if got.N != nil {
+					t.Errorf("%s %s: N = %v, want nil", path, c.payload, *got.N)
+				}
+			} else if got.N == nil || *got.N != c.wantN.(int) {
+				t.Errorf("%s %s: N = %v, want %v", path, c.payload, got.N, c.wantN)
+			}
+		}
+	}
+}

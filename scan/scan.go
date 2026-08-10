@@ -419,6 +419,10 @@ func parseHex4(b []byte) (rune, bool) {
 // without decoding — escapes are validated only enough to find the end.
 // Used by SkipValue/skipObject where the value is discarded; avoids the
 // scratch alloc + unescape work String would do on escaped strings.
+// On error the returned position is where the scan GAVE UP: an index
+// strictly inside data for a malformation, len(data) when it ran off the end
+// (see skipValueAt — CaptureValue reads this to tell malformed from
+// truncated). Exported SkipValue still reports 0 on error.
 func skipString(data []byte, i int) (int, error) {
 	j := i + 1
 	// q memoizes the next '"' at or after j (len(data) = none buffered): as j
@@ -439,33 +443,33 @@ func skipString(data []byte, i int) (int, error) {
 		bsRel := bytes.IndexByte(data[j:q], '\\')
 		if q < len(data) && bsRel < 0 {
 			if hasCtrlByte(data[j:q]) {
-				return 0, ErrBadString
+				return j, ErrBadString
 			}
 			return q + 1, nil
 		}
 		if bsRel < 0 {
-			return 0, ErrUnterminated
+			return len(data), ErrUnterminated
 		}
 		bs := j + bsRel
 		if hasCtrlByte(data[j:bs]) {
-			return 0, ErrBadString
+			return j, ErrBadString
 		}
 		if bs+1 >= len(data) {
-			return 0, ErrBadString
+			return len(data), ErrBadString
 		}
 		switch data[bs+1] {
 		case '"', '\\', '/', 'b', 'f', 'n', 'r', 't':
 			j = bs + 2
 		case 'u':
 			if bs+6 > len(data) {
-				return 0, ErrBadString
+				return len(data), ErrBadString
 			}
 			if _, ok := parseHex4(data[bs+2 : bs+6]); !ok {
-				return 0, ErrBadString
+				return bs, ErrBadString
 			}
 			j = bs + 6
 		default:
-			return 0, ErrBadString
+			return bs, ErrBadString
 		}
 	}
 }
@@ -734,7 +738,7 @@ func skipNumber(data []byte, i int) (int, error) {
 		i++
 	}
 	if i >= n {
-		return 0, ErrBadNumber
+		return i, ErrBadNumber
 	}
 	if data[i] == '0' {
 		i++
@@ -744,12 +748,12 @@ func skipNumber(data []byte, i int) (int, error) {
 			i++
 		}
 	} else {
-		return 0, ErrBadNumber
+		return i, ErrBadNumber
 	}
 	if i < n && data[i] == '.' {
 		i++
 		if i >= n || data[i] < '0' || data[i] > '9' {
-			return 0, ErrBadNumber
+			return i, ErrBadNumber
 		}
 		i++
 		for i < n && data[i] >= '0' && data[i] <= '9' {
@@ -762,7 +766,7 @@ func skipNumber(data []byte, i int) (int, error) {
 			i++
 		}
 		if i >= n || data[i] < '0' || data[i] > '9' {
-			return 0, ErrBadNumber
+			return i, ErrBadNumber
 		}
 		i++
 		for i < n && data[i] >= '0' && data[i] <= '9' {
@@ -800,25 +804,61 @@ func Null(data []byte, i int) (int, bool) {
 
 // SkipValue skips any JSON value (literal, number, string, array, object).
 func SkipValue(data []byte, i int) (int, error) {
+	end, err := skipValue(data, i, 0)
+	if err != nil {
+		return 0, err
+	}
+	return end, nil
+}
+
+// litEnd reports where a fixed literal scan gave up: len(data) when data[i:]
+// is a proper PREFIX of want (truncated — more bytes could still complete
+// it), else the index of the first mismatching byte (malformed, final).
+// Bool/Null report position 0 on failure, which would read as "failed at the
+// very start" and wrongly mark a chunked `tru` final.
+func litEnd(data []byte, i int, want string) int {
+	k := 0
+	for i+k < len(data) && k < len(want) && data[i+k] == want[k] {
+		k++
+	}
+	if i+k >= len(data) {
+		return len(data)
+	}
+	return i + k
+}
+
+// skipValueAt is [SkipValue] with the give-up POSITION preserved on error.
+// CaptureValue uses it to tell a TRUNCATED window (the walk ran off the end;
+// more bytes may complete the value) from a MALFORMED one (it failed at a
+// byte strictly inside the window, so the verdict is final no matter what
+// arrives next). Cold path — only after the tier skip has already failed.
+func skipValueAt(data []byte, i int) (int, error) {
 	return skipValue(data, i, 0)
 }
 
 func skipValue(data []byte, i, depth int) (int, error) {
 	i = SkipSpace(data, i)
 	if i >= len(data) {
-		return 0, ErrUnexpectedEnd
+		return i, ErrUnexpectedEnd
 	}
 	switch data[i] {
 	case '"':
 		return skipString(data, i)
 	case 't', 'f':
 		_, j, err := Bool(data, i)
-		return j, err
+		if err != nil {
+			want := "true"
+			if data[i] == 'f' {
+				want = "false"
+			}
+			return litEnd(data, i, want), err
+		}
+		return j, nil
 	case 'n':
 		if j, ok := Null(data, i); ok {
 			return j, nil
 		}
-		return 0, ErrBadLiteral
+		return litEnd(data, i, "null"), ErrBadLiteral
 	case '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
 		return skipNumber(data, i)
 	case '[':
@@ -826,12 +866,12 @@ func skipValue(data []byte, i, depth int) (int, error) {
 	case '{':
 		return skipObject(data, i+1, depth+1)
 	}
-	return 0, ErrBadValue
+	return i, ErrBadValue
 }
 
 func skipArray(data []byte, i, depth int) (int, error) {
 	if depth > MaxDepth {
-		return 0, ErrMaxDepth
+		return i, ErrMaxDepth
 	}
 	i = SkipSpace(data, i)
 	if i < len(data) && data[i] == ']' {
@@ -840,11 +880,11 @@ func skipArray(data []byte, i, depth int) (int, error) {
 	for {
 		j, err := skipValue(data, i, depth)
 		if err != nil {
-			return 0, err
+			return j, err
 		}
 		i = SkipSpace(data, j)
 		if i >= len(data) {
-			return 0, ErrBadArray
+			return i, ErrBadArray
 		}
 		if data[i] == ',' {
 			i++
@@ -853,13 +893,13 @@ func skipArray(data []byte, i, depth int) (int, error) {
 		if data[i] == ']' {
 			return i + 1, nil
 		}
-		return 0, ErrBadArray
+		return i, ErrBadArray
 	}
 }
 
 func skipObject(data []byte, i, depth int) (int, error) {
 	if depth > MaxDepth {
-		return 0, ErrMaxDepth
+		return i, ErrMaxDepth
 	}
 	i = SkipSpace(data, i)
 	if i < len(data) && data[i] == '}' {
@@ -867,24 +907,24 @@ func skipObject(data []byte, i, depth int) (int, error) {
 	}
 	for {
 		if i >= len(data) || data[i] != '"' {
-			return 0, ErrBadObject
+			return i, ErrBadObject
 		}
 		j, err := skipString(data, i)
 		if err != nil {
-			return 0, err
+			return j, err
 		}
 		j = SkipSpace(data, j)
 		if j >= len(data) || data[j] != ':' {
-			return 0, ErrBadObject
+			return j, ErrBadObject
 		}
 		j = SkipSpace(data, j+1)
 		k, err := skipValue(data, j, depth)
 		if err != nil {
-			return 0, err
+			return k, err
 		}
 		i = SkipSpace(data, k)
 		if i >= len(data) {
-			return 0, ErrBadObject
+			return i, ErrBadObject
 		}
 		if data[i] == ',' {
 			i = SkipSpace(data, i+1)
@@ -893,7 +933,7 @@ func skipObject(data []byte, i, depth int) (int, error) {
 		if data[i] == '}' {
 			return i + 1, nil
 		}
-		return 0, ErrBadObject
+		return i, ErrBadObject
 	}
 }
 

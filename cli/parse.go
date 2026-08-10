@@ -893,6 +893,7 @@ func (s *structSet) extractFieldFromTypes(structName string, field *types.Var, t
 			fi.ElemIface = inspectType(elem, s.stdIfaces)
 		}
 	}
+	foldByteArray(&fi)
 
 	if fi.Inline {
 		if fi.Kind != KindMap {
@@ -1066,6 +1067,7 @@ func (s *structSet) extractStruct(name string, st *ast.StructType) (StructInfo, 
 					name, ident.Name), s.fileSet.Position(field.Pos())))
 				continue
 			}
+			foldByteArray(&fi)
 			// Generic sql.Null[T] (Go 1.22): treat the V slot as a bare T.
 			// Needs go/types; the AST-only loader keeps primitives on the
 			// SQLNullSpec path and custom inners on the encoding/json fallback.
@@ -1188,12 +1190,32 @@ func (s *structSet) extractEmbedded(parent string, field *ast.Field) ([]FieldInf
 	return sub.Fields, nil
 }
 
+// checkTagReadable rejects a struct tag that NAMES one of ggen's keys but
+// whose value reflect.StructTag.Get cannot read back. Get unquotes the
+// double-quoted value with Go string rules, so an invalid escape (`\'` — the
+// spelling the docs' "\' is a literal quote" invites inside a backquoted
+// tag) makes Get return "" and every rule in that tag vanish SILENTLY,
+// emitting a field with no validation at all. Inside a backquoted tag the
+// literal quote is `\\'`, which Get unescapes to `\'` for the pipe lexer.
+func checkTagReadable(tag reflect.StructTag, goName string) error {
+	for _, key := range [...]string{"json", "pipe", "hint"} {
+		if strings.Contains(string(tag), key+`:"`) && tag.Get(key) == "" {
+			return fmt.Errorf("field %s: `%s` tag is present but unreadable — reflect.StructTag.Get returned nothing, "+
+				`which silently drops every rule in it (an invalid Go string escape? inside a backquoted tag a literal quote is \', not ')`, goName, key)
+		}
+	}
+	return nil
+}
+
 func extractField(structName, goName string, field *ast.Field) (FieldInfo, error) {
 	// HintLen -1 = unset; a tagless field must not read as an explicit hint:"0"
 	fi := FieldInfo{GoName: goName, StructName: structName, HintLen: -1}
 
 	if field.Tag != nil {
 		tag := reflect.StructTag(strings.Trim(field.Tag.Value, "`"))
+		if err := checkTagReadable(tag, goName); err != nil {
+			return fi, err
+		}
 		jsonName, opts, ignored, err := parseJSONTag(tag.Get("json"))
 		if err != nil {
 			return fi, fmt.Errorf("field %s: %w", goName, err)
@@ -1372,6 +1394,23 @@ func (s *structSet) fixConstArrayLens(fi *FieldInfo, t types.Type) bool {
 	return true
 }
 
+// foldByteArray collapses `[N]byte` / `[N]uint8` onto the KindBytes (base64)
+// path, keeping N in ArrayLen so the emitters can enforce the exact decoded
+// length. jsonv2 base64s a byte ARRAY and REJECTS the number-array form that
+// encoding/json v1 emits — ggen sides with v2, as everywhere else the two
+// disagree. `format:array` opts back into the v1 tuple-of-numbers shape (and
+// every other `format:` — base64url/base32/hex — works too).
+func foldByteArray(fi *FieldInfo) {
+	if fi.Kind != KindArray || fi.ElemPointer || fi.Format == "array" {
+		return
+	}
+	if fi.ElemKind != KindUint8 || (fi.ElemType != "byte" && fi.ElemType != "uint8") {
+		return
+	}
+	fi.Kind = KindBytes
+	fi.ElemKind, fi.ElemType = 0, ""
+}
+
 // arrayLenFromType pulls N out of a "[N]T" type string, 0 on parse failure.
 func arrayLenFromType(typ string) int {
 	if len(typ) < 3 || typ[0] != '[' {
@@ -1428,13 +1467,13 @@ func resolveKind(goType string) TypeKind {
 		return KindInt8
 	case "int16":
 		return KindInt16
-	case "int32":
+	case "int32", "rune":
 		return KindInt32
 	case "int64":
 		return KindInt64
 	case "uint":
 		return KindUint
-	case "uint8":
+	case "uint8", "byte":
 		return KindUint8
 	case "uint16":
 		return KindUint16

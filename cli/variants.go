@@ -49,15 +49,29 @@ func kindShapeBytes(k TypeKind, format string) []string {
 	return nil
 }
 
+// variantShapeKind resolves a type spelling to the kind whose JSON SHAPE it
+// actually has. A named primitive (`type Score int`) reports KindStruct at its
+// use sites, so an unresolved lookup claims the object shape `{` for a value
+// that really decodes as a number — the native variant became unreachable for
+// its own type, and a converter with a named-primitive input W likewise.
+// FieldInfo.NamedPrims is the PARSE-time source (checkVariantShapes runs
+// before namedKinds is seeded); namedKinds covers render time.
+func variantShapeKind(f FieldInfo, goType string, kind TypeKind) TypeKind {
+	if k, ok := f.NamedPrims[goType]; ok {
+		return k
+	}
+	return effectiveKind(goType, kind)
+}
+
 // variantCaseBytes returns the case labels a single variant claims.
 func variantCaseBytes(f FieldInfo, v Variant) []string {
 	switch v.Kind {
 	case VariantNullZero:
 		return []string{"'n'"}
 	case VariantNative:
-		return kindShapeBytes(f.Kind, f.Format)
+		return kindShapeBytes(variantShapeKind(f, f.GoType, f.Kind), f.Format)
 	case VariantConvert:
-		return kindShapeBytes(v.InKind, "")
+		return kindShapeBytes(variantShapeKind(f, v.InType, v.InKind), "")
 	}
 	return nil
 }

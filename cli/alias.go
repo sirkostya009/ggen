@@ -321,6 +321,10 @@ func renderAliasContainerDecode(b *bytes.Buffer, s StructInfo, stream bool) {
 func renderAliasContainerAppendJSON(b *bytes.Buffer, s StructInfo) {
 	f := s.AliasField
 	f.GoType = s.Name
+	// Same shared slot the struct body declares: a delegating element
+	// (nested ggen struct, marshaler alias) emits `dst, err = …`, and this
+	// path has no field loop to have declared it.
+	b.WriteString("var err error\n_ = err\n")
 	switch s.AliasKind {
 	case KindSlice, KindArray:
 		// renderAppendSlice handles both via f.Kind / f.ArrayLen.

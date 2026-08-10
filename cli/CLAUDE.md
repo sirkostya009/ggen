@@ -31,8 +31,16 @@ paths as string literals into generated code.
 ```
 ggen ./...                    every package matched by the pattern (module-scoped, as `go build`)
 ggen <dir>                    one package
+ggen <dir> ./sub/... <dir2>   several targets in one run (each processed, like `go build`)
 ggen <file.go> [Names...]     one file; optional struct name filter
 ```
+
+**Every positional is a target** in dir/pattern mode. They used to be silently
+dropped after the first — so the repo's own
+`ggen ./decode/... ./encode/... ./scan/...` regen line only ever visited
+`decode`. A leading FILE still takes the rest as a struct-name filter (the one
+shape where trailing args are names, not targets); a file in any later
+position is a loud error, and `-o` is rejected with multiple targets.
 
 Packages load via `golang.org/x/tools/go/packages` with full type info; interface
 impls (TextMarshaler, ByteDecoder, JSONMarshaler, …) are picked up and emitted as
@@ -59,7 +67,7 @@ single-package mode. Processing is post-order over the matched import subgraph
 | `-pkg <name>`    | override package name in output                                                                                                                       |
 | `-marshal`       | emit `MarshalJSON` method                                                                                                                             |
 | `-unmarshal`     | emit `UnmarshalJSON` method                                                                                                                           |
-| `-multierr`      | accumulate validation failures into `validation.Errors`, returned at end of parse; parse errors still return immediately                              |
+| `-multierr`      | accumulate validation failures into `validation.Errors`, returned at end of parse; parse errors still return immediately. The drain past a NESTED decode is gated on the callee being multierr too (`multiErrTypes` / `calleeDrains`): a single-error callee returns mid-value, so continuing would resume from a desynced cursor — the inner object's remaining keys used to surface as the PARENT's unknown keys |
 | `-allowdups`     | allow duplicate keys, first-wins (later skipped). Default: `validation.DuplicateKeyError`. NOTE the check is scoped to DECLARED keys (the per-field `seenX` flags) — dups inside skipped / `any` / raw / nested scopes are NOT detected, a decided divergence from jsonv2 (see backlog Tried Rejected) |
 | `-novalidate`    | skip validation rules, required-field checks, mods                                                                                                    |
 | `-ignoreunknown` | silently skip unknown JSON keys. Default: `validation.UnknownKeyError`. Overridden when an inline map field is present                                |
@@ -165,7 +173,14 @@ later stage := step ( WS step )*            // value steps, inner:/keys: levels
 **Lexing/quoting** (`tokenizePipe`): steps are WS-separated; structural glyphs
 `/ ~ ( )` are significant with or without spaces (plus the `inner:`/`keys:` word
 prefixes); a value/message may be single-quoted, required only when it contains
-whitespace; `\'` is a literal quote. Multi-part values (`oneof`/`replace`/
+whitespace; a literal quote is `\\'` in SOURCE (the tag value is a
+double-quoted Go string, so `reflect.StructTag.Get` unescapes it to `\'`
+for the lexer — a bare `\'` makes Get return "" and every rule in the tag
+vanish, which `checkTagReadable` now rejects at parse time). The tokenizer
+PRESERVES `\'` inside quoted spans; unescaping happens downstream in
+`stripQuotes`/`splitPipeParts`, after the part split — unescaping earlier
+handed `splitPipeParts` a bare quote it read as a delimiter toggle.
+Multi-part values (`oneof`/`replace`/
 `clamp`) quote per PART: `parseStep` skips the whole-value strip for them and
 `splitPipeParts` splits on `|` OUTSIDE quotes then strips each part — so
 `oneof='New York'|LA` protects the space and `replace='a|b'|c` a literal
@@ -244,7 +259,13 @@ reset at the top of DecodeFrom so the decoder never appends over carried-in data
   merges; primitive leaves skip the seed. Widened numeric leaves scan into a wide
   temp and cast at the assign site. The leaf decodes natively at every depth — NO
   encoding/json fallback. Same emit on bytes + stream paths
-- fixed arrays `[N]T`: every slot overwritten or strict-length-errors; no entry reset
+- fixed arrays `[N]T`: every slot overwritten or strict-length-errors; no entry
+  reset. A MERGEABLE element is blanked before the element decode (`dst[i] =
+  T{}` for a struct elem; the multi-level pointer cascade builds a fresh chain
+  via `TargetNil`) — decoding a struct in place through its value receiver
+  otherwise MERGED the carried slot, so `[2]Inner` kept fields the payload
+  omitted while `[]Inner` and `[2]*Inner` decoded fresh. jsonv2 zeroes; pinned
+  by `TestMerge_ArraySlotsOverwrite`
 
 JSON `null` for slice/map sets `result.X = nil` (stdlib v1/v2 parity). JSON
 `[]`/`{}` on a non-nil receiver keeps the `[:0]`'d / cleared container; on a nil
@@ -370,7 +391,11 @@ via `types.RelativeTo(s.typesPkg)`.
 ## Supported Go kinds (per field)
 
 - `string`, `bool`
-- `int`/`int8`/`int16`/`int32`/`int64`, `uint`/`uint8`/`uint16`/`uint32`/`uint64`
+- `int`/`int8`/`int16`/`int32`/`int64`, `uint`/`uint8`/`uint16`/`uint32`/`uint64`,
+  plus the builtin aliases `rune` (= int32) and `byte` (= uint8). Both resolve
+  in `resolveKind`; without that a `[]rune` element fell to KindStruct and
+  emitted `append(dst, rune{})` — an accepted annotation whose output did not
+  compile
 - `float32`, `float64`
 - Pointer to any of above (`*T`) — null ↔ nil. Multi-level (`**T`, …) also native:
   decode parses the leaf first then builds/reuses the chain, encode derefs
@@ -429,7 +454,12 @@ via `types.RelativeTo(s.typesPkg)`.
 - `[N]T` (fixed-length array) — JSON tuple with **strict count**: decode errors
   with `validation.LenError{Want:N}` when count ≠ N. Combines/nests freely
   (`[][N]T`, `[N][]T`, `[N][M]T`, …) via the same recursive emitter as `[][]T`.
-  `[]byte` stays KindBytes (base64) — only non-byte arrays get tuple treatment
+  `[]byte` stays KindBytes (base64), and `[N]byte` folds onto the SAME base64
+  path (`foldByteArray`, parse.go) with a strict decoded-length check —
+  jsonv2 base64s byte arrays and rejects the v1 number-array form, so ggen
+  sides with v2 as everywhere else the two disagree. `format:array` opts back
+  into the v1 tuple of numbers. Only non-byte arrays get tuple treatment by
+  default
 
 ## Wire-format divergences from stdlib
 
@@ -1006,6 +1036,34 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
     skip+RawMessage path, differential vs jsonv2 — the skip row is what proves
     the asymmetry is gone) plus updated `scan` lattice + reference-differential
     tests (their zero-padded inputs are now correctly rejected).
+
+53. **Custom time layouts close through the escape helper.** A named
+    `time.X` constant is fixed, ASCII-safe text, but a CUSTOM layout's
+    non-token characters are copied verbatim by `AppendFormat` — so a layout
+    carrying `"` produced INVALID JSON and one carrying `\` a silent
+    backspace escape. `renderAppendTime` routes custom layouts through
+    `encode.CloseJSONString{,HTML}` (the same escape-on-dirty closer the
+    TextAppender sites use, keyed off a field-suffixed `_tf<Field>` mark), and
+    `timeFormatSize` budgets +5 per escape-needing layout byte. Named
+    constants keep the raw append. Pinned by
+    `TestFormat_CustomLayoutEscapes`.
+
+54. **Unreadable struct tags are a generate-time error.** `reflect.StructTag.Get`
+    unquotes the tag value with Go string rules, so an invalid escape (a bare
+    `\'`) makes it return `""` — every `pipe:` rule in that tag vanished
+    SILENTLY and the field emitted with no validation at all. `checkTagReadable`
+    rejects a tag that spells `json:`/`pipe:`/`hint:` but reads back empty,
+    naming the correct spelling (`\\'` in source). Same class as the
+    accepted-tag-emits-broken-code rule, one layer up.
+
+55. **Decode-variant shapes resolve named primitives.** `variantCaseBytes`
+    fed `f.Kind` straight to `kindShapeBytes`, but a named primitive reports
+    KindStruct at its use sites — so the NATIVE variant of a `type Score int`
+    field claimed the object shape `{` and `{"s":42}` fell to the dispatch
+    default, and a converter whose input W was a named primitive was
+    unreachable the same way. `variantShapeKind` resolves through
+    `FieldInfo.NamedPrims` (parse time, before `namedKinds` is seeded) then
+    `effectiveKind` (render time).
 
 ## Named types, cross-package types (defects fixed 2026-07)
 

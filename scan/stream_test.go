@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 	"testing/iotest"
+	"time"
 )
 
 // chunkedReader returns one byte per Read until exhausted. Forces every
@@ -477,6 +478,199 @@ func TestStreamInt_LeadingZeroPeekTransientError(t *testing.T) {
 		t.Errorf("bare 0 uint: got %d, %v", v, err)
 	}
 }
+
+// TestStreamTransientErrorNeverSilentNorMislabeled sweeps every value
+// primitive against a reader that hiccups (0, err) at each byte position.
+// Two failure modes are pinned: the number scanners' refill loops used to
+// `break` on ANY ReadMore error and return the digits scanned so far with a
+// NIL error (silent truncation — `12345` → 1234 at top level), and the
+// string/bool/literal/skip refill arms relabeled the hiccup as a grammar
+// sentinel (ErrUnterminated / ErrBadBool / ErrBadObject), destroying error
+// identity. Both contradict ReadMore's documented contract.
+func TestStreamTransientErrorNeverSilentNorMislabeled(t *testing.T) {
+	t.Parallel()
+	errTransient := errTransientHiccup
+	cases := []struct {
+		name string
+		data string
+		run  func(*Stream) (any, error)
+	}{
+		{"Int64", "12345", func(s *Stream) (any, error) { return s.Int64() }},
+		{"Uint64", "98765", func(s *Stream) (any, error) { return s.Uint64() }},
+		{"Float64", "123.5", func(s *Stream) (any, error) { return s.Float64() }},
+		{"Number", "777", func(s *Stream) (any, error) { return s.Number() }},
+		{"String", `"abcdef"`, func(s *Stream) (any, error) { return s.String(true) }},
+		{"StringEscape", `"a\nb\u0041c"`, func(s *Stream) (any, error) { return s.String(true) }},
+		{"KeyView", `"key"`, func(s *Stream) (any, error) { return s.KeyView(true) }},
+		{"Bool", "true", func(s *Stream) (any, error) { return s.Bool() }},
+		{"Any", "123.5", func(s *Stream) (any, error) { return s.Any() }},
+		{"AnyObject", `{"a":[1,"x"]}`, func(s *Stream) (any, error) { return s.Any() }},
+		{"SkipNumber", "12345", func(s *Stream) (any, error) { return nil, s.SkipValue() }},
+		{"SkipObject", `{"a":1,"b":2}`, func(s *Stream) (any, error) { return nil, s.SkipValue() }},
+		{"SkipString", `"abcdef"`, func(s *Stream) (any, error) { return nil, s.SkipValue() }},
+		{"SkipNull", "null", func(s *Stream) (any, error) { return nil, s.SkipValue() }},
+	}
+	for _, tc := range cases {
+		for at := 1; at <= len(tc.data)+1; at++ {
+			r := &hiccupReader{data: []byte(tc.data), hiccupAt: at}
+			var s Stream
+			s.Reset(r, make([]byte, 0, 1))
+			v, err := tc.run(&s)
+			if r.calls < at {
+				continue // value completed before the hiccup could fire
+			}
+			if err == nil {
+				t.Errorf("%s hiccup@%d: got (%v, nil) — silent truncation", tc.name, at, v)
+				continue
+			}
+			if !errors.Is(err, errTransient) {
+				t.Errorf("%s hiccup@%d: err = %v (%T), want the transient error", tc.name, at, err, err)
+			}
+		}
+	}
+	// Control: the drained-window path still ends values normally, and real
+	// grammar errors still report as grammar errors.
+	var s Stream
+	s.Reset(strings.NewReader("12345"), make([]byte, 0, 1))
+	if v, err := s.Int64(); err != nil || v != 12345 {
+		t.Errorf("clean Int64 = %v, %v", v, err)
+	}
+	s.Reset(strings.NewReader(`"abc`), make([]byte, 0, 1))
+	if _, err := s.String(true); !errors.Is(err, ErrUnterminated) {
+		t.Errorf("unterminated: %v, want ErrUnterminated", err)
+	}
+	s.Reset(strings.NewReader("01"), make([]byte, 0, 1))
+	if _, err := s.Int64(); !errors.Is(err, ErrBadNumber) {
+		t.Errorf("leading zero: %v, want ErrBadNumber", err)
+	}
+}
+
+// The stream number scanners collect a loose [0-9.eE+-] span across refills
+// and then grammar-check it; the GRAMMAR end is authoritative, not the loose
+// scan's, so they stop where the bytes path stops (maximal munch). Erroring
+// on the whole span instead made `1.5.5` / `1e5e` / `01` reject on the
+// stream where the bytes path succeeds — a bytes/stream parity break.
+func TestStreamNumberMaximalMunchMatchesBytes(t *testing.T) {
+	t.Parallel()
+	for _, in := range []string{"01", "1.5.5", "1e5e", "0", "-0", "12345", "1.5", "1e5", "00", "1-2"} {
+		wantV, wantN, wantErr := Float64([]byte(in), 0)
+		var s Stream
+		s.Reset(strings.NewReader(in), make([]byte, 0, 1))
+		gotV, gotErr := s.Float64()
+		if (wantErr == nil) != (gotErr == nil) {
+			t.Errorf("Float64(%q): bytes err %v, stream err %v", in, wantErr, gotErr)
+			continue
+		}
+		if wantErr != nil {
+			continue
+		}
+		if gotV != wantV || s.Pos != wantN {
+			t.Errorf("Float64(%q): stream (%v, pos %d), bytes (%v, pos %d)", in, gotV, s.Pos, wantV, wantN)
+		}
+		// Number mirrors the same extent.
+		wantNum, wantNumN, numErr := Number([]byte(in), 0)
+		s.Reset(strings.NewReader(in), make([]byte, 0, 1))
+		gotNum, gotNumErr := s.Number()
+		if (numErr == nil) != (gotNumErr == nil) {
+			t.Errorf("Number(%q): bytes err %v, stream err %v", in, numErr, gotNumErr)
+			continue
+		}
+		if numErr == nil && (gotNum != wantNum || s.Pos != wantNumN) {
+			t.Errorf("Number(%q): stream (%q, pos %d), bytes (%q, pos %d)", in, gotNum, s.Pos, wantNum, wantNumN)
+		}
+	}
+}
+
+// A live (never-EOF) reader that has delivered a complete but MALFORMED
+// value must get an error, not a hang: the capture loop treated every skip
+// failure as "read more" and blocked in Read forever waiting for bytes that
+// could not repair a malformation sitting before bytes already buffered.
+func TestStreamCaptureValue_LiveMalformedDoesNotHang(t *testing.T) {
+	t.Parallel()
+	for _, payload := range []string{`{"a":}`, `[1,]x`, `{"a" 1}`, `[1 2]`, `tru3`} {
+		done := make(chan error, 1)
+		block := make(chan struct{})
+		go func() {
+			var s Stream
+			s.Reset(&liveReader{data: []byte(payload), block: block}, make([]byte, 0, 64))
+			_, err := s.CaptureValue()
+			done <- err
+		}()
+		select {
+		case err := <-done:
+			if err == nil {
+				t.Errorf("%s: got nil error, want a parse error", payload)
+			}
+		case <-time.After(2 * time.Second):
+			t.Errorf("%s: CaptureValue hung on a live reader", payload)
+		}
+		close(block)
+	}
+}
+
+// A TRUNCATED value on a live reader must still wait (more bytes can
+// complete it) — the control proving the finality check isn't over-eager.
+func TestStreamCaptureValue_LiveTruncatedStillWaits(t *testing.T) {
+	t.Parallel()
+	block := make(chan struct{})
+	done := make(chan error, 1)
+	go func() {
+		var s Stream
+		s.Reset(&liveReader{data: []byte(`{"a":1`), block: block}, make([]byte, 0, 64))
+		_, err := s.CaptureValue()
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		t.Errorf("returned %v on a truncated value; must keep waiting for bytes", err)
+	case <-time.After(200 * time.Millisecond):
+		// Correct: still waiting.
+	}
+	close(block)
+}
+
+// liveReader delivers its payload, then blocks until block is closed (a
+// socket with nothing in flight) and finally reports EOF.
+type liveReader struct {
+	data  []byte
+	pos   int
+	block chan struct{}
+}
+
+func (r *liveReader) Read(p []byte) (int, error) {
+	if r.pos < len(r.data) {
+		n := copy(p, r.data[r.pos:])
+		r.pos += n
+		return n, nil
+	}
+	<-r.block
+	return 0, io.EOF
+}
+
+// hiccupReader delivers one byte per Read except call #hiccupAt, which
+// returns (0, errTransient) — the recoverable-reader class (a net.Conn read
+// deadline), distinct from a drained window.
+type hiccupReader struct {
+	data     []byte
+	pos      int
+	calls    int
+	hiccupAt int
+}
+
+func (r *hiccupReader) Read(p []byte) (int, error) {
+	r.calls++
+	if r.calls == r.hiccupAt {
+		return 0, errTransientHiccup
+	}
+	if r.pos >= len(r.data) {
+		return 0, io.EOF
+	}
+	n := copy(p, r.data[r.pos:r.pos+1])
+	r.pos += n
+	return n, nil
+}
+
+var errTransientHiccup = errors.New("transient")
 
 // flakyReader plays a sequence of string chunks and injected errors.
 type flakyReader struct {

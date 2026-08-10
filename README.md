@@ -107,6 +107,7 @@ type User struct {
 ggen .               # current package
 ggen ./...           # every package matched by the pattern — module-scoped, same as `go build ./...`
 ggen ./pkg/...       # subtree pattern (relative paths must start with `./`)
+ggen ./a ./b/...     # several targets in one run, each processed
 ggen path/to/file.go # one file; optional struct-name filter as trailing args
 ```
 
@@ -245,7 +246,9 @@ skipped silently (no decode wiring, never appear in marshal output) — same as
   the parent object.
 - `format:X` — type-specific format hint (see _supported kinds_ below). Per
   jsonv2, this MUST be the last option in the tag. Single-quote values with
-  special characters (`format:'Jan 2, 2006'`); `\'` is a literal quote.
+  special characters (`format:'Jan 2, 2006'`). A literal quote is `\\'` —
+  the tag value is a double-quoted Go string, so a bare `\'` is an invalid
+  escape that makes the whole tag unreadable (ggen rejects it outright).
 - Names follow jsonv2 quoting too: `json:"'a,b'"` names a field `a,b`,
   `json:"'-'"` names it `-` (only a bare `json:"-"` ignores the field —
   `json:"-,..."` is rejected at generate time, like jsonv2).
@@ -306,7 +309,9 @@ Everything after the decode stage operates on field value. One thing to note is
 5 before clamping, while `clamp=5|10 gte=5` clamps first — and then never fails,
 since the clamped value is always in range.
 
-Values with spaces are single-quoted (`starts='New '`, `\'` = literal quote).
+Values with spaces are single-quoted (`starts='New '`). A literal quote is
+`\\'` (the tag value is a double-quoted Go string — a bare `\'` is an invalid
+escape and ggen rejects the tag rather than silently dropping its rules).
 In `|`-separated lists (`oneof`, `replace`, `clamp`) quote per **part** —
 quotes scope one part and protect a literal pipe: `oneof='New York'|LA`,
 `replace='a|b'|c`.
@@ -428,6 +433,7 @@ if errors.Is(err, scan.ErrBadString) { ... }
 | primitive | `string`, `bool`, `int*`, `uint*`, `float*`                      | scalar | `*T` for any of these — `null` ↔ `nil`; multi-level `**T`/… also supported                 |
 | slice     | `[]T`                                                            | array  | nil → `null`; `[]*T` decodes into a single contiguous `[]T` slab. `[]**T`/… also supported |
 | array     | `[N]T`                                                           | tuple  | strict element count — mismatch → `validation.LenError`; `[N]*T` uses a fixed `[N]T` slab  |
+| array     | `[N]byte`                                                        | base64 string | jsonv2 parity (v1 emits a number array); strict decoded length. `format:array` for the v1 shape |
 | map       | `map[string]V`                                                   | object | string keys only. `map[string]*V` / `**V` / … values decode natively, `null` ↔ `nil`       |
 | struct    | named / embedded                                                 | object | embedded fields are promoted, same as `encoding/json`                                      |
 | cross-pkg | foreign struct / named type                                      | varies | static method-set probe at codegen — see _cross-package interfaces_ below                  |

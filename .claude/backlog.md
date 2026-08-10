@@ -242,15 +242,15 @@ surface pinned by `Decoder[T]`).
   cap exists to protect from pathology, for one-off-by-K at a 10000 cliff.
   DECIDED not worth it; the cap's purpose (no stack overflow) is unaffected.
 
-- **`[N]byte` wire shape: numbers vs base64 (v1/v2 disagree, 2026-08).**
-  ggen emits `[1,2,3,255]` for a byte ARRAY — exact `encoding/json` v1 parity,
-  and what ggen already did before `byte` got a resolveKind case (it decoded
-  each slot through `json.Unmarshal`; the fix only made it a native fast path,
-  wire-identical). jsonv2 instead base64s `[N]byte` (`"AQID/w=="`) and REJECTS
-  the array form. Picking v2 means routing `[N]byte` to KindBytes with a
-  strict decoded-length check (base64 → exactly N bytes, else error) — real
-  work on a shape nobody in-repo uses. `[]byte` is unaffected (base64 in both).
-  Decide if a consumer ever feeds ggen output to a strict v2 decoder.
+- **jsonv2 double-unescapes `\\` inside quoted tag sections (2026-08).**
+  `json:"'a\\b'"` names the field `a`+U+0008 under jsonv2 — it applies Go
+  escape semantics to the section, then again to the result. ggen's tag
+  unquoting treats only `\'` as an escape, so the same tag names the field
+  `a\b` (backslash + b) and a `format:'a\\b 2006'` layout emits those two
+  characters, JSON-escaped. ggen's output is valid and round-trips; only the
+  spelling of a backslash-bearing NAME/LAYOUT differs from jsonv2. Matching
+  the quirk exactly means replicating a double-unescape nobody relies on —
+  revisit only if a consumer feeds ggen tags to jsonv2 and compares keys.
 
 - **base64 `StdEncoding` strips embedded `\r`/`\n` (minor jsonv2 divergence).**
   `{"b":"aG\nVsbG8="}` decodes to "hello" (Go stdlib base64 skips newlines by

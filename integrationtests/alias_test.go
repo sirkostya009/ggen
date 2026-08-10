@@ -7,6 +7,7 @@ package integrationtests
 import (
 	"bytes"
 	"encoding/json"
+	jsonv2 "encoding/json/v2"
 	"errors"
 	"fmt"
 	"reflect"
@@ -699,5 +700,72 @@ func TestNamedPrim_JSONNumberStaysNumeric(t *testing.T) {
 	}
 	if string(out) != `{"n":12.5}` {
 		t.Errorf("wire = %s, want a bare number", out)
+	}
+}
+
+// A container alias whose ELEMENT delegates (nested ggen struct) emits
+// `dst, err = …` in AppendJSON; the alias encode body never declared err, so
+// the whole package failed to compile.
+//
+//ggen:generate
+type InnerBit struct {
+	X int `json:"x"`
+}
+
+//ggen:generate
+type BitItems []InnerBit
+
+//ggen:generate
+type BitLookup map[string]InnerBit
+
+func TestAlias_DelegatingElementCompilesAndRoundtrips(t *testing.T) {
+	t.Parallel()
+	items := BitItems{{X: 1}, {X: 2}}
+	out, err := encode.Marshal(items)
+	if err != nil || string(out) != `[{"x":1},{"x":2}]` {
+		t.Fatalf("BitItems marshal: %s %v", out, err)
+	}
+	var back BitItems
+	if back, _, err = back.DecodeFrom(out); err != nil || !reflect.DeepEqual(back, items) {
+		t.Fatalf("BitItems roundtrip: %v %v", back, err)
+	}
+	lk := BitLookup{"a": {X: 9}}
+	if out, err = encode.Marshal(lk); err != nil || string(out) != `{"a":{"x":9}}` {
+		t.Fatalf("BitLookup marshal: %s %v", out, err)
+	}
+}
+
+// `rune` and `[]rune` are numbers in BOTH stdlib versions; the slice element
+// used to fall to KindStruct and emit `append(dst, rune{})`, which did not
+// compile. (`[N]byte` is base64 — see TestByteArray_Base64StrictLen.)
+//
+//ggen:generate
+type RuneCarrier struct {
+	R []rune `json:"r"`
+	C rune   `json:"c"`
+}
+
+func TestAlias_RuneElements(t *testing.T) {
+	t.Parallel()
+	in := RuneCarrier{R: []rune("héllo"), C: '☃'}
+	out, err := encode.Marshal(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(out) != `{"c":9731,"r":[104,233,108,108,111]}` {
+		t.Fatalf("wire: %s", out)
+	}
+	// Same VALUES as jsonv2 (ggen sorts keys, jsonv2 keeps declaration order).
+	want, err := jsonv2.Marshal(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var gm, wm map[string]any
+	if jsonv2.Unmarshal(out, &gm) != nil || jsonv2.Unmarshal(want, &wm) != nil || !reflect.DeepEqual(gm, wm) {
+		t.Errorf("ggen %s, jsonv2 %s", out, want)
+	}
+	back, _, err := RuneCarrier{}.DecodeFrom(out)
+	if err != nil || !reflect.DeepEqual(back, in) {
+		t.Fatalf("roundtrip: %+v %v", back, err)
 	}
 }

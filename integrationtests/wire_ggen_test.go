@@ -1430,8 +1430,262 @@ func (s TimeCustomTiny) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"customTiny\":\""...)
+	_tfCustomTiny := len(dst)
 	dst = s.CustomTiny.AppendFormat(dst, "2")
-	return append(dst, "\"}"...), nil
+	dst = encode.CloseJSONString(dst, _tfCustomTiny)
+	return append(dst, '}'), nil
+}
+
+func (recv TimeEscapingLayout) DecodeFrom(data []byte) (result TimeEscapingLayout, i int, err error) {
+	result = recv
+	seenQuote := false
+	seenSlash := false
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+	}
+	i++
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		i++
+		return result, i, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
+		}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+			ke++
+		}
+		if ke >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
+		}
+		if data[ke] < 0x20 {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
+		}
+		if data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = scan.String(data, i, true)
+			if err != nil {
+				return result, i, decode.NewParseErr("", i, err)
+			}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		}
+		i++
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch key {
+		case "quote":
+			if seenQuote {
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"quote"}}
+			}
+			seenQuote = true
+			var s string
+			if i >= len(data) || data[i] != '"' {
+				return result, i, decode.NewParseErr("quote", i, scan.ErrExpectString)
+			}
+			ke := i + 1
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+				ke++
+			}
+			if ke < len(data) && data[ke] == '"' {
+				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				s, i, err = scan.String(data, i, true)
+				if err != nil {
+					return result, i, decode.NewParseErr("quote", i, err)
+				}
+			}
+			result.Quote, err = time.Parse("x\"y 2006", s)
+			if err != nil {
+				return result, i, decode.NewParseErr("quote", i, err)
+			}
+		case "slash":
+			if seenSlash {
+				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"slash"}}
+			}
+			seenSlash = true
+			var s string
+			if i >= len(data) || data[i] != '"' {
+				return result, i, decode.NewParseErr("slash", i, scan.ErrExpectString)
+			}
+			ke := i + 1
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+				ke++
+			}
+			if ke < len(data) && data[ke] == '"' {
+				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				s, i, err = scan.String(data, i, true)
+				if err != nil {
+					return result, i, decode.NewParseErr("slash", i, err)
+				}
+			}
+			result.Slash, err = time.Parse("a\\b 2006", s)
+			if err != nil {
+				return result, i, decode.NewParseErr("slash", i, err)
+			}
+		default:
+			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			i++
+			return result, i, nil
+		}
+		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+	}
+}
+
+func (recv TimeEscapingLayout) DecodeFromStream(s *scan.Stream) (result TimeEscapingLayout, err error) {
+	result = recv
+	seenQuote := false
+	seenSlash := false
+	err = s.ObjectOpen()
+	if err != nil {
+		return result, decode.NewParseErr("", s.Pos, err)
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, decode.NewParseErr("", s.Pos, err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView(true)
+		if err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		switch key {
+		case "quote":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("quote", s.Pos, err)
+			}
+			if seenQuote {
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"quote"}}
+			}
+			seenQuote = true
+			var sv string
+			sv, err = s.StringView(true)
+			if err != nil {
+				return result, decode.NewParseErr("quote", s.Pos, err)
+			}
+			result.Quote, err = time.Parse("x\"y 2006", sv)
+			if err != nil {
+				return result, decode.NewParseErr("quote", s.Pos, err)
+			}
+		case "slash":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, decode.NewParseErr("slash", s.Pos, err)
+			}
+			if seenSlash {
+				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"slash"}}
+			}
+			seenSlash = true
+			var sv string
+			sv, err = s.StringView(true)
+			if err != nil {
+				return result, decode.NewParseErr("slash", s.Pos, err)
+			}
+			result.Slash, err = time.Parse("a\\b 2006", sv)
+			if err != nil {
+				return result, decode.NewParseErr("slash", s.Pos, err)
+			}
+		default:
+			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+		}
+
+		err = s.SkipSpace()
+		if err != nil {
+			return result, decode.NewParseErr("", s.Pos, err)
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, decode.NewParseErr("", s.Pos, err)
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, decode.NewParseErr("", s.Pos, err)
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			return result, nil
+		}
+		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+	}
+}
+
+func (s TimeEscapingLayout) JSONSize() int {
+	size := 121
+	return size
+}
+
+func (s TimeEscapingLayout) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"quote\":\""...)
+	_tfQuote := len(dst)
+	dst = s.Quote.AppendFormat(dst, "x\"y 2006")
+	dst = encode.CloseJSONString(dst, _tfQuote)
+	dst = append(dst, ",\"slash\":\""...)
+	_tfSlash := len(dst)
+	dst = s.Slash.AppendFormat(dst, "a\\b 2006")
+	dst = encode.CloseJSONString(dst, _tfSlash)
+	return append(dst, '}'), nil
 }
 
 func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct, i int, err error) {
@@ -2845,12 +3099,18 @@ func (s TimeFormatsStruct) AppendJSON(dst []byte) ([]byte, error) {
 	dst = append(dst, "{\"ansic\":\""...)
 	dst = s.ANSIC.AppendFormat(dst, time.ANSIC)
 	dst = append(dst, "\",\"customComma\":\""...)
+	_tfCustomComma := len(dst)
 	dst = s.CustomComma.AppendFormat(dst, "Jan 2, 2006")
-	dst = append(dst, "\",\"customLong\":\""...)
+	dst = encode.CloseJSONString(dst, _tfCustomComma)
+	dst = append(dst, ",\"customLong\":\""...)
+	_tfCustomLong := len(dst)
 	dst = s.CustomLong.AppendFormat(dst, "2006-Jan-02T15:04:05.000000000_Mon_-0700")
-	dst = append(dst, "\",\"customTiny\":\""...)
+	dst = encode.CloseJSONString(dst, _tfCustomLong)
+	dst = append(dst, ",\"customTiny\":\""...)
+	_tfCustomTiny := len(dst)
 	dst = s.CustomTiny.AppendFormat(dst, "2")
-	dst = append(dst, "\",\"dateOnly\":\""...)
+	dst = encode.CloseJSONString(dst, _tfCustomTiny)
+	dst = append(dst, ",\"dateOnly\":\""...)
 	dst = s.DateOnly.AppendFormat(dst, time.DateOnly)
 	dst = append(dst, "\",\"dateTime\":\""...)
 	dst = s.DateTime.AppendFormat(dst, time.DateTime)

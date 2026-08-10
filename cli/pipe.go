@@ -129,13 +129,17 @@ func tokenizePipe(tag string) ([]ptok, error) {
 					break
 				}
 				if ch == '\'' {
-					// Quoted span: copy literally to the closing quote (\' is an
-					// escaped quote). Quotes kept; stripQuotes removes them later.
+					// Quoted span: copy literally to the closing quote, KEEPING
+					// the `\'` escape intact. Unescaping here would hand
+					// splitPipeParts (multi-part values) a bare quote it reads
+					// as a real delimiter, so `oneof='it\'s'|no` collapsed into
+					// one garbage entry. stripQuotes / splitPipeParts do the
+					// unescaping downstream, after the part split.
 					sb.WriteByte('\'')
 					i++
 					for i < n {
 						if tag[i] == '\\' && i+1 < n && tag[i+1] == '\'' {
-							sb.WriteByte('\'')
+							sb.WriteString(`\'`)
 							i += 2
 							continue
 						}

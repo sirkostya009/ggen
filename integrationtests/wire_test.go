@@ -12,6 +12,7 @@ import (
 	"bytes"
 	"encoding/base32"
 	"encoding/base64"
+	"encoding/json"
 	"encoding/hex"
 	"encoding/json/jsontext"
 	jsonv2 "encoding/json/v2"
@@ -672,6 +673,52 @@ type TimeStampNano struct {
 //ggen:generate
 type TimeCustomTiny struct {
 	CustomTiny time.Time `json:"customTiny,format:'2'"`
+}
+
+// A custom layout's literal characters are copied verbatim by AppendFormat,
+// so one carrying `"` or `\` used to land raw between the quotes — invalid
+// JSON for the quote, a silent backspace escape for the backslash. Both now
+// close through the escape-on-dirty helper.
+//
+//ggen:generate
+type TimeEscapingLayout struct {
+	Quote time.Time `json:"quote,format:'x\"y 2006'"`
+	Slash time.Time `json:"slash,format:'a\\b 2006'"`
+}
+
+func TestFormat_CustomLayoutEscapes(t *testing.T) {
+	t.Parallel()
+	when := time.Date(2026, 8, 9, 1, 2, 3, 0, time.UTC)
+	in := TimeEscapingLayout{Quote: when, Slash: when}
+	out, err := encode.Marshal(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !json.Valid(out) {
+		t.Fatalf("invalid JSON: %s", out)
+	}
+	got := objectKeys(t, out)
+	var q, sl string
+	if err := jsonv2.Unmarshal([]byte(got["quote"]), &q); err != nil {
+		t.Fatalf("quote value: %v (%s)", err, got["quote"])
+	}
+	if err := jsonv2.Unmarshal([]byte(got["slash"]), &sl); err != nil {
+		t.Fatalf("slash value: %v (%s)", err, got["slash"])
+	}
+	if q != when.Format(`x"y 2006`) {
+		t.Errorf("quote layout: %q, want %q", q, when.Format(`x"y 2006`))
+	}
+	if sl != when.Format(`a\b 2006`) {
+		t.Errorf("slash layout: %q, want %q", sl, when.Format(`a\b 2006`))
+	}
+	// The widened budget still bounds the escaped output.
+	if n := in.JSONSize(); len(out) > n {
+		t.Errorf("JSONSize %d < output %d", n, len(out))
+	}
+	got2, err := in.AppendJSON(make([]byte, 0, in.JSONSize()))
+	if err != nil || cap(got2) != in.JSONSize() {
+		t.Errorf("realloc: size %d cap %d err %v", in.JSONSize(), cap(got2), err)
+	}
 }
 
 // TimeFormatsStruct is TimeFormatsStdCompat plus the jsonv2-rejected formats

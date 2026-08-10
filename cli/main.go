@@ -127,47 +127,59 @@ func main() {
 		flag.Usage()
 		os.Exit(2)
 	}
-	target := positional[0]
-
 	// -dry emits no file, so -o / -pkg are dead — reject rather than drop.
 	if cliDry && (outFlag != "" || pkgFlag != "") {
 		cliLog.Fatal(errors.New("-o / -pkg cannot be used with -dry (dry run emits no file)"))
 	}
 
-	if strings.HasSuffix(target, "...") {
-		if outFlag != "" {
-			cliLog.Fatal(errors.New("-o cannot be used with ./... (pattern matches multiple packages; each writes its own output)"))
-		}
-		// Pattern mode collects per-package errors rather than bailing; only
-		// packages.Load failures (no go.mod, bad pattern) are fatal.
-		act := func(dir string) error { return generateDir(dir, "", "") }
+	// A leading FILE takes the rest as a struct-name filter; anything else
+	// (dir / pattern) makes every positional its own target, like `go build`.
+	if info, err := os.Stat(positional[0]); err == nil && !info.IsDir() {
 		if cliDry {
-			act = checkPackage
-		}
-		if err := walkPackages(target, act); err != nil {
-			cliLog.Fatal(err)
-		}
-	} else if info, err := os.Stat(target); err != nil {
-		cliLog.Fatal(err)
-	} else if info.IsDir() {
-		var err error
-		if cliDry {
-			err = checkPackage(target)
+			err = checkFile(positional[0], positional[1:])
 		} else {
-			err = generateDir(target, outFlag, pkgFlag)
+			err = generateSingleFile(positional[0], positional[1:], outFlag, pkgFlag)
 		}
 		if err != nil {
 			cliLog.Error(err)
 		}
 	} else {
-		var err error
-		if cliDry {
-			err = checkFile(target, positional[1:])
-		} else {
-			err = generateSingleFile(target, positional[1:], outFlag, pkgFlag)
+		if outFlag != "" && len(positional) > 1 {
+			cliLog.Fatal(errors.New("-o cannot be used with multiple targets (each package writes its own output)"))
 		}
-		if err != nil {
-			cliLog.Error(err)
+		for _, target := range positional {
+			if strings.HasSuffix(target, "...") {
+				if outFlag != "" {
+					cliLog.Fatal(errors.New("-o cannot be used with ./... (pattern matches multiple packages; each writes its own output)"))
+				}
+				// Pattern mode collects per-package errors rather than bailing;
+				// only packages.Load failures (no go.mod, bad pattern) are fatal.
+				act := func(dir string) error { return generateDir(dir, "", "") }
+				if cliDry {
+					act = checkPackage
+				}
+				if err := walkPackages(target, act); err != nil {
+					cliLog.Fatal(err)
+				}
+				continue
+			}
+			info, err := os.Stat(target)
+			if err != nil {
+				cliLog.Fatal(err)
+			}
+			if !info.IsDir() {
+				// Only the FIRST positional may be a file (its trailing args
+				// are struct names); a file here is a mixed-target mistake.
+				cliLog.Fatal(fmt.Errorf("%s: file targets must come first (ggen <file.go> [Names...]); mixing files with packages is not supported", target))
+			}
+			if cliDry {
+				err = checkPackage(target)
+			} else {
+				err = generateDir(target, outFlag, pkgFlag)
+			}
+			if err != nil {
+				cliLog.Error(err)
+			}
 		}
 	}
 
@@ -338,10 +350,12 @@ func generateDir(dir, outFlag, pkgFlag string) error {
 		generatedTypes[s.Name] = struct{}{}
 	}
 	seedNamedKinds(structs)
+	multiErrTypes = seedMultiErrTypes(structs)
 	cyclicTypes = computeCyclicTypes(structs)
 	defer func() {
 		generatedTypes = nil
 		namedKinds = nil
+		multiErrTypes = nil
 		cyclicTypes = nil
 	}()
 
@@ -480,9 +494,11 @@ func generateSingleFile(file string, wanted []string, outFlag, pkgFlag string) e
 		generatedTypes[s.Name] = struct{}{}
 	}
 	seedNamedKinds(structs)
+	multiErrTypes = seedMultiErrTypes(structs)
 	defer func() {
 		generatedTypes = nil
 		namedKinds = nil
+		multiErrTypes = nil
 		cyclicTypes = nil
 	}()
 

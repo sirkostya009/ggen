@@ -280,6 +280,35 @@ sitting unread in the buffer). The old sticky `Err`/`EOF` fields were deleted wi
 the `Shift` flag — the only cross-refill EOF consumer is `CaptureValue`, which
 tracks it as a local (`ReadMore == io.ErrUnexpectedEOF` ⇒ drained).
 
+**Reader errors are never silently swallowed or relabeled.** `ReadMore`
+returns `io.ErrUnexpectedEOF` for a drained window and the reader's own error
+otherwise, and every refill site now distinguishes the two:
+
+- The number scanners (`Int64`/`Uint64`/`Float64`/`Number`, plus `refillSkip`
+  behind `skipNumber`) used to `break` on ANY refill error and return the
+  digits scanned so far with a NIL error — `s.Int64()` on `"12345"` with one
+  transient reader hiccup returned `1234, nil`. Silent at top level (an alias
+  decoder returns `s.Int64()` directly), a bogus grammar error one frame up.
+  They now propagate anything that is not `io.ErrUnexpectedEOF`; `skipNumber`
+  threads the error out of `refillSkip` and prefers it over `ErrBadNumber`.
+- The string/key/bool/literal/skip refill arms returned a GRAMMAR sentinel
+  (`ErrUnterminated`/`ErrBadString`/`ErrBadBool`/`ErrBadLiteral`/`ErrBadArray`/
+  `ErrBadObject`) for a reader hiccup, destroying error identity. All 15 route
+  through `notEOF(err, sentinel)`, which keeps a real error and maps only the
+  drained case to the sentinel.
+
+Pinned by `TestStreamTransientErrorNeverSilentNorMislabeled` (every value
+primitive × every byte position, plus a drained-window and grammar-error
+control) — it fails 44 ways against the old code.
+
+**Stream numbers are maximal-munch, like the bytes path.** The refill loop
+collects a loose `[0-9.eE+-]` span (it doubles as the extent finder), then
+`skipNumber` grammar-checks it — and the GRAMMAR end is authoritative, not the
+loose scan's. Erroring when the two disagreed made `1.5.5` / `1e5e` / `01`
+reject on the stream where the bytes path returns `1.5` / `100000` / `0` and
+leaves the rest to the caller. Pinned by
+`TestStreamNumberMaximalMunchMatchesBytes`.
+
 **Aggressive compaction inside Stream methods.** `SkipSpace`, `ConsumeColon`,
 `Int64`/`Uint64`, `String`/`KeyView`, `Float64`/`Number` pass non-zero `keep`
 (current cursor, or value-start `start` for spans outlasting the loop) so the
@@ -313,10 +342,16 @@ SIMD skip: tiers are thin wrappers (`CaptureValueAVX{,2,512}`) calling the bytes
 returns `io.ErrUnexpectedEOF`), **or the value is self-delimiting** (first
 non-WS byte is not `-`/digit — closing quote/bracket/fixed literal make the
 end final even at the window edge); only a NUMBER `123` at the edge refills,
-since it could continue `1234`. A skip ERROR on a partial window
-is indistinguishable from truncation (no error position), so it also means "read
-more" and only surfaces once drained — malformed input buffers the stream
-remainder before erroring. The FIRST refill compacts the consumed prefix (`ReadMore(start)`,
+since it could continue `1234`. A skip ERROR is classified rather than
+assumed truncated: `skipValueAt` (the scalar walk, which PRESERVES the position
+where it gave up — exported `SkipValue` still reports 0 on error, and the SIMD
+entry points normalize to match) re-walks the window, and a failure at a byte
+STRICTLY INSIDE it is final — no byte that has not arrived can repair a
+malformation sitting before bytes already held. Only an off-the-end failure
+keeps reading. Without this a live (never-EOF) reader that had delivered a
+complete but malformed value blocked in `Read` FOREVER; pinned by
+`TestStreamCaptureValue_LiveMalformedDoesNotHang` plus a truncated-value
+control that must still wait. The FIRST refill compacts the consumed prefix (`ReadMore(start)`,
 rebase `start = 0`) so the window grows for the value only, never dragging dead
 bytes through each doubling; entry deliberately does not compact (the value may
 already be fully buffered and ReadMore always Reads — could block a live socket).

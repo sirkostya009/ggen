@@ -4,6 +4,7 @@ import (
 	"encoding"
 	"encoding/base64"
 	"encoding/json"
+	"math/big"
 	"reflect"
 	"strconv"
 	"strings"
@@ -209,6 +210,19 @@ func appendAny(dst []byte, v any, esc escapeFn) ([]byte, error) {
 			return append(dst, 'n', 'u', 'l', 'l'), nil
 		}
 		return append(dst, x...), nil
+	// go1.24 gave big.Int an AppendText, so the TextAppender dispatch below
+	// would quote its digits — but v1, jsonv2 AND ggen's own KindBigInt field
+	// wire all emit a BARE NUMBER. Exactly the hazard the case-ordering rule
+	// warns about (a type whose MarshalJSON shape differs from its AppendText
+	// body needs a concrete case first). big.Float/big.Rat need no case: their
+	// text form IS their quoted-string wire.
+	case big.Int:
+		return x.Append(dst, 10), nil
+	case *big.Int:
+		if x == nil {
+			return append(dst, 'n', 'u', 'l', 'l'), nil
+		}
+		return x.Append(dst, 10), nil
 	case time.Time:
 		return appendTime(dst, x)
 	case *time.Time:
@@ -693,6 +707,12 @@ func quotableKind(t reflect.Type) bool {
 	if t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
+	// json.Number is a named STRING whose wire shape is a NUMBER, so both
+	// stdlib versions DO quote it under `,string` — the one string-kind
+	// exception (unlike bool, which jsonv2 deliberately stopped quoting).
+	if t == numberType {
+		return true
+	}
 	switch t.Kind() {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
 		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
@@ -701,6 +721,8 @@ func quotableKind(t reflect.Type) bool {
 	}
 	return false
 }
+
+var numberType = reflect.TypeFor[json.Number]()
 
 func hasTagOpt(opts, want string) bool {
 	for opts != "" {
