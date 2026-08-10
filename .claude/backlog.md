@@ -49,6 +49,56 @@ shaves routinely vanish in wall clock.
   `classifyStructural` sized `stringSlow` off the first quote, not the real
   unescaped close via `stringSpanEnd` — SIMD escape decode 44→4 allocs.)
 
+- **simdjson stage-1 block-mask skip (the "SkipHeavy prize") — REJECTED,
+  measured (2026-08).** Built in full for the avx512 tier: per 64-byte block,
+  classify quote/backslash/ctrl + whitespace and structural via two nibble-LUT
+  PSHUFBs (the `|0x20` curlify fold; its only false positives, 0x0C→`,` and
+  0x1A→`:`, are control bytes filtered by `&^ mCtrl`), derive escaped bytes
+  from the odd-backslash-run trick, `in_string = prefix_xor(unescaped quotes)`
+  carried across blocks, then a scalar state machine over ONLY the structural
+  bits (depth stack, comma/colon placement, key-must-be-string, no trailing
+  comma; numbers/literals validated by the existing scalar validators at the
+  token starts the masks hand it). Full validation retained; on any doubt it
+  returned ok=false and the byte-wise tree re-ran to own the exact sentinel, so
+  error identity was parity-by-construction. Correct (exhaustive LUT probe over
+  all 256 bytes, prefix-xor vs naive, mutation/truncation/seam parity, a
+  "must actually vouch" test that caught a real bug: token emission used raw
+  `mQuote & inStr`, so an ESCAPED quote inside a string was emitted as a
+  string-start token).
+  **SkipHeavy compact +16.8%** (4.08 → 4.77 ms), pretty only −2.4%; controls
+  <1.2%. Diagnosis is conclusive and kills the whole shape: with the token
+  dispatch neutered entirely, the MASK COMPUTATION ALONE measured 4.26 ms on
+  compact — already above the old tree's 4.08 ms TOTAL. The report's premise
+  ("replace a per-structural-char scalar tree") was wrong about this baseline:
+  ggen's skip tier ALREADY vectorizes exactly what the block walk was meant to
+  accelerate — `skipString*` locates via `structuralIndex*` (~3 compares/64 B,
+  and it exits at the closing quote) and `SkipSpace*` skips whitespace runs by
+  lane. The block walk instead pays ~5 masks + 2 shuffles per 64 B over EVERY
+  byte, including string interiors it cannot exit early from. simdjson wins
+  this because stage 1 indexes the document ONCE and every later pass is
+  index-driven; amortising stage-1 cost over a single skip does not pay.
+  Don't retry unless the skip becomes index-driven across many values (i.e. a
+  document-level index ggen deliberately does not build), or the baseline
+  loses its vector string/whitespace scans.
+
+- **Two-block software pipelining in `validUTF8x64` (simdjson `step<128>`) —
+  REJECTED, measured (2026-08).** Unrolled the wide loop to 128 B/iteration with
+  two INDEPENDENT error accumulators, on the theory that the per-block
+  `errAcc` accumulate serialized the classify chains. Consistently 2-6% SLOWER
+  (4 KB 104.3 → 110.0 ns, 16 KB 409.5 → 432.4, 192 B +5.6%). The loop was
+  already ILP-rich — prevN come from four INDEPENDENT loads, so consecutive
+  blocks share only a 1-cycle VPOR — and the real limiter is VPSHUFB
+  throughput on the shuffle port (3 per block), which unrolling cannot raise.
+  The bigger body only adds register pressure and code size. Don't retry on
+  this kernel; the same "already ILP-saturated, shuffle-port-bound" argument
+  likely applies to the other classify loops.
+  METHODOLOGY NOTE: the first attempt at this A/B compared numbers across two
+  separate `go test -bench` invocations and read a false ~10%; the SAME code
+  re-measured 104 → 113 ns between runs. Only the two-built-binaries form
+  (`go test -c`, one pinned pass each) reproduced the baseline exactly and
+  showed the true 2-6%. In-process `-bench` runs at different `-benchtime`
+  are NOT comparable on this micro.
+
 Rejected from past hunts, do not retry without a new argument: **[17]** positional
 next-key predictor (payload-order-dependent), **[23]** indexed marshal loop
 (go1.26 already folds the range copy) + pointer-receiver cores (vetoed — public
@@ -191,6 +241,16 @@ surface pinned by `Decoder[T]`).
   through every acyclic struct — codegen churn + a runtime add on shapes the
   cap exists to protect from pathology, for one-off-by-K at a 10000 cliff.
   DECIDED not worth it; the cap's purpose (no stack overflow) is unaffected.
+
+- **`[N]byte` wire shape: numbers vs base64 (v1/v2 disagree, 2026-08).**
+  ggen emits `[1,2,3,255]` for a byte ARRAY — exact `encoding/json` v1 parity,
+  and what ggen already did before `byte` got a resolveKind case (it decoded
+  each slot through `json.Unmarshal`; the fix only made it a native fast path,
+  wire-identical). jsonv2 instead base64s `[N]byte` (`"AQID/w=="`) and REJECTS
+  the array form. Picking v2 means routing `[N]byte` to KindBytes with a
+  strict decoded-length check (base64 → exactly N bytes, else error) — real
+  work on a shape nobody in-repo uses. `[]byte` is unaffected (base64 in both).
+  Decide if a consumer ever feeds ggen output to a strict v2 decoder.
 
 - **base64 `StdEncoding` strips embedded `\r`/`\n` (minor jsonv2 divergence).**
   `{"b":"aG\nVsbG8="}` decodes to "hello" (Go stdlib base64 skips newlines by
