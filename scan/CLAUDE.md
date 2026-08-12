@@ -69,7 +69,13 @@ Primitives: `SkipSpace`, `String`, `Int64`, `Uint64`, `Float64`, `Bool`,
   the original instruction sequence — the ≤16 B gate caps `frac` at 15, so
   they need no `|power|` range check; without that split the plain rows
   measured +5%. Declining an out-of-range exponent costs ~1.6 ns before
-  ParseFloat takes over. Pinned by `TestExactShort_ParseFloatDifferential`
+  ParseFloat takes over. The exponent digit loop clamps its `int` accumulator
+  past 999 instead of accumulating unboundedly (found+fixed 2026-08) — any
+  span this function accepts needs `|exp - frac| ≤ 22` with `frac ≤ 15`, so
+  no legitimate exponent exceeds ~37, but on a 32-bit `int` (`GOARCH=386`) a
+  pathological digit run like `1e4294967296` wrapped the accumulator back
+  through zero instead of correctly bailing to ParseFloat, silently
+  returning the wrong float. Pinned by `TestExactShort_ParseFloatDifferential`
   (1.5M randomized spans incl. a well-formed-exponent generator, bit-identity
   incl. -0 + accept/reject parity, plus must-accept/must-decline assertions —
   the differential only checks ACCEPTED results, so a fast path that silently
@@ -503,6 +509,27 @@ to a tier (`tierStreamStringCalls`). Measured at avx512: SkipHeavy ggen_stream
 compact −32.6%, pretty −25.6%; Mega_Reader flat (copy mallocs dominate).
 Pinned by `TestStreamSkipValueSIMD_Parity` (chunked readers ×
 truncations at every byte).
+
+**Correctness fixes (found+fixed 2026-08, audit round 4) — the tiers now
+actually match the scalar contracts this section already documented:**
+`CaptureValueAVX{,2,512}` were missing the malformed-inside-window finality
+check (see `CaptureValue` below) entirely — on any tier-skip error with the
+window not yet drained, they went straight to `ReadMore` instead of
+classifying the failure first, so a complete-but-malformed value on a live
+(never-EOF) reader blocked in `Read` forever; they now re-walk via
+`skipValueAt` and bail the same way the scalar path does.
+`skipSpaceSlowAVX{,2,512}` rebased `s.Pos = i` after a compacting
+`ReadMore(i)` instead of `s.Pos = 0` — `i` was the OLD (pre-compaction)
+buffer length, a stale index once `ReadMore` truncated `s.buf` to `[:0]`
+(`ReadMore` always fully discards here since `keep == len(s.buf)` exactly at
+every call site), overcounting every subsequent `Offset()`. And the ~15
+refill sites across `skipStringStreamTail`/`skipString*`/`skipNull`/
+`skipArray*`/`skipObject*` returned a bare grammar sentinel
+(`ErrBadString`/`ErrUnterminated`/`ErrBadLiteral`/`ErrBadArray`/
+`ErrBadObject`) on ANY `ReadMore` failure — including a transient reader
+error unrelated to malformed JSON — instead of routing through `notEOF`
+like the scalar tree already does (see "Reader errors are never silently
+swallowed or relabeled" above); they now do.
 
 **Skip-tree compaction (scalar + tiers, shipped with the tier).** The skip
 tree used to refill with grow-only `ReadMore(0)`, and readers fill the whole

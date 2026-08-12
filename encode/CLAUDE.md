@@ -30,6 +30,9 @@ func WriteSliceTo[T Marshaler](w io.Writer, items []T) error
 func BytesToString(buf []byte) string                // unsafe.String over buffer
 func AppendString(dst []byte, s string) []byte       // HTML-safe variant
 func AppendNetipAddr(dst []byte, a netip.Addr) []byte // addr text + closing `"`; zoned text re-escapes (zones are arbitrary bytes)
+func AppendNetipAddrHTML(dst []byte, a netip.Addr) []byte // htmlescape variant
+func AppendURL(dst []byte, u url.URL) []byte          // wire-form text + closing `"`, re-escapes when needed
+func AppendURLHTML(dst []byte, u url.URL) []byte      // htmlescape variant
 func CloseJSONString(dst []byte, from int) []byte     // close raw-appended text (TextAppender output), re-escaping iff dirty
 func CloseJSONStringHTML(dst []byte, from int) []byte // htmlescape variant
 func AppendStringNoHTML(dst []byte, s string) []byte // jsonv2-default variant
@@ -37,6 +40,14 @@ func AppendFloat(dst []byte, v float64, bitSize int) ([]byte, error) // stdlib-p
 func AppendAny(dst []byte, v any) ([]byte, error)     // any-walker, NoHTML escaping
 func AppendAnyHTML(dst []byte, v any) ([]byte, error) // any-walker, HTML-safe escaping
 ```
+
+`AppendURLHTML`/`AppendNetipAddrHTML` (added 2026-08) close through
+`CloseJSONStringHTML` instead of `CloseJSONString` — before them, `url.go`
+and `netip_addr.go` had only the NoHTML closer, so a `net/url.URL` or zoned
+`netip.Addr` field on an `htmlescape` struct silently ignored the mode (every
+other string-shaped field on the struct escaped `<`/`>`/`&`, these two
+didn't). Codegen (`appendURLFn`/`appendNetipAddrFn`, cli/CLAUDE.md) now
+picks the pair by `f.HTMLEscape` like every other string emitter.
 
 ## `AppendFloat` — stdlib-parity format selection
 
@@ -183,7 +194,21 @@ that would otherwise catch them:
    bare number — exactly the hazard this ordering rule exists for.
    `big.Float`/`big.Rat` need no case: their text form IS their quoted wire.
 5. **Interface fallbacks** — ggen `Marshaler` / `json.Marshaler` /
-   `encoding.TextAppender` / `encoding.TextMarshaler`.
+   `encoding.TextAppender` / `encoding.TextMarshaler`. All four arms guard a
+   typed-nil pointer (`isNilPtr`) before invoking the method and emit `null`
+   instead — a typed-nil `*T` satisfies these interfaces whenever T's methods
+   have value receivers (true of every ggen-generated struct's
+   `AppendJSON`/`JSONSize`), so the type switch matches it here BEFORE the
+   `reflect.Pointer` nil check in step 6 ever runs, and calling the method
+   nil-derefs (`AppendAny(nil, (*M)(nil))` used to panic; stdlib emits
+   `null`). `isNilPtr` reads the interface's data word directly via
+   `unsafe.Pointer` rather than `reflect.ValueOf` — a boxed pointer's data
+   word IS the pointer (nil iff the pointer is nil), and no other kind boxes
+   through a nil data word (Go 1.4+ interface representation), so this can't
+   false-positive. `reflect.ValueOf` measured **+51% ns/op** on the common
+   non-nil path in an in-situ core-pinned A/B (this dispatch arm fires for
+   every `any`-typed struct field on the fast path) — the unsafe read costs
+   <1% over no guard at all.
 6. **Reflection** — slices/arrays/maps/pointers/structs (json-tag parsing for
    struct walking), keeping nested ggen `Marshaler` / `TextAppender` on the fast
    path. The `reflect.Map` walk reuses two addressable scratch `reflect.Value`s

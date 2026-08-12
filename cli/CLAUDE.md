@@ -169,6 +169,11 @@ later stage := step ( WS step )*            // value steps, inner:/keys: levels
   message-capable). `func(bool)bool` is rejected. Bool forms carry an inline
   message `@Even:'must be even'`. Cross-package via source-file imports; blank
   imports work.
+  `@Conv` converter INPUT types (`W` in `func(W) T`) are peeled of every
+  pointer level before the foreign-package and container checks run — a
+  `*[]int`/`*other.T` input used to dodge both — and `chan`/`func`/interface
+  inputs are rejected outright alongside the existing slice/array/map
+  rejection (none have a wire shape a converter call site can scan into).
 
 **Lexing/quoting** (`tokenizePipe`): steps are WS-separated; structural glyphs
 `/ ~ ( )` are significant with or without spaces (plus the `inner:`/`keys:` word
@@ -176,7 +181,12 @@ prefixes); a value/message may be single-quoted, required only when it contains
 whitespace; a literal quote is `\\'` in SOURCE (the tag value is a
 double-quoted Go string, so `reflect.StructTag.Get` unescapes it to `\'`
 for the lexer — a bare `\'` makes Get return "" and every rule in the tag
-vanish, which `checkTagReadable` now rejects at parse time). The tokenizer
+vanish, which `checkTagReadable` now rejects at parse time; `checkTagReadable`
+itself uses `Lookup`, not `Get`, so the legal empty `json:""` no longer
+false-positives as unreadable). An unterminated `'` (no closing quote before
+end-of-tag, e.g. `oneof='New York|LA`) is a parse ERROR — it used to be
+silently auto-closed, which changes the rule's semantics (`'New York|LA'`
+reads as one `oneof` part instead of two). The tokenizer
 PRESERVES `\'` inside quoted spans; unescaping happens downstream in
 `stripQuotes`/`splitPipeParts`, after the part split — unescaping earlier
 handed `splitPipeParts` a bare quote it read as a delimiter toggle.
@@ -207,6 +217,18 @@ back to `stepsFromLegacy(mods, vals)` for synthetic fields that set only buckets
 `applicability.go` rejects mismatched rules against the working type (clear
 message); per-level gating (elem kind under `inner:`, `string` under `keys:`).
 Cases covered in `TestCLI/InvalidRuleApplication`.
+
+Numeric bound VALUES (`gt/gte/lt/lte/eq/neq`, `oneof`'s numeric parts,
+`clamp`'s lo/hi) are also range- and sign-checked against the field's
+declared kind (`boundFits`/`kindIntBits`), not just parsed as a valid
+number — a bound literal is pasted verbatim into a Go comparison against the
+field, so `uint gte=-1` or `int8 lte=300` used to pass parse and then fail
+the GENERATED build with a constant-overflow error. `eff()` (the
+pointer/named-primitive kind resolver every rule check goes through) strips
+leading `*` before the `NamedPrims` lookup — `NamedPrims` is keyed by the
+pointee's bare spelling, so a `*Priority` field used to miss the lookup
+entirely and its rules bypassed the matrix rather than being checked against
+the underlying primitive kind.
 
 ## Generated methods (per annotated struct T)
 
@@ -357,7 +379,12 @@ regular struct codegen).
 Accepted underlying kinds:
 
 - **primitive** (`string`, `bool`, `int*`, `uint*`, `float*`): scan via `scan.X` /
-  `_s.X`, cast to alias. `htmlescape` flips the string-append helper
+  `_s.X`, cast to alias. `htmlescape` flips the string-append helper. Float
+  marshal routes through `encode.AppendFloat` (stdlib-parity `'f'`/`'e'`
+  selection, errors on NaN/Inf) — it used to be a bare
+  `strconv.AppendFloat(…, 'g', -1, …)`, which silently emitted the literal
+  text `NaN`/`Inf` (invalid JSON, nil error) and used `'g'` formatting that
+  diverges from every other float site in generated code (`1e6` vs `1000000`)
 - **struct** (`type LocalUUID uuid.UUID`): methods don't propagate from the RHS,
   so probing uses `inspectType` on the RHS named type. Three-step ladder:
     1. _ggen-method delegation_ — if underlying has AppendJSON+DecodeFrom: cast →
@@ -686,6 +713,17 @@ Pos, Err}` for raw sentinels (a one-segment path), prepends the segment onto a `
 35. **Omit-guard pointer peel on marshal.** `AppendJSON`'s omitempty/omitzero guard
     for a pointer field is exactly `X != nil`, so the value emit peels one pointer
     level (`renderAppendValue` on `(*X)`) — no dead `if X == nil { null }` rung.
+    `fieldSkipExpr` (`generate.go`) builds the non-pointer per-kind guards:
+    `omitempty` had a `KindSlice, KindMap` case for "len > 0" that `[]byte`
+    (`KindBytes`) never matched — a nil/empty `omitempty` `[]byte` field
+    always emitted `"key":null` instead of being skipped; now `KindBytes`
+    shares the slice/map arm. `omitzero` on `KindStruct`/`KindSQLNull`/
+    `KindArray` emitted `ref != (T{})`, which does not compile when T holds a
+    slice/map/func/chan field (Go comparability); `zeroCompare` now checks a
+    new `FieldInfo.NotComparable` flag (`!types.Comparable(field.Type())`,
+    set at both extraction paths in `parse.go`) and falls back to
+    `!reflect.ValueOf(ref).IsZero()` for those — comparable structs still get
+    the cheap `!=` form.
 36. **Brace-less value emitters.** Decode value emitters write locals straight into
     the caller's scope — no `{ … }` wrapper per value (slice/array/map, time/
     duration/netip/url/big\*/raw/sqlnull/any/string-tag/struct/bytes, cross-pkg
@@ -882,6 +920,31 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
     `renderAppendMap`'s value switch was missing `int8/16/32`, `uint/uint8/16/32`,
     `float32`, so `map[string]uint8` (etc.) marshaled `{"k":}` with no value —
     those kinds now emit the value.
+
+    **`json:",string"` on a narrow int had NO guard (found+fixed 2026-08,
+    audit round 4)** — `renderStringTag`/`renderStreamStringTag` parsed the
+    quoted numeral with `strconv.ParseInt/ParseUint` at bit-width 64 and then
+    bare-cast (`ref = int8(n)`), skipping `narrowIntGuard` entirely, so
+    `"300"` into an `int8` field silently wrapped to `44` instead of
+    returning `ErrNumberOverflow` — the float32 sibling on the same two
+    functions already called `narrowFloatGuard`, which is what the coverage
+    claim above was modeled on. Same-shape fix: both functions now call
+    `narrowIntGuard` (via `kindNarrowName`, since the target may be a named
+    type) before the narrowing cast, bytes + stream.
+
+    A second, unrelated `,string` bug from the same round: on the bytes
+    path, a `*int`/`*int64`-kind pointer field took the pointer-leaf FAST
+    PATH (`cli/generate.go`'s inline int/uint scanner) unconditionally,
+    which never checks `f.String` — a `*int` field tagged `,string` decoded
+    a bare unquoted number and REJECTED the documented quoted wire form. The
+    fast path now excludes `f.String` fields, falling through to the normal
+    leaf recursion that reaches `renderStringTag`. And on the STREAM path,
+    the string-tag branch used to run BEFORE the pointer peel (the bytes
+    renderer already ordered Pointer first, with a comment explaining
+    exactly why), so a `*int` field with `,string` emitted `result.X =
+    *int(n)` — uncompilable. Stream now excludes `f.Pointer` from the
+    string-tag branch too, so it falls into the pointer peel and re-enters
+    the string-tag branch on the (non-pointer) leaf.
 49. **Single-copy `-copy` escape strings (both tiers, via `scan.Detach`).** In
     `-copy` mode a RETAINED escaped string used to double-allocate: the fall path
     emitted `sv, i, err = scan.String(...)` (escape arm → `stringSlow` returns a
@@ -984,9 +1047,25 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
       `decodeFromDepth(data, _depth int)` core that guards `_depth > MaxDepth`;
       nested calls into cyclic callees pass `_depth+1` (`decodeCallFor`/
       `streamDecodeCallFor`; alias delegation threads it too). ACYCLIC structs
-      (the common case) are byte-identical to before — a folded `const _depth =
-      0` keeps the call sites uniform. Seeded/cleared alongside `generatedTypes`
-      in `main.go` (+ `bench_test`).
+      that reference a cyclic type get a folded `const _depth = 0` so the call
+      site stays uniform; acyclic structs that DON'T (the common case) render
+      their field body first and only emit the const if it scanned true
+      (`strings.Contains(body, "_depth+1")`) — the const is otherwise dead
+      weight (harmless either way; `go build` elides an unused `const`
+      entirely, this is a codegen-output cleanliness fix, not a correctness
+      one). Seeded/cleared alongside `generatedTypes` in `main.go` (+
+      `bench_test`).
+
+      **Single-file mode (`ggen file.go [Name...]`) used to run cycle
+      detection over only the structs declared in that one file** — a
+      cross-file `A↔B` cycle (A in `foo.go`, B in `bar.go`, same package)
+      never entered `cyclicTypes`, so BOTH lost the depth-threaded core and
+      its stack-overflow guard, silently. `parseFile` now resolves every
+      struct in the package (`set.resolveFiltered` over `set.annotations`,
+      best-effort — a sibling that fails to resolve falls back to the old
+      per-file behavior) and runs `computeCyclicTypes` over the whole set;
+      `generateSingleFile` seeds `cyclicTypes` from that instead of leaving
+      it nil.
     - **Cost** (core-24, 500x, count=2, machine in `performance` profile, each
       A/B warmed first and validated with the **jsonv2 row as an in-run
       control** — see bench/CLAUDE.md): everything flat EXCEPT DeepNested (a
