@@ -20,24 +20,24 @@ goos: linux
 goarch: amd64
 pkg: github.com/sirkostya009/ggen/bench
 cpu: AMD RYZEN AI MAX+ 395 w/ Radeon 8060S
-BenchmarkMega_Unmarshal/jsonv2         500   25140128 ns/op   185.38 MB/s   155 gc   13556011 B/op   234397 allocs/op
-BenchmarkMega_Unmarshal/sonic          500   12062786 ns/op   386.35 MB/s   150 gc   16619826 B/op   127484 allocs/op
-BenchmarkMega_Unmarshal/sonic_fast     500   12003873 ns/op   388.24 MB/s   149 gc   16619826 B/op   127484 allocs/op
-BenchmarkMega_Unmarshal/easyjson       500   18557929 ns/op   251.13 MB/s   147 gc   12853609 B/op   164283 allocs/op
-BenchmarkMega_Unmarshal/ggen           500   10238159 ns/op   455.20 MB/s    85 gc    8434184 B/op    54990 allocs/op
-BenchmarkMega_Unmarshal/ggen_copy      500   11902418 ns/op   391.55 MB/s    98 gc    9979393 B/op   132894 allocs/op
-BenchmarkMega_Marshal/jsonv2           500   11129385 ns/op   418.46 MB/s    50 gc    4774166 B/op     7497 allocs/op
-BenchmarkMega_Marshal/sonic            500    8342389 ns/op   558.65 MB/s   223 gc   26870597 B/op     5107 allocs/op
-BenchmarkMega_Marshal/sonic_fast       500    7731154 ns/op   602.81 MB/s   225 gc   26870542 B/op     5106 allocs/op
-BenchmarkMega_Marshal/easyjson         500    7667069 ns/op   607.85 MB/s    53 gc    4876654 B/op     6914 allocs/op
-BenchmarkMega_Marshal/ggen             500    5984014 ns/op   778.81 MB/s    97 gc    9691136 B/op        1 allocs/op
-BenchmarkMega_Marshal/ggen_presized    500    4910092 ns/op   949.15 MB/s     0 gc          0 B/op        0 allocs/op
-BenchmarkMega_Reader/jsonv2            500   25774731 ns/op   180.81 MB/s   158 gc   13556022 B/op   234397 allocs/op
-BenchmarkMega_Reader/sonic             500   15905907 ns/op   293.00 MB/s   276 gc   34812950 B/op   127506 allocs/op
-BenchmarkMega_Reader/sonic_fast        500   15724834 ns/op   296.37 MB/s   276 gc   34812950 B/op   127506 allocs/op
-BenchmarkMega_Reader/easyjson          500   20135747 ns/op   231.45 MB/s   249 gc   23314832 B/op   164313 allocs/op
-BenchmarkMega_Reader/ggen_stream       500   15054303 ns/op   309.57 MB/s   125 gc   12974142 B/op   169760 allocs/op
-BenchmarkMega_Reader/ggen_readall      500   12134934 ns/op   384.05 MB/s   162 gc   18895123 B/op    55018 allocs/op
+BenchmarkMega_Unmarshal/jsonv2         500   37131734 ns/op   125.51 MB/s   154.0 gc   13556011 B/op   234397 allocs/op   +145.3%
+BenchmarkMega_Unmarshal/sonic          500   17984064 ns/op   259.14 MB/s   150.0 gc   16619826 B/op   127484 allocs/op    +18.8%
+BenchmarkMega_Unmarshal/sonic_fast     500   17395560 ns/op   267.91 MB/s   145.0 gc   16619825 B/op   127484 allocs/op    +14.9%
+BenchmarkMega_Unmarshal/easyjson       500   28219615 ns/op   165.15 MB/s   141.0 gc   12853608 B/op   164283 allocs/op    +86.5%
+BenchmarkMega_Unmarshal/ggen           500   15135164 ns/op   307.92 MB/s    94.0 gc    8754217 B/op    45981 allocs/op   baseline
+BenchmarkMega_Unmarshal/ggen_copy      500   17173686 ns/op   271.37 MB/s   110.0 gc   10299425 B/op   123885 allocs/op    +13.5%
+BenchmarkMega_Marshal/jsonv2           500   17378854 ns/op   267.98 MB/s    51.0 gc    4774166 B/op     7497 allocs/op   +124.6%
+BenchmarkMega_Marshal/sonic            500   12154843 ns/op   383.42 MB/s   233.0 gc   26870608 B/op     5107 allocs/op    +57.1%
+BenchmarkMega_Marshal/sonic_fast       500   11323605 ns/op   411.57 MB/s   227.0 gc   26870544 B/op     5106 allocs/op    +46.3%
+BenchmarkMega_Marshal/easyjson         500   11792031 ns/op   395.22 MB/s    52.0 gc    4876633 B/op     6914 allocs/op    +52.4%
+BenchmarkMega_Marshal/ggen             500    9463797 ns/op   492.45 MB/s   117.0 gc    9691136 B/op        1 allocs/op    +22.3%
+BenchmarkMega_Marshal/ggen_presized    500    7738655 ns/op   602.23 MB/s       0 gc          0 B/op        0 allocs/op   baseline
+BenchmarkMega_Reader/jsonv2            500   38476797 ns/op   121.12 MB/s   155.0 gc   13556021 B/op   234397 allocs/op   +110.3%
+BenchmarkMega_Reader/sonic             500   22847669 ns/op   203.98 MB/s   275.0 gc   34812950 B/op   127506 allocs/op    +24.9%
+BenchmarkMega_Reader/sonic_fast        500   22512533 ns/op   207.02 MB/s   277.0 gc   34812951 B/op   127506 allocs/op    +23.1%
+BenchmarkMega_Reader/easyjson          500   30163674 ns/op   154.50 MB/s   250.0 gc   23314832 B/op   164313 allocs/op    +64.9%
+BenchmarkMega_Reader/ggen_stream       500   22125066 ns/op   210.64 MB/s   137.0 gc   12424862 B/op   138138 allocs/op    +20.9%
+BenchmarkMega_Reader/ggen_readall      500   18293888 ns/op   254.75 MB/s   181.0 gc   19215155 B/op    46009 allocs/op   baseline
 ```
 
 ### simd
@@ -45,33 +45,27 @@ BenchmarkMega_Reader/ggen_readall      500   12134934 ns/op   384.05 MB/s   162 
 Code generated with `-simd=avx512` (see the flag table below) against sonic.
 
 ```sh
-BenchmarkMega_Unmarshal/sonic          500     11936692 ns/op    390.43 MB/s   148 gc   16619825 B/op   127484 allocs/op
-BenchmarkMega_Unmarshal/sonic_fast     500     11919286 ns/op    391.00 MB/s   148 gc   16619826 B/op   127484 allocs/op
-BenchmarkMega_Unmarshal/ggen           500      9310070 ns/op    500.58 MB/s    77 gc    8434184 B/op    54990 allocs/op
-BenchmarkMega_Unmarshal/ggen_copy      500     11599721 ns/op    401.77 MB/s    96 gc    9979393 B/op   132894 allocs/op
-BenchmarkNoAlloc_Unmarshal/sonic       500         2478 ns/op   1108.77 MB/s     0 gc       3744 B/op        3 allocs/op
-BenchmarkNoAlloc_Unmarshal/sonic_fast  500         2332 ns/op   1178.59 MB/s     0 gc       3744 B/op        3 allocs/op
-BenchmarkNoAlloc_Unmarshal/ggen        500         1078 ns/op   2549.44 MB/s     0 gc          0 B/op        0 allocs/op
-BenchmarkNoAlloc_Unmarshal/ggen_copy   500         1579 ns/op   1740.87 MB/s     0 gc       1864 B/op       25 allocs/op
-BenchmarkSmall_Unmarshal/sonic         500        414.5 ns/op   7001.92 MB/s     0 gc       3280 B/op        5 allocs/op
-BenchmarkSmall_Unmarshal/sonic_fast    500        388.7 ns/op   7465.72 MB/s     0 gc       3280 B/op        5 allocs/op
-BenchmarkSmall_Unmarshal/ggen          500        131.2 ns/op  22121.26 MB/s     0 gc         64 B/op        1 allocs/op
-BenchmarkSmall_Unmarshal/ggen_copy     500        264.9 ns/op  10955.16 MB/s     0 gc       3192 B/op        8 allocs/op
-BenchmarkTiny_Unmarshal/sonic          500        322.4 ns/op    397.04 MB/s     0 gc        256 B/op        3 allocs/op
-BenchmarkTiny_Unmarshal/sonic_fast     500        306.9 ns/op    417.08 MB/s     0 gc        256 B/op        3 allocs/op
-BenchmarkTiny_Unmarshal/ggen           500        69.95 ns/op   1829.88 MB/s     0 gc          0 B/op        0 allocs/op
-BenchmarkTiny_Unmarshal/ggen_copy      500        125.6 ns/op   1018.98 MB/s     0 gc         56 B/op        4 allocs/op
+BenchmarkMega_Unmarshal/sonic          500     18103086 ns/op    257.44 MB/s   151.0 gc   16619826 B/op   127484 allocs/op    +31.3%
+BenchmarkMega_Unmarshal/sonic_fast     500     17707721 ns/op    263.19 MB/s   148.0 gc   16619826 B/op   127484 allocs/op    +28.5%
+BenchmarkMega_Unmarshal/ggen           500     13785144 ns/op    338.08 MB/s    94.0 gc    8754217 B/op    45981 allocs/op   baseline
+BenchmarkMega_Unmarshal/ggen_copy      500     16558354 ns/op    281.46 MB/s   107.0 gc   10299424 B/op   123885 allocs/op    +20.1%
+BenchmarkNoAlloc_Unmarshal/sonic       500         3883 ns/op    707.76 MB/s       0 gc       3744 B/op        3 allocs/op   +136.2%
+BenchmarkNoAlloc_Unmarshal/sonic_fast  500         3767 ns/op    729.55 MB/s       0 gc       3744 B/op        3 allocs/op   +129.1%
+BenchmarkNoAlloc_Unmarshal/ggen        500         1644 ns/op   1671.63 MB/s       0 gc          0 B/op        0 allocs/op   baseline
+BenchmarkNoAlloc_Unmarshal/ggen_copy   500         2499 ns/op   1099.85 MB/s       0 gc       1864 B/op       25 allocs/op    +52.0%
+BenchmarkSmall_Unmarshal/sonic         500        587.2 ns/op   4941.74 MB/s       0 gc       3280 B/op        5 allocs/op   +147.7%
+BenchmarkSmall_Unmarshal/sonic_fast    500        566.1 ns/op   5125.90 MB/s       0 gc       3280 B/op        5 allocs/op   +138.8%
+BenchmarkSmall_Unmarshal/ggen          500        237.1 ns/op  12238.22 MB/s       0 gc         80 B/op        1 allocs/op   baseline
+BenchmarkSmall_Unmarshal/ggen_copy     500        456.9 ns/op   6350.97 MB/s       0 gc       3208 B/op        8 allocs/op    +92.7%
+BenchmarkTiny_Unmarshal/sonic          500        524.1 ns/op    244.22 MB/s       0 gc        256 B/op        3 allocs/op   +374.7%
+BenchmarkTiny_Unmarshal/sonic_fast     500        490.0 ns/op    261.20 MB/s       0 gc        256 B/op        3 allocs/op   +343.8%
+BenchmarkTiny_Unmarshal/ggen           500        110.4 ns/op   1159.78 MB/s       0 gc          0 B/op        0 allocs/op   baseline
+BenchmarkTiny_Unmarshal/ggen_copy      500        191.3 ns/op    669.25 MB/s       0 gc         56 B/op        4 allocs/op    +73.3%
 ```
 
-ggen decodes 2.2× faster than sonic's fastest config on the flat record and
-4.4× on the tiny object — at zero allocations. When copying payload instead
-of aliasing (`ggen_copy` benchmarks) it still stays ahead of sonic by 1.5×
-on the flat record and 2.4× on the tiny object.
-Small benefits most: the benchmark is dominated by one long string, decoded at
-22 GB/s, ~19× sonic.
-
-So ggen is still faster than sonic while also pertaining most of stdlib's
-decoding safety features like unicode and grammar validation.
+Sonic is fast, but its also cheating - it accepts invalid JSON and doesn't validate
+unicode within string values. ggen does both as well as outpacing sonic - all thanks to
+pregenerated code.
 
 ## install
 
