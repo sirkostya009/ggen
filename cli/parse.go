@@ -385,7 +385,7 @@ func (s *structSet) resolveFiltered(wanted []string, allowExpand func(string) bo
 // used in single-file mode to seed generatedTypes so a cross-file reference
 // routes to a direct DecodeFrom before sibling _ggen files exist. Nil in the
 // AST-only degraded mode (siblings unknown).
-func parseFile(filename string, wanted []string) ([]StructInfo, string, map[string]struct{}, error) {
+func parseFile(filename string, wanted []string) ([]StructInfo, string, map[string]struct{}, map[string]struct{}, error) {
 	dir := filepath.Dir(filename)
 	set, err := loadDirWithTypes(dir)
 	degraded := false
@@ -394,7 +394,7 @@ func parseFile(filename string, wanted []string) ([]StructInfo, string, map[stri
 	if err != nil || (len(set.structs) == 0 && len(set.aliases) == 0) {
 		set, err = loadStructs([]string{filename})
 		if err != nil {
-			return nil, "", nil, err
+			return nil, "", nil, nil, err
 		}
 		degraded = true
 	}
@@ -425,7 +425,7 @@ func parseFile(filename string, wanted []string) ([]StructInfo, string, map[stri
 			// No name filter and no annotated struct in this file. Error
 			// loudly. richError so the pretty logger shows the escape hatch;
 			// no source position — this is file-level.
-			return nil, set.pkgName, nil, &richError{
+			return nil, set.pkgName, nil, nil, &richError{
 				Msg:      fmt.Sprintf("%s: no //ggen:generate-annotated struct found in file", relPath(filename)),
 				BotHint:  "missing //ggen:generate directive",
 				UserHint: fmt.Sprintf("Add `//ggen:generate` above each struct you want generated, or pass struct names explicitly: `ggen %s Name1 Name2 ...`.", filepath.Base(filename)),
@@ -439,18 +439,28 @@ func parseFile(filename string, wanted []string) ([]StructInfo, string, map[stri
 		// Position-carrying errors already prefix the filename; don't
 		// double-prefix. Only prefix bare errors lacking location info.
 		if _, ok := errors.AsType[*richError](err); ok {
-			return nil, "", nil, err
+			return nil, "", nil, nil, err
 		}
-		return nil, "", nil, fmt.Errorf("%s: %w", filename, err)
+		return nil, "", nil, nil, fmt.Errorf("%s: %w", filename, err)
 	}
 	var siblings map[string]struct{}
+	var pkgCyclic map[string]struct{}
 	if !degraded {
 		siblings = make(map[string]struct{}, len(set.annotations))
+		all := make([]string, 0, len(set.annotations))
 		for n := range set.annotations {
 			siblings[n] = struct{}{}
+			all = append(all, n)
+		}
+		// Cycle analysis needs the WHOLE package's structs: a cross-file
+		// A↔B cycle is invisible to the per-file fallback and loses the
+		// recursion depth cap. Best-effort — a sibling that fails to
+		// resolve falls back to per-file detection.
+		if allStructs, aerr := set.resolveFiltered(all, func(string) bool { return true }); aerr == nil {
+			pkgCyclic = computeCyclicTypes(allStructs)
 		}
 	}
-	return structs, set.pkgName, siblings, nil
+	return structs, set.pkgName, siblings, pkgCyclic, nil
 }
 
 // parsePackage loads every eligible .go file in dir and generates only for
@@ -810,6 +820,7 @@ func (s *structSet) extractFieldFromTypes(structName string, field *types.Var, t
 	fi := FieldInfo{GoName: field.Name(), StructName: structName}
 	qualifier := types.RelativeTo(s.typesPkg)
 	fi.GoType = types.TypeString(field.Type(), qualifier)
+	fi.NotComparable = !types.Comparable(field.Type())
 
 	rt := reflect.StructTag(tag)
 	jsonName, opts, ignored, err := parseJSONTag(rt.Get("json"))
@@ -1041,6 +1052,7 @@ func (s *structSet) extractStruct(name string, st *ast.StructType) (StructInfo, 
 				if expr, ok := s.fieldExpr[name+"."+ident.Name]; ok {
 					if tv, ok := s.typesInfo.Types[expr]; ok {
 						fieldType = tv.Type
+						fi.NotComparable = !types.Comparable(fieldType)
 						fi.Iface = inspectType(fieldType, s.stdIfaces)
 						fi.TypeImports = s.foreignImports(fieldType)
 						fi.NamedPrims = s.namedPrims(fieldType)
@@ -1199,7 +1211,9 @@ func (s *structSet) extractEmbedded(parent string, field *ast.Field) ([]FieldInf
 // literal quote is `\\'`, which Get unescapes to `\'` for the pipe lexer.
 func checkTagReadable(tag reflect.StructTag, goName string) error {
 	for _, key := range [...]string{"json", "pipe", "hint"} {
-		if strings.Contains(string(tag), key+`:"`) && tag.Get(key) == "" {
+		// Lookup, not Get: a legal empty value (`json:""`) reads back as
+		// ("", true); only a value Go tag syntax cannot parse reports !ok.
+		if _, ok := tag.Lookup(key); strings.Contains(string(tag), key+`:"`) && !ok {
 			return fmt.Errorf("field %s: `%s` tag is present but unreadable — reflect.StructTag.Get returned nothing, "+
 				`which silently drops every rule in it (an invalid Go string escape? inside a backquoted tag a literal quote is \', not ')`, goName, key)
 		}

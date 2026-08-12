@@ -16,6 +16,13 @@ func AppendURL(dst []byte, u url.URL) []byte {
 	return closeJSONString(appendURLRaw(dst, u), from)
 }
 
+// AppendURLHTML is AppendURL closing through the HTML-safe escape set
+// (htmlescape mode).
+func AppendURLHTML(dst []byte, u url.URL) []byte {
+	from := len(dst)
+	return CloseJSONStringHTML(appendURLRaw(dst, u), from)
+}
+
 // appendURLRaw appends u's wire form, byte-for-byte equal to url.URL.String,
 // with zero allocation.
 func appendURLRaw(dst []byte, u url.URL) []byte {

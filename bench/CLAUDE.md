@@ -341,7 +341,13 @@ Protocol, in order:
 
 1. `cat /sys/firmware/acpi/platform_profile` and
    `/sys/devices/system/cpu/cpu24/cpufreq/{scaling_governor,scaling_max_freq}` —
-   want `performance` and the full boost ceiling (~5187 MHz here, NOT 3000).
+   want `performance` and the full boost ceiling (~5187 MHz here, NOT 3000). If
+   it isn't, `powerprofilesctl set performance` (check current with
+   `powerprofilesctl get`/`list`) — the box defaults to `power-saver`
+   (governor `powersave`, freq capped at 3000000), which is the exact trap
+   this section exists to catch. Set it back to `power-saver` when done if
+   you want the machine to idle quiet again; it isn't required for
+   correctness, only for not cooking the fans all day.
 2. Run one throwaway pass and DISCARD it, so no side eats the ramp.
 3. Include an **untouched third-party row as an in-run control** — the
    `jsonv2` row of the same bench family is ideal: ggen changes can't affect it,

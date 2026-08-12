@@ -50,7 +50,7 @@ func (s *Stream) skipSpaceSlowAVX() error {
 			i++
 		}
 		if err := s.ReadMore(i); err != nil {
-			s.Pos = i
+			s.Pos = 0
 			if err == io.ErrUnexpectedEOF {
 				return nil
 			}
@@ -94,7 +94,7 @@ func (s *Stream) skipSpaceSlowAVX2() error {
 			i++
 		}
 		if err := s.ReadMore(i); err != nil {
-			s.Pos = i
+			s.Pos = 0
 			if err == io.ErrUnexpectedEOF {
 				return nil
 			}
@@ -138,7 +138,7 @@ func (s *Stream) skipSpaceSlowAVX512() error {
 			i++
 		}
 		if err := s.ReadMore(i); err != nil {
-			s.Pos = i
+			s.Pos = 0
 			if err == io.ErrUnexpectedEOF {
 				return nil
 			}
@@ -156,7 +156,7 @@ func (s *Stream) skipSpaceSlowAVX512() error {
 func (s *Stream) skipStringStreamTail(start, bs int) (int, int, error) {
 	if bs+1 >= len(s.buf) {
 		if err := s.ReadMore(bs); err != nil {
-			return 0, 0, ErrBadString
+			return 0, 0, notEOF(err, ErrBadString)
 		}
 		start = 0
 		bs = 0
@@ -167,7 +167,7 @@ func (s *Stream) skipStringStreamTail(start, bs int) (int, int, error) {
 	case 'u':
 		for bs+6 > len(s.buf) {
 			if err := s.ReadMore(bs); err != nil {
-				return 0, 0, ErrBadString
+				return 0, 0, notEOF(err, ErrBadString)
 			}
 			start = 0
 			bs = 0
@@ -204,7 +204,7 @@ func (s *Stream) skipStringAVX() error {
 			j = 0
 			start = 0
 			if err != nil {
-				return ErrUnterminated
+				return notEOF(err, ErrUnterminated)
 			}
 			continue
 		}
@@ -247,7 +247,7 @@ func (s *Stream) skipStringAVX2() error {
 			j = 0
 			start = 0
 			if err != nil {
-				return ErrUnterminated
+				return notEOF(err, ErrUnterminated)
 			}
 			continue
 		}
@@ -290,7 +290,7 @@ func (s *Stream) skipStringAVX512() error {
 			j = 0
 			start = 0
 			if err != nil {
-				return ErrUnterminated
+				return notEOF(err, ErrUnterminated)
 			}
 			continue
 		}
@@ -318,7 +318,7 @@ func (s *Stream) skipNull() error {
 		pos := j + 1 + k
 		if pos >= len(s.buf) {
 			if err := s.ReadMore(0); err != nil {
-				return ErrBadLiteral
+				return notEOF(err, ErrBadLiteral)
 			}
 		}
 		if s.buf[pos] != "ull"[k] {
@@ -373,7 +373,7 @@ func (s *Stream) skipArrayAVX(depth int) error {
 	}
 	if s.Pos >= len(s.buf) {
 		if err := s.ReadMore(s.Pos); err != nil {
-			return ErrBadArray
+			return notEOF(err, ErrBadArray)
 		}
 		s.Pos = 0
 	}
@@ -390,7 +390,7 @@ func (s *Stream) skipArrayAVX(depth int) error {
 		}
 		if s.Pos >= len(s.buf) {
 			if err := s.ReadMore(0); err != nil {
-				return ErrBadArray
+				return notEOF(err, ErrBadArray)
 			}
 		}
 		if s.buf[s.Pos] == ',' {
@@ -414,7 +414,7 @@ func (s *Stream) skipObjectAVX(depth int) error {
 	}
 	if s.Pos >= len(s.buf) {
 		if err := s.ReadMore(s.Pos); err != nil {
-			return ErrBadObject
+			return notEOF(err, ErrBadObject)
 		}
 		s.Pos = 0
 	}
@@ -431,7 +431,7 @@ func (s *Stream) skipObjectAVX(depth int) error {
 		}
 		if s.Pos >= len(s.buf) {
 			if err := s.ReadMore(0); err != nil {
-				return ErrBadObject
+				return notEOF(err, ErrBadObject)
 			}
 		}
 		if s.buf[s.Pos] != ':' {
@@ -446,7 +446,7 @@ func (s *Stream) skipObjectAVX(depth int) error {
 		}
 		if s.Pos >= len(s.buf) {
 			if err := s.ReadMore(0); err != nil {
-				return ErrBadObject
+				return notEOF(err, ErrBadObject)
 			}
 		}
 		if s.buf[s.Pos] == ',' {
@@ -509,7 +509,7 @@ func (s *Stream) skipArrayAVX2(depth int) error {
 	}
 	if s.Pos >= len(s.buf) {
 		if err := s.ReadMore(s.Pos); err != nil {
-			return ErrBadArray
+			return notEOF(err, ErrBadArray)
 		}
 		s.Pos = 0
 	}
@@ -526,7 +526,7 @@ func (s *Stream) skipArrayAVX2(depth int) error {
 		}
 		if s.Pos >= len(s.buf) {
 			if err := s.ReadMore(0); err != nil {
-				return ErrBadArray
+				return notEOF(err, ErrBadArray)
 			}
 		}
 		if s.buf[s.Pos] == ',' {
@@ -550,7 +550,7 @@ func (s *Stream) skipObjectAVX2(depth int) error {
 	}
 	if s.Pos >= len(s.buf) {
 		if err := s.ReadMore(s.Pos); err != nil {
-			return ErrBadObject
+			return notEOF(err, ErrBadObject)
 		}
 		s.Pos = 0
 	}
@@ -567,7 +567,7 @@ func (s *Stream) skipObjectAVX2(depth int) error {
 		}
 		if s.Pos >= len(s.buf) {
 			if err := s.ReadMore(0); err != nil {
-				return ErrBadObject
+				return notEOF(err, ErrBadObject)
 			}
 		}
 		if s.buf[s.Pos] != ':' {
@@ -582,7 +582,7 @@ func (s *Stream) skipObjectAVX2(depth int) error {
 		}
 		if s.Pos >= len(s.buf) {
 			if err := s.ReadMore(0); err != nil {
-				return ErrBadObject
+				return notEOF(err, ErrBadObject)
 			}
 		}
 		if s.buf[s.Pos] == ',' {
@@ -658,6 +658,13 @@ func (s *Stream) CaptureValueAVX() ([]byte, error) {
 			s.Pos = start
 			return nil, err
 		}
+		// A failure at a byte strictly inside the window is final — see
+		// Stream.CaptureValue; without this a live reader that delivered a
+		// complete malformed value blocks in Read forever.
+		if at, aerr := skipValueAt(s.buf, start); aerr != nil && at < len(s.buf) {
+			s.Pos = start
+			return nil, err
+		}
 		if e := s.ReadMore(start); e != nil {
 			if e != io.ErrUnexpectedEOF {
 				s.Pos = 0
@@ -685,6 +692,13 @@ func (s *Stream) CaptureValueAVX2() ([]byte, error) {
 			}
 		}
 		if eof {
+			s.Pos = start
+			return nil, err
+		}
+		// A failure at a byte strictly inside the window is final — see
+		// Stream.CaptureValue; without this a live reader that delivered a
+		// complete malformed value blocks in Read forever.
+		if at, aerr := skipValueAt(s.buf, start); aerr != nil && at < len(s.buf) {
 			s.Pos = start
 			return nil, err
 		}
@@ -718,6 +732,13 @@ func (s *Stream) CaptureValueAVX512() ([]byte, error) {
 			s.Pos = start
 			return nil, err
 		}
+		// A failure at a byte strictly inside the window is final — see
+		// Stream.CaptureValue; without this a live reader that delivered a
+		// complete malformed value blocks in Read forever.
+		if at, aerr := skipValueAt(s.buf, start); aerr != nil && at < len(s.buf) {
+			s.Pos = start
+			return nil, err
+		}
 		if e := s.ReadMore(start); e != nil {
 			if e != io.ErrUnexpectedEOF {
 				s.Pos = 0
@@ -738,7 +759,7 @@ func (s *Stream) skipArrayAVX512(depth int) error {
 	}
 	if s.Pos >= len(s.buf) {
 		if err := s.ReadMore(s.Pos); err != nil {
-			return ErrBadArray
+			return notEOF(err, ErrBadArray)
 		}
 		s.Pos = 0
 	}
@@ -755,7 +776,7 @@ func (s *Stream) skipArrayAVX512(depth int) error {
 		}
 		if s.Pos >= len(s.buf) {
 			if err := s.ReadMore(0); err != nil {
-				return ErrBadArray
+				return notEOF(err, ErrBadArray)
 			}
 		}
 		if s.buf[s.Pos] == ',' {
@@ -779,7 +800,7 @@ func (s *Stream) skipObjectAVX512(depth int) error {
 	}
 	if s.Pos >= len(s.buf) {
 		if err := s.ReadMore(s.Pos); err != nil {
-			return ErrBadObject
+			return notEOF(err, ErrBadObject)
 		}
 		s.Pos = 0
 	}
@@ -796,7 +817,7 @@ func (s *Stream) skipObjectAVX512(depth int) error {
 		}
 		if s.Pos >= len(s.buf) {
 			if err := s.ReadMore(0); err != nil {
-				return ErrBadObject
+				return notEOF(err, ErrBadObject)
 			}
 		}
 		if s.buf[s.Pos] != ':' {
@@ -811,7 +832,7 @@ func (s *Stream) skipObjectAVX512(depth int) error {
 		}
 		if s.Pos >= len(s.buf) {
 			if err := s.ReadMore(0); err != nil {
-				return ErrBadObject
+				return notEOF(err, ErrBadObject)
 			}
 		}
 		if s.buf[s.Pos] == ',' {

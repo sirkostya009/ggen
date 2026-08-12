@@ -131,9 +131,11 @@ func renderAliasAppendJSON(b *bytes.Buffer, s StructInfo) {
 	case KindUint, KindUint8, KindUint16, KindUint32, KindUint64:
 		b.WriteString("return strconv.AppendUint(dst, uint64(s), 10), nil\n")
 	case KindFloat32:
-		b.WriteString("return strconv.AppendFloat(dst, float64(s), 'g', -1, 32), nil\n")
+		// encode.AppendFloat: stdlib-parity format, errors on NaN/Inf instead
+		// of emitting invalid JSON — same routing as struct float fields.
+		b.WriteString("return encode.AppendFloat(dst, float64(s), 32)\n")
 	case KindFloat64:
-		b.WriteString("return strconv.AppendFloat(dst, float64(s), 'g', -1, 64), nil\n")
+		b.WriteString("return encode.AppendFloat(dst, float64(s), 64)\n")
 	}
 }
 

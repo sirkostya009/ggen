@@ -408,8 +408,11 @@ func bucketKeys(m map[bucketKey][]StructInfo) []bucketKey {
 			return strings.Compare(a.tag, b.tag)
 		}
 		// non-test (false) before test (true)
-		if !a.test && b.test {
-			return 1
+		if a.test != b.test {
+			if a.test {
+				return 1
+			}
+			return -1
 		}
 		return 0
 	})
@@ -459,7 +462,7 @@ func slugifyTag(tag string) string {
 }
 
 func generateSingleFile(file string, wanted []string, outFlag, pkgFlag string) error {
-	structs, pkgName, siblings, err := parseFile(file, wanted)
+	structs, pkgName, siblings, pkgCyclic, err := parseFile(file, wanted)
 	if err != nil {
 		return err
 	}
@@ -495,6 +498,9 @@ func generateSingleFile(file string, wanted []string, outFlag, pkgFlag string) e
 	}
 	seedNamedKinds(structs)
 	multiErrTypes = seedMultiErrTypes(structs)
+	// Package-wide cycle set — generateTo's per-file fallback can't see a
+	// cross-file A↔B cycle (opt #51 depth cap silently vanished there).
+	cyclicTypes = pkgCyclic
 	defer func() {
 		generatedTypes = nil
 		namedKinds = nil

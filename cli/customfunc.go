@@ -186,15 +186,28 @@ func classifyConverter(ref string, fieldType types.Type, qualifier types.Qualifi
 		return customFunc{}, "", false, fmt.Errorf("converter must take exactly one parameter (the scanned input)")
 	}
 	w := sig.Params().At(0).Type()
-	if named, isNamed := w.(*types.Named); isNamed && named.Obj().Pkg() != nil && named.Obj().Pkg() != pkg {
+	// Peel pointer levels first: `*[]int` or `*other.T` must not dodge the
+	// checks below (a pointer-wrapped container still emits broken code).
+	base := w
+	for {
+		p, isPtr := base.(*types.Pointer)
+		if !isPtr {
+			break
+		}
+		base = p.Elem()
+	}
+	if named, isNamed := base.(*types.Named); isNamed && named.Obj().Pkg() != nil && named.Obj().Pkg() != pkg {
 		return customFunc{}, "", false, fmt.Errorf("converter input %s is from another package; only builtin or same-package input types are supported", w)
 	}
 	// The documented contract is "primitive or ggen-decodable struct" — a
 	// container input synthesizes a FieldInfo with no element shape and the
-	// emitted scan doesn't compile (or silently mis-scans).
-	switch w.Underlying().(type) {
+	// emitted scan doesn't compile (or silently mis-scans); chan/func/
+	// interface inputs have no wire shape at all.
+	switch base.Underlying().(type) {
 	case *types.Slice, *types.Array, *types.Map:
 		return customFunc{}, "", false, fmt.Errorf("converter input %s must be a primitive or a ggen-decodable struct — container inputs are not supported", w)
+	case *types.Chan, *types.Signature, *types.Interface:
+		return customFunc{}, "", false, fmt.Errorf("converter input %s must be a primitive or a ggen-decodable struct", w)
 	}
 	cf = customFunc{PkgImport: pkgImp, PkgName: pkgName, FuncName: funcPart}
 	res := sig.Results()

@@ -423,6 +423,7 @@ func scanBodiesForStdImports(bodies [][]byte, add func(string)) {
 		path  string
 	}{
 		{[]byte("strconv."), "strconv"},
+		{[]byte("reflect."), "reflect"},
 		{[]byte("archsimd."), "simd/archsimd"},
 		{[]byte("bits."), "math/bits"},
 		{[]byte("math."), "math"},
@@ -1306,7 +1307,7 @@ func fieldSkipExpr(f FieldInfo, ref string) string {
 			switch f.Kind {
 			case KindString:
 				emitConds = append(emitConds, fmt.Sprintf("%s != \"\"", ref))
-			case KindSlice, KindMap:
+			case KindSlice, KindBytes, KindMap:
 				emitConds = append(emitConds, fmt.Sprintf("len(%s) > 0", ref))
 			case KindRawJSON:
 				// Underlying []byte; nil/empty → skip (no peek into content).
@@ -1339,7 +1340,7 @@ func fieldSkipExpr(f FieldInfo, ref string) string {
 				// Go-zero is nil; `make([]T, 0)` is non-nil and must be emitted.
 				emitConds = append(emitConds, fmt.Sprintf("%s != nil", ref))
 			case KindStruct:
-				emitConds = append(emitConds, fmt.Sprintf("%s != (%s{})", ref, f.GoType))
+				emitConds = append(emitConds, zeroCompare(f, ref))
 			case KindTime:
 				emitConds = append(emitConds, fmt.Sprintf("!%s.IsZero()", ref))
 			case KindDuration:
@@ -1351,14 +1352,14 @@ func fieldSkipExpr(f FieldInfo, ref string) string {
 			case KindAny:
 				emitConds = append(emitConds, fmt.Sprintf("%s != nil", ref))
 			case KindSQLNull:
-				emitConds = append(emitConds, fmt.Sprintf("%s != (%s{})", ref, f.GoType))
+				emitConds = append(emitConds, zeroCompare(f, ref))
 			case KindURL:
 				emitConds = append(emitConds, fmt.Sprintf("%s != (%s{})", ref, f.GoType))
 			case KindBigInt, KindBigFloat, KindBigRat:
 				// big.X isn't comparable (unexported slices); Sign()==0 for zero.
 				emitConds = append(emitConds, fmt.Sprintf("%s.Sign() != 0", ref))
 			case KindArray:
-				emitConds = append(emitConds, fmt.Sprintf("%s != (%s{})", ref, f.GoType))
+				emitConds = append(emitConds, zeroCompare(f, ref))
 			}
 		}
 	}
@@ -1366,6 +1367,16 @@ func fieldSkipExpr(f FieldInfo, ref string) string {
 		return ""
 	}
 	return strings.Join(slices.Compact(emitConds), " && ")
+}
+
+// zeroCompare emits the omitzero is-nonzero test: `ref != (T{})` when the
+// type is comparable, else a reflect deep-zero probe — `!= (T{})` on a struct
+// carrying a slice/map field does not compile.
+func zeroCompare(f FieldInfo, ref string) string {
+	if f.NotComparable {
+		return fmt.Sprintf("!reflect.ValueOf(%s).IsZero()", ref)
+	}
+	return fmt.Sprintf("%s != (%s{})", ref, f.GoType)
 }
 
 func renderAppendJSON(b *bytes.Buffer, s StructInfo) {
@@ -1706,7 +1717,7 @@ dst = append(dst, '"')
 `, ref)
 	case KindNetipAddr:
 		// Zoned text may need escaping — encode.AppendNetipAddr handles it.
-		fmt.Fprintf(b, "dst = append(dst, '\"')\ndst = encode.AppendNetipAddr(dst, %s)\n", ref)
+		fmt.Fprintf(b, "dst = append(dst, '\"')\ndst = %s(dst, %s)\n", appendNetipAddrFn(f.HTMLEscape), ref)
 	case KindRawJSON:
 		// Emit raw bytes verbatim (or "null" if empty/nil).
 		fmt.Fprintf(b, `if len(%s) == 0 {
@@ -1716,7 +1727,7 @@ dst = append(dst, '"')
 }
 `, ref, ref)
 	case KindURL:
-		fmt.Fprintf(b, "dst = append(dst, '\"')\ndst = encode.AppendURL(dst, %s)\n", ref)
+		fmt.Fprintf(b, "dst = append(dst, '\"')\ndst = %s(dst, %s)\n", appendURLFn(f.HTMLEscape), ref)
 	case KindBigInt:
 		fmt.Fprintf(b, "dst = (&%s).Append(dst, 10)\n", ref)
 	case KindBigFloat:
@@ -2039,6 +2050,22 @@ func closeStrFn(htmlEscape bool) string {
 	return "encode.CloseJSONString"
 }
 
+// appendURLFn / appendNetipAddrFn pick the escape-set variant of the raw-text
+// closers (htmlescape parity with every other string emitter).
+func appendURLFn(htmlEscape bool) string {
+	if htmlEscape {
+		return "encode.AppendURLHTML"
+	}
+	return "encode.AppendURL"
+}
+
+func appendNetipAddrFn(htmlEscape bool) string {
+	if htmlEscape {
+		return "encode.AppendNetipAddrHTML"
+	}
+	return "encode.AppendNetipAddr"
+}
+
 // emitNoCloseAfterComma emits the bytes-path guard inside an element loop's
 // comma branch: a container close (or EOF) right after a comma is invalid JSON.
 func emitNoCloseAfterComma(b *bytes.Buffer, posVar string, close byte) {
@@ -2086,13 +2113,13 @@ dst = append(dst, '"')
 `, ref), true
 	case KindNetipAddr:
 		// Zoned text may need escaping — encode.AppendNetipAddr handles it.
-		return prefix + `"`, fmt.Sprintf("dst = encode.AppendNetipAddr(dst, %s)\n", ref), true
+		return prefix + `"`, fmt.Sprintf("dst = %s(dst, %s)\n", appendNetipAddrFn(f.HTMLEscape), ref), true
 	case KindBytes:
 		// No fold: a nil []byte emits `null` (no opening quote).
 	case KindURL:
 		// AppendURL writes body + closing quote, escaping when RawQuery/
 		// Opaque/Host smuggled bytes a JSON string can't hold raw.
-		return prefix + `"`, fmt.Sprintf("dst = encode.AppendURL(dst, %s)\n", ref), true
+		return prefix + `"`, fmt.Sprintf("dst = %s(dst, %s)\n", appendURLFn(f.HTMLEscape), ref), true
 	case KindBigRat:
 		return prefix + `"`, fmt.Sprintf("if dst, err = (&%s).AppendText(dst); err != nil { return dst, err }\ndst = append(dst, '\"')\n", ref), true
 	case KindBigFloat:
@@ -2854,6 +2881,26 @@ func zeroLit(elemType string, kind TypeKind) string {
 // type narrower than 64-bit imposes — the types a bare Go conversion silently
 // truncates. ok=false for int/int64/uint/uint64 (64-bit on target platforms, so
 // the MaxInt64/MaxUint64 scan bound already covers them).
+// kindNarrowName maps a narrow integer kind to its builtin spelling for
+// narrowIntGuard — f.GoType may be a named type whose bounds these are.
+func kindNarrowName(k TypeKind) string {
+	switch k {
+	case KindInt8:
+		return "int8"
+	case KindInt16:
+		return "int16"
+	case KindInt32:
+		return "int32"
+	case KindUint8:
+		return "uint8"
+	case KindUint16:
+		return "uint16"
+	case KindUint32:
+		return "uint32"
+	}
+	return ""
+}
+
 func narrowIntBounds(typ string) (lo, hi string, ok bool) {
 	switch typ {
 	case "int8":
@@ -3284,15 +3331,30 @@ func renderDecode(bOut *bytes.Buffer, s StructInfo) {
 		fmt.Fprintf(b, "func (recv %s) decodeFromDepth(data []byte, _depth int) (result %s, i int, err error) {\n", s.Name, s.Name)
 		b.WriteString("result = recv\n")
 		b.WriteString("if _depth > scan.MaxDepth {\n\treturn result, 0, scan.ErrMaxDepth\n}\n")
-	} else {
-		fmt.Fprintf(b, "func (recv %s) DecodeFrom(data []byte) (result %s, i int, err error) {\n", s.Name, s.Name)
-		b.WriteString("result = recv\n")
-		if len(cyclicTypes) > 0 {
-			// Lets call sites into cyclic types uniformly pass _depth+1; folds
-			// to a constant here (unused consts are legal).
-			b.WriteString("const _depth = 0\n")
-		}
+		renderDecodeBody(b, s)
+		return
 	}
+	fmt.Fprintf(b, "func (recv %s) DecodeFrom(data []byte) (result %s, i int, err error) {\n", s.Name, s.Name)
+	b.WriteString("result = recv\n")
+	if len(cyclicTypes) == 0 {
+		renderDecodeBody(b, s)
+		return
+	}
+	// Only structs that actually call into a cyclic nested type need `_depth`
+	// in scope (decodeCallFor emits `_depth+1` there) — render first and gate
+	// on that, so the common acyclic-package struct doesn't carry a dead const.
+	var rest bytes.Buffer
+	renderDecodeBody(&rest, s)
+	if strings.Contains(rest.String(), "_depth+1") {
+		b.WriteString("const _depth = 0\n")
+	}
+	b.Write(rest.Bytes())
+}
+
+// renderDecodeBody emits everything after the DecodeFrom prologue
+// (result = recv [; depth check]) — the alias delegation or the full
+// object-scan loop, shared by both the cyclic and acyclic prologues above.
+func renderDecodeBody(b *bytes.Buffer, s StructInfo) {
 	if s.IsAlias {
 		renderAliasDecode(b, s)
 		b.WriteString("}\n\n")
@@ -4502,6 +4564,8 @@ default: return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, scan.ErrBadBool)
 		if f.Kind == KindUint64 {
 			fmt.Fprintf(b, "%s = u\n", ref)
 		} else {
+			b.WriteString(narrowIntGuard("u", kindNarrowName(f.Kind),
+				fmt.Sprintf("return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrNumberOverflow)", posVar, field)))
 			fmt.Fprintf(b, "%s = %s(u)\n", ref, f.GoType)
 		}
 	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
@@ -4510,6 +4574,8 @@ default: return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, scan.ErrBadBool)
 		if f.Kind == KindInt64 {
 			fmt.Fprintf(b, "%s = n\n", ref)
 		} else {
+			b.WriteString(narrowIntGuard("n", kindNarrowName(f.Kind),
+				fmt.Sprintf("return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrNumberOverflow)", posVar, field)))
 			fmt.Fprintf(b, "%s = %s(n)\n", ref, f.GoType)
 		}
 	case KindString:
@@ -4793,7 +4859,7 @@ func renderField(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 		}
 		// Fast path: the inline int/uint scanner materializes `n`, so a leaf
 		// with no built-in rules skips the temp — cascade runs off `n`.
-		if (leaf.Kind == KindInt64 || leaf.Kind == KindUint64) && len(builtinV) == 0 && len(builtinM) == 0 {
+		if (leaf.Kind == KindInt64 || leaf.Kind == KindUint64) && !f.String && len(builtinV) == 0 && len(builtinM) == 0 {
 			valExpr := "n"
 			if castFn != "" {
 				valExpr = castFn + "(n)"
@@ -5366,13 +5432,26 @@ func renderStreamDecode(b *bytes.Buffer, s StructInfo) {
 	body.WriteString("result = recv\n")
 	if isCyclic(s.Name) {
 		body.WriteString("if _depth > scan.MaxDepth {\n\treturn result, scan.ErrMaxDepth\n}\n")
-	} else if len(cyclicTypes) > 0 {
-		body.WriteString("const _depth = 0\n")
-	}
-	if s.IsAlias {
-		renderAliasStreamDecode(&body, s)
+		if s.IsAlias {
+			renderAliasStreamDecode(&body, s)
+		} else {
+			renderStreamDecodeStruct(&body, s)
+		}
 	} else {
-		renderStreamDecodeStruct(&body, s)
+		// Only structs that actually call into a cyclic nested type need
+		// `_depth` in scope (decodeCallFor emits `_depth+1` there) — render
+		// first and gate on that, so the common acyclic-package struct
+		// doesn't carry a dead const.
+		var rest bytes.Buffer
+		if s.IsAlias {
+			renderAliasStreamDecode(&rest, s)
+		} else {
+			renderStreamDecodeStruct(&rest, s)
+		}
+		if strings.Contains(rest.String(), "_depth+1") {
+			body.WriteString("const _depth = 0\n")
+		}
+		body.Write(rest.Bytes())
 	}
 	body.WriteString("}\n\n")
 	b.WriteString(tierStreamStringCalls(body.String(), s))
@@ -6197,6 +6276,8 @@ default: return result, decode.NewParseErr(%[2]s, s.Pos, scan.ErrBadBool)
 		if f.Kind == KindUint64 {
 			fmt.Fprintf(b, "%s = u\n", ref)
 		} else {
+			b.WriteString(narrowIntGuard("u", kindNarrowName(f.Kind),
+				fmt.Sprintf("return result, decode.NewParseErr(%s, s.Pos, scan.ErrNumberOverflow)", field)))
 			fmt.Fprintf(b, "%s = %s(u)\n", ref, f.GoType)
 		}
 	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
@@ -6205,6 +6286,8 @@ default: return result, decode.NewParseErr(%[2]s, s.Pos, scan.ErrBadBool)
 		if f.Kind == KindInt64 {
 			fmt.Fprintf(b, "%s = n\n", ref)
 		} else {
+			b.WriteString(narrowIntGuard("n", kindNarrowName(f.Kind),
+				fmt.Sprintf("return result, decode.NewParseErr(%s, s.Pos, scan.ErrNumberOverflow)", field)))
 			fmt.Fprintf(b, "%s = %s(n)\n", ref, f.GoType)
 		}
 	case KindString:
@@ -6257,8 +6340,10 @@ func renderStreamField(f FieldInfo, ref, posVar string) string {
 		}
 		return out
 	}
-	// See renderField — `,string` on bool is a no-op to match jsonv2.
-	if f.String && f.Kind != KindBool {
+	// See renderField — `,string` on bool is a no-op to match jsonv2. Pointer
+	// fields fall through to the pointer peel below, whose leaf recursion
+	// re-enters here (the string-tag branch on `*T` emits broken code).
+	if f.String && f.Kind != KindBool && !f.Pointer {
 		var out bytes.Buffer
 		nz := nullZeroApplies(f)
 		flat := nz && nullBreakOK(f)

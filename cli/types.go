@@ -125,6 +125,7 @@ type FieldInfo struct {
 	Copy             bool   // propagated from parent struct: bytes-path decode copies retained strings/RawMessage/any instead of aliasing data
 	AllowInvalidUTF8 bool   // propagated from parent struct: skip decode UTF-8 validation (strings pass raw bytes through, unpaired surrogates → U+FFFD, raw spans unchecked)
 	Ignored          bool
+	NotComparable    bool // go/types says the field's type is not comparable (omitzero needs a reflect zero probe, `!= (T{})` would not compile)
 
 	// SQLNullInner, when non-nil, marks a generic database/sql.Null[T] (Go
 	// 1.22): the synthetic FieldInfo for T. Renderers delegate the V slot to

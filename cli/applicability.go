@@ -30,7 +30,10 @@ func checkRuleApplicability(fi FieldInfo) error {
 	// no NamedPrims and keeps the historical KindStruct skip.
 	eff := func(typ string, kind TypeKind) TypeKind {
 		if kind == KindStruct {
-			if k, ok := fi.NamedPrims[typ]; ok {
+			// Pointer fields spell GoType "*Priority" while NamedPrims keys
+			// the pointee — strip the stars or every rule on a
+			// pointer-to-named-primitive bypasses the matrix.
+			if k, ok := fi.NamedPrims[strings.TrimLeft(typ, "*")]; ok {
 				return k
 			}
 		}
@@ -388,6 +391,9 @@ func checkOneValRule(r ValidationRule, source string, kind TypeKind, typeName, f
 					return dupErr(p)
 				}
 				seen[f] = struct{}{}
+				if !boundFits(strings.TrimSpace(p), kind) {
+					return boundRangeErr(fieldDesc, "oneof="+r.Value, p)
+				}
 			}
 		} else {
 			seen := map[string]struct{}{}
@@ -585,6 +591,9 @@ func checkOneModRule(m ModRule, source string, kind TypeKind, typeName, fieldDes
 					}
 				}
 			}
+			if !boundFits(v, kind) {
+				return boundRangeErr(fieldDesc, "clamp="+m.Value, v)
+			}
 			return nil
 		}
 		if lo != "" {
@@ -629,6 +638,61 @@ func mismatchMod(m ModRule, source, fieldDesc, typeName, requiredKind, botHint, 
 		CodeSpan: m.Name,
 		BotHint:  botHint,
 		UserHint: fmt.Sprintf("`%s` requires %s. %s", m.Name, requiredKind, userTail),
+	}
+}
+
+// kindIntBits returns (bits, unsigned) for integral kinds, (0, false)
+// otherwise.
+func kindIntBits(kind TypeKind) (int, bool) {
+	switch kind {
+	case KindInt, KindInt64:
+		return 64, false
+	case KindInt8:
+		return 8, false
+	case KindInt16:
+		return 16, false
+	case KindInt32:
+		return 32, false
+	case KindUint, KindUint64:
+		return 64, true
+	case KindUint8:
+		return 8, true
+	case KindUint16:
+		return 16, true
+	case KindUint32:
+		return 32, true
+	}
+	return 0, false
+}
+
+// boundFits reports whether the numeric literal v fits the kind's range and
+// sign — bounds are pasted verbatim into Go comparisons against the field, so
+// `uint8 >= -1` or `int8 <= 300` is a constant-overflow compile error in the
+// generated file.
+func boundFits(v string, kind TypeKind) bool {
+	bits, unsigned := kindIntBits(kind)
+	if bits == 0 {
+		if kind == KindFloat32 {
+			f, err := strconv.ParseFloat(v, 64)
+			return err == nil && !math.IsInf(float64(float32(f)), 0)
+		}
+		return true
+	}
+	var err error
+	if unsigned {
+		_, err = strconv.ParseUint(v, 10, bits)
+	} else {
+		_, err = strconv.ParseInt(v, 10, bits)
+	}
+	return err == nil
+}
+
+func boundRangeErr(fieldDesc, ruleSpelling, v string) *richError {
+	return &richError{
+		Msg:      fmt.Sprintf("%s: `%s` bound %q is out of the field type's range", fieldDesc, ruleSpelling, v),
+		CodeSpan: v,
+		BotHint:  "out-of-range bound is a constant-overflow compile error in the generated file",
+		UserHint: "use a bound the field's type can hold (mind sign for unsigned kinds)",
 	}
 }
 
@@ -692,6 +756,9 @@ func needFloat(r ValidationRule, fieldDesc string, kind TypeKind) error {
 				UserHint: "use a whole number, or make the field a float",
 			}
 		}
+	}
+	if !boundFits(v, kind) {
+		return boundRangeErr(fieldDesc, r.Name+"="+r.Value, v)
 	}
 	return nil
 }

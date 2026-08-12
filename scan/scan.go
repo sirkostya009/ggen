@@ -691,6 +691,12 @@ func exactShort(s []byte) (float64, bool) {
 				return 0, false
 			}
 			exp = exp*10 + int(d-'0')
+			// |exp - frac| ≤ 22 with frac ≤ 15 caps any acceptable exp at 37;
+			// bailing here also keeps the accumulator from wrapping a 32-bit
+			// int on long exponents ("1e4294967296" must not read as exp 0).
+			if exp > 999 {
+				return 0, false
+			}
 		}
 		exp *= esign
 		break

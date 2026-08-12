@@ -95,7 +95,6 @@ const ggenCap_CopyNode_Tags_string_64 = (1-min((64*max(int(unsafe.Sizeof(*new(st
 
 func (recv Addr) DecodeFrom(data []byte) (result Addr, i int, err error) {
 	result = recv
-	const _depth = 0
 	seenCity := false
 	seenStreet := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -223,7 +222,6 @@ func (recv Addr) DecodeFrom(data []byte) (result Addr, i int, err error) {
 
 func (recv Addr) DecodeFromStream(s *scan.Stream) (result Addr, err error) {
 	result = recv
-	const _depth = 0
 	seenCity := false
 	seenStreet := false
 	err = s.ObjectOpen()
@@ -2497,7 +2495,6 @@ func (s Node) AppendJSON(dst []byte) ([]byte, error) {
 
 func (recv CopyAddr) DecodeFrom(data []byte) (result CopyAddr, i int, err error) {
 	result = recv
-	const _depth = 0
 	seenCity := false
 	seenStreet := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -2627,7 +2624,6 @@ func (recv CopyAddr) DecodeFrom(data []byte) (result CopyAddr, i int, err error)
 
 func (recv CopyAddr) DecodeFromStream(s *scan.Stream) (result CopyAddr, err error) {
 	result = recv
-	const _depth = 0
 	seenCity := false
 	seenStreet := false
 	err = s.ObjectOpen()
@@ -4905,7 +4901,6 @@ func (s CopyNode) AppendJSON(dst []byte) ([]byte, error) {
 
 func (recv MapHeavy) DecodeFrom(data []byte) (result MapHeavy, i int, err error) {
 	result = recv
-	const _depth = 0
 	if result.Labels != nil {
 		clear(result.Labels)
 	}
@@ -5084,7 +5079,6 @@ func (recv MapHeavy) DecodeFrom(data []byte) (result MapHeavy, i int, err error)
 
 func (recv MapHeavy) DecodeFromStream(s *scan.Stream) (result MapHeavy, err error) {
 	result = recv
-	const _depth = 0
 	if result.Labels != nil {
 		clear(result.Labels)
 	}

@@ -4494,6 +4494,7 @@ func (s PtrSliceTupleStruct) AppendJSON(dst []byte) ([]byte, error) {
 
 func (recv PtrSliceNodesStruct) DecodeFrom(data []byte) (result PtrSliceNodesStruct, i int, err error) {
 	result = recv
+	const _depth = 0
 	if result.Nodes != nil {
 		result.Nodes = result.Nodes[:0]
 	}
@@ -4597,7 +4598,7 @@ func (recv PtrSliceNodesStruct) DecodeFrom(data []byte) (result PtrSliceNodesStr
 					}
 					slab0 = append(slab0, Node{})
 					var _n int
-					slab0[len(slab0)-1], _n, err = slab0[len(slab0)-1].DecodeFrom(data[i:])
+					slab0[len(slab0)-1], _n, err = slab0[len(slab0)-1].decodeFromDepth(data[i:], _depth+1)
 					i += _n
 					if err != nil {
 						return result, i, decode.NewParseErrShift("nodes", i, _n, err)
@@ -4649,6 +4650,7 @@ func (recv PtrSliceNodesStruct) DecodeFrom(data []byte) (result PtrSliceNodesStr
 
 func (recv PtrSliceNodesStruct) DecodeFromStream(s *scan.Stream) (result PtrSliceNodesStruct, err error) {
 	result = recv
+	const _depth = 0
 	if result.Nodes != nil {
 		result.Nodes = result.Nodes[:0]
 	}
@@ -4777,7 +4779,7 @@ func (recv PtrSliceNodesStruct) DecodeFromStream(s *scan.Stream) (result PtrSlic
 					break
 				}
 				slab0 = append(slab0, Node{})
-				slab0[len(slab0)-1], err = slab0[len(slab0)-1].DecodeFromStream(s)
+				slab0[len(slab0)-1], err = slab0[len(slab0)-1].decodeFromStreamDepth(s, _depth+1)
 				if err != nil {
 					return result, decode.NewParseErr("nodes", s.Pos, err)
 				}
@@ -4888,6 +4890,7 @@ func (s PtrSliceNodesStruct) AppendJSON(dst []byte) ([]byte, error) {
 
 func (recv PtrSliceStruct) DecodeFrom(data []byte) (result PtrSliceStruct, i int, err error) {
 	result = recv
+	const _depth = 0
 	if result.Items != nil {
 		result.Items = result.Items[:0]
 	}
@@ -5072,7 +5075,7 @@ func (recv PtrSliceStruct) DecodeFrom(data []byte) (result PtrSliceStruct, i int
 					}
 					slab0 = append(slab0, Node{})
 					var _n int
-					slab0[len(slab0)-1], _n, err = slab0[len(slab0)-1].DecodeFrom(data[i:])
+					slab0[len(slab0)-1], _n, err = slab0[len(slab0)-1].decodeFromDepth(data[i:], _depth+1)
 					i += _n
 					if err != nil {
 						return result, i, decode.NewParseErrShift("nodes", i, _n, err)
@@ -5193,6 +5196,7 @@ func (recv PtrSliceStruct) DecodeFrom(data []byte) (result PtrSliceStruct, i int
 
 func (recv PtrSliceStruct) DecodeFromStream(s *scan.Stream) (result PtrSliceStruct, err error) {
 	result = recv
+	const _depth = 0
 	if result.Items != nil {
 		result.Items = result.Items[:0]
 	}
@@ -5456,7 +5460,7 @@ func (recv PtrSliceStruct) DecodeFromStream(s *scan.Stream) (result PtrSliceStru
 					break
 				}
 				slab0 = append(slab0, Node{})
-				slab0[len(slab0)-1], err = slab0[len(slab0)-1].DecodeFromStream(s)
+				slab0[len(slab0)-1], err = slab0[len(slab0)-1].decodeFromStreamDepth(s, _depth+1)
 				if err != nil {
 					return result, decode.NewParseErr("nodes", s.Pos, err)
 				}

@@ -248,7 +248,7 @@ func (s AliasFloat64) JSONSize() int {
 }
 
 func (s AliasFloat64) AppendJSON(dst []byte) ([]byte, error) {
-	return strconv.AppendFloat(dst, float64(s), 'g', -1, 64), nil
+	return encode.AppendFloat(dst, float64(s), 64)
 }
 
 func (recv AliasBool) DecodeFrom(data []byte) (result AliasBool, i int, err error) {

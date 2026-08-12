@@ -1405,6 +1405,9 @@ func (recv StringTagStruct) DecodeFrom(data []byte) (result StringTagStruct, i i
 			if err != nil {
 				return result, i, decode.NewParseErr("i16", i, err)
 			}
+			if n < math.MinInt16 || n > math.MaxInt16 {
+				return result, i, decode.NewParseErr("i16", i, scan.ErrNumberOverflow)
+			}
 			result.I16 = int16(n)
 		case "i32":
 			if seenI32 {
@@ -1435,6 +1438,9 @@ func (recv StringTagStruct) DecodeFrom(data []byte) (result StringTagStruct, i i
 			n, err := strconv.ParseInt(sv, 10, 64)
 			if err != nil {
 				return result, i, decode.NewParseErr("i32", i, err)
+			}
+			if n < math.MinInt32 || n > math.MaxInt32 {
+				return result, i, decode.NewParseErr("i32", i, scan.ErrNumberOverflow)
 			}
 			result.I32 = int32(n)
 		case "i64":
@@ -1498,6 +1504,9 @@ func (recv StringTagStruct) DecodeFrom(data []byte) (result StringTagStruct, i i
 			if err != nil {
 				return result, i, decode.NewParseErr("i8", i, err)
 			}
+			if n < math.MinInt8 || n > math.MaxInt8 {
+				return result, i, decode.NewParseErr("i8", i, scan.ErrNumberOverflow)
+			}
 			result.I8 = int8(n)
 		case "u16":
 			if seenU16 {
@@ -1529,6 +1538,9 @@ func (recv StringTagStruct) DecodeFrom(data []byte) (result StringTagStruct, i i
 			if err != nil {
 				return result, i, decode.NewParseErr("u16", i, err)
 			}
+			if u > math.MaxUint16 {
+				return result, i, decode.NewParseErr("u16", i, scan.ErrNumberOverflow)
+			}
 			result.U16 = uint16(u)
 		case "u32":
 			if seenU32 {
@@ -1559,6 +1571,9 @@ func (recv StringTagStruct) DecodeFrom(data []byte) (result StringTagStruct, i i
 			u, err := strconv.ParseUint(sv, 10, 64)
 			if err != nil {
 				return result, i, decode.NewParseErr("u32", i, err)
+			}
+			if u > math.MaxUint32 {
+				return result, i, decode.NewParseErr("u32", i, scan.ErrNumberOverflow)
 			}
 			result.U32 = uint32(u)
 		case "u64":
@@ -1621,6 +1636,9 @@ func (recv StringTagStruct) DecodeFrom(data []byte) (result StringTagStruct, i i
 			u, err := strconv.ParseUint(sv, 10, 64)
 			if err != nil {
 				return result, i, decode.NewParseErr("u8", i, err)
+			}
+			if u > math.MaxUint8 {
+				return result, i, decode.NewParseErr("u8", i, scan.ErrNumberOverflow)
 			}
 			result.U8 = uint8(u)
 		default:
@@ -1757,6 +1775,9 @@ func (recv StringTagStruct) DecodeFromStream(s *scan.Stream) (result StringTagSt
 			if err != nil {
 				return result, decode.NewParseErr("i16", s.Pos, err)
 			}
+			if n < math.MinInt16 || n > math.MaxInt16 {
+				return result, decode.NewParseErr("i16", s.Pos, scan.ErrNumberOverflow)
+			}
 			result.I16 = int16(n)
 		case "i32":
 			err = s.ConsumeColon()
@@ -1775,6 +1796,9 @@ func (recv StringTagStruct) DecodeFromStream(s *scan.Stream) (result StringTagSt
 			n, err := strconv.ParseInt(sv, 10, 64)
 			if err != nil {
 				return result, decode.NewParseErr("i32", s.Pos, err)
+			}
+			if n < math.MinInt32 || n > math.MaxInt32 {
+				return result, decode.NewParseErr("i32", s.Pos, scan.ErrNumberOverflow)
 			}
 			result.I32 = int32(n)
 		case "i64":
@@ -1814,6 +1838,9 @@ func (recv StringTagStruct) DecodeFromStream(s *scan.Stream) (result StringTagSt
 			if err != nil {
 				return result, decode.NewParseErr("i8", s.Pos, err)
 			}
+			if n < math.MinInt8 || n > math.MaxInt8 {
+				return result, decode.NewParseErr("i8", s.Pos, scan.ErrNumberOverflow)
+			}
 			result.I8 = int8(n)
 		case "u16":
 			err = s.ConsumeColon()
@@ -1833,6 +1860,9 @@ func (recv StringTagStruct) DecodeFromStream(s *scan.Stream) (result StringTagSt
 			if err != nil {
 				return result, decode.NewParseErr("u16", s.Pos, err)
 			}
+			if u > math.MaxUint16 {
+				return result, decode.NewParseErr("u16", s.Pos, scan.ErrNumberOverflow)
+			}
 			result.U16 = uint16(u)
 		case "u32":
 			err = s.ConsumeColon()
@@ -1851,6 +1881,9 @@ func (recv StringTagStruct) DecodeFromStream(s *scan.Stream) (result StringTagSt
 			u, err := strconv.ParseUint(sv, 10, 64)
 			if err != nil {
 				return result, decode.NewParseErr("u32", s.Pos, err)
+			}
+			if u > math.MaxUint32 {
+				return result, decode.NewParseErr("u32", s.Pos, scan.ErrNumberOverflow)
 			}
 			result.U32 = uint32(u)
 		case "u64":
@@ -1889,6 +1922,9 @@ func (recv StringTagStruct) DecodeFromStream(s *scan.Stream) (result StringTagSt
 			u, err := strconv.ParseUint(sv, 10, 64)
 			if err != nil {
 				return result, decode.NewParseErr("u8", s.Pos, err)
+			}
+			if u > math.MaxUint8 {
+				return result, decode.NewParseErr("u8", s.Pos, scan.ErrNumberOverflow)
 			}
 			result.U8 = uint8(u)
 		default:

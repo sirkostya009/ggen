@@ -137,6 +137,7 @@ func tokenizePipe(tag string) ([]ptok, error) {
 					// unescaping downstream, after the part split.
 					sb.WriteByte('\'')
 					i++
+					closed := false
 					for i < n {
 						if tag[i] == '\\' && i+1 < n && tag[i+1] == '\'' {
 							sb.WriteString(`\'`)
@@ -145,10 +146,16 @@ func tokenizePipe(tag string) ([]ptok, error) {
 						}
 						if tag[i] == '\'' {
 							i++
+							closed = true
 							break
 						}
 						sb.WriteByte(tag[i])
 						i++
+					}
+					if !closed {
+						// Auto-closing would silently change the rule's
+						// semantics (`oneof='New York|LA` reads as one part).
+						return nil, fmt.Errorf("unterminated ' quote in pipe tag")
 					}
 					sb.WriteByte('\'')
 					continue

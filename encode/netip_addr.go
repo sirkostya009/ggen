@@ -14,3 +14,14 @@ func AppendNetipAddr(dst []byte, a netip.Addr) []byte {
 	}
 	return closeJSONString(dst, from)
 }
+
+// AppendNetipAddrHTML is AppendNetipAddr closing zoned text through the
+// HTML-safe escape set; zone-free text has no <>& to escape either.
+func AppendNetipAddrHTML(dst []byte, a netip.Addr) []byte {
+	from := len(dst)
+	dst, _ = a.AppendText(dst)
+	if a.Zone() == "" {
+		return append(dst, '"')
+	}
+	return CloseJSONStringHTML(dst, from)
+}

@@ -41,7 +41,7 @@ type Foo struct {
 `
 	file := writeGoFile(t, src)
 
-	structs, pkg, _, err := parseFile(file, []string{"Foo"})
+	structs, pkg, _, _, err := parseFile(file, []string{"Foo"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +90,7 @@ type Unrelated struct {
 `
 	file := writeGoFile(t, src)
 
-	structs, _, _, err := parseFile(file, []string{"Parent"})
+	structs, _, _, _, err := parseFile(file, []string{"Parent"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +123,7 @@ type A struct { X int ` + "`" + `json:"x"` + "`" + ` }
 type B struct { Y int ` + "`" + `json:"y"` + "`" + ` }
 `
 	file := writeGoFile(t, src)
-	_, _, _, err := parseFile(file, nil)
+	_, _, _, _, err := parseFile(file, nil)
 	if err == nil {
 		t.Fatal("expected error when no annotation and no name filter")
 	}
@@ -142,7 +142,7 @@ type A struct { X int ` + "`" + `json:"x"` + "`" + ` }
 type B struct { Y int ` + "`" + `json:"y"` + "`" + ` }
 `
 	file := writeGoFile(t, src)
-	structs, _, _, err := parseFile(file, []string{"A"})
+	structs, _, _, _, err := parseFile(file, []string{"A"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +154,7 @@ type B struct { Y int ` + "`" + `json:"y"` + "`" + ` }
 func TestParseFile_notFound(t *testing.T) {
 	t.Parallel()
 	file := writeGoFile(t, "package test\ntype Bar struct{}\n")
-	if _, _, _, err := parseFile(file, []string{"Foo"}); err == nil {
+	if _, _, _, _, err := parseFile(file, []string{"Foo"}); err == nil {
 		t.Fatal("expected error for missing struct")
 	}
 }
@@ -171,7 +171,7 @@ type Derived struct {
 }
 `
 	file := writeGoFile(t, src)
-	structs, _, _, err := parseFile(file, []string{"Derived"})
+	structs, _, _, _, err := parseFile(file, []string{"Derived"})
 	if err != nil {
 		t.Fatalf("unexpected: %v", err)
 	}
@@ -493,7 +493,7 @@ type Msg struct {
 		t.Fatal(err)
 	}
 
-	structs, pkg, _, err := parseFile(goFile, []string{"Msg"})
+	structs, pkg, _, _, err := parseFile(goFile, []string{"Msg"})
 	if err != nil {
 		t.Fatal(err)
 	}

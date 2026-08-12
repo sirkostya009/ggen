@@ -95,14 +95,14 @@ func UnmarshalSliceStream[T Decoder[T]](r io.Reader, buf []byte) ([]T, []byte, e
 	var s scan.Stream
 	s.Reset(r, buf)
 	if err := s.ArrayOpen(); err != nil {
-		return nil, s.Bytes(), NewParseErr("[]", s.Pos, err)
+		return nil, s.Bytes(), NewParseErr("[]", s.Offset(), err)
 	}
 	if err := s.SkipSpace(); err != nil {
-		return nil, s.Bytes(), NewParseErr("[]", s.Pos, err)
+		return nil, s.Bytes(), NewParseErr("[]", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err := s.ReadMore(s.Pos); err != nil {
-			return nil, s.Bytes(), NewParseErr("[]", s.Pos, err)
+			return nil, s.Bytes(), NewParseErr("[]", s.Offset(), err)
 		}
 		s.Pos = 0
 	}
@@ -115,28 +115,33 @@ func UnmarshalSliceStream[T Decoder[T]](r io.Reader, buf []byte) ([]T, []byte, e
 		var zero T
 		v, err := zero.DecodeFromStream(&s)
 		if err != nil {
-			return nil, s.Bytes(), NewParseErr(arrField(len(result)), s.Pos, err)
+			return nil, s.Bytes(), NewParseErr(arrField(len(result)), s.Offset(), err)
 		}
 		result = append(result, v)
 		if err := s.SkipSpace(); err != nil {
-			return nil, s.Bytes(), NewParseErr(arrField(len(result)-1), s.Pos, err)
+			return nil, s.Bytes(), NewParseErr(arrField(len(result)-1), s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err := s.ReadMore(s.Pos); err != nil {
-				return nil, s.Bytes(), NewParseErr(arrField(len(result)-1), s.Pos, err)
+				return nil, s.Bytes(), NewParseErr(arrField(len(result)-1), s.Offset(), err)
 			}
 			s.Pos = 0
 		}
 		c := s.Bytes()[s.Pos]
 		if c == ',' {
 			s.Pos++
+			// Separator WS — scalar/alias element decoders don't skip leading
+			// space themselves (mirrors the bytes walker's SkipSpace(i+1)).
+			if err := s.SkipSpace(); err != nil {
+				return nil, s.Bytes(), NewParseErr(arrField(len(result)), s.Offset(), err)
+			}
 			continue
 		}
 		if c == ']' {
 			s.Pos++
 			return result, s.Bytes(), nil
 		}
-		return nil, s.Bytes(), NewParseErr(arrField(len(result)-1), s.Pos, scan.ErrBadArray)
+		return nil, s.Bytes(), NewParseErr(arrField(len(result)-1), s.Offset(), scan.ErrBadArray)
 	}
 }
 

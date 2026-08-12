@@ -1154,7 +1154,6 @@ func (s CopyDoc) AppendJSON(dst []byte) ([]byte, error) {
 
 func (recv CopyRef) DecodeFrom(data []byte) (result CopyRef, i int, err error) {
 	result = recv
-	const _depth = 0
 	seenLabel := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
@@ -1257,7 +1256,6 @@ func (recv CopyRef) DecodeFrom(data []byte) (result CopyRef, i int, err error) {
 
 func (recv CopyRef) DecodeFromStream(s *scan.Stream) (result CopyRef, err error) {
 	result = recv
-	const _depth = 0
 	seenLabel := false
 	err = s.ObjectOpen()
 	if err != nil {
@@ -1344,7 +1342,6 @@ func (s CopyRef) AppendJSON(dst []byte) ([]byte, error) {
 
 func (recv AliasDoc) DecodeFrom(data []byte) (result AliasDoc, i int, err error) {
 	result = recv
-	const _depth = 0
 	seenName := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
@@ -1446,7 +1443,6 @@ func (recv AliasDoc) DecodeFrom(data []byte) (result AliasDoc, i int, err error)
 
 func (recv AliasDoc) DecodeFromStream(s *scan.Stream) (result AliasDoc, err error) {
 	result = recv
-	const _depth = 0
 	seenName := false
 	err = s.ObjectOpen()
 	if err != nil {

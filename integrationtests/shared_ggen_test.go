@@ -22,7 +22,6 @@ const ggenCap_Node_Tags_string = (min((80/max(int(unsafe.Sizeof(*new(string))), 
 
 func (recv Address) DecodeFrom(data []byte) (result Address, i int, err error) {
 	result = recv
-	const _depth = 0
 	seenCity := false
 	seenStreet := false
 	seenZipCode := false
@@ -206,7 +205,6 @@ func (recv Address) DecodeFrom(data []byte) (result Address, i int, err error) {
 
 func (recv Address) DecodeFromStream(s *scan.Stream) (result Address, err error) {
 	result = recv
-	const _depth = 0
 	seenCity := false
 	seenStreet := false
 	seenZipCode := false
@@ -1282,7 +1280,6 @@ func (s Node) AppendJSON(dst []byte) ([]byte, error) {
 
 func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err error) {
 	result = recv
-	const _depth = 0
 	var seen uint64
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
@@ -2599,7 +2596,6 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 
 func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err error) {
 	result = recv
-	const _depth = 0
 	var seen uint64
 	err = s.ObjectOpen()
 	if err != nil {

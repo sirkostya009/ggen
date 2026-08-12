@@ -27,7 +27,7 @@ func checkPackage(dir string) error {
 // checkFile is the single-file analogue of checkPackage; `wanted` is the
 // optional positional-name filter.
 func checkFile(filename string, wanted []string) error {
-	structs, _, _, err := parseFile(filename, wanted)
+	structs, _, _, _, err := parseFile(filename, wanted)
 	if err != nil {
 		return err
 	}
