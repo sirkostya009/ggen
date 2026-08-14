@@ -154,7 +154,7 @@ func (recv DiveStruct) DecodeFrom(data []byte) (result DiveStruct, i int, err er
 				break
 			}
 			if i >= len(data) || data[i] != '[' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("scores", i, scan.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -240,7 +240,7 @@ func (recv DiveStruct) DecodeFrom(data []byte) (result DiveStruct, i int, err er
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, scan.ErrBadArray
+							return result, i, decode.NewParseErr("scores", i, scan.ErrBadArray)
 						}
 						continue
 					}
@@ -248,7 +248,7 @@ func (recv DiveStruct) DecodeFrom(data []byte) (result DiveStruct, i int, err er
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("scores", i, scan.ErrBadArray)
 			}
 			i++
 		case "tags":
@@ -261,7 +261,7 @@ func (recv DiveStruct) DecodeFrom(data []byte) (result DiveStruct, i int, err er
 				result.Tags = nil
 			} else {
 				if i >= len(data) || data[i] != '[' {
-					return result, i, scan.ErrBadArray
+					return result, i, decode.NewParseErr("tags", i, scan.ErrBadArray)
 				}
 				i++
 				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -322,7 +322,7 @@ func (recv DiveStruct) DecodeFrom(data []byte) (result DiveStruct, i int, err er
 								i++
 							}
 							if i >= len(data) || data[i] == ']' {
-								return result, i, scan.ErrBadArray
+								return result, i, decode.NewParseErr("tags", i, scan.ErrBadArray)
 							}
 							continue
 						}
@@ -330,7 +330,7 @@ func (recv DiveStruct) DecodeFrom(data []byte) (result DiveStruct, i int, err er
 					}
 				}
 				if i >= len(data) || data[i] != ']' {
-					return result, i, scan.ErrBadArray
+					return result, i, decode.NewParseErr("tags", i, scan.ErrBadArray)
 				}
 				i++
 			}
@@ -953,7 +953,7 @@ func (recv CustomDiveStruct) DecodeFrom(data []byte) (result CustomDiveStruct, i
 							i++
 						}
 						if i >= len(data) || data[i] == '}' {
-							return result, i, scan.ErrBadObject
+							return result, i, decode.NewParseErr("lookup", i, scan.ErrBadObject)
 						}
 						continue
 					}
@@ -1082,7 +1082,7 @@ func (recv CustomDiveStruct) DecodeFrom(data []byte) (result CustomDiveStruct, i
 							i++
 						}
 						if i >= len(data) || data[i] == '}' {
-							return result, i, scan.ErrBadObject
+							return result, i, decode.NewParseErr("mixed", i, scan.ErrBadObject)
 						}
 						continue
 					}
@@ -1170,7 +1170,7 @@ func (recv CustomDiveStruct) DecodeFrom(data []byte) (result CustomDiveStruct, i
 				break
 			}
 			if i >= len(data) || data[i] != '[' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("tags", i, scan.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -1220,7 +1220,7 @@ func (recv CustomDiveStruct) DecodeFrom(data []byte) (result CustomDiveStruct, i
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, scan.ErrBadArray
+							return result, i, decode.NewParseErr("tags", i, scan.ErrBadArray)
 						}
 						continue
 					}
@@ -1228,7 +1228,7 @@ func (recv CustomDiveStruct) DecodeFrom(data []byte) (result CustomDiveStruct, i
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("tags", i, scan.ErrBadArray)
 			}
 			i++
 		case "trim":
@@ -1242,7 +1242,7 @@ func (recv CustomDiveStruct) DecodeFrom(data []byte) (result CustomDiveStruct, i
 				break
 			}
 			if i >= len(data) || data[i] != '[' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("trim", i, scan.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -1290,7 +1290,7 @@ func (recv CustomDiveStruct) DecodeFrom(data []byte) (result CustomDiveStruct, i
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, scan.ErrBadArray
+							return result, i, decode.NewParseErr("trim", i, scan.ErrBadArray)
 						}
 						continue
 					}
@@ -1298,7 +1298,7 @@ func (recv CustomDiveStruct) DecodeFrom(data []byte) (result CustomDiveStruct, i
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("trim", i, scan.ErrBadArray)
 			}
 			i++
 		default:

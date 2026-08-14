@@ -913,7 +913,7 @@ func (s *structSet) extractFieldFromTypes(structName string, field *types.Var, t
 	}
 
 	fi.Iface = inspectType(field.Type(), s.stdIfaces)
-	if err := checkRuleApplicability(fi); err != nil {
+	if err := checkRuleApplicability(fi, false); err != nil {
 		return fi, attachPosition(err, s.fileSet.Position(field.Pos()))
 	}
 	return fi, nil
@@ -1061,8 +1061,8 @@ func (s *structSet) extractStruct(name string, st *ast.StructType) (StructInfo, 
 						// `type P string` field rejects here instead of
 						// emitting broken code (generate resolves the same
 						// kinds via effectiveKind and emits real rule code).
-						if extractErr == nil && len(fi.NamedPrims) > 0 {
-							if err := checkRuleApplicability(fi); err != nil {
+						if extractErr == nil {
+							if err := checkRuleApplicability(fi, true); err != nil {
 								extractErr = err
 								errs = append(errs, attachPosition(err, s.fileSet.Position(field.Pos())))
 							}
@@ -1330,7 +1330,7 @@ func extractField(structName, goName string, field *ast.Field) (FieldInfo, error
 		}
 	}
 
-	if err := checkRuleApplicability(fi); err != nil {
+	if err := checkRuleApplicability(fi, false); err != nil {
 		return fi, err
 	}
 	return fi, nil

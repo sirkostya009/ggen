@@ -193,7 +193,7 @@ func (recv NativeTypes) DecodeFrom(data []byte) (result NativeTypes, i int, err 
 						i++
 					}
 					if i >= len(data) || data[i] == ']' {
-						return result, i, scan.ErrBadArray
+						return result, i, decode.NewParseErr("byteArray", i, scan.ErrBadArray)
 					}
 					continue
 				}
@@ -1156,7 +1156,7 @@ func (recv ByteArrays) DecodeFrom(data []byte) (result ByteArrays, i int, err er
 			}
 			seenArr = true
 			if i >= len(data) || data[i] != '[' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("arr", i, scan.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -1208,7 +1208,7 @@ func (recv ByteArrays) DecodeFrom(data []byte) (result ByteArrays, i int, err er
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, scan.ErrBadArray
+							return result, i, decode.NewParseErr("arr", i, scan.ErrBadArray)
 						}
 						continue
 					}
@@ -1216,7 +1216,7 @@ func (recv ByteArrays) DecodeFrom(data []byte) (result ByteArrays, i int, err er
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("arr", i, scan.ErrBadArray)
 			}
 			if idx0 != 4 {
 				return result, i, &validation.LenError{Pos: i, Path: []string{"arr"}, Want: 4, Got: idx0}

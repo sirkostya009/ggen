@@ -831,23 +831,23 @@ func appendStruct(dst []byte, rv reflect.Value, esc escapeFn) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-// isNilPtr reports a typed-nil pointer boxed in the interface: the dispatch
-// arms match it via a value-receiver method set, and invoking the method
-// would nil-deref (stdlib emits null; the reflect fallback never runs
-// because the type switch matches first).
-// isNilPtr reports a typed-nil pointer boxed in the interface via a direct
-// read of the interface's data word — the dispatch arms match it through a
-// value-receiver method set on *T, and invoking the method would nil-deref
-// (stdlib emits null; the reflect fallback never runs because the type
-// switch matches first). A boxed pointer's data word IS the pointer value
-// (nil iff the pointer is nil); every other kind boxes through a non-nil
-// pointer to its value (Go 1.4+ interface representation — a boxed non-
-// pointer never stores nil, small values included), so this can't
-// false-positive on a genuinely non-nil value of another kind. reflect.
-// ValueOf measured +51% on the common non-nil path in this hot dispatch arm
-// (in-situ core-pinned A/B, 2026-08); this is a raw two-word read, no
-// allocation, no reflect.
+// isNilPtr reports a typed-nil POINTER boxed in the interface: the dispatch
+// arms match it through a value-receiver method set on *T, and invoking the
+// method would nil-deref (stdlib emits null; the reflect fallback never runs
+// because the type switch matches first). The fast path is a raw read of the
+// interface's data word — a boxed pointer's data word IS the pointer value,
+// and no non-nil value of any kind boxes through a nil data word (Go 1.4+
+// interface representation), so a NON-nil data word always means "call the
+// method". reflect.ValueOf measured +51% on that common non-nil path in this
+// hot dispatch arm (in-situ core-pinned A/B, 2026-08). A NIL data word is
+// ambiguous, though: nil maps, funcs, and chans box one too, and calling a
+// value-receiver method on those is safe Go that stdlib performs — so the
+// cold path disambiguates by reflect kind and emits null only for a true
+// pointer.
 func isNilPtr(v any) bool {
 	type iface struct{ typ, data unsafe.Pointer }
-	return (*iface)(unsafe.Pointer(&v)).data == nil
+	if (*iface)(unsafe.Pointer(&v)).data != nil {
+		return false
+	}
+	return reflect.ValueOf(v).Kind() == reflect.Pointer
 }

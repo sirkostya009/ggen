@@ -112,21 +112,21 @@ func skipSpaceAVX512Slow(data []byte, i int) int {
 // scalar skipString).
 func skipStringTail(data []byte, bs int) (int, error) {
 	if bs+1 >= len(data) {
-		return 0, ErrBadString
+		return len(data), ErrBadString
 	}
 	switch data[bs+1] {
 	case '"', '\\', '/', 'b', 'f', 'n', 'r', 't':
 		return bs + 2, nil
 	case 'u':
 		if bs+6 > len(data) {
-			return 0, ErrBadString
+			return len(data), ErrBadString
 		}
 		if _, ok := parseHex4(data[bs+2 : bs+6]); !ok {
-			return 0, ErrBadString
+			return bs, ErrBadString
 		}
 		return bs + 6, nil
 	default:
-		return 0, ErrBadString
+		return bs, ErrBadString
 	}
 }
 
@@ -136,7 +136,7 @@ func skipStringAVX(data []byte, i int) (int, error) {
 	for {
 		k := structuralIndexAVX(data[j:])
 		if k < 0 {
-			return 0, ErrUnterminated
+			return len(data), ErrUnterminated
 		}
 		switch data[j+k] {
 		case '"':
@@ -144,11 +144,16 @@ func skipStringAVX(data []byte, i int) (int, error) {
 		case '\\':
 			nj, err := skipStringTail(data, j+k)
 			if err != nil {
-				return 0, err
+				return nj, err
 			}
 			j = nj
 		default:
-			return 0, ctrlHitErr(data[j+k:])
+			// Scalar skipString reports its span start j on a ctrl hit,
+			// len(data) for the unterminated-no-backslash tail.
+			if err := ctrlHitErr(data[j+k:]); err == ErrUnterminated {
+				return len(data), err
+			}
+			return j, ErrBadString
 		}
 	}
 }
@@ -159,7 +164,7 @@ func skipStringAVX2(data []byte, i int) (int, error) {
 	for {
 		k := structuralIndexAVX2(data[j:])
 		if k < 0 {
-			return 0, ErrUnterminated
+			return len(data), ErrUnterminated
 		}
 		switch data[j+k] {
 		case '"':
@@ -167,11 +172,16 @@ func skipStringAVX2(data []byte, i int) (int, error) {
 		case '\\':
 			nj, err := skipStringTail(data, j+k)
 			if err != nil {
-				return 0, err
+				return nj, err
 			}
 			j = nj
 		default:
-			return 0, ctrlHitErr(data[j+k:])
+			// Scalar skipString reports its span start j on a ctrl hit,
+			// len(data) for the unterminated-no-backslash tail.
+			if err := ctrlHitErr(data[j+k:]); err == ErrUnterminated {
+				return len(data), err
+			}
+			return j, ErrBadString
 		}
 	}
 }
@@ -182,7 +192,7 @@ func skipStringAVX512(data []byte, i int) (int, error) {
 	for {
 		k := structuralIndexAVX512(data[j:])
 		if k < 0 {
-			return 0, ErrUnterminated
+			return len(data), ErrUnterminated
 		}
 		switch data[j+k] {
 		case '"':
@@ -190,43 +200,48 @@ func skipStringAVX512(data []byte, i int) (int, error) {
 		case '\\':
 			nj, err := skipStringTail(data, j+k)
 			if err != nil {
-				return 0, err
+				return nj, err
 			}
 			j = nj
 		default:
-			return 0, ctrlHitErr(data[j+k:])
+			// Scalar skipString reports its span start j on a ctrl hit,
+			// len(data) for the unterminated-no-backslash tail.
+			if err := ctrlHitErr(data[j+k:]); err == ErrUnterminated {
+				return len(data), err
+			}
+			return j, ErrBadString
 		}
 	}
 }
 
 // SkipValueAVX is SkipValue over the fused AVX skip tree.
 func SkipValueAVX(data []byte, i int) (int, error) {
-	// Position normalized to 0 on error, matching [SkipValue]: the tiers
-	// delegate to the shared scalar skipNumber/skipString, which preserve
-	// their give-up offset for skipValueAt's truncated-vs-malformed test.
-	end, err := skipValueAVX(data, i, 0)
-	if err != nil {
-		return 0, err
-	}
-	return end, nil
+	return skipValueAVX(data, i, 0)
 }
 
 func skipValueAVX(data []byte, i, depth int) (int, error) {
 	i = SkipSpaceAVX(data, i)
 	if i >= len(data) {
-		return 0, ErrUnexpectedEnd
+		return i, ErrUnexpectedEnd
 	}
 	switch data[i] {
 	case '"':
 		return skipStringAVX(data, i)
 	case 't', 'f':
 		_, j, err := Bool(data, i)
-		return j, err
+		if err != nil {
+			want := "true"
+			if data[i] == 'f' {
+				want = "false"
+			}
+			return litEnd(data, i, want), err
+		}
+		return j, nil
 	case 'n':
 		if j, ok := Null(data, i); ok {
 			return j, nil
 		}
-		return 0, ErrBadLiteral
+		return litEnd(data, i, "null"), ErrBadLiteral
 	case '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
 		return skipNumber(data, i)
 	case '[':
@@ -234,12 +249,12 @@ func skipValueAVX(data []byte, i, depth int) (int, error) {
 	case '{':
 		return skipObjectAVX(data, i+1, depth+1)
 	}
-	return 0, ErrBadValue
+	return i, ErrBadValue
 }
 
 func skipArrayAVX(data []byte, i, depth int) (int, error) {
 	if depth > MaxDepth {
-		return 0, ErrMaxDepth
+		return i, ErrMaxDepth
 	}
 	i = SkipSpaceAVX(data, i)
 	if i < len(data) && data[i] == ']' {
@@ -248,11 +263,11 @@ func skipArrayAVX(data []byte, i, depth int) (int, error) {
 	for {
 		j, err := skipValueAVX(data, i, depth)
 		if err != nil {
-			return 0, err
+			return j, err
 		}
 		i = SkipSpaceAVX(data, j)
 		if i >= len(data) {
-			return 0, ErrBadArray
+			return i, ErrBadArray
 		}
 		if data[i] == ',' {
 			i++
@@ -261,13 +276,13 @@ func skipArrayAVX(data []byte, i, depth int) (int, error) {
 		if data[i] == ']' {
 			return i + 1, nil
 		}
-		return 0, ErrBadArray
+		return i, ErrBadArray
 	}
 }
 
 func skipObjectAVX(data []byte, i, depth int) (int, error) {
 	if depth > MaxDepth {
-		return 0, ErrMaxDepth
+		return i, ErrMaxDepth
 	}
 	i = SkipSpaceAVX(data, i)
 	if i < len(data) && data[i] == '}' {
@@ -275,24 +290,24 @@ func skipObjectAVX(data []byte, i, depth int) (int, error) {
 	}
 	for {
 		if i >= len(data) || data[i] != '"' {
-			return 0, ErrBadObject
+			return i, ErrBadObject
 		}
 		j, err := skipStringAVX(data, i)
 		if err != nil {
-			return 0, err
+			return j, err
 		}
 		j = SkipSpaceAVX(data, j)
 		if j >= len(data) || data[j] != ':' {
-			return 0, ErrBadObject
+			return j, ErrBadObject
 		}
 		j = SkipSpaceAVX(data, j+1)
 		k, err := skipValueAVX(data, j, depth)
 		if err != nil {
-			return 0, err
+			return k, err
 		}
 		i = SkipSpaceAVX(data, k)
 		if i >= len(data) {
-			return 0, ErrBadObject
+			return i, ErrBadObject
 		}
 		if data[i] == ',' {
 			i = SkipSpaceAVX(data, i+1)
@@ -301,38 +316,38 @@ func skipObjectAVX(data []byte, i, depth int) (int, error) {
 		if data[i] == '}' {
 			return i + 1, nil
 		}
-		return 0, ErrBadObject
+		return i, ErrBadObject
 	}
 }
 
 // SkipValueAVX2 is SkipValue over the fused AVX2 skip tree.
 func SkipValueAVX2(data []byte, i int) (int, error) {
-	// Position normalized to 0 on error, matching [SkipValue]: the tiers
-	// delegate to the shared scalar skipNumber/skipString, which preserve
-	// their give-up offset for skipValueAt's truncated-vs-malformed test.
-	end, err := skipValueAVX2(data, i, 0)
-	if err != nil {
-		return 0, err
-	}
-	return end, nil
+	return skipValueAVX2(data, i, 0)
 }
 
 func skipValueAVX2(data []byte, i, depth int) (int, error) {
 	i = SkipSpaceAVX2(data, i)
 	if i >= len(data) {
-		return 0, ErrUnexpectedEnd
+		return i, ErrUnexpectedEnd
 	}
 	switch data[i] {
 	case '"':
 		return skipStringAVX2(data, i)
 	case 't', 'f':
 		_, j, err := Bool(data, i)
-		return j, err
+		if err != nil {
+			want := "true"
+			if data[i] == 'f' {
+				want = "false"
+			}
+			return litEnd(data, i, want), err
+		}
+		return j, nil
 	case 'n':
 		if j, ok := Null(data, i); ok {
 			return j, nil
 		}
-		return 0, ErrBadLiteral
+		return litEnd(data, i, "null"), ErrBadLiteral
 	case '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
 		return skipNumber(data, i)
 	case '[':
@@ -340,12 +355,12 @@ func skipValueAVX2(data []byte, i, depth int) (int, error) {
 	case '{':
 		return skipObjectAVX2(data, i+1, depth+1)
 	}
-	return 0, ErrBadValue
+	return i, ErrBadValue
 }
 
 func skipArrayAVX2(data []byte, i, depth int) (int, error) {
 	if depth > MaxDepth {
-		return 0, ErrMaxDepth
+		return i, ErrMaxDepth
 	}
 	i = SkipSpaceAVX2(data, i)
 	if i < len(data) && data[i] == ']' {
@@ -354,11 +369,11 @@ func skipArrayAVX2(data []byte, i, depth int) (int, error) {
 	for {
 		j, err := skipValueAVX2(data, i, depth)
 		if err != nil {
-			return 0, err
+			return j, err
 		}
 		i = SkipSpaceAVX2(data, j)
 		if i >= len(data) {
-			return 0, ErrBadArray
+			return i, ErrBadArray
 		}
 		if data[i] == ',' {
 			i++
@@ -367,13 +382,13 @@ func skipArrayAVX2(data []byte, i, depth int) (int, error) {
 		if data[i] == ']' {
 			return i + 1, nil
 		}
-		return 0, ErrBadArray
+		return i, ErrBadArray
 	}
 }
 
 func skipObjectAVX2(data []byte, i, depth int) (int, error) {
 	if depth > MaxDepth {
-		return 0, ErrMaxDepth
+		return i, ErrMaxDepth
 	}
 	i = SkipSpaceAVX2(data, i)
 	if i < len(data) && data[i] == '}' {
@@ -381,24 +396,24 @@ func skipObjectAVX2(data []byte, i, depth int) (int, error) {
 	}
 	for {
 		if i >= len(data) || data[i] != '"' {
-			return 0, ErrBadObject
+			return i, ErrBadObject
 		}
 		j, err := skipStringAVX2(data, i)
 		if err != nil {
-			return 0, err
+			return j, err
 		}
 		j = SkipSpaceAVX2(data, j)
 		if j >= len(data) || data[j] != ':' {
-			return 0, ErrBadObject
+			return j, ErrBadObject
 		}
 		j = SkipSpaceAVX2(data, j+1)
 		k, err := skipValueAVX2(data, j, depth)
 		if err != nil {
-			return 0, err
+			return k, err
 		}
 		i = SkipSpaceAVX2(data, k)
 		if i >= len(data) {
-			return 0, ErrBadObject
+			return i, ErrBadObject
 		}
 		if data[i] == ',' {
 			i = SkipSpaceAVX2(data, i+1)
@@ -407,38 +422,38 @@ func skipObjectAVX2(data []byte, i, depth int) (int, error) {
 		if data[i] == '}' {
 			return i + 1, nil
 		}
-		return 0, ErrBadObject
+		return i, ErrBadObject
 	}
 }
 
 // SkipValueAVX512 is SkipValue over the fused AVX-512 skip tree.
 func SkipValueAVX512(data []byte, i int) (int, error) {
-	// Position normalized to 0 on error, matching [SkipValue]: the tiers
-	// delegate to the shared scalar skipNumber/skipString, which preserve
-	// their give-up offset for skipValueAt's truncated-vs-malformed test.
-	end, err := skipValueAVX512(data, i, 0)
-	if err != nil {
-		return 0, err
-	}
-	return end, nil
+	return skipValueAVX512(data, i, 0)
 }
 
 func skipValueAVX512(data []byte, i, depth int) (int, error) {
 	i = SkipSpaceAVX512(data, i)
 	if i >= len(data) {
-		return 0, ErrUnexpectedEnd
+		return i, ErrUnexpectedEnd
 	}
 	switch data[i] {
 	case '"':
 		return skipStringAVX512(data, i)
 	case 't', 'f':
 		_, j, err := Bool(data, i)
-		return j, err
+		if err != nil {
+			want := "true"
+			if data[i] == 'f' {
+				want = "false"
+			}
+			return litEnd(data, i, want), err
+		}
+		return j, nil
 	case 'n':
 		if j, ok := Null(data, i); ok {
 			return j, nil
 		}
-		return 0, ErrBadLiteral
+		return litEnd(data, i, "null"), ErrBadLiteral
 	case '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
 		return skipNumber(data, i)
 	case '[':
@@ -446,12 +461,12 @@ func skipValueAVX512(data []byte, i, depth int) (int, error) {
 	case '{':
 		return skipObjectAVX512(data, i+1, depth+1)
 	}
-	return 0, ErrBadValue
+	return i, ErrBadValue
 }
 
 func skipArrayAVX512(data []byte, i, depth int) (int, error) {
 	if depth > MaxDepth {
-		return 0, ErrMaxDepth
+		return i, ErrMaxDepth
 	}
 	i = SkipSpaceAVX512(data, i)
 	if i < len(data) && data[i] == ']' {
@@ -460,11 +475,11 @@ func skipArrayAVX512(data []byte, i, depth int) (int, error) {
 	for {
 		j, err := skipValueAVX512(data, i, depth)
 		if err != nil {
-			return 0, err
+			return j, err
 		}
 		i = SkipSpaceAVX512(data, j)
 		if i >= len(data) {
-			return 0, ErrBadArray
+			return i, ErrBadArray
 		}
 		if data[i] == ',' {
 			i++
@@ -473,13 +488,13 @@ func skipArrayAVX512(data []byte, i, depth int) (int, error) {
 		if data[i] == ']' {
 			return i + 1, nil
 		}
-		return 0, ErrBadArray
+		return i, ErrBadArray
 	}
 }
 
 func skipObjectAVX512(data []byte, i, depth int) (int, error) {
 	if depth > MaxDepth {
-		return 0, ErrMaxDepth
+		return i, ErrMaxDepth
 	}
 	i = SkipSpaceAVX512(data, i)
 	if i < len(data) && data[i] == '}' {
@@ -487,24 +502,24 @@ func skipObjectAVX512(data []byte, i, depth int) (int, error) {
 	}
 	for {
 		if i >= len(data) || data[i] != '"' {
-			return 0, ErrBadObject
+			return i, ErrBadObject
 		}
 		j, err := skipStringAVX512(data, i)
 		if err != nil {
-			return 0, err
+			return j, err
 		}
 		j = SkipSpaceAVX512(data, j)
 		if j >= len(data) || data[j] != ':' {
-			return 0, ErrBadObject
+			return j, ErrBadObject
 		}
 		j = SkipSpaceAVX512(data, j+1)
 		k, err := skipValueAVX512(data, j, depth)
 		if err != nil {
-			return 0, err
+			return k, err
 		}
 		i = SkipSpaceAVX512(data, k)
 		if i >= len(data) {
-			return 0, ErrBadObject
+			return i, ErrBadObject
 		}
 		if data[i] == ',' {
 			i = SkipSpaceAVX512(data, i+1)
@@ -513,6 +528,6 @@ func skipObjectAVX512(data []byte, i, depth int) (int, error) {
 		if data[i] == '}' {
 			return i + 1, nil
 		}
-		return 0, ErrBadObject
+		return i, ErrBadObject
 	}
 }

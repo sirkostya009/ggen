@@ -247,8 +247,10 @@ surface pinned by `Decoder[T]`).
   escape semantics to the section, then again to the result. ggen's tag
   unquoting treats only `\'` as an escape, so the same tag names the field
   `a\b` (backslash + b) and a `format:'a\\b 2006'` layout emits those two
-  characters, JSON-escaped. ggen's output is valid and round-trips; only the
-  spelling of a backslash-bearing NAME/LAYOUT differs from jsonv2. Matching
+  characters, JSON-escaped. Since the round-5 name-escape fix (opt #56) wire
+  KEYS are JSON-escaped statically too, so ggen's output is valid JSON and
+  self-round-trips (pinned in `keyescape_test.go`); only the SPELLING of a
+  backslash-bearing name/layout differs from jsonv2. Matching
   the quirk exactly means replicating a double-unescape nobody relies on —
   revisit only if a consumer feeds ggen tags to jsonv2 and compares keys.
 

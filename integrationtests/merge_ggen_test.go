@@ -81,7 +81,7 @@ func (recv ArrMerge) DecodeFrom(data []byte) (result ArrMerge, i int, err error)
 			}
 			seenAI = true
 			if i >= len(data) || data[i] != '[' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("ai", i, scan.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -110,7 +110,7 @@ func (recv ArrMerge) DecodeFrom(data []byte) (result ArrMerge, i int, err error)
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, scan.ErrBadArray
+							return result, i, decode.NewParseErr("ai", i, scan.ErrBadArray)
 						}
 						continue
 					}
@@ -118,7 +118,7 @@ func (recv ArrMerge) DecodeFrom(data []byte) (result ArrMerge, i int, err error)
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("ai", i, scan.ErrBadArray)
 			}
 			if idx0 != 2 {
 				return result, i, &validation.LenError{Pos: i, Path: []string{"ai"}, Want: 2, Got: idx0}
@@ -130,7 +130,7 @@ func (recv ArrMerge) DecodeFrom(data []byte) (result ArrMerge, i int, err error)
 			}
 			seenAM = true
 			if i >= len(data) || data[i] != '[' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("am", i, scan.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -165,7 +165,7 @@ func (recv ArrMerge) DecodeFrom(data []byte) (result ArrMerge, i int, err error)
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, scan.ErrBadArray
+							return result, i, decode.NewParseErr("am", i, scan.ErrBadArray)
 						}
 						continue
 					}
@@ -173,7 +173,7 @@ func (recv ArrMerge) DecodeFrom(data []byte) (result ArrMerge, i int, err error)
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("am", i, scan.ErrBadArray)
 			}
 			if idx0 != 2 {
 				return result, i, &validation.LenError{Pos: i, Path: []string{"am"}, Want: 2, Got: idx0}
@@ -185,7 +185,7 @@ func (recv ArrMerge) DecodeFrom(data []byte) (result ArrMerge, i int, err error)
 			}
 			seenAP = true
 			if i >= len(data) || data[i] != '[' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("ap", i, scan.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -211,7 +211,7 @@ func (recv ArrMerge) DecodeFrom(data []byte) (result ArrMerge, i int, err error)
 								i++
 							}
 							if i >= len(data) || data[i] == ']' {
-								return result, i, scan.ErrBadArray
+								return result, i, decode.NewParseErr("ap", i, scan.ErrBadArray)
 							}
 							continue
 						}
@@ -234,7 +234,7 @@ func (recv ArrMerge) DecodeFrom(data []byte) (result ArrMerge, i int, err error)
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, scan.ErrBadArray
+							return result, i, decode.NewParseErr("ap", i, scan.ErrBadArray)
 						}
 						continue
 					}
@@ -242,7 +242,7 @@ func (recv ArrMerge) DecodeFrom(data []byte) (result ArrMerge, i int, err error)
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("ap", i, scan.ErrBadArray)
 			}
 			if idx0 != 2 {
 				return result, i, &validation.LenError{Pos: i, Path: []string{"ap"}, Want: 2, Got: idx0}
@@ -259,7 +259,7 @@ func (recv ArrMerge) DecodeFrom(data []byte) (result ArrMerge, i int, err error)
 				break
 			}
 			if i >= len(data) || data[i] != '[' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("si", i, scan.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -292,7 +292,7 @@ func (recv ArrMerge) DecodeFrom(data []byte) (result ArrMerge, i int, err error)
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, scan.ErrBadArray
+							return result, i, decode.NewParseErr("si", i, scan.ErrBadArray)
 						}
 						continue
 					}
@@ -300,7 +300,7 @@ func (recv ArrMerge) DecodeFrom(data []byte) (result ArrMerge, i int, err error)
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("si", i, scan.ErrBadArray)
 			}
 			i++
 		default:

@@ -158,7 +158,7 @@ func (recv OmitStruct) DecodeFrom(data []byte) (result OmitStruct, i int, err er
 				break
 			}
 			if i >= len(data) || data[i] != '[' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("extra", i, scan.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -205,7 +205,7 @@ func (recv OmitStruct) DecodeFrom(data []byte) (result OmitStruct, i int, err er
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, scan.ErrBadArray
+							return result, i, decode.NewParseErr("extra", i, scan.ErrBadArray)
 						}
 						continue
 					}
@@ -213,7 +213,7 @@ func (recv OmitStruct) DecodeFrom(data []byte) (result OmitStruct, i int, err er
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("extra", i, scan.ErrBadArray)
 			}
 			i++
 		case "labels":
@@ -304,7 +304,7 @@ func (recv OmitStruct) DecodeFrom(data []byte) (result OmitStruct, i int, err er
 							i++
 						}
 						if i >= len(data) || data[i] == '}' {
-							return result, i, scan.ErrBadObject
+							return result, i, decode.NewParseErr("labels", i, scan.ErrBadObject)
 						}
 						continue
 					}
@@ -403,7 +403,7 @@ func (recv OmitStruct) DecodeFrom(data []byte) (result OmitStruct, i int, err er
 							i++
 						}
 						if i >= len(data) || data[i] == '}' {
-							return result, i, scan.ErrBadObject
+							return result, i, decode.NewParseErr("meta", i, scan.ErrBadObject)
 						}
 						continue
 					}
@@ -459,7 +459,7 @@ func (recv OmitStruct) DecodeFrom(data []byte) (result OmitStruct, i int, err er
 				break
 			}
 			if i >= len(data) || data[i] != '[' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("tags", i, scan.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -506,7 +506,7 @@ func (recv OmitStruct) DecodeFrom(data []byte) (result OmitStruct, i int, err er
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, scan.ErrBadArray
+							return result, i, decode.NewParseErr("tags", i, scan.ErrBadArray)
 						}
 						continue
 					}
@@ -514,7 +514,7 @@ func (recv OmitStruct) DecodeFrom(data []byte) (result OmitStruct, i int, err er
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("tags", i, scan.ErrBadArray)
 			}
 			i++
 		default:

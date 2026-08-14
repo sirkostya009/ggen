@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unsafe"
 )
 
 // stringHappyCases: every input is a complete JSON string literal that
@@ -135,6 +136,21 @@ func TestDetach(t *testing.T) {
 	}
 	if n := testing.AllocsPerRun(100, func() { _ = Detach(aliased, clean) }); n != 1 {
 		t.Errorf("Detach of an aliasing string allocated %v times, want 1", n)
+	}
+
+	// Empty aliased string: a zero-length header still carries a pointer into
+	// data, pinning the whole backing array under GC — Detach must return the
+	// detached "" instead.
+	backing := make([]byte, 1<<16)
+	empty := unsafe.String(unsafe.SliceData(backing), 0)
+	detached := Detach(empty, backing)
+	if detached != "" {
+		t.Fatalf("Detach(empty alias) = %q, want empty", detached)
+	}
+	sp := uintptr(unsafe.Pointer(unsafe.StringData(detached)))
+	dp := uintptr(unsafe.Pointer(unsafe.SliceData(backing)))
+	if sp >= dp && sp < dp+uintptr(len(backing)) {
+		t.Errorf("Detach(empty alias) still points into data — backing array stays pinned")
 	}
 }
 

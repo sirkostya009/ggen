@@ -1460,7 +1460,7 @@ func (recv NarrowInts) DecodeFrom(data []byte) (result NarrowInts, i int, err er
 							i++
 						}
 						if i >= len(data) || data[i] == '}' {
-							return result, i, scan.ErrBadObject
+							return result, i, decode.NewParseErr("mapU", i, scan.ErrBadObject)
 						}
 						continue
 					}
@@ -1529,7 +1529,7 @@ func (recv NarrowInts) DecodeFrom(data []byte) (result NarrowInts, i int, err er
 				break
 			}
 			if i >= len(data) || data[i] != '[' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("sliI", i, scan.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -1612,7 +1612,7 @@ func (recv NarrowInts) DecodeFrom(data []byte) (result NarrowInts, i int, err er
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, scan.ErrBadArray
+							return result, i, decode.NewParseErr("sliI", i, scan.ErrBadArray)
 						}
 						continue
 					}
@@ -1620,7 +1620,7 @@ func (recv NarrowInts) DecodeFrom(data []byte) (result NarrowInts, i int, err er
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("sliI", i, scan.ErrBadArray)
 			}
 			i++
 		case "u16":
@@ -3117,7 +3117,7 @@ func (recv NarrowFloats) DecodeFrom(data []byte) (result NarrowFloats, i int, er
 							i++
 						}
 						if i >= len(data) || data[i] == '}' {
-							return result, i, scan.ErrBadObject
+							return result, i, decode.NewParseErr("fm", i, scan.ErrBadObject)
 						}
 						continue
 					}
@@ -3162,7 +3162,7 @@ func (recv NarrowFloats) DecodeFrom(data []byte) (result NarrowFloats, i int, er
 				break
 			}
 			if i >= len(data) || data[i] != '[' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("fs", i, scan.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -3202,7 +3202,7 @@ func (recv NarrowFloats) DecodeFrom(data []byte) (result NarrowFloats, i int, er
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, scan.ErrBadArray
+							return result, i, decode.NewParseErr("fs", i, scan.ErrBadArray)
 						}
 						continue
 					}
@@ -3210,7 +3210,7 @@ func (recv NarrowFloats) DecodeFrom(data []byte) (result NarrowFloats, i int, er
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("fs", i, scan.ErrBadArray)
 			}
 			i++
 		default:

@@ -216,7 +216,14 @@ back to `stepsFromLegacy(mods, vals)` for synthetic fields that set only buckets
 
 `applicability.go` rejects mismatched rules against the working type (clear
 message); per-level gating (elem kind under `inner:`, `string` under `keys:`).
-Cases covered in `TestCLI/InvalidRuleApplication`.
+Cases covered in `TestCLI/InvalidRuleApplication`. KindStruct positions no
+longer skip: `checkRuleApplicability(fi, resolved)` DEFERS opaque kinds on the
+early AST pass and REJECTS them on the go/types re-run (`resolved=true`, after
+`NamedPrims` resolves named primitives to their underlying kind) — the render
+paths emit uncompilable comparisons (gt/trim on a struct) or, worst, NOTHING
+(eq/neq) for a genuine struct kind. `required`/`optional`/`@Func` stay
+kind-agnostic. AST-only mode keeps the historical skip (no type info to judge
+by).
 
 Numeric bound VALUES (`gt/gte/lt/lte/eq/neq`, `oneof`'s numeric parts,
 `clamp`'s lo/hi) are also range- and sign-checked against the field's
@@ -322,7 +329,8 @@ Decode-only. Pinned in `integrationtests/nullzero_test.go` + `cli_test.go`.
 **Trailing commas are rejected (stdlib parity).** Every element-loop comma branch
 (slice/map/tuple/nested/pointer-elem/`[]byte` format:array, bytes + stream) emits
 a guard after the comma's WS skip: container close or EOF right after a comma →
-`scan.ErrBadArray`/`ErrBadObject` (`emitNoCloseAfterComma` /
+`scan.ErrBadArray`/`ErrBadObject`, wrapped in `decode.NewParseErr` with field +
+cursor on both paths (`emitNoCloseAfterComma` /
 `streamNoCloseAfterComma`). The EOF half also guards a stream-path index of
 `s.Bytes()[s.Pos]` on input truncated right after a comma (`SkipSpace` returns nil
 at EOF with `Pos == len(buf)`). Pinned in `scan_decode_test.go`.
@@ -1143,6 +1151,44 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
     unreachable the same way. `variantShapeKind` resolves through
     `FieldInfo.NamedPrims` (parse time, before `namedKinds` is seeded) then
     `effectiveKind` (render time).
+
+56. **Wire-key name constants are JSON-escaped statically.**
+    `renderAppendJSONBody` used to concatenate `f.JSONName` raw into the
+    `,"name":` prefix (Go-escaped via `%q` only), so a quote-bearing name from
+    the standard tag grammar (`json:"'q\"x'"`) emitted invalid JSON with a nil
+    error, and a backslash-bearing one a silently different key.
+    `escapeJSONName` escapes once at generate time (quote/backslash/control;
+    `\b\f\n\r\t` shorthands, else `\uXXXX` — jsontext's spelling); htmlescape
+    structs also escape `<>&` in names (v1/jsonv2 escape keys like values).
+    `renderSize` budgets `len(escapedName)+3`. Decode dispatch already matched
+    the unescaped name against unescaped wire keys — only the emit side was
+    broken. Pinned by `integrationtests/keyescape_test.go` (jsonv2 byte parity
+    for the quote name, v1 parity for the htmlescape name, validity +
+    self-round-trip for the backslash name whose SPELLING divergence stays —
+    see backlog).
+
+57. **Bytes-path slice/array structural errors wrap in `NewParseErr`.** The
+    `[`-open and `]`-close guards in `emitByteSliceRead` and every
+    `emitNoCloseAfterComma` site returned BARE `scan.ErrBadArray`/`ErrBadObject`
+    (no path, no pos, `errors.As[*decode.ParseError]` failed) while the stream
+    twins and the map/bytes-value guards all wrapped. All bytes-path structural
+    guards now emit `decode.NewParseErr(field, cursor, sentinel)` — including
+    the `pipe:` variant dispatch in `variants.go` (`renderVariantDispatch`'s
+    head/`null`-arm/default sentinels, which had the `field` literal computed
+    and then discarded via `_ = field`). Pinned by
+    `TestParseError_SliceStructural` + `TestParseError_VariantDispatch` (integ,
+    bytes + stream). The entry-level `ErrMaxDepth` guard stays bare — it fires
+    before any field is entered, so there is no path or position to carry. The same round's
+    runtime half made scan primitives return the ERROR position instead of 0,
+    so the existing `NewParseErr(field, i, err)` emit shape stamps a real pos
+    with no codegen change (`TestParseError_ScanPrimitivePos`).
+
+58. **`renderAppendMap` uses `vref` in the bool/int64/uint64/float64 arms.**
+    Those four arms hardcoded `v`, so a named-primitive map value
+    (`map[string]Flag`, `type Flag bool`) generated uncompilable
+    `strconv.AppendBool(dst, v)`; the KindString arm and `emitSliceElement`
+    already cast via `primCast`. Pinned by
+    `TestMap_NamedPrimitiveValuesRoundTrip`.
 
 ## Named types, cross-package types (defects fixed 2026-07)
 

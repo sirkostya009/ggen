@@ -39,12 +39,12 @@ func UnmarshalSlice[T Decoder[T]](data []byte) ([]T, error) {
 	}
 	i++
 	i = scan.SkipSpace(data, i)
-	var result []T
 	if i < len(data) && data[i] == ']' {
-		return result, trailingCheck(data, i+1)
+		// Non-nil empty for [] — generated slice fields and jsonv2 agree.
+		return []T{}, trailingCheck(data, i+1)
 	}
 	// Same width-driven prealloc ladder generated slice fields use.
-	result = make([]T, 0, PreallocCap(unsafe.Sizeof(*new(T))))
+	result := make([]T, 0, PreallocCap(unsafe.Sizeof(*new(T))))
 	for {
 		var zero T
 		v, n, err := zero.DecodeFrom(data[i:])
@@ -106,11 +106,12 @@ func UnmarshalSliceStream[T Decoder[T]](r io.Reader, buf []byte) ([]T, []byte, e
 		}
 		s.Pos = 0
 	}
-	var result []T
 	if s.Bytes()[s.Pos] == ']' {
 		s.Pos++
-		return result, s.Bytes(), nil
+		// Non-nil empty for [] — matches the bytes walker.
+		return []T{}, s.Bytes(), nil
 	}
+	var result []T
 	for {
 		var zero T
 		v, err := zero.DecodeFromStream(&s)

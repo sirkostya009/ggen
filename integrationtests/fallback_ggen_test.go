@@ -770,7 +770,7 @@ func (recv CrossPkgShapes) DecodeFrom(data []byte) (result CrossPkgShapes, i int
 			}
 			seenArr = true
 			if i >= len(data) || data[i] != '[' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("arr", i, scan.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -802,7 +802,7 @@ func (recv CrossPkgShapes) DecodeFrom(data []byte) (result CrossPkgShapes, i int
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, scan.ErrBadArray
+							return result, i, decode.NewParseErr("arr", i, scan.ErrBadArray)
 						}
 						continue
 					}
@@ -810,7 +810,7 @@ func (recv CrossPkgShapes) DecodeFrom(data []byte) (result CrossPkgShapes, i int
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("arr", i, scan.ErrBadArray)
 			}
 			if idx0 != 2 {
 				return result, i, &validation.LenError{Pos: i, Path: []string{"arr"}, Want: 2, Got: idx0}
@@ -895,7 +895,7 @@ func (recv CrossPkgShapes) DecodeFrom(data []byte) (result CrossPkgShapes, i int
 							i++
 						}
 						if i >= len(data) || data[i] == '}' {
-							return result, i, scan.ErrBadObject
+							return result, i, decode.NewParseErr("dict", i, scan.ErrBadObject)
 						}
 						continue
 					}
@@ -917,7 +917,7 @@ func (recv CrossPkgShapes) DecodeFrom(data []byte) (result CrossPkgShapes, i int
 				break
 			}
 			if i >= len(data) || data[i] != '[' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("many", i, scan.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -953,7 +953,7 @@ func (recv CrossPkgShapes) DecodeFrom(data []byte) (result CrossPkgShapes, i int
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, scan.ErrBadArray
+							return result, i, decode.NewParseErr("many", i, scan.ErrBadArray)
 						}
 						continue
 					}
@@ -961,7 +961,7 @@ func (recv CrossPkgShapes) DecodeFrom(data []byte) (result CrossPkgShapes, i int
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("many", i, scan.ErrBadArray)
 			}
 			i++
 		case "one":
@@ -1038,7 +1038,7 @@ func (recv CrossPkgShapes) DecodeFrom(data []byte) (result CrossPkgShapes, i int
 				break
 			}
 			if i >= len(data) || data[i] != '[' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("slab", i, scan.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -1069,7 +1069,7 @@ func (recv CrossPkgShapes) DecodeFrom(data []byte) (result CrossPkgShapes, i int
 								i++
 							}
 							if i >= len(data) || data[i] == ']' {
-								return result, i, scan.ErrBadArray
+								return result, i, decode.NewParseErr("slab", i, scan.ErrBadArray)
 							}
 							continue
 						}
@@ -1095,7 +1095,7 @@ func (recv CrossPkgShapes) DecodeFrom(data []byte) (result CrossPkgShapes, i int
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, scan.ErrBadArray
+							return result, i, decode.NewParseErr("slab", i, scan.ErrBadArray)
 						}
 						continue
 					}
@@ -1103,7 +1103,7 @@ func (recv CrossPkgShapes) DecodeFrom(data []byte) (result CrossPkgShapes, i int
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("slab", i, scan.ErrBadArray)
 			}
 			i++
 		default:

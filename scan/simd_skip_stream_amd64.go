@@ -186,7 +186,7 @@ func (s *Stream) skipStringAVX() error {
 	i := s.Pos
 	if i >= len(s.buf) {
 		if err := s.ReadMore(i); err != nil {
-			return err
+			return notEOF(err, ErrExpectString)
 		}
 		i = 0
 	}
@@ -229,7 +229,7 @@ func (s *Stream) skipStringAVX2() error {
 	i := s.Pos
 	if i >= len(s.buf) {
 		if err := s.ReadMore(i); err != nil {
-			return err
+			return notEOF(err, ErrExpectString)
 		}
 		i = 0
 	}
@@ -272,7 +272,7 @@ func (s *Stream) skipStringAVX512() error {
 	i := s.Pos
 	if i >= len(s.buf) {
 		if err := s.ReadMore(i); err != nil {
-			return err
+			return notEOF(err, ErrExpectString)
 		}
 		i = 0
 	}
@@ -340,7 +340,7 @@ func (s *Stream) skipValueAVX(depth int) error {
 	}
 	if s.Pos >= len(s.buf) {
 		if err := s.ReadMore(s.Pos); err != nil {
-			return ErrUnexpectedEnd
+			return notEOF(err, ErrUnexpectedEnd)
 		}
 		s.Pos = 0
 	}
@@ -372,8 +372,10 @@ func (s *Stream) skipArrayAVX(depth int) error {
 		return err
 	}
 	if s.Pos >= len(s.buf) {
+		// Drained right after '[' matches bytes skipArray, whose element
+		// skipValue reports ErrUnexpectedEnd — not ErrBadArray.
 		if err := s.ReadMore(s.Pos); err != nil {
-			return notEOF(err, ErrBadArray)
+			return notEOF(err, ErrUnexpectedEnd)
 		}
 		s.Pos = 0
 	}
@@ -424,6 +426,11 @@ func (s *Stream) skipObjectAVX(depth int) error {
 	}
 	for {
 		if err := s.skipStringAVX(); err != nil {
+			// Drained at a key start (only reachable after a comma — the
+			// head guaranteed a byte): the bytes loop reports ErrBadObject.
+			if err == ErrExpectString && s.Pos >= len(s.buf) {
+				return ErrBadObject
+			}
 			return err
 		}
 		if err := s.SkipSpaceAVX(); err != nil {
@@ -476,7 +483,7 @@ func (s *Stream) skipValueAVX2(depth int) error {
 	}
 	if s.Pos >= len(s.buf) {
 		if err := s.ReadMore(s.Pos); err != nil {
-			return ErrUnexpectedEnd
+			return notEOF(err, ErrUnexpectedEnd)
 		}
 		s.Pos = 0
 	}
@@ -508,8 +515,10 @@ func (s *Stream) skipArrayAVX2(depth int) error {
 		return err
 	}
 	if s.Pos >= len(s.buf) {
+		// Drained right after '[' matches bytes skipArray, whose element
+		// skipValue reports ErrUnexpectedEnd — not ErrBadArray.
 		if err := s.ReadMore(s.Pos); err != nil {
-			return notEOF(err, ErrBadArray)
+			return notEOF(err, ErrUnexpectedEnd)
 		}
 		s.Pos = 0
 	}
@@ -560,6 +569,11 @@ func (s *Stream) skipObjectAVX2(depth int) error {
 	}
 	for {
 		if err := s.skipStringAVX2(); err != nil {
+			// Drained at a key start (only reachable after a comma — the
+			// head guaranteed a byte): the bytes loop reports ErrBadObject.
+			if err == ErrExpectString && s.Pos >= len(s.buf) {
+				return ErrBadObject
+			}
 			return err
 		}
 		if err := s.SkipSpaceAVX2(); err != nil {
@@ -612,7 +626,7 @@ func (s *Stream) skipValueAVX512(depth int) error {
 	}
 	if s.Pos >= len(s.buf) {
 		if err := s.ReadMore(s.Pos); err != nil {
-			return ErrUnexpectedEnd
+			return notEOF(err, ErrUnexpectedEnd)
 		}
 		s.Pos = 0
 	}
@@ -660,8 +674,9 @@ func (s *Stream) CaptureValueAVX() ([]byte, error) {
 		}
 		// A failure at a byte strictly inside the window is final — see
 		// Stream.CaptureValue; without this a live reader that delivered a
-		// complete malformed value blocks in Read forever.
-		if at, aerr := skipValueAt(s.buf, start); aerr != nil && at < len(s.buf) {
+		// complete malformed value blocks in Read forever. The tier skip
+		// preserves its give-up position (scalar-identical by parity test).
+		if err != nil && end < len(s.buf) {
 			s.Pos = start
 			return nil, err
 		}
@@ -697,8 +712,9 @@ func (s *Stream) CaptureValueAVX2() ([]byte, error) {
 		}
 		// A failure at a byte strictly inside the window is final — see
 		// Stream.CaptureValue; without this a live reader that delivered a
-		// complete malformed value blocks in Read forever.
-		if at, aerr := skipValueAt(s.buf, start); aerr != nil && at < len(s.buf) {
+		// complete malformed value blocks in Read forever. The tier skip
+		// preserves its give-up position (scalar-identical by parity test).
+		if err != nil && end < len(s.buf) {
 			s.Pos = start
 			return nil, err
 		}
@@ -734,8 +750,9 @@ func (s *Stream) CaptureValueAVX512() ([]byte, error) {
 		}
 		// A failure at a byte strictly inside the window is final — see
 		// Stream.CaptureValue; without this a live reader that delivered a
-		// complete malformed value blocks in Read forever.
-		if at, aerr := skipValueAt(s.buf, start); aerr != nil && at < len(s.buf) {
+		// complete malformed value blocks in Read forever. The tier skip
+		// preserves its give-up position (scalar-identical by parity test).
+		if err != nil && end < len(s.buf) {
 			s.Pos = start
 			return nil, err
 		}
@@ -758,8 +775,10 @@ func (s *Stream) skipArrayAVX512(depth int) error {
 		return err
 	}
 	if s.Pos >= len(s.buf) {
+		// Drained right after '[' matches bytes skipArray, whose element
+		// skipValue reports ErrUnexpectedEnd — not ErrBadArray.
 		if err := s.ReadMore(s.Pos); err != nil {
-			return notEOF(err, ErrBadArray)
+			return notEOF(err, ErrUnexpectedEnd)
 		}
 		s.Pos = 0
 	}
@@ -810,6 +829,11 @@ func (s *Stream) skipObjectAVX512(depth int) error {
 	}
 	for {
 		if err := s.skipStringAVX512(); err != nil {
+			// Drained at a key start (only reachable after a comma — the
+			// head guaranteed a byte): the bytes loop reports ErrBadObject.
+			if err == ErrExpectString && s.Pos >= len(s.buf) {
+				return ErrBadObject
+			}
 			return err
 		}
 		if err := s.SkipSpaceAVX512(); err != nil {

@@ -34,7 +34,7 @@ func classifyStructural(data, rest []byte, start, k int, hasHigh, validate bool)
 	switch rest[k] {
 	case '"':
 		if hasHigh && !validUTF8x16(rest[:k]) {
-			return "", 0, ErrInvalidUTF8
+			return "", start, ErrInvalidUTF8
 		}
 		return unsafe.String(unsafe.SliceData(rest), k), start + k + 1, nil
 	case '\\':
@@ -47,7 +47,8 @@ func classifyStructural(data, rest []byte, start, k int, hasHigh, validate bool)
 		// the scratch into the growth chain (matches scan.String).
 		return stringSlow(data, start, start+k, stringSpanEnd(data, start)-start, validate)
 	default:
-		return "", 0, ctrlHitErr(rest[k:])
+		p, err := ctrlHitPos(data, start, rest[k:])
+		return "", p, err
 	}
 }
 
@@ -73,7 +74,7 @@ func classifyStructural64(data, rest []byte, start, k int, hasHigh, validate boo
 				ok = validUTF8x64(span)
 			}
 			if !ok {
-				return "", 0, ErrInvalidUTF8
+				return "", start, ErrInvalidUTF8
 			}
 		}
 		return unsafe.String(unsafe.SliceData(rest), k), start + k + 1, nil
@@ -84,7 +85,8 @@ func classifyStructural64(data, rest []byte, start, k int, hasHigh, validate boo
 		}
 		return stringSlow(data, start, start+k, stringSpanEnd(data, start)-start, validate)
 	default:
-		return "", 0, ctrlHitErr(rest[k:])
+		p, err := ctrlHitPos(data, start, rest[k:])
+		return "", p, err
 	}
 }
 
@@ -98,10 +100,21 @@ func ctrlHitErr(rest []byte) error {
 	return ErrBadString
 }
 
+// ctrlHitPos pairs ctrlHitErr with the scalar-identical error position:
+// ErrUnterminated ends at len(data) (ran off the end), ErrBadString at the
+// span start — where scalar String's checkSpan/stringSlow-prefix arms report.
+func ctrlHitPos(data []byte, start int, rest []byte) (int, error) {
+	err := ctrlHitErr(rest)
+	if err == ErrUnterminated {
+		return len(data), err
+	}
+	return start, err
+}
+
 // StringAVX is scan.String scanning 16 bytes/iteration (128-bit vectors).
 func StringAVX(data []byte, i int, validate bool) (string, int, error) {
 	if i >= len(data) || data[i] != '"' {
-		return "", 0, ErrExpectString
+		return "", i, ErrExpectString
 	}
 	start := i + 1
 	rest := data[start:]
@@ -135,13 +148,13 @@ func StringAVX(data []byte, i int, validate bool) (string, int, error) {
 			}
 		}
 	}
-	return "", 0, ErrUnterminated
+	return "", len(data), ErrUnterminated
 }
 
 // StringAVX2 is scan.String scanning 32 bytes/iteration (256-bit vectors).
 func StringAVX2(data []byte, i int, validate bool) (string, int, error) {
 	if i >= len(data) || data[i] != '"' {
-		return "", 0, ErrExpectString
+		return "", i, ErrExpectString
 	}
 	start := i + 1
 	rest := data[start:]
@@ -172,13 +185,13 @@ func StringAVX2(data []byte, i int, validate bool) (string, int, error) {
 			}
 		}
 	}
-	return "", 0, ErrUnterminated
+	return "", len(data), ErrUnterminated
 }
 
 // StringAVX512 is scan.String scanning 64 bytes/iteration (512-bit vectors).
 func StringAVX512(data []byte, i int, validate bool) (string, int, error) {
 	if i >= len(data) || data[i] != '"' {
-		return "", 0, ErrExpectString
+		return "", i, ErrExpectString
 	}
 	start := i + 1
 	rest := data[start:]
@@ -210,5 +223,5 @@ func StringAVX512(data []byte, i int, validate bool) (string, int, error) {
 			}
 		}
 	}
-	return "", 0, ErrUnterminated
+	return "", len(data), ErrUnterminated
 }

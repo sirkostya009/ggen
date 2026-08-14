@@ -954,7 +954,7 @@ func (recv NullZeroWhole) DecodeFrom(data []byte) (result NullZeroWhole, i int, 
 				break
 			}
 			if i >= len(data) || data[i] != '[' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("c", i, scan.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -1034,7 +1034,7 @@ func (recv NullZeroWhole) DecodeFrom(data []byte) (result NullZeroWhole, i int, 
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, scan.ErrBadArray
+							return result, i, decode.NewParseErr("c", i, scan.ErrBadArray)
 						}
 						continue
 					}
@@ -1042,7 +1042,7 @@ func (recv NullZeroWhole) DecodeFrom(data []byte) (result NullZeroWhole, i int, 
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("c", i, scan.ErrBadArray)
 			}
 			i++
 		default:

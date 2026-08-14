@@ -153,15 +153,15 @@ func convCall(v Variant) string {
 func renderVariantDispatch(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	field := fieldLit(f)
 	inlineSkipWS(b, posVar)
-	fmt.Fprintf(b, "if %s >= len(data) {\nreturn result, %s, scan.ErrUnexpectedEnd\n}\n", posVar, posVar)
+	fmt.Fprintf(b, "if %s >= len(data) {\nreturn result, %s, decode.NewParseErr(%s, %s, scan.ErrUnexpectedEnd)\n}\n", posVar, posVar, field, posVar)
 	fmt.Fprintf(b, "switch data[%s] {\n", posVar)
 	for idx, v := range f.Variants {
 		labels := strings.Join(variantCaseBytes(f, v), ", ")
 		fmt.Fprintf(b, "case %s:\n", labels)
 		switch v.Kind {
 		case VariantNullZero:
-			fmt.Fprintf(b, "if %s+4 > len(data) || data[%s+1] != 'u' || data[%s+2] != 'l' || data[%s+3] != 'l' {\nreturn result, %s, scan.ErrBadLiteral\n}\n%s += 4\n%s = %s\n",
-				posVar, posVar, posVar, posVar, posVar, posVar, ref, zeroLit(f.GoType, f.Kind))
+			fmt.Fprintf(b, "if %s+4 > len(data) || data[%s+1] != 'u' || data[%s+2] != 'l' || data[%s+3] != 'l' {\nreturn result, %s, decode.NewParseErr(%s, %s, scan.ErrBadLiteral)\n}\n%s += 4\n%s = %s\n",
+				posVar, posVar, posVar, posVar, posVar, field, posVar, posVar, ref, zeroLit(f.GoType, f.Kind))
 		case VariantNative:
 			renderField(b, nativeVariantField(f), ref, posVar)
 		case VariantConvert:
@@ -171,8 +171,7 @@ func renderVariantDispatch(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 			emitConvAssign(b, v, ref, tmp, posVar)
 		}
 	}
-	fmt.Fprintf(b, "default:\nreturn result, %s, scan.ErrBadValue\n}\n", posVar)
-	_ = field
+	fmt.Fprintf(b, "default:\nreturn result, %s, decode.NewParseErr(%s, %s, scan.ErrBadValue)\n}\n", posVar, field, posVar)
 }
 
 // renderVariantDispatchStream is the stream-path counterpart.

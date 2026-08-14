@@ -141,7 +141,7 @@ func (recv ModStruct) DecodeFrom(data []byte) (result ModStruct, i int, err erro
 				break
 			}
 			if i >= len(data) || data[i] != '[' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("tags", i, scan.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -190,7 +190,7 @@ func (recv ModStruct) DecodeFrom(data []byte) (result ModStruct, i int, err erro
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, scan.ErrBadArray
+							return result, i, decode.NewParseErr("tags", i, scan.ErrBadArray)
 						}
 						continue
 					}
@@ -198,7 +198,7 @@ func (recv ModStruct) DecodeFrom(data []byte) (result ModStruct, i int, err erro
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("tags", i, scan.ErrBadArray)
 			}
 			i++
 		default:

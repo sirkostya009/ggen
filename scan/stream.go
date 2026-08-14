@@ -162,7 +162,7 @@ func (s *Stream) ConsumeColon() error {
 	i := s.Pos
 	if i >= len(s.buf) {
 		if err := s.ReadMore(i); err != nil {
-			return err
+			return notEOF(err, ErrBadObject)
 		}
 		i = 0
 	}
@@ -232,8 +232,10 @@ func (s *Stream) StringView(validate bool) (string, error) {
 func (s *Stream) stringView(validate bool) (v string, owned bool, err error) {
 	i := s.Pos
 	if i >= len(s.buf) {
+		// Drained where a string must start matches bytes String's
+		// ErrExpectString; a transient reader error propagates raw.
 		if err := s.ReadMore(i); err != nil {
-			return "", false, err
+			return "", false, notEOF(err, ErrExpectString)
 		}
 		i = 0
 	}
@@ -293,8 +295,9 @@ func (s *Stream) stringView(validate bool) (v string, owned bool, err error) {
 func (s *Stream) KeyView(validate bool) (string, error) {
 	i := s.Pos
 	if i >= len(s.buf) {
+		// Drained here matches bytes String's ErrExpectString — see stringView.
 		if err := s.ReadMore(i); err != nil {
-			return "", err
+			return "", notEOF(err, ErrExpectString)
 		}
 		i = 0
 	}
@@ -375,7 +378,7 @@ func (s *Stream) skipString() error {
 	i := s.Pos
 	if i >= len(s.buf) {
 		if err := s.ReadMore(i); err != nil {
-			return err
+			return notEOF(err, ErrExpectString)
 		}
 		i = 0
 	}
@@ -616,7 +619,7 @@ func (s *Stream) Int64() (int64, error) {
 	i := s.Pos
 	if i >= len(s.buf) {
 		if err := s.ReadMore(i); err != nil {
-			return 0, err
+			return 0, notEOF(err, ErrBadNumber)
 		}
 		i = 0
 	}
@@ -625,8 +628,10 @@ func (s *Stream) Int64() (int64, error) {
 		neg = true
 		i++
 		if i >= len(s.buf) {
+			// Drained after a bare "-" is a grammar error, like the bytes
+			// path; a transient reader error still propagates raw.
 			if err := s.ReadMore(i); err != nil {
-				return 0, err
+				return 0, notEOF(err, ErrBadNumber)
 			}
 			i = 0
 		}
@@ -720,7 +725,7 @@ func (s *Stream) Uint64() (uint64, error) {
 	i := s.Pos
 	if i >= len(s.buf) {
 		if err := s.ReadMore(i); err != nil {
-			return 0, err
+			return 0, notEOF(err, ErrBadNumber)
 		}
 		i = 0
 	}
@@ -792,7 +797,7 @@ func (s *Stream) Float64() (float64, error) {
 	i := s.Pos
 	if i >= len(s.buf) {
 		if err := s.ReadMore(i); err != nil {
-			return 0, err
+			return 0, notEOF(err, ErrBadNumber)
 		}
 		i = 0
 	}
@@ -984,7 +989,7 @@ func (s *Stream) Bool() (bool, error) {
 	i := s.Pos
 	if i >= len(s.buf) {
 		if err := s.ReadMore(i); err != nil {
-			return false, err
+			return false, notEOF(err, ErrBadBool)
 		}
 		i = 0
 	}
@@ -1024,7 +1029,7 @@ func (s *Stream) skipValueDepth(depth int) error {
 	}
 	if s.Pos >= len(s.buf) {
 		if err := s.ReadMore(s.Pos); err != nil {
-			return ErrUnexpectedEnd
+			return notEOF(err, ErrUnexpectedEnd)
 		}
 		s.Pos = 0
 	}
@@ -1066,10 +1071,10 @@ func (s *Stream) skipValueDepth(depth int) error {
 // it (json.Unmarshal / UnmarshalText / SetString consume it in place, no copy
 // needed). It buffers the whole value contiguously and locates its end with the
 // BYTES-path SkipValue — reused verbatim (SIMD tiers included), no streaming
-// skip. A skip failure on a partial window is indistinguishable from truncation
-// (no error position), so any error means "read more" and only surfaces once EOF
-// says no more bytes can fix it — malformed input therefore buffers the stream's
-// remainder before erroring. A huge value grows s.buf to its size, which is
+// skip. SkipValue preserves its give-up position on error, so a failure at a
+// byte strictly inside the window is surfaced as final immediately; only an
+// off-the-end failure means "read more" and keeps reading until EOF says no
+// more bytes can fix it. A huge value grows s.buf to its size, which is
 // inherent: the raw bytes must be contiguous to hand off anyway.
 func (s *Stream) CaptureValue() ([]byte, error) {
 	start := s.Pos
@@ -1105,11 +1110,10 @@ func (s *Stream) CaptureValue() ([]byte, error) {
 		// already hold. Surfacing it now is what keeps a live (never-EOF)
 		// reader from wedging the decode: without this, a fully-delivered
 		// `{"a":}` on a socket blocked in Read forever waiting for bytes that
-		// could not have helped. Only an off-the-end failure is ambiguous
-		// with truncation and keeps reading. Cold path (the tier skip already
-		// failed); skipValueAt is the scalar walk, grammar-identical to every
-		// tier by parity test.
-		if at, aerr := skipValueAt(s.buf, start); aerr != nil && at < len(s.buf) {
+		// could not have helped. Only an off-the-end failure (end == len) is
+		// ambiguous with truncation and keeps reading. SkipValue preserves
+		// its give-up position on error, so no re-walk is needed.
+		if err != nil && end < len(s.buf) {
 			s.Pos = start
 			return nil, err
 		}
@@ -1142,8 +1146,10 @@ func (s *Stream) skipArray(depth int) error {
 		return err
 	}
 	if s.Pos >= len(s.buf) {
+		// Drained right after '[' matches bytes skipArray, whose element
+		// skipValue reports ErrUnexpectedEnd — not ErrBadArray.
 		if err := s.ReadMore(s.Pos); err != nil {
-			return notEOF(err, ErrBadArray)
+			return notEOF(err, ErrUnexpectedEnd)
 		}
 		s.Pos = 0
 	}
@@ -1194,6 +1200,11 @@ func (s *Stream) skipObject(depth int) error {
 	}
 	for {
 		if err := s.skipString(); err != nil {
+			// Drained at a key start (only reachable after a comma — the
+			// head guaranteed a byte): the bytes loop reports ErrBadObject.
+			if err == ErrExpectString && s.Pos >= len(s.buf) {
+				return ErrBadObject
+			}
 			return err
 		}
 		if err := s.SkipSpace(); err != nil {
@@ -1249,7 +1260,7 @@ func (s *Stream) anyValueDepth(depth int) (any, error) {
 	}
 	if s.Pos >= len(s.buf) {
 		if err := s.ReadMore(s.Pos); err != nil {
-			return nil, err
+			return nil, notEOF(err, ErrUnexpectedEnd)
 		}
 		s.Pos = 0
 	}
@@ -1260,7 +1271,7 @@ func (s *Stream) anyValueDepth(depth int) (any, error) {
 			pos := j + 1 + k
 			if pos >= len(s.buf) {
 				if err := s.ReadMore(0); err != nil {
-					return nil, err
+					return nil, notEOF(err, ErrBadLiteral)
 				}
 			}
 			if s.buf[pos] != "ull"[k] {
@@ -1292,8 +1303,10 @@ func (s *Stream) anyArray(depth int) ([]any, error) {
 		return nil, err
 	}
 	if s.Pos >= len(s.buf) {
+		// Drained right after '[' matches bytes anyArray, whose element
+		// anyValue reports ErrUnexpectedEnd.
 		if err := s.ReadMore(s.Pos); err != nil {
-			return nil, err
+			return nil, notEOF(err, ErrUnexpectedEnd)
 		}
 		s.Pos = 0
 	}
@@ -1313,7 +1326,7 @@ func (s *Stream) anyArray(depth int) ([]any, error) {
 		}
 		if s.Pos >= len(s.buf) {
 			if err := s.ReadMore(s.Pos); err != nil {
-				return nil, err
+				return nil, notEOF(err, ErrBadArray)
 			}
 			s.Pos = 0
 		}
@@ -1341,8 +1354,10 @@ func (s *Stream) anyObject(depth int) (map[string]any, error) {
 		return nil, err
 	}
 	if s.Pos >= len(s.buf) {
+		// Drained right after '{' matches bytes anyObject, whose key String
+		// reports ErrExpectString.
 		if err := s.ReadMore(s.Pos); err != nil {
-			return nil, err
+			return nil, notEOF(err, ErrExpectString)
 		}
 		s.Pos = 0
 	}
@@ -1361,7 +1376,7 @@ func (s *Stream) anyObject(depth int) (map[string]any, error) {
 		}
 		if s.Pos >= len(s.buf) {
 			if err := s.ReadMore(0); err != nil {
-				return nil, err
+				return nil, notEOF(err, ErrBadObject)
 			}
 		}
 		if s.buf[s.Pos] != ':' {
@@ -1381,7 +1396,7 @@ func (s *Stream) anyObject(depth int) (map[string]any, error) {
 		}
 		if s.Pos >= len(s.buf) {
 			if err := s.ReadMore(s.Pos); err != nil {
-				return nil, err
+				return nil, notEOF(err, ErrBadObject)
 			}
 			s.Pos = 0
 		}
@@ -1406,7 +1421,7 @@ func (s *Stream) Number() (json.Number, error) {
 	i := s.Pos
 	if i >= len(s.buf) {
 		if err := s.ReadMore(i); err != nil {
-			return "", err
+			return "", notEOF(err, ErrBadNumber)
 		}
 		i = 0
 	}
@@ -1467,7 +1482,7 @@ func (s *Stream) anyNumberValueDepth(depth int) (any, error) {
 	}
 	if s.Pos >= len(s.buf) {
 		if err := s.ReadMore(s.Pos); err != nil {
-			return nil, err
+			return nil, notEOF(err, ErrUnexpectedEnd)
 		}
 		s.Pos = 0
 	}
@@ -1478,7 +1493,7 @@ func (s *Stream) anyNumberValueDepth(depth int) (any, error) {
 			pos := j + 1 + k
 			if pos >= len(s.buf) {
 				if err := s.ReadMore(0); err != nil {
-					return nil, err
+					return nil, notEOF(err, ErrBadLiteral)
 				}
 			}
 			if s.buf[pos] != "ull"[k] {
@@ -1510,8 +1525,10 @@ func (s *Stream) anyNumberArray(depth int) ([]any, error) {
 		return nil, err
 	}
 	if s.Pos >= len(s.buf) {
+		// Drained right after '[' matches bytes anyArray, whose element
+		// anyValue reports ErrUnexpectedEnd.
 		if err := s.ReadMore(s.Pos); err != nil {
-			return nil, err
+			return nil, notEOF(err, ErrUnexpectedEnd)
 		}
 		s.Pos = 0
 	}
@@ -1531,7 +1548,7 @@ func (s *Stream) anyNumberArray(depth int) ([]any, error) {
 		}
 		if s.Pos >= len(s.buf) {
 			if err := s.ReadMore(s.Pos); err != nil {
-				return nil, err
+				return nil, notEOF(err, ErrBadArray)
 			}
 			s.Pos = 0
 		}
@@ -1559,8 +1576,10 @@ func (s *Stream) anyNumberObject(depth int) (map[string]any, error) {
 		return nil, err
 	}
 	if s.Pos >= len(s.buf) {
+		// Drained right after '{' matches bytes anyObject, whose key String
+		// reports ErrExpectString.
 		if err := s.ReadMore(s.Pos); err != nil {
-			return nil, err
+			return nil, notEOF(err, ErrExpectString)
 		}
 		s.Pos = 0
 	}
@@ -1579,7 +1598,7 @@ func (s *Stream) anyNumberObject(depth int) (map[string]any, error) {
 		}
 		if s.Pos >= len(s.buf) {
 			if err := s.ReadMore(0); err != nil {
-				return nil, err
+				return nil, notEOF(err, ErrBadObject)
 			}
 		}
 		if s.buf[s.Pos] != ':' {
@@ -1599,7 +1618,7 @@ func (s *Stream) anyNumberObject(depth int) (map[string]any, error) {
 		}
 		if s.Pos >= len(s.buf) {
 			if err := s.ReadMore(s.Pos); err != nil {
-				return nil, err
+				return nil, notEOF(err, ErrBadObject)
 			}
 			s.Pos = 0
 		}

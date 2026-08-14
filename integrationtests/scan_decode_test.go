@@ -933,3 +933,106 @@ func TestNarrowFloatOverflow(t *testing.T) {
 		t.Errorf("boundary: got %v, %v", got.F, err)
 	}
 }
+
+// Round-5 pins: bytes-path slice structural errors wrap in *decode.ParseError
+// (path + pos), and scan-primitive error positions surface end-to-end,
+// bytes/stream agreeing on the identical payload.
+
+func nodeStreamErr(t *testing.T, payload []byte) error {
+	t.Helper()
+	var s scan.Stream
+	s.Reset(bytes.NewReader(payload), make([]byte, 0, len(payload)))
+	_, err := Node{}.DecodeFromStream(&s)
+	return err
+}
+
+func TestParseError_SliceStructural(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name    string
+		payload string
+	}{
+		{"wrong_shape", `{"tags":{}}`},
+		{"truncated_after_comma", `{"tags":["a",`},
+		{"close_after_comma", `{"tags":["a",]}`},
+		{"unclosed", `{"tags":["a"`},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			payload := []byte(c.payload)
+			_, _, berr := Node{}.DecodeFrom(payload)
+			if berr == nil {
+				t.Fatal("bytes: expected error")
+			}
+			var pe *decode.ParseError
+			if !errors.As(berr, &pe) {
+				t.Fatalf("bytes: got %T %v, want *decode.ParseError", berr, berr)
+			}
+			if len(pe.Path) == 0 || pe.Path[0] != "tags" {
+				t.Errorf("bytes: Path = %v, want [tags ...]", pe.Path)
+			}
+			if pe.Pos < 8 {
+				t.Errorf("bytes: Pos = %d, want >= 8 (inside the value)", pe.Pos)
+			}
+			serr := nodeStreamErr(t, payload)
+			var spe *decode.ParseError
+			if !errors.As(serr, &spe) {
+				t.Fatalf("stream: got %T %v, want *decode.ParseError", serr, serr)
+			}
+			if len(spe.Path) == 0 || spe.Path[0] != "tags" {
+				t.Errorf("stream: Path = %v, want [tags ...]", spe.Path)
+			}
+		})
+	}
+}
+
+// The pipe: variant dispatch heads (no matching shape, truncated value,
+// malformed null arm) wrap like every other structural guard.
+func TestParseError_VariantDispatch(t *testing.T) {
+	t.Parallel()
+	for _, c := range []struct{ name, payload string }{
+		{"no_matching_shape", `{"count":true}`},
+		{"truncated_at_value", `{"count":`},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			_, _, err := LooseThing{}.DecodeFrom([]byte(c.payload))
+			var pe *decode.ParseError
+			if !errors.As(err, &pe) {
+				t.Fatalf("got %T %v, want *decode.ParseError", err, err)
+			}
+			if len(pe.Path) == 0 || pe.Path[0] != "count" {
+				t.Errorf("Path = %v, want [count]", pe.Path)
+			}
+			if pe.Pos < 9 {
+				t.Errorf("Pos = %d, want >= 9 (at the value)", pe.Pos)
+			}
+		})
+	}
+}
+
+func TestParseError_ScanPrimitivePos(t *testing.T) {
+	t.Parallel()
+	// scan.String fails inside the value; runtime now returns the error
+	// position, which the emitted NewParseErr site stamps unmodified.
+	payload := []byte(`{"name":"ab` + "\x01" + `c"}`)
+	_, _, berr := Node{}.DecodeFrom(payload)
+	var bpe *decode.ParseError
+	if !errors.As(berr, &bpe) {
+		t.Fatalf("bytes: got %T %v, want *decode.ParseError", berr, berr)
+	}
+	if bpe.Pos < 8 {
+		t.Errorf("bytes: Pos = %d, want >= 8 (error inside the string)", bpe.Pos)
+	}
+	serr := nodeStreamErr(t, payload)
+	var spe *decode.ParseError
+	if !errors.As(serr, &spe) {
+		t.Fatalf("stream: got %T %v, want *decode.ParseError", serr, serr)
+	}
+	// Bytes stamps the string-content start (scan.String's error pos), the
+	// stream the value start — both real positions, never the old 0.
+	if spe.Pos < 8 {
+		t.Errorf("stream: Pos = %d, want >= 8 (at the value)", spe.Pos)
+	}
+}

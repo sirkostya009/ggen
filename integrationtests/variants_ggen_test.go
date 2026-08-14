@@ -297,7 +297,7 @@ func (recv LooseThing) DecodeFrom(data []byte) (result LooseThing, i int, err er
 				i++
 			}
 			if i >= len(data) {
-				return result, i, scan.ErrUnexpectedEnd
+				return result, i, decode.NewParseErr("count", i, scan.ErrUnexpectedEnd)
 			}
 			switch data[i] {
 			case '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
@@ -378,7 +378,7 @@ func (recv LooseThing) DecodeFrom(data []byte) (result LooseThing, i int, err er
 					result.Count = cv
 				}
 			default:
-				return result, i, scan.ErrBadValue
+				return result, i, decode.NewParseErr("count", i, scan.ErrBadValue)
 			}
 			if result.Count < 0 {
 				return result, i, &validation.GTEError{Pos: i, Path: []string{"count"}, Limit: 0, Value: result.Count}
@@ -392,12 +392,12 @@ func (recv LooseThing) DecodeFrom(data []byte) (result LooseThing, i int, err er
 				i++
 			}
 			if i >= len(data) {
-				return result, i, scan.ErrUnexpectedEnd
+				return result, i, decode.NewParseErr("opt", i, scan.ErrUnexpectedEnd)
 			}
 			switch data[i] {
 			case 'n':
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
-					return result, i, scan.ErrBadLiteral
+					return result, i, decode.NewParseErr("opt", i, scan.ErrBadLiteral)
 				}
 				i += 4
 				result.Opt = 0
@@ -479,7 +479,7 @@ func (recv LooseThing) DecodeFrom(data []byte) (result LooseThing, i int, err er
 					result.Opt = cv
 				}
 			default:
-				return result, i, scan.ErrBadValue
+				return result, i, decode.NewParseErr("opt", i, scan.ErrBadValue)
 			}
 		case "price":
 			if seenPrice {
@@ -490,7 +490,7 @@ func (recv LooseThing) DecodeFrom(data []byte) (result LooseThing, i int, err er
 				i++
 			}
 			if i >= len(data) {
-				return result, i, scan.ErrUnexpectedEnd
+				return result, i, decode.NewParseErr("price", i, scan.ErrUnexpectedEnd)
 			}
 			switch data[i] {
 			case '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
@@ -553,7 +553,7 @@ func (recv LooseThing) DecodeFrom(data []byte) (result LooseThing, i int, err er
 				}
 				result.Price = FromMoney(_cv1)
 			default:
-				return result, i, scan.ErrBadValue
+				return result, i, decode.NewParseErr("price", i, scan.ErrBadValue)
 			}
 		default:
 			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
@@ -843,7 +843,7 @@ func (recv ElemInterleave) DecodeFrom(data []byte) (result ElemInterleave, i int
 				break
 			}
 			if i >= len(data) || data[i] != '[' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("nums", i, scan.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -927,7 +927,7 @@ func (recv ElemInterleave) DecodeFrom(data []byte) (result ElemInterleave, i int
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, scan.ErrBadArray
+							return result, i, decode.NewParseErr("nums", i, scan.ErrBadArray)
 						}
 						continue
 					}
@@ -935,7 +935,7 @@ func (recv ElemInterleave) DecodeFrom(data []byte) (result ElemInterleave, i int
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("nums", i, scan.ErrBadArray)
 			}
 			i++
 		default:
@@ -1208,12 +1208,12 @@ func (recv ConvNamed) DecodeFrom(data []byte) (result ConvNamed, i int, err erro
 				i++
 			}
 			if i >= len(data) {
-				return result, i, scan.ErrUnexpectedEnd
+				return result, i, decode.NewParseErr("n", i, scan.ErrUnexpectedEnd)
 			}
 			switch data[i] {
 			case 'n':
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
-					return result, i, scan.ErrBadLiteral
+					return result, i, decode.NewParseErr("n", i, scan.ErrBadLiteral)
 				}
 				i += 4
 				result.N = nil
@@ -1304,7 +1304,7 @@ func (recv ConvNamed) DecodeFrom(data []byte) (result ConvNamed, i int, err erro
 					result.N = cv
 				}
 			default:
-				return result, i, scan.ErrBadValue
+				return result, i, decode.NewParseErr("n", i, scan.ErrBadValue)
 			}
 		case "s":
 			if seenS {
@@ -1315,7 +1315,7 @@ func (recv ConvNamed) DecodeFrom(data []byte) (result ConvNamed, i int, err erro
 				i++
 			}
 			if i >= len(data) {
-				return result, i, scan.ErrUnexpectedEnd
+				return result, i, decode.NewParseErr("s", i, scan.ErrUnexpectedEnd)
 			}
 			switch data[i] {
 			case '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
@@ -1396,7 +1396,7 @@ func (recv ConvNamed) DecodeFrom(data []byte) (result ConvNamed, i int, err erro
 					result.S = cv
 				}
 			default:
-				return result, i, scan.ErrBadValue
+				return result, i, decode.NewParseErr("s", i, scan.ErrBadValue)
 			}
 		default:
 			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}

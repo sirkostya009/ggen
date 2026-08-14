@@ -1307,7 +1307,7 @@ func (recv AliasTags) DecodeFrom(data []byte) (result AliasTags, i int, err erro
 		return result, i, nil
 	}
 	if i >= len(data) || data[i] != '[' {
-		return result, i, scan.ErrBadArray
+		return result, i, decode.NewParseErr("", i, scan.ErrBadArray)
 	}
 	i++
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -1348,7 +1348,7 @@ func (recv AliasTags) DecodeFrom(data []byte) (result AliasTags, i int, err erro
 					i++
 				}
 				if i >= len(data) || data[i] == ']' {
-					return result, i, scan.ErrBadArray
+					return result, i, decode.NewParseErr("", i, scan.ErrBadArray)
 				}
 				continue
 			}
@@ -1356,7 +1356,7 @@ func (recv AliasTags) DecodeFrom(data []byte) (result AliasTags, i int, err erro
 		}
 	}
 	if i >= len(data) || data[i] != ']' {
-		return result, i, scan.ErrBadArray
+		return result, i, decode.NewParseErr("", i, scan.ErrBadArray)
 	}
 	i++
 	return result, i, nil
@@ -1600,7 +1600,7 @@ func (recv AliasLookup) DecodeFrom(data []byte) (result AliasLookup, i int, err 
 					i++
 				}
 				if i >= len(data) || data[i] == '}' {
-					return result, i, scan.ErrBadObject
+					return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 				}
 				continue
 			}
@@ -1762,7 +1762,7 @@ func (recv AliasTuple) DecodeFrom(data []byte) (result AliasTuple, i int, err er
 		i++
 	}
 	if i >= len(data) || data[i] != '[' {
-		return result, i, scan.ErrBadArray
+		return result, i, decode.NewParseErr("", i, scan.ErrBadArray)
 	}
 	i++
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -1833,7 +1833,7 @@ func (recv AliasTuple) DecodeFrom(data []byte) (result AliasTuple, i int, err er
 					i++
 				}
 				if i >= len(data) || data[i] == ']' {
-					return result, i, scan.ErrBadArray
+					return result, i, decode.NewParseErr("", i, scan.ErrBadArray)
 				}
 				continue
 			}
@@ -1841,7 +1841,7 @@ func (recv AliasTuple) DecodeFrom(data []byte) (result AliasTuple, i int, err er
 		}
 	}
 	if i >= len(data) || data[i] != ']' {
-		return result, i, scan.ErrBadArray
+		return result, i, decode.NewParseErr("", i, scan.ErrBadArray)
 	}
 	if idx0 != 3 {
 		return result, i, &validation.LenError{Pos: i, Path: []string{""}, Want: 3, Got: idx0}
@@ -2866,7 +2866,7 @@ func (recv NPPositions) DecodeFrom(data []byte) (result NPPositions, i int, err 
 			}
 			seenA = true
 			if i >= len(data) || data[i] != '[' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("a", i, scan.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -2911,7 +2911,7 @@ func (recv NPPositions) DecodeFrom(data []byte) (result NPPositions, i int, err 
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, scan.ErrBadArray
+							return result, i, decode.NewParseErr("a", i, scan.ErrBadArray)
 						}
 						continue
 					}
@@ -2919,7 +2919,7 @@ func (recv NPPositions) DecodeFrom(data []byte) (result NPPositions, i int, err 
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("a", i, scan.ErrBadArray)
 			}
 			if idx0 != 2 {
 				return result, i, &validation.LenError{Pos: i, Path: []string{"a"}, Want: 2, Got: idx0}
@@ -3080,7 +3080,7 @@ func (recv NPPositions) DecodeFrom(data []byte) (result NPPositions, i int, err 
 							i++
 						}
 						if i >= len(data) || data[i] == '}' {
-							return result, i, scan.ErrBadObject
+							return result, i, decode.NewParseErr("m", i, scan.ErrBadObject)
 						}
 						continue
 					}
@@ -3143,7 +3143,7 @@ func (recv NPPositions) DecodeFrom(data []byte) (result NPPositions, i int, err 
 				break
 			}
 			if i >= len(data) || data[i] != '[' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("s", i, scan.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -3192,7 +3192,7 @@ func (recv NPPositions) DecodeFrom(data []byte) (result NPPositions, i int, err 
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, scan.ErrBadArray
+							return result, i, decode.NewParseErr("s", i, scan.ErrBadArray)
 						}
 						continue
 					}
@@ -3200,7 +3200,7 @@ func (recv NPPositions) DecodeFrom(data []byte) (result NPPositions, i int, err 
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("s", i, scan.ErrBadArray)
 			}
 			i++
 		case "u":
@@ -4261,7 +4261,7 @@ func (recv BitItems) DecodeFrom(data []byte) (result BitItems, i int, err error)
 		return result, i, nil
 	}
 	if i >= len(data) || data[i] != '[' {
-		return result, i, scan.ErrBadArray
+		return result, i, decode.NewParseErr("", i, scan.ErrBadArray)
 	}
 	i++
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -4288,7 +4288,7 @@ func (recv BitItems) DecodeFrom(data []byte) (result BitItems, i int, err error)
 					i++
 				}
 				if i >= len(data) || data[i] == ']' {
-					return result, i, scan.ErrBadArray
+					return result, i, decode.NewParseErr("", i, scan.ErrBadArray)
 				}
 				continue
 			}
@@ -4296,7 +4296,7 @@ func (recv BitItems) DecodeFrom(data []byte) (result BitItems, i int, err error)
 		}
 	}
 	if i >= len(data) || data[i] != ']' {
-		return result, i, scan.ErrBadArray
+		return result, i, decode.NewParseErr("", i, scan.ErrBadArray)
 	}
 	i++
 	return result, i, nil
@@ -4501,7 +4501,7 @@ func (recv BitLookup) DecodeFrom(data []byte) (result BitLookup, i int, err erro
 					i++
 				}
 				if i >= len(data) || data[i] == '}' {
-					return result, i, scan.ErrBadObject
+					return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
 				}
 				continue
 			}
@@ -4781,7 +4781,7 @@ func (recv RuneCarrier) DecodeFrom(data []byte) (result RuneCarrier, i int, err 
 				break
 			}
 			if i >= len(data) || data[i] != '[' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("r", i, scan.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -4861,7 +4861,7 @@ func (recv RuneCarrier) DecodeFrom(data []byte) (result RuneCarrier, i int, err 
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, scan.ErrBadArray
+							return result, i, decode.NewParseErr("r", i, scan.ErrBadArray)
 						}
 						continue
 					}
@@ -4869,7 +4869,7 @@ func (recv RuneCarrier) DecodeFrom(data []byte) (result RuneCarrier, i int, err 
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("r", i, scan.ErrBadArray)
 			}
 			i++
 		default:

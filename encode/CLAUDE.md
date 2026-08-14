@@ -202,10 +202,13 @@ that would otherwise catch them:
    `reflect.Pointer` nil check in step 6 ever runs, and calling the method
    nil-derefs (`AppendAny(nil, (*M)(nil))` used to panic; stdlib emits
    `null`). `isNilPtr` reads the interface's data word directly via
-   `unsafe.Pointer` rather than `reflect.ValueOf` — a boxed pointer's data
-   word IS the pointer (nil iff the pointer is nil), and no other kind boxes
-   through a nil data word (Go 1.4+ interface representation), so this can't
-   false-positive. `reflect.ValueOf` measured **+51% ns/op** on the common
+   `unsafe.Pointer` rather than `reflect.ValueOf` — a NON-nil data word always
+   means a callable value, so the common path is one raw two-word read.
+   A NIL data word is ambiguous: nil maps, funcs, and chans box one too
+   (calling a value-receiver method on them is safe Go that stdlib performs),
+   so the cold path disambiguates by reflect kind and emits `null` only for a
+   true `reflect.Pointer` (pinned by `TestAppendAny_NilMapFuncNotNull`).
+   `reflect.ValueOf` measured **+51% ns/op** on the common
    non-nil path in an in-situ core-pinned A/B (this dispatch arm fires for
    every `any`-typed struct field on the fast path) — the unsafe read costs
    <1% over no guard at all.

@@ -218,7 +218,9 @@ func EvenOnly(n int) error { if n%2 != 0 { return errors.New("must be even") }; 
 Applicability is checked at parse time (string-only rules on non-strings,
 numeric on non-numerics, `inner:` on non-containers, `keys:` on non-maps, etc.)
 with a clear diagnostic; each value step is gated against the working type at
-its level.
+its level. Struct/opaque types reject kinded rules too (named primitives
+resolve to the underlying kind first; `required`/`optional`/`@Func` still
+apply) — use a custom `@Func` validator for struct-typed fields.
 
 ### `hint:"..."` — preallocation
 

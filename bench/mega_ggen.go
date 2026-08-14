@@ -477,7 +477,7 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 				result.Children = nil
 			} else {
 				if i >= len(data) || data[i] != '[' {
-					return result, i, scan.ErrBadArray
+					return result, i, decode.NewParseErr("children", i, scan.ErrBadArray)
 				}
 				i++
 				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -510,7 +510,7 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 								i++
 							}
 							if i >= len(data) || data[i] == ']' {
-								return result, i, scan.ErrBadArray
+								return result, i, decode.NewParseErr("children", i, scan.ErrBadArray)
 							}
 							continue
 						}
@@ -518,7 +518,7 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 					}
 				}
 				if i >= len(data) || data[i] != ']' {
-					return result, i, scan.ErrBadArray
+					return result, i, decode.NewParseErr("children", i, scan.ErrBadArray)
 				}
 				i++
 			}
@@ -531,7 +531,7 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 			}
 			seenCoords = true
 			if i >= len(data) || data[i] != '[' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("coords", i, scan.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -557,7 +557,7 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, scan.ErrBadArray
+							return result, i, decode.NewParseErr("coords", i, scan.ErrBadArray)
 						}
 						continue
 					}
@@ -565,7 +565,7 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("coords", i, scan.ErrBadArray)
 			}
 			if idx0 != 2 {
 				return result, i, &validation.LenError{Pos: i, Path: []string{"coords"}, Want: 2, Got: idx0}
@@ -677,7 +677,7 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 				result.Matrix = nil
 			} else {
 				if i >= len(data) || data[i] != '[' {
-					return result, i, scan.ErrBadArray
+					return result, i, decode.NewParseErr("matrix", i, scan.ErrBadArray)
 				}
 				i++
 				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -714,7 +714,7 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 									i++
 								}
 								if i >= len(data) || data[i] == ']' {
-									return result, i, scan.ErrBadArray
+									return result, i, decode.NewParseErr("matrix", i, scan.ErrBadArray)
 								}
 								continue
 							}
@@ -725,7 +725,7 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 							row0 = row0[:0]
 						}
 						if i >= len(data) || data[i] != '[' {
-							return result, i, scan.ErrBadArray
+							return result, i, decode.NewParseErr("matrix[]", i, scan.ErrBadArray)
 						}
 						i++
 						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -805,7 +805,7 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 										i++
 									}
 									if i >= len(data) || data[i] == ']' {
-										return result, i, scan.ErrBadArray
+										return result, i, decode.NewParseErr("matrix[]", i, scan.ErrBadArray)
 									}
 									continue
 								}
@@ -813,7 +813,7 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 							}
 						}
 						if i >= len(data) || data[i] != ']' {
-							return result, i, scan.ErrBadArray
+							return result, i, decode.NewParseErr("matrix[]", i, scan.ErrBadArray)
 						}
 						i++
 						result.Matrix[len(result.Matrix)-1] = row0
@@ -829,7 +829,7 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 								i++
 							}
 							if i >= len(data) || data[i] == ']' {
-								return result, i, scan.ErrBadArray
+								return result, i, decode.NewParseErr("matrix", i, scan.ErrBadArray)
 							}
 							continue
 						}
@@ -837,7 +837,7 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 					}
 				}
 				if i >= len(data) || data[i] != ']' {
-					return result, i, scan.ErrBadArray
+					return result, i, decode.NewParseErr("matrix", i, scan.ErrBadArray)
 				}
 				i++
 			}
@@ -987,7 +987,7 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 								i++
 							}
 							if i >= len(data) || data[i] == '}' {
-								return result, i, scan.ErrBadObject
+								return result, i, decode.NewParseErr("props", i, scan.ErrBadObject)
 							}
 							continue
 						}
@@ -1027,7 +1027,7 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 				result.Refs = nil
 			} else {
 				if i >= len(data) || data[i] != '[' {
-					return result, i, scan.ErrBadArray
+					return result, i, decode.NewParseErr("refs", i, scan.ErrBadArray)
 				}
 				i++
 				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -1058,7 +1058,7 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 									i++
 								}
 								if i >= len(data) || data[i] == ']' {
-									return result, i, scan.ErrBadArray
+									return result, i, decode.NewParseErr("refs", i, scan.ErrBadArray)
 								}
 								continue
 							}
@@ -1081,7 +1081,7 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 								i++
 							}
 							if i >= len(data) || data[i] == ']' {
-								return result, i, scan.ErrBadArray
+								return result, i, decode.NewParseErr("refs", i, scan.ErrBadArray)
 							}
 							continue
 						}
@@ -1089,7 +1089,7 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 					}
 				}
 				if i >= len(data) || data[i] != ']' {
-					return result, i, scan.ErrBadArray
+					return result, i, decode.NewParseErr("refs", i, scan.ErrBadArray)
 				}
 				i++
 			}
@@ -1121,7 +1121,7 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 				result.Tags = nil
 			} else {
 				if i >= len(data) || data[i] != '[' {
-					return result, i, scan.ErrBadArray
+					return result, i, decode.NewParseErr("tags", i, scan.ErrBadArray)
 				}
 				i++
 				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -1174,7 +1174,7 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 								i++
 							}
 							if i >= len(data) || data[i] == ']' {
-								return result, i, scan.ErrBadArray
+								return result, i, decode.NewParseErr("tags", i, scan.ErrBadArray)
 							}
 							continue
 						}
@@ -1182,7 +1182,7 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 					}
 				}
 				if i >= len(data) || data[i] != ']' {
-					return result, i, scan.ErrBadArray
+					return result, i, decode.NewParseErr("tags", i, scan.ErrBadArray)
 				}
 				i++
 			}
@@ -2879,7 +2879,7 @@ func (recv CopyNode) decodeFromDepth(data []byte, _depth int) (result CopyNode, 
 				result.Children = nil
 			} else {
 				if i >= len(data) || data[i] != '[' {
-					return result, i, scan.ErrBadArray
+					return result, i, decode.NewParseErr("children", i, scan.ErrBadArray)
 				}
 				i++
 				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -2912,7 +2912,7 @@ func (recv CopyNode) decodeFromDepth(data []byte, _depth int) (result CopyNode, 
 								i++
 							}
 							if i >= len(data) || data[i] == ']' {
-								return result, i, scan.ErrBadArray
+								return result, i, decode.NewParseErr("children", i, scan.ErrBadArray)
 							}
 							continue
 						}
@@ -2920,7 +2920,7 @@ func (recv CopyNode) decodeFromDepth(data []byte, _depth int) (result CopyNode, 
 					}
 				}
 				if i >= len(data) || data[i] != ']' {
-					return result, i, scan.ErrBadArray
+					return result, i, decode.NewParseErr("children", i, scan.ErrBadArray)
 				}
 				i++
 			}
@@ -2933,7 +2933,7 @@ func (recv CopyNode) decodeFromDepth(data []byte, _depth int) (result CopyNode, 
 			}
 			seenCoords = true
 			if i >= len(data) || data[i] != '[' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("coords", i, scan.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -2959,7 +2959,7 @@ func (recv CopyNode) decodeFromDepth(data []byte, _depth int) (result CopyNode, 
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, scan.ErrBadArray
+							return result, i, decode.NewParseErr("coords", i, scan.ErrBadArray)
 						}
 						continue
 					}
@@ -2967,7 +2967,7 @@ func (recv CopyNode) decodeFromDepth(data []byte, _depth int) (result CopyNode, 
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("coords", i, scan.ErrBadArray)
 			}
 			if idx0 != 2 {
 				return result, i, &validation.LenError{Pos: i, Path: []string{"coords"}, Want: 2, Got: idx0}
@@ -3079,7 +3079,7 @@ func (recv CopyNode) decodeFromDepth(data []byte, _depth int) (result CopyNode, 
 				result.Matrix = nil
 			} else {
 				if i >= len(data) || data[i] != '[' {
-					return result, i, scan.ErrBadArray
+					return result, i, decode.NewParseErr("matrix", i, scan.ErrBadArray)
 				}
 				i++
 				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -3116,7 +3116,7 @@ func (recv CopyNode) decodeFromDepth(data []byte, _depth int) (result CopyNode, 
 									i++
 								}
 								if i >= len(data) || data[i] == ']' {
-									return result, i, scan.ErrBadArray
+									return result, i, decode.NewParseErr("matrix", i, scan.ErrBadArray)
 								}
 								continue
 							}
@@ -3127,7 +3127,7 @@ func (recv CopyNode) decodeFromDepth(data []byte, _depth int) (result CopyNode, 
 							row0 = row0[:0]
 						}
 						if i >= len(data) || data[i] != '[' {
-							return result, i, scan.ErrBadArray
+							return result, i, decode.NewParseErr("matrix[]", i, scan.ErrBadArray)
 						}
 						i++
 						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -3207,7 +3207,7 @@ func (recv CopyNode) decodeFromDepth(data []byte, _depth int) (result CopyNode, 
 										i++
 									}
 									if i >= len(data) || data[i] == ']' {
-										return result, i, scan.ErrBadArray
+										return result, i, decode.NewParseErr("matrix[]", i, scan.ErrBadArray)
 									}
 									continue
 								}
@@ -3215,7 +3215,7 @@ func (recv CopyNode) decodeFromDepth(data []byte, _depth int) (result CopyNode, 
 							}
 						}
 						if i >= len(data) || data[i] != ']' {
-							return result, i, scan.ErrBadArray
+							return result, i, decode.NewParseErr("matrix[]", i, scan.ErrBadArray)
 						}
 						i++
 						result.Matrix[len(result.Matrix)-1] = row0
@@ -3231,7 +3231,7 @@ func (recv CopyNode) decodeFromDepth(data []byte, _depth int) (result CopyNode, 
 								i++
 							}
 							if i >= len(data) || data[i] == ']' {
-								return result, i, scan.ErrBadArray
+								return result, i, decode.NewParseErr("matrix", i, scan.ErrBadArray)
 							}
 							continue
 						}
@@ -3239,7 +3239,7 @@ func (recv CopyNode) decodeFromDepth(data []byte, _depth int) (result CopyNode, 
 					}
 				}
 				if i >= len(data) || data[i] != ']' {
-					return result, i, scan.ErrBadArray
+					return result, i, decode.NewParseErr("matrix", i, scan.ErrBadArray)
 				}
 				i++
 			}
@@ -3392,7 +3392,7 @@ func (recv CopyNode) decodeFromDepth(data []byte, _depth int) (result CopyNode, 
 								i++
 							}
 							if i >= len(data) || data[i] == '}' {
-								return result, i, scan.ErrBadObject
+								return result, i, decode.NewParseErr("props", i, scan.ErrBadObject)
 							}
 							continue
 						}
@@ -3432,7 +3432,7 @@ func (recv CopyNode) decodeFromDepth(data []byte, _depth int) (result CopyNode, 
 				result.Refs = nil
 			} else {
 				if i >= len(data) || data[i] != '[' {
-					return result, i, scan.ErrBadArray
+					return result, i, decode.NewParseErr("refs", i, scan.ErrBadArray)
 				}
 				i++
 				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -3463,7 +3463,7 @@ func (recv CopyNode) decodeFromDepth(data []byte, _depth int) (result CopyNode, 
 									i++
 								}
 								if i >= len(data) || data[i] == ']' {
-									return result, i, scan.ErrBadArray
+									return result, i, decode.NewParseErr("refs", i, scan.ErrBadArray)
 								}
 								continue
 							}
@@ -3486,7 +3486,7 @@ func (recv CopyNode) decodeFromDepth(data []byte, _depth int) (result CopyNode, 
 								i++
 							}
 							if i >= len(data) || data[i] == ']' {
-								return result, i, scan.ErrBadArray
+								return result, i, decode.NewParseErr("refs", i, scan.ErrBadArray)
 							}
 							continue
 						}
@@ -3494,7 +3494,7 @@ func (recv CopyNode) decodeFromDepth(data []byte, _depth int) (result CopyNode, 
 					}
 				}
 				if i >= len(data) || data[i] != ']' {
-					return result, i, scan.ErrBadArray
+					return result, i, decode.NewParseErr("refs", i, scan.ErrBadArray)
 				}
 				i++
 			}
@@ -3526,7 +3526,7 @@ func (recv CopyNode) decodeFromDepth(data []byte, _depth int) (result CopyNode, 
 				result.Tags = nil
 			} else {
 				if i >= len(data) || data[i] != '[' {
-					return result, i, scan.ErrBadArray
+					return result, i, decode.NewParseErr("tags", i, scan.ErrBadArray)
 				}
 				i++
 				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -3580,7 +3580,7 @@ func (recv CopyNode) decodeFromDepth(data []byte, _depth int) (result CopyNode, 
 								i++
 							}
 							if i >= len(data) || data[i] == ']' {
-								return result, i, scan.ErrBadArray
+								return result, i, decode.NewParseErr("tags", i, scan.ErrBadArray)
 							}
 							continue
 						}
@@ -3588,7 +3588,7 @@ func (recv CopyNode) decodeFromDepth(data []byte, _depth int) (result CopyNode, 
 					}
 				}
 				if i >= len(data) || data[i] != ']' {
-					return result, i, scan.ErrBadArray
+					return result, i, decode.NewParseErr("tags", i, scan.ErrBadArray)
 				}
 				i++
 			}
@@ -5042,7 +5042,7 @@ func (recv MapHeavy) DecodeFrom(data []byte) (result MapHeavy, i int, err error)
 							i++
 						}
 						if i >= len(data) || data[i] == '}' {
-							return result, i, scan.ErrBadObject
+							return result, i, decode.NewParseErr("labels", i, scan.ErrBadObject)
 						}
 						continue
 					}

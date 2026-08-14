@@ -13,7 +13,7 @@ import (
 func stringSlowRef(data []byte, start, j, capHint int, validate bool) (string, int, error) {
 	bad, rawHigh := ctrlOrHigh(data[start:j])
 	if bad {
-		return "", 0, ErrBadString
+		return "", start, ErrBadString
 	}
 	buf := make([]byte, 0, capHint)
 	buf = append(buf, data[start:j]...)
@@ -22,13 +22,13 @@ func stringSlowRef(data []byte, start, j, capHint int, validate bool) (string, i
 		c := data[j]
 		if c == '"' {
 			if validate && (rawHigh || rawHi&0x80 != 0) && !utf8.Valid(buf) {
-				return "", 0, ErrInvalidUTF8
+				return "", j, ErrInvalidUTF8
 			}
 			return string(buf), j + 1, nil
 		}
 		if c == '\\' {
 			if j+1 >= len(data) {
-				return "", 0, ErrBadString
+				return "", len(data), ErrBadString
 			}
 			esc := data[j+1]
 			switch esc {
@@ -52,11 +52,11 @@ func stringSlowRef(data []byte, start, j, capHint int, validate bool) (string, i
 				j += 2
 			case 'u':
 				if j+6 > len(data) {
-					return "", 0, ErrBadString
+					return "", len(data), ErrBadString
 				}
 				r, ok := parseHex4(data[j+2 : j+6])
 				if !ok {
-					return "", 0, ErrBadString
+					return "", j, ErrBadString
 				}
 				j += 6
 				if utf16.IsSurrogate(r) {
@@ -69,23 +69,23 @@ func stringSlowRef(data []byte, start, j, capHint int, validate bool) (string, i
 						}
 					}
 					if validate && utf16.IsSurrogate(r) {
-						return "", 0, ErrInvalidUTF8
+						return "", j, ErrInvalidUTF8
 					}
 				}
 				buf = utf8.AppendRune(buf, r)
 			default:
-				return "", 0, ErrBadString
+				return "", j, ErrBadString
 			}
 			continue
 		}
 		if c < 0x20 {
-			return "", 0, ErrBadString
+			return "", j, ErrBadString
 		}
 		rawHi |= c
 		buf = append(buf, c)
 		j++
 	}
-	return "", 0, ErrUnterminated
+	return "", len(data), ErrUnterminated
 }
 
 // escapeAlphabet: fragments that stress every boundary the escRunWindow gate

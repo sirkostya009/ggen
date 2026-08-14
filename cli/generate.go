@@ -1532,9 +1532,10 @@ func renderAppendJSONBody(b *bytes.Buffer, s StructInfo) {
 
 	if !anyConditional {
 		for i, f := range s.Fields {
-			prefix := `,"` + f.JSONName + `":`
+			name := escapeJSONName(f.JSONName, f.HTMLEscape)
+			prefix := `,"` + name + `":`
 			if i == 0 {
-				prefix = `{"` + f.JSONName + `":`
+				prefix = `{"` + name + `":`
 			}
 			ref := "s." + f.GoName
 			if newPrefix, code, ok := foldLeadingQuote(f, ref, prefix); ok {
@@ -1581,7 +1582,7 @@ dst = append(dst, ':')
 			fmt.Fprintf(b, "if %s {\n", emit)
 		}
 		b.WriteString("if len(dst) > start { dst = append(dst, ',') }\n")
-		prefix := `"` + f.JSONName + `":`
+		prefix := `"` + escapeJSONName(f.JSONName, f.HTMLEscape) + `":`
 		if newPrefix, code, ok := foldLeadingQuote(av, aref, prefix); ok {
 			fmt.Fprintf(b, "dst = append(dst, %q...)\n", newPrefix)
 			b.WriteString(code)
@@ -2011,7 +2012,7 @@ func renderSize(b *bytes.Buffer, s StructInfo) {
 		}
 		n, code := sizeContrib(sizeField, sizeRef)
 		if emit == "" {
-			fixed += len(f.JSONName) + 3 // "name":
+			fixed += len(escapeJSONName(f.JSONName, f.HTMLEscape)) + 3 // "name":
 			if named > 0 {
 				fixed++ // comma
 			}
@@ -2021,13 +2022,50 @@ func renderSize(b *bytes.Buffer, s StructInfo) {
 			continue
 		}
 		// Omit-eligible field: worst-case includes a leading comma.
-		fmt.Fprintf(&runtime, "if %s {\nsize += %d\n", emit, len(f.JSONName)+4+n)
+		fmt.Fprintf(&runtime, "if %s {\nsize += %d\n", emit, len(escapeJSONName(f.JSONName, f.HTMLEscape))+4+n)
 		runtime.WriteString(code)
 		runtime.WriteString("}\n")
 	}
 	fmt.Fprintf(b, "size := %d\n", fixed)
 	_, _ = runtime.WriteTo(b)
 	b.WriteString("return size\n}\n\n")
+}
+
+// escapeJSONName JSON-escapes a field name once at generate time for embedding
+// into the constant `"name":` wire prefix (quote/backslash/control bytes;
+// htmlEscape also escapes <>& — jsonv2 escapes names like values). Without it
+// a tag-grammar name carrying `"` emitted invalid JSON with a nil error.
+func escapeJSONName(name string, htmlEscape bool) string {
+	var b strings.Builder
+	for i := 0; i < len(name); i++ {
+		c := name[i]
+		switch {
+		case c == '"':
+			b.WriteString(`\"`)
+		case c == '\\':
+			b.WriteString(`\\`)
+		case c < 0x20:
+			switch c {
+			case '\b':
+				b.WriteString(`\b`)
+			case '\f':
+				b.WriteString(`\f`)
+			case '\n':
+				b.WriteString(`\n`)
+			case '\r':
+				b.WriteString(`\r`)
+			case '\t':
+				b.WriteString(`\t`)
+			default:
+				fmt.Fprintf(&b, `\u%04x`, c)
+			}
+		case htmlEscape && (c == '<' || c == '>' || c == '&'):
+			fmt.Fprintf(&b, `\u%04x`, c)
+		default:
+			b.WriteByte(c)
+		}
+	}
+	return b.String()
 }
 
 // appendStrFn returns the encode-pkg helper for emitting a JSON string body +
@@ -2068,12 +2106,12 @@ func appendNetipAddrFn(htmlEscape bool) string {
 
 // emitNoCloseAfterComma emits the bytes-path guard inside an element loop's
 // comma branch: a container close (or EOF) right after a comma is invalid JSON.
-func emitNoCloseAfterComma(b *bytes.Buffer, posVar string, close byte) {
+func emitNoCloseAfterComma(b *bytes.Buffer, field, posVar string, close byte) {
 	sentinel := "scan.ErrBadArray"
 	if close == '}' {
 		sentinel = "scan.ErrBadObject"
 	}
-	fmt.Fprintf(b, "if %[1]s >= len(data) || data[%[1]s] == '%[2]c' { return result, i, %[3]s }\n", posVar, close, sentinel)
+	fmt.Fprintf(b, "if %[1]s >= len(data) || data[%[1]s] == '%[2]c' { return result, %[1]s, decode.NewParseErr(%[4]s, %[1]s, %[3]s) }\n", posVar, close, sentinel, field)
 }
 
 // streamNoCloseAfterComma is emitNoCloseAfterComma's stream twin. The
@@ -2569,19 +2607,19 @@ dst = append(dst, ':')
 		// Two lines so coalesce merges the `'"'` with the preceding `':'`.
 		fmt.Fprintf(b, "dst = append(dst, '\"')\ndst = %s(dst, %s)\n", appendStr, vref)
 	case KindBool:
-		b.WriteString("dst = strconv.AppendBool(dst, v)\n")
+		fmt.Fprintf(b, "dst = strconv.AppendBool(dst, %s)\n", vref)
 	case KindInt, KindInt8, KindInt16, KindInt32:
 		b.WriteString("dst = strconv.AppendInt(dst, int64(v), 10)\n")
 	case KindInt64:
-		b.WriteString("dst = strconv.AppendInt(dst, v, 10)\n")
+		fmt.Fprintf(b, "dst = strconv.AppendInt(dst, %s, 10)\n", vref)
 	case KindUint, KindUint8, KindUint16, KindUint32:
 		b.WriteString("dst = strconv.AppendUint(dst, uint64(v), 10)\n")
 	case KindUint64:
-		b.WriteString("dst = strconv.AppendUint(dst, v, 10)\n")
+		fmt.Fprintf(b, "dst = strconv.AppendUint(dst, %s, 10)\n", vref)
 	case KindFloat32:
 		b.WriteString("if dst, err = encode.AppendFloat(dst, float64(v), 32); err != nil { return dst, err }\n")
 	case KindFloat64:
-		b.WriteString("if dst, err = encode.AppendFloat(dst, v, 64); err != nil { return dst, err }\n")
+		fmt.Fprintf(b, "if dst, err = encode.AppendFloat(dst, %s, 64); err != nil { return dst, err }\n", vref)
 	case KindStruct:
 		if isGenerated(f.ElemType) {
 			b.WriteString("if dst, err = v.AppendJSON(dst); err != nil { return dst, err }\n")
@@ -3595,7 +3633,7 @@ func renderMap(b *bytes.Buffer, f FieldInfo, ref, posVar string, topLevel bool) 
 		inlineSkipWS(b, posVar)
 		fmt.Fprintf(b, `		if %[1]s < len(data) && data[%[1]s] == ',' { %[1]s++; `, posVar)
 		inlineSkipWS(b, posVar)
-		emitNoCloseAfterComma(b, posVar, '}')
+		emitNoCloseAfterComma(b, field, posVar, '}')
 		fmt.Fprintf(b, `			continue }
 		break
 	}
@@ -3693,7 +3731,7 @@ mv, _n, err = mv.`+decodeCallFor(f.ElemType)+`
 	inlineSkipWS(b, posVar)
 	fmt.Fprintf(b, `		if %[1]s < len(data) && data[%[1]s] == ',' { %[1]s++; `, posVar)
 	inlineSkipWS(b, posVar)
-	emitNoCloseAfterComma(b, posVar, '}')
+	emitNoCloseAfterComma(b, field, posVar, '}')
 	fmt.Fprintf(b, `			continue }
 		break
 	}
@@ -3748,7 +3786,7 @@ for %[1]s < len(data) && data[%[1]s] != ']' {
 		inlineSkipWS(b, posVar)
 		fmt.Fprintf(b, `	if %[1]s < len(data) && data[%[1]s] == ',' { %[1]s++; `, posVar)
 		inlineSkipWS(b, posVar)
-		emitNoCloseAfterComma(b, posVar, ']')
+		emitNoCloseAfterComma(b, field, posVar, ']')
 		fmt.Fprintf(b, ` continue }
 	break
 }
@@ -5153,7 +5191,7 @@ func emitByteSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth i
 			b.WriteString("} else {\n")
 		}
 	}
-	fmt.Fprintf(b, "if %s >= len(data) || data[%s] != '[' { return result, i, scan.ErrBadArray }\n", kvar, kvar)
+	fmt.Fprintf(b, "if %[1]s >= len(data) || data[%[1]s] != '[' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrBadArray) }\n", kvar, fieldLit(f))
 	fmt.Fprintf(b, "%s++\n", kvar)
 	inlineSkipWS(b, kvar)
 	slabVar := fmt.Sprintf("slab%d", depth)
@@ -5232,7 +5270,7 @@ if e := bytes.IndexByte(data[%[2]s:], ']'); e >= 0 { %[4]s = bytes.Count(data[%[
 		inlineSkipWS(b, kvar)
 		fmt.Fprintf(b, "if %s < len(data) && data[%s] == ',' { %s++; ", kvar, kvar, kvar)
 		inlineSkipWS(b, kvar)
-		emitNoCloseAfterComma(b, kvar, ']')
+		emitNoCloseAfterComma(b, fieldLit(f), kvar, ']')
 		b.WriteString("continue }\nbreak\n}\n")
 	}
 	// Compute the in-place target; slice cases pre-grow the slot here.
@@ -5361,7 +5399,7 @@ if e := bytes.IndexByte(data[%[2]s:], ']'); e >= 0 { %[4]s = bytes.Count(data[%[
 				inlineSkipWS(b, kvar)
 				fmt.Fprintf(b, "if %s < len(data) && data[%s] == ',' { %s++; ", kvar, kvar, kvar)
 				inlineSkipWS(b, kvar)
-				emitNoCloseAfterComma(b, kvar, ']')
+				emitNoCloseAfterComma(b, fieldLit(f), kvar, ']')
 				b.WriteString("continue }\nbreak\n}\n")
 				inner.NullDone = true
 			}
@@ -5398,11 +5436,11 @@ if e := bytes.IndexByte(data[%[2]s:], ']'); e >= 0 { %[4]s = bytes.Count(data[%[
 	inlineSkipWS(b, kvar)
 	fmt.Fprintf(b, "if %s < len(data) && data[%s] == ',' { %s++; ", kvar, kvar, kvar)
 	inlineSkipWS(b, kvar)
-	emitNoCloseAfterComma(b, kvar, ']')
+	emitNoCloseAfterComma(b, fieldLit(f), kvar, ']')
 	b.WriteString("continue }\n")
 	b.WriteString("break\n")
 	b.WriteString("}\n}\n") // close for{} and the non-empty guard
-	fmt.Fprintf(b, "if %s >= len(data) || data[%s] != ']' { return result, i, scan.ErrBadArray }\n", kvar, kvar)
+	fmt.Fprintf(b, "if %[1]s >= len(data) || data[%[1]s] != ']' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrBadArray) }\n", kvar, fieldLit(f))
 	if isArray {
 		fmt.Fprintf(b, "if %s != %d { return result, i, %s }\n",
 			ivar, arrayN,

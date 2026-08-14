@@ -217,7 +217,7 @@ func (recv PermissiveDoc) DecodeFrom(data []byte) (result PermissiveDoc, i int, 
 							i++
 						}
 						if i >= len(data) || data[i] == '}' {
-							return result, i, scan.ErrBadObject
+							return result, i, decode.NewParseErr("props", i, scan.ErrBadObject)
 						}
 						continue
 					}
@@ -250,7 +250,7 @@ func (recv PermissiveDoc) DecodeFrom(data []byte) (result PermissiveDoc, i int, 
 				break
 			}
 			if i >= len(data) || data[i] != '[' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("tags", i, scan.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -297,7 +297,7 @@ func (recv PermissiveDoc) DecodeFrom(data []byte) (result PermissiveDoc, i int, 
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, scan.ErrBadArray
+							return result, i, decode.NewParseErr("tags", i, scan.ErrBadArray)
 						}
 						continue
 					}
@@ -305,7 +305,7 @@ func (recv PermissiveDoc) DecodeFrom(data []byte) (result PermissiveDoc, i int, 
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("tags", i, scan.ErrBadArray)
 			}
 			i++
 		default:

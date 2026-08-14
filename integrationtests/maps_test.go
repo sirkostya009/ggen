@@ -187,3 +187,41 @@ func TestEmbedded_promotedRequired(t *testing.T) {
 		t.Fatal("expected missing-required error")
 	}
 }
+
+// Named-primitive map VALUES: renderAppendMap used to hardcode `v` instead of
+// the primCast'd vref in the bool/int64/uint64/float64 arms — uncompilable.
+type (
+	NVBool    bool
+	NVInt64   int64
+	NVUint64  uint64
+	NVFloat64 float64
+)
+
+//ggen:generate
+type NamedValMaps struct {
+	B map[string]NVBool    `json:"b"`
+	I map[string]NVInt64   `json:"i"`
+	U map[string]NVUint64  `json:"u"`
+	F map[string]NVFloat64 `json:"f"`
+}
+
+func TestMap_NamedPrimitiveValuesRoundTrip(t *testing.T) {
+	t.Parallel()
+	v := NamedValMaps{
+		B: map[string]NVBool{"t": true},
+		I: map[string]NVInt64{"i": -5},
+		U: map[string]NVUint64{"u": 7},
+		F: map[string]NVFloat64{"f": 1.5},
+	}
+	out, err := v.AppendJSON(nil)
+	if err != nil {
+		t.Fatalf("AppendJSON: %v", err)
+	}
+	got, _, err := NamedValMaps{}.DecodeFrom(out)
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.B["t"] != true || got.I["i"] != -5 || got.U["u"] != 7 || got.F["f"] != 1.5 {
+		t.Errorf("round-trip = %+v", got)
+	}
+}

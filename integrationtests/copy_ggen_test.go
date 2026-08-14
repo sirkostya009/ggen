@@ -112,7 +112,7 @@ func (recv CopyDoc) decodeFromDepth(data []byte, _depth int) (result CopyDoc, i 
 				break
 			}
 			if i >= len(data) || data[i] != '[' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("children", i, scan.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -145,7 +145,7 @@ func (recv CopyDoc) decodeFromDepth(data []byte, _depth int) (result CopyDoc, i 
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, scan.ErrBadArray
+							return result, i, decode.NewParseErr("children", i, scan.ErrBadArray)
 						}
 						continue
 					}
@@ -153,7 +153,7 @@ func (recv CopyDoc) decodeFromDepth(data []byte, _depth int) (result CopyDoc, i 
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("children", i, scan.ErrBadArray)
 			}
 			i++
 		case "extra":
@@ -281,7 +281,7 @@ func (recv CopyDoc) decodeFromDepth(data []byte, _depth int) (result CopyDoc, i 
 							i++
 						}
 						if i >= len(data) || data[i] == '}' {
-							return result, i, scan.ErrBadObject
+							return result, i, decode.NewParseErr("props", i, scan.ErrBadObject)
 						}
 						continue
 					}
@@ -318,7 +318,7 @@ func (recv CopyDoc) decodeFromDepth(data []byte, _depth int) (result CopyDoc, i 
 				break
 			}
 			if i >= len(data) || data[i] != '[' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("refs", i, scan.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -349,7 +349,7 @@ func (recv CopyDoc) decodeFromDepth(data []byte, _depth int) (result CopyDoc, i 
 								i++
 							}
 							if i >= len(data) || data[i] == ']' {
-								return result, i, scan.ErrBadArray
+								return result, i, decode.NewParseErr("refs", i, scan.ErrBadArray)
 							}
 							continue
 						}
@@ -372,7 +372,7 @@ func (recv CopyDoc) decodeFromDepth(data []byte, _depth int) (result CopyDoc, i 
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, scan.ErrBadArray
+							return result, i, decode.NewParseErr("refs", i, scan.ErrBadArray)
 						}
 						continue
 					}
@@ -380,7 +380,7 @@ func (recv CopyDoc) decodeFromDepth(data []byte, _depth int) (result CopyDoc, i 
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("refs", i, scan.ErrBadArray)
 			}
 			i++
 		case "tags":
@@ -394,7 +394,7 @@ func (recv CopyDoc) decodeFromDepth(data []byte, _depth int) (result CopyDoc, i 
 				break
 			}
 			if i >= len(data) || data[i] != '[' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("tags", i, scan.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -442,7 +442,7 @@ func (recv CopyDoc) decodeFromDepth(data []byte, _depth int) (result CopyDoc, i 
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, scan.ErrBadArray
+							return result, i, decode.NewParseErr("tags", i, scan.ErrBadArray)
 						}
 						continue
 					}
@@ -450,7 +450,7 @@ func (recv CopyDoc) decodeFromDepth(data []byte, _depth int) (result CopyDoc, i 
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("tags", i, scan.ErrBadArray)
 			}
 			i++
 		default:

@@ -56,7 +56,7 @@ func SkipSpace(data []byte, i int) int {
 // Expect consumes a specific byte at data[i] and returns the new position.
 func Expect(data []byte, i int, c byte) (int, error) {
 	if i >= len(data) || data[i] != c {
-		return 0, fmt.Errorf("scan: expected %q at pos %d", c, i)
+		return i, fmt.Errorf("scan: expected %q at pos %d", c, i)
 	}
 	return i + 1, nil
 }
@@ -65,7 +65,7 @@ func Expect(data []byte, i int, c byte) (int, error) {
 func ObjectOpen(data []byte, i int) (int, error) {
 	i = SkipSpace(data, i)
 	if i >= len(data) || data[i] != '{' {
-		return 0, ErrBadObject
+		return i, ErrBadObject
 	}
 	return i + 1, nil
 }
@@ -74,7 +74,7 @@ func ObjectOpen(data []byte, i int) (int, error) {
 func ArrayOpen(data []byte, i int) (int, error) {
 	i = SkipSpace(data, i)
 	if i >= len(data) || data[i] != '[' {
-		return 0, ErrBadArray
+		return i, ErrBadArray
 	}
 	return i + 1, nil
 }
@@ -88,7 +88,7 @@ func ArrayOpen(data []byte, i int) (int, error) {
 // escape forms) run either way.
 func String(data []byte, i int, validate bool) (string, int, error) {
 	if i >= len(data) || data[i] != '"' {
-		return "", 0, ErrExpectString
+		return "", i, ErrExpectString
 	}
 	start := i + 1
 	rest := data[start:]
@@ -99,7 +99,7 @@ func String(data []byte, i int, validate bool) (string, int, error) {
 		if bsIdx := bytes.IndexByte(rest, '\\'); bsIdx >= 0 {
 			return stringSlow(data, start, start+bsIdx, bsIdx+16, validate)
 		}
-		return "", 0, ErrUnterminated
+		return "", len(data), ErrUnterminated
 	}
 	if bsIdx := bytes.IndexByte(rest[:closeIdx], '\\'); bsIdx >= 0 {
 		// closeIdx is the FIRST '"', which may be an escaped `\"` — sizing the
@@ -110,10 +110,10 @@ func String(data []byte, i int, validate bool) (string, int, error) {
 	}
 	if validate {
 		if err := checkSpan(rest[:closeIdx]); err != nil {
-			return "", 0, err
+			return "", start, err
 		}
 	} else if hasCtrlByte(rest[:closeIdx]) {
-		return "", 0, ErrBadString
+		return "", start, ErrBadString
 	}
 	return unsafe.String(unsafe.SliceData(rest), closeIdx), start + closeIdx + 1, nil
 }
@@ -128,7 +128,9 @@ func String(data []byte, i int, validate bool) (string, int, error) {
 // that never overlaps data's backing, so the pointer-range test can't false-hit.
 func Detach(s string, data []byte) string {
 	if len(s) == 0 {
-		return s
+		// A zero-length alias still carries a data pointer into the backing
+		// array, pinning it under GC — return the detached empty string.
+		return ""
 	}
 	sp := uintptr(unsafe.Pointer(unsafe.StringData(s)))
 	dp := uintptr(unsafe.Pointer(unsafe.SliceData(data)))
@@ -296,7 +298,7 @@ const escRunWindow = 16
 func stringSlow(data []byte, start, j, capHint int, validate bool) (string, int, error) {
 	bad, rawHigh := ctrlOrHigh(data[start:j])
 	if bad {
-		return "", 0, ErrBadString
+		return "", start, ErrBadString
 	}
 	buf := make([]byte, 0, capHint)
 	buf = append(buf, data[start:j]...)
@@ -314,7 +316,7 @@ func stringSlow(data []byte, start, j, capHint int, validate bool) (string, int,
 				break
 			}
 			if c < 0x20 {
-				return "", 0, ErrBadString
+				return "", j, ErrBadString
 			}
 			rawHi |= c
 			buf = append(buf, c)
@@ -331,13 +333,13 @@ func stringSlow(data []byte, start, j, capHint int, validate bool) (string, int,
 			// ASCII. Whole-buf Valid is exact: raw segments always start/end at
 			// rune boundaries (escape bytes '\'/'"' can't be continuations).
 			if validate && (rawHigh || rawHi&0x80 != 0) && !utf8.Valid(buf) {
-				return "", 0, ErrInvalidUTF8
+				return "", j, ErrInvalidUTF8
 			}
 			return unsafe.String(unsafe.SliceData(buf), len(buf)), j + 1, nil
 		}
 		if c == '\\' {
 			if j+1 >= len(data) {
-				return "", 0, ErrBadString
+				return "", len(data), ErrBadString
 			}
 			esc := data[j+1]
 			switch esc {
@@ -361,11 +363,11 @@ func stringSlow(data []byte, start, j, capHint int, validate bool) (string, int,
 				j += 2
 			case 'u':
 				if j+6 > len(data) {
-					return "", 0, ErrBadString
+					return "", len(data), ErrBadString
 				}
 				r, ok := parseHex4(data[j+2 : j+6])
 				if !ok {
-					return "", 0, ErrBadString
+					return "", j, ErrBadString
 				}
 				j += 6
 				if utf16.IsSurrogate(r) {
@@ -381,12 +383,12 @@ func stringSlow(data []byte, start, j, capHint int, validate bool) (string, int,
 					// permissive mode keeps v1's U+FFFD substitution
 					// (AppendRune encodes RuneError for surrogates).
 					if validate && utf16.IsSurrogate(r) {
-						return "", 0, ErrInvalidUTF8
+						return "", j, ErrInvalidUTF8
 					}
 				}
 				buf = utf8.AppendRune(buf, r)
 			default:
-				return "", 0, ErrBadString
+				return "", j, ErrBadString
 			}
 			continue
 		}
@@ -394,7 +396,7 @@ func stringSlow(data []byte, start, j, capHint int, validate bool) (string, int,
 		// per-byte window ran out mid-run; the next iteration's bulk arm takes
 		// it (bulk was just set).
 	}
-	return "", 0, ErrUnterminated
+	return "", len(data), ErrUnterminated
 }
 
 func parseHex4(b []byte) (rune, bool) {
@@ -421,8 +423,7 @@ func parseHex4(b []byte) (rune, bool) {
 // scratch alloc + unescape work String would do on escaped strings.
 // On error the returned position is where the scan GAVE UP: an index
 // strictly inside data for a malformation, len(data) when it ran off the end
-// (see skipValueAt — CaptureValue reads this to tell malformed from
-// truncated). Exported SkipValue still reports 0 on error.
+// (see CaptureValue, which reads it to tell malformed from truncated).
 func skipString(data []byte, i int) (int, error) {
 	j := i + 1
 	// q memoizes the next '"' at or after j (len(data) = none buffered): as j
@@ -490,12 +491,12 @@ func Int64(data []byte, i int) (int64, int, error) {
 		i++
 	}
 	if i >= len(data) || data[i] < '0' || data[i] > '9' {
-		return 0, 0, ErrBadNumber
+		return 0, i, ErrBadNumber
 	}
 	// RFC 8259 forbids leading zeros ("01"): a leading '0' must END the integer
 	// part. One compare on the first byte, predicted not-taken for most input.
 	if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
-		return 0, 0, ErrBadNumber
+		return 0, i, ErrBadNumber
 	}
 	limit := uint64(math.MaxInt64)
 	if neg {
@@ -512,7 +513,7 @@ func Int64(data []byte, i int) (int64, int, error) {
 	for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 		d := uint64(data[i] - '0')
 		if u > limit/10 || (u == limit/10 && d > limit%10) {
-			return 0, 0, ErrNumberOverflow
+			return 0, i, ErrNumberOverflow
 		}
 		u = u*10 + d
 		i++
@@ -520,7 +521,7 @@ func Int64(data []byte, i int) (int64, int, error) {
 	if i < len(data) {
 		c := data[i]
 		if c == '.' || c == 'e' || c == 'E' {
-			return 0, 0, ErrBadNumber
+			return 0, i, ErrBadNumber
 		}
 	}
 	if neg {
@@ -537,11 +538,11 @@ func Int64(data []byte, i int) (int64, int, error) {
 // when the magnitude exceeds MaxUint64.
 func Uint64(data []byte, i int) (uint64, int, error) {
 	if i >= len(data) || data[i] < '0' || data[i] > '9' {
-		return 0, 0, ErrBadNumber
+		return 0, i, ErrBadNumber
 	}
 	// No leading zeros — see Int64.
 	if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
-		return 0, 0, ErrBadNumber
+		return 0, i, ErrBadNumber
 	}
 	var n uint64
 	// First ≤19 digits can't overflow uint64; a 20th resumes the checked
@@ -554,7 +555,7 @@ func Uint64(data []byte, i int) (uint64, int, error) {
 	for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 		d := uint64(data[i] - '0')
 		if n > Uint64Limit/10 || (n == Uint64Limit/10 && d > Uint64Limit%10) {
-			return 0, 0, ErrNumberOverflow
+			return 0, i, ErrNumberOverflow
 		}
 		n = n*10 + d
 		i++
@@ -562,7 +563,7 @@ func Uint64(data []byte, i int) (uint64, int, error) {
 	if i < len(data) {
 		c := data[i]
 		if c == '.' || c == 'e' || c == 'E' {
-			return 0, 0, ErrBadNumber
+			return 0, i, ErrBadNumber
 		}
 	}
 	return n, i, nil
@@ -582,7 +583,7 @@ func Float64(data []byte, i int) (float64, int, error) {
 		i++
 	}
 	if i >= n {
-		return 0, 0, ErrBadNumber
+		return 0, i, ErrBadNumber
 	}
 	if data[i] == '0' {
 		i++
@@ -592,12 +593,12 @@ func Float64(data []byte, i int) (float64, int, error) {
 			i++
 		}
 	} else {
-		return 0, 0, ErrBadNumber
+		return 0, i, ErrBadNumber
 	}
 	if i < n && data[i] == '.' {
 		i++
 		if i >= n || data[i] < '0' || data[i] > '9' {
-			return 0, 0, ErrBadNumber
+			return 0, i, ErrBadNumber
 		}
 		i++
 		for i < n && data[i] >= '0' && data[i] <= '9' {
@@ -610,7 +611,7 @@ func Float64(data []byte, i int) (float64, int, error) {
 			i++
 		}
 		if i >= n || data[i] < '0' || data[i] > '9' {
-			return 0, 0, ErrBadNumber
+			return 0, i, ErrBadNumber
 		}
 		i++
 		for i < n && data[i] >= '0' && data[i] <= '9' {
@@ -629,7 +630,7 @@ func Float64(data []byte, i int) (float64, int, error) {
 	raw := unsafe.String(unsafe.SliceData(data[start:]), i-start)
 	v, err := strconv.ParseFloat(raw, 64)
 	if err != nil {
-		return 0, 0, err
+		return 0, start, err
 	}
 	return v, i, nil
 }
@@ -797,7 +798,7 @@ func Bool(data []byte, i int) (bool, int, error) {
 	if i+5 <= len(data) && data[i] == 'f' && binary.LittleEndian.Uint32(data[i+1:]) == litAlse {
 		return false, i + 5, nil
 	}
-	return false, 0, ErrBadBool
+	return false, i, ErrBadBool
 }
 
 // Null consumes a null literal. Returns new pos + true if matched, else (i, false).
@@ -809,19 +810,18 @@ func Null(data []byte, i int) (int, bool) {
 }
 
 // SkipValue skips any JSON value (literal, number, string, array, object).
+// On error the returned position is where the walk GAVE UP: a byte strictly
+// inside data for a malformation, len(data) when it ran off the end —
+// CaptureValue reads it to tell malformed from truncated.
 func SkipValue(data []byte, i int) (int, error) {
-	end, err := skipValue(data, i, 0)
-	if err != nil {
-		return 0, err
-	}
-	return end, nil
+	return skipValue(data, i, 0)
 }
 
 // litEnd reports where a fixed literal scan gave up: len(data) when data[i:]
 // is a proper PREFIX of want (truncated — more bytes could still complete
 // it), else the index of the first mismatching byte (malformed, final).
-// Bool/Null report position 0 on failure, which would read as "failed at the
-// very start" and wrongly mark a chunked `tru` final.
+// Bool reports its start position on failure, which would wrongly mark a
+// chunked `tru` final.
 func litEnd(data []byte, i int, want string) int {
 	k := 0
 	for i+k < len(data) && k < len(want) && data[i+k] == want[k] {
@@ -831,15 +831,6 @@ func litEnd(data []byte, i int, want string) int {
 		return len(data)
 	}
 	return i + k
-}
-
-// skipValueAt is [SkipValue] with the give-up POSITION preserved on error.
-// CaptureValue uses it to tell a TRUNCATED window (the walk ran off the end;
-// more bytes may complete the value) from a MALFORMED one (it failed at a
-// byte strictly inside the window, so the verdict is final no matter what
-// arrives next). Cold path — only after the tier skip has already failed.
-func skipValueAt(data []byte, i int) (int, error) {
-	return skipValue(data, i, 0)
 }
 
 func skipValue(data []byte, i, depth int) (int, error) {
@@ -954,13 +945,13 @@ func Any(data []byte, i int) (any, int, error) {
 func anyValue(data []byte, i, depth int) (any, int, error) {
 	i = SkipSpace(data, i)
 	if i >= len(data) {
-		return nil, 0, ErrUnexpectedEnd
+		return nil, i, ErrUnexpectedEnd
 	}
 	switch c := data[i]; {
 	case c == 'n':
 		j, ok := Null(data, i)
 		if !ok {
-			return nil, 0, ErrBadLiteral
+			return nil, litEnd(data, i, "null"), ErrBadLiteral
 		}
 		return nil, j, nil
 	case c == 't' || c == 'f':
@@ -977,12 +968,12 @@ func anyValue(data []byte, i, depth int) (any, int, error) {
 	case c == '{':
 		return anyObject(data, i, depth+1)
 	}
-	return nil, 0, ErrBadLiteral
+	return nil, i, ErrBadLiteral
 }
 
 func anyArray(data []byte, i, depth int) ([]any, int, error) {
 	if depth > MaxDepth {
-		return nil, 0, ErrMaxDepth
+		return nil, i, ErrMaxDepth
 	}
 	i++ // consume '['
 	i = SkipSpace(data, i)
@@ -993,12 +984,12 @@ func anyArray(data []byte, i, depth int) ([]any, int, error) {
 	for {
 		v, j, err := anyValue(data, i, depth)
 		if err != nil {
-			return nil, 0, err
+			return nil, j, err
 		}
 		out = append(out, v)
 		i = SkipSpace(data, j)
 		if i >= len(data) {
-			return nil, 0, ErrBadArray
+			return nil, i, ErrBadArray
 		}
 		if data[i] == ',' {
 			i = SkipSpace(data, i+1)
@@ -1007,13 +998,13 @@ func anyArray(data []byte, i, depth int) ([]any, int, error) {
 		if data[i] == ']' {
 			return out, i + 1, nil
 		}
-		return nil, 0, ErrBadArray
+		return nil, i, ErrBadArray
 	}
 }
 
 func anyObject(data []byte, i, depth int) (map[string]any, int, error) {
 	if depth > MaxDepth {
-		return nil, 0, ErrMaxDepth
+		return nil, i, ErrMaxDepth
 	}
 	i++ // consume '{'
 	i = SkipSpace(data, i)
@@ -1024,21 +1015,21 @@ func anyObject(data []byte, i, depth int) (map[string]any, int, error) {
 	for {
 		key, j, err := String(data, i, true)
 		if err != nil {
-			return nil, 0, err
+			return nil, j, err
 		}
 		j = SkipSpace(data, j)
 		if j >= len(data) || data[j] != ':' {
-			return nil, 0, ErrBadObject
+			return nil, j, ErrBadObject
 		}
 		j = SkipSpace(data, j+1)
 		v, k, err := anyValue(data, j, depth)
 		if err != nil {
-			return nil, 0, err
+			return nil, k, err
 		}
 		out[key] = v
 		i = SkipSpace(data, k)
 		if i >= len(data) {
-			return nil, 0, ErrBadObject
+			return nil, i, ErrBadObject
 		}
 		if data[i] == ',' {
 			i = SkipSpace(data, i+1)
@@ -1047,7 +1038,7 @@ func anyObject(data []byte, i, depth int) (map[string]any, int, error) {
 		if data[i] == '}' {
 			return out, i + 1, nil
 		}
-		return nil, 0, ErrBadObject
+		return nil, i, ErrBadObject
 	}
 }
 
@@ -1058,7 +1049,7 @@ func Number(data []byte, i int) (json.Number, int, error) {
 	start := i
 	i, err := skipNumber(data, i) // strict grammar — see Float64
 	if err != nil {
-		return "", 0, err
+		return "", i, err
 	}
 	return json.Number(unsafe.String(unsafe.SliceData(data[start:]), i-start)), i, nil
 }
@@ -1073,13 +1064,13 @@ func AnyNumber(data []byte, i int) (any, int, error) {
 func anyNumberValue(data []byte, i, depth int) (any, int, error) {
 	i = SkipSpace(data, i)
 	if i >= len(data) {
-		return nil, 0, ErrUnexpectedEnd
+		return nil, i, ErrUnexpectedEnd
 	}
 	switch c := data[i]; {
 	case c == 'n':
 		j, ok := Null(data, i)
 		if !ok {
-			return nil, 0, ErrBadLiteral
+			return nil, litEnd(data, i, "null"), ErrBadLiteral
 		}
 		return nil, j, nil
 	case c == 't' || c == 'f':
@@ -1096,12 +1087,12 @@ func anyNumberValue(data []byte, i, depth int) (any, int, error) {
 	case c == '{':
 		return anyNumberObject(data, i, depth+1)
 	}
-	return nil, 0, ErrBadLiteral
+	return nil, i, ErrBadLiteral
 }
 
 func anyNumberArray(data []byte, i, depth int) ([]any, int, error) {
 	if depth > MaxDepth {
-		return nil, 0, ErrMaxDepth
+		return nil, i, ErrMaxDepth
 	}
 	i++
 	i = SkipSpace(data, i)
@@ -1112,12 +1103,12 @@ func anyNumberArray(data []byte, i, depth int) ([]any, int, error) {
 	for {
 		v, j, err := anyNumberValue(data, i, depth)
 		if err != nil {
-			return nil, 0, err
+			return nil, j, err
 		}
 		out = append(out, v)
 		i = SkipSpace(data, j)
 		if i >= len(data) {
-			return nil, 0, ErrBadArray
+			return nil, i, ErrBadArray
 		}
 		if data[i] == ',' {
 			i = SkipSpace(data, i+1)
@@ -1126,13 +1117,13 @@ func anyNumberArray(data []byte, i, depth int) ([]any, int, error) {
 		if data[i] == ']' {
 			return out, i + 1, nil
 		}
-		return nil, 0, ErrBadArray
+		return nil, i, ErrBadArray
 	}
 }
 
 func anyNumberObject(data []byte, i, depth int) (map[string]any, int, error) {
 	if depth > MaxDepth {
-		return nil, 0, ErrMaxDepth
+		return nil, i, ErrMaxDepth
 	}
 	i++
 	i = SkipSpace(data, i)
@@ -1143,21 +1134,21 @@ func anyNumberObject(data []byte, i, depth int) (map[string]any, int, error) {
 	for {
 		key, j, err := String(data, i, true)
 		if err != nil {
-			return nil, 0, err
+			return nil, j, err
 		}
 		j = SkipSpace(data, j)
 		if j >= len(data) || data[j] != ':' {
-			return nil, 0, ErrBadObject
+			return nil, j, ErrBadObject
 		}
 		j = SkipSpace(data, j+1)
 		v, k, err := anyNumberValue(data, j, depth)
 		if err != nil {
-			return nil, 0, err
+			return nil, k, err
 		}
 		out[key] = v
 		i = SkipSpace(data, k)
 		if i >= len(data) {
-			return nil, 0, ErrBadObject
+			return nil, i, ErrBadObject
 		}
 		if data[i] == ',' {
 			i = SkipSpace(data, i+1)
@@ -1166,7 +1157,7 @@ func anyNumberObject(data []byte, i, depth int) (map[string]any, int, error) {
 		if data[i] == '}' {
 			return out, i + 1, nil
 		}
-		return nil, 0, ErrBadObject
+		return nil, i, ErrBadObject
 	}
 }
 
@@ -1183,13 +1174,13 @@ func AnyCopy(data []byte, i int) (any, int, error) {
 func anyCopyValue(data []byte, i, depth int) (any, int, error) {
 	i = SkipSpace(data, i)
 	if i >= len(data) {
-		return nil, 0, ErrUnexpectedEnd
+		return nil, i, ErrUnexpectedEnd
 	}
 	switch c := data[i]; {
 	case c == 'n':
 		j, ok := Null(data, i)
 		if !ok {
-			return nil, 0, ErrBadLiteral
+			return nil, litEnd(data, i, "null"), ErrBadLiteral
 		}
 		return nil, j, nil
 	case c == 't' || c == 'f':
@@ -1198,7 +1189,7 @@ func anyCopyValue(data []byte, i, depth int) (any, int, error) {
 	case c == '"':
 		s, j, err := String(data, i, true)
 		if err != nil {
-			return nil, 0, err
+			return nil, j, err
 		}
 		return Detach(s, data), j, nil
 	case c == '-' || (c >= '0' && c <= '9'):
@@ -1209,12 +1200,12 @@ func anyCopyValue(data []byte, i, depth int) (any, int, error) {
 	case c == '{':
 		return anyObjectCopy(data, i, depth+1)
 	}
-	return nil, 0, ErrBadLiteral
+	return nil, i, ErrBadLiteral
 }
 
 func anyArrayCopy(data []byte, i, depth int) ([]any, int, error) {
 	if depth > MaxDepth {
-		return nil, 0, ErrMaxDepth
+		return nil, i, ErrMaxDepth
 	}
 	i++ // consume '['
 	i = SkipSpace(data, i)
@@ -1225,12 +1216,12 @@ func anyArrayCopy(data []byte, i, depth int) ([]any, int, error) {
 	for {
 		v, j, err := anyCopyValue(data, i, depth)
 		if err != nil {
-			return nil, 0, err
+			return nil, j, err
 		}
 		out = append(out, v)
 		i = SkipSpace(data, j)
 		if i >= len(data) {
-			return nil, 0, ErrBadArray
+			return nil, i, ErrBadArray
 		}
 		if data[i] == ',' {
 			i = SkipSpace(data, i+1)
@@ -1239,13 +1230,13 @@ func anyArrayCopy(data []byte, i, depth int) ([]any, int, error) {
 		if data[i] == ']' {
 			return out, i + 1, nil
 		}
-		return nil, 0, ErrBadArray
+		return nil, i, ErrBadArray
 	}
 }
 
 func anyObjectCopy(data []byte, i, depth int) (map[string]any, int, error) {
 	if depth > MaxDepth {
-		return nil, 0, ErrMaxDepth
+		return nil, i, ErrMaxDepth
 	}
 	i++ // consume '{'
 	i = SkipSpace(data, i)
@@ -1256,21 +1247,21 @@ func anyObjectCopy(data []byte, i, depth int) (map[string]any, int, error) {
 	for {
 		key, j, err := String(data, i, true)
 		if err != nil {
-			return nil, 0, err
+			return nil, j, err
 		}
 		j = SkipSpace(data, j)
 		if j >= len(data) || data[j] != ':' {
-			return nil, 0, ErrBadObject
+			return nil, j, ErrBadObject
 		}
 		j = SkipSpace(data, j+1)
 		v, k, err := anyCopyValue(data, j, depth)
 		if err != nil {
-			return nil, 0, err
+			return nil, k, err
 		}
 		out[Detach(key, data)] = v
 		i = SkipSpace(data, k)
 		if i >= len(data) {
-			return nil, 0, ErrBadObject
+			return nil, i, ErrBadObject
 		}
 		if data[i] == ',' {
 			i = SkipSpace(data, i+1)
@@ -1279,7 +1270,7 @@ func anyObjectCopy(data []byte, i, depth int) (map[string]any, int, error) {
 		if data[i] == '}' {
 			return out, i + 1, nil
 		}
-		return nil, 0, ErrBadObject
+		return nil, i, ErrBadObject
 	}
 }
 
@@ -1293,13 +1284,13 @@ func AnyNumberCopy(data []byte, i int) (any, int, error) {
 func anyNumberCopyValue(data []byte, i, depth int) (any, int, error) {
 	i = SkipSpace(data, i)
 	if i >= len(data) {
-		return nil, 0, ErrUnexpectedEnd
+		return nil, i, ErrUnexpectedEnd
 	}
 	switch c := data[i]; {
 	case c == 'n':
 		j, ok := Null(data, i)
 		if !ok {
-			return nil, 0, ErrBadLiteral
+			return nil, litEnd(data, i, "null"), ErrBadLiteral
 		}
 		return nil, j, nil
 	case c == 't' || c == 'f':
@@ -1308,13 +1299,13 @@ func anyNumberCopyValue(data []byte, i, depth int) (any, int, error) {
 	case c == '"':
 		s, j, err := String(data, i, true)
 		if err != nil {
-			return nil, 0, err
+			return nil, j, err
 		}
 		return Detach(s, data), j, nil
 	case c == '-' || (c >= '0' && c <= '9'):
 		n, j, err := Number(data, i)
 		if err != nil {
-			return nil, 0, err
+			return nil, j, err
 		}
 		return json.Number(strings.Clone(string(n))), j, nil
 	case c == '[':
@@ -1322,12 +1313,12 @@ func anyNumberCopyValue(data []byte, i, depth int) (any, int, error) {
 	case c == '{':
 		return anyNumberObjectCopy(data, i, depth+1)
 	}
-	return nil, 0, ErrBadLiteral
+	return nil, i, ErrBadLiteral
 }
 
 func anyNumberArrayCopy(data []byte, i, depth int) ([]any, int, error) {
 	if depth > MaxDepth {
-		return nil, 0, ErrMaxDepth
+		return nil, i, ErrMaxDepth
 	}
 	i++
 	i = SkipSpace(data, i)
@@ -1338,12 +1329,12 @@ func anyNumberArrayCopy(data []byte, i, depth int) ([]any, int, error) {
 	for {
 		v, j, err := anyNumberCopyValue(data, i, depth)
 		if err != nil {
-			return nil, 0, err
+			return nil, j, err
 		}
 		out = append(out, v)
 		i = SkipSpace(data, j)
 		if i >= len(data) {
-			return nil, 0, ErrBadArray
+			return nil, i, ErrBadArray
 		}
 		if data[i] == ',' {
 			i = SkipSpace(data, i+1)
@@ -1352,13 +1343,13 @@ func anyNumberArrayCopy(data []byte, i, depth int) ([]any, int, error) {
 		if data[i] == ']' {
 			return out, i + 1, nil
 		}
-		return nil, 0, ErrBadArray
+		return nil, i, ErrBadArray
 	}
 }
 
 func anyNumberObjectCopy(data []byte, i, depth int) (map[string]any, int, error) {
 	if depth > MaxDepth {
-		return nil, 0, ErrMaxDepth
+		return nil, i, ErrMaxDepth
 	}
 	i++
 	i = SkipSpace(data, i)
@@ -1369,21 +1360,21 @@ func anyNumberObjectCopy(data []byte, i, depth int) (map[string]any, int, error)
 	for {
 		key, j, err := String(data, i, true)
 		if err != nil {
-			return nil, 0, err
+			return nil, j, err
 		}
 		j = SkipSpace(data, j)
 		if j >= len(data) || data[j] != ':' {
-			return nil, 0, ErrBadObject
+			return nil, j, ErrBadObject
 		}
 		j = SkipSpace(data, j+1)
 		v, k, err := anyNumberCopyValue(data, j, depth)
 		if err != nil {
-			return nil, 0, err
+			return nil, k, err
 		}
 		out[Detach(key, data)] = v
 		i = SkipSpace(data, k)
 		if i >= len(data) {
-			return nil, 0, ErrBadObject
+			return nil, i, ErrBadObject
 		}
 		if data[i] == ',' {
 			i = SkipSpace(data, i+1)
@@ -1392,6 +1383,6 @@ func anyNumberObjectCopy(data []byte, i, depth int) (map[string]any, int, error)
 		if data[i] == '}' {
 			return out, i + 1, nil
 		}
-		return nil, 0, ErrBadObject
+		return nil, i, ErrBadObject
 	}
 }

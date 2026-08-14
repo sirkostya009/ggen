@@ -328,6 +328,11 @@ quotes scope one part and protect a literal pipe: `oneof='New York'|LA`,
 | `trim`, `tolower`, `toupper`, `trimleft=X`, `trimright=X`, `replace=old\|new` | string  |
 | `clamp=lo\|hi` (either side may be empty: `clamp=0\|`, `clamp=\|100`)     | numeric |
 
+A rule that doesn't fit the field's kind is rejected at generate time with a
+clear diagnostic — including on struct-typed fields (named types over a
+primitive count as that primitive; `required`/`optional`/`@Func` work on any
+kind — use a custom `@Func` validator for struct values).
+
 #### `inner:` / `keys:`
 
 `inner:` scopes steps to one container level down. `keys:` scopes to map keys.

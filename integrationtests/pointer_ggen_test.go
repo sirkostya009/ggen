@@ -3815,7 +3815,7 @@ func (recv PtrSliceItemsStruct) DecodeFrom(data []byte) (result PtrSliceItemsStr
 				break
 			}
 			if i >= len(data) || data[i] != '[' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("items", i, scan.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -3846,7 +3846,7 @@ func (recv PtrSliceItemsStruct) DecodeFrom(data []byte) (result PtrSliceItemsStr
 								i++
 							}
 							if i >= len(data) || data[i] == ']' {
-								return result, i, scan.ErrBadArray
+								return result, i, decode.NewParseErr("items", i, scan.ErrBadArray)
 							}
 							continue
 						}
@@ -3869,7 +3869,7 @@ func (recv PtrSliceItemsStruct) DecodeFrom(data []byte) (result PtrSliceItemsStr
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, scan.ErrBadArray
+							return result, i, decode.NewParseErr("items", i, scan.ErrBadArray)
 						}
 						continue
 					}
@@ -3877,7 +3877,7 @@ func (recv PtrSliceItemsStruct) DecodeFrom(data []byte) (result PtrSliceItemsStr
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("items", i, scan.ErrBadArray)
 			}
 			i++
 		default:
@@ -4201,7 +4201,7 @@ func (recv PtrSliceTupleStruct) DecodeFrom(data []byte) (result PtrSliceTupleStr
 			}
 			seenTuple = true
 			if i >= len(data) || data[i] != '[' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("tuple", i, scan.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -4227,7 +4227,7 @@ func (recv PtrSliceTupleStruct) DecodeFrom(data []byte) (result PtrSliceTupleStr
 								i++
 							}
 							if i >= len(data) || data[i] == ']' {
-								return result, i, scan.ErrBadArray
+								return result, i, decode.NewParseErr("tuple", i, scan.ErrBadArray)
 							}
 							continue
 						}
@@ -4250,7 +4250,7 @@ func (recv PtrSliceTupleStruct) DecodeFrom(data []byte) (result PtrSliceTupleStr
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, scan.ErrBadArray
+							return result, i, decode.NewParseErr("tuple", i, scan.ErrBadArray)
 						}
 						continue
 					}
@@ -4258,7 +4258,7 @@ func (recv PtrSliceTupleStruct) DecodeFrom(data []byte) (result PtrSliceTupleStr
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("tuple", i, scan.ErrBadArray)
 			}
 			if idx0 != 3 {
 				return result, i, &validation.LenError{Pos: i, Path: []string{"tuple"}, Want: 3, Got: idx0}
@@ -4559,7 +4559,7 @@ func (recv PtrSliceNodesStruct) DecodeFrom(data []byte) (result PtrSliceNodesStr
 				break
 			}
 			if i >= len(data) || data[i] != '[' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("nodes", i, scan.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -4590,7 +4590,7 @@ func (recv PtrSliceNodesStruct) DecodeFrom(data []byte) (result PtrSliceNodesStr
 								i++
 							}
 							if i >= len(data) || data[i] == ']' {
-								return result, i, scan.ErrBadArray
+								return result, i, decode.NewParseErr("nodes", i, scan.ErrBadArray)
 							}
 							continue
 						}
@@ -4613,7 +4613,7 @@ func (recv PtrSliceNodesStruct) DecodeFrom(data []byte) (result PtrSliceNodesStr
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, scan.ErrBadArray
+							return result, i, decode.NewParseErr("nodes", i, scan.ErrBadArray)
 						}
 						continue
 					}
@@ -4621,7 +4621,7 @@ func (recv PtrSliceNodesStruct) DecodeFrom(data []byte) (result PtrSliceNodesStr
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("nodes", i, scan.ErrBadArray)
 			}
 			i++
 		default:
@@ -4960,7 +4960,7 @@ func (recv PtrSliceStruct) DecodeFrom(data []byte) (result PtrSliceStruct, i int
 				break
 			}
 			if i >= len(data) || data[i] != '[' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("items", i, scan.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -4991,7 +4991,7 @@ func (recv PtrSliceStruct) DecodeFrom(data []byte) (result PtrSliceStruct, i int
 								i++
 							}
 							if i >= len(data) || data[i] == ']' {
-								return result, i, scan.ErrBadArray
+								return result, i, decode.NewParseErr("items", i, scan.ErrBadArray)
 							}
 							continue
 						}
@@ -5014,7 +5014,7 @@ func (recv PtrSliceStruct) DecodeFrom(data []byte) (result PtrSliceStruct, i int
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, scan.ErrBadArray
+							return result, i, decode.NewParseErr("items", i, scan.ErrBadArray)
 						}
 						continue
 					}
@@ -5022,7 +5022,7 @@ func (recv PtrSliceStruct) DecodeFrom(data []byte) (result PtrSliceStruct, i int
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("items", i, scan.ErrBadArray)
 			}
 			i++
 		case "nodes":
@@ -5036,7 +5036,7 @@ func (recv PtrSliceStruct) DecodeFrom(data []byte) (result PtrSliceStruct, i int
 				break
 			}
 			if i >= len(data) || data[i] != '[' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("nodes", i, scan.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -5067,7 +5067,7 @@ func (recv PtrSliceStruct) DecodeFrom(data []byte) (result PtrSliceStruct, i int
 								i++
 							}
 							if i >= len(data) || data[i] == ']' {
-								return result, i, scan.ErrBadArray
+								return result, i, decode.NewParseErr("nodes", i, scan.ErrBadArray)
 							}
 							continue
 						}
@@ -5090,7 +5090,7 @@ func (recv PtrSliceStruct) DecodeFrom(data []byte) (result PtrSliceStruct, i int
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, scan.ErrBadArray
+							return result, i, decode.NewParseErr("nodes", i, scan.ErrBadArray)
 						}
 						continue
 					}
@@ -5098,7 +5098,7 @@ func (recv PtrSliceStruct) DecodeFrom(data []byte) (result PtrSliceStruct, i int
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("nodes", i, scan.ErrBadArray)
 			}
 			i++
 		case "tuple":
@@ -5107,7 +5107,7 @@ func (recv PtrSliceStruct) DecodeFrom(data []byte) (result PtrSliceStruct, i int
 			}
 			seenTuple = true
 			if i >= len(data) || data[i] != '[' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("tuple", i, scan.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -5133,7 +5133,7 @@ func (recv PtrSliceStruct) DecodeFrom(data []byte) (result PtrSliceStruct, i int
 								i++
 							}
 							if i >= len(data) || data[i] == ']' {
-								return result, i, scan.ErrBadArray
+								return result, i, decode.NewParseErr("tuple", i, scan.ErrBadArray)
 							}
 							continue
 						}
@@ -5156,7 +5156,7 @@ func (recv PtrSliceStruct) DecodeFrom(data []byte) (result PtrSliceStruct, i int
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, scan.ErrBadArray
+							return result, i, decode.NewParseErr("tuple", i, scan.ErrBadArray)
 						}
 						continue
 					}
@@ -5164,7 +5164,7 @@ func (recv PtrSliceStruct) DecodeFrom(data []byte) (result PtrSliceStruct, i int
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("tuple", i, scan.ErrBadArray)
 			}
 			if idx0 != 3 {
 				return result, i, &validation.LenError{Pos: i, Path: []string{"tuple"}, Want: 3, Got: idx0}
@@ -5817,7 +5817,7 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 			}
 			seenAPP = true
 			if i >= len(data) || data[i] != '[' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("app", i, scan.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -5893,7 +5893,7 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, scan.ErrBadArray
+							return result, i, decode.NewParseErr("app", i, scan.ErrBadArray)
 						}
 						continue
 					}
@@ -5901,7 +5901,7 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("app", i, scan.ErrBadArray)
 			}
 			if idx0 != 3 {
 				return result, i, &validation.LenError{Pos: i, Path: []string{"app"}, Want: 3, Got: idx0}
@@ -6029,7 +6029,7 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 							i++
 						}
 						if i >= len(data) || data[i] == '}' {
-							return result, i, scan.ErrBadObject
+							return result, i, decode.NewParseErr("mp", i, scan.ErrBadObject)
 						}
 						continue
 					}
@@ -6121,7 +6121,7 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 							i++
 						}
 						if i >= len(data) || data[i] == '}' {
-							return result, i, scan.ErrBadObject
+							return result, i, decode.NewParseErr("mpa", i, scan.ErrBadObject)
 						}
 						continue
 					}
@@ -6254,7 +6254,7 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 							i++
 						}
 						if i >= len(data) || data[i] == '}' {
-							return result, i, scan.ErrBadObject
+							return result, i, decode.NewParseErr("mpp", i, scan.ErrBadObject)
 						}
 						continue
 					}
@@ -6276,7 +6276,7 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 				break
 			}
 			if i >= len(data) || data[i] != '[' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("nspp", i, scan.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -6310,7 +6310,7 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 								i++
 							}
 							if i >= len(data) || data[i] == ']' {
-								return result, i, scan.ErrBadArray
+								return result, i, decode.NewParseErr("nspp", i, scan.ErrBadArray)
 							}
 							continue
 						}
@@ -6321,7 +6321,7 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 						row0 = row0[:0]
 					}
 					if i >= len(data) || data[i] != '[' {
-						return result, i, scan.ErrBadArray
+						return result, i, decode.NewParseErr("nspp[]", i, scan.ErrBadArray)
 					}
 					i++
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -6402,7 +6402,7 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 									i++
 								}
 								if i >= len(data) || data[i] == ']' {
-									return result, i, scan.ErrBadArray
+									return result, i, decode.NewParseErr("nspp[]", i, scan.ErrBadArray)
 								}
 								continue
 							}
@@ -6410,7 +6410,7 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 						}
 					}
 					if i >= len(data) || data[i] != ']' {
-						return result, i, scan.ErrBadArray
+						return result, i, decode.NewParseErr("nspp[]", i, scan.ErrBadArray)
 					}
 					i++
 					result.NSPP[len(result.NSPP)-1] = row0
@@ -6423,7 +6423,7 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, scan.ErrBadArray
+							return result, i, decode.NewParseErr("nspp", i, scan.ErrBadArray)
 						}
 						continue
 					}
@@ -6431,7 +6431,7 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("nspp", i, scan.ErrBadArray)
 			}
 			i++
 		case "spp":
@@ -6445,7 +6445,7 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 				break
 			}
 			if i >= len(data) || data[i] != '[' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("spp", i, scan.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -6526,7 +6526,7 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, scan.ErrBadArray
+							return result, i, decode.NewParseErr("spp", i, scan.ErrBadArray)
 						}
 						continue
 					}
@@ -6534,7 +6534,7 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("spp", i, scan.ErrBadArray)
 			}
 			i++
 		default:
@@ -7791,7 +7791,7 @@ func (recv PtrContainers) DecodeFrom(data []byte) (result PtrContainers, i int, 
 				v = nil
 			} else {
 				if i >= len(data) || data[i] != '[' {
-					return result, i, scan.ErrBadArray
+					return result, i, decode.NewParseErr("deep", i, scan.ErrBadArray)
 				}
 				i++
 				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -7871,7 +7871,7 @@ func (recv PtrContainers) DecodeFrom(data []byte) (result PtrContainers, i int, 
 								i++
 							}
 							if i >= len(data) || data[i] == ']' {
-								return result, i, scan.ErrBadArray
+								return result, i, decode.NewParseErr("deep", i, scan.ErrBadArray)
 							}
 							continue
 						}
@@ -7879,7 +7879,7 @@ func (recv PtrContainers) DecodeFrom(data []byte) (result PtrContainers, i int, 
 					}
 				}
 				if i >= len(data) || data[i] != ']' {
-					return result, i, scan.ErrBadArray
+					return result, i, decode.NewParseErr("deep", i, scan.ErrBadArray)
 				}
 				i++
 			}
@@ -7911,7 +7911,7 @@ func (recv PtrContainers) DecodeFrom(data []byte) (result PtrContainers, i int, 
 				v = nil
 			} else {
 				if i >= len(data) || data[i] != '[' {
-					return result, i, scan.ErrBadArray
+					return result, i, decode.NewParseErr("elems", i, scan.ErrBadArray)
 				}
 				i++
 				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -7944,7 +7944,7 @@ func (recv PtrContainers) DecodeFrom(data []byte) (result PtrContainers, i int, 
 								i++
 							}
 							if i >= len(data) || data[i] == ']' {
-								return result, i, scan.ErrBadArray
+								return result, i, decode.NewParseErr("elems", i, scan.ErrBadArray)
 							}
 							continue
 						}
@@ -7952,7 +7952,7 @@ func (recv PtrContainers) DecodeFrom(data []byte) (result PtrContainers, i int, 
 					}
 				}
 				if i >= len(data) || data[i] != ']' {
-					return result, i, scan.ErrBadArray
+					return result, i, decode.NewParseErr("elems", i, scan.ErrBadArray)
 				}
 				i++
 			}
@@ -8086,7 +8086,7 @@ func (recv PtrContainers) DecodeFrom(data []byte) (result PtrContainers, i int, 
 								i++
 							}
 							if i >= len(data) || data[i] == '}' {
-								return result, i, scan.ErrBadObject
+								return result, i, decode.NewParseErr("m1", i, scan.ErrBadObject)
 							}
 							continue
 						}
@@ -8228,7 +8228,7 @@ func (recv PtrContainers) DecodeFrom(data []byte) (result PtrContainers, i int, 
 								i++
 							}
 							if i >= len(data) || data[i] == '}' {
-								return result, i, scan.ErrBadObject
+								return result, i, decode.NewParseErr("m3", i, scan.ErrBadObject)
 							}
 							continue
 						}
@@ -8333,7 +8333,7 @@ func (recv PtrContainers) DecodeFrom(data []byte) (result PtrContainers, i int, 
 								i++
 							}
 							if i >= len(data) || data[i] == '}' {
-								return result, i, scan.ErrBadObject
+								return result, i, decode.NewParseErr("melem", i, scan.ErrBadObject)
 							}
 							continue
 						}
@@ -8371,7 +8371,7 @@ func (recv PtrContainers) DecodeFrom(data []byte) (result PtrContainers, i int, 
 				v = nil
 			} else {
 				if i >= len(data) || data[i] != '[' {
-					return result, i, scan.ErrBadArray
+					return result, i, decode.NewParseErr("one", i, scan.ErrBadArray)
 				}
 				i++
 				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -8451,7 +8451,7 @@ func (recv PtrContainers) DecodeFrom(data []byte) (result PtrContainers, i int, 
 								i++
 							}
 							if i >= len(data) || data[i] == ']' {
-								return result, i, scan.ErrBadArray
+								return result, i, decode.NewParseErr("one", i, scan.ErrBadArray)
 							}
 							continue
 						}
@@ -8459,7 +8459,7 @@ func (recv PtrContainers) DecodeFrom(data []byte) (result PtrContainers, i int, 
 					}
 				}
 				if i >= len(data) || data[i] != ']' {
-					return result, i, scan.ErrBadArray
+					return result, i, decode.NewParseErr("one", i, scan.ErrBadArray)
 				}
 				i++
 			}
@@ -8479,7 +8479,7 @@ func (recv PtrContainers) DecodeFrom(data []byte) (result PtrContainers, i int, 
 				break
 			}
 			if i >= len(data) || data[i] != '[' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("plain", i, scan.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -8559,7 +8559,7 @@ func (recv PtrContainers) DecodeFrom(data []byte) (result PtrContainers, i int, 
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, scan.ErrBadArray
+							return result, i, decode.NewParseErr("plain", i, scan.ErrBadArray)
 						}
 						continue
 					}
@@ -8567,7 +8567,7 @@ func (recv PtrContainers) DecodeFrom(data []byte) (result PtrContainers, i int, 
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("plain", i, scan.ErrBadArray)
 			}
 			i++
 		default:

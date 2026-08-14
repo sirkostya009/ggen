@@ -418,11 +418,11 @@ func TestInt_ReferenceDifferential(t *testing.T) {
 			i++
 		}
 		if i >= len(data) || data[i] < '0' || data[i] > '9' {
-			return 0, 0, ErrBadNumber
+			return 0, i, ErrBadNumber
 		}
 		// RFC 8259: no leading zeros (mirrors Int64).
 		if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
-			return 0, 0, ErrBadNumber
+			return 0, i, ErrBadNumber
 		}
 		limit := uint64(math.MaxInt64)
 		if neg {
@@ -432,7 +432,7 @@ func TestInt_ReferenceDifferential(t *testing.T) {
 		for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 			d := uint64(data[i] - '0')
 			if u > limit/10 || (u == limit/10 && d > limit%10) {
-				return 0, 0, ErrNumberOverflow
+				return 0, i, ErrNumberOverflow
 			}
 			u = u*10 + d
 			i++
@@ -440,7 +440,7 @@ func TestInt_ReferenceDifferential(t *testing.T) {
 		if i < len(data) {
 			c := data[i]
 			if c == '.' || c == 'e' || c == 'E' {
-				return 0, 0, ErrBadNumber
+				return 0, i, ErrBadNumber
 			}
 		}
 		if neg {
@@ -453,17 +453,17 @@ func TestInt_ReferenceDifferential(t *testing.T) {
 	}
 	refUint := func(data []byte, i int) (uint64, int, error) {
 		if i >= len(data) || data[i] < '0' || data[i] > '9' {
-			return 0, 0, ErrBadNumber
+			return 0, i, ErrBadNumber
 		}
 		// RFC 8259: no leading zeros (mirrors Uint64).
 		if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
-			return 0, 0, ErrBadNumber
+			return 0, i, ErrBadNumber
 		}
 		var n uint64
 		for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 			d := uint64(data[i] - '0')
 			if n > Uint64Limit/10 || (n == Uint64Limit/10 && d > Uint64Limit%10) {
-				return 0, 0, ErrNumberOverflow
+				return 0, i, ErrNumberOverflow
 			}
 			n = n*10 + d
 			i++
@@ -471,7 +471,7 @@ func TestInt_ReferenceDifferential(t *testing.T) {
 		if i < len(data) {
 			c := data[i]
 			if c == '.' || c == 'e' || c == 'E' {
-				return 0, 0, ErrBadNumber
+				return 0, i, ErrBadNumber
 			}
 		}
 		return n, i, nil

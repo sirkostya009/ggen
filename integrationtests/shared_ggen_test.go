@@ -447,7 +447,7 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 				break
 			}
 			if i >= len(data) || data[i] != '[' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("children", i, scan.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -480,7 +480,7 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, scan.ErrBadArray
+							return result, i, decode.NewParseErr("children", i, scan.ErrBadArray)
 						}
 						continue
 					}
@@ -488,7 +488,7 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("children", i, scan.ErrBadArray)
 			}
 			i++
 		case "id":
@@ -658,7 +658,7 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 							i++
 						}
 						if i >= len(data) || data[i] == '}' {
-							return result, i, scan.ErrBadObject
+							return result, i, decode.NewParseErr("props", i, scan.ErrBadObject)
 						}
 						continue
 					}
@@ -689,7 +689,7 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 				break
 			}
 			if i >= len(data) || data[i] != '[' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("tags", i, scan.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -736,7 +736,7 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, scan.ErrBadArray
+							return result, i, decode.NewParseErr("tags", i, scan.ErrBadArray)
 						}
 						continue
 					}
@@ -744,7 +744,7 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, scan.ErrBadArray
+				return result, i, decode.NewParseErr("tags", i, scan.ErrBadArray)
 			}
 			i++
 		default:

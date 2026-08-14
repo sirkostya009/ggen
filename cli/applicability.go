@@ -11,9 +11,12 @@ import (
 // checkRuleApplicability rejects validation/mod tags that don't fit the
 // field's Go kind (e.g. `ascii` on an int) — otherwise the generator emits
 // broken Go the user only hits at compile time. Each reject is a *richError
-// (see log.go). Called after kind resolution; KindStruct is skipped (aliases /
-// custom marshalers can't be judged without full type info).
-func checkRuleApplicability(fi FieldInfo) error {
+// (see log.go). Called after kind resolution; named primitives are judged by
+// their underlying kind. `resolved` marks the go/types re-run (NamedPrims
+// populated): a still-KindStruct kind there is a genuine struct/opaque type
+// and kinded rules reject — no rule emit path compiles against it. Before
+// resolution (and in AST-only mode) KindStruct positions defer.
+func checkRuleApplicability(fi FieldInfo, resolved bool) error {
 	desc := fi.GoName
 	if fi.StructName != "" {
 		desc = fi.StructName + "." + fi.GoName
@@ -26,8 +29,8 @@ func checkRuleApplicability(fi FieldInfo) error {
 
 	// A named primitive reports KindStruct here, but generate resolves it via
 	// namedKinds and emits REAL primitive rule code — judge it by the
-	// underlying kind (parse-time twin of effectiveKind). AST-only mode has
-	// no NamedPrims and keeps the historical KindStruct skip.
+	// underlying kind (parse-time twin of effectiveKind). Unresolved types
+	// stay KindStruct; checkVal/checkMod below decide defer-vs-reject.
 	eff := func(typ string, kind TypeKind) TypeKind {
 		if kind == KindStruct {
 			// Pointer fields spell GoType "*Priority" while NamedPrims keys
@@ -59,10 +62,25 @@ func checkRuleApplicability(fi FieldInfo) error {
 		}
 	}
 
+	// checkVal/checkMod defer opaque (KindStruct) positions until the
+	// go/types re-run resolves named primitives; resolved => reject there.
+	checkVal := func(rules []ValidationRule, source string, kind TypeKind, typeName, fieldDesc string) {
+		if kind == KindStruct && !resolved {
+			return
+		}
+		collect(checkValRules(rules, source, kind, typeName, fieldDesc))
+	}
+	checkMod := func(mods []ModRule, source string, kind TypeKind, typeName, fieldDesc string) {
+		if kind == KindStruct && !resolved {
+			return
+		}
+		collect(checkModRules(mods, source, kind, typeName, fieldDesc))
+	}
+
 	// Outer rules apply to the field itself. For pointers fi.Kind is the
 	// pointee kind, the right anchor.
-	collect(checkValRules(fi.Validation, "pipe", eff(fi.GoType, fi.Kind), fi.GoType, desc))
-	collect(checkModRules(fi.Mods, "pipe", eff(fi.GoType, fi.Kind), fi.GoType, desc))
+	checkVal(fi.Validation, "pipe", eff(fi.GoType, fi.Kind), fi.GoType, desc)
+	checkMod(fi.Mods, "pipe", eff(fi.GoType, fi.Kind), fi.GoType, desc)
 
 	// keys: only valid on maps. Keyed kind itself is always string.
 	if len(fi.KeyValidation) > 0 || len(fi.KeyMods) > 0 {
@@ -75,8 +93,8 @@ func checkRuleApplicability(fi FieldInfo) error {
 			})
 		}
 	}
-	collect(checkValRules(fi.KeyValidation, "pipe keys:", KindString, "string", desc+" key"))
-	collect(checkModRules(fi.KeyMods, "pipe keys:", KindString, "string", desc+" key"))
+	checkVal(fi.KeyValidation, "pipe keys:", KindString, "string", desc+" key")
+	checkMod(fi.KeyMods, "pipe keys:", KindString, "string", desc+" key")
 
 	// inner: only valid on slice/array/map/[]byte.
 	hasDive := len(fi.ElemValidation) > 0 || len(fi.ElemMods) > 0 ||
@@ -89,8 +107,8 @@ func checkRuleApplicability(fi FieldInfo) error {
 			UserHint: "`inner:` only works with slice/array/map",
 		})
 	}
-	collect(checkValRules(fi.ElemValidation, "pipe inner:", eff(fi.ElemType, fi.ElemKind), fi.ElemType, desc+" element"))
-	collect(checkModRules(fi.ElemMods, "pipe inner:", eff(fi.ElemType, fi.ElemKind), fi.ElemType, desc+" element"))
+	checkVal(fi.ElemValidation, "pipe inner:", eff(fi.ElemType, fi.ElemKind), fi.ElemType, desc+" element")
+	checkMod(fi.ElemMods, "pipe inner:", eff(fi.ElemType, fi.ElemKind), fi.ElemType, desc+" element")
 
 	// Levels >= 2 (`inner:(inner:(...))`) peel the element type per level —
 	// they used to bypass the matrix entirely, so a mismatched rule two
@@ -112,10 +130,10 @@ func checkRuleApplicability(fi FieldInfo) error {
 		}
 		lk := eff(levelType, levelKind)
 		if li < len(fi.InnerValidation) {
-			collect(checkValRules(fi.InnerValidation[li], "pipe inner:", lk, levelType, ldesc))
+			checkVal(fi.InnerValidation[li], "pipe inner:", lk, levelType, ldesc)
 		}
 		if li < len(fi.InnerMods) {
-			collect(checkModRules(fi.InnerMods[li], "pipe inner:", lk, levelType, ldesc))
+			checkMod(fi.InnerMods[li], "pipe inner:", lk, levelType, ldesc)
 		}
 	}
 
@@ -217,10 +235,10 @@ func tagAnchor(source string) string {
 	return source + `:"`
 }
 
+// KindStruct is NOT skipped: the caller already resolved named primitives via
+// eff(), so a struct/opaque kind here has no compilable rule emit — every
+// kind-checked rule rejects (required/optional/@Func still pass).
 func checkValRules(rules []ValidationRule, source string, kind TypeKind, typeName, fieldDesc string) error {
-	if kind == KindStruct {
-		return nil // opaque: may be an alias / custom marshaler
-	}
 	// First pass: collect unknown-rule errors. An unknown name means a typo;
 	// kind-mismatch diagnostics on the other rules would just be noise, so
 	// surface the typo alone. Anchor disambiguates short rule names.
@@ -455,10 +473,8 @@ func renamedCaseHint(name string) string {
 	return ""
 }
 
+// KindStruct is NOT skipped — same reasoning as checkValRules.
 func checkModRules(mods []ModRule, source string, kind TypeKind, typeName, fieldDesc string) error {
-	if kind == KindStruct {
-		return nil
-	}
 	// Same unknown-name short-circuit as checkValRules.
 	anchor := tagAnchor(source)
 	var unknown []error

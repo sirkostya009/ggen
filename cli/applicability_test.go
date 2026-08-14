@@ -7,7 +7,7 @@ import (
 
 // Unit tests for applicability.go. Two matrices drive the bulk (val rule ×
 // kind, mod rule × kind); per-rule shape errors and the orchestrator's
-// structural checks (keys:/inner:/hintlen scoping, KindStruct skip) get their
+// structural checks (keys:/inner:/hintlen scoping, KindStruct rejection) get their
 // own tables.
 
 // kindEntry is one row of the kind matrix.
@@ -17,7 +17,7 @@ type kindEntry struct {
 }
 
 // allKindEntries covers every TypeKind the field-level resolver can emit,
-// including KindStruct for the "skip when opaque" path.
+// including KindStruct for the opaque-rejection path.
 var allKindEntries = []kindEntry{
 	{KindString, "string"},
 	{KindBool, "bool"},
@@ -49,6 +49,7 @@ var allKindEntries = []kindEntry{
 	{KindRawJSON, "json.RawMessage"},
 	{KindAny, "any"},
 	{KindSQLNull, "sql.NullString"},
+	{KindStruct, "Foo"},
 }
 
 // Acceptance predicates, declared once to keep the per-rule tables readable.
@@ -381,35 +382,43 @@ func TestCheckOneModRule_ValueShape(t *testing.T) {
 
 // ----- skip-paths -----
 
-// KindStruct fields opt out of the applicability check (alias /
-// custom-marshaler ambiguity), so kind-mismatched rules all pass.
-func TestCheckValRules_KindStructSkipped(t *testing.T) {
+// KindStruct fields reach these checks only when they are genuine
+// struct/opaque types (named primitives were resolved by eff() upstream) —
+// kinded rules must reject; required/optional/@Func still pass.
+func TestCheckValRules_KindStructRejected(t *testing.T) {
 	t.Parallel()
-	rules := []ValidationRule{
+	for _, r := range []ValidationRule{
 		{Name: "alphanum"},
 		{Name: "numeric"},
 		{Name: "gt", Value: "5"},
 		{Name: "multiple", Value: "2"},
 		{Name: "len", Value: "5"},
-		{Name: "minlen", Value: "abc"}, // even bad value should be ignored
 		{Name: "oneof", Value: "a|b"},
+		{Name: "eq", Value: "x"},
+		{Name: "neq", Value: "x"},
+	} {
+		if err := checkValRules([]ValidationRule{r}, "ggen", KindStruct, "Foo", "field f"); err == nil {
+			t.Errorf("rule %q on KindStruct must reject, got nil", r.Name)
+		}
 	}
-	if err := checkValRules(rules, "ggen", KindStruct, "Foo", "field f"); err != nil {
-		t.Errorf("KindStruct must skip all val rules, got: %v", err)
+	// Kind-agnostic rules keep working on structs.
+	ok := []ValidationRule{{Name: "required"}, {Name: "optional"}}
+	if err := checkValRules(ok, "ggen", KindStruct, "Foo", "field f"); err != nil {
+		t.Errorf("required/optional on KindStruct must pass, got: %v", err)
 	}
 }
 
-// TestCheckModRules_KindStructSkipped mirrors the val-side skip.
-func TestCheckModRules_KindStructSkipped(t *testing.T) {
+// TestCheckModRules_KindStructRejected mirrors the val-side rejection.
+func TestCheckModRules_KindStructRejected(t *testing.T) {
 	t.Parallel()
-	mods := []ModRule{
+	for _, m := range []ModRule{
 		{Name: "trim"},
 		{Name: "clamp", Value: "0|10"},
-		{Name: "clamp", Value: "garbage"}, // bad shape ignored under struct
-		{Name: "replace", Value: "no-pipe"},
-	}
-	if err := checkModRules(mods, "mod", KindStruct, "Foo", "field f"); err != nil {
-		t.Errorf("KindStruct must skip all mod rules, got: %v", err)
+		{Name: "replace", Value: "a|b"},
+	} {
+		if err := checkModRules([]ModRule{m}, "mod", KindStruct, "Foo", "field f"); err == nil {
+			t.Errorf("mod %q on KindStruct must reject, got nil", m.Name)
+		}
 	}
 }
 
@@ -773,7 +782,7 @@ func TestCheckRuleApplicability_Structural(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
-			err := checkRuleApplicability(c.fi)
+			err := checkRuleApplicability(c.fi, false)
 			if c.wantSub == "" {
 				if err != nil {
 					t.Errorf("expected nil, got: %v", err)
@@ -800,7 +809,7 @@ func TestCheckRuleApplicability_FieldNameInDiagnostic(t *testing.T) {
 		Validation: []ValidationRule{{Name: "alphanum"}},
 		HintLen:    -1,
 	}
-	err := checkRuleApplicability(fi)
+	err := checkRuleApplicability(fi, false)
 	if err == nil {
 		t.Fatal("expected error")
 	}

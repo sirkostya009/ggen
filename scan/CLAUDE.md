@@ -10,6 +10,20 @@ error)`. Zero-alloc happy path, sentinel errors (`scan.ErrBadObject` etc).
 Primitives: `SkipSpace`, `String`, `Int64`, `Uint64`, `Float64`, `Bool`,
 `ObjectOpen`, `ArrayOpen`, `SkipValue`.
 
+- **Error-position contract (2026-08).** On error every bytes primitive returns
+  the position where scanning STOPPED — a byte strictly inside `data` for a
+  malformation, `len(data)` when it ran off the end — never a flat 0 (which made
+  every runtime-call parse failure stamp `ParseError.Pos = 0`). String-content
+  errors (`ErrBadString`/`ErrInvalidUTF8` on a clean span) report the span
+  start; `stringSlow` reports its interior cursor (its prefix-ctrl arm reports
+  the span start, like the clean-span errors). The SIMD twins
+  (`StringAVX*`, `SkipValueAVX*` + skip tiers) mirror the scalar positions
+  byte-for-byte — pinned by the existing `*SIMD_Parity` differentials, which
+  compare (value, pos, err) against scalar. The `Any*` families propagate the
+  improved positions; `skipValueAt` is gone (it existed only because exported
+  `SkipValue` normalized to 0 — `SkipValue` itself now preserves the give-up
+  position, and `CaptureValue` reads it directly).
+
 - **Depth cap (`MaxDepth` = 10000).** `SkipValue` and the four `Any` families
   (`Any`/`AnyNumber`/`AnyCopy`/`AnyNumberCopy`), their stream mirrors, and the
   SIMD skip tiers keep their public signatures but delegate to a `depth`-carrying
@@ -171,8 +185,12 @@ Primitives: `SkipSpace`, `String`, `Int64`, `Uint64`, `Float64`, `Bool`,
   tier func directly, so there is NO `StringCopyAVX*` variant family.** Generated
   `-copy` decoders (scalar + SIMD copy fall) and `AnyCopy`/`AnyNumberCopy` call the
   tier func then `Detach`; `EscapeHeavy/ggen_copy` matches the aliasing `ggen` row
-  (4 allocs) in both tiers. Pinned by `TestDetach` (value + scribble-survival for
-  aliased & owned inputs, and the alloc contract: clone iff aliasing).
+  (4 allocs) in both tiers. A zero-length alias returns the detached `""`
+  (the empty header still carried a pointer into `data`, pinning the whole
+  backing array under GC — reached `-copy` retained values via
+  `AnyCopy`/`AnyNumberCopy` keys). Pinned by `TestDetach` (value +
+  scribble-survival for aliased & owned inputs, the alloc contract: clone iff
+  aliasing, and the empty-alias pointer-range check).
 - **`StringAVX`/`StringAVX2`/`StringAVX512` — fused SIMD siblings of `String`**
   (`simd_amd64.go`, `//go:build goexperiment.simd`, `simd/archsimd`). One
   vector pass per 16/32/64 bytes classifies closing `"`, `\`, and control
@@ -307,6 +325,26 @@ Pinned by `TestStreamTransientErrorNeverSilentNorMislabeled` (every value
 primitive × every byte position, plus a drained-window and grammar-error
 control) — it fails 44 ways against the old code.
 
+**Drained-truncation sentinels match the bytes path (2026-08).** Which grammar
+sentinel a drained refill maps to is now pinned to the error the BYTES path
+returns for the same truncated input — at EVERY refill site, value heads
+included: the `Any`/`AnyNumber` walkers' head and container-entry refills
+(`ErrUnexpectedEnd` / `ErrExpectString` / `ErrBadArray` / `ErrBadObject` per
+site), the null arm (`ErrBadLiteral`, was raw EOF), stream `SkipValue`'s array
+entry (`ErrUnexpectedEnd`, was `ErrBadArray`), `stringView`/`KeyView` head
+(`ErrExpectString`), and the value-primitive heads that used to return the raw
+`ReadMore` error — `Int64`/`Uint64`/`Float64`/`Number` (`ErrBadNumber`, the
+`-` arm too), `Bool` (`ErrBadBool`), `ConsumeColon` (`ErrBadObject`),
+`skipString` scalar + all three SIMD tiers (`ErrExpectString`). All still
+route through `notEOF`, so transient reader errors propagate raw.
+`skipObject`'s after-comma key position reports `ErrBadObject` via an
+ERROR-PATH relabel (drained `ErrExpectString` from the key `skipString`),
+not a per-key bound check — the pre-check shape it replaced added a compare
+to the hot skip loop in all four tiers for an error-identity-only gain. Pinned by `TestBytesStreamTruncationErrorParity` — a bytes-vs-
+stream error-identity battery over truncated inputs at chunk sizes 1/3/64,
+covering `SkipValue`, `Any`, `AnyNumber`, and `Int64("-")`; the SIMD stream
+skip tiers mirror the same mapping (stream-skip parity tests).
+
 **Stream numbers are maximal-munch, like the bytes path.** The refill loop
 collects a loose `[0-9.eE+-]` span (it doubles as the extent finder), then
 `skipNumber` grammar-checks it — and the GRAMMAR end is authoritative, not the
@@ -349,10 +387,9 @@ returns `io.ErrUnexpectedEOF`), **or the value is self-delimiting** (first
 non-WS byte is not `-`/digit — closing quote/bracket/fixed literal make the
 end final even at the window edge); only a NUMBER `123` at the edge refills,
 since it could continue `1234`. A skip ERROR is classified rather than
-assumed truncated: `skipValueAt` (the scalar walk, which PRESERVES the position
-where it gave up — exported `SkipValue` still reports 0 on error, and the SIMD
-entry points normalize to match) re-walks the window, and a failure at a byte
-STRICTLY INSIDE it is final — no byte that has not arrived can repair a
+assumed truncated: `SkipValue` preserves the position where it gave up (SIMD
+tiers scalar-identical by parity test), and a failure at a byte
+STRICTLY INSIDE the window is final — no byte that has not arrived can repair a
 malformation sitting before bytes already held. Only an off-the-end failure
 keeps reading. Without this a live (never-EOF) reader that had delivered a
 complete but malformed value blocked in `Read` FOREVER; pinned by
@@ -516,8 +553,9 @@ actually match the scalar contracts this section already documented:**
 check (see `CaptureValue` below) entirely — on any tier-skip error with the
 window not yet drained, they went straight to `ReadMore` instead of
 classifying the failure first, so a complete-but-malformed value on a live
-(never-EOF) reader blocked in `Read` forever; they now re-walk via
-`skipValueAt` and bail the same way the scalar path does.
+(never-EOF) reader blocked in `Read` forever; they now bail the same way the
+scalar path does, reading the give-up position the tier skip preserves
+(`end < len(s.buf)` ⇒ final) — no re-walk.
 `skipSpaceSlowAVX{,2,512}` rebased `s.Pos = i` after a compacting
 `ReadMore(i)` instead of `s.Pos = 0` — `i` was the OLD (pre-compaction)
 buffer length, a stale index once `ReadMore` truncated `s.buf` to `[:0]`
