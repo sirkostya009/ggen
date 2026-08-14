@@ -190,6 +190,50 @@ func TestNetipAddr_ZoneEscaped(t *testing.T) {
 	}
 }
 
+// An EMPTY (not null) wire value decodes to an empty non-nil slice, like
+// every other container — the decoders naturally produce nil there
+// (AppendDecode(nil, "") is nil, an immediate `]` appends nothing), which
+// would re-marshal as null and break the round-trip fixed point.
+func TestBytes_emptyDecodesNonNil(t *testing.T) {
+	t.Parallel()
+	payload := []byte(`{"blob":"","hexBlob":"","byteArray":[]}`)
+	got, _, err := NativeTypes{}.DecodeFrom(payload)
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	for _, c := range []struct {
+		name string
+		v    []byte
+	}{{"Blob", got.Blob}, {"HexBlob", got.HexBlob}, {"ByteArray", got.ByteArray}} {
+		if c.v == nil {
+			t.Errorf("%s: empty wire decoded to nil, want empty non-nil", c.name)
+		}
+		if len(c.v) != 0 {
+			t.Errorf("%s: len = %d, want 0", c.name, len(c.v))
+		}
+	}
+	out, err := encode.MarshalString(got)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	for _, want := range []string{`"blob":""`, `"hexBlob":""`, `"byteArray":[]`} {
+		if !strings.Contains(out, want) {
+			t.Errorf("re-marshal lost the empty form: want %s in %s", want, out)
+		}
+	}
+
+	var st scan.Stream
+	st.Reset(bytes.NewReader(payload), nil)
+	sgot, err := NativeTypes{}.DecodeFromStream(&st)
+	if err != nil {
+		t.Fatalf("stream decode: %v", err)
+	}
+	if sgot.Blob == nil || sgot.HexBlob == nil || sgot.ByteArray == nil {
+		t.Errorf("stream: empty wire decoded to nil: blob=%v hex=%v arr=%v",
+			sgot.Blob, sgot.HexBlob, sgot.ByteArray)
+	}
+}
+
 // null []byte decodes to nil and a nil []byte marshals as null; empty
 // non-nil keeps the empty-string / empty-array form.
 func TestBytes_nullRoundtrip(t *testing.T) {

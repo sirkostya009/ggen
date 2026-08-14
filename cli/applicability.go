@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -137,6 +138,8 @@ func checkRuleApplicability(fi FieldInfo, resolved bool) error {
 		}
 	}
 
+	collect(checkFormat(fi, desc))
+
 	// hint only meaningful on growable containers (slice/map).
 	if fi.HintLen >= 0 && fi.Kind != KindSlice && fi.Kind != KindMap {
 		collect(&richError{
@@ -148,6 +151,80 @@ func checkRuleApplicability(fi FieldInfo, resolved bool) error {
 	}
 
 	return errors.Join(errs...)
+}
+
+// checkFormat rejects a `format:` the emitters don't recognize. Every emit
+// switch has a silent default arm, so a typo (`format:base64ur`) used to fall
+// back to the default encoding — wrong bytes on the wire, no diagnostic
+// anywhere. time.Time is deliberately open-ended: an unrecognized value there
+// is a custom Go layout (see the custom-layout support), so only the closed
+// sets are policed.
+func checkFormat(fi FieldInfo, desc string) error {
+	if fi.Format == "" {
+		return nil
+	}
+	kind := fi.Kind
+	if kind == KindSlice || kind == KindArray {
+		// A container carries format: down to its elements. `[N]byte` is
+		// already KindBytes (ArrayLen > 0), so it needs no peel.
+		if k, ok := formatElemKind(fi); ok {
+			kind = k
+		}
+	}
+	var valid []string
+	switch kind {
+	case KindBytes:
+		valid = []string{"base64", "base64url", "base32", "base32hex", "base16", "hex", "array"}
+	case KindDuration:
+		valid = []string{"sec", "milli", "micro", "nano", "units"}
+	case KindTime:
+		return nil // any other value is a custom layout
+	default:
+		return &richError{
+			Msg:      fmt.Sprintf("%s: `format:%s` is not applicable to %s", desc, fi.Format, fi.GoType),
+			CodeSpan: "format:" + fi.Format,
+			BotHint:  "format: only applies to []byte, time.Time and time.Duration",
+			UserHint: "`format:` selects a []byte encoding, a time layout, or a duration unit; drop it here",
+		}
+	}
+	if slices.Contains(valid, fi.Format) {
+		return nil
+	}
+	return &richError{
+		Msg:      fmt.Sprintf("%s: unknown `format:%s` for %s", desc, fi.Format, fi.GoType),
+		CodeSpan: "format:" + fi.Format,
+		BotHint:  "unrecognized format value; emitters would silently use the default",
+		UserHint: "valid values here: " + strings.Join(valid, ", "),
+	}
+}
+
+// formatElemKind resolves the element kind a container's format: applies to.
+// A fixed byte array (`[N]byte`) is a []byte-shaped value, not a container of
+// formatted elements — it takes the same encodings.
+func formatElemKind(fi FieldInfo) (TypeKind, bool) {
+	if isByteArrayType(fi.GoType) {
+		return KindBytes, true
+	}
+	if fi.ElemKind == KindBytes || fi.ElemKind == KindTime || fi.ElemKind == KindDuration {
+		return fi.ElemKind, true
+	}
+	return 0, false
+}
+
+// isByteArrayType reports whether typ spells a fixed byte array.
+func isByteArrayType(typ string) bool {
+	inner, ok := strings.CutPrefix(typ, "[")
+	if !ok {
+		return false
+	}
+	n, elem, ok := strings.Cut(inner, "]")
+	if !ok || n == "" {
+		return false
+	}
+	if _, err := strconv.Atoi(n); err != nil {
+		return false
+	}
+	return elem == "byte" || elem == "uint8"
 }
 
 // peelTypeOnce strips one container level off a type string (mirroring the
@@ -296,7 +373,7 @@ func checkOneValRule(r ValidationRule, source string, kind TypeKind, typeName, f
 				"expected string/slice/array/map/[]byte",
 				userHint)
 		}
-		return needInt(r, fieldDesc)
+		return needNonNegInt(r, fieldDesc)
 
 	case "runes", "minrunes", "maxrunes":
 		if kind != KindString {
@@ -309,7 +386,7 @@ func checkOneValRule(r ValidationRule, source string, kind TypeKind, typeName, f
 				"rune count requires string",
 				userHint)
 		}
-		return needInt(r, fieldDesc)
+		return needNonNegInt(r, fieldDesc)
 
 	case "gt", "gte", "lt", "lte":
 		if !isNumeric(kind) {
@@ -710,6 +787,24 @@ func boundRangeErr(fieldDesc, ruleSpelling, v string) *richError {
 		BotHint:  "out-of-range bound is a constant-overflow compile error in the generated file",
 		UserHint: "use a bound the field's type can hold (mind sign for unsigned kinds)",
 	}
+}
+
+// needNonNegInt is needInt for the length/count rules, where a negative bound
+// is nonsense: `maxlen=-1` compiles to a comparison no value can satisfy, so
+// the field rejects everything with no diagnostic anywhere.
+func needNonNegInt(r ValidationRule, fieldDesc string) error {
+	if err := needInt(r, fieldDesc); err != nil {
+		return err
+	}
+	if n, _ := strconv.Atoi(strings.TrimSpace(r.Value)); n < 0 {
+		return &richError{
+			Msg:      fmt.Sprintf("%s: `%s=%s` requires a non-negative integer", fieldDesc, r.Name, r.Value),
+			CodeSpan: r.Name + "=" + r.Value,
+			BotHint:  "negative length/count bound",
+			UserHint: fmt.Sprintf("lengths and counts are never negative; use `%s=0` or a positive value", r.Name),
+		}
+	}
+	return nil
 }
 
 func needInt(r ValidationRule, fieldDesc string) error {

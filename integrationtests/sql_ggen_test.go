@@ -43,13 +43,7 @@ func (recv SQLNullStringStruct) DecodeFrom(data []byte) (result SQLNullStringStr
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
-		if ke >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-		}
-		if data[ke] < 0x20 {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-		}
-		if data[ke] == '"' {
+		if ke < len(data) && data[ke] == '"' {
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
@@ -131,15 +125,15 @@ func (recv SQLNullStringStruct) DecodeFromStream(s *scan.Stream) (result SQLNull
 	seenS := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -151,13 +145,13 @@ func (recv SQLNullStringStruct) DecodeFromStream(s *scan.Stream) (result SQLNull
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "s":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("s", s.Pos, err)
+				return result, decode.NewParseErr("s", s.Offset(), err)
 			}
 			if seenS {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"s"}}
@@ -165,18 +159,18 @@ func (recv SQLNullStringStruct) DecodeFromStream(s *scan.Stream) (result SQLNull
 			seenS = true
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("s", s.Pos, err)
+					return result, decode.NewParseErr("s", s.Offset(), err)
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("s", s.Pos, err)
+							return result, decode.NewParseErr("s", s.Offset(), err)
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("s", s.Pos, scan.ErrBadLiteral)
+						return result, decode.NewParseErr("s", s.Offset(), scan.ErrBadLiteral)
 					}
 				}
 				result.S = sql.NullString{}
@@ -185,7 +179,7 @@ func (recv SQLNullStringStruct) DecodeFromStream(s *scan.Stream) (result SQLNull
 				var nv string
 				nv, err = s.String(true)
 				if err != nil {
-					return result, decode.NewParseErr("s", s.Pos, err)
+					return result, decode.NewParseErr("s", s.Offset(), err)
 				}
 
 				result.S = sql.NullString{String: nv, Valid: true}
@@ -196,11 +190,11 @@ func (recv SQLNullStringStruct) DecodeFromStream(s *scan.Stream) (result SQLNull
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -209,7 +203,7 @@ func (recv SQLNullStringStruct) DecodeFromStream(s *scan.Stream) (result SQLNull
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -217,7 +211,7 @@ func (recv SQLNullStringStruct) DecodeFromStream(s *scan.Stream) (result SQLNull
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
 	}
 }
 
@@ -266,13 +260,7 @@ func (recv SQLNullInt64Struct) DecodeFrom(data []byte) (result SQLNullInt64Struc
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
-		if ke >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-		}
-		if data[ke] < 0x20 {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-		}
-		if data[ke] == '"' {
+		if ke < len(data) && data[ke] == '"' {
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
@@ -381,15 +369,15 @@ func (recv SQLNullInt64Struct) DecodeFromStream(s *scan.Stream) (result SQLNullI
 	seenI := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -401,13 +389,13 @@ func (recv SQLNullInt64Struct) DecodeFromStream(s *scan.Stream) (result SQLNullI
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "i":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("i", s.Pos, err)
+				return result, decode.NewParseErr("i", s.Offset(), err)
 			}
 			if seenI {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"i"}}
@@ -415,18 +403,18 @@ func (recv SQLNullInt64Struct) DecodeFromStream(s *scan.Stream) (result SQLNullI
 			seenI = true
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("i", s.Pos, err)
+					return result, decode.NewParseErr("i", s.Offset(), err)
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("i", s.Pos, err)
+							return result, decode.NewParseErr("i", s.Offset(), err)
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("i", s.Pos, scan.ErrBadLiteral)
+						return result, decode.NewParseErr("i", s.Offset(), scan.ErrBadLiteral)
 					}
 				}
 				result.I = sql.NullInt64{}
@@ -435,7 +423,7 @@ func (recv SQLNullInt64Struct) DecodeFromStream(s *scan.Stream) (result SQLNullI
 				var nv int64
 				nv, err = s.Int64()
 				if err != nil {
-					return result, decode.NewParseErr("i", s.Pos, err)
+					return result, decode.NewParseErr("i", s.Offset(), err)
 				}
 
 				result.I = sql.NullInt64{Int64: nv, Valid: true}
@@ -446,11 +434,11 @@ func (recv SQLNullInt64Struct) DecodeFromStream(s *scan.Stream) (result SQLNullI
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -459,7 +447,7 @@ func (recv SQLNullInt64Struct) DecodeFromStream(s *scan.Stream) (result SQLNullI
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -467,7 +455,7 @@ func (recv SQLNullInt64Struct) DecodeFromStream(s *scan.Stream) (result SQLNullI
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
 	}
 }
 
@@ -514,13 +502,7 @@ func (recv SQLNullInt32Struct) DecodeFrom(data []byte) (result SQLNullInt32Struc
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
-		if ke >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-		}
-		if data[ke] < 0x20 {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-		}
-		if data[ke] == '"' {
+		if ke < len(data) && data[ke] == '"' {
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
@@ -632,15 +614,15 @@ func (recv SQLNullInt32Struct) DecodeFromStream(s *scan.Stream) (result SQLNullI
 	seenI32 := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -652,13 +634,13 @@ func (recv SQLNullInt32Struct) DecodeFromStream(s *scan.Stream) (result SQLNullI
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "i32":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("i32", s.Pos, err)
+				return result, decode.NewParseErr("i32", s.Offset(), err)
 			}
 			if seenI32 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"i32"}}
@@ -666,18 +648,18 @@ func (recv SQLNullInt32Struct) DecodeFromStream(s *scan.Stream) (result SQLNullI
 			seenI32 = true
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("i32", s.Pos, err)
+					return result, decode.NewParseErr("i32", s.Offset(), err)
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("i32", s.Pos, err)
+							return result, decode.NewParseErr("i32", s.Offset(), err)
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("i32", s.Pos, scan.ErrBadLiteral)
+						return result, decode.NewParseErr("i32", s.Offset(), scan.ErrBadLiteral)
 					}
 				}
 				result.I32 = sql.NullInt32{}
@@ -686,7 +668,7 @@ func (recv SQLNullInt32Struct) DecodeFromStream(s *scan.Stream) (result SQLNullI
 				var nv int64
 				nv, err = s.Int64()
 				if err != nil {
-					return result, decode.NewParseErr("i32", s.Pos, err)
+					return result, decode.NewParseErr("i32", s.Offset(), err)
 				}
 
 				result.I32 = sql.NullInt32{Int32: int32(nv), Valid: true}
@@ -697,11 +679,11 @@ func (recv SQLNullInt32Struct) DecodeFromStream(s *scan.Stream) (result SQLNullI
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -710,7 +692,7 @@ func (recv SQLNullInt32Struct) DecodeFromStream(s *scan.Stream) (result SQLNullI
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -718,7 +700,7 @@ func (recv SQLNullInt32Struct) DecodeFromStream(s *scan.Stream) (result SQLNullI
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
 	}
 }
 
@@ -765,13 +747,7 @@ func (recv SQLNullInt16Struct) DecodeFrom(data []byte) (result SQLNullInt16Struc
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
-		if ke >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-		}
-		if data[ke] < 0x20 {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-		}
-		if data[ke] == '"' {
+		if ke < len(data) && data[ke] == '"' {
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
@@ -883,15 +859,15 @@ func (recv SQLNullInt16Struct) DecodeFromStream(s *scan.Stream) (result SQLNullI
 	seenI16 := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -903,13 +879,13 @@ func (recv SQLNullInt16Struct) DecodeFromStream(s *scan.Stream) (result SQLNullI
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "i16":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("i16", s.Pos, err)
+				return result, decode.NewParseErr("i16", s.Offset(), err)
 			}
 			if seenI16 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"i16"}}
@@ -917,18 +893,18 @@ func (recv SQLNullInt16Struct) DecodeFromStream(s *scan.Stream) (result SQLNullI
 			seenI16 = true
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("i16", s.Pos, err)
+					return result, decode.NewParseErr("i16", s.Offset(), err)
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("i16", s.Pos, err)
+							return result, decode.NewParseErr("i16", s.Offset(), err)
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("i16", s.Pos, scan.ErrBadLiteral)
+						return result, decode.NewParseErr("i16", s.Offset(), scan.ErrBadLiteral)
 					}
 				}
 				result.I16 = sql.NullInt16{}
@@ -937,7 +913,7 @@ func (recv SQLNullInt16Struct) DecodeFromStream(s *scan.Stream) (result SQLNullI
 				var nv int64
 				nv, err = s.Int64()
 				if err != nil {
-					return result, decode.NewParseErr("i16", s.Pos, err)
+					return result, decode.NewParseErr("i16", s.Offset(), err)
 				}
 
 				result.I16 = sql.NullInt16{Int16: int16(nv), Valid: true}
@@ -948,11 +924,11 @@ func (recv SQLNullInt16Struct) DecodeFromStream(s *scan.Stream) (result SQLNullI
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -961,7 +937,7 @@ func (recv SQLNullInt16Struct) DecodeFromStream(s *scan.Stream) (result SQLNullI
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -969,7 +945,7 @@ func (recv SQLNullInt16Struct) DecodeFromStream(s *scan.Stream) (result SQLNullI
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
 	}
 }
 
@@ -1016,13 +992,7 @@ func (recv SQLNullByteStruct) DecodeFrom(data []byte) (result SQLNullByteStruct,
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
-		if ke >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-		}
-		if data[ke] < 0x20 {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-		}
-		if data[ke] == '"' {
+		if ke < len(data) && data[ke] == '"' {
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
@@ -1112,15 +1082,15 @@ func (recv SQLNullByteStruct) DecodeFromStream(s *scan.Stream) (result SQLNullBy
 	seenB := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -1132,13 +1102,13 @@ func (recv SQLNullByteStruct) DecodeFromStream(s *scan.Stream) (result SQLNullBy
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "b":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("b", s.Pos, err)
+				return result, decode.NewParseErr("b", s.Offset(), err)
 			}
 			if seenB {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"b"}}
@@ -1146,18 +1116,18 @@ func (recv SQLNullByteStruct) DecodeFromStream(s *scan.Stream) (result SQLNullBy
 			seenB = true
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("b", s.Pos, err)
+					return result, decode.NewParseErr("b", s.Offset(), err)
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("b", s.Pos, err)
+							return result, decode.NewParseErr("b", s.Offset(), err)
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("b", s.Pos, scan.ErrBadLiteral)
+						return result, decode.NewParseErr("b", s.Offset(), scan.ErrBadLiteral)
 					}
 				}
 				result.B = sql.NullByte{}
@@ -1166,7 +1136,7 @@ func (recv SQLNullByteStruct) DecodeFromStream(s *scan.Stream) (result SQLNullBy
 				var nv uint64
 				nv, err = s.Uint64()
 				if err != nil {
-					return result, decode.NewParseErr("b", s.Pos, err)
+					return result, decode.NewParseErr("b", s.Offset(), err)
 				}
 
 				result.B = sql.NullByte{Byte: byte(nv), Valid: true}
@@ -1177,11 +1147,11 @@ func (recv SQLNullByteStruct) DecodeFromStream(s *scan.Stream) (result SQLNullBy
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -1190,7 +1160,7 @@ func (recv SQLNullByteStruct) DecodeFromStream(s *scan.Stream) (result SQLNullBy
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -1198,7 +1168,7 @@ func (recv SQLNullByteStruct) DecodeFromStream(s *scan.Stream) (result SQLNullBy
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
 	}
 }
 
@@ -1245,13 +1215,7 @@ func (recv SQLNullBoolStruct) DecodeFrom(data []byte) (result SQLNullBoolStruct,
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
-		if ke >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-		}
-		if data[ke] < 0x20 {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-		}
-		if data[ke] == '"' {
+		if ke < len(data) && data[ke] == '"' {
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
@@ -1317,15 +1281,15 @@ func (recv SQLNullBoolStruct) DecodeFromStream(s *scan.Stream) (result SQLNullBo
 	seenBL := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -1337,13 +1301,13 @@ func (recv SQLNullBoolStruct) DecodeFromStream(s *scan.Stream) (result SQLNullBo
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "bl":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("bl", s.Pos, err)
+				return result, decode.NewParseErr("bl", s.Offset(), err)
 			}
 			if seenBL {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"bl"}}
@@ -1351,18 +1315,18 @@ func (recv SQLNullBoolStruct) DecodeFromStream(s *scan.Stream) (result SQLNullBo
 			seenBL = true
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("bl", s.Pos, err)
+					return result, decode.NewParseErr("bl", s.Offset(), err)
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("bl", s.Pos, err)
+							return result, decode.NewParseErr("bl", s.Offset(), err)
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("bl", s.Pos, scan.ErrBadLiteral)
+						return result, decode.NewParseErr("bl", s.Offset(), scan.ErrBadLiteral)
 					}
 				}
 				result.BL = sql.NullBool{}
@@ -1371,7 +1335,7 @@ func (recv SQLNullBoolStruct) DecodeFromStream(s *scan.Stream) (result SQLNullBo
 				var nv bool
 				nv, err = s.Bool()
 				if err != nil {
-					return result, decode.NewParseErr("bl", s.Pos, err)
+					return result, decode.NewParseErr("bl", s.Offset(), err)
 				}
 
 				result.BL = sql.NullBool{Bool: nv, Valid: true}
@@ -1382,11 +1346,11 @@ func (recv SQLNullBoolStruct) DecodeFromStream(s *scan.Stream) (result SQLNullBo
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -1395,7 +1359,7 @@ func (recv SQLNullBoolStruct) DecodeFromStream(s *scan.Stream) (result SQLNullBo
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -1403,7 +1367,7 @@ func (recv SQLNullBoolStruct) DecodeFromStream(s *scan.Stream) (result SQLNullBo
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
 	}
 }
 
@@ -1450,13 +1414,7 @@ func (recv SQLNullFloat64Struct) DecodeFrom(data []byte) (result SQLNullFloat64S
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
-		if ke >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-		}
-		if data[ke] < 0x20 {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-		}
-		if data[ke] == '"' {
+		if ke < len(data) && data[ke] == '"' {
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
@@ -1522,15 +1480,15 @@ func (recv SQLNullFloat64Struct) DecodeFromStream(s *scan.Stream) (result SQLNul
 	seenF := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -1542,13 +1500,13 @@ func (recv SQLNullFloat64Struct) DecodeFromStream(s *scan.Stream) (result SQLNul
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "f":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("f", s.Pos, err)
+				return result, decode.NewParseErr("f", s.Offset(), err)
 			}
 			if seenF {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f"}}
@@ -1556,18 +1514,18 @@ func (recv SQLNullFloat64Struct) DecodeFromStream(s *scan.Stream) (result SQLNul
 			seenF = true
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("f", s.Pos, err)
+					return result, decode.NewParseErr("f", s.Offset(), err)
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("f", s.Pos, err)
+							return result, decode.NewParseErr("f", s.Offset(), err)
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("f", s.Pos, scan.ErrBadLiteral)
+						return result, decode.NewParseErr("f", s.Offset(), scan.ErrBadLiteral)
 					}
 				}
 				result.F = sql.NullFloat64{}
@@ -1576,7 +1534,7 @@ func (recv SQLNullFloat64Struct) DecodeFromStream(s *scan.Stream) (result SQLNul
 				var nv float64
 				nv, err = s.Float64()
 				if err != nil {
-					return result, decode.NewParseErr("f", s.Pos, err)
+					return result, decode.NewParseErr("f", s.Offset(), err)
 				}
 
 				result.F = sql.NullFloat64{Float64: nv, Valid: true}
@@ -1587,11 +1545,11 @@ func (recv SQLNullFloat64Struct) DecodeFromStream(s *scan.Stream) (result SQLNul
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -1600,7 +1558,7 @@ func (recv SQLNullFloat64Struct) DecodeFromStream(s *scan.Stream) (result SQLNul
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -1608,7 +1566,7 @@ func (recv SQLNullFloat64Struct) DecodeFromStream(s *scan.Stream) (result SQLNul
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
 	}
 }
 
@@ -1657,13 +1615,7 @@ func (recv SQLNullTimeStruct) DecodeFrom(data []byte) (result SQLNullTimeStruct,
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
-		if ke >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-		}
-		if data[ke] < 0x20 {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-		}
-		if data[ke] == '"' {
+		if ke < len(data) && data[ke] == '"' {
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
@@ -1750,15 +1702,15 @@ func (recv SQLNullTimeStruct) DecodeFromStream(s *scan.Stream) (result SQLNullTi
 	seenT := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -1770,13 +1722,13 @@ func (recv SQLNullTimeStruct) DecodeFromStream(s *scan.Stream) (result SQLNullTi
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "t":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("t", s.Pos, err)
+				return result, decode.NewParseErr("t", s.Offset(), err)
 			}
 			if seenT {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"t"}}
@@ -1784,18 +1736,18 @@ func (recv SQLNullTimeStruct) DecodeFromStream(s *scan.Stream) (result SQLNullTi
 			seenT = true
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("t", s.Pos, err)
+					return result, decode.NewParseErr("t", s.Offset(), err)
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("t", s.Pos, err)
+							return result, decode.NewParseErr("t", s.Offset(), err)
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("t", s.Pos, scan.ErrBadLiteral)
+						return result, decode.NewParseErr("t", s.Offset(), scan.ErrBadLiteral)
 					}
 				}
 				result.T = sql.NullTime{}
@@ -1805,11 +1757,11 @@ func (recv SQLNullTimeStruct) DecodeFromStream(s *scan.Stream) (result SQLNullTi
 				var sv string
 				sv, err = s.StringView(true)
 				if err != nil {
-					return result, decode.NewParseErr("t", s.Pos, err)
+					return result, decode.NewParseErr("t", s.Offset(), err)
 				}
 				nv, err = time.Parse(time.RFC3339Nano, sv)
 				if err != nil {
-					return result, decode.NewParseErr("t", s.Pos, err)
+					return result, decode.NewParseErr("t", s.Offset(), err)
 				}
 
 				result.T = sql.NullTime{Time: nv, Valid: true}
@@ -1820,11 +1772,11 @@ func (recv SQLNullTimeStruct) DecodeFromStream(s *scan.Stream) (result SQLNullTi
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -1833,7 +1785,7 @@ func (recv SQLNullTimeStruct) DecodeFromStream(s *scan.Stream) (result SQLNullTi
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -1841,7 +1793,7 @@ func (recv SQLNullTimeStruct) DecodeFromStream(s *scan.Stream) (result SQLNullTi
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
 	}
 }
 
@@ -1890,13 +1842,7 @@ func (recv SQLNullGenStringStruct) DecodeFrom(data []byte) (result SQLNullGenStr
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
-		if ke >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-		}
-		if data[ke] < 0x20 {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-		}
-		if data[ke] == '"' {
+		if ke < len(data) && data[ke] == '"' {
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
@@ -1978,15 +1924,15 @@ func (recv SQLNullGenStringStruct) DecodeFromStream(s *scan.Stream) (result SQLN
 	seenS := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -1998,13 +1944,13 @@ func (recv SQLNullGenStringStruct) DecodeFromStream(s *scan.Stream) (result SQLN
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "s":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("s", s.Pos, err)
+				return result, decode.NewParseErr("s", s.Offset(), err)
 			}
 			if seenS {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"s"}}
@@ -2012,18 +1958,18 @@ func (recv SQLNullGenStringStruct) DecodeFromStream(s *scan.Stream) (result SQLN
 			seenS = true
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("s", s.Pos, err)
+					return result, decode.NewParseErr("s", s.Offset(), err)
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("s", s.Pos, err)
+							return result, decode.NewParseErr("s", s.Offset(), err)
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("s", s.Pos, scan.ErrBadLiteral)
+						return result, decode.NewParseErr("s", s.Offset(), scan.ErrBadLiteral)
 					}
 				}
 				result.S = sql.Null[string]{}
@@ -2032,7 +1978,7 @@ func (recv SQLNullGenStringStruct) DecodeFromStream(s *scan.Stream) (result SQLN
 				var nv string
 				nv, err = s.String(true)
 				if err != nil {
-					return result, decode.NewParseErr("s", s.Pos, err)
+					return result, decode.NewParseErr("s", s.Offset(), err)
 				}
 
 				result.S = sql.Null[string]{V: nv, Valid: true}
@@ -2043,11 +1989,11 @@ func (recv SQLNullGenStringStruct) DecodeFromStream(s *scan.Stream) (result SQLN
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -2056,7 +2002,7 @@ func (recv SQLNullGenStringStruct) DecodeFromStream(s *scan.Stream) (result SQLN
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -2064,7 +2010,7 @@ func (recv SQLNullGenStringStruct) DecodeFromStream(s *scan.Stream) (result SQLN
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
 	}
 }
 
@@ -2113,13 +2059,7 @@ func (recv SQLNullGenIntStruct) DecodeFrom(data []byte) (result SQLNullGenIntStr
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
-		if ke >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-		}
-		if data[ke] < 0x20 {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-		}
-		if data[ke] == '"' {
+		if ke < len(data) && data[ke] == '"' {
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
@@ -2228,15 +2168,15 @@ func (recv SQLNullGenIntStruct) DecodeFromStream(s *scan.Stream) (result SQLNull
 	seenI := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -2248,13 +2188,13 @@ func (recv SQLNullGenIntStruct) DecodeFromStream(s *scan.Stream) (result SQLNull
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "i":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("i", s.Pos, err)
+				return result, decode.NewParseErr("i", s.Offset(), err)
 			}
 			if seenI {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"i"}}
@@ -2262,18 +2202,18 @@ func (recv SQLNullGenIntStruct) DecodeFromStream(s *scan.Stream) (result SQLNull
 			seenI = true
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("i", s.Pos, err)
+					return result, decode.NewParseErr("i", s.Offset(), err)
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("i", s.Pos, err)
+							return result, decode.NewParseErr("i", s.Offset(), err)
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("i", s.Pos, scan.ErrBadLiteral)
+						return result, decode.NewParseErr("i", s.Offset(), scan.ErrBadLiteral)
 					}
 				}
 				result.I = sql.Null[int]{}
@@ -2282,7 +2222,7 @@ func (recv SQLNullGenIntStruct) DecodeFromStream(s *scan.Stream) (result SQLNull
 				var iv int64
 				iv, err = s.Int64()
 				if err != nil {
-					return result, decode.NewParseErr("i", s.Pos, err)
+					return result, decode.NewParseErr("i", s.Offset(), err)
 				}
 
 				result.I = sql.Null[int]{V: int(iv), Valid: true}
@@ -2293,11 +2233,11 @@ func (recv SQLNullGenIntStruct) DecodeFromStream(s *scan.Stream) (result SQLNull
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -2306,7 +2246,7 @@ func (recv SQLNullGenIntStruct) DecodeFromStream(s *scan.Stream) (result SQLNull
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -2314,7 +2254,7 @@ func (recv SQLNullGenIntStruct) DecodeFromStream(s *scan.Stream) (result SQLNull
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
 	}
 }
 
@@ -2361,13 +2301,7 @@ func (recv SQLNullGenUint64Struct) DecodeFrom(data []byte) (result SQLNullGenUin
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
-		if ke >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-		}
-		if data[ke] < 0x20 {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-		}
-		if data[ke] == '"' {
+		if ke < len(data) && data[ke] == '"' {
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
@@ -2457,15 +2391,15 @@ func (recv SQLNullGenUint64Struct) DecodeFromStream(s *scan.Stream) (result SQLN
 	seenU := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -2477,13 +2411,13 @@ func (recv SQLNullGenUint64Struct) DecodeFromStream(s *scan.Stream) (result SQLN
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "u":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("u", s.Pos, err)
+				return result, decode.NewParseErr("u", s.Offset(), err)
 			}
 			if seenU {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"u"}}
@@ -2491,18 +2425,18 @@ func (recv SQLNullGenUint64Struct) DecodeFromStream(s *scan.Stream) (result SQLN
 			seenU = true
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("u", s.Pos, err)
+					return result, decode.NewParseErr("u", s.Offset(), err)
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("u", s.Pos, err)
+							return result, decode.NewParseErr("u", s.Offset(), err)
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("u", s.Pos, scan.ErrBadLiteral)
+						return result, decode.NewParseErr("u", s.Offset(), scan.ErrBadLiteral)
 					}
 				}
 				result.U = sql.Null[uint64]{}
@@ -2511,7 +2445,7 @@ func (recv SQLNullGenUint64Struct) DecodeFromStream(s *scan.Stream) (result SQLN
 				var nv uint64
 				nv, err = s.Uint64()
 				if err != nil {
-					return result, decode.NewParseErr("u", s.Pos, err)
+					return result, decode.NewParseErr("u", s.Offset(), err)
 				}
 
 				result.U = sql.Null[uint64]{V: nv, Valid: true}
@@ -2522,11 +2456,11 @@ func (recv SQLNullGenUint64Struct) DecodeFromStream(s *scan.Stream) (result SQLN
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -2535,7 +2469,7 @@ func (recv SQLNullGenUint64Struct) DecodeFromStream(s *scan.Stream) (result SQLN
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -2543,7 +2477,7 @@ func (recv SQLNullGenUint64Struct) DecodeFromStream(s *scan.Stream) (result SQLN
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
 	}
 }
 
@@ -2590,13 +2524,7 @@ func (recv SQLNullGenFloat32Struct) DecodeFrom(data []byte) (result SQLNullGenFl
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
-		if ke >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-		}
-		if data[ke] < 0x20 {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-		}
-		if data[ke] == '"' {
+		if ke < len(data) && data[ke] == '"' {
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
@@ -2665,15 +2593,15 @@ func (recv SQLNullGenFloat32Struct) DecodeFromStream(s *scan.Stream) (result SQL
 	seenF := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -2685,13 +2613,13 @@ func (recv SQLNullGenFloat32Struct) DecodeFromStream(s *scan.Stream) (result SQL
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "f":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("f", s.Pos, err)
+				return result, decode.NewParseErr("f", s.Offset(), err)
 			}
 			if seenF {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f"}}
@@ -2699,18 +2627,18 @@ func (recv SQLNullGenFloat32Struct) DecodeFromStream(s *scan.Stream) (result SQL
 			seenF = true
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("f", s.Pos, err)
+					return result, decode.NewParseErr("f", s.Offset(), err)
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("f", s.Pos, err)
+							return result, decode.NewParseErr("f", s.Offset(), err)
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("f", s.Pos, scan.ErrBadLiteral)
+						return result, decode.NewParseErr("f", s.Offset(), scan.ErrBadLiteral)
 					}
 				}
 				result.F = sql.Null[float32]{}
@@ -2719,10 +2647,10 @@ func (recv SQLNullGenFloat32Struct) DecodeFromStream(s *scan.Stream) (result SQL
 				var fv float64
 				fv, err = s.Float64()
 				if err != nil {
-					return result, decode.NewParseErr("f", s.Pos, err)
+					return result, decode.NewParseErr("f", s.Offset(), err)
 				}
 				if math.IsInf(float64(float32(fv)), 0) {
-					return result, decode.NewParseErr("f", s.Pos, scan.ErrNumberOverflow)
+					return result, decode.NewParseErr("f", s.Offset(), scan.ErrNumberOverflow)
 				}
 
 				result.F = sql.Null[float32]{V: float32(fv), Valid: true}
@@ -2733,11 +2661,11 @@ func (recv SQLNullGenFloat32Struct) DecodeFromStream(s *scan.Stream) (result SQL
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -2746,7 +2674,7 @@ func (recv SQLNullGenFloat32Struct) DecodeFromStream(s *scan.Stream) (result SQL
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -2754,7 +2682,7 @@ func (recv SQLNullGenFloat32Struct) DecodeFromStream(s *scan.Stream) (result SQL
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
 	}
 }
 
@@ -2803,13 +2731,7 @@ func (recv SQLNullGenBoolStruct) DecodeFrom(data []byte) (result SQLNullGenBoolS
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
-		if ke >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-		}
-		if data[ke] < 0x20 {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-		}
-		if data[ke] == '"' {
+		if ke < len(data) && data[ke] == '"' {
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
@@ -2875,15 +2797,15 @@ func (recv SQLNullGenBoolStruct) DecodeFromStream(s *scan.Stream) (result SQLNul
 	seenBL := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -2895,13 +2817,13 @@ func (recv SQLNullGenBoolStruct) DecodeFromStream(s *scan.Stream) (result SQLNul
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "bl":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("bl", s.Pos, err)
+				return result, decode.NewParseErr("bl", s.Offset(), err)
 			}
 			if seenBL {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"bl"}}
@@ -2909,18 +2831,18 @@ func (recv SQLNullGenBoolStruct) DecodeFromStream(s *scan.Stream) (result SQLNul
 			seenBL = true
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("bl", s.Pos, err)
+					return result, decode.NewParseErr("bl", s.Offset(), err)
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("bl", s.Pos, err)
+							return result, decode.NewParseErr("bl", s.Offset(), err)
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("bl", s.Pos, scan.ErrBadLiteral)
+						return result, decode.NewParseErr("bl", s.Offset(), scan.ErrBadLiteral)
 					}
 				}
 				result.BL = sql.Null[bool]{}
@@ -2929,7 +2851,7 @@ func (recv SQLNullGenBoolStruct) DecodeFromStream(s *scan.Stream) (result SQLNul
 				var nv bool
 				nv, err = s.Bool()
 				if err != nil {
-					return result, decode.NewParseErr("bl", s.Pos, err)
+					return result, decode.NewParseErr("bl", s.Offset(), err)
 				}
 
 				result.BL = sql.Null[bool]{V: nv, Valid: true}
@@ -2940,11 +2862,11 @@ func (recv SQLNullGenBoolStruct) DecodeFromStream(s *scan.Stream) (result SQLNul
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -2953,7 +2875,7 @@ func (recv SQLNullGenBoolStruct) DecodeFromStream(s *scan.Stream) (result SQLNul
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -2961,7 +2883,7 @@ func (recv SQLNullGenBoolStruct) DecodeFromStream(s *scan.Stream) (result SQLNul
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
 	}
 }
 
@@ -3008,13 +2930,7 @@ func (recv SQLNullGenTimeStruct) DecodeFrom(data []byte) (result SQLNullGenTimeS
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
-		if ke >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-		}
-		if data[ke] < 0x20 {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-		}
-		if data[ke] == '"' {
+		if ke < len(data) && data[ke] == '"' {
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
@@ -3101,15 +3017,15 @@ func (recv SQLNullGenTimeStruct) DecodeFromStream(s *scan.Stream) (result SQLNul
 	seenT := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -3121,13 +3037,13 @@ func (recv SQLNullGenTimeStruct) DecodeFromStream(s *scan.Stream) (result SQLNul
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "t":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("t", s.Pos, err)
+				return result, decode.NewParseErr("t", s.Offset(), err)
 			}
 			if seenT {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"t"}}
@@ -3135,18 +3051,18 @@ func (recv SQLNullGenTimeStruct) DecodeFromStream(s *scan.Stream) (result SQLNul
 			seenT = true
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("t", s.Pos, err)
+					return result, decode.NewParseErr("t", s.Offset(), err)
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("t", s.Pos, err)
+							return result, decode.NewParseErr("t", s.Offset(), err)
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("t", s.Pos, scan.ErrBadLiteral)
+						return result, decode.NewParseErr("t", s.Offset(), scan.ErrBadLiteral)
 					}
 				}
 				result.T = sql.Null[time.Time]{}
@@ -3156,11 +3072,11 @@ func (recv SQLNullGenTimeStruct) DecodeFromStream(s *scan.Stream) (result SQLNul
 				var sv string
 				sv, err = s.StringView(true)
 				if err != nil {
-					return result, decode.NewParseErr("t", s.Pos, err)
+					return result, decode.NewParseErr("t", s.Offset(), err)
 				}
 				nv, err = time.Parse(time.RFC3339Nano, sv)
 				if err != nil {
-					return result, decode.NewParseErr("t", s.Pos, err)
+					return result, decode.NewParseErr("t", s.Offset(), err)
 				}
 
 				result.T = sql.Null[time.Time]{V: nv, Valid: true}
@@ -3171,11 +3087,11 @@ func (recv SQLNullGenTimeStruct) DecodeFromStream(s *scan.Stream) (result SQLNul
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -3184,7 +3100,7 @@ func (recv SQLNullGenTimeStruct) DecodeFromStream(s *scan.Stream) (result SQLNul
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -3192,7 +3108,7 @@ func (recv SQLNullGenTimeStruct) DecodeFromStream(s *scan.Stream) (result SQLNul
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
 	}
 }
 
@@ -3241,13 +3157,7 @@ func (recv SQLNullGenAccountStruct) DecodeFrom(data []byte) (result SQLNullGenAc
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
-		if ke >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-		}
-		if data[ke] < 0x20 {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-		}
-		if data[ke] == '"' {
+		if ke < len(data) && data[ke] == '"' {
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
@@ -3356,15 +3266,15 @@ func (recv SQLNullGenAccountStruct) DecodeFromStream(s *scan.Stream) (result SQL
 	seenA := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -3376,13 +3286,13 @@ func (recv SQLNullGenAccountStruct) DecodeFromStream(s *scan.Stream) (result SQL
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "a":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("a", s.Pos, err)
+				return result, decode.NewParseErr("a", s.Offset(), err)
 			}
 			if seenA {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"a"}}
@@ -3390,18 +3300,18 @@ func (recv SQLNullGenAccountStruct) DecodeFromStream(s *scan.Stream) (result SQL
 			seenA = true
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("a", s.Pos, err)
+					return result, decode.NewParseErr("a", s.Offset(), err)
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("a", s.Pos, err)
+							return result, decode.NewParseErr("a", s.Offset(), err)
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("a", s.Pos, scan.ErrBadLiteral)
+						return result, decode.NewParseErr("a", s.Offset(), scan.ErrBadLiteral)
 					}
 				}
 				result.A = sql.Null[SQLAccountID]{}
@@ -3410,7 +3320,7 @@ func (recv SQLNullGenAccountStruct) DecodeFromStream(s *scan.Stream) (result SQL
 				var _nvV int64
 				_nvV, err = s.Int64()
 				if err != nil {
-					return result, decode.NewParseErr("a", s.Pos, err)
+					return result, decode.NewParseErr("a", s.Offset(), err)
 				}
 
 				result.A = sql.Null[SQLAccountID]{V: SQLAccountID(_nvV), Valid: true}
@@ -3421,11 +3331,11 @@ func (recv SQLNullGenAccountStruct) DecodeFromStream(s *scan.Stream) (result SQL
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -3434,7 +3344,7 @@ func (recv SQLNullGenAccountStruct) DecodeFromStream(s *scan.Stream) (result SQL
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -3442,7 +3352,7 @@ func (recv SQLNullGenAccountStruct) DecodeFromStream(s *scan.Stream) (result SQL
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
 	}
 }
 
@@ -3489,13 +3399,7 @@ func (recv SQLNullGenLabelStruct) DecodeFrom(data []byte) (result SQLNullGenLabe
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
-		if ke >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-		}
-		if data[ke] < 0x20 {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-		}
-		if data[ke] == '"' {
+		if ke < len(data) && data[ke] == '"' {
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
@@ -3577,15 +3481,15 @@ func (recv SQLNullGenLabelStruct) DecodeFromStream(s *scan.Stream) (result SQLNu
 	seenL := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -3597,13 +3501,13 @@ func (recv SQLNullGenLabelStruct) DecodeFromStream(s *scan.Stream) (result SQLNu
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "l":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("l", s.Pos, err)
+				return result, decode.NewParseErr("l", s.Offset(), err)
 			}
 			if seenL {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"l"}}
@@ -3611,18 +3515,18 @@ func (recv SQLNullGenLabelStruct) DecodeFromStream(s *scan.Stream) (result SQLNu
 			seenL = true
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("l", s.Pos, err)
+					return result, decode.NewParseErr("l", s.Offset(), err)
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("l", s.Pos, err)
+							return result, decode.NewParseErr("l", s.Offset(), err)
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("l", s.Pos, scan.ErrBadLiteral)
+						return result, decode.NewParseErr("l", s.Offset(), scan.ErrBadLiteral)
 					}
 				}
 				result.L = sql.Null[SQLLabel]{}
@@ -3631,7 +3535,7 @@ func (recv SQLNullGenLabelStruct) DecodeFromStream(s *scan.Stream) (result SQLNu
 				var _nvV string
 				_nvV, err = s.String(true)
 				if err != nil {
-					return result, decode.NewParseErr("l", s.Pos, err)
+					return result, decode.NewParseErr("l", s.Offset(), err)
 				}
 
 				result.L = sql.Null[SQLLabel]{V: SQLLabel(_nvV), Valid: true}
@@ -3642,11 +3546,11 @@ func (recv SQLNullGenLabelStruct) DecodeFromStream(s *scan.Stream) (result SQLNu
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -3655,7 +3559,7 @@ func (recv SQLNullGenLabelStruct) DecodeFromStream(s *scan.Stream) (result SQLNu
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -3663,7 +3567,7 @@ func (recv SQLNullGenLabelStruct) DecodeFromStream(s *scan.Stream) (result SQLNu
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
 	}
 }
 
@@ -3712,13 +3616,7 @@ func (recv SQLNullGenUUIDStruct) DecodeFrom(data []byte) (result SQLNullGenUUIDS
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
-		if ke >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-		}
-		if data[ke] < 0x20 {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-		}
-		if data[ke] == '"' {
+		if ke < len(data) && data[ke] == '"' {
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
@@ -3789,15 +3687,15 @@ func (recv SQLNullGenUUIDStruct) DecodeFromStream(s *scan.Stream) (result SQLNul
 	seenID := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -3809,13 +3707,13 @@ func (recv SQLNullGenUUIDStruct) DecodeFromStream(s *scan.Stream) (result SQLNul
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "id":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("id", s.Pos, err)
+				return result, decode.NewParseErr("id", s.Offset(), err)
 			}
 			if seenID {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"id"}}
@@ -3823,18 +3721,18 @@ func (recv SQLNullGenUUIDStruct) DecodeFromStream(s *scan.Stream) (result SQLNul
 			seenID = true
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("id", s.Pos, err)
+					return result, decode.NewParseErr("id", s.Offset(), err)
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("id", s.Pos, err)
+							return result, decode.NewParseErr("id", s.Offset(), err)
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("id", s.Pos, scan.ErrBadLiteral)
+						return result, decode.NewParseErr("id", s.Offset(), scan.ErrBadLiteral)
 					}
 				}
 				result.ID = sql.Null[uuid.UUID]{}
@@ -3844,11 +3742,11 @@ func (recv SQLNullGenUUIDStruct) DecodeFromStream(s *scan.Stream) (result SQLNul
 				var ts string
 				ts, err = s.StringView(true)
 				if err != nil {
-					return result, decode.NewParseErr("id", s.Pos, err)
+					return result, decode.NewParseErr("id", s.Offset(), err)
 				}
 				err = nv.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts)))
 				if err != nil {
-					return result, decode.NewParseErr("id", s.Pos, err)
+					return result, decode.NewParseErr("id", s.Offset(), err)
 				}
 
 				result.ID = sql.Null[uuid.UUID]{V: nv, Valid: true}
@@ -3859,11 +3757,11 @@ func (recv SQLNullGenUUIDStruct) DecodeFromStream(s *scan.Stream) (result SQLNul
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -3872,7 +3770,7 @@ func (recv SQLNullGenUUIDStruct) DecodeFromStream(s *scan.Stream) (result SQLNul
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -3880,7 +3778,7 @@ func (recv SQLNullGenUUIDStruct) DecodeFromStream(s *scan.Stream) (result SQLNul
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
 	}
 }
 
@@ -3940,13 +3838,7 @@ func (recv SQLNullStruct) DecodeFrom(data []byte) (result SQLNullStruct, i int, 
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
-		if ke >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-		}
-		if data[ke] < 0x20 {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-		}
-		if data[ke] == '"' {
+		if ke < len(data) && data[ke] == '"' {
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
@@ -4334,15 +4226,15 @@ func (recv SQLNullStruct) DecodeFromStream(s *scan.Stream) (result SQLNullStruct
 	seenT := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -4354,13 +4246,13 @@ func (recv SQLNullStruct) DecodeFromStream(s *scan.Stream) (result SQLNullStruct
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "b":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("b", s.Pos, err)
+				return result, decode.NewParseErr("b", s.Offset(), err)
 			}
 			if seenB {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"b"}}
@@ -4368,18 +4260,18 @@ func (recv SQLNullStruct) DecodeFromStream(s *scan.Stream) (result SQLNullStruct
 			seenB = true
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("b", s.Pos, err)
+					return result, decode.NewParseErr("b", s.Offset(), err)
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("b", s.Pos, err)
+							return result, decode.NewParseErr("b", s.Offset(), err)
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("b", s.Pos, scan.ErrBadLiteral)
+						return result, decode.NewParseErr("b", s.Offset(), scan.ErrBadLiteral)
 					}
 				}
 				result.B = sql.NullByte{}
@@ -4388,7 +4280,7 @@ func (recv SQLNullStruct) DecodeFromStream(s *scan.Stream) (result SQLNullStruct
 				var nv uint64
 				nv, err = s.Uint64()
 				if err != nil {
-					return result, decode.NewParseErr("b", s.Pos, err)
+					return result, decode.NewParseErr("b", s.Offset(), err)
 				}
 
 				result.B = sql.NullByte{Byte: byte(nv), Valid: true}
@@ -4396,7 +4288,7 @@ func (recv SQLNullStruct) DecodeFromStream(s *scan.Stream) (result SQLNullStruct
 		case "bl":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("bl", s.Pos, err)
+				return result, decode.NewParseErr("bl", s.Offset(), err)
 			}
 			if seenBL {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"bl"}}
@@ -4404,18 +4296,18 @@ func (recv SQLNullStruct) DecodeFromStream(s *scan.Stream) (result SQLNullStruct
 			seenBL = true
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("bl", s.Pos, err)
+					return result, decode.NewParseErr("bl", s.Offset(), err)
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("bl", s.Pos, err)
+							return result, decode.NewParseErr("bl", s.Offset(), err)
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("bl", s.Pos, scan.ErrBadLiteral)
+						return result, decode.NewParseErr("bl", s.Offset(), scan.ErrBadLiteral)
 					}
 				}
 				result.BL = sql.NullBool{}
@@ -4424,7 +4316,7 @@ func (recv SQLNullStruct) DecodeFromStream(s *scan.Stream) (result SQLNullStruct
 				var nv bool
 				nv, err = s.Bool()
 				if err != nil {
-					return result, decode.NewParseErr("bl", s.Pos, err)
+					return result, decode.NewParseErr("bl", s.Offset(), err)
 				}
 
 				result.BL = sql.NullBool{Bool: nv, Valid: true}
@@ -4432,7 +4324,7 @@ func (recv SQLNullStruct) DecodeFromStream(s *scan.Stream) (result SQLNullStruct
 		case "f":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("f", s.Pos, err)
+				return result, decode.NewParseErr("f", s.Offset(), err)
 			}
 			if seenF {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f"}}
@@ -4440,18 +4332,18 @@ func (recv SQLNullStruct) DecodeFromStream(s *scan.Stream) (result SQLNullStruct
 			seenF = true
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("f", s.Pos, err)
+					return result, decode.NewParseErr("f", s.Offset(), err)
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("f", s.Pos, err)
+							return result, decode.NewParseErr("f", s.Offset(), err)
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("f", s.Pos, scan.ErrBadLiteral)
+						return result, decode.NewParseErr("f", s.Offset(), scan.ErrBadLiteral)
 					}
 				}
 				result.F = sql.NullFloat64{}
@@ -4460,7 +4352,7 @@ func (recv SQLNullStruct) DecodeFromStream(s *scan.Stream) (result SQLNullStruct
 				var nv float64
 				nv, err = s.Float64()
 				if err != nil {
-					return result, decode.NewParseErr("f", s.Pos, err)
+					return result, decode.NewParseErr("f", s.Offset(), err)
 				}
 
 				result.F = sql.NullFloat64{Float64: nv, Valid: true}
@@ -4468,7 +4360,7 @@ func (recv SQLNullStruct) DecodeFromStream(s *scan.Stream) (result SQLNullStruct
 		case "i":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("i", s.Pos, err)
+				return result, decode.NewParseErr("i", s.Offset(), err)
 			}
 			if seenI {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"i"}}
@@ -4476,18 +4368,18 @@ func (recv SQLNullStruct) DecodeFromStream(s *scan.Stream) (result SQLNullStruct
 			seenI = true
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("i", s.Pos, err)
+					return result, decode.NewParseErr("i", s.Offset(), err)
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("i", s.Pos, err)
+							return result, decode.NewParseErr("i", s.Offset(), err)
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("i", s.Pos, scan.ErrBadLiteral)
+						return result, decode.NewParseErr("i", s.Offset(), scan.ErrBadLiteral)
 					}
 				}
 				result.I = sql.NullInt64{}
@@ -4496,7 +4388,7 @@ func (recv SQLNullStruct) DecodeFromStream(s *scan.Stream) (result SQLNullStruct
 				var nv int64
 				nv, err = s.Int64()
 				if err != nil {
-					return result, decode.NewParseErr("i", s.Pos, err)
+					return result, decode.NewParseErr("i", s.Offset(), err)
 				}
 
 				result.I = sql.NullInt64{Int64: nv, Valid: true}
@@ -4504,7 +4396,7 @@ func (recv SQLNullStruct) DecodeFromStream(s *scan.Stream) (result SQLNullStruct
 		case "i16":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("i16", s.Pos, err)
+				return result, decode.NewParseErr("i16", s.Offset(), err)
 			}
 			if seenI16 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"i16"}}
@@ -4512,18 +4404,18 @@ func (recv SQLNullStruct) DecodeFromStream(s *scan.Stream) (result SQLNullStruct
 			seenI16 = true
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("i16", s.Pos, err)
+					return result, decode.NewParseErr("i16", s.Offset(), err)
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("i16", s.Pos, err)
+							return result, decode.NewParseErr("i16", s.Offset(), err)
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("i16", s.Pos, scan.ErrBadLiteral)
+						return result, decode.NewParseErr("i16", s.Offset(), scan.ErrBadLiteral)
 					}
 				}
 				result.I16 = sql.NullInt16{}
@@ -4532,7 +4424,7 @@ func (recv SQLNullStruct) DecodeFromStream(s *scan.Stream) (result SQLNullStruct
 				var nv int64
 				nv, err = s.Int64()
 				if err != nil {
-					return result, decode.NewParseErr("i16", s.Pos, err)
+					return result, decode.NewParseErr("i16", s.Offset(), err)
 				}
 
 				result.I16 = sql.NullInt16{Int16: int16(nv), Valid: true}
@@ -4540,7 +4432,7 @@ func (recv SQLNullStruct) DecodeFromStream(s *scan.Stream) (result SQLNullStruct
 		case "i32":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("i32", s.Pos, err)
+				return result, decode.NewParseErr("i32", s.Offset(), err)
 			}
 			if seenI32 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"i32"}}
@@ -4548,18 +4440,18 @@ func (recv SQLNullStruct) DecodeFromStream(s *scan.Stream) (result SQLNullStruct
 			seenI32 = true
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("i32", s.Pos, err)
+					return result, decode.NewParseErr("i32", s.Offset(), err)
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("i32", s.Pos, err)
+							return result, decode.NewParseErr("i32", s.Offset(), err)
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("i32", s.Pos, scan.ErrBadLiteral)
+						return result, decode.NewParseErr("i32", s.Offset(), scan.ErrBadLiteral)
 					}
 				}
 				result.I32 = sql.NullInt32{}
@@ -4568,7 +4460,7 @@ func (recv SQLNullStruct) DecodeFromStream(s *scan.Stream) (result SQLNullStruct
 				var nv int64
 				nv, err = s.Int64()
 				if err != nil {
-					return result, decode.NewParseErr("i32", s.Pos, err)
+					return result, decode.NewParseErr("i32", s.Offset(), err)
 				}
 
 				result.I32 = sql.NullInt32{Int32: int32(nv), Valid: true}
@@ -4576,7 +4468,7 @@ func (recv SQLNullStruct) DecodeFromStream(s *scan.Stream) (result SQLNullStruct
 		case "s":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("s", s.Pos, err)
+				return result, decode.NewParseErr("s", s.Offset(), err)
 			}
 			if seenS {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"s"}}
@@ -4584,18 +4476,18 @@ func (recv SQLNullStruct) DecodeFromStream(s *scan.Stream) (result SQLNullStruct
 			seenS = true
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("s", s.Pos, err)
+					return result, decode.NewParseErr("s", s.Offset(), err)
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("s", s.Pos, err)
+							return result, decode.NewParseErr("s", s.Offset(), err)
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("s", s.Pos, scan.ErrBadLiteral)
+						return result, decode.NewParseErr("s", s.Offset(), scan.ErrBadLiteral)
 					}
 				}
 				result.S = sql.NullString{}
@@ -4604,7 +4496,7 @@ func (recv SQLNullStruct) DecodeFromStream(s *scan.Stream) (result SQLNullStruct
 				var nv string
 				nv, err = s.String(true)
 				if err != nil {
-					return result, decode.NewParseErr("s", s.Pos, err)
+					return result, decode.NewParseErr("s", s.Offset(), err)
 				}
 
 				result.S = sql.NullString{String: nv, Valid: true}
@@ -4612,7 +4504,7 @@ func (recv SQLNullStruct) DecodeFromStream(s *scan.Stream) (result SQLNullStruct
 		case "t":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("t", s.Pos, err)
+				return result, decode.NewParseErr("t", s.Offset(), err)
 			}
 			if seenT {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"t"}}
@@ -4620,18 +4512,18 @@ func (recv SQLNullStruct) DecodeFromStream(s *scan.Stream) (result SQLNullStruct
 			seenT = true
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("t", s.Pos, err)
+					return result, decode.NewParseErr("t", s.Offset(), err)
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("t", s.Pos, err)
+							return result, decode.NewParseErr("t", s.Offset(), err)
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("t", s.Pos, scan.ErrBadLiteral)
+						return result, decode.NewParseErr("t", s.Offset(), scan.ErrBadLiteral)
 					}
 				}
 				result.T = sql.NullTime{}
@@ -4641,11 +4533,11 @@ func (recv SQLNullStruct) DecodeFromStream(s *scan.Stream) (result SQLNullStruct
 				var sv string
 				sv, err = s.StringView(true)
 				if err != nil {
-					return result, decode.NewParseErr("t", s.Pos, err)
+					return result, decode.NewParseErr("t", s.Offset(), err)
 				}
 				nv, err = time.Parse(time.RFC3339Nano, sv)
 				if err != nil {
-					return result, decode.NewParseErr("t", s.Pos, err)
+					return result, decode.NewParseErr("t", s.Offset(), err)
 				}
 
 				result.T = sql.NullTime{Time: nv, Valid: true}
@@ -4656,11 +4548,11 @@ func (recv SQLNullStruct) DecodeFromStream(s *scan.Stream) (result SQLNullStruct
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -4669,7 +4561,7 @@ func (recv SQLNullStruct) DecodeFromStream(s *scan.Stream) (result SQLNullStruct
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -4677,7 +4569,7 @@ func (recv SQLNullStruct) DecodeFromStream(s *scan.Stream) (result SQLNullStruct
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
 	}
 }
 

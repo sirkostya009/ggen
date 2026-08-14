@@ -182,7 +182,10 @@ func TestCheckOneValRule_ValueShape(t *testing.T) {
 		{"len_non_numeric", ValidationRule{Name: "len", Value: "abc"}, KindString, "value is not a valid integer", "string"},
 		{"len_float", ValidationRule{Name: "len", Value: "1.5"}, KindString, "value is not a valid integer", "string"},
 		{"len_whitespace", ValidationRule{Name: "len", Value: " 5 "}, KindString, "", "string"},
-		{"len_negative", ValidationRule{Name: "len", Value: "-3"}, KindString, "", "string"},
+		{"len_negative", ValidationRule{Name: "len", Value: "-3"}, KindString, "requires a non-negative integer", "string"},
+		{"maxlen_negative", ValidationRule{Name: "maxlen", Value: "-1"}, KindString, "requires a non-negative integer", "string"},
+		{"maxrunes_negative", ValidationRule{Name: "maxrunes", Value: "-2"}, KindString, "requires a non-negative integer", "string"},
+		{"len_zero_ok", ValidationRule{Name: "len", Value: "0"}, KindString, "", "string"},
 		{"minlen_empty", ValidationRule{Name: "minlen"}, KindString, "requires an integer value", "string"},
 		{"maxlen_non_numeric", ValidationRule{Name: "maxlen", Value: "x"}, KindSlice, "is not a valid integer", "[]int"},
 

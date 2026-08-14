@@ -55,13 +55,7 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
-		if ke >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-		}
-		if data[ke] < 0x20 {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-		}
-		if data[ke] == '"' {
+		if ke < len(data) && data[ke] == '"' {
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
@@ -643,15 +637,15 @@ func (recv PrimStruct) DecodeFromStream(s *scan.Stream) (result PrimStruct, err 
 	seenU8 := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -663,13 +657,13 @@ func (recv PrimStruct) DecodeFromStream(s *scan.Stream) (result PrimStruct, err 
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "b":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("b", s.Pos, err)
+				return result, decode.NewParseErr("b", s.Offset(), err)
 			}
 			if seenB {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"b"}}
@@ -677,12 +671,12 @@ func (recv PrimStruct) DecodeFromStream(s *scan.Stream) (result PrimStruct, err 
 			seenB = true
 			result.B, err = s.Bool()
 			if err != nil {
-				return result, decode.NewParseErr("b", s.Pos, err)
+				return result, decode.NewParseErr("b", s.Offset(), err)
 			}
 		case "f32":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("f32", s.Pos, err)
+				return result, decode.NewParseErr("f32", s.Offset(), err)
 			}
 			if seenF32 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f32"}}
@@ -691,16 +685,16 @@ func (recv PrimStruct) DecodeFromStream(s *scan.Stream) (result PrimStruct, err 
 			var fv float64
 			fv, err = s.Float64()
 			if err != nil {
-				return result, decode.NewParseErr("f32", s.Pos, err)
+				return result, decode.NewParseErr("f32", s.Offset(), err)
 			}
 			if math.IsInf(float64(float32(fv)), 0) {
-				return result, decode.NewParseErr("f32", s.Pos, scan.ErrNumberOverflow)
+				return result, decode.NewParseErr("f32", s.Offset(), scan.ErrNumberOverflow)
 			}
 			result.F32 = float32(fv)
 		case "f64":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("f64", s.Pos, err)
+				return result, decode.NewParseErr("f64", s.Offset(), err)
 			}
 			if seenF64 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f64"}}
@@ -708,12 +702,12 @@ func (recv PrimStruct) DecodeFromStream(s *scan.Stream) (result PrimStruct, err 
 			seenF64 = true
 			result.F64, err = s.Float64()
 			if err != nil {
-				return result, decode.NewParseErr("f64", s.Pos, err)
+				return result, decode.NewParseErr("f64", s.Offset(), err)
 			}
 		case "i":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("i", s.Pos, err)
+				return result, decode.NewParseErr("i", s.Offset(), err)
 			}
 			if seenI {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"i"}}
@@ -722,13 +716,13 @@ func (recv PrimStruct) DecodeFromStream(s *scan.Stream) (result PrimStruct, err 
 			var iv int64
 			iv, err = s.Int64()
 			if err != nil {
-				return result, decode.NewParseErr("i", s.Pos, err)
+				return result, decode.NewParseErr("i", s.Offset(), err)
 			}
 			result.I = int(iv)
 		case "i16":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("i16", s.Pos, err)
+				return result, decode.NewParseErr("i16", s.Offset(), err)
 			}
 			if seenI16 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"i16"}}
@@ -737,16 +731,16 @@ func (recv PrimStruct) DecodeFromStream(s *scan.Stream) (result PrimStruct, err 
 			var iv int64
 			iv, err = s.Int64()
 			if err != nil {
-				return result, decode.NewParseErr("i16", s.Pos, err)
+				return result, decode.NewParseErr("i16", s.Offset(), err)
 			}
 			if iv < math.MinInt16 || iv > math.MaxInt16 {
-				return result, decode.NewParseErr("i16", s.Pos, scan.ErrNumberOverflow)
+				return result, decode.NewParseErr("i16", s.Offset(), scan.ErrNumberOverflow)
 			}
 			result.I16 = int16(iv)
 		case "i32":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("i32", s.Pos, err)
+				return result, decode.NewParseErr("i32", s.Offset(), err)
 			}
 			if seenI32 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"i32"}}
@@ -755,16 +749,16 @@ func (recv PrimStruct) DecodeFromStream(s *scan.Stream) (result PrimStruct, err 
 			var iv int64
 			iv, err = s.Int64()
 			if err != nil {
-				return result, decode.NewParseErr("i32", s.Pos, err)
+				return result, decode.NewParseErr("i32", s.Offset(), err)
 			}
 			if iv < math.MinInt32 || iv > math.MaxInt32 {
-				return result, decode.NewParseErr("i32", s.Pos, scan.ErrNumberOverflow)
+				return result, decode.NewParseErr("i32", s.Offset(), scan.ErrNumberOverflow)
 			}
 			result.I32 = int32(iv)
 		case "i64":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("i64", s.Pos, err)
+				return result, decode.NewParseErr("i64", s.Offset(), err)
 			}
 			if seenI64 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"i64"}}
@@ -772,12 +766,12 @@ func (recv PrimStruct) DecodeFromStream(s *scan.Stream) (result PrimStruct, err 
 			seenI64 = true
 			result.I64, err = s.Int64()
 			if err != nil {
-				return result, decode.NewParseErr("i64", s.Pos, err)
+				return result, decode.NewParseErr("i64", s.Offset(), err)
 			}
 		case "i8":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("i8", s.Pos, err)
+				return result, decode.NewParseErr("i8", s.Offset(), err)
 			}
 			if seenI8 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"i8"}}
@@ -786,16 +780,16 @@ func (recv PrimStruct) DecodeFromStream(s *scan.Stream) (result PrimStruct, err 
 			var iv int64
 			iv, err = s.Int64()
 			if err != nil {
-				return result, decode.NewParseErr("i8", s.Pos, err)
+				return result, decode.NewParseErr("i8", s.Offset(), err)
 			}
 			if iv < math.MinInt8 || iv > math.MaxInt8 {
-				return result, decode.NewParseErr("i8", s.Pos, scan.ErrNumberOverflow)
+				return result, decode.NewParseErr("i8", s.Offset(), scan.ErrNumberOverflow)
 			}
 			result.I8 = int8(iv)
 		case "str":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("str", s.Pos, err)
+				return result, decode.NewParseErr("str", s.Offset(), err)
 			}
 			if seenStr {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"str"}}
@@ -803,12 +797,12 @@ func (recv PrimStruct) DecodeFromStream(s *scan.Stream) (result PrimStruct, err 
 			seenStr = true
 			result.Str, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("str", s.Pos, err)
+				return result, decode.NewParseErr("str", s.Offset(), err)
 			}
 		case "u":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("u", s.Pos, err)
+				return result, decode.NewParseErr("u", s.Offset(), err)
 			}
 			if seenU {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"u"}}
@@ -817,13 +811,13 @@ func (recv PrimStruct) DecodeFromStream(s *scan.Stream) (result PrimStruct, err 
 			var uv uint64
 			uv, err = s.Uint64()
 			if err != nil {
-				return result, decode.NewParseErr("u", s.Pos, err)
+				return result, decode.NewParseErr("u", s.Offset(), err)
 			}
 			result.U = uint(uv)
 		case "u16":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("u16", s.Pos, err)
+				return result, decode.NewParseErr("u16", s.Offset(), err)
 			}
 			if seenU16 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"u16"}}
@@ -832,16 +826,16 @@ func (recv PrimStruct) DecodeFromStream(s *scan.Stream) (result PrimStruct, err 
 			var uv uint64
 			uv, err = s.Uint64()
 			if err != nil {
-				return result, decode.NewParseErr("u16", s.Pos, err)
+				return result, decode.NewParseErr("u16", s.Offset(), err)
 			}
 			if uv > math.MaxUint16 {
-				return result, decode.NewParseErr("u16", s.Pos, scan.ErrNumberOverflow)
+				return result, decode.NewParseErr("u16", s.Offset(), scan.ErrNumberOverflow)
 			}
 			result.U16 = uint16(uv)
 		case "u32":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("u32", s.Pos, err)
+				return result, decode.NewParseErr("u32", s.Offset(), err)
 			}
 			if seenU32 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"u32"}}
@@ -850,16 +844,16 @@ func (recv PrimStruct) DecodeFromStream(s *scan.Stream) (result PrimStruct, err 
 			var uv uint64
 			uv, err = s.Uint64()
 			if err != nil {
-				return result, decode.NewParseErr("u32", s.Pos, err)
+				return result, decode.NewParseErr("u32", s.Offset(), err)
 			}
 			if uv > math.MaxUint32 {
-				return result, decode.NewParseErr("u32", s.Pos, scan.ErrNumberOverflow)
+				return result, decode.NewParseErr("u32", s.Offset(), scan.ErrNumberOverflow)
 			}
 			result.U32 = uint32(uv)
 		case "u64":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("u64", s.Pos, err)
+				return result, decode.NewParseErr("u64", s.Offset(), err)
 			}
 			if seenU64 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"u64"}}
@@ -867,12 +861,12 @@ func (recv PrimStruct) DecodeFromStream(s *scan.Stream) (result PrimStruct, err 
 			seenU64 = true
 			result.U64, err = s.Uint64()
 			if err != nil {
-				return result, decode.NewParseErr("u64", s.Pos, err)
+				return result, decode.NewParseErr("u64", s.Offset(), err)
 			}
 		case "u8":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("u8", s.Pos, err)
+				return result, decode.NewParseErr("u8", s.Offset(), err)
 			}
 			if seenU8 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"u8"}}
@@ -881,10 +875,10 @@ func (recv PrimStruct) DecodeFromStream(s *scan.Stream) (result PrimStruct, err 
 			var uv uint64
 			uv, err = s.Uint64()
 			if err != nil {
-				return result, decode.NewParseErr("u8", s.Pos, err)
+				return result, decode.NewParseErr("u8", s.Offset(), err)
 			}
 			if uv > math.MaxUint8 {
-				return result, decode.NewParseErr("u8", s.Pos, scan.ErrNumberOverflow)
+				return result, decode.NewParseErr("u8", s.Offset(), scan.ErrNumberOverflow)
 			}
 			result.U8 = uint8(uv)
 		default:
@@ -893,11 +887,11 @@ func (recv PrimStruct) DecodeFromStream(s *scan.Stream) (result PrimStruct, err 
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -906,7 +900,7 @@ func (recv PrimStruct) DecodeFromStream(s *scan.Stream) (result PrimStruct, err 
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -914,7 +908,7 @@ func (recv PrimStruct) DecodeFromStream(s *scan.Stream) (result PrimStruct, err 
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
 	}
 }
 

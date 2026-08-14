@@ -41,13 +41,7 @@ func (recv KeyEscQuote) DecodeFrom(data []byte) (result KeyEscQuote, i int, err 
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
-		if ke >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-		}
-		if data[ke] < 0x20 {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-		}
-		if data[ke] == '"' {
+		if ke < len(data) && data[ke] == '"' {
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
@@ -150,15 +144,15 @@ func (recv KeyEscQuote) DecodeFromStream(s *scan.Stream) (result KeyEscQuote, er
 	seenA := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -170,13 +164,13 @@ func (recv KeyEscQuote) DecodeFromStream(s *scan.Stream) (result KeyEscQuote, er
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "q\"x":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("q\"x", s.Pos, err)
+				return result, decode.NewParseErr("q\"x", s.Offset(), err)
 			}
 			if seenA {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"q\"x"}}
@@ -185,7 +179,7 @@ func (recv KeyEscQuote) DecodeFromStream(s *scan.Stream) (result KeyEscQuote, er
 			var iv int64
 			iv, err = s.Int64()
 			if err != nil {
-				return result, decode.NewParseErr("q\"x", s.Pos, err)
+				return result, decode.NewParseErr("q\"x", s.Offset(), err)
 			}
 			result.A = int(iv)
 		default:
@@ -194,11 +188,11 @@ func (recv KeyEscQuote) DecodeFromStream(s *scan.Stream) (result KeyEscQuote, er
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -207,7 +201,7 @@ func (recv KeyEscQuote) DecodeFromStream(s *scan.Stream) (result KeyEscQuote, er
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -215,7 +209,7 @@ func (recv KeyEscQuote) DecodeFromStream(s *scan.Stream) (result KeyEscQuote, er
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
 	}
 }
 
@@ -258,13 +252,7 @@ func (recv KeyEscBackslash) DecodeFrom(data []byte) (result KeyEscBackslash, i i
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
-		if ke >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-		}
-		if data[ke] < 0x20 {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-		}
-		if data[ke] == '"' {
+		if ke < len(data) && data[ke] == '"' {
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
@@ -367,15 +355,15 @@ func (recv KeyEscBackslash) DecodeFromStream(s *scan.Stream) (result KeyEscBacks
 	seenA := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -387,13 +375,13 @@ func (recv KeyEscBackslash) DecodeFromStream(s *scan.Stream) (result KeyEscBacks
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "a\\b":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("a\\b", s.Pos, err)
+				return result, decode.NewParseErr("a\\b", s.Offset(), err)
 			}
 			if seenA {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"a\\b"}}
@@ -402,7 +390,7 @@ func (recv KeyEscBackslash) DecodeFromStream(s *scan.Stream) (result KeyEscBacks
 			var iv int64
 			iv, err = s.Int64()
 			if err != nil {
-				return result, decode.NewParseErr("a\\b", s.Pos, err)
+				return result, decode.NewParseErr("a\\b", s.Offset(), err)
 			}
 			result.A = int(iv)
 		default:
@@ -411,11 +399,11 @@ func (recv KeyEscBackslash) DecodeFromStream(s *scan.Stream) (result KeyEscBacks
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -424,7 +412,7 @@ func (recv KeyEscBackslash) DecodeFromStream(s *scan.Stream) (result KeyEscBacks
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -432,7 +420,7 @@ func (recv KeyEscBackslash) DecodeFromStream(s *scan.Stream) (result KeyEscBacks
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
 	}
 }
 
@@ -475,13 +463,7 @@ func (recv KeyEscHTML) DecodeFrom(data []byte) (result KeyEscHTML, i int, err er
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
-		if ke >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-		}
-		if data[ke] < 0x20 {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-		}
-		if data[ke] == '"' {
+		if ke < len(data) && data[ke] == '"' {
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
@@ -584,15 +566,15 @@ func (recv KeyEscHTML) DecodeFromStream(s *scan.Stream) (result KeyEscHTML, err 
 	seenA := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -604,13 +586,13 @@ func (recv KeyEscHTML) DecodeFromStream(s *scan.Stream) (result KeyEscHTML, err 
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "a&b":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("a&b", s.Pos, err)
+				return result, decode.NewParseErr("a&b", s.Offset(), err)
 			}
 			if seenA {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"a&b"}}
@@ -619,7 +601,7 @@ func (recv KeyEscHTML) DecodeFromStream(s *scan.Stream) (result KeyEscHTML, err 
 			var iv int64
 			iv, err = s.Int64()
 			if err != nil {
-				return result, decode.NewParseErr("a&b", s.Pos, err)
+				return result, decode.NewParseErr("a&b", s.Offset(), err)
 			}
 			result.A = int(iv)
 		default:
@@ -628,11 +610,11 @@ func (recv KeyEscHTML) DecodeFromStream(s *scan.Stream) (result KeyEscHTML, err 
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -641,7 +623,7 @@ func (recv KeyEscHTML) DecodeFromStream(s *scan.Stream) (result KeyEscHTML, err 
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -649,7 +631,7 @@ func (recv KeyEscHTML) DecodeFromStream(s *scan.Stream) (result KeyEscHTML, err 
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
 	}
 }
 

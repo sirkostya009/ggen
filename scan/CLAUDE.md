@@ -319,7 +319,10 @@ otherwise, and every refill site now distinguishes the two:
   (`ErrUnterminated`/`ErrBadString`/`ErrBadBool`/`ErrBadLiteral`/`ErrBadArray`/
   `ErrBadObject`) for a reader hiccup, destroying error identity. All 15 route
   through `notEOF(err, sentinel)`, which keeps a real error and maps only the
-  drained case to the sentinel.
+  drained case to the sentinel. `NotEOF` is the exported wrapper — generated
+  stream decoders' dispatch-loop refills need the same mapping (they returned
+  the raw reader error, so a truncated object surfaced `io.ErrUnexpectedEOF`
+  where the bytes path reported a grammar sentinel; cli/CLAUDE.md #60).
 
 Pinned by `TestStreamTransientErrorNeverSilentNorMislabeled` (every value
 primitive × every byte position, plus a drained-window and grammar-error

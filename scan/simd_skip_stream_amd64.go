@@ -156,7 +156,7 @@ func (s *Stream) skipSpaceSlowAVX512() error {
 func (s *Stream) skipStringStreamTail(start, bs int) (int, int, error) {
 	if bs+1 >= len(s.buf) {
 		if err := s.ReadMore(bs); err != nil {
-			return 0, 0, notEOF(err, ErrBadString)
+			return 0, 0, NotEOF(err, ErrBadString)
 		}
 		start = 0
 		bs = 0
@@ -167,7 +167,7 @@ func (s *Stream) skipStringStreamTail(start, bs int) (int, int, error) {
 	case 'u':
 		for bs+6 > len(s.buf) {
 			if err := s.ReadMore(bs); err != nil {
-				return 0, 0, notEOF(err, ErrBadString)
+				return 0, 0, NotEOF(err, ErrBadString)
 			}
 			start = 0
 			bs = 0
@@ -186,7 +186,7 @@ func (s *Stream) skipStringAVX() error {
 	i := s.Pos
 	if i >= len(s.buf) {
 		if err := s.ReadMore(i); err != nil {
-			return notEOF(err, ErrExpectString)
+			return NotEOF(err, ErrExpectString)
 		}
 		i = 0
 	}
@@ -204,7 +204,7 @@ func (s *Stream) skipStringAVX() error {
 			j = 0
 			start = 0
 			if err != nil {
-				return notEOF(err, ErrUnterminated)
+				return NotEOF(err, ErrUnterminated)
 			}
 			continue
 		}
@@ -229,7 +229,7 @@ func (s *Stream) skipStringAVX2() error {
 	i := s.Pos
 	if i >= len(s.buf) {
 		if err := s.ReadMore(i); err != nil {
-			return notEOF(err, ErrExpectString)
+			return NotEOF(err, ErrExpectString)
 		}
 		i = 0
 	}
@@ -247,7 +247,7 @@ func (s *Stream) skipStringAVX2() error {
 			j = 0
 			start = 0
 			if err != nil {
-				return notEOF(err, ErrUnterminated)
+				return NotEOF(err, ErrUnterminated)
 			}
 			continue
 		}
@@ -272,7 +272,7 @@ func (s *Stream) skipStringAVX512() error {
 	i := s.Pos
 	if i >= len(s.buf) {
 		if err := s.ReadMore(i); err != nil {
-			return notEOF(err, ErrExpectString)
+			return NotEOF(err, ErrExpectString)
 		}
 		i = 0
 	}
@@ -290,7 +290,7 @@ func (s *Stream) skipStringAVX512() error {
 			j = 0
 			start = 0
 			if err != nil {
-				return notEOF(err, ErrUnterminated)
+				return NotEOF(err, ErrUnterminated)
 			}
 			continue
 		}
@@ -318,7 +318,7 @@ func (s *Stream) skipNull() error {
 		pos := j + 1 + k
 		if pos >= len(s.buf) {
 			if err := s.ReadMore(0); err != nil {
-				return notEOF(err, ErrBadLiteral)
+				return NotEOF(err, ErrBadLiteral)
 			}
 		}
 		if s.buf[pos] != "ull"[k] {
@@ -340,7 +340,7 @@ func (s *Stream) skipValueAVX(depth int) error {
 	}
 	if s.Pos >= len(s.buf) {
 		if err := s.ReadMore(s.Pos); err != nil {
-			return notEOF(err, ErrUnexpectedEnd)
+			return NotEOF(err, ErrUnexpectedEnd)
 		}
 		s.Pos = 0
 	}
@@ -375,7 +375,7 @@ func (s *Stream) skipArrayAVX(depth int) error {
 		// Drained right after '[' matches bytes skipArray, whose element
 		// skipValue reports ErrUnexpectedEnd — not ErrBadArray.
 		if err := s.ReadMore(s.Pos); err != nil {
-			return notEOF(err, ErrUnexpectedEnd)
+			return NotEOF(err, ErrUnexpectedEnd)
 		}
 		s.Pos = 0
 	}
@@ -392,7 +392,7 @@ func (s *Stream) skipArrayAVX(depth int) error {
 		}
 		if s.Pos >= len(s.buf) {
 			if err := s.ReadMore(0); err != nil {
-				return notEOF(err, ErrBadArray)
+				return NotEOF(err, ErrBadArray)
 			}
 		}
 		if s.buf[s.Pos] == ',' {
@@ -416,7 +416,7 @@ func (s *Stream) skipObjectAVX(depth int) error {
 	}
 	if s.Pos >= len(s.buf) {
 		if err := s.ReadMore(s.Pos); err != nil {
-			return notEOF(err, ErrBadObject)
+			return NotEOF(err, ErrBadObject)
 		}
 		s.Pos = 0
 	}
@@ -438,7 +438,7 @@ func (s *Stream) skipObjectAVX(depth int) error {
 		}
 		if s.Pos >= len(s.buf) {
 			if err := s.ReadMore(0); err != nil {
-				return notEOF(err, ErrBadObject)
+				return NotEOF(err, ErrBadObject)
 			}
 		}
 		if s.buf[s.Pos] != ':' {
@@ -453,7 +453,7 @@ func (s *Stream) skipObjectAVX(depth int) error {
 		}
 		if s.Pos >= len(s.buf) {
 			if err := s.ReadMore(0); err != nil {
-				return notEOF(err, ErrBadObject)
+				return NotEOF(err, ErrBadObject)
 			}
 		}
 		if s.buf[s.Pos] == ',' {
@@ -483,7 +483,7 @@ func (s *Stream) skipValueAVX2(depth int) error {
 	}
 	if s.Pos >= len(s.buf) {
 		if err := s.ReadMore(s.Pos); err != nil {
-			return notEOF(err, ErrUnexpectedEnd)
+			return NotEOF(err, ErrUnexpectedEnd)
 		}
 		s.Pos = 0
 	}
@@ -518,7 +518,7 @@ func (s *Stream) skipArrayAVX2(depth int) error {
 		// Drained right after '[' matches bytes skipArray, whose element
 		// skipValue reports ErrUnexpectedEnd — not ErrBadArray.
 		if err := s.ReadMore(s.Pos); err != nil {
-			return notEOF(err, ErrUnexpectedEnd)
+			return NotEOF(err, ErrUnexpectedEnd)
 		}
 		s.Pos = 0
 	}
@@ -535,7 +535,7 @@ func (s *Stream) skipArrayAVX2(depth int) error {
 		}
 		if s.Pos >= len(s.buf) {
 			if err := s.ReadMore(0); err != nil {
-				return notEOF(err, ErrBadArray)
+				return NotEOF(err, ErrBadArray)
 			}
 		}
 		if s.buf[s.Pos] == ',' {
@@ -559,7 +559,7 @@ func (s *Stream) skipObjectAVX2(depth int) error {
 	}
 	if s.Pos >= len(s.buf) {
 		if err := s.ReadMore(s.Pos); err != nil {
-			return notEOF(err, ErrBadObject)
+			return NotEOF(err, ErrBadObject)
 		}
 		s.Pos = 0
 	}
@@ -581,7 +581,7 @@ func (s *Stream) skipObjectAVX2(depth int) error {
 		}
 		if s.Pos >= len(s.buf) {
 			if err := s.ReadMore(0); err != nil {
-				return notEOF(err, ErrBadObject)
+				return NotEOF(err, ErrBadObject)
 			}
 		}
 		if s.buf[s.Pos] != ':' {
@@ -596,7 +596,7 @@ func (s *Stream) skipObjectAVX2(depth int) error {
 		}
 		if s.Pos >= len(s.buf) {
 			if err := s.ReadMore(0); err != nil {
-				return notEOF(err, ErrBadObject)
+				return NotEOF(err, ErrBadObject)
 			}
 		}
 		if s.buf[s.Pos] == ',' {
@@ -626,7 +626,7 @@ func (s *Stream) skipValueAVX512(depth int) error {
 	}
 	if s.Pos >= len(s.buf) {
 		if err := s.ReadMore(s.Pos); err != nil {
-			return notEOF(err, ErrUnexpectedEnd)
+			return NotEOF(err, ErrUnexpectedEnd)
 		}
 		s.Pos = 0
 	}
@@ -778,7 +778,7 @@ func (s *Stream) skipArrayAVX512(depth int) error {
 		// Drained right after '[' matches bytes skipArray, whose element
 		// skipValue reports ErrUnexpectedEnd — not ErrBadArray.
 		if err := s.ReadMore(s.Pos); err != nil {
-			return notEOF(err, ErrUnexpectedEnd)
+			return NotEOF(err, ErrUnexpectedEnd)
 		}
 		s.Pos = 0
 	}
@@ -795,7 +795,7 @@ func (s *Stream) skipArrayAVX512(depth int) error {
 		}
 		if s.Pos >= len(s.buf) {
 			if err := s.ReadMore(0); err != nil {
-				return notEOF(err, ErrBadArray)
+				return NotEOF(err, ErrBadArray)
 			}
 		}
 		if s.buf[s.Pos] == ',' {
@@ -819,7 +819,7 @@ func (s *Stream) skipObjectAVX512(depth int) error {
 	}
 	if s.Pos >= len(s.buf) {
 		if err := s.ReadMore(s.Pos); err != nil {
-			return notEOF(err, ErrBadObject)
+			return NotEOF(err, ErrBadObject)
 		}
 		s.Pos = 0
 	}
@@ -841,7 +841,7 @@ func (s *Stream) skipObjectAVX512(depth int) error {
 		}
 		if s.Pos >= len(s.buf) {
 			if err := s.ReadMore(0); err != nil {
-				return notEOF(err, ErrBadObject)
+				return NotEOF(err, ErrBadObject)
 			}
 		}
 		if s.buf[s.Pos] != ':' {
@@ -856,7 +856,7 @@ func (s *Stream) skipObjectAVX512(depth int) error {
 		}
 		if s.Pos >= len(s.buf) {
 			if err := s.ReadMore(0); err != nil {
-				return notEOF(err, ErrBadObject)
+				return NotEOF(err, ErrBadObject)
 			}
 		}
 		if s.buf[s.Pos] == ',' {

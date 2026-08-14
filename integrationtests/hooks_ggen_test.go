@@ -46,13 +46,7 @@ func (recv HookedStruct) DecodeFrom(data []byte) (result HookedStruct, i int, er
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
-		if ke >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-		}
-		if data[ke] < 0x20 {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-		}
-		if data[ke] == '"' {
+		if ke < len(data) && data[ke] == '"' {
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
@@ -196,15 +190,15 @@ func (recv HookedStruct) DecodeFromStream(s *scan.Stream) (result HookedStruct, 
 	seenName := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -219,13 +213,13 @@ func (recv HookedStruct) DecodeFromStream(s *scan.Stream) (result HookedStruct, 
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "n":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("n", s.Pos, err)
+				return result, decode.NewParseErr("n", s.Offset(), err)
 			}
 			if seenN {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"n"}}
@@ -234,7 +228,7 @@ func (recv HookedStruct) DecodeFromStream(s *scan.Stream) (result HookedStruct, 
 			var iv int64
 			iv, err = s.Int64()
 			if err != nil {
-				return result, decode.NewParseErr("n", s.Pos, err)
+				return result, decode.NewParseErr("n", s.Offset(), err)
 			}
 			result.N = int(iv)
 			if result.N < 0 {
@@ -246,7 +240,7 @@ func (recv HookedStruct) DecodeFromStream(s *scan.Stream) (result HookedStruct, 
 		case "name":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("name", s.Pos, err)
+				return result, decode.NewParseErr("name", s.Offset(), err)
 			}
 			if seenName {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"name"}}
@@ -254,7 +248,7 @@ func (recv HookedStruct) DecodeFromStream(s *scan.Stream) (result HookedStruct, 
 			seenName = true
 			result.Name, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("name", s.Pos, err)
+				return result, decode.NewParseErr("name", s.Offset(), err)
 			}
 			if len(result.Name) < 1 {
 				return result, &validation.MinLenError{Pos: s.Offset(), Path: []string{"name"}, Limit: 1, Got: len(result.Name)}
@@ -268,11 +262,11 @@ func (recv HookedStruct) DecodeFromStream(s *scan.Stream) (result HookedStruct, 
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -281,7 +275,7 @@ func (recv HookedStruct) DecodeFromStream(s *scan.Stream) (result HookedStruct, 
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -292,7 +286,7 @@ func (recv HookedStruct) DecodeFromStream(s *scan.Stream) (result HookedStruct, 
 			}
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
 	}
 }
 

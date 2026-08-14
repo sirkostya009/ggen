@@ -60,13 +60,7 @@ func (recv DiveStruct) DecodeFrom(data []byte) (result DiveStruct, i int, err er
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
-		if ke >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-		}
-		if data[ke] < 0x20 {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-		}
-		if data[ke] == '"' {
+		if ke < len(data) && data[ke] == '"' {
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
@@ -413,15 +407,15 @@ func (recv DiveStruct) DecodeFromStream(s *scan.Stream) (result DiveStruct, err 
 	seenTitle := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -433,13 +427,13 @@ func (recv DiveStruct) DecodeFromStream(s *scan.Stream) (result DiveStruct, err 
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "count":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("count", s.Pos, err)
+				return result, decode.NewParseErr("count", s.Offset(), err)
 			}
 			if seenCount {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"count"}}
@@ -448,7 +442,7 @@ func (recv DiveStruct) DecodeFromStream(s *scan.Stream) (result DiveStruct, err 
 			var iv int64
 			iv, err = s.Int64()
 			if err != nil {
-				return result, decode.NewParseErr("count", s.Pos, err)
+				return result, decode.NewParseErr("count", s.Offset(), err)
 			}
 			result.Count = int(iv)
 			if err := EvenOnly(result.Count); err != nil {
@@ -457,7 +451,7 @@ func (recv DiveStruct) DecodeFromStream(s *scan.Stream) (result DiveStruct, err 
 		case "scores":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("scores", s.Pos, err)
+				return result, decode.NewParseErr("scores", s.Offset(), err)
 			}
 			if seenScores {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"scores"}}
@@ -465,22 +459,22 @@ func (recv DiveStruct) DecodeFromStream(s *scan.Stream) (result DiveStruct, err 
 			seenScores = true
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("scores", s.Pos, err)
+				return result, decode.NewParseErr("scores", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("scores", s.Pos, err)
+					return result, decode.NewParseErr("scores", s.Offset(), err)
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("scores", s.Pos, err)
+							return result, decode.NewParseErr("scores", s.Offset(), err)
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("scores", s.Pos, scan.ErrBadLiteral)
+						return result, decode.NewParseErr("scores", s.Offset(), scan.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -489,15 +483,15 @@ func (recv DiveStruct) DecodeFromStream(s *scan.Stream) (result DiveStruct, err 
 			}
 			err = s.ArrayOpen()
 			if err != nil {
-				return result, decode.NewParseErr("scores", s.Pos, err)
+				return result, decode.NewParseErr("scores", s.Offset(), err)
 			}
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("scores", s.Pos, err)
+				return result, decode.NewParseErr("scores", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("scores", s.Pos, err)
+					return result, decode.NewParseErr("scores", s.Offset(), err)
 				}
 			}
 			if s.Bytes()[s.Pos] == ']' {
@@ -514,7 +508,7 @@ func (recv DiveStruct) DecodeFromStream(s *scan.Stream) (result DiveStruct, err 
 				var iv int64
 				iv, err = s.Int64()
 				if err != nil {
-					return result, decode.NewParseErr("scores", s.Pos, err)
+					return result, decode.NewParseErr("scores", s.Offset(), err)
 				}
 				result.Scores[len(result.Scores)-1] = int(iv)
 				if result.Scores[len(result.Scores)-1] < 0 {
@@ -525,34 +519,34 @@ func (recv DiveStruct) DecodeFromStream(s *scan.Stream) (result DiveStruct, err 
 				}
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("scores", s.Pos, err)
+					return result, decode.NewParseErr("scores", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("scores", s.Pos, err)
+						return result, decode.NewParseErr("scores", s.Offset(), err)
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
 					s.Pos++
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("scores", s.Pos, err)
+						return result, decode.NewParseErr("scores", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-						return result, decode.NewParseErr("scores", s.Pos, scan.ErrBadArray)
+						return result, decode.NewParseErr("scores", s.Offset(), scan.ErrBadArray)
 					}
 					continue
 				}
 				break
 			}
 			if s.Bytes()[s.Pos] != ']' {
-				return result, decode.NewParseErr("scores", s.Pos, scan.ErrBadArray)
+				return result, decode.NewParseErr("scores", s.Offset(), scan.ErrBadArray)
 			}
 			s.Pos++
 		case "tags":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("tags", s.Pos, err)
+				return result, decode.NewParseErr("tags", s.Offset(), err)
 			}
 			if seenTags {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"tags"}}
@@ -560,22 +554,22 @@ func (recv DiveStruct) DecodeFromStream(s *scan.Stream) (result DiveStruct, err 
 			seenTags = true
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("tags", s.Pos, err)
+				return result, decode.NewParseErr("tags", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("tags", s.Pos, err)
+					return result, decode.NewParseErr("tags", s.Offset(), err)
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("tags", s.Pos, err)
+							return result, decode.NewParseErr("tags", s.Offset(), err)
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("tags", s.Pos, scan.ErrBadLiteral)
+						return result, decode.NewParseErr("tags", s.Offset(), scan.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -583,15 +577,15 @@ func (recv DiveStruct) DecodeFromStream(s *scan.Stream) (result DiveStruct, err 
 			} else {
 				err = s.ArrayOpen()
 				if err != nil {
-					return result, decode.NewParseErr("tags", s.Pos, err)
+					return result, decode.NewParseErr("tags", s.Offset(), err)
 				}
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("tags", s.Pos, err)
+					return result, decode.NewParseErr("tags", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("tags", s.Pos, err)
+						return result, decode.NewParseErr("tags", s.Offset(), err)
 					}
 				}
 				if s.Bytes()[s.Pos] == ']' {
@@ -607,7 +601,7 @@ func (recv DiveStruct) DecodeFromStream(s *scan.Stream) (result DiveStruct, err 
 					result.Tags = append(result.Tags, "")
 					result.Tags[len(result.Tags)-1], err = s.String(true)
 					if err != nil {
-						return result, decode.NewParseErr("tags", s.Pos, err)
+						return result, decode.NewParseErr("tags", s.Offset(), err)
 					}
 					if len(result.Tags[len(result.Tags)-1]) < 2 {
 						return result, &validation.MinRunesError{Pos: s.Offset(), Path: []string{"tags[]"}, Limit: 2, Got: utf8.RuneCountInString(result.Tags[len(result.Tags)-1])}
@@ -625,28 +619,28 @@ func (recv DiveStruct) DecodeFromStream(s *scan.Stream) (result DiveStruct, err 
 					}
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("tags", s.Pos, err)
+						return result, decode.NewParseErr("tags", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("tags", s.Pos, err)
+							return result, decode.NewParseErr("tags", s.Offset(), err)
 						}
 					}
 					if s.Bytes()[s.Pos] == ',' {
 						s.Pos++
 						err = s.SkipSpace()
 						if err != nil {
-							return result, decode.NewParseErr("tags", s.Pos, err)
+							return result, decode.NewParseErr("tags", s.Offset(), err)
 						}
 						if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-							return result, decode.NewParseErr("tags", s.Pos, scan.ErrBadArray)
+							return result, decode.NewParseErr("tags", s.Offset(), scan.ErrBadArray)
 						}
 						continue
 					}
 					break
 				}
 				if s.Bytes()[s.Pos] != ']' {
-					return result, decode.NewParseErr("tags", s.Pos, scan.ErrBadArray)
+					return result, decode.NewParseErr("tags", s.Offset(), scan.ErrBadArray)
 				}
 				s.Pos++
 			}
@@ -659,7 +653,7 @@ func (recv DiveStruct) DecodeFromStream(s *scan.Stream) (result DiveStruct, err 
 		case "title":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("title", s.Pos, err)
+				return result, decode.NewParseErr("title", s.Offset(), err)
 			}
 			if seenTitle {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"title"}}
@@ -667,7 +661,7 @@ func (recv DiveStruct) DecodeFromStream(s *scan.Stream) (result DiveStruct, err 
 			seenTitle = true
 			result.Title, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("title", s.Pos, err)
+				return result, decode.NewParseErr("title", s.Offset(), err)
 			}
 			if len(result.Title) < 1 {
 				return result, &validation.MinRunesError{Pos: s.Offset(), Path: []string{"title"}, Limit: 1, Got: utf8.RuneCountInString(result.Title)}
@@ -685,11 +679,11 @@ func (recv DiveStruct) DecodeFromStream(s *scan.Stream) (result DiveStruct, err 
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -698,7 +692,7 @@ func (recv DiveStruct) DecodeFromStream(s *scan.Stream) (result DiveStruct, err 
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -706,7 +700,7 @@ func (recv DiveStruct) DecodeFromStream(s *scan.Stream) (result DiveStruct, err 
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
 	}
 }
 
@@ -807,13 +801,7 @@ func (recv CustomDiveStruct) DecodeFrom(data []byte) (result CustomDiveStruct, i
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
-		if ke >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-		}
-		if data[ke] < 0x20 {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-		}
-		if data[ke] == '"' {
+		if ke < len(data) && data[ke] == '"' {
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
@@ -1346,15 +1334,15 @@ func (recv CustomDiveStruct) DecodeFromStream(s *scan.Stream) (result CustomDive
 	seenTrim := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -1366,13 +1354,13 @@ func (recv CustomDiveStruct) DecodeFromStream(s *scan.Stream) (result CustomDive
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "lookup":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("lookup", s.Pos, err)
+				return result, decode.NewParseErr("lookup", s.Offset(), err)
 			}
 			if seenLookup {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"lookup"}}
@@ -1380,22 +1368,22 @@ func (recv CustomDiveStruct) DecodeFromStream(s *scan.Stream) (result CustomDive
 			seenLookup = true
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("lookup", s.Pos, err)
+				return result, decode.NewParseErr("lookup", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("lookup", s.Pos, err)
+					return result, decode.NewParseErr("lookup", s.Offset(), err)
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("lookup", s.Pos, err)
+							return result, decode.NewParseErr("lookup", s.Offset(), err)
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("lookup", s.Pos, scan.ErrBadLiteral)
+						return result, decode.NewParseErr("lookup", s.Offset(), scan.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -1404,15 +1392,15 @@ func (recv CustomDiveStruct) DecodeFromStream(s *scan.Stream) (result CustomDive
 			}
 			err = s.ObjectOpen()
 			if err != nil {
-				return result, decode.NewParseErr("lookup", s.Pos, err)
+				return result, decode.NewParseErr("lookup", s.Offset(), err)
 			}
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("lookup", s.Pos, err)
+				return result, decode.NewParseErr("lookup", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("lookup", s.Pos, err)
+					return result, decode.NewParseErr("lookup", s.Offset(), err)
 				}
 			}
 			if s.Bytes()[s.Pos] == '}' {
@@ -1428,64 +1416,64 @@ func (recv CustomDiveStruct) DecodeFromStream(s *scan.Stream) (result CustomDive
 				var mk string
 				mk, err = s.String(true)
 				if err != nil {
-					return result, decode.NewParseErr("lookup", s.Pos, err)
+					return result, decode.NewParseErr("lookup", s.Offset(), err)
 				}
 				if err := KeyShape(mk); err != nil {
 					return result, &validation.CustomError{Pos: s.Offset(), Path: []string{"lookup.key"}, Name: "KeyShape", Value: mk, Cause: err}
 				}
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("lookup", s.Pos, err)
+					return result, decode.NewParseErr("lookup", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("lookup", s.Pos, err)
+						return result, decode.NewParseErr("lookup", s.Offset(), err)
 					}
 				}
 				if s.Bytes()[s.Pos] != ':' {
-					return result, decode.NewParseErr("lookup", s.Pos, scan.ErrBadObject)
+					return result, decode.NewParseErr("lookup", s.Offset(), scan.ErrBadObject)
 				}
 				s.Pos++
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("lookup", s.Pos, err)
+					return result, decode.NewParseErr("lookup", s.Offset(), err)
 				}
 				var iv int64
 				iv, err = s.Int64()
 				if err != nil {
-					return result, decode.NewParseErr("lookup", s.Pos, err)
+					return result, decode.NewParseErr("lookup", s.Offset(), err)
 				}
 				result.Lookup[mk] = int(iv)
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("lookup", s.Pos, err)
+					return result, decode.NewParseErr("lookup", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("lookup", s.Pos, err)
+						return result, decode.NewParseErr("lookup", s.Offset(), err)
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
 					s.Pos++
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("lookup", s.Pos, err)
+						return result, decode.NewParseErr("lookup", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == '}' {
-						return result, decode.NewParseErr("lookup", s.Pos, scan.ErrBadObject)
+						return result, decode.NewParseErr("lookup", s.Offset(), scan.ErrBadObject)
 					}
 					continue
 				}
 				break
 			}
 			if s.Bytes()[s.Pos] != '}' {
-				return result, decode.NewParseErr("lookup", s.Pos, scan.ErrBadObject)
+				return result, decode.NewParseErr("lookup", s.Offset(), scan.ErrBadObject)
 			}
 			s.Pos++
 		case "mixed":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("mixed", s.Pos, err)
+				return result, decode.NewParseErr("mixed", s.Offset(), err)
 			}
 			if seenMixed {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"mixed"}}
@@ -1493,22 +1481,22 @@ func (recv CustomDiveStruct) DecodeFromStream(s *scan.Stream) (result CustomDive
 			seenMixed = true
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("mixed", s.Pos, err)
+				return result, decode.NewParseErr("mixed", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("mixed", s.Pos, err)
+					return result, decode.NewParseErr("mixed", s.Offset(), err)
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("mixed", s.Pos, err)
+							return result, decode.NewParseErr("mixed", s.Offset(), err)
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("mixed", s.Pos, scan.ErrBadLiteral)
+						return result, decode.NewParseErr("mixed", s.Offset(), scan.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -1517,15 +1505,15 @@ func (recv CustomDiveStruct) DecodeFromStream(s *scan.Stream) (result CustomDive
 			}
 			err = s.ObjectOpen()
 			if err != nil {
-				return result, decode.NewParseErr("mixed", s.Pos, err)
+				return result, decode.NewParseErr("mixed", s.Offset(), err)
 			}
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("mixed", s.Pos, err)
+				return result, decode.NewParseErr("mixed", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("mixed", s.Pos, err)
+					return result, decode.NewParseErr("mixed", s.Offset(), err)
 				}
 			}
 			if s.Bytes()[s.Pos] == '}' {
@@ -1541,62 +1529,62 @@ func (recv CustomDiveStruct) DecodeFromStream(s *scan.Stream) (result CustomDive
 				var mk string
 				mk, err = s.String(true)
 				if err != nil {
-					return result, decode.NewParseErr("mixed", s.Pos, err)
+					return result, decode.NewParseErr("mixed", s.Offset(), err)
 				}
 				mk = LowerKey(mk)
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("mixed", s.Pos, err)
+					return result, decode.NewParseErr("mixed", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("mixed", s.Pos, err)
+						return result, decode.NewParseErr("mixed", s.Offset(), err)
 					}
 				}
 				if s.Bytes()[s.Pos] != ':' {
-					return result, decode.NewParseErr("mixed", s.Pos, scan.ErrBadObject)
+					return result, decode.NewParseErr("mixed", s.Offset(), scan.ErrBadObject)
 				}
 				s.Pos++
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("mixed", s.Pos, err)
+					return result, decode.NewParseErr("mixed", s.Offset(), err)
 				}
 				var iv int64
 				iv, err = s.Int64()
 				if err != nil {
-					return result, decode.NewParseErr("mixed", s.Pos, err)
+					return result, decode.NewParseErr("mixed", s.Offset(), err)
 				}
 				result.Mixed[mk] = int(iv)
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("mixed", s.Pos, err)
+					return result, decode.NewParseErr("mixed", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("mixed", s.Pos, err)
+						return result, decode.NewParseErr("mixed", s.Offset(), err)
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
 					s.Pos++
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("mixed", s.Pos, err)
+						return result, decode.NewParseErr("mixed", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == '}' {
-						return result, decode.NewParseErr("mixed", s.Pos, scan.ErrBadObject)
+						return result, decode.NewParseErr("mixed", s.Offset(), scan.ErrBadObject)
 					}
 					continue
 				}
 				break
 			}
 			if s.Bytes()[s.Pos] != '}' {
-				return result, decode.NewParseErr("mixed", s.Pos, scan.ErrBadObject)
+				return result, decode.NewParseErr("mixed", s.Offset(), scan.ErrBadObject)
 			}
 			s.Pos++
 		case "ptr":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("ptr", s.Pos, err)
+				return result, decode.NewParseErr("ptr", s.Offset(), err)
 			}
 			if seenPtr {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"ptr"}}
@@ -1604,18 +1592,18 @@ func (recv CustomDiveStruct) DecodeFromStream(s *scan.Stream) (result CustomDive
 			seenPtr = true
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("ptr", s.Pos, err)
+					return result, decode.NewParseErr("ptr", s.Offset(), err)
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("ptr", s.Pos, err)
+							return result, decode.NewParseErr("ptr", s.Offset(), err)
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("ptr", s.Pos, scan.ErrBadLiteral)
+						return result, decode.NewParseErr("ptr", s.Offset(), scan.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -1624,7 +1612,7 @@ func (recv CustomDiveStruct) DecodeFromStream(s *scan.Stream) (result CustomDive
 				var v int64
 				v, err = s.Int64()
 				if err != nil {
-					return result, decode.NewParseErr("ptr", s.Pos, err)
+					return result, decode.NewParseErr("ptr", s.Offset(), err)
 				}
 				if result.Ptr == nil {
 					result.Ptr = new(int(v))
@@ -1638,7 +1626,7 @@ func (recv CustomDiveStruct) DecodeFromStream(s *scan.Stream) (result CustomDive
 		case "tags":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("tags", s.Pos, err)
+				return result, decode.NewParseErr("tags", s.Offset(), err)
 			}
 			if seenTags {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"tags"}}
@@ -1646,22 +1634,22 @@ func (recv CustomDiveStruct) DecodeFromStream(s *scan.Stream) (result CustomDive
 			seenTags = true
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("tags", s.Pos, err)
+				return result, decode.NewParseErr("tags", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("tags", s.Pos, err)
+					return result, decode.NewParseErr("tags", s.Offset(), err)
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("tags", s.Pos, err)
+							return result, decode.NewParseErr("tags", s.Offset(), err)
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("tags", s.Pos, scan.ErrBadLiteral)
+						return result, decode.NewParseErr("tags", s.Offset(), scan.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -1670,15 +1658,15 @@ func (recv CustomDiveStruct) DecodeFromStream(s *scan.Stream) (result CustomDive
 			}
 			err = s.ArrayOpen()
 			if err != nil {
-				return result, decode.NewParseErr("tags", s.Pos, err)
+				return result, decode.NewParseErr("tags", s.Offset(), err)
 			}
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("tags", s.Pos, err)
+				return result, decode.NewParseErr("tags", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("tags", s.Pos, err)
+					return result, decode.NewParseErr("tags", s.Offset(), err)
 				}
 			}
 			if s.Bytes()[s.Pos] == ']' {
@@ -1694,41 +1682,41 @@ func (recv CustomDiveStruct) DecodeFromStream(s *scan.Stream) (result CustomDive
 				result.Tags = append(result.Tags, "")
 				result.Tags[len(result.Tags)-1], err = s.String(true)
 				if err != nil {
-					return result, decode.NewParseErr("tags", s.Pos, err)
+					return result, decode.NewParseErr("tags", s.Offset(), err)
 				}
 				if err := NotBlank(result.Tags[len(result.Tags)-1]); err != nil {
 					return result, &validation.CustomError{Pos: s.Offset(), Path: []string{"tags[]"}, Name: "NotBlank", Value: result.Tags[len(result.Tags)-1], Cause: err}
 				}
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("tags", s.Pos, err)
+					return result, decode.NewParseErr("tags", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("tags", s.Pos, err)
+						return result, decode.NewParseErr("tags", s.Offset(), err)
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
 					s.Pos++
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("tags", s.Pos, err)
+						return result, decode.NewParseErr("tags", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-						return result, decode.NewParseErr("tags", s.Pos, scan.ErrBadArray)
+						return result, decode.NewParseErr("tags", s.Offset(), scan.ErrBadArray)
 					}
 					continue
 				}
 				break
 			}
 			if s.Bytes()[s.Pos] != ']' {
-				return result, decode.NewParseErr("tags", s.Pos, scan.ErrBadArray)
+				return result, decode.NewParseErr("tags", s.Offset(), scan.ErrBadArray)
 			}
 			s.Pos++
 		case "trim":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("trim", s.Pos, err)
+				return result, decode.NewParseErr("trim", s.Offset(), err)
 			}
 			if seenTrim {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"trim"}}
@@ -1736,22 +1724,22 @@ func (recv CustomDiveStruct) DecodeFromStream(s *scan.Stream) (result CustomDive
 			seenTrim = true
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("trim", s.Pos, err)
+				return result, decode.NewParseErr("trim", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("trim", s.Pos, err)
+					return result, decode.NewParseErr("trim", s.Offset(), err)
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("trim", s.Pos, err)
+							return result, decode.NewParseErr("trim", s.Offset(), err)
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("trim", s.Pos, scan.ErrBadLiteral)
+						return result, decode.NewParseErr("trim", s.Offset(), scan.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -1760,15 +1748,15 @@ func (recv CustomDiveStruct) DecodeFromStream(s *scan.Stream) (result CustomDive
 			}
 			err = s.ArrayOpen()
 			if err != nil {
-				return result, decode.NewParseErr("trim", s.Pos, err)
+				return result, decode.NewParseErr("trim", s.Offset(), err)
 			}
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("trim", s.Pos, err)
+				return result, decode.NewParseErr("trim", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("trim", s.Pos, err)
+					return result, decode.NewParseErr("trim", s.Offset(), err)
 				}
 			}
 			if s.Bytes()[s.Pos] == ']' {
@@ -1784,33 +1772,33 @@ func (recv CustomDiveStruct) DecodeFromStream(s *scan.Stream) (result CustomDive
 				result.Trim = append(result.Trim, "")
 				result.Trim[len(result.Trim)-1], err = s.String(true)
 				if err != nil {
-					return result, decode.NewParseErr("trim", s.Pos, err)
+					return result, decode.NewParseErr("trim", s.Offset(), err)
 				}
 				result.Trim[len(result.Trim)-1] = TrimSpace(result.Trim[len(result.Trim)-1])
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("trim", s.Pos, err)
+					return result, decode.NewParseErr("trim", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("trim", s.Pos, err)
+						return result, decode.NewParseErr("trim", s.Offset(), err)
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
 					s.Pos++
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("trim", s.Pos, err)
+						return result, decode.NewParseErr("trim", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-						return result, decode.NewParseErr("trim", s.Pos, scan.ErrBadArray)
+						return result, decode.NewParseErr("trim", s.Offset(), scan.ErrBadArray)
 					}
 					continue
 				}
 				break
 			}
 			if s.Bytes()[s.Pos] != ']' {
-				return result, decode.NewParseErr("trim", s.Pos, scan.ErrBadArray)
+				return result, decode.NewParseErr("trim", s.Offset(), scan.ErrBadArray)
 			}
 			s.Pos++
 		default:
@@ -1819,11 +1807,11 @@ func (recv CustomDiveStruct) DecodeFromStream(s *scan.Stream) (result CustomDive
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -1832,7 +1820,7 @@ func (recv CustomDiveStruct) DecodeFromStream(s *scan.Stream) (result CustomDive
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -1840,7 +1828,7 @@ func (recv CustomDiveStruct) DecodeFromStream(s *scan.Stream) (result CustomDive
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
 	}
 }
 

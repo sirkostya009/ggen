@@ -48,13 +48,7 @@ func (recv RichTypes) DecodeFrom(data []byte) (result RichTypes, i int, err erro
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
-		if ke >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-		}
-		if data[ke] < 0x20 {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-		}
-		if data[ke] == '"' {
+		if ke < len(data) && data[ke] == '"' {
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
@@ -271,15 +265,15 @@ func (recv RichTypes) DecodeFromStream(s *scan.Stream) (result RichTypes, err er
 	seenSite := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -291,13 +285,13 @@ func (recv RichTypes) DecodeFromStream(s *scan.Stream) (result RichTypes, err er
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "big":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("big", s.Pos, err)
+				return result, decode.NewParseErr("big", s.Offset(), err)
 			}
 			if seenBig {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"big"}}
@@ -305,15 +299,15 @@ func (recv RichTypes) DecodeFromStream(s *scan.Stream) (result RichTypes, err er
 			seenBig = true
 			span, err := s.CaptureValue()
 			if err != nil {
-				return result, decode.NewParseErr("big", s.Pos, err)
+				return result, decode.NewParseErr("big", s.Offset(), err)
 			}
 			if _, ok := (&result.Big).SetString(unsafe.String(unsafe.SliceData(span), len(span)), 10); !ok {
-				return result, decode.NewParseErr("big", s.Pos, scan.ErrBadNumber)
+				return result, decode.NewParseErr("big", s.Offset(), scan.ErrBadNumber)
 			}
 		case "bigF":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("bigF", s.Pos, err)
+				return result, decode.NewParseErr("bigF", s.Offset(), err)
 			}
 			if seenBigF {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"bigF"}}
@@ -322,15 +316,15 @@ func (recv RichTypes) DecodeFromStream(s *scan.Stream) (result RichTypes, err er
 			var sv string
 			sv, err = s.StringView(true)
 			if err != nil {
-				return result, decode.NewParseErr("bigF", s.Pos, err)
+				return result, decode.NewParseErr("bigF", s.Offset(), err)
 			}
 			if _, _, err := (&result.BigF).Parse(sv, 10); err != nil {
-				return result, decode.NewParseErr("bigF", s.Pos, err)
+				return result, decode.NewParseErr("bigF", s.Offset(), err)
 			}
 		case "bigR":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("bigR", s.Pos, err)
+				return result, decode.NewParseErr("bigR", s.Offset(), err)
 			}
 			if seenBigR {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"bigR"}}
@@ -339,15 +333,15 @@ func (recv RichTypes) DecodeFromStream(s *scan.Stream) (result RichTypes, err er
 			var sv string
 			sv, err = s.StringView(true)
 			if err != nil {
-				return result, decode.NewParseErr("bigR", s.Pos, err)
+				return result, decode.NewParseErr("bigR", s.Offset(), err)
 			}
 			if _, ok := (&result.BigR).SetString(sv); !ok {
-				return result, decode.NewParseErr("bigR", s.Pos, scan.ErrBadNumber)
+				return result, decode.NewParseErr("bigR", s.Offset(), scan.ErrBadNumber)
 			}
 		case "gofrsId":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("gofrsId", s.Pos, err)
+				return result, decode.NewParseErr("gofrsId", s.Offset(), err)
 			}
 			if seenGofrsID {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"gofrsId"}}
@@ -356,16 +350,16 @@ func (recv RichTypes) DecodeFromStream(s *scan.Stream) (result RichTypes, err er
 			var ts string
 			ts, err = s.StringView(true)
 			if err != nil {
-				return result, decode.NewParseErr("gofrsId", s.Pos, err)
+				return result, decode.NewParseErr("gofrsId", s.Offset(), err)
 			}
 			err = result.GofrsID.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts)))
 			if err != nil {
-				return result, decode.NewParseErr("gofrsId", s.Pos, err)
+				return result, decode.NewParseErr("gofrsId", s.Offset(), err)
 			}
 		case "id":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("id", s.Pos, err)
+				return result, decode.NewParseErr("id", s.Offset(), err)
 			}
 			if seenID {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"id"}}
@@ -374,16 +368,16 @@ func (recv RichTypes) DecodeFromStream(s *scan.Stream) (result RichTypes, err er
 			var ts string
 			ts, err = s.StringView(true)
 			if err != nil {
-				return result, decode.NewParseErr("id", s.Pos, err)
+				return result, decode.NewParseErr("id", s.Offset(), err)
 			}
 			err = result.ID.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts)))
 			if err != nil {
-				return result, decode.NewParseErr("id", s.Pos, err)
+				return result, decode.NewParseErr("id", s.Offset(), err)
 			}
 		case "raw1":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("raw1", s.Pos, err)
+				return result, decode.NewParseErr("raw1", s.Offset(), err)
 			}
 			if seenRaw1 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"raw1"}}
@@ -391,17 +385,17 @@ func (recv RichTypes) DecodeFromStream(s *scan.Stream) (result RichTypes, err er
 			seenRaw1 = true
 			span, err := s.CaptureValue()
 			if err != nil {
-				return result, decode.NewParseErr("raw1", s.Pos, err)
+				return result, decode.NewParseErr("raw1", s.Offset(), err)
 			}
 			err = scan.CheckUTF8(span)
 			if err != nil {
-				return result, decode.NewParseErr("raw1", s.Pos, err)
+				return result, decode.NewParseErr("raw1", s.Offset(), err)
 			}
 			result.Raw1 = append(make([]byte, 0, len(span)), span...)
 		case "raw2":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("raw2", s.Pos, err)
+				return result, decode.NewParseErr("raw2", s.Offset(), err)
 			}
 			if seenRaw2 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"raw2"}}
@@ -409,17 +403,17 @@ func (recv RichTypes) DecodeFromStream(s *scan.Stream) (result RichTypes, err er
 			seenRaw2 = true
 			span, err := s.CaptureValue()
 			if err != nil {
-				return result, decode.NewParseErr("raw2", s.Pos, err)
+				return result, decode.NewParseErr("raw2", s.Offset(), err)
 			}
 			err = scan.CheckUTF8(span)
 			if err != nil {
-				return result, decode.NewParseErr("raw2", s.Pos, err)
+				return result, decode.NewParseErr("raw2", s.Offset(), err)
 			}
 			result.Raw2 = append(make([]byte, 0, len(span)), span...)
 		case "site":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("site", s.Pos, err)
+				return result, decode.NewParseErr("site", s.Offset(), err)
 			}
 			if seenSite {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"site"}}
@@ -428,11 +422,11 @@ func (recv RichTypes) DecodeFromStream(s *scan.Stream) (result RichTypes, err er
 			var sv string
 			sv, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("site", s.Pos, err)
+				return result, decode.NewParseErr("site", s.Offset(), err)
 			}
 			u, err := url.Parse(sv)
 			if err != nil {
-				return result, decode.NewParseErr("site", s.Pos, err)
+				return result, decode.NewParseErr("site", s.Offset(), err)
 			}
 			result.Site = *u
 		default:
@@ -441,11 +435,11 @@ func (recv RichTypes) DecodeFromStream(s *scan.Stream) (result RichTypes, err er
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -454,7 +448,7 @@ func (recv RichTypes) DecodeFromStream(s *scan.Stream) (result RichTypes, err er
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -462,7 +456,7 @@ func (recv RichTypes) DecodeFromStream(s *scan.Stream) (result RichTypes, err er
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
 	}
 }
 

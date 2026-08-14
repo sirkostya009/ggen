@@ -171,6 +171,7 @@ Like stdlib, ggen has merge semantics, but deliberately different ones:
 | pointer to a container (`*[]T`, `**map[string]T`, …) | pointee reset, capacity kept | pointee kept as-is | reset reaches through every pointer level, so a reused receiver replaces rather than appends |
 | key omitted from payload, container field | reset, capacity kept | container kept as-is | a blank payload gives a blank slate                                                       |
 | `null` → slice / map / pointer            | nil'd                | nil'd                | —                                                                                         |
+| empty wire value → container field        | empty, non-nil       | empty, non-nil       | `[]`, `{}`, and an empty `[]byte` string all decode to an allocated empty value, so re-marshalling gives the empty form back, not `null` |
 | `null` → non-pointer scalar or struct     | parse error          | Go zero value        | use a pointer, a per-field `nullzero` decode variant, or `-nullzero` for all value fields |
 
 ### runtime packages
@@ -242,7 +243,11 @@ skipped silently (no decode wiring, never appear in marshal output) — same as
   jsonv2, this MUST be the last option in the tag. Single-quote values with
   special characters (`format:'Jan 2, 2006'`). A literal quote is `\\'` —
   the tag value is a double-quoted Go string, so a bare `\'` is an invalid
-  escape that makes the whole tag unreadable (ggen rejects it outright).
+  escape that makes the whole tag unreadable (ggen rejects it outright), as is
+  a quoted section you never close. A format ggen does not recognize, or one on
+  a type that takes none, is a generate-time error rather than a silent
+  fallback to the default encoding; `time.Time` is the exception, where an
+  unrecognized value is taken as a custom Go layout.
 - Names follow jsonv2 quoting too: `json:"'a,b'"` names a field `a,b`,
   `json:"'-'"` names it `-` (only a bare `json:"-"` ignores the field —
   `json:"-,..."` is rejected at generate time, like jsonv2).
@@ -313,8 +318,8 @@ quotes scope one part and protect a literal pipe: `oneof='New York'|LA`,
 | validators                                                    | error                                          | checks                                         |
 | ------------------------------------------------------------- | ---------------------------------------------- | ---------------------------------------------- |
 | `notempty`                                                    | `NotEmptyError`                                | string non-empty / slice / map non-zero length |
-| `len=N`, `minlen=N`, `maxlen=N`                               | `LenError`, `MinLenError`, `MaxLenError`       | byte-length / element-count bounds             |
-| `runes=N`, `minrunes=N`, `maxrunes=N`                         | `RunesError`, `MinRunesError`, `MaxRunesError` | rune-count bounds (utf8 aware)                 |
+| `len=N`, `minlen=N`, `maxlen=N`                               | `LenError`, `MinLenError`, `MaxLenError`       | byte-length / element-count bounds (N >= 0)    |
+| `runes=N`, `minrunes=N`, `maxrunes=N`                         | `RunesError`, `MinRunesError`, `MaxRunesError` | rune-count bounds, utf8 aware (N >= 0)         |
 | `gt=N`, `gte=N`, `lt=N`, `lte=N`                              | `GTError`, `GTEError`, `LTError`, `LTEError`   | numeric comparison                             |
 | `eq=X`, `neq=X`                                               | `EqError`, `NeqError`                          | equality (numeric or string operand)           |
 | `multiple=N`                                                  | `MultipleError`                                | numeric — multiple of N                        |

@@ -41,13 +41,7 @@ func (recv EscapeDoc) DecodeFrom(data []byte) (result EscapeDoc, i int, err erro
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
-		if ke >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-		}
-		if data[ke] < 0x20 {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-		}
-		if data[ke] == '"' {
+		if ke < len(data) && data[ke] == '"' {
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
@@ -199,15 +193,15 @@ func (recv EscapeDoc) DecodeFromStream(s *scan.Stream) (result EscapeDoc, err er
 	seenD := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -219,13 +213,13 @@ func (recv EscapeDoc) DecodeFromStream(s *scan.Stream) (result EscapeDoc, err er
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "a":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("a", s.Pos, err)
+				return result, decode.NewParseErr("a", s.Offset(), err)
 			}
 			if seenA {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"a"}}
@@ -233,12 +227,12 @@ func (recv EscapeDoc) DecodeFromStream(s *scan.Stream) (result EscapeDoc, err er
 			seenA = true
 			result.A, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("a", s.Pos, err)
+				return result, decode.NewParseErr("a", s.Offset(), err)
 			}
 		case "b":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("b", s.Pos, err)
+				return result, decode.NewParseErr("b", s.Offset(), err)
 			}
 			if seenB {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"b"}}
@@ -246,12 +240,12 @@ func (recv EscapeDoc) DecodeFromStream(s *scan.Stream) (result EscapeDoc, err er
 			seenB = true
 			result.B, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("b", s.Pos, err)
+				return result, decode.NewParseErr("b", s.Offset(), err)
 			}
 		case "c":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("c", s.Pos, err)
+				return result, decode.NewParseErr("c", s.Offset(), err)
 			}
 			if seenC {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"c"}}
@@ -259,12 +253,12 @@ func (recv EscapeDoc) DecodeFromStream(s *scan.Stream) (result EscapeDoc, err er
 			seenC = true
 			result.C, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("c", s.Pos, err)
+				return result, decode.NewParseErr("c", s.Offset(), err)
 			}
 		case "d":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("d", s.Pos, err)
+				return result, decode.NewParseErr("d", s.Offset(), err)
 			}
 			if seenD {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"d"}}
@@ -272,7 +266,7 @@ func (recv EscapeDoc) DecodeFromStream(s *scan.Stream) (result EscapeDoc, err er
 			seenD = true
 			result.D, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("d", s.Pos, err)
+				return result, decode.NewParseErr("d", s.Offset(), err)
 			}
 		default:
 			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
@@ -280,11 +274,11 @@ func (recv EscapeDoc) DecodeFromStream(s *scan.Stream) (result EscapeDoc, err er
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -293,7 +287,7 @@ func (recv EscapeDoc) DecodeFromStream(s *scan.Stream) (result EscapeDoc, err er
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -301,7 +295,7 @@ func (recv EscapeDoc) DecodeFromStream(s *scan.Stream) (result EscapeDoc, err er
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
 	}
 }
 
@@ -357,13 +351,7 @@ func (recv CopyEscapeDoc) DecodeFrom(data []byte) (result CopyEscapeDoc, i int, 
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
-		if ke >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-		}
-		if data[ke] < 0x20 {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-		}
-		if data[ke] == '"' {
+		if ke < len(data) && data[ke] == '"' {
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
@@ -519,15 +507,15 @@ func (recv CopyEscapeDoc) DecodeFromStream(s *scan.Stream) (result CopyEscapeDoc
 	seenD := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -539,13 +527,13 @@ func (recv CopyEscapeDoc) DecodeFromStream(s *scan.Stream) (result CopyEscapeDoc
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "a":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("a", s.Pos, err)
+				return result, decode.NewParseErr("a", s.Offset(), err)
 			}
 			if seenA {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"a"}}
@@ -553,12 +541,12 @@ func (recv CopyEscapeDoc) DecodeFromStream(s *scan.Stream) (result CopyEscapeDoc
 			seenA = true
 			result.A, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("a", s.Pos, err)
+				return result, decode.NewParseErr("a", s.Offset(), err)
 			}
 		case "b":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("b", s.Pos, err)
+				return result, decode.NewParseErr("b", s.Offset(), err)
 			}
 			if seenB {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"b"}}
@@ -566,12 +554,12 @@ func (recv CopyEscapeDoc) DecodeFromStream(s *scan.Stream) (result CopyEscapeDoc
 			seenB = true
 			result.B, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("b", s.Pos, err)
+				return result, decode.NewParseErr("b", s.Offset(), err)
 			}
 		case "c":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("c", s.Pos, err)
+				return result, decode.NewParseErr("c", s.Offset(), err)
 			}
 			if seenC {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"c"}}
@@ -579,12 +567,12 @@ func (recv CopyEscapeDoc) DecodeFromStream(s *scan.Stream) (result CopyEscapeDoc
 			seenC = true
 			result.C, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("c", s.Pos, err)
+				return result, decode.NewParseErr("c", s.Offset(), err)
 			}
 		case "d":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("d", s.Pos, err)
+				return result, decode.NewParseErr("d", s.Offset(), err)
 			}
 			if seenD {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"d"}}
@@ -592,7 +580,7 @@ func (recv CopyEscapeDoc) DecodeFromStream(s *scan.Stream) (result CopyEscapeDoc
 			seenD = true
 			result.D, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("d", s.Pos, err)
+				return result, decode.NewParseErr("d", s.Offset(), err)
 			}
 		default:
 			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
@@ -600,11 +588,11 @@ func (recv CopyEscapeDoc) DecodeFromStream(s *scan.Stream) (result CopyEscapeDoc
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -613,7 +601,7 @@ func (recv CopyEscapeDoc) DecodeFromStream(s *scan.Stream) (result CopyEscapeDoc
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -621,7 +609,7 @@ func (recv CopyEscapeDoc) DecodeFromStream(s *scan.Stream) (result CopyEscapeDoc
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
 	}
 }
 

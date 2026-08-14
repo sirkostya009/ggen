@@ -49,13 +49,7 @@ func (recv ArrMerge) DecodeFrom(data []byte) (result ArrMerge, i int, err error)
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
-		if ke >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-		}
-		if data[ke] < 0x20 {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-		}
-		if data[ke] == '"' {
+		if ke < len(data) && data[ke] == '"' {
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
@@ -338,15 +332,15 @@ func (recv ArrMerge) DecodeFromStream(s *scan.Stream) (result ArrMerge, err erro
 	seenSI := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -358,13 +352,13 @@ func (recv ArrMerge) DecodeFromStream(s *scan.Stream) (result ArrMerge, err erro
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "ai":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("ai", s.Pos, err)
+				return result, decode.NewParseErr("ai", s.Offset(), err)
 			}
 			if seenAI {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"ai"}}
@@ -372,15 +366,15 @@ func (recv ArrMerge) DecodeFromStream(s *scan.Stream) (result ArrMerge, err erro
 			seenAI = true
 			err = s.ArrayOpen()
 			if err != nil {
-				return result, decode.NewParseErr("ai", s.Pos, err)
+				return result, decode.NewParseErr("ai", s.Offset(), err)
 			}
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("ai", s.Pos, err)
+				return result, decode.NewParseErr("ai", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("ai", s.Pos, err)
+					return result, decode.NewParseErr("ai", s.Offset(), err)
 				}
 			}
 			var idx0 int
@@ -391,33 +385,33 @@ func (recv ArrMerge) DecodeFromStream(s *scan.Stream) (result ArrMerge, err erro
 				result.AI[idx0] = MergeInner{}
 				result.AI[idx0], err = result.AI[idx0].DecodeFromStream(s)
 				if err != nil {
-					return result, decode.NewParseErr("ai", s.Pos, err)
+					return result, decode.NewParseErr("ai", s.Offset(), err)
 				}
 				idx0++
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("ai", s.Pos, err)
+					return result, decode.NewParseErr("ai", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("ai", s.Pos, err)
+						return result, decode.NewParseErr("ai", s.Offset(), err)
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
 					s.Pos++
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("ai", s.Pos, err)
+						return result, decode.NewParseErr("ai", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-						return result, decode.NewParseErr("ai", s.Pos, scan.ErrBadArray)
+						return result, decode.NewParseErr("ai", s.Offset(), scan.ErrBadArray)
 					}
 					continue
 				}
 				break
 			}
 			if s.Bytes()[s.Pos] != ']' {
-				return result, decode.NewParseErr("ai", s.Pos, scan.ErrBadArray)
+				return result, decode.NewParseErr("ai", s.Offset(), scan.ErrBadArray)
 			}
 			if idx0 != 2 {
 				return result, &validation.LenError{Pos: s.Offset(), Path: []string{"ai"}, Want: 2, Got: idx0}
@@ -426,7 +420,7 @@ func (recv ArrMerge) DecodeFromStream(s *scan.Stream) (result ArrMerge, err erro
 		case "am":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("am", s.Pos, err)
+				return result, decode.NewParseErr("am", s.Offset(), err)
 			}
 			if seenAM {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"am"}}
@@ -434,15 +428,15 @@ func (recv ArrMerge) DecodeFromStream(s *scan.Stream) (result ArrMerge, err erro
 			seenAM = true
 			err = s.ArrayOpen()
 			if err != nil {
-				return result, decode.NewParseErr("am", s.Pos, err)
+				return result, decode.NewParseErr("am", s.Offset(), err)
 			}
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("am", s.Pos, err)
+				return result, decode.NewParseErr("am", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("am", s.Pos, err)
+					return result, decode.NewParseErr("am", s.Offset(), err)
 				}
 			}
 			var idx0 int
@@ -452,18 +446,18 @@ func (recv ArrMerge) DecodeFromStream(s *scan.Stream) (result ArrMerge, err erro
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("am[]", s.Pos, err)
+						return result, decode.NewParseErr("am[]", s.Offset(), err)
 					}
 				}
 				if s.Bytes()[s.Pos] == 'n' {
 					for ki := 1; ki < 4; ki++ {
 						if s.Pos+ki >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, decode.NewParseErr("am[]", s.Pos, err)
+								return result, decode.NewParseErr("am[]", s.Offset(), err)
 							}
 						}
 						if s.Bytes()[s.Pos+ki] != "null"[ki] {
-							return result, decode.NewParseErr("am[]", s.Pos, scan.ErrBadLiteral)
+							return result, decode.NewParseErr("am[]", s.Offset(), scan.ErrBadLiteral)
 						}
 					}
 					s.Pos += 4
@@ -472,35 +466,35 @@ func (recv ArrMerge) DecodeFromStream(s *scan.Stream) (result ArrMerge, err erro
 					var v MergeInner
 					v, err = v.DecodeFromStream(s)
 					if err != nil {
-						return result, decode.NewParseErr("am[]", s.Pos, err)
+						return result, decode.NewParseErr("am[]", s.Offset(), err)
 					}
 					result.AM[idx0] = new(new(v))
 				}
 				idx0++
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("am", s.Pos, err)
+					return result, decode.NewParseErr("am", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("am", s.Pos, err)
+						return result, decode.NewParseErr("am", s.Offset(), err)
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
 					s.Pos++
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("am", s.Pos, err)
+						return result, decode.NewParseErr("am", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-						return result, decode.NewParseErr("am", s.Pos, scan.ErrBadArray)
+						return result, decode.NewParseErr("am", s.Offset(), scan.ErrBadArray)
 					}
 					continue
 				}
 				break
 			}
 			if s.Bytes()[s.Pos] != ']' {
-				return result, decode.NewParseErr("am", s.Pos, scan.ErrBadArray)
+				return result, decode.NewParseErr("am", s.Offset(), scan.ErrBadArray)
 			}
 			if idx0 != 2 {
 				return result, &validation.LenError{Pos: s.Offset(), Path: []string{"am"}, Want: 2, Got: idx0}
@@ -509,7 +503,7 @@ func (recv ArrMerge) DecodeFromStream(s *scan.Stream) (result ArrMerge, err erro
 		case "ap":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("ap", s.Pos, err)
+				return result, decode.NewParseErr("ap", s.Offset(), err)
 			}
 			if seenAP {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"ap"}}
@@ -517,15 +511,15 @@ func (recv ArrMerge) DecodeFromStream(s *scan.Stream) (result ArrMerge, err erro
 			seenAP = true
 			err = s.ArrayOpen()
 			if err != nil {
-				return result, decode.NewParseErr("ap", s.Pos, err)
+				return result, decode.NewParseErr("ap", s.Offset(), err)
 			}
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("ap", s.Pos, err)
+				return result, decode.NewParseErr("ap", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("ap", s.Pos, err)
+					return result, decode.NewParseErr("ap", s.Offset(), err)
 				}
 			}
 			var idx0 int
@@ -536,18 +530,18 @@ func (recv ArrMerge) DecodeFromStream(s *scan.Stream) (result ArrMerge, err erro
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("ap", s.Pos, err)
+						return result, decode.NewParseErr("ap", s.Offset(), err)
 					}
 				}
 				if s.Bytes()[s.Pos] == 'n' {
 					for ki := 1; ki < 4; ki++ {
 						if s.Pos+ki >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, decode.NewParseErr("ap", s.Pos, err)
+								return result, decode.NewParseErr("ap", s.Offset(), err)
 							}
 						}
 						if s.Bytes()[s.Pos+ki] != "null"[ki] {
-							return result, decode.NewParseErr("ap", s.Pos, scan.ErrBadLiteral)
+							return result, decode.NewParseErr("ap", s.Offset(), scan.ErrBadLiteral)
 						}
 					}
 					s.Pos += 4
@@ -555,21 +549,21 @@ func (recv ArrMerge) DecodeFromStream(s *scan.Stream) (result ArrMerge, err erro
 					idx0++
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("ap", s.Pos, err)
+						return result, decode.NewParseErr("ap", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("ap", s.Pos, err)
+							return result, decode.NewParseErr("ap", s.Offset(), err)
 						}
 					}
 					if s.Bytes()[s.Pos] == ',' {
 						s.Pos++
 						err = s.SkipSpace()
 						if err != nil {
-							return result, decode.NewParseErr("ap", s.Pos, err)
+							return result, decode.NewParseErr("ap", s.Offset(), err)
 						}
 						if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-							return result, decode.NewParseErr("ap", s.Pos, scan.ErrBadArray)
+							return result, decode.NewParseErr("ap", s.Offset(), scan.ErrBadArray)
 						}
 						continue
 					}
@@ -577,34 +571,34 @@ func (recv ArrMerge) DecodeFromStream(s *scan.Stream) (result ArrMerge, err erro
 				}
 				slab0[idx0], err = slab0[idx0].DecodeFromStream(s)
 				if err != nil {
-					return result, decode.NewParseErr("ap", s.Pos, err)
+					return result, decode.NewParseErr("ap", s.Offset(), err)
 				}
 				result.AP[idx0] = &slab0[idx0]
 				idx0++
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("ap", s.Pos, err)
+					return result, decode.NewParseErr("ap", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("ap", s.Pos, err)
+						return result, decode.NewParseErr("ap", s.Offset(), err)
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
 					s.Pos++
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("ap", s.Pos, err)
+						return result, decode.NewParseErr("ap", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-						return result, decode.NewParseErr("ap", s.Pos, scan.ErrBadArray)
+						return result, decode.NewParseErr("ap", s.Offset(), scan.ErrBadArray)
 					}
 					continue
 				}
 				break
 			}
 			if s.Bytes()[s.Pos] != ']' {
-				return result, decode.NewParseErr("ap", s.Pos, scan.ErrBadArray)
+				return result, decode.NewParseErr("ap", s.Offset(), scan.ErrBadArray)
 			}
 			if idx0 != 2 {
 				return result, &validation.LenError{Pos: s.Offset(), Path: []string{"ap"}, Want: 2, Got: idx0}
@@ -613,7 +607,7 @@ func (recv ArrMerge) DecodeFromStream(s *scan.Stream) (result ArrMerge, err erro
 		case "si":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("si", s.Pos, err)
+				return result, decode.NewParseErr("si", s.Offset(), err)
 			}
 			if seenSI {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"si"}}
@@ -621,22 +615,22 @@ func (recv ArrMerge) DecodeFromStream(s *scan.Stream) (result ArrMerge, err erro
 			seenSI = true
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("si", s.Pos, err)
+				return result, decode.NewParseErr("si", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("si", s.Pos, err)
+					return result, decode.NewParseErr("si", s.Offset(), err)
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("si", s.Pos, err)
+							return result, decode.NewParseErr("si", s.Offset(), err)
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("si", s.Pos, scan.ErrBadLiteral)
+						return result, decode.NewParseErr("si", s.Offset(), scan.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -645,15 +639,15 @@ func (recv ArrMerge) DecodeFromStream(s *scan.Stream) (result ArrMerge, err erro
 			}
 			err = s.ArrayOpen()
 			if err != nil {
-				return result, decode.NewParseErr("si", s.Pos, err)
+				return result, decode.NewParseErr("si", s.Offset(), err)
 			}
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("si", s.Pos, err)
+				return result, decode.NewParseErr("si", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("si", s.Pos, err)
+					return result, decode.NewParseErr("si", s.Offset(), err)
 				}
 			}
 			if s.Bytes()[s.Pos] == ']' {
@@ -669,32 +663,32 @@ func (recv ArrMerge) DecodeFromStream(s *scan.Stream) (result ArrMerge, err erro
 				result.SI = append(result.SI, MergeInner{})
 				result.SI[len(result.SI)-1], err = result.SI[len(result.SI)-1].DecodeFromStream(s)
 				if err != nil {
-					return result, decode.NewParseErr("si", s.Pos, err)
+					return result, decode.NewParseErr("si", s.Offset(), err)
 				}
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("si", s.Pos, err)
+					return result, decode.NewParseErr("si", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("si", s.Pos, err)
+						return result, decode.NewParseErr("si", s.Offset(), err)
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
 					s.Pos++
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("si", s.Pos, err)
+						return result, decode.NewParseErr("si", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-						return result, decode.NewParseErr("si", s.Pos, scan.ErrBadArray)
+						return result, decode.NewParseErr("si", s.Offset(), scan.ErrBadArray)
 					}
 					continue
 				}
 				break
 			}
 			if s.Bytes()[s.Pos] != ']' {
-				return result, decode.NewParseErr("si", s.Pos, scan.ErrBadArray)
+				return result, decode.NewParseErr("si", s.Offset(), scan.ErrBadArray)
 			}
 			s.Pos++
 		default:
@@ -703,11 +697,11 @@ func (recv ArrMerge) DecodeFromStream(s *scan.Stream) (result ArrMerge, err erro
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -716,7 +710,7 @@ func (recv ArrMerge) DecodeFromStream(s *scan.Stream) (result ArrMerge, err erro
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -724,7 +718,7 @@ func (recv ArrMerge) DecodeFromStream(s *scan.Stream) (result ArrMerge, err erro
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
 	}
 }
 
@@ -874,13 +868,7 @@ func (recv MergeInner) DecodeFrom(data []byte) (result MergeInner, i int, err er
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
-		if ke >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-		}
-		if data[ke] < 0x20 {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-		}
-		if data[ke] == '"' {
+		if ke < len(data) && data[ke] == '"' {
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
@@ -1009,15 +997,15 @@ func (recv MergeInner) DecodeFromStream(s *scan.Stream) (result MergeInner, err 
 	seenY := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -1029,13 +1017,13 @@ func (recv MergeInner) DecodeFromStream(s *scan.Stream) (result MergeInner, err 
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "x":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("x", s.Pos, err)
+				return result, decode.NewParseErr("x", s.Offset(), err)
 			}
 			if seenX {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"x"}}
@@ -1044,13 +1032,13 @@ func (recv MergeInner) DecodeFromStream(s *scan.Stream) (result MergeInner, err 
 			var iv int64
 			iv, err = s.Int64()
 			if err != nil {
-				return result, decode.NewParseErr("x", s.Pos, err)
+				return result, decode.NewParseErr("x", s.Offset(), err)
 			}
 			result.X = int(iv)
 		case "y":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("y", s.Pos, err)
+				return result, decode.NewParseErr("y", s.Offset(), err)
 			}
 			if seenY {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"y"}}
@@ -1058,7 +1046,7 @@ func (recv MergeInner) DecodeFromStream(s *scan.Stream) (result MergeInner, err 
 			seenY = true
 			result.Y, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("y", s.Pos, err)
+				return result, decode.NewParseErr("y", s.Offset(), err)
 			}
 		default:
 			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
@@ -1066,11 +1054,11 @@ func (recv MergeInner) DecodeFromStream(s *scan.Stream) (result MergeInner, err 
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -1079,7 +1067,7 @@ func (recv MergeInner) DecodeFromStream(s *scan.Stream) (result MergeInner, err 
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -1087,7 +1075,7 @@ func (recv MergeInner) DecodeFromStream(s *scan.Stream) (result MergeInner, err 
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
 	}
 }
 

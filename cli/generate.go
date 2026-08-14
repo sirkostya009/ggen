@@ -698,7 +698,7 @@ func scalarCountable(k TypeKind) bool { return isNumeric(k) || k == KindBool }
 // return shape for a fallible mod ("" = stream 2-tuple, else bytes 3-tuple). A
 // custom mod is pure (`func(T)T`), error-form (`func(T)(T,error)`, parse error),
 // or bool-form (`func(T)(T,bool)`, false → decode.ModError parse error).
-func renderOneMod(b *bytes.Buffer, m ModRule, ref, goType string, kind TypeKind, posVar string) {
+func renderOneMod(b *bytes.Buffer, m ModRule, field, ref, goType string, kind TypeKind, posVar string) {
 	kind = effectiveKind(goType, kind)
 	prim := kindPrimitiveName(kind)
 	cast := goType != "" && prim != "" && goType != prim
@@ -734,8 +734,16 @@ func renderOneMod(b *bytes.Buffer, m ModRule, ref, goType string, kind TypeKind,
 					fmt.Fprintf(b, "if v, ok := %s(%s); !ok {\n\t%s\n} else {\n\t%s = v\n}\n",
 						call, ref, ret(modErr), ref)
 				} else {
+					// The mod's own error is foreign: wrap it so it carries
+					// the field path and offset, like every other decode
+					// failure (errors.As still reaches the mod's error).
+					pos := posVar
+					if pos == "" {
+						pos = "s.Offset()"
+					}
+					wrapped := fmt.Sprintf("decode.NewParseErr(%s, %s, err)", field, pos)
 					fmt.Fprintf(b, "if v, err := %s(%s); err != nil {\n\t%s\n} else {\n\t%s = v\n}\n",
-						call, ref, ret("err"), ref)
+						call, ref, ret(wrapped), ref)
 				}
 			} else {
 				fmt.Fprintf(b, "%s = %s(%s)\n", ref, call, ref)
@@ -1317,9 +1325,10 @@ func fieldSkipExpr(f FieldInfo, ref string) string {
 			case KindSQLNull:
 				// !Valid marshals as `null` (JSON-empty) → emit only when Valid.
 				emitConds = append(emitConds, fmt.Sprintf("%s.Valid", ref))
-			case KindBigInt, KindBigFloat, KindBigRat:
-				// zero big.X marshals as `"0"` (JSON-empty) → skip the zero.
-				emitConds = append(emitConds, fmt.Sprintf("%s.Sign() != 0", ref))
+				// big.Int/Float/Rat carry NO omitempty arm on purpose: a zero
+				// one encodes as `0` / `"0"`, which is not a JSON-empty value
+				// (v1 never omits a struct; jsonv2 omits only null/""/{}/[]).
+				// Omitting it dropped a field whose wire form is meaningful.
 			}
 		}
 	}
@@ -2122,7 +2131,7 @@ func streamNoCloseAfterComma(field string, close byte) string {
 	if close == '}' {
 		sentinel = "scan.ErrBadObject"
 	}
-	return fmt.Sprintf("if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == '%c' { return result, decode.NewParseErr(%s, s.Pos, %s) }\n", close, field, sentinel)
+	return fmt.Sprintf("if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == '%c' { return result, decode.NewParseErr(%s, s.Offset(), %s) }\n", close, field, sentinel)
 }
 
 // appendAnyFn mirrors appendStrFn for `any` values — htmlescape structs
@@ -3255,13 +3264,15 @@ if %[5]s < len(data) && data[%[5]s] == '"' {
 	if cp {
 		hot = "string(data[%[1]s+1:%[5]s])"
 	}
+	// Everything that is not a clean closing quote (run off the end, ctrl
+	// byte, escape, high byte) falls to scan.String — the error-identity AND
+	// error-position source of truth. Early-bailing here reported the opening
+	// quote's offset and diverged from the SIMD tier, which always falls.
 	if window < 0 {
 		fmt.Fprintf(b, `if %[1]s >= len(data) || data[%[1]s] != '"' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrExpectString) }
 %[5]s := %[1]s + 1
 for %[5]s < len(data) && data[%[5]s] != '"' && data[%[5]s] != '\\' && data[%[5]s] >= 0x20`+win80+` { %[5]s++ }
-if %[5]s >= len(data) { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrUnterminated) }
-if data[%[5]s] < 0x20 { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrBadString) }
-if data[%[5]s] == '"' {
+if %[5]s < len(data) && data[%[5]s] == '"' {
 	%[3]s = `+hot+`
 	%[4]s = %[5]s + 1
 } else {
@@ -3768,6 +3779,14 @@ func renderBytes(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	b.WriteString("}\n")
 }
 
+// emitEmptyBytesNonNil keeps an empty wire value ("" / []) decoding to an
+// empty NON-nil slice on a nil receiver, like every other container — the
+// decoders return nil for it (AppendDecode(nil, "") is nil; an immediate ']'
+// appends nothing), which would re-marshal as null.
+func emitEmptyBytesNonNil(b *bytes.Buffer, ref string) {
+	fmt.Fprintf(b, "if %[1]s == nil { %[1]s = []byte{} }\n", ref)
+}
+
 func renderBytesValue(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	field := fieldLit(f)
 	if f.Format == "array" {
@@ -3793,6 +3812,7 @@ for %[1]s < len(data) && data[%[1]s] != ']' {
 if %[1]s >= len(data) || data[%[1]s] != ']' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrBadArray) }
 %[1]s++
 `, posVar, field)
+		emitEmptyBytesNonNil(b, ref)
 		return
 	}
 	// AppendDecode skips the `[]byte(s)` copy DecodeString makes; pre-size
@@ -3841,6 +3861,7 @@ copy(%[7]s[:], %[1]sd)
 %[1]s, err = hex.AppendDecode(%[1]s, unsafe.Slice(unsafe.StringData(s), len(s)))
 if err != nil { return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, err) }
 `, ref, posVar, field)
+		emitEmptyBytesNonNil(b, ref)
 		return
 	}
 	b.WriteString("var s string\n")
@@ -3849,6 +3870,7 @@ if err != nil { return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, err) }
 %[1]s, err = %[3]s.AppendDecode(%[1]s, unsafe.Slice(unsafe.StringData(s), len(s)))
 if err != nil { return result, %[4]s, decode.NewParseErr(%[5]s, %[4]s, err) }
 `, ref, dlen, enc, posVar, field)
+	emitEmptyBytesNonNil(b, ref)
 }
 
 // renderTime emits time.Time decode.
@@ -4525,7 +4547,7 @@ func renderPipe(b *bytes.Buffer, steps []Step, ref, jsonName, goType string, kin
 	}
 	for p := 0; p < len(steps); {
 		if steps[p].IsMod {
-			renderOneMod(b, steps[p].M, ref, goType, kind, posVar)
+			renderOneMod(b, steps[p].M, strconv.Quote(jsonName), ref, goType, kind, posVar)
 			p++
 			continue
 		}
@@ -4765,7 +4787,7 @@ func emitStreamNullZero(b *bytes.Buffer, ref, zero, field string, flat bool) {
 	rmKi := strings.Replace(rm, "if s.Pos >=", "if s.Pos+ki >=", 1)
 	fmt.Fprintf(b, `%[2]sif s.Bytes()[s.Pos] == 'n' {
 	for ki := 1; ki < 4; ki++ {
-		%[3]sif s.Bytes()[s.Pos+ki] != "null"[ki] { return result, decode.NewParseErr(%[4]s, s.Pos, scan.ErrBadLiteral) }
+		%[3]sif s.Bytes()[s.Pos+ki] != "null"[ki] { return result, decode.NewParseErr(%[4]s, s.Offset(), scan.ErrBadLiteral) }
 	}
 	s.Pos += 4
 	%[1]s = %[5]s
@@ -5543,9 +5565,16 @@ func renderStreamDecodeStruct(b *bytes.Buffer, s StructInfo) {
 	// the switch. ConsumeColon (opening each case) may compact the buffer and
 	// kill the alias, so cases that capture key must clone before it.
 	chk := streamErrCheck(`""`)
-	rmore := `if s.Pos >= len(s.Bytes()) { if err = s.ReadMore(s.Pos); err != nil { return result, decode.NewParseErr("", s.Pos, err) }; s.Pos = 0 }
-`
-	badObj := `return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)`
+	// A drained refill maps to the sentinel the BYTES path reports for the
+	// same truncation: at the key position `{` wants a name, past a value it
+	// wants ',' or '}'. Transient reader errors still propagate raw.
+	rmore := func(sentinel string) string {
+		return fmt.Sprintf(`if s.Pos >= len(s.Bytes()) { if err = s.ReadMore(s.Pos); err != nil { return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, %s)) }; s.Pos = 0 }
+`, sentinel)
+	}
+	rmoreKey := rmore("scan.ErrExpectString")
+	rmoreSep := rmore("scan.ErrBadObject")
+	badObj := `return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)`
 	fmt.Fprintf(b, `err = s.ObjectOpen()
 %[1]serr = s.SkipSpace()
 %[1]s%[5]sif s.Bytes()[s.Pos] == '}' {
@@ -5557,7 +5586,7 @@ for {
 	key, err = s.KeyView(`+vArgS(s)+`)
 	%[1]s%[3]s
 	err = s.SkipSpace()
-	%[1]s%[5]sc := s.Bytes()[s.Pos]
+	%[1]s%[6]sc := s.Bytes()[s.Pos]
 	if c == ',' {
 		s.Pos++
 		err = s.SkipSpace()
@@ -5568,7 +5597,7 @@ for {
 %[2]s		return result, nil
 	}
 	%[4]s
-}`, chk, plStr, renderStreamDispatch(s), badObj, rmore)
+}`, chk, plStr, renderStreamDispatch(s), badObj, rmoreKey, rmoreSep)
 }
 
 func renderStreamDispatch(s StructInfo) string {
@@ -5632,8 +5661,8 @@ func renderStreamMap(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	chk := streamErrCheck(field)
 	rm := streamReadMore(field, "0", false)
 	rmKi := strings.Replace(rm, "if s.Pos >=", "if s.Pos+ki >=", 1)
-	badLit := fmt.Sprintf("return result, decode.NewParseErr(%s, s.Pos, scan.ErrBadLiteral)", field)
-	badObj := fmt.Sprintf("return result, decode.NewParseErr(%s, s.Pos, scan.ErrBadObject)", field)
+	badLit := fmt.Sprintf("return result, decode.NewParseErr(%s, s.Offset(), scan.ErrBadLiteral)", field)
+	badObj := fmt.Sprintf("return result, decode.NewParseErr(%s, s.Offset(), scan.ErrBadObject)", field)
 	makeExpr := fmt.Sprintf("make(%s)", f.GoType)
 	if cap := mapPreallocCap(f); cap > 0 {
 		makeExpr = fmt.Sprintf("make(%s, %d)", f.GoType, cap)
@@ -5712,7 +5741,7 @@ func renderStreamMap(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 			fmt.Fprintf(b, `%s, err = s.Int64()
 %s`, mapTarget, chk)
 		} else {
-			g := narrowIntGuard("iv", f.ElemType, fmt.Sprintf("return result, decode.NewParseErr(%s, s.Pos, scan.ErrNumberOverflow)", field))
+			g := narrowIntGuard("iv", f.ElemType, fmt.Sprintf("return result, decode.NewParseErr(%s, s.Offset(), scan.ErrNumberOverflow)", field))
 			fmt.Fprintf(b, `var iv int64
 iv, err = s.Int64()
 %[3]s%[4]s%[1]s = %[2]s(iv)
@@ -5723,7 +5752,7 @@ iv, err = s.Int64()
 			fmt.Fprintf(b, `%s, err = s.Uint64()
 %s`, mapTarget, chk)
 		} else {
-			g := narrowIntGuard("uv", f.ElemType, fmt.Sprintf("return result, decode.NewParseErr(%s, s.Pos, scan.ErrNumberOverflow)", field))
+			g := narrowIntGuard("uv", f.ElemType, fmt.Sprintf("return result, decode.NewParseErr(%s, s.Offset(), scan.ErrNumberOverflow)", field))
 			fmt.Fprintf(b, `var uv uint64
 uv, err = s.Uint64()
 %[3]s%[4]s%[1]s = %[2]s(uv)
@@ -5738,7 +5767,7 @@ uv, err = s.Uint64()
 fv, err = s.Float64()
 %[2]s%[3]s%[1]s = float32(fv)
 `, mapTarget, chk,
-				narrowFloatGuard("fv", "float32", fmt.Sprintf("return result, decode.NewParseErr(%s, s.Pos, scan.ErrNumberOverflow)", field)))
+				narrowFloatGuard("fv", "float32", fmt.Sprintf("return result, decode.NewParseErr(%s, s.Offset(), scan.ErrNumberOverflow)", field)))
 		}
 	case KindStruct:
 		if isGenerated(f.ElemType) {
@@ -5781,7 +5810,7 @@ mv, err = mv.`+streamDecodeCallFor(f.ElemType)+`
 // streamErrCheck returns the `if err != nil { return ... }` tail for a
 // stream-side scan call, with the field literal embedded (no post-pass wrap).
 func streamErrCheck(field string) string {
-	return fmt.Sprintf("if err != nil { return result, decode.NewParseErr(%s, s.Pos, err) }\n", field)
+	return fmt.Sprintf("if err != nil { return result, decode.NewParseErr(%s, s.Offset(), err) }\n", field)
 }
 
 // bytesErrCheck is the bytes-path equivalent of streamErrCheck, with the
@@ -5798,7 +5827,7 @@ func streamReadMore(field, keep string, resetPos bool) string {
 	if resetPos {
 		reset = "; s.Pos = 0"
 	}
-	return fmt.Sprintf("if s.Pos >= len(s.Bytes()) { if err = s.ReadMore(%s); err != nil { return result, decode.NewParseErr(%s, s.Pos, err) }%s }\n", keep, field, reset)
+	return fmt.Sprintf("if s.Pos >= len(s.Bytes()) { if err = s.ReadMore(%s); err != nil { return result, decode.NewParseErr(%s, s.Offset(), err) }%s }\n", keep, field, reset)
 }
 
 // nestedDecodeErrCheck emits the `if err != nil { … }` tail after a nested
@@ -5840,7 +5869,7 @@ func calleeDrains(t string) bool {
 // callee is the callee's type name ("" when unknown), used to gate the
 // multierr drain — see calleeDrains.
 func nestedDecodeErrCheck(field, callee string, multierr, bytesPath bool, nVar string) string {
-	wrap := fmt.Sprintf("decode.NewParseErr(%s, s.Pos, err)", field)
+	wrap := fmt.Sprintf("decode.NewParseErr(%s, s.Offset(), err)", field)
 	ret := fmt.Sprintf("return result, %s", wrap)
 	drain := fmt.Sprintf("errs.Append(%s, verr)", field)
 	if bytesPath {
@@ -5876,7 +5905,7 @@ func renderStreamBytes(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	// `null` → nil out the field (see renderBytes).
 	fmt.Fprintf(b, `%[3]sif s.Bytes()[s.Pos] == 'n' {
 	for ki := 1; ki < 4; ki++ {
-		%[4]sif s.Bytes()[s.Pos+ki] != "null"[ki] { return result, decode.NewParseErr(%[2]s, s.Pos, scan.ErrBadLiteral) }
+		%[4]sif s.Bytes()[s.Pos+ki] != "null"[ki] { return result, decode.NewParseErr(%[2]s, s.Offset(), scan.ErrBadLiteral) }
 	}
 	s.Pos += 4
 	%[1]s = nil
@@ -5896,7 +5925,7 @@ func renderStreamBytesValue(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	field := fieldLit(f)
 	chk := streamErrCheck(field)
 	rm := streamReadMore(field, "0", false)
-	badArr := fmt.Sprintf("return result, decode.NewParseErr(%s, s.Pos, scan.ErrBadArray)", field)
+	badArr := fmt.Sprintf("return result, decode.NewParseErr(%s, s.Offset(), scan.ErrBadArray)", field)
 	if f.Format == "array" {
 		// `u` not `v`: a pointer-leaf caller declares `var v []byte` in the
 		// same scope.
@@ -5913,6 +5942,7 @@ func renderStreamBytesValue(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 if s.Bytes()[s.Pos] != ']' { %[3]s }
 s.Pos++
 `, ref, chk, badArr, rm, streamNoCloseAfterComma(field, ']'))
+		emitEmptyBytesNonNil(b, ref)
 		return
 	}
 	enc := "base64.StdEncoding"
@@ -5955,6 +5985,7 @@ sv, err = s.StringView(`+vArg(f)+`)
 %[2]sif cap(%[1]s) < hex.DecodedLen(len(sv)) { %[1]s = make([]byte, 0, hex.DecodedLen(len(sv))) }
 %[1]s, err = hex.AppendDecode(%[1]s, unsafe.Slice(unsafe.StringData(sv), len(sv)))
 %[2]s`, ref, chk)
+		emitEmptyBytesNonNil(b, ref)
 		return
 	}
 	fmt.Fprintf(b, `var sv string
@@ -5962,6 +5993,7 @@ sv, err = s.StringView(`+vArg(f)+`)
 %[4]sif cap(%[1]s) < %[2]s(len(sv)) { %[1]s = make([]byte, 0, %[2]s(len(sv))) }
 %[1]s, err = %[3]s.AppendDecode(%[1]s, unsafe.Slice(unsafe.StringData(sv), len(sv)))
 %[4]s`, ref, dlen, enc, chk)
+	emitEmptyBytesNonNil(b, ref)
 }
 
 func renderStreamTime(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
@@ -6039,7 +6071,7 @@ func renderStreamNetIP(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	fmt.Fprintf(b, `var sv string
 sv, err = s.StringView(`+vArg(f)+`)
 %[2]s%[1]s = net.ParseIP(sv)
-if %[1]s == nil { return result, decode.NewParseErr(%[3]s, s.Pos, &net.ParseError{Type: "IP address", Text: string(sv)}) }
+if %[1]s == nil { return result, decode.NewParseErr(%[3]s, s.Offset(), &net.ParseError{Type: "IP address", Text: string(sv)}) }
 `, ref, chk, field)
 }
 
@@ -6095,7 +6127,7 @@ func renderStreamBigInt(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	chk := streamErrCheck(field)
 	fmt.Fprintf(b, `span, err := s.CaptureValue()
 %[2]sif _, ok := (&%[1]s).SetString(unsafe.String(unsafe.SliceData(span), len(span)), 10); !ok {
-	return result, decode.NewParseErr(%[3]s, s.Pos, scan.ErrBadNumber)
+	return result, decode.NewParseErr(%[3]s, s.Offset(), scan.ErrBadNumber)
 }
 `, ref, chk, field)
 }
@@ -6108,7 +6140,7 @@ func renderStreamBigFloat(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	fmt.Fprintf(b, `var sv string
 sv, err = s.StringView(`+vArg(f)+`)
 %[2]sif _, _, err := (&%[1]s).Parse(sv, 10); err != nil {
-	return result, decode.NewParseErr(%[3]s, s.Pos, err)
+	return result, decode.NewParseErr(%[3]s, s.Offset(), err)
 }
 `, ref, chk, field)
 }
@@ -6121,7 +6153,7 @@ func renderStreamBigRat(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	fmt.Fprintf(b, `var sv string
 sv, err = s.StringView(`+vArg(f)+`)
 %[2]sif _, ok := (&%[1]s).SetString(sv); !ok {
-	return result, decode.NewParseErr(%[3]s, s.Pos, scan.ErrBadNumber)
+	return result, decode.NewParseErr(%[3]s, s.Offset(), scan.ErrBadNumber)
 }
 `, ref, chk, field)
 }
@@ -6143,7 +6175,7 @@ func renderStreamSQLNull(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 		}
 		fmt.Fprintf(b, `%[5]sif s.Bytes()[s.Pos] == 'n' {
 	for ki := 1; ki < 4; ki++ {
-		%[7]sif s.Bytes()[s.Pos+ki] != "null"[ki] { return result, decode.NewParseErr(%[6]s, s.Pos, scan.ErrBadLiteral) }
+		%[7]sif s.Bytes()[s.Pos+ki] != "null"[ki] { return result, decode.NewParseErr(%[6]s, s.Offset(), scan.ErrBadLiteral) }
 	}
 	%[1]s = sql.%[2]s{}
 	s.Pos += 4
@@ -6206,7 +6238,7 @@ nv, err = s.%[2]s(%[4]s)
 	rmKi := strings.Replace(rm, "if s.Pos >=", "if s.Pos+ki >=", 1)
 	fmt.Fprintf(b, `%[6]sif s.Bytes()[s.Pos] == 'n' {
 	for ki := 1; ki < 4; ki++ {
-		%[8]sif s.Bytes()[s.Pos+ki] != "null"[ki] { return result, decode.NewParseErr(%[7]s, s.Pos, scan.ErrBadLiteral) }
+		%[8]sif s.Bytes()[s.Pos+ki] != "null"[ki] { return result, decode.NewParseErr(%[7]s, s.Offset(), scan.ErrBadLiteral) }
 	}
 	%[1]s = sql.%[2]s{}
 	s.Pos += 4
@@ -6262,7 +6294,7 @@ _iv, err = _iv.`+streamDecodeCallFor(inline.ElemType)+`
 		}
 		return prelude + fmt.Sprintf(`span, err := s.CaptureValue()
 %[3]svar _iv %[1]s
-if err = json.Unmarshal(span, &_iv); err != nil { return result, decode.NewParseErr(ownKey, s.Pos, err) }
+if err = json.Unmarshal(span, &_iv); err != nil { return result, decode.NewParseErr(ownKey, s.Offset(), err) }
 result.%[2]s[ownKey] = _iv
 `, inline.ElemType, inline.GoName, chk)
 	}
@@ -6295,7 +6327,7 @@ func renderStreamStringTag(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 		fmt.Fprintf(b, `switch sv {
 case "true": %[1]s = true
 case "false": %[1]s = false
-default: return result, decode.NewParseErr(%[2]s, s.Pos, scan.ErrBadBool)
+default: return result, decode.NewParseErr(%[2]s, s.Offset(), scan.ErrBadBool)
 }
 `, ref, field)
 	case KindFloat32, KindFloat64:
@@ -6303,7 +6335,7 @@ default: return result, decode.NewParseErr(%[2]s, s.Pos, scan.ErrBadBool)
 		b.WriteString(chk)
 		if f.Kind == KindFloat32 {
 			b.WriteString(narrowFloatGuard("f", "float32",
-				fmt.Sprintf("return result, decode.NewParseErr(%s, s.Pos, scan.ErrNumberOverflow)", field)))
+				fmt.Sprintf("return result, decode.NewParseErr(%s, s.Offset(), scan.ErrNumberOverflow)", field)))
 			fmt.Fprintf(b, "%s = float32(f)\n", ref)
 		} else {
 			fmt.Fprintf(b, "%s = f\n", ref)
@@ -6315,7 +6347,7 @@ default: return result, decode.NewParseErr(%[2]s, s.Pos, scan.ErrBadBool)
 			fmt.Fprintf(b, "%s = u\n", ref)
 		} else {
 			b.WriteString(narrowIntGuard("u", kindNarrowName(f.Kind),
-				fmt.Sprintf("return result, decode.NewParseErr(%s, s.Pos, scan.ErrNumberOverflow)", field)))
+				fmt.Sprintf("return result, decode.NewParseErr(%s, s.Offset(), scan.ErrNumberOverflow)", field)))
 			fmt.Fprintf(b, "%s = %s(u)\n", ref, f.GoType)
 		}
 	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
@@ -6325,7 +6357,7 @@ default: return result, decode.NewParseErr(%[2]s, s.Pos, scan.ErrBadBool)
 			fmt.Fprintf(b, "%s = n\n", ref)
 		} else {
 			b.WriteString(narrowIntGuard("n", kindNarrowName(f.Kind),
-				fmt.Sprintf("return result, decode.NewParseErr(%s, s.Pos, scan.ErrNumberOverflow)", field)))
+				fmt.Sprintf("return result, decode.NewParseErr(%s, s.Offset(), scan.ErrNumberOverflow)", field)))
 			fmt.Fprintf(b, "%s = %s(n)\n", ref, f.GoType)
 		}
 	case KindString:
@@ -6428,7 +6460,7 @@ func renderStreamField(f FieldInfo, ref, posVar string) string {
 		flat := nullBreakOK(f)
 		fmt.Fprintf(b, `%[2]sif s.Bytes()[s.Pos] == 'n' {
 	for ki := 1; ki < 4; ki++ {
-		%[3]sif s.Bytes()[s.Pos+ki] != "null"[ki] { return result, decode.NewParseErr(%[4]s, s.Pos, scan.ErrBadLiteral) }
+		%[3]sif s.Bytes()[s.Pos+ki] != "null"[ki] { return result, decode.NewParseErr(%[4]s, s.Offset(), scan.ErrBadLiteral) }
 	}
 	s.Pos += 4
 	%[1]s = nil
@@ -6443,8 +6475,8 @@ func renderStreamField(f FieldInfo, ref, posVar string) string {
 			emitPointerSeed(b, ref, depth, leaf.Kind)
 		}
 		b.WriteString(renderStreamField(leaf, "v", posVar))
-		b.WriteString(narrowIntGuard("v", narrowCast, fmt.Sprintf("return result, decode.NewParseErr(%s, s.Pos, scan.ErrNumberOverflow)", field)))
-		b.WriteString(narrowFloatGuard("v", narrowCast, fmt.Sprintf("return result, decode.NewParseErr(%s, s.Pos, scan.ErrNumberOverflow)", field)))
+		b.WriteString(narrowIntGuard("v", narrowCast, fmt.Sprintf("return result, decode.NewParseErr(%s, s.Offset(), scan.ErrNumberOverflow)", field)))
+		b.WriteString(narrowFloatGuard("v", narrowCast, fmt.Sprintf("return result, decode.NewParseErr(%s, s.Offset(), scan.ErrNumberOverflow)", field)))
 		if f.TargetNil {
 			// Target is a known-nil `var x *T` — straight new-chain assign.
 			fmt.Fprintf(b, "%s = %s\n", ref, newChain(valExpr, depth))
@@ -6473,7 +6505,7 @@ func renderStreamField(f FieldInfo, ref, posVar string) string {
 	}
 	widenedScan := func(wideType, wideVar, method, castTo string) {
 		guard := ""
-		errRet := fmt.Sprintf("return result, decode.NewParseErr(%s, s.Pos, scan.ErrNumberOverflow)", field)
+		errRet := fmt.Sprintf("return result, decode.NewParseErr(%s, s.Offset(), scan.ErrNumberOverflow)", field)
 		if method == "Int64" || method == "Uint64" {
 			guard = narrowIntGuard(wideVar, castTo, errRet)
 		}
@@ -6585,7 +6617,7 @@ func emitStreamSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth
 		fmt.Fprintf(b, `err = s.SkipSpace()
 %[2]s%[4]sif s.Bytes()[s.Pos] == 'n' {
 	for ki := 1; ki < 4; ki++ {
-		%[5]sif s.Bytes()[s.Pos+ki] != "null"[ki] { return result, decode.NewParseErr(%[3]s, s.Pos, scan.ErrBadLiteral) }
+		%[5]sif s.Bytes()[s.Pos+ki] != "null"[ki] { return result, decode.NewParseErr(%[3]s, s.Offset(), scan.ErrBadLiteral) }
 	}
 	s.Pos += 4
 	%[1]s = nil
@@ -6641,7 +6673,7 @@ func emitStreamSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth
 		}
 		fmt.Fprintf(b, `%[4]sif s.Bytes()[s.Pos] == 'n' {
 	for ki := 1; ki < 4; ki++ {
-		%[5]sif s.Bytes()[s.Pos+ki] != "null"[ki] { return result, decode.NewParseErr(%[3]s, s.Pos, scan.ErrBadLiteral) }
+		%[5]sif s.Bytes()[s.Pos+ki] != "null"[ki] { return result, decode.NewParseErr(%[3]s, s.Offset(), scan.ErrBadLiteral) }
 	}
 	s.Pos += 4
 	%[1]s	err = s.SkipSpace()
@@ -6708,7 +6740,7 @@ func emitStreamSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth
 				fmt.Fprintf(b, `%s, err = s.Int64()
 %s`, target, chk)
 			} else {
-				g := narrowIntGuard("iv", f.ElemType, fmt.Sprintf("return result, decode.NewParseErr(%s, s.Pos, scan.ErrNumberOverflow)", field))
+				g := narrowIntGuard("iv", f.ElemType, fmt.Sprintf("return result, decode.NewParseErr(%s, s.Offset(), scan.ErrNumberOverflow)", field))
 				fmt.Fprintf(b, `var iv int64
 iv, err = s.Int64()
 %[3]s%[4]s%[1]s = %[2]s(iv)
@@ -6719,7 +6751,7 @@ iv, err = s.Int64()
 				fmt.Fprintf(b, `%s, err = s.Uint64()
 %s`, target, chk)
 			} else {
-				g := narrowIntGuard("uv", f.ElemType, fmt.Sprintf("return result, decode.NewParseErr(%s, s.Pos, scan.ErrNumberOverflow)", field))
+				g := narrowIntGuard("uv", f.ElemType, fmt.Sprintf("return result, decode.NewParseErr(%s, s.Offset(), scan.ErrNumberOverflow)", field))
 				fmt.Fprintf(b, `var uv uint64
 uv, err = s.Uint64()
 %[3]s%[4]s%[1]s = %[2]s(uv)
@@ -6734,7 +6766,7 @@ uv, err = s.Uint64()
 fv, err = s.Float64()
 %[2]s%[3]s%[1]s = float32(fv)
 `, target, chk,
-					narrowFloatGuard("fv", "float32", fmt.Sprintf("return result, decode.NewParseErr(%s, s.Pos, scan.ErrNumberOverflow)", field)))
+					narrowFloatGuard("fv", "float32", fmt.Sprintf("return result, decode.NewParseErr(%s, s.Offset(), scan.ErrNumberOverflow)", field)))
 			}
 		case KindStruct:
 			if directStruct {
@@ -6752,7 +6784,7 @@ fv, err = s.Float64()
 				// nested in an else (mirrors the []*T nil-elem fast path).
 				fmt.Fprintf(b, `%[2]sif s.Bytes()[s.Pos] == 'n' {
 	for ki := 1; ki < 4; ki++ {
-		%[3]sif s.Bytes()[s.Pos+ki] != "null"[ki] { return result, decode.NewParseErr(%[1]s, s.Pos, scan.ErrBadLiteral) }
+		%[3]sif s.Bytes()[s.Pos+ki] != "null"[ki] { return result, decode.NewParseErr(%[1]s, s.Offset(), scan.ErrBadLiteral) }
 	}
 	s.Pos += 4
 `, field, rm, rmKi)
@@ -6806,7 +6838,7 @@ break
 %[1]s%[3]sif s.Bytes()[s.Pos] == ',' { s.Pos++; err = s.SkipSpace(); %[1]s%[4]scontinue }
 break
 }
-if s.Bytes()[s.Pos] != ']' { return result, decode.NewParseErr(%[2]s, s.Pos, scan.ErrBadArray) }
+if s.Bytes()[s.Pos] != ']' { return result, decode.NewParseErr(%[2]s, s.Offset(), scan.ErrBadArray) }
 `, chk, field, rm, streamNoCloseAfterComma(field, ']'))
 	if isArray {
 		fmt.Fprintf(b, "if %s != %d { return result, %s }\n",

@@ -39,13 +39,7 @@ func (recv AnyStruct) DecodeFrom(data []byte) (result AnyStruct, i int, err erro
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
-		if ke >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-		}
-		if data[ke] < 0x20 {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-		}
-		if data[ke] == '"' {
+		if ke < len(data) && data[ke] == '"' {
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
@@ -129,15 +123,15 @@ func (recv AnyStruct) DecodeFromStream(s *scan.Stream) (result AnyStruct, err er
 	seenName := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -149,13 +143,13 @@ func (recv AnyStruct) DecodeFromStream(s *scan.Stream) (result AnyStruct, err er
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "body":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("body", s.Pos, err)
+				return result, decode.NewParseErr("body", s.Offset(), err)
 			}
 			if seenBody {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"body"}}
@@ -163,12 +157,12 @@ func (recv AnyStruct) DecodeFromStream(s *scan.Stream) (result AnyStruct, err er
 			seenBody = true
 			result.Body, err = s.Any()
 			if err != nil {
-				return result, decode.NewParseErr("body", s.Pos, err)
+				return result, decode.NewParseErr("body", s.Offset(), err)
 			}
 		case "name":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("name", s.Pos, err)
+				return result, decode.NewParseErr("name", s.Offset(), err)
 			}
 			if seenName {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"name"}}
@@ -176,7 +170,7 @@ func (recv AnyStruct) DecodeFromStream(s *scan.Stream) (result AnyStruct, err er
 			seenName = true
 			result.Name, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("name", s.Pos, err)
+				return result, decode.NewParseErr("name", s.Offset(), err)
 			}
 		default:
 			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
@@ -184,11 +178,11 @@ func (recv AnyStruct) DecodeFromStream(s *scan.Stream) (result AnyStruct, err er
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -197,7 +191,7 @@ func (recv AnyStruct) DecodeFromStream(s *scan.Stream) (result AnyStruct, err er
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -205,7 +199,7 @@ func (recv AnyStruct) DecodeFromStream(s *scan.Stream) (result AnyStruct, err er
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
 	}
 }
 
@@ -254,13 +248,7 @@ func (recv AnyNumberStruct) DecodeFrom(data []byte) (result AnyNumberStruct, i i
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
-		if ke >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-		}
-		if data[ke] < 0x20 {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-		}
-		if data[ke] == '"' {
+		if ke < len(data) && data[ke] == '"' {
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
@@ -344,15 +332,15 @@ func (recv AnyNumberStruct) DecodeFromStream(s *scan.Stream) (result AnyNumberSt
 	seenName := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -364,13 +352,13 @@ func (recv AnyNumberStruct) DecodeFromStream(s *scan.Stream) (result AnyNumberSt
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "body":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("body", s.Pos, err)
+				return result, decode.NewParseErr("body", s.Offset(), err)
 			}
 			if seenBody {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"body"}}
@@ -378,12 +366,12 @@ func (recv AnyNumberStruct) DecodeFromStream(s *scan.Stream) (result AnyNumberSt
 			seenBody = true
 			result.Body, err = s.AnyNumber()
 			if err != nil {
-				return result, decode.NewParseErr("body", s.Pos, err)
+				return result, decode.NewParseErr("body", s.Offset(), err)
 			}
 		case "name":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("name", s.Pos, err)
+				return result, decode.NewParseErr("name", s.Offset(), err)
 			}
 			if seenName {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"name"}}
@@ -391,7 +379,7 @@ func (recv AnyNumberStruct) DecodeFromStream(s *scan.Stream) (result AnyNumberSt
 			seenName = true
 			result.Name, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("name", s.Pos, err)
+				return result, decode.NewParseErr("name", s.Offset(), err)
 			}
 		default:
 			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
@@ -399,11 +387,11 @@ func (recv AnyNumberStruct) DecodeFromStream(s *scan.Stream) (result AnyNumberSt
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -412,7 +400,7 @@ func (recv AnyNumberStruct) DecodeFromStream(s *scan.Stream) (result AnyNumberSt
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -420,7 +408,7 @@ func (recv AnyNumberStruct) DecodeFromStream(s *scan.Stream) (result AnyNumberSt
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
 	}
 }
 

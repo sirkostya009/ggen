@@ -1190,6 +1190,80 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
     already cast via `primCast`. Pinned by
     `TestMap_NamedPrimitiveValuesRoundTrip`.
 
+59. **Stream error positions stamp `s.Offset()`, never the raw `s.Pos`.**
+    ~165 emit sites per generated decoder interpolated the buffer-relative
+    `s.Pos` into `decode.NewParseErr`, while the validation-error sites in the
+    SAME function already used `s.Offset()`. `Pos` only equals the payload
+    offset until a compacting refill slides the window, so the reported
+    position collapsed toward 0 and CHANGED WITH THE CHUNK SIZE (`{"i8":128}`
+    → 9 on bytes, 0/0/2 on stream at 1/3/7-byte chunks). Round-4 fixed the
+    identical class inside `decode.UnmarshalSliceStream` but not the emitters;
+    round-5's pin used a 16-byte payload, where the window never slides and
+    `Pos == Offset()` by accident. Pinned by
+    `TestParseError_StreamPosIsPayloadOffset` (9.5 KB payload × chunk sizes ×
+    a 64-byte buffer).
+
+60. **Generated stream refills map drained → the bytes-path sentinel.**
+    The struct dispatch loop's `ReadMore` guards returned the RAW reader error,
+    so truncation surfaced `io.ErrUnexpectedEOF` where the bytes path reported
+    a grammar sentinel. The two guard positions now carry the sentinel the
+    bytes path returns for the same truncation (`ErrExpectString` at a key,
+    `ErrBadObject` past a value) via the newly exported `scan.NotEOF`, so
+    transient reader errors still propagate raw. Sentinels AND positions now
+    match bytes at every chunk size. One residual, deliberate: at the colon
+    site the stream carries a field path and bytes does not — the check lives
+    at different stages (bytes before dispatch, stream inside each case via
+    `ConsumeColon`), so bytes has no field name there; sentinel and position
+    agree.
+
+61. **Foreign errors from converters and fallible mods wrap in `NewParseErr`.**
+    An error-form `@Conv` / `@Mod` returned its own error bare — no path, no
+    offset, `errors.As[*decode.ParseError]` false — while the bool forms built
+    a typed `decode.ModError`. Both now wrap (the underlying error stays
+    reachable through `errors.As`). Pinned by
+    `TestVariant_converterErrorCarriesPathAndPos` +
+    `TestFallibleMod_errorCarriesPathAndPos`.
+
+62. **Empty `[]byte` wire decodes to an empty NON-nil slice.**
+    `""` (base64/hex) and `[]` (`format:array`) left a nil receiver nil —
+    `AppendDecode(nil, "")` is nil and an immediate `]` appends nothing — so
+    `[]byte{}` marshalled `""`, decoded to nil, and re-marshalled `null`,
+    breaking the round-trip fixed point that every other container honours
+    (cli/CLAUDE.md's empty-non-nil rule). `emitEmptyBytesNonNil` closes all six
+    arms (bytes + stream × base64/hex/array). Pinned by
+    `TestBytes_emptyDecodesNonNil`.
+
+63. **The scalar inline key scan falls to `scan.String` on any non-quote.**
+    Its early-bails reported the OPENING QUOTE's offset for
+    unterminated/ctrl-byte strings while the SIMD tier always falls and reports
+    `scan.String`'s give-up position — the same struct built with and without
+    `-simd` disagreed on error position (274 of 4000 random mutations). The
+    fall is the documented error-identity source of truth, so the error arms
+    now route there; the happy path drops a compare rather than gaining one.
+
+64. **Parse-time rejections that used to be silent.** Three shapes were
+    accepted and then miscompiled or silently ignored: an unterminated `'` in a
+    json tag (the quote landed in the wire key), a negative `len`/`minlen`/
+    `maxlen`/`runes` bound (`maxlen=-1` emits a validator no value can satisfy),
+    and an unknown `format:` (a typo like `base64ur` fell through to the
+    default encoding — wrong bytes, no diagnostic). All three now fail at
+    generate time with a field+rule diagnostic. `format:` on `time.Time` stays
+    open-ended (an unrecognized value there is a custom Go layout), and
+    `[N]byte` is checked as `[]byte`. Rows in `cli_test.go`'s
+    `InvalidRuleApplication` table.
+
+65. **`omitempty` never omits a zero `big.Int`/`big.Float`/`big.Rat`.**
+    The arm claimed a zero big value is "JSON-empty", but it encodes as `0` /
+    `"0"` — v1 never omits a struct, and jsonv2 omits only `null`/`""`/`{}`/`[]`.
+    The field silently vanished from the wire. Arm deleted. Pinned by
+    `TestOmitEmpty_bigTypesNeverOmitted`.
+
+66. **Primitive alias decoders skip leading whitespace.**
+    `AliasString("").DecodeFrom([]byte(" \"x\""))` failed `ErrExpectString`
+    while container and struct aliases accepted the same input (their
+    `ArrayOpen`/`ObjectOpen` skip space). Whitespace is legal before any
+    top-level value. Pinned by `TestAlias_leadingWhitespace`.
+
 ## Named types, cross-package types (defects fixed 2026-07)
 
 One missing lookup and one stale signature matcher made two whole type families

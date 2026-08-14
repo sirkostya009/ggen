@@ -44,13 +44,7 @@ func (recv External2) DecodeFrom(data []byte) (result External2, i int, err erro
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
-		if ke >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-		}
-		if data[ke] < 0x20 {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-		}
-		if data[ke] == '"' {
+		if ke < len(data) && data[ke] == '"' {
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
@@ -188,15 +182,15 @@ func (recv External2) DecodeFromStream(s *scan.Stream) (result External2, err er
 	seenValue := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -211,13 +205,13 @@ func (recv External2) DecodeFromStream(s *scan.Stream) (result External2, err er
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "key":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("key", s.Pos, err)
+				return result, decode.NewParseErr("key", s.Offset(), err)
 			}
 			if seenKey {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"key"}}
@@ -225,7 +219,7 @@ func (recv External2) DecodeFromStream(s *scan.Stream) (result External2, err er
 			seenKey = true
 			result.Key, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("key", s.Pos, err)
+				return result, decode.NewParseErr("key", s.Offset(), err)
 			}
 			if len(result.Key) < 1 {
 				return result, &validation.MinLenError{Pos: s.Offset(), Path: []string{"key"}, Limit: 1, Got: len(result.Key)}
@@ -233,7 +227,7 @@ func (recv External2) DecodeFromStream(s *scan.Stream) (result External2, err er
 		case "value":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("value", s.Pos, err)
+				return result, decode.NewParseErr("value", s.Offset(), err)
 			}
 			if seenValue {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"value"}}
@@ -242,7 +236,7 @@ func (recv External2) DecodeFromStream(s *scan.Stream) (result External2, err er
 			var iv int64
 			iv, err = s.Int64()
 			if err != nil {
-				return result, decode.NewParseErr("value", s.Pos, err)
+				return result, decode.NewParseErr("value", s.Offset(), err)
 			}
 			result.Value = int(iv)
 			if result.Value < 0 {
@@ -254,11 +248,11 @@ func (recv External2) DecodeFromStream(s *scan.Stream) (result External2, err er
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -267,7 +261,7 @@ func (recv External2) DecodeFromStream(s *scan.Stream) (result External2, err er
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -278,7 +272,7 @@ func (recv External2) DecodeFromStream(s *scan.Stream) (result External2, err er
 			}
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
 	}
 }
 

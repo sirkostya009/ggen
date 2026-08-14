@@ -769,3 +769,33 @@ func TestAlias_RuneElements(t *testing.T) {
 		t.Fatalf("roundtrip: %+v %v", back, err)
 	}
 }
+
+// Leading whitespace is legal before any top-level JSON value. Container and
+// struct aliases always accepted it (ArrayOpen/ObjectOpen skip space); the
+// primitive alias decoders scanned at the cursor and rejected it.
+func TestAlias_leadingWhitespace(t *testing.T) {
+	t.Parallel()
+	sv, _, err := AliasString("").DecodeFrom([]byte(" \t\n\"x\""))
+	if err != nil {
+		t.Fatalf("AliasString: %v", err)
+	}
+	if sv != "x" {
+		t.Errorf("AliasString = %q, want %q", sv, "x")
+	}
+	iv, _, err := AliasInt(0).DecodeFrom([]byte("  42"))
+	if err != nil {
+		t.Fatalf("AliasInt: %v", err)
+	}
+	if iv != 42 {
+		t.Errorf("AliasInt = %d, want 42", iv)
+	}
+	var st scan.Stream
+	st.Reset(bytes.NewReader([]byte("  \"y\"")), nil)
+	sv2, err := AliasString("").DecodeFromStream(&st)
+	if err != nil {
+		t.Fatalf("AliasString stream: %v", err)
+	}
+	if sv2 != "y" {
+		t.Errorf("AliasString stream = %q, want %q", sv2, "y")
+	}
+}

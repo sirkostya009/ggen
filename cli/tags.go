@@ -28,7 +28,10 @@ func parseJSONTag(tag string) (name string, opts JSONOptions, ignored bool, err 
 	if tag == "-" {
 		return "", JSONOptions{}, true, nil
 	}
-	parts := splitTagOpts(tag)
+	parts, unterminated := splitTagOpts(tag)
+	if unterminated {
+		return "", JSONOptions{}, false, fmt.Errorf("json tag %q: unterminated quoted section (odd number of `'`); escape a literal quote as \\'", tag)
+	}
 	name = strings.TrimSpace(parts[0])
 	if name == "-" && len(parts) > 1 {
 		return "", JSONOptions{}, false, fmt.Errorf(`json tag %q: use json:"-" to ignore the field, or json:"'-'" for a field named "-"`, tag)
@@ -58,7 +61,10 @@ func parseJSONTag(tag string) (name string, opts JSONOptions, ignored bool, err 
 }
 
 // splitTagOpts splits a json tag on commas outside single-quoted regions.
-func splitTagOpts(tag string) []string {
+// The second result reports an unterminated quoted section (odd quote count),
+// which would otherwise swallow the option separators and leave the quote
+// character sitting in the wire key.
+func splitTagOpts(tag string) ([]string, bool) {
 	var parts []string
 	start, quoted := 0, false
 	for i := 0; i < len(tag); i++ {
@@ -76,7 +82,7 @@ func splitTagOpts(tag string) []string {
 			}
 		}
 	}
-	return append(parts, tag[start:])
+	return append(parts, tag[start:]), quoted
 }
 
 // unquoteTagValue strips one level of single quotes and unescapes \'.

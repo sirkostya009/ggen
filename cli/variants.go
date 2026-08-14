@@ -168,7 +168,7 @@ func renderVariantDispatch(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 			tmp := fmt.Sprintf("_cv%d", idx)
 			fmt.Fprintf(b, "var %s %s\n", tmp, v.InType)
 			renderField(b, converterInputField(f, v), tmp, posVar)
-			emitConvAssign(b, v, ref, tmp, posVar)
+			emitConvAssign(b, v, field, ref, tmp, posVar)
 		}
 	}
 	fmt.Fprintf(b, "default:\nreturn result, %s, decode.NewParseErr(%s, %s, scan.ErrBadValue)\n}\n", posVar, field, posVar)
@@ -187,7 +187,7 @@ func renderVariantDispatchStream(f FieldInfo, ref, posVar string) string {
 		switch v.Kind {
 		case VariantNullZero:
 			rmKi := strings.Replace(streamReadMore(field, "0", false), "if s.Pos >=", "if s.Pos+ki >=", 1)
-			fmt.Fprintf(b, "for ki := 1; ki < 4; ki++ {\n%sif s.Bytes()[s.Pos+ki] != \"null\"[ki] {\nreturn result, decode.NewParseErr(%s, s.Pos, scan.ErrBadLiteral)\n}\n}\ns.Pos += 4\n%s = %s\n",
+			fmt.Fprintf(b, "for ki := 1; ki < 4; ki++ {\n%sif s.Bytes()[s.Pos+ki] != \"null\"[ki] {\nreturn result, decode.NewParseErr(%s, s.Offset(), scan.ErrBadLiteral)\n}\n}\ns.Pos += 4\n%s = %s\n",
 				rmKi, field, ref, zeroLit(f.GoType, f.Kind))
 		case VariantNative:
 			b.WriteString(renderStreamField(nativeVariantField(f), ref, posVar))
@@ -195,15 +195,15 @@ func renderVariantDispatchStream(f FieldInfo, ref, posVar string) string {
 			tmp := fmt.Sprintf("_cv%d", idx)
 			fmt.Fprintf(b, "var %s %s\n", tmp, v.InType)
 			b.WriteString(renderStreamField(converterInputField(f, v), tmp, posVar))
-			emitConvAssignStream(b, v, ref, tmp)
+			emitConvAssignStream(b, v, field, ref, tmp)
 		}
 	}
-	fmt.Fprintf(b, "default:\nreturn result, decode.NewParseErr(%s, s.Pos, scan.ErrBadValue)\n}\n", field)
+	fmt.Fprintf(b, "default:\nreturn result, decode.NewParseErr(%s, s.Offset(), scan.ErrBadValue)\n}\n", field)
 	return b.String()
 }
 
 // emitConvAssign emits the converter call + assignment for the bytes path.
-func emitConvAssign(b *bytes.Buffer, v Variant, ref, tmp, posVar string) {
+func emitConvAssign(b *bytes.Buffer, v Variant, field, ref, tmp, posVar string) {
 	call := convCall(v)
 	if !v.Fallible {
 		fmt.Fprintf(b, "%s = %s(%s)\n", ref, call, tmp)
@@ -214,11 +214,14 @@ func emitConvAssign(b *bytes.Buffer, v Variant, ref, tmp, posVar string) {
 		fmt.Fprintf(b, "if cv, ok := %s(%s); !ok {\nreturn result, %s, %s\n} else {\n%s = cv\n}\n", call, tmp, posVar, modErr, ref)
 		return
 	}
-	fmt.Fprintf(b, "if cv, err := %s(%s); err != nil {\nreturn result, %s, err\n} else {\n%s = cv\n}\n", call, tmp, posVar, ref)
+	// A converter's own error is foreign — wrap it so it carries the field
+	// path and offset every other decode failure does (errors.As still
+	// reaches the converter's error through the ParseError).
+	fmt.Fprintf(b, "if cv, err := %s(%s); err != nil {\nreturn result, %s, decode.NewParseErr(%s, %s, err)\n} else {\n%s = cv\n}\n", call, tmp, posVar, field, posVar, ref)
 }
 
 // emitConvAssignStream is the stream-path counterpart (2-tuple returns).
-func emitConvAssignStream(b *bytes.Buffer, v Variant, ref, tmp string) {
+func emitConvAssignStream(b *bytes.Buffer, v Variant, field, ref, tmp string) {
 	call := convCall(v)
 	if !v.Fallible {
 		fmt.Fprintf(b, "%s = %s(%s)\n", ref, call, tmp)
@@ -229,5 +232,5 @@ func emitConvAssignStream(b *bytes.Buffer, v Variant, ref, tmp string) {
 		fmt.Fprintf(b, "if cv, ok := %s(%s); !ok {\nreturn result, %s\n} else {\n%s = cv\n}\n", call, tmp, modErr, ref)
 		return
 	}
-	fmt.Fprintf(b, "if cv, err := %s(%s); err != nil {\nreturn result, err\n} else {\n%s = cv\n}\n", call, tmp, ref)
+	fmt.Fprintf(b, "if cv, err := %s(%s); err != nil {\nreturn result, decode.NewParseErr(%s, s.Offset(), err)\n} else {\n%s = cv\n}\n", call, tmp, field, ref)
 }

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sirkostya009/ggen/decode"
 	_ "github.com/sirkostya009/ggen/integrationtests/thirdparty"
 	"github.com/sirkostya009/ggen/validation"
 )
@@ -90,6 +91,27 @@ func RejectShort(s string) (string, error) {
 		return "", fmt.Errorf("rejected by mod")
 	}
 	return s, nil
+}
+
+// A fallible mod's own error is foreign, so it gets wrapped like every other
+// decode failure: field path + payload offset, reachable via errors.As. It
+// used to propagate bare, leaving the caller no idea which field failed.
+func TestFallibleMod_errorCarriesPathAndPos(t *testing.T) {
+	t.Parallel()
+	_, _, err := FallibleModStruct{}.DecodeFrom([]byte(`{"email":"ab"}`))
+	var pe *decode.ParseError
+	if !errors.As(err, &pe) {
+		t.Fatalf("got %T %v, want *decode.ParseError", err, err)
+	}
+	if len(pe.Path) == 0 || pe.Path[0] != "email" {
+		t.Errorf("Path = %v, want [email]", pe.Path)
+	}
+	if pe.Pos <= 0 {
+		t.Errorf("Pos = %d, want a real offset", pe.Pos)
+	}
+	if !strings.Contains(err.Error(), "rejected by mod") {
+		t.Errorf("wrapping lost the mod message: %v", err)
+	}
 }
 
 // The mod runs first, so its error surfaces ahead of the contains/minlen

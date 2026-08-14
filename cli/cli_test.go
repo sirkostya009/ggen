@@ -1902,6 +1902,16 @@ type Msg struct {
 
 			// ----- json tag grammar (jsonv2 parity) -----
 			{"dash_with_options", "F string", `json:"-,"`, `use json:"-" to ignore the field`},
+			{"unterminated_tag_quote", "F string", `json:"'a,b"`, "unterminated quoted section"},
+
+			// ----- format: must name an encoding the emitters know -----
+			{"unknown_bytes_format", "B []byte", `json:"b,format:base64ur"`, "unknown `format:base64ur`"},
+			{"unknown_duration_format", "D time.Duration", `json:"d,format:secs"`, "unknown `format:secs`"},
+			{"format_on_int", "N int", `json:"n,format:base64"`, "not applicable"},
+
+			// ----- length/count bounds are never negative -----
+			{"maxlen_negative", "S string", `json:"s" pipe:"maxlen=-1"`, "requires a non-negative integer"},
+			{"minrunes_negative", "S string", `json:"s" pipe:"minrunes=-2"`, "requires a non-negative integer"},
 			{"trailing_comma_tag", "F string", `json:"f,"`, "empty option"},
 			{"empty_option_tag", "F string", `json:"f,,omitempty"`, "empty option"},
 

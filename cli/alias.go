@@ -19,6 +19,9 @@ func renderAliasDecode(b *bytes.Buffer, s StructInfo) {
 		return
 	}
 	const wrap = `if err != nil { return result, i, decode.NewParseErr("", i, err) }`
+	// Leading whitespace is legal before any top-level value; container and
+	// struct aliases already skip it via ArrayOpen/ObjectOpen.
+	inlineSkipWS(b, "i")
 	switch s.AliasKind {
 	case KindString:
 		fmt.Fprintf(b, "var v string\nv, i, err = "+scanStringFn+"(data, i, "+vArgS(s)+")\n%s\nresult = %s(v)\n", wrap, s.Name)
@@ -48,20 +51,21 @@ func renderAliasStreamDecode(b *bytes.Buffer, s StructInfo) {
 		renderAliasContainerDecode(b, s, true)
 		return
 	}
-	const wrap = `if err != nil { return result, decode.NewParseErr("", s.Pos, err) }`
+	const wrap = `if err != nil { return result, decode.NewParseErr("", s.Offset(), err) }`
+	b.WriteString("err = s.SkipSpace()\n" + wrap + "\n")
 	switch s.AliasKind {
 	case KindString:
 		fmt.Fprintf(b, "var v string\nv, err = s.String("+vArgS(s)+")\n%s\nresult = %s(v)\n", wrap, s.Name)
 	case KindBool:
 		fmt.Fprintf(b, "var v bool\nv, err = s.Bool()\n%s\nresult = %s(v)\n", wrap, s.Name)
 	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
-		guard := narrowIntGuard("v", s.AliasUnderlying, `return result, decode.NewParseErr("", s.Pos, scan.ErrNumberOverflow)`)
+		guard := narrowIntGuard("v", s.AliasUnderlying, `return result, decode.NewParseErr("", s.Offset(), scan.ErrNumberOverflow)`)
 		fmt.Fprintf(b, "var v int64\nv, err = s.Int64()\n%s\n%sresult = %s(v)\n", wrap, guard, s.Name)
 	case KindUint, KindUint8, KindUint16, KindUint32, KindUint64:
-		guard := narrowIntGuard("v", s.AliasUnderlying, `return result, decode.NewParseErr("", s.Pos, scan.ErrNumberOverflow)`)
+		guard := narrowIntGuard("v", s.AliasUnderlying, `return result, decode.NewParseErr("", s.Offset(), scan.ErrNumberOverflow)`)
 		fmt.Fprintf(b, "var v uint64\nv, err = s.Uint64()\n%s\n%sresult = %s(v)\n", wrap, guard, s.Name)
 	case KindFloat32, KindFloat64:
-		guard := narrowFloatGuard("v", s.AliasUnderlying, `return result, decode.NewParseErr("", s.Pos, scan.ErrNumberOverflow)`)
+		guard := narrowFloatGuard("v", s.AliasUnderlying, `return result, decode.NewParseErr("", s.Offset(), scan.ErrNumberOverflow)`)
 		fmt.Fprintf(b, "var v float64\nv, err = s.Float64()\n%s\n%sresult = %s(v)\n", wrap, guard, s.Name)
 	}
 	b.WriteString("return result, nil\n")
@@ -167,16 +171,16 @@ return result, i, nil
 		}
 		fmt.Fprintf(b, `var u %[1]s
 v, err := u.`+call+`
-if err != nil { return result, decode.NewParseErr("", s.Pos, err) }
+if err != nil { return result, decode.NewParseErr("", s.Offset(), err) }
 result = %[2]s(v)
 return result, nil
 `, s.AliasUnderlying, s.Name)
 	case s.AliasIface.JSONUnmarshaler:
 		if stream {
 			fmt.Fprintf(b, `span, err := s.CaptureValue()
-if err != nil { return result, decode.NewParseErr("", s.Pos, err) }
+if err != nil { return result, decode.NewParseErr("", s.Offset(), err) }
 var u %[1]s
-if err := u.UnmarshalJSON(span); err != nil { return result, decode.NewParseErr("", s.Pos, err) }
+if err := u.UnmarshalJSON(span); err != nil { return result, decode.NewParseErr("", s.Offset(), err) }
 result = %[2]s(u)
 return result, nil
 `, s.AliasUnderlying, s.Name)
@@ -193,9 +197,9 @@ return result, k, nil
 	case s.AliasIface.TextUnmarshaler:
 		if stream {
 			fmt.Fprintf(b, `ts, err := s.String(`+vArgS(s)+`)
-if err != nil { return result, decode.NewParseErr("", s.Pos, err) }
+if err != nil { return result, decode.NewParseErr("", s.Offset(), err) }
 var u %[1]s
-if err := u.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts))); err != nil { return result, decode.NewParseErr("", s.Pos, err) }
+if err := u.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts))); err != nil { return result, decode.NewParseErr("", s.Offset(), err) }
 result = %[2]s(u)
 return result, nil
 `, s.AliasUnderlying, s.Name)

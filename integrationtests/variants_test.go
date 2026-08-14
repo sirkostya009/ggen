@@ -4,9 +4,11 @@ package integrationtests
 
 import (
 	"bytes"
+	"errors"
 	"strconv"
 	"testing"
 
+	"github.com/sirkostya009/ggen/decode"
 	"github.com/sirkostya009/ggen/scan"
 )
 
@@ -155,5 +157,38 @@ func TestVariants_NamedPrimAndPointer(t *testing.T) {
 				t.Errorf("%s %s: N = %v, want %v", path, c.payload, got.N, c.wantN)
 			}
 		}
+	}
+}
+
+// An error-form converter's own error is foreign, so it gets wrapped with the
+// field path and payload offset like every other decode failure. It used to
+// propagate bare (a *strconv.NumError with no idea which field failed).
+func TestVariant_converterErrorCarriesPathAndPos(t *testing.T) {
+	t.Parallel()
+	_, _, err := LooseThing{}.DecodeFrom([]byte(`{"count":"xyz"}`))
+	var pe *decode.ParseError
+	if !errors.As(err, &pe) {
+		t.Fatalf("got %T %v, want *decode.ParseError", err, err)
+	}
+	if len(pe.Path) == 0 || pe.Path[0] != "count" {
+		t.Errorf("Path = %v, want [count]", pe.Path)
+	}
+	if pe.Pos <= 0 {
+		t.Errorf("Pos = %d, want a real offset", pe.Pos)
+	}
+	var ne *strconv.NumError
+	if !errors.As(err, &ne) {
+		t.Errorf("wrapping hid the converter's own error: %v", err)
+	}
+
+	var st scan.Stream
+	st.Reset(bytes.NewReader([]byte(`{"count":"xyz"}`)), nil)
+	_, serr := LooseThing{}.DecodeFromStream(&st)
+	var spe *decode.ParseError
+	if !errors.As(serr, &spe) {
+		t.Fatalf("stream: got %T %v, want *decode.ParseError", serr, serr)
+	}
+	if len(spe.Path) == 0 || spe.Path[0] != "count" {
+		t.Errorf("stream: Path = %v, want [count]", spe.Path)
 	}
 }

@@ -40,13 +40,7 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
-		if ke >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-		}
-		if data[ke] < 0x20 {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-		}
-		if data[ke] == '"' {
+		if ke < len(data) && data[ke] == '"' {
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
@@ -1113,15 +1107,15 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 	var seen uint64
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -1133,13 +1127,13 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "active":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("active", s.Pos, err)
+				return result, decode.NewParseErr("active", s.Offset(), err)
 			}
 			if seen&(1<<0) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"active"}}
@@ -1147,12 +1141,12 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 			seen |= 1 << 0
 			result.Active, err = s.Bool()
 			if err != nil {
-				return result, decode.NewParseErr("active", s.Pos, err)
+				return result, decode.NewParseErr("active", s.Offset(), err)
 			}
 		case "address":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("address", s.Pos, err)
+				return result, decode.NewParseErr("address", s.Offset(), err)
 			}
 			if seen&(1<<1) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"address"}}
@@ -1160,12 +1154,12 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 			seen |= 1 << 1
 			result.Address, err = result.Address.DecodeFromStream(s)
 			if err != nil {
-				return result, decode.NewParseErr("address", s.Pos, err)
+				return result, decode.NewParseErr("address", s.Offset(), err)
 			}
 		case "age":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("age", s.Pos, err)
+				return result, decode.NewParseErr("age", s.Offset(), err)
 			}
 			if seen&(1<<2) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"age"}}
@@ -1174,16 +1168,16 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 			var uv uint64
 			uv, err = s.Uint64()
 			if err != nil {
-				return result, decode.NewParseErr("age", s.Pos, err)
+				return result, decode.NewParseErr("age", s.Offset(), err)
 			}
 			if uv > math.MaxUint8 {
-				return result, decode.NewParseErr("age", s.Pos, scan.ErrNumberOverflow)
+				return result, decode.NewParseErr("age", s.Offset(), scan.ErrNumberOverflow)
 			}
 			result.Age = uint8(uv)
 		case "avatarUrl":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("avatarUrl", s.Pos, err)
+				return result, decode.NewParseErr("avatarUrl", s.Offset(), err)
 			}
 			if seen&(1<<3) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"avatarUrl"}}
@@ -1191,12 +1185,12 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 			seen |= 1 << 3
 			result.AvatarURL, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("avatarUrl", s.Pos, err)
+				return result, decode.NewParseErr("avatarUrl", s.Offset(), err)
 			}
 		case "balance":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("balance", s.Pos, err)
+				return result, decode.NewParseErr("balance", s.Offset(), err)
 			}
 			if seen&(1<<4) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"balance"}}
@@ -1204,12 +1198,12 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 			seen |= 1 << 4
 			result.Balance, err = s.Float64()
 			if err != nil {
-				return result, decode.NewParseErr("balance", s.Pos, err)
+				return result, decode.NewParseErr("balance", s.Offset(), err)
 			}
 		case "bannerUrl":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("bannerUrl", s.Pos, err)
+				return result, decode.NewParseErr("bannerUrl", s.Offset(), err)
 			}
 			if seen&(1<<5) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"bannerUrl"}}
@@ -1217,12 +1211,12 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 			seen |= 1 << 5
 			result.BannerURL, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("bannerUrl", s.Pos, err)
+				return result, decode.NewParseErr("bannerUrl", s.Offset(), err)
 			}
 		case "bio":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("bio", s.Pos, err)
+				return result, decode.NewParseErr("bio", s.Offset(), err)
 			}
 			if seen&(1<<6) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"bio"}}
@@ -1230,12 +1224,12 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 			seen |= 1 << 6
 			result.Bio, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("bio", s.Pos, err)
+				return result, decode.NewParseErr("bio", s.Offset(), err)
 			}
 		case "company":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("company", s.Pos, err)
+				return result, decode.NewParseErr("company", s.Offset(), err)
 			}
 			if seen&(1<<7) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"company"}}
@@ -1243,12 +1237,12 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 			seen |= 1 << 7
 			result.Company, err = result.Company.DecodeFromStream(s)
 			if err != nil {
-				return result, decode.NewParseErr("company", s.Pos, err)
+				return result, decode.NewParseErr("company", s.Offset(), err)
 			}
 		case "createdAt":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("createdAt", s.Pos, err)
+				return result, decode.NewParseErr("createdAt", s.Offset(), err)
 			}
 			if seen&(1<<8) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"createdAt"}}
@@ -1256,12 +1250,12 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 			seen |= 1 << 8
 			result.CreatedAt, err = s.Int64()
 			if err != nil {
-				return result, decode.NewParseErr("createdAt", s.Pos, err)
+				return result, decode.NewParseErr("createdAt", s.Offset(), err)
 			}
 		case "deleted":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("deleted", s.Pos, err)
+				return result, decode.NewParseErr("deleted", s.Offset(), err)
 			}
 			if seen&(1<<9) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"deleted"}}
@@ -1269,12 +1263,12 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 			seen |= 1 << 9
 			result.Deleted, err = s.Bool()
 			if err != nil {
-				return result, decode.NewParseErr("deleted", s.Pos, err)
+				return result, decode.NewParseErr("deleted", s.Offset(), err)
 			}
 		case "displayName":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("displayName", s.Pos, err)
+				return result, decode.NewParseErr("displayName", s.Offset(), err)
 			}
 			if seen&(1<<10) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"displayName"}}
@@ -1282,12 +1276,12 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 			seen |= 1 << 10
 			result.DisplayName, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("displayName", s.Pos, err)
+				return result, decode.NewParseErr("displayName", s.Offset(), err)
 			}
 		case "email":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("email", s.Pos, err)
+				return result, decode.NewParseErr("email", s.Offset(), err)
 			}
 			if seen&(1<<11) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"email"}}
@@ -1295,12 +1289,12 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 			seen |= 1 << 11
 			result.Email, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("email", s.Pos, err)
+				return result, decode.NewParseErr("email", s.Offset(), err)
 			}
 		case "failedLogins":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("failedLogins", s.Pos, err)
+				return result, decode.NewParseErr("failedLogins", s.Offset(), err)
 			}
 			if seen&(1<<12) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"failedLogins"}}
@@ -1309,16 +1303,16 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 			var uv uint64
 			uv, err = s.Uint64()
 			if err != nil {
-				return result, decode.NewParseErr("failedLogins", s.Pos, err)
+				return result, decode.NewParseErr("failedLogins", s.Offset(), err)
 			}
 			if uv > math.MaxUint16 {
-				return result, decode.NewParseErr("failedLogins", s.Pos, scan.ErrNumberOverflow)
+				return result, decode.NewParseErr("failedLogins", s.Offset(), scan.ErrNumberOverflow)
 			}
 			result.FailedLogins = uint16(uv)
 		case "firstName":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("firstName", s.Pos, err)
+				return result, decode.NewParseErr("firstName", s.Offset(), err)
 			}
 			if seen&(1<<13) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"firstName"}}
@@ -1326,12 +1320,12 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 			seen |= 1 << 13
 			result.FirstName, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("firstName", s.Pos, err)
+				return result, decode.NewParseErr("firstName", s.Offset(), err)
 			}
 		case "followerCount":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("followerCount", s.Pos, err)
+				return result, decode.NewParseErr("followerCount", s.Offset(), err)
 			}
 			if seen&(1<<14) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"followerCount"}}
@@ -1340,13 +1334,13 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 			var iv int64
 			iv, err = s.Int64()
 			if err != nil {
-				return result, decode.NewParseErr("followerCount", s.Pos, err)
+				return result, decode.NewParseErr("followerCount", s.Offset(), err)
 			}
 			result.FollowerCount = int(iv)
 		case "followingCount":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("followingCount", s.Pos, err)
+				return result, decode.NewParseErr("followingCount", s.Offset(), err)
 			}
 			if seen&(1<<15) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"followingCount"}}
@@ -1355,13 +1349,13 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 			var iv int64
 			iv, err = s.Int64()
 			if err != nil {
-				return result, decode.NewParseErr("followingCount", s.Pos, err)
+				return result, decode.NewParseErr("followingCount", s.Offset(), err)
 			}
 			result.FollowingCount = int(iv)
 		case "id":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("id", s.Pos, err)
+				return result, decode.NewParseErr("id", s.Offset(), err)
 			}
 			if seen&(1<<16) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"id"}}
@@ -1369,12 +1363,12 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 			seen |= 1 << 16
 			result.ID, err = s.Uint64()
 			if err != nil {
-				return result, decode.NewParseErr("id", s.Pos, err)
+				return result, decode.NewParseErr("id", s.Offset(), err)
 			}
 		case "lastLogin":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("lastLogin", s.Pos, err)
+				return result, decode.NewParseErr("lastLogin", s.Offset(), err)
 			}
 			if seen&(1<<17) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"lastLogin"}}
@@ -1382,12 +1376,12 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 			seen |= 1 << 17
 			result.LastLogin, err = s.Int64()
 			if err != nil {
-				return result, decode.NewParseErr("lastLogin", s.Pos, err)
+				return result, decode.NewParseErr("lastLogin", s.Offset(), err)
 			}
 		case "lastName":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("lastName", s.Pos, err)
+				return result, decode.NewParseErr("lastName", s.Offset(), err)
 			}
 			if seen&(1<<18) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"lastName"}}
@@ -1395,12 +1389,12 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 			seen |= 1 << 18
 			result.LastName, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("lastName", s.Pos, err)
+				return result, decode.NewParseErr("lastName", s.Offset(), err)
 			}
 		case "locale":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("locale", s.Pos, err)
+				return result, decode.NewParseErr("locale", s.Offset(), err)
 			}
 			if seen&(1<<19) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"locale"}}
@@ -1408,12 +1402,12 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 			seen |= 1 << 19
 			result.Locale, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("locale", s.Pos, err)
+				return result, decode.NewParseErr("locale", s.Offset(), err)
 			}
 		case "loginCount":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("loginCount", s.Pos, err)
+				return result, decode.NewParseErr("loginCount", s.Offset(), err)
 			}
 			if seen&(1<<20) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"loginCount"}}
@@ -1422,16 +1416,16 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 			var uv uint64
 			uv, err = s.Uint64()
 			if err != nil {
-				return result, decode.NewParseErr("loginCount", s.Pos, err)
+				return result, decode.NewParseErr("loginCount", s.Offset(), err)
 			}
 			if uv > math.MaxUint32 {
-				return result, decode.NewParseErr("loginCount", s.Pos, scan.ErrNumberOverflow)
+				return result, decode.NewParseErr("loginCount", s.Offset(), scan.ErrNumberOverflow)
 			}
 			result.LoginCount = uint32(uv)
 		case "middleName":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("middleName", s.Pos, err)
+				return result, decode.NewParseErr("middleName", s.Offset(), err)
 			}
 			if seen&(1<<21) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"middleName"}}
@@ -1439,12 +1433,12 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 			seen |= 1 << 21
 			result.MiddleName, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("middleName", s.Pos, err)
+				return result, decode.NewParseErr("middleName", s.Offset(), err)
 			}
 		case "phone":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("phone", s.Pos, err)
+				return result, decode.NewParseErr("phone", s.Offset(), err)
 			}
 			if seen&(1<<22) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"phone"}}
@@ -1452,12 +1446,12 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 			seen |= 1 << 22
 			result.Phone, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("phone", s.Pos, err)
+				return result, decode.NewParseErr("phone", s.Offset(), err)
 			}
 		case "postCount":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("postCount", s.Pos, err)
+				return result, decode.NewParseErr("postCount", s.Offset(), err)
 			}
 			if seen&(1<<23) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"postCount"}}
@@ -1466,13 +1460,13 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 			var iv int64
 			iv, err = s.Int64()
 			if err != nil {
-				return result, decode.NewParseErr("postCount", s.Pos, err)
+				return result, decode.NewParseErr("postCount", s.Offset(), err)
 			}
 			result.PostCount = int(iv)
 		case "preferences":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("preferences", s.Pos, err)
+				return result, decode.NewParseErr("preferences", s.Offset(), err)
 			}
 			if seen&(1<<24) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"preferences"}}
@@ -1480,12 +1474,12 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 			seen |= 1 << 24
 			result.Preferences, err = result.Preferences.DecodeFromStream(s)
 			if err != nil {
-				return result, decode.NewParseErr("preferences", s.Pos, err)
+				return result, decode.NewParseErr("preferences", s.Offset(), err)
 			}
 		case "premium":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("premium", s.Pos, err)
+				return result, decode.NewParseErr("premium", s.Offset(), err)
 			}
 			if seen&(1<<25) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"premium"}}
@@ -1493,12 +1487,12 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 			seen |= 1 << 25
 			result.Premium, err = s.Bool()
 			if err != nil {
-				return result, decode.NewParseErr("premium", s.Pos, err)
+				return result, decode.NewParseErr("premium", s.Offset(), err)
 			}
 		case "reputation":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("reputation", s.Pos, err)
+				return result, decode.NewParseErr("reputation", s.Offset(), err)
 			}
 			if seen&(1<<26) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"reputation"}}
@@ -1507,16 +1501,16 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 			var iv int64
 			iv, err = s.Int64()
 			if err != nil {
-				return result, decode.NewParseErr("reputation", s.Pos, err)
+				return result, decode.NewParseErr("reputation", s.Offset(), err)
 			}
 			if iv < math.MinInt32 || iv > math.MaxInt32 {
-				return result, decode.NewParseErr("reputation", s.Pos, scan.ErrNumberOverflow)
+				return result, decode.NewParseErr("reputation", s.Offset(), scan.ErrNumberOverflow)
 			}
 			result.Reputation = int32(iv)
 		case "storageQuota":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("storageQuota", s.Pos, err)
+				return result, decode.NewParseErr("storageQuota", s.Offset(), err)
 			}
 			if seen&(1<<27) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"storageQuota"}}
@@ -1524,12 +1518,12 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 			seen |= 1 << 27
 			result.StorageQuota, err = s.Int64()
 			if err != nil {
-				return result, decode.NewParseErr("storageQuota", s.Pos, err)
+				return result, decode.NewParseErr("storageQuota", s.Offset(), err)
 			}
 		case "storageUsed":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("storageUsed", s.Pos, err)
+				return result, decode.NewParseErr("storageUsed", s.Offset(), err)
 			}
 			if seen&(1<<28) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"storageUsed"}}
@@ -1537,12 +1531,12 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 			seen |= 1 << 28
 			result.StorageUsed, err = s.Int64()
 			if err != nil {
-				return result, decode.NewParseErr("storageUsed", s.Pos, err)
+				return result, decode.NewParseErr("storageUsed", s.Offset(), err)
 			}
 		case "suspended":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("suspended", s.Pos, err)
+				return result, decode.NewParseErr("suspended", s.Offset(), err)
 			}
 			if seen&(1<<29) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"suspended"}}
@@ -1550,12 +1544,12 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 			seen |= 1 << 29
 			result.Suspended, err = s.Bool()
 			if err != nil {
-				return result, decode.NewParseErr("suspended", s.Pos, err)
+				return result, decode.NewParseErr("suspended", s.Offset(), err)
 			}
 		case "trustScore":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("trustScore", s.Pos, err)
+				return result, decode.NewParseErr("trustScore", s.Offset(), err)
 			}
 			if seen&(1<<30) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"trustScore"}}
@@ -1563,12 +1557,12 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 			seen |= 1 << 30
 			result.TrustScore, err = s.Float64()
 			if err != nil {
-				return result, decode.NewParseErr("trustScore", s.Pos, err)
+				return result, decode.NewParseErr("trustScore", s.Offset(), err)
 			}
 		case "twoFactorEnabled":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("twoFactorEnabled", s.Pos, err)
+				return result, decode.NewParseErr("twoFactorEnabled", s.Offset(), err)
 			}
 			if seen&(1<<31) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"twoFactorEnabled"}}
@@ -1576,12 +1570,12 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 			seen |= 1 << 31
 			result.TwoFactorEnabled, err = s.Bool()
 			if err != nil {
-				return result, decode.NewParseErr("twoFactorEnabled", s.Pos, err)
+				return result, decode.NewParseErr("twoFactorEnabled", s.Offset(), err)
 			}
 		case "updatedAt":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("updatedAt", s.Pos, err)
+				return result, decode.NewParseErr("updatedAt", s.Offset(), err)
 			}
 			if seen&(1<<32) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"updatedAt"}}
@@ -1589,12 +1583,12 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 			seen |= 1 << 32
 			result.UpdatedAt, err = s.Int64()
 			if err != nil {
-				return result, decode.NewParseErr("updatedAt", s.Pos, err)
+				return result, decode.NewParseErr("updatedAt", s.Offset(), err)
 			}
 		case "username":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("username", s.Pos, err)
+				return result, decode.NewParseErr("username", s.Offset(), err)
 			}
 			if seen&(1<<33) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"username"}}
@@ -1602,12 +1596,12 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 			seen |= 1 << 33
 			result.Username, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("username", s.Pos, err)
+				return result, decode.NewParseErr("username", s.Offset(), err)
 			}
 		case "verified":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("verified", s.Pos, err)
+				return result, decode.NewParseErr("verified", s.Offset(), err)
 			}
 			if seen&(1<<34) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"verified"}}
@@ -1615,7 +1609,7 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 			seen |= 1 << 34
 			result.Verified, err = s.Bool()
 			if err != nil {
-				return result, decode.NewParseErr("verified", s.Pos, err)
+				return result, decode.NewParseErr("verified", s.Offset(), err)
 			}
 		default:
 			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
@@ -1623,11 +1617,11 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -1636,7 +1630,7 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -1644,7 +1638,7 @@ func (recv Account) DecodeFromStream(s *scan.Stream) (result Account, err error)
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
 	}
 }
 
@@ -1785,13 +1779,7 @@ func (recv PostalAddress) DecodeFrom(data []byte) (result PostalAddress, i int, 
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
-		if ke >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-		}
-		if data[ke] < 0x20 {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-		}
-		if data[ke] == '"' {
+		if ke < len(data) && data[ke] == '"' {
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
@@ -2007,15 +1995,15 @@ func (recv PostalAddress) DecodeFromStream(s *scan.Stream) (result PostalAddress
 	seenState := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -2027,13 +2015,13 @@ func (recv PostalAddress) DecodeFromStream(s *scan.Stream) (result PostalAddress
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "city":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("city", s.Pos, err)
+				return result, decode.NewParseErr("city", s.Offset(), err)
 			}
 			if seenCity {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"city"}}
@@ -2041,12 +2029,12 @@ func (recv PostalAddress) DecodeFromStream(s *scan.Stream) (result PostalAddress
 			seenCity = true
 			result.City, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("city", s.Pos, err)
+				return result, decode.NewParseErr("city", s.Offset(), err)
 			}
 		case "country":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("country", s.Pos, err)
+				return result, decode.NewParseErr("country", s.Offset(), err)
 			}
 			if seenCountry {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"country"}}
@@ -2054,12 +2042,12 @@ func (recv PostalAddress) DecodeFromStream(s *scan.Stream) (result PostalAddress
 			seenCountry = true
 			result.Country, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("country", s.Pos, err)
+				return result, decode.NewParseErr("country", s.Offset(), err)
 			}
 		case "geo":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("geo", s.Pos, err)
+				return result, decode.NewParseErr("geo", s.Offset(), err)
 			}
 			if seenGeo {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"geo"}}
@@ -2067,12 +2055,12 @@ func (recv PostalAddress) DecodeFromStream(s *scan.Stream) (result PostalAddress
 			seenGeo = true
 			result.Geo, err = result.Geo.DecodeFromStream(s)
 			if err != nil {
-				return result, decode.NewParseErr("geo", s.Pos, err)
+				return result, decode.NewParseErr("geo", s.Offset(), err)
 			}
 		case "line1":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("line1", s.Pos, err)
+				return result, decode.NewParseErr("line1", s.Offset(), err)
 			}
 			if seenLine1 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"line1"}}
@@ -2080,12 +2068,12 @@ func (recv PostalAddress) DecodeFromStream(s *scan.Stream) (result PostalAddress
 			seenLine1 = true
 			result.Line1, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("line1", s.Pos, err)
+				return result, decode.NewParseErr("line1", s.Offset(), err)
 			}
 		case "line2":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("line2", s.Pos, err)
+				return result, decode.NewParseErr("line2", s.Offset(), err)
 			}
 			if seenLine2 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"line2"}}
@@ -2093,12 +2081,12 @@ func (recv PostalAddress) DecodeFromStream(s *scan.Stream) (result PostalAddress
 			seenLine2 = true
 			result.Line2, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("line2", s.Pos, err)
+				return result, decode.NewParseErr("line2", s.Offset(), err)
 			}
 		case "postalCode":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("postalCode", s.Pos, err)
+				return result, decode.NewParseErr("postalCode", s.Offset(), err)
 			}
 			if seenPostalCode {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"postalCode"}}
@@ -2106,12 +2094,12 @@ func (recv PostalAddress) DecodeFromStream(s *scan.Stream) (result PostalAddress
 			seenPostalCode = true
 			result.PostalCode, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("postalCode", s.Pos, err)
+				return result, decode.NewParseErr("postalCode", s.Offset(), err)
 			}
 		case "state":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("state", s.Pos, err)
+				return result, decode.NewParseErr("state", s.Offset(), err)
 			}
 			if seenState {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"state"}}
@@ -2119,7 +2107,7 @@ func (recv PostalAddress) DecodeFromStream(s *scan.Stream) (result PostalAddress
 			seenState = true
 			result.State, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("state", s.Pos, err)
+				return result, decode.NewParseErr("state", s.Offset(), err)
 			}
 		default:
 			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
@@ -2127,11 +2115,11 @@ func (recv PostalAddress) DecodeFromStream(s *scan.Stream) (result PostalAddress
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -2140,7 +2128,7 @@ func (recv PostalAddress) DecodeFromStream(s *scan.Stream) (result PostalAddress
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -2148,7 +2136,7 @@ func (recv PostalAddress) DecodeFromStream(s *scan.Stream) (result PostalAddress
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
 	}
 }
 
@@ -2215,13 +2203,7 @@ func (recv Geo) DecodeFrom(data []byte) (result Geo, i int, err error) {
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
-		if ke >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-		}
-		if data[ke] < 0x20 {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-		}
-		if data[ke] == '"' {
+		if ke < len(data) && data[ke] == '"' {
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
@@ -2314,15 +2296,15 @@ func (recv Geo) DecodeFromStream(s *scan.Stream) (result Geo, err error) {
 	seenLng := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -2334,13 +2316,13 @@ func (recv Geo) DecodeFromStream(s *scan.Stream) (result Geo, err error) {
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "accuracy":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("accuracy", s.Pos, err)
+				return result, decode.NewParseErr("accuracy", s.Offset(), err)
 			}
 			if seenAccuracy {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"accuracy"}}
@@ -2349,16 +2331,16 @@ func (recv Geo) DecodeFromStream(s *scan.Stream) (result Geo, err error) {
 			var fv float64
 			fv, err = s.Float64()
 			if err != nil {
-				return result, decode.NewParseErr("accuracy", s.Pos, err)
+				return result, decode.NewParseErr("accuracy", s.Offset(), err)
 			}
 			if math.IsInf(float64(float32(fv)), 0) {
-				return result, decode.NewParseErr("accuracy", s.Pos, scan.ErrNumberOverflow)
+				return result, decode.NewParseErr("accuracy", s.Offset(), scan.ErrNumberOverflow)
 			}
 			result.Accuracy = float32(fv)
 		case "altitude":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("altitude", s.Pos, err)
+				return result, decode.NewParseErr("altitude", s.Offset(), err)
 			}
 			if seenAltitude {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"altitude"}}
@@ -2366,12 +2348,12 @@ func (recv Geo) DecodeFromStream(s *scan.Stream) (result Geo, err error) {
 			seenAltitude = true
 			result.Altitude, err = s.Float64()
 			if err != nil {
-				return result, decode.NewParseErr("altitude", s.Pos, err)
+				return result, decode.NewParseErr("altitude", s.Offset(), err)
 			}
 		case "lat":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("lat", s.Pos, err)
+				return result, decode.NewParseErr("lat", s.Offset(), err)
 			}
 			if seenLat {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"lat"}}
@@ -2379,12 +2361,12 @@ func (recv Geo) DecodeFromStream(s *scan.Stream) (result Geo, err error) {
 			seenLat = true
 			result.Lat, err = s.Float64()
 			if err != nil {
-				return result, decode.NewParseErr("lat", s.Pos, err)
+				return result, decode.NewParseErr("lat", s.Offset(), err)
 			}
 		case "lng":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("lng", s.Pos, err)
+				return result, decode.NewParseErr("lng", s.Offset(), err)
 			}
 			if seenLng {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"lng"}}
@@ -2392,7 +2374,7 @@ func (recv Geo) DecodeFromStream(s *scan.Stream) (result Geo, err error) {
 			seenLng = true
 			result.Lng, err = s.Float64()
 			if err != nil {
-				return result, decode.NewParseErr("lng", s.Pos, err)
+				return result, decode.NewParseErr("lng", s.Offset(), err)
 			}
 		default:
 			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
@@ -2400,11 +2382,11 @@ func (recv Geo) DecodeFromStream(s *scan.Stream) (result Geo, err error) {
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -2413,7 +2395,7 @@ func (recv Geo) DecodeFromStream(s *scan.Stream) (result Geo, err error) {
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -2421,7 +2403,7 @@ func (recv Geo) DecodeFromStream(s *scan.Stream) (result Geo, err error) {
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
 	}
 }
 
@@ -2484,13 +2466,7 @@ func (recv Company) DecodeFrom(data []byte) (result Company, i int, err error) {
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
-		if ke >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-		}
-		if data[ke] < 0x20 {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-		}
-		if data[ke] == '"' {
+		if ke < len(data) && data[ke] == '"' {
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
@@ -2765,15 +2741,15 @@ func (recv Company) DecodeFromStream(s *scan.Stream) (result Company, err error)
 	seenTitle := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -2785,13 +2761,13 @@ func (recv Company) DecodeFromStream(s *scan.Stream) (result Company, err error)
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "department":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("department", s.Pos, err)
+				return result, decode.NewParseErr("department", s.Offset(), err)
 			}
 			if seenDepartment {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"department"}}
@@ -2799,12 +2775,12 @@ func (recv Company) DecodeFromStream(s *scan.Stream) (result Company, err error)
 			seenDepartment = true
 			result.Department, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("department", s.Pos, err)
+				return result, decode.NewParseErr("department", s.Offset(), err)
 			}
 		case "employeeId":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("employeeId", s.Pos, err)
+				return result, decode.NewParseErr("employeeId", s.Offset(), err)
 			}
 			if seenEmployeeID {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"employeeId"}}
@@ -2812,12 +2788,12 @@ func (recv Company) DecodeFromStream(s *scan.Stream) (result Company, err error)
 			seenEmployeeID = true
 			result.EmployeeID, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("employeeId", s.Pos, err)
+				return result, decode.NewParseErr("employeeId", s.Offset(), err)
 			}
 		case "founded":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("founded", s.Pos, err)
+				return result, decode.NewParseErr("founded", s.Offset(), err)
 			}
 			if seenFounded {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"founded"}}
@@ -2826,16 +2802,16 @@ func (recv Company) DecodeFromStream(s *scan.Stream) (result Company, err error)
 			var iv int64
 			iv, err = s.Int64()
 			if err != nil {
-				return result, decode.NewParseErr("founded", s.Pos, err)
+				return result, decode.NewParseErr("founded", s.Offset(), err)
 			}
 			if iv < math.MinInt16 || iv > math.MaxInt16 {
-				return result, decode.NewParseErr("founded", s.Pos, scan.ErrNumberOverflow)
+				return result, decode.NewParseErr("founded", s.Offset(), scan.ErrNumberOverflow)
 			}
 			result.Founded = int16(iv)
 		case "headcount":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("headcount", s.Pos, err)
+				return result, decode.NewParseErr("headcount", s.Offset(), err)
 			}
 			if seenHeadcount {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"headcount"}}
@@ -2844,13 +2820,13 @@ func (recv Company) DecodeFromStream(s *scan.Stream) (result Company, err error)
 			var iv int64
 			iv, err = s.Int64()
 			if err != nil {
-				return result, decode.NewParseErr("headcount", s.Pos, err)
+				return result, decode.NewParseErr("headcount", s.Offset(), err)
 			}
 			result.Headcount = int(iv)
 		case "isPublic":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("isPublic", s.Pos, err)
+				return result, decode.NewParseErr("isPublic", s.Offset(), err)
 			}
 			if seenIsPublic {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"isPublic"}}
@@ -2858,12 +2834,12 @@ func (recv Company) DecodeFromStream(s *scan.Stream) (result Company, err error)
 			seenIsPublic = true
 			result.IsPublic, err = s.Bool()
 			if err != nil {
-				return result, decode.NewParseErr("isPublic", s.Pos, err)
+				return result, decode.NewParseErr("isPublic", s.Offset(), err)
 			}
 		case "name":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("name", s.Pos, err)
+				return result, decode.NewParseErr("name", s.Offset(), err)
 			}
 			if seenName {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"name"}}
@@ -2871,12 +2847,12 @@ func (recv Company) DecodeFromStream(s *scan.Stream) (result Company, err error)
 			seenName = true
 			result.Name, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("name", s.Pos, err)
+				return result, decode.NewParseErr("name", s.Offset(), err)
 			}
 		case "title":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("title", s.Pos, err)
+				return result, decode.NewParseErr("title", s.Offset(), err)
 			}
 			if seenTitle {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"title"}}
@@ -2884,7 +2860,7 @@ func (recv Company) DecodeFromStream(s *scan.Stream) (result Company, err error)
 			seenTitle = true
 			result.Title, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("title", s.Pos, err)
+				return result, decode.NewParseErr("title", s.Offset(), err)
 			}
 		default:
 			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
@@ -2892,11 +2868,11 @@ func (recv Company) DecodeFromStream(s *scan.Stream) (result Company, err error)
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -2905,7 +2881,7 @@ func (recv Company) DecodeFromStream(s *scan.Stream) (result Company, err error)
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -2913,7 +2889,7 @@ func (recv Company) DecodeFromStream(s *scan.Stream) (result Company, err error)
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
 	}
 }
 
@@ -2981,13 +2957,7 @@ func (recv Preferences) DecodeFrom(data []byte) (result Preferences, i int, err 
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
-		if ke >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-		}
-		if data[ke] < 0x20 {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-		}
-		if data[ke] == '"' {
+		if ke < len(data) && data[ke] == '"' {
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
@@ -3228,15 +3198,15 @@ func (recv Preferences) DecodeFromStream(s *scan.Stream) (result Preferences, er
 	seenTimezone := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -3248,13 +3218,13 @@ func (recv Preferences) DecodeFromStream(s *scan.Stream) (result Preferences, er
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "autoSave":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("autoSave", s.Pos, err)
+				return result, decode.NewParseErr("autoSave", s.Offset(), err)
 			}
 			if seenAutoSave {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"autoSave"}}
@@ -3262,12 +3232,12 @@ func (recv Preferences) DecodeFromStream(s *scan.Stream) (result Preferences, er
 			seenAutoSave = true
 			result.AutoSave, err = s.Bool()
 			if err != nil {
-				return result, decode.NewParseErr("autoSave", s.Pos, err)
+				return result, decode.NewParseErr("autoSave", s.Offset(), err)
 			}
 		case "betaFeatures":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("betaFeatures", s.Pos, err)
+				return result, decode.NewParseErr("betaFeatures", s.Offset(), err)
 			}
 			if seenBetaFeatures {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"betaFeatures"}}
@@ -3275,12 +3245,12 @@ func (recv Preferences) DecodeFromStream(s *scan.Stream) (result Preferences, er
 			seenBetaFeatures = true
 			result.BetaFeatures, err = s.Bool()
 			if err != nil {
-				return result, decode.NewParseErr("betaFeatures", s.Pos, err)
+				return result, decode.NewParseErr("betaFeatures", s.Offset(), err)
 			}
 		case "currency":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("currency", s.Pos, err)
+				return result, decode.NewParseErr("currency", s.Offset(), err)
 			}
 			if seenCurrency {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"currency"}}
@@ -3288,12 +3258,12 @@ func (recv Preferences) DecodeFromStream(s *scan.Stream) (result Preferences, er
 			seenCurrency = true
 			result.Currency, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("currency", s.Pos, err)
+				return result, decode.NewParseErr("currency", s.Offset(), err)
 			}
 		case "emailNotifications":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("emailNotifications", s.Pos, err)
+				return result, decode.NewParseErr("emailNotifications", s.Offset(), err)
 			}
 			if seenEmailNotifications {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"emailNotifications"}}
@@ -3301,12 +3271,12 @@ func (recv Preferences) DecodeFromStream(s *scan.Stream) (result Preferences, er
 			seenEmailNotifications = true
 			result.EmailNotifications, err = s.Bool()
 			if err != nil {
-				return result, decode.NewParseErr("emailNotifications", s.Pos, err)
+				return result, decode.NewParseErr("emailNotifications", s.Offset(), err)
 			}
 		case "itemsPerPage":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("itemsPerPage", s.Pos, err)
+				return result, decode.NewParseErr("itemsPerPage", s.Offset(), err)
 			}
 			if seenItemsPerPage {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"itemsPerPage"}}
@@ -3315,16 +3285,16 @@ func (recv Preferences) DecodeFromStream(s *scan.Stream) (result Preferences, er
 			var uv uint64
 			uv, err = s.Uint64()
 			if err != nil {
-				return result, decode.NewParseErr("itemsPerPage", s.Pos, err)
+				return result, decode.NewParseErr("itemsPerPage", s.Offset(), err)
 			}
 			if uv > math.MaxUint8 {
-				return result, decode.NewParseErr("itemsPerPage", s.Pos, scan.ErrNumberOverflow)
+				return result, decode.NewParseErr("itemsPerPage", s.Offset(), scan.ErrNumberOverflow)
 			}
 			result.ItemsPerPage = uint8(uv)
 		case "language":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("language", s.Pos, err)
+				return result, decode.NewParseErr("language", s.Offset(), err)
 			}
 			if seenLanguage {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"language"}}
@@ -3332,12 +3302,12 @@ func (recv Preferences) DecodeFromStream(s *scan.Stream) (result Preferences, er
 			seenLanguage = true
 			result.Language, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("language", s.Pos, err)
+				return result, decode.NewParseErr("language", s.Offset(), err)
 			}
 		case "pushNotifications":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("pushNotifications", s.Pos, err)
+				return result, decode.NewParseErr("pushNotifications", s.Offset(), err)
 			}
 			if seenPushNotifications {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"pushNotifications"}}
@@ -3345,12 +3315,12 @@ func (recv Preferences) DecodeFromStream(s *scan.Stream) (result Preferences, er
 			seenPushNotifications = true
 			result.PushNotifications, err = s.Bool()
 			if err != nil {
-				return result, decode.NewParseErr("pushNotifications", s.Pos, err)
+				return result, decode.NewParseErr("pushNotifications", s.Offset(), err)
 			}
 		case "smsNotifications":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("smsNotifications", s.Pos, err)
+				return result, decode.NewParseErr("smsNotifications", s.Offset(), err)
 			}
 			if seenSMSNotifications {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"smsNotifications"}}
@@ -3358,12 +3328,12 @@ func (recv Preferences) DecodeFromStream(s *scan.Stream) (result Preferences, er
 			seenSMSNotifications = true
 			result.SMSNotifications, err = s.Bool()
 			if err != nil {
-				return result, decode.NewParseErr("smsNotifications", s.Pos, err)
+				return result, decode.NewParseErr("smsNotifications", s.Offset(), err)
 			}
 		case "theme":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("theme", s.Pos, err)
+				return result, decode.NewParseErr("theme", s.Offset(), err)
 			}
 			if seenTheme {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"theme"}}
@@ -3371,12 +3341,12 @@ func (recv Preferences) DecodeFromStream(s *scan.Stream) (result Preferences, er
 			seenTheme = true
 			result.Theme, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("theme", s.Pos, err)
+				return result, decode.NewParseErr("theme", s.Offset(), err)
 			}
 		case "timezone":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("timezone", s.Pos, err)
+				return result, decode.NewParseErr("timezone", s.Offset(), err)
 			}
 			if seenTimezone {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"timezone"}}
@@ -3384,7 +3354,7 @@ func (recv Preferences) DecodeFromStream(s *scan.Stream) (result Preferences, er
 			seenTimezone = true
 			result.Timezone, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("timezone", s.Pos, err)
+				return result, decode.NewParseErr("timezone", s.Offset(), err)
 			}
 		default:
 			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
@@ -3392,11 +3362,11 @@ func (recv Preferences) DecodeFromStream(s *scan.Stream) (result Preferences, er
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -3405,7 +3375,7 @@ func (recv Preferences) DecodeFromStream(s *scan.Stream) (result Preferences, er
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -3413,7 +3383,7 @@ func (recv Preferences) DecodeFromStream(s *scan.Stream) (result Preferences, er
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
 	}
 }
 
@@ -3478,13 +3448,7 @@ func (recv CopyAccount) DecodeFrom(data []byte) (result CopyAccount, i int, err 
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
-		if ke >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-		}
-		if data[ke] < 0x20 {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-		}
-		if data[ke] == '"' {
+		if ke < len(data) && data[ke] == '"' {
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
@@ -4562,15 +4526,15 @@ func (recv CopyAccount) DecodeFromStream(s *scan.Stream) (result CopyAccount, er
 	var seen uint64
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -4582,13 +4546,13 @@ func (recv CopyAccount) DecodeFromStream(s *scan.Stream) (result CopyAccount, er
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "active":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("active", s.Pos, err)
+				return result, decode.NewParseErr("active", s.Offset(), err)
 			}
 			if seen&(1<<0) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"active"}}
@@ -4596,12 +4560,12 @@ func (recv CopyAccount) DecodeFromStream(s *scan.Stream) (result CopyAccount, er
 			seen |= 1 << 0
 			result.Active, err = s.Bool()
 			if err != nil {
-				return result, decode.NewParseErr("active", s.Pos, err)
+				return result, decode.NewParseErr("active", s.Offset(), err)
 			}
 		case "address":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("address", s.Pos, err)
+				return result, decode.NewParseErr("address", s.Offset(), err)
 			}
 			if seen&(1<<1) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"address"}}
@@ -4609,12 +4573,12 @@ func (recv CopyAccount) DecodeFromStream(s *scan.Stream) (result CopyAccount, er
 			seen |= 1 << 1
 			result.Address, err = result.Address.DecodeFromStream(s)
 			if err != nil {
-				return result, decode.NewParseErr("address", s.Pos, err)
+				return result, decode.NewParseErr("address", s.Offset(), err)
 			}
 		case "age":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("age", s.Pos, err)
+				return result, decode.NewParseErr("age", s.Offset(), err)
 			}
 			if seen&(1<<2) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"age"}}
@@ -4623,16 +4587,16 @@ func (recv CopyAccount) DecodeFromStream(s *scan.Stream) (result CopyAccount, er
 			var uv uint64
 			uv, err = s.Uint64()
 			if err != nil {
-				return result, decode.NewParseErr("age", s.Pos, err)
+				return result, decode.NewParseErr("age", s.Offset(), err)
 			}
 			if uv > math.MaxUint8 {
-				return result, decode.NewParseErr("age", s.Pos, scan.ErrNumberOverflow)
+				return result, decode.NewParseErr("age", s.Offset(), scan.ErrNumberOverflow)
 			}
 			result.Age = uint8(uv)
 		case "avatarUrl":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("avatarUrl", s.Pos, err)
+				return result, decode.NewParseErr("avatarUrl", s.Offset(), err)
 			}
 			if seen&(1<<3) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"avatarUrl"}}
@@ -4640,12 +4604,12 @@ func (recv CopyAccount) DecodeFromStream(s *scan.Stream) (result CopyAccount, er
 			seen |= 1 << 3
 			result.AvatarURL, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("avatarUrl", s.Pos, err)
+				return result, decode.NewParseErr("avatarUrl", s.Offset(), err)
 			}
 		case "balance":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("balance", s.Pos, err)
+				return result, decode.NewParseErr("balance", s.Offset(), err)
 			}
 			if seen&(1<<4) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"balance"}}
@@ -4653,12 +4617,12 @@ func (recv CopyAccount) DecodeFromStream(s *scan.Stream) (result CopyAccount, er
 			seen |= 1 << 4
 			result.Balance, err = s.Float64()
 			if err != nil {
-				return result, decode.NewParseErr("balance", s.Pos, err)
+				return result, decode.NewParseErr("balance", s.Offset(), err)
 			}
 		case "bannerUrl":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("bannerUrl", s.Pos, err)
+				return result, decode.NewParseErr("bannerUrl", s.Offset(), err)
 			}
 			if seen&(1<<5) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"bannerUrl"}}
@@ -4666,12 +4630,12 @@ func (recv CopyAccount) DecodeFromStream(s *scan.Stream) (result CopyAccount, er
 			seen |= 1 << 5
 			result.BannerURL, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("bannerUrl", s.Pos, err)
+				return result, decode.NewParseErr("bannerUrl", s.Offset(), err)
 			}
 		case "bio":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("bio", s.Pos, err)
+				return result, decode.NewParseErr("bio", s.Offset(), err)
 			}
 			if seen&(1<<6) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"bio"}}
@@ -4679,12 +4643,12 @@ func (recv CopyAccount) DecodeFromStream(s *scan.Stream) (result CopyAccount, er
 			seen |= 1 << 6
 			result.Bio, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("bio", s.Pos, err)
+				return result, decode.NewParseErr("bio", s.Offset(), err)
 			}
 		case "company":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("company", s.Pos, err)
+				return result, decode.NewParseErr("company", s.Offset(), err)
 			}
 			if seen&(1<<7) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"company"}}
@@ -4692,12 +4656,12 @@ func (recv CopyAccount) DecodeFromStream(s *scan.Stream) (result CopyAccount, er
 			seen |= 1 << 7
 			result.Company, err = result.Company.DecodeFromStream(s)
 			if err != nil {
-				return result, decode.NewParseErr("company", s.Pos, err)
+				return result, decode.NewParseErr("company", s.Offset(), err)
 			}
 		case "createdAt":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("createdAt", s.Pos, err)
+				return result, decode.NewParseErr("createdAt", s.Offset(), err)
 			}
 			if seen&(1<<8) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"createdAt"}}
@@ -4705,12 +4669,12 @@ func (recv CopyAccount) DecodeFromStream(s *scan.Stream) (result CopyAccount, er
 			seen |= 1 << 8
 			result.CreatedAt, err = s.Int64()
 			if err != nil {
-				return result, decode.NewParseErr("createdAt", s.Pos, err)
+				return result, decode.NewParseErr("createdAt", s.Offset(), err)
 			}
 		case "deleted":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("deleted", s.Pos, err)
+				return result, decode.NewParseErr("deleted", s.Offset(), err)
 			}
 			if seen&(1<<9) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"deleted"}}
@@ -4718,12 +4682,12 @@ func (recv CopyAccount) DecodeFromStream(s *scan.Stream) (result CopyAccount, er
 			seen |= 1 << 9
 			result.Deleted, err = s.Bool()
 			if err != nil {
-				return result, decode.NewParseErr("deleted", s.Pos, err)
+				return result, decode.NewParseErr("deleted", s.Offset(), err)
 			}
 		case "displayName":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("displayName", s.Pos, err)
+				return result, decode.NewParseErr("displayName", s.Offset(), err)
 			}
 			if seen&(1<<10) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"displayName"}}
@@ -4731,12 +4695,12 @@ func (recv CopyAccount) DecodeFromStream(s *scan.Stream) (result CopyAccount, er
 			seen |= 1 << 10
 			result.DisplayName, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("displayName", s.Pos, err)
+				return result, decode.NewParseErr("displayName", s.Offset(), err)
 			}
 		case "email":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("email", s.Pos, err)
+				return result, decode.NewParseErr("email", s.Offset(), err)
 			}
 			if seen&(1<<11) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"email"}}
@@ -4744,12 +4708,12 @@ func (recv CopyAccount) DecodeFromStream(s *scan.Stream) (result CopyAccount, er
 			seen |= 1 << 11
 			result.Email, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("email", s.Pos, err)
+				return result, decode.NewParseErr("email", s.Offset(), err)
 			}
 		case "failedLogins":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("failedLogins", s.Pos, err)
+				return result, decode.NewParseErr("failedLogins", s.Offset(), err)
 			}
 			if seen&(1<<12) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"failedLogins"}}
@@ -4758,16 +4722,16 @@ func (recv CopyAccount) DecodeFromStream(s *scan.Stream) (result CopyAccount, er
 			var uv uint64
 			uv, err = s.Uint64()
 			if err != nil {
-				return result, decode.NewParseErr("failedLogins", s.Pos, err)
+				return result, decode.NewParseErr("failedLogins", s.Offset(), err)
 			}
 			if uv > math.MaxUint16 {
-				return result, decode.NewParseErr("failedLogins", s.Pos, scan.ErrNumberOverflow)
+				return result, decode.NewParseErr("failedLogins", s.Offset(), scan.ErrNumberOverflow)
 			}
 			result.FailedLogins = uint16(uv)
 		case "firstName":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("firstName", s.Pos, err)
+				return result, decode.NewParseErr("firstName", s.Offset(), err)
 			}
 			if seen&(1<<13) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"firstName"}}
@@ -4775,12 +4739,12 @@ func (recv CopyAccount) DecodeFromStream(s *scan.Stream) (result CopyAccount, er
 			seen |= 1 << 13
 			result.FirstName, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("firstName", s.Pos, err)
+				return result, decode.NewParseErr("firstName", s.Offset(), err)
 			}
 		case "followerCount":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("followerCount", s.Pos, err)
+				return result, decode.NewParseErr("followerCount", s.Offset(), err)
 			}
 			if seen&(1<<14) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"followerCount"}}
@@ -4789,13 +4753,13 @@ func (recv CopyAccount) DecodeFromStream(s *scan.Stream) (result CopyAccount, er
 			var iv int64
 			iv, err = s.Int64()
 			if err != nil {
-				return result, decode.NewParseErr("followerCount", s.Pos, err)
+				return result, decode.NewParseErr("followerCount", s.Offset(), err)
 			}
 			result.FollowerCount = int(iv)
 		case "followingCount":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("followingCount", s.Pos, err)
+				return result, decode.NewParseErr("followingCount", s.Offset(), err)
 			}
 			if seen&(1<<15) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"followingCount"}}
@@ -4804,13 +4768,13 @@ func (recv CopyAccount) DecodeFromStream(s *scan.Stream) (result CopyAccount, er
 			var iv int64
 			iv, err = s.Int64()
 			if err != nil {
-				return result, decode.NewParseErr("followingCount", s.Pos, err)
+				return result, decode.NewParseErr("followingCount", s.Offset(), err)
 			}
 			result.FollowingCount = int(iv)
 		case "id":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("id", s.Pos, err)
+				return result, decode.NewParseErr("id", s.Offset(), err)
 			}
 			if seen&(1<<16) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"id"}}
@@ -4818,12 +4782,12 @@ func (recv CopyAccount) DecodeFromStream(s *scan.Stream) (result CopyAccount, er
 			seen |= 1 << 16
 			result.ID, err = s.Uint64()
 			if err != nil {
-				return result, decode.NewParseErr("id", s.Pos, err)
+				return result, decode.NewParseErr("id", s.Offset(), err)
 			}
 		case "lastLogin":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("lastLogin", s.Pos, err)
+				return result, decode.NewParseErr("lastLogin", s.Offset(), err)
 			}
 			if seen&(1<<17) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"lastLogin"}}
@@ -4831,12 +4795,12 @@ func (recv CopyAccount) DecodeFromStream(s *scan.Stream) (result CopyAccount, er
 			seen |= 1 << 17
 			result.LastLogin, err = s.Int64()
 			if err != nil {
-				return result, decode.NewParseErr("lastLogin", s.Pos, err)
+				return result, decode.NewParseErr("lastLogin", s.Offset(), err)
 			}
 		case "lastName":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("lastName", s.Pos, err)
+				return result, decode.NewParseErr("lastName", s.Offset(), err)
 			}
 			if seen&(1<<18) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"lastName"}}
@@ -4844,12 +4808,12 @@ func (recv CopyAccount) DecodeFromStream(s *scan.Stream) (result CopyAccount, er
 			seen |= 1 << 18
 			result.LastName, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("lastName", s.Pos, err)
+				return result, decode.NewParseErr("lastName", s.Offset(), err)
 			}
 		case "locale":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("locale", s.Pos, err)
+				return result, decode.NewParseErr("locale", s.Offset(), err)
 			}
 			if seen&(1<<19) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"locale"}}
@@ -4857,12 +4821,12 @@ func (recv CopyAccount) DecodeFromStream(s *scan.Stream) (result CopyAccount, er
 			seen |= 1 << 19
 			result.Locale, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("locale", s.Pos, err)
+				return result, decode.NewParseErr("locale", s.Offset(), err)
 			}
 		case "loginCount":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("loginCount", s.Pos, err)
+				return result, decode.NewParseErr("loginCount", s.Offset(), err)
 			}
 			if seen&(1<<20) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"loginCount"}}
@@ -4871,16 +4835,16 @@ func (recv CopyAccount) DecodeFromStream(s *scan.Stream) (result CopyAccount, er
 			var uv uint64
 			uv, err = s.Uint64()
 			if err != nil {
-				return result, decode.NewParseErr("loginCount", s.Pos, err)
+				return result, decode.NewParseErr("loginCount", s.Offset(), err)
 			}
 			if uv > math.MaxUint32 {
-				return result, decode.NewParseErr("loginCount", s.Pos, scan.ErrNumberOverflow)
+				return result, decode.NewParseErr("loginCount", s.Offset(), scan.ErrNumberOverflow)
 			}
 			result.LoginCount = uint32(uv)
 		case "middleName":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("middleName", s.Pos, err)
+				return result, decode.NewParseErr("middleName", s.Offset(), err)
 			}
 			if seen&(1<<21) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"middleName"}}
@@ -4888,12 +4852,12 @@ func (recv CopyAccount) DecodeFromStream(s *scan.Stream) (result CopyAccount, er
 			seen |= 1 << 21
 			result.MiddleName, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("middleName", s.Pos, err)
+				return result, decode.NewParseErr("middleName", s.Offset(), err)
 			}
 		case "phone":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("phone", s.Pos, err)
+				return result, decode.NewParseErr("phone", s.Offset(), err)
 			}
 			if seen&(1<<22) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"phone"}}
@@ -4901,12 +4865,12 @@ func (recv CopyAccount) DecodeFromStream(s *scan.Stream) (result CopyAccount, er
 			seen |= 1 << 22
 			result.Phone, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("phone", s.Pos, err)
+				return result, decode.NewParseErr("phone", s.Offset(), err)
 			}
 		case "postCount":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("postCount", s.Pos, err)
+				return result, decode.NewParseErr("postCount", s.Offset(), err)
 			}
 			if seen&(1<<23) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"postCount"}}
@@ -4915,13 +4879,13 @@ func (recv CopyAccount) DecodeFromStream(s *scan.Stream) (result CopyAccount, er
 			var iv int64
 			iv, err = s.Int64()
 			if err != nil {
-				return result, decode.NewParseErr("postCount", s.Pos, err)
+				return result, decode.NewParseErr("postCount", s.Offset(), err)
 			}
 			result.PostCount = int(iv)
 		case "preferences":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("preferences", s.Pos, err)
+				return result, decode.NewParseErr("preferences", s.Offset(), err)
 			}
 			if seen&(1<<24) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"preferences"}}
@@ -4929,12 +4893,12 @@ func (recv CopyAccount) DecodeFromStream(s *scan.Stream) (result CopyAccount, er
 			seen |= 1 << 24
 			result.Preferences, err = result.Preferences.DecodeFromStream(s)
 			if err != nil {
-				return result, decode.NewParseErr("preferences", s.Pos, err)
+				return result, decode.NewParseErr("preferences", s.Offset(), err)
 			}
 		case "premium":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("premium", s.Pos, err)
+				return result, decode.NewParseErr("premium", s.Offset(), err)
 			}
 			if seen&(1<<25) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"premium"}}
@@ -4942,12 +4906,12 @@ func (recv CopyAccount) DecodeFromStream(s *scan.Stream) (result CopyAccount, er
 			seen |= 1 << 25
 			result.Premium, err = s.Bool()
 			if err != nil {
-				return result, decode.NewParseErr("premium", s.Pos, err)
+				return result, decode.NewParseErr("premium", s.Offset(), err)
 			}
 		case "reputation":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("reputation", s.Pos, err)
+				return result, decode.NewParseErr("reputation", s.Offset(), err)
 			}
 			if seen&(1<<26) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"reputation"}}
@@ -4956,16 +4920,16 @@ func (recv CopyAccount) DecodeFromStream(s *scan.Stream) (result CopyAccount, er
 			var iv int64
 			iv, err = s.Int64()
 			if err != nil {
-				return result, decode.NewParseErr("reputation", s.Pos, err)
+				return result, decode.NewParseErr("reputation", s.Offset(), err)
 			}
 			if iv < math.MinInt32 || iv > math.MaxInt32 {
-				return result, decode.NewParseErr("reputation", s.Pos, scan.ErrNumberOverflow)
+				return result, decode.NewParseErr("reputation", s.Offset(), scan.ErrNumberOverflow)
 			}
 			result.Reputation = int32(iv)
 		case "storageQuota":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("storageQuota", s.Pos, err)
+				return result, decode.NewParseErr("storageQuota", s.Offset(), err)
 			}
 			if seen&(1<<27) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"storageQuota"}}
@@ -4973,12 +4937,12 @@ func (recv CopyAccount) DecodeFromStream(s *scan.Stream) (result CopyAccount, er
 			seen |= 1 << 27
 			result.StorageQuota, err = s.Int64()
 			if err != nil {
-				return result, decode.NewParseErr("storageQuota", s.Pos, err)
+				return result, decode.NewParseErr("storageQuota", s.Offset(), err)
 			}
 		case "storageUsed":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("storageUsed", s.Pos, err)
+				return result, decode.NewParseErr("storageUsed", s.Offset(), err)
 			}
 			if seen&(1<<28) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"storageUsed"}}
@@ -4986,12 +4950,12 @@ func (recv CopyAccount) DecodeFromStream(s *scan.Stream) (result CopyAccount, er
 			seen |= 1 << 28
 			result.StorageUsed, err = s.Int64()
 			if err != nil {
-				return result, decode.NewParseErr("storageUsed", s.Pos, err)
+				return result, decode.NewParseErr("storageUsed", s.Offset(), err)
 			}
 		case "suspended":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("suspended", s.Pos, err)
+				return result, decode.NewParseErr("suspended", s.Offset(), err)
 			}
 			if seen&(1<<29) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"suspended"}}
@@ -4999,12 +4963,12 @@ func (recv CopyAccount) DecodeFromStream(s *scan.Stream) (result CopyAccount, er
 			seen |= 1 << 29
 			result.Suspended, err = s.Bool()
 			if err != nil {
-				return result, decode.NewParseErr("suspended", s.Pos, err)
+				return result, decode.NewParseErr("suspended", s.Offset(), err)
 			}
 		case "trustScore":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("trustScore", s.Pos, err)
+				return result, decode.NewParseErr("trustScore", s.Offset(), err)
 			}
 			if seen&(1<<30) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"trustScore"}}
@@ -5012,12 +4976,12 @@ func (recv CopyAccount) DecodeFromStream(s *scan.Stream) (result CopyAccount, er
 			seen |= 1 << 30
 			result.TrustScore, err = s.Float64()
 			if err != nil {
-				return result, decode.NewParseErr("trustScore", s.Pos, err)
+				return result, decode.NewParseErr("trustScore", s.Offset(), err)
 			}
 		case "twoFactorEnabled":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("twoFactorEnabled", s.Pos, err)
+				return result, decode.NewParseErr("twoFactorEnabled", s.Offset(), err)
 			}
 			if seen&(1<<31) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"twoFactorEnabled"}}
@@ -5025,12 +4989,12 @@ func (recv CopyAccount) DecodeFromStream(s *scan.Stream) (result CopyAccount, er
 			seen |= 1 << 31
 			result.TwoFactorEnabled, err = s.Bool()
 			if err != nil {
-				return result, decode.NewParseErr("twoFactorEnabled", s.Pos, err)
+				return result, decode.NewParseErr("twoFactorEnabled", s.Offset(), err)
 			}
 		case "updatedAt":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("updatedAt", s.Pos, err)
+				return result, decode.NewParseErr("updatedAt", s.Offset(), err)
 			}
 			if seen&(1<<32) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"updatedAt"}}
@@ -5038,12 +5002,12 @@ func (recv CopyAccount) DecodeFromStream(s *scan.Stream) (result CopyAccount, er
 			seen |= 1 << 32
 			result.UpdatedAt, err = s.Int64()
 			if err != nil {
-				return result, decode.NewParseErr("updatedAt", s.Pos, err)
+				return result, decode.NewParseErr("updatedAt", s.Offset(), err)
 			}
 		case "username":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("username", s.Pos, err)
+				return result, decode.NewParseErr("username", s.Offset(), err)
 			}
 			if seen&(1<<33) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"username"}}
@@ -5051,12 +5015,12 @@ func (recv CopyAccount) DecodeFromStream(s *scan.Stream) (result CopyAccount, er
 			seen |= 1 << 33
 			result.Username, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("username", s.Pos, err)
+				return result, decode.NewParseErr("username", s.Offset(), err)
 			}
 		case "verified":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("verified", s.Pos, err)
+				return result, decode.NewParseErr("verified", s.Offset(), err)
 			}
 			if seen&(1<<34) != 0 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"verified"}}
@@ -5064,7 +5028,7 @@ func (recv CopyAccount) DecodeFromStream(s *scan.Stream) (result CopyAccount, er
 			seen |= 1 << 34
 			result.Verified, err = s.Bool()
 			if err != nil {
-				return result, decode.NewParseErr("verified", s.Pos, err)
+				return result, decode.NewParseErr("verified", s.Offset(), err)
 			}
 		default:
 			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
@@ -5072,11 +5036,11 @@ func (recv CopyAccount) DecodeFromStream(s *scan.Stream) (result CopyAccount, er
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -5085,7 +5049,7 @@ func (recv CopyAccount) DecodeFromStream(s *scan.Stream) (result CopyAccount, er
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -5093,7 +5057,7 @@ func (recv CopyAccount) DecodeFromStream(s *scan.Stream) (result CopyAccount, er
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
 	}
 }
 
@@ -5234,13 +5198,7 @@ func (recv CopyPostalAddress) DecodeFrom(data []byte) (result CopyPostalAddress,
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
-		if ke >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-		}
-		if data[ke] < 0x20 {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-		}
-		if data[ke] == '"' {
+		if ke < len(data) && data[ke] == '"' {
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
@@ -5462,15 +5420,15 @@ func (recv CopyPostalAddress) DecodeFromStream(s *scan.Stream) (result CopyPosta
 	seenState := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -5482,13 +5440,13 @@ func (recv CopyPostalAddress) DecodeFromStream(s *scan.Stream) (result CopyPosta
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "city":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("city", s.Pos, err)
+				return result, decode.NewParseErr("city", s.Offset(), err)
 			}
 			if seenCity {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"city"}}
@@ -5496,12 +5454,12 @@ func (recv CopyPostalAddress) DecodeFromStream(s *scan.Stream) (result CopyPosta
 			seenCity = true
 			result.City, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("city", s.Pos, err)
+				return result, decode.NewParseErr("city", s.Offset(), err)
 			}
 		case "country":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("country", s.Pos, err)
+				return result, decode.NewParseErr("country", s.Offset(), err)
 			}
 			if seenCountry {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"country"}}
@@ -5509,12 +5467,12 @@ func (recv CopyPostalAddress) DecodeFromStream(s *scan.Stream) (result CopyPosta
 			seenCountry = true
 			result.Country, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("country", s.Pos, err)
+				return result, decode.NewParseErr("country", s.Offset(), err)
 			}
 		case "geo":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("geo", s.Pos, err)
+				return result, decode.NewParseErr("geo", s.Offset(), err)
 			}
 			if seenGeo {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"geo"}}
@@ -5522,12 +5480,12 @@ func (recv CopyPostalAddress) DecodeFromStream(s *scan.Stream) (result CopyPosta
 			seenGeo = true
 			result.Geo, err = result.Geo.DecodeFromStream(s)
 			if err != nil {
-				return result, decode.NewParseErr("geo", s.Pos, err)
+				return result, decode.NewParseErr("geo", s.Offset(), err)
 			}
 		case "line1":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("line1", s.Pos, err)
+				return result, decode.NewParseErr("line1", s.Offset(), err)
 			}
 			if seenLine1 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"line1"}}
@@ -5535,12 +5493,12 @@ func (recv CopyPostalAddress) DecodeFromStream(s *scan.Stream) (result CopyPosta
 			seenLine1 = true
 			result.Line1, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("line1", s.Pos, err)
+				return result, decode.NewParseErr("line1", s.Offset(), err)
 			}
 		case "line2":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("line2", s.Pos, err)
+				return result, decode.NewParseErr("line2", s.Offset(), err)
 			}
 			if seenLine2 {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"line2"}}
@@ -5548,12 +5506,12 @@ func (recv CopyPostalAddress) DecodeFromStream(s *scan.Stream) (result CopyPosta
 			seenLine2 = true
 			result.Line2, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("line2", s.Pos, err)
+				return result, decode.NewParseErr("line2", s.Offset(), err)
 			}
 		case "postalCode":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("postalCode", s.Pos, err)
+				return result, decode.NewParseErr("postalCode", s.Offset(), err)
 			}
 			if seenPostalCode {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"postalCode"}}
@@ -5561,12 +5519,12 @@ func (recv CopyPostalAddress) DecodeFromStream(s *scan.Stream) (result CopyPosta
 			seenPostalCode = true
 			result.PostalCode, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("postalCode", s.Pos, err)
+				return result, decode.NewParseErr("postalCode", s.Offset(), err)
 			}
 		case "state":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("state", s.Pos, err)
+				return result, decode.NewParseErr("state", s.Offset(), err)
 			}
 			if seenState {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"state"}}
@@ -5574,7 +5532,7 @@ func (recv CopyPostalAddress) DecodeFromStream(s *scan.Stream) (result CopyPosta
 			seenState = true
 			result.State, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("state", s.Pos, err)
+				return result, decode.NewParseErr("state", s.Offset(), err)
 			}
 		default:
 			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
@@ -5582,11 +5540,11 @@ func (recv CopyPostalAddress) DecodeFromStream(s *scan.Stream) (result CopyPosta
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -5595,7 +5553,7 @@ func (recv CopyPostalAddress) DecodeFromStream(s *scan.Stream) (result CopyPosta
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -5603,7 +5561,7 @@ func (recv CopyPostalAddress) DecodeFromStream(s *scan.Stream) (result CopyPosta
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
 	}
 }
 
@@ -5673,13 +5631,7 @@ func (recv CopyCompany) DecodeFrom(data []byte) (result CopyCompany, i int, err 
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
-		if ke >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-		}
-		if data[ke] < 0x20 {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-		}
-		if data[ke] == '"' {
+		if ke < len(data) && data[ke] == '"' {
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
@@ -5958,15 +5910,15 @@ func (recv CopyCompany) DecodeFromStream(s *scan.Stream) (result CopyCompany, er
 	seenTitle := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -5978,13 +5930,13 @@ func (recv CopyCompany) DecodeFromStream(s *scan.Stream) (result CopyCompany, er
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "department":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("department", s.Pos, err)
+				return result, decode.NewParseErr("department", s.Offset(), err)
 			}
 			if seenDepartment {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"department"}}
@@ -5992,12 +5944,12 @@ func (recv CopyCompany) DecodeFromStream(s *scan.Stream) (result CopyCompany, er
 			seenDepartment = true
 			result.Department, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("department", s.Pos, err)
+				return result, decode.NewParseErr("department", s.Offset(), err)
 			}
 		case "employeeId":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("employeeId", s.Pos, err)
+				return result, decode.NewParseErr("employeeId", s.Offset(), err)
 			}
 			if seenEmployeeID {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"employeeId"}}
@@ -6005,12 +5957,12 @@ func (recv CopyCompany) DecodeFromStream(s *scan.Stream) (result CopyCompany, er
 			seenEmployeeID = true
 			result.EmployeeID, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("employeeId", s.Pos, err)
+				return result, decode.NewParseErr("employeeId", s.Offset(), err)
 			}
 		case "founded":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("founded", s.Pos, err)
+				return result, decode.NewParseErr("founded", s.Offset(), err)
 			}
 			if seenFounded {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"founded"}}
@@ -6019,16 +5971,16 @@ func (recv CopyCompany) DecodeFromStream(s *scan.Stream) (result CopyCompany, er
 			var iv int64
 			iv, err = s.Int64()
 			if err != nil {
-				return result, decode.NewParseErr("founded", s.Pos, err)
+				return result, decode.NewParseErr("founded", s.Offset(), err)
 			}
 			if iv < math.MinInt16 || iv > math.MaxInt16 {
-				return result, decode.NewParseErr("founded", s.Pos, scan.ErrNumberOverflow)
+				return result, decode.NewParseErr("founded", s.Offset(), scan.ErrNumberOverflow)
 			}
 			result.Founded = int16(iv)
 		case "headcount":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("headcount", s.Pos, err)
+				return result, decode.NewParseErr("headcount", s.Offset(), err)
 			}
 			if seenHeadcount {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"headcount"}}
@@ -6037,13 +5989,13 @@ func (recv CopyCompany) DecodeFromStream(s *scan.Stream) (result CopyCompany, er
 			var iv int64
 			iv, err = s.Int64()
 			if err != nil {
-				return result, decode.NewParseErr("headcount", s.Pos, err)
+				return result, decode.NewParseErr("headcount", s.Offset(), err)
 			}
 			result.Headcount = int(iv)
 		case "isPublic":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("isPublic", s.Pos, err)
+				return result, decode.NewParseErr("isPublic", s.Offset(), err)
 			}
 			if seenIsPublic {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"isPublic"}}
@@ -6051,12 +6003,12 @@ func (recv CopyCompany) DecodeFromStream(s *scan.Stream) (result CopyCompany, er
 			seenIsPublic = true
 			result.IsPublic, err = s.Bool()
 			if err != nil {
-				return result, decode.NewParseErr("isPublic", s.Pos, err)
+				return result, decode.NewParseErr("isPublic", s.Offset(), err)
 			}
 		case "name":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("name", s.Pos, err)
+				return result, decode.NewParseErr("name", s.Offset(), err)
 			}
 			if seenName {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"name"}}
@@ -6064,12 +6016,12 @@ func (recv CopyCompany) DecodeFromStream(s *scan.Stream) (result CopyCompany, er
 			seenName = true
 			result.Name, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("name", s.Pos, err)
+				return result, decode.NewParseErr("name", s.Offset(), err)
 			}
 		case "title":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("title", s.Pos, err)
+				return result, decode.NewParseErr("title", s.Offset(), err)
 			}
 			if seenTitle {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"title"}}
@@ -6077,7 +6029,7 @@ func (recv CopyCompany) DecodeFromStream(s *scan.Stream) (result CopyCompany, er
 			seenTitle = true
 			result.Title, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("title", s.Pos, err)
+				return result, decode.NewParseErr("title", s.Offset(), err)
 			}
 		default:
 			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
@@ -6085,11 +6037,11 @@ func (recv CopyCompany) DecodeFromStream(s *scan.Stream) (result CopyCompany, er
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -6098,7 +6050,7 @@ func (recv CopyCompany) DecodeFromStream(s *scan.Stream) (result CopyCompany, er
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -6106,7 +6058,7 @@ func (recv CopyCompany) DecodeFromStream(s *scan.Stream) (result CopyCompany, er
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
 	}
 }
 
@@ -6174,13 +6126,7 @@ func (recv CopyPreferences) DecodeFrom(data []byte) (result CopyPreferences, i i
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
-		if ke >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-		}
-		if data[ke] < 0x20 {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-		}
-		if data[ke] == '"' {
+		if ke < len(data) && data[ke] == '"' {
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
@@ -6425,15 +6371,15 @@ func (recv CopyPreferences) DecodeFromStream(s *scan.Stream) (result CopyPrefere
 	seenTimezone := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -6445,13 +6391,13 @@ func (recv CopyPreferences) DecodeFromStream(s *scan.Stream) (result CopyPrefere
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "autoSave":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("autoSave", s.Pos, err)
+				return result, decode.NewParseErr("autoSave", s.Offset(), err)
 			}
 			if seenAutoSave {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"autoSave"}}
@@ -6459,12 +6405,12 @@ func (recv CopyPreferences) DecodeFromStream(s *scan.Stream) (result CopyPrefere
 			seenAutoSave = true
 			result.AutoSave, err = s.Bool()
 			if err != nil {
-				return result, decode.NewParseErr("autoSave", s.Pos, err)
+				return result, decode.NewParseErr("autoSave", s.Offset(), err)
 			}
 		case "betaFeatures":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("betaFeatures", s.Pos, err)
+				return result, decode.NewParseErr("betaFeatures", s.Offset(), err)
 			}
 			if seenBetaFeatures {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"betaFeatures"}}
@@ -6472,12 +6418,12 @@ func (recv CopyPreferences) DecodeFromStream(s *scan.Stream) (result CopyPrefere
 			seenBetaFeatures = true
 			result.BetaFeatures, err = s.Bool()
 			if err != nil {
-				return result, decode.NewParseErr("betaFeatures", s.Pos, err)
+				return result, decode.NewParseErr("betaFeatures", s.Offset(), err)
 			}
 		case "currency":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("currency", s.Pos, err)
+				return result, decode.NewParseErr("currency", s.Offset(), err)
 			}
 			if seenCurrency {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"currency"}}
@@ -6485,12 +6431,12 @@ func (recv CopyPreferences) DecodeFromStream(s *scan.Stream) (result CopyPrefere
 			seenCurrency = true
 			result.Currency, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("currency", s.Pos, err)
+				return result, decode.NewParseErr("currency", s.Offset(), err)
 			}
 		case "emailNotifications":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("emailNotifications", s.Pos, err)
+				return result, decode.NewParseErr("emailNotifications", s.Offset(), err)
 			}
 			if seenEmailNotifications {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"emailNotifications"}}
@@ -6498,12 +6444,12 @@ func (recv CopyPreferences) DecodeFromStream(s *scan.Stream) (result CopyPrefere
 			seenEmailNotifications = true
 			result.EmailNotifications, err = s.Bool()
 			if err != nil {
-				return result, decode.NewParseErr("emailNotifications", s.Pos, err)
+				return result, decode.NewParseErr("emailNotifications", s.Offset(), err)
 			}
 		case "itemsPerPage":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("itemsPerPage", s.Pos, err)
+				return result, decode.NewParseErr("itemsPerPage", s.Offset(), err)
 			}
 			if seenItemsPerPage {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"itemsPerPage"}}
@@ -6512,16 +6458,16 @@ func (recv CopyPreferences) DecodeFromStream(s *scan.Stream) (result CopyPrefere
 			var uv uint64
 			uv, err = s.Uint64()
 			if err != nil {
-				return result, decode.NewParseErr("itemsPerPage", s.Pos, err)
+				return result, decode.NewParseErr("itemsPerPage", s.Offset(), err)
 			}
 			if uv > math.MaxUint8 {
-				return result, decode.NewParseErr("itemsPerPage", s.Pos, scan.ErrNumberOverflow)
+				return result, decode.NewParseErr("itemsPerPage", s.Offset(), scan.ErrNumberOverflow)
 			}
 			result.ItemsPerPage = uint8(uv)
 		case "language":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("language", s.Pos, err)
+				return result, decode.NewParseErr("language", s.Offset(), err)
 			}
 			if seenLanguage {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"language"}}
@@ -6529,12 +6475,12 @@ func (recv CopyPreferences) DecodeFromStream(s *scan.Stream) (result CopyPrefere
 			seenLanguage = true
 			result.Language, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("language", s.Pos, err)
+				return result, decode.NewParseErr("language", s.Offset(), err)
 			}
 		case "pushNotifications":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("pushNotifications", s.Pos, err)
+				return result, decode.NewParseErr("pushNotifications", s.Offset(), err)
 			}
 			if seenPushNotifications {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"pushNotifications"}}
@@ -6542,12 +6488,12 @@ func (recv CopyPreferences) DecodeFromStream(s *scan.Stream) (result CopyPrefere
 			seenPushNotifications = true
 			result.PushNotifications, err = s.Bool()
 			if err != nil {
-				return result, decode.NewParseErr("pushNotifications", s.Pos, err)
+				return result, decode.NewParseErr("pushNotifications", s.Offset(), err)
 			}
 		case "smsNotifications":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("smsNotifications", s.Pos, err)
+				return result, decode.NewParseErr("smsNotifications", s.Offset(), err)
 			}
 			if seenSMSNotifications {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"smsNotifications"}}
@@ -6555,12 +6501,12 @@ func (recv CopyPreferences) DecodeFromStream(s *scan.Stream) (result CopyPrefere
 			seenSMSNotifications = true
 			result.SMSNotifications, err = s.Bool()
 			if err != nil {
-				return result, decode.NewParseErr("smsNotifications", s.Pos, err)
+				return result, decode.NewParseErr("smsNotifications", s.Offset(), err)
 			}
 		case "theme":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("theme", s.Pos, err)
+				return result, decode.NewParseErr("theme", s.Offset(), err)
 			}
 			if seenTheme {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"theme"}}
@@ -6568,12 +6514,12 @@ func (recv CopyPreferences) DecodeFromStream(s *scan.Stream) (result CopyPrefere
 			seenTheme = true
 			result.Theme, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("theme", s.Pos, err)
+				return result, decode.NewParseErr("theme", s.Offset(), err)
 			}
 		case "timezone":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("timezone", s.Pos, err)
+				return result, decode.NewParseErr("timezone", s.Offset(), err)
 			}
 			if seenTimezone {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"timezone"}}
@@ -6581,7 +6527,7 @@ func (recv CopyPreferences) DecodeFromStream(s *scan.Stream) (result CopyPrefere
 			seenTimezone = true
 			result.Timezone, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("timezone", s.Pos, err)
+				return result, decode.NewParseErr("timezone", s.Offset(), err)
 			}
 		default:
 			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
@@ -6589,11 +6535,11 @@ func (recv CopyPreferences) DecodeFromStream(s *scan.Stream) (result CopyPrefere
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -6602,7 +6548,7 @@ func (recv CopyPreferences) DecodeFromStream(s *scan.Stream) (result CopyPrefere
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -6610,7 +6556,7 @@ func (recv CopyPreferences) DecodeFromStream(s *scan.Stream) (result CopyPrefere
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
 	}
 }
 

@@ -1036,3 +1036,45 @@ func TestParseError_ScanPrimitivePos(t *testing.T) {
 		t.Errorf("stream: Pos = %d, want >= 8 (at the value)", spe.Pos)
 	}
 }
+
+// Stream ParseError positions must be full-payload offsets (s.Offset()), not
+// the buffer-relative s.Pos: once a compacting refill slides the window the
+// two diverge, so a small buffer + chunked reader used to report a position
+// near 0 for a failure thousands of bytes in — and the value changed with the
+// chunk size. A 16-byte payload cannot catch it (the window never slides).
+func TestParseError_StreamPosIsPayloadOffset(t *testing.T) {
+	t.Parallel()
+	var sb strings.Builder
+	sb.WriteString(`{"tags":[`)
+	for i := 0; i < 500; i++ {
+		if i > 0 {
+			sb.WriteByte(',')
+		}
+		sb.WriteString(`"aaaaaaaaaaaaaaaa"`)
+	}
+	sb.WriteString(`],"id":true}`) // id is an int: fails far into the payload
+	payload := []byte(sb.String())
+	wantAtLeast := bytes.Index(payload, []byte(`"id":true`))
+
+	_, _, berr := Node{}.DecodeFrom(payload)
+	var bpe *decode.ParseError
+	if !errors.As(berr, &bpe) {
+		t.Fatalf("bytes: got %T %v, want *decode.ParseError", berr, berr)
+	}
+	if bpe.Pos < wantAtLeast {
+		t.Errorf("bytes: Pos = %d, want >= %d", bpe.Pos, wantAtLeast)
+	}
+	for _, chunk := range []int{1, 7, 64, 512} {
+		var s scan.Stream
+		s.Reset(&chunkReader{data: payload, max: chunk}, make([]byte, 0, 64))
+		_, serr := Node{}.DecodeFromStream(&s)
+		var spe *decode.ParseError
+		if !errors.As(serr, &spe) {
+			t.Fatalf("stream chunk=%d: got %T %v, want *decode.ParseError", chunk, serr, serr)
+		}
+		if spe.Pos < wantAtLeast {
+			t.Errorf("stream chunk=%d: Pos = %d, want >= %d (payload offset, not buffer-relative)",
+				chunk, spe.Pos, wantAtLeast)
+		}
+	}
+}

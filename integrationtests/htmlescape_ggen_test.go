@@ -38,13 +38,7 @@ func (recv HTMLRawStruct) DecodeFrom(data []byte) (result HTMLRawStruct, i int, 
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
-		if ke >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-		}
-		if data[ke] < 0x20 {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-		}
-		if data[ke] == '"' {
+		if ke < len(data) && data[ke] == '"' {
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
@@ -118,15 +112,15 @@ func (recv HTMLRawStruct) DecodeFromStream(s *scan.Stream) (result HTMLRawStruct
 	seenNote := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -138,13 +132,13 @@ func (recv HTMLRawStruct) DecodeFromStream(s *scan.Stream) (result HTMLRawStruct
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "note":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("note", s.Pos, err)
+				return result, decode.NewParseErr("note", s.Offset(), err)
 			}
 			if seenNote {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"note"}}
@@ -152,7 +146,7 @@ func (recv HTMLRawStruct) DecodeFromStream(s *scan.Stream) (result HTMLRawStruct
 			seenNote = true
 			result.Note, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("note", s.Pos, err)
+				return result, decode.NewParseErr("note", s.Offset(), err)
 			}
 		default:
 			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
@@ -160,11 +154,11 @@ func (recv HTMLRawStruct) DecodeFromStream(s *scan.Stream) (result HTMLRawStruct
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -173,7 +167,7 @@ func (recv HTMLRawStruct) DecodeFromStream(s *scan.Stream) (result HTMLRawStruct
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -181,7 +175,7 @@ func (recv HTMLRawStruct) DecodeFromStream(s *scan.Stream) (result HTMLRawStruct
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
 	}
 }
 
@@ -225,13 +219,7 @@ func (recv HTMLEscapeStruct) DecodeFrom(data []byte) (result HTMLEscapeStruct, i
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
 			ke++
 		}
-		if ke >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-		}
-		if data[ke] < 0x20 {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-		}
-		if data[ke] == '"' {
+		if ke < len(data) && data[ke] == '"' {
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
@@ -305,15 +293,15 @@ func (recv HTMLEscapeStruct) DecodeFromStream(s *scan.Stream) (result HTMLEscape
 	seenNote := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -325,13 +313,13 @@ func (recv HTMLEscapeStruct) DecodeFromStream(s *scan.Stream) (result HTMLEscape
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "note":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("note", s.Pos, err)
+				return result, decode.NewParseErr("note", s.Offset(), err)
 			}
 			if seenNote {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"note"}}
@@ -339,7 +327,7 @@ func (recv HTMLEscapeStruct) DecodeFromStream(s *scan.Stream) (result HTMLEscape
 			seenNote = true
 			result.Note, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("note", s.Pos, err)
+				return result, decode.NewParseErr("note", s.Offset(), err)
 			}
 		default:
 			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
@@ -347,11 +335,11 @@ func (recv HTMLEscapeStruct) DecodeFromStream(s *scan.Stream) (result HTMLEscape
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -360,7 +348,7 @@ func (recv HTMLEscapeStruct) DecodeFromStream(s *scan.Stream) (result HTMLEscape
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -368,7 +356,7 @@ func (recv HTMLEscapeStruct) DecodeFromStream(s *scan.Stream) (result HTMLEscape
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
 	}
 }
 

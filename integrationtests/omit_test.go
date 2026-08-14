@@ -3,6 +3,7 @@ package integrationtests
 //go:generate ../ggen $GOFILE
 
 import (
+	"math/big"
 	"strings"
 	"testing"
 
@@ -183,3 +184,27 @@ func TestStringTag_AllVariants_unmarshal(t *testing.T) {
 }
 
 // TestStringTag_JSONSize_NoRealloc lives in jsonsize_test.go.
+
+// BigOmit pins that omitempty never drops a big.Int/Float/Rat: a zero one
+// encodes as `0` / `"0"`, which is not a JSON-empty value (v1 never omits a
+// struct; jsonv2 omits only null/""/{}/[]). ggen used to skip the zero.
+//
+//ggen:generate
+type BigOmit struct {
+	I big.Int   `json:"i,omitempty"`
+	F big.Float `json:"f,omitempty"`
+	R big.Rat   `json:"r,omitempty"`
+}
+
+func TestOmitEmpty_bigTypesNeverOmitted(t *testing.T) {
+	t.Parallel()
+	out, err := encode.MarshalString(BigOmit{})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	for _, want := range []string{`"i":`, `"f":`, `"r":`} {
+		if !strings.Contains(out, want) {
+			t.Errorf("zero big value omitted: want %s in %s", want, out)
+		}
+	}
+}

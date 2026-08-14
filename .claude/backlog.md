@@ -202,6 +202,21 @@ surface pinned by `Decoder[T]`).
 
 ## Open design questions
 
+- **`scan.NotEOF` leaks the drained-vs-transient mapping into generated code
+  (2026-08).** Round-6 fix #60 needed the generated stream dispatch loop to map
+  a drained refill to the bytes-path grammar sentinel, so `notEOF` was exported
+  and now appears at ~378 generated call sites
+  (`scan.NotEOF(err, scan.ErrExpectString)`). It works and it is honest — the
+  emitted code genuinely does what the runtime primitives do — but it publishes
+  an error-mapping helper that is really an internal policy, and every generated
+  file now carries the idiom. Alternatives not taken: a `Stream` method doing
+  guard-plus-map in one call (the two guard sites want DIFFERENT sentinels, so
+  it is `NotEOF` with a receiver); `ReadMore` itself taking a sentinel (changes
+  a core API for every caller to serve two emit sites); generated code comparing
+  `io.ErrUnexpectedEOF` inline (an extra `io` import in every generated file).
+  Revisit if a third consumer needs the mapping, or if the dispatch loop is ever
+  restructured so one refill helper covers both positions.
+
 - **`-unsafe` / "turbo" generator mode — trust the input completely, drop every
   guard.** Motivation: the 2026-07 jsonv2-parity work (opts #50-52) bought real
   correctness but cost real throughput on some shapes, and there are consumers

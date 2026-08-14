@@ -53,13 +53,7 @@ func (recv PermissiveDoc) DecodeFrom(data []byte) (result PermissiveDoc, i int, 
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 {
 			ke++
 		}
-		if ke >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrUnterminated)
-		}
-		if data[ke] < 0x20 {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadString)
-		}
-		if data[ke] == '"' {
+		if ke < len(data) && data[ke] == '"' {
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
@@ -347,15 +341,15 @@ func (recv PermissiveDoc) DecodeFromStream(s *scan.Stream) (result PermissiveDoc
 	seenTags := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Pos, err)
+		return result, decode.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -367,13 +361,13 @@ func (recv PermissiveDoc) DecodeFromStream(s *scan.Stream) (result PermissiveDoc
 		var key string
 		key, err = s.KeyView(false)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "long":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("long", s.Pos, err)
+				return result, decode.NewParseErr("long", s.Offset(), err)
 			}
 			if seenLong {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"long"}}
@@ -381,12 +375,12 @@ func (recv PermissiveDoc) DecodeFromStream(s *scan.Stream) (result PermissiveDoc
 			seenLong = true
 			result.Long, err = s.String(false)
 			if err != nil {
-				return result, decode.NewParseErr("long", s.Pos, err)
+				return result, decode.NewParseErr("long", s.Offset(), err)
 			}
 		case "name":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("name", s.Pos, err)
+				return result, decode.NewParseErr("name", s.Offset(), err)
 			}
 			if seenName {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"name"}}
@@ -394,12 +388,12 @@ func (recv PermissiveDoc) DecodeFromStream(s *scan.Stream) (result PermissiveDoc
 			seenName = true
 			result.Name, err = s.String(false)
 			if err != nil {
-				return result, decode.NewParseErr("name", s.Pos, err)
+				return result, decode.NewParseErr("name", s.Offset(), err)
 			}
 		case "props":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("props", s.Pos, err)
+				return result, decode.NewParseErr("props", s.Offset(), err)
 			}
 			if seenProps {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"props"}}
@@ -407,22 +401,22 @@ func (recv PermissiveDoc) DecodeFromStream(s *scan.Stream) (result PermissiveDoc
 			seenProps = true
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("props", s.Pos, err)
+				return result, decode.NewParseErr("props", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("props", s.Pos, err)
+					return result, decode.NewParseErr("props", s.Offset(), err)
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("props", s.Pos, err)
+							return result, decode.NewParseErr("props", s.Offset(), err)
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("props", s.Pos, scan.ErrBadLiteral)
+						return result, decode.NewParseErr("props", s.Offset(), scan.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -431,15 +425,15 @@ func (recv PermissiveDoc) DecodeFromStream(s *scan.Stream) (result PermissiveDoc
 			}
 			err = s.ObjectOpen()
 			if err != nil {
-				return result, decode.NewParseErr("props", s.Pos, err)
+				return result, decode.NewParseErr("props", s.Offset(), err)
 			}
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("props", s.Pos, err)
+				return result, decode.NewParseErr("props", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("props", s.Pos, err)
+					return result, decode.NewParseErr("props", s.Offset(), err)
 				}
 			}
 			if s.Bytes()[s.Pos] == '}' {
@@ -455,59 +449,59 @@ func (recv PermissiveDoc) DecodeFromStream(s *scan.Stream) (result PermissiveDoc
 				var mk string
 				mk, err = s.String(false)
 				if err != nil {
-					return result, decode.NewParseErr("props", s.Pos, err)
+					return result, decode.NewParseErr("props", s.Offset(), err)
 				}
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("props", s.Pos, err)
+					return result, decode.NewParseErr("props", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("props", s.Pos, err)
+						return result, decode.NewParseErr("props", s.Offset(), err)
 					}
 				}
 				if s.Bytes()[s.Pos] != ':' {
-					return result, decode.NewParseErr("props", s.Pos, scan.ErrBadObject)
+					return result, decode.NewParseErr("props", s.Offset(), scan.ErrBadObject)
 				}
 				s.Pos++
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("props", s.Pos, err)
+					return result, decode.NewParseErr("props", s.Offset(), err)
 				}
 				result.Props[mk], err = s.String(false)
 				if err != nil {
-					return result, decode.NewParseErr("props", s.Pos, err)
+					return result, decode.NewParseErr("props", s.Offset(), err)
 				}
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("props", s.Pos, err)
+					return result, decode.NewParseErr("props", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("props", s.Pos, err)
+						return result, decode.NewParseErr("props", s.Offset(), err)
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
 					s.Pos++
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("props", s.Pos, err)
+						return result, decode.NewParseErr("props", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == '}' {
-						return result, decode.NewParseErr("props", s.Pos, scan.ErrBadObject)
+						return result, decode.NewParseErr("props", s.Offset(), scan.ErrBadObject)
 					}
 					continue
 				}
 				break
 			}
 			if s.Bytes()[s.Pos] != '}' {
-				return result, decode.NewParseErr("props", s.Pos, scan.ErrBadObject)
+				return result, decode.NewParseErr("props", s.Offset(), scan.ErrBadObject)
 			}
 			s.Pos++
 		case "raw":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("raw", s.Pos, err)
+				return result, decode.NewParseErr("raw", s.Offset(), err)
 			}
 			if seenRaw {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"raw"}}
@@ -515,13 +509,13 @@ func (recv PermissiveDoc) DecodeFromStream(s *scan.Stream) (result PermissiveDoc
 			seenRaw = true
 			span, err := s.CaptureValue()
 			if err != nil {
-				return result, decode.NewParseErr("raw", s.Pos, err)
+				return result, decode.NewParseErr("raw", s.Offset(), err)
 			}
 			result.Raw = append(make([]byte, 0, len(span)), span...)
 		case "tags":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("tags", s.Pos, err)
+				return result, decode.NewParseErr("tags", s.Offset(), err)
 			}
 			if seenTags {
 				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"tags"}}
@@ -529,22 +523,22 @@ func (recv PermissiveDoc) DecodeFromStream(s *scan.Stream) (result PermissiveDoc
 			seenTags = true
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("tags", s.Pos, err)
+				return result, decode.NewParseErr("tags", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("tags", s.Pos, err)
+					return result, decode.NewParseErr("tags", s.Offset(), err)
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("tags", s.Pos, err)
+							return result, decode.NewParseErr("tags", s.Offset(), err)
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("tags", s.Pos, scan.ErrBadLiteral)
+						return result, decode.NewParseErr("tags", s.Offset(), scan.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -553,15 +547,15 @@ func (recv PermissiveDoc) DecodeFromStream(s *scan.Stream) (result PermissiveDoc
 			}
 			err = s.ArrayOpen()
 			if err != nil {
-				return result, decode.NewParseErr("tags", s.Pos, err)
+				return result, decode.NewParseErr("tags", s.Offset(), err)
 			}
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("tags", s.Pos, err)
+				return result, decode.NewParseErr("tags", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("tags", s.Pos, err)
+					return result, decode.NewParseErr("tags", s.Offset(), err)
 				}
 			}
 			if s.Bytes()[s.Pos] == ']' {
@@ -577,32 +571,32 @@ func (recv PermissiveDoc) DecodeFromStream(s *scan.Stream) (result PermissiveDoc
 				result.Tags = append(result.Tags, "")
 				result.Tags[len(result.Tags)-1], err = s.String(false)
 				if err != nil {
-					return result, decode.NewParseErr("tags", s.Pos, err)
+					return result, decode.NewParseErr("tags", s.Offset(), err)
 				}
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("tags", s.Pos, err)
+					return result, decode.NewParseErr("tags", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("tags", s.Pos, err)
+						return result, decode.NewParseErr("tags", s.Offset(), err)
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
 					s.Pos++
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("tags", s.Pos, err)
+						return result, decode.NewParseErr("tags", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-						return result, decode.NewParseErr("tags", s.Pos, scan.ErrBadArray)
+						return result, decode.NewParseErr("tags", s.Offset(), scan.ErrBadArray)
 					}
 					continue
 				}
 				break
 			}
 			if s.Bytes()[s.Pos] != ']' {
-				return result, decode.NewParseErr("tags", s.Pos, scan.ErrBadArray)
+				return result, decode.NewParseErr("tags", s.Offset(), scan.ErrBadArray)
 			}
 			s.Pos++
 		default:
@@ -611,11 +605,11 @@ func (recv PermissiveDoc) DecodeFromStream(s *scan.Stream) (result PermissiveDoc
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Pos, err)
+			return result, decode.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -624,7 +618,7 @@ func (recv PermissiveDoc) DecodeFromStream(s *scan.Stream) (result PermissiveDoc
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Pos, err)
+				return result, decode.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -632,7 +626,7 @@ func (recv PermissiveDoc) DecodeFromStream(s *scan.Stream) (result PermissiveDoc
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Pos, scan.ErrBadObject)
+		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
 	}
 }
 
