@@ -1042,3 +1042,20 @@ func TestAppendAny_NumberStringTag(t *testing.T) {
 		t.Errorf("ggen %s, jsonv2 %s", got, want)
 	}
 }
+
+// A recursively embedded anonymous struct used to recurse forever in
+// collectFields (fatal stack overflow); stdlib breaks the cycle and emits
+// the reachable fields.
+func TestAppendAny_RecursiveEmbedNoOverflow(t *testing.T) {
+	type node struct {
+		*node
+		X int
+	}
+	got, err := AppendAny(nil, node{X: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != `{"X":1}` {
+		t.Errorf("got %s, want {\"X\":1}", got)
+	}
+}

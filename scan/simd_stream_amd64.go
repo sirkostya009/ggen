@@ -184,7 +184,7 @@ func (s *Stream) stringViewAVX(validate bool) (v string, owned bool, err error) 
 	i := s.Pos
 	if i >= len(s.buf) {
 		if err := s.ReadMore(i); err != nil {
-			return "", false, err
+			return "", false, NotEOF(err, ErrExpectString)
 		}
 		i = 0
 	}
@@ -203,7 +203,7 @@ func (s *Stream) stringViewAVX(validate bool) (v string, owned bool, err error) 
 			j -= start
 			start = 0
 			if err != nil {
-				return "", false, ErrUnterminated
+				return "", false, NotEOF(err, ErrUnterminated)
 			}
 			continue
 		}
@@ -231,7 +231,7 @@ func (s *Stream) stringViewAVX2(validate bool) (v string, owned bool, err error)
 	i := s.Pos
 	if i >= len(s.buf) {
 		if err := s.ReadMore(i); err != nil {
-			return "", false, err
+			return "", false, NotEOF(err, ErrExpectString)
 		}
 		i = 0
 	}
@@ -250,7 +250,7 @@ func (s *Stream) stringViewAVX2(validate bool) (v string, owned bool, err error)
 			j -= start
 			start = 0
 			if err != nil {
-				return "", false, ErrUnterminated
+				return "", false, NotEOF(err, ErrUnterminated)
 			}
 			continue
 		}
@@ -276,7 +276,7 @@ func (s *Stream) stringViewAVX512(validate bool) (v string, owned bool, err erro
 	i := s.Pos
 	if i >= len(s.buf) {
 		if err := s.ReadMore(i); err != nil {
-			return "", false, err
+			return "", false, NotEOF(err, ErrExpectString)
 		}
 		i = 0
 	}
@@ -295,7 +295,7 @@ func (s *Stream) stringViewAVX512(validate bool) (v string, owned bool, err erro
 			j -= start
 			start = 0
 			if err != nil {
-				return "", false, ErrUnterminated
+				return "", false, NotEOF(err, ErrUnterminated)
 			}
 			continue
 		}

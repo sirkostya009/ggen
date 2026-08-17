@@ -1264,6 +1264,21 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
     `ArrayOpen`/`ObjectOpen` skip space). Whitespace is legal before any
     top-level value. Pinned by `TestAlias_leadingWhitespace`.
 
+67. **Synthesized FieldInfos carry the parent's flags + hint levels (round 7).**
+    Three drop classes in the synthetic-field constructors: (a)
+    `peelSliceField` hardcoded `HintLen: -1` and never consulted
+    `f.HintLevels`, so documented per-level hints (`hint:"32 inner:8"`) were
+    parsed and silently never emitted — it now shifts `HintLevels[0]` into the
+    peeled level's `HintLen` (mirroring the `Levels` shift); (b)
+    `peelSliceField`, `elemPtrField`, and `sqlNullInnerField` omitted
+    `AllowInvalidUTF8` (zero value = validate), so the opt-out silently
+    stopped applying one container/pointer level down (`[][]string` inner
+    rows re-validated while `[]string` didn't); (c) `converterInputField`
+    built the `@Conv` input-W field with no `Copy` and no `AllowInvalidUTF8` —
+    under `-copy` a converter-retained string ALIASED `data`, breaking the
+    copy contract (buffer mutation after decode corrupted the converted
+    value). Pinned by `TestGenerate_syntheticFieldFlagPropagation`.
+
 ## Named types, cross-package types (defects fixed 2026-07)
 
 One missing lookup and one stale signature matcher made two whole type families

@@ -610,7 +610,7 @@ func cachedStructInfo(t reflect.Type) *structInfo {
 		return v.(*structInfo)
 	}
 	info := &structInfo{}
-	collectFields(info, t, nil)
+	collectFields(info, t, nil, map[reflect.Type]struct{}{t: {}})
 	info.fields = resolveFieldConflicts(info.fields)
 	structInfoCache.Store(t, info)
 	return info
@@ -672,7 +672,11 @@ func resolveFieldConflicts(fields []fieldInfo) []fieldInfo {
 	return out
 }
 
-func collectFields(info *structInfo, t reflect.Type, parentIndex []int) {
+// seen holds the embedding chain from the root to t — recursion into a type
+// already on the chain would never terminate (stdlib breaks the cycle the
+// same way). Stack semantics (delete after recursing) so a diamond-embedded
+// type still surfaces twice for resolveFieldConflicts to judge.
+func collectFields(info *structInfo, t reflect.Type, parentIndex []int, seen map[reflect.Type]struct{}) {
 	for i := 0; i < t.NumField(); i++ {
 		sf := t.Field(i)
 		idx := append(append([]int(nil), parentIndex...), i)
@@ -689,7 +693,11 @@ func collectFields(info *structInfo, t reflect.Type, parentIndex []int) {
 				ft = ft.Elem()
 			}
 			if ft.Kind() == reflect.Struct {
-				collectFields(info, ft, idx)
+				if _, cyclic := seen[ft]; !cyclic {
+					seen[ft] = struct{}{}
+					collectFields(info, ft, idx, seen)
+					delete(seen, ft)
+				}
 				continue
 			}
 		}

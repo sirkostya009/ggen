@@ -14,6 +14,20 @@ shaves routinely vanish in wall clock.
   multierr stops collecting dive errors past the bound. Touches every container
   emitter.
 
+- **GENERATED stream container-loop refills still grow-only (round-7 find,
+  distinct from the runtime skip-tree item below).** `streamReadMore` is
+  emitted with `keep="0"` at ~8 container-loop sites (generate.go array-entry,
+  element-separator, and null-literal refills — visible in
+  `bench/small_ggen.go`); readers fill the window, so these land with
+  `len == cap` and DOUBLE the buffer. The dispatch loop already compacts
+  (`ReadMore(s.Pos); s.Pos = 0`); stream element values are owned copies and
+  `KeyView` aliases are dead past dispatch, so compaction is believed safe at
+  most sites — the null-literal loop holds `s.Pos`-relative offsets needing a
+  rebase. Same class as the skip-tree compaction (8.4 MB → 127 KB/op). B/op
+  win on long arrays/maps through small buffers; wall-clock likely
+  small-to-flat. UNMEASURED, per-site alias-safety audit not completed —
+  house-rule bench + safety pass before landing.
+
 - **Stream skip-tree separator/colon/literal refills still grow-only.** The
   per-iteration ','/']'/'}' bound checks in (*Stream).skipArray/skipObject,
   the byte-by-byte literal loops (Bool, the 'null' arms), and anyObject's

@@ -566,3 +566,47 @@ func TestSQLNullGeneric(t *testing.T) {
 		})
 	}
 }
+
+// Round-7: synthesized element/converter FieldInfos used to drop flags the
+// parent carried — hint: inner levels were parsed but never emitted, and
+// allowinvalidutf8/copy vanished one container level down (and on @Conv
+// inputs entirely).
+func TestGenerate_syntheticFieldFlagPropagation(t *testing.T) {
+	t.Run("hint_inner_levels", func(t *testing.T) {
+		code, err := generate("p", []StructInfo{{
+			Name: "H",
+			Fields: []FieldInfo{{
+				GoName: "Rows", JSONName: "rows", GoType: "[][]int",
+				Kind: KindSlice, ElemKind: KindSlice, ElemType: "[]int",
+				HintLen: 32, HintLevels: []int{8},
+			}},
+		}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		s := string(code)
+		if !strings.Contains(s, "make([][]int, 0, 32)") {
+			t.Errorf("outer hint not emitted:\n%s", s)
+		}
+		if !strings.Contains(s, "make([]int, 0, 8)") {
+			t.Errorf("inner hint dropped by peelSliceField:\n%s", s)
+		}
+	})
+
+	t.Run("allowinvalidutf8_nested_elem", func(t *testing.T) {
+		code, err := generate("p", []StructInfo{{
+			Name: "U", AllowInvalidUTF8: true,
+			Fields: []FieldInfo{{
+				GoName: "Nested", JSONName: "nested", GoType: "[][]string",
+				Kind: KindSlice, ElemKind: KindSlice, ElemType: "[]string",
+				HintLen: -1, AllowInvalidUTF8: true,
+			}},
+		}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(code), "scan.String(data, i, true)") {
+			t.Errorf("inner string elems re-validate UTF-8 despite allowinvalidutf8:\n%s", code)
+		}
+	})
+}

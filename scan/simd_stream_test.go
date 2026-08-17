@@ -96,3 +96,60 @@ func TestStreamStringSIMD_Parity(t *testing.T) {
 		}
 	}
 }
+
+// errAfterReader yields data, then a transient (non-EOF) error forever.
+type errAfterReader struct {
+	data []byte
+	err  error
+}
+
+func (r *errAfterReader) Read(p []byte) (int, error) {
+	if len(r.data) == 0 {
+		return 0, r.err
+	}
+	n := copy(p, r.data)
+	r.data = r.data[n:]
+	return n, nil
+}
+
+// TestStreamStringSIMD_RefillErrorIdentity pins the tier refill arms against
+// the scalar contracts (round-7 fix): a drained reader at a string position
+// maps to ErrExpectString / ErrUnterminated like the scalar path, and a
+// transient reader error propagates raw instead of being relabeled.
+func TestStreamStringSIMD_RefillErrorIdentity(t *testing.T) {
+	t.Parallel()
+	tiers := []struct {
+		name string
+		fn   func(*Stream, bool) (string, error)
+	}{
+		{"AVX", (*Stream).StringAVX},
+		{"AVX2", (*Stream).StringAVX2},
+		{"AVX512", (*Stream).StringAVX512},
+	}
+	boom := io.ErrNoProgress
+	for _, tier := range tiers {
+		t.Run(tier.name, func(t *testing.T) {
+			// Drained at the head: scalar maps to ErrExpectString.
+			var s Stream
+			s.Reset(strings.NewReader(""), nil)
+			if _, err := tier.fn(&s, true); err != ErrExpectString {
+				t.Errorf("drained head: got %v, want ErrExpectString", err)
+			}
+			// Drained mid-string: ErrUnterminated.
+			s.Reset(strings.NewReader(`"abc`), nil)
+			if _, err := tier.fn(&s, true); err != ErrUnterminated {
+				t.Errorf("drained mid-string: got %v, want ErrUnterminated", err)
+			}
+			// Transient error at the head propagates raw.
+			s.Reset(&errAfterReader{err: boom}, nil)
+			if _, err := tier.fn(&s, true); err != boom {
+				t.Errorf("transient head: got %v, want raw reader error", err)
+			}
+			// Transient error mid-string propagates raw, not ErrUnterminated.
+			s.Reset(&errAfterReader{data: []byte(`"abc`), err: boom}, nil)
+			if _, err := tier.fn(&s, true); err != boom {
+				t.Errorf("transient mid-string: got %v, want raw reader error", err)
+			}
+		})
+	}
+}

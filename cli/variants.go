@@ -132,11 +132,13 @@ func nativeVariantField(f FieldInfo) FieldInfo {
 // input type W, so renderField/renderStreamField can scan it into a temp.
 func converterInputField(f FieldInfo, v Variant) FieldInfo {
 	return FieldInfo{
-		GoName:     f.GoName,
-		StructName: f.StructName,
-		JSONName:   f.JSONName,
-		GoType:     v.InType,
-		Kind:       v.InKind,
+		GoName:           f.GoName,
+		StructName:       f.StructName,
+		JSONName:         f.JSONName,
+		GoType:           v.InType,
+		Kind:             v.InKind,
+		Copy:             f.Copy,
+		AllowInvalidUTF8: f.AllowInvalidUTF8,
 	}
 }
 

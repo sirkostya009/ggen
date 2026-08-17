@@ -111,7 +111,8 @@ func UnmarshalSliceStream[T Decoder[T]](r io.Reader, buf []byte) ([]T, []byte, e
 		// Non-nil empty for [] — matches the bytes walker.
 		return []T{}, s.Bytes(), nil
 	}
-	var result []T
+	// Same width-driven prealloc ladder the bytes walker uses.
+	result := make([]T, 0, PreallocCap(unsafe.Sizeof(*new(T))))
 	for {
 		var zero T
 		v, err := zero.DecodeFromStream(&s)

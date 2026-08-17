@@ -508,6 +508,15 @@ avx512: Mega_Reader −5.2%, NoAlloc_Reader −7.7%, Small_Reader −20/−26%.
 Parity pinned by `TestStreamStringSIMD_Parity` (lane-seam bodies × chunked
 readers 1..64 B forcing mid-string refills, all tiers, error identity).
 
+**Refill error identity (found+fixed 2026-08, round 7).** All three
+`stringViewAVX*` cores returned the RAW `ReadMore` error at the head refill
+(scalar: `NotEOF(err, ErrExpectString)`) and mapped EVERY mid-string refill
+failure to `ErrUnterminated` (scalar: `NotEOF(err, ErrUnterminated)` — a
+transient reader error was relabeled as malformed JSON). The parity test only
+feeds complete payloads, so both slipped through; now routed through `NotEOF`
+like the scalar path and pinned by
+`TestStreamStringSIMD_RefillErrorIdentity`.
+
 ### Skip-tree SIMD tiers (`simd_skip_amd64.go`, `//go:build goexperiment.simd`)
 
 `SkipValueAVX{,2,512}` + `skipArray*`/`skipObject*`/`skipString*`/`SkipSpace*`

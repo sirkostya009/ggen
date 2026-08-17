@@ -217,6 +217,13 @@ that would otherwise catch them:
    path. The `reflect.Map` walk reuses two addressable scratch `reflect.Value`s
    via `Value.SetIterKey`/`SetIterValue` (vs `iter.Key()`/`iter.Value()` which
    allocate a fresh Value per entry). Only `any` fields reach this.
+   The struct walk's flattened field list (`cachedStructInfo`/`collectFields`)
+   guards anonymous-embed recursion with a stack-set visited map (found+fixed
+   2026-08, round 7): `type Node struct { *Node; X int }` used to recurse
+   forever → fatal stack overflow; stdlib breaks the cycle and emits
+   `{"X":1}`. Stack semantics (delete after recursing) keep diamond-embedded
+   types duplicated for `resolveFieldConflicts`. Pinned by
+   `TestAppendAny_RecursiveEmbedNoOverflow`.
 
 ### `,string` on `json.Number`
 

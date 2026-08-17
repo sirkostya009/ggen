@@ -4253,6 +4253,7 @@ func sqlNullInnerField(f FieldInfo) FieldInfo {
 	inner.UseNumber = f.UseNumber
 	inner.HTMLEscape = f.HTMLEscape
 	inner.Copy = f.Copy
+	inner.AllowInvalidUTF8 = f.AllowInvalidUTF8
 	inner.AtDispatch = false
 	return inner
 }
@@ -4682,11 +4683,12 @@ func elemPtrField(f FieldInfo, jsonName string) FieldInfo {
 		JSONName:    jsonName,
 		Format:      f.Format,
 		HTMLEscape:  f.HTMLEscape,
-		MultiErr:    f.MultiErr,
-		NoValidate:  f.NoValidate,
-		AllowDups:   f.AllowDups,
-		UseNumber:   f.UseNumber,
-		Copy:        f.Copy,
+		MultiErr:         f.MultiErr,
+		NoValidate:       f.NoValidate,
+		AllowDups:        f.AllowDups,
+		UseNumber:        f.UseNumber,
+		Copy:             f.Copy,
+		AllowInvalidUTF8: f.AllowInvalidUTF8,
 		Validation:  f.ElemValidation,
 		Mods:        f.ElemMods,
 		Iface:       f.ElemIface,
@@ -5110,10 +5112,11 @@ func peelSliceField(f FieldInfo) FieldInfo {
 		ElemType:    innerElem,
 		ElemKind:    innerKind,
 		JSONName:    f.JSONName + "[]",
-		MultiErr:    f.MultiErr,
-		NoValidate:  f.NoValidate,
-		AllowDups:   f.AllowDups,
-		Copy:        f.Copy,
+		MultiErr:         f.MultiErr,
+		NoValidate:       f.NoValidate,
+		AllowDups:        f.AllowDups,
+		Copy:             f.Copy,
+		AllowInvalidUTF8: f.AllowInvalidUTF8,
 		// HintLen=-1 ("unset") so preallocCap falls through to the kind
 		// default — the zero-value 0 would read as opt-out.
 		HintLen: -1,
@@ -5136,6 +5139,12 @@ func peelSliceField(f FieldInfo) FieldInfo {
 	// Ordered per-level steps: this level's elem is the next inner level down.
 	if len(f.Levels) > 1 {
 		inner.Levels = f.Levels[1:]
+	}
+	// Per-level prealloc hints shift down the same way: HintLevels[0] sizes
+	// this peeled level's rows.
+	if len(f.HintLevels) > 0 {
+		inner.HintLen = f.HintLevels[0]
+		inner.HintLevels = f.HintLevels[1:]
 	}
 	return inner
 }
