@@ -69,11 +69,40 @@ func variantCaseBytes(f FieldInfo, v Variant) []string {
 	case VariantNullZero:
 		return []string{"'n'"}
 	case VariantNative:
-		return kindShapeBytes(variantShapeKind(f, f.GoType, f.Kind), f.Format)
+		bs := kindShapeBytes(variantShapeKind(f, f.GoType, f.Kind), f.Format)
+		// Null-aware native kinds keep their null arm: without it a converter
+		// variant made {"p":null} a hard error where the plain field decodes
+		// null → nil. An explicit nullzero variant claims 'n' itself.
+		if nativeAcceptsNull(f) && !hasNullZeroVariant(f) {
+			bs = append(bs, "'n'")
+		}
+		return bs
 	case VariantConvert:
 		return kindShapeBytes(variantShapeKind(f, v.InType, v.InKind), "")
 	}
 	return nil
+}
+
+// nativeAcceptsNull reports whether f's native decode path has a null branch
+// (the kind-gated null acceptance: pointer, slice, map, []byte, raw).
+func nativeAcceptsNull(f FieldInfo) bool {
+	if f.Pointer {
+		return true
+	}
+	switch variantShapeKind(f, f.GoType, f.Kind) {
+	case KindSlice, KindMap, KindBytes, KindRawJSON:
+		return true
+	}
+	return false
+}
+
+func hasNullZeroVariant(f FieldInfo) bool {
+	for _, v := range f.Variants {
+		if v.Kind == VariantNullZero {
+			return true
+		}
+	}
+	return false
 }
 
 // checkVariantShapes verifies the decode variants on f claim disjoint JSON
@@ -212,7 +241,9 @@ func emitConvAssign(b *bytes.Buffer, v Variant, field, ref, tmp, posVar string) 
 		return
 	}
 	if v.BoolForm {
-		modErr := fmt.Sprintf("&decode.ModError{%sName: %q, Msg: %q, Value: %s}", posLit(posVar), v.FuncName, v.Msg, tmp)
+		// ModError is a parse error — wrap so it carries the field path like
+		// every other decode failure (mod_error.go doc).
+		modErr := fmt.Sprintf("decode.NewParseErr(%s, %s, &decode.ModError{%sName: %q, Msg: %q, Value: %s})", field, posVar, posLit(posVar), v.FuncName, v.Msg, tmp)
 		fmt.Fprintf(b, "if cv, ok := %s(%s); !ok {\nreturn result, %s, %s\n} else {\n%s = cv\n}\n", call, tmp, posVar, modErr, ref)
 		return
 	}
@@ -230,7 +261,7 @@ func emitConvAssignStream(b *bytes.Buffer, v Variant, field, ref, tmp string) {
 		return
 	}
 	if v.BoolForm {
-		modErr := fmt.Sprintf("&decode.ModError{Pos: s.Offset(), Name: %q, Msg: %q, Value: %s}", v.FuncName, v.Msg, tmp)
+		modErr := fmt.Sprintf("decode.NewParseErr(%s, s.Offset(), &decode.ModError{Pos: s.Offset(), Name: %q, Msg: %q, Value: %s})", field, v.FuncName, v.Msg, tmp)
 		fmt.Fprintf(b, "if cv, ok := %s(%s); !ok {\nreturn result, %s\n} else {\n%s = cv\n}\n", call, tmp, modErr, ref)
 		return
 	}

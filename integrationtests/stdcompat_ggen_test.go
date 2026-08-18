@@ -752,7 +752,7 @@ func (recv TimeUnix) DecodeFromStream(s *scan.Stream) (result TimeUnix, err erro
 }
 
 func (s TimeUnix) JSONSize() int {
-	size := 33
+	size := 41
 	return size
 }
 
@@ -760,7 +760,7 @@ func (s TimeUnix) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"unix\":"...)
-	dst = strconv.AppendFloat(dst, float64(s.Unix.UnixNano())/1e9, 'f', -1, 64)
+	dst = encode.AppendUnixSeconds(dst, s.Unix)
 	return append(dst, '}'), nil
 }
 
@@ -5023,7 +5023,7 @@ func (recv TimeFormatsStdCompat) DecodeFromStream(s *scan.Stream) (result TimeFo
 }
 
 func (s TimeFormatsStdCompat) JSONSize() int {
-	size := 847
+	size := 855
 	return size
 }
 
@@ -5067,7 +5067,7 @@ func (s TimeFormatsStdCompat) AppendJSON(dst []byte) ([]byte, error) {
 	dst = append(dst, "\",\"timeOnly\":\""...)
 	dst = s.TimeOnly.AppendFormat(dst, time.TimeOnly)
 	dst = append(dst, "\",\"unix\":"...)
-	dst = strconv.AppendFloat(dst, float64(s.Unix.UnixNano())/1e9, 'f', -1, 64)
+	dst = encode.AppendUnixSeconds(dst, s.Unix)
 	dst = append(dst, ",\"unixDate\":\""...)
 	dst = s.UnixDate.AppendFormat(dst, time.UnixDate)
 	dst = append(dst, "\",\"unixMicro\":"...)
@@ -5472,8 +5472,9 @@ func (recv richSubset) DecodeFromStream(s *scan.Stream) (result richSubset, err 
 }
 
 func (s richSubset) JSONSize() int {
-	size := 391
+	size := 349
 	size += s.Big.BitLen() / 3
+	size += int(s.BigF.Prec()) / 3
 	size += (s.BigR.Num().BitLen() + s.BigR.Denom().BitLen()) / 3
 	if n := len(s.Raw1); n > 0 {
 		size += n

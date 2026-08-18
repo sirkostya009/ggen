@@ -37,6 +37,7 @@ func CloseJSONString(dst []byte, from int) []byte     // close raw-appended text
 func CloseJSONStringHTML(dst []byte, from int) []byte // htmlescape variant
 func AppendStringNoHTML(dst []byte, s string) []byte // jsonv2-default variant
 func AppendFloat(dst []byte, v float64, bitSize int) ([]byte, error) // stdlib-parity float format
+func AppendUnixSeconds(dst []byte, t time.Time) []byte // format:unix wire — exact decimal seconds + fractional nanos (never float64(UnixNano()), which overflowed outside ~1678-2262 and lost sub-100ns precision); pinned by TestAppendUnixSeconds
 func AppendAny(dst []byte, v any) ([]byte, error)     // any-walker, NoHTML escaping
 func AppendAnyHTML(dst []byte, v any) ([]byte, error) // any-walker, HTML-safe escaping
 ```

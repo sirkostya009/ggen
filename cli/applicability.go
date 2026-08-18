@@ -149,6 +149,31 @@ func checkRuleApplicability(fi FieldInfo, resolved bool) error {
 			UserHint: "`hint` is a prealloc capacity hint; only slice/map have capacity to size",
 		})
 	}
+	// hint: inner levels must land on a growable level too — they used to
+	// bypass the matrix entirely (parsed, then silently ignored).
+	hintLevelType := fi.ElemType
+	hintLevelKind := fi.ElemKind
+	for li, h := range fi.HintLevels {
+		if li > 0 {
+			var ok bool
+			hintLevelType, hintLevelKind, ok = peelTypeOnce(hintLevelType)
+			if !ok {
+				hintLevelKind = 0
+			}
+		}
+		if h < 0 {
+			continue
+		}
+		if lk := eff(hintLevelType, hintLevelKind); lk != KindSlice && lk != KindMap {
+			collect(&richError{
+				Msg:      fmt.Sprintf("%s: `hint` `inner:` level %d is only valid on a slice/map element (got %s)", desc, li+1, fi.GoType),
+				CodeSpan: "inner:",
+				BotHint:  "hint inner: level deeper than the container nests, or on a non-container element",
+				UserHint: "remove the extra `inner:` hint level",
+			})
+			break
+		}
+	}
 
 	return errors.Join(errs...)
 }

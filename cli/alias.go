@@ -24,7 +24,13 @@ func renderAliasDecode(b *bytes.Buffer, s StructInfo) {
 	inlineSkipWS(b, "i")
 	switch s.AliasKind {
 	case KindString:
-		fmt.Fprintf(b, "var v string\nv, i, err = "+scanStringFn+"(data, i, "+vArgS(s)+")\n%s\nresult = %s(v)\n", wrap, s.Name)
+		// copy: Detach clones iff the scan result aliases data (escape-path
+		// results already own their bytes) — same shape as struct fields.
+		detach := ""
+		if s.Copy {
+			detach = "v = scan.Detach(v, data)\n"
+		}
+		fmt.Fprintf(b, "var v string\nv, i, err = "+scanStringFn+"(data, i, "+vArgS(s)+")\n%s\n%sresult = %s(v)\n", wrap, detach, s.Name)
 	case KindBool:
 		fmt.Fprintf(b, "var v bool\nv, i, err = scan.Bool(data, i)\n%s\nresult = %s(v)\n", wrap, s.Name)
 	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
@@ -92,8 +98,7 @@ func renderAliasSize(s StructInfo) string {
 		// Same per-kind machinery as a struct FIELD of this shape — the old
 		// flat 1024 under-reserved any real container (growth chain past it)
 		// and over-reserved small ones.
-		f := s.AliasField
-		f.GoType = s.Name
+		f := aliasContainerField(s)
 		n, code := sizeContrib(f, "s")
 		return fmt.Sprintf("size := %d\n%sreturn size\n", n, code)
 	case KindStruct:
@@ -258,6 +263,23 @@ return dst, nil
 	}
 }
 
+// aliasContainerField returns s.AliasField with the struct-level flags
+// stamped on — the alias field is built at parse time, BEFORE annotation/CLI
+// flag propagation (which only walks Fields), so reading it raw silently
+// dropped copy/htmlescape/allowinvalidutf8/multierr on container aliases.
+func aliasContainerField(s StructInfo) FieldInfo {
+	f := s.AliasField
+	f.GoType = s.Name
+	f.MultiErr = s.MultiErr
+	f.NoValidate = s.NoValidate
+	f.AllowDups = s.AllowDups
+	f.UseNumber = s.UseNumber
+	f.HTMLEscape = s.HTMLEscape
+	f.Copy = s.Copy
+	f.AllowInvalidUTF8 = s.AllowInvalidUTF8
+	return f
+}
+
 // renderAliasContainerDecode dispatches a slice/map/array alias into the
 // field-level emitters with `result` as ref; s.AliasField carries the shape.
 // All the slice/map/array machinery (empty-peek, hint-len cap, slab, dive)
@@ -271,8 +293,7 @@ func renderAliasContainerDecode(b *bytes.Buffer, s StructInfo, stream bool) {
 	case KindMap:
 		b.WriteString("if result != nil { clear(result) }\n")
 	}
-	f := s.AliasField
-	f.GoType = s.Name
+	f := aliasContainerField(s)
 	// Stream cursor is s.Pos; bytes path uses the function-arg `i`.
 	posVar := "i"
 	if stream {
@@ -325,8 +346,7 @@ func renderAliasContainerDecode(b *bytes.Buffer, s StructInfo, stream bool) {
 // renderAliasContainerAppendJSON emits the encode body for slice/map/array
 // aliases via the field-level append helpers, with `s` (the receiver) as ref.
 func renderAliasContainerAppendJSON(b *bytes.Buffer, s StructInfo) {
-	f := s.AliasField
-	f.GoType = s.Name
+	f := aliasContainerField(s)
 	// Same shared slot the struct body declares: a delegating element
 	// (nested ggen struct, marshaler alias) emits `dst, err = …`, and this
 	// path has no field loop to have declared it.

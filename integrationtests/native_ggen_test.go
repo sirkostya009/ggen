@@ -828,7 +828,7 @@ func (recv NativeTypes) DecodeFromStream(s *scan.Stream) (result NativeTypes, er
 }
 
 func (s NativeTypes) JSONSize() int {
-	size := 334
+	size := 342
 	if s.Addr.Is4() {
 		size += 15
 	} else {
@@ -908,7 +908,7 @@ func (s NativeTypes) AppendJSON(dst []byte) ([]byte, error) {
 	dst = append(dst, ",\"unitDur\":\""...)
 	dst = encode.AppendStringNoHTML(dst, s.UnitDur.String())
 	dst = append(dst, ",\"unixAt\":"...)
-	dst = strconv.AppendFloat(dst, float64(s.UnixAt.UnixNano())/1e9, 'f', -1, 64)
+	dst = encode.AppendUnixSeconds(dst, s.UnixAt)
 	return append(dst, '}'), nil
 }
 

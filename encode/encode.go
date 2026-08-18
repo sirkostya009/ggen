@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"strconv"
 	"sync"
+	"time"
 	"unsafe"
 )
 
@@ -74,6 +75,36 @@ func AppendFloat(dst []byte, v float64, bitSize int) ([]byte, error) {
 		}
 	}
 	return dst, nil
+}
+
+// AppendUnixSeconds appends t as decimal Unix seconds with exact fractional
+// nanoseconds (`format:unix` wire form). Routing through float64(UnixNano())
+// silently emitted garbage outside the int64-nanosecond range (~years
+// 1678-2262) and lost sub-100ns precision at the float64 resolution floor.
+func AppendUnixSeconds(dst []byte, t time.Time) []byte {
+	sec, ns := t.Unix(), t.Nanosecond()
+	if ns == 0 {
+		return strconv.AppendInt(dst, sec, 10)
+	}
+	// Nanosecond() is [0,1e9): a negative time with a fraction prints as
+	// -(|sec+1| + (1e9-ns)/1e9), e.g. sec=-1 ns=5e8 → "-0.5".
+	if sec < 0 {
+		dst = append(dst, '-')
+		sec = -(sec + 1)
+		ns = 1e9 - ns
+	}
+	dst = strconv.AppendInt(dst, sec, 10)
+	dst = append(dst, '.')
+	var frac [9]byte
+	for i := 8; i >= 0; i-- {
+		frac[i] = byte('0' + ns%10)
+		ns /= 10
+	}
+	n := 9
+	for n > 1 && frac[n-1] == '0' {
+		n--
+	}
+	return append(dst, frac[:n]...)
 }
 
 // MarshalString returns the JSON encoding of v as a string. The returned

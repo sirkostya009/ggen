@@ -1279,6 +1279,44 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
     copy contract (buffer mutation after decode corrupted the converted
     value). Pinned by `TestGenerate_syntheticFieldFlagPropagation`.
 
+68. **Round-8 fixes (alias flags, variant null, omit on named prims, unix
+    time, big.Float size).** Six related defects:
+    - **Container + primitive aliases dropped struct flags.** `AliasField` is
+      built at parse time, BEFORE `applyCLIFlags` (which only walks `Fields`),
+      so `copy`/`htmlescape`/`allowinvalidutf8`/`multierr` on
+      `type Tags []string` were silently ignored — copy-mode elements still
+      ALIASED the input (silent corruption class), htmlescape emitted NoHTML
+      appends. `aliasContainerField` (alias.go) stamps struct flags at all
+      render sites; the primitive string alias emits `scan.Detach` under
+      `copy`.
+    - **Converter variants made JSON `null` a hard error on null-aware
+      kinds.** `variantCaseBytes`'s native arm never claimed `'n'`, so
+      `P *int` + `pipe:"./@Conv"` rejected `{"p":null}` that the plain field
+      decodes to nil. Native now claims `'n'` for pointer/slice/map/bytes/raw
+      (`nativeAcceptsNull`) unless an explicit `nullzero` variant claims it.
+    - **`omitempty`/`omitzero` on named primitives.** `fieldSkipExpr` never
+      resolved through `effectiveKind`, so a `type Score int` field hit the
+      KindStruct arm: omitzero emitted `!= (Score{})` (does not compile),
+      omitempty had no arm (option silently dropped, `{"s":""}` emitted where
+      v1+jsonv2 omit).
+    - **`hint:` inner levels now go through the applicability matrix** —
+      `hint:"inner:8"` on a non-container element was parsed and silently
+      ignored.
+    - **Bool-form `ModError` wraps in `NewParseErr`** (all three emit sites —
+      renderOneMod + both converter assigns), carrying the field path as
+      mod_error.go always documented.
+    - **`format:unix` marshal routes through `encode.AppendUnixSeconds`**
+      (exact seconds + fractional nanos from `Unix()`/`Nanosecond()`), not
+      `float64(UnixNano())/1e9` — which silently emitted garbage outside the
+      int64-nano range (~1678-2262) and lost sub-100ns precision. unix budget
+      24 → 32 (19-digit seconds). And **big.Float `JSONSize` is
+      precision-scaled** (`Prec()/3 + 24`, was flat 66 — undersized for
+      user-raised precision, breaking the single-alloc Marshal contract);
+      dropped from `constSizePerEntry` so container elements take the
+      per-element loop.
+    Pinned by `TestGenerate_round8Fixes` (cli) + `TestAppendUnixSeconds`
+    (encode).
+
 ## Named types, cross-package types (defects fixed 2026-07)
 
 One missing lookup and one stale signature matcher made two whole type families

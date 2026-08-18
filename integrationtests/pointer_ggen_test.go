@@ -1184,7 +1184,7 @@ func (recv PtrWhenStruct) DecodeFromStream(s *scan.Stream) (result PtrWhenStruct
 func (s PtrWhenStruct) JSONSize() int {
 	size := 2
 	if s.When != nil {
-		size += 32
+		size += 40
 	}
 	return size
 }
@@ -1199,7 +1199,7 @@ func (s PtrWhenStruct) AppendJSON(dst []byte) ([]byte, error) {
 			dst = append(dst, ',')
 		}
 		dst = append(dst, "\"when\":"...)
-		dst = strconv.AppendFloat(dst, float64((*s.When).UnixNano())/1e9, 'f', -1, 64)
+		dst = encode.AppendUnixSeconds(dst, (*s.When))
 	}
 	return append(dst, '}'), nil
 }
@@ -2007,7 +2007,7 @@ func (s PointerStruct) JSONSize() int {
 		size += 34
 	}
 	if s.When != nil {
-		size += 32
+		size += 40
 	}
 	return size
 }
@@ -2066,7 +2066,7 @@ func (s PointerStruct) AppendJSON(dst []byte) ([]byte, error) {
 			dst = append(dst, ',')
 		}
 		dst = append(dst, "\"when\":"...)
-		dst = strconv.AppendFloat(dst, float64((*s.When).UnixNano())/1e9, 'f', -1, 64)
+		dst = encode.AppendUnixSeconds(dst, (*s.When))
 	}
 	return append(dst, '}'), nil
 }

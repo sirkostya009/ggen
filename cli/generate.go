@@ -729,8 +729,14 @@ func renderOneMod(b *bytes.Buffer, m ModRule, field, ref, goType string, kind Ty
 					return "return result, " + errExpr
 				}
 				if m.BoolForm {
-					modErr := fmt.Sprintf("&decode.ModError{%sName: %q, Msg: %q, Value: %s}",
-						posLit(posVar), strings.TrimPrefix(m.Name, "@"), m.Msg, ref)
+					// ModError is a parse error — wrap so it carries the field
+					// path like every other decode failure (mod_error.go doc).
+					pos := posVar
+					if pos == "" {
+						pos = "s.Offset()"
+					}
+					modErr := fmt.Sprintf("decode.NewParseErr(%s, %s, &decode.ModError{%sName: %q, Msg: %q, Value: %s})",
+						field, pos, posLit(posVar), strings.TrimPrefix(m.Name, "@"), m.Msg, ref)
 					fmt.Fprintf(b, "if v, ok := %s(%s); !ok {\n\t%s\n} else {\n\t%s = v\n}\n",
 						call, ref, ret(modErr), ref)
 				} else {
@@ -1308,11 +1314,15 @@ func fieldIsConditional(f FieldInfo) bool {
 // Empty string means "always emit".
 func fieldSkipExpr(f FieldInfo, ref string) string {
 	var emitConds []string
+	// A named primitive reports KindStruct at its use sites; unresolved, the
+	// omitzero KindStruct arm emitted `ref != (Score{})` (does not compile)
+	// and omitempty had no arm at all (option silently dropped).
+	kind := effectiveKind(f.GoType, f.Kind)
 	if f.OmitEmpty {
 		if f.Pointer {
 			emitConds = append(emitConds, fmt.Sprintf("%s != nil", ref))
 		} else {
-			switch f.Kind {
+			switch kind {
 			case KindString:
 				emitConds = append(emitConds, fmt.Sprintf("%s != \"\"", ref))
 			case KindSlice, KindBytes, KindMap:
@@ -1336,7 +1346,7 @@ func fieldSkipExpr(f FieldInfo, ref string) string {
 		if f.Pointer {
 			emitConds = append(emitConds, fmt.Sprintf("%s != nil", ref))
 		} else {
-			switch f.Kind {
+			switch kind {
 			case KindString:
 				emitConds = append(emitConds, fmt.Sprintf("%s != \"\"", ref))
 			case KindBool:
@@ -1814,8 +1824,8 @@ dst = append(dst, ']')
 func timeFormatSize(format string) int {
 	switch format {
 	case "unix":
-		// sign + 10-digit seconds + `.` + 9-digit nanos = 21, plus slack.
-		return 24
+		// sign + 19-digit seconds + `.` + 9-digit nanos = 30, plus slack.
+		return 32
 	case "unixmilli", "unixmicro", "unixnano":
 		return sizeInt // int64 digits, no quotes
 	case "", "RFC3339Nano":
@@ -1911,9 +1921,12 @@ func renderAppendTime(b *bytes.Buffer, f FieldInfo, ref string) {
 	layout, numeric := timeLayoutExpr(f.Format)
 	if numeric != "" {
 		// `format:unix` emits a fractional decimal so sub-second nanos
-		// round-trip (jsonv2 parity). The other unix* units are integer-granular.
+		// round-trip (jsonv2 parity). AppendUnixSeconds works from
+		// Unix()+Nanosecond(), never float64(UnixNano()) — that overflowed
+		// outside the int64-nano range and lost sub-100ns precision. The
+		// other unix* units are integer-granular.
 		if numeric == "Unix" {
-			fmt.Fprintf(b, "dst = strconv.AppendFloat(dst, float64(%s.UnixNano())/1e9, 'f', -1, 64)\n", ref)
+			fmt.Fprintf(b, "dst = encode.AppendUnixSeconds(dst, %s)\n", ref)
 			return
 		}
 		fmt.Fprintf(b, "dst = strconv.AppendInt(dst, %s.%s(), 10)\n", ref, numeric)
@@ -2308,7 +2321,11 @@ func sizeContribKind(f FieldInfo, ref string) (int, string) {
 		// log10(2^bits) ≈ bits/3, plus sign/safety.
 		return 4, fmt.Sprintf("size += %s.BitLen()/3\n", ref)
 	case KindBigFloat:
-		return 66, ""
+		// 'g' -1 digit count scales with the value's mantissa precision
+		// (user-settable via SetPrec): ≈ Prec()×log10(2) ≤ Prec()/3. A flat
+		// const under-reserved raised-precision values, breaking the
+		// single-alloc Marshal contract. +24: sign, '.', "e-123456789", quotes.
+		return 24, fmt.Sprintf("size += int(%s.Prec())/3\n", ref)
 	case KindBigRat:
 		return 8, fmt.Sprintf("size += (%s.Num().BitLen() + %s.Denom().BitLen())/3\n", ref, ref)
 	case KindSQLNull:
@@ -2478,8 +2495,9 @@ func constSizePerEntry(kind TypeKind, format string) (int, bool) {
 		return timeFormatSize(format), true
 	case KindDuration:
 		return durationFormatSize(format), true
-	case KindBigFloat:
-		return 66, true // +2 for surrounding quotes
+	// KindBigFloat has NO fixed bound — digit count scales with the value's
+	// user-settable precision (see sizeContribKind); callers fall to the
+	// per-element sizeContrib loop.
 	case KindAny:
 		return 64, true
 	}

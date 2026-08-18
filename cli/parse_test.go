@@ -610,3 +610,79 @@ func TestGenerate_syntheticFieldFlagPropagation(t *testing.T) {
 		}
 	})
 }
+
+// Round-8 pins: emit-shape assertions for the alias/variant/omit fixes.
+func TestGenerate_round8Fixes(t *testing.T) {
+	t.Run("container_alias_flags", func(t *testing.T) {
+		// copy + htmlescape + allowinvalidutf8 on a slice alias used to be
+		// silently dropped (AliasField is built before flag propagation).
+		code, err := generate("p", []StructInfo{{
+			Name: "Tags", IsAlias: true, AliasKind: KindSlice,
+			AliasUnderlying: "[]string", HTMLEscape: true, Copy: true, AllowInvalidUTF8: true,
+			AliasField: FieldInfo{Kind: KindSlice, ElemType: "string", ElemKind: KindString, HintLen: -1},
+		}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		s := string(code)
+		if strings.Contains(s, "unsafe.String(") {
+			t.Errorf("copy dropped — element still aliases input:\n%s", s)
+		}
+		if strings.Contains(s, "scan.String(data, i, true)") {
+			t.Errorf("allowinvalidutf8 dropped — element still validates:\n%s", s)
+		}
+		if !strings.Contains(s, "encode.AppendString(") {
+			t.Errorf("htmlescape dropped — NoHTML append emitted:\n%s", s)
+		}
+	})
+
+	t.Run("primitive_string_alias_copy", func(t *testing.T) {
+		code, err := generate("p", []StructInfo{{
+			Name: "S", IsAlias: true, AliasKind: KindString, AliasUnderlying: "string", Copy: true,
+		}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(code), "scan.Detach(v, data)") {
+			t.Errorf("copy alias missing Detach:\n%s", code)
+		}
+	})
+
+	t.Run("converter_variant_keeps_native_null", func(t *testing.T) {
+		// *int with a converter variant: the native case must still claim 'n'
+		// (null → nil) instead of hard-erroring.
+		code, err := generate("p", []StructInfo{{
+			Name: "V",
+			Fields: []FieldInfo{{
+				GoName: "P", JSONName: "p", GoType: "*int", Kind: KindInt,
+				Pointer: true, PointeeType: "int", HintLen: -1,
+				Variants: []Variant{
+					{Kind: VariantNative},
+					{Kind: VariantConvert, FuncName: "FromStr", InType: "string", InKind: KindString},
+				},
+			}},
+		}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(code), "'n'") {
+			t.Errorf("native variant does not claim 'n':\n%s", code)
+		}
+	})
+
+	t.Run("named_prim_omit", func(t *testing.T) {
+		// Named primitives (KindStruct at use sites) used to emit an invalid
+		// composite literal for omitzero and drop omitempty entirely.
+		old := namedKinds
+		namedKinds = map[string]TypeKind{"Score": KindInt, "Name": KindString}
+		defer func() { namedKinds = old }()
+		f := FieldInfo{GoName: "S", GoType: "Score", Kind: KindStruct, OmitZero: true}
+		if got := fieldSkipExpr(f, "s.S"); got != "s.S != 0" {
+			t.Errorf("omitzero named int: got %q", got)
+		}
+		f = FieldInfo{GoName: "N", GoType: "Name", Kind: KindStruct, OmitEmpty: true}
+		if got := fieldSkipExpr(f, "s.N"); got != `s.N != ""` {
+			t.Errorf("omitempty named string: got %q", got)
+		}
+	})
+}

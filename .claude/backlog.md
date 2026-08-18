@@ -354,6 +354,14 @@ surface pinned by `Decoder[T]`).
   change to the whole user-facing tag surface — only worth it if it comes out
   genuinely smaller to explain, not merely more uniform.
 
+- **`structHasAppendFormatTime` only sees field-level KindTime (round-8 find,
+  probe-negative).** The 64-byte AppendFormat headroom reservation skips
+  `[]time.Time` / `map[string]time.Time` / `sql.NullTime` elements. A 3-elem
+  `[]time.Time` probe did NOT realloc (AppendFormat grew within budget on
+  current Go), so this is an inconsistency between the reservation rule and
+  its coverage, not a demonstrated bug. Revisit only if a time-slice realloc
+  ever shows up.
+
 # Tried Rejected
 
 - **Duplicate-key detection in skipped / `any` / raw / nested scopes.** ggen's

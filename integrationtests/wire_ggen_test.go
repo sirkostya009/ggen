@@ -3041,7 +3041,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *scan.Stream) (result TimeForma
 }
 
 func (s TimeFormatsStruct) JSONSize() int {
-	size := 1045
+	size := 1053
 	return size
 }
 
@@ -3099,7 +3099,7 @@ func (s TimeFormatsStruct) AppendJSON(dst []byte) ([]byte, error) {
 	dst = append(dst, "\",\"timeOnly\":\""...)
 	dst = s.TimeOnly.AppendFormat(dst, time.TimeOnly)
 	dst = append(dst, "\",\"unix\":"...)
-	dst = strconv.AppendFloat(dst, float64(s.Unix.UnixNano())/1e9, 'f', -1, 64)
+	dst = encode.AppendUnixSeconds(dst, s.Unix)
 	dst = append(dst, ",\"unixDate\":\""...)
 	dst = s.UnixDate.AppendFormat(dst, time.UnixDate)
 	dst = append(dst, "\",\"unixMicro\":"...)

@@ -2238,7 +2238,8 @@ func (recv BigOmit) DecodeFromStream(s *scan.Stream) (result BigOmit, err error)
 }
 
 func (s BigOmit) JSONSize() int {
-	size := 94
+	size := 52
+	size += int(s.F.Prec()) / 3
 	size += s.I.BitLen() / 3
 	size += (s.R.Num().BitLen() + s.R.Denom().BitLen()) / 3
 	return size

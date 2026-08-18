@@ -461,8 +461,9 @@ func (recv RichTypes) DecodeFromStream(s *scan.Stream) (result RichTypes, err er
 }
 
 func (s RichTypes) JSONSize() int {
-	size := 407
+	size := 365
 	size += s.Big.BitLen() / 3
+	size += int(s.BigF.Prec()) / 3
 	size += (s.BigR.Num().BitLen() + s.BigR.Denom().BitLen()) / 3
 	if n := len(s.Raw1); n > 0 {
 		size += n
