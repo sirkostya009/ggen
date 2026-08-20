@@ -31,7 +31,7 @@ func structuralIndexAVX(b []byte) int {
 	ctrl := archsimd.BroadcastUint8x16(0x1F)
 	j := 0
 	for ; j+16 <= len(b); j += 16 {
-		v := archsimd.LoadUint8x16Slice(b[j:])
+		v := archsimd.LoadUint8x16(b[j:])
 		m := v.Equal(quote).Or(v.Equal(bslash)).Or(v.Min(ctrl).Equal(v)).ToBits()
 		if m != 0 {
 			return j + bits.TrailingZeros16(m)
@@ -52,7 +52,7 @@ func structuralIndexAVX2(b []byte) int {
 	ctrl := archsimd.BroadcastUint8x32(0x1F)
 	j := 0
 	for ; j+32 <= len(b); j += 32 {
-		v := archsimd.LoadUint8x32Slice(b[j:])
+		v := archsimd.LoadUint8x32(b[j:])
 		m := v.Equal(quote).Or(v.Equal(bslash)).Or(v.Min(ctrl).Equal(v)).ToBits()
 		if m != 0 {
 			return j + bits.TrailingZeros32(m)
@@ -73,7 +73,7 @@ func structuralIndexAVX512(b []byte) int {
 	space := archsimd.BroadcastUint8x64(0x20)
 	j := 0
 	for ; j+64 <= len(b); j += 64 {
-		v := archsimd.LoadUint8x64Slice(b[j:])
+		v := archsimd.LoadUint8x64(b[j:])
 		m := v.Equal(quote).ToBits() | v.Equal(bslash).ToBits() | v.Less(space).ToBits()
 		if m != 0 {
 			return j + bits.TrailingZeros64(m)
@@ -101,7 +101,7 @@ func structuralIndexHighAVX(b []byte) (int, bool) {
 	acc := archsimd.BroadcastUint8x16(0)
 	j := 0
 	for ; j+16 <= len(b); j += 16 {
-		v := archsimd.LoadUint8x16Slice(b[j:])
+		v := archsimd.LoadUint8x16(b[j:])
 		acc = acc.Or(v)
 		m := v.Equal(quote).Or(v.Equal(bslash)).Or(v.Min(ctrl).Equal(v)).ToBits()
 		if m != 0 {
@@ -129,7 +129,7 @@ func structuralIndexHighAVX2(b []byte) (int, bool) {
 	acc := archsimd.BroadcastUint8x32(0)
 	j := 0
 	for ; j+32 <= len(b); j += 32 {
-		v := archsimd.LoadUint8x32Slice(b[j:])
+		v := archsimd.LoadUint8x32(b[j:])
 		acc = acc.Or(v)
 		m := v.Equal(quote).Or(v.Equal(bslash)).Or(v.Min(ctrl).Equal(v)).ToBits()
 		if m != 0 {
@@ -157,7 +157,7 @@ func structuralIndexHighAVX512(b []byte) (int, bool) {
 	acc := archsimd.BroadcastUint8x64(0)
 	j := 0
 	for ; j+64 <= len(b); j += 64 {
-		v := archsimd.LoadUint8x64Slice(b[j:])
+		v := archsimd.LoadUint8x64(b[j:])
 		acc = acc.Or(v)
 		m := v.Equal(quote).ToBits() | v.Equal(bslash).ToBits() | v.Less(space).ToBits()
 		if m != 0 {

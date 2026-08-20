@@ -51,7 +51,7 @@ discoverable, avoids cross-session collisions, and matches the test harness path
 go build -o ggen ./cli
 ./ggen ./decode/... ./encode/... ./scan/...
 easyjson bench/mega.go bench/small.go bench/simple.go
-GOEXPERIMENT=jsonv2 go generate work
+go generate work
 ```
 
 The binary builds from the `cli/` module to project-root `./ggen` (so the

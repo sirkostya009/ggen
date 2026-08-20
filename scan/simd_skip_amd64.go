@@ -43,7 +43,7 @@ func skipSpaceAVXSlow(data []byte, i int) int {
 	nl := archsimd.BroadcastUint8x16('\n')
 	cr := archsimd.BroadcastUint8x16('\r')
 	for ; i+16 <= len(data); i += 16 {
-		v := archsimd.LoadUint8x16Slice(data[i:])
+		v := archsimd.LoadUint8x16(data[i:])
 		m := v.Equal(sp).Or(v.Equal(tb)).Or(v.Equal(nl)).Or(v.Equal(cr)).ToBits()
 		if m != 0xFFFF {
 			return i + bits.TrailingZeros16(^m)
@@ -69,7 +69,7 @@ func skipSpaceAVX2Slow(data []byte, i int) int {
 	nl := archsimd.BroadcastUint8x32('\n')
 	cr := archsimd.BroadcastUint8x32('\r')
 	for ; i+32 <= len(data); i += 32 {
-		v := archsimd.LoadUint8x32Slice(data[i:])
+		v := archsimd.LoadUint8x32(data[i:])
 		m := v.Equal(sp).Or(v.Equal(tb)).Or(v.Equal(nl)).Or(v.Equal(cr)).ToBits()
 		if m != 0xFFFFFFFF {
 			return i + bits.TrailingZeros32(^m)
@@ -95,7 +95,7 @@ func skipSpaceAVX512Slow(data []byte, i int) int {
 	nl := archsimd.BroadcastUint8x64('\n')
 	cr := archsimd.BroadcastUint8x64('\r')
 	for ; i+64 <= len(data); i += 64 {
-		v := archsimd.LoadUint8x64Slice(data[i:])
+		v := archsimd.LoadUint8x64(data[i:])
 		m := v.Equal(sp).ToBits() | v.Equal(tb).ToBits() | v.Equal(nl).ToBits() | v.Equal(cr).ToBits()
 		if m != ^uint64(0) {
 			return i + bits.TrailingZeros64(^m)

@@ -1,5 +1,3 @@
-//go:build goexperiment.jsonv2
-
 package bench
 
 // -cpu=1 runs serially, -cpu=N with N parallel goroutines. Under RunParallel

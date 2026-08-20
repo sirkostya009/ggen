@@ -440,8 +440,8 @@ func packageFileName(dir, tag string, testFile bool) string {
 }
 
 // slugifyTag makes a build-constraint expression filename-safe: non-alnum runs
-// collapse to single underscores, trimmed (`goexperiment.jsonv2` →
-// `goexperiment_jsonv2`, `foo && bar` → `foo_bar`).
+// collapse to single underscores, trimmed (`goexperiment.simd` →
+// `goexperiment_simd`, `foo && bar` → `foo_bar`).
 func slugifyTag(tag string) string {
 	var b strings.Builder
 	last := byte(0)

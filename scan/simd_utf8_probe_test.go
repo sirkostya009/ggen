@@ -17,8 +17,8 @@ func TestConcatShiftSemantics(t *testing.T) {
 		prevA[i] = uint8(i)      // 0..15
 		curA[i] = uint8(100 + i) // 100..115
 	}
-	prev := archsimd.LoadUint8x16Slice(prevA[:])
-	cur := archsimd.LoadUint8x16Slice(curA[:])
+	prev := archsimd.LoadUint8x16(prevA[:])
+	cur := archsimd.LoadUint8x16(curA[:])
 
 	// The law validUTF8x16's prev1/prev2/prev3 lanes build on:
 	// recv.ConcatShiftBytesRight(N, arg)[i] == (arg ++ recv)[i+N].
@@ -34,12 +34,12 @@ func TestConcatShiftSemantics(t *testing.T) {
 	}
 
 	var out [16]uint8
-	cur.ConcatShiftBytesRight(15, prev).StoreSlice(out[:])
-	check("cur.ConcatShiftBytesRight(15, prev)", out, prevA, curA, 15)
-	prev.ConcatShiftBytesRight(15, cur).StoreSlice(out[:])
-	check("prev.ConcatShiftBytesRight(15, cur)", out, curA, prevA, 15)
-	cur.ConcatShiftBytesRight(14, prev).StoreSlice(out[:])
-	check("cur.ConcatShiftBytesRight(14, prev)", out, prevA, curA, 14)
-	cur.ConcatShiftBytesRight(13, prev).StoreSlice(out[:])
-	check("cur.ConcatShiftBytesRight(13, prev)", out, prevA, curA, 13)
+	cur.ConcatShiftBytesRight(prev, 15).Store(out[:])
+	check("cur.ConcatShiftBytesRight(prev, 15)", out, prevA, curA, 15)
+	prev.ConcatShiftBytesRight(cur, 15).Store(out[:])
+	check("prev.ConcatShiftBytesRight(cur, 15)", out, curA, prevA, 15)
+	cur.ConcatShiftBytesRight(prev, 14).Store(out[:])
+	check("cur.ConcatShiftBytesRight(prev, 14)", out, prevA, curA, 14)
+	cur.ConcatShiftBytesRight(prev, 13).Store(out[:])
+	check("cur.ConcatShiftBytesRight(prev, 13)", out, prevA, curA, 13)
 }

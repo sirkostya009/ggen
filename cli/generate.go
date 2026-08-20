@@ -3209,7 +3209,7 @@ func inlineScanStringWin(b *bytes.Buffer, posIn, dst, posOut, field, ke string, 
 	// validation, span ≥ lane, string near the payload end where a full-lane
 	// load would overread) falls through to the fused scan.StringAVX* call, which
 	// restarts at posIn — error identity byte-identical. Full-lane loads
-	// only: Load*SlicePart is a real CALL, not an intrinsic. Broadcasts are
+	// only: Load*Part is a real CALL, not an intrinsic. Broadcasts are
 	// emitted per site; gc CSEs them across sites and hoists them out of
 	// loops. In cp mode the happy path copies inline (string(data[…])); the
 	// escape/long-span fall calls the SAME aliasing tier func and detaches via
@@ -3254,7 +3254,7 @@ if %[5]s < len(data) && data[%[5]s] == '"' {
 		fmt.Fprintf(b, `if %[1]s >= len(data) || data[%[1]s] != '"' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrExpectString) }
 %[5]s := %[1]s + 1
 if %[5]s+%[6]d <= len(data) {
-	%[5]sV := archsimd.Load%[7]sSlice(data[%[5]s:])
+	%[5]sV := archsimd.Load%[7]s(data[%[5]s:])
 	`+classify+`
 	if %[5]sM != 0 { %[5]s += bits.%[8]s(%[5]sM) }
 } else {

@@ -1,5 +1,3 @@
-//go:build goexperiment.jsonv2
-
 // Two-way ggen ↔ jsonv2 compat: each annotated struct must round-trip through
 // both, and both re-parsed results must agree.
 

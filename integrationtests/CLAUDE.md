@@ -8,11 +8,11 @@ the boundary users see.
 
 Each annotated source carries `//go:generate ../ggen $GOFILE`, emitting sibling
 `<file>_ggen_test.go`; build tags propagate. Files behind opt-in tags (e.g.
-`//go:build goexperiment.jsonv2 && ggen_brokencodegen`) are skipped by default
+`//go:build ggen_brokencodegen`) are skipped by default
 `go generate` — pass `-tags=…`. Regenerate:
 
 ```sh
-(cd integrationtests && GOEXPERIMENT=jsonv2 go generate ./...)
+(cd integrationtests && go generate ./...)
 ```
 
 Cross-file struct refs work first run: single-file mode seeds the known-types
@@ -76,11 +76,11 @@ Fuzzers in `fuzz_test.go`:
 `./...` from root does NOT cross module boundaries; cd in first:
 
 ```sh
-(cd integrationtests && GOEXPERIMENT=jsonv2 go test ./...)
+(cd integrationtests && go test ./...)
 ```
 
-`GOEXPERIMENT=jsonv2` required — annotated structs use `encoding/json/v2` import
-paths, stdcompat compares against jsonv2.
+Annotated structs use `encoding/json/v2` import paths and stdcompat compares
+against jsonv2 — both stable since Go 1.27, so no `GOEXPERIMENT` is needed.
 
 ## Adding new tests
 

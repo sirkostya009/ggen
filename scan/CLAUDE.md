@@ -203,7 +203,7 @@ Primitives: `SkipSpace`, `String`, `Int64`, `Uint64`, `Float64`, `Bool`,
   VPMOVM2B+VPORD+VPMOVB2M). Both shaves measured −2.9% NoAlloc at avx512. Shared scalar `classifyStructural` tail keeps alias return /
   `stringSlow` handoff / error identity byte-identical to `String` (pinned by
   `TestStringSIMD_Parity`: fixed cases at every vector-phase alignment + 2000
-  randomized bodies, all three tiers). Tail loads via `Load*SlicePart`
+  randomized bodies, all three tiers). Tail loads via `Load*Part`
   (zero-fill); padding zeroes register as ctrl bytes, filtered by the
   `k < len(rest)` position check. NO runtime feature probing — generated code
   calls one tier directly (`ggen -simd`, see `cli/CLAUDE.md` opt #46); wrong

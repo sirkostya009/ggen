@@ -13,7 +13,7 @@
 // full lane at s[len-lane:] — always in bounds behind the len(s) >= lane gate
 // — and shifting its mask right by lane-rem so the already-emitted overlap
 // falls off (simdjson's builder does the same). Full-lane loads only:
-// Load*SlicePart is a real call, and its zero padding would classify as ctrl
+// Load*Part is a real call, and its zero padding would classify as ctrl
 // and emit spurious escapes.
 //
 // Unsigned Less is emulated below 512-bit (re-broadcasts 0x80 per iteration),
@@ -63,7 +63,7 @@ func byteview(s string) []byte {
 // lane reclassified at s[len(s)-lane:] and right-shifted so bit 0 is s[j], so
 // bits for bytes before j (already emitted) are gone. The reload is always in
 // bounds because every tier gates on len(s) >= lane, which is why the tail
-// needs neither a per-byte table walk nor Load*SlicePart (a real call whose
+// needs neither a per-byte table walk nor Load*Part (a real call whose
 // zero padding would classify as ctrl and emit spurious escapes).
 func escapeTail(dst []byte, s string, start, j int, m uint64) []byte {
 	for m != 0 {
@@ -91,7 +91,7 @@ func AppendStringNoHTMLAVX(dst []byte, s string) []byte {
 	ctrl := archsimd.BroadcastUint8x16(0x1F)
 	start, j := 0, 0
 	for ; j+16 <= len(s); j += 16 {
-		v := archsimd.LoadUint8x16Slice(byteview(s)[j:])
+		v := archsimd.LoadUint8x16(byteview(s)[j:])
 		m := v.Equal(q).Or(v.Equal(bs)).Or(v.Min(ctrl).Equal(v)).ToBits()
 		for m != 0 {
 			k := j + bits.TrailingZeros16(m)
@@ -105,7 +105,7 @@ func AppendStringNoHTMLAVX(dst []byte, s string) []byte {
 	}
 	var tm uint64
 	if rem := len(s) - j; rem > 0 {
-		v := archsimd.LoadUint8x16Slice(byteview(s)[len(s)-16:])
+		v := archsimd.LoadUint8x16(byteview(s)[len(s)-16:])
 		tm = uint64(v.Equal(q).Or(v.Equal(bs)).Or(v.Min(ctrl).Equal(v)).ToBits()) >> (16 - uint(rem))
 	}
 	return escapeTail(dst, s, start, j, tm)
@@ -121,7 +121,7 @@ func AppendStringNoHTMLAVX2(dst []byte, s string) []byte {
 	ctrl := archsimd.BroadcastUint8x32(0x1F)
 	start, j := 0, 0
 	for ; j+32 <= len(s); j += 32 {
-		v := archsimd.LoadUint8x32Slice(byteview(s)[j:])
+		v := archsimd.LoadUint8x32(byteview(s)[j:])
 		m := v.Equal(q).Or(v.Equal(bs)).Or(v.Min(ctrl).Equal(v)).ToBits()
 		for m != 0 {
 			k := j + bits.TrailingZeros32(m)
@@ -135,7 +135,7 @@ func AppendStringNoHTMLAVX2(dst []byte, s string) []byte {
 	}
 	var tm uint64
 	if rem := len(s) - j; rem > 0 {
-		v := archsimd.LoadUint8x32Slice(byteview(s)[len(s)-32:])
+		v := archsimd.LoadUint8x32(byteview(s)[len(s)-32:])
 		tm = uint64(v.Equal(q).Or(v.Equal(bs)).Or(v.Min(ctrl).Equal(v)).ToBits()) >> (32 - uint(rem))
 	}
 	return escapeTail(dst, s, start, j, tm)
@@ -151,7 +151,7 @@ func AppendStringNoHTMLAVX512(dst []byte, s string) []byte {
 	space := archsimd.BroadcastUint8x64(0x20)
 	start, j := 0, 0
 	for ; j+64 <= len(s); j += 64 {
-		v := archsimd.LoadUint8x64Slice(byteview(s)[j:])
+		v := archsimd.LoadUint8x64(byteview(s)[j:])
 		m := v.Equal(q).ToBits() | v.Equal(bs).ToBits() | v.Less(space).ToBits()
 		for m != 0 {
 			k := j + bits.TrailingZeros64(m)
@@ -165,7 +165,7 @@ func AppendStringNoHTMLAVX512(dst []byte, s string) []byte {
 	}
 	var tm uint64
 	if rem := len(s) - j; rem > 0 {
-		v := archsimd.LoadUint8x64Slice(byteview(s)[len(s)-64:])
+		v := archsimd.LoadUint8x64(byteview(s)[len(s)-64:])
 		tm = (v.Equal(q).ToBits() | v.Equal(bs).ToBits() | v.Less(space).ToBits()) >> (64 - uint(rem))
 	}
 	return escapeTail(dst, s, start, j, tm)
@@ -184,7 +184,7 @@ func AppendStringAVX(dst []byte, s string) []byte {
 	amp := archsimd.BroadcastUint8x16('&')
 	start, j := 0, 0
 	for ; j+16 <= len(s); j += 16 {
-		v := archsimd.LoadUint8x16Slice(byteview(s)[j:])
+		v := archsimd.LoadUint8x16(byteview(s)[j:])
 		m := v.Equal(q).Or(v.Equal(bs)).Or(v.Min(ctrl).Equal(v)).
 			Or(v.Equal(lt)).Or(v.Equal(gt)).Or(v.Equal(amp)).ToBits()
 		for m != 0 {
@@ -199,7 +199,7 @@ func AppendStringAVX(dst []byte, s string) []byte {
 	}
 	var tm uint64
 	if rem := len(s) - j; rem > 0 {
-		v := archsimd.LoadUint8x16Slice(byteview(s)[len(s)-16:])
+		v := archsimd.LoadUint8x16(byteview(s)[len(s)-16:])
 		tm = uint64(v.Equal(q).Or(v.Equal(bs)).Or(v.Min(ctrl).Equal(v)).
 			Or(v.Equal(lt)).Or(v.Equal(gt)).Or(v.Equal(amp)).ToBits()) >> (16 - uint(rem))
 	}
@@ -219,7 +219,7 @@ func AppendStringAVX2(dst []byte, s string) []byte {
 	amp := archsimd.BroadcastUint8x32('&')
 	start, j := 0, 0
 	for ; j+32 <= len(s); j += 32 {
-		v := archsimd.LoadUint8x32Slice(byteview(s)[j:])
+		v := archsimd.LoadUint8x32(byteview(s)[j:])
 		m := v.Equal(q).Or(v.Equal(bs)).Or(v.Min(ctrl).Equal(v)).
 			Or(v.Equal(lt)).Or(v.Equal(gt)).Or(v.Equal(amp)).ToBits()
 		for m != 0 {
@@ -234,7 +234,7 @@ func AppendStringAVX2(dst []byte, s string) []byte {
 	}
 	var tm uint64
 	if rem := len(s) - j; rem > 0 {
-		v := archsimd.LoadUint8x32Slice(byteview(s)[len(s)-32:])
+		v := archsimd.LoadUint8x32(byteview(s)[len(s)-32:])
 		tm = uint64(v.Equal(q).Or(v.Equal(bs)).Or(v.Min(ctrl).Equal(v)).
 			Or(v.Equal(lt)).Or(v.Equal(gt)).Or(v.Equal(amp)).ToBits()) >> (32 - uint(rem))
 	}
@@ -254,7 +254,7 @@ func AppendStringAVX512(dst []byte, s string) []byte {
 	amp := archsimd.BroadcastUint8x64('&')
 	start, j := 0, 0
 	for ; j+64 <= len(s); j += 64 {
-		v := archsimd.LoadUint8x64Slice(byteview(s)[j:])
+		v := archsimd.LoadUint8x64(byteview(s)[j:])
 		m := v.Equal(q).ToBits() | v.Equal(bs).ToBits() | v.Less(space).ToBits() |
 			v.Equal(lt).ToBits() | v.Equal(gt).ToBits() | v.Equal(amp).ToBits()
 		for m != 0 {
@@ -269,7 +269,7 @@ func AppendStringAVX512(dst []byte, s string) []byte {
 	}
 	var tm uint64
 	if rem := len(s) - j; rem > 0 {
-		v := archsimd.LoadUint8x64Slice(byteview(s)[len(s)-64:])
+		v := archsimd.LoadUint8x64(byteview(s)[len(s)-64:])
 		tm = (v.Equal(q).ToBits() | v.Equal(bs).ToBits() | v.Less(space).ToBits() |
 			v.Equal(lt).ToBits() | v.Equal(gt).ToBits() | v.Equal(amp).ToBits()) >> (64 - uint(rem))
 	}

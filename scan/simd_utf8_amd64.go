@@ -99,9 +99,9 @@ var utf8MaxIncomplete = [16]uint8{
 // validUTF8x16 reports whether b is well-formed UTF-8 (same accept set as
 // unicode/utf8.Valid — verified by TestValidUTF8SIMD_Parity).
 func validUTF8x16(b []byte) bool {
-	lut1 := archsimd.LoadUint8x16Slice(utf8Byte1High[:])
-	lut2 := archsimd.LoadUint8x16Slice(utf8Byte1Low[:])
-	lut3 := archsimd.LoadUint8x16Slice(utf8Byte2High[:])
+	lut1 := archsimd.LoadUint8x16(utf8Byte1High[:])
+	lut2 := archsimd.LoadUint8x16(utf8Byte1Low[:])
+	lut3 := archsimd.LoadUint8x16(utf8Byte2High[:])
 	nib := archsimd.BroadcastUint8x16(0x0F)
 	// Saturating-sub thresholds: result has the high bit set iff the byte is
 	// ≥ 0xE0 (3+-byte lead two back) / ≥ 0xF0 (4-byte lead three back).
@@ -114,24 +114,24 @@ func validUTF8x16(b []byte) bool {
 	for i := 0; i < len(b); i += 16 {
 		var c archsimd.Uint8x16
 		if i+16 <= len(b) {
-			c = archsimd.LoadUint8x16Slice(b[i:])
+			c = archsimd.LoadUint8x16(b[i:])
 		} else {
-			c = archsimd.LoadUint8x16SlicePart(b[i:]) // zero-padded tail
+			c, _ = archsimd.LoadUint8x16Part(b[i:]) // zero-padded tail
 		}
-		prev1 := c.ConcatShiftBytesRight(15, prev)
+		prev1 := c.ConcatShiftBytesRight(prev, 15)
 		prev1Hi := prev1.AsUint16x8().ShiftAllRight(4).AsUint8x16().And(nib)
 		curHi := c.AsUint16x8().ShiftAllRight(4).AsUint8x16().And(nib)
 		sc := lut1.PermuteOrZero(prev1Hi.AsInt8x16()).
 			And(lut2.PermuteOrZero(prev1.And(nib).AsInt8x16())).
 			And(lut3.PermuteOrZero(curHi.AsInt8x16()))
-		prev2 := c.ConcatShiftBytesRight(14, prev)
-		prev3 := c.ConcatShiftBytesRight(13, prev)
+		prev2 := c.ConcatShiftBytesRight(prev, 14)
+		prev3 := c.ConcatShiftBytesRight(prev, 13)
 		must23_80 := prev2.SubSaturated(sub3).Or(prev3.SubSaturated(sub4)).And(high)
 		errAcc = errAcc.Or(must23_80.Xor(sc))
 		prev = c
 	}
 	// prev is the final block (zero when b is empty): reject a rune left
 	// dangling at end-of-input.
-	maxInc := archsimd.LoadUint8x16Slice(utf8MaxIncomplete[:])
+	maxInc := archsimd.LoadUint8x16(utf8MaxIncomplete[:])
 	return errAcc.Or(prev.SubSaturated(maxInc)).IsZero()
 }

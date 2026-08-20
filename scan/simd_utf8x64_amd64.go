@@ -61,28 +61,28 @@ func validUTF8x64(b []byte) bool {
 	}
 
 	// Head: first 16 bytes with prev = zero, 16-lane classify, no EOF check.
-	lo1 := archsimd.LoadUint8x16Slice(utf8Byte1High[:])
-	lo2 := archsimd.LoadUint8x16Slice(utf8Byte1Low[:])
-	lo3 := archsimd.LoadUint8x16Slice(utf8Byte2High[:])
+	lo1 := archsimd.LoadUint8x16(utf8Byte1High[:])
+	lo2 := archsimd.LoadUint8x16(utf8Byte1Low[:])
+	lo3 := archsimd.LoadUint8x16(utf8Byte2High[:])
 	nib16 := archsimd.BroadcastUint8x16(0x0F)
 	zero16 := archsimd.BroadcastUint8x16(0)
-	h := archsimd.LoadUint8x16Slice(b)
-	hPrev1 := h.ConcatShiftBytesRight(15, zero16)
+	h := archsimd.LoadUint8x16(b)
+	hPrev1 := h.ConcatShiftBytesRight(zero16, 15)
 	hPrev1Hi := hPrev1.AsUint16x8().ShiftAllRight(4).AsUint8x16().And(nib16)
 	hCurHi := h.AsUint16x8().ShiftAllRight(4).AsUint8x16().And(nib16)
 	hsc := lo1.PermuteOrZero(hPrev1Hi.AsInt8x16()).
 		And(lo2.PermuteOrZero(hPrev1.And(nib16).AsInt8x16())).
 		And(lo3.PermuteOrZero(hCurHi.AsInt8x16()))
-	hMust := h.ConcatShiftBytesRight(14, zero16).SubSaturated(archsimd.BroadcastUint8x16(0xE0 - 0x80)).
-		Or(h.ConcatShiftBytesRight(13, zero16).SubSaturated(archsimd.BroadcastUint8x16(0xF0 - 0x80))).
+	hMust := h.ConcatShiftBytesRight(zero16, 14).SubSaturated(archsimd.BroadcastUint8x16(0xE0 - 0x80)).
+		Or(h.ConcatShiftBytesRight(zero16, 13).SubSaturated(archsimd.BroadcastUint8x16(0xF0 - 0x80))).
 		And(archsimd.BroadcastUint8x16(0x80))
 	if !hMust.Xor(hsc).IsZero() {
 		return false
 	}
 
-	lut1 := archsimd.LoadUint8x64Slice(utf8Byte1High64[:])
-	lut2 := archsimd.LoadUint8x64Slice(utf8Byte1Low64[:])
-	lut3 := archsimd.LoadUint8x64Slice(utf8Byte2High64[:])
+	lut1 := archsimd.LoadUint8x64(utf8Byte1High64[:])
+	lut2 := archsimd.LoadUint8x64(utf8Byte1Low64[:])
+	lut3 := archsimd.LoadUint8x64(utf8Byte2High64[:])
 	nib := archsimd.BroadcastUint8x64(0x0F)
 	sub3 := archsimd.BroadcastUint8x64(0xE0 - 0x80)
 	sub4 := archsimd.BroadcastUint8x64(0xF0 - 0x80)
@@ -95,10 +95,10 @@ func validUTF8x64(b []byte) bool {
 	// Full blocks: b[i-3:] always holds ≥ 64 bytes here, so every prevN load
 	// is a plain full load.
 	for ; i+64 <= len(b); i += 64 {
-		c := archsimd.LoadUint8x64Slice(b[i:])
-		p1 := archsimd.LoadUint8x64Slice(b[i-1:])
-		p2 := archsimd.LoadUint8x64Slice(b[i-2:])
-		p3 := archsimd.LoadUint8x64Slice(b[i-3:])
+		c := archsimd.LoadUint8x64(b[i:])
+		p1 := archsimd.LoadUint8x64(b[i-1:])
+		p2 := archsimd.LoadUint8x64(b[i-2:])
+		p3 := archsimd.LoadUint8x64(b[i-3:])
 		prev1Hi := p1.AsUint16x32().ShiftAllRight(4).AsUint8x64().And(nib)
 		curHi := c.AsUint16x32().ShiftAllRight(4).AsUint8x64().And(nib)
 		sc := lut1.PermuteOrZeroGrouped(prev1Hi.AsInt8x64()).
@@ -112,10 +112,10 @@ func validUTF8x64(b []byte) bool {
 	// check in-block. prevN load the same way (their pad lanes only ever pair
 	// with padded cur lanes).
 	if i < len(b) {
-		c := archsimd.LoadUint8x64SlicePart(b[i:])
-		p1 := archsimd.LoadUint8x64SlicePart(b[i-1:])
-		p2 := archsimd.LoadUint8x64SlicePart(b[i-2:])
-		p3 := archsimd.LoadUint8x64SlicePart(b[i-3:])
+		c, _ := archsimd.LoadUint8x64Part(b[i:])
+		p1, _ := archsimd.LoadUint8x64Part(b[i-1:])
+		p2, _ := archsimd.LoadUint8x64Part(b[i-2:])
+		p3, _ := archsimd.LoadUint8x64Part(b[i-3:])
 		prev1Hi := p1.AsUint16x32().ShiftAllRight(4).AsUint8x64().And(nib)
 		curHi := c.AsUint16x32().ShiftAllRight(4).AsUint8x64().And(nib)
 		sc := lut1.PermuteOrZeroGrouped(prev1Hi.AsInt8x64()).
@@ -126,7 +126,7 @@ func validUTF8x64(b []byte) bool {
 		prev = c
 	}
 	// check_eof on the final block (see validUTF8x16).
-	maxInc := archsimd.LoadUint8x64Slice(utf8MaxIncomplete64[:])
+	maxInc := archsimd.LoadUint8x64(utf8MaxIncomplete64[:])
 	errAcc = errAcc.Or(prev.SubSaturated(maxInc))
 	return errAcc.Equal(zero).ToBits() == ^uint64(0)
 }

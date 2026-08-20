@@ -7,7 +7,7 @@ description: Drive ggen CLI. Generate zero-copy, zero-reflection JSON encode/dec
 
 ggen parse annotated Go structs. Emit `DecodeFrom`, `DecodeFromStream`, `JSONSize`, `AppendJSON`. Generated code = hand-rolled byte scan. No reflection, no token layer. Bytes path (`DecodeFrom` over caller `[]byte`) strings alias input via `unsafe.String` — zero-copy. Stream path (`DecodeFromStream` over `*scan.Stream`) copy strings out of intermediate buffer so buffer compact safely. See _Stream is not zero-copy_ below.
 
-Module: `github.com/sirkostya009/ggen`. Binary: `ggen`. Go ≥ 1.26.
+Module: `github.com/sirkostya009/ggen`. Binary: `ggen`. Go ≥ 1.27.
 
 ## When to reach for ggen
 
@@ -42,10 +42,10 @@ ggen <file.go> Foo Bar # one file, only structs named Foo or Bar, will fully ove
 
 Test-only packages (no non-`_test.go` files) skipped in pattern mode. Invoke `ggen <dir>` directly when target only has `_test.go` sources.
 
-**Run ggen under same `GOEXPERIMENT` as user build** — `packages.Load` honor build tags. Files behind `goexperiment.jsonv2` invisible without it. Repos using jsonv2:
+**Run ggen under same `GOEXPERIMENT` as user build** — `packages.Load` honor build tags. Files behind an experiment tag (e.g. `goexperiment.simd`) invisible without it:
 
 ```sh
-GOEXPERIMENT=jsonv2 ggen ./...
+GOEXPERIMENT=simd ggen ./...
 ```
 
 ## Agent-mode output (do not truncate)
@@ -384,7 +384,7 @@ Build tag propagation: struct in file behind `//go:build foo` land in `<dir>_foo
 2. **Long-lived references can balloon heap.** A short string field from a large payload stays referenced (cached, stored in a struct held forever) → Go's non-compacting GC keep the entire backing buffer alive. For long-lived data, copy field (`s := string([]byte(decoded.X))`) or use streaming.
 3. **Wire-shape divergences from stdlib** for `net/url.URL` (string, not struct dump) and `sql.Null*` (inner-or-null, not `{Valid:…}` wrapper). Round-trip through ggen fine. Pipe through stdlib `encoding/json` reshape value.
 4. **AST-only fallback when no `go.mod`.** When `packages.Load` cannot resolve types (e.g. temp file with no module context), ggen fall back to AST-only mode and emit `encoding/json` for cross-package types. Slower but correct.
-5. **Build under right `GOEXPERIMENT`.** Files behind `goexperiment.jsonv2` invisible without `GOEXPERIMENT=jsonv2 ggen ./...`.
+5. **Build under right `GOEXPERIMENT`.** Files behind an experiment tag (e.g. `goexperiment.simd`) invisible without `GOEXPERIMENT=simd ggen ./...`. `encoding/json/v2` needs none — stable since Go 1.27.
 6. **Test files first-class inputs.** Annotated structs in `_test.go` files route to `_ggen_test.go` so methods don't bundle into library build.
 7. **`hint:` only safe prealloc hint.** Don't expect `maxlen` to size container — it doesn't (intentional, retained-heap reasons). Use `hint:"N"` when know typical size.
 8. **Decode rejects invalid UTF-8; encode doesn't validate.** Decode: malformed UTF-8 bytes or unpaired `\uXXXX` surrogates in string values/keys → `scan.ErrInvalidUTF8` (jsonv2 parity; v1 instead silently replace with U+FFFD). ASCII strings pay nothing. Captured raw spans (`json.RawMessage`/`jsontext.Value`) byte-validated too. Exceptions: skipped content (`ignoreunknown`) grammar-checked only; unpaired surrogate ESCAPE inside raw span pass (ASCII text there; jsonv2 reject). Opt out per struct: `allowinvalidutf8`. Encode: invalid bytes in struct strings emitted raw onto wire (v1 replace, v2 replace+error) — validate at boundary if populating structs from untrusted bytes.

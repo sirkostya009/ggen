@@ -1,4 +1,4 @@
-//go:build goexperiment.jsonv2 && ggen_brokencodegen
+//go:build ggen_brokencodegen
 
 // Pins combinations that produce broken generator output. Behind
 // `-tags ggen_brokencodegen` so the default test run stays green; tagging

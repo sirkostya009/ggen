@@ -9,7 +9,7 @@
 // generate time (-simd flag). No runtime feature probing — calling a tier the
 // CPU lacks faults. Building this file requires GOEXPERIMENT=simd.
 //
-// Tail loads use Load*SlicePart (zero-filled); padding zeroes register as
+// Tail loads use Load*Part (zero-filled); padding zeroes register as
 // control bytes, filtered by the k < len(rest) position check.
 
 package scan
@@ -129,7 +129,7 @@ func StringAVX(data []byte, i int, validate bool) (string, int, error) {
 	acc := archsimd.BroadcastUint8x16(0)
 	j := 0
 	for ; j+16 <= len(rest); j += 16 {
-		v := archsimd.LoadUint8x16Slice(rest[j:])
+		v := archsimd.LoadUint8x16(rest[j:])
 		acc = acc.Or(v)
 		m := v.Equal(quote).Or(v.Equal(bslash)).Or(v.Min(ctrl).Equal(v)).ToBits()
 		if m != 0 {
@@ -138,7 +138,7 @@ func StringAVX(data []byte, i int, validate bool) (string, int, error) {
 		}
 	}
 	if j < len(rest) {
-		v := archsimd.LoadUint8x16SlicePart(rest[j:])
+		v, _ := archsimd.LoadUint8x16Part(rest[j:])
 		acc = acc.Or(v)
 		m := v.Equal(quote).Or(v.Equal(bslash)).Or(v.Min(ctrl).Equal(v)).ToBits()
 		if m != 0 {
@@ -166,7 +166,7 @@ func StringAVX2(data []byte, i int, validate bool) (string, int, error) {
 	acc := archsimd.BroadcastUint8x32(0) // lane OR — see StringAVX
 	j := 0
 	for ; j+32 <= len(rest); j += 32 {
-		v := archsimd.LoadUint8x32Slice(rest[j:])
+		v := archsimd.LoadUint8x32(rest[j:])
 		acc = acc.Or(v)
 		m := v.Equal(quote).Or(v.Equal(bslash)).Or(v.Min(ctrl).Equal(v)).ToBits()
 		if m != 0 {
@@ -175,7 +175,7 @@ func StringAVX2(data []byte, i int, validate bool) (string, int, error) {
 		}
 	}
 	if j < len(rest) {
-		v := archsimd.LoadUint8x32SlicePart(rest[j:])
+		v, _ := archsimd.LoadUint8x32Part(rest[j:])
 		acc = acc.Or(v)
 		m := v.Equal(quote).Or(v.Equal(bslash)).Or(v.Min(ctrl).Equal(v)).ToBits()
 		if m != 0 {
@@ -204,7 +204,7 @@ func StringAVX512(data []byte, i int, validate bool) (string, int, error) {
 	// Mask.Or on 512-bit round-trips the vector domain (VPMOVM2B+VPORD+
 	// VPMOVB2M); ToBits each mask (KMOVQ) and OR in scalar registers instead.
 	for ; j+64 <= len(rest); j += 64 {
-		v := archsimd.LoadUint8x64Slice(rest[j:])
+		v := archsimd.LoadUint8x64(rest[j:])
 		acc = acc.Or(v)
 		m := v.Equal(quote).ToBits() | v.Equal(bslash).ToBits() | v.Less(space).ToBits()
 		if m != 0 {
@@ -213,7 +213,7 @@ func StringAVX512(data []byte, i int, validate bool) (string, int, error) {
 		}
 	}
 	if j < len(rest) {
-		v := archsimd.LoadUint8x64SlicePart(rest[j:])
+		v, _ := archsimd.LoadUint8x64Part(rest[j:])
 		acc = acc.Or(v)
 		m := v.Equal(quote).ToBits() | v.Equal(bslash).ToBits() | v.Less(space).ToBits()
 		if m != 0 {

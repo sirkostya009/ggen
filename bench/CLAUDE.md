@@ -34,7 +34,7 @@ The numbers below are for science only.
   bench family carries a `ggen_copy` row).
 - `bench/{mega,small,simple,skip,escape}_ggen.go` — generated ggen methods,
   one per annotated source (each carries `//go:generate ../ggen $GOFILE`,
-  same as integrationtests). Regen: `(cd bench && GOEXPERIMENT=jsonv2 go
+  same as integrationtests). Regen: `(cd bench && go
   generate .)`.
 - `bench/{mega,small,simple}_easyjson.go` — generated easyjson methods.
   Regen: `easyjson bench/mega.go bench/small.go bench/simple.go`.
@@ -213,7 +213,7 @@ one `io.ReadAll` buffer).
 
 ### SIMD tier (`ggen -simd`, bytes path)
 
-Generated-code A/B, both binaries `GOEXPERIMENT=jsonv2,simd` (same toolchain —
+Generated-code A/B, both binaries `GOEXPERIMENT=simd` (same toolchain —
 the experiment alone shifts codegen, so a scalar binary built WITHOUT it is a
 confounded baseline), differing only in the generated file (scalar vs
 `-simd=avx512`). Interleaved core-24 pinned runs (10× each side), benchstat
@@ -390,7 +390,7 @@ treats the first non-flag token as the command, so `taskset … GOEXPERIMENT=…
 tries to exec the env assignment.
 
 ```sh
-(cd bench && GOEXPERIMENT=jsonv2 GOMAXPROCS=1 taskset -c 24 go test -run=^$ -bench=. -benchtime=500x -count=1 -cpu=1 .)
+(cd bench && GOMAXPROCS=1 taskset -c 24 go test -run=^$ -bench=. -benchtime=500x -count=1 -cpu=1 .)
 ```
 
 `-benchtime=500x` fixes the iteration count so rows are directly comparable.

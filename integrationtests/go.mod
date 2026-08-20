@@ -1,6 +1,6 @@
 module github.com/sirkostya009/ggen/integrationtests
 
-go 1.26
+go 1.27
 
 require (
 	github.com/gofrs/uuid/v5 v5.4.0

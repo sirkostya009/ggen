@@ -1,5 +1,3 @@
-//go:build goexperiment.jsonv2
-
 package encode
 
 // BenchmarkAppendAny_* — encode.AppendAny across the shapes an `any`
@@ -233,7 +231,7 @@ func TestAppendAny_Struct_Embedded(t *testing.T) {
 		Base
 		Name string `json:"name"`
 	}
-	checkAny(t, Derived{Base: Base{ID: "abc", Meta: "m"}, Name: "alice"})
+	checkAny(t, Derived{ID: "abc", Meta: "m", Name: "alice"})
 }
 
 // Fields promoted through a nil embedded pointer are omitted, not a panic.

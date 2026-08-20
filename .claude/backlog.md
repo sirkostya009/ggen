@@ -216,6 +216,38 @@ surface pinned by `Decoder[T]`).
 
 ## Open design questions
 
+- **Go 1.27 stable `encoding/json/v2` dropped features the experiment had —
+  4 parity gaps, 10 failing tests, UNDECIDED (2026-08).** The 1.27 bump removed
+  `goexperiment.jsonv2` (v2 + jsontext are stable, no flag). But the STABLE
+  release is not the package the experiment shipped: it cut or tightened four
+  things ggen still implements, so the ggen↔jsonv2 parity tests fail with the
+  ORACLE moved, not ggen broken. ggen's own features all still work.
+
+  | Feature | Stable jsonv2 | ggen | Failing tests |
+  | --- | --- | --- | --- |
+  | `format:` (time layouts, base64/base32/hex, nonfinite, emitnull/emitempty) | REMOVED, unreachable | fully supported | `TestStdCompat_NativeTypes`, `_TimeFormatsStdCompat`, `_PointerStruct`, `TestStdCompatMerge_Parity` (2 subtests) |
+  | `,string` on bool / plain string | ERRORS (`invalid use of 'string' tag option`) | bool bare, string single-encoded | `TestStdCompat_StringTagStruct`, `TestAppendAny_Struct_StringOpt`, `TestAppendAny_NumberStringTag` |
+  | Quoted names `json:"'a,b'"` | REJECTS (malformed tag, `'` invalid at option start) | supported | `TestKeyEscape_QuoteParityWithJSONv2`, `TestQuotedNames_roundtrip` |
+  | `,inline` / `,unknown` | renamed `,embed` (flattens identically) | flattens on `inline` | `TestStdCompat_InlineStruct` |
+
+  `format:` is the consequential one. Cut for the initial release per
+  https://go.dev/issue/79071, pending typed struct tags
+  (https://go.dev/issue/74472) as a more expressive replacement for the tag's
+  bespoke mini-DSL. It survives ONLY as `ExperimentalSupportFormatTag`, which
+  lives in `encoding/json/internal/jsonopts` — internal, explicitly documented
+  as inaccessible to public code, and gated behind `goexperiment.jsonv2` on top
+  of that. Verified empirically: ggen cannot opt back in, with or without the
+  experiment flag. `format:` is a headline ggen feature AND the stdlib is likely
+  to reintroduce it in a DIFFERENT shape once typed tags land, so following
+  them now risks churning the user-facing tag surface twice.
+
+  Each row decides independently: keep ggen's behaviour + pin a documented
+  divergence (and stop the test consulting jsonv2 for that shape), or follow
+  the stdlib. `,inline` → `,embed` is the cheap one — `,embed` flattens exactly
+  like ggen's `inline`, so it is a rename. `,string` and quoted names are
+  small, real breaking changes if followed. Whatever lands must propagate to
+  the three surface docs (README / SKILL.md / cli/CLAUDE.md).
+
 - **`scan.NotEOF` leaks the drained-vs-transient mapping into generated code
   (2026-08).** Round-6 fix #60 needed the generated stream dispatch loop to map
   a drained refill to the bytes-path grammar sentinel, so `notEOF` was exported

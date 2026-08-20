@@ -387,8 +387,7 @@ func TestRichError_Unwrap(t *testing.T) {
 	if !errors.Is(re, inner) {
 		t.Errorf("richError must unwrap to its inner error")
 	}
-	var got *richError
-	if !errors.As(fmt.Errorf("wrap: %w", re), &got) {
+	if _, ok := errors.AsType[*richError](fmt.Errorf("wrap: %w", re)); !ok {
 		t.Errorf("errors.As must thread through fmt.Errorf wrapping")
 	}
 }

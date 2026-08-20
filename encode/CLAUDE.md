@@ -142,7 +142,7 @@ caller-buffer padding. It replaced a per-byte table walk over up to lane-1
 bytes: −49% on the 2800 B `BenchmarkEscapeScan/avx512` row (rem 48) and −37…−77%
 across `BenchmarkEscapeTailRem` (rem 16…63); rem 0 unaffected. Macro is
 untouched by construction — sub-lane strings never reach these functions, and
-no repo marshal bench carries ≥64 B strings. `Load*SlicePart` stays unused: it
+no repo marshal bench carries ≥64 B strings. `Load*Part` stays unused: it
 is a real CALL and its zero padding would classify as ctrl and emit spurious
 escapes. Overlap correctness (a byte classified in BOTH the main loop and the
 reload must be emitted exactly once) is pinned exhaustively by

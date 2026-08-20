@@ -34,7 +34,7 @@ func (s *Stream) skipSpaceSlowAVX() error {
 	buf := s.buf
 	for {
 		for ; i+16 <= len(buf); i += 16 {
-			v := archsimd.LoadUint8x16Slice(buf[i:])
+			v := archsimd.LoadUint8x16(buf[i:])
 			m := v.Equal(sp).Or(v.Equal(tb)).Or(v.Equal(nl)).Or(v.Equal(cr)).ToBits()
 			if m != 0xFFFF {
 				s.Pos = i + bits.TrailingZeros16(^m)
@@ -78,7 +78,7 @@ func (s *Stream) skipSpaceSlowAVX2() error {
 	buf := s.buf
 	for {
 		for ; i+32 <= len(buf); i += 32 {
-			v := archsimd.LoadUint8x32Slice(buf[i:])
+			v := archsimd.LoadUint8x32(buf[i:])
 			m := v.Equal(sp).Or(v.Equal(tb)).Or(v.Equal(nl)).Or(v.Equal(cr)).ToBits()
 			if m != 0xFFFFFFFF {
 				s.Pos = i + bits.TrailingZeros32(^m)
@@ -122,7 +122,7 @@ func (s *Stream) skipSpaceSlowAVX512() error {
 	buf := s.buf
 	for {
 		for ; i+64 <= len(buf); i += 64 {
-			v := archsimd.LoadUint8x64Slice(buf[i:])
+			v := archsimd.LoadUint8x64(buf[i:])
 			m := v.Equal(sp).ToBits() | v.Equal(tb).ToBits() | v.Equal(nl).ToBits() | v.Equal(cr).ToBits()
 			if m != ^uint64(0) {
 				s.Pos = i + bits.TrailingZeros64(^m)

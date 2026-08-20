@@ -1,5 +1,3 @@
-//go:build goexperiment.jsonv2
-
 package bench
 
 // BenchmarkSmall_* — small-value benchmarks on the ~2.9 KiB ValidPayload,

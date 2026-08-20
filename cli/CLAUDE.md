@@ -48,8 +48,9 @@ direct method calls — no runtime probing. If type info can't resolve (temp fil
 no `go.mod`), falls back to AST-only mode and emits a plain `encoding/json`
 fallback for cross-package types.
 
-Run `ggen` with the same `GOEXPERIMENT` env as user code — files behind
-`goexperiment.jsonv2` are otherwise invisible.
+Run `ggen` with the same `GOEXPERIMENT` env as user code — files behind an
+experiment tag (e.g. `goexperiment.simd`) are otherwise invisible.
+`encoding/json/v2` is stable as of Go 1.27 and needs no experiment.
 
 Pattern mode (`./...`, `./sub/...`, `...`) resolves via `packages.Load` —
 module-scoped, workspace-aware, never crosses module bounds. A subdir with its
@@ -530,7 +531,7 @@ own gen file with a matching header — a struct in `tagged.go` (behind
 `go/build/constraint.Parse`. Cross-bucket struct refs in the same package still
 route through direct DecodeFrom (`generatedTypes` seeded with the union of all
 buckets first). Tagged-bucket slugs collapse non-alnum runs to single underscores
-(`goexperiment.jsonv2` → `goexperiment_jsonv2`, `foo && bar` → `foo_bar`).
+(`goexperiment.simd` → `goexperiment_simd`, `foo && bar` → `foo_bar`).
 
 ## Codegen optimizations (nothing at runtime)
 
@@ -843,7 +844,7 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
     path, anything else (escape, ctrl, span ≥ lane) falls to the direct
     `scan.StringAVX`/`AVX2`/`AVX512` call, which restarts at `posIn` — error
     identity byte-identical. Lane by tier: avx → 16 B, avx2/avx512 → 32 B
-    inline (64 B inline never pays). Full-lane loads only — `Load*SlicePart`
+    inline (64 B inline never pays). Full-lane loads only — `Load*Part`
     is a real CALL, not an intrinsic — so a string starting within one lane
     of the payload end takes a **bounded scalar tail loop** instead (< lane
     iterations; without it, tiny payloads whose fields all sit near EOF paid

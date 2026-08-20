@@ -1,5 +1,3 @@
-//go:build goexperiment.jsonv2
-
 package integrationtests
 
 //go:generate ../ggen $GOFILE
