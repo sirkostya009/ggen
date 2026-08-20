@@ -1168,7 +1168,7 @@ func (recv CrossPkgShapes) DecodeFromStream(s *scan.Stream) (result CrossPkgShap
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("arr", s.Offset(), err)
+					return result, decode.NewParseErr("arr", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
 				}
 			}
 			var idx0 int
@@ -1192,7 +1192,7 @@ func (recv CrossPkgShapes) DecodeFromStream(s *scan.Stream) (result CrossPkgShap
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("arr", s.Offset(), err)
+						return result, decode.NewParseErr("arr", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
@@ -1230,14 +1230,14 @@ func (recv CrossPkgShapes) DecodeFromStream(s *scan.Stream) (result CrossPkgShap
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("dict", s.Offset(), err)
+					return result, decode.NewParseErr("dict", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("dict", s.Offset(), err)
+							return result, decode.NewParseErr("dict", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
@@ -1258,7 +1258,7 @@ func (recv CrossPkgShapes) DecodeFromStream(s *scan.Stream) (result CrossPkgShap
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("dict", s.Offset(), err)
+					return result, decode.NewParseErr("dict", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 				}
 			}
 			if s.Bytes()[s.Pos] == '}' {
@@ -1282,7 +1282,7 @@ func (recv CrossPkgShapes) DecodeFromStream(s *scan.Stream) (result CrossPkgShap
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("dict", s.Offset(), err)
+						return result, decode.NewParseErr("dict", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 					}
 				}
 				if s.Bytes()[s.Pos] != ':' {
@@ -1309,7 +1309,7 @@ func (recv CrossPkgShapes) DecodeFromStream(s *scan.Stream) (result CrossPkgShap
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("dict", s.Offset(), err)
+						return result, decode.NewParseErr("dict", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
@@ -1344,14 +1344,14 @@ func (recv CrossPkgShapes) DecodeFromStream(s *scan.Stream) (result CrossPkgShap
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("many", s.Offset(), err)
+					return result, decode.NewParseErr("many", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("many", s.Offset(), err)
+							return result, decode.NewParseErr("many", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
@@ -1372,7 +1372,7 @@ func (recv CrossPkgShapes) DecodeFromStream(s *scan.Stream) (result CrossPkgShap
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("many", s.Offset(), err)
+					return result, decode.NewParseErr("many", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
 				}
 			}
 			if s.Bytes()[s.Pos] == ']' {
@@ -1400,7 +1400,7 @@ func (recv CrossPkgShapes) DecodeFromStream(s *scan.Stream) (result CrossPkgShap
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("many", s.Offset(), err)
+						return result, decode.NewParseErr("many", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
@@ -1444,14 +1444,14 @@ func (recv CrossPkgShapes) DecodeFromStream(s *scan.Stream) (result CrossPkgShap
 			seenPPtr = true
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("pptr", s.Offset(), err)
+					return result, decode.NewParseErr("pptr", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("pptr", s.Offset(), err)
+							return result, decode.NewParseErr("pptr", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
@@ -1488,14 +1488,14 @@ func (recv CrossPkgShapes) DecodeFromStream(s *scan.Stream) (result CrossPkgShap
 			seenPtr = true
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("ptr", s.Offset(), err)
+					return result, decode.NewParseErr("ptr", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("ptr", s.Offset(), err)
+							return result, decode.NewParseErr("ptr", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
@@ -1534,14 +1534,14 @@ func (recv CrossPkgShapes) DecodeFromStream(s *scan.Stream) (result CrossPkgShap
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("slab", s.Offset(), err)
+					return result, decode.NewParseErr("slab", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("slab", s.Offset(), err)
+							return result, decode.NewParseErr("slab", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
@@ -1562,7 +1562,7 @@ func (recv CrossPkgShapes) DecodeFromStream(s *scan.Stream) (result CrossPkgShap
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("slab", s.Offset(), err)
+					return result, decode.NewParseErr("slab", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
 				}
 			}
 			var slab0 []thirdparty2.External2
@@ -1579,14 +1579,14 @@ func (recv CrossPkgShapes) DecodeFromStream(s *scan.Stream) (result CrossPkgShap
 			for s.Bytes()[s.Pos] != ']' {
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("slab", s.Offset(), err)
+						return result, decode.NewParseErr("slab", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
 					}
 				}
 				if s.Bytes()[s.Pos] == 'n' {
 					for ki := 1; ki < 4; ki++ {
 						if s.Pos+ki >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, decode.NewParseErr("slab", s.Offset(), err)
+								return result, decode.NewParseErr("slab", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
 							}
 						}
 						if s.Bytes()[s.Pos+ki] != "null"[ki] {
@@ -1601,7 +1601,7 @@ func (recv CrossPkgShapes) DecodeFromStream(s *scan.Stream) (result CrossPkgShap
 					}
 					if s.Pos >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("slab", s.Offset(), err)
+							return result, decode.NewParseErr("slab", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
 						}
 					}
 					if s.Bytes()[s.Pos] == ',' {
@@ -1633,7 +1633,7 @@ func (recv CrossPkgShapes) DecodeFromStream(s *scan.Stream) (result CrossPkgShap
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("slab", s.Offset(), err)
+						return result, decode.NewParseErr("slab", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {

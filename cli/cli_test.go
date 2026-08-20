@@ -2057,8 +2057,9 @@ type Msg struct {
 			{"gt_inf", "F float64", `json:"f" pipe:"gt=Inf"`, "NaN/Inf are not valid bounds"},
 			{"eq_nan", "F float64", `json:"f" pipe:"eq=NaN"`, "NaN/Inf are not valid bounds"},
 			{"clamp_fractional_on_int", "N int", `json:"n" pipe:"clamp=0|1.5"`, "integer field needs integer bounds"},
-			{"string_tag_on_slice", "X []int", `json:"x,string"`, "only valid on primitive fields"},
-			{"string_tag_on_map", "M map[string]int", `json:"m,string"`, "only valid on primitive fields"},
+			{"string_tag_on_slice", "X []int", `json:"x,string"`, "only valid on numeric fields"},
+			{"string_tag_on_map", "M map[string]int", `json:"m,string"`, "only valid on numeric fields"},
+			{"string_tag_on_string", "S string", `json:"s,string"`, "only valid on numeric fields"},
 			{"inner_depth2_mismatch", "M [][]int", `json:"m" pipe:"inner:(inner:(trim))"`, "is inapplicable to int"},
 			{"inner_deeper_than_type", "X []int", `json:"x" pipe:"inner:(inner:(gte=0))"`, "no element at that depth"},
 		}

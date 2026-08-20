@@ -3818,6 +3818,7 @@ func renderBytesValue(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 for %[1]s < len(data) && data[%[1]s] != ']' {
 	u, %[1]s, err = scan.Uint64(data, %[1]s)
 	if err != nil { return result, %[1]s, decode.NewParseErr(%[3]s, %[1]s, err) }
+	if u > 255 { return result, %[1]s, decode.NewParseErr(%[3]s, %[1]s, scan.ErrNumberOverflow) }
 	%[2]s = append(%[2]s, byte(u))
 `, posVar, ref, field)
 		inlineSkipWS(b, posVar)
@@ -4337,7 +4338,8 @@ func renderSQLNull(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 			valExpr = "float32(nv)"
 		}
 	case KindTime:
-		tf := FieldInfo{JSONName: f.JSONName, Format: f.Format}
+		tf := FieldInfo{JSONName: f.JSONName, Format: f.Format,
+			Copy: f.Copy, AllowInvalidUTF8: f.AllowInvalidUTF8, MultiErr: f.MultiErr}
 		declType = "time.Time"
 		renderTime(&inner, tf, "nv", posVar)
 	}
@@ -4657,8 +4659,6 @@ default: return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, scan.ErrBadBool)
 				fmt.Sprintf("return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrNumberOverflow)", posVar, field)))
 			fmt.Fprintf(b, "%s = %s(n)\n", ref, f.GoType)
 		}
-	case KindString:
-		fmt.Fprintf(b, "%s = sv\n", ref)
 	}
 }
 
@@ -4802,9 +4802,9 @@ func nullZeroApplies(f FieldInfo) bool {
 // inlineNullPeek + zero assign used for `nullzero`. It emits the buffered
 // `null` literal check (ReadMore-guarded, like the stream pointer branch),
 // sets ref to its Go zero on a match, then breaks (flat) or opens an else.
-func emitStreamNullZero(b *bytes.Buffer, ref, zero, field string, flat bool) {
-	rm := streamReadMore(field, "0", false)
-	rmKi := strings.Replace(rm, "if s.Pos >=", "if s.Pos+ki >=", 1)
+func emitStreamNullZero(b *bytes.Buffer, ref, zero, field string, flat bool, sentinel string) {
+	rm := streamReadMore(field, "0", false, sentinel)
+	rmKi := strings.Replace(streamReadMore(field, "0", false, "scan.ErrBadLiteral"), "if s.Pos >=", "if s.Pos+ki >=", 1)
 	fmt.Fprintf(b, `%[2]sif s.Bytes()[s.Pos] == 'n' {
 	for ki := 1; ki < 4; ki++ {
 		%[3]sif s.Bytes()[s.Pos+ki] != "null"[ki] { return result, decode.NewParseErr(%[4]s, s.Offset(), scan.ErrBadLiteral) }
@@ -5686,8 +5686,8 @@ func renderStreamDispatch(s StructInfo) string {
 func renderStreamMap(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	field := fieldLit(f)
 	chk := streamErrCheck(field)
-	rm := streamReadMore(field, "0", false)
-	rmKi := strings.Replace(rm, "if s.Pos >=", "if s.Pos+ki >=", 1)
+	rm := streamReadMore(field, "0", false, "scan.ErrBadObject")
+	rmKi := strings.Replace(streamReadMore(field, "0", false, "scan.ErrBadLiteral"), "if s.Pos >=", "if s.Pos+ki >=", 1)
 	badLit := fmt.Sprintf("return result, decode.NewParseErr(%s, s.Offset(), scan.ErrBadLiteral)", field)
 	badObj := fmt.Sprintf("return result, decode.NewParseErr(%s, s.Offset(), scan.ErrBadObject)", field)
 	makeExpr := fmt.Sprintf("make(%s)", f.GoType)
@@ -5848,13 +5848,41 @@ func bytesErrCheck(field, posVar string) string {
 
 // streamReadMore emits the "buffer exhausted? pull more" guard. keep controls
 // compaction (`0` = grow, `s.Pos` = discard consumed prefix); resetPos appends
-// `s.Pos = 0` after a non-zero keep.
-func streamReadMore(field, keep string, resetPos bool) string {
+// `s.Pos = 0` after a non-zero keep. sentinel, when non-empty, maps a DRAINED
+// refill to the grammar sentinel the bytes path reports for the same
+// truncation (round-6 #60, extended to every generated value-head refill);
+// transient reader errors still propagate raw via scan.NotEOF.
+func streamReadMore(field, keep string, resetPos bool, sentinel string) string {
 	reset := ""
 	if resetPos {
 		reset = "; s.Pos = 0"
 	}
-	return fmt.Sprintf("if s.Pos >= len(s.Bytes()) { if err = s.ReadMore(%s); err != nil { return result, decode.NewParseErr(%s, s.Offset(), err) }%s }\n", keep, field, reset)
+	errExpr := "err"
+	if sentinel != "" {
+		errExpr = "scan.NotEOF(err, " + sentinel + ")"
+	}
+	return fmt.Sprintf("if s.Pos >= len(s.Bytes()) { if err = s.ReadMore(%s); err != nil { return result, decode.NewParseErr(%s, s.Offset(), %s) }%s }\n", keep, field, errExpr, reset)
+}
+
+// truncSentinel maps a value kind to the grammar sentinel the BYTES path
+// reports for input truncated at that value's head.
+func truncSentinel(k TypeKind) string {
+	switch k {
+	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64,
+		KindUint, KindUint8, KindUint16, KindUint32, KindUint64,
+		KindFloat32, KindFloat64, KindBigInt:
+		return "scan.ErrBadNumber"
+	case KindBool:
+		return "scan.ErrBadBool"
+	case KindString, KindBytes, KindTime, KindDuration, KindNetIP,
+		KindNetipAddr, KindNetipPrefix, KindURL, KindBigFloat, KindBigRat:
+		return "scan.ErrExpectString"
+	case KindMap, KindStruct:
+		return "scan.ErrBadObject"
+	case KindSlice, KindArray:
+		return "scan.ErrBadArray"
+	}
+	return "scan.ErrUnexpectedEnd"
 }
 
 // nestedDecodeErrCheck emits the `if err != nil { … }` tail after a nested
@@ -5927,8 +5955,8 @@ func renderStreamBytes(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 		return
 	}
 	field := fieldLit(f)
-	rm := streamReadMore(field, "0", false)
-	rmKi := strings.Replace(rm, "if s.Pos >=", "if s.Pos+ki >=", 1)
+	rm := streamReadMore(field, "0", false, "scan.ErrExpectString")
+	rmKi := strings.Replace(streamReadMore(field, "0", false, "scan.ErrBadLiteral"), "if s.Pos >=", "if s.Pos+ki >=", 1)
 	// `null` → nil out the field (see renderBytes).
 	fmt.Fprintf(b, `%[3]sif s.Bytes()[s.Pos] == 'n' {
 	for ki := 1; ki < 4; ki++ {
@@ -5951,7 +5979,7 @@ func renderStreamBytesValue(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	_ = posVar // stream-path uses s.Pos directly
 	field := fieldLit(f)
 	chk := streamErrCheck(field)
-	rm := streamReadMore(field, "0", false)
+	rm := streamReadMore(field, "0", false, "scan.ErrBadArray")
 	badArr := fmt.Sprintf("return result, decode.NewParseErr(%s, s.Offset(), scan.ErrBadArray)", field)
 	if f.Format == "array" {
 		// `u` not `v`: a pointer-leaf caller declares `var v []byte` in the
@@ -5961,14 +5989,15 @@ func renderStreamBytesValue(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 %[2]s%[4]sfor s.Bytes()[s.Pos] != ']' {
 	var u uint64
 	u, err = s.Uint64()
-	%[2]s%[1]s = append(%[1]s, byte(u))
+	%[2]sif u > 255 { return result, decode.NewParseErr(%[6]s, s.Offset(), scan.ErrNumberOverflow) }
+	%[1]s = append(%[1]s, byte(u))
 	err = s.SkipSpace()
 	%[2]s%[4]sif s.Bytes()[s.Pos] == ',' { s.Pos++; err = s.SkipSpace(); %[2]s%[5]scontinue }
 	break
 }
 if s.Bytes()[s.Pos] != ']' { %[3]s }
 s.Pos++
-`, ref, chk, badArr, rm, streamNoCloseAfterComma(field, ']'))
+`, ref, chk, badArr, rm, streamNoCloseAfterComma(field, ']'), field)
 		emitEmptyBytesNonNil(b, ref)
 		return
 	}
@@ -6094,11 +6123,12 @@ func renderStreamNetIP(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	field := fieldLit(f)
 	chk := streamErrCheck(field)
 	// StringView: net.ParseIP copies into a fresh IP; the error literal
-	// retains sv, so it clones (string(sv)) — see Stream.StringView.
+	// retains sv, so it clones — string(sv) on a string is an IDENTITY
+	// conversion (no copy), strings.Clone is the real one.
 	fmt.Fprintf(b, `var sv string
 sv, err = s.StringView(`+vArg(f)+`)
 %[2]s%[1]s = net.ParseIP(sv)
-if %[1]s == nil { return result, decode.NewParseErr(%[3]s, s.Offset(), &net.ParseError{Type: "IP address", Text: string(sv)}) }
+if %[1]s == nil { return result, decode.NewParseErr(%[3]s, s.Offset(), &net.ParseError{Type: "IP address", Text: strings.Clone(sv)}) }
 `, ref, chk, field)
 }
 
@@ -6191,8 +6221,8 @@ func renderStreamSQLNull(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	if f.SQLNullInner != nil {
 		inner := sqlNullInnerField(f)
 		field := fieldLit(f)
-		rm := streamReadMore(field, "0", false)
-		rmKi := strings.Replace(rm, "if s.Pos >=", "if s.Pos+ki >=", 1)
+		rm := streamReadMore(field, "0", false, truncSentinel(effectiveKind(inner.GoType, inner.Kind)))
+		rmKi := strings.Replace(streamReadMore(field, "0", false, "scan.ErrBadLiteral"), "if s.Pos >=", "if s.Pos+ki >=", 1)
 		dec := renderStreamField(inner, "nv", posVar)
 		body, valExpr := dec, "nv"
 		if rest, expr, ok := foldTailAssign(body, "nv"); ok {
@@ -6256,13 +6286,14 @@ nv, err = s.%[2]s(%[4]s)
 			valExpr = fmt.Sprintf("%s(nv)", spec.Type)
 		}
 	case KindTime:
-		tf := FieldInfo{JSONName: f.JSONName, Format: f.Format}
+		tf := FieldInfo{JSONName: f.JSONName, Format: f.Format,
+			Copy: f.Copy, AllowInvalidUTF8: f.AllowInvalidUTF8, MultiErr: f.MultiErr}
 		inner.WriteString("var nv time.Time\n")
 		renderStreamTime(&inner, tf, "nv", posVar)
 		valExpr = "nv"
 	}
-	rm := streamReadMore(field, "0", false)
-	rmKi := strings.Replace(rm, "if s.Pos >=", "if s.Pos+ki >=", 1)
+	rm := streamReadMore(field, "0", false, truncSentinel(spec.Inner))
+	rmKi := strings.Replace(streamReadMore(field, "0", false, "scan.ErrBadLiteral"), "if s.Pos >=", "if s.Pos+ki >=", 1)
 	fmt.Fprintf(b, `%[6]sif s.Bytes()[s.Pos] == 'n' {
 	for ki := 1; ki < 4; ki++ {
 		%[8]sif s.Bytes()[s.Pos+ki] != "null"[ki] { return result, decode.NewParseErr(%[7]s, s.Offset(), scan.ErrBadLiteral) }
@@ -6387,8 +6418,6 @@ default: return result, decode.NewParseErr(%[2]s, s.Offset(), scan.ErrBadBool)
 				fmt.Sprintf("return result, decode.NewParseErr(%s, s.Offset(), scan.ErrNumberOverflow)", field)))
 			fmt.Fprintf(b, "%s = %s(n)\n", ref, f.GoType)
 		}
-	case KindString:
-		fmt.Fprintf(b, "%s = string(sv)\n", ref)
 	}
 }
 
@@ -6414,7 +6443,7 @@ func renderStreamField(f FieldInfo, ref, posVar string) string {
 		flat := nz && nullBreakOK(f)
 		if nz {
 			var nb bytes.Buffer
-			emitStreamNullZero(&nb, ref, zeroLit(f.GoType, f.Kind), fieldLit(f), flat)
+			emitStreamNullZero(&nb, ref, zeroLit(f.GoType, f.Kind), fieldLit(f), flat, truncSentinel(effectiveKind(f.GoType, f.Kind)))
 			out = nb.String()
 		}
 		tmp := "_nv" + f.GoName
@@ -6445,7 +6474,7 @@ func renderStreamField(f FieldInfo, ref, posVar string) string {
 		nz := nullZeroApplies(f)
 		flat := nz && nullBreakOK(f)
 		if nz {
-			emitStreamNullZero(&out, ref, zeroLit(f.GoType, f.Kind), fieldLit(f), flat)
+			emitStreamNullZero(&out, ref, zeroLit(f.GoType, f.Kind), fieldLit(f), flat, truncSentinel(effectiveKind(f.GoType, f.Kind)))
 		}
 		renderStreamStringTag(&out, f, ref, posVar)
 		if nz && !flat {
@@ -6464,8 +6493,8 @@ func renderStreamField(f FieldInfo, ref, posVar string) string {
 		// See renderField: custom @Func rules want the pointer, built-ins the leaf.
 		builtinV, customV := partitionCustomValidation(f.Validation)
 		builtinM, customM := partitionCustomMods(f.Mods)
-		rm := streamReadMore(field, "0", false)
-		rmKi := strings.Replace(rm, "if s.Pos >=", "if s.Pos+ki >=", 1)
+		rm := streamReadMore(field, "0", false, truncSentinel(effectiveKind(f.PointeeType, f.Kind)))
+		rmKi := strings.Replace(streamReadMore(field, "0", false, "scan.ErrBadLiteral"), "if s.Pos >=", "if s.Pos+ki >=", 1)
 		// Decode-into-receiver, any depth — see renderField.
 		depth, leafType := pointerDepth(f.GoType)
 		leaf := f
@@ -6548,7 +6577,7 @@ func renderStreamField(f FieldInfo, ref, posVar string) string {
 	nz := nullZeroApplies(f)
 	flat := nz && nullBreakOK(f)
 	if nz {
-		emitStreamNullZero(b, ref, zeroLit(f.GoType, f.Kind), field, flat)
+		emitStreamNullZero(b, ref, zeroLit(f.GoType, f.Kind), field, flat, truncSentinel(effectiveKind(f.GoType, f.Kind)))
 	}
 	switch f.Kind {
 	case KindString:
@@ -6636,8 +6665,8 @@ func emitStreamSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth
 	slabVar := fmt.Sprintf("slab%d", depth)
 	field := fieldLit(f)
 	chk := streamErrCheck(field)
-	rm := streamReadMore(field, "0", false)
-	rmKi := strings.Replace(rm, "if s.Pos >=", "if s.Pos+ki >=", 1)
+	rm := streamReadMore(field, "0", false, "scan.ErrBadArray")
+	rmKi := strings.Replace(streamReadMore(field, "0", false, "scan.ErrBadLiteral"), "if s.Pos >=", "if s.Pos+ki >=", 1)
 	// At dispatch level flat-break; a NullDone nested slot skips the peek.
 	flat := !isArray && nullBreakOK(f)
 	if !isArray && !f.NullDone {

@@ -110,8 +110,12 @@ Field config is partitioned by role across three tags: `json:` (wire shape),
   Entries spliced out on marshal
 - `json:"name,omitempty"` — not marshaled when JSON-empty (null, "", [], {})
 - `json:"name,omitzero"` — not marshaled when Go-zero
-- `json:"name,string"` — wrap primitive as JSON string on marshal, unwrap on
-  unmarshal. Primitives only, like stdlib
+- `json:"name,string"` — wrap numeric as JSON string on marshal, unwrap on
+  unmarshal. Numerics only (jsonv2 defaults; jsonv2 itself silently IGNORES
+  the option on non-numerics — ggen rejects at generate time per the
+  no-silent-no-op convention). `bool` is tolerated as a documented no-op
+  (v2 dropped bool quoting); a STRING field is a generate-time error — it
+  was a silent no-op that didn't even match v1's double-encoding
 - `json:"name,format:X"` — format hint for native types (see Kinds). **jsonv2
   requirement: `format:X` must be LAST in the tag.**
 
@@ -1316,6 +1320,47 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
       per-element loop.
     Pinned by `TestGenerate_round8Fixes` (cli) + `TestAppendUnixSeconds`
     (encode).
+
+69. **Round-9 fixes (parse layer + stream emitters).** Nine defects, all
+    reproduced by the audit:
+    - **Map-valued sibling structs never queued** — `referencedStructName`
+      had no `*ast.MapType` case, so a struct reached only through
+      `map[string]Inner` missed `generatedTypes` and its values fell to the
+      reflective `json.Unmarshal` fallback (silently lenient semantics).
+    - **Embedded promotion lost depth** — a depth-1 promoted field clashing
+      with a depth-2 one dropped BOTH (`{}` on the wire) where stdlib keeps
+      the shallower. `FieldInfo.EmbedDepth` + depth-aware
+      `resolveFieldCollisions` (min-depth wins; tie drops; every ggen field
+      is json-tagged, so stdlib's tagged tiebreak can never differentiate).
+    - **Cyclic embedding crashed the generator** (stack overflow) —
+      `extractStructSeen` threads the embedding chain, diagnostic instead.
+    - **A tab after `//ggen:generate` silently dropped the annotation**
+      (go:generate accepts tabs) — any whitespace separates now.
+    - **Single-file mode seeded `multiErrTypes` file-locally** — a
+      cross-file multierr callee lost its drain branch (same class as the
+      round-6 cross-file cycle fix); parseFile now returns a package-wide
+      set unioned in.
+    - **Stream `,string` STRING values retained a KeyView alias**
+      (`string(sv)` is an identity conversion, no copy) — silent corruption
+      on the next compacting refill. Fixed, then SUPERSEDED same round by a
+      user call: `,string` on a string field is now a generate-time ERROR
+      (see the `json:` tag section) and both KindString string-tag arms are
+      deleted. The same identity-conversion misconception was fixed for real
+      in `renderStreamNetIP`'s error literal (`strings.Clone`).
+    - **Generated value-head refills leaked raw `io.ErrUnexpectedEOF`** —
+      `streamReadMore` gained a sentinel param (`scan.NotEOF`) and every
+      site maps a drained refill to the bytes-path sentinel via
+      `truncSentinel` (kind → ErrBadNumber/ErrExpectString/ErrBadObject/…);
+      null-literal refills map to ErrBadLiteral (round-6 #60, extended from
+      the dispatch loop to all emit sites).
+    - **`format:array` byte elements silently wrapped** (`300` → `44`, nil
+      error, both paths) — now `> 255` → `ErrNumberOverflow` (the opt #48
+      family's missed site).
+    - **sql.NullTime's synthesized inner field dropped
+      Copy/AllowInvalidUTF8/MultiErr** (both paths — opt #67 class).
+    Pinned by `TestParseFile_round9` (cli) and
+    `TestTruncationSentinelParity` / `TestStringTag_StreamStringDetached` /
+    `TestFormatArray_ByteOverflow` (integrationtests).
 
 ## Named types, cross-package types (defects fixed 2026-07)
 

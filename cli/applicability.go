@@ -44,21 +44,23 @@ func checkRuleApplicability(fi FieldInfo, resolved bool) error {
 		return kind
 	}
 
-	// json:",string" is documented primitives-only; renderStringTag has no
-	// other arms, so anything else emitted non-compiling code. Named
-	// primitives are rejected too — the string-tag emit does not cast.
+	// json:",string" is numerics-only (jsonv2 defaults; bool is tolerated as
+	// a documented no-op since v2 dropped bool quoting). A STRING field used
+	// to be accepted as a silent no-op that didn't even match v1's
+	// double-encoding — dropped in favor of a loud reject. Named primitives
+	// are rejected too — the string-tag emit does not cast.
 	if fi.String {
 		switch fi.Kind { // for pointers fi.Kind is already the pointee kind
-		case KindString, KindBool,
+		case KindBool,
 			KindInt, KindInt8, KindInt16, KindInt32, KindInt64,
 			KindUint, KindUint8, KindUint16, KindUint32, KindUint64,
 			KindFloat32, KindFloat64:
 		default:
 			collect(&richError{
-				Msg:      desc + ": `json:\",string\"` is only valid on primitive fields (got " + fi.GoType + ")",
+				Msg:      desc + ": `json:\",string\"` is only valid on numeric fields (got " + fi.GoType + ")",
 				CodeSpan: ",string",
-				BotHint:  "string-tag emit only handles primitive kinds",
-				UserHint: "`,string` wraps primitives, like stdlib; drop it or use a primitive field",
+				BotHint:  "string-tag quotes numerics only (jsonv2 defaults)",
+				UserHint: "`,string` quotes numeric values, like encoding/json/v2; drop it",
 			})
 		}
 	}

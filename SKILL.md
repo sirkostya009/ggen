@@ -126,7 +126,9 @@ type Order struct { /* ... */ }
 - `json:",inline"` — field = catch-all map for unknown keys. Type must be a string-keyed map (`map[string]V`); V may be `any`, a primitive, a ggen-annotated struct, or any other type (typed elems dispatch through the elem's fast path or `encoding/json.Unmarshal` over the captured span). Overrides `-ignoreunknown`.
 - `json:"name,omitempty"` — skip on marshal when JSON-empty. `big.Int`/`Float`/`Rat` are never skipped: a zero one encodes as `0`/`"0"`, which is not JSON-empty.
 - `json:"name,omitzero"` — skip on marshal when Go-zero.
-- `json:"name,string"` — wrap primitive as JSON string (unwrap on decode).
+- `json:"name,string"` — wrap numeric as JSON string (unwrap on decode).
+  Numerics only, like encoding/json/v2 (`bool` is a no-op; anything else is a
+  generate-time error).
 - `json:"name,format:X"` — format hint for native types (see kinds below). MUST be last option in tag (jsonv2 rule). Quote values with special characters: `format:'Jan 2, 2006'`. Literal quote = `\\'` (a bare `\'` is an invalid Go string escape — ggen errors instead of dropping the tag). An unrecognized format, or one on a type that has none, is a generate-time error; `time.Time` accepts any custom Go layout. An unterminated `'` is rejected too.
 - Quoted names (jsonv2): `json:"'a,b'"` → key `a,b`; `json:"'-'"` → key `-`. Only a bare `json:"-"` ignores the field; `json:"-,..."` is a generate-time error.
 

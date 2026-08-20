@@ -461,7 +461,9 @@ point**:
 
 - base64/base32/hex `[]byte` (decoded into independent dst by `AppendDecode`)
 - `time.Time`/`time.Duration` text formats (parse → value; error builds fresh string)
-- `net.IP` (`ParseIP` copies; `&net.ParseError{Text:…}` clones `sv`)
+- `net.IP` (`ParseIP` copies; the `&net.ParseError{Text:…}` error literal
+  detaches via `strings.Clone(sv)` — `string(sv)` of a string is an identity
+  conversion, NOT a copy, a round-9 find)
 - `netip.Addr`/`netip.Prefix` (value types, zones deep-copied by `unique`)
 - `big.Float`/`big.Rat` (parse into receiver, like `big.Int`'s span alias)
 - cross-pkg `TextUnmarshaler` (encoding contract forbids retaining the arg)

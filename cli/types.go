@@ -79,6 +79,7 @@ type ModRule struct {
 type FieldInfo struct {
 	GoName          string
 	StructName      string // owning struct's Go name; used in error diagnostics
+	EmbedDepth      int    // embedding levels between the declaring struct and the parent (0 = the parent's own field); dominant-field rule keeps the shallowest
 	JSONName        string
 	GoType          string // full Go type as string, e.g. "string", "[]int", "*Address"
 	Kind            TypeKind

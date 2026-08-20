@@ -210,14 +210,14 @@ func renderVariantDispatchStream(f FieldInfo, ref, posVar string) string {
 	b := getSmall()
 	defer putSmall(b)
 	field := fieldLit(f)
-	b.WriteString(streamReadMore(field, "0", false))
+	b.WriteString(streamReadMore(field, "0", false, "scan.ErrUnexpectedEnd"))
 	b.WriteString("switch s.Bytes()[s.Pos] {\n")
 	for idx, v := range f.Variants {
 		labels := strings.Join(variantCaseBytes(f, v), ", ")
 		fmt.Fprintf(b, "case %s:\n", labels)
 		switch v.Kind {
 		case VariantNullZero:
-			rmKi := strings.Replace(streamReadMore(field, "0", false), "if s.Pos >=", "if s.Pos+ki >=", 1)
+			rmKi := strings.Replace(streamReadMore(field, "0", false, "scan.ErrBadLiteral"), "if s.Pos >=", "if s.Pos+ki >=", 1)
 			fmt.Fprintf(b, "for ki := 1; ki < 4; ki++ {\n%sif s.Bytes()[s.Pos+ki] != \"null\"[ki] {\nreturn result, decode.NewParseErr(%s, s.Offset(), scan.ErrBadLiteral)\n}\n}\ns.Pos += 4\n%s = %s\n",
 				rmKi, field, ref, zeroLit(f.GoType, f.Kind))
 		case VariantNative:

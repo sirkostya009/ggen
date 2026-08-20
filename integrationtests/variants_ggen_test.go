@@ -608,7 +608,7 @@ func (recv LooseThing) DecodeFromStream(s *scan.Stream) (result LooseThing, err 
 			seenCount = true
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("count", s.Offset(), err)
+					return result, decode.NewParseErr("count", s.Offset(), scan.NotEOF(err, scan.ErrUnexpectedEnd))
 				}
 			}
 			switch s.Bytes()[s.Pos] {
@@ -647,7 +647,7 @@ func (recv LooseThing) DecodeFromStream(s *scan.Stream) (result LooseThing, err 
 			seenOpt = true
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("opt", s.Offset(), err)
+					return result, decode.NewParseErr("opt", s.Offset(), scan.NotEOF(err, scan.ErrUnexpectedEnd))
 				}
 			}
 			switch s.Bytes()[s.Pos] {
@@ -655,7 +655,7 @@ func (recv LooseThing) DecodeFromStream(s *scan.Stream) (result LooseThing, err 
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("opt", s.Offset(), err)
+							return result, decode.NewParseErr("opt", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
@@ -696,7 +696,7 @@ func (recv LooseThing) DecodeFromStream(s *scan.Stream) (result LooseThing, err 
 			seenPrice = true
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("price", s.Offset(), err)
+					return result, decode.NewParseErr("price", s.Offset(), scan.NotEOF(err, scan.ErrUnexpectedEnd))
 				}
 			}
 			switch s.Bytes()[s.Pos] {
@@ -990,14 +990,14 @@ func (recv ElemInterleave) DecodeFromStream(s *scan.Stream) (result ElemInterlea
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("nums", s.Offset(), err)
+					return result, decode.NewParseErr("nums", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("nums", s.Offset(), err)
+							return result, decode.NewParseErr("nums", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
@@ -1018,7 +1018,7 @@ func (recv ElemInterleave) DecodeFromStream(s *scan.Stream) (result ElemInterlea
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("nums", s.Offset(), err)
+					return result, decode.NewParseErr("nums", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
 				}
 			}
 			if s.Bytes()[s.Pos] == ']' {
@@ -1048,7 +1048,7 @@ func (recv ElemInterleave) DecodeFromStream(s *scan.Stream) (result ElemInterlea
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("nums", s.Offset(), err)
+						return result, decode.NewParseErr("nums", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
@@ -1438,7 +1438,7 @@ func (recv ConvNamed) DecodeFromStream(s *scan.Stream) (result ConvNamed, err er
 			seenN = true
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("n", s.Offset(), err)
+					return result, decode.NewParseErr("n", s.Offset(), scan.NotEOF(err, scan.ErrUnexpectedEnd))
 				}
 			}
 			switch s.Bytes()[s.Pos] {
@@ -1446,7 +1446,7 @@ func (recv ConvNamed) DecodeFromStream(s *scan.Stream) (result ConvNamed, err er
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("n", s.Offset(), err)
+							return result, decode.NewParseErr("n", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
@@ -1458,14 +1458,14 @@ func (recv ConvNamed) DecodeFromStream(s *scan.Stream) (result ConvNamed, err er
 			case '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("n", s.Offset(), err)
+						return result, decode.NewParseErr("n", s.Offset(), scan.NotEOF(err, scan.ErrBadNumber))
 					}
 				}
 				if s.Bytes()[s.Pos] == 'n' {
 					for ki := 1; ki < 4; ki++ {
 						if s.Pos+ki >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, decode.NewParseErr("n", s.Offset(), err)
+								return result, decode.NewParseErr("n", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
 							}
 						}
 						if s.Bytes()[s.Pos+ki] != "null"[ki] {
@@ -1511,7 +1511,7 @@ func (recv ConvNamed) DecodeFromStream(s *scan.Stream) (result ConvNamed, err er
 			seenS = true
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("s", s.Offset(), err)
+					return result, decode.NewParseErr("s", s.Offset(), scan.NotEOF(err, scan.ErrUnexpectedEnd))
 				}
 			}
 			switch s.Bytes()[s.Pos] {

@@ -247,14 +247,16 @@ func parseAnnotation(groups ...*ast.CommentGroup) (annotationFlags, bool) {
 		for _, c := range cg.List {
 			text := strings.TrimPrefix(c.Text, "//")
 			text = strings.TrimRight(text, " \t")
-			if text == "ggen:generate" {
-				return annotationFlags{}, true
-			}
-			rest, ok := strings.CutPrefix(text, "ggen:generate ")
-			if !ok {
+			rest, ok := strings.CutPrefix(text, "ggen:generate")
+			// Any whitespace separates tokens (go:generate accepts tabs
+			// too); a longer identifier ("ggen:generatex") does not match.
+			if !ok || (rest != "" && rest[0] != ' ' && rest[0] != '\t') {
 				continue
 			}
 			rest = strings.TrimLeft(rest, " \t")
+			if rest == "" {
+				return annotationFlags{}, true
+			}
 			var flags annotationFlags
 			for tok := range strings.FieldsSeq(rest) {
 				switch tok {
@@ -385,7 +387,7 @@ func (s *structSet) resolveFiltered(wanted []string, allowExpand func(string) bo
 // used in single-file mode to seed generatedTypes so a cross-file reference
 // routes to a direct DecodeFrom before sibling _ggen files exist. Nil in the
 // AST-only degraded mode (siblings unknown).
-func parseFile(filename string, wanted []string) ([]StructInfo, string, map[string]struct{}, map[string]struct{}, error) {
+func parseFile(filename string, wanted []string) ([]StructInfo, string, map[string]struct{}, map[string]struct{}, map[string]struct{}, error) {
 	dir := filepath.Dir(filename)
 	set, err := loadDirWithTypes(dir)
 	degraded := false
@@ -394,7 +396,7 @@ func parseFile(filename string, wanted []string) ([]StructInfo, string, map[stri
 	if err != nil || (len(set.structs) == 0 && len(set.aliases) == 0) {
 		set, err = loadStructs([]string{filename})
 		if err != nil {
-			return nil, "", nil, nil, err
+			return nil, "", nil, nil, nil, err
 		}
 		degraded = true
 	}
@@ -425,7 +427,7 @@ func parseFile(filename string, wanted []string) ([]StructInfo, string, map[stri
 			// No name filter and no annotated struct in this file. Error
 			// loudly. richError so the pretty logger shows the escape hatch;
 			// no source position — this is file-level.
-			return nil, set.pkgName, nil, nil, &richError{
+			return nil, set.pkgName, nil, nil, nil, &richError{
 				Msg:      fmt.Sprintf("%s: no //ggen:generate-annotated struct found in file", relPath(filename)),
 				BotHint:  "missing //ggen:generate directive",
 				UserHint: fmt.Sprintf("Add `//ggen:generate` above each struct you want generated, or pass struct names explicitly: `ggen %s Name1 Name2 ...`.", filepath.Base(filename)),
@@ -439,12 +441,12 @@ func parseFile(filename string, wanted []string) ([]StructInfo, string, map[stri
 		// Position-carrying errors already prefix the filename; don't
 		// double-prefix. Only prefix bare errors lacking location info.
 		if _, ok := errors.AsType[*richError](err); ok {
-			return nil, "", nil, nil, err
+			return nil, "", nil, nil, nil, err
 		}
-		return nil, "", nil, nil, fmt.Errorf("%s: %w", filename, err)
+		return nil, "", nil, nil, nil, fmt.Errorf("%s: %w", filename, err)
 	}
 	var siblings map[string]struct{}
-	var pkgCyclic map[string]struct{}
+	var pkgCyclic, pkgMultiErr map[string]struct{}
 	if !degraded {
 		siblings = make(map[string]struct{}, len(set.annotations))
 		all := make([]string, 0, len(set.annotations))
@@ -455,12 +457,15 @@ func parseFile(filename string, wanted []string) ([]StructInfo, string, map[stri
 		// Cycle analysis needs the WHOLE package's structs: a cross-file
 		// A↔B cycle is invisible to the per-file fallback and loses the
 		// recursion depth cap. Best-effort — a sibling that fails to
-		// resolve falls back to per-file detection.
+		// resolve falls back to per-file detection. The multierr callee
+		// set is package-wide for the same reason: a cross-file multierr
+		// callee otherwise lost its drain branch in single-file mode.
 		if allStructs, aerr := set.resolveFiltered(all, func(string) bool { return true }); aerr == nil {
 			pkgCyclic = computeCyclicTypes(allStructs)
+			pkgMultiErr = seedMultiErrTypes(allStructs)
 		}
 	}
-	return structs, set.pkgName, siblings, pkgCyclic, nil
+	return structs, set.pkgName, siblings, pkgCyclic, pkgMultiErr, nil
 }
 
 // parsePackage loads every eligible .go file in dir and generates only for
@@ -1013,17 +1018,29 @@ func referencedStructName(expr ast.Expr, all map[string]*ast.StructType) string 
 		return referencedStructName(e.Elt, all)
 	case *ast.StarExpr:
 		return referencedStructName(e.X, all)
+	case *ast.MapType:
+		// Map-valued references count too — without this a struct reached
+		// only through map[string]Inner never entered generatedTypes and its
+		// values fell to the reflective json.Unmarshal fallback.
+		return referencedStructName(e.Value, all)
 	}
 	return ""
 }
 
 func (s *structSet) extractStruct(name string, st *ast.StructType) (StructInfo, error) {
+	return s.extractStructSeen(name, st, map[string]struct{}{name: {}})
+}
+
+// extractStructSeen carries the embedding chain from the root struct so a
+// cyclic embedding (invalid Go, but ggen walks syntax before type-checking)
+// is a diagnostic instead of a fatal generator stack overflow.
+func (s *structSet) extractStructSeen(name string, st *ast.StructType, seen map[string]struct{}) (StructInfo, error) {
 	info := StructInfo{Name: name}
 	var errs []error
 	for _, field := range st.Fields.List {
 		if len(field.Names) == 0 {
 			// Embedded field: promote its fields into the parent.
-			sub, err := s.extractEmbedded(name, field)
+			sub, err := s.extractEmbedded(name, field, seen)
 			if err != nil {
 				errs = append(errs, err)
 				continue
@@ -1129,29 +1146,39 @@ func resolveFieldCollisions(parent string, fields []FieldInfo, errs *[]error) []
 			if len(idxs) < 2 {
 				continue
 			}
-			var own, promoted []int
+			// Dominant-field rule: shallowest embedding depth wins (own
+			// fields are depth 0); a tie at the minimum drops the name
+			// (stdlib ambiguity — every ggen field is json-tagged, so
+			// stdlib's tagged tiebreak can never differentiate). A flat
+			// own-vs-promoted split used to drop BOTH when a depth-1
+			// promoted field clashed with a depth-2 one — stdlib keeps
+			// the shallower.
+			minD := fields[idxs[0]].EmbedDepth
+			for _, i := range idxs[1:] {
+				minD = min(minD, fields[i].EmbedDepth)
+			}
+			var atMin []int
 			for _, i := range idxs {
-				if fields[i].StructName == parent {
-					own = append(own, i)
-				} else {
-					promoted = append(promoted, i)
+				if fields[i].EmbedDepth == minD {
+					atMin = append(atMin, i)
 				}
 			}
 			switch {
-			case len(own) == 1:
-				// The parent's own field shadows the promoted ones.
-				for _, i := range promoted {
-					drop[i] = true
+			case len(atMin) == 1:
+				for _, i := range idxs {
+					if i != atMin[0] {
+						drop[i] = true
+					}
 				}
-			case len(own) > 1:
+			case minD == 0:
 				*errs = append(*errs, fmt.Errorf(
 					"%s: fields %s and %s share JSON name %q",
-					parent, fields[own[0]].GoName, fields[own[1]].GoName, fields[own[0]].JSONName))
+					parent, fields[atMin[0]].GoName, fields[atMin[1]].GoName, fields[atMin[0]].JSONName))
 				for _, i := range idxs[1:] {
 					drop[i] = true // keep one so a broken emit doesn't pile on
 				}
 			default:
-				// Promoted-vs-promoted ambiguity: stdlib drops the name.
+				// Promoted-vs-promoted tie: stdlib drops the name.
 				for _, i := range idxs {
 					drop[i] = true
 				}
@@ -1175,7 +1202,7 @@ func resolveFieldCollisions(parent string, fields []FieldInfo, errs *[]error) []
 // extractEmbedded resolves an embedded field and returns the promoted fields
 // that should be appended to the parent. Supports only same-package named
 // struct embeddings without a json tag (stdlib semantics).
-func (s *structSet) extractEmbedded(parent string, field *ast.Field) ([]FieldInfo, error) {
+func (s *structSet) extractEmbedded(parent string, field *ast.Field, seen map[string]struct{}) ([]FieldInfo, error) {
 	if field.Tag != nil {
 		return nil, fmt.Errorf("tagged embedded field in %s is not supported", parent)
 	}
@@ -1195,9 +1222,19 @@ func (s *structSet) extractEmbedded(parent string, field *ast.Field) ([]FieldInf
 	if !ok {
 		return nil, fmt.Errorf("embedded type %s in %s not found in this package", typeName, parent)
 	}
-	sub, err := s.extractStruct(typeName, st)
+	if _, cyclic := seen[typeName]; cyclic {
+		return nil, fmt.Errorf("cyclic embedding of %s in %s", typeName, parent)
+	}
+	seen[typeName] = struct{}{}
+	sub, err := s.extractStructSeen(typeName, st, seen)
+	delete(seen, typeName)
 	if err != nil {
 		return nil, err
+	}
+	// Promoted fields sit one embedding level deeper than where they were
+	// declared — the dominant-field rule keeps the shallowest on a clash.
+	for i := range sub.Fields {
+		sub.Fields[i].EmbedDepth++
 	}
 	return sub.Fields, nil
 }

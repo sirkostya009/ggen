@@ -462,7 +462,7 @@ func slugifyTag(tag string) string {
 }
 
 func generateSingleFile(file string, wanted []string, outFlag, pkgFlag string) error {
-	structs, pkgName, siblings, pkgCyclic, err := parseFile(file, wanted)
+	structs, pkgName, siblings, pkgCyclic, pkgMultiErr, err := parseFile(file, wanted)
 	if err != nil {
 		return err
 	}
@@ -497,7 +497,13 @@ func generateSingleFile(file string, wanted []string, outFlag, pkgFlag string) e
 		generatedTypes[s.Name] = struct{}{}
 	}
 	seedNamedKinds(structs)
+	// Union with the package-wide multierr set — a cross-file multierr
+	// callee otherwise lost its drain branch in single-file mode (same
+	// class as the cross-file cycle fix below).
 	multiErrTypes = seedMultiErrTypes(structs)
+	for n := range pkgMultiErr {
+		multiErrTypes[n] = struct{}{}
+	}
 	// Package-wide cycle set — generateTo's per-file fallback can't see a
 	// cross-file A↔B cycle (opt #51 depth cap silently vanished there).
 	cyclicTypes = pkgCyclic

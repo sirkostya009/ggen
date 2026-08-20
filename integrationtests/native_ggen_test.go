@@ -180,6 +180,9 @@ func (recv NativeTypes) DecodeFrom(data []byte) (result NativeTypes, i int, err 
 				if err != nil {
 					return result, i, decode.NewParseErr("byteArray", i, err)
 				}
+				if u > 255 {
+					return result, i, decode.NewParseErr("byteArray", i, scan.ErrNumberOverflow)
+				}
 				result.ByteArray = append(result.ByteArray, byte(u))
 				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 					i++
@@ -518,14 +521,14 @@ func (recv NativeTypes) DecodeFromStream(s *scan.Stream) (result NativeTypes, er
 			seenBlob = true
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("blob", s.Offset(), err)
+					return result, decode.NewParseErr("blob", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("blob", s.Offset(), err)
+							return result, decode.NewParseErr("blob", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
@@ -562,14 +565,14 @@ func (recv NativeTypes) DecodeFromStream(s *scan.Stream) (result NativeTypes, er
 			seenByteArray = true
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("byteArray", s.Offset(), err)
+					return result, decode.NewParseErr("byteArray", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("byteArray", s.Offset(), err)
+							return result, decode.NewParseErr("byteArray", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
@@ -590,7 +593,7 @@ func (recv NativeTypes) DecodeFromStream(s *scan.Stream) (result NativeTypes, er
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("byteArray", s.Offset(), err)
+					return result, decode.NewParseErr("byteArray", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {
@@ -599,6 +602,9 @@ func (recv NativeTypes) DecodeFromStream(s *scan.Stream) (result NativeTypes, er
 				if err != nil {
 					return result, decode.NewParseErr("byteArray", s.Offset(), err)
 				}
+				if u > 255 {
+					return result, decode.NewParseErr("byteArray", s.Offset(), scan.ErrNumberOverflow)
+				}
 				result.ByteArray = append(result.ByteArray, byte(u))
 				err = s.SkipSpace()
 				if err != nil {
@@ -606,7 +612,7 @@ func (recv NativeTypes) DecodeFromStream(s *scan.Stream) (result NativeTypes, er
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("byteArray", s.Offset(), err)
+						return result, decode.NewParseErr("byteArray", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
@@ -676,14 +682,14 @@ func (recv NativeTypes) DecodeFromStream(s *scan.Stream) (result NativeTypes, er
 			seenHexBlob = true
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("hexBlob", s.Offset(), err)
+					return result, decode.NewParseErr("hexBlob", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("hexBlob", s.Offset(), err)
+							return result, decode.NewParseErr("hexBlob", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
@@ -743,7 +749,7 @@ func (recv NativeTypes) DecodeFromStream(s *scan.Stream) (result NativeTypes, er
 			}
 			result.LegacyIP = net.ParseIP(sv)
 			if result.LegacyIP == nil {
-				return result, decode.NewParseErr("legacyIP", s.Offset(), &net.ParseError{Type: "IP address", Text: string(sv)})
+				return result, decode.NewParseErr("legacyIP", s.Offset(), &net.ParseError{Type: "IP address", Text: strings.Clone(sv)})
 			}
 		case "secDur":
 			err = s.ConsumeColon()
@@ -1367,7 +1373,7 @@ func (recv ByteArrays) DecodeFromStream(s *scan.Stream) (result ByteArrays, err 
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("arr", s.Offset(), err)
+					return result, decode.NewParseErr("arr", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
 				}
 			}
 			var idx0 int
@@ -1388,7 +1394,7 @@ func (recv ByteArrays) DecodeFromStream(s *scan.Stream) (result ByteArrays, err 
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("arr", s.Offset(), err)
+						return result, decode.NewParseErr("arr", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {

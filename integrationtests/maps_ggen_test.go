@@ -468,14 +468,14 @@ func (recv MapStruct) DecodeFromStream(s *scan.Stream) (result MapStruct, err er
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("addresses", s.Offset(), err)
+					return result, decode.NewParseErr("addresses", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("addresses", s.Offset(), err)
+							return result, decode.NewParseErr("addresses", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
@@ -496,7 +496,7 @@ func (recv MapStruct) DecodeFromStream(s *scan.Stream) (result MapStruct, err er
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("addresses", s.Offset(), err)
+					return result, decode.NewParseErr("addresses", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 				}
 			}
 			if s.Bytes()[s.Pos] == '}' {
@@ -520,7 +520,7 @@ func (recv MapStruct) DecodeFromStream(s *scan.Stream) (result MapStruct, err er
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("addresses", s.Offset(), err)
+						return result, decode.NewParseErr("addresses", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 					}
 				}
 				if s.Bytes()[s.Pos] != ':' {
@@ -543,7 +543,7 @@ func (recv MapStruct) DecodeFromStream(s *scan.Stream) (result MapStruct, err er
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("addresses", s.Offset(), err)
+						return result, decode.NewParseErr("addresses", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
@@ -578,14 +578,14 @@ func (recv MapStruct) DecodeFromStream(s *scan.Stream) (result MapStruct, err er
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("counts", s.Offset(), err)
+					return result, decode.NewParseErr("counts", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("counts", s.Offset(), err)
+							return result, decode.NewParseErr("counts", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
@@ -605,7 +605,7 @@ func (recv MapStruct) DecodeFromStream(s *scan.Stream) (result MapStruct, err er
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("counts", s.Offset(), err)
+						return result, decode.NewParseErr("counts", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 					}
 				}
 				if s.Bytes()[s.Pos] == '}' {
@@ -629,7 +629,7 @@ func (recv MapStruct) DecodeFromStream(s *scan.Stream) (result MapStruct, err er
 					}
 					if s.Pos >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("counts", s.Offset(), err)
+							return result, decode.NewParseErr("counts", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 						}
 					}
 					if s.Bytes()[s.Pos] != ':' {
@@ -652,7 +652,7 @@ func (recv MapStruct) DecodeFromStream(s *scan.Stream) (result MapStruct, err er
 					}
 					if s.Pos >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("counts", s.Offset(), err)
+							return result, decode.NewParseErr("counts", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 						}
 					}
 					if s.Bytes()[s.Pos] == ',' {
@@ -691,14 +691,14 @@ func (recv MapStruct) DecodeFromStream(s *scan.Stream) (result MapStruct, err er
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("labels", s.Offset(), err)
+					return result, decode.NewParseErr("labels", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("labels", s.Offset(), err)
+							return result, decode.NewParseErr("labels", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
@@ -719,7 +719,7 @@ func (recv MapStruct) DecodeFromStream(s *scan.Stream) (result MapStruct, err er
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("labels", s.Offset(), err)
+					return result, decode.NewParseErr("labels", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 				}
 			}
 			if s.Bytes()[s.Pos] == '}' {
@@ -743,7 +743,7 @@ func (recv MapStruct) DecodeFromStream(s *scan.Stream) (result MapStruct, err er
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("labels", s.Offset(), err)
+						return result, decode.NewParseErr("labels", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 					}
 				}
 				if s.Bytes()[s.Pos] != ':' {
@@ -766,7 +766,7 @@ func (recv MapStruct) DecodeFromStream(s *scan.Stream) (result MapStruct, err er
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("labels", s.Offset(), err)
+						return result, decode.NewParseErr("labels", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
@@ -1410,14 +1410,14 @@ func (recv MapDiveStruct) DecodeFromStream(s *scan.Stream) (result MapDiveStruct
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("clamped", s.Offset(), err)
+					return result, decode.NewParseErr("clamped", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("clamped", s.Offset(), err)
+							return result, decode.NewParseErr("clamped", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
@@ -1438,7 +1438,7 @@ func (recv MapDiveStruct) DecodeFromStream(s *scan.Stream) (result MapDiveStruct
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("clamped", s.Offset(), err)
+					return result, decode.NewParseErr("clamped", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 				}
 			}
 			if s.Bytes()[s.Pos] == '}' {
@@ -1462,7 +1462,7 @@ func (recv MapDiveStruct) DecodeFromStream(s *scan.Stream) (result MapDiveStruct
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("clamped", s.Offset(), err)
+						return result, decode.NewParseErr("clamped", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 					}
 				}
 				if s.Bytes()[s.Pos] != ':' {
@@ -1491,7 +1491,7 @@ func (recv MapDiveStruct) DecodeFromStream(s *scan.Stream) (result MapDiveStruct
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("clamped", s.Offset(), err)
+						return result, decode.NewParseErr("clamped", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
@@ -1526,14 +1526,14 @@ func (recv MapDiveStruct) DecodeFromStream(s *scan.Stream) (result MapDiveStruct
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("counts", s.Offset(), err)
+					return result, decode.NewParseErr("counts", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("counts", s.Offset(), err)
+							return result, decode.NewParseErr("counts", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
@@ -1554,7 +1554,7 @@ func (recv MapDiveStruct) DecodeFromStream(s *scan.Stream) (result MapDiveStruct
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("counts", s.Offset(), err)
+					return result, decode.NewParseErr("counts", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 				}
 			}
 			if s.Bytes()[s.Pos] == '}' {
@@ -1578,7 +1578,7 @@ func (recv MapDiveStruct) DecodeFromStream(s *scan.Stream) (result MapDiveStruct
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("counts", s.Offset(), err)
+						return result, decode.NewParseErr("counts", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 					}
 				}
 				if s.Bytes()[s.Pos] != ':' {
@@ -1607,7 +1607,7 @@ func (recv MapDiveStruct) DecodeFromStream(s *scan.Stream) (result MapDiveStruct
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("counts", s.Offset(), err)
+						return result, decode.NewParseErr("counts", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
@@ -1642,14 +1642,14 @@ func (recv MapDiveStruct) DecodeFromStream(s *scan.Stream) (result MapDiveStruct
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("names", s.Offset(), err)
+					return result, decode.NewParseErr("names", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("names", s.Offset(), err)
+							return result, decode.NewParseErr("names", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
@@ -1670,7 +1670,7 @@ func (recv MapDiveStruct) DecodeFromStream(s *scan.Stream) (result MapDiveStruct
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("names", s.Offset(), err)
+					return result, decode.NewParseErr("names", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 				}
 			}
 			if s.Bytes()[s.Pos] == '}' {
@@ -1694,7 +1694,7 @@ func (recv MapDiveStruct) DecodeFromStream(s *scan.Stream) (result MapDiveStruct
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("names", s.Offset(), err)
+						return result, decode.NewParseErr("names", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 					}
 				}
 				if s.Bytes()[s.Pos] != ':' {
@@ -1721,7 +1721,7 @@ func (recv MapDiveStruct) DecodeFromStream(s *scan.Stream) (result MapDiveStruct
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("names", s.Offset(), err)
+						return result, decode.NewParseErr("names", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
@@ -2721,14 +2721,14 @@ func (recv NamedValMaps) DecodeFromStream(s *scan.Stream) (result NamedValMaps, 
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("b", s.Offset(), err)
+					return result, decode.NewParseErr("b", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("b", s.Offset(), err)
+							return result, decode.NewParseErr("b", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
@@ -2749,7 +2749,7 @@ func (recv NamedValMaps) DecodeFromStream(s *scan.Stream) (result NamedValMaps, 
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("b", s.Offset(), err)
+					return result, decode.NewParseErr("b", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 				}
 			}
 			if s.Bytes()[s.Pos] == '}' {
@@ -2773,7 +2773,7 @@ func (recv NamedValMaps) DecodeFromStream(s *scan.Stream) (result NamedValMaps, 
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("b", s.Offset(), err)
+						return result, decode.NewParseErr("b", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 					}
 				}
 				if s.Bytes()[s.Pos] != ':' {
@@ -2796,7 +2796,7 @@ func (recv NamedValMaps) DecodeFromStream(s *scan.Stream) (result NamedValMaps, 
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("b", s.Offset(), err)
+						return result, decode.NewParseErr("b", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
@@ -2831,14 +2831,14 @@ func (recv NamedValMaps) DecodeFromStream(s *scan.Stream) (result NamedValMaps, 
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("f", s.Offset(), err)
+					return result, decode.NewParseErr("f", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("f", s.Offset(), err)
+							return result, decode.NewParseErr("f", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
@@ -2859,7 +2859,7 @@ func (recv NamedValMaps) DecodeFromStream(s *scan.Stream) (result NamedValMaps, 
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("f", s.Offset(), err)
+					return result, decode.NewParseErr("f", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 				}
 			}
 			if s.Bytes()[s.Pos] == '}' {
@@ -2883,7 +2883,7 @@ func (recv NamedValMaps) DecodeFromStream(s *scan.Stream) (result NamedValMaps, 
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("f", s.Offset(), err)
+						return result, decode.NewParseErr("f", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 					}
 				}
 				if s.Bytes()[s.Pos] != ':' {
@@ -2906,7 +2906,7 @@ func (recv NamedValMaps) DecodeFromStream(s *scan.Stream) (result NamedValMaps, 
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("f", s.Offset(), err)
+						return result, decode.NewParseErr("f", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
@@ -2941,14 +2941,14 @@ func (recv NamedValMaps) DecodeFromStream(s *scan.Stream) (result NamedValMaps, 
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("i", s.Offset(), err)
+					return result, decode.NewParseErr("i", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("i", s.Offset(), err)
+							return result, decode.NewParseErr("i", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
@@ -2969,7 +2969,7 @@ func (recv NamedValMaps) DecodeFromStream(s *scan.Stream) (result NamedValMaps, 
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("i", s.Offset(), err)
+					return result, decode.NewParseErr("i", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 				}
 			}
 			if s.Bytes()[s.Pos] == '}' {
@@ -2993,7 +2993,7 @@ func (recv NamedValMaps) DecodeFromStream(s *scan.Stream) (result NamedValMaps, 
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("i", s.Offset(), err)
+						return result, decode.NewParseErr("i", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 					}
 				}
 				if s.Bytes()[s.Pos] != ':' {
@@ -3016,7 +3016,7 @@ func (recv NamedValMaps) DecodeFromStream(s *scan.Stream) (result NamedValMaps, 
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("i", s.Offset(), err)
+						return result, decode.NewParseErr("i", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
@@ -3051,14 +3051,14 @@ func (recv NamedValMaps) DecodeFromStream(s *scan.Stream) (result NamedValMaps, 
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("u", s.Offset(), err)
+					return result, decode.NewParseErr("u", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("u", s.Offset(), err)
+							return result, decode.NewParseErr("u", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
@@ -3079,7 +3079,7 @@ func (recv NamedValMaps) DecodeFromStream(s *scan.Stream) (result NamedValMaps, 
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("u", s.Offset(), err)
+					return result, decode.NewParseErr("u", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 				}
 			}
 			if s.Bytes()[s.Pos] == '}' {
@@ -3103,7 +3103,7 @@ func (recv NamedValMaps) DecodeFromStream(s *scan.Stream) (result NamedValMaps, 
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("u", s.Offset(), err)
+						return result, decode.NewParseErr("u", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 					}
 				}
 				if s.Bytes()[s.Pos] != ':' {
@@ -3126,7 +3126,7 @@ func (recv NamedValMaps) DecodeFromStream(s *scan.Stream) (result NamedValMaps, 
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("u", s.Offset(), err)
+						return result, decode.NewParseErr("u", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {

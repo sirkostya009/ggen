@@ -41,7 +41,7 @@ type Foo struct {
 `
 	file := writeGoFile(t, src)
 
-	structs, pkg, _, _, err := parseFile(file, []string{"Foo"})
+	structs, pkg, _, _, _, err := parseFile(file, []string{"Foo"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +90,7 @@ type Unrelated struct {
 `
 	file := writeGoFile(t, src)
 
-	structs, _, _, _, err := parseFile(file, []string{"Parent"})
+	structs, _, _, _, _, err := parseFile(file, []string{"Parent"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +123,7 @@ type A struct { X int ` + "`" + `json:"x"` + "`" + ` }
 type B struct { Y int ` + "`" + `json:"y"` + "`" + ` }
 `
 	file := writeGoFile(t, src)
-	_, _, _, _, err := parseFile(file, nil)
+	_, _, _, _, _, err := parseFile(file, nil)
 	if err == nil {
 		t.Fatal("expected error when no annotation and no name filter")
 	}
@@ -142,7 +142,7 @@ type A struct { X int ` + "`" + `json:"x"` + "`" + ` }
 type B struct { Y int ` + "`" + `json:"y"` + "`" + ` }
 `
 	file := writeGoFile(t, src)
-	structs, _, _, _, err := parseFile(file, []string{"A"})
+	structs, _, _, _, _, err := parseFile(file, []string{"A"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +154,7 @@ type B struct { Y int ` + "`" + `json:"y"` + "`" + ` }
 func TestParseFile_notFound(t *testing.T) {
 	t.Parallel()
 	file := writeGoFile(t, "package test\ntype Bar struct{}\n")
-	if _, _, _, _, err := parseFile(file, []string{"Foo"}); err == nil {
+	if _, _, _, _, _, err := parseFile(file, []string{"Foo"}); err == nil {
 		t.Fatal("expected error for missing struct")
 	}
 }
@@ -171,7 +171,7 @@ type Derived struct {
 }
 `
 	file := writeGoFile(t, src)
-	structs, _, _, _, err := parseFile(file, []string{"Derived"})
+	structs, _, _, _, _, err := parseFile(file, []string{"Derived"})
 	if err != nil {
 		t.Fatalf("unexpected: %v", err)
 	}
@@ -493,7 +493,7 @@ type Msg struct {
 		t.Fatal(err)
 	}
 
-	structs, pkg, _, _, err := parseFile(goFile, []string{"Msg"})
+	structs, pkg, _, _, _, err := parseFile(goFile, []string{"Msg"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -683,6 +683,99 @@ func TestGenerate_round8Fixes(t *testing.T) {
 		f = FieldInfo{GoName: "N", GoType: "Name", Kind: KindStruct, OmitEmpty: true}
 		if got := fieldSkipExpr(f, "s.N"); got != `s.N != ""` {
 			t.Errorf("omitempty named string: got %q", got)
+		}
+	})
+}
+
+// Round-9 parse-layer pins.
+func TestParseFile_round9(t *testing.T) {
+	t.Run("tab_after_directive", func(t *testing.T) {
+		// go:generate accepts tab separators; a tab used to silently drop
+		// the whole annotation (no output, exit 0).
+		file := writeGoFile(t, "package test\n//ggen:generate\tmarshal\ntype A struct{ X int `json:\"x\"` }\n")
+		structs, _, _, _, _, err := parseFile(file, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(structs) != 1 || !structs[0].Marshal {
+			t.Fatalf("tab-separated annotation dropped: %+v", structs)
+		}
+	})
+
+	t.Run("depth_dominance", func(t *testing.T) {
+		// A depth-1 promoted field beats a depth-2 one (stdlib dominant-field
+		// rule); the flat resolver used to drop BOTH → `{}` on the wire.
+		src := `package test
+//ggen:generate
+type Top struct {
+	A
+	B
+}
+type A struct{ X int ` + "`json:\"x\"`" + ` }
+type B struct{ C }
+type C struct{ X int ` + "`json:\"x\"`" + ` }
+`
+		file := writeGoFile(t, src)
+		structs, _, _, _, _, err := parseFile(file, []string{"Top"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var top *StructInfo
+		for i := range structs {
+			if structs[i].Name == "Top" {
+				top = &structs[i]
+			}
+		}
+		if top == nil {
+			t.Fatal("Top not returned")
+		}
+		var xs []FieldInfo
+		for _, f := range top.Fields {
+			if f.JSONName == "x" {
+				xs = append(xs, f)
+			}
+		}
+		if len(xs) != 1 || xs[0].StructName != "A" {
+			t.Fatalf("want exactly A.X to survive, got %+v", xs)
+		}
+	})
+
+	t.Run("cyclic_embedding_errors", func(t *testing.T) {
+		// Invalid Go, but ggen walks syntax first: must diagnose, not
+		// stack-overflow the generator.
+		src := `package test
+//ggen:generate
+type A struct{ B; X int ` + "`json:\"x\"`" + ` }
+type B struct{ A }
+`
+		file := writeGoFile(t, src)
+		_, _, _, _, _, err := parseFile(file, []string{"A"})
+		if err == nil || !strings.Contains(err.Error(), "cyclic embedding") {
+			t.Fatalf("want cyclic-embedding diagnostic, got %v", err)
+		}
+	})
+
+	t.Run("map_value_sibling_generated", func(t *testing.T) {
+		// A struct reached only through map[string]Inner used to miss
+		// generatedTypes and fall to the json.Unmarshal fallback.
+		src := `package test
+//ggen:generate
+type Outer struct{ M map[string]Inner ` + "`json:\"m\"`" + ` }
+type Inner struct{ N int ` + "`json:\"n\"`" + ` }
+`
+		file := writeGoFile(t, src)
+		structs, _, _, _, _, err := parseFile(file, []string{"Outer"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		found := false
+		for _, s := range structs {
+			if s.Name == "Inner" {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("map-valued Inner not queued: %+v", structs)
 		}
 	})
 }

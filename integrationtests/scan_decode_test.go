@@ -1078,3 +1078,34 @@ func TestParseError_StreamPosIsPayloadOffset(t *testing.T) {
 		}
 	}
 }
+
+// Round-9: generated value-head refills map a DRAINED reader to the same
+// grammar sentinel the bytes path reports for the truncation (scan.NotEOF in
+// streamReadMore) — raw io.ErrUnexpectedEOF used to leak at null-peek/map/
+// slice/variant heads. Sweeps every prefix cut of a null-bearing payload.
+func TestTruncationSentinelParity(t *testing.T) {
+	t.Parallel()
+	payload := `{"id":1,"tags":null,"props":null,"children":null,"name":"x"}`
+	for cut := 1; cut < len(payload); cut++ {
+		bytesErr, streamErr := decodeBothPaths[Node](payload[:cut])
+		if bytesErr == nil || streamErr == nil {
+			t.Fatalf("cut %d accepted: bytes=%v stream=%v", cut, bytesErr, streamErr)
+		}
+		if errors.Is(streamErr, io.ErrUnexpectedEOF) && !errors.Is(bytesErr, io.ErrUnexpectedEOF) {
+			t.Errorf("cut %d %q: stream leaks raw EOF (%v), bytes says %v",
+				cut, payload[:cut], streamErr, bytesErr)
+		}
+	}
+}
+
+// Round-9: `format:array` byte elements reject >255 with ErrNumberOverflow
+// (encoding/json v1 and jsonv2 both reject) instead of silently wrapping.
+func TestFormatArray_ByteOverflow(t *testing.T) {
+	t.Parallel()
+	bytesErr, streamErr := decodeBothPaths[NativeTypes](`{"byteArray":[300]}`)
+	for path, err := range map[string]error{"bytes": bytesErr, "stream": streamErr} {
+		if !errors.Is(err, scan.ErrNumberOverflow) {
+			t.Errorf("%s: got %v, want ErrNumberOverflow", path, err)
+		}
+	}
+}

@@ -14,7 +14,7 @@ func BenchmarkGenerate(b *testing.B) {
 	if _, err := os.Stat(src); err != nil {
 		b.Skipf("no shared_test.go at %s: %v", src, err)
 	}
-	structs, pkg, _, _, err := parseFile(src, nil)
+	structs, pkg, _, _, _, err := parseFile(src, nil)
 	if err != nil {
 		b.Fatal(err)
 	}
