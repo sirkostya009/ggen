@@ -26,6 +26,14 @@ type Decoder[T any] interface {
 	DecodeFrom(data []byte) (T, int, error)
 }
 
+// Unmarshaler is a type decodable on both paths — bytes ([Decoder]) and
+// stream ([StreamDecoder]). Every ggen-generated struct satisfies it; use it
+// to constrain code that wants to pick the path at the call site.
+type Unmarshaler[T any] interface {
+	Decoder[T]
+	StreamDecoder[T]
+}
+
 // UnmarshalSlice decodes a JSON array of T, delegating each element to
 // T.DecodeFrom. Errors route through [NewParseErr].
 func UnmarshalSlice[T Decoder[T]](data []byte) ([]T, error) {

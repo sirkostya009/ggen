@@ -367,6 +367,9 @@ s.Seq[T](prev...)                          // iter.Seq2[T, error]; NDJSON/concat
                                            // reuses one value per run
 T{}.DecodeFromStream(s)                    // the method Value wraps
 
+// Unmarshaler[T] = Decoder[T] + StreamDecoder[T] — constrain on it to pick
+// the path at the call site; every generated struct satisfies it
+
 // bytes array walkers
 ggen.UnmarshalSlice[T](data)             // ([]T, error)
 ggen.ReadSlice[T](r)                     // ([]T, error)

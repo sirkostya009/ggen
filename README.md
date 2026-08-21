@@ -600,7 +600,7 @@ var bufPool = sync.Pool{New: func() any {
 	return ggen.NewStream(nil, make([]byte, 0, 512))
 }}
 
-func parseRequest[T ggen.Decoder[T]](r *http.Request) (T, error) {
+func parseRequest[T ggen.Unmarshaler[T]](r *http.Request) (T, error) {
 	var zero T
 	s := bufPool.Get().(*ggen.Stream)
 	// grow the buf to match incoming content length (if available)
