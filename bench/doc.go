@@ -13,11 +13,11 @@ import (
 	"bytes"
 	"encoding/json"
 
-	"github.com/sirkostya009/ggen/encode"
+	"github.com/sirkostya009/ggen"
 )
 
-func mustMarshal[T encode.Marshaler](v T) []byte {
-	out, err := encode.Marshal(v)
+func mustMarshal[T ggen.Marshaler](v T) []byte {
+	out, err := ggen.Marshal(v)
 	if err != nil {
 		panic(err)
 	}
@@ -25,7 +25,7 @@ func mustMarshal[T encode.Marshaler](v T) []byte {
 }
 
 // canonicalize round-trips a payload through encoding/json v1, which emits
-// map keys sorted — freezing the entry order that encode.Marshal leaves to
+// map keys sorted — freezing the entry order that ggen.Marshal leaves to
 // Go's randomized map iteration. UseNumber keeps numeric text verbatim.
 // Needed only by MapHeavy (the one multi-entry-map payload); the cost is
 // that ALL object keys sort (struct fields too), trading natural field

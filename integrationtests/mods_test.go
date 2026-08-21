@@ -10,9 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sirkostya009/ggen/decode"
+	"github.com/sirkostya009/ggen"
 	_ "github.com/sirkostya009/ggen/integrationtests/thirdparty"
-	"github.com/sirkostya009/ggen/validation"
 )
 
 // ModStruct exercises pipe mods: transforms applied after decode, before
@@ -99,9 +98,9 @@ func RejectShort(s string) (string, error) {
 func TestFallibleMod_errorCarriesPathAndPos(t *testing.T) {
 	t.Parallel()
 	_, _, err := FallibleModStruct{}.DecodeFrom([]byte(`{"email":"ab"}`))
-	var pe *decode.ParseError
+	var pe *ggen.ParseError
 	if !errors.As(err, &pe) {
-		t.Fatalf("got %T %v, want *decode.ParseError", err, err)
+		t.Fatalf("got %T %v, want *ggen.ParseError", err, err)
 	}
 	if len(pe.Path) == 0 || pe.Path[0] != "email" {
 		t.Errorf("Path = %v, want [email]", pe.Path)
@@ -132,15 +131,15 @@ func TestFallibleMod_shortCircuitsValidation(t *testing.T) {
 }
 
 // In multierr mode a fallible mod still returns a single parse error, not
-// validation.Errors.
+// ggen.Errors.
 func TestFallibleMod_multierrStillShortCircuits(t *testing.T) {
 	t.Parallel()
 	_, _, err := FallibleModMultierrStruct{}.DecodeFrom([]byte(`{"email":"x"}`))
 	if err == nil {
 		t.Fatal("expected mod rejection in multierr mode")
 	}
-	if _, ok := err.(validation.Errors); ok {
-		t.Errorf("mod error wrapped into validation.Errors; should be a plain parse error: %v", err)
+	if _, ok := err.(ggen.Errors); ok {
+		t.Errorf("mod error wrapped into ggen.Errors; should be a plain parse error: %v", err)
 	}
 	if !strings.Contains(err.Error(), "rejected by mod") {
 		t.Errorf("expected mod error in multierr mode, got: %v", err)
@@ -232,15 +231,15 @@ func TestNestedMultierr_drainsInnerValidationErrors(t *testing.T) {
 	t.Parallel()
 	// "abcdef" passes the mod but fails inner contains=@ + minlen=10; outer also
 	// fails on name (required/minlen=2) and code (lte=100). Inner returns a
-	// validation.Errors aggregate the outer must drain.
+	// ggen.Errors aggregate the outer must drain.
 	in := []byte(`{"inner":{"email":"abcdef"},"name":"","code":200}`)
 	_, _, err := NestedMultierrStruct{}.DecodeFrom(in)
 	if err == nil {
 		t.Fatal("expected aggregated errors")
 	}
-	leaves, ok := err.(validation.Errors)
+	leaves, ok := err.(ggen.Errors)
 	if !ok {
-		t.Fatalf("err = %T, want validation.Errors; got: %v", err, err)
+		t.Fatalf("err = %T, want ggen.Errors; got: %v", err, err)
 	}
 	if len(leaves) < 4 {
 		t.Errorf("got %d leaves, want >= 4 (inner+outer combined): %v", len(leaves), leaves)
@@ -257,8 +256,8 @@ func TestNestedMultierr_drainsInnerValidationErrors(t *testing.T) {
 		}
 	}
 	// Drained inner leaves carry FULL-payload offsets — the multierr drain
-	// rebases each via validation.ShiftPos at the nested call site.
-	var ce *validation.ContainsError
+	// rebases each via ggen.ShiftPos at the nested call site.
+	var ce *ggen.ContainsError
 	if !errors.As(err, &ce) {
 		t.Fatalf("no ContainsError leaf: %v", leaves)
 	}
@@ -269,28 +268,28 @@ func TestNestedMultierr_drainsInnerValidationErrors(t *testing.T) {
 
 // pathOf reads the Path slice off a validation error, via the pathSegments
 // interface if present, else a type switch over the leaf types this test uses.
-func pathOf(e validation.Error) []string {
+func pathOf(e ggen.Error) []string {
 	type pathed interface{ pathSegments() []string }
 	if p, ok := e.(pathed); ok {
 		return p.pathSegments()
 	}
 	switch v := e.(type) {
-	case *validation.ContainsError:
+	case *ggen.ContainsError:
 		return v.Path
-	case *validation.MinLenError:
+	case *ggen.MinLenError:
 		return v.Path
-	case *validation.LTEError:
+	case *ggen.LTEError:
 		return v.Path
-	case *validation.GTEError:
+	case *ggen.GTEError:
 		return v.Path
-	case *validation.RequiredError:
+	case *ggen.RequiredError:
 		return v.Path
 	}
 	return nil
 }
 
 // An inner parse error returns immediately (not drained), wrapped in
-// *decode.ParseError.
+// *ggen.ParseError.
 func TestNestedMultierr_innerParseErrorReturnsEarly(t *testing.T) {
 	t.Parallel()
 	// Inner email is a number, not a string.
@@ -299,8 +298,8 @@ func TestNestedMultierr_innerParseErrorReturnsEarly(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected parse error")
 	}
-	if _, ok := err.(validation.Errors); ok {
-		t.Errorf("parse error wrapped in validation.Errors: %v", err)
+	if _, ok := err.(ggen.Errors); ok {
+		t.Errorf("parse error wrapped in ggen.Errors: %v", err)
 	}
 }
 
@@ -326,7 +325,7 @@ func TestQuotedPipeParts(t *testing.T) {
 	if _, _, err = (QuotedParts{}).DecodeFrom([]byte(`{"city":"'New York'","note":""}`)); err == nil {
 		t.Error("literal-quote value must be rejected (quote leak into allowed set)")
 	}
-	var oe *validation.OneOfError
+	var oe *ggen.OneOfError
 	_, _, err = QuotedParts{}.DecodeFrom([]byte(`{"city":"Boston","note":""}`))
 	if !errors.As(err, &oe) {
 		t.Fatalf("want OneOfError, got %v", err)
@@ -351,12 +350,12 @@ func TestCaseValidators(t *testing.T) {
 	if err != nil || got.Slug != "abc-123" {
 		t.Fatalf("caseless+correct case must pass: %+v %v", got, err)
 	}
-	var le *validation.LowerError
+	var le *ggen.LowerError
 	_, _, err = CaseRules{}.DecodeFrom([]byte(`{"slug":"aBc","code":"OK"}`))
 	if !errors.As(err, &le) || le.Value != "aBc" {
 		t.Errorf("want LowerError{aBc}, got %v", err)
 	}
-	var ue *validation.UpperError
+	var ue *ggen.UpperError
 	_, _, err = CaseRules{}.DecodeFrom([]byte(`{"slug":"ok","code":"AbC"}`))
 	if !errors.As(err, &ue) || ue.Value != "AbC" {
 		t.Errorf("want UpperError{AbC}, got %v", err)
@@ -402,16 +401,16 @@ func TestMultierr_NoCursorDesyncOnSingleErrorCallee(t *testing.T) {
 		strings.Contains(msg, "invalid object") || strings.Contains(msg, "invalid array") {
 		t.Errorf("cursor desync artifact: %v", msg)
 	}
-	if _, ok := errors.AsType[*validation.MinLenError](err); !ok {
+	if _, ok := errors.AsType[*ggen.MinLenError](err); !ok {
 		t.Errorf("inner failure not reported: %v", err)
 	}
 
 	// A multierr callee DOES consume the whole value, so the parent still
 	// collects its own field failures alongside the inner one.
 	_, _, err = DrainOuter{}.DecodeFrom([]byte(`{"ime":{"a":"x","b":"bee"},"name":"","tail":99}`))
-	errs, ok := err.(validation.Errors)
+	errs, ok := err.(ggen.Errors)
 	if !ok {
-		t.Fatalf("want validation.Errors, got %T: %v", err, err)
+		t.Fatalf("want ggen.Errors, got %T: %v", err, err)
 	}
 	if len(errs) < 3 {
 		t.Errorf("got %d leaves, want >= 3 (ime.a + name + tail): %v", len(errs), errs)

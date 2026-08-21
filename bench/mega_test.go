@@ -12,8 +12,7 @@ import (
 
 	"github.com/bytedance/sonic"
 	"github.com/mailru/easyjson"
-	"github.com/sirkostya009/ggen/encode"
-	"github.com/sirkostya009/ggen/scan"
+	"github.com/sirkostya009/ggen"
 )
 
 func reportGC(b *testing.B, pre, post runtime.MemStats) {
@@ -77,7 +76,7 @@ func BenchmarkMega_Marshal(b *testing.B) {
 		{"sonic", func() ([]byte, error) { return sonic.Marshal(MegaValuePlain) }},
 		{"sonic_fast", func() ([]byte, error) { return sonic.ConfigFastest.Marshal(MegaValuePlain) }},
 		{"easyjson", func() ([]byte, error) { return MegaValue.MarshalJSON() }},
-		{"ggen", func() ([]byte, error) { return encode.Marshal(MegaValue) }},
+		{"ggen", func() ([]byte, error) { return ggen.Marshal(MegaValue) }},
 	}
 
 	for _, c := range marshalCodecs {
@@ -149,7 +148,7 @@ func BenchmarkMega_Reader(b *testing.B) {
 		{"ggen stream", func(s *readerState) error {
 			s.r.Reset(MegaPayload)
 			var err error
-			var _st scan.Stream
+			var _st ggen.Stream
 			_st.Reset(&s.r, s.buf[:0])
 			_, err = Node{}.DecodeFromStream(&_st)
 			s.buf = _st.Bytes()
@@ -184,7 +183,7 @@ func BenchmarkMega_Reader(b *testing.B) {
 // recursion cost from mega's fanout work. As the maximally depth-sensitive
 // bench it's also the one that shows the recursion depth-cap cost (cli
 // CLAUDE.md opt #51): +5.4% scalar, +0.4% (flat) avx512 vs uncapped, from the
-// per-level depth thread + `> scan.MaxDepth` compare in Node's
+// per-level depth thread + `> the runtime maxDepth cap (10000)` compare in Node's
 // decodeFromDepth core. Mega (realistic shallow nesting) is flat — the compare
 // hides under memory latency there.
 //

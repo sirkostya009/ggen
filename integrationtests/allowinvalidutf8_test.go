@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sirkostya009/ggen/scan"
+	"github.com/sirkostya009/ggen"
 )
 
 // PermissiveDoc opts out of decode UTF-8 validation: raw invalid bytes flow
@@ -25,7 +25,7 @@ type PermissiveDoc struct {
 }
 
 // TestAllowInvalidUTF8 pins the permissive contract on every string-producing
-// shape (inline window, long-span scan.String fall, escape arm, slice elem,
+// shape (inline window, long-span ggen.String fall, escape arm, slice elem,
 // map key+value, raw capture), bytes + stream, against the strict default
 // (Address) as control.
 func TestAllowInvalidUTF8(t *testing.T) {
@@ -79,7 +79,7 @@ func TestAllowInvalidUTF8(t *testing.T) {
 			}
 			c.check(t, got)
 			for _, bufCap := range []int{8, 512} {
-				var s scan.Stream
+				var s ggen.Stream
 				s.Reset(&chunkReader{data: []byte(c.payload), max: 3}, make([]byte, 0, bufCap))
 				sGot, sErr := PermissiveDoc{}.DecodeFromStream(&s)
 				if sErr != nil {

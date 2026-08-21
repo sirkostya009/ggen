@@ -8,8 +8,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/sirkostya009/ggen/decode"
-	"github.com/sirkostya009/ggen/scan"
+	"github.com/sirkostya009/ggen"
 )
 
 //ggen:generate
@@ -90,7 +89,7 @@ func TestVariants_BytesPath(t *testing.T) {
 func TestVariants_StreamPath(t *testing.T) {
 	t.Parallel()
 	in := []byte(`{"count":"7","price":{"amount":42},"opt":null}`)
-	var s scan.Stream
+	var s ggen.Stream
 	s.Reset(bytes.NewReader(in), make([]byte, 0, len(in)))
 	got, err := LooseThing{}.DecodeFromStream(&s)
 	if err != nil {
@@ -138,7 +137,7 @@ func TestVariants_NamedPrimAndPointer(t *testing.T) {
 			if path == "bytes" {
 				got, _, err = ConvNamed{}.DecodeFrom([]byte(c.payload))
 			} else {
-				var s scan.Stream
+				var s ggen.Stream
 				s.Reset(bytes.NewReader([]byte(c.payload)), make([]byte, 0, 4))
 				got, err = ConvNamed{}.DecodeFromStream(&s)
 			}
@@ -166,9 +165,9 @@ func TestVariants_NamedPrimAndPointer(t *testing.T) {
 func TestVariant_converterErrorCarriesPathAndPos(t *testing.T) {
 	t.Parallel()
 	_, _, err := LooseThing{}.DecodeFrom([]byte(`{"count":"xyz"}`))
-	var pe *decode.ParseError
+	var pe *ggen.ParseError
 	if !errors.As(err, &pe) {
-		t.Fatalf("got %T %v, want *decode.ParseError", err, err)
+		t.Fatalf("got %T %v, want *ggen.ParseError", err, err)
 	}
 	if len(pe.Path) == 0 || pe.Path[0] != "count" {
 		t.Errorf("Path = %v, want [count]", pe.Path)
@@ -176,17 +175,16 @@ func TestVariant_converterErrorCarriesPathAndPos(t *testing.T) {
 	if pe.Pos <= 0 {
 		t.Errorf("Pos = %d, want a real offset", pe.Pos)
 	}
-	var ne *strconv.NumError
-	if !errors.As(err, &ne) {
+	if _, ok := errors.AsType[*strconv.NumError](err); !ok {
 		t.Errorf("wrapping hid the converter's own error: %v", err)
 	}
 
-	var st scan.Stream
+	var st ggen.Stream
 	st.Reset(bytes.NewReader([]byte(`{"count":"xyz"}`)), nil)
 	_, serr := LooseThing{}.DecodeFromStream(&st)
-	var spe *decode.ParseError
+	var spe *ggen.ParseError
 	if !errors.As(serr, &spe) {
-		t.Fatalf("stream: got %T %v, want *decode.ParseError", serr, serr)
+		t.Fatalf("stream: got %T %v, want *ggen.ParseError", serr, serr)
 	}
 	if len(spe.Path) == 0 || spe.Path[0] != "count" {
 		t.Errorf("stream: Path = %v, want [count]", spe.Path)

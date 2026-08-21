@@ -208,7 +208,7 @@ func TestGenerate_basic(t *testing.T) {
 		"package testpkg",
 		"func (recv TestStruct) DecodeFrom",
 		"seenName",
-		`validation.Required`,
+		`ggen.Required`,
 	} {
 		if !strings.Contains(s, want) {
 			t.Errorf("missing %q in output", want)
@@ -240,10 +240,10 @@ func TestGenerate_newValidators(t *testing.T) {
 	}
 	s := string(code)
 	for _, want := range []string{
-		`validation.IsAlphanum`,
-		`validation.IsURL`,
+		`ggen.IsAlphanum`,
+		`ggen.IsURL`,
 		`case "a", "b", "c"`,
-		`validation.GT`,
+		`ggen.GT`,
 	} {
 		if !strings.Contains(s, want) {
 			t.Errorf("missing %q in generated code", want)
@@ -605,7 +605,7 @@ func TestGenerate_syntheticFieldFlagPropagation(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if strings.Contains(string(code), "scan.String(data, i, true)") {
+		if strings.Contains(string(code), "ggen.String(data, i, true)") {
 			t.Errorf("inner string elems re-validate UTF-8 despite allowinvalidutf8:\n%s", code)
 		}
 	})
@@ -628,10 +628,10 @@ func TestGenerate_round8Fixes(t *testing.T) {
 		if strings.Contains(s, "unsafe.String(") {
 			t.Errorf("copy dropped — element still aliases input:\n%s", s)
 		}
-		if strings.Contains(s, "scan.String(data, i, true)") {
+		if strings.Contains(s, "ggen.String(data, i, true)") {
 			t.Errorf("allowinvalidutf8 dropped — element still validates:\n%s", s)
 		}
-		if !strings.Contains(s, "encode.AppendString(") {
+		if !strings.Contains(s, "ggen.AppendString(") {
 			t.Errorf("htmlescape dropped — NoHTML append emitted:\n%s", s)
 		}
 	})
@@ -643,7 +643,7 @@ func TestGenerate_round8Fixes(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !strings.Contains(string(code), "scan.Detach(v, data)") {
+		if !strings.Contains(string(code), "ggen.Detach(v, data)") {
 			t.Errorf("copy alias missing Detach:\n%s", code)
 		}
 	})

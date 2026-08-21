@@ -8,10 +8,7 @@ import (
 	"strings"
 	"unsafe"
 
-	"github.com/sirkostya009/ggen/decode"
-	"github.com/sirkostya009/ggen/encode"
-	"github.com/sirkostya009/ggen/scan"
-	"github.com/sirkostya009/ggen/validation"
+	"github.com/sirkostya009/ggen"
 )
 
 // Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
@@ -30,7 +27,7 @@ func (recv ArrMerge) DecodeFrom(data []byte) (result ArrMerge, i int, err error)
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
-		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 	}
 	i++
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -43,7 +40,7 @@ func (recv ArrMerge) DecodeFrom(data []byte) (result ArrMerge, i int, err error)
 	for {
 		var key string
 		if i >= len(data) || data[i] != '"' {
-			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrExpectString)
 		}
 		ke := i + 1
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
@@ -53,16 +50,16 @@ func (recv ArrMerge) DecodeFrom(data []byte) (result ArrMerge, i int, err error)
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i, true)
+			key, i, err = ggen.String(data, i, true)
 			if err != nil {
-				return result, i, decode.NewParseErr("", i, err)
+				return result, i, ggen.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 		}
 		i++
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -71,11 +68,11 @@ func (recv ArrMerge) DecodeFrom(data []byte) (result ArrMerge, i int, err error)
 		switch key {
 		case "ai":
 			if seenAI {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"ai"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"ai"}}
 			}
 			seenAI = true
 			if i >= len(data) || data[i] != '[' {
-				return result, i, decode.NewParseErr("ai", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("ai", i, ggen.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -85,14 +82,14 @@ func (recv ArrMerge) DecodeFrom(data []byte) (result ArrMerge, i int, err error)
 			if i < len(data) && data[i] != ']' {
 				for {
 					if idx0 >= 2 {
-						return result, i, &validation.LenError{Pos: i, Path: []string{"ai"}, Want: 2, Got: idx0}
+						return result, i, &ggen.LenError{Pos: i, Path: []string{"ai"}, Want: 2, Got: idx0}
 					}
 					result.AI[idx0] = MergeInner{}
 					var _n int
 					result.AI[idx0], _n, err = result.AI[idx0].DecodeFrom(data[i:])
 					i += _n
 					if err != nil {
-						return result, i, decode.NewParseErrShift("ai", i, _n, err)
+						return result, i, ggen.NewParseErrShift("ai", i, _n, err)
 					}
 					idx0++
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -104,7 +101,7 @@ func (recv ArrMerge) DecodeFrom(data []byte) (result ArrMerge, i int, err error)
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, decode.NewParseErr("ai", i, scan.ErrBadArray)
+							return result, i, ggen.NewParseErr("ai", i, ggen.ErrBadArray)
 						}
 						continue
 					}
@@ -112,19 +109,19 @@ func (recv ArrMerge) DecodeFrom(data []byte) (result ArrMerge, i int, err error)
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, decode.NewParseErr("ai", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("ai", i, ggen.ErrBadArray)
 			}
 			if idx0 != 2 {
-				return result, i, &validation.LenError{Pos: i, Path: []string{"ai"}, Want: 2, Got: idx0}
+				return result, i, &ggen.LenError{Pos: i, Path: []string{"ai"}, Want: 2, Got: idx0}
 			}
 			i++
 		case "am":
 			if seenAM {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"am"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"am"}}
 			}
 			seenAM = true
 			if i >= len(data) || data[i] != '[' {
-				return result, i, decode.NewParseErr("am", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("am", i, ggen.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -134,7 +131,7 @@ func (recv ArrMerge) DecodeFrom(data []byte) (result ArrMerge, i int, err error)
 			if i < len(data) && data[i] != ']' {
 				for {
 					if idx0 >= 2 {
-						return result, i, &validation.LenError{Pos: i, Path: []string{"am"}, Want: 2, Got: idx0}
+						return result, i, &ggen.LenError{Pos: i, Path: []string{"am"}, Want: 2, Got: idx0}
 					}
 					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 						i += 4
@@ -145,7 +142,7 @@ func (recv ArrMerge) DecodeFrom(data []byte) (result ArrMerge, i int, err error)
 						v, _n, err = v.DecodeFrom(data[i:])
 						i += _n
 						if err != nil {
-							return result, i, decode.NewParseErrShift("am[]", i, _n, err)
+							return result, i, ggen.NewParseErrShift("am[]", i, _n, err)
 						}
 						result.AM[idx0] = new(new(v))
 					}
@@ -159,7 +156,7 @@ func (recv ArrMerge) DecodeFrom(data []byte) (result ArrMerge, i int, err error)
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, decode.NewParseErr("am", i, scan.ErrBadArray)
+							return result, i, ggen.NewParseErr("am", i, ggen.ErrBadArray)
 						}
 						continue
 					}
@@ -167,19 +164,19 @@ func (recv ArrMerge) DecodeFrom(data []byte) (result ArrMerge, i int, err error)
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, decode.NewParseErr("am", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("am", i, ggen.ErrBadArray)
 			}
 			if idx0 != 2 {
-				return result, i, &validation.LenError{Pos: i, Path: []string{"am"}, Want: 2, Got: idx0}
+				return result, i, &ggen.LenError{Pos: i, Path: []string{"am"}, Want: 2, Got: idx0}
 			}
 			i++
 		case "ap":
 			if seenAP {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"ap"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"ap"}}
 			}
 			seenAP = true
 			if i >= len(data) || data[i] != '[' {
-				return result, i, decode.NewParseErr("ap", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("ap", i, ggen.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -190,7 +187,7 @@ func (recv ArrMerge) DecodeFrom(data []byte) (result ArrMerge, i int, err error)
 			if i < len(data) && data[i] != ']' {
 				for {
 					if idx0 >= 2 {
-						return result, i, &validation.LenError{Pos: i, Path: []string{"ap"}, Want: 2, Got: idx0}
+						return result, i, &ggen.LenError{Pos: i, Path: []string{"ap"}, Want: 2, Got: idx0}
 					}
 					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 						i += 4
@@ -205,7 +202,7 @@ func (recv ArrMerge) DecodeFrom(data []byte) (result ArrMerge, i int, err error)
 								i++
 							}
 							if i >= len(data) || data[i] == ']' {
-								return result, i, decode.NewParseErr("ap", i, scan.ErrBadArray)
+								return result, i, ggen.NewParseErr("ap", i, ggen.ErrBadArray)
 							}
 							continue
 						}
@@ -215,7 +212,7 @@ func (recv ArrMerge) DecodeFrom(data []byte) (result ArrMerge, i int, err error)
 					slab0[idx0], _n, err = slab0[idx0].DecodeFrom(data[i:])
 					i += _n
 					if err != nil {
-						return result, i, decode.NewParseErrShift("ap", i, _n, err)
+						return result, i, ggen.NewParseErrShift("ap", i, _n, err)
 					}
 					result.AP[idx0] = &slab0[idx0]
 					idx0++
@@ -228,7 +225,7 @@ func (recv ArrMerge) DecodeFrom(data []byte) (result ArrMerge, i int, err error)
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, decode.NewParseErr("ap", i, scan.ErrBadArray)
+							return result, i, ggen.NewParseErr("ap", i, ggen.ErrBadArray)
 						}
 						continue
 					}
@@ -236,15 +233,15 @@ func (recv ArrMerge) DecodeFrom(data []byte) (result ArrMerge, i int, err error)
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, decode.NewParseErr("ap", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("ap", i, ggen.ErrBadArray)
 			}
 			if idx0 != 2 {
-				return result, i, &validation.LenError{Pos: i, Path: []string{"ap"}, Want: 2, Got: idx0}
+				return result, i, &ggen.LenError{Pos: i, Path: []string{"ap"}, Want: 2, Got: idx0}
 			}
 			i++
 		case "si":
 			if seenSI {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"si"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"si"}}
 			}
 			seenSI = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -253,7 +250,7 @@ func (recv ArrMerge) DecodeFrom(data []byte) (result ArrMerge, i int, err error)
 				break
 			}
 			if i >= len(data) || data[i] != '[' {
-				return result, i, decode.NewParseErr("si", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("si", i, ggen.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -275,7 +272,7 @@ func (recv ArrMerge) DecodeFrom(data []byte) (result ArrMerge, i int, err error)
 					result.SI[len(result.SI)-1], _n, err = result.SI[len(result.SI)-1].DecodeFrom(data[i:])
 					i += _n
 					if err != nil {
-						return result, i, decode.NewParseErrShift("si", i, _n, err)
+						return result, i, ggen.NewParseErrShift("si", i, _n, err)
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -286,7 +283,7 @@ func (recv ArrMerge) DecodeFrom(data []byte) (result ArrMerge, i int, err error)
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, decode.NewParseErr("si", i, scan.ErrBadArray)
+							return result, i, ggen.NewParseErr("si", i, ggen.ErrBadArray)
 						}
 						continue
 					}
@@ -294,17 +291,17 @@ func (recv ArrMerge) DecodeFrom(data []byte) (result ArrMerge, i int, err error)
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, decode.NewParseErr("si", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("si", i, ggen.ErrBadArray)
 			}
 			i++
 		default:
-			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 		}
 		if data[i] == ',' {
 			i++
@@ -317,11 +314,11 @@ func (recv ArrMerge) DecodeFrom(data []byte) (result ArrMerge, i int, err error)
 			i++
 			return result, i, nil
 		}
-		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 	}
 }
 
-func (recv ArrMerge) DecodeFromStream(s *scan.Stream) (result ArrMerge, err error) {
+func (recv ArrMerge) DecodeFromStream(s *ggen.Stream) (result ArrMerge, err error) {
 	result = recv
 	if result.SI != nil {
 		result.SI = result.SI[:0]
@@ -332,15 +329,15 @@ func (recv ArrMerge) DecodeFromStream(s *scan.Stream) (result ArrMerge, err erro
 	seenSI := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Offset(), err)
+		return result, ggen.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Offset(), err)
+		return result, ggen.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
+			return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -352,112 +349,112 @@ func (recv ArrMerge) DecodeFromStream(s *scan.Stream) (result ArrMerge, err erro
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Offset(), err)
+			return result, ggen.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "ai":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("ai", s.Offset(), err)
+				return result, ggen.NewParseErr("ai", s.Offset(), err)
 			}
 			if seenAI {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"ai"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"ai"}}
 			}
 			seenAI = true
 			err = s.ArrayOpen()
 			if err != nil {
-				return result, decode.NewParseErr("ai", s.Offset(), err)
+				return result, ggen.NewParseErr("ai", s.Offset(), err)
 			}
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("ai", s.Offset(), err)
+				return result, ggen.NewParseErr("ai", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("ai", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+					return result, ggen.NewParseErr("ai", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
 			var idx0 int
 			for s.Bytes()[s.Pos] != ']' {
 				if idx0 >= 2 {
-					return result, &validation.LenError{Pos: s.Offset(), Path: []string{"ai"}, Want: 2, Got: idx0}
+					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"ai"}, Want: 2, Got: idx0}
 				}
 				result.AI[idx0] = MergeInner{}
 				result.AI[idx0], err = result.AI[idx0].DecodeFromStream(s)
 				if err != nil {
-					return result, decode.NewParseErr("ai", s.Offset(), err)
+					return result, ggen.NewParseErr("ai", s.Offset(), err)
 				}
 				idx0++
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("ai", s.Offset(), err)
+					return result, ggen.NewParseErr("ai", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("ai", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+						return result, ggen.NewParseErr("ai", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
 					s.Pos++
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("ai", s.Offset(), err)
+						return result, ggen.NewParseErr("ai", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-						return result, decode.NewParseErr("ai", s.Offset(), scan.ErrBadArray)
+						return result, ggen.NewParseErr("ai", s.Offset(), ggen.ErrBadArray)
 					}
 					continue
 				}
 				break
 			}
 			if s.Bytes()[s.Pos] != ']' {
-				return result, decode.NewParseErr("ai", s.Offset(), scan.ErrBadArray)
+				return result, ggen.NewParseErr("ai", s.Offset(), ggen.ErrBadArray)
 			}
 			if idx0 != 2 {
-				return result, &validation.LenError{Pos: s.Offset(), Path: []string{"ai"}, Want: 2, Got: idx0}
+				return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"ai"}, Want: 2, Got: idx0}
 			}
 			s.Pos++
 		case "am":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("am", s.Offset(), err)
+				return result, ggen.NewParseErr("am", s.Offset(), err)
 			}
 			if seenAM {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"am"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"am"}}
 			}
 			seenAM = true
 			err = s.ArrayOpen()
 			if err != nil {
-				return result, decode.NewParseErr("am", s.Offset(), err)
+				return result, ggen.NewParseErr("am", s.Offset(), err)
 			}
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("am", s.Offset(), err)
+				return result, ggen.NewParseErr("am", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("am", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+					return result, ggen.NewParseErr("am", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
 			var idx0 int
 			for s.Bytes()[s.Pos] != ']' {
 				if idx0 >= 2 {
-					return result, &validation.LenError{Pos: s.Offset(), Path: []string{"am"}, Want: 2, Got: idx0}
+					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"am"}, Want: 2, Got: idx0}
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("am[]", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+						return result, ggen.NewParseErr("am[]", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 					}
 				}
 				if s.Bytes()[s.Pos] == 'n' {
 					for ki := 1; ki < 4; ki++ {
 						if s.Pos+ki >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, decode.NewParseErr("am[]", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
+								return result, ggen.NewParseErr("am[]", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
 							}
 						}
 						if s.Bytes()[s.Pos+ki] != "null"[ki] {
-							return result, decode.NewParseErr("am[]", s.Offset(), scan.ErrBadLiteral)
+							return result, ggen.NewParseErr("am[]", s.Offset(), ggen.ErrBadLiteral)
 						}
 					}
 					s.Pos += 4
@@ -466,82 +463,82 @@ func (recv ArrMerge) DecodeFromStream(s *scan.Stream) (result ArrMerge, err erro
 					var v MergeInner
 					v, err = v.DecodeFromStream(s)
 					if err != nil {
-						return result, decode.NewParseErr("am[]", s.Offset(), err)
+						return result, ggen.NewParseErr("am[]", s.Offset(), err)
 					}
 					result.AM[idx0] = new(new(v))
 				}
 				idx0++
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("am", s.Offset(), err)
+					return result, ggen.NewParseErr("am", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("am", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+						return result, ggen.NewParseErr("am", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
 					s.Pos++
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("am", s.Offset(), err)
+						return result, ggen.NewParseErr("am", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-						return result, decode.NewParseErr("am", s.Offset(), scan.ErrBadArray)
+						return result, ggen.NewParseErr("am", s.Offset(), ggen.ErrBadArray)
 					}
 					continue
 				}
 				break
 			}
 			if s.Bytes()[s.Pos] != ']' {
-				return result, decode.NewParseErr("am", s.Offset(), scan.ErrBadArray)
+				return result, ggen.NewParseErr("am", s.Offset(), ggen.ErrBadArray)
 			}
 			if idx0 != 2 {
-				return result, &validation.LenError{Pos: s.Offset(), Path: []string{"am"}, Want: 2, Got: idx0}
+				return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"am"}, Want: 2, Got: idx0}
 			}
 			s.Pos++
 		case "ap":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("ap", s.Offset(), err)
+				return result, ggen.NewParseErr("ap", s.Offset(), err)
 			}
 			if seenAP {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"ap"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"ap"}}
 			}
 			seenAP = true
 			err = s.ArrayOpen()
 			if err != nil {
-				return result, decode.NewParseErr("ap", s.Offset(), err)
+				return result, ggen.NewParseErr("ap", s.Offset(), err)
 			}
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("ap", s.Offset(), err)
+				return result, ggen.NewParseErr("ap", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("ap", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+					return result, ggen.NewParseErr("ap", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
 			var idx0 int
 			slab0 := make([]MergeInner, 2)
 			for s.Bytes()[s.Pos] != ']' {
 				if idx0 >= 2 {
-					return result, &validation.LenError{Pos: s.Offset(), Path: []string{"ap"}, Want: 2, Got: idx0}
+					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"ap"}, Want: 2, Got: idx0}
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("ap", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+						return result, ggen.NewParseErr("ap", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 					}
 				}
 				if s.Bytes()[s.Pos] == 'n' {
 					for ki := 1; ki < 4; ki++ {
 						if s.Pos+ki >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, decode.NewParseErr("ap", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
+								return result, ggen.NewParseErr("ap", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
 							}
 						}
 						if s.Bytes()[s.Pos+ki] != "null"[ki] {
-							return result, decode.NewParseErr("ap", s.Offset(), scan.ErrBadLiteral)
+							return result, ggen.NewParseErr("ap", s.Offset(), ggen.ErrBadLiteral)
 						}
 					}
 					s.Pos += 4
@@ -549,21 +546,21 @@ func (recv ArrMerge) DecodeFromStream(s *scan.Stream) (result ArrMerge, err erro
 					idx0++
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("ap", s.Offset(), err)
+						return result, ggen.NewParseErr("ap", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("ap", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+							return result, ggen.NewParseErr("ap", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 						}
 					}
 					if s.Bytes()[s.Pos] == ',' {
 						s.Pos++
 						err = s.SkipSpace()
 						if err != nil {
-							return result, decode.NewParseErr("ap", s.Offset(), err)
+							return result, ggen.NewParseErr("ap", s.Offset(), err)
 						}
 						if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-							return result, decode.NewParseErr("ap", s.Offset(), scan.ErrBadArray)
+							return result, ggen.NewParseErr("ap", s.Offset(), ggen.ErrBadArray)
 						}
 						continue
 					}
@@ -571,66 +568,66 @@ func (recv ArrMerge) DecodeFromStream(s *scan.Stream) (result ArrMerge, err erro
 				}
 				slab0[idx0], err = slab0[idx0].DecodeFromStream(s)
 				if err != nil {
-					return result, decode.NewParseErr("ap", s.Offset(), err)
+					return result, ggen.NewParseErr("ap", s.Offset(), err)
 				}
 				result.AP[idx0] = &slab0[idx0]
 				idx0++
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("ap", s.Offset(), err)
+					return result, ggen.NewParseErr("ap", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("ap", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+						return result, ggen.NewParseErr("ap", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
 					s.Pos++
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("ap", s.Offset(), err)
+						return result, ggen.NewParseErr("ap", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-						return result, decode.NewParseErr("ap", s.Offset(), scan.ErrBadArray)
+						return result, ggen.NewParseErr("ap", s.Offset(), ggen.ErrBadArray)
 					}
 					continue
 				}
 				break
 			}
 			if s.Bytes()[s.Pos] != ']' {
-				return result, decode.NewParseErr("ap", s.Offset(), scan.ErrBadArray)
+				return result, ggen.NewParseErr("ap", s.Offset(), ggen.ErrBadArray)
 			}
 			if idx0 != 2 {
-				return result, &validation.LenError{Pos: s.Offset(), Path: []string{"ap"}, Want: 2, Got: idx0}
+				return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"ap"}, Want: 2, Got: idx0}
 			}
 			s.Pos++
 		case "si":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("si", s.Offset(), err)
+				return result, ggen.NewParseErr("si", s.Offset(), err)
 			}
 			if seenSI {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"si"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"si"}}
 			}
 			seenSI = true
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("si", s.Offset(), err)
+				return result, ggen.NewParseErr("si", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("si", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+					return result, ggen.NewParseErr("si", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("si", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
+							return result, ggen.NewParseErr("si", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("si", s.Offset(), scan.ErrBadLiteral)
+						return result, ggen.NewParseErr("si", s.Offset(), ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -639,15 +636,15 @@ func (recv ArrMerge) DecodeFromStream(s *scan.Stream) (result ArrMerge, err erro
 			}
 			err = s.ArrayOpen()
 			if err != nil {
-				return result, decode.NewParseErr("si", s.Offset(), err)
+				return result, ggen.NewParseErr("si", s.Offset(), err)
 			}
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("si", s.Offset(), err)
+				return result, ggen.NewParseErr("si", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("si", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+					return result, ggen.NewParseErr("si", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
 			if s.Bytes()[s.Pos] == ']' {
@@ -663,45 +660,45 @@ func (recv ArrMerge) DecodeFromStream(s *scan.Stream) (result ArrMerge, err erro
 				result.SI = append(result.SI, MergeInner{})
 				result.SI[len(result.SI)-1], err = result.SI[len(result.SI)-1].DecodeFromStream(s)
 				if err != nil {
-					return result, decode.NewParseErr("si", s.Offset(), err)
+					return result, ggen.NewParseErr("si", s.Offset(), err)
 				}
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("si", s.Offset(), err)
+					return result, ggen.NewParseErr("si", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("si", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+						return result, ggen.NewParseErr("si", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
 					s.Pos++
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("si", s.Offset(), err)
+						return result, ggen.NewParseErr("si", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-						return result, decode.NewParseErr("si", s.Offset(), scan.ErrBadArray)
+						return result, ggen.NewParseErr("si", s.Offset(), ggen.ErrBadArray)
 					}
 					continue
 				}
 				break
 			}
 			if s.Bytes()[s.Pos] != ']' {
-				return result, decode.NewParseErr("si", s.Offset(), scan.ErrBadArray)
+				return result, ggen.NewParseErr("si", s.Offset(), ggen.ErrBadArray)
 			}
 			s.Pos++
 		default:
-			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Offset(), err)
+			return result, ggen.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+				return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -710,7 +707,7 @@ func (recv ArrMerge) DecodeFromStream(s *scan.Stream) (result ArrMerge, err erro
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Offset(), err)
+				return result, ggen.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -718,7 +715,7 @@ func (recv ArrMerge) DecodeFromStream(s *scan.Stream) (result ArrMerge, err erro
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
+		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
 	}
 }
 
@@ -849,7 +846,7 @@ func (recv MergeInner) DecodeFrom(data []byte) (result MergeInner, i int, err er
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
-		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 	}
 	i++
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -862,7 +859,7 @@ func (recv MergeInner) DecodeFrom(data []byte) (result MergeInner, i int, err er
 	for {
 		var key string
 		if i >= len(data) || data[i] != '"' {
-			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrExpectString)
 		}
 		ke := i + 1
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
@@ -872,16 +869,16 @@ func (recv MergeInner) DecodeFrom(data []byte) (result MergeInner, i int, err er
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i, true)
+			key, i, err = ggen.String(data, i, true)
 			if err != nil {
-				return result, i, decode.NewParseErr("", i, err)
+				return result, i, ggen.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 		}
 		i++
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -890,7 +887,7 @@ func (recv MergeInner) DecodeFrom(data []byte) (result MergeInner, i int, err er
 		switch key {
 		case "x":
 			if seenX {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"x"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"x"}}
 			}
 			seenX = true
 			neg := false
@@ -899,14 +896,14 @@ func (recv MergeInner) DecodeFrom(data []byte) (result MergeInner, i int, err er
 				i++
 			}
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
-				return result, i, decode.NewParseErr("x", i, scan.ErrBadNumber)
+				return result, i, ggen.NewParseErr("x", i, ggen.ErrBadNumber)
 			}
 			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
-				return result, i, decode.NewParseErr("x", i, scan.ErrBadNumber)
+				return result, i, ggen.NewParseErr("x", i, ggen.ErrBadNumber)
 			}
 			limit := uint64(math.MaxInt64)
 			if neg {
-				limit = scan.SignedNeg
+				limit = ggen.SignedNeg
 			}
 			var u uint64
 			de := i + 18
@@ -920,7 +917,7 @@ func (recv MergeInner) DecodeFrom(data []byte) (result MergeInner, i int, err er
 			for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 				d := uint64(data[i] - '0')
 				if u > limit/10 || (u == limit/10 && d > limit%10) {
-					return result, i, decode.NewParseErr("x", i, scan.ErrNumberOverflow)
+					return result, i, ggen.NewParseErr("x", i, ggen.ErrNumberOverflow)
 				}
 				u = u*10 + d
 				i++
@@ -928,12 +925,12 @@ func (recv MergeInner) DecodeFrom(data []byte) (result MergeInner, i int, err er
 			if i < len(data) {
 				c := data[i]
 				if c == '.' || c == 'e' || c == 'E' {
-					return result, i, decode.NewParseErr("x", i, scan.ErrBadNumber)
+					return result, i, ggen.NewParseErr("x", i, ggen.ErrBadNumber)
 				}
 			}
 			var n int64
 			if neg {
-				if u == scan.SignedNeg {
+				if u == ggen.SignedNeg {
 					n = math.MinInt64
 				} else {
 					n = -int64(u)
@@ -944,11 +941,11 @@ func (recv MergeInner) DecodeFrom(data []byte) (result MergeInner, i int, err er
 			result.X = int(n)
 		case "y":
 			if seenY {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"y"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"y"}}
 			}
 			seenY = true
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("y", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("y", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -962,19 +959,19 @@ func (recv MergeInner) DecodeFrom(data []byte) (result MergeInner, i int, err er
 				result.Y = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.Y, i, err = scan.String(data, i, true)
+				result.Y, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("y", i, err)
+					return result, i, ggen.NewParseErr("y", i, err)
 				}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 		}
 		if data[i] == ',' {
 			i++
@@ -987,25 +984,25 @@ func (recv MergeInner) DecodeFrom(data []byte) (result MergeInner, i int, err er
 			i++
 			return result, i, nil
 		}
-		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 	}
 }
 
-func (recv MergeInner) DecodeFromStream(s *scan.Stream) (result MergeInner, err error) {
+func (recv MergeInner) DecodeFromStream(s *ggen.Stream) (result MergeInner, err error) {
 	result = recv
 	seenX := false
 	seenY := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Offset(), err)
+		return result, ggen.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Offset(), err)
+		return result, ggen.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
+			return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -1017,48 +1014,48 @@ func (recv MergeInner) DecodeFromStream(s *scan.Stream) (result MergeInner, err 
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Offset(), err)
+			return result, ggen.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "x":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("x", s.Offset(), err)
+				return result, ggen.NewParseErr("x", s.Offset(), err)
 			}
 			if seenX {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"x"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"x"}}
 			}
 			seenX = true
 			var iv int64
 			iv, err = s.Int64()
 			if err != nil {
-				return result, decode.NewParseErr("x", s.Offset(), err)
+				return result, ggen.NewParseErr("x", s.Offset(), err)
 			}
 			result.X = int(iv)
 		case "y":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("y", s.Offset(), err)
+				return result, ggen.NewParseErr("y", s.Offset(), err)
 			}
 			if seenY {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"y"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"y"}}
 			}
 			seenY = true
 			result.Y, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("y", s.Offset(), err)
+				return result, ggen.NewParseErr("y", s.Offset(), err)
 			}
 		default:
-			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Offset(), err)
+			return result, ggen.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+				return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -1067,7 +1064,7 @@ func (recv MergeInner) DecodeFromStream(s *scan.Stream) (result MergeInner, err 
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Offset(), err)
+				return result, ggen.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -1075,7 +1072,7 @@ func (recv MergeInner) DecodeFromStream(s *scan.Stream) (result MergeInner, err 
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
+		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
 	}
 }
 
@@ -1091,6 +1088,6 @@ func (s MergeInner) AppendJSON(dst []byte) ([]byte, error) {
 	dst = append(dst, "{\"x\":"...)
 	dst = strconv.AppendInt(dst, int64(s.X), 10)
 	dst = append(dst, ",\"y\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.Y)
+	dst = ggen.AppendStringNoHTML(dst, s.Y)
 	return append(dst, '}'), nil
 }

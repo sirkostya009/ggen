@@ -10,9 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sirkostya009/ggen/decode"
-	"github.com/sirkostya009/ggen/encode"
-	"github.com/sirkostya009/ggen/scan"
+	"github.com/sirkostya009/ggen"
 )
 
 // An inner pointee error chains its field path through the outer field
@@ -24,14 +22,14 @@ func TestPointer_parseErrorChainsThroughPointee(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	var pe *decode.ParseError
+	var pe *ggen.ParseError
 	if !errors.As(err, &pe) {
-		t.Fatalf("err = %T %v, want *decode.ParseError", err, err)
+		t.Fatalf("err = %T %v, want *ggen.ParseError", err, err)
 	}
 	if strings.Join(pe.Path, ".") != "addr.street" {
 		t.Fatalf("Path = %v; want [addr street]", pe.Path)
 	}
-	if !errors.Is(err, scan.ErrExpectString) {
+	if !errors.Is(err, ggen.ErrExpectString) {
 		t.Fatalf("errors.Is sentinel mismatch: %v", err)
 	}
 }
@@ -85,14 +83,14 @@ type PointerStruct struct {
 func TestPointer_roundtripAllSet(t *testing.T) {
 	t.Parallel()
 	in := PointerStruct{
-		PtrNameStruct:    PtrNameStruct{Name: new("alice")},
-		PtrCountStruct:   PtrCountStruct{Count: new(7)},
-		PtrRatioStruct:   PtrRatioStruct{Ratio: new(0.5)},
-		PtrAddrStruct:    PtrAddrStruct{Addr: &Address{Street: "Main 1", City: "Lviv", ZipCode: "79000"}},
-		PtrWhenStruct:    PtrWhenStruct{When: new(time.Unix(1_700_000_000, 0).UTC())},
-		PtrEnabledStruct: PtrEnabledStruct{Enabled: new(true)},
+		Name:    new("alice"),
+		Count:   new(7),
+		Ratio:   new(0.5),
+		Addr:    &Address{Street: "Main 1", City: "Lviv", ZipCode: "79000"},
+		When:    new(time.Unix(1_700_000_000, 0).UTC()),
+		Enabled: new(true),
 	}
-	out, _ := encode.MarshalString(in)
+	out, _ := ggen.MarshalString(in)
 	got, _, err := PointerStruct{}.DecodeFrom([]byte(out))
 	if err != nil {
 		t.Fatalf("unmarshal: %v\n%s", err, out)
@@ -105,8 +103,8 @@ func TestPointer_roundtripAllSet(t *testing.T) {
 
 func TestPointer_nilOmitted(t *testing.T) {
 	t.Parallel()
-	in := PointerStruct{PtrNameStruct: PtrNameStruct{Name: new("bob")}, PtrEnabledStruct: PtrEnabledStruct{Enabled: new(false)}}
-	out, _ := encode.MarshalString(in)
+	in := PointerStruct{Name: new("bob"), Enabled: new(false)}
+	out, _ := ggen.MarshalString(in)
 	// nil omitempty fields are absent.
 	for _, absent := range []string{"count", "ratio", "addr", "when"} {
 		if strings.Contains(out, `"`+absent+`"`) {
@@ -185,12 +183,12 @@ func TestNPtr_scalarRoundtrip(t *testing.T) {
 	pps := &ps
 	ppps := &pps
 	in := NPtrStruct{
-		PtrPPStruct:    PtrPPStruct{PP: ppv1},
-		PtrPPPStruct:   PtrPPPStruct{PPP: pppv2},
-		PtrPPPPStruct:  PtrPPPPStruct{PPPP: &ppps},
-		PtrAddr2Struct: PtrAddr2Struct{Addr: new(&Address{Street: "Main 1", City: "Lviv", ZipCode: "79000"})},
+		PP:   ppv1,
+		PPP:  pppv2,
+		PPPP: &ppps,
+		Addr: new(&Address{Street: "Main 1", City: "Lviv", ZipCode: "79000"}),
 	}
-	out, _ := encode.MarshalString(in)
+	out, _ := ggen.MarshalString(in)
 	got, _, err := NPtrStruct{}.DecodeFrom([]byte(out))
 	if err != nil {
 		t.Fatalf("unmarshal: %v\n%s", err, out)
@@ -225,8 +223,8 @@ func TestNPtr_allNull(t *testing.T) {
 // short-circuits at the first nil).
 func TestNPtr_intermediateNilMarshalsNull(t *testing.T) {
 	t.Parallel()
-	in := NPtrStruct{PtrPPStruct: PtrPPStruct{PP: new((*int)(nil))}} // non-nil outer, nil inner
-	out, err := encode.MarshalString(in)
+	in := NPtrStruct{PP: new((*int)(nil))} // non-nil outer, nil inner
+	out, err := ggen.MarshalString(in)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
@@ -327,7 +325,7 @@ func TestNPtr_containersRoundtrip(t *testing.T) {
 func TestNPtr_containersStream(t *testing.T) {
 	t.Parallel()
 	in := []byte(`{"spp":[1,null],"app":[9,null,2],"mp":{"a":4},"mpp":{"z":null}}`)
-	var s scan.Stream
+	var s ggen.Stream
 	s.Reset(bytes.NewReader(in), make([]byte, 16))
 	got, err := NPtrContainersStruct{}.DecodeFromStream(&s)
 	if err != nil {

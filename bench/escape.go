@@ -22,7 +22,7 @@ type EscapeDoc struct {
 
 // CopyEscapeDoc is EscapeDoc under -copy (`//ggen:generate copy`) — the
 // ggen_copy row of BenchmarkEscapeHeavy_Unmarshal. On escaped strings copy mode
-// runs scan.String → stringSlow (owned scratch) then strings.Clone (a second
+// runs ggen.String → stringSlow (owned scratch) then strings.Clone (a second
 // alloc): the escape path already owns its bytes, so the clone is redundant but
 // documented -copy overhead. The row quantifies that double-copy vs the aliasing
 // ggen row.

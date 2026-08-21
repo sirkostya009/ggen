@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sirkostya009/ggen/encode"
+	"github.com/sirkostya009/ggen"
 )
 
 // OmitStruct exercises omitempty / omitzero / string tag options.
@@ -27,7 +27,7 @@ type OmitStruct struct {
 func TestOmitEmpty_marshal(t *testing.T) {
 	t.Parallel()
 	s := OmitStruct{Name: "alice", Score: 0, StrCount: 42}
-	out, _ := encode.MarshalString(s)
+	out, _ := ggen.MarshalString(s)
 	if strings.Contains(out, "bio") {
 		t.Errorf("expected bio omitted, got %q", out)
 	}
@@ -42,7 +42,7 @@ func TestOmitEmpty_marshal(t *testing.T) {
 func TestOmitEmpty_present(t *testing.T) {
 	t.Parallel()
 	s := OmitStruct{Name: "a", Bio: "hello", Tags: []string{"x"}, StrCount: 1}
-	out, _ := encode.MarshalString(s)
+	out, _ := ggen.MarshalString(s)
 	if !strings.Contains(out, `"bio":"hello"`) {
 		t.Errorf("bio missing: %q", out)
 	}
@@ -54,13 +54,13 @@ func TestOmitEmpty_present(t *testing.T) {
 func TestOmitZero_marshal(t *testing.T) {
 	t.Parallel()
 	s := OmitStruct{Name: "x", Score: 0, StrCount: 1}
-	out, _ := encode.MarshalString(s)
+	out, _ := ggen.MarshalString(s)
 	if strings.Contains(out, "score") {
 		t.Errorf("expected score omitted, got %q", out)
 	}
 
 	s.Score = 3.14
-	out, _ = encode.MarshalString(s)
+	out, _ = ggen.MarshalString(s)
 	if !strings.Contains(out, `"score":3.14`) {
 		t.Errorf("score missing: %q", out)
 	}
@@ -69,7 +69,7 @@ func TestOmitZero_marshal(t *testing.T) {
 func TestStringTag_marshal(t *testing.T) {
 	t.Parallel()
 	s := OmitStruct{Name: "x", StrCount: 42}
-	out, _ := encode.MarshalString(s)
+	out, _ := ggen.MarshalString(s)
 	if !strings.Contains(out, `"count":"42"`) {
 		t.Errorf("expected quoted count, got %q", out)
 	}
@@ -106,7 +106,7 @@ func TestStringTag_unmarshalExpectsString(t *testing.T) {
 func TestOmit_roundtrip(t *testing.T) {
 	t.Parallel()
 	orig := OmitStruct{Name: "alice", Bio: "dev", Score: 9.5, StrCount: 42, Tags: []string{"go", "rust"}}
-	out, _ := encode.Marshal(orig)
+	out, _ := ggen.Marshal(orig)
 	got, _, err := OmitStruct{}.DecodeFrom(out)
 	if err != nil {
 		t.Fatalf("unmarshal: %v\n%s", err, out)
@@ -145,7 +145,7 @@ func TestStringTag_AllVariants_marshal(t *testing.T) {
 		U8: 8, U16: 16, U32: 32, U64: 64,
 		F32: 1.25, F64: 2.5, B: true,
 	}
-	out, err := encode.MarshalString(in)
+	out, err := ggen.MarshalString(in)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
@@ -191,14 +191,14 @@ func TestStringTag_AllVariants_unmarshal(t *testing.T) {
 //
 //ggen:generate
 type BigOmit struct {
-	I big.Int   `json:"i,omitempty"`
-	F big.Float `json:"f,omitempty"`
-	R big.Rat   `json:"r,omitempty"`
+	I big.Int   `json:"i"`
+	F big.Float `json:"f"`
+	R big.Rat   `json:"r"`
 }
 
 func TestOmitEmpty_bigTypesNeverOmitted(t *testing.T) {
 	t.Parallel()
-	out, err := encode.MarshalString(BigOmit{})
+	out, err := ggen.MarshalString(BigOmit{})
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}

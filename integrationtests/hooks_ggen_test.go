@@ -8,10 +8,7 @@ import (
 	"strings"
 	"unsafe"
 
-	"github.com/sirkostya009/ggen/decode"
-	"github.com/sirkostya009/ggen/encode"
-	"github.com/sirkostya009/ggen/scan"
-	"github.com/sirkostya009/ggen/validation"
+	"github.com/sirkostya009/ggen"
 )
 
 func (recv HookedStruct) DecodeFrom(data []byte) (result HookedStruct, i int, err error) {
@@ -22,7 +19,7 @@ func (recv HookedStruct) DecodeFrom(data []byte) (result HookedStruct, i int, er
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
-		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 	}
 	i++
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -31,14 +28,14 @@ func (recv HookedStruct) DecodeFrom(data []byte) (result HookedStruct, i int, er
 	if i < len(data) && data[i] == '}' {
 		i++
 		if !seenName {
-			return result, i, &validation.RequiredError{Pos: i, Path: []string{"name"}}
+			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"name"}}
 		}
 		return result, i, nil
 	}
 	for {
 		var key string
 		if i >= len(data) || data[i] != '"' {
-			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrExpectString)
 		}
 		ke := i + 1
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
@@ -48,16 +45,16 @@ func (recv HookedStruct) DecodeFrom(data []byte) (result HookedStruct, i int, er
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i, true)
+			key, i, err = ggen.String(data, i, true)
 			if err != nil {
-				return result, i, decode.NewParseErr("", i, err)
+				return result, i, ggen.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 		}
 		i++
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -66,7 +63,7 @@ func (recv HookedStruct) DecodeFrom(data []byte) (result HookedStruct, i int, er
 		switch key {
 		case "n":
 			if seenN {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"n"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"n"}}
 			}
 			seenN = true
 			neg := false
@@ -75,14 +72,14 @@ func (recv HookedStruct) DecodeFrom(data []byte) (result HookedStruct, i int, er
 				i++
 			}
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
-				return result, i, decode.NewParseErr("n", i, scan.ErrBadNumber)
+				return result, i, ggen.NewParseErr("n", i, ggen.ErrBadNumber)
 			}
 			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
-				return result, i, decode.NewParseErr("n", i, scan.ErrBadNumber)
+				return result, i, ggen.NewParseErr("n", i, ggen.ErrBadNumber)
 			}
 			limit := uint64(math.MaxInt64)
 			if neg {
-				limit = scan.SignedNeg
+				limit = ggen.SignedNeg
 			}
 			var u uint64
 			de := i + 18
@@ -96,7 +93,7 @@ func (recv HookedStruct) DecodeFrom(data []byte) (result HookedStruct, i int, er
 			for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 				d := uint64(data[i] - '0')
 				if u > limit/10 || (u == limit/10 && d > limit%10) {
-					return result, i, decode.NewParseErr("n", i, scan.ErrNumberOverflow)
+					return result, i, ggen.NewParseErr("n", i, ggen.ErrNumberOverflow)
 				}
 				u = u*10 + d
 				i++
@@ -104,12 +101,12 @@ func (recv HookedStruct) DecodeFrom(data []byte) (result HookedStruct, i int, er
 			if i < len(data) {
 				c := data[i]
 				if c == '.' || c == 'e' || c == 'E' {
-					return result, i, decode.NewParseErr("n", i, scan.ErrBadNumber)
+					return result, i, ggen.NewParseErr("n", i, ggen.ErrBadNumber)
 				}
 			}
 			var n int64
 			if neg {
-				if u == scan.SignedNeg {
+				if u == ggen.SignedNeg {
 					n = math.MinInt64
 				} else {
 					n = -int64(u)
@@ -119,18 +116,18 @@ func (recv HookedStruct) DecodeFrom(data []byte) (result HookedStruct, i int, er
 			}
 			result.N = int(n)
 			if result.N < 0 {
-				return result, i, &validation.GTEError{Pos: i, Path: []string{"n"}, Limit: 0, Value: result.N}
+				return result, i, &ggen.GTEError{Pos: i, Path: []string{"n"}, Limit: 0, Value: result.N}
 			}
 			if result.N > 100 {
-				return result, i, &validation.LTEError{Pos: i, Path: []string{"n"}, Limit: 100, Value: result.N}
+				return result, i, &ggen.LTEError{Pos: i, Path: []string{"n"}, Limit: 100, Value: result.N}
 			}
 		case "name":
 			if seenName {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"name"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"name"}}
 			}
 			seenName = true
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("name", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("name", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -144,25 +141,25 @@ func (recv HookedStruct) DecodeFrom(data []byte) (result HookedStruct, i int, er
 				result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.Name, i, err = scan.String(data, i, true)
+				result.Name, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("name", i, err)
+					return result, i, ggen.NewParseErr("name", i, err)
 				}
 			}
 			if len(result.Name) < 1 {
-				return result, i, &validation.MinLenError{Pos: i, Path: []string{"name"}, Limit: 1, Got: len(result.Name)}
+				return result, i, &ggen.MinLenError{Pos: i, Path: []string{"name"}, Limit: 1, Got: len(result.Name)}
 			}
 			if len(result.Name) > 20 {
-				return result, i, &validation.MaxLenError{Pos: i, Path: []string{"name"}, Limit: 20, Got: len(result.Name)}
+				return result, i, &ggen.MaxLenError{Pos: i, Path: []string{"name"}, Limit: 20, Got: len(result.Name)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 		}
 		if data[i] == ',' {
 			i++
@@ -174,36 +171,36 @@ func (recv HookedStruct) DecodeFrom(data []byte) (result HookedStruct, i int, er
 		if data[i] == '}' {
 			i++
 			if !seenName {
-				return result, i, &validation.RequiredError{Pos: i, Path: []string{"name"}}
+				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"name"}}
 			}
 			return result, i, nil
 		}
-		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 	}
 }
 
-func (recv HookedStruct) DecodeFromStream(s *scan.Stream) (result HookedStruct, err error) {
+func (recv HookedStruct) DecodeFromStream(s *ggen.Stream) (result HookedStruct, err error) {
 	result = recv
 	seenN := false
 	seenName := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Offset(), err)
+		return result, ggen.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Offset(), err)
+		return result, ggen.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
+			return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
 		}
 		s.Pos = 0
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
 		if !seenName {
-			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"name"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"name"}}
 		}
 		return result, nil
 	}
@@ -211,60 +208,60 @@ func (recv HookedStruct) DecodeFromStream(s *scan.Stream) (result HookedStruct, 
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Offset(), err)
+			return result, ggen.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "n":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("n", s.Offset(), err)
+				return result, ggen.NewParseErr("n", s.Offset(), err)
 			}
 			if seenN {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"n"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"n"}}
 			}
 			seenN = true
 			var iv int64
 			iv, err = s.Int64()
 			if err != nil {
-				return result, decode.NewParseErr("n", s.Offset(), err)
+				return result, ggen.NewParseErr("n", s.Offset(), err)
 			}
 			result.N = int(iv)
 			if result.N < 0 {
-				return result, &validation.GTEError{Pos: s.Offset(), Path: []string{"n"}, Limit: 0, Value: result.N}
+				return result, &ggen.GTEError{Pos: s.Offset(), Path: []string{"n"}, Limit: 0, Value: result.N}
 			}
 			if result.N > 100 {
-				return result, &validation.LTEError{Pos: s.Offset(), Path: []string{"n"}, Limit: 100, Value: result.N}
+				return result, &ggen.LTEError{Pos: s.Offset(), Path: []string{"n"}, Limit: 100, Value: result.N}
 			}
 		case "name":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("name", s.Offset(), err)
+				return result, ggen.NewParseErr("name", s.Offset(), err)
 			}
 			if seenName {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"name"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"name"}}
 			}
 			seenName = true
 			result.Name, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("name", s.Offset(), err)
+				return result, ggen.NewParseErr("name", s.Offset(), err)
 			}
 			if len(result.Name) < 1 {
-				return result, &validation.MinLenError{Pos: s.Offset(), Path: []string{"name"}, Limit: 1, Got: len(result.Name)}
+				return result, &ggen.MinLenError{Pos: s.Offset(), Path: []string{"name"}, Limit: 1, Got: len(result.Name)}
 			}
 			if len(result.Name) > 20 {
-				return result, &validation.MaxLenError{Pos: s.Offset(), Path: []string{"name"}, Limit: 20, Got: len(result.Name)}
+				return result, &ggen.MaxLenError{Pos: s.Offset(), Path: []string{"name"}, Limit: 20, Got: len(result.Name)}
 			}
 		default:
-			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Offset(), err)
+			return result, ggen.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+				return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -273,18 +270,18 @@ func (recv HookedStruct) DecodeFromStream(s *scan.Stream) (result HookedStruct, 
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Offset(), err)
+				return result, ggen.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
 		if c == '}' {
 			s.Pos++
 			if !seenName {
-				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"name"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"name"}}
 			}
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
+		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
 	}
 }
 
@@ -300,12 +297,12 @@ func (s HookedStruct) AppendJSON(dst []byte) ([]byte, error) {
 	dst = append(dst, "{\"n\":"...)
 	dst = strconv.AppendInt(dst, int64(s.N), 10)
 	dst = append(dst, ",\"name\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.Name)
+	dst = ggen.AppendStringNoHTML(dst, s.Name)
 	return append(dst, '}'), nil
 }
 
 func (s HookedStruct) MarshalJSON() ([]byte, error) {
-	return encode.Marshal(s)
+	return ggen.Marshal(s)
 }
 
 func (s *HookedStruct) UnmarshalJSON(data []byte) error {

@@ -7,10 +7,7 @@ import (
 	"strings"
 	"unsafe"
 
-	"github.com/sirkostya009/ggen/decode"
-	"github.com/sirkostya009/ggen/encode"
-	"github.com/sirkostya009/ggen/scan"
-	"github.com/sirkostya009/ggen/validation"
+	"github.com/sirkostya009/ggen"
 )
 
 func (recv URLStruct) DecodeFrom(data []byte) (result URLStruct, i int, err error) {
@@ -20,7 +17,7 @@ func (recv URLStruct) DecodeFrom(data []byte) (result URLStruct, i int, err erro
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
-		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 	}
 	i++
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -33,7 +30,7 @@ func (recv URLStruct) DecodeFrom(data []byte) (result URLStruct, i int, err erro
 	for {
 		var key string
 		if i >= len(data) || data[i] != '"' {
-			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrExpectString)
 		}
 		ke := i + 1
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
@@ -43,16 +40,16 @@ func (recv URLStruct) DecodeFrom(data []byte) (result URLStruct, i int, err erro
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i, true)
+			key, i, err = ggen.String(data, i, true)
 			if err != nil {
-				return result, i, decode.NewParseErr("", i, err)
+				return result, i, ggen.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 		}
 		i++
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -61,12 +58,12 @@ func (recv URLStruct) DecodeFrom(data []byte) (result URLStruct, i int, err erro
 		switch key {
 		case "site":
 			if seenSite {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"site"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"site"}}
 			}
 			seenSite = true
 			var s string
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("site", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("site", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -80,25 +77,25 @@ func (recv URLStruct) DecodeFrom(data []byte) (result URLStruct, i int, err erro
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				s, i, err = scan.String(data, i, true)
+				s, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("site", i, err)
+					return result, i, ggen.NewParseErr("site", i, err)
 				}
 			}
 			var u *url.URL
 			u, err = url.Parse(s)
 			if err != nil {
-				return result, i, decode.NewParseErr("site", i, err)
+				return result, i, ggen.NewParseErr("site", i, err)
 			}
 			result.Site = *u
 		default:
-			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 		}
 		if data[i] == ',' {
 			i++
@@ -111,24 +108,24 @@ func (recv URLStruct) DecodeFrom(data []byte) (result URLStruct, i int, err erro
 			i++
 			return result, i, nil
 		}
-		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 	}
 }
 
-func (recv URLStruct) DecodeFromStream(s *scan.Stream) (result URLStruct, err error) {
+func (recv URLStruct) DecodeFromStream(s *ggen.Stream) (result URLStruct, err error) {
 	result = recv
 	seenSite := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Offset(), err)
+		return result, ggen.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Offset(), err)
+		return result, ggen.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
+			return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -140,39 +137,39 @@ func (recv URLStruct) DecodeFromStream(s *scan.Stream) (result URLStruct, err er
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Offset(), err)
+			return result, ggen.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "site":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("site", s.Offset(), err)
+				return result, ggen.NewParseErr("site", s.Offset(), err)
 			}
 			if seenSite {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"site"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"site"}}
 			}
 			seenSite = true
 			var sv string
 			sv, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("site", s.Offset(), err)
+				return result, ggen.NewParseErr("site", s.Offset(), err)
 			}
 			u, err := url.Parse(sv)
 			if err != nil {
-				return result, decode.NewParseErr("site", s.Offset(), err)
+				return result, ggen.NewParseErr("site", s.Offset(), err)
 			}
 			result.Site = *u
 		default:
-			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Offset(), err)
+			return result, ggen.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+				return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -181,7 +178,7 @@ func (recv URLStruct) DecodeFromStream(s *scan.Stream) (result URLStruct, err er
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Offset(), err)
+				return result, ggen.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -189,7 +186,7 @@ func (recv URLStruct) DecodeFromStream(s *scan.Stream) (result URLStruct, err er
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
+		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
 	}
 }
 
@@ -207,6 +204,6 @@ func (s URLStruct) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"site\":\""...)
-	dst = encode.AppendURL(dst, s.Site)
+	dst = ggen.AppendURL(dst, s.Site)
 	return append(dst, '}'), nil
 }

@@ -8,10 +8,7 @@ import (
 	"strings"
 	"unsafe"
 
-	"github.com/sirkostya009/ggen/decode"
-	"github.com/sirkostya009/ggen/encode"
-	"github.com/sirkostya009/ggen/scan"
-	"github.com/sirkostya009/ggen/validation"
+	"github.com/sirkostya009/ggen"
 )
 
 func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err error) {
@@ -34,7 +31,7 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
-		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 	}
 	i++
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -47,7 +44,7 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 	for {
 		var key string
 		if i >= len(data) || data[i] != '"' {
-			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrExpectString)
 		}
 		ke := i + 1
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
@@ -57,16 +54,16 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i, true)
+			key, i, err = ggen.String(data, i, true)
 			if err != nil {
-				return result, i, decode.NewParseErr("", i, err)
+				return result, i, ggen.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 		}
 		i++
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -75,39 +72,39 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 		switch key {
 		case "b":
 			if seenB {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"b"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"b"}}
 			}
 			seenB = true
-			result.B, i, err = scan.Bool(data, i)
+			result.B, i, err = ggen.Bool(data, i)
 			if err != nil {
-				return result, i, decode.NewParseErr("b", i, err)
+				return result, i, ggen.NewParseErr("b", i, err)
 			}
 		case "f32":
 			if seenF32 {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f32"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"f32"}}
 			}
 			seenF32 = true
 			var fv float64
-			fv, i, err = scan.Float64(data, i)
+			fv, i, err = ggen.Float64(data, i)
 			if err != nil {
-				return result, i, decode.NewParseErr("f32", i, err)
+				return result, i, ggen.NewParseErr("f32", i, err)
 			}
 			if math.IsInf(float64(float32(fv)), 0) {
-				return result, i, decode.NewParseErr("f32", i, scan.ErrNumberOverflow)
+				return result, i, ggen.NewParseErr("f32", i, ggen.ErrNumberOverflow)
 			}
 			result.F32 = float32(fv)
 		case "f64":
 			if seenF64 {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f64"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"f64"}}
 			}
 			seenF64 = true
-			result.F64, i, err = scan.Float64(data, i)
+			result.F64, i, err = ggen.Float64(data, i)
 			if err != nil {
-				return result, i, decode.NewParseErr("f64", i, err)
+				return result, i, ggen.NewParseErr("f64", i, err)
 			}
 		case "i":
 			if seenI {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"i"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"i"}}
 			}
 			seenI = true
 			neg := false
@@ -116,14 +113,14 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 				i++
 			}
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
-				return result, i, decode.NewParseErr("i", i, scan.ErrBadNumber)
+				return result, i, ggen.NewParseErr("i", i, ggen.ErrBadNumber)
 			}
 			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
-				return result, i, decode.NewParseErr("i", i, scan.ErrBadNumber)
+				return result, i, ggen.NewParseErr("i", i, ggen.ErrBadNumber)
 			}
 			limit := uint64(math.MaxInt64)
 			if neg {
-				limit = scan.SignedNeg
+				limit = ggen.SignedNeg
 			}
 			var u uint64
 			de := i + 18
@@ -137,7 +134,7 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 				d := uint64(data[i] - '0')
 				if u > limit/10 || (u == limit/10 && d > limit%10) {
-					return result, i, decode.NewParseErr("i", i, scan.ErrNumberOverflow)
+					return result, i, ggen.NewParseErr("i", i, ggen.ErrNumberOverflow)
 				}
 				u = u*10 + d
 				i++
@@ -145,12 +142,12 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			if i < len(data) {
 				c := data[i]
 				if c == '.' || c == 'e' || c == 'E' {
-					return result, i, decode.NewParseErr("i", i, scan.ErrBadNumber)
+					return result, i, ggen.NewParseErr("i", i, ggen.ErrBadNumber)
 				}
 			}
 			var n int64
 			if neg {
-				if u == scan.SignedNeg {
+				if u == ggen.SignedNeg {
 					n = math.MinInt64
 				} else {
 					n = -int64(u)
@@ -161,7 +158,7 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			result.I = int(n)
 		case "i16":
 			if seenI16 {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"i16"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"i16"}}
 			}
 			seenI16 = true
 			neg := false
@@ -170,14 +167,14 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 				i++
 			}
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
-				return result, i, decode.NewParseErr("i16", i, scan.ErrBadNumber)
+				return result, i, ggen.NewParseErr("i16", i, ggen.ErrBadNumber)
 			}
 			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
-				return result, i, decode.NewParseErr("i16", i, scan.ErrBadNumber)
+				return result, i, ggen.NewParseErr("i16", i, ggen.ErrBadNumber)
 			}
 			limit := uint64(math.MaxInt64)
 			if neg {
-				limit = scan.SignedNeg
+				limit = ggen.SignedNeg
 			}
 			var u uint64
 			de := i + 18
@@ -191,7 +188,7 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 				d := uint64(data[i] - '0')
 				if u > limit/10 || (u == limit/10 && d > limit%10) {
-					return result, i, decode.NewParseErr("i16", i, scan.ErrNumberOverflow)
+					return result, i, ggen.NewParseErr("i16", i, ggen.ErrNumberOverflow)
 				}
 				u = u*10 + d
 				i++
@@ -199,12 +196,12 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			if i < len(data) {
 				c := data[i]
 				if c == '.' || c == 'e' || c == 'E' {
-					return result, i, decode.NewParseErr("i16", i, scan.ErrBadNumber)
+					return result, i, ggen.NewParseErr("i16", i, ggen.ErrBadNumber)
 				}
 			}
 			var n int64
 			if neg {
-				if u == scan.SignedNeg {
+				if u == ggen.SignedNeg {
 					n = math.MinInt64
 				} else {
 					n = -int64(u)
@@ -213,12 +210,12 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 				n = int64(u)
 			}
 			if n < math.MinInt16 || n > math.MaxInt16 {
-				return result, i, decode.NewParseErr("i16", i, scan.ErrNumberOverflow)
+				return result, i, ggen.NewParseErr("i16", i, ggen.ErrNumberOverflow)
 			}
 			result.I16 = int16(n)
 		case "i32":
 			if seenI32 {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"i32"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"i32"}}
 			}
 			seenI32 = true
 			neg := false
@@ -227,14 +224,14 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 				i++
 			}
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
-				return result, i, decode.NewParseErr("i32", i, scan.ErrBadNumber)
+				return result, i, ggen.NewParseErr("i32", i, ggen.ErrBadNumber)
 			}
 			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
-				return result, i, decode.NewParseErr("i32", i, scan.ErrBadNumber)
+				return result, i, ggen.NewParseErr("i32", i, ggen.ErrBadNumber)
 			}
 			limit := uint64(math.MaxInt64)
 			if neg {
-				limit = scan.SignedNeg
+				limit = ggen.SignedNeg
 			}
 			var u uint64
 			de := i + 18
@@ -248,7 +245,7 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 				d := uint64(data[i] - '0')
 				if u > limit/10 || (u == limit/10 && d > limit%10) {
-					return result, i, decode.NewParseErr("i32", i, scan.ErrNumberOverflow)
+					return result, i, ggen.NewParseErr("i32", i, ggen.ErrNumberOverflow)
 				}
 				u = u*10 + d
 				i++
@@ -256,12 +253,12 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			if i < len(data) {
 				c := data[i]
 				if c == '.' || c == 'e' || c == 'E' {
-					return result, i, decode.NewParseErr("i32", i, scan.ErrBadNumber)
+					return result, i, ggen.NewParseErr("i32", i, ggen.ErrBadNumber)
 				}
 			}
 			var n int64
 			if neg {
-				if u == scan.SignedNeg {
+				if u == ggen.SignedNeg {
 					n = math.MinInt64
 				} else {
 					n = -int64(u)
@@ -270,12 +267,12 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 				n = int64(u)
 			}
 			if n < math.MinInt32 || n > math.MaxInt32 {
-				return result, i, decode.NewParseErr("i32", i, scan.ErrNumberOverflow)
+				return result, i, ggen.NewParseErr("i32", i, ggen.ErrNumberOverflow)
 			}
 			result.I32 = int32(n)
 		case "i64":
 			if seenI64 {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"i64"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"i64"}}
 			}
 			seenI64 = true
 			neg := false
@@ -284,14 +281,14 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 				i++
 			}
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
-				return result, i, decode.NewParseErr("i64", i, scan.ErrBadNumber)
+				return result, i, ggen.NewParseErr("i64", i, ggen.ErrBadNumber)
 			}
 			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
-				return result, i, decode.NewParseErr("i64", i, scan.ErrBadNumber)
+				return result, i, ggen.NewParseErr("i64", i, ggen.ErrBadNumber)
 			}
 			limit := uint64(math.MaxInt64)
 			if neg {
-				limit = scan.SignedNeg
+				limit = ggen.SignedNeg
 			}
 			var u uint64
 			de := i + 18
@@ -305,7 +302,7 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 				d := uint64(data[i] - '0')
 				if u > limit/10 || (u == limit/10 && d > limit%10) {
-					return result, i, decode.NewParseErr("i64", i, scan.ErrNumberOverflow)
+					return result, i, ggen.NewParseErr("i64", i, ggen.ErrNumberOverflow)
 				}
 				u = u*10 + d
 				i++
@@ -313,12 +310,12 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			if i < len(data) {
 				c := data[i]
 				if c == '.' || c == 'e' || c == 'E' {
-					return result, i, decode.NewParseErr("i64", i, scan.ErrBadNumber)
+					return result, i, ggen.NewParseErr("i64", i, ggen.ErrBadNumber)
 				}
 			}
 			var n int64
 			if neg {
-				if u == scan.SignedNeg {
+				if u == ggen.SignedNeg {
 					n = math.MinInt64
 				} else {
 					n = -int64(u)
@@ -329,7 +326,7 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			result.I64 = n
 		case "i8":
 			if seenI8 {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"i8"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"i8"}}
 			}
 			seenI8 = true
 			neg := false
@@ -338,14 +335,14 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 				i++
 			}
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
-				return result, i, decode.NewParseErr("i8", i, scan.ErrBadNumber)
+				return result, i, ggen.NewParseErr("i8", i, ggen.ErrBadNumber)
 			}
 			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
-				return result, i, decode.NewParseErr("i8", i, scan.ErrBadNumber)
+				return result, i, ggen.NewParseErr("i8", i, ggen.ErrBadNumber)
 			}
 			limit := uint64(math.MaxInt64)
 			if neg {
-				limit = scan.SignedNeg
+				limit = ggen.SignedNeg
 			}
 			var u uint64
 			de := i + 18
@@ -359,7 +356,7 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 				d := uint64(data[i] - '0')
 				if u > limit/10 || (u == limit/10 && d > limit%10) {
-					return result, i, decode.NewParseErr("i8", i, scan.ErrNumberOverflow)
+					return result, i, ggen.NewParseErr("i8", i, ggen.ErrNumberOverflow)
 				}
 				u = u*10 + d
 				i++
@@ -367,12 +364,12 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			if i < len(data) {
 				c := data[i]
 				if c == '.' || c == 'e' || c == 'E' {
-					return result, i, decode.NewParseErr("i8", i, scan.ErrBadNumber)
+					return result, i, ggen.NewParseErr("i8", i, ggen.ErrBadNumber)
 				}
 			}
 			var n int64
 			if neg {
-				if u == scan.SignedNeg {
+				if u == ggen.SignedNeg {
 					n = math.MinInt64
 				} else {
 					n = -int64(u)
@@ -381,16 +378,16 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 				n = int64(u)
 			}
 			if n < math.MinInt8 || n > math.MaxInt8 {
-				return result, i, decode.NewParseErr("i8", i, scan.ErrNumberOverflow)
+				return result, i, ggen.NewParseErr("i8", i, ggen.ErrNumberOverflow)
 			}
 			result.I8 = int8(n)
 		case "str":
 			if seenStr {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"str"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"str"}}
 			}
 			seenStr = true
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("str", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("str", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -404,21 +401,21 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 				result.Str = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.Str, i, err = scan.String(data, i, true)
+				result.Str, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("str", i, err)
+					return result, i, ggen.NewParseErr("str", i, err)
 				}
 			}
 		case "u":
 			if seenU {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"u"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"u"}}
 			}
 			seenU = true
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
-				return result, i, decode.NewParseErr("u", i, scan.ErrBadNumber)
+				return result, i, ggen.NewParseErr("u", i, ggen.ErrBadNumber)
 			}
 			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
-				return result, i, decode.NewParseErr("u", i, scan.ErrBadNumber)
+				return result, i, ggen.NewParseErr("u", i, ggen.ErrBadNumber)
 			}
 			var n uint64
 			de := i + 19
@@ -431,8 +428,8 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			}
 			for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 				d := uint64(data[i] - '0')
-				if n > scan.Uint64Limit/10 || (n == scan.Uint64Limit/10 && d > scan.Uint64Limit%10) {
-					return result, i, decode.NewParseErr("u", i, scan.ErrNumberOverflow)
+				if n > ggen.Uint64Limit/10 || (n == ggen.Uint64Limit/10 && d > ggen.Uint64Limit%10) {
+					return result, i, ggen.NewParseErr("u", i, ggen.ErrNumberOverflow)
 				}
 				n = n*10 + d
 				i++
@@ -440,20 +437,20 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			if i < len(data) {
 				c := data[i]
 				if c == '.' || c == 'e' || c == 'E' {
-					return result, i, decode.NewParseErr("u", i, scan.ErrBadNumber)
+					return result, i, ggen.NewParseErr("u", i, ggen.ErrBadNumber)
 				}
 			}
 			result.U = uint(n)
 		case "u16":
 			if seenU16 {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"u16"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"u16"}}
 			}
 			seenU16 = true
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
-				return result, i, decode.NewParseErr("u16", i, scan.ErrBadNumber)
+				return result, i, ggen.NewParseErr("u16", i, ggen.ErrBadNumber)
 			}
 			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
-				return result, i, decode.NewParseErr("u16", i, scan.ErrBadNumber)
+				return result, i, ggen.NewParseErr("u16", i, ggen.ErrBadNumber)
 			}
 			var n uint64
 			de := i + 19
@@ -466,8 +463,8 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			}
 			for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 				d := uint64(data[i] - '0')
-				if n > scan.Uint64Limit/10 || (n == scan.Uint64Limit/10 && d > scan.Uint64Limit%10) {
-					return result, i, decode.NewParseErr("u16", i, scan.ErrNumberOverflow)
+				if n > ggen.Uint64Limit/10 || (n == ggen.Uint64Limit/10 && d > ggen.Uint64Limit%10) {
+					return result, i, ggen.NewParseErr("u16", i, ggen.ErrNumberOverflow)
 				}
 				n = n*10 + d
 				i++
@@ -475,23 +472,23 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			if i < len(data) {
 				c := data[i]
 				if c == '.' || c == 'e' || c == 'E' {
-					return result, i, decode.NewParseErr("u16", i, scan.ErrBadNumber)
+					return result, i, ggen.NewParseErr("u16", i, ggen.ErrBadNumber)
 				}
 			}
 			if n > math.MaxUint16 {
-				return result, i, decode.NewParseErr("u16", i, scan.ErrNumberOverflow)
+				return result, i, ggen.NewParseErr("u16", i, ggen.ErrNumberOverflow)
 			}
 			result.U16 = uint16(n)
 		case "u32":
 			if seenU32 {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"u32"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"u32"}}
 			}
 			seenU32 = true
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
-				return result, i, decode.NewParseErr("u32", i, scan.ErrBadNumber)
+				return result, i, ggen.NewParseErr("u32", i, ggen.ErrBadNumber)
 			}
 			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
-				return result, i, decode.NewParseErr("u32", i, scan.ErrBadNumber)
+				return result, i, ggen.NewParseErr("u32", i, ggen.ErrBadNumber)
 			}
 			var n uint64
 			de := i + 19
@@ -504,8 +501,8 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			}
 			for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 				d := uint64(data[i] - '0')
-				if n > scan.Uint64Limit/10 || (n == scan.Uint64Limit/10 && d > scan.Uint64Limit%10) {
-					return result, i, decode.NewParseErr("u32", i, scan.ErrNumberOverflow)
+				if n > ggen.Uint64Limit/10 || (n == ggen.Uint64Limit/10 && d > ggen.Uint64Limit%10) {
+					return result, i, ggen.NewParseErr("u32", i, ggen.ErrNumberOverflow)
 				}
 				n = n*10 + d
 				i++
@@ -513,23 +510,23 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			if i < len(data) {
 				c := data[i]
 				if c == '.' || c == 'e' || c == 'E' {
-					return result, i, decode.NewParseErr("u32", i, scan.ErrBadNumber)
+					return result, i, ggen.NewParseErr("u32", i, ggen.ErrBadNumber)
 				}
 			}
 			if n > math.MaxUint32 {
-				return result, i, decode.NewParseErr("u32", i, scan.ErrNumberOverflow)
+				return result, i, ggen.NewParseErr("u32", i, ggen.ErrNumberOverflow)
 			}
 			result.U32 = uint32(n)
 		case "u64":
 			if seenU64 {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"u64"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"u64"}}
 			}
 			seenU64 = true
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
-				return result, i, decode.NewParseErr("u64", i, scan.ErrBadNumber)
+				return result, i, ggen.NewParseErr("u64", i, ggen.ErrBadNumber)
 			}
 			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
-				return result, i, decode.NewParseErr("u64", i, scan.ErrBadNumber)
+				return result, i, ggen.NewParseErr("u64", i, ggen.ErrBadNumber)
 			}
 			var n uint64
 			de := i + 19
@@ -542,8 +539,8 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			}
 			for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 				d := uint64(data[i] - '0')
-				if n > scan.Uint64Limit/10 || (n == scan.Uint64Limit/10 && d > scan.Uint64Limit%10) {
-					return result, i, decode.NewParseErr("u64", i, scan.ErrNumberOverflow)
+				if n > ggen.Uint64Limit/10 || (n == ggen.Uint64Limit/10 && d > ggen.Uint64Limit%10) {
+					return result, i, ggen.NewParseErr("u64", i, ggen.ErrNumberOverflow)
 				}
 				n = n*10 + d
 				i++
@@ -551,20 +548,20 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			if i < len(data) {
 				c := data[i]
 				if c == '.' || c == 'e' || c == 'E' {
-					return result, i, decode.NewParseErr("u64", i, scan.ErrBadNumber)
+					return result, i, ggen.NewParseErr("u64", i, ggen.ErrBadNumber)
 				}
 			}
 			result.U64 = n
 		case "u8":
 			if seenU8 {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"u8"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"u8"}}
 			}
 			seenU8 = true
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
-				return result, i, decode.NewParseErr("u8", i, scan.ErrBadNumber)
+				return result, i, ggen.NewParseErr("u8", i, ggen.ErrBadNumber)
 			}
 			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
-				return result, i, decode.NewParseErr("u8", i, scan.ErrBadNumber)
+				return result, i, ggen.NewParseErr("u8", i, ggen.ErrBadNumber)
 			}
 			var n uint64
 			de := i + 19
@@ -577,8 +574,8 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			}
 			for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 				d := uint64(data[i] - '0')
-				if n > scan.Uint64Limit/10 || (n == scan.Uint64Limit/10 && d > scan.Uint64Limit%10) {
-					return result, i, decode.NewParseErr("u8", i, scan.ErrNumberOverflow)
+				if n > ggen.Uint64Limit/10 || (n == ggen.Uint64Limit/10 && d > ggen.Uint64Limit%10) {
+					return result, i, ggen.NewParseErr("u8", i, ggen.ErrNumberOverflow)
 				}
 				n = n*10 + d
 				i++
@@ -586,21 +583,21 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			if i < len(data) {
 				c := data[i]
 				if c == '.' || c == 'e' || c == 'E' {
-					return result, i, decode.NewParseErr("u8", i, scan.ErrBadNumber)
+					return result, i, ggen.NewParseErr("u8", i, ggen.ErrBadNumber)
 				}
 			}
 			if n > math.MaxUint8 {
-				return result, i, decode.NewParseErr("u8", i, scan.ErrNumberOverflow)
+				return result, i, ggen.NewParseErr("u8", i, ggen.ErrNumberOverflow)
 			}
 			result.U8 = uint8(n)
 		default:
-			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 		}
 		if data[i] == ',' {
 			i++
@@ -613,11 +610,11 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			i++
 			return result, i, nil
 		}
-		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 	}
 }
 
-func (recv PrimStruct) DecodeFromStream(s *scan.Stream) (result PrimStruct, err error) {
+func (recv PrimStruct) DecodeFromStream(s *ggen.Stream) (result PrimStruct, err error) {
 	result = recv
 	seenB := false
 	seenF32 := false
@@ -635,15 +632,15 @@ func (recv PrimStruct) DecodeFromStream(s *scan.Stream) (result PrimStruct, err 
 	seenU8 := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Offset(), err)
+		return result, ggen.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Offset(), err)
+		return result, ggen.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
+			return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -655,241 +652,241 @@ func (recv PrimStruct) DecodeFromStream(s *scan.Stream) (result PrimStruct, err 
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Offset(), err)
+			return result, ggen.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "b":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("b", s.Offset(), err)
+				return result, ggen.NewParseErr("b", s.Offset(), err)
 			}
 			if seenB {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"b"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"b"}}
 			}
 			seenB = true
 			result.B, err = s.Bool()
 			if err != nil {
-				return result, decode.NewParseErr("b", s.Offset(), err)
+				return result, ggen.NewParseErr("b", s.Offset(), err)
 			}
 		case "f32":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("f32", s.Offset(), err)
+				return result, ggen.NewParseErr("f32", s.Offset(), err)
 			}
 			if seenF32 {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f32"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f32"}}
 			}
 			seenF32 = true
 			var fv float64
 			fv, err = s.Float64()
 			if err != nil {
-				return result, decode.NewParseErr("f32", s.Offset(), err)
+				return result, ggen.NewParseErr("f32", s.Offset(), err)
 			}
 			if math.IsInf(float64(float32(fv)), 0) {
-				return result, decode.NewParseErr("f32", s.Offset(), scan.ErrNumberOverflow)
+				return result, ggen.NewParseErr("f32", s.Offset(), ggen.ErrNumberOverflow)
 			}
 			result.F32 = float32(fv)
 		case "f64":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("f64", s.Offset(), err)
+				return result, ggen.NewParseErr("f64", s.Offset(), err)
 			}
 			if seenF64 {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f64"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f64"}}
 			}
 			seenF64 = true
 			result.F64, err = s.Float64()
 			if err != nil {
-				return result, decode.NewParseErr("f64", s.Offset(), err)
+				return result, ggen.NewParseErr("f64", s.Offset(), err)
 			}
 		case "i":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("i", s.Offset(), err)
+				return result, ggen.NewParseErr("i", s.Offset(), err)
 			}
 			if seenI {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"i"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"i"}}
 			}
 			seenI = true
 			var iv int64
 			iv, err = s.Int64()
 			if err != nil {
-				return result, decode.NewParseErr("i", s.Offset(), err)
+				return result, ggen.NewParseErr("i", s.Offset(), err)
 			}
 			result.I = int(iv)
 		case "i16":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("i16", s.Offset(), err)
+				return result, ggen.NewParseErr("i16", s.Offset(), err)
 			}
 			if seenI16 {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"i16"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"i16"}}
 			}
 			seenI16 = true
 			var iv int64
 			iv, err = s.Int64()
 			if err != nil {
-				return result, decode.NewParseErr("i16", s.Offset(), err)
+				return result, ggen.NewParseErr("i16", s.Offset(), err)
 			}
 			if iv < math.MinInt16 || iv > math.MaxInt16 {
-				return result, decode.NewParseErr("i16", s.Offset(), scan.ErrNumberOverflow)
+				return result, ggen.NewParseErr("i16", s.Offset(), ggen.ErrNumberOverflow)
 			}
 			result.I16 = int16(iv)
 		case "i32":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("i32", s.Offset(), err)
+				return result, ggen.NewParseErr("i32", s.Offset(), err)
 			}
 			if seenI32 {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"i32"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"i32"}}
 			}
 			seenI32 = true
 			var iv int64
 			iv, err = s.Int64()
 			if err != nil {
-				return result, decode.NewParseErr("i32", s.Offset(), err)
+				return result, ggen.NewParseErr("i32", s.Offset(), err)
 			}
 			if iv < math.MinInt32 || iv > math.MaxInt32 {
-				return result, decode.NewParseErr("i32", s.Offset(), scan.ErrNumberOverflow)
+				return result, ggen.NewParseErr("i32", s.Offset(), ggen.ErrNumberOverflow)
 			}
 			result.I32 = int32(iv)
 		case "i64":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("i64", s.Offset(), err)
+				return result, ggen.NewParseErr("i64", s.Offset(), err)
 			}
 			if seenI64 {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"i64"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"i64"}}
 			}
 			seenI64 = true
 			result.I64, err = s.Int64()
 			if err != nil {
-				return result, decode.NewParseErr("i64", s.Offset(), err)
+				return result, ggen.NewParseErr("i64", s.Offset(), err)
 			}
 		case "i8":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("i8", s.Offset(), err)
+				return result, ggen.NewParseErr("i8", s.Offset(), err)
 			}
 			if seenI8 {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"i8"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"i8"}}
 			}
 			seenI8 = true
 			var iv int64
 			iv, err = s.Int64()
 			if err != nil {
-				return result, decode.NewParseErr("i8", s.Offset(), err)
+				return result, ggen.NewParseErr("i8", s.Offset(), err)
 			}
 			if iv < math.MinInt8 || iv > math.MaxInt8 {
-				return result, decode.NewParseErr("i8", s.Offset(), scan.ErrNumberOverflow)
+				return result, ggen.NewParseErr("i8", s.Offset(), ggen.ErrNumberOverflow)
 			}
 			result.I8 = int8(iv)
 		case "str":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("str", s.Offset(), err)
+				return result, ggen.NewParseErr("str", s.Offset(), err)
 			}
 			if seenStr {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"str"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"str"}}
 			}
 			seenStr = true
 			result.Str, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("str", s.Offset(), err)
+				return result, ggen.NewParseErr("str", s.Offset(), err)
 			}
 		case "u":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("u", s.Offset(), err)
+				return result, ggen.NewParseErr("u", s.Offset(), err)
 			}
 			if seenU {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"u"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"u"}}
 			}
 			seenU = true
 			var uv uint64
 			uv, err = s.Uint64()
 			if err != nil {
-				return result, decode.NewParseErr("u", s.Offset(), err)
+				return result, ggen.NewParseErr("u", s.Offset(), err)
 			}
 			result.U = uint(uv)
 		case "u16":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("u16", s.Offset(), err)
+				return result, ggen.NewParseErr("u16", s.Offset(), err)
 			}
 			if seenU16 {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"u16"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"u16"}}
 			}
 			seenU16 = true
 			var uv uint64
 			uv, err = s.Uint64()
 			if err != nil {
-				return result, decode.NewParseErr("u16", s.Offset(), err)
+				return result, ggen.NewParseErr("u16", s.Offset(), err)
 			}
 			if uv > math.MaxUint16 {
-				return result, decode.NewParseErr("u16", s.Offset(), scan.ErrNumberOverflow)
+				return result, ggen.NewParseErr("u16", s.Offset(), ggen.ErrNumberOverflow)
 			}
 			result.U16 = uint16(uv)
 		case "u32":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("u32", s.Offset(), err)
+				return result, ggen.NewParseErr("u32", s.Offset(), err)
 			}
 			if seenU32 {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"u32"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"u32"}}
 			}
 			seenU32 = true
 			var uv uint64
 			uv, err = s.Uint64()
 			if err != nil {
-				return result, decode.NewParseErr("u32", s.Offset(), err)
+				return result, ggen.NewParseErr("u32", s.Offset(), err)
 			}
 			if uv > math.MaxUint32 {
-				return result, decode.NewParseErr("u32", s.Offset(), scan.ErrNumberOverflow)
+				return result, ggen.NewParseErr("u32", s.Offset(), ggen.ErrNumberOverflow)
 			}
 			result.U32 = uint32(uv)
 		case "u64":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("u64", s.Offset(), err)
+				return result, ggen.NewParseErr("u64", s.Offset(), err)
 			}
 			if seenU64 {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"u64"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"u64"}}
 			}
 			seenU64 = true
 			result.U64, err = s.Uint64()
 			if err != nil {
-				return result, decode.NewParseErr("u64", s.Offset(), err)
+				return result, ggen.NewParseErr("u64", s.Offset(), err)
 			}
 		case "u8":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("u8", s.Offset(), err)
+				return result, ggen.NewParseErr("u8", s.Offset(), err)
 			}
 			if seenU8 {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"u8"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"u8"}}
 			}
 			seenU8 = true
 			var uv uint64
 			uv, err = s.Uint64()
 			if err != nil {
-				return result, decode.NewParseErr("u8", s.Offset(), err)
+				return result, ggen.NewParseErr("u8", s.Offset(), err)
 			}
 			if uv > math.MaxUint8 {
-				return result, decode.NewParseErr("u8", s.Offset(), scan.ErrNumberOverflow)
+				return result, ggen.NewParseErr("u8", s.Offset(), ggen.ErrNumberOverflow)
 			}
 			result.U8 = uint8(uv)
 		default:
-			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Offset(), err)
+			return result, ggen.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+				return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -898,7 +895,7 @@ func (recv PrimStruct) DecodeFromStream(s *scan.Stream) (result PrimStruct, err 
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Offset(), err)
+				return result, ggen.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -906,7 +903,7 @@ func (recv PrimStruct) DecodeFromStream(s *scan.Stream) (result PrimStruct, err 
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
+		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
 	}
 }
 
@@ -922,11 +919,11 @@ func (s PrimStruct) AppendJSON(dst []byte) ([]byte, error) {
 	dst = append(dst, "{\"b\":"...)
 	dst = strconv.AppendBool(dst, s.B)
 	dst = append(dst, ",\"f32\":"...)
-	if dst, err = encode.AppendFloat(dst, float64(s.F32), 32); err != nil {
+	if dst, err = ggen.AppendFloat(dst, float64(s.F32), 32); err != nil {
 		return dst, err
 	}
 	dst = append(dst, ",\"f64\":"...)
-	if dst, err = encode.AppendFloat(dst, s.F64, 64); err != nil {
+	if dst, err = ggen.AppendFloat(dst, s.F64, 64); err != nil {
 		return dst, err
 	}
 	dst = append(dst, ",\"i\":"...)
@@ -940,7 +937,7 @@ func (s PrimStruct) AppendJSON(dst []byte) ([]byte, error) {
 	dst = append(dst, ",\"i8\":"...)
 	dst = strconv.AppendInt(dst, int64(s.I8), 10)
 	dst = append(dst, ",\"str\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.Str)
+	dst = ggen.AppendStringNoHTML(dst, s.Str)
 	dst = append(dst, ",\"u\":"...)
 	dst = strconv.AppendUint(dst, uint64(s.U), 10)
 	dst = append(dst, ",\"u16\":"...)

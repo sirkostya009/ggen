@@ -15,8 +15,7 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"github.com/sirkostya009/ggen/encode"
-	"github.com/sirkostya009/ggen/scan"
+	"github.com/sirkostya009/ggen"
 )
 
 var fuzzSeeds = [][]byte{
@@ -65,15 +64,15 @@ func FuzzStreamEqualsBytes(f *testing.F) {
 			return
 		}
 		r := &chunkReader{data: data, max: int(chunkSize)}
-		var s scan.Stream
+		var s ggen.Stream
 		s.Reset(r, make([]byte, 0, 8))
 		got, errStream := Node{}.DecodeFromStream(&s)
 		if errStream != nil {
 			t.Fatalf("bytes accepted but stream rejected (chunk=%d):\n bytes: %s\n err:   %v",
 				chunkSize, data, errStream)
 		}
-		wantOut, _ := encode.Marshal(want)
-		gotOut, _ := encode.Marshal(got)
+		wantOut, _ := ggen.Marshal(want)
+		gotOut, _ := ggen.Marshal(got)
 		if !bytes.Equal(wantOut, gotOut) {
 			// Map marshal order is nondeterministic, so a byte diff may be pure
 			// key order. Re-check order-insensitively (parse both to any) before
@@ -141,7 +140,7 @@ func FuzzStreamHugeStringNoPanic(f *testing.F) {
 			}
 		}()
 		r := &chunkReader{data: payload, max: int(chunk)}
-		var s scan.Stream
+		var s ggen.Stream
 		s.Reset(r, make([]byte, 0, 16))
 		got, err := HugeStringStruct{}.DecodeFromStream(&s)
 		if err != nil {
@@ -196,7 +195,7 @@ func FuzzPrimitivesCompat(f *testing.F) {
 		u uint, u8 uint8, u16 uint16, u32 uint32, u64 uint64, f32 float32, f64 float64, str string) {
 		// Invalid UTF-8 can't round-trip through jsonv2.Marshal (it errors), so
 		// build the payload by hand and assert REJECT parity: both ggen and
-		// jsonv2 must refuse it (ggen with scan.ErrInvalidUTF8). Only when the
+		// jsonv2 must refuse it (ggen with ggen.ErrInvalidUTF8). Only when the
 		// raw bytes keep the payload structurally well-formed — a quote/
 		// backslash/ctrl byte would change what is being tested.
 		if !utf8.ValidString(str) {
@@ -210,8 +209,8 @@ func FuzzPrimitivesCompat(f *testing.F) {
 			if gerr == nil || serr == nil {
 				t.Fatalf("invalid UTF-8 accepted:\n ggen err:   %v\n stdlib err: %v\n payload: %q", gerr, serr, payload)
 			}
-			if !errors.Is(gerr, scan.ErrInvalidUTF8) {
-				t.Fatalf("want scan.ErrInvalidUTF8, got %v (payload %q)", gerr, payload)
+			if !errors.Is(gerr, ggen.ErrInvalidUTF8) {
+				t.Fatalf("want ggen.ErrInvalidUTF8, got %v (payload %q)", gerr, payload)
 			}
 			return
 		}

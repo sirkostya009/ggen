@@ -9,7 +9,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/sirkostya009/ggen/encode"
+	"github.com/sirkostya009/ggen"
 )
 
 // AnyStruct: bare `any` field, default float64 numbers.
@@ -69,7 +69,7 @@ func TestAny_DecodeScalars(t *testing.T) {
 func TestAny_MarshalRoundtrip(t *testing.T) {
 	t.Parallel()
 	in := AnyStruct{Name: "x", Body: map[string]any{"k": float64(1), "v": "y"}}
-	out, _ := encode.Marshal(in)
+	out, _ := ggen.Marshal(in)
 	got, _, err := AnyStruct{}.DecodeFrom(out)
 	if err != nil {
 		t.Fatalf("unmarshal: %v\n%s", err, out)

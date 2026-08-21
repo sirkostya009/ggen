@@ -13,10 +13,7 @@ import (
 	"unicode/utf8"
 	"unsafe"
 
-	"github.com/sirkostya009/ggen/decode"
-	"github.com/sirkostya009/ggen/encode"
-	"github.com/sirkostya009/ggen/scan"
-	"github.com/sirkostya009/ggen/validation"
+	"github.com/sirkostya009/ggen"
 )
 
 // Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
@@ -125,7 +122,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
-		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 	}
 	i++
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -138,7 +135,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 	for {
 		var key string
 		if i >= len(data) || data[i] != '"' {
-			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrExpectString)
 		}
 		ke := i + 1
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
@@ -148,16 +145,16 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i, true)
+			key, i, err = ggen.String(data, i, true)
 			if err != nil {
-				return result, i, decode.NewParseErr("", i, err)
+				return result, i, ggen.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 		}
 		i++
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -166,7 +163,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 		switch key {
 		case "clampedScore":
 			if seenClampedScore {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"clampedScore"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"clampedScore"}}
 			}
 			seenClampedScore = true
 			neg := false
@@ -175,14 +172,14 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 				i++
 			}
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
-				return result, i, decode.NewParseErr("clampedScore", i, scan.ErrBadNumber)
+				return result, i, ggen.NewParseErr("clampedScore", i, ggen.ErrBadNumber)
 			}
 			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
-				return result, i, decode.NewParseErr("clampedScore", i, scan.ErrBadNumber)
+				return result, i, ggen.NewParseErr("clampedScore", i, ggen.ErrBadNumber)
 			}
 			limit := uint64(math.MaxInt64)
 			if neg {
-				limit = scan.SignedNeg
+				limit = ggen.SignedNeg
 			}
 			var u uint64
 			de := i + 18
@@ -196,7 +193,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 			for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 				d := uint64(data[i] - '0')
 				if u > limit/10 || (u == limit/10 && d > limit%10) {
-					return result, i, decode.NewParseErr("clampedScore", i, scan.ErrNumberOverflow)
+					return result, i, ggen.NewParseErr("clampedScore", i, ggen.ErrNumberOverflow)
 				}
 				u = u*10 + d
 				i++
@@ -204,12 +201,12 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 			if i < len(data) {
 				c := data[i]
 				if c == '.' || c == 'e' || c == 'E' {
-					return result, i, decode.NewParseErr("clampedScore", i, scan.ErrBadNumber)
+					return result, i, ggen.NewParseErr("clampedScore", i, ggen.ErrBadNumber)
 				}
 			}
 			var n int64
 			if neg {
-				if u == scan.SignedNeg {
+				if u == ggen.SignedNeg {
 					n = math.MinInt64
 				} else {
 					n = -int64(u)
@@ -226,7 +223,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 			}
 		case "hintedTags":
 			if seenHintedTags {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"hintedTags"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"hintedTags"}}
 			}
 			seenHintedTags = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -234,7 +231,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 				result.HintedTags = nil
 			} else {
 				if i >= len(data) || data[i] != '[' {
-					return result, i, decode.NewParseErr("hintedTags", i, scan.ErrBadArray)
+					return result, i, ggen.NewParseErr("hintedTags", i, ggen.ErrBadArray)
 				}
 				i++
 				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -253,7 +250,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 					for {
 						result.HintedTags = append(result.HintedTags, "")
 						if i >= len(data) || data[i] != '"' {
-							return result, i, decode.NewParseErr("hintedTags", i, scan.ErrExpectString)
+							return result, i, ggen.NewParseErr("hintedTags", i, ggen.ErrExpectString)
 						}
 						ke := i + 1
 						kew := ke + 32
@@ -267,9 +264,9 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 							result.HintedTags[len(result.HintedTags)-1] = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 							i = ke + 1
 						} else {
-							result.HintedTags[len(result.HintedTags)-1], i, err = scan.String(data, i, true)
+							result.HintedTags[len(result.HintedTags)-1], i, err = ggen.String(data, i, true)
 							if err != nil {
-								return result, i, decode.NewParseErr("hintedTags", i, err)
+								return result, i, ggen.NewParseErr("hintedTags", i, err)
 							}
 						}
 						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -281,7 +278,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 								i++
 							}
 							if i >= len(data) || data[i] == ']' {
-								return result, i, decode.NewParseErr("hintedTags", i, scan.ErrBadArray)
+								return result, i, ggen.NewParseErr("hintedTags", i, ggen.ErrBadArray)
 							}
 							continue
 						}
@@ -289,16 +286,16 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 					}
 				}
 				if i >= len(data) || data[i] != ']' {
-					return result, i, decode.NewParseErr("hintedTags", i, scan.ErrBadArray)
+					return result, i, ggen.NewParseErr("hintedTags", i, ggen.ErrBadArray)
 				}
 				i++
 			}
 			if len(result.HintedTags) > 1000 {
-				return result, i, &validation.MaxLenError{Pos: i, Path: []string{"hintedTags"}, Limit: 1000, Got: len(result.HintedTags)}
+				return result, i, &ggen.MaxLenError{Pos: i, Path: []string{"hintedTags"}, Limit: 1000, Got: len(result.HintedTags)}
 			}
 		case "keyedMap":
 			if seenKeyedMap {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"keyedMap"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"keyedMap"}}
 			}
 			seenKeyedMap = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -307,7 +304,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 				break
 			}
 			if i >= len(data) || data[i] != '{' {
-				return result, i, decode.NewParseErr("keyedMap", i, scan.ErrBadObject)
+				return result, i, ggen.NewParseErr("keyedMap", i, ggen.ErrBadObject)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -326,7 +323,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 				for {
 					var mk string
 					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("keyedMap", i, scan.ErrExpectString)
+						return result, i, ggen.NewParseErr("keyedMap", i, ggen.ErrExpectString)
 					}
 					ke := i + 1
 					kew := ke + 32
@@ -340,32 +337,32 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 						mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 						i = ke + 1
 					} else {
-						mk, i, err = scan.String(data, i, true)
+						mk, i, err = ggen.String(data, i, true)
 						if err != nil {
-							return result, i, decode.NewParseErr("keyedMap", i, err)
+							return result, i, ggen.NewParseErr("keyedMap", i, err)
 						}
 					}
 					mk = strings.TrimSpace(mk)
 					mk = strings.ToLower(mk)
 					if len(mk) < 2 {
-						return result, i, &validation.MinRunesError{Pos: i, Path: []string{"keyedMap.key"}, Limit: 2, Got: utf8.RuneCountInString(mk)}
+						return result, i, &ggen.MinRunesError{Pos: i, Path: []string{"keyedMap.key"}, Limit: 2, Got: utf8.RuneCountInString(mk)}
 					} else if len(mk) < 5 {
 						if rc := utf8.RuneCountInString(mk); rc < 2 {
-							return result, i, &validation.MinRunesError{Pos: i, Path: []string{"keyedMap.key"}, Limit: 2, Got: rc}
+							return result, i, &ggen.MinRunesError{Pos: i, Path: []string{"keyedMap.key"}, Limit: 2, Got: rc}
 						}
 					}
 					if len(mk) > 64 {
-						return result, i, &validation.MaxRunesError{Pos: i, Path: []string{"keyedMap.key"}, Limit: 16, Got: utf8.RuneCountInString(mk)}
+						return result, i, &ggen.MaxRunesError{Pos: i, Path: []string{"keyedMap.key"}, Limit: 16, Got: utf8.RuneCountInString(mk)}
 					} else if len(mk) > 16 {
 						if rc := utf8.RuneCountInString(mk); rc > 16 {
-							return result, i, &validation.MaxRunesError{Pos: i, Path: []string{"keyedMap.key"}, Limit: 16, Got: rc}
+							return result, i, &ggen.MaxRunesError{Pos: i, Path: []string{"keyedMap.key"}, Limit: 16, Got: rc}
 						}
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
 					if i >= len(data) || data[i] != ':' {
-						return result, i, decode.NewParseErr("keyedMap", i, scan.ErrBadObject)
+						return result, i, ggen.NewParseErr("keyedMap", i, ggen.ErrBadObject)
 					}
 					i++
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -377,14 +374,14 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 						i++
 					}
 					if i >= len(data) || data[i] < '0' || data[i] > '9' {
-						return result, i, decode.NewParseErr("keyedMap", i, scan.ErrBadNumber)
+						return result, i, ggen.NewParseErr("keyedMap", i, ggen.ErrBadNumber)
 					}
 					if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
-						return result, i, decode.NewParseErr("keyedMap", i, scan.ErrBadNumber)
+						return result, i, ggen.NewParseErr("keyedMap", i, ggen.ErrBadNumber)
 					}
 					limit := uint64(math.MaxInt64)
 					if neg {
-						limit = scan.SignedNeg
+						limit = ggen.SignedNeg
 					}
 					var u uint64
 					de := i + 18
@@ -398,7 +395,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 					for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 						d := uint64(data[i] - '0')
 						if u > limit/10 || (u == limit/10 && d > limit%10) {
-							return result, i, decode.NewParseErr("keyedMap", i, scan.ErrNumberOverflow)
+							return result, i, ggen.NewParseErr("keyedMap", i, ggen.ErrNumberOverflow)
 						}
 						u = u*10 + d
 						i++
@@ -406,12 +403,12 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 					if i < len(data) {
 						c := data[i]
 						if c == '.' || c == 'e' || c == 'E' {
-							return result, i, decode.NewParseErr("keyedMap", i, scan.ErrBadNumber)
+							return result, i, ggen.NewParseErr("keyedMap", i, ggen.ErrBadNumber)
 						}
 					}
 					var n int64
 					if neg {
-						if u == scan.SignedNeg {
+						if u == ggen.SignedNeg {
 							n = math.MinInt64
 						} else {
 							n = -int64(u)
@@ -429,7 +426,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 							i++
 						}
 						if i >= len(data) || data[i] == '}' {
-							return result, i, decode.NewParseErr("keyedMap", i, scan.ErrBadObject)
+							return result, i, ggen.NewParseErr("keyedMap", i, ggen.ErrBadObject)
 						}
 						continue
 					}
@@ -437,12 +434,12 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 				}
 			}
 			if i >= len(data) || data[i] != '}' {
-				return result, i, decode.NewParseErr("keyedMap", i, scan.ErrBadObject)
+				return result, i, ggen.NewParseErr("keyedMap", i, ggen.ErrBadObject)
 			}
 			i++
 		case "nestedInts":
 			if seenNestedInts {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"nestedInts"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"nestedInts"}}
 			}
 			seenNestedInts = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -451,7 +448,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 				break
 			}
 			if i >= len(data) || data[i] != '[' {
-				return result, i, decode.NewParseErr("nestedInts", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("nestedInts", i, ggen.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -477,7 +474,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 						i += 4
 						result.NestedInts[len(result.NestedInts)-1] = nil
 						if len(result.NestedInts[len(result.NestedInts)-1]) < 1 {
-							return result, i, &validation.MinLenError{Pos: i, Path: []string{"nestedInts[]"}, Limit: 1, Got: len(result.NestedInts[len(result.NestedInts)-1])}
+							return result, i, &ggen.MinLenError{Pos: i, Path: []string{"nestedInts[]"}, Limit: 1, Got: len(result.NestedInts[len(result.NestedInts)-1])}
 						}
 						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
@@ -488,7 +485,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 								i++
 							}
 							if i >= len(data) || data[i] == ']' {
-								return result, i, decode.NewParseErr("nestedInts", i, scan.ErrBadArray)
+								return result, i, ggen.NewParseErr("nestedInts", i, ggen.ErrBadArray)
 							}
 							continue
 						}
@@ -499,7 +496,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 						row0 = row0[:0]
 					}
 					if i >= len(data) || data[i] != '[' {
-						return result, i, decode.NewParseErr("nestedInts[]", i, scan.ErrBadArray)
+						return result, i, ggen.NewParseErr("nestedInts[]", i, ggen.ErrBadArray)
 					}
 					i++
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -527,14 +524,14 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 								i++
 							}
 							if i >= len(data) || data[i] < '0' || data[i] > '9' {
-								return result, i, decode.NewParseErr("nestedInts[]", i, scan.ErrBadNumber)
+								return result, i, ggen.NewParseErr("nestedInts[]", i, ggen.ErrBadNumber)
 							}
 							if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
-								return result, i, decode.NewParseErr("nestedInts[]", i, scan.ErrBadNumber)
+								return result, i, ggen.NewParseErr("nestedInts[]", i, ggen.ErrBadNumber)
 							}
 							limit := uint64(math.MaxInt64)
 							if neg {
-								limit = scan.SignedNeg
+								limit = ggen.SignedNeg
 							}
 							var u uint64
 							de := i + 18
@@ -548,7 +545,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 							for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 								d := uint64(data[i] - '0')
 								if u > limit/10 || (u == limit/10 && d > limit%10) {
-									return result, i, decode.NewParseErr("nestedInts[]", i, scan.ErrNumberOverflow)
+									return result, i, ggen.NewParseErr("nestedInts[]", i, ggen.ErrNumberOverflow)
 								}
 								u = u*10 + d
 								i++
@@ -556,12 +553,12 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 							if i < len(data) {
 								c := data[i]
 								if c == '.' || c == 'e' || c == 'E' {
-									return result, i, decode.NewParseErr("nestedInts[]", i, scan.ErrBadNumber)
+									return result, i, ggen.NewParseErr("nestedInts[]", i, ggen.ErrBadNumber)
 								}
 							}
 							var n int64
 							if neg {
-								if u == scan.SignedNeg {
+								if u == ggen.SignedNeg {
 									n = math.MinInt64
 								} else {
 									n = -int64(u)
@@ -571,10 +568,10 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 							}
 							row0[len(row0)-1] = int(n)
 							if row0[len(row0)-1] < 0 {
-								return result, i, &validation.GTEError{Pos: i, Path: []string{"nestedInts[][]"}, Limit: 0, Value: row0[len(row0)-1]}
+								return result, i, &ggen.GTEError{Pos: i, Path: []string{"nestedInts[][]"}, Limit: 0, Value: row0[len(row0)-1]}
 							}
 							if row0[len(row0)-1] > 100 {
-								return result, i, &validation.LTEError{Pos: i, Path: []string{"nestedInts[][]"}, Limit: 100, Value: row0[len(row0)-1]}
+								return result, i, &ggen.LTEError{Pos: i, Path: []string{"nestedInts[][]"}, Limit: 100, Value: row0[len(row0)-1]}
 							}
 							for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 								i++
@@ -585,7 +582,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 									i++
 								}
 								if i >= len(data) || data[i] == ']' {
-									return result, i, decode.NewParseErr("nestedInts[]", i, scan.ErrBadArray)
+									return result, i, ggen.NewParseErr("nestedInts[]", i, ggen.ErrBadArray)
 								}
 								continue
 							}
@@ -593,12 +590,12 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 						}
 					}
 					if i >= len(data) || data[i] != ']' {
-						return result, i, decode.NewParseErr("nestedInts[]", i, scan.ErrBadArray)
+						return result, i, ggen.NewParseErr("nestedInts[]", i, ggen.ErrBadArray)
 					}
 					i++
 					result.NestedInts[len(result.NestedInts)-1] = row0
 					if len(result.NestedInts[len(result.NestedInts)-1]) < 1 {
-						return result, i, &validation.MinLenError{Pos: i, Path: []string{"nestedInts[]"}, Limit: 1, Got: len(result.NestedInts[len(result.NestedInts)-1])}
+						return result, i, &ggen.MinLenError{Pos: i, Path: []string{"nestedInts[]"}, Limit: 1, Got: len(result.NestedInts[len(result.NestedInts)-1])}
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -609,7 +606,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, decode.NewParseErr("nestedInts", i, scan.ErrBadArray)
+							return result, i, ggen.NewParseErr("nestedInts", i, ggen.ErrBadArray)
 						}
 						continue
 					}
@@ -617,12 +614,12 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, decode.NewParseErr("nestedInts", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("nestedInts", i, ggen.ErrBadArray)
 			}
 			i++
 		case "triple":
 			if seenTriple {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"triple"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"triple"}}
 			}
 			seenTriple = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -631,7 +628,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 				break
 			}
 			if i >= len(data) || data[i] != '[' {
-				return result, i, decode.NewParseErr("triple", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("triple", i, ggen.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -657,7 +654,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 						i += 4
 						result.Triple[len(result.Triple)-1] = nil
 						if len(result.Triple[len(result.Triple)-1]) < 1 {
-							return result, i, &validation.MinLenError{Pos: i, Path: []string{"triple[]"}, Limit: 1, Got: len(result.Triple[len(result.Triple)-1])}
+							return result, i, &ggen.MinLenError{Pos: i, Path: []string{"triple[]"}, Limit: 1, Got: len(result.Triple[len(result.Triple)-1])}
 						}
 						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
@@ -668,7 +665,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 								i++
 							}
 							if i >= len(data) || data[i] == ']' {
-								return result, i, decode.NewParseErr("triple", i, scan.ErrBadArray)
+								return result, i, ggen.NewParseErr("triple", i, ggen.ErrBadArray)
 							}
 							continue
 						}
@@ -679,7 +676,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 						row0 = row0[:0]
 					}
 					if i >= len(data) || data[i] != '[' {
-						return result, i, decode.NewParseErr("triple[]", i, scan.ErrBadArray)
+						return result, i, ggen.NewParseErr("triple[]", i, ggen.ErrBadArray)
 					}
 					i++
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -705,7 +702,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 								i += 4
 								row0[len(row0)-1] = nil
 								if len(row0[len(row0)-1]) < 1 {
-									return result, i, &validation.MinLenError{Pos: i, Path: []string{"triple[][]"}, Limit: 1, Got: len(row0[len(row0)-1])}
+									return result, i, &ggen.MinLenError{Pos: i, Path: []string{"triple[][]"}, Limit: 1, Got: len(row0[len(row0)-1])}
 								}
 								for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 									i++
@@ -716,7 +713,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 										i++
 									}
 									if i >= len(data) || data[i] == ']' {
-										return result, i, decode.NewParseErr("triple[]", i, scan.ErrBadArray)
+										return result, i, ggen.NewParseErr("triple[]", i, ggen.ErrBadArray)
 									}
 									continue
 								}
@@ -727,7 +724,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 								row1 = row1[:0]
 							}
 							if i >= len(data) || data[i] != '[' {
-								return result, i, decode.NewParseErr("triple[][]", i, scan.ErrBadArray)
+								return result, i, ggen.NewParseErr("triple[][]", i, ggen.ErrBadArray)
 							}
 							i++
 							for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -746,7 +743,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 								for {
 									row1 = append(row1, "")
 									if i >= len(data) || data[i] != '"' {
-										return result, i, decode.NewParseErr("triple[][]", i, scan.ErrExpectString)
+										return result, i, ggen.NewParseErr("triple[][]", i, ggen.ErrExpectString)
 									}
 									ke := i + 1
 									kew := ke + 32
@@ -760,13 +757,13 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 										row1[len(row1)-1] = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 										i = ke + 1
 									} else {
-										row1[len(row1)-1], i, err = scan.String(data, i, true)
+										row1[len(row1)-1], i, err = ggen.String(data, i, true)
 										if err != nil {
-											return result, i, decode.NewParseErr("triple[][]", i, err)
+											return result, i, ggen.NewParseErr("triple[][]", i, err)
 										}
 									}
 									if len(row1[len(row1)-1]) < 1 {
-										return result, i, &validation.MinLenError{Pos: i, Path: []string{"triple[][][]"}, Limit: 1, Got: len(row1[len(row1)-1])}
+										return result, i, &ggen.MinLenError{Pos: i, Path: []string{"triple[][][]"}, Limit: 1, Got: len(row1[len(row1)-1])}
 									}
 									for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 										i++
@@ -777,7 +774,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 											i++
 										}
 										if i >= len(data) || data[i] == ']' {
-											return result, i, decode.NewParseErr("triple[][]", i, scan.ErrBadArray)
+											return result, i, ggen.NewParseErr("triple[][]", i, ggen.ErrBadArray)
 										}
 										continue
 									}
@@ -785,12 +782,12 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 								}
 							}
 							if i >= len(data) || data[i] != ']' {
-								return result, i, decode.NewParseErr("triple[][]", i, scan.ErrBadArray)
+								return result, i, ggen.NewParseErr("triple[][]", i, ggen.ErrBadArray)
 							}
 							i++
 							row0[len(row0)-1] = row1
 							if len(row0[len(row0)-1]) < 1 {
-								return result, i, &validation.MinLenError{Pos: i, Path: []string{"triple[][]"}, Limit: 1, Got: len(row0[len(row0)-1])}
+								return result, i, &ggen.MinLenError{Pos: i, Path: []string{"triple[][]"}, Limit: 1, Got: len(row0[len(row0)-1])}
 							}
 							for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 								i++
@@ -801,7 +798,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 									i++
 								}
 								if i >= len(data) || data[i] == ']' {
-									return result, i, decode.NewParseErr("triple[]", i, scan.ErrBadArray)
+									return result, i, ggen.NewParseErr("triple[]", i, ggen.ErrBadArray)
 								}
 								continue
 							}
@@ -809,12 +806,12 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 						}
 					}
 					if i >= len(data) || data[i] != ']' {
-						return result, i, decode.NewParseErr("triple[]", i, scan.ErrBadArray)
+						return result, i, ggen.NewParseErr("triple[]", i, ggen.ErrBadArray)
 					}
 					i++
 					result.Triple[len(result.Triple)-1] = row0
 					if len(result.Triple[len(result.Triple)-1]) < 1 {
-						return result, i, &validation.MinLenError{Pos: i, Path: []string{"triple[]"}, Limit: 1, Got: len(result.Triple[len(result.Triple)-1])}
+						return result, i, &ggen.MinLenError{Pos: i, Path: []string{"triple[]"}, Limit: 1, Got: len(result.Triple[len(result.Triple)-1])}
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -825,7 +822,7 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, decode.NewParseErr("triple", i, scan.ErrBadArray)
+							return result, i, ggen.NewParseErr("triple", i, ggen.ErrBadArray)
 						}
 						continue
 					}
@@ -833,17 +830,17 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, decode.NewParseErr("triple", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("triple", i, ggen.ErrBadArray)
 			}
 			i++
 		default:
-			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 		}
 		if data[i] == ',' {
 			i++
@@ -856,11 +853,11 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 			i++
 			return result, i, nil
 		}
-		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 	}
 }
 
-func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, err error) {
+func (recv ExtraStruct) DecodeFromStream(s *ggen.Stream) (result ExtraStruct, err error) {
 	result = recv
 	if result.HintedTags != nil {
 		result.HintedTags = result.HintedTags[:0]
@@ -881,15 +878,15 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 	seenTriple := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Offset(), err)
+		return result, ggen.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Offset(), err)
+		return result, ggen.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
+			return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -901,22 +898,22 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Offset(), err)
+			return result, ggen.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "clampedScore":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("clampedScore", s.Offset(), err)
+				return result, ggen.NewParseErr("clampedScore", s.Offset(), err)
 			}
 			if seenClampedScore {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"clampedScore"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"clampedScore"}}
 			}
 			seenClampedScore = true
 			var iv int64
 			iv, err = s.Int64()
 			if err != nil {
-				return result, decode.NewParseErr("clampedScore", s.Offset(), err)
+				return result, ggen.NewParseErr("clampedScore", s.Offset(), err)
 			}
 			result.ClampedScore = int(iv)
 			if result.ClampedScore < 0 {
@@ -928,30 +925,30 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 		case "hintedTags":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("hintedTags", s.Offset(), err)
+				return result, ggen.NewParseErr("hintedTags", s.Offset(), err)
 			}
 			if seenHintedTags {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"hintedTags"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"hintedTags"}}
 			}
 			seenHintedTags = true
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("hintedTags", s.Offset(), err)
+				return result, ggen.NewParseErr("hintedTags", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("hintedTags", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+					return result, ggen.NewParseErr("hintedTags", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("hintedTags", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
+							return result, ggen.NewParseErr("hintedTags", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("hintedTags", s.Offset(), scan.ErrBadLiteral)
+						return result, ggen.NewParseErr("hintedTags", s.Offset(), ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -959,15 +956,15 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 			} else {
 				err = s.ArrayOpen()
 				if err != nil {
-					return result, decode.NewParseErr("hintedTags", s.Offset(), err)
+					return result, ggen.NewParseErr("hintedTags", s.Offset(), err)
 				}
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("hintedTags", s.Offset(), err)
+					return result, ggen.NewParseErr("hintedTags", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("hintedTags", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+						return result, ggen.NewParseErr("hintedTags", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 					}
 				}
 				if s.Bytes()[s.Pos] == ']' {
@@ -983,65 +980,65 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 					result.HintedTags = append(result.HintedTags, "")
 					result.HintedTags[len(result.HintedTags)-1], err = s.String(true)
 					if err != nil {
-						return result, decode.NewParseErr("hintedTags", s.Offset(), err)
+						return result, ggen.NewParseErr("hintedTags", s.Offset(), err)
 					}
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("hintedTags", s.Offset(), err)
+						return result, ggen.NewParseErr("hintedTags", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("hintedTags", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+							return result, ggen.NewParseErr("hintedTags", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 						}
 					}
 					if s.Bytes()[s.Pos] == ',' {
 						s.Pos++
 						err = s.SkipSpace()
 						if err != nil {
-							return result, decode.NewParseErr("hintedTags", s.Offset(), err)
+							return result, ggen.NewParseErr("hintedTags", s.Offset(), err)
 						}
 						if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-							return result, decode.NewParseErr("hintedTags", s.Offset(), scan.ErrBadArray)
+							return result, ggen.NewParseErr("hintedTags", s.Offset(), ggen.ErrBadArray)
 						}
 						continue
 					}
 					break
 				}
 				if s.Bytes()[s.Pos] != ']' {
-					return result, decode.NewParseErr("hintedTags", s.Offset(), scan.ErrBadArray)
+					return result, ggen.NewParseErr("hintedTags", s.Offset(), ggen.ErrBadArray)
 				}
 				s.Pos++
 			}
 			if len(result.HintedTags) > 1000 {
-				return result, &validation.MaxLenError{Pos: s.Offset(), Path: []string{"hintedTags"}, Limit: 1000, Got: len(result.HintedTags)}
+				return result, &ggen.MaxLenError{Pos: s.Offset(), Path: []string{"hintedTags"}, Limit: 1000, Got: len(result.HintedTags)}
 			}
 		case "keyedMap":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("keyedMap", s.Offset(), err)
+				return result, ggen.NewParseErr("keyedMap", s.Offset(), err)
 			}
 			if seenKeyedMap {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"keyedMap"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"keyedMap"}}
 			}
 			seenKeyedMap = true
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("keyedMap", s.Offset(), err)
+				return result, ggen.NewParseErr("keyedMap", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("keyedMap", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+					return result, ggen.NewParseErr("keyedMap", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("keyedMap", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
+							return result, ggen.NewParseErr("keyedMap", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("keyedMap", s.Offset(), scan.ErrBadLiteral)
+						return result, ggen.NewParseErr("keyedMap", s.Offset(), ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -1050,15 +1047,15 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 			}
 			err = s.ObjectOpen()
 			if err != nil {
-				return result, decode.NewParseErr("keyedMap", s.Offset(), err)
+				return result, ggen.NewParseErr("keyedMap", s.Offset(), err)
 			}
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("keyedMap", s.Offset(), err)
+				return result, ggen.NewParseErr("keyedMap", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("keyedMap", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+					return result, ggen.NewParseErr("keyedMap", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 				}
 			}
 			if s.Bytes()[s.Pos] == '}' {
@@ -1074,100 +1071,100 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 				var mk string
 				mk, err = s.String(true)
 				if err != nil {
-					return result, decode.NewParseErr("keyedMap", s.Offset(), err)
+					return result, ggen.NewParseErr("keyedMap", s.Offset(), err)
 				}
 				mk = strings.TrimSpace(mk)
 				mk = strings.ToLower(mk)
 				if len(mk) < 2 {
-					return result, &validation.MinRunesError{Pos: s.Offset(), Path: []string{"keyedMap.key"}, Limit: 2, Got: utf8.RuneCountInString(mk)}
+					return result, &ggen.MinRunesError{Pos: s.Offset(), Path: []string{"keyedMap.key"}, Limit: 2, Got: utf8.RuneCountInString(mk)}
 				} else if len(mk) < 5 {
 					if rc := utf8.RuneCountInString(mk); rc < 2 {
-						return result, &validation.MinRunesError{Pos: s.Offset(), Path: []string{"keyedMap.key"}, Limit: 2, Got: rc}
+						return result, &ggen.MinRunesError{Pos: s.Offset(), Path: []string{"keyedMap.key"}, Limit: 2, Got: rc}
 					}
 				}
 				if len(mk) > 64 {
-					return result, &validation.MaxRunesError{Pos: s.Offset(), Path: []string{"keyedMap.key"}, Limit: 16, Got: utf8.RuneCountInString(mk)}
+					return result, &ggen.MaxRunesError{Pos: s.Offset(), Path: []string{"keyedMap.key"}, Limit: 16, Got: utf8.RuneCountInString(mk)}
 				} else if len(mk) > 16 {
 					if rc := utf8.RuneCountInString(mk); rc > 16 {
-						return result, &validation.MaxRunesError{Pos: s.Offset(), Path: []string{"keyedMap.key"}, Limit: 16, Got: rc}
+						return result, &ggen.MaxRunesError{Pos: s.Offset(), Path: []string{"keyedMap.key"}, Limit: 16, Got: rc}
 					}
 				}
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("keyedMap", s.Offset(), err)
+					return result, ggen.NewParseErr("keyedMap", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("keyedMap", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+						return result, ggen.NewParseErr("keyedMap", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 					}
 				}
 				if s.Bytes()[s.Pos] != ':' {
-					return result, decode.NewParseErr("keyedMap", s.Offset(), scan.ErrBadObject)
+					return result, ggen.NewParseErr("keyedMap", s.Offset(), ggen.ErrBadObject)
 				}
 				s.Pos++
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("keyedMap", s.Offset(), err)
+					return result, ggen.NewParseErr("keyedMap", s.Offset(), err)
 				}
 				var iv int64
 				iv, err = s.Int64()
 				if err != nil {
-					return result, decode.NewParseErr("keyedMap", s.Offset(), err)
+					return result, ggen.NewParseErr("keyedMap", s.Offset(), err)
 				}
 				result.KeyedMap[mk] = int(iv)
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("keyedMap", s.Offset(), err)
+					return result, ggen.NewParseErr("keyedMap", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("keyedMap", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+						return result, ggen.NewParseErr("keyedMap", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
 					s.Pos++
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("keyedMap", s.Offset(), err)
+						return result, ggen.NewParseErr("keyedMap", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == '}' {
-						return result, decode.NewParseErr("keyedMap", s.Offset(), scan.ErrBadObject)
+						return result, ggen.NewParseErr("keyedMap", s.Offset(), ggen.ErrBadObject)
 					}
 					continue
 				}
 				break
 			}
 			if s.Bytes()[s.Pos] != '}' {
-				return result, decode.NewParseErr("keyedMap", s.Offset(), scan.ErrBadObject)
+				return result, ggen.NewParseErr("keyedMap", s.Offset(), ggen.ErrBadObject)
 			}
 			s.Pos++
 		case "nestedInts":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("nestedInts", s.Offset(), err)
+				return result, ggen.NewParseErr("nestedInts", s.Offset(), err)
 			}
 			if seenNestedInts {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"nestedInts"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"nestedInts"}}
 			}
 			seenNestedInts = true
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("nestedInts", s.Offset(), err)
+				return result, ggen.NewParseErr("nestedInts", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("nestedInts", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+					return result, ggen.NewParseErr("nestedInts", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("nestedInts", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
+							return result, ggen.NewParseErr("nestedInts", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("nestedInts", s.Offset(), scan.ErrBadLiteral)
+						return result, ggen.NewParseErr("nestedInts", s.Offset(), ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -1176,15 +1173,15 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 			}
 			err = s.ArrayOpen()
 			if err != nil {
-				return result, decode.NewParseErr("nestedInts", s.Offset(), err)
+				return result, ggen.NewParseErr("nestedInts", s.Offset(), err)
 			}
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("nestedInts", s.Offset(), err)
+				return result, ggen.NewParseErr("nestedInts", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("nestedInts", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+					return result, ggen.NewParseErr("nestedInts", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
 			if s.Bytes()[s.Pos] == ']' {
@@ -1204,42 +1201,42 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("nestedInts", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+						return result, ggen.NewParseErr("nestedInts", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 					}
 				}
 				if s.Bytes()[s.Pos] == 'n' {
 					for ki := 1; ki < 4; ki++ {
 						if s.Pos+ki >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, decode.NewParseErr("nestedInts", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
+								return result, ggen.NewParseErr("nestedInts", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
 							}
 						}
 						if s.Bytes()[s.Pos+ki] != "null"[ki] {
-							return result, decode.NewParseErr("nestedInts", s.Offset(), scan.ErrBadLiteral)
+							return result, ggen.NewParseErr("nestedInts", s.Offset(), ggen.ErrBadLiteral)
 						}
 					}
 					s.Pos += 4
 					result.NestedInts[len(result.NestedInts)-1] = nil
 					if len(result.NestedInts[len(result.NestedInts)-1]) < 1 {
-						return result, &validation.MinLenError{Pos: s.Offset(), Path: []string{"nestedInts[]"}, Limit: 1, Got: len(result.NestedInts[len(result.NestedInts)-1])}
+						return result, &ggen.MinLenError{Pos: s.Offset(), Path: []string{"nestedInts[]"}, Limit: 1, Got: len(result.NestedInts[len(result.NestedInts)-1])}
 					}
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("nestedInts", s.Offset(), err)
+						return result, ggen.NewParseErr("nestedInts", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("nestedInts", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+							return result, ggen.NewParseErr("nestedInts", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 						}
 					}
 					if s.Bytes()[s.Pos] == ',' {
 						s.Pos++
 						err = s.SkipSpace()
 						if err != nil {
-							return result, decode.NewParseErr("nestedInts", s.Offset(), err)
+							return result, ggen.NewParseErr("nestedInts", s.Offset(), err)
 						}
 						if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-							return result, decode.NewParseErr("nestedInts", s.Offset(), scan.ErrBadArray)
+							return result, ggen.NewParseErr("nestedInts", s.Offset(), ggen.ErrBadArray)
 						}
 						continue
 					}
@@ -1251,15 +1248,15 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 				}
 				err = s.ArrayOpen()
 				if err != nil {
-					return result, decode.NewParseErr("nestedInts[]", s.Offset(), err)
+					return result, ggen.NewParseErr("nestedInts[]", s.Offset(), err)
 				}
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("nestedInts[]", s.Offset(), err)
+					return result, ggen.NewParseErr("nestedInts[]", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("nestedInts[]", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+						return result, ggen.NewParseErr("nestedInts[]", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 					}
 				}
 				if s.Bytes()[s.Pos] == ']' {
@@ -1276,98 +1273,98 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 					var iv int64
 					iv, err = s.Int64()
 					if err != nil {
-						return result, decode.NewParseErr("nestedInts[]", s.Offset(), err)
+						return result, ggen.NewParseErr("nestedInts[]", s.Offset(), err)
 					}
 					row0[len(row0)-1] = int(iv)
 					if row0[len(row0)-1] < 0 {
-						return result, &validation.GTEError{Pos: s.Offset(), Path: []string{"nestedInts[][]"}, Limit: 0, Value: row0[len(row0)-1]}
+						return result, &ggen.GTEError{Pos: s.Offset(), Path: []string{"nestedInts[][]"}, Limit: 0, Value: row0[len(row0)-1]}
 					}
 					if row0[len(row0)-1] > 100 {
-						return result, &validation.LTEError{Pos: s.Offset(), Path: []string{"nestedInts[][]"}, Limit: 100, Value: row0[len(row0)-1]}
+						return result, &ggen.LTEError{Pos: s.Offset(), Path: []string{"nestedInts[][]"}, Limit: 100, Value: row0[len(row0)-1]}
 					}
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("nestedInts[]", s.Offset(), err)
+						return result, ggen.NewParseErr("nestedInts[]", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("nestedInts[]", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+							return result, ggen.NewParseErr("nestedInts[]", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 						}
 					}
 					if s.Bytes()[s.Pos] == ',' {
 						s.Pos++
 						err = s.SkipSpace()
 						if err != nil {
-							return result, decode.NewParseErr("nestedInts[]", s.Offset(), err)
+							return result, ggen.NewParseErr("nestedInts[]", s.Offset(), err)
 						}
 						if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-							return result, decode.NewParseErr("nestedInts[]", s.Offset(), scan.ErrBadArray)
+							return result, ggen.NewParseErr("nestedInts[]", s.Offset(), ggen.ErrBadArray)
 						}
 						continue
 					}
 					break
 				}
 				if s.Bytes()[s.Pos] != ']' {
-					return result, decode.NewParseErr("nestedInts[]", s.Offset(), scan.ErrBadArray)
+					return result, ggen.NewParseErr("nestedInts[]", s.Offset(), ggen.ErrBadArray)
 				}
 				s.Pos++
 				result.NestedInts[len(result.NestedInts)-1] = row0
 				if len(result.NestedInts[len(result.NestedInts)-1]) < 1 {
-					return result, &validation.MinLenError{Pos: s.Offset(), Path: []string{"nestedInts[]"}, Limit: 1, Got: len(result.NestedInts[len(result.NestedInts)-1])}
+					return result, &ggen.MinLenError{Pos: s.Offset(), Path: []string{"nestedInts[]"}, Limit: 1, Got: len(result.NestedInts[len(result.NestedInts)-1])}
 				}
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("nestedInts", s.Offset(), err)
+					return result, ggen.NewParseErr("nestedInts", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("nestedInts", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+						return result, ggen.NewParseErr("nestedInts", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
 					s.Pos++
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("nestedInts", s.Offset(), err)
+						return result, ggen.NewParseErr("nestedInts", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-						return result, decode.NewParseErr("nestedInts", s.Offset(), scan.ErrBadArray)
+						return result, ggen.NewParseErr("nestedInts", s.Offset(), ggen.ErrBadArray)
 					}
 					continue
 				}
 				break
 			}
 			if s.Bytes()[s.Pos] != ']' {
-				return result, decode.NewParseErr("nestedInts", s.Offset(), scan.ErrBadArray)
+				return result, ggen.NewParseErr("nestedInts", s.Offset(), ggen.ErrBadArray)
 			}
 			s.Pos++
 		case "triple":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("triple", s.Offset(), err)
+				return result, ggen.NewParseErr("triple", s.Offset(), err)
 			}
 			if seenTriple {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"triple"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"triple"}}
 			}
 			seenTriple = true
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("triple", s.Offset(), err)
+				return result, ggen.NewParseErr("triple", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("triple", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+					return result, ggen.NewParseErr("triple", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("triple", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
+							return result, ggen.NewParseErr("triple", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("triple", s.Offset(), scan.ErrBadLiteral)
+						return result, ggen.NewParseErr("triple", s.Offset(), ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -1376,15 +1373,15 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 			}
 			err = s.ArrayOpen()
 			if err != nil {
-				return result, decode.NewParseErr("triple", s.Offset(), err)
+				return result, ggen.NewParseErr("triple", s.Offset(), err)
 			}
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("triple", s.Offset(), err)
+				return result, ggen.NewParseErr("triple", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("triple", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+					return result, ggen.NewParseErr("triple", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
 			if s.Bytes()[s.Pos] == ']' {
@@ -1404,42 +1401,42 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("triple", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+						return result, ggen.NewParseErr("triple", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 					}
 				}
 				if s.Bytes()[s.Pos] == 'n' {
 					for ki := 1; ki < 4; ki++ {
 						if s.Pos+ki >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, decode.NewParseErr("triple", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
+								return result, ggen.NewParseErr("triple", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
 							}
 						}
 						if s.Bytes()[s.Pos+ki] != "null"[ki] {
-							return result, decode.NewParseErr("triple", s.Offset(), scan.ErrBadLiteral)
+							return result, ggen.NewParseErr("triple", s.Offset(), ggen.ErrBadLiteral)
 						}
 					}
 					s.Pos += 4
 					result.Triple[len(result.Triple)-1] = nil
 					if len(result.Triple[len(result.Triple)-1]) < 1 {
-						return result, &validation.MinLenError{Pos: s.Offset(), Path: []string{"triple[]"}, Limit: 1, Got: len(result.Triple[len(result.Triple)-1])}
+						return result, &ggen.MinLenError{Pos: s.Offset(), Path: []string{"triple[]"}, Limit: 1, Got: len(result.Triple[len(result.Triple)-1])}
 					}
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("triple", s.Offset(), err)
+						return result, ggen.NewParseErr("triple", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("triple", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+							return result, ggen.NewParseErr("triple", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 						}
 					}
 					if s.Bytes()[s.Pos] == ',' {
 						s.Pos++
 						err = s.SkipSpace()
 						if err != nil {
-							return result, decode.NewParseErr("triple", s.Offset(), err)
+							return result, ggen.NewParseErr("triple", s.Offset(), err)
 						}
 						if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-							return result, decode.NewParseErr("triple", s.Offset(), scan.ErrBadArray)
+							return result, ggen.NewParseErr("triple", s.Offset(), ggen.ErrBadArray)
 						}
 						continue
 					}
@@ -1451,15 +1448,15 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 				}
 				err = s.ArrayOpen()
 				if err != nil {
-					return result, decode.NewParseErr("triple[]", s.Offset(), err)
+					return result, ggen.NewParseErr("triple[]", s.Offset(), err)
 				}
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("triple[]", s.Offset(), err)
+					return result, ggen.NewParseErr("triple[]", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("triple[]", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+						return result, ggen.NewParseErr("triple[]", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 					}
 				}
 				if s.Bytes()[s.Pos] == ']' {
@@ -1479,42 +1476,42 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 					}
 					if s.Pos >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("triple[]", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+							return result, ggen.NewParseErr("triple[]", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 						}
 					}
 					if s.Bytes()[s.Pos] == 'n' {
 						for ki := 1; ki < 4; ki++ {
 							if s.Pos+ki >= len(s.Bytes()) {
 								if err = s.ReadMore(0); err != nil {
-									return result, decode.NewParseErr("triple[]", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
+									return result, ggen.NewParseErr("triple[]", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
 								}
 							}
 							if s.Bytes()[s.Pos+ki] != "null"[ki] {
-								return result, decode.NewParseErr("triple[]", s.Offset(), scan.ErrBadLiteral)
+								return result, ggen.NewParseErr("triple[]", s.Offset(), ggen.ErrBadLiteral)
 							}
 						}
 						s.Pos += 4
 						row0[len(row0)-1] = nil
 						if len(row0[len(row0)-1]) < 1 {
-							return result, &validation.MinLenError{Pos: s.Offset(), Path: []string{"triple[][]"}, Limit: 1, Got: len(row0[len(row0)-1])}
+							return result, &ggen.MinLenError{Pos: s.Offset(), Path: []string{"triple[][]"}, Limit: 1, Got: len(row0[len(row0)-1])}
 						}
 						err = s.SkipSpace()
 						if err != nil {
-							return result, decode.NewParseErr("triple[]", s.Offset(), err)
+							return result, ggen.NewParseErr("triple[]", s.Offset(), err)
 						}
 						if s.Pos >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, decode.NewParseErr("triple[]", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+								return result, ggen.NewParseErr("triple[]", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 							}
 						}
 						if s.Bytes()[s.Pos] == ',' {
 							s.Pos++
 							err = s.SkipSpace()
 							if err != nil {
-								return result, decode.NewParseErr("triple[]", s.Offset(), err)
+								return result, ggen.NewParseErr("triple[]", s.Offset(), err)
 							}
 							if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-								return result, decode.NewParseErr("triple[]", s.Offset(), scan.ErrBadArray)
+								return result, ggen.NewParseErr("triple[]", s.Offset(), ggen.ErrBadArray)
 							}
 							continue
 						}
@@ -1526,15 +1523,15 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 					}
 					err = s.ArrayOpen()
 					if err != nil {
-						return result, decode.NewParseErr("triple[][]", s.Offset(), err)
+						return result, ggen.NewParseErr("triple[][]", s.Offset(), err)
 					}
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("triple[][]", s.Offset(), err)
+						return result, ggen.NewParseErr("triple[][]", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("triple[][]", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+							return result, ggen.NewParseErr("triple[][]", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 						}
 					}
 					if s.Bytes()[s.Pos] == ']' {
@@ -1550,108 +1547,108 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 						row1 = append(row1, "")
 						row1[len(row1)-1], err = s.String(true)
 						if err != nil {
-							return result, decode.NewParseErr("triple[][]", s.Offset(), err)
+							return result, ggen.NewParseErr("triple[][]", s.Offset(), err)
 						}
 						if len(row1[len(row1)-1]) < 1 {
-							return result, &validation.MinLenError{Pos: s.Offset(), Path: []string{"triple[][][]"}, Limit: 1, Got: len(row1[len(row1)-1])}
+							return result, &ggen.MinLenError{Pos: s.Offset(), Path: []string{"triple[][][]"}, Limit: 1, Got: len(row1[len(row1)-1])}
 						}
 						err = s.SkipSpace()
 						if err != nil {
-							return result, decode.NewParseErr("triple[][]", s.Offset(), err)
+							return result, ggen.NewParseErr("triple[][]", s.Offset(), err)
 						}
 						if s.Pos >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, decode.NewParseErr("triple[][]", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+								return result, ggen.NewParseErr("triple[][]", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 							}
 						}
 						if s.Bytes()[s.Pos] == ',' {
 							s.Pos++
 							err = s.SkipSpace()
 							if err != nil {
-								return result, decode.NewParseErr("triple[][]", s.Offset(), err)
+								return result, ggen.NewParseErr("triple[][]", s.Offset(), err)
 							}
 							if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-								return result, decode.NewParseErr("triple[][]", s.Offset(), scan.ErrBadArray)
+								return result, ggen.NewParseErr("triple[][]", s.Offset(), ggen.ErrBadArray)
 							}
 							continue
 						}
 						break
 					}
 					if s.Bytes()[s.Pos] != ']' {
-						return result, decode.NewParseErr("triple[][]", s.Offset(), scan.ErrBadArray)
+						return result, ggen.NewParseErr("triple[][]", s.Offset(), ggen.ErrBadArray)
 					}
 					s.Pos++
 					row0[len(row0)-1] = row1
 					if len(row0[len(row0)-1]) < 1 {
-						return result, &validation.MinLenError{Pos: s.Offset(), Path: []string{"triple[][]"}, Limit: 1, Got: len(row0[len(row0)-1])}
+						return result, &ggen.MinLenError{Pos: s.Offset(), Path: []string{"triple[][]"}, Limit: 1, Got: len(row0[len(row0)-1])}
 					}
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("triple[]", s.Offset(), err)
+						return result, ggen.NewParseErr("triple[]", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("triple[]", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+							return result, ggen.NewParseErr("triple[]", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 						}
 					}
 					if s.Bytes()[s.Pos] == ',' {
 						s.Pos++
 						err = s.SkipSpace()
 						if err != nil {
-							return result, decode.NewParseErr("triple[]", s.Offset(), err)
+							return result, ggen.NewParseErr("triple[]", s.Offset(), err)
 						}
 						if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-							return result, decode.NewParseErr("triple[]", s.Offset(), scan.ErrBadArray)
+							return result, ggen.NewParseErr("triple[]", s.Offset(), ggen.ErrBadArray)
 						}
 						continue
 					}
 					break
 				}
 				if s.Bytes()[s.Pos] != ']' {
-					return result, decode.NewParseErr("triple[]", s.Offset(), scan.ErrBadArray)
+					return result, ggen.NewParseErr("triple[]", s.Offset(), ggen.ErrBadArray)
 				}
 				s.Pos++
 				result.Triple[len(result.Triple)-1] = row0
 				if len(result.Triple[len(result.Triple)-1]) < 1 {
-					return result, &validation.MinLenError{Pos: s.Offset(), Path: []string{"triple[]"}, Limit: 1, Got: len(result.Triple[len(result.Triple)-1])}
+					return result, &ggen.MinLenError{Pos: s.Offset(), Path: []string{"triple[]"}, Limit: 1, Got: len(result.Triple[len(result.Triple)-1])}
 				}
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("triple", s.Offset(), err)
+					return result, ggen.NewParseErr("triple", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("triple", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+						return result, ggen.NewParseErr("triple", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
 					s.Pos++
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("triple", s.Offset(), err)
+						return result, ggen.NewParseErr("triple", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-						return result, decode.NewParseErr("triple", s.Offset(), scan.ErrBadArray)
+						return result, ggen.NewParseErr("triple", s.Offset(), ggen.ErrBadArray)
 					}
 					continue
 				}
 				break
 			}
 			if s.Bytes()[s.Pos] != ']' {
-				return result, decode.NewParseErr("triple", s.Offset(), scan.ErrBadArray)
+				return result, ggen.NewParseErr("triple", s.Offset(), ggen.ErrBadArray)
 			}
 			s.Pos++
 		default:
-			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Offset(), err)
+			return result, ggen.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+				return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -1660,7 +1657,7 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Offset(), err)
+				return result, ggen.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -1668,7 +1665,7 @@ func (recv ExtraStruct) DecodeFromStream(s *scan.Stream) (result ExtraStruct, er
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
+		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
 	}
 }
 
@@ -1727,10 +1724,10 @@ func (s ExtraStruct) AppendJSON(dst []byte) ([]byte, error) {
 		dst = append(dst, '[')
 		if len(s.HintedTags) > 0 {
 			dst = append(dst, '"')
-			dst = encode.AppendStringNoHTML(dst, s.HintedTags[0])
+			dst = ggen.AppendStringNoHTML(dst, s.HintedTags[0])
 			for _, v0 := range s.HintedTags[1:] {
 				dst = append(dst, ",\""...)
-				dst = encode.AppendStringNoHTML(dst, v0)
+				dst = ggen.AppendStringNoHTML(dst, v0)
 			}
 		}
 		dst = append(dst, ']')
@@ -1748,7 +1745,7 @@ func (s ExtraStruct) AppendJSON(dst []byte) ([]byte, error) {
 			} else {
 				dst = append(dst, ",\""...)
 			}
-			dst = encode.AppendStringNoHTML(dst, k)
+			dst = ggen.AppendStringNoHTML(dst, k)
 			dst = append(dst, ':')
 			dst = strconv.AppendInt(dst, int64(v), 10)
 		}
@@ -1809,10 +1806,10 @@ func (s ExtraStruct) AppendJSON(dst []byte) ([]byte, error) {
 						dst = append(dst, '[')
 						if len(s.Triple[0][0]) > 0 {
 							dst = append(dst, '"')
-							dst = encode.AppendStringNoHTML(dst, s.Triple[0][0][0])
+							dst = ggen.AppendStringNoHTML(dst, s.Triple[0][0][0])
 							for _, v2 := range s.Triple[0][0][1:] {
 								dst = append(dst, ",\""...)
-								dst = encode.AppendStringNoHTML(dst, v2)
+								dst = ggen.AppendStringNoHTML(dst, v2)
 							}
 						}
 						dst = append(dst, ']')
@@ -1825,10 +1822,10 @@ func (s ExtraStruct) AppendJSON(dst []byte) ([]byte, error) {
 							dst = append(dst, '[')
 							if len(v1) > 0 {
 								dst = append(dst, '"')
-								dst = encode.AppendStringNoHTML(dst, v1[0])
+								dst = ggen.AppendStringNoHTML(dst, v1[0])
 								for _, v2 := range v1[1:] {
 									dst = append(dst, ",\""...)
-									dst = encode.AppendStringNoHTML(dst, v2)
+									dst = ggen.AppendStringNoHTML(dst, v2)
 								}
 							}
 							dst = append(dst, ']')
@@ -1850,10 +1847,10 @@ func (s ExtraStruct) AppendJSON(dst []byte) ([]byte, error) {
 							dst = append(dst, '[')
 							if len(v0[0]) > 0 {
 								dst = append(dst, '"')
-								dst = encode.AppendStringNoHTML(dst, v0[0][0])
+								dst = ggen.AppendStringNoHTML(dst, v0[0][0])
 								for _, v2 := range v0[0][1:] {
 									dst = append(dst, ",\""...)
-									dst = encode.AppendStringNoHTML(dst, v2)
+									dst = ggen.AppendStringNoHTML(dst, v2)
 								}
 							}
 							dst = append(dst, ']')
@@ -1866,10 +1863,10 @@ func (s ExtraStruct) AppendJSON(dst []byte) ([]byte, error) {
 								dst = append(dst, '[')
 								if len(v1) > 0 {
 									dst = append(dst, '"')
-									dst = encode.AppendStringNoHTML(dst, v1[0])
+									dst = ggen.AppendStringNoHTML(dst, v1[0])
 									for _, v2 := range v1[1:] {
 										dst = append(dst, ",\""...)
-										dst = encode.AppendStringNoHTML(dst, v2)
+										dst = ggen.AppendStringNoHTML(dst, v2)
 									}
 								}
 								dst = append(dst, ']')
@@ -1903,7 +1900,7 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
-		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 	}
 	i++
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -1916,7 +1913,7 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 	for {
 		var key string
 		if i >= len(data) || data[i] != '"' {
-			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrExpectString)
 		}
 		ke := i + 1
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
@@ -1926,16 +1923,16 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i, true)
+			key, i, err = ggen.String(data, i, true)
 			if err != nil {
-				return result, i, decode.NewParseErr("", i, err)
+				return result, i, ggen.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 		}
 		i++
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -1944,11 +1941,11 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 		switch key {
 		case "named":
 			if seenNamed {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"named"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"named"}}
 			}
 			seenNamed = true
 			if i >= len(data) || data[i] != '[' {
-				return result, i, decode.NewParseErr("named", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("named", i, ggen.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -1958,7 +1955,7 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 			if i < len(data) && data[i] != ']' {
 				for {
 					if idx0 >= 2 {
-						return result, i, &validation.LenError{Pos: i, Path: []string{"named"}, Want: 2, Got: idx0}
+						return result, i, &ggen.LenError{Pos: i, Path: []string{"named"}, Want: 2, Got: idx0}
 					}
 					neg := false
 					if i < len(data) && data[i] == '-' {
@@ -1966,14 +1963,14 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 						i++
 					}
 					if i >= len(data) || data[i] < '0' || data[i] > '9' {
-						return result, i, decode.NewParseErr("named", i, scan.ErrBadNumber)
+						return result, i, ggen.NewParseErr("named", i, ggen.ErrBadNumber)
 					}
 					if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
-						return result, i, decode.NewParseErr("named", i, scan.ErrBadNumber)
+						return result, i, ggen.NewParseErr("named", i, ggen.ErrBadNumber)
 					}
 					limit := uint64(math.MaxInt64)
 					if neg {
-						limit = scan.SignedNeg
+						limit = ggen.SignedNeg
 					}
 					var u uint64
 					de := i + 18
@@ -1987,7 +1984,7 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 					for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 						d := uint64(data[i] - '0')
 						if u > limit/10 || (u == limit/10 && d > limit%10) {
-							return result, i, decode.NewParseErr("named", i, scan.ErrNumberOverflow)
+							return result, i, ggen.NewParseErr("named", i, ggen.ErrNumberOverflow)
 						}
 						u = u*10 + d
 						i++
@@ -1995,12 +1992,12 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 					if i < len(data) {
 						c := data[i]
 						if c == '.' || c == 'e' || c == 'E' {
-							return result, i, decode.NewParseErr("named", i, scan.ErrBadNumber)
+							return result, i, ggen.NewParseErr("named", i, ggen.ErrBadNumber)
 						}
 					}
 					var n int64
 					if neg {
-						if u == scan.SignedNeg {
+						if u == ggen.SignedNeg {
 							n = math.MinInt64
 						} else {
 							n = -int64(u)
@@ -2019,7 +2016,7 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, decode.NewParseErr("named", i, scan.ErrBadArray)
+							return result, i, ggen.NewParseErr("named", i, ggen.ErrBadArray)
 						}
 						continue
 					}
@@ -2027,15 +2024,15 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, decode.NewParseErr("named", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("named", i, ggen.ErrBadArray)
 			}
 			if idx0 != 2 {
-				return result, i, &validation.LenError{Pos: i, Path: []string{"named"}, Want: 2, Got: idx0}
+				return result, i, &ggen.LenError{Pos: i, Path: []string{"named"}, Want: 2, Got: idx0}
 			}
 			i++
 		case "nested":
 			if seenNested {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"nested"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"nested"}}
 			}
 			seenNested = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -2044,7 +2041,7 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 				break
 			}
 			if i >= len(data) || data[i] != '[' {
-				return result, i, decode.NewParseErr("nested", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("nested", i, ggen.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -2064,7 +2061,7 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 					result.Nested = append(result.Nested, [2]int{})
 					row0 := result.Nested[len(result.Nested)-1]
 					if i >= len(data) || data[i] != '[' {
-						return result, i, decode.NewParseErr("nested[]", i, scan.ErrBadArray)
+						return result, i, ggen.NewParseErr("nested[]", i, ggen.ErrBadArray)
 					}
 					i++
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -2074,7 +2071,7 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 					if i < len(data) && data[i] != ']' {
 						for {
 							if idx1 >= 2 {
-								return result, i, &validation.LenError{Pos: i, Path: []string{"nested[]"}, Want: 2, Got: idx1}
+								return result, i, &ggen.LenError{Pos: i, Path: []string{"nested[]"}, Want: 2, Got: idx1}
 							}
 							neg := false
 							if i < len(data) && data[i] == '-' {
@@ -2082,14 +2079,14 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 								i++
 							}
 							if i >= len(data) || data[i] < '0' || data[i] > '9' {
-								return result, i, decode.NewParseErr("nested[]", i, scan.ErrBadNumber)
+								return result, i, ggen.NewParseErr("nested[]", i, ggen.ErrBadNumber)
 							}
 							if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
-								return result, i, decode.NewParseErr("nested[]", i, scan.ErrBadNumber)
+								return result, i, ggen.NewParseErr("nested[]", i, ggen.ErrBadNumber)
 							}
 							limit := uint64(math.MaxInt64)
 							if neg {
-								limit = scan.SignedNeg
+								limit = ggen.SignedNeg
 							}
 							var u uint64
 							de := i + 18
@@ -2103,7 +2100,7 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 							for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 								d := uint64(data[i] - '0')
 								if u > limit/10 || (u == limit/10 && d > limit%10) {
-									return result, i, decode.NewParseErr("nested[]", i, scan.ErrNumberOverflow)
+									return result, i, ggen.NewParseErr("nested[]", i, ggen.ErrNumberOverflow)
 								}
 								u = u*10 + d
 								i++
@@ -2111,12 +2108,12 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 							if i < len(data) {
 								c := data[i]
 								if c == '.' || c == 'e' || c == 'E' {
-									return result, i, decode.NewParseErr("nested[]", i, scan.ErrBadNumber)
+									return result, i, ggen.NewParseErr("nested[]", i, ggen.ErrBadNumber)
 								}
 							}
 							var n int64
 							if neg {
-								if u == scan.SignedNeg {
+								if u == ggen.SignedNeg {
 									n = math.MinInt64
 								} else {
 									n = -int64(u)
@@ -2135,7 +2132,7 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 									i++
 								}
 								if i >= len(data) || data[i] == ']' {
-									return result, i, decode.NewParseErr("nested[]", i, scan.ErrBadArray)
+									return result, i, ggen.NewParseErr("nested[]", i, ggen.ErrBadArray)
 								}
 								continue
 							}
@@ -2143,10 +2140,10 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 						}
 					}
 					if i >= len(data) || data[i] != ']' {
-						return result, i, decode.NewParseErr("nested[]", i, scan.ErrBadArray)
+						return result, i, ggen.NewParseErr("nested[]", i, ggen.ErrBadArray)
 					}
 					if idx1 != 2 {
-						return result, i, &validation.LenError{Pos: i, Path: []string{"nested[]"}, Want: 2, Got: idx1}
+						return result, i, &ggen.LenError{Pos: i, Path: []string{"nested[]"}, Want: 2, Got: idx1}
 					}
 					i++
 					result.Nested[len(result.Nested)-1] = row0
@@ -2159,7 +2156,7 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, decode.NewParseErr("nested", i, scan.ErrBadArray)
+							return result, i, ggen.NewParseErr("nested", i, ggen.ErrBadArray)
 						}
 						continue
 					}
@@ -2167,16 +2164,16 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, decode.NewParseErr("nested", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("nested", i, ggen.ErrBadArray)
 			}
 			i++
 		case "pair":
 			if seenPair {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"pair"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"pair"}}
 			}
 			seenPair = true
 			if i >= len(data) || data[i] != '[' {
-				return result, i, decode.NewParseErr("pair", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("pair", i, ggen.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -2186,7 +2183,7 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 			if i < len(data) && data[i] != ']' {
 				for {
 					if idx0 >= 2 {
-						return result, i, &validation.LenError{Pos: i, Path: []string{"pair"}, Want: 2, Got: idx0}
+						return result, i, &ggen.LenError{Pos: i, Path: []string{"pair"}, Want: 2, Got: idx0}
 					}
 					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 						i += 4
@@ -2201,7 +2198,7 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 								i++
 							}
 							if i >= len(data) || data[i] == ']' {
-								return result, i, decode.NewParseErr("pair", i, scan.ErrBadArray)
+								return result, i, ggen.NewParseErr("pair", i, ggen.ErrBadArray)
 							}
 							continue
 						}
@@ -2212,7 +2209,7 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 						row0 = row0[:0]
 					}
 					if i >= len(data) || data[i] != '[' {
-						return result, i, decode.NewParseErr("pair[]", i, scan.ErrBadArray)
+						return result, i, ggen.NewParseErr("pair[]", i, ggen.ErrBadArray)
 					}
 					i++
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -2231,7 +2228,7 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 						for {
 							row0 = append(row0, "")
 							if i >= len(data) || data[i] != '"' {
-								return result, i, decode.NewParseErr("pair[]", i, scan.ErrExpectString)
+								return result, i, ggen.NewParseErr("pair[]", i, ggen.ErrExpectString)
 							}
 							ke := i + 1
 							kew := ke + 32
@@ -2245,9 +2242,9 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 								row0[len(row0)-1] = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 								i = ke + 1
 							} else {
-								row0[len(row0)-1], i, err = scan.String(data, i, true)
+								row0[len(row0)-1], i, err = ggen.String(data, i, true)
 								if err != nil {
-									return result, i, decode.NewParseErr("pair[]", i, err)
+									return result, i, ggen.NewParseErr("pair[]", i, err)
 								}
 							}
 							for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -2259,7 +2256,7 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 									i++
 								}
 								if i >= len(data) || data[i] == ']' {
-									return result, i, decode.NewParseErr("pair[]", i, scan.ErrBadArray)
+									return result, i, ggen.NewParseErr("pair[]", i, ggen.ErrBadArray)
 								}
 								continue
 							}
@@ -2267,7 +2264,7 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 						}
 					}
 					if i >= len(data) || data[i] != ']' {
-						return result, i, decode.NewParseErr("pair[]", i, scan.ErrBadArray)
+						return result, i, ggen.NewParseErr("pair[]", i, ggen.ErrBadArray)
 					}
 					i++
 					result.Pair[idx0] = row0
@@ -2281,7 +2278,7 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, decode.NewParseErr("pair", i, scan.ErrBadArray)
+							return result, i, ggen.NewParseErr("pair", i, ggen.ErrBadArray)
 						}
 						continue
 					}
@@ -2289,19 +2286,19 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, decode.NewParseErr("pair", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("pair", i, ggen.ErrBadArray)
 			}
 			if idx0 != 2 {
-				return result, i, &validation.LenError{Pos: i, Path: []string{"pair"}, Want: 2, Got: idx0}
+				return result, i, &ggen.LenError{Pos: i, Path: []string{"pair"}, Want: 2, Got: idx0}
 			}
 			i++
 		case "point":
 			if seenPoint {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"point"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"point"}}
 			}
 			seenPoint = true
 			if i >= len(data) || data[i] != '[' {
-				return result, i, decode.NewParseErr("point", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("point", i, ggen.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -2311,11 +2308,11 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 			if i < len(data) && data[i] != ']' {
 				for {
 					if idx0 >= 2 {
-						return result, i, &validation.LenError{Pos: i, Path: []string{"point"}, Want: 2, Got: idx0}
+						return result, i, &ggen.LenError{Pos: i, Path: []string{"point"}, Want: 2, Got: idx0}
 					}
-					result.Point[idx0], i, err = scan.Float64(data, i)
+					result.Point[idx0], i, err = ggen.Float64(data, i)
 					if err != nil {
-						return result, i, decode.NewParseErr("point", i, err)
+						return result, i, ggen.NewParseErr("point", i, err)
 					}
 					idx0++
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -2327,7 +2324,7 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, decode.NewParseErr("point", i, scan.ErrBadArray)
+							return result, i, ggen.NewParseErr("point", i, ggen.ErrBadArray)
 						}
 						continue
 					}
@@ -2335,19 +2332,19 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, decode.NewParseErr("point", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("point", i, ggen.ErrBadArray)
 			}
 			if idx0 != 2 {
-				return result, i, &validation.LenError{Pos: i, Path: []string{"point"}, Want: 2, Got: idx0}
+				return result, i, &ggen.LenError{Pos: i, Path: []string{"point"}, Want: 2, Got: idx0}
 			}
 			i++
 		case "rgb":
 			if seenRGB {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"rgb"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"rgb"}}
 			}
 			seenRGB = true
 			if i >= len(data) || data[i] != '[' {
-				return result, i, decode.NewParseErr("rgb", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("rgb", i, ggen.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -2357,7 +2354,7 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 			if i < len(data) && data[i] != ']' {
 				for {
 					if idx0 >= 3 {
-						return result, i, &validation.LenError{Pos: i, Path: []string{"rgb"}, Want: 3, Got: idx0}
+						return result, i, &ggen.LenError{Pos: i, Path: []string{"rgb"}, Want: 3, Got: idx0}
 					}
 					neg := false
 					if i < len(data) && data[i] == '-' {
@@ -2365,14 +2362,14 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 						i++
 					}
 					if i >= len(data) || data[i] < '0' || data[i] > '9' {
-						return result, i, decode.NewParseErr("rgb", i, scan.ErrBadNumber)
+						return result, i, ggen.NewParseErr("rgb", i, ggen.ErrBadNumber)
 					}
 					if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
-						return result, i, decode.NewParseErr("rgb", i, scan.ErrBadNumber)
+						return result, i, ggen.NewParseErr("rgb", i, ggen.ErrBadNumber)
 					}
 					limit := uint64(math.MaxInt64)
 					if neg {
-						limit = scan.SignedNeg
+						limit = ggen.SignedNeg
 					}
 					var u uint64
 					de := i + 18
@@ -2386,7 +2383,7 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 					for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 						d := uint64(data[i] - '0')
 						if u > limit/10 || (u == limit/10 && d > limit%10) {
-							return result, i, decode.NewParseErr("rgb", i, scan.ErrNumberOverflow)
+							return result, i, ggen.NewParseErr("rgb", i, ggen.ErrNumberOverflow)
 						}
 						u = u*10 + d
 						i++
@@ -2394,12 +2391,12 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 					if i < len(data) {
 						c := data[i]
 						if c == '.' || c == 'e' || c == 'E' {
-							return result, i, decode.NewParseErr("rgb", i, scan.ErrBadNumber)
+							return result, i, ggen.NewParseErr("rgb", i, ggen.ErrBadNumber)
 						}
 					}
 					var n int64
 					if neg {
-						if u == scan.SignedNeg {
+						if u == ggen.SignedNeg {
 							n = math.MinInt64
 						} else {
 							n = -int64(u)
@@ -2415,10 +2412,10 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 						result.RGB[idx0] = 255
 					}
 					if result.RGB[idx0] < 0 {
-						return result, i, &validation.GTEError{Pos: i, Path: []string{"rgb[]"}, Limit: 0, Value: result.RGB[idx0]}
+						return result, i, &ggen.GTEError{Pos: i, Path: []string{"rgb[]"}, Limit: 0, Value: result.RGB[idx0]}
 					}
 					if result.RGB[idx0] > 255 {
-						return result, i, &validation.LTEError{Pos: i, Path: []string{"rgb[]"}, Limit: 255, Value: result.RGB[idx0]}
+						return result, i, &ggen.LTEError{Pos: i, Path: []string{"rgb[]"}, Limit: 255, Value: result.RGB[idx0]}
 					}
 					idx0++
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -2430,7 +2427,7 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, decode.NewParseErr("rgb", i, scan.ErrBadArray)
+							return result, i, ggen.NewParseErr("rgb", i, ggen.ErrBadArray)
 						}
 						continue
 					}
@@ -2438,15 +2435,15 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, decode.NewParseErr("rgb", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("rgb", i, ggen.ErrBadArray)
 			}
 			if idx0 != 3 {
-				return result, i, &validation.LenError{Pos: i, Path: []string{"rgb"}, Want: 3, Got: idx0}
+				return result, i, &ggen.LenError{Pos: i, Path: []string{"rgb"}, Want: 3, Got: idx0}
 			}
 			i++
 		case "segments":
 			if seenSegments {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"segments"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"segments"}}
 			}
 			seenSegments = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -2455,7 +2452,7 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 				break
 			}
 			if i >= len(data) || data[i] != '[' {
-				return result, i, decode.NewParseErr("segments", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("segments", i, ggen.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -2475,7 +2472,7 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 					result.Segments = append(result.Segments, [2]int{})
 					row0 := result.Segments[len(result.Segments)-1]
 					if i >= len(data) || data[i] != '[' {
-						return result, i, decode.NewParseErr("segments[]", i, scan.ErrBadArray)
+						return result, i, ggen.NewParseErr("segments[]", i, ggen.ErrBadArray)
 					}
 					i++
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -2485,7 +2482,7 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 					if i < len(data) && data[i] != ']' {
 						for {
 							if idx1 >= 2 {
-								return result, i, &validation.LenError{Pos: i, Path: []string{"segments[]"}, Want: 2, Got: idx1}
+								return result, i, &ggen.LenError{Pos: i, Path: []string{"segments[]"}, Want: 2, Got: idx1}
 							}
 							neg := false
 							if i < len(data) && data[i] == '-' {
@@ -2493,14 +2490,14 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 								i++
 							}
 							if i >= len(data) || data[i] < '0' || data[i] > '9' {
-								return result, i, decode.NewParseErr("segments[]", i, scan.ErrBadNumber)
+								return result, i, ggen.NewParseErr("segments[]", i, ggen.ErrBadNumber)
 							}
 							if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
-								return result, i, decode.NewParseErr("segments[]", i, scan.ErrBadNumber)
+								return result, i, ggen.NewParseErr("segments[]", i, ggen.ErrBadNumber)
 							}
 							limit := uint64(math.MaxInt64)
 							if neg {
-								limit = scan.SignedNeg
+								limit = ggen.SignedNeg
 							}
 							var u uint64
 							de := i + 18
@@ -2514,7 +2511,7 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 							for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 								d := uint64(data[i] - '0')
 								if u > limit/10 || (u == limit/10 && d > limit%10) {
-									return result, i, decode.NewParseErr("segments[]", i, scan.ErrNumberOverflow)
+									return result, i, ggen.NewParseErr("segments[]", i, ggen.ErrNumberOverflow)
 								}
 								u = u*10 + d
 								i++
@@ -2522,12 +2519,12 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 							if i < len(data) {
 								c := data[i]
 								if c == '.' || c == 'e' || c == 'E' {
-									return result, i, decode.NewParseErr("segments[]", i, scan.ErrBadNumber)
+									return result, i, ggen.NewParseErr("segments[]", i, ggen.ErrBadNumber)
 								}
 							}
 							var n int64
 							if neg {
-								if u == scan.SignedNeg {
+								if u == ggen.SignedNeg {
 									n = math.MinInt64
 								} else {
 									n = -int64(u)
@@ -2546,7 +2543,7 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 									i++
 								}
 								if i >= len(data) || data[i] == ']' {
-									return result, i, decode.NewParseErr("segments[]", i, scan.ErrBadArray)
+									return result, i, ggen.NewParseErr("segments[]", i, ggen.ErrBadArray)
 								}
 								continue
 							}
@@ -2554,10 +2551,10 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 						}
 					}
 					if i >= len(data) || data[i] != ']' {
-						return result, i, decode.NewParseErr("segments[]", i, scan.ErrBadArray)
+						return result, i, ggen.NewParseErr("segments[]", i, ggen.ErrBadArray)
 					}
 					if idx1 != 2 {
-						return result, i, &validation.LenError{Pos: i, Path: []string{"segments[]"}, Want: 2, Got: idx1}
+						return result, i, &ggen.LenError{Pos: i, Path: []string{"segments[]"}, Want: 2, Got: idx1}
 					}
 					i++
 					result.Segments[len(result.Segments)-1] = row0
@@ -2570,7 +2567,7 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, decode.NewParseErr("segments", i, scan.ErrBadArray)
+							return result, i, ggen.NewParseErr("segments", i, ggen.ErrBadArray)
 						}
 						continue
 					}
@@ -2578,17 +2575,17 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, decode.NewParseErr("segments", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("segments", i, ggen.ErrBadArray)
 			}
 			i++
 		default:
-			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 		}
 		if data[i] == ',' {
 			i++
@@ -2601,11 +2598,11 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 			i++
 			return result, i, nil
 		}
-		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 	}
 }
 
-func (recv TupleStruct) DecodeFromStream(s *scan.Stream) (result TupleStruct, err error) {
+func (recv TupleStruct) DecodeFromStream(s *ggen.Stream) (result TupleStruct, err error) {
 	result = recv
 	if result.Nested != nil {
 		result.Nested = result.Nested[:0]
@@ -2621,15 +2618,15 @@ func (recv TupleStruct) DecodeFromStream(s *scan.Stream) (result TupleStruct, er
 	seenSegments := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Offset(), err)
+		return result, ggen.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Offset(), err)
+		return result, ggen.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
+			return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -2641,99 +2638,99 @@ func (recv TupleStruct) DecodeFromStream(s *scan.Stream) (result TupleStruct, er
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Offset(), err)
+			return result, ggen.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "named":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("named", s.Offset(), err)
+				return result, ggen.NewParseErr("named", s.Offset(), err)
 			}
 			if seenNamed {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"named"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"named"}}
 			}
 			seenNamed = true
 			err = s.ArrayOpen()
 			if err != nil {
-				return result, decode.NewParseErr("named", s.Offset(), err)
+				return result, ggen.NewParseErr("named", s.Offset(), err)
 			}
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("named", s.Offset(), err)
+				return result, ggen.NewParseErr("named", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("named", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+					return result, ggen.NewParseErr("named", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
 			var idx0 int
 			for s.Bytes()[s.Pos] != ']' {
 				if idx0 >= 2 {
-					return result, &validation.LenError{Pos: s.Offset(), Path: []string{"named"}, Want: 2, Got: idx0}
+					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"named"}, Want: 2, Got: idx0}
 				}
 				var iv int64
 				iv, err = s.Int64()
 				if err != nil {
-					return result, decode.NewParseErr("named", s.Offset(), err)
+					return result, ggen.NewParseErr("named", s.Offset(), err)
 				}
 				result.Named[idx0] = int(iv)
 				idx0++
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("named", s.Offset(), err)
+					return result, ggen.NewParseErr("named", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("named", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+						return result, ggen.NewParseErr("named", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
 					s.Pos++
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("named", s.Offset(), err)
+						return result, ggen.NewParseErr("named", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-						return result, decode.NewParseErr("named", s.Offset(), scan.ErrBadArray)
+						return result, ggen.NewParseErr("named", s.Offset(), ggen.ErrBadArray)
 					}
 					continue
 				}
 				break
 			}
 			if s.Bytes()[s.Pos] != ']' {
-				return result, decode.NewParseErr("named", s.Offset(), scan.ErrBadArray)
+				return result, ggen.NewParseErr("named", s.Offset(), ggen.ErrBadArray)
 			}
 			if idx0 != 2 {
-				return result, &validation.LenError{Pos: s.Offset(), Path: []string{"named"}, Want: 2, Got: idx0}
+				return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"named"}, Want: 2, Got: idx0}
 			}
 			s.Pos++
 		case "nested":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("nested", s.Offset(), err)
+				return result, ggen.NewParseErr("nested", s.Offset(), err)
 			}
 			if seenNested {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"nested"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"nested"}}
 			}
 			seenNested = true
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("nested", s.Offset(), err)
+				return result, ggen.NewParseErr("nested", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("nested", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+					return result, ggen.NewParseErr("nested", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("nested", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
+							return result, ggen.NewParseErr("nested", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("nested", s.Offset(), scan.ErrBadLiteral)
+						return result, ggen.NewParseErr("nested", s.Offset(), ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -2742,15 +2739,15 @@ func (recv TupleStruct) DecodeFromStream(s *scan.Stream) (result TupleStruct, er
 			}
 			err = s.ArrayOpen()
 			if err != nil {
-				return result, decode.NewParseErr("nested", s.Offset(), err)
+				return result, ggen.NewParseErr("nested", s.Offset(), err)
 			}
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("nested", s.Offset(), err)
+				return result, ggen.NewParseErr("nested", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("nested", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+					return result, ggen.NewParseErr("nested", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
 			if s.Bytes()[s.Pos] == ']' {
@@ -2767,126 +2764,126 @@ func (recv TupleStruct) DecodeFromStream(s *scan.Stream) (result TupleStruct, er
 				row0 := result.Nested[len(result.Nested)-1]
 				err = s.ArrayOpen()
 				if err != nil {
-					return result, decode.NewParseErr("nested[]", s.Offset(), err)
+					return result, ggen.NewParseErr("nested[]", s.Offset(), err)
 				}
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("nested[]", s.Offset(), err)
+					return result, ggen.NewParseErr("nested[]", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("nested[]", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+						return result, ggen.NewParseErr("nested[]", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 					}
 				}
 				var idx1 int
 				for s.Bytes()[s.Pos] != ']' {
 					if idx1 >= 2 {
-						return result, &validation.LenError{Pos: s.Offset(), Path: []string{"nested[]"}, Want: 2, Got: idx1}
+						return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"nested[]"}, Want: 2, Got: idx1}
 					}
 					var iv int64
 					iv, err = s.Int64()
 					if err != nil {
-						return result, decode.NewParseErr("nested[]", s.Offset(), err)
+						return result, ggen.NewParseErr("nested[]", s.Offset(), err)
 					}
 					row0[idx1] = int(iv)
 					idx1++
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("nested[]", s.Offset(), err)
+						return result, ggen.NewParseErr("nested[]", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("nested[]", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+							return result, ggen.NewParseErr("nested[]", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 						}
 					}
 					if s.Bytes()[s.Pos] == ',' {
 						s.Pos++
 						err = s.SkipSpace()
 						if err != nil {
-							return result, decode.NewParseErr("nested[]", s.Offset(), err)
+							return result, ggen.NewParseErr("nested[]", s.Offset(), err)
 						}
 						if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-							return result, decode.NewParseErr("nested[]", s.Offset(), scan.ErrBadArray)
+							return result, ggen.NewParseErr("nested[]", s.Offset(), ggen.ErrBadArray)
 						}
 						continue
 					}
 					break
 				}
 				if s.Bytes()[s.Pos] != ']' {
-					return result, decode.NewParseErr("nested[]", s.Offset(), scan.ErrBadArray)
+					return result, ggen.NewParseErr("nested[]", s.Offset(), ggen.ErrBadArray)
 				}
 				if idx1 != 2 {
-					return result, &validation.LenError{Pos: s.Offset(), Path: []string{"nested[]"}, Want: 2, Got: idx1}
+					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"nested[]"}, Want: 2, Got: idx1}
 				}
 				s.Pos++
 				result.Nested[len(result.Nested)-1] = row0
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("nested", s.Offset(), err)
+					return result, ggen.NewParseErr("nested", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("nested", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+						return result, ggen.NewParseErr("nested", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
 					s.Pos++
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("nested", s.Offset(), err)
+						return result, ggen.NewParseErr("nested", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-						return result, decode.NewParseErr("nested", s.Offset(), scan.ErrBadArray)
+						return result, ggen.NewParseErr("nested", s.Offset(), ggen.ErrBadArray)
 					}
 					continue
 				}
 				break
 			}
 			if s.Bytes()[s.Pos] != ']' {
-				return result, decode.NewParseErr("nested", s.Offset(), scan.ErrBadArray)
+				return result, ggen.NewParseErr("nested", s.Offset(), ggen.ErrBadArray)
 			}
 			s.Pos++
 		case "pair":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("pair", s.Offset(), err)
+				return result, ggen.NewParseErr("pair", s.Offset(), err)
 			}
 			if seenPair {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"pair"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"pair"}}
 			}
 			seenPair = true
 			err = s.ArrayOpen()
 			if err != nil {
-				return result, decode.NewParseErr("pair", s.Offset(), err)
+				return result, ggen.NewParseErr("pair", s.Offset(), err)
 			}
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("pair", s.Offset(), err)
+				return result, ggen.NewParseErr("pair", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("pair", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+					return result, ggen.NewParseErr("pair", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
 			var idx0 int
 			for s.Bytes()[s.Pos] != ']' {
 				if idx0 >= 2 {
-					return result, &validation.LenError{Pos: s.Offset(), Path: []string{"pair"}, Want: 2, Got: idx0}
+					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"pair"}, Want: 2, Got: idx0}
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("pair", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+						return result, ggen.NewParseErr("pair", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 					}
 				}
 				if s.Bytes()[s.Pos] == 'n' {
 					for ki := 1; ki < 4; ki++ {
 						if s.Pos+ki >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, decode.NewParseErr("pair", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
+								return result, ggen.NewParseErr("pair", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
 							}
 						}
 						if s.Bytes()[s.Pos+ki] != "null"[ki] {
-							return result, decode.NewParseErr("pair", s.Offset(), scan.ErrBadLiteral)
+							return result, ggen.NewParseErr("pair", s.Offset(), ggen.ErrBadLiteral)
 						}
 					}
 					s.Pos += 4
@@ -2894,21 +2891,21 @@ func (recv TupleStruct) DecodeFromStream(s *scan.Stream) (result TupleStruct, er
 					idx0++
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("pair", s.Offset(), err)
+						return result, ggen.NewParseErr("pair", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("pair", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+							return result, ggen.NewParseErr("pair", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 						}
 					}
 					if s.Bytes()[s.Pos] == ',' {
 						s.Pos++
 						err = s.SkipSpace()
 						if err != nil {
-							return result, decode.NewParseErr("pair", s.Offset(), err)
+							return result, ggen.NewParseErr("pair", s.Offset(), err)
 						}
 						if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-							return result, decode.NewParseErr("pair", s.Offset(), scan.ErrBadArray)
+							return result, ggen.NewParseErr("pair", s.Offset(), ggen.ErrBadArray)
 						}
 						continue
 					}
@@ -2920,15 +2917,15 @@ func (recv TupleStruct) DecodeFromStream(s *scan.Stream) (result TupleStruct, er
 				}
 				err = s.ArrayOpen()
 				if err != nil {
-					return result, decode.NewParseErr("pair[]", s.Offset(), err)
+					return result, ggen.NewParseErr("pair[]", s.Offset(), err)
 				}
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("pair[]", s.Offset(), err)
+					return result, ggen.NewParseErr("pair[]", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("pair[]", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+						return result, ggen.NewParseErr("pair[]", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 					}
 				}
 				if s.Bytes()[s.Pos] == ']' {
@@ -2944,157 +2941,157 @@ func (recv TupleStruct) DecodeFromStream(s *scan.Stream) (result TupleStruct, er
 					row0 = append(row0, "")
 					row0[len(row0)-1], err = s.String(true)
 					if err != nil {
-						return result, decode.NewParseErr("pair[]", s.Offset(), err)
+						return result, ggen.NewParseErr("pair[]", s.Offset(), err)
 					}
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("pair[]", s.Offset(), err)
+						return result, ggen.NewParseErr("pair[]", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("pair[]", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+							return result, ggen.NewParseErr("pair[]", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 						}
 					}
 					if s.Bytes()[s.Pos] == ',' {
 						s.Pos++
 						err = s.SkipSpace()
 						if err != nil {
-							return result, decode.NewParseErr("pair[]", s.Offset(), err)
+							return result, ggen.NewParseErr("pair[]", s.Offset(), err)
 						}
 						if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-							return result, decode.NewParseErr("pair[]", s.Offset(), scan.ErrBadArray)
+							return result, ggen.NewParseErr("pair[]", s.Offset(), ggen.ErrBadArray)
 						}
 						continue
 					}
 					break
 				}
 				if s.Bytes()[s.Pos] != ']' {
-					return result, decode.NewParseErr("pair[]", s.Offset(), scan.ErrBadArray)
+					return result, ggen.NewParseErr("pair[]", s.Offset(), ggen.ErrBadArray)
 				}
 				s.Pos++
 				result.Pair[idx0] = row0
 				idx0++
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("pair", s.Offset(), err)
+					return result, ggen.NewParseErr("pair", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("pair", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+						return result, ggen.NewParseErr("pair", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
 					s.Pos++
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("pair", s.Offset(), err)
+						return result, ggen.NewParseErr("pair", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-						return result, decode.NewParseErr("pair", s.Offset(), scan.ErrBadArray)
+						return result, ggen.NewParseErr("pair", s.Offset(), ggen.ErrBadArray)
 					}
 					continue
 				}
 				break
 			}
 			if s.Bytes()[s.Pos] != ']' {
-				return result, decode.NewParseErr("pair", s.Offset(), scan.ErrBadArray)
+				return result, ggen.NewParseErr("pair", s.Offset(), ggen.ErrBadArray)
 			}
 			if idx0 != 2 {
-				return result, &validation.LenError{Pos: s.Offset(), Path: []string{"pair"}, Want: 2, Got: idx0}
+				return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"pair"}, Want: 2, Got: idx0}
 			}
 			s.Pos++
 		case "point":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("point", s.Offset(), err)
+				return result, ggen.NewParseErr("point", s.Offset(), err)
 			}
 			if seenPoint {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"point"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"point"}}
 			}
 			seenPoint = true
 			err = s.ArrayOpen()
 			if err != nil {
-				return result, decode.NewParseErr("point", s.Offset(), err)
+				return result, ggen.NewParseErr("point", s.Offset(), err)
 			}
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("point", s.Offset(), err)
+				return result, ggen.NewParseErr("point", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("point", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+					return result, ggen.NewParseErr("point", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
 			var idx0 int
 			for s.Bytes()[s.Pos] != ']' {
 				if idx0 >= 2 {
-					return result, &validation.LenError{Pos: s.Offset(), Path: []string{"point"}, Want: 2, Got: idx0}
+					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"point"}, Want: 2, Got: idx0}
 				}
 				result.Point[idx0], err = s.Float64()
 				if err != nil {
-					return result, decode.NewParseErr("point", s.Offset(), err)
+					return result, ggen.NewParseErr("point", s.Offset(), err)
 				}
 				idx0++
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("point", s.Offset(), err)
+					return result, ggen.NewParseErr("point", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("point", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+						return result, ggen.NewParseErr("point", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
 					s.Pos++
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("point", s.Offset(), err)
+						return result, ggen.NewParseErr("point", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-						return result, decode.NewParseErr("point", s.Offset(), scan.ErrBadArray)
+						return result, ggen.NewParseErr("point", s.Offset(), ggen.ErrBadArray)
 					}
 					continue
 				}
 				break
 			}
 			if s.Bytes()[s.Pos] != ']' {
-				return result, decode.NewParseErr("point", s.Offset(), scan.ErrBadArray)
+				return result, ggen.NewParseErr("point", s.Offset(), ggen.ErrBadArray)
 			}
 			if idx0 != 2 {
-				return result, &validation.LenError{Pos: s.Offset(), Path: []string{"point"}, Want: 2, Got: idx0}
+				return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"point"}, Want: 2, Got: idx0}
 			}
 			s.Pos++
 		case "rgb":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("rgb", s.Offset(), err)
+				return result, ggen.NewParseErr("rgb", s.Offset(), err)
 			}
 			if seenRGB {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"rgb"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"rgb"}}
 			}
 			seenRGB = true
 			err = s.ArrayOpen()
 			if err != nil {
-				return result, decode.NewParseErr("rgb", s.Offset(), err)
+				return result, ggen.NewParseErr("rgb", s.Offset(), err)
 			}
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("rgb", s.Offset(), err)
+				return result, ggen.NewParseErr("rgb", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("rgb", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+					return result, ggen.NewParseErr("rgb", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
 			var idx0 int
 			for s.Bytes()[s.Pos] != ']' {
 				if idx0 >= 3 {
-					return result, &validation.LenError{Pos: s.Offset(), Path: []string{"rgb"}, Want: 3, Got: idx0}
+					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"rgb"}, Want: 3, Got: idx0}
 				}
 				var iv int64
 				iv, err = s.Int64()
 				if err != nil {
-					return result, decode.NewParseErr("rgb", s.Offset(), err)
+					return result, ggen.NewParseErr("rgb", s.Offset(), err)
 				}
 				result.RGB[idx0] = int(iv)
 				if result.RGB[idx0] < 0 {
@@ -3104,68 +3101,68 @@ func (recv TupleStruct) DecodeFromStream(s *scan.Stream) (result TupleStruct, er
 					result.RGB[idx0] = 255
 				}
 				if result.RGB[idx0] < 0 {
-					return result, &validation.GTEError{Pos: s.Offset(), Path: []string{"rgb[]"}, Limit: 0, Value: result.RGB[idx0]}
+					return result, &ggen.GTEError{Pos: s.Offset(), Path: []string{"rgb[]"}, Limit: 0, Value: result.RGB[idx0]}
 				}
 				if result.RGB[idx0] > 255 {
-					return result, &validation.LTEError{Pos: s.Offset(), Path: []string{"rgb[]"}, Limit: 255, Value: result.RGB[idx0]}
+					return result, &ggen.LTEError{Pos: s.Offset(), Path: []string{"rgb[]"}, Limit: 255, Value: result.RGB[idx0]}
 				}
 				idx0++
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("rgb", s.Offset(), err)
+					return result, ggen.NewParseErr("rgb", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("rgb", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+						return result, ggen.NewParseErr("rgb", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
 					s.Pos++
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("rgb", s.Offset(), err)
+						return result, ggen.NewParseErr("rgb", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-						return result, decode.NewParseErr("rgb", s.Offset(), scan.ErrBadArray)
+						return result, ggen.NewParseErr("rgb", s.Offset(), ggen.ErrBadArray)
 					}
 					continue
 				}
 				break
 			}
 			if s.Bytes()[s.Pos] != ']' {
-				return result, decode.NewParseErr("rgb", s.Offset(), scan.ErrBadArray)
+				return result, ggen.NewParseErr("rgb", s.Offset(), ggen.ErrBadArray)
 			}
 			if idx0 != 3 {
-				return result, &validation.LenError{Pos: s.Offset(), Path: []string{"rgb"}, Want: 3, Got: idx0}
+				return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"rgb"}, Want: 3, Got: idx0}
 			}
 			s.Pos++
 		case "segments":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("segments", s.Offset(), err)
+				return result, ggen.NewParseErr("segments", s.Offset(), err)
 			}
 			if seenSegments {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"segments"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"segments"}}
 			}
 			seenSegments = true
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("segments", s.Offset(), err)
+				return result, ggen.NewParseErr("segments", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("segments", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+					return result, ggen.NewParseErr("segments", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("segments", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
+							return result, ggen.NewParseErr("segments", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("segments", s.Offset(), scan.ErrBadLiteral)
+						return result, ggen.NewParseErr("segments", s.Offset(), ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -3174,15 +3171,15 @@ func (recv TupleStruct) DecodeFromStream(s *scan.Stream) (result TupleStruct, er
 			}
 			err = s.ArrayOpen()
 			if err != nil {
-				return result, decode.NewParseErr("segments", s.Offset(), err)
+				return result, ggen.NewParseErr("segments", s.Offset(), err)
 			}
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("segments", s.Offset(), err)
+				return result, ggen.NewParseErr("segments", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("segments", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+					return result, ggen.NewParseErr("segments", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
 			if s.Bytes()[s.Pos] == ']' {
@@ -3199,96 +3196,96 @@ func (recv TupleStruct) DecodeFromStream(s *scan.Stream) (result TupleStruct, er
 				row0 := result.Segments[len(result.Segments)-1]
 				err = s.ArrayOpen()
 				if err != nil {
-					return result, decode.NewParseErr("segments[]", s.Offset(), err)
+					return result, ggen.NewParseErr("segments[]", s.Offset(), err)
 				}
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("segments[]", s.Offset(), err)
+					return result, ggen.NewParseErr("segments[]", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("segments[]", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+						return result, ggen.NewParseErr("segments[]", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 					}
 				}
 				var idx1 int
 				for s.Bytes()[s.Pos] != ']' {
 					if idx1 >= 2 {
-						return result, &validation.LenError{Pos: s.Offset(), Path: []string{"segments[]"}, Want: 2, Got: idx1}
+						return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"segments[]"}, Want: 2, Got: idx1}
 					}
 					var iv int64
 					iv, err = s.Int64()
 					if err != nil {
-						return result, decode.NewParseErr("segments[]", s.Offset(), err)
+						return result, ggen.NewParseErr("segments[]", s.Offset(), err)
 					}
 					row0[idx1] = int(iv)
 					idx1++
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("segments[]", s.Offset(), err)
+						return result, ggen.NewParseErr("segments[]", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("segments[]", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+							return result, ggen.NewParseErr("segments[]", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 						}
 					}
 					if s.Bytes()[s.Pos] == ',' {
 						s.Pos++
 						err = s.SkipSpace()
 						if err != nil {
-							return result, decode.NewParseErr("segments[]", s.Offset(), err)
+							return result, ggen.NewParseErr("segments[]", s.Offset(), err)
 						}
 						if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-							return result, decode.NewParseErr("segments[]", s.Offset(), scan.ErrBadArray)
+							return result, ggen.NewParseErr("segments[]", s.Offset(), ggen.ErrBadArray)
 						}
 						continue
 					}
 					break
 				}
 				if s.Bytes()[s.Pos] != ']' {
-					return result, decode.NewParseErr("segments[]", s.Offset(), scan.ErrBadArray)
+					return result, ggen.NewParseErr("segments[]", s.Offset(), ggen.ErrBadArray)
 				}
 				if idx1 != 2 {
-					return result, &validation.LenError{Pos: s.Offset(), Path: []string{"segments[]"}, Want: 2, Got: idx1}
+					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"segments[]"}, Want: 2, Got: idx1}
 				}
 				s.Pos++
 				result.Segments[len(result.Segments)-1] = row0
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("segments", s.Offset(), err)
+					return result, ggen.NewParseErr("segments", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("segments", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+						return result, ggen.NewParseErr("segments", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
 					s.Pos++
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("segments", s.Offset(), err)
+						return result, ggen.NewParseErr("segments", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-						return result, decode.NewParseErr("segments", s.Offset(), scan.ErrBadArray)
+						return result, ggen.NewParseErr("segments", s.Offset(), ggen.ErrBadArray)
 					}
 					continue
 				}
 				break
 			}
 			if s.Bytes()[s.Pos] != ']' {
-				return result, decode.NewParseErr("segments", s.Offset(), scan.ErrBadArray)
+				return result, ggen.NewParseErr("segments", s.Offset(), ggen.ErrBadArray)
 			}
 			s.Pos++
 		default:
-			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Offset(), err)
+			return result, ggen.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+				return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -3297,7 +3294,7 @@ func (recv TupleStruct) DecodeFromStream(s *scan.Stream) (result TupleStruct, er
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Offset(), err)
+				return result, ggen.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -3305,7 +3302,7 @@ func (recv TupleStruct) DecodeFromStream(s *scan.Stream) (result TupleStruct, er
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
+		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
 	}
 }
 
@@ -3406,10 +3403,10 @@ func (s TupleStruct) AppendJSON(dst []byte) ([]byte, error) {
 			dst = append(dst, '[')
 			if len(s.Pair[0]) > 0 {
 				dst = append(dst, '"')
-				dst = encode.AppendStringNoHTML(dst, s.Pair[0][0])
+				dst = ggen.AppendStringNoHTML(dst, s.Pair[0][0])
 				for _, v1 := range s.Pair[0][1:] {
 					dst = append(dst, ",\""...)
-					dst = encode.AppendStringNoHTML(dst, v1)
+					dst = ggen.AppendStringNoHTML(dst, v1)
 				}
 			}
 			dst = append(dst, ']')
@@ -3422,10 +3419,10 @@ func (s TupleStruct) AppendJSON(dst []byte) ([]byte, error) {
 				dst = append(dst, '[')
 				if len(v0) > 0 {
 					dst = append(dst, '"')
-					dst = encode.AppendStringNoHTML(dst, v0[0])
+					dst = ggen.AppendStringNoHTML(dst, v0[0])
 					for _, v1 := range v0[1:] {
 						dst = append(dst, ",\""...)
-						dst = encode.AppendStringNoHTML(dst, v1)
+						dst = ggen.AppendStringNoHTML(dst, v1)
 					}
 				}
 				dst = append(dst, ']')
@@ -3434,12 +3431,12 @@ func (s TupleStruct) AppendJSON(dst []byte) ([]byte, error) {
 	}
 	dst = append(dst, "],\"point\":["...)
 	if len(s.Point) > 0 {
-		if dst, err = encode.AppendFloat(dst, s.Point[0], 64); err != nil {
+		if dst, err = ggen.AppendFloat(dst, s.Point[0], 64); err != nil {
 			return dst, err
 		}
 		for _, v0 := range s.Point[1:] {
 			dst = append(dst, ',')
-			if dst, err = encode.AppendFloat(dst, v0, 64); err != nil {
+			if dst, err = ggen.AppendFloat(dst, v0, 64); err != nil {
 				return dst, err
 			}
 		}
@@ -3534,7 +3531,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
-		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 	}
 	i++
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -3547,7 +3544,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 	for {
 		var key string
 		if i >= len(data) || data[i] != '"' {
-			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrExpectString)
 		}
 		ke := i + 1
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
@@ -3557,16 +3554,16 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i, true)
+			key, i, err = ggen.String(data, i, true)
 			if err != nil {
-				return result, i, decode.NewParseErr("", i, err)
+				return result, i, ggen.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 		}
 		i++
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -3575,7 +3572,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 		switch key {
 		case "hinted":
 			if seenHinted {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"hinted"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"hinted"}}
 			}
 			seenHinted = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -3584,7 +3581,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 				break
 			}
 			if i >= len(data) || data[i] != '[' {
-				return result, i, decode.NewParseErr("hinted", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("hinted", i, ggen.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -3606,7 +3603,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 					result.Hinted[len(result.Hinted)-1], _n, err = result.Hinted[len(result.Hinted)-1].DecodeFrom(data[i:])
 					i += _n
 					if err != nil {
-						return result, i, decode.NewParseErrShift("hinted", i, _n, err)
+						return result, i, ggen.NewParseErrShift("hinted", i, _n, err)
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -3617,7 +3614,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, decode.NewParseErr("hinted", i, scan.ErrBadArray)
+							return result, i, ggen.NewParseErr("hinted", i, ggen.ErrBadArray)
 						}
 						continue
 					}
@@ -3625,12 +3622,12 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, decode.NewParseErr("hinted", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("hinted", i, ggen.ErrBadArray)
 			}
 			i++
 		case "ints":
 			if seenInts {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"ints"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"ints"}}
 			}
 			seenInts = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -3639,7 +3636,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 				break
 			}
 			if i >= len(data) || data[i] != '[' {
-				return result, i, decode.NewParseErr("ints", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("ints", i, ggen.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -3667,14 +3664,14 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 						i++
 					}
 					if i >= len(data) || data[i] < '0' || data[i] > '9' {
-						return result, i, decode.NewParseErr("ints", i, scan.ErrBadNumber)
+						return result, i, ggen.NewParseErr("ints", i, ggen.ErrBadNumber)
 					}
 					if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
-						return result, i, decode.NewParseErr("ints", i, scan.ErrBadNumber)
+						return result, i, ggen.NewParseErr("ints", i, ggen.ErrBadNumber)
 					}
 					limit := uint64(math.MaxInt64)
 					if neg {
-						limit = scan.SignedNeg
+						limit = ggen.SignedNeg
 					}
 					var u uint64
 					de := i + 18
@@ -3688,7 +3685,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 					for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 						d := uint64(data[i] - '0')
 						if u > limit/10 || (u == limit/10 && d > limit%10) {
-							return result, i, decode.NewParseErr("ints", i, scan.ErrNumberOverflow)
+							return result, i, ggen.NewParseErr("ints", i, ggen.ErrNumberOverflow)
 						}
 						u = u*10 + d
 						i++
@@ -3696,12 +3693,12 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 					if i < len(data) {
 						c := data[i]
 						if c == '.' || c == 'e' || c == 'E' {
-							return result, i, decode.NewParseErr("ints", i, scan.ErrBadNumber)
+							return result, i, ggen.NewParseErr("ints", i, ggen.ErrBadNumber)
 						}
 					}
 					var n int64
 					if neg {
-						if u == scan.SignedNeg {
+						if u == ggen.SignedNeg {
 							n = math.MinInt64
 						} else {
 							n = -int64(u)
@@ -3719,7 +3716,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, decode.NewParseErr("ints", i, scan.ErrBadArray)
+							return result, i, ggen.NewParseErr("ints", i, ggen.ErrBadArray)
 						}
 						continue
 					}
@@ -3727,12 +3724,12 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, decode.NewParseErr("ints", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("ints", i, ggen.ErrBadArray)
 			}
 			i++
 		case "lened":
 			if seenLened {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"lened"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"lened"}}
 			}
 			seenLened = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -3740,7 +3737,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 				result.Lened = nil
 			} else {
 				if i >= len(data) || data[i] != '[' {
-					return result, i, decode.NewParseErr("lened", i, scan.ErrBadArray)
+					return result, i, ggen.NewParseErr("lened", i, ggen.ErrBadArray)
 				}
 				i++
 				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -3762,7 +3759,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 						result.Lened[len(result.Lened)-1], _n, err = result.Lened[len(result.Lened)-1].DecodeFrom(data[i:])
 						i += _n
 						if err != nil {
-							return result, i, decode.NewParseErrShift("lened", i, _n, err)
+							return result, i, ggen.NewParseErrShift("lened", i, _n, err)
 						}
 						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
@@ -3773,7 +3770,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 								i++
 							}
 							if i >= len(data) || data[i] == ']' {
-								return result, i, decode.NewParseErr("lened", i, scan.ErrBadArray)
+								return result, i, ggen.NewParseErr("lened", i, ggen.ErrBadArray)
 							}
 							continue
 						}
@@ -3781,16 +3778,16 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 					}
 				}
 				if i >= len(data) || data[i] != ']' {
-					return result, i, decode.NewParseErr("lened", i, scan.ErrBadArray)
+					return result, i, ggen.NewParseErr("lened", i, ggen.ErrBadArray)
 				}
 				i++
 			}
 			if len(result.Lened) != 6 {
-				return result, i, &validation.LenError{Pos: i, Path: []string{"lened"}, Want: 6, Got: len(result.Lened)}
+				return result, i, &ggen.LenError{Pos: i, Path: []string{"lened"}, Want: 6, Got: len(result.Lened)}
 			}
 		case "maxFits":
 			if seenMaxFits {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"maxFits"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"maxFits"}}
 			}
 			seenMaxFits = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -3798,7 +3795,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 				result.MaxFits = nil
 			} else {
 				if i >= len(data) || data[i] != '[' {
-					return result, i, decode.NewParseErr("maxFits", i, scan.ErrBadArray)
+					return result, i, ggen.NewParseErr("maxFits", i, ggen.ErrBadArray)
 				}
 				i++
 				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -3820,7 +3817,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 						result.MaxFits[len(result.MaxFits)-1], _n, err = result.MaxFits[len(result.MaxFits)-1].DecodeFrom(data[i:])
 						i += _n
 						if err != nil {
-							return result, i, decode.NewParseErrShift("maxFits", i, _n, err)
+							return result, i, ggen.NewParseErrShift("maxFits", i, _n, err)
 						}
 						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
@@ -3831,7 +3828,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 								i++
 							}
 							if i >= len(data) || data[i] == ']' {
-								return result, i, decode.NewParseErr("maxFits", i, scan.ErrBadArray)
+								return result, i, ggen.NewParseErr("maxFits", i, ggen.ErrBadArray)
 							}
 							continue
 						}
@@ -3839,16 +3836,16 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 					}
 				}
 				if i >= len(data) || data[i] != ']' {
-					return result, i, decode.NewParseErr("maxFits", i, scan.ErrBadArray)
+					return result, i, ggen.NewParseErr("maxFits", i, ggen.ErrBadArray)
 				}
 				i++
 			}
 			if len(result.MaxFits) > 8 {
-				return result, i, &validation.MaxLenError{Pos: i, Path: []string{"maxFits"}, Limit: 8, Got: len(result.MaxFits)}
+				return result, i, &ggen.MaxLenError{Pos: i, Path: []string{"maxFits"}, Limit: 8, Got: len(result.MaxFits)}
 			}
 		case "maxTooBig":
 			if seenMaxTooBig {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"maxTooBig"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"maxTooBig"}}
 			}
 			seenMaxTooBig = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -3856,7 +3853,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 				result.MaxTooBig = nil
 			} else {
 				if i >= len(data) || data[i] != '[' {
-					return result, i, decode.NewParseErr("maxTooBig", i, scan.ErrBadArray)
+					return result, i, ggen.NewParseErr("maxTooBig", i, ggen.ErrBadArray)
 				}
 				i++
 				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -3878,7 +3875,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 						result.MaxTooBig[len(result.MaxTooBig)-1], _n, err = result.MaxTooBig[len(result.MaxTooBig)-1].DecodeFrom(data[i:])
 						i += _n
 						if err != nil {
-							return result, i, decode.NewParseErrShift("maxTooBig", i, _n, err)
+							return result, i, ggen.NewParseErrShift("maxTooBig", i, _n, err)
 						}
 						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
@@ -3889,7 +3886,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 								i++
 							}
 							if i >= len(data) || data[i] == ']' {
-								return result, i, decode.NewParseErr("maxTooBig", i, scan.ErrBadArray)
+								return result, i, ggen.NewParseErr("maxTooBig", i, ggen.ErrBadArray)
 							}
 							continue
 						}
@@ -3897,16 +3894,16 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 					}
 				}
 				if i >= len(data) || data[i] != ']' {
-					return result, i, decode.NewParseErr("maxTooBig", i, scan.ErrBadArray)
+					return result, i, ggen.NewParseErr("maxTooBig", i, ggen.ErrBadArray)
 				}
 				i++
 			}
 			if len(result.MaxTooBig) > 8 {
-				return result, i, &validation.MaxLenError{Pos: i, Path: []string{"maxTooBig"}, Limit: 8, Got: len(result.MaxTooBig)}
+				return result, i, &ggen.MaxLenError{Pos: i, Path: []string{"maxTooBig"}, Limit: 8, Got: len(result.MaxTooBig)}
 			}
 		case "minned":
 			if seenMinned {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"minned"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"minned"}}
 			}
 			seenMinned = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -3914,7 +3911,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 				result.Minned = nil
 			} else {
 				if i >= len(data) || data[i] != '[' {
-					return result, i, decode.NewParseErr("minned", i, scan.ErrBadArray)
+					return result, i, ggen.NewParseErr("minned", i, ggen.ErrBadArray)
 				}
 				i++
 				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -3936,7 +3933,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 						result.Minned[len(result.Minned)-1], _n, err = result.Minned[len(result.Minned)-1].DecodeFrom(data[i:])
 						i += _n
 						if err != nil {
-							return result, i, decode.NewParseErrShift("minned", i, _n, err)
+							return result, i, ggen.NewParseErrShift("minned", i, _n, err)
 						}
 						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
@@ -3947,7 +3944,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 								i++
 							}
 							if i >= len(data) || data[i] == ']' {
-								return result, i, decode.NewParseErr("minned", i, scan.ErrBadArray)
+								return result, i, ggen.NewParseErr("minned", i, ggen.ErrBadArray)
 							}
 							continue
 						}
@@ -3955,16 +3952,16 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 					}
 				}
 				if i >= len(data) || data[i] != ']' {
-					return result, i, decode.NewParseErr("minned", i, scan.ErrBadArray)
+					return result, i, ggen.NewParseErr("minned", i, ggen.ErrBadArray)
 				}
 				i++
 			}
 			if len(result.Minned) < 5 {
-				return result, i, &validation.MinLenError{Pos: i, Path: []string{"minned"}, Limit: 5, Got: len(result.Minned)}
+				return result, i, &ggen.MinLenError{Pos: i, Path: []string{"minned"}, Limit: 5, Got: len(result.Minned)}
 			}
 		case "nested":
 			if seenNested {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"nested"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"nested"}}
 			}
 			seenNested = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -3973,7 +3970,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 				break
 			}
 			if i >= len(data) || data[i] != '[' {
-				return result, i, decode.NewParseErr("nested", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("nested", i, ggen.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -4007,7 +4004,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 								i++
 							}
 							if i >= len(data) || data[i] == ']' {
-								return result, i, decode.NewParseErr("nested", i, scan.ErrBadArray)
+								return result, i, ggen.NewParseErr("nested", i, ggen.ErrBadArray)
 							}
 							continue
 						}
@@ -4018,7 +4015,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 						row0 = row0[:0]
 					}
 					if i >= len(data) || data[i] != '[' {
-						return result, i, decode.NewParseErr("nested[]", i, scan.ErrBadArray)
+						return result, i, ggen.NewParseErr("nested[]", i, ggen.ErrBadArray)
 					}
 					i++
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -4046,14 +4043,14 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 								i++
 							}
 							if i >= len(data) || data[i] < '0' || data[i] > '9' {
-								return result, i, decode.NewParseErr("nested[]", i, scan.ErrBadNumber)
+								return result, i, ggen.NewParseErr("nested[]", i, ggen.ErrBadNumber)
 							}
 							if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
-								return result, i, decode.NewParseErr("nested[]", i, scan.ErrBadNumber)
+								return result, i, ggen.NewParseErr("nested[]", i, ggen.ErrBadNumber)
 							}
 							limit := uint64(math.MaxInt64)
 							if neg {
-								limit = scan.SignedNeg
+								limit = ggen.SignedNeg
 							}
 							var u uint64
 							de := i + 18
@@ -4067,7 +4064,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 							for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 								d := uint64(data[i] - '0')
 								if u > limit/10 || (u == limit/10 && d > limit%10) {
-									return result, i, decode.NewParseErr("nested[]", i, scan.ErrNumberOverflow)
+									return result, i, ggen.NewParseErr("nested[]", i, ggen.ErrNumberOverflow)
 								}
 								u = u*10 + d
 								i++
@@ -4075,12 +4072,12 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 							if i < len(data) {
 								c := data[i]
 								if c == '.' || c == 'e' || c == 'E' {
-									return result, i, decode.NewParseErr("nested[]", i, scan.ErrBadNumber)
+									return result, i, ggen.NewParseErr("nested[]", i, ggen.ErrBadNumber)
 								}
 							}
 							var n int64
 							if neg {
-								if u == scan.SignedNeg {
+								if u == ggen.SignedNeg {
 									n = math.MinInt64
 								} else {
 									n = -int64(u)
@@ -4098,7 +4095,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 									i++
 								}
 								if i >= len(data) || data[i] == ']' {
-									return result, i, decode.NewParseErr("nested[]", i, scan.ErrBadArray)
+									return result, i, ggen.NewParseErr("nested[]", i, ggen.ErrBadArray)
 								}
 								continue
 							}
@@ -4106,7 +4103,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 						}
 					}
 					if i >= len(data) || data[i] != ']' {
-						return result, i, decode.NewParseErr("nested[]", i, scan.ErrBadArray)
+						return result, i, ggen.NewParseErr("nested[]", i, ggen.ErrBadArray)
 					}
 					i++
 					result.Nested[len(result.Nested)-1] = row0
@@ -4119,7 +4116,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, decode.NewParseErr("nested", i, scan.ErrBadArray)
+							return result, i, ggen.NewParseErr("nested", i, ggen.ErrBadArray)
 						}
 						continue
 					}
@@ -4127,12 +4124,12 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, decode.NewParseErr("nested", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("nested", i, ggen.ErrBadArray)
 			}
 			i++
 		case "ptrs":
 			if seenPtrs {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"ptrs"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"ptrs"}}
 			}
 			seenPtrs = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -4141,7 +4138,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 				break
 			}
 			if i >= len(data) || data[i] != '[' {
-				return result, i, decode.NewParseErr("ptrs", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("ptrs", i, ggen.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -4172,7 +4169,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 								i++
 							}
 							if i >= len(data) || data[i] == ']' {
-								return result, i, decode.NewParseErr("ptrs", i, scan.ErrBadArray)
+								return result, i, ggen.NewParseErr("ptrs", i, ggen.ErrBadArray)
 							}
 							continue
 						}
@@ -4183,7 +4180,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 					slab0[len(slab0)-1], _n, err = slab0[len(slab0)-1].DecodeFrom(data[i:])
 					i += _n
 					if err != nil {
-						return result, i, decode.NewParseErrShift("ptrs", i, _n, err)
+						return result, i, ggen.NewParseErrShift("ptrs", i, _n, err)
 					}
 					result.Ptrs = append(result.Ptrs, &slab0[len(slab0)-1])
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -4195,7 +4192,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, decode.NewParseErr("ptrs", i, scan.ErrBadArray)
+							return result, i, ggen.NewParseErr("ptrs", i, ggen.ErrBadArray)
 						}
 						continue
 					}
@@ -4203,12 +4200,12 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, decode.NewParseErr("ptrs", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("ptrs", i, ggen.ErrBadArray)
 			}
 			i++
 		case "rows":
 			if seenRows {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"rows"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"rows"}}
 			}
 			seenRows = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -4217,7 +4214,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 				break
 			}
 			if i >= len(data) || data[i] != '[' {
-				return result, i, decode.NewParseErr("rows", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("rows", i, ggen.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -4239,7 +4236,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 					result.Rows[len(result.Rows)-1], _n, err = result.Rows[len(result.Rows)-1].DecodeFrom(data[i:])
 					i += _n
 					if err != nil {
-						return result, i, decode.NewParseErrShift("rows", i, _n, err)
+						return result, i, ggen.NewParseErrShift("rows", i, _n, err)
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -4250,7 +4247,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, decode.NewParseErr("rows", i, scan.ErrBadArray)
+							return result, i, ggen.NewParseErr("rows", i, ggen.ErrBadArray)
 						}
 						continue
 					}
@@ -4258,12 +4255,12 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, decode.NewParseErr("rows", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("rows", i, ggen.ErrBadArray)
 			}
 			i++
 		case "strs":
 			if seenStrs {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"strs"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"strs"}}
 			}
 			seenStrs = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -4272,7 +4269,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 				break
 			}
 			if i >= len(data) || data[i] != '[' {
-				return result, i, decode.NewParseErr("strs", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("strs", i, ggen.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -4291,7 +4288,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 				for {
 					result.Strs = append(result.Strs, "")
 					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("strs", i, scan.ErrExpectString)
+						return result, i, ggen.NewParseErr("strs", i, ggen.ErrExpectString)
 					}
 					ke := i + 1
 					kew := ke + 32
@@ -4305,9 +4302,9 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 						result.Strs[len(result.Strs)-1] = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 						i = ke + 1
 					} else {
-						result.Strs[len(result.Strs)-1], i, err = scan.String(data, i, true)
+						result.Strs[len(result.Strs)-1], i, err = ggen.String(data, i, true)
 						if err != nil {
-							return result, i, decode.NewParseErr("strs", i, err)
+							return result, i, ggen.NewParseErr("strs", i, err)
 						}
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -4319,7 +4316,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, decode.NewParseErr("strs", i, scan.ErrBadArray)
+							return result, i, ggen.NewParseErr("strs", i, ggen.ErrBadArray)
 						}
 						continue
 					}
@@ -4327,12 +4324,12 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, decode.NewParseErr("strs", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("strs", i, ggen.ErrBadArray)
 			}
 			i++
 		case "wide":
 			if seenWide {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"wide"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"wide"}}
 			}
 			seenWide = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -4341,7 +4338,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 				break
 			}
 			if i >= len(data) || data[i] != '[' {
-				return result, i, decode.NewParseErr("wide", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("wide", i, ggen.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -4363,7 +4360,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 					result.Wide[len(result.Wide)-1], _n, err = result.Wide[len(result.Wide)-1].DecodeFrom(data[i:])
 					i += _n
 					if err != nil {
-						return result, i, decode.NewParseErrShift("wide", i, _n, err)
+						return result, i, ggen.NewParseErrShift("wide", i, _n, err)
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -4374,7 +4371,7 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, decode.NewParseErr("wide", i, scan.ErrBadArray)
+							return result, i, ggen.NewParseErr("wide", i, ggen.ErrBadArray)
 						}
 						continue
 					}
@@ -4382,17 +4379,17 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, decode.NewParseErr("wide", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("wide", i, ggen.ErrBadArray)
 			}
 			i++
 		default:
-			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 		}
 		if data[i] == ',' {
 			i++
@@ -4405,11 +4402,11 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 			i++
 			return result, i, nil
 		}
-		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 	}
 }
 
-func (recv PreallocWidths) DecodeFromStream(s *scan.Stream) (result PreallocWidths, err error) {
+func (recv PreallocWidths) DecodeFromStream(s *ggen.Stream) (result PreallocWidths, err error) {
 	result = recv
 	if result.Hinted != nil {
 		result.Hinted = result.Hinted[:0]
@@ -4457,15 +4454,15 @@ func (recv PreallocWidths) DecodeFromStream(s *scan.Stream) (result PreallocWidt
 	seenWide := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Offset(), err)
+		return result, ggen.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Offset(), err)
+		return result, ggen.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
+			return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -4477,36 +4474,36 @@ func (recv PreallocWidths) DecodeFromStream(s *scan.Stream) (result PreallocWidt
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Offset(), err)
+			return result, ggen.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "hinted":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("hinted", s.Offset(), err)
+				return result, ggen.NewParseErr("hinted", s.Offset(), err)
 			}
 			if seenHinted {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"hinted"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"hinted"}}
 			}
 			seenHinted = true
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("hinted", s.Offset(), err)
+				return result, ggen.NewParseErr("hinted", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("hinted", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+					return result, ggen.NewParseErr("hinted", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("hinted", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
+							return result, ggen.NewParseErr("hinted", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("hinted", s.Offset(), scan.ErrBadLiteral)
+						return result, ggen.NewParseErr("hinted", s.Offset(), ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -4515,15 +4512,15 @@ func (recv PreallocWidths) DecodeFromStream(s *scan.Stream) (result PreallocWidt
 			}
 			err = s.ArrayOpen()
 			if err != nil {
-				return result, decode.NewParseErr("hinted", s.Offset(), err)
+				return result, ggen.NewParseErr("hinted", s.Offset(), err)
 			}
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("hinted", s.Offset(), err)
+				return result, ggen.NewParseErr("hinted", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("hinted", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+					return result, ggen.NewParseErr("hinted", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
 			if s.Bytes()[s.Pos] == ']' {
@@ -4539,61 +4536,61 @@ func (recv PreallocWidths) DecodeFromStream(s *scan.Stream) (result PreallocWidt
 				result.Hinted = append(result.Hinted, PreallocWide{})
 				result.Hinted[len(result.Hinted)-1], err = result.Hinted[len(result.Hinted)-1].DecodeFromStream(s)
 				if err != nil {
-					return result, decode.NewParseErr("hinted", s.Offset(), err)
+					return result, ggen.NewParseErr("hinted", s.Offset(), err)
 				}
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("hinted", s.Offset(), err)
+					return result, ggen.NewParseErr("hinted", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("hinted", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+						return result, ggen.NewParseErr("hinted", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
 					s.Pos++
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("hinted", s.Offset(), err)
+						return result, ggen.NewParseErr("hinted", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-						return result, decode.NewParseErr("hinted", s.Offset(), scan.ErrBadArray)
+						return result, ggen.NewParseErr("hinted", s.Offset(), ggen.ErrBadArray)
 					}
 					continue
 				}
 				break
 			}
 			if s.Bytes()[s.Pos] != ']' {
-				return result, decode.NewParseErr("hinted", s.Offset(), scan.ErrBadArray)
+				return result, ggen.NewParseErr("hinted", s.Offset(), ggen.ErrBadArray)
 			}
 			s.Pos++
 		case "ints":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("ints", s.Offset(), err)
+				return result, ggen.NewParseErr("ints", s.Offset(), err)
 			}
 			if seenInts {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"ints"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"ints"}}
 			}
 			seenInts = true
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("ints", s.Offset(), err)
+				return result, ggen.NewParseErr("ints", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("ints", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+					return result, ggen.NewParseErr("ints", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("ints", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
+							return result, ggen.NewParseErr("ints", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("ints", s.Offset(), scan.ErrBadLiteral)
+						return result, ggen.NewParseErr("ints", s.Offset(), ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -4602,15 +4599,15 @@ func (recv PreallocWidths) DecodeFromStream(s *scan.Stream) (result PreallocWidt
 			}
 			err = s.ArrayOpen()
 			if err != nil {
-				return result, decode.NewParseErr("ints", s.Offset(), err)
+				return result, ggen.NewParseErr("ints", s.Offset(), err)
 			}
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("ints", s.Offset(), err)
+				return result, ggen.NewParseErr("ints", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("ints", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+					return result, ggen.NewParseErr("ints", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
 			if s.Bytes()[s.Pos] == ']' {
@@ -4627,62 +4624,62 @@ func (recv PreallocWidths) DecodeFromStream(s *scan.Stream) (result PreallocWidt
 				var iv int64
 				iv, err = s.Int64()
 				if err != nil {
-					return result, decode.NewParseErr("ints", s.Offset(), err)
+					return result, ggen.NewParseErr("ints", s.Offset(), err)
 				}
 				result.Ints[len(result.Ints)-1] = int(iv)
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("ints", s.Offset(), err)
+					return result, ggen.NewParseErr("ints", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("ints", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+						return result, ggen.NewParseErr("ints", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
 					s.Pos++
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("ints", s.Offset(), err)
+						return result, ggen.NewParseErr("ints", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-						return result, decode.NewParseErr("ints", s.Offset(), scan.ErrBadArray)
+						return result, ggen.NewParseErr("ints", s.Offset(), ggen.ErrBadArray)
 					}
 					continue
 				}
 				break
 			}
 			if s.Bytes()[s.Pos] != ']' {
-				return result, decode.NewParseErr("ints", s.Offset(), scan.ErrBadArray)
+				return result, ggen.NewParseErr("ints", s.Offset(), ggen.ErrBadArray)
 			}
 			s.Pos++
 		case "lened":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("lened", s.Offset(), err)
+				return result, ggen.NewParseErr("lened", s.Offset(), err)
 			}
 			if seenLened {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"lened"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"lened"}}
 			}
 			seenLened = true
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("lened", s.Offset(), err)
+				return result, ggen.NewParseErr("lened", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("lened", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+					return result, ggen.NewParseErr("lened", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("lened", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
+							return result, ggen.NewParseErr("lened", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("lened", s.Offset(), scan.ErrBadLiteral)
+						return result, ggen.NewParseErr("lened", s.Offset(), ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -4690,15 +4687,15 @@ func (recv PreallocWidths) DecodeFromStream(s *scan.Stream) (result PreallocWidt
 			} else {
 				err = s.ArrayOpen()
 				if err != nil {
-					return result, decode.NewParseErr("lened", s.Offset(), err)
+					return result, ggen.NewParseErr("lened", s.Offset(), err)
 				}
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("lened", s.Offset(), err)
+					return result, ggen.NewParseErr("lened", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("lened", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+						return result, ggen.NewParseErr("lened", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 					}
 				}
 				if s.Bytes()[s.Pos] == ']' {
@@ -4714,65 +4711,65 @@ func (recv PreallocWidths) DecodeFromStream(s *scan.Stream) (result PreallocWidt
 					result.Lened = append(result.Lened, PreallocWide{})
 					result.Lened[len(result.Lened)-1], err = result.Lened[len(result.Lened)-1].DecodeFromStream(s)
 					if err != nil {
-						return result, decode.NewParseErr("lened", s.Offset(), err)
+						return result, ggen.NewParseErr("lened", s.Offset(), err)
 					}
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("lened", s.Offset(), err)
+						return result, ggen.NewParseErr("lened", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("lened", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+							return result, ggen.NewParseErr("lened", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 						}
 					}
 					if s.Bytes()[s.Pos] == ',' {
 						s.Pos++
 						err = s.SkipSpace()
 						if err != nil {
-							return result, decode.NewParseErr("lened", s.Offset(), err)
+							return result, ggen.NewParseErr("lened", s.Offset(), err)
 						}
 						if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-							return result, decode.NewParseErr("lened", s.Offset(), scan.ErrBadArray)
+							return result, ggen.NewParseErr("lened", s.Offset(), ggen.ErrBadArray)
 						}
 						continue
 					}
 					break
 				}
 				if s.Bytes()[s.Pos] != ']' {
-					return result, decode.NewParseErr("lened", s.Offset(), scan.ErrBadArray)
+					return result, ggen.NewParseErr("lened", s.Offset(), ggen.ErrBadArray)
 				}
 				s.Pos++
 			}
 			if len(result.Lened) != 6 {
-				return result, &validation.LenError{Pos: s.Offset(), Path: []string{"lened"}, Want: 6, Got: len(result.Lened)}
+				return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"lened"}, Want: 6, Got: len(result.Lened)}
 			}
 		case "maxFits":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("maxFits", s.Offset(), err)
+				return result, ggen.NewParseErr("maxFits", s.Offset(), err)
 			}
 			if seenMaxFits {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"maxFits"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"maxFits"}}
 			}
 			seenMaxFits = true
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("maxFits", s.Offset(), err)
+				return result, ggen.NewParseErr("maxFits", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("maxFits", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+					return result, ggen.NewParseErr("maxFits", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("maxFits", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
+							return result, ggen.NewParseErr("maxFits", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("maxFits", s.Offset(), scan.ErrBadLiteral)
+						return result, ggen.NewParseErr("maxFits", s.Offset(), ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -4780,15 +4777,15 @@ func (recv PreallocWidths) DecodeFromStream(s *scan.Stream) (result PreallocWidt
 			} else {
 				err = s.ArrayOpen()
 				if err != nil {
-					return result, decode.NewParseErr("maxFits", s.Offset(), err)
+					return result, ggen.NewParseErr("maxFits", s.Offset(), err)
 				}
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("maxFits", s.Offset(), err)
+					return result, ggen.NewParseErr("maxFits", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("maxFits", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+						return result, ggen.NewParseErr("maxFits", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 					}
 				}
 				if s.Bytes()[s.Pos] == ']' {
@@ -4804,65 +4801,65 @@ func (recv PreallocWidths) DecodeFromStream(s *scan.Stream) (result PreallocWidt
 					result.MaxFits = append(result.MaxFits, PreallocRow{})
 					result.MaxFits[len(result.MaxFits)-1], err = result.MaxFits[len(result.MaxFits)-1].DecodeFromStream(s)
 					if err != nil {
-						return result, decode.NewParseErr("maxFits", s.Offset(), err)
+						return result, ggen.NewParseErr("maxFits", s.Offset(), err)
 					}
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("maxFits", s.Offset(), err)
+						return result, ggen.NewParseErr("maxFits", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("maxFits", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+							return result, ggen.NewParseErr("maxFits", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 						}
 					}
 					if s.Bytes()[s.Pos] == ',' {
 						s.Pos++
 						err = s.SkipSpace()
 						if err != nil {
-							return result, decode.NewParseErr("maxFits", s.Offset(), err)
+							return result, ggen.NewParseErr("maxFits", s.Offset(), err)
 						}
 						if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-							return result, decode.NewParseErr("maxFits", s.Offset(), scan.ErrBadArray)
+							return result, ggen.NewParseErr("maxFits", s.Offset(), ggen.ErrBadArray)
 						}
 						continue
 					}
 					break
 				}
 				if s.Bytes()[s.Pos] != ']' {
-					return result, decode.NewParseErr("maxFits", s.Offset(), scan.ErrBadArray)
+					return result, ggen.NewParseErr("maxFits", s.Offset(), ggen.ErrBadArray)
 				}
 				s.Pos++
 			}
 			if len(result.MaxFits) > 8 {
-				return result, &validation.MaxLenError{Pos: s.Offset(), Path: []string{"maxFits"}, Limit: 8, Got: len(result.MaxFits)}
+				return result, &ggen.MaxLenError{Pos: s.Offset(), Path: []string{"maxFits"}, Limit: 8, Got: len(result.MaxFits)}
 			}
 		case "maxTooBig":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("maxTooBig", s.Offset(), err)
+				return result, ggen.NewParseErr("maxTooBig", s.Offset(), err)
 			}
 			if seenMaxTooBig {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"maxTooBig"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"maxTooBig"}}
 			}
 			seenMaxTooBig = true
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("maxTooBig", s.Offset(), err)
+				return result, ggen.NewParseErr("maxTooBig", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("maxTooBig", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+					return result, ggen.NewParseErr("maxTooBig", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("maxTooBig", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
+							return result, ggen.NewParseErr("maxTooBig", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("maxTooBig", s.Offset(), scan.ErrBadLiteral)
+						return result, ggen.NewParseErr("maxTooBig", s.Offset(), ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -4870,15 +4867,15 @@ func (recv PreallocWidths) DecodeFromStream(s *scan.Stream) (result PreallocWidt
 			} else {
 				err = s.ArrayOpen()
 				if err != nil {
-					return result, decode.NewParseErr("maxTooBig", s.Offset(), err)
+					return result, ggen.NewParseErr("maxTooBig", s.Offset(), err)
 				}
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("maxTooBig", s.Offset(), err)
+					return result, ggen.NewParseErr("maxTooBig", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("maxTooBig", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+						return result, ggen.NewParseErr("maxTooBig", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 					}
 				}
 				if s.Bytes()[s.Pos] == ']' {
@@ -4894,65 +4891,65 @@ func (recv PreallocWidths) DecodeFromStream(s *scan.Stream) (result PreallocWidt
 					result.MaxTooBig = append(result.MaxTooBig, PreallocWide{})
 					result.MaxTooBig[len(result.MaxTooBig)-1], err = result.MaxTooBig[len(result.MaxTooBig)-1].DecodeFromStream(s)
 					if err != nil {
-						return result, decode.NewParseErr("maxTooBig", s.Offset(), err)
+						return result, ggen.NewParseErr("maxTooBig", s.Offset(), err)
 					}
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("maxTooBig", s.Offset(), err)
+						return result, ggen.NewParseErr("maxTooBig", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("maxTooBig", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+							return result, ggen.NewParseErr("maxTooBig", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 						}
 					}
 					if s.Bytes()[s.Pos] == ',' {
 						s.Pos++
 						err = s.SkipSpace()
 						if err != nil {
-							return result, decode.NewParseErr("maxTooBig", s.Offset(), err)
+							return result, ggen.NewParseErr("maxTooBig", s.Offset(), err)
 						}
 						if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-							return result, decode.NewParseErr("maxTooBig", s.Offset(), scan.ErrBadArray)
+							return result, ggen.NewParseErr("maxTooBig", s.Offset(), ggen.ErrBadArray)
 						}
 						continue
 					}
 					break
 				}
 				if s.Bytes()[s.Pos] != ']' {
-					return result, decode.NewParseErr("maxTooBig", s.Offset(), scan.ErrBadArray)
+					return result, ggen.NewParseErr("maxTooBig", s.Offset(), ggen.ErrBadArray)
 				}
 				s.Pos++
 			}
 			if len(result.MaxTooBig) > 8 {
-				return result, &validation.MaxLenError{Pos: s.Offset(), Path: []string{"maxTooBig"}, Limit: 8, Got: len(result.MaxTooBig)}
+				return result, &ggen.MaxLenError{Pos: s.Offset(), Path: []string{"maxTooBig"}, Limit: 8, Got: len(result.MaxTooBig)}
 			}
 		case "minned":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("minned", s.Offset(), err)
+				return result, ggen.NewParseErr("minned", s.Offset(), err)
 			}
 			if seenMinned {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"minned"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"minned"}}
 			}
 			seenMinned = true
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("minned", s.Offset(), err)
+				return result, ggen.NewParseErr("minned", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("minned", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+					return result, ggen.NewParseErr("minned", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("minned", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
+							return result, ggen.NewParseErr("minned", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("minned", s.Offset(), scan.ErrBadLiteral)
+						return result, ggen.NewParseErr("minned", s.Offset(), ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -4960,15 +4957,15 @@ func (recv PreallocWidths) DecodeFromStream(s *scan.Stream) (result PreallocWidt
 			} else {
 				err = s.ArrayOpen()
 				if err != nil {
-					return result, decode.NewParseErr("minned", s.Offset(), err)
+					return result, ggen.NewParseErr("minned", s.Offset(), err)
 				}
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("minned", s.Offset(), err)
+					return result, ggen.NewParseErr("minned", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("minned", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+						return result, ggen.NewParseErr("minned", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 					}
 				}
 				if s.Bytes()[s.Pos] == ']' {
@@ -4984,65 +4981,65 @@ func (recv PreallocWidths) DecodeFromStream(s *scan.Stream) (result PreallocWidt
 					result.Minned = append(result.Minned, PreallocWide{})
 					result.Minned[len(result.Minned)-1], err = result.Minned[len(result.Minned)-1].DecodeFromStream(s)
 					if err != nil {
-						return result, decode.NewParseErr("minned", s.Offset(), err)
+						return result, ggen.NewParseErr("minned", s.Offset(), err)
 					}
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("minned", s.Offset(), err)
+						return result, ggen.NewParseErr("minned", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("minned", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+							return result, ggen.NewParseErr("minned", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 						}
 					}
 					if s.Bytes()[s.Pos] == ',' {
 						s.Pos++
 						err = s.SkipSpace()
 						if err != nil {
-							return result, decode.NewParseErr("minned", s.Offset(), err)
+							return result, ggen.NewParseErr("minned", s.Offset(), err)
 						}
 						if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-							return result, decode.NewParseErr("minned", s.Offset(), scan.ErrBadArray)
+							return result, ggen.NewParseErr("minned", s.Offset(), ggen.ErrBadArray)
 						}
 						continue
 					}
 					break
 				}
 				if s.Bytes()[s.Pos] != ']' {
-					return result, decode.NewParseErr("minned", s.Offset(), scan.ErrBadArray)
+					return result, ggen.NewParseErr("minned", s.Offset(), ggen.ErrBadArray)
 				}
 				s.Pos++
 			}
 			if len(result.Minned) < 5 {
-				return result, &validation.MinLenError{Pos: s.Offset(), Path: []string{"minned"}, Limit: 5, Got: len(result.Minned)}
+				return result, &ggen.MinLenError{Pos: s.Offset(), Path: []string{"minned"}, Limit: 5, Got: len(result.Minned)}
 			}
 		case "nested":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("nested", s.Offset(), err)
+				return result, ggen.NewParseErr("nested", s.Offset(), err)
 			}
 			if seenNested {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"nested"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"nested"}}
 			}
 			seenNested = true
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("nested", s.Offset(), err)
+				return result, ggen.NewParseErr("nested", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("nested", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+					return result, ggen.NewParseErr("nested", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("nested", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
+							return result, ggen.NewParseErr("nested", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("nested", s.Offset(), scan.ErrBadLiteral)
+						return result, ggen.NewParseErr("nested", s.Offset(), ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -5051,15 +5048,15 @@ func (recv PreallocWidths) DecodeFromStream(s *scan.Stream) (result PreallocWidt
 			}
 			err = s.ArrayOpen()
 			if err != nil {
-				return result, decode.NewParseErr("nested", s.Offset(), err)
+				return result, ggen.NewParseErr("nested", s.Offset(), err)
 			}
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("nested", s.Offset(), err)
+				return result, ggen.NewParseErr("nested", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("nested", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+					return result, ggen.NewParseErr("nested", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
 			if s.Bytes()[s.Pos] == ']' {
@@ -5079,39 +5076,39 @@ func (recv PreallocWidths) DecodeFromStream(s *scan.Stream) (result PreallocWidt
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("nested", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+						return result, ggen.NewParseErr("nested", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 					}
 				}
 				if s.Bytes()[s.Pos] == 'n' {
 					for ki := 1; ki < 4; ki++ {
 						if s.Pos+ki >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, decode.NewParseErr("nested", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
+								return result, ggen.NewParseErr("nested", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
 							}
 						}
 						if s.Bytes()[s.Pos+ki] != "null"[ki] {
-							return result, decode.NewParseErr("nested", s.Offset(), scan.ErrBadLiteral)
+							return result, ggen.NewParseErr("nested", s.Offset(), ggen.ErrBadLiteral)
 						}
 					}
 					s.Pos += 4
 					result.Nested[len(result.Nested)-1] = nil
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("nested", s.Offset(), err)
+						return result, ggen.NewParseErr("nested", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("nested", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+							return result, ggen.NewParseErr("nested", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 						}
 					}
 					if s.Bytes()[s.Pos] == ',' {
 						s.Pos++
 						err = s.SkipSpace()
 						if err != nil {
-							return result, decode.NewParseErr("nested", s.Offset(), err)
+							return result, ggen.NewParseErr("nested", s.Offset(), err)
 						}
 						if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-							return result, decode.NewParseErr("nested", s.Offset(), scan.ErrBadArray)
+							return result, ggen.NewParseErr("nested", s.Offset(), ggen.ErrBadArray)
 						}
 						continue
 					}
@@ -5123,15 +5120,15 @@ func (recv PreallocWidths) DecodeFromStream(s *scan.Stream) (result PreallocWidt
 				}
 				err = s.ArrayOpen()
 				if err != nil {
-					return result, decode.NewParseErr("nested[]", s.Offset(), err)
+					return result, ggen.NewParseErr("nested[]", s.Offset(), err)
 				}
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("nested[]", s.Offset(), err)
+					return result, ggen.NewParseErr("nested[]", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("nested[]", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+						return result, ggen.NewParseErr("nested[]", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 					}
 				}
 				if s.Bytes()[s.Pos] == ']' {
@@ -5148,89 +5145,89 @@ func (recv PreallocWidths) DecodeFromStream(s *scan.Stream) (result PreallocWidt
 					var iv int64
 					iv, err = s.Int64()
 					if err != nil {
-						return result, decode.NewParseErr("nested[]", s.Offset(), err)
+						return result, ggen.NewParseErr("nested[]", s.Offset(), err)
 					}
 					row0[len(row0)-1] = int(iv)
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("nested[]", s.Offset(), err)
+						return result, ggen.NewParseErr("nested[]", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("nested[]", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+							return result, ggen.NewParseErr("nested[]", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 						}
 					}
 					if s.Bytes()[s.Pos] == ',' {
 						s.Pos++
 						err = s.SkipSpace()
 						if err != nil {
-							return result, decode.NewParseErr("nested[]", s.Offset(), err)
+							return result, ggen.NewParseErr("nested[]", s.Offset(), err)
 						}
 						if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-							return result, decode.NewParseErr("nested[]", s.Offset(), scan.ErrBadArray)
+							return result, ggen.NewParseErr("nested[]", s.Offset(), ggen.ErrBadArray)
 						}
 						continue
 					}
 					break
 				}
 				if s.Bytes()[s.Pos] != ']' {
-					return result, decode.NewParseErr("nested[]", s.Offset(), scan.ErrBadArray)
+					return result, ggen.NewParseErr("nested[]", s.Offset(), ggen.ErrBadArray)
 				}
 				s.Pos++
 				result.Nested[len(result.Nested)-1] = row0
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("nested", s.Offset(), err)
+					return result, ggen.NewParseErr("nested", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("nested", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+						return result, ggen.NewParseErr("nested", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
 					s.Pos++
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("nested", s.Offset(), err)
+						return result, ggen.NewParseErr("nested", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-						return result, decode.NewParseErr("nested", s.Offset(), scan.ErrBadArray)
+						return result, ggen.NewParseErr("nested", s.Offset(), ggen.ErrBadArray)
 					}
 					continue
 				}
 				break
 			}
 			if s.Bytes()[s.Pos] != ']' {
-				return result, decode.NewParseErr("nested", s.Offset(), scan.ErrBadArray)
+				return result, ggen.NewParseErr("nested", s.Offset(), ggen.ErrBadArray)
 			}
 			s.Pos++
 		case "ptrs":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("ptrs", s.Offset(), err)
+				return result, ggen.NewParseErr("ptrs", s.Offset(), err)
 			}
 			if seenPtrs {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"ptrs"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"ptrs"}}
 			}
 			seenPtrs = true
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("ptrs", s.Offset(), err)
+				return result, ggen.NewParseErr("ptrs", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("ptrs", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+					return result, ggen.NewParseErr("ptrs", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("ptrs", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
+							return result, ggen.NewParseErr("ptrs", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("ptrs", s.Offset(), scan.ErrBadLiteral)
+						return result, ggen.NewParseErr("ptrs", s.Offset(), ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -5239,15 +5236,15 @@ func (recv PreallocWidths) DecodeFromStream(s *scan.Stream) (result PreallocWidt
 			}
 			err = s.ArrayOpen()
 			if err != nil {
-				return result, decode.NewParseErr("ptrs", s.Offset(), err)
+				return result, ggen.NewParseErr("ptrs", s.Offset(), err)
 			}
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("ptrs", s.Offset(), err)
+				return result, ggen.NewParseErr("ptrs", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("ptrs", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+					return result, ggen.NewParseErr("ptrs", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
 			var slab0 []PreallocRow
@@ -5264,39 +5261,39 @@ func (recv PreallocWidths) DecodeFromStream(s *scan.Stream) (result PreallocWidt
 			for s.Bytes()[s.Pos] != ']' {
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("ptrs", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+						return result, ggen.NewParseErr("ptrs", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 					}
 				}
 				if s.Bytes()[s.Pos] == 'n' {
 					for ki := 1; ki < 4; ki++ {
 						if s.Pos+ki >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, decode.NewParseErr("ptrs", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
+								return result, ggen.NewParseErr("ptrs", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
 							}
 						}
 						if s.Bytes()[s.Pos+ki] != "null"[ki] {
-							return result, decode.NewParseErr("ptrs", s.Offset(), scan.ErrBadLiteral)
+							return result, ggen.NewParseErr("ptrs", s.Offset(), ggen.ErrBadLiteral)
 						}
 					}
 					s.Pos += 4
 					result.Ptrs = append(result.Ptrs, nil)
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("ptrs", s.Offset(), err)
+						return result, ggen.NewParseErr("ptrs", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("ptrs", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+							return result, ggen.NewParseErr("ptrs", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 						}
 					}
 					if s.Bytes()[s.Pos] == ',' {
 						s.Pos++
 						err = s.SkipSpace()
 						if err != nil {
-							return result, decode.NewParseErr("ptrs", s.Offset(), err)
+							return result, ggen.NewParseErr("ptrs", s.Offset(), err)
 						}
 						if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-							return result, decode.NewParseErr("ptrs", s.Offset(), scan.ErrBadArray)
+							return result, ggen.NewParseErr("ptrs", s.Offset(), ggen.ErrBadArray)
 						}
 						continue
 					}
@@ -5305,62 +5302,62 @@ func (recv PreallocWidths) DecodeFromStream(s *scan.Stream) (result PreallocWidt
 				slab0 = append(slab0, PreallocRow{})
 				slab0[len(slab0)-1], err = slab0[len(slab0)-1].DecodeFromStream(s)
 				if err != nil {
-					return result, decode.NewParseErr("ptrs", s.Offset(), err)
+					return result, ggen.NewParseErr("ptrs", s.Offset(), err)
 				}
 				result.Ptrs = append(result.Ptrs, &slab0[len(slab0)-1])
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("ptrs", s.Offset(), err)
+					return result, ggen.NewParseErr("ptrs", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("ptrs", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+						return result, ggen.NewParseErr("ptrs", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
 					s.Pos++
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("ptrs", s.Offset(), err)
+						return result, ggen.NewParseErr("ptrs", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-						return result, decode.NewParseErr("ptrs", s.Offset(), scan.ErrBadArray)
+						return result, ggen.NewParseErr("ptrs", s.Offset(), ggen.ErrBadArray)
 					}
 					continue
 				}
 				break
 			}
 			if s.Bytes()[s.Pos] != ']' {
-				return result, decode.NewParseErr("ptrs", s.Offset(), scan.ErrBadArray)
+				return result, ggen.NewParseErr("ptrs", s.Offset(), ggen.ErrBadArray)
 			}
 			s.Pos++
 		case "rows":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("rows", s.Offset(), err)
+				return result, ggen.NewParseErr("rows", s.Offset(), err)
 			}
 			if seenRows {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"rows"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"rows"}}
 			}
 			seenRows = true
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("rows", s.Offset(), err)
+				return result, ggen.NewParseErr("rows", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("rows", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+					return result, ggen.NewParseErr("rows", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("rows", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
+							return result, ggen.NewParseErr("rows", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("rows", s.Offset(), scan.ErrBadLiteral)
+						return result, ggen.NewParseErr("rows", s.Offset(), ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -5369,15 +5366,15 @@ func (recv PreallocWidths) DecodeFromStream(s *scan.Stream) (result PreallocWidt
 			}
 			err = s.ArrayOpen()
 			if err != nil {
-				return result, decode.NewParseErr("rows", s.Offset(), err)
+				return result, ggen.NewParseErr("rows", s.Offset(), err)
 			}
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("rows", s.Offset(), err)
+				return result, ggen.NewParseErr("rows", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("rows", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+					return result, ggen.NewParseErr("rows", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
 			if s.Bytes()[s.Pos] == ']' {
@@ -5393,61 +5390,61 @@ func (recv PreallocWidths) DecodeFromStream(s *scan.Stream) (result PreallocWidt
 				result.Rows = append(result.Rows, PreallocRow{})
 				result.Rows[len(result.Rows)-1], err = result.Rows[len(result.Rows)-1].DecodeFromStream(s)
 				if err != nil {
-					return result, decode.NewParseErr("rows", s.Offset(), err)
+					return result, ggen.NewParseErr("rows", s.Offset(), err)
 				}
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("rows", s.Offset(), err)
+					return result, ggen.NewParseErr("rows", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("rows", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+						return result, ggen.NewParseErr("rows", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
 					s.Pos++
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("rows", s.Offset(), err)
+						return result, ggen.NewParseErr("rows", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-						return result, decode.NewParseErr("rows", s.Offset(), scan.ErrBadArray)
+						return result, ggen.NewParseErr("rows", s.Offset(), ggen.ErrBadArray)
 					}
 					continue
 				}
 				break
 			}
 			if s.Bytes()[s.Pos] != ']' {
-				return result, decode.NewParseErr("rows", s.Offset(), scan.ErrBadArray)
+				return result, ggen.NewParseErr("rows", s.Offset(), ggen.ErrBadArray)
 			}
 			s.Pos++
 		case "strs":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("strs", s.Offset(), err)
+				return result, ggen.NewParseErr("strs", s.Offset(), err)
 			}
 			if seenStrs {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"strs"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"strs"}}
 			}
 			seenStrs = true
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("strs", s.Offset(), err)
+				return result, ggen.NewParseErr("strs", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("strs", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+					return result, ggen.NewParseErr("strs", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("strs", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
+							return result, ggen.NewParseErr("strs", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("strs", s.Offset(), scan.ErrBadLiteral)
+						return result, ggen.NewParseErr("strs", s.Offset(), ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -5456,15 +5453,15 @@ func (recv PreallocWidths) DecodeFromStream(s *scan.Stream) (result PreallocWidt
 			}
 			err = s.ArrayOpen()
 			if err != nil {
-				return result, decode.NewParseErr("strs", s.Offset(), err)
+				return result, ggen.NewParseErr("strs", s.Offset(), err)
 			}
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("strs", s.Offset(), err)
+				return result, ggen.NewParseErr("strs", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("strs", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+					return result, ggen.NewParseErr("strs", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
 			if s.Bytes()[s.Pos] == ']' {
@@ -5480,61 +5477,61 @@ func (recv PreallocWidths) DecodeFromStream(s *scan.Stream) (result PreallocWidt
 				result.Strs = append(result.Strs, "")
 				result.Strs[len(result.Strs)-1], err = s.String(true)
 				if err != nil {
-					return result, decode.NewParseErr("strs", s.Offset(), err)
+					return result, ggen.NewParseErr("strs", s.Offset(), err)
 				}
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("strs", s.Offset(), err)
+					return result, ggen.NewParseErr("strs", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("strs", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+						return result, ggen.NewParseErr("strs", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
 					s.Pos++
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("strs", s.Offset(), err)
+						return result, ggen.NewParseErr("strs", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-						return result, decode.NewParseErr("strs", s.Offset(), scan.ErrBadArray)
+						return result, ggen.NewParseErr("strs", s.Offset(), ggen.ErrBadArray)
 					}
 					continue
 				}
 				break
 			}
 			if s.Bytes()[s.Pos] != ']' {
-				return result, decode.NewParseErr("strs", s.Offset(), scan.ErrBadArray)
+				return result, ggen.NewParseErr("strs", s.Offset(), ggen.ErrBadArray)
 			}
 			s.Pos++
 		case "wide":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("wide", s.Offset(), err)
+				return result, ggen.NewParseErr("wide", s.Offset(), err)
 			}
 			if seenWide {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"wide"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"wide"}}
 			}
 			seenWide = true
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("wide", s.Offset(), err)
+				return result, ggen.NewParseErr("wide", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("wide", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+					return result, ggen.NewParseErr("wide", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("wide", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
+							return result, ggen.NewParseErr("wide", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("wide", s.Offset(), scan.ErrBadLiteral)
+						return result, ggen.NewParseErr("wide", s.Offset(), ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -5543,15 +5540,15 @@ func (recv PreallocWidths) DecodeFromStream(s *scan.Stream) (result PreallocWidt
 			}
 			err = s.ArrayOpen()
 			if err != nil {
-				return result, decode.NewParseErr("wide", s.Offset(), err)
+				return result, ggen.NewParseErr("wide", s.Offset(), err)
 			}
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("wide", s.Offset(), err)
+				return result, ggen.NewParseErr("wide", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("wide", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+					return result, ggen.NewParseErr("wide", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
 			if s.Bytes()[s.Pos] == ']' {
@@ -5567,45 +5564,45 @@ func (recv PreallocWidths) DecodeFromStream(s *scan.Stream) (result PreallocWidt
 				result.Wide = append(result.Wide, PreallocWide{})
 				result.Wide[len(result.Wide)-1], err = result.Wide[len(result.Wide)-1].DecodeFromStream(s)
 				if err != nil {
-					return result, decode.NewParseErr("wide", s.Offset(), err)
+					return result, ggen.NewParseErr("wide", s.Offset(), err)
 				}
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("wide", s.Offset(), err)
+					return result, ggen.NewParseErr("wide", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("wide", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+						return result, ggen.NewParseErr("wide", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
 					s.Pos++
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("wide", s.Offset(), err)
+						return result, ggen.NewParseErr("wide", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-						return result, decode.NewParseErr("wide", s.Offset(), scan.ErrBadArray)
+						return result, ggen.NewParseErr("wide", s.Offset(), ggen.ErrBadArray)
 					}
 					continue
 				}
 				break
 			}
 			if s.Bytes()[s.Pos] != ']' {
-				return result, decode.NewParseErr("wide", s.Offset(), scan.ErrBadArray)
+				return result, ggen.NewParseErr("wide", s.Offset(), ggen.ErrBadArray)
 			}
 			s.Pos++
 		default:
-			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Offset(), err)
+			return result, ggen.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+				return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -5614,7 +5611,7 @@ func (recv PreallocWidths) DecodeFromStream(s *scan.Stream) (result PreallocWidt
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Offset(), err)
+				return result, ggen.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -5622,7 +5619,7 @@ func (recv PreallocWidths) DecodeFromStream(s *scan.Stream) (result PreallocWidt
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
+		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
 	}
 }
 
@@ -5899,10 +5896,10 @@ func (s PreallocWidths) AppendJSON(dst []byte) ([]byte, error) {
 		dst = append(dst, '[')
 		if len(s.Strs) > 0 {
 			dst = append(dst, '"')
-			dst = encode.AppendStringNoHTML(dst, s.Strs[0])
+			dst = ggen.AppendStringNoHTML(dst, s.Strs[0])
 			for _, v0 := range s.Strs[1:] {
 				dst = append(dst, ",\""...)
-				dst = encode.AppendStringNoHTML(dst, v0)
+				dst = ggen.AppendStringNoHTML(dst, v0)
 			}
 		}
 		dst = append(dst, ']')
@@ -5935,7 +5932,7 @@ func (recv PreallocRow) DecodeFrom(data []byte) (result PreallocRow, i int, err 
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
-		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 	}
 	i++
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -5948,7 +5945,7 @@ func (recv PreallocRow) DecodeFrom(data []byte) (result PreallocRow, i int, err 
 	for {
 		var key string
 		if i >= len(data) || data[i] != '"' {
-			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrExpectString)
 		}
 		ke := i + 1
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
@@ -5958,16 +5955,16 @@ func (recv PreallocRow) DecodeFrom(data []byte) (result PreallocRow, i int, err 
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i, true)
+			key, i, err = ggen.String(data, i, true)
 			if err != nil {
-				return result, i, decode.NewParseErr("", i, err)
+				return result, i, ggen.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 		}
 		i++
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -5976,11 +5973,11 @@ func (recv PreallocRow) DecodeFrom(data []byte) (result PreallocRow, i int, err 
 		switch key {
 		case "c":
 			if seenC {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"c"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"c"}}
 			}
 			seenC = true
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("c", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("c", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -5994,19 +5991,19 @@ func (recv PreallocRow) DecodeFrom(data []byte) (result PreallocRow, i int, err 
 				result.C = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.C, i, err = scan.String(data, i, true)
+				result.C, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("c", i, err)
+					return result, i, ggen.NewParseErr("c", i, err)
 				}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 		}
 		if data[i] == ',' {
 			i++
@@ -6019,24 +6016,24 @@ func (recv PreallocRow) DecodeFrom(data []byte) (result PreallocRow, i int, err 
 			i++
 			return result, i, nil
 		}
-		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 	}
 }
 
-func (recv PreallocRow) DecodeFromStream(s *scan.Stream) (result PreallocRow, err error) {
+func (recv PreallocRow) DecodeFromStream(s *ggen.Stream) (result PreallocRow, err error) {
 	result = recv
 	seenC := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Offset(), err)
+		return result, ggen.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Offset(), err)
+		return result, ggen.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
+			return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -6048,33 +6045,33 @@ func (recv PreallocRow) DecodeFromStream(s *scan.Stream) (result PreallocRow, er
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Offset(), err)
+			return result, ggen.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "c":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("c", s.Offset(), err)
+				return result, ggen.NewParseErr("c", s.Offset(), err)
 			}
 			if seenC {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"c"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"c"}}
 			}
 			seenC = true
 			result.C, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("c", s.Offset(), err)
+				return result, ggen.NewParseErr("c", s.Offset(), err)
 			}
 		default:
-			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Offset(), err)
+			return result, ggen.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+				return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -6083,7 +6080,7 @@ func (recv PreallocRow) DecodeFromStream(s *scan.Stream) (result PreallocRow, er
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Offset(), err)
+				return result, ggen.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -6091,7 +6088,7 @@ func (recv PreallocRow) DecodeFromStream(s *scan.Stream) (result PreallocRow, er
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
+		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
 	}
 }
 
@@ -6105,7 +6102,7 @@ func (s PreallocRow) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"c\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.C)
+	dst = ggen.AppendStringNoHTML(dst, s.C)
 	return append(dst, '}'), nil
 }
 
@@ -6116,7 +6113,7 @@ func (recv PreallocWide) DecodeFrom(data []byte) (result PreallocWide, i int, er
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
-		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 	}
 	i++
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -6129,7 +6126,7 @@ func (recv PreallocWide) DecodeFrom(data []byte) (result PreallocWide, i int, er
 	for {
 		var key string
 		if i >= len(data) || data[i] != '"' {
-			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrExpectString)
 		}
 		ke := i + 1
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
@@ -6139,16 +6136,16 @@ func (recv PreallocWide) DecodeFrom(data []byte) (result PreallocWide, i int, er
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i, true)
+			key, i, err = ggen.String(data, i, true)
 			if err != nil {
-				return result, i, decode.NewParseErr("", i, err)
+				return result, i, ggen.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 		}
 		i++
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -6157,11 +6154,11 @@ func (recv PreallocWide) DecodeFrom(data []byte) (result PreallocWide, i int, er
 		switch key {
 		case "c":
 			if seenC {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"c"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"c"}}
 			}
 			seenC = true
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("c", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("c", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -6175,19 +6172,19 @@ func (recv PreallocWide) DecodeFrom(data []byte) (result PreallocWide, i int, er
 				result.C = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.C, i, err = scan.String(data, i, true)
+				result.C, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("c", i, err)
+					return result, i, ggen.NewParseErr("c", i, err)
 				}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 		}
 		if data[i] == ',' {
 			i++
@@ -6200,24 +6197,24 @@ func (recv PreallocWide) DecodeFrom(data []byte) (result PreallocWide, i int, er
 			i++
 			return result, i, nil
 		}
-		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 	}
 }
 
-func (recv PreallocWide) DecodeFromStream(s *scan.Stream) (result PreallocWide, err error) {
+func (recv PreallocWide) DecodeFromStream(s *ggen.Stream) (result PreallocWide, err error) {
 	result = recv
 	seenC := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Offset(), err)
+		return result, ggen.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Offset(), err)
+		return result, ggen.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
+			return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -6229,33 +6226,33 @@ func (recv PreallocWide) DecodeFromStream(s *scan.Stream) (result PreallocWide, 
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Offset(), err)
+			return result, ggen.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "c":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("c", s.Offset(), err)
+				return result, ggen.NewParseErr("c", s.Offset(), err)
 			}
 			if seenC {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"c"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"c"}}
 			}
 			seenC = true
 			result.C, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("c", s.Offset(), err)
+				return result, ggen.NewParseErr("c", s.Offset(), err)
 			}
 		default:
-			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Offset(), err)
+			return result, ggen.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+				return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -6264,7 +6261,7 @@ func (recv PreallocWide) DecodeFromStream(s *scan.Stream) (result PreallocWide, 
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Offset(), err)
+				return result, ggen.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -6272,7 +6269,7 @@ func (recv PreallocWide) DecodeFromStream(s *scan.Stream) (result PreallocWide, 
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
+		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
 	}
 }
 
@@ -6286,7 +6283,7 @@ func (s PreallocWide) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"c\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.C)
+	dst = ggen.AppendStringNoHTML(dst, s.C)
 	return append(dst, '}'), nil
 }
 
@@ -6320,7 +6317,7 @@ func (recv ElemKinds) DecodeFrom(data []byte) (result ElemKinds, i int, err erro
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
-		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 	}
 	i++
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -6333,7 +6330,7 @@ func (recv ElemKinds) DecodeFrom(data []byte) (result ElemKinds, i int, err erro
 	for {
 		var key string
 		if i >= len(data) || data[i] != '"' {
-			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrExpectString)
 		}
 		ke := i + 1
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
@@ -6343,16 +6340,16 @@ func (recv ElemKinds) DecodeFrom(data []byte) (result ElemKinds, i int, err erro
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i, true)
+			key, i, err = ggen.String(data, i, true)
 			if err != nil {
-				return result, i, decode.NewParseErr("", i, err)
+				return result, i, ggen.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 		}
 		i++
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -6361,7 +6358,7 @@ func (recv ElemKinds) DecodeFrom(data []byte) (result ElemKinds, i int, err erro
 		switch key {
 		case "anys":
 			if seenAnys {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"anys"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"anys"}}
 			}
 			seenAnys = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -6370,7 +6367,7 @@ func (recv ElemKinds) DecodeFrom(data []byte) (result ElemKinds, i int, err erro
 				break
 			}
 			if i >= len(data) || data[i] != '[' {
-				return result, i, decode.NewParseErr("anys", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("anys", i, ggen.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -6388,9 +6385,9 @@ func (recv ElemKinds) DecodeFrom(data []byte) (result ElemKinds, i int, err erro
 			if i < len(data) && data[i] != ']' {
 				for {
 					result.Anys = append(result.Anys, nil)
-					result.Anys[len(result.Anys)-1], i, err = scan.Any(data, i)
+					result.Anys[len(result.Anys)-1], i, err = ggen.Any(data, i)
 					if err != nil {
-						return result, i, decode.NewParseErr("anys[]", i, err)
+						return result, i, ggen.NewParseErr("anys[]", i, err)
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -6401,7 +6398,7 @@ func (recv ElemKinds) DecodeFrom(data []byte) (result ElemKinds, i int, err erro
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, decode.NewParseErr("anys", i, scan.ErrBadArray)
+							return result, i, ggen.NewParseErr("anys", i, ggen.ErrBadArray)
 						}
 						continue
 					}
@@ -6409,12 +6406,12 @@ func (recv ElemKinds) DecodeFrom(data []byte) (result ElemKinds, i int, err erro
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, decode.NewParseErr("anys", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("anys", i, ggen.ErrBadArray)
 			}
 			i++
 		case "blobs":
 			if seenBlobs {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"blobs"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"blobs"}}
 			}
 			seenBlobs = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -6423,7 +6420,7 @@ func (recv ElemKinds) DecodeFrom(data []byte) (result ElemKinds, i int, err erro
 				break
 			}
 			if i >= len(data) || data[i] != '[' {
-				return result, i, decode.NewParseErr("blobs", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("blobs", i, ggen.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -6447,7 +6444,7 @@ func (recv ElemKinds) DecodeFrom(data []byte) (result ElemKinds, i int, err erro
 					} else {
 						var s string
 						if i >= len(data) || data[i] != '"' {
-							return result, i, decode.NewParseErr("blobs[]", i, scan.ErrExpectString)
+							return result, i, ggen.NewParseErr("blobs[]", i, ggen.ErrExpectString)
 						}
 						ke := i + 1
 						kew := ke + 32
@@ -6461,9 +6458,9 @@ func (recv ElemKinds) DecodeFrom(data []byte) (result ElemKinds, i int, err erro
 							s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 							i = ke + 1
 						} else {
-							s, i, err = scan.String(data, i, true)
+							s, i, err = ggen.String(data, i, true)
 							if err != nil {
-								return result, i, decode.NewParseErr("blobs[]", i, err)
+								return result, i, ggen.NewParseErr("blobs[]", i, err)
 							}
 						}
 						if cap(result.Blobs[len(result.Blobs)-1]) < base64.StdEncoding.DecodedLen(len(s)) {
@@ -6471,7 +6468,7 @@ func (recv ElemKinds) DecodeFrom(data []byte) (result ElemKinds, i int, err erro
 						}
 						result.Blobs[len(result.Blobs)-1], err = base64.StdEncoding.AppendDecode(result.Blobs[len(result.Blobs)-1], unsafe.Slice(unsafe.StringData(s), len(s)))
 						if err != nil {
-							return result, i, decode.NewParseErr("blobs[]", i, err)
+							return result, i, ggen.NewParseErr("blobs[]", i, err)
 						}
 						if result.Blobs[len(result.Blobs)-1] == nil {
 							result.Blobs[len(result.Blobs)-1] = []byte{}
@@ -6486,7 +6483,7 @@ func (recv ElemKinds) DecodeFrom(data []byte) (result ElemKinds, i int, err erro
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, decode.NewParseErr("blobs", i, scan.ErrBadArray)
+							return result, i, ggen.NewParseErr("blobs", i, ggen.ErrBadArray)
 						}
 						continue
 					}
@@ -6494,12 +6491,12 @@ func (recv ElemKinds) DecodeFrom(data []byte) (result ElemKinds, i int, err erro
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, decode.NewParseErr("blobs", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("blobs", i, ggen.ErrBadArray)
 			}
 			i++
 		case "durs":
 			if seenDurs {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"durs"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"durs"}}
 			}
 			seenDurs = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -6508,7 +6505,7 @@ func (recv ElemKinds) DecodeFrom(data []byte) (result ElemKinds, i int, err erro
 				break
 			}
 			if i >= len(data) || data[i] != '[' {
-				return result, i, decode.NewParseErr("durs", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("durs", i, ggen.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -6528,7 +6525,7 @@ func (recv ElemKinds) DecodeFrom(data []byte) (result ElemKinds, i int, err erro
 					result.Durs = append(result.Durs, 0)
 					var s string
 					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("durs[]", i, scan.ErrExpectString)
+						return result, i, ggen.NewParseErr("durs[]", i, ggen.ErrExpectString)
 					}
 					ke := i + 1
 					kew := ke + 32
@@ -6542,14 +6539,14 @@ func (recv ElemKinds) DecodeFrom(data []byte) (result ElemKinds, i int, err erro
 						s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 						i = ke + 1
 					} else {
-						s, i, err = scan.String(data, i, true)
+						s, i, err = ggen.String(data, i, true)
 						if err != nil {
-							return result, i, decode.NewParseErr("durs[]", i, err)
+							return result, i, ggen.NewParseErr("durs[]", i, err)
 						}
 					}
 					result.Durs[len(result.Durs)-1], err = time.ParseDuration(s)
 					if err != nil {
-						return result, i, decode.NewParseErr("durs[]", i, err)
+						return result, i, ggen.NewParseErr("durs[]", i, err)
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -6560,7 +6557,7 @@ func (recv ElemKinds) DecodeFrom(data []byte) (result ElemKinds, i int, err erro
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, decode.NewParseErr("durs", i, scan.ErrBadArray)
+							return result, i, ggen.NewParseErr("durs", i, ggen.ErrBadArray)
 						}
 						continue
 					}
@@ -6568,12 +6565,12 @@ func (recv ElemKinds) DecodeFrom(data []byte) (result ElemKinds, i int, err erro
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, decode.NewParseErr("durs", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("durs", i, ggen.ErrBadArray)
 			}
 			i++
 		case "maps":
 			if seenMaps {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"maps"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"maps"}}
 			}
 			seenMaps = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -6582,7 +6579,7 @@ func (recv ElemKinds) DecodeFrom(data []byte) (result ElemKinds, i int, err erro
 				break
 			}
 			if i >= len(data) || data[i] != '[' {
-				return result, i, decode.NewParseErr("maps", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("maps", i, ggen.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -6605,7 +6602,7 @@ func (recv ElemKinds) DecodeFrom(data []byte) (result ElemKinds, i int, err erro
 						result.Maps[len(result.Maps)-1] = nil
 					} else {
 						if i >= len(data) || data[i] != '{' {
-							return result, i, decode.NewParseErr("maps[]", i, scan.ErrBadObject)
+							return result, i, ggen.NewParseErr("maps[]", i, ggen.ErrBadObject)
 						}
 						i++
 						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -6624,7 +6621,7 @@ func (recv ElemKinds) DecodeFrom(data []byte) (result ElemKinds, i int, err erro
 							for {
 								var mk string
 								if i >= len(data) || data[i] != '"' {
-									return result, i, decode.NewParseErr("maps[]", i, scan.ErrExpectString)
+									return result, i, ggen.NewParseErr("maps[]", i, ggen.ErrExpectString)
 								}
 								ke := i + 1
 								kew := ke + 32
@@ -6638,16 +6635,16 @@ func (recv ElemKinds) DecodeFrom(data []byte) (result ElemKinds, i int, err erro
 									mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 									i = ke + 1
 								} else {
-									mk, i, err = scan.String(data, i, true)
+									mk, i, err = ggen.String(data, i, true)
 									if err != nil {
-										return result, i, decode.NewParseErr("maps[]", i, err)
+										return result, i, ggen.NewParseErr("maps[]", i, err)
 									}
 								}
 								for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 									i++
 								}
 								if i >= len(data) || data[i] != ':' {
-									return result, i, decode.NewParseErr("maps[]", i, scan.ErrBadObject)
+									return result, i, ggen.NewParseErr("maps[]", i, ggen.ErrBadObject)
 								}
 								i++
 								for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -6659,14 +6656,14 @@ func (recv ElemKinds) DecodeFrom(data []byte) (result ElemKinds, i int, err erro
 									i++
 								}
 								if i >= len(data) || data[i] < '0' || data[i] > '9' {
-									return result, i, decode.NewParseErr("maps[]", i, scan.ErrBadNumber)
+									return result, i, ggen.NewParseErr("maps[]", i, ggen.ErrBadNumber)
 								}
 								if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
-									return result, i, decode.NewParseErr("maps[]", i, scan.ErrBadNumber)
+									return result, i, ggen.NewParseErr("maps[]", i, ggen.ErrBadNumber)
 								}
 								limit := uint64(math.MaxInt64)
 								if neg {
-									limit = scan.SignedNeg
+									limit = ggen.SignedNeg
 								}
 								var u uint64
 								de := i + 18
@@ -6680,7 +6677,7 @@ func (recv ElemKinds) DecodeFrom(data []byte) (result ElemKinds, i int, err erro
 								for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 									d := uint64(data[i] - '0')
 									if u > limit/10 || (u == limit/10 && d > limit%10) {
-										return result, i, decode.NewParseErr("maps[]", i, scan.ErrNumberOverflow)
+										return result, i, ggen.NewParseErr("maps[]", i, ggen.ErrNumberOverflow)
 									}
 									u = u*10 + d
 									i++
@@ -6688,12 +6685,12 @@ func (recv ElemKinds) DecodeFrom(data []byte) (result ElemKinds, i int, err erro
 								if i < len(data) {
 									c := data[i]
 									if c == '.' || c == 'e' || c == 'E' {
-										return result, i, decode.NewParseErr("maps[]", i, scan.ErrBadNumber)
+										return result, i, ggen.NewParseErr("maps[]", i, ggen.ErrBadNumber)
 									}
 								}
 								var n int64
 								if neg {
-									if u == scan.SignedNeg {
+									if u == ggen.SignedNeg {
 										n = math.MinInt64
 									} else {
 										n = -int64(u)
@@ -6711,7 +6708,7 @@ func (recv ElemKinds) DecodeFrom(data []byte) (result ElemKinds, i int, err erro
 										i++
 									}
 									if i >= len(data) || data[i] == '}' {
-										return result, i, decode.NewParseErr("maps[]", i, scan.ErrBadObject)
+										return result, i, ggen.NewParseErr("maps[]", i, ggen.ErrBadObject)
 									}
 									continue
 								}
@@ -6719,7 +6716,7 @@ func (recv ElemKinds) DecodeFrom(data []byte) (result ElemKinds, i int, err erro
 							}
 						}
 						if i >= len(data) || data[i] != '}' {
-							return result, i, decode.NewParseErr("maps[]", i, scan.ErrBadObject)
+							return result, i, ggen.NewParseErr("maps[]", i, ggen.ErrBadObject)
 						}
 						i++
 					}
@@ -6732,7 +6729,7 @@ func (recv ElemKinds) DecodeFrom(data []byte) (result ElemKinds, i int, err erro
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, decode.NewParseErr("maps", i, scan.ErrBadArray)
+							return result, i, ggen.NewParseErr("maps", i, ggen.ErrBadArray)
 						}
 						continue
 					}
@@ -6740,12 +6737,12 @@ func (recv ElemKinds) DecodeFrom(data []byte) (result ElemKinds, i int, err erro
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, decode.NewParseErr("maps", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("maps", i, ggen.ErrBadArray)
 			}
 			i++
 		case "raws":
 			if seenRaws {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"raws"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"raws"}}
 			}
 			seenRaws = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -6754,7 +6751,7 @@ func (recv ElemKinds) DecodeFrom(data []byte) (result ElemKinds, i int, err erro
 				break
 			}
 			if i >= len(data) || data[i] != '[' {
-				return result, i, decode.NewParseErr("raws", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("raws", i, ggen.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -6773,13 +6770,13 @@ func (recv ElemKinds) DecodeFrom(data []byte) (result ElemKinds, i int, err erro
 				for {
 					result.Raws = append(result.Raws, nil)
 					start := i
-					i, err = scan.SkipValue(data, start)
+					i, err = ggen.SkipValue(data, start)
 					if err != nil {
-						return result, i, decode.NewParseErr("raws[]", i, err)
+						return result, i, ggen.NewParseErr("raws[]", i, err)
 					}
-					err = scan.CheckUTF8(data[start:i])
+					err = ggen.CheckUTF8(data[start:i])
 					if err != nil {
-						return result, i, decode.NewParseErr("raws[]", i, err)
+						return result, i, ggen.NewParseErr("raws[]", i, err)
 					}
 					result.Raws[len(result.Raws)-1] = data[start:i]
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -6791,7 +6788,7 @@ func (recv ElemKinds) DecodeFrom(data []byte) (result ElemKinds, i int, err erro
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, decode.NewParseErr("raws", i, scan.ErrBadArray)
+							return result, i, ggen.NewParseErr("raws", i, ggen.ErrBadArray)
 						}
 						continue
 					}
@@ -6799,12 +6796,12 @@ func (recv ElemKinds) DecodeFrom(data []byte) (result ElemKinds, i int, err erro
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, decode.NewParseErr("raws", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("raws", i, ggen.ErrBadArray)
 			}
 			i++
 		case "times":
 			if seenTimes {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"times"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"times"}}
 			}
 			seenTimes = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -6813,7 +6810,7 @@ func (recv ElemKinds) DecodeFrom(data []byte) (result ElemKinds, i int, err erro
 				break
 			}
 			if i >= len(data) || data[i] != '[' {
-				return result, i, decode.NewParseErr("times", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("times", i, ggen.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -6833,7 +6830,7 @@ func (recv ElemKinds) DecodeFrom(data []byte) (result ElemKinds, i int, err erro
 					result.Times = append(result.Times, time.Time{})
 					var s string
 					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("times[]", i, scan.ErrExpectString)
+						return result, i, ggen.NewParseErr("times[]", i, ggen.ErrExpectString)
 					}
 					ke := i + 1
 					kew := ke + 32
@@ -6847,14 +6844,14 @@ func (recv ElemKinds) DecodeFrom(data []byte) (result ElemKinds, i int, err erro
 						s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 						i = ke + 1
 					} else {
-						s, i, err = scan.String(data, i, true)
+						s, i, err = ggen.String(data, i, true)
 						if err != nil {
-							return result, i, decode.NewParseErr("times[]", i, err)
+							return result, i, ggen.NewParseErr("times[]", i, err)
 						}
 					}
 					result.Times[len(result.Times)-1], err = time.Parse(time.RFC3339Nano, s)
 					if err != nil {
-						return result, i, decode.NewParseErr("times[]", i, err)
+						return result, i, ggen.NewParseErr("times[]", i, err)
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -6865,7 +6862,7 @@ func (recv ElemKinds) DecodeFrom(data []byte) (result ElemKinds, i int, err erro
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, decode.NewParseErr("times", i, scan.ErrBadArray)
+							return result, i, ggen.NewParseErr("times", i, ggen.ErrBadArray)
 						}
 						continue
 					}
@@ -6873,17 +6870,17 @@ func (recv ElemKinds) DecodeFrom(data []byte) (result ElemKinds, i int, err erro
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, decode.NewParseErr("times", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("times", i, ggen.ErrBadArray)
 			}
 			i++
 		default:
-			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 		}
 		if data[i] == ',' {
 			i++
@@ -6896,11 +6893,11 @@ func (recv ElemKinds) DecodeFrom(data []byte) (result ElemKinds, i int, err erro
 			i++
 			return result, i, nil
 		}
-		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 	}
 }
 
-func (recv ElemKinds) DecodeFromStream(s *scan.Stream) (result ElemKinds, err error) {
+func (recv ElemKinds) DecodeFromStream(s *ggen.Stream) (result ElemKinds, err error) {
 	result = recv
 	if result.Anys != nil {
 		result.Anys = result.Anys[:0]
@@ -6928,15 +6925,15 @@ func (recv ElemKinds) DecodeFromStream(s *scan.Stream) (result ElemKinds, err er
 	seenTimes := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Offset(), err)
+		return result, ggen.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Offset(), err)
+		return result, ggen.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
+			return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -6948,36 +6945,36 @@ func (recv ElemKinds) DecodeFromStream(s *scan.Stream) (result ElemKinds, err er
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Offset(), err)
+			return result, ggen.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "anys":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("anys", s.Offset(), err)
+				return result, ggen.NewParseErr("anys", s.Offset(), err)
 			}
 			if seenAnys {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"anys"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"anys"}}
 			}
 			seenAnys = true
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("anys", s.Offset(), err)
+				return result, ggen.NewParseErr("anys", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("anys", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+					return result, ggen.NewParseErr("anys", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("anys", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
+							return result, ggen.NewParseErr("anys", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("anys", s.Offset(), scan.ErrBadLiteral)
+						return result, ggen.NewParseErr("anys", s.Offset(), ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -6986,15 +6983,15 @@ func (recv ElemKinds) DecodeFromStream(s *scan.Stream) (result ElemKinds, err er
 			}
 			err = s.ArrayOpen()
 			if err != nil {
-				return result, decode.NewParseErr("anys", s.Offset(), err)
+				return result, ggen.NewParseErr("anys", s.Offset(), err)
 			}
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("anys", s.Offset(), err)
+				return result, ggen.NewParseErr("anys", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("anys", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+					return result, ggen.NewParseErr("anys", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
 			if s.Bytes()[s.Pos] == ']' {
@@ -7010,61 +7007,61 @@ func (recv ElemKinds) DecodeFromStream(s *scan.Stream) (result ElemKinds, err er
 				result.Anys = append(result.Anys, nil)
 				result.Anys[len(result.Anys)-1], err = s.Any()
 				if err != nil {
-					return result, decode.NewParseErr("anys[]", s.Offset(), err)
+					return result, ggen.NewParseErr("anys[]", s.Offset(), err)
 				}
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("anys", s.Offset(), err)
+					return result, ggen.NewParseErr("anys", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("anys", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+						return result, ggen.NewParseErr("anys", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
 					s.Pos++
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("anys", s.Offset(), err)
+						return result, ggen.NewParseErr("anys", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-						return result, decode.NewParseErr("anys", s.Offset(), scan.ErrBadArray)
+						return result, ggen.NewParseErr("anys", s.Offset(), ggen.ErrBadArray)
 					}
 					continue
 				}
 				break
 			}
 			if s.Bytes()[s.Pos] != ']' {
-				return result, decode.NewParseErr("anys", s.Offset(), scan.ErrBadArray)
+				return result, ggen.NewParseErr("anys", s.Offset(), ggen.ErrBadArray)
 			}
 			s.Pos++
 		case "blobs":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("blobs", s.Offset(), err)
+				return result, ggen.NewParseErr("blobs", s.Offset(), err)
 			}
 			if seenBlobs {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"blobs"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"blobs"}}
 			}
 			seenBlobs = true
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("blobs", s.Offset(), err)
+				return result, ggen.NewParseErr("blobs", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("blobs", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+					return result, ggen.NewParseErr("blobs", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("blobs", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
+							return result, ggen.NewParseErr("blobs", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("blobs", s.Offset(), scan.ErrBadLiteral)
+						return result, ggen.NewParseErr("blobs", s.Offset(), ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -7073,15 +7070,15 @@ func (recv ElemKinds) DecodeFromStream(s *scan.Stream) (result ElemKinds, err er
 			}
 			err = s.ArrayOpen()
 			if err != nil {
-				return result, decode.NewParseErr("blobs", s.Offset(), err)
+				return result, ggen.NewParseErr("blobs", s.Offset(), err)
 			}
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("blobs", s.Offset(), err)
+				return result, ggen.NewParseErr("blobs", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("blobs", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+					return result, ggen.NewParseErr("blobs", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
 			if s.Bytes()[s.Pos] == ']' {
@@ -7097,18 +7094,18 @@ func (recv ElemKinds) DecodeFromStream(s *scan.Stream) (result ElemKinds, err er
 				result.Blobs = append(result.Blobs, nil)
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("blobs[]", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
+						return result, ggen.NewParseErr("blobs[]", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
 					}
 				}
 				if s.Bytes()[s.Pos] == 'n' {
 					for ki := 1; ki < 4; ki++ {
 						if s.Pos+ki >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, decode.NewParseErr("blobs[]", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
+								return result, ggen.NewParseErr("blobs[]", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
 							}
 						}
 						if s.Bytes()[s.Pos+ki] != "null"[ki] {
-							return result, decode.NewParseErr("blobs[]", s.Offset(), scan.ErrBadLiteral)
+							return result, ggen.NewParseErr("blobs[]", s.Offset(), ggen.ErrBadLiteral)
 						}
 					}
 					s.Pos += 4
@@ -7117,14 +7114,14 @@ func (recv ElemKinds) DecodeFromStream(s *scan.Stream) (result ElemKinds, err er
 					var sv string
 					sv, err = s.StringView(true)
 					if err != nil {
-						return result, decode.NewParseErr("blobs[]", s.Offset(), err)
+						return result, ggen.NewParseErr("blobs[]", s.Offset(), err)
 					}
 					if cap(result.Blobs[len(result.Blobs)-1]) < base64.StdEncoding.DecodedLen(len(sv)) {
 						result.Blobs[len(result.Blobs)-1] = make([]byte, 0, base64.StdEncoding.DecodedLen(len(sv)))
 					}
 					result.Blobs[len(result.Blobs)-1], err = base64.StdEncoding.AppendDecode(result.Blobs[len(result.Blobs)-1], unsafe.Slice(unsafe.StringData(sv), len(sv)))
 					if err != nil {
-						return result, decode.NewParseErr("blobs[]", s.Offset(), err)
+						return result, ggen.NewParseErr("blobs[]", s.Offset(), err)
 					}
 					if result.Blobs[len(result.Blobs)-1] == nil {
 						result.Blobs[len(result.Blobs)-1] = []byte{}
@@ -7132,57 +7129,57 @@ func (recv ElemKinds) DecodeFromStream(s *scan.Stream) (result ElemKinds, err er
 				}
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("blobs", s.Offset(), err)
+					return result, ggen.NewParseErr("blobs", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("blobs", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+						return result, ggen.NewParseErr("blobs", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
 					s.Pos++
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("blobs", s.Offset(), err)
+						return result, ggen.NewParseErr("blobs", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-						return result, decode.NewParseErr("blobs", s.Offset(), scan.ErrBadArray)
+						return result, ggen.NewParseErr("blobs", s.Offset(), ggen.ErrBadArray)
 					}
 					continue
 				}
 				break
 			}
 			if s.Bytes()[s.Pos] != ']' {
-				return result, decode.NewParseErr("blobs", s.Offset(), scan.ErrBadArray)
+				return result, ggen.NewParseErr("blobs", s.Offset(), ggen.ErrBadArray)
 			}
 			s.Pos++
 		case "durs":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("durs", s.Offset(), err)
+				return result, ggen.NewParseErr("durs", s.Offset(), err)
 			}
 			if seenDurs {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"durs"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"durs"}}
 			}
 			seenDurs = true
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("durs", s.Offset(), err)
+				return result, ggen.NewParseErr("durs", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("durs", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+					return result, ggen.NewParseErr("durs", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("durs", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
+							return result, ggen.NewParseErr("durs", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("durs", s.Offset(), scan.ErrBadLiteral)
+						return result, ggen.NewParseErr("durs", s.Offset(), ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -7191,15 +7188,15 @@ func (recv ElemKinds) DecodeFromStream(s *scan.Stream) (result ElemKinds, err er
 			}
 			err = s.ArrayOpen()
 			if err != nil {
-				return result, decode.NewParseErr("durs", s.Offset(), err)
+				return result, ggen.NewParseErr("durs", s.Offset(), err)
 			}
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("durs", s.Offset(), err)
+				return result, ggen.NewParseErr("durs", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("durs", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+					return result, ggen.NewParseErr("durs", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
 			if s.Bytes()[s.Pos] == ']' {
@@ -7216,65 +7213,65 @@ func (recv ElemKinds) DecodeFromStream(s *scan.Stream) (result ElemKinds, err er
 				var sv string
 				sv, err = s.StringView(true)
 				if err != nil {
-					return result, decode.NewParseErr("durs[]", s.Offset(), err)
+					return result, ggen.NewParseErr("durs[]", s.Offset(), err)
 				}
 				result.Durs[len(result.Durs)-1], err = time.ParseDuration(sv)
 				if err != nil {
-					return result, decode.NewParseErr("durs[]", s.Offset(), err)
+					return result, ggen.NewParseErr("durs[]", s.Offset(), err)
 				}
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("durs", s.Offset(), err)
+					return result, ggen.NewParseErr("durs", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("durs", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+						return result, ggen.NewParseErr("durs", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
 					s.Pos++
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("durs", s.Offset(), err)
+						return result, ggen.NewParseErr("durs", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-						return result, decode.NewParseErr("durs", s.Offset(), scan.ErrBadArray)
+						return result, ggen.NewParseErr("durs", s.Offset(), ggen.ErrBadArray)
 					}
 					continue
 				}
 				break
 			}
 			if s.Bytes()[s.Pos] != ']' {
-				return result, decode.NewParseErr("durs", s.Offset(), scan.ErrBadArray)
+				return result, ggen.NewParseErr("durs", s.Offset(), ggen.ErrBadArray)
 			}
 			s.Pos++
 		case "maps":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("maps", s.Offset(), err)
+				return result, ggen.NewParseErr("maps", s.Offset(), err)
 			}
 			if seenMaps {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"maps"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"maps"}}
 			}
 			seenMaps = true
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("maps", s.Offset(), err)
+				return result, ggen.NewParseErr("maps", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("maps", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+					return result, ggen.NewParseErr("maps", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("maps", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
+							return result, ggen.NewParseErr("maps", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("maps", s.Offset(), scan.ErrBadLiteral)
+						return result, ggen.NewParseErr("maps", s.Offset(), ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -7283,15 +7280,15 @@ func (recv ElemKinds) DecodeFromStream(s *scan.Stream) (result ElemKinds, err er
 			}
 			err = s.ArrayOpen()
 			if err != nil {
-				return result, decode.NewParseErr("maps", s.Offset(), err)
+				return result, ggen.NewParseErr("maps", s.Offset(), err)
 			}
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("maps", s.Offset(), err)
+				return result, ggen.NewParseErr("maps", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("maps", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+					return result, ggen.NewParseErr("maps", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
 			if s.Bytes()[s.Pos] == ']' {
@@ -7307,22 +7304,22 @@ func (recv ElemKinds) DecodeFromStream(s *scan.Stream) (result ElemKinds, err er
 				result.Maps = append(result.Maps, nil)
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("maps[]", s.Offset(), err)
+					return result, ggen.NewParseErr("maps[]", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("maps[]", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+						return result, ggen.NewParseErr("maps[]", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 					}
 				}
 				if s.Bytes()[s.Pos] == 'n' {
 					for ki := 1; ki < 4; ki++ {
 						if s.Pos+ki >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, decode.NewParseErr("maps[]", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
+								return result, ggen.NewParseErr("maps[]", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
 							}
 						}
 						if s.Bytes()[s.Pos+ki] != "null"[ki] {
-							return result, decode.NewParseErr("maps[]", s.Offset(), scan.ErrBadLiteral)
+							return result, ggen.NewParseErr("maps[]", s.Offset(), ggen.ErrBadLiteral)
 						}
 					}
 					s.Pos += 4
@@ -7330,15 +7327,15 @@ func (recv ElemKinds) DecodeFromStream(s *scan.Stream) (result ElemKinds, err er
 				} else {
 					err = s.ObjectOpen()
 					if err != nil {
-						return result, decode.NewParseErr("maps[]", s.Offset(), err)
+						return result, ggen.NewParseErr("maps[]", s.Offset(), err)
 					}
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("maps[]", s.Offset(), err)
+						return result, ggen.NewParseErr("maps[]", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("maps[]", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+							return result, ggen.NewParseErr("maps[]", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 						}
 					}
 					if s.Bytes()[s.Pos] == '}' {
@@ -7354,111 +7351,111 @@ func (recv ElemKinds) DecodeFromStream(s *scan.Stream) (result ElemKinds, err er
 						var mk string
 						mk, err = s.String(true)
 						if err != nil {
-							return result, decode.NewParseErr("maps[]", s.Offset(), err)
+							return result, ggen.NewParseErr("maps[]", s.Offset(), err)
 						}
 						err = s.SkipSpace()
 						if err != nil {
-							return result, decode.NewParseErr("maps[]", s.Offset(), err)
+							return result, ggen.NewParseErr("maps[]", s.Offset(), err)
 						}
 						if s.Pos >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, decode.NewParseErr("maps[]", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+								return result, ggen.NewParseErr("maps[]", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 							}
 						}
 						if s.Bytes()[s.Pos] != ':' {
-							return result, decode.NewParseErr("maps[]", s.Offset(), scan.ErrBadObject)
+							return result, ggen.NewParseErr("maps[]", s.Offset(), ggen.ErrBadObject)
 						}
 						s.Pos++
 						err = s.SkipSpace()
 						if err != nil {
-							return result, decode.NewParseErr("maps[]", s.Offset(), err)
+							return result, ggen.NewParseErr("maps[]", s.Offset(), err)
 						}
 						var iv int64
 						iv, err = s.Int64()
 						if err != nil {
-							return result, decode.NewParseErr("maps[]", s.Offset(), err)
+							return result, ggen.NewParseErr("maps[]", s.Offset(), err)
 						}
 						result.Maps[len(result.Maps)-1][mk] = int(iv)
 						err = s.SkipSpace()
 						if err != nil {
-							return result, decode.NewParseErr("maps[]", s.Offset(), err)
+							return result, ggen.NewParseErr("maps[]", s.Offset(), err)
 						}
 						if s.Pos >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, decode.NewParseErr("maps[]", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+								return result, ggen.NewParseErr("maps[]", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 							}
 						}
 						if s.Bytes()[s.Pos] == ',' {
 							s.Pos++
 							err = s.SkipSpace()
 							if err != nil {
-								return result, decode.NewParseErr("maps[]", s.Offset(), err)
+								return result, ggen.NewParseErr("maps[]", s.Offset(), err)
 							}
 							if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == '}' {
-								return result, decode.NewParseErr("maps[]", s.Offset(), scan.ErrBadObject)
+								return result, ggen.NewParseErr("maps[]", s.Offset(), ggen.ErrBadObject)
 							}
 							continue
 						}
 						break
 					}
 					if s.Bytes()[s.Pos] != '}' {
-						return result, decode.NewParseErr("maps[]", s.Offset(), scan.ErrBadObject)
+						return result, ggen.NewParseErr("maps[]", s.Offset(), ggen.ErrBadObject)
 					}
 					s.Pos++
 				}
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("maps", s.Offset(), err)
+					return result, ggen.NewParseErr("maps", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("maps", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+						return result, ggen.NewParseErr("maps", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
 					s.Pos++
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("maps", s.Offset(), err)
+						return result, ggen.NewParseErr("maps", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-						return result, decode.NewParseErr("maps", s.Offset(), scan.ErrBadArray)
+						return result, ggen.NewParseErr("maps", s.Offset(), ggen.ErrBadArray)
 					}
 					continue
 				}
 				break
 			}
 			if s.Bytes()[s.Pos] != ']' {
-				return result, decode.NewParseErr("maps", s.Offset(), scan.ErrBadArray)
+				return result, ggen.NewParseErr("maps", s.Offset(), ggen.ErrBadArray)
 			}
 			s.Pos++
 		case "raws":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("raws", s.Offset(), err)
+				return result, ggen.NewParseErr("raws", s.Offset(), err)
 			}
 			if seenRaws {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"raws"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"raws"}}
 			}
 			seenRaws = true
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("raws", s.Offset(), err)
+				return result, ggen.NewParseErr("raws", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("raws", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+					return result, ggen.NewParseErr("raws", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("raws", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
+							return result, ggen.NewParseErr("raws", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("raws", s.Offset(), scan.ErrBadLiteral)
+						return result, ggen.NewParseErr("raws", s.Offset(), ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -7467,15 +7464,15 @@ func (recv ElemKinds) DecodeFromStream(s *scan.Stream) (result ElemKinds, err er
 			}
 			err = s.ArrayOpen()
 			if err != nil {
-				return result, decode.NewParseErr("raws", s.Offset(), err)
+				return result, ggen.NewParseErr("raws", s.Offset(), err)
 			}
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("raws", s.Offset(), err)
+				return result, ggen.NewParseErr("raws", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("raws", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+					return result, ggen.NewParseErr("raws", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
 			if s.Bytes()[s.Pos] == ']' {
@@ -7491,66 +7488,66 @@ func (recv ElemKinds) DecodeFromStream(s *scan.Stream) (result ElemKinds, err er
 				result.Raws = append(result.Raws, nil)
 				span, err := s.CaptureValue()
 				if err != nil {
-					return result, decode.NewParseErr("raws[]", s.Offset(), err)
+					return result, ggen.NewParseErr("raws[]", s.Offset(), err)
 				}
-				err = scan.CheckUTF8(span)
+				err = ggen.CheckUTF8(span)
 				if err != nil {
-					return result, decode.NewParseErr("raws[]", s.Offset(), err)
+					return result, ggen.NewParseErr("raws[]", s.Offset(), err)
 				}
 				result.Raws[len(result.Raws)-1] = append(make([]byte, 0, len(span)), span...)
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("raws", s.Offset(), err)
+					return result, ggen.NewParseErr("raws", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("raws", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+						return result, ggen.NewParseErr("raws", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
 					s.Pos++
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("raws", s.Offset(), err)
+						return result, ggen.NewParseErr("raws", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-						return result, decode.NewParseErr("raws", s.Offset(), scan.ErrBadArray)
+						return result, ggen.NewParseErr("raws", s.Offset(), ggen.ErrBadArray)
 					}
 					continue
 				}
 				break
 			}
 			if s.Bytes()[s.Pos] != ']' {
-				return result, decode.NewParseErr("raws", s.Offset(), scan.ErrBadArray)
+				return result, ggen.NewParseErr("raws", s.Offset(), ggen.ErrBadArray)
 			}
 			s.Pos++
 		case "times":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("times", s.Offset(), err)
+				return result, ggen.NewParseErr("times", s.Offset(), err)
 			}
 			if seenTimes {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"times"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"times"}}
 			}
 			seenTimes = true
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("times", s.Offset(), err)
+				return result, ggen.NewParseErr("times", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("times", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+					return result, ggen.NewParseErr("times", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("times", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
+							return result, ggen.NewParseErr("times", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("times", s.Offset(), scan.ErrBadLiteral)
+						return result, ggen.NewParseErr("times", s.Offset(), ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -7559,15 +7556,15 @@ func (recv ElemKinds) DecodeFromStream(s *scan.Stream) (result ElemKinds, err er
 			}
 			err = s.ArrayOpen()
 			if err != nil {
-				return result, decode.NewParseErr("times", s.Offset(), err)
+				return result, ggen.NewParseErr("times", s.Offset(), err)
 			}
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("times", s.Offset(), err)
+				return result, ggen.NewParseErr("times", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("times", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+					return result, ggen.NewParseErr("times", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
 			if s.Bytes()[s.Pos] == ']' {
@@ -7584,49 +7581,49 @@ func (recv ElemKinds) DecodeFromStream(s *scan.Stream) (result ElemKinds, err er
 				var sv string
 				sv, err = s.StringView(true)
 				if err != nil {
-					return result, decode.NewParseErr("times[]", s.Offset(), err)
+					return result, ggen.NewParseErr("times[]", s.Offset(), err)
 				}
 				result.Times[len(result.Times)-1], err = time.Parse(time.RFC3339Nano, sv)
 				if err != nil {
-					return result, decode.NewParseErr("times[]", s.Offset(), err)
+					return result, ggen.NewParseErr("times[]", s.Offset(), err)
 				}
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("times", s.Offset(), err)
+					return result, ggen.NewParseErr("times", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("times", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+						return result, ggen.NewParseErr("times", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
 					s.Pos++
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("times", s.Offset(), err)
+						return result, ggen.NewParseErr("times", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-						return result, decode.NewParseErr("times", s.Offset(), scan.ErrBadArray)
+						return result, ggen.NewParseErr("times", s.Offset(), ggen.ErrBadArray)
 					}
 					continue
 				}
 				break
 			}
 			if s.Bytes()[s.Pos] != ']' {
-				return result, decode.NewParseErr("times", s.Offset(), scan.ErrBadArray)
+				return result, ggen.NewParseErr("times", s.Offset(), ggen.ErrBadArray)
 			}
 			s.Pos++
 		default:
-			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Offset(), err)
+			return result, ggen.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+				return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -7635,7 +7632,7 @@ func (recv ElemKinds) DecodeFromStream(s *scan.Stream) (result ElemKinds, err er
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Offset(), err)
+				return result, ggen.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -7643,7 +7640,7 @@ func (recv ElemKinds) DecodeFromStream(s *scan.Stream) (result ElemKinds, err er
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
+		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
 	}
 }
 
@@ -7700,12 +7697,12 @@ func (s ElemKinds) AppendJSON(dst []byte) ([]byte, error) {
 	} else {
 		dst = append(dst, '[')
 		if len(s.Anys) > 0 {
-			if dst, err = encode.AppendAny(dst, s.Anys[0]); err != nil {
+			if dst, err = ggen.AppendAny(dst, s.Anys[0]); err != nil {
 				return dst, err
 			}
 			for _, v0 := range s.Anys[1:] {
 				dst = append(dst, ',')
-				if dst, err = encode.AppendAny(dst, v0); err != nil {
+				if dst, err = ggen.AppendAny(dst, v0); err != nil {
 					return dst, err
 				}
 			}
@@ -7745,10 +7742,10 @@ func (s ElemKinds) AppendJSON(dst []byte) ([]byte, error) {
 		dst = append(dst, '[')
 		if len(s.Durs) > 0 {
 			dst = append(dst, '"')
-			dst = encode.AppendStringNoHTML(dst, s.Durs[0].String())
+			dst = ggen.AppendStringNoHTML(dst, s.Durs[0].String())
 			for _, v0 := range s.Durs[1:] {
 				dst = append(dst, ",\""...)
-				dst = encode.AppendStringNoHTML(dst, v0.String())
+				dst = ggen.AppendStringNoHTML(dst, v0.String())
 			}
 		}
 		dst = append(dst, ']')
@@ -7771,7 +7768,7 @@ func (s ElemKinds) AppendJSON(dst []byte) ([]byte, error) {
 					} else {
 						dst = append(dst, ",\""...)
 					}
-					dst = encode.AppendStringNoHTML(dst, k)
+					dst = ggen.AppendStringNoHTML(dst, k)
 					dst = append(dst, ':')
 					dst = strconv.AppendInt(dst, int64(v), 10)
 				}
@@ -7791,7 +7788,7 @@ func (s ElemKinds) AppendJSON(dst []byte) ([]byte, error) {
 						} else {
 							dst = append(dst, ",\""...)
 						}
-						dst = encode.AppendStringNoHTML(dst, k)
+						dst = ggen.AppendStringNoHTML(dst, k)
 						dst = append(dst, ':')
 						dst = strconv.AppendInt(dst, int64(v), 10)
 					}
@@ -7873,7 +7870,7 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
-		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 	}
 	i++
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -7886,7 +7883,7 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 	for {
 		var key string
 		if i >= len(data) || data[i] != '"' {
-			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrExpectString)
 		}
 		ke := i + 1
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
@@ -7896,16 +7893,16 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i, true)
+			key, i, err = ggen.String(data, i, true)
 			if err != nil {
-				return result, i, decode.NewParseErr("", i, err)
+				return result, i, ggen.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 		}
 		i++
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -7914,7 +7911,7 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 		switch key {
 		case "anys":
 			if seenAnys {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"anys"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"anys"}}
 			}
 			seenAnys = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -7923,7 +7920,7 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 				break
 			}
 			if i >= len(data) || data[i] != '{' {
-				return result, i, decode.NewParseErr("anys", i, scan.ErrBadObject)
+				return result, i, ggen.NewParseErr("anys", i, ggen.ErrBadObject)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -7942,7 +7939,7 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 				for {
 					var mk string
 					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("anys", i, scan.ErrExpectString)
+						return result, i, ggen.NewParseErr("anys", i, ggen.ErrExpectString)
 					}
 					ke := i + 1
 					kew := ke + 32
@@ -7956,16 +7953,16 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 						mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 						i = ke + 1
 					} else {
-						mk, i, err = scan.String(data, i, true)
+						mk, i, err = ggen.String(data, i, true)
 						if err != nil {
-							return result, i, decode.NewParseErr("anys", i, err)
+							return result, i, ggen.NewParseErr("anys", i, err)
 						}
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
 					if i >= len(data) || data[i] != ':' {
-						return result, i, decode.NewParseErr("anys", i, scan.ErrBadObject)
+						return result, i, ggen.NewParseErr("anys", i, ggen.ErrBadObject)
 					}
 					i++
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -7973,9 +7970,9 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 					}
 					{
 						var mv any
-						mv, i, err = scan.Any(data, i)
+						mv, i, err = ggen.Any(data, i)
 						if err != nil {
-							return result, i, decode.NewParseErr("anys.value", i, err)
+							return result, i, ggen.NewParseErr("anys.value", i, err)
 						}
 						result.Anys[mk] = mv
 					}
@@ -7988,7 +7985,7 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 							i++
 						}
 						if i >= len(data) || data[i] == '}' {
-							return result, i, decode.NewParseErr("anys", i, scan.ErrBadObject)
+							return result, i, ggen.NewParseErr("anys", i, ggen.ErrBadObject)
 						}
 						continue
 					}
@@ -7996,12 +7993,12 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 				}
 			}
 			if i >= len(data) || data[i] != '}' {
-				return result, i, decode.NewParseErr("anys", i, scan.ErrBadObject)
+				return result, i, ggen.NewParseErr("anys", i, ggen.ErrBadObject)
 			}
 			i++
 		case "blobs":
 			if seenBlobs {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"blobs"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"blobs"}}
 			}
 			seenBlobs = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -8010,7 +8007,7 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 				break
 			}
 			if i >= len(data) || data[i] != '{' {
-				return result, i, decode.NewParseErr("blobs", i, scan.ErrBadObject)
+				return result, i, ggen.NewParseErr("blobs", i, ggen.ErrBadObject)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -8029,7 +8026,7 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 				for {
 					var mk string
 					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("blobs", i, scan.ErrExpectString)
+						return result, i, ggen.NewParseErr("blobs", i, ggen.ErrExpectString)
 					}
 					ke := i + 1
 					kew := ke + 32
@@ -8043,16 +8040,16 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 						mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 						i = ke + 1
 					} else {
-						mk, i, err = scan.String(data, i, true)
+						mk, i, err = ggen.String(data, i, true)
 						if err != nil {
-							return result, i, decode.NewParseErr("blobs", i, err)
+							return result, i, ggen.NewParseErr("blobs", i, err)
 						}
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
 					if i >= len(data) || data[i] != ':' {
-						return result, i, decode.NewParseErr("blobs", i, scan.ErrBadObject)
+						return result, i, ggen.NewParseErr("blobs", i, ggen.ErrBadObject)
 					}
 					i++
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -8066,7 +8063,7 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 						} else {
 							var s string
 							if i >= len(data) || data[i] != '"' {
-								return result, i, decode.NewParseErr("blobs.value", i, scan.ErrExpectString)
+								return result, i, ggen.NewParseErr("blobs.value", i, ggen.ErrExpectString)
 							}
 							ke := i + 1
 							kew := ke + 32
@@ -8080,9 +8077,9 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 								s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 								i = ke + 1
 							} else {
-								s, i, err = scan.String(data, i, true)
+								s, i, err = ggen.String(data, i, true)
 								if err != nil {
-									return result, i, decode.NewParseErr("blobs.value", i, err)
+									return result, i, ggen.NewParseErr("blobs.value", i, err)
 								}
 							}
 							if cap(mv) < base64.StdEncoding.DecodedLen(len(s)) {
@@ -8090,7 +8087,7 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 							}
 							mv, err = base64.StdEncoding.AppendDecode(mv, unsafe.Slice(unsafe.StringData(s), len(s)))
 							if err != nil {
-								return result, i, decode.NewParseErr("blobs.value", i, err)
+								return result, i, ggen.NewParseErr("blobs.value", i, err)
 							}
 							if mv == nil {
 								mv = []byte{}
@@ -8107,7 +8104,7 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 							i++
 						}
 						if i >= len(data) || data[i] == '}' {
-							return result, i, decode.NewParseErr("blobs", i, scan.ErrBadObject)
+							return result, i, ggen.NewParseErr("blobs", i, ggen.ErrBadObject)
 						}
 						continue
 					}
@@ -8115,12 +8112,12 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 				}
 			}
 			if i >= len(data) || data[i] != '}' {
-				return result, i, decode.NewParseErr("blobs", i, scan.ErrBadObject)
+				return result, i, ggen.NewParseErr("blobs", i, ggen.ErrBadObject)
 			}
 			i++
 		case "durs":
 			if seenDurs {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"durs"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"durs"}}
 			}
 			seenDurs = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -8129,7 +8126,7 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 				break
 			}
 			if i >= len(data) || data[i] != '{' {
-				return result, i, decode.NewParseErr("durs", i, scan.ErrBadObject)
+				return result, i, ggen.NewParseErr("durs", i, ggen.ErrBadObject)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -8148,7 +8145,7 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 				for {
 					var mk string
 					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("durs", i, scan.ErrExpectString)
+						return result, i, ggen.NewParseErr("durs", i, ggen.ErrExpectString)
 					}
 					ke := i + 1
 					kew := ke + 32
@@ -8162,16 +8159,16 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 						mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 						i = ke + 1
 					} else {
-						mk, i, err = scan.String(data, i, true)
+						mk, i, err = ggen.String(data, i, true)
 						if err != nil {
-							return result, i, decode.NewParseErr("durs", i, err)
+							return result, i, ggen.NewParseErr("durs", i, err)
 						}
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
 					if i >= len(data) || data[i] != ':' {
-						return result, i, decode.NewParseErr("durs", i, scan.ErrBadObject)
+						return result, i, ggen.NewParseErr("durs", i, ggen.ErrBadObject)
 					}
 					i++
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -8181,7 +8178,7 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 						var mv time.Duration
 						var s string
 						if i >= len(data) || data[i] != '"' {
-							return result, i, decode.NewParseErr("durs.value", i, scan.ErrExpectString)
+							return result, i, ggen.NewParseErr("durs.value", i, ggen.ErrExpectString)
 						}
 						ke := i + 1
 						kew := ke + 32
@@ -8195,14 +8192,14 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 							s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 							i = ke + 1
 						} else {
-							s, i, err = scan.String(data, i, true)
+							s, i, err = ggen.String(data, i, true)
 							if err != nil {
-								return result, i, decode.NewParseErr("durs.value", i, err)
+								return result, i, ggen.NewParseErr("durs.value", i, err)
 							}
 						}
 						mv, err = time.ParseDuration(s)
 						if err != nil {
-							return result, i, decode.NewParseErr("durs.value", i, err)
+							return result, i, ggen.NewParseErr("durs.value", i, err)
 						}
 						result.Durs[mk] = mv
 					}
@@ -8215,7 +8212,7 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 							i++
 						}
 						if i >= len(data) || data[i] == '}' {
-							return result, i, decode.NewParseErr("durs", i, scan.ErrBadObject)
+							return result, i, ggen.NewParseErr("durs", i, ggen.ErrBadObject)
 						}
 						continue
 					}
@@ -8223,12 +8220,12 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 				}
 			}
 			if i >= len(data) || data[i] != '}' {
-				return result, i, decode.NewParseErr("durs", i, scan.ErrBadObject)
+				return result, i, ggen.NewParseErr("durs", i, ggen.ErrBadObject)
 			}
 			i++
 		case "ints":
 			if seenInts {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"ints"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"ints"}}
 			}
 			seenInts = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -8237,7 +8234,7 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 				break
 			}
 			if i >= len(data) || data[i] != '{' {
-				return result, i, decode.NewParseErr("ints", i, scan.ErrBadObject)
+				return result, i, ggen.NewParseErr("ints", i, ggen.ErrBadObject)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -8256,7 +8253,7 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 				for {
 					var mk string
 					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("ints", i, scan.ErrExpectString)
+						return result, i, ggen.NewParseErr("ints", i, ggen.ErrExpectString)
 					}
 					ke := i + 1
 					kew := ke + 32
@@ -8270,16 +8267,16 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 						mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 						i = ke + 1
 					} else {
-						mk, i, err = scan.String(data, i, true)
+						mk, i, err = ggen.String(data, i, true)
 						if err != nil {
-							return result, i, decode.NewParseErr("ints", i, err)
+							return result, i, ggen.NewParseErr("ints", i, err)
 						}
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
 					if i >= len(data) || data[i] != ':' {
-						return result, i, decode.NewParseErr("ints", i, scan.ErrBadObject)
+						return result, i, ggen.NewParseErr("ints", i, ggen.ErrBadObject)
 					}
 					i++
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -8292,7 +8289,7 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 							mv = nil
 						} else {
 							if i >= len(data) || data[i] != '[' {
-								return result, i, decode.NewParseErr("ints.value", i, scan.ErrBadArray)
+								return result, i, ggen.NewParseErr("ints.value", i, ggen.ErrBadArray)
 							}
 							i++
 							for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -8320,14 +8317,14 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 										i++
 									}
 									if i >= len(data) || data[i] < '0' || data[i] > '9' {
-										return result, i, decode.NewParseErr("ints.value", i, scan.ErrBadNumber)
+										return result, i, ggen.NewParseErr("ints.value", i, ggen.ErrBadNumber)
 									}
 									if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
-										return result, i, decode.NewParseErr("ints.value", i, scan.ErrBadNumber)
+										return result, i, ggen.NewParseErr("ints.value", i, ggen.ErrBadNumber)
 									}
 									limit := uint64(math.MaxInt64)
 									if neg {
-										limit = scan.SignedNeg
+										limit = ggen.SignedNeg
 									}
 									var u uint64
 									de := i + 18
@@ -8341,7 +8338,7 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 									for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 										d := uint64(data[i] - '0')
 										if u > limit/10 || (u == limit/10 && d > limit%10) {
-											return result, i, decode.NewParseErr("ints.value", i, scan.ErrNumberOverflow)
+											return result, i, ggen.NewParseErr("ints.value", i, ggen.ErrNumberOverflow)
 										}
 										u = u*10 + d
 										i++
@@ -8349,12 +8346,12 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 									if i < len(data) {
 										c := data[i]
 										if c == '.' || c == 'e' || c == 'E' {
-											return result, i, decode.NewParseErr("ints.value", i, scan.ErrBadNumber)
+											return result, i, ggen.NewParseErr("ints.value", i, ggen.ErrBadNumber)
 										}
 									}
 									var n int64
 									if neg {
-										if u == scan.SignedNeg {
+										if u == ggen.SignedNeg {
 											n = math.MinInt64
 										} else {
 											n = -int64(u)
@@ -8372,7 +8369,7 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 											i++
 										}
 										if i >= len(data) || data[i] == ']' {
-											return result, i, decode.NewParseErr("ints.value", i, scan.ErrBadArray)
+											return result, i, ggen.NewParseErr("ints.value", i, ggen.ErrBadArray)
 										}
 										continue
 									}
@@ -8380,7 +8377,7 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 								}
 							}
 							if i >= len(data) || data[i] != ']' {
-								return result, i, decode.NewParseErr("ints.value", i, scan.ErrBadArray)
+								return result, i, ggen.NewParseErr("ints.value", i, ggen.ErrBadArray)
 							}
 							i++
 						}
@@ -8395,7 +8392,7 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 							i++
 						}
 						if i >= len(data) || data[i] == '}' {
-							return result, i, decode.NewParseErr("ints", i, scan.ErrBadObject)
+							return result, i, ggen.NewParseErr("ints", i, ggen.ErrBadObject)
 						}
 						continue
 					}
@@ -8403,12 +8400,12 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 				}
 			}
 			if i >= len(data) || data[i] != '}' {
-				return result, i, decode.NewParseErr("ints", i, scan.ErrBadObject)
+				return result, i, ggen.NewParseErr("ints", i, ggen.ErrBadObject)
 			}
 			i++
 		case "raws":
 			if seenRaws {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"raws"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"raws"}}
 			}
 			seenRaws = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -8417,7 +8414,7 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 				break
 			}
 			if i >= len(data) || data[i] != '{' {
-				return result, i, decode.NewParseErr("raws", i, scan.ErrBadObject)
+				return result, i, ggen.NewParseErr("raws", i, ggen.ErrBadObject)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -8436,7 +8433,7 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 				for {
 					var mk string
 					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("raws", i, scan.ErrExpectString)
+						return result, i, ggen.NewParseErr("raws", i, ggen.ErrExpectString)
 					}
 					ke := i + 1
 					kew := ke + 32
@@ -8450,16 +8447,16 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 						mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 						i = ke + 1
 					} else {
-						mk, i, err = scan.String(data, i, true)
+						mk, i, err = ggen.String(data, i, true)
 						if err != nil {
-							return result, i, decode.NewParseErr("raws", i, err)
+							return result, i, ggen.NewParseErr("raws", i, err)
 						}
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
 					if i >= len(data) || data[i] != ':' {
-						return result, i, decode.NewParseErr("raws", i, scan.ErrBadObject)
+						return result, i, ggen.NewParseErr("raws", i, ggen.ErrBadObject)
 					}
 					i++
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -8468,13 +8465,13 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 					{
 						var mv json.RawMessage
 						start := i
-						i, err = scan.SkipValue(data, start)
+						i, err = ggen.SkipValue(data, start)
 						if err != nil {
-							return result, i, decode.NewParseErr("raws.value", i, err)
+							return result, i, ggen.NewParseErr("raws.value", i, err)
 						}
-						err = scan.CheckUTF8(data[start:i])
+						err = ggen.CheckUTF8(data[start:i])
 						if err != nil {
-							return result, i, decode.NewParseErr("raws.value", i, err)
+							return result, i, ggen.NewParseErr("raws.value", i, err)
 						}
 						mv = data[start:i]
 						result.Raws[mk] = mv
@@ -8488,7 +8485,7 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 							i++
 						}
 						if i >= len(data) || data[i] == '}' {
-							return result, i, decode.NewParseErr("raws", i, scan.ErrBadObject)
+							return result, i, ggen.NewParseErr("raws", i, ggen.ErrBadObject)
 						}
 						continue
 					}
@@ -8496,12 +8493,12 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 				}
 			}
 			if i >= len(data) || data[i] != '}' {
-				return result, i, decode.NewParseErr("raws", i, scan.ErrBadObject)
+				return result, i, ggen.NewParseErr("raws", i, ggen.ErrBadObject)
 			}
 			i++
 		case "times":
 			if seenTimes {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"times"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"times"}}
 			}
 			seenTimes = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -8510,7 +8507,7 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 				break
 			}
 			if i >= len(data) || data[i] != '{' {
-				return result, i, decode.NewParseErr("times", i, scan.ErrBadObject)
+				return result, i, ggen.NewParseErr("times", i, ggen.ErrBadObject)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -8529,7 +8526,7 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 				for {
 					var mk string
 					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("times", i, scan.ErrExpectString)
+						return result, i, ggen.NewParseErr("times", i, ggen.ErrExpectString)
 					}
 					ke := i + 1
 					kew := ke + 32
@@ -8543,16 +8540,16 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 						mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 						i = ke + 1
 					} else {
-						mk, i, err = scan.String(data, i, true)
+						mk, i, err = ggen.String(data, i, true)
 						if err != nil {
-							return result, i, decode.NewParseErr("times", i, err)
+							return result, i, ggen.NewParseErr("times", i, err)
 						}
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
 					if i >= len(data) || data[i] != ':' {
-						return result, i, decode.NewParseErr("times", i, scan.ErrBadObject)
+						return result, i, ggen.NewParseErr("times", i, ggen.ErrBadObject)
 					}
 					i++
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -8562,7 +8559,7 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 						var mv time.Time
 						var s string
 						if i >= len(data) || data[i] != '"' {
-							return result, i, decode.NewParseErr("times.value", i, scan.ErrExpectString)
+							return result, i, ggen.NewParseErr("times.value", i, ggen.ErrExpectString)
 						}
 						ke := i + 1
 						kew := ke + 32
@@ -8576,14 +8573,14 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 							s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 							i = ke + 1
 						} else {
-							s, i, err = scan.String(data, i, true)
+							s, i, err = ggen.String(data, i, true)
 							if err != nil {
-								return result, i, decode.NewParseErr("times.value", i, err)
+								return result, i, ggen.NewParseErr("times.value", i, err)
 							}
 						}
 						mv, err = time.Parse(time.RFC3339Nano, s)
 						if err != nil {
-							return result, i, decode.NewParseErr("times.value", i, err)
+							return result, i, ggen.NewParseErr("times.value", i, err)
 						}
 						result.Times[mk] = mv
 					}
@@ -8596,7 +8593,7 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 							i++
 						}
 						if i >= len(data) || data[i] == '}' {
-							return result, i, decode.NewParseErr("times", i, scan.ErrBadObject)
+							return result, i, ggen.NewParseErr("times", i, ggen.ErrBadObject)
 						}
 						continue
 					}
@@ -8604,17 +8601,17 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 				}
 			}
 			if i >= len(data) || data[i] != '}' {
-				return result, i, decode.NewParseErr("times", i, scan.ErrBadObject)
+				return result, i, ggen.NewParseErr("times", i, ggen.ErrBadObject)
 			}
 			i++
 		default:
-			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 		}
 		if data[i] == ',' {
 			i++
@@ -8627,11 +8624,11 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 			i++
 			return result, i, nil
 		}
-		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 	}
 }
 
-func (recv MapVals) DecodeFromStream(s *scan.Stream) (result MapVals, err error) {
+func (recv MapVals) DecodeFromStream(s *ggen.Stream) (result MapVals, err error) {
 	result = recv
 	if result.Anys != nil {
 		clear(result.Anys)
@@ -8659,15 +8656,15 @@ func (recv MapVals) DecodeFromStream(s *scan.Stream) (result MapVals, err error)
 	seenTimes := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Offset(), err)
+		return result, ggen.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Offset(), err)
+		return result, ggen.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
+			return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -8679,36 +8676,36 @@ func (recv MapVals) DecodeFromStream(s *scan.Stream) (result MapVals, err error)
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Offset(), err)
+			return result, ggen.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "anys":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("anys", s.Offset(), err)
+				return result, ggen.NewParseErr("anys", s.Offset(), err)
 			}
 			if seenAnys {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"anys"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"anys"}}
 			}
 			seenAnys = true
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("anys", s.Offset(), err)
+				return result, ggen.NewParseErr("anys", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("anys", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+					return result, ggen.NewParseErr("anys", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("anys", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
+							return result, ggen.NewParseErr("anys", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("anys", s.Offset(), scan.ErrBadLiteral)
+						return result, ggen.NewParseErr("anys", s.Offset(), ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -8717,15 +8714,15 @@ func (recv MapVals) DecodeFromStream(s *scan.Stream) (result MapVals, err error)
 			}
 			err = s.ObjectOpen()
 			if err != nil {
-				return result, decode.NewParseErr("anys", s.Offset(), err)
+				return result, ggen.NewParseErr("anys", s.Offset(), err)
 			}
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("anys", s.Offset(), err)
+				return result, ggen.NewParseErr("anys", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("anys", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+					return result, ggen.NewParseErr("anys", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 				}
 			}
 			if s.Bytes()[s.Pos] == '}' {
@@ -8741,86 +8738,86 @@ func (recv MapVals) DecodeFromStream(s *scan.Stream) (result MapVals, err error)
 				var mk string
 				mk, err = s.String(true)
 				if err != nil {
-					return result, decode.NewParseErr("anys", s.Offset(), err)
+					return result, ggen.NewParseErr("anys", s.Offset(), err)
 				}
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("anys", s.Offset(), err)
+					return result, ggen.NewParseErr("anys", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("anys", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+						return result, ggen.NewParseErr("anys", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 					}
 				}
 				if s.Bytes()[s.Pos] != ':' {
-					return result, decode.NewParseErr("anys", s.Offset(), scan.ErrBadObject)
+					return result, ggen.NewParseErr("anys", s.Offset(), ggen.ErrBadObject)
 				}
 				s.Pos++
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("anys", s.Offset(), err)
+					return result, ggen.NewParseErr("anys", s.Offset(), err)
 				}
 				{
 					var mv any
 					mv, err = s.Any()
 					if err != nil {
-						return result, decode.NewParseErr("anys.value", s.Offset(), err)
+						return result, ggen.NewParseErr("anys.value", s.Offset(), err)
 					}
 					result.Anys[mk] = mv
 				}
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("anys", s.Offset(), err)
+					return result, ggen.NewParseErr("anys", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("anys", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+						return result, ggen.NewParseErr("anys", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
 					s.Pos++
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("anys", s.Offset(), err)
+						return result, ggen.NewParseErr("anys", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == '}' {
-						return result, decode.NewParseErr("anys", s.Offset(), scan.ErrBadObject)
+						return result, ggen.NewParseErr("anys", s.Offset(), ggen.ErrBadObject)
 					}
 					continue
 				}
 				break
 			}
 			if s.Bytes()[s.Pos] != '}' {
-				return result, decode.NewParseErr("anys", s.Offset(), scan.ErrBadObject)
+				return result, ggen.NewParseErr("anys", s.Offset(), ggen.ErrBadObject)
 			}
 			s.Pos++
 		case "blobs":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("blobs", s.Offset(), err)
+				return result, ggen.NewParseErr("blobs", s.Offset(), err)
 			}
 			if seenBlobs {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"blobs"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"blobs"}}
 			}
 			seenBlobs = true
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("blobs", s.Offset(), err)
+				return result, ggen.NewParseErr("blobs", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("blobs", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+					return result, ggen.NewParseErr("blobs", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("blobs", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
+							return result, ggen.NewParseErr("blobs", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("blobs", s.Offset(), scan.ErrBadLiteral)
+						return result, ggen.NewParseErr("blobs", s.Offset(), ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -8829,15 +8826,15 @@ func (recv MapVals) DecodeFromStream(s *scan.Stream) (result MapVals, err error)
 			}
 			err = s.ObjectOpen()
 			if err != nil {
-				return result, decode.NewParseErr("blobs", s.Offset(), err)
+				return result, ggen.NewParseErr("blobs", s.Offset(), err)
 			}
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("blobs", s.Offset(), err)
+				return result, ggen.NewParseErr("blobs", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("blobs", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+					return result, ggen.NewParseErr("blobs", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 				}
 			}
 			if s.Bytes()[s.Pos] == '}' {
@@ -8853,41 +8850,41 @@ func (recv MapVals) DecodeFromStream(s *scan.Stream) (result MapVals, err error)
 				var mk string
 				mk, err = s.String(true)
 				if err != nil {
-					return result, decode.NewParseErr("blobs", s.Offset(), err)
+					return result, ggen.NewParseErr("blobs", s.Offset(), err)
 				}
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("blobs", s.Offset(), err)
+					return result, ggen.NewParseErr("blobs", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("blobs", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+						return result, ggen.NewParseErr("blobs", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 					}
 				}
 				if s.Bytes()[s.Pos] != ':' {
-					return result, decode.NewParseErr("blobs", s.Offset(), scan.ErrBadObject)
+					return result, ggen.NewParseErr("blobs", s.Offset(), ggen.ErrBadObject)
 				}
 				s.Pos++
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("blobs", s.Offset(), err)
+					return result, ggen.NewParseErr("blobs", s.Offset(), err)
 				}
 				{
 					var mv []byte
 					if s.Pos >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("blobs.value", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
+							return result, ggen.NewParseErr("blobs.value", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
 						}
 					}
 					if s.Bytes()[s.Pos] == 'n' {
 						for ki := 1; ki < 4; ki++ {
 							if s.Pos+ki >= len(s.Bytes()) {
 								if err = s.ReadMore(0); err != nil {
-									return result, decode.NewParseErr("blobs.value", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
+									return result, ggen.NewParseErr("blobs.value", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
 								}
 							}
 							if s.Bytes()[s.Pos+ki] != "null"[ki] {
-								return result, decode.NewParseErr("blobs.value", s.Offset(), scan.ErrBadLiteral)
+								return result, ggen.NewParseErr("blobs.value", s.Offset(), ggen.ErrBadLiteral)
 							}
 						}
 						s.Pos += 4
@@ -8896,14 +8893,14 @@ func (recv MapVals) DecodeFromStream(s *scan.Stream) (result MapVals, err error)
 						var sv string
 						sv, err = s.StringView(true)
 						if err != nil {
-							return result, decode.NewParseErr("blobs.value", s.Offset(), err)
+							return result, ggen.NewParseErr("blobs.value", s.Offset(), err)
 						}
 						if cap(mv) < base64.StdEncoding.DecodedLen(len(sv)) {
 							mv = make([]byte, 0, base64.StdEncoding.DecodedLen(len(sv)))
 						}
 						mv, err = base64.StdEncoding.AppendDecode(mv, unsafe.Slice(unsafe.StringData(sv), len(sv)))
 						if err != nil {
-							return result, decode.NewParseErr("blobs.value", s.Offset(), err)
+							return result, ggen.NewParseErr("blobs.value", s.Offset(), err)
 						}
 						if mv == nil {
 							mv = []byte{}
@@ -8913,57 +8910,57 @@ func (recv MapVals) DecodeFromStream(s *scan.Stream) (result MapVals, err error)
 				}
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("blobs", s.Offset(), err)
+					return result, ggen.NewParseErr("blobs", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("blobs", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+						return result, ggen.NewParseErr("blobs", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
 					s.Pos++
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("blobs", s.Offset(), err)
+						return result, ggen.NewParseErr("blobs", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == '}' {
-						return result, decode.NewParseErr("blobs", s.Offset(), scan.ErrBadObject)
+						return result, ggen.NewParseErr("blobs", s.Offset(), ggen.ErrBadObject)
 					}
 					continue
 				}
 				break
 			}
 			if s.Bytes()[s.Pos] != '}' {
-				return result, decode.NewParseErr("blobs", s.Offset(), scan.ErrBadObject)
+				return result, ggen.NewParseErr("blobs", s.Offset(), ggen.ErrBadObject)
 			}
 			s.Pos++
 		case "durs":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("durs", s.Offset(), err)
+				return result, ggen.NewParseErr("durs", s.Offset(), err)
 			}
 			if seenDurs {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"durs"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"durs"}}
 			}
 			seenDurs = true
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("durs", s.Offset(), err)
+				return result, ggen.NewParseErr("durs", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("durs", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+					return result, ggen.NewParseErr("durs", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("durs", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
+							return result, ggen.NewParseErr("durs", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("durs", s.Offset(), scan.ErrBadLiteral)
+						return result, ggen.NewParseErr("durs", s.Offset(), ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -8972,15 +8969,15 @@ func (recv MapVals) DecodeFromStream(s *scan.Stream) (result MapVals, err error)
 			}
 			err = s.ObjectOpen()
 			if err != nil {
-				return result, decode.NewParseErr("durs", s.Offset(), err)
+				return result, ggen.NewParseErr("durs", s.Offset(), err)
 			}
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("durs", s.Offset(), err)
+				return result, ggen.NewParseErr("durs", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("durs", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+					return result, ggen.NewParseErr("durs", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 				}
 			}
 			if s.Bytes()[s.Pos] == '}' {
@@ -8996,91 +8993,91 @@ func (recv MapVals) DecodeFromStream(s *scan.Stream) (result MapVals, err error)
 				var mk string
 				mk, err = s.String(true)
 				if err != nil {
-					return result, decode.NewParseErr("durs", s.Offset(), err)
+					return result, ggen.NewParseErr("durs", s.Offset(), err)
 				}
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("durs", s.Offset(), err)
+					return result, ggen.NewParseErr("durs", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("durs", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+						return result, ggen.NewParseErr("durs", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 					}
 				}
 				if s.Bytes()[s.Pos] != ':' {
-					return result, decode.NewParseErr("durs", s.Offset(), scan.ErrBadObject)
+					return result, ggen.NewParseErr("durs", s.Offset(), ggen.ErrBadObject)
 				}
 				s.Pos++
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("durs", s.Offset(), err)
+					return result, ggen.NewParseErr("durs", s.Offset(), err)
 				}
 				{
 					var mv time.Duration
 					var sv string
 					sv, err = s.StringView(true)
 					if err != nil {
-						return result, decode.NewParseErr("durs.value", s.Offset(), err)
+						return result, ggen.NewParseErr("durs.value", s.Offset(), err)
 					}
 					mv, err = time.ParseDuration(sv)
 					if err != nil {
-						return result, decode.NewParseErr("durs.value", s.Offset(), err)
+						return result, ggen.NewParseErr("durs.value", s.Offset(), err)
 					}
 					result.Durs[mk] = mv
 				}
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("durs", s.Offset(), err)
+					return result, ggen.NewParseErr("durs", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("durs", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+						return result, ggen.NewParseErr("durs", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
 					s.Pos++
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("durs", s.Offset(), err)
+						return result, ggen.NewParseErr("durs", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == '}' {
-						return result, decode.NewParseErr("durs", s.Offset(), scan.ErrBadObject)
+						return result, ggen.NewParseErr("durs", s.Offset(), ggen.ErrBadObject)
 					}
 					continue
 				}
 				break
 			}
 			if s.Bytes()[s.Pos] != '}' {
-				return result, decode.NewParseErr("durs", s.Offset(), scan.ErrBadObject)
+				return result, ggen.NewParseErr("durs", s.Offset(), ggen.ErrBadObject)
 			}
 			s.Pos++
 		case "ints":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("ints", s.Offset(), err)
+				return result, ggen.NewParseErr("ints", s.Offset(), err)
 			}
 			if seenInts {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"ints"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"ints"}}
 			}
 			seenInts = true
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("ints", s.Offset(), err)
+				return result, ggen.NewParseErr("ints", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("ints", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+					return result, ggen.NewParseErr("ints", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("ints", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
+							return result, ggen.NewParseErr("ints", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("ints", s.Offset(), scan.ErrBadLiteral)
+						return result, ggen.NewParseErr("ints", s.Offset(), ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -9089,15 +9086,15 @@ func (recv MapVals) DecodeFromStream(s *scan.Stream) (result MapVals, err error)
 			}
 			err = s.ObjectOpen()
 			if err != nil {
-				return result, decode.NewParseErr("ints", s.Offset(), err)
+				return result, ggen.NewParseErr("ints", s.Offset(), err)
 			}
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("ints", s.Offset(), err)
+				return result, ggen.NewParseErr("ints", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("ints", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+					return result, ggen.NewParseErr("ints", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 				}
 			}
 			if s.Bytes()[s.Pos] == '}' {
@@ -9113,45 +9110,45 @@ func (recv MapVals) DecodeFromStream(s *scan.Stream) (result MapVals, err error)
 				var mk string
 				mk, err = s.String(true)
 				if err != nil {
-					return result, decode.NewParseErr("ints", s.Offset(), err)
+					return result, ggen.NewParseErr("ints", s.Offset(), err)
 				}
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("ints", s.Offset(), err)
+					return result, ggen.NewParseErr("ints", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("ints", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+						return result, ggen.NewParseErr("ints", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 					}
 				}
 				if s.Bytes()[s.Pos] != ':' {
-					return result, decode.NewParseErr("ints", s.Offset(), scan.ErrBadObject)
+					return result, ggen.NewParseErr("ints", s.Offset(), ggen.ErrBadObject)
 				}
 				s.Pos++
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("ints", s.Offset(), err)
+					return result, ggen.NewParseErr("ints", s.Offset(), err)
 				}
 				{
 					var mv []int
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("ints.value", s.Offset(), err)
+						return result, ggen.NewParseErr("ints.value", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("ints.value", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+							return result, ggen.NewParseErr("ints.value", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 						}
 					}
 					if s.Bytes()[s.Pos] == 'n' {
 						for ki := 1; ki < 4; ki++ {
 							if s.Pos+ki >= len(s.Bytes()) {
 								if err = s.ReadMore(0); err != nil {
-									return result, decode.NewParseErr("ints.value", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
+									return result, ggen.NewParseErr("ints.value", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
 								}
 							}
 							if s.Bytes()[s.Pos+ki] != "null"[ki] {
-								return result, decode.NewParseErr("ints.value", s.Offset(), scan.ErrBadLiteral)
+								return result, ggen.NewParseErr("ints.value", s.Offset(), ggen.ErrBadLiteral)
 							}
 						}
 						s.Pos += 4
@@ -9159,15 +9156,15 @@ func (recv MapVals) DecodeFromStream(s *scan.Stream) (result MapVals, err error)
 					} else {
 						err = s.ArrayOpen()
 						if err != nil {
-							return result, decode.NewParseErr("ints.value", s.Offset(), err)
+							return result, ggen.NewParseErr("ints.value", s.Offset(), err)
 						}
 						err = s.SkipSpace()
 						if err != nil {
-							return result, decode.NewParseErr("ints.value", s.Offset(), err)
+							return result, ggen.NewParseErr("ints.value", s.Offset(), err)
 						}
 						if s.Pos >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, decode.NewParseErr("ints.value", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+								return result, ggen.NewParseErr("ints.value", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 							}
 						}
 						if s.Bytes()[s.Pos] == ']' {
@@ -9184,33 +9181,33 @@ func (recv MapVals) DecodeFromStream(s *scan.Stream) (result MapVals, err error)
 							var iv int64
 							iv, err = s.Int64()
 							if err != nil {
-								return result, decode.NewParseErr("ints.value", s.Offset(), err)
+								return result, ggen.NewParseErr("ints.value", s.Offset(), err)
 							}
 							mv[len(mv)-1] = int(iv)
 							err = s.SkipSpace()
 							if err != nil {
-								return result, decode.NewParseErr("ints.value", s.Offset(), err)
+								return result, ggen.NewParseErr("ints.value", s.Offset(), err)
 							}
 							if s.Pos >= len(s.Bytes()) {
 								if err = s.ReadMore(0); err != nil {
-									return result, decode.NewParseErr("ints.value", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+									return result, ggen.NewParseErr("ints.value", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 								}
 							}
 							if s.Bytes()[s.Pos] == ',' {
 								s.Pos++
 								err = s.SkipSpace()
 								if err != nil {
-									return result, decode.NewParseErr("ints.value", s.Offset(), err)
+									return result, ggen.NewParseErr("ints.value", s.Offset(), err)
 								}
 								if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-									return result, decode.NewParseErr("ints.value", s.Offset(), scan.ErrBadArray)
+									return result, ggen.NewParseErr("ints.value", s.Offset(), ggen.ErrBadArray)
 								}
 								continue
 							}
 							break
 						}
 						if s.Bytes()[s.Pos] != ']' {
-							return result, decode.NewParseErr("ints.value", s.Offset(), scan.ErrBadArray)
+							return result, ggen.NewParseErr("ints.value", s.Offset(), ggen.ErrBadArray)
 						}
 						s.Pos++
 					}
@@ -9218,57 +9215,57 @@ func (recv MapVals) DecodeFromStream(s *scan.Stream) (result MapVals, err error)
 				}
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("ints", s.Offset(), err)
+					return result, ggen.NewParseErr("ints", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("ints", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+						return result, ggen.NewParseErr("ints", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
 					s.Pos++
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("ints", s.Offset(), err)
+						return result, ggen.NewParseErr("ints", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == '}' {
-						return result, decode.NewParseErr("ints", s.Offset(), scan.ErrBadObject)
+						return result, ggen.NewParseErr("ints", s.Offset(), ggen.ErrBadObject)
 					}
 					continue
 				}
 				break
 			}
 			if s.Bytes()[s.Pos] != '}' {
-				return result, decode.NewParseErr("ints", s.Offset(), scan.ErrBadObject)
+				return result, ggen.NewParseErr("ints", s.Offset(), ggen.ErrBadObject)
 			}
 			s.Pos++
 		case "raws":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("raws", s.Offset(), err)
+				return result, ggen.NewParseErr("raws", s.Offset(), err)
 			}
 			if seenRaws {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"raws"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"raws"}}
 			}
 			seenRaws = true
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("raws", s.Offset(), err)
+				return result, ggen.NewParseErr("raws", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("raws", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+					return result, ggen.NewParseErr("raws", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("raws", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
+							return result, ggen.NewParseErr("raws", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("raws", s.Offset(), scan.ErrBadLiteral)
+						return result, ggen.NewParseErr("raws", s.Offset(), ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -9277,15 +9274,15 @@ func (recv MapVals) DecodeFromStream(s *scan.Stream) (result MapVals, err error)
 			}
 			err = s.ObjectOpen()
 			if err != nil {
-				return result, decode.NewParseErr("raws", s.Offset(), err)
+				return result, ggen.NewParseErr("raws", s.Offset(), err)
 			}
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("raws", s.Offset(), err)
+				return result, ggen.NewParseErr("raws", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("raws", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+					return result, ggen.NewParseErr("raws", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 				}
 			}
 			if s.Bytes()[s.Pos] == '}' {
@@ -9301,91 +9298,91 @@ func (recv MapVals) DecodeFromStream(s *scan.Stream) (result MapVals, err error)
 				var mk string
 				mk, err = s.String(true)
 				if err != nil {
-					return result, decode.NewParseErr("raws", s.Offset(), err)
+					return result, ggen.NewParseErr("raws", s.Offset(), err)
 				}
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("raws", s.Offset(), err)
+					return result, ggen.NewParseErr("raws", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("raws", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+						return result, ggen.NewParseErr("raws", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 					}
 				}
 				if s.Bytes()[s.Pos] != ':' {
-					return result, decode.NewParseErr("raws", s.Offset(), scan.ErrBadObject)
+					return result, ggen.NewParseErr("raws", s.Offset(), ggen.ErrBadObject)
 				}
 				s.Pos++
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("raws", s.Offset(), err)
+					return result, ggen.NewParseErr("raws", s.Offset(), err)
 				}
 				{
 					var mv json.RawMessage
 					span, err := s.CaptureValue()
 					if err != nil {
-						return result, decode.NewParseErr("raws.value", s.Offset(), err)
+						return result, ggen.NewParseErr("raws.value", s.Offset(), err)
 					}
-					err = scan.CheckUTF8(span)
+					err = ggen.CheckUTF8(span)
 					if err != nil {
-						return result, decode.NewParseErr("raws.value", s.Offset(), err)
+						return result, ggen.NewParseErr("raws.value", s.Offset(), err)
 					}
 					mv = append(make([]byte, 0, len(span)), span...)
 					result.Raws[mk] = mv
 				}
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("raws", s.Offset(), err)
+					return result, ggen.NewParseErr("raws", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("raws", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+						return result, ggen.NewParseErr("raws", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
 					s.Pos++
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("raws", s.Offset(), err)
+						return result, ggen.NewParseErr("raws", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == '}' {
-						return result, decode.NewParseErr("raws", s.Offset(), scan.ErrBadObject)
+						return result, ggen.NewParseErr("raws", s.Offset(), ggen.ErrBadObject)
 					}
 					continue
 				}
 				break
 			}
 			if s.Bytes()[s.Pos] != '}' {
-				return result, decode.NewParseErr("raws", s.Offset(), scan.ErrBadObject)
+				return result, ggen.NewParseErr("raws", s.Offset(), ggen.ErrBadObject)
 			}
 			s.Pos++
 		case "times":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("times", s.Offset(), err)
+				return result, ggen.NewParseErr("times", s.Offset(), err)
 			}
 			if seenTimes {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"times"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"times"}}
 			}
 			seenTimes = true
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("times", s.Offset(), err)
+				return result, ggen.NewParseErr("times", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("times", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+					return result, ggen.NewParseErr("times", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("times", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
+							return result, ggen.NewParseErr("times", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("times", s.Offset(), scan.ErrBadLiteral)
+						return result, ggen.NewParseErr("times", s.Offset(), ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -9394,15 +9391,15 @@ func (recv MapVals) DecodeFromStream(s *scan.Stream) (result MapVals, err error)
 			}
 			err = s.ObjectOpen()
 			if err != nil {
-				return result, decode.NewParseErr("times", s.Offset(), err)
+				return result, ggen.NewParseErr("times", s.Offset(), err)
 			}
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("times", s.Offset(), err)
+				return result, ggen.NewParseErr("times", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("times", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+					return result, ggen.NewParseErr("times", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 				}
 			}
 			if s.Bytes()[s.Pos] == '}' {
@@ -9418,75 +9415,75 @@ func (recv MapVals) DecodeFromStream(s *scan.Stream) (result MapVals, err error)
 				var mk string
 				mk, err = s.String(true)
 				if err != nil {
-					return result, decode.NewParseErr("times", s.Offset(), err)
+					return result, ggen.NewParseErr("times", s.Offset(), err)
 				}
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("times", s.Offset(), err)
+					return result, ggen.NewParseErr("times", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("times", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+						return result, ggen.NewParseErr("times", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 					}
 				}
 				if s.Bytes()[s.Pos] != ':' {
-					return result, decode.NewParseErr("times", s.Offset(), scan.ErrBadObject)
+					return result, ggen.NewParseErr("times", s.Offset(), ggen.ErrBadObject)
 				}
 				s.Pos++
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("times", s.Offset(), err)
+					return result, ggen.NewParseErr("times", s.Offset(), err)
 				}
 				{
 					var mv time.Time
 					var sv string
 					sv, err = s.StringView(true)
 					if err != nil {
-						return result, decode.NewParseErr("times.value", s.Offset(), err)
+						return result, ggen.NewParseErr("times.value", s.Offset(), err)
 					}
 					mv, err = time.Parse(time.RFC3339Nano, sv)
 					if err != nil {
-						return result, decode.NewParseErr("times.value", s.Offset(), err)
+						return result, ggen.NewParseErr("times.value", s.Offset(), err)
 					}
 					result.Times[mk] = mv
 				}
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("times", s.Offset(), err)
+					return result, ggen.NewParseErr("times", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("times", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+						return result, ggen.NewParseErr("times", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
 					s.Pos++
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("times", s.Offset(), err)
+						return result, ggen.NewParseErr("times", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == '}' {
-						return result, decode.NewParseErr("times", s.Offset(), scan.ErrBadObject)
+						return result, ggen.NewParseErr("times", s.Offset(), ggen.ErrBadObject)
 					}
 					continue
 				}
 				break
 			}
 			if s.Bytes()[s.Pos] != '}' {
-				return result, decode.NewParseErr("times", s.Offset(), scan.ErrBadObject)
+				return result, ggen.NewParseErr("times", s.Offset(), ggen.ErrBadObject)
 			}
 			s.Pos++
 		default:
-			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Offset(), err)
+			return result, ggen.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+				return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -9495,7 +9492,7 @@ func (recv MapVals) DecodeFromStream(s *scan.Stream) (result MapVals, err error)
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Offset(), err)
+				return result, ggen.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -9503,7 +9500,7 @@ func (recv MapVals) DecodeFromStream(s *scan.Stream) (result MapVals, err error)
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
+		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
 	}
 }
 
@@ -9564,9 +9561,9 @@ func (s MapVals) AppendJSON(dst []byte) ([]byte, error) {
 			} else {
 				dst = append(dst, ",\""...)
 			}
-			dst = encode.AppendStringNoHTML(dst, k)
+			dst = ggen.AppendStringNoHTML(dst, k)
 			dst = append(dst, ':')
-			if dst, err = encode.AppendAny(dst, v); err != nil {
+			if dst, err = ggen.AppendAny(dst, v); err != nil {
 				return dst, err
 			}
 		}
@@ -9585,7 +9582,7 @@ func (s MapVals) AppendJSON(dst []byte) ([]byte, error) {
 			} else {
 				dst = append(dst, ",\""...)
 			}
-			dst = encode.AppendStringNoHTML(dst, k)
+			dst = ggen.AppendStringNoHTML(dst, k)
 			dst = append(dst, ':')
 			if v == nil {
 				dst = append(dst, "null"...)
@@ -9610,9 +9607,9 @@ func (s MapVals) AppendJSON(dst []byte) ([]byte, error) {
 			} else {
 				dst = append(dst, ",\""...)
 			}
-			dst = encode.AppendStringNoHTML(dst, k)
+			dst = ggen.AppendStringNoHTML(dst, k)
 			dst = append(dst, ":\""...)
-			dst = encode.AppendStringNoHTML(dst, v.String())
+			dst = ggen.AppendStringNoHTML(dst, v.String())
 		}
 		dst = append(dst, '}')
 	}
@@ -9629,7 +9626,7 @@ func (s MapVals) AppendJSON(dst []byte) ([]byte, error) {
 			} else {
 				dst = append(dst, ",\""...)
 			}
-			dst = encode.AppendStringNoHTML(dst, k)
+			dst = ggen.AppendStringNoHTML(dst, k)
 			dst = append(dst, ':')
 			if v == nil {
 				dst = append(dst, "null"...)
@@ -9660,7 +9657,7 @@ func (s MapVals) AppendJSON(dst []byte) ([]byte, error) {
 			} else {
 				dst = append(dst, ",\""...)
 			}
-			dst = encode.AppendStringNoHTML(dst, k)
+			dst = ggen.AppendStringNoHTML(dst, k)
 			dst = append(dst, ':')
 			if len(v) == 0 {
 				dst = append(dst, "null"...)
@@ -9683,7 +9680,7 @@ func (s MapVals) AppendJSON(dst []byte) ([]byte, error) {
 			} else {
 				dst = append(dst, ",\""...)
 			}
-			dst = encode.AppendStringNoHTML(dst, k)
+			dst = ggen.AppendStringNoHTML(dst, k)
 			dst = append(dst, ":\""...)
 			dst = v.AppendFormat(dst, time.RFC3339Nano)
 			dst = append(dst, '"')
@@ -9701,7 +9698,7 @@ func (recv QuotedNames) DecodeFrom(data []byte) (result QuotedNames, i int, err 
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
-		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 	}
 	i++
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -9714,7 +9711,7 @@ func (recv QuotedNames) DecodeFrom(data []byte) (result QuotedNames, i int, err 
 	for {
 		var key string
 		if i >= len(data) || data[i] != '"' {
-			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrExpectString)
 		}
 		ke := i + 1
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
@@ -9724,16 +9721,16 @@ func (recv QuotedNames) DecodeFrom(data []byte) (result QuotedNames, i int, err 
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i, true)
+			key, i, err = ggen.String(data, i, true)
 			if err != nil {
-				return result, i, decode.NewParseErr("", i, err)
+				return result, i, ggen.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 		}
 		i++
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -9742,11 +9739,11 @@ func (recv QuotedNames) DecodeFrom(data []byte) (result QuotedNames, i int, err 
 		switch key {
 		case "-":
 			if seenDash {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"-"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"-"}}
 			}
 			seenDash = true
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("-", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("-", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -9760,18 +9757,18 @@ func (recv QuotedNames) DecodeFrom(data []byte) (result QuotedNames, i int, err 
 				result.Dash = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.Dash, i, err = scan.String(data, i, true)
+				result.Dash, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("-", i, err)
+					return result, i, ggen.NewParseErr("-", i, err)
 				}
 			}
 		case "a,b":
 			if seenComma {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"a,b"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"a,b"}}
 			}
 			seenComma = true
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("a,b", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("a,b", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -9785,19 +9782,19 @@ func (recv QuotedNames) DecodeFrom(data []byte) (result QuotedNames, i int, err 
 				result.Comma = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.Comma, i, err = scan.String(data, i, true)
+				result.Comma, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("a,b", i, err)
+					return result, i, ggen.NewParseErr("a,b", i, err)
 				}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 		}
 		if data[i] == ',' {
 			i++
@@ -9810,25 +9807,25 @@ func (recv QuotedNames) DecodeFrom(data []byte) (result QuotedNames, i int, err 
 			i++
 			return result, i, nil
 		}
-		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 	}
 }
 
-func (recv QuotedNames) DecodeFromStream(s *scan.Stream) (result QuotedNames, err error) {
+func (recv QuotedNames) DecodeFromStream(s *ggen.Stream) (result QuotedNames, err error) {
 	result = recv
 	seenDash := false
 	seenComma := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Offset(), err)
+		return result, ggen.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Offset(), err)
+		return result, ggen.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
+			return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -9840,46 +9837,46 @@ func (recv QuotedNames) DecodeFromStream(s *scan.Stream) (result QuotedNames, er
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Offset(), err)
+			return result, ggen.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "-":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("-", s.Offset(), err)
+				return result, ggen.NewParseErr("-", s.Offset(), err)
 			}
 			if seenDash {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"-"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"-"}}
 			}
 			seenDash = true
 			result.Dash, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("-", s.Offset(), err)
+				return result, ggen.NewParseErr("-", s.Offset(), err)
 			}
 		case "a,b":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("a,b", s.Offset(), err)
+				return result, ggen.NewParseErr("a,b", s.Offset(), err)
 			}
 			if seenComma {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"a,b"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"a,b"}}
 			}
 			seenComma = true
 			result.Comma, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("a,b", s.Offset(), err)
+				return result, ggen.NewParseErr("a,b", s.Offset(), err)
 			}
 		default:
-			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Offset(), err)
+			return result, ggen.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+				return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -9888,7 +9885,7 @@ func (recv QuotedNames) DecodeFromStream(s *scan.Stream) (result QuotedNames, er
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Offset(), err)
+				return result, ggen.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -9896,7 +9893,7 @@ func (recv QuotedNames) DecodeFromStream(s *scan.Stream) (result QuotedNames, er
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
+		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
 	}
 }
 
@@ -9911,8 +9908,8 @@ func (s QuotedNames) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"-\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.Dash)
+	dst = ggen.AppendStringNoHTML(dst, s.Dash)
 	dst = append(dst, ",\"a,b\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.Comma)
+	dst = ggen.AppendStringNoHTML(dst, s.Comma)
 	return append(dst, '}'), nil
 }

@@ -20,16 +20,15 @@ import (
 
 	gofrs "github.com/gofrs/uuid/v5"
 	"github.com/google/uuid"
-	"github.com/sirkostya009/ggen/decode"
-	"github.com/sirkostya009/ggen/encode"
+	"github.com/sirkostya009/ggen"
 	"github.com/sirkostya009/ggen/integrationtests/thirdparty"
 	"github.com/sirkostya009/ggen/integrationtests/thirdparty2"
 )
 
 // ggenCompat is the generated method subset this file needs.
 type ggenCompat[T any] interface {
-	encode.Marshaler
-	decode.Decoder[T]
+	ggen.Marshaler
+	ggen.Decoder[T]
 }
 
 // crossCompat drives the two-way compat check. Equality is semantic: each
@@ -37,7 +36,7 @@ type ggenCompat[T any] interface {
 // nil-vs-empty differences don't register but wire divergence does.
 func crossCompat[T ggenCompat[T]](t *testing.T, in T) {
 	// ggen marshal → jsonv2 unmarshal.
-	ggenBytes, mErr := encode.Marshal(in)
+	ggenBytes, mErr := ggen.Marshal(in)
 	if mErr != nil {
 		t.Fatalf("ggen Marshal for %T: %v", in, mErr)
 	}
@@ -94,7 +93,7 @@ func exactWire[T ggenCompat[T]](t *testing.T, name string, in T) {
 	t.Helper()
 	t.Run(name, func(t *testing.T) {
 		t.Parallel()
-		ggenBytes, err := encode.Marshal(in)
+		ggenBytes, err := ggen.Marshal(in)
 		if err != nil {
 			t.Fatalf("ggen Marshal for %T: %v", in, err)
 		}
@@ -150,12 +149,12 @@ func TestStdCompat_PointerStruct(t *testing.T) {
 	when := time.Unix(1700000000, 0).UTC()
 	enabled := true
 	crossCompat(t, PointerStruct{
-		PtrNameStruct:    PtrNameStruct{Name: &name},
-		PtrCountStruct:   PtrCountStruct{Count: &count},
-		PtrRatioStruct:   PtrRatioStruct{Ratio: &ratio},
-		PtrAddrStruct:    PtrAddrStruct{Addr: &Address{Street: "S", City: "C", ZipCode: "12345"}},
-		PtrWhenStruct:    PtrWhenStruct{When: &when},
-		PtrEnabledStruct: PtrEnabledStruct{Enabled: &enabled},
+		Name:    &name,
+		Count:   &count,
+		Ratio:   &ratio,
+		Addr:    &Address{Street: "S", City: "C", ZipCode: "12345"},
+		When:    &when,
+		Enabled: &enabled,
 	})
 	// All nils — the null path.
 	crossCompat(t, PointerStruct{})
@@ -327,27 +326,27 @@ type TimeFormatsStdCompat struct {
 // timeFormatsStdCompat builds the jsonv2-compatible subset.
 func timeFormatsStdCompat(when time.Time) TimeFormatsStdCompat {
 	return TimeFormatsStdCompat{
-		TimeDefault:     TimeDefault{Default: when},
-		TimeUnix:        TimeUnix{Unix: when},
-		TimeUnixMilli:   TimeUnixMilli{UnixMilli: when},
-		TimeUnixMicro:   TimeUnixMicro{UnixMicro: when},
-		TimeUnixNano:    TimeUnixNano{UnixNano: when},
-		TimeANSIC:       TimeANSIC{ANSIC: when},
-		TimeUnixDate:    TimeUnixDate{UnixDate: when},
-		TimeRubyDate:    TimeRubyDate{RubyDate: when},
-		TimeRFC822:      TimeRFC822{RFC822: when},
-		TimeRFC822Z:     TimeRFC822Z{RFC822Z: when},
-		TimeRFC850:      TimeRFC850{RFC850: when},
-		TimeRFC1123:     TimeRFC1123{RFC1123: when},
-		TimeRFC1123Z:    TimeRFC1123Z{RFC1123Z: when},
-		TimeRFC3339:     TimeRFC3339{RFC3339: when},
-		TimeRFC3339Nano: TimeRFC3339Nano{RFC3339Nano: when},
-		TimeKitchen:     TimeKitchen{Kitchen: when},
-		TimeDateTime:    TimeDateTime{DateTime: when},
-		TimeDateOnly:    TimeDateOnly{DateOnly: when},
-		TimeTimeOnly:    TimeTimeOnly{TimeOnly: when},
-		TimeCustomComma: TimeCustomComma{CustomComma: when},
-		TimeCustomLong:  TimeCustomLong{CustomLong: when},
+		Default:     when,
+		Unix:        when,
+		UnixMilli:   when,
+		UnixMicro:   when,
+		UnixNano:    when,
+		ANSIC:       when,
+		UnixDate:    when,
+		RubyDate:    when,
+		RFC822:      when,
+		RFC822Z:     when,
+		RFC850:      when,
+		RFC1123:     when,
+		RFC1123Z:    when,
+		RFC3339:     when,
+		RFC3339Nano: when,
+		Kitchen:     when,
+		DateTime:    when,
+		DateOnly:    when,
+		TimeOnly:    when,
+		CustomComma: when,
+		CustomLong:  when,
 	}
 }
 
@@ -390,7 +389,7 @@ func TestStdCompat_MapStruct(t *testing.T) {
 
 func TestStdCompat_Derived(t *testing.T) {
 	t.Parallel()
-	crossCompat(t, Derived{Base: Base{ID: "abc", Meta: "m"}, Name: "alice"})
+	crossCompat(t, Derived{ID: "abc", Meta: "m", Name: "alice"})
 }
 
 func TestStdCompat_DiveStruct(t *testing.T) {
@@ -470,9 +469,9 @@ func TestStdCompat_PtrSliceStruct(t *testing.T) {
 	b := Address{Street: "S2", City: "C2", ZipCode: "22222"}
 	// Mix of present + nil elements exercises the slab path's null branch.
 	crossCompat(t, PtrSliceStruct{
-		PtrSliceItemsStruct: PtrSliceItemsStruct{Items: []*Address{&a, &b}},
-		PtrSliceTupleStruct: PtrSliceTupleStruct{Tuple: [3]*Address{&a, nil, &b}},
-		PtrSliceNodesStruct: PtrSliceNodesStruct{Nodes: []*Node{{ID: 1, Name: "x"}, nil, {ID: 2, Name: "y"}}},
+		Items: []*Address{&a, &b},
+		Tuple: [3]*Address{&a, nil, &b},
+		Nodes: []*Node{{ID: 1, Name: "x"}, nil, {ID: 2, Name: "y"}},
 	})
 }
 
@@ -533,7 +532,7 @@ func TestStdCompat_FloatWire(t *testing.T) {
 	}
 }
 
-// The encode.AppendAny wire shape matches jsonv2: HTML-special bytes in
+// The ggen.AppendAny wire shape matches jsonv2: HTML-special bytes in
 // any-held strings/slices/maps emit literally, and floats through the any path
 // use the same AppendFloat. Single-key maps keep iteration order deterministic
 // for the byte compare.
@@ -652,18 +651,18 @@ func TestStdCompatMerge_Parity(t *testing.T) {
 	// Pointer `*T`: omitted keeps pointee, present replaces, null drops.
 	crossCompatMerge(t, "ptr_scalar_persist",
 		func() PointerStruct {
-			return PointerStruct{PtrNameStruct: PtrNameStruct{Name: new("keep")}, PtrCountStruct: PtrCountStruct{Count: new(1)}}
+			return PointerStruct{Name: new("keep"), Count: new(1)}
 		},
 		`{"count":9}`)
 	crossCompatMerge(t, "ptr_null_drops",
 		func() PointerStruct {
-			return PointerStruct{PtrNameStruct: PtrNameStruct{Name: new("x")}, PtrEnabledStruct: PtrEnabledStruct{Enabled: new(true)}}
+			return PointerStruct{Name: new("x"), Enabled: new(true)}
 		},
 		`{"name":null,"enabled":null}`)
 
 	// Multi-level pointer `**int`: present key resolves the chain.
 	crossCompatMerge(t, "multilevel_ptr",
-		func() NPtrStruct { return NPtrStruct{PtrPPStruct: PtrPPStruct{PP: new(new(3))}} },
+		func() NPtrStruct { return NPtrStruct{PP: new(new(3))} },
 		`{"pp":9}`)
 
 	// Exact-length array payload: every slot overwritten (short-payload diverges).

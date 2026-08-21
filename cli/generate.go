@@ -35,7 +35,7 @@ func putSmall(b *bytes.Buffer) { smallPool.Put(b) }
 // cyclicTypes marks generated structs that sit on a type-graph cycle
 // (directly or mutually self-referential). Their decode methods get a
 // depth-guarded core + thin public shim so payload nesting is bounded by
-// scan.MaxDepth instead of the goroutine stack (a few MB of `{"kids":[…`
+// maxDepth (10000) instead of the goroutine stack (a few MB of `{"kids":[…`
 // is otherwise a fatal, unrecoverable stack overflow). Seeded by the caller
 // alongside generatedTypes; computed from the bucket as a fallback.
 var cyclicTypes map[string]struct{}
@@ -296,7 +296,7 @@ func renderStructMethods(buf *bytes.Buffer, s StructInfo) {
 	renderAppendJSON(buf, s)
 
 	if s.Marshal {
-		fmt.Fprintf(buf, "func (s %s) MarshalJSON() ([]byte, error) {\n\treturn encode.Marshal(s)\n}\n\n", s.Name)
+		fmt.Fprintf(buf, "func (s %s) MarshalJSON() ([]byte, error) {\n\treturn ggen.Marshal(s)\n}\n\n", s.Name)
 	}
 	if s.Unmarshal {
 		fmt.Fprintf(buf, "func (s *%s) UnmarshalJSON(data []byte) error {\n\tvar zero %s\n\tv, _, err := zero.DecodeFrom(data)\n\tif err != nil {\n\t\treturn err\n\t}\n\t*s = v\n\treturn nil\n}\n\n", s.Name, s.Name)
@@ -307,10 +307,8 @@ func renderStructMethods(buf *bytes.Buffer, s StructInfo) {
 // generated file will reference, driven off StructInfo features plus a body-scan.
 func collectImports(structs []StructInfo, bodies [][]byte) ([]string, []string) {
 	need := map[string]struct{}{
-		// scan is named by every generated method. encode is NOT universal
-		// (a struct delegating to nested AppendJSON never names it), so the
-		// body-scan below resolves it.
-		"github.com/sirkostya009/ggen/scan": {},
+		// The ggen runtime package is named by every generated method.
+		"github.com/sirkostya009/ggen": {},
 	}
 	add := func(p string) {
 		if p != "" {
@@ -348,18 +346,6 @@ func collectImports(structs []StructInfo, bodies [][]byte) ([]string, []string) 
 		if s.MultiErr {
 			anyValidation = true
 		}
-		// Non-alias structs reference validation outside per-field rules:
-		// !AllowDups → DuplicateKeyError; !IgnoreUnknown && no inline → UnknownKeyError.
-		if !s.IsAlias {
-			add("github.com/sirkostya009/ggen/decode")
-			inline := s.InlineField().Inline
-			if !s.AllowDups {
-				anyValidation = true
-			}
-			if !s.IgnoreUnknown && !inline {
-				anyValidation = true
-			}
-		}
 		// Struct alias delegating to a foreign-package underlying
 		// (e.g. `type Local uuid.UUID`) needs that package's import.
 		if s.IsAlias && s.AliasKind == KindStruct {
@@ -389,12 +375,9 @@ func collectImports(structs []StructInfo, bodies [][]byte) ([]string, []string) 
 			}
 		}
 	}
-	_ = anyMarshal   // MarshalJSON hook uses encode.Marshal; encode resolved elsewhere
-	_ = anyUnmarshal // UnmarshalJSON hook expands inline via zero.DecodeFrom
-	if anyValidation || anyRequired {
-		add("github.com/sirkostya009/ggen/validation")
-	}
-	_ = anyString // body-scan picks up unsafe usage; flag unused here
+	// anyMarshal/anyUnmarshal/anyValidation/anyRequired/anyString used to pick
+	// runtime sub-packages; the single ggen import is unconditional now.
+	_, _, _, _, _ = anyMarshal, anyUnmarshal, anyValidation, anyRequired, anyString
 	// Stdlib-helper imports are emission-driven: scanning the rendered bodies
 	// for the import-qualified token is exact and avoids a per-kind walk over
 	// arbitrarily-nested container types.
@@ -439,15 +422,6 @@ func scanBodiesForStdImports(bodies [][]byte, add func(string)) {
 		{[]byte("jsontext."), "encoding/json/jsontext"},
 		{[]byte("json."), "encoding/json"},
 		{[]byte("big."), "math/big"},
-		{[]byte("encode."), "github.com/sirkostya009/ggen/encode"},
-		// decode.NewParseErr / decode.ModError appear in nearly every body;
-		// the body-scan reliably adds the import iff the token is present
-		// (covers alias-only files the struct-walk above skips).
-		{[]byte("decode."), "github.com/sirkostya009/ggen/decode"},
-		// Same reason: an ARRAY alias emits validation.LenError from the
-		// strict-length guard with no field rule to flip anyValidation, so
-		// an alias-only package named validation without importing it.
-		{[]byte("validation."), "github.com/sirkostya009/ggen/validation"},
 	}
 	for _, body := range bodies {
 		for i := range table {
@@ -507,7 +481,7 @@ func collectFieldImports(f FieldInfo, add func(string), anyString, anyValidation
 			case "url", "alphanum",
 				"numeric", "hexadecimal",
 				"islower", "isupper":
-				add("github.com/sirkostya009/ggen/validation")
+				add("github.com/sirkostya009/ggen")
 			}
 		}
 	}
@@ -697,7 +671,7 @@ func scalarCountable(k TypeKind) bool { return isNumeric(k) || k == KindBool }
 // renderOneMod emits one mod (transform) against ref. posVar selects the
 // return shape for a fallible mod ("" = stream 2-tuple, else bytes 3-tuple). A
 // custom mod is pure (`func(T)T`), error-form (`func(T)(T,error)`, parse error),
-// or bool-form (`func(T)(T,bool)`, false → decode.ModError parse error).
+// or bool-form (`func(T)(T,bool)`, false → ggen.ModError parse error).
 func renderOneMod(b *bytes.Buffer, m ModRule, field, ref, goType string, kind TypeKind, posVar string) {
 	kind = effectiveKind(goType, kind)
 	prim := kindPrimitiveName(kind)
@@ -735,7 +709,7 @@ func renderOneMod(b *bytes.Buffer, m ModRule, field, ref, goType string, kind Ty
 					if pos == "" {
 						pos = "s.Offset()"
 					}
-					modErr := fmt.Sprintf("decode.NewParseErr(%s, %s, &decode.ModError{%sName: %q, Msg: %q, Value: %s})",
+					modErr := fmt.Sprintf("ggen.NewParseErr(%s, %s, &ggen.ModError{%sName: %q, Msg: %q, Value: %s})",
 						field, pos, posLit(posVar), strings.TrimPrefix(m.Name, "@"), m.Msg, ref)
 					fmt.Fprintf(b, "if v, ok := %s(%s); !ok {\n\t%s\n} else {\n\t%s = v\n}\n",
 						call, ref, ret(modErr), ref)
@@ -747,7 +721,7 @@ func renderOneMod(b *bytes.Buffer, m ModRule, field, ref, goType string, kind Ty
 					if pos == "" {
 						pos = "s.Offset()"
 					}
-					wrapped := fmt.Sprintf("decode.NewParseErr(%s, %s, err)", field, pos)
+					wrapped := fmt.Sprintf("ggen.NewParseErr(%s, %s, err)", field, pos)
 					fmt.Fprintf(b, "if v, err := %s(%s); err != nil {\n\t%s\n} else {\n\t%s = v\n}\n",
 						call, ref, ret(wrapped), ref)
 				}
@@ -894,7 +868,7 @@ func effectiveKind(goType string, kind TypeKind) TypeKind {
 
 // primCast converts ref to its underlying primitive when goType is a named
 // type — needed wherever the emitted code hands the value to a string-typed
-// API (`utf8.RuneCountInString`, `strings.HasPrefix`, `validation.IsURL`) or
+// API (`utf8.RuneCountInString`, `strings.HasPrefix`, `ggen.IsURL`) or
 // stores it in a string-typed error field. Comparisons against untyped
 // constants (len/gte/eq/oneof) need no cast, so callers only wrap where the
 // destination type is concrete.
@@ -953,13 +927,13 @@ func posLit(posVar string) string {
 }
 
 // withPos injects posLit right after the opening brace of a
-// `&validation.XError{...}` literal so every error carries its position.
+// `&ggen.XError{...}` literal so every error carries its position.
 func withPos(errExpr, posVar string) string {
 	k := strings.IndexByte(errExpr, '{')
 	return errExpr[:k+1] + posLit(posVar) + errExpr[k+1:]
 }
 
-// arrayLenErr builds a typed *validation.LenError literal for the strict
+// arrayLenErr builds a typed *ggen.LenError literal for the strict
 // fixed-array element-count check.
 // byteArrayLen returns N for a `[N]byte` field folded onto the KindBytes
 // (base64) path, else 0. jsonv2 base64s byte ARRAYS and rejects the v1
@@ -972,12 +946,12 @@ func byteArrayLen(f FieldInfo) int {
 }
 
 func arrayLenErr(field string, want int, gotExpr, posVar string) string {
-	return withPos(fmt.Sprintf("&validation.LenError{Path: []string{%q}, Want: %d, Got: %s}", field, want, gotExpr), posVar)
+	return withPos(fmt.Sprintf("&ggen.LenError{Path: []string{%q}, Want: %d, Got: %s}", field, want, gotExpr), posVar)
 }
 
-// requiredErr builds a typed *validation.RequiredError literal.
+// requiredErr builds a typed *ggen.RequiredError literal.
 func requiredErr(field string) string {
-	return fmt.Sprintf("&validation.RequiredError{Path: []string{%q}}", field)
+	return fmt.Sprintf("&ggen.RequiredError{Path: []string{%q}}", field)
 }
 
 // oneofRegistry collects unique allowed-string sets emitted as package-level
@@ -1108,11 +1082,11 @@ func emitRuneRule(b *bytes.Buffer, v ValidationRule, ref, jsonName, goType strin
 	errLit := func(got string) string {
 		switch v.Name {
 		case "runes":
-			return fmt.Sprintf("&validation.RunesError{Path: []string{%q}, Want: %s, Got: %s}", jsonName, v.Value, got)
+			return fmt.Sprintf("&ggen.RunesError{Path: []string{%q}, Want: %s, Got: %s}", jsonName, v.Value, got)
 		case "minrunes":
-			return fmt.Sprintf("&validation.MinRunesError{Path: []string{%q}, Limit: %s, Got: %s}", jsonName, v.Value, got)
+			return fmt.Sprintf("&ggen.MinRunesError{Path: []string{%q}, Limit: %s, Got: %s}", jsonName, v.Value, got)
 		default: // maxrunes
-			return fmt.Sprintf("&validation.MaxRunesError{Path: []string{%q}, Limit: %s, Got: %s}", jsonName, v.Value, got)
+			return fmt.Sprintf("&ggen.MaxRunesError{Path: []string{%q}, Limit: %s, Got: %s}", jsonName, v.Value, got)
 		}
 	}
 	// utf8 takes a real string; a named string type needs the conversion.
@@ -1173,50 +1147,50 @@ func renderOneVal(b *bytes.Buffer, v ValidationRule, ref, jsonName, goType strin
 
 	case "notempty":
 		fmt.Fprintf(b, "if len(%s) == 0 {\n\t%s\n}\n", ref,
-			onErr(fmt.Sprintf("&validation.NotEmptyError{Path: []string{%q}}", jsonName)))
+			onErr(fmt.Sprintf("&ggen.NotEmptyError{Path: []string{%q}}", jsonName)))
 
 	case "len":
 		fmt.Fprintf(b, "if len(%s) != %s {\n\t%s\n}\n", ref, v.Value,
-			onErr(fmt.Sprintf("&validation.LenError{Path: []string{%q}, Want: %s, Got: len(%s)}", jsonName, v.Value, ref)))
+			onErr(fmt.Sprintf("&ggen.LenError{Path: []string{%q}, Want: %s, Got: len(%s)}", jsonName, v.Value, ref)))
 	case "minlen":
 		fmt.Fprintf(b, "if len(%s) < %s {\n\t%s\n}\n", ref, v.Value,
-			onErr(fmt.Sprintf("&validation.MinLenError{Path: []string{%q}, Limit: %s, Got: len(%s)}", jsonName, v.Value, ref)))
+			onErr(fmt.Sprintf("&ggen.MinLenError{Path: []string{%q}, Limit: %s, Got: len(%s)}", jsonName, v.Value, ref)))
 	case "maxlen":
 		fmt.Fprintf(b, "if len(%s) > %s {\n\t%s\n}\n", ref, v.Value,
-			onErr(fmt.Sprintf("&validation.MaxLenError{Path: []string{%q}, Limit: %s, Got: len(%s)}", jsonName, v.Value, ref)))
+			onErr(fmt.Sprintf("&ggen.MaxLenError{Path: []string{%q}, Limit: %s, Got: len(%s)}", jsonName, v.Value, ref)))
 
 	case "gt":
 		fmt.Fprintf(b, "if %s <= %s {\n\t%s\n}\n", ref, v.Value,
-			onErr(fmt.Sprintf("&validation.GTError{Path: []string{%q}, Limit: %s, Value: %s}", jsonName, v.Value, ref)))
+			onErr(fmt.Sprintf("&ggen.GTError{Path: []string{%q}, Limit: %s, Value: %s}", jsonName, v.Value, ref)))
 	case "gte":
 		fmt.Fprintf(b, "if %s < %s {\n\t%s\n}\n", ref, v.Value,
-			onErr(fmt.Sprintf("&validation.GTEError{Path: []string{%q}, Limit: %s, Value: %s}", jsonName, v.Value, ref)))
+			onErr(fmt.Sprintf("&ggen.GTEError{Path: []string{%q}, Limit: %s, Value: %s}", jsonName, v.Value, ref)))
 	case "lt":
 		fmt.Fprintf(b, "if %s >= %s {\n\t%s\n}\n", ref, v.Value,
-			onErr(fmt.Sprintf("&validation.LTError{Path: []string{%q}, Limit: %s, Value: %s}", jsonName, v.Value, ref)))
+			onErr(fmt.Sprintf("&ggen.LTError{Path: []string{%q}, Limit: %s, Value: %s}", jsonName, v.Value, ref)))
 	case "lte":
 		fmt.Fprintf(b, "if %s > %s {\n\t%s\n}\n", ref, v.Value,
-			onErr(fmt.Sprintf("&validation.LTEError{Path: []string{%q}, Limit: %s, Value: %s}", jsonName, v.Value, ref)))
+			onErr(fmt.Sprintf("&ggen.LTEError{Path: []string{%q}, Limit: %s, Value: %s}", jsonName, v.Value, ref)))
 
 	case "eq":
 		if kind == KindString {
 			fmt.Fprintf(b, "if %s != %q {\n\t%s\n}\n",
 				ref, v.Value,
-				onErr(fmt.Sprintf("&validation.EqError{Path: []string{%q}, Want: %q, Value: %s}", jsonName, v.Value, ref)))
+				onErr(fmt.Sprintf("&ggen.EqError{Path: []string{%q}, Want: %q, Value: %s}", jsonName, v.Value, ref)))
 		} else if isNumeric(kind) {
 			fmt.Fprintf(b, "if %s != %s {\n\t%s\n}\n",
 				ref, v.Value,
-				onErr(fmt.Sprintf("&validation.EqError{Path: []string{%q}, Want: %s, Value: %s}", jsonName, v.Value, ref)))
+				onErr(fmt.Sprintf("&ggen.EqError{Path: []string{%q}, Want: %s, Value: %s}", jsonName, v.Value, ref)))
 		}
 	case "neq":
 		if kind == KindString {
 			fmt.Fprintf(b, "if %s == %q {\n\t%s\n}\n",
 				ref, v.Value,
-				onErr(fmt.Sprintf("&validation.NeqError{Path: []string{%q}, Want: %q, Value: %s}", jsonName, v.Value, ref)))
+				onErr(fmt.Sprintf("&ggen.NeqError{Path: []string{%q}, Want: %q, Value: %s}", jsonName, v.Value, ref)))
 		} else if isNumeric(kind) {
 			fmt.Fprintf(b, "if %s == %s {\n\t%s\n}\n",
 				ref, v.Value,
-				onErr(fmt.Sprintf("&validation.NeqError{Path: []string{%q}, Want: %s, Value: %s}", jsonName, v.Value, ref)))
+				onErr(fmt.Sprintf("&ggen.NeqError{Path: []string{%q}, Want: %s, Value: %s}", jsonName, v.Value, ref)))
 		}
 
 	case "oneof":
@@ -1224,44 +1198,44 @@ func renderOneVal(b *bytes.Buffer, v ValidationRule, ref, jsonName, goType strin
 		varName := registerOneOf(splitPipeParts(v.Value))
 		fmt.Fprintf(b, "switch %s {\ncase %s:\ndefault:\n\t%s\n}\n",
 			ref, cases,
-			onErr(fmt.Sprintf("&validation.OneOfError{Path: []string{%q}, Allowed: %s, Value: %s}", jsonName, varName, ref)))
+			onErr(fmt.Sprintf("&ggen.OneOfError{Path: []string{%q}, Allowed: %s, Value: %s}", jsonName, varName, ref)))
 
 	case "url":
-		fmt.Fprintf(b, "if !validation.IsURL(%s) {\n\t%s\n}\n", str,
-			onErr(fmt.Sprintf("&validation.URLError{Path: []string{%q}, Value: %s}", jsonName, str)))
+		fmt.Fprintf(b, "if !ggen.IsURL(%s) {\n\t%s\n}\n", str,
+			onErr(fmt.Sprintf("&ggen.URLError{Path: []string{%q}, Value: %s}", jsonName, str)))
 
 	case "alphanum":
-		fmt.Fprintf(b, "if !validation.IsAlphanum(%s) {\n\t%s\n}\n", str,
-			onErr(fmt.Sprintf("&validation.AlphanumError{Path: []string{%q}, Value: %s}", jsonName, str)))
+		fmt.Fprintf(b, "if !ggen.IsAlphanum(%s) {\n\t%s\n}\n", str,
+			onErr(fmt.Sprintf("&ggen.AlphanumError{Path: []string{%q}, Value: %s}", jsonName, str)))
 	case "numeric":
-		fmt.Fprintf(b, "if !validation.IsNumeric(%s) {\n\t%s\n}\n", str,
-			onErr(fmt.Sprintf("&validation.NumericError{Path: []string{%q}, Value: %s}", jsonName, str)))
+		fmt.Fprintf(b, "if !ggen.IsNumeric(%s) {\n\t%s\n}\n", str,
+			onErr(fmt.Sprintf("&ggen.NumericError{Path: []string{%q}, Value: %s}", jsonName, str)))
 	case "islower":
-		fmt.Fprintf(b, "if !validation.IsLower(%s) {\n\t%s\n}\n", str,
-			onErr(fmt.Sprintf("&validation.LowerError{Path: []string{%q}, Value: %s}", jsonName, str)))
+		fmt.Fprintf(b, "if !ggen.IsLower(%s) {\n\t%s\n}\n", str,
+			onErr(fmt.Sprintf("&ggen.LowerError{Path: []string{%q}, Value: %s}", jsonName, str)))
 	case "isupper":
-		fmt.Fprintf(b, "if !validation.IsUpper(%s) {\n\t%s\n}\n", str,
-			onErr(fmt.Sprintf("&validation.UpperError{Path: []string{%q}, Value: %s}", jsonName, str)))
+		fmt.Fprintf(b, "if !ggen.IsUpper(%s) {\n\t%s\n}\n", str,
+			onErr(fmt.Sprintf("&ggen.UpperError{Path: []string{%q}, Value: %s}", jsonName, str)))
 	case "hexadecimal":
-		fmt.Fprintf(b, "if !validation.IsHex(%s) {\n\t%s\n}\n", str,
-			onErr(fmt.Sprintf("&validation.HexadecimalError{Path: []string{%q}, Value: %s}", jsonName, str)))
+		fmt.Fprintf(b, "if !ggen.IsHex(%s) {\n\t%s\n}\n", str,
+			onErr(fmt.Sprintf("&ggen.HexadecimalError{Path: []string{%q}, Value: %s}", jsonName, str)))
 
 	case "starts":
 		fmt.Fprintf(b, "if !strings.HasPrefix(%s, %q) {\n\t%s\n}\n",
 			str, v.Value,
-			onErr(fmt.Sprintf("&validation.StartsError{Path: []string{%q}, Want: %q, Value: %s}", jsonName, v.Value, str)))
+			onErr(fmt.Sprintf("&ggen.StartsError{Path: []string{%q}, Want: %q, Value: %s}", jsonName, v.Value, str)))
 	case "ends":
 		fmt.Fprintf(b, "if !strings.HasSuffix(%s, %q) {\n\t%s\n}\n",
 			str, v.Value,
-			onErr(fmt.Sprintf("&validation.EndsError{Path: []string{%q}, Want: %q, Value: %s}", jsonName, v.Value, str)))
+			onErr(fmt.Sprintf("&ggen.EndsError{Path: []string{%q}, Want: %q, Value: %s}", jsonName, v.Value, str)))
 	case "contains":
 		fmt.Fprintf(b, "if !strings.Contains(%s, %q) {\n\t%s\n}\n",
 			str, v.Value,
-			onErr(fmt.Sprintf("&validation.ContainsError{Path: []string{%q}, Want: %q, Value: %s}", jsonName, v.Value, str)))
+			onErr(fmt.Sprintf("&ggen.ContainsError{Path: []string{%q}, Want: %q, Value: %s}", jsonName, v.Value, str)))
 
 	case "multiple":
 		fmt.Fprintf(b, "if %s %% %s != 0 {\n\t%s\n}\n", ref, v.Value,
-			onErr(fmt.Sprintf("&validation.MultipleError{Path: []string{%q}, Of: %s, Value: %s}", jsonName, v.Value, ref)))
+			onErr(fmt.Sprintf("&ggen.MultipleError{Path: []string{%q}, Of: %s, Value: %s}", jsonName, v.Value, ref)))
 
 	default:
 		// `@FuncName` — user-defined validator resolved at parse time.
@@ -1273,11 +1247,11 @@ func renderOneVal(b *bytes.Buffer, v ValidationRule, ref, jsonName, goType strin
 			if v.BoolForm {
 				fmt.Fprintf(b, "if !%s(%s) {\n\t%s\n}\n",
 					call, ref,
-					onErr(fmt.Sprintf("&validation.PredicateError{Path: []string{%q}, Name: %q, Msg: %q, Value: %s}", jsonName, strings.TrimPrefix(v.Name, "@"), v.Msg, ref)))
+					onErr(fmt.Sprintf("&ggen.PredicateError{Path: []string{%q}, Name: %q, Msg: %q, Value: %s}", jsonName, strings.TrimPrefix(v.Name, "@"), v.Msg, ref)))
 			} else {
 				fmt.Fprintf(b, "if err := %s(%s); err != nil {\n\t%s\n}\n",
 					call, ref,
-					onErr(fmt.Sprintf("&validation.CustomError{Path: []string{%q}, Name: %q, Value: %s, Cause: err}", jsonName, strings.TrimPrefix(v.Name, "@"), ref)))
+					onErr(fmt.Sprintf("&ggen.CustomError{Path: []string{%q}, Name: %q, Value: %s, Cause: err}", jsonName, strings.TrimPrefix(v.Name, "@"), ref)))
 			}
 		}
 		// Unknown non-custom names are silently ignored.
@@ -1687,10 +1661,10 @@ func renderAppendValue(b *bytes.Buffer, f FieldInfo, ref string) {
 			fmt.Fprintf(b, "dst = append(dst, '\"')\ndst = strconv.AppendUint(dst, %s, 10)\ndst = append(dst, '\"')\n", ref)
 			return
 		case KindFloat32:
-			fmt.Fprintf(b, "dst = append(dst, '\"')\nif dst, err = encode.AppendFloat(dst, float64(%s), 32); err != nil { return dst, err }\ndst = append(dst, '\"')\n", ref)
+			fmt.Fprintf(b, "dst = append(dst, '\"')\nif dst, err = ggen.AppendFloat(dst, float64(%s), 32); err != nil { return dst, err }\ndst = append(dst, '\"')\n", ref)
 			return
 		case KindFloat64:
-			fmt.Fprintf(b, "dst = append(dst, '\"')\nif dst, err = encode.AppendFloat(dst, %s, 64); err != nil { return dst, err }\ndst = append(dst, '\"')\n", ref)
+			fmt.Fprintf(b, "dst = append(dst, '\"')\nif dst, err = ggen.AppendFloat(dst, %s, 64); err != nil { return dst, err }\ndst = append(dst, '\"')\n", ref)
 			return
 		}
 		// unknown/invalid combo — fall through to default
@@ -1709,9 +1683,9 @@ func renderAppendValue(b *bytes.Buffer, f FieldInfo, ref string) {
 	case KindUint64:
 		fmt.Fprintf(b, "dst = strconv.AppendUint(dst, %s, 10)\n", ref)
 	case KindFloat32:
-		fmt.Fprintf(b, "if dst, err = encode.AppendFloat(dst, float64(%s), 32); err != nil { return dst, err }\n", ref)
+		fmt.Fprintf(b, "if dst, err = ggen.AppendFloat(dst, float64(%s), 32); err != nil { return dst, err }\n", ref)
 	case KindFloat64:
-		fmt.Fprintf(b, "if dst, err = encode.AppendFloat(dst, %s, 64); err != nil { return dst, err }\n", ref)
+		fmt.Fprintf(b, "if dst, err = ggen.AppendFloat(dst, %s, 64); err != nil { return dst, err }\n", ref)
 	case KindStruct:
 		if isGenerated(f.GoType) {
 			fmt.Fprintf(b, "if dst, err = %s.AppendJSON(dst); err != nil { return dst, err }\n", ref)
@@ -1736,7 +1710,7 @@ if dst, err = %s.AppendText(dst); err != nil { return dst, err }
 dst = append(dst, '"')
 `, ref)
 	case KindNetipAddr:
-		// Zoned text may need escaping — encode.AppendNetipAddr handles it.
+		// Zoned text may need escaping — ggen.AppendNetipAddr handles it.
 		fmt.Fprintf(b, "dst = append(dst, '\"')\ndst = %s(dst, %s)\n", appendNetipAddrFn(f.HTMLEscape), ref)
 	case KindRawJSON:
 		// Emit raw bytes verbatim (or "null" if empty/nil).
@@ -1926,7 +1900,7 @@ func renderAppendTime(b *bytes.Buffer, f FieldInfo, ref string) {
 		// outside the int64-nano range and lost sub-100ns precision. The
 		// other unix* units are integer-granular.
 		if numeric == "Unix" {
-			fmt.Fprintf(b, "dst = encode.AppendUnixSeconds(dst, %s)\n", ref)
+			fmt.Fprintf(b, "dst = ggen.AppendUnixSeconds(dst, %s)\n", ref)
 			return
 		}
 		fmt.Fprintf(b, "dst = strconv.AppendInt(dst, %s.%s(), 10)\n", ref, numeric)
@@ -1962,7 +1936,7 @@ func renderAppendDuration(b *bytes.Buffer, f FieldInfo, ref string) {
 	switch f.Format {
 	case "sec":
 		// Seconds() is always finite — the error arm is dead but uniform.
-		fmt.Fprintf(b, "if dst, err = encode.AppendFloat(dst, %s.Seconds(), 64); err != nil { return dst, err }\n", ref)
+		fmt.Fprintf(b, "if dst, err = ggen.AppendFloat(dst, %s.Seconds(), 64); err != nil { return dst, err }\n", ref)
 	case "milli":
 		fmt.Fprintf(b, "dst = strconv.AppendInt(dst, %s.Milliseconds(), 10)\n", ref)
 	case "micro":
@@ -2096,55 +2070,55 @@ func escapeJSONName(name string, htmlEscape bool) string {
 // already written the opening `"`.
 func appendStrFn(htmlEscape bool) string {
 	if htmlEscape {
-		return "encode.AppendString" + simdSuffix
+		return "ggen.AppendString" + simdSuffix
 	}
-	return "encode.AppendStringNoHTML" + simdSuffix
+	return "ggen.AppendStringNoHTML" + simdSuffix
 }
 
 // closeStrFn returns the encode-pkg closer for raw text appended between
 // quotes (TextAppender output): closes the string, re-escaping iff dirty.
 func closeStrFn(htmlEscape bool) string {
 	if htmlEscape {
-		return "encode.CloseJSONStringHTML"
+		return "ggen.CloseJSONStringHTML"
 	}
-	return "encode.CloseJSONString"
+	return "ggen.CloseJSONString"
 }
 
 // appendURLFn / appendNetipAddrFn pick the escape-set variant of the raw-text
 // closers (htmlescape parity with every other string emitter).
 func appendURLFn(htmlEscape bool) string {
 	if htmlEscape {
-		return "encode.AppendURLHTML"
+		return "ggen.AppendURLHTML"
 	}
-	return "encode.AppendURL"
+	return "ggen.AppendURL"
 }
 
 func appendNetipAddrFn(htmlEscape bool) string {
 	if htmlEscape {
-		return "encode.AppendNetipAddrHTML"
+		return "ggen.AppendNetipAddrHTML"
 	}
-	return "encode.AppendNetipAddr"
+	return "ggen.AppendNetipAddr"
 }
 
 // emitNoCloseAfterComma emits the bytes-path guard inside an element loop's
 // comma branch: a container close (or EOF) right after a comma is invalid JSON.
 func emitNoCloseAfterComma(b *bytes.Buffer, field, posVar string, close byte) {
-	sentinel := "scan.ErrBadArray"
+	sentinel := "ggen.ErrBadArray"
 	if close == '}' {
-		sentinel = "scan.ErrBadObject"
+		sentinel = "ggen.ErrBadObject"
 	}
-	fmt.Fprintf(b, "if %[1]s >= len(data) || data[%[1]s] == '%[2]c' { return result, %[1]s, decode.NewParseErr(%[4]s, %[1]s, %[3]s) }\n", posVar, close, sentinel, field)
+	fmt.Fprintf(b, "if %[1]s >= len(data) || data[%[1]s] == '%[2]c' { return result, %[1]s, ggen.NewParseErr(%[4]s, %[1]s, %[3]s) }\n", posVar, close, sentinel, field)
 }
 
 // streamNoCloseAfterComma is emitNoCloseAfterComma's stream twin. The
 // `s.Pos >= len(...)` half also catches EOF right after the comma (SkipSpace
 // returns nil at EOF, and the loop top would otherwise index out of range).
 func streamNoCloseAfterComma(field string, close byte) string {
-	sentinel := "scan.ErrBadArray"
+	sentinel := "ggen.ErrBadArray"
 	if close == '}' {
-		sentinel = "scan.ErrBadObject"
+		sentinel = "ggen.ErrBadObject"
 	}
-	return fmt.Sprintf("if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == '%c' { return result, decode.NewParseErr(%s, s.Offset(), %s) }\n", close, field, sentinel)
+	return fmt.Sprintf("if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == '%c' { return result, ggen.NewParseErr(%s, s.Offset(), %s) }\n", close, field, sentinel)
 }
 
 // appendAnyFn mirrors appendStrFn for `any` values — htmlescape structs
@@ -2152,9 +2126,9 @@ func streamNoCloseAfterComma(field string, close byte) string {
 // escape consistently with sibling string fields.
 func appendAnyFn(htmlEscape bool) string {
 	if htmlEscape {
-		return "encode.AppendAnyHTML"
+		return "ggen.AppendAnyHTML"
 	}
-	return "encode.AppendAny"
+	return "ggen.AppendAny"
 }
 
 // foldLeadingQuote checks whether the field's value emit begins with a JSON
@@ -2172,7 +2146,7 @@ func foldLeadingQuote(f FieldInfo, ref, prefix string) (newPrefix, code string, 
 dst = append(dst, '"')
 `, ref), true
 	case KindNetipAddr:
-		// Zoned text may need escaping — encode.AppendNetipAddr handles it.
+		// Zoned text may need escaping — ggen.AppendNetipAddr handles it.
 		return prefix + `"`, fmt.Sprintf("dst = %s(dst, %s)\n", appendNetipAddrFn(f.HTMLEscape), ref), true
 	case KindBytes:
 		// No fold: a nil []byte emits `null` (no opening quote).
@@ -2576,9 +2550,9 @@ func emitSliceElement(b *bytes.Buffer, f FieldInfo, vref string, depth int) {
 	case KindUint64:
 		fmt.Fprintf(b, "dst = strconv.AppendUint(dst, %s, 10)\n", vref)
 	case KindFloat32:
-		fmt.Fprintf(b, "if dst, err = encode.AppendFloat(dst, float64(%s), 32); err != nil { return dst, err }\n", vref)
+		fmt.Fprintf(b, "if dst, err = ggen.AppendFloat(dst, float64(%s), 32); err != nil { return dst, err }\n", vref)
 	case KindFloat64:
-		fmt.Fprintf(b, "if dst, err = encode.AppendFloat(dst, %s, 64); err != nil { return dst, err }\n", vref)
+		fmt.Fprintf(b, "if dst, err = ggen.AppendFloat(dst, %s, 64); err != nil { return dst, err }\n", vref)
 	case KindStruct:
 		if isGenerated(f.ElemType) {
 			fmt.Fprintf(b, "if dst, err = %s.AppendJSON(dst); err != nil { return dst, err }\n", vref)
@@ -2644,9 +2618,9 @@ dst = append(dst, ':')
 	case KindUint64:
 		fmt.Fprintf(b, "dst = strconv.AppendUint(dst, %s, 10)\n", vref)
 	case KindFloat32:
-		b.WriteString("if dst, err = encode.AppendFloat(dst, float64(v), 32); err != nil { return dst, err }\n")
+		b.WriteString("if dst, err = ggen.AppendFloat(dst, float64(v), 32); err != nil { return dst, err }\n")
 	case KindFloat64:
-		fmt.Fprintf(b, "if dst, err = encode.AppendFloat(dst, %s, 64); err != nil { return dst, err }\n", vref)
+		fmt.Fprintf(b, "if dst, err = ggen.AppendFloat(dst, %s, 64); err != nil { return dst, err }\n", vref)
 	case KindStruct:
 		if isGenerated(f.ElemType) {
 			b.WriteString("if dst, err = v.AppendJSON(dst); err != nil { return dst, err }\n")
@@ -2709,8 +2683,8 @@ func mapPreallocCap(f FieldInfo) int {
 // (hintlen/len/minlen) apply to both and still outrank everything.
 //
 // With no hint the cap comes from the ELEMENT WIDTH rather than its kind:
-// `scan.PreallocCap(unsafe.Sizeof(*new(E)))`, which folds to a literal at
-// compile time (verified in asm — `MOVL $4`). See scan.PreallocCap for the
+// `prealloc.Cap(unsafe.Sizeof(*new(E)))`, which folds to a literal at
+// compile time (verified in asm — `MOVL $4`). See internal/prealloc for the
 // ladder; the short version is "as many elements as fit under 80 bytes, else
 // under 512, else 1". That replaced a flat 4 for primitives and, more
 // importantly, a cap of ZERO for struct elements — those used to walk the
@@ -2724,7 +2698,7 @@ func preallocCap(f FieldInfo) (slice, slab string) {
 		return strconv.Itoa(n), strconv.Itoa(n)
 	}
 	// Default cap comes from the ELEMENT WIDTH, not the element kind:
-	// `scan.PreallocCap(unsafe.Sizeof(*new(T)))`. Both operands are
+	// `prealloc.Cap(unsafe.Sizeof(*new(T)))`. Both operands are
 	// compile-time constants, so gc folds the call and its branches to a
 	// literal — the emitted code carries `make([]T, 0, 4)`, not a call.
 	// `*new(T)` (rather than `T{}`) spells a zero value of ANY type, and
@@ -2761,13 +2735,13 @@ func preallocCap(f FieldInfo) (slice, slab string) {
 // capForSize returns the name of a package-level constant holding the
 // width-driven default capacity for elemType, registering it on first use.
 //
-// It has to be a CONSTANT EXPRESSION, not a call to scan.PreallocCap:
+// It has to be a CONSTANT EXPRESSION, not a call to prealloc.Cap:
 // measured on the bench module, gc inlines that helper only into small
 // functions — 30 of 34 emitted sites kept a real `CALL` because the enclosing
 // generated DecodeFrom is far past the inliner's budget. A constant folds in
 // the frontend, where the inliner never gets a vote.
 //
-// The expression is scan.PreallocCap's ladder written branchlessly, with
+// The expression is prealloc.Cap's ladder written branchlessly, with
 // `sel` as the 0/1 selector for "at least 2 elements fit under 80 bytes":
 //
 //	S   = max(sizeof(E), 1)          // 1 keeps a zero-width element from dividing by zero
@@ -2826,11 +2800,11 @@ func capForSize(scope, elemType string) string {
 	return name
 }
 
-// fastAllocMax mirrors scan.PreallocCap — the emitted constants have to spell
+// fastAllocMax mirrors internal/prealloc — the emitted constants have to spell
 // the same ladder the runtime helper documents and tests.
 // fastAllocMax is go1.27's size-specialized-malloc cutoff; inert on go1.26.
 // INCLUSIVE — verified against master: the tables are [specializedMallocMax+1]
-// and both gates admit exactly 80 (see scan.PreallocCap). So the tier divides
+// and both gates admit exactly 80 (see prealloc.Cap). So the tier divides
 // by 80, not 79; the earlier 79 dropped one element for every width dividing 80
 // and pushed a 40-byte element into the span tier (12 elements) where 2 fit the
 // fast one exactly.
@@ -2840,7 +2814,7 @@ const fastAllocMax = 80
 // computes it for ITS target rather than inheriting this host's: the value is
 // `goarch.PtrSize * goarch.PtrBits` = 8 × PtrSize² (512 on 64-bit, 128 on
 // 32-bit). Hardcoding 512 would over-budget a 32-bit target by 4×. See
-// scan.PreallocCap for what staying under it actually buys — the headline is
+// internal/prealloc for what staying under it actually buys — the headline is
 // "no malloc header", not the GC.
 const spanBudgetExpr = "(8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))"
 
@@ -2866,11 +2840,11 @@ func resetCapRegistry() {
 }
 
 // fieldLit returns the JSON name of f as a Go string literal — the `field`
-// argument embedded into decode.NewParseErr at every error-return site.
+// argument embedded into ggen.NewParseErr at every error-return site.
 func fieldLit(f FieldInfo) string { return strconv.Quote(f.JSONName) }
 
 // inlineSkipWS emits an inline whitespace-skipping loop that mutates posVar
-// directly, avoiding the scan.SkipSpace call overhead.
+// directly, avoiding the ggen.SkipSpace call overhead.
 func inlineSkipWS(b *bytes.Buffer, posVar string) {
 	// SIMD tier: consume one whitespace byte inline (compact JSON exits on
 	// one compare, a single separator space stays call-free), then hand a
@@ -2878,7 +2852,7 @@ func inlineSkipWS(b *bytes.Buffer, posVar string) {
 	// a time instead of byte-stepping.
 	if simdSuffix != "" {
 		fmt.Fprintf(b,
-			"if %[1]s < len(data) && data[%[1]s] <= ' ' && (data[%[1]s] == ' ' || data[%[1]s] == '\\t' || data[%[1]s] == '\\n' || data[%[1]s] == '\\r') {\n%[1]s++\nif %[1]s < len(data) && data[%[1]s] <= ' ' { %[1]s = scan.SkipSpace%[2]s(data, %[1]s) }\n}\n",
+			"if %[1]s < len(data) && data[%[1]s] <= ' ' && (data[%[1]s] == ' ' || data[%[1]s] == '\\t' || data[%[1]s] == '\\n' || data[%[1]s] == '\\r') {\n%[1]s++\nif %[1]s < len(data) && data[%[1]s] <= ' ' { %[1]s = ggen.SkipSpace%[2]s(data, %[1]s) }\n}\n",
 			posVar, simdSuffix)
 		return
 	}
@@ -2940,7 +2914,7 @@ func zeroLit(elemType string, kind TypeKind) string {
 
 // inlineScanInt64 emits an inline signed-int scanner that assigns into dst
 // (via castFn if non-empty) and advances posVar, with overflow detection.
-// field is the JSON-path expression for decode.NewParseErr (a quoted literal,
+// field is the JSON-path expression for ggen.NewParseErr (a quoted literal,
 // `""` for boundaries, or a runtime expr like `key` for unknown-key handlers).
 // narrowIntBounds returns the (min, max) literal bounds a fixed-width integer
 // type narrower than 64-bit imposes — the types a bare Go conversion silently
@@ -3037,7 +3011,7 @@ func inlineScanInt64(b *bytes.Buffer, posVar, dst, castFn, field string) {
 	assign := ""
 	switch {
 	case castFn != "":
-		errRet := fmt.Sprintf("return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrNumberOverflow)", posVar, field)
+		errRet := fmt.Sprintf("return result, %[1]s, ggen.NewParseErr(%[2]s, %[1]s, ggen.ErrNumberOverflow)", posVar, field)
 		assign = narrowIntGuard("n", castFn, errRet) + dst + " = " + castFn + "(n)"
 	case dst != "n":
 		assign = dst + " = n"
@@ -3051,10 +3025,10 @@ func inlineScanInt64(b *bytes.Buffer, posVar, dst, castFn, field string) {
 func inlineScanInt64Stmt(b *bytes.Buffer, posVar, field, stmt string) {
 	fmt.Fprintf(b, `neg := false
 if %[1]s < len(data) && data[%[1]s] == '-' { neg = true; %[1]s++ }
-if %[1]s >= len(data) || data[%[1]s] < '0' || data[%[1]s] > '9' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrBadNumber) }
-if data[%[1]s] == '0' && %[1]s+1 < len(data) && data[%[1]s+1] >= '0' && data[%[1]s+1] <= '9' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrBadNumber) }
+if %[1]s >= len(data) || data[%[1]s] < '0' || data[%[1]s] > '9' { return result, %[1]s, ggen.NewParseErr(%[2]s, %[1]s, ggen.ErrBadNumber) }
+if data[%[1]s] == '0' && %[1]s+1 < len(data) && data[%[1]s+1] >= '0' && data[%[1]s+1] <= '9' { return result, %[1]s, ggen.NewParseErr(%[2]s, %[1]s, ggen.ErrBadNumber) }
 limit := uint64(math.MaxInt64)
-if neg { limit = scan.SignedNeg }
+if neg { limit = ggen.SignedNeg }
 var u uint64
 de := %[1]s + 18
 if de > len(data) { de = len(data) }
@@ -3065,18 +3039,18 @@ for %[1]s < de && data[%[1]s] >= '0' && data[%[1]s] <= '9' {
 for %[1]s < len(data) && data[%[1]s] >= '0' && data[%[1]s] <= '9' {
 	d := uint64(data[%[1]s]-'0')
 	if u > limit/10 || (u == limit/10 && d > limit%%10) {
-		return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrNumberOverflow)
+		return result, %[1]s, ggen.NewParseErr(%[2]s, %[1]s, ggen.ErrNumberOverflow)
 	}
 	u = u*10 + d
 	%[1]s++
 }
 if %[1]s < len(data) {
 	c := data[%[1]s]
-	if c == '.' || c == 'e' || c == 'E' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrBadNumber) }
+	if c == '.' || c == 'e' || c == 'E' { return result, %[1]s, ggen.NewParseErr(%[2]s, %[1]s, ggen.ErrBadNumber) }
 }
 var n int64
 if neg {
-	if u == scan.SignedNeg { n = math.MinInt64 } else { n = -int64(u) }
+	if u == ggen.SignedNeg { n = math.MinInt64 } else { n = -int64(u) }
 } else {
 	n = int64(u)
 }
@@ -3089,7 +3063,7 @@ func inlineScanUint64(b *bytes.Buffer, posVar, dst, castFn, field string) {
 	assign := ""
 	switch {
 	case castFn != "":
-		errRet := fmt.Sprintf("return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrNumberOverflow)", posVar, field)
+		errRet := fmt.Sprintf("return result, %[1]s, ggen.NewParseErr(%[2]s, %[1]s, ggen.ErrNumberOverflow)", posVar, field)
 		assign = narrowIntGuard("n", castFn, errRet) + dst + " = " + castFn + "(n)"
 	case dst != "n":
 		assign = dst + " = n"
@@ -3101,8 +3075,8 @@ func inlineScanUint64(b *bytes.Buffer, posVar, dst, castFn, field string) {
 // the parsed value lands in `n` (uint64) before `stmt` runs. Brace-less —
 // see inlineScanInt64Stmt.
 func inlineScanUint64Stmt(b *bytes.Buffer, posVar, field, stmt string) {
-	fmt.Fprintf(b, `if %[1]s >= len(data) || data[%[1]s] < '0' || data[%[1]s] > '9' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrBadNumber) }
-if data[%[1]s] == '0' && %[1]s+1 < len(data) && data[%[1]s+1] >= '0' && data[%[1]s+1] <= '9' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrBadNumber) }
+	fmt.Fprintf(b, `if %[1]s >= len(data) || data[%[1]s] < '0' || data[%[1]s] > '9' { return result, %[1]s, ggen.NewParseErr(%[2]s, %[1]s, ggen.ErrBadNumber) }
+if data[%[1]s] == '0' && %[1]s+1 < len(data) && data[%[1]s+1] >= '0' && data[%[1]s+1] <= '9' { return result, %[1]s, ggen.NewParseErr(%[2]s, %[1]s, ggen.ErrBadNumber) }
 var n uint64
 de := %[1]s + 19
 if de > len(data) { de = len(data) }
@@ -3112,15 +3086,15 @@ for %[1]s < de && data[%[1]s] >= '0' && data[%[1]s] <= '9' {
 }
 for %[1]s < len(data) && data[%[1]s] >= '0' && data[%[1]s] <= '9' {
 	d := uint64(data[%[1]s]-'0')
-	if n > scan.Uint64Limit/10 || (n == scan.Uint64Limit/10 && d > scan.Uint64Limit%%10) {
-		return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrNumberOverflow)
+	if n > ggen.Uint64Limit/10 || (n == ggen.Uint64Limit/10 && d > ggen.Uint64Limit%%10) {
+		return result, %[1]s, ggen.NewParseErr(%[2]s, %[1]s, ggen.ErrNumberOverflow)
 	}
 	n = n*10 + d
 	%[1]s++
 }
 if %[1]s < len(data) {
 	c := data[%[1]s]
-	if c == '.' || c == 'e' || c == 'E' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrBadNumber) }
+	if c == '.' || c == 'e' || c == 'E' { return result, %[1]s, ggen.NewParseErr(%[2]s, %[1]s, ggen.ErrBadNumber) }
 }
 %[3]s
 `, posVar, field, stmt)
@@ -3129,10 +3103,10 @@ if %[1]s < len(data) {
 // inlineScanString emits a string reader that assigns into dst and advances
 // posOut past the closing quote. The hot path aliases via unsafe.String (or
 // copies via string(...) when cp is set — the -copy mode, so the result no
-// longer references data); escapes fall back to scan.String (already an owned
+// longer references data); escapes fall back to ggen.String (already an owned
 // copy). The loop also stops on any control byte (<0x20), which RFC 8259 /
 // jsonv2 reject, and on any non-ASCII byte (>=0x80) — the inline fast paths
-// alias without validating, so non-ASCII spans hand off to scan.String*, which
+// alias without validating, so non-ASCII spans hand off to ggen.String*, which
 // UTF-8-validates (ErrInvalidUTF8, jsonv2 parity). Pure-ASCII short strings —
 // the dominant population — stay inline. Brace-less: `ke` lands in the caller's scope (renderMap's
 // value scan uses inlineScanStringVar to avoid colliding with the key scan's
@@ -3141,7 +3115,7 @@ if %[1]s < len(data) {
 // netip, big*) stay aliasing regardless — their conversion owns its output.
 // scalarStringWindow bounds the scalar-tier inline string byte-scan: a span
 // that runs past this many bytes (or hits an escape/ctrl) hands off to
-// scan.String's SIMD IndexByte locate instead of walking the whole body one
+// ggen.String's SIMD IndexByte locate instead of walking the whole body one
 // byte at a time. Sized so keys and short values stay inline while long
 // strings (bios, URLs, descriptions) take the vectorized path.
 const scalarStringWindow = 32
@@ -3207,30 +3181,30 @@ func inlineScanStringWin(b *bytes.Buffer, posIn, dst, posOut, field, ke string, 
 	// same op count as the old Min-Equal ctrl term alone). Quote hit → inline
 	// alias/copy; anything else (escape, ctrl, non-ASCII needing UTF-8
 	// validation, span ≥ lane, string near the payload end where a full-lane
-	// load would overread) falls through to the fused scan.StringAVX* call, which
+	// load would overread) falls through to the fused ggen.StringAVX* call, which
 	// restarts at posIn — error identity byte-identical. Full-lane loads
 	// only: Load*Part is a real CALL, not an intrinsic. Broadcasts are
 	// emitted per site; gc CSEs them across sites and hoists them out of
 	// loops. In cp mode the happy path copies inline (string(data[…])); the
 	// escape/long-span fall calls the SAME aliasing tier func and detaches via
-	// scan.Detach — one clone only when the result aliases data (a stringSlow
+	// ggen.Detach — one clone only when the result aliases data (a stringSlow
 	// escape result is already owned, so Detach skips the clone, killing the
 	// escape double-copy). Reuses the tier StringAVX* directly — no per-tier
 	// StringCopy variant.
-	if scanStringFn != "scan.String" {
+	if scanStringFn != "ggen.String" {
 		lane, vecT, tzFn := 32, "Uint8x32", "TrailingZeros32"
-		if scanStringFn == "scan.StringAVX" {
+		if scanStringFn == "ggen.StringAVX" {
 			lane, vecT, tzFn = 16, "Uint8x16", "TrailingZeros16"
 		}
 		hot := "unsafe.String(unsafe.SliceData(data[%[1]s+1:]), %[5]s-%[1]s-1)"
 		fall := `%[3]s, %[4]s, err = ` + scanStringFn + `(data, %[1]s, ` + vLit + `)
-	if err != nil { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, err) }`
+	if err != nil { return result, %[1]s, ggen.NewParseErr(%[2]s, %[1]s, err) }`
 		if cp {
 			hot = "string(data[%[1]s+1:%[5]s])"
-			fall += "\n\t" + `%[3]s = scan.Detach(%[3]s, data)`
+			fall += "\n\t" + `%[3]s = ggen.Detach(%[3]s, data)`
 		}
 		if window > 0 {
-			fmt.Fprintf(b, `if %[1]s >= len(data) || data[%[1]s] != '"' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrExpectString) }
+			fmt.Fprintf(b, `if %[1]s >= len(data) || data[%[1]s] != '"' { return result, %[1]s, ggen.NewParseErr(%[2]s, %[1]s, ggen.ErrExpectString) }
 %[5]s := %[1]s + 1
 %[5]sw := %[5]s + %[6]d
 if %[5]sw > len(data) { %[5]sw = len(data) }
@@ -3251,7 +3225,7 @@ if %[5]s < len(data) && data[%[5]s] == '"' {
 			// inline — no validation to route to).
 			classify = `%[5]sM := %[5]sV.Equal(archsimd.Broadcast%[7]s('"')).Or(%[5]sV.Equal(archsimd.Broadcast%[7]s('\\'))).Or(%[5]sV.Min(archsimd.Broadcast%[7]s(0x1F)).Equal(%[5]sV)).ToBits()`
 		}
-		fmt.Fprintf(b, `if %[1]s >= len(data) || data[%[1]s] != '"' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrExpectString) }
+		fmt.Fprintf(b, `if %[1]s >= len(data) || data[%[1]s] != '"' { return result, %[1]s, ggen.NewParseErr(%[2]s, %[1]s, ggen.ErrExpectString) }
 %[5]s := %[1]s + 1
 if %[5]s+%[6]d <= len(data) {
 	%[5]sV := archsimd.Load%[7]s(data[%[5]s:])
@@ -3273,8 +3247,8 @@ if %[5]s < len(data) && data[%[5]s] == '"' {
 	// matched against known field names, so a window bound is pure per-key setup
 	// with no long span to hand off — it regressed tiny structs). window >= 0 =
 	// bound the inline byte loop and hand any string that runs past it (or hits
-	// an escape/ctrl byte) to scan.String, whose bytes.IndexByte locate is
-	// SIMD/AVX2 and crushes the per-byte loop on long spans (bios, URLs). scan.String
+	// an escape/ctrl byte) to ggen.String, whose bytes.IndexByte locate is
+	// SIMD/AVX2 and crushes the per-byte loop on long spans (bios, URLs). ggen.String
 	// is the error-identity source of truth (ErrUnterminated/ErrBadString); the
 	// bounded loop only fast-paths a clean quote-terminated span. Same shape as
 	// the SIMD window>0 template above.
@@ -3283,33 +3257,33 @@ if %[5]s < len(data) && data[%[5]s] == '"' {
 		hot = "string(data[%[1]s+1:%[5]s])"
 	}
 	// Everything that is not a clean closing quote (run off the end, ctrl
-	// byte, escape, high byte) falls to scan.String — the error-identity AND
+	// byte, escape, high byte) falls to ggen.String — the error-identity AND
 	// error-position source of truth. Early-bailing here reported the opening
 	// quote's offset and diverged from the SIMD tier, which always falls.
 	if window < 0 {
-		fmt.Fprintf(b, `if %[1]s >= len(data) || data[%[1]s] != '"' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrExpectString) }
+		fmt.Fprintf(b, `if %[1]s >= len(data) || data[%[1]s] != '"' { return result, %[1]s, ggen.NewParseErr(%[2]s, %[1]s, ggen.ErrExpectString) }
 %[5]s := %[1]s + 1
 for %[5]s < len(data) && data[%[5]s] != '"' && data[%[5]s] != '\\' && data[%[5]s] >= 0x20`+win80+` { %[5]s++ }
 if %[5]s < len(data) && data[%[5]s] == '"' {
 	%[3]s = `+hot+`
 	%[4]s = %[5]s + 1
 } else {
-	%[3]s, %[4]s, err = scan.String(data, %[1]s, `+vLit+`)
-	if err != nil { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, err) }
+	%[3]s, %[4]s, err = ggen.String(data, %[1]s, `+vLit+`)
+	if err != nil { return result, %[1]s, ggen.NewParseErr(%[2]s, %[1]s, err) }
 }
 `, posIn, field, dst, posOut, ke)
 		return
 	}
-	fall := `%[3]s, %[4]s, err = scan.String(data, %[1]s, ` + vLit + `)
-	if err != nil { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, err) }`
+	fall := `%[3]s, %[4]s, err = ggen.String(data, %[1]s, ` + vLit + `)
+	if err != nil { return result, %[1]s, ggen.NewParseErr(%[2]s, %[1]s, err) }`
 	if cp {
-		fall += "\n\t" + `%[3]s = scan.Detach(%[3]s, data)`
+		fall += "\n\t" + `%[3]s = ggen.Detach(%[3]s, data)`
 	}
 	win := window
 	if win == 0 {
 		win = scalarStringWindow
 	}
-	fmt.Fprintf(b, `if %[1]s >= len(data) || data[%[1]s] != '"' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrExpectString) }
+	fmt.Fprintf(b, `if %[1]s >= len(data) || data[%[1]s] != '"' { return result, %[1]s, ggen.NewParseErr(%[2]s, %[1]s, ggen.ErrExpectString) }
 %[5]s := %[1]s + 1
 %[5]sw := %[5]s + %[6]d
 if %[5]sw > len(data) { %[5]sw = len(data) }
@@ -3375,7 +3349,7 @@ func emitReceiverReset(b *bytes.Buffer, s StructInfo) {
 // zero-alloc on the happy path; whitespace skipping inlined at each hot site.
 func renderDecode(bOut *bytes.Buffer, s StructInfo) {
 	// Rendered into a temp buffer so the SIMD tier can rewrite the
-	// scan.SkipValue callee post-emit (unique token, no collision risk) —
+	// ggen.SkipValue callee post-emit (unique token, no collision risk) —
 	// the tier skip tree vector-skips whitespace runs + fuses skipString.
 	var scratch bytes.Buffer
 	b := bOut
@@ -3384,20 +3358,20 @@ func renderDecode(bOut *bytes.Buffer, s StructInfo) {
 	}
 	defer func() {
 		if simdSuffix != "" {
-			bOut.WriteString(strings.ReplaceAll(scratch.String(), "scan.SkipValue(", "scan.SkipValue"+simdSuffix+"("))
+			bOut.WriteString(strings.ReplaceAll(scratch.String(), "ggen.SkipValue(", "ggen.SkipValue"+simdSuffix+"("))
 		}
 	}()
 	// Named results home the values in the caller's return slot, so every
 	// `return result, …` is register-set + RET with no struct copy; the
 	// `result = recv` prologue seeds the merge source.
 	if isCyclic(s.Name) {
-		// Self-referential type: bound payload nesting at scan.MaxDepth via a
+		// Self-referential type: bound payload nesting at maxDepth (10000) via a
 		// depth-threaded core; the public method is a thin seed-0 shim so the
 		// surface (and acyclic callers) stay unchanged.
 		fmt.Fprintf(b, "func (recv %s) DecodeFrom(data []byte) (%s, int, error) {\n\treturn recv.decodeFromDepth(data, 0)\n}\n\n", s.Name, s.Name)
 		fmt.Fprintf(b, "func (recv %s) decodeFromDepth(data []byte, _depth int) (result %s, i int, err error) {\n", s.Name, s.Name)
 		b.WriteString("result = recv\n")
-		b.WriteString("if _depth > scan.MaxDepth {\n\treturn result, 0, scan.ErrMaxDepth\n}\n")
+		b.WriteString("if _depth > 10000 { // runtime maxDepth\n\treturn result, 0, ggen.ErrMaxDepth\n}\n")
 		renderDecodeBody(b, s)
 		return
 	}
@@ -3429,7 +3403,7 @@ func renderDecodeBody(b *bytes.Buffer, s StructInfo) {
 	}
 	emitReceiverReset(b, s)
 	if s.MultiErr {
-		b.WriteString("var errs validation.Errors\n")
+		b.WriteString("var errs ggen.Errors\n")
 	}
 
 	// Per-field "seen" tracking: required-field post-loop checks + duplicate-key
@@ -3449,7 +3423,7 @@ func renderDecodeBody(b *bytes.Buffer, s StructInfo) {
 	}
 
 	inlineSkipWS(b, "i")
-	b.WriteString(`if i >= len(data) || data[i] != '{' { return result, i, decode.NewParseErr("", i, scan.ErrBadObject) }
+	b.WriteString(`if i >= len(data) || data[i] != '{' { return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject) }
 i++
 `)
 	inlineSkipWS(b, "i")
@@ -3462,7 +3436,7 @@ i++
 	// (~load+3 compares+movemask+tzcnt) loses to a ≤5-iteration predictable
 	// scalar loop, so key scans get a bounded scalar window sized to the
 	// longest declared key instead (unknown longer keys fall to the tier call).
-	if maxKey := maxJSONNameLen(s); scanStringFn != "scan.String" && maxKey <= 5 {
+	if maxKey := maxJSONNameLen(s); scanStringFn != "ggen.String" && maxKey <= 5 {
 		inlineScanStringWin(b, "i", "key", "i", `""`, "ke", false, !s.AllowInvalidUTF8, maxKey+1)
 	} else {
 		// Dispatch keys are short (matched against known field names): scan
@@ -3471,20 +3445,20 @@ i++
 		inlineScanStringWin(b, "i", "key", "i", `""`, "ke", false, !s.AllowInvalidUTF8, -1)
 	}
 	inlineSkipWS(b, "i")
-	b.WriteString(`if i >= len(data) || data[i] != ':' { return result, i, decode.NewParseErr("", i, scan.ErrBadObject) }
+	b.WriteString(`if i >= len(data) || data[i] != ':' { return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject) }
 i++
 `)
 	inlineSkipWS(b, "i")
 	renderDispatch(b, s)
 	inlineSkipWS(b, "i")
-	b.WriteString(`if i >= len(data) { return result, i, decode.NewParseErr("", i, scan.ErrBadObject) }
+	b.WriteString(`if i >= len(data) { return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject) }
 if data[i] == ',' { i++; `)
 	inlineSkipWS(b, "i")
 	b.WriteString("continue }\nif data[i] == '}' {\ni++\n")
 	renderPostLoop(b, s)
 	b.WriteString(`return result, i, nil
 }
-return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 }`)
 	b.WriteString("}\n\n")
 }
@@ -3547,7 +3521,7 @@ func renderDispatch(b *bytes.Buffer, s StructInfo) {
 		chk := bytesErrCheck(fieldLit(f), "i")
 		if s.AllowDups {
 			fmt.Fprintf(b, `if %s {
-	i, err = scan.SkipValue(data, i)
+	i, err = ggen.SkipValue(data, i)
 	%s} else {
 	%s`, seen, chk, set)
 			renderField(b, f, "result."+f.GoName, "i")
@@ -3556,15 +3530,15 @@ func renderDispatch(b *bytes.Buffer, s StructInfo) {
 		}
 		if s.MultiErr {
 			fmt.Fprintf(b, `if %[1]s {
-	errs = append(errs, &validation.DuplicateKeyError{Pos: i, Path: []string{%[2]q}})
-	i, err = scan.SkipValue(data, i)
+	errs = append(errs, &ggen.DuplicateKeyError{Pos: i, Path: []string{%[2]q}})
+	i, err = ggen.SkipValue(data, i)
 	%[3]s} else {
 	%[4]s`, seen, f.JSONName, chk, set)
 			renderField(b, f, "result."+f.GoName, "i")
 			b.WriteString("}\n")
 			return
 		}
-		fmt.Fprintf(b, `if %s { return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{%q}} }
+		fmt.Fprintf(b, `if %s { return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{%q}} }
 %s`, seen, f.JSONName, set)
 		renderField(b, f, "result."+f.GoName, "i")
 	}
@@ -3627,7 +3601,7 @@ func renderMap(b *bytes.Buffer, f FieldInfo, ref, posVar string, topLevel bool) 
 	} else {
 		b.WriteString("} else {\n")
 	}
-	fmt.Fprintf(b, `if %[1]s >= len(data) || data[%[1]s] != '{' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrBadObject) }
+	fmt.Fprintf(b, `if %[1]s >= len(data) || data[%[1]s] != '{' { return result, %[1]s, ggen.NewParseErr(%[2]s, %[1]s, ggen.ErrBadObject) }
 	%[1]s++
 `, posVar, field)
 	inlineSkipWS(b, posVar)
@@ -3646,7 +3620,7 @@ func renderMap(b *bytes.Buffer, f FieldInfo, ref, posVar string, topLevel bool) 
 	inlineScanString(b, posVar, "mk", posVar, field, f.Copy, !f.AllowInvalidUTF8)
 	keyValidateAndMod(b, f, "mk")
 	inlineSkipWS(b, posVar)
-	fmt.Fprintf(b, `		if %[1]s >= len(data) || data[%[1]s] != ':' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrBadObject) }
+	fmt.Fprintf(b, `		if %[1]s >= len(data) || data[%[1]s] != ':' { return result, %[1]s, ggen.NewParseErr(%[2]s, %[1]s, ggen.ErrBadObject) }
 		%[1]s++
 `, posVar, field)
 	inlineSkipWS(b, posVar)
@@ -3667,7 +3641,7 @@ func renderMap(b *bytes.Buffer, f FieldInfo, ref, posVar string, topLevel bool) 
 		break
 	}
 	}
-	if %[1]s >= len(data) || data[%[1]s] != '}' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrBadObject) }
+	if %[1]s >= len(data) || data[%[1]s] != '}' { return result, %[1]s, ggen.NewParseErr(%[2]s, %[1]s, ggen.ErrBadObject) }
 	%[1]s++
 `, posVar, field)
 		if topLevel {
@@ -3693,8 +3667,8 @@ func renderMap(b *bytes.Buffer, f FieldInfo, ref, posVar string, topLevel bool) 
 		// Straight into the slot; end-var `ve` since the key scan owns `ke`.
 		inlineScanStringVar(b, posVar, mapTarget, posVar, field, "ve", f.Copy, !f.AllowInvalidUTF8)
 	case KindBool:
-		fmt.Fprintf(b, `%[2]s, %[1]s, err = scan.Bool(data, %[1]s)
-if err != nil { return result, %[1]s, decode.NewParseErr(%[3]s, %[1]s, err) }
+		fmt.Fprintf(b, `%[2]s, %[1]s, err = ggen.Bool(data, %[1]s)
+if err != nil { return result, %[1]s, ggen.NewParseErr(%[3]s, %[1]s, err) }
 `, posVar, mapTarget, field)
 	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
 		castFn := ""
@@ -3710,16 +3684,16 @@ if err != nil { return result, %[1]s, decode.NewParseErr(%[3]s, %[1]s, err) }
 		inlineScanUint64(b, posVar, mapTarget, castFn, field)
 	case KindFloat32, KindFloat64:
 		if f.ElemKind == KindFloat64 {
-			fmt.Fprintf(b, `%[2]s, %[1]s, err = scan.Float64(data, %[1]s)
-if err != nil { return result, %[1]s, decode.NewParseErr(%[3]s, %[1]s, err) }
+			fmt.Fprintf(b, `%[2]s, %[1]s, err = ggen.Float64(data, %[1]s)
+if err != nil { return result, %[1]s, ggen.NewParseErr(%[3]s, %[1]s, err) }
 `, posVar, mapTarget, field)
 		} else {
 			fmt.Fprintf(b, `var fv float64
-fv, %[1]s, err = scan.Float64(data, %[1]s)
-if err != nil { return result, %[1]s, decode.NewParseErr(%[3]s, %[1]s, err) }
+fv, %[1]s, err = ggen.Float64(data, %[1]s)
+if err != nil { return result, %[1]s, ggen.NewParseErr(%[3]s, %[1]s, err) }
 %[4]s%[2]s = float32(fv)
 `, posVar, mapTarget, field,
-				narrowFloatGuard("fv", "float32", fmt.Sprintf("return result, %s, decode.NewParseErr(%s, %s, scan.ErrNumberOverflow)", posVar, field, posVar)))
+				narrowFloatGuard("fv", "float32", fmt.Sprintf("return result, %s, ggen.NewParseErr(%s, %s, ggen.ErrNumberOverflow)", posVar, field, posVar)))
 		}
 	case KindStruct:
 		if isGenerated(f.ElemType) {
@@ -3765,7 +3739,7 @@ mv, _n, err = mv.`+decodeCallFor(f.ElemType)+`
 		break
 	}
 	}
-	if %[1]s >= len(data) || data[%[1]s] != '}' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrBadObject) }
+	if %[1]s >= len(data) || data[%[1]s] != '}' { return result, %[1]s, ggen.NewParseErr(%[2]s, %[1]s, ggen.ErrBadObject) }
 	%[1]s++
 `, posVar, field)
 	if topLevel {
@@ -3810,15 +3784,15 @@ func renderBytesValue(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	if f.Format == "array" {
 		// `u` not `v`: a pointer-leaf caller declares `var v []byte` here.
 		inlineSkipWS(b, posVar)
-		fmt.Fprintf(b, `if %[1]s >= len(data) || data[%[1]s] != '[' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrBadArray) }
+		fmt.Fprintf(b, `if %[1]s >= len(data) || data[%[1]s] != '[' { return result, %[1]s, ggen.NewParseErr(%[2]s, %[1]s, ggen.ErrBadArray) }
 %[1]s++
 `, posVar, field)
 		inlineSkipWS(b, posVar)
 		fmt.Fprintf(b, `var u uint64
 for %[1]s < len(data) && data[%[1]s] != ']' {
-	u, %[1]s, err = scan.Uint64(data, %[1]s)
-	if err != nil { return result, %[1]s, decode.NewParseErr(%[3]s, %[1]s, err) }
-	if u > 255 { return result, %[1]s, decode.NewParseErr(%[3]s, %[1]s, scan.ErrNumberOverflow) }
+	u, %[1]s, err = ggen.Uint64(data, %[1]s)
+	if err != nil { return result, %[1]s, ggen.NewParseErr(%[3]s, %[1]s, err) }
+	if u > 255 { return result, %[1]s, ggen.NewParseErr(%[3]s, %[1]s, ggen.ErrNumberOverflow) }
 	%[2]s = append(%[2]s, byte(u))
 `, posVar, ref, field)
 		inlineSkipWS(b, posVar)
@@ -3828,7 +3802,7 @@ for %[1]s < len(data) && data[%[1]s] != ']' {
 		fmt.Fprintf(b, ` continue }
 	break
 }
-if %[1]s >= len(data) || data[%[1]s] != ']' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrBadArray) }
+if %[1]s >= len(data) || data[%[1]s] != ']' { return result, %[1]s, ggen.NewParseErr(%[2]s, %[1]s, ggen.ErrBadArray) }
 %[1]s++
 `, posVar, field)
 		emitEmptyBytesNonNil(b, ref)
@@ -3865,7 +3839,7 @@ if %[1]s >= len(data) || data[%[1]s] != ']' { return result, %[1]s, decode.NewPa
 		fmt.Fprintf(b, `var %[1]s [%[2]d]byte
 var %[1]sd []byte
 %[1]sd, err = %[3]s(%[1]s[:0], unsafe.Slice(unsafe.StringData(s), len(s)))
-if err != nil { return result, %[4]s, decode.NewParseErr(%[5]s, %[4]s, err) }
+if err != nil { return result, %[4]s, ggen.NewParseErr(%[5]s, %[4]s, err) }
 if len(%[1]sd) != %[2]d { return result, %[4]s, %[6]s }
 copy(%[7]s[:], %[1]sd)
 `, tmp, n, dec, posVar, field,
@@ -3878,7 +3852,7 @@ copy(%[7]s[:], %[1]sd)
 		inlineScanString(b, posVar, "s", posVar, field, false, !f.AllowInvalidUTF8)
 		fmt.Fprintf(b, `if cap(%[1]s) < hex.DecodedLen(len(s)) { %[1]s = make([]byte, 0, hex.DecodedLen(len(s))) }
 %[1]s, err = hex.AppendDecode(%[1]s, unsafe.Slice(unsafe.StringData(s), len(s)))
-if err != nil { return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, err) }
+if err != nil { return result, %[2]s, ggen.NewParseErr(%[3]s, %[2]s, err) }
 `, ref, posVar, field)
 		emitEmptyBytesNonNil(b, ref)
 		return
@@ -3887,7 +3861,7 @@ if err != nil { return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, err) }
 	inlineScanString(b, posVar, "s", posVar, field, false, !f.AllowInvalidUTF8)
 	fmt.Fprintf(b, `if cap(%[1]s) < %[2]s(len(s)) { %[1]s = make([]byte, 0, %[2]s(len(s))) }
 %[1]s, err = %[3]s.AppendDecode(%[1]s, unsafe.Slice(unsafe.StringData(s), len(s)))
-if err != nil { return result, %[4]s, decode.NewParseErr(%[5]s, %[4]s, err) }
+if err != nil { return result, %[4]s, ggen.NewParseErr(%[5]s, %[4]s, err) }
 `, ref, dlen, enc, posVar, field)
 	emitEmptyBytesNonNil(b, ref)
 }
@@ -3901,8 +3875,8 @@ func renderTime(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 		// (sec, nsec) for round-trip safety. Other unix* are integer-granular.
 		if numeric == "Unix" {
 			fmt.Fprintf(b, `var f float64
-f, %[1]s, err = scan.Float64(data, %[1]s)
-if err != nil { return result, %[1]s, decode.NewParseErr(%[3]s, %[1]s, err) }
+f, %[1]s, err = ggen.Float64(data, %[1]s)
+if err != nil { return result, %[1]s, ggen.NewParseErr(%[3]s, %[1]s, err) }
 sec := int64(f)
 nsec := int64((f - float64(sec)) * 1e9)
 %[2]s = time.Unix(sec, nsec)
@@ -3915,8 +3889,8 @@ nsec := int64((f - float64(sec)) * 1e9)
 			"UnixNano":  "time.Unix(0, n)",
 		}[numeric]
 		fmt.Fprintf(b, `var n int64
-n, %[1]s, err = scan.Int64(data, %[1]s)
-if err != nil { return result, %[1]s, decode.NewParseErr(%[4]s, %[1]s, err) }
+n, %[1]s, err = ggen.Int64(data, %[1]s)
+if err != nil { return result, %[1]s, ggen.NewParseErr(%[4]s, %[1]s, err) }
 %[2]s = %[3]s
 `, posVar, ref, ctor, field)
 		return
@@ -3924,7 +3898,7 @@ if err != nil { return result, %[1]s, decode.NewParseErr(%[4]s, %[1]s, err) }
 	b.WriteString("var s string\n")
 	inlineScanString(b, posVar, "s", posVar, field, false, !f.AllowInvalidUTF8)
 	fmt.Fprintf(b, `%[1]s, err = time.Parse(%[2]s, s)
-if err != nil { return result, %[3]s, decode.NewParseErr(%[4]s, %[3]s, err) }
+if err != nil { return result, %[3]s, ggen.NewParseErr(%[4]s, %[3]s, err) }
 `, ref, layout, posVar, field)
 }
 
@@ -3935,8 +3909,8 @@ func renderDuration(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	case "sec":
 		// `f` not `v`: a pointer-leaf caller declares `var v time.Duration` here.
 		fmt.Fprintf(b, `var f float64
-f, %[1]s, err = scan.Float64(data, %[1]s)
-if err != nil { return result, %[1]s, decode.NewParseErr(%[3]s, %[1]s, err) }
+f, %[1]s, err = ggen.Float64(data, %[1]s)
+if err != nil { return result, %[1]s, ggen.NewParseErr(%[3]s, %[1]s, err) }
 %[2]s = time.Duration(f * float64(time.Second))
 `, posVar, ref, field)
 		return
@@ -3947,8 +3921,8 @@ if err != nil { return result, %[1]s, decode.NewParseErr(%[3]s, %[1]s, err) }
 			"nano":  "time.Nanosecond",
 		}[f.Format]
 		fmt.Fprintf(b, `var n int64
-n, %[1]s, err = scan.Int64(data, %[1]s)
-if err != nil { return result, %[1]s, decode.NewParseErr(%[4]s, %[1]s, err) }
+n, %[1]s, err = ggen.Int64(data, %[1]s)
+if err != nil { return result, %[1]s, ggen.NewParseErr(%[4]s, %[1]s, err) }
 %[2]s = time.Duration(n) * %[3]s
 `, posVar, ref, unit, field)
 		return
@@ -3956,7 +3930,7 @@ if err != nil { return result, %[1]s, decode.NewParseErr(%[4]s, %[1]s, err) }
 	b.WriteString("var s string\n")
 	inlineScanString(b, posVar, "s", posVar, field, false, !f.AllowInvalidUTF8)
 	fmt.Fprintf(b, `%[1]s, err = time.ParseDuration(s)
-if err != nil { return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, err) }
+if err != nil { return result, %[2]s, ggen.NewParseErr(%[3]s, %[2]s, err) }
 `, ref, posVar, field)
 }
 
@@ -3966,7 +3940,7 @@ func renderNetIP(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	b.WriteString("var s string\n")
 	inlineScanString(b, posVar, "s", posVar, field, false, !f.AllowInvalidUTF8)
 	fmt.Fprintf(b, `%[1]s = net.ParseIP(s)
-if %[1]s == nil { return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, &net.ParseError{Type: "IP address", Text: s}) }
+if %[1]s == nil { return result, %[2]s, ggen.NewParseErr(%[3]s, %[2]s, &net.ParseError{Type: "IP address", Text: s}) }
 `, ref, posVar, field)
 }
 
@@ -3975,7 +3949,7 @@ func renderNetipAddr(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	b.WriteString("var s string\n")
 	inlineScanString(b, posVar, "s", posVar, field, false, !f.AllowInvalidUTF8)
 	fmt.Fprintf(b, `%[1]s, err = netip.ParseAddr(s)
-if err != nil { return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, err) }
+if err != nil { return result, %[2]s, ggen.NewParseErr(%[3]s, %[2]s, err) }
 `, ref, posVar, field)
 }
 
@@ -3984,7 +3958,7 @@ func renderNetipPrefix(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	b.WriteString("var s string\n")
 	inlineScanString(b, posVar, "s", posVar, field, false, !f.AllowInvalidUTF8)
 	fmt.Fprintf(b, `%[1]s, err = netip.ParsePrefix(s)
-if err != nil { return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, err) }
+if err != nil { return result, %[2]s, ggen.NewParseErr(%[3]s, %[2]s, err) }
 `, ref, posVar, field)
 }
 
@@ -4069,7 +4043,7 @@ func renderCrossPkgStructDecode(f FieldInfo, ref, posVar string) string {
 		case f.Iface.JSONUnmarshaler:
 			chk := bytesErrCheck(fieldLit(f), posVar)
 			return fmt.Sprintf(`start := %[1]s
-%[1]s, err = scan.SkipValue(data, start)
+%[1]s, err = ggen.SkipValue(data, start)
 %[3]serr = %[2]s.UnmarshalJSON(data[start:%[1]s])
 %[3]s`, posVar, ref, chk)
 
@@ -4083,14 +4057,14 @@ ts, %[1]s, err = `+scanStringFn+`(data, %[1]s, `+vArg(f)+`)
 		default:
 			chk := bytesErrCheck(fieldLit(f), posVar)
 			return fmt.Sprintf(`start := %[1]s
-%[1]s, err = scan.SkipValue(data, start)
+%[1]s, err = ggen.SkipValue(data, start)
 %[3]serr = json.Unmarshal(data[start:%[1]s], &%[2]s)
 %[3]s`, posVar, ref, chk)
 		}
 	}
 	chk := bytesErrCheck(fieldLit(f), posVar)
 	return fmt.Sprintf(`start := %[1]s
-%[1]s, err = scan.SkipValue(data, start)
+%[1]s, err = ggen.SkipValue(data, start)
 %[3]serr = json.Unmarshal(data[start:%[1]s], &%[2]s)
 %[3]s`, posVar, ref, chk)
 }
@@ -4113,7 +4087,7 @@ func renderCrossPkgStructAppend(f FieldInfo, ref string) string {
 			return fmt.Sprintf(`var %[1]s []byte
 %[1]s, err = %[2]s.MarshalJSON()
 if err != nil { return dst, err }
-if len(%[1]s) == 0 { return dst, encode.ErrEmptyMarshalJSON }
+if len(%[1]s) == 0 { return dst, ggen.ErrEmptyMarshalJSON }
 dst = append(dst, %[1]s...)
 `, tmp, ref)
 
@@ -4132,7 +4106,7 @@ dst = %[3]s(dst, %[1]s)
 %[1]s, err = %[2]s.MarshalText()
 if err != nil { return dst, err }
 dst = append(dst, '"')
-dst = %[3]s(dst, encode.BytesToString(%[1]s))
+dst = %[3]s(dst, ggen.BytesToString(%[1]s))
 `, tmp, ref, appendStrFn(f.HTMLEscape))
 
 		default:
@@ -4199,12 +4173,12 @@ func renderRawJSON(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 		// append over the existing backing (reused across decodes; nil → fresh).
 		span = "append(%[2]s[:0], data[start:%[1]s]...)"
 	}
-	check := "err = scan.CheckUTF8(data[start:%[1]s])\n%[3]s"
+	check := "err = ggen.CheckUTF8(data[start:%[1]s])\n%[3]s"
 	if f.AllowInvalidUTF8 {
 		check = ""
 	}
 	fmt.Fprintf(b, `start := %[1]s
-%[1]s, err = scan.SkipValue(data, start)
+%[1]s, err = ggen.SkipValue(data, start)
 %[3]s`+check+`%[2]s = `+span+`
 `, posVar, ref, chk)
 }
@@ -4217,7 +4191,7 @@ func renderURL(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	inlineScanString(b, posVar, "s", posVar, field, false, !f.AllowInvalidUTF8)
 	fmt.Fprintf(b, `var u *url.URL
 u, err = url.Parse(s)
-if err != nil { return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, err) }
+if err != nil { return result, %[2]s, ggen.NewParseErr(%[3]s, %[2]s, err) }
 %[1]s = *u
 `, ref, posVar, field)
 }
@@ -4228,10 +4202,10 @@ if err != nil { return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, err) }
 func renderBigInt(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	field := fieldLit(f)
 	fmt.Fprintf(b, `start := %[1]s
-%[1]s, err = scan.SkipValue(data, start)
-if err != nil { return result, %[1]s, decode.NewParseErr(%[3]s, %[1]s, err) }
+%[1]s, err = ggen.SkipValue(data, start)
+if err != nil { return result, %[1]s, ggen.NewParseErr(%[3]s, %[1]s, err) }
 if _, ok := (&%[2]s).SetString(unsafe.String(unsafe.SliceData(data[start:]), %[1]s-start), 10); !ok {
-	return result, %[1]s, decode.NewParseErr(%[3]s, %[1]s, scan.ErrBadNumber)
+	return result, %[1]s, ggen.NewParseErr(%[3]s, %[1]s, ggen.ErrBadNumber)
 }
 `, posVar, ref, field)
 }
@@ -4244,7 +4218,7 @@ func renderBigFloat(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	b.WriteString("var s string\n")
 	inlineScanString(b, posVar, "s", posVar, field, false, !f.AllowInvalidUTF8)
 	fmt.Fprintf(b, `if _, _, err := (&%[1]s).Parse(s, 10); err != nil {
-	return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, err)
+	return result, %[2]s, ggen.NewParseErr(%[3]s, %[2]s, err)
 }
 `, ref, posVar, field)
 }
@@ -4256,7 +4230,7 @@ func renderBigRat(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	b.WriteString("var s string\n")
 	inlineScanString(b, posVar, "s", posVar, field, false, !f.AllowInvalidUTF8)
 	fmt.Fprintf(b, `if _, ok := (&%[1]s).SetString(s); !ok {
-	return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, scan.ErrBadNumber)
+	return result, %[2]s, ggen.NewParseErr(%[3]s, %[2]s, ggen.ErrBadNumber)
 }
 `, ref, posVar, field)
 }
@@ -4316,8 +4290,8 @@ func renderSQLNull(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 		inlineScanString(&inner, posVar, "nv", posVar, field, f.Copy, !f.AllowInvalidUTF8)
 	case KindBool:
 		declType = "bool"
-		fmt.Fprintf(&inner, "nv, %[1]s, err = scan.Bool(data, %[1]s)\n", posVar)
-		fmt.Fprintf(&inner, "if err != nil { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, err) }\n", posVar, field)
+		fmt.Fprintf(&inner, "nv, %[1]s, err = ggen.Bool(data, %[1]s)\n", posVar)
+		fmt.Fprintf(&inner, "if err != nil { return result, %[1]s, ggen.NewParseErr(%[2]s, %[1]s, err) }\n", posVar, field)
 	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
 		cast := spec.Type
 		if spec.Type == "int64" {
@@ -4332,8 +4306,8 @@ func renderSQLNull(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 		inlineScanUint64(&inner, posVar, "nv", cast, field)
 	case KindFloat32, KindFloat64:
 		declType = "float64"
-		fmt.Fprintf(&inner, "nv, %[1]s, err = scan.Float64(data, %[1]s)\n", posVar)
-		fmt.Fprintf(&inner, "if err != nil { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, err) }\n", posVar, field)
+		fmt.Fprintf(&inner, "nv, %[1]s, err = ggen.Float64(data, %[1]s)\n", posVar)
+		fmt.Fprintf(&inner, "if err != nil { return result, %[1]s, ggen.NewParseErr(%[2]s, %[1]s, err) }\n", posVar, field)
 		if spec.Type != "float64" {
 			valExpr = "float32(nv)"
 		}
@@ -4374,13 +4348,13 @@ func sqlTypeName(goType string) string {
 	return goType
 }
 
-// renderAny decodes into a reflective any via scan.Any / scan.AnyNumber. Under
+// renderAny decodes into a reflective any via ggen.Any / ggen.AnyNumber. Under
 // -copy the Copy variants clone every nested string (values + object keys) so
 // the tree survives a later mutation of data.
 func renderAny(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
-	fn := "scan.Any"
+	fn := "ggen.Any"
 	if f.UseNumber {
-		fn = "scan.AnyNumber"
+		fn = "ggen.AnyNumber"
 	}
 	if f.Copy {
 		fn += "Copy"
@@ -4485,7 +4459,7 @@ func seenSet(s StructInfo, f FieldInfo) string {
 // inline catch-all map → absorb; s.IgnoreUnknown → SkipValue; else
 // UnknownKeyError. The bytes-path `key` aliases data and stays valid for the
 // whole function, so by default it embeds directly into the stored map key /
-// decode.NewParseErr (no clone). Under -copy every retained `key` is cloned
+// ggen.NewParseErr (no clone). Under -copy every retained `key` is cloned
 // (keyExpr) and inline-map string/any VALUES are copied too, so the absorbed
 // entries survive a later mutation of data — matching the stream path.
 func unknownKey(s StructInfo, posVar string) string {
@@ -4499,9 +4473,9 @@ func unknownKey(s StructInfo, posVar string) string {
 			inline.GoName, inline.GoName, inline.GoType)
 		switch inline.ElemKind {
 		case KindAny:
-			anyFn := "scan.Any"
+			anyFn := "ggen.Any"
 			if s.UseNumber {
-				anyFn = "scan.AnyNumber"
+				anyFn = "ggen.AnyNumber"
 			}
 			if s.Copy {
 				anyFn += "Copy"
@@ -4510,12 +4484,12 @@ func unknownKey(s StructInfo, posVar string) string {
 %[4]s`, inline.GoName, posVar, anyFn, chk, keyExpr)
 		case KindString:
 			if s.Copy {
-				// tier func + scan.Detach: reuse the tier locate, clone the value
+				// tier func + ggen.Detach: reuse the tier locate, clone the value
 				// only when it aliases data (an owned stringSlow escape result
 				// skips the clone — no double-copy). Key stays cloned (keyExpr).
 				return initMap + fmt.Sprintf(`var _sv string
 _sv, %[1]s, err = `+scanStringFn+`(data, %[1]s, `+vArg(inline)+`)
-%[3]sresult.%[2]s[%[4]s] = scan.Detach(_sv, data)
+%[3]sresult.%[2]s[%[4]s] = ggen.Detach(_sv, data)
 `, posVar, inline.GoName, chk, keyExpr)
 			}
 			return initMap + fmt.Sprintf(`result.%[2]s[key], %[1]s, err = `+scanStringFn+`(data, %[1]s, `+vArg(inline)+`)
@@ -4531,22 +4505,22 @@ _iv, _in, err = _iv.`+decodeCallFor(inline.ElemType)+`
 			}
 		}
 		return initMap + fmt.Sprintf(`_vstart := %[1]s
-%[1]s, err = scan.SkipValue(data, %[1]s)
+%[1]s, err = ggen.SkipValue(data, %[1]s)
 %[4]svar _iv %[2]s
-if err = json.Unmarshal(data[_vstart:%[1]s], &_iv); err != nil { return result, %[1]s, decode.NewParseErr(%[5]s, %[1]s, err) }
+if err = json.Unmarshal(data[_vstart:%[1]s], &_iv); err != nil { return result, %[1]s, ggen.NewParseErr(%[5]s, %[1]s, err) }
 result.%[3]s[%[5]s] = _iv
 `, posVar, inline.ElemType, inline.GoName, chk, keyExpr)
 	}
 	if s.IgnoreUnknown {
-		return fmt.Sprintf(`%[1]s, err = scan.SkipValue(data, %[1]s)
+		return fmt.Sprintf(`%[1]s, err = ggen.SkipValue(data, %[1]s)
 %[2]s`, posVar, chk)
 	}
 	if s.MultiErr {
-		return fmt.Sprintf(`errs = append(errs, &validation.UnknownKeyError{Pos: %[1]s, Path: []string{%[3]s}})
-%[1]s, err = scan.SkipValue(data, %[1]s)
+		return fmt.Sprintf(`errs = append(errs, &ggen.UnknownKeyError{Pos: %[1]s, Path: []string{%[3]s}})
+%[1]s, err = ggen.SkipValue(data, %[1]s)
 %[2]s`, posVar, chk, keyExpr)
 	}
-	return fmt.Sprintf("return result, %[1]s, &validation.UnknownKeyError{Pos: %[1]s, Path: []string{%[2]s}}\n", posVar, keyExpr)
+	return fmt.Sprintf("return result, %[1]s, &ggen.UnknownKeyError{Pos: %[1]s, Path: []string{%[2]s}}\n", posVar, keyExpr)
 }
 
 // renderPipe emits an ordered value-stage step list (mods and validators
@@ -4620,13 +4594,13 @@ func renderStringTag(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	// Only the KindString case retains sv (ref = sv); numeric `,string` parses
 	// it into an independent value, so the copy is needed for strings only.
 	inlineScanString(b, posVar, "sv", posVar, field, f.Copy && f.Kind == KindString, !f.AllowInvalidUTF8)
-	errCheck := fmt.Sprintf("if err != nil { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, err) }\n", posVar, field)
+	errCheck := fmt.Sprintf("if err != nil { return result, %[1]s, ggen.NewParseErr(%[2]s, %[1]s, err) }\n", posVar, field)
 	switch f.Kind {
 	case KindBool:
 		fmt.Fprintf(b, `switch sv {
 case "true": %[1]s = true
 case "false": %[1]s = false
-default: return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, scan.ErrBadBool)
+default: return result, %[2]s, ggen.NewParseErr(%[3]s, %[2]s, ggen.ErrBadBool)
 }
 `, ref, posVar, field)
 	case KindFloat32, KindFloat64:
@@ -4634,7 +4608,7 @@ default: return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, scan.ErrBadBool)
 		b.WriteString(errCheck)
 		if f.Kind == KindFloat32 {
 			b.WriteString(narrowFloatGuard("f", "float32",
-				fmt.Sprintf("return result, %s, decode.NewParseErr(%s, %s, scan.ErrNumberOverflow)", posVar, field, posVar)))
+				fmt.Sprintf("return result, %s, ggen.NewParseErr(%s, %s, ggen.ErrNumberOverflow)", posVar, field, posVar)))
 			fmt.Fprintf(b, "%s = float32(f)\n", ref)
 		} else {
 			fmt.Fprintf(b, "%s = f\n", ref)
@@ -4646,7 +4620,7 @@ default: return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, scan.ErrBadBool)
 			fmt.Fprintf(b, "%s = u\n", ref)
 		} else {
 			b.WriteString(narrowIntGuard("u", kindNarrowName(f.Kind),
-				fmt.Sprintf("return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrNumberOverflow)", posVar, field)))
+				fmt.Sprintf("return result, %[1]s, ggen.NewParseErr(%[2]s, %[1]s, ggen.ErrNumberOverflow)", posVar, field)))
 			fmt.Fprintf(b, "%s = %s(u)\n", ref, f.GoType)
 		}
 	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
@@ -4656,7 +4630,7 @@ default: return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, scan.ErrBadBool)
 			fmt.Fprintf(b, "%s = n\n", ref)
 		} else {
 			b.WriteString(narrowIntGuard("n", kindNarrowName(f.Kind),
-				fmt.Sprintf("return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrNumberOverflow)", posVar, field)))
+				fmt.Sprintf("return result, %[1]s, ggen.NewParseErr(%[2]s, %[1]s, ggen.ErrNumberOverflow)", posVar, field)))
 			fmt.Fprintf(b, "%s = %s(n)\n", ref, f.GoType)
 		}
 	}
@@ -4694,22 +4668,22 @@ func elemPtrField(f FieldInfo, jsonName string) FieldInfo {
 	et, _ := elemPtrType(f)
 	_, leafType := pointerDepth(et)
 	pf := FieldInfo{
-		GoType:      et,
-		Pointer:     true,
-		PointeeType: et[1:],
-		Kind:        resolveKind(leafType),
-		JSONName:    jsonName,
-		Format:      f.Format,
-		HTMLEscape:  f.HTMLEscape,
+		GoType:           et,
+		Pointer:          true,
+		PointeeType:      et[1:],
+		Kind:             resolveKind(leafType),
+		JSONName:         jsonName,
+		Format:           f.Format,
+		HTMLEscape:       f.HTMLEscape,
 		MultiErr:         f.MultiErr,
 		NoValidate:       f.NoValidate,
 		AllowDups:        f.AllowDups,
 		UseNumber:        f.UseNumber,
 		Copy:             f.Copy,
 		AllowInvalidUTF8: f.AllowInvalidUTF8,
-		Validation:  f.ElemValidation,
-		Mods:        f.ElemMods,
-		Iface:       f.ElemIface,
+		Validation:       f.ElemValidation,
+		Mods:             f.ElemMods,
+		Iface:            f.ElemIface,
 	}
 	// A container leaf needs its own Elem* populated — the parse layer only
 	// fills these for the outermost container.
@@ -4804,10 +4778,10 @@ func nullZeroApplies(f FieldInfo) bool {
 // sets ref to its Go zero on a match, then breaks (flat) or opens an else.
 func emitStreamNullZero(b *bytes.Buffer, ref, zero, field string, flat bool, sentinel string) {
 	rm := streamReadMore(field, "0", false, sentinel)
-	rmKi := strings.Replace(streamReadMore(field, "0", false, "scan.ErrBadLiteral"), "if s.Pos >=", "if s.Pos+ki >=", 1)
+	rmKi := strings.Replace(streamReadMore(field, "0", false, "ggen.ErrBadLiteral"), "if s.Pos >=", "if s.Pos+ki >=", 1)
 	fmt.Fprintf(b, `%[2]sif s.Bytes()[s.Pos] == 'n' {
 	for ki := 1; ki < 4; ki++ {
-		%[3]sif s.Bytes()[s.Pos+ki] != "null"[ki] { return result, decode.NewParseErr(%[4]s, s.Offset(), scan.ErrBadLiteral) }
+		%[3]sif s.Bytes()[s.Pos+ki] != "null"[ki] { return result, ggen.NewParseErr(%[4]s, s.Offset(), ggen.ErrBadLiteral) }
 	}
 	s.Pos += 4
 	%[1]s = %[5]s
@@ -4861,7 +4835,7 @@ func renderField(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	}
 	// Named primitive (`type B S; type S string`): scan the UNDERLYING into a
 	// temp and convert at the assign. Delegating to the alias's own DecodeFrom
-	// costs a `scan.String` call per field — it forfeits the inline window scan
+	// costs a `ggen.String` call per field — it forfeits the inline window scan
 	// (opt #47) — and an UNANNOTATED named type had no methods to call at all,
 	// so it fell through to SkipValue + encoding/json. The conversion itself is
 	// free: identical underlying type, so gc emits no instruction for it.
@@ -4946,7 +4920,7 @@ func renderField(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 			}
 			var cascade bytes.Buffer
 			// Guard the narrowing cast: an out-of-range leaf overflows, not wraps.
-			errRet := fmt.Sprintf("return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrNumberOverflow)", posVar, fieldLit(f))
+			errRet := fmt.Sprintf("return result, %[1]s, ggen.NewParseErr(%[2]s, %[1]s, ggen.ErrNumberOverflow)", posVar, fieldLit(f))
 			cascade.WriteString(narrowIntGuard("n", castFn, errRet))
 			if f.TargetNil {
 				fmt.Fprintf(&cascade, "%s = %s\n", ref, newChain(valExpr, depth))
@@ -4969,8 +4943,8 @@ func renderField(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 				emitPointerSeed(b, ref, depth, leaf.Kind)
 			}
 			renderField(b, leaf, "v", posVar)
-			b.WriteString(narrowIntGuard("v", castFn, fmt.Sprintf("return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrNumberOverflow)", posVar, fieldLit(f))))
-			b.WriteString(narrowFloatGuard("v", castFn, fmt.Sprintf("return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrNumberOverflow)", posVar, fieldLit(f))))
+			b.WriteString(narrowIntGuard("v", castFn, fmt.Sprintf("return result, %[1]s, ggen.NewParseErr(%[2]s, %[1]s, ggen.ErrNumberOverflow)", posVar, fieldLit(f))))
+			b.WriteString(narrowFloatGuard("v", castFn, fmt.Sprintf("return result, %[1]s, ggen.NewParseErr(%[2]s, %[1]s, ggen.ErrNumberOverflow)", posVar, fieldLit(f))))
 			if f.TargetNil {
 				// Target is a known-nil `var x *T` — straight new-chain assign.
 				fmt.Fprintf(b, "%s = %s\n", ref, newChain(valExpr, depth))
@@ -5020,8 +4994,8 @@ func renderField(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	case KindString:
 		inlineScanString(b, posVar, ref, posVar, field, f.Copy, !f.AllowInvalidUTF8)
 	case KindBool:
-		fmt.Fprintf(b, "%[1]s, %[2]s, err = scan.Bool(data, %[2]s)\n", ref, posVar)
-		fmt.Fprintf(b, "if err != nil { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, err) }\n", posVar, field)
+		fmt.Fprintf(b, "%[1]s, %[2]s, err = ggen.Bool(data, %[2]s)\n", ref, posVar)
+		fmt.Fprintf(b, "if err != nil { return result, %[1]s, ggen.NewParseErr(%[2]s, %[1]s, err) }\n", posVar, field)
 	case KindInt, KindInt8, KindInt16, KindInt32:
 		inlineScanInt64(b, posVar, ref, f.GoType, field)
 	case KindInt64:
@@ -5032,14 +5006,14 @@ func renderField(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 		inlineScanUint64(b, posVar, ref, "", field)
 	case KindFloat32:
 		fmt.Fprintf(b, `var fv float64
-fv, %[1]s, err = scan.Float64(data, %[1]s)
-if err != nil { return result, %[1]s, decode.NewParseErr(%[3]s, %[1]s, err) }
+fv, %[1]s, err = ggen.Float64(data, %[1]s)
+if err != nil { return result, %[1]s, ggen.NewParseErr(%[3]s, %[1]s, err) }
 %[4]s%[2]s = float32(fv)
 `, posVar, ref, field,
-			narrowFloatGuard("fv", "float32", fmt.Sprintf("return result, %s, decode.NewParseErr(%s, %s, scan.ErrNumberOverflow)", posVar, field, posVar)))
+			narrowFloatGuard("fv", "float32", fmt.Sprintf("return result, %s, ggen.NewParseErr(%s, %s, ggen.ErrNumberOverflow)", posVar, field, posVar)))
 	case KindFloat64:
-		fmt.Fprintf(b, `%[1]s, %[2]s, err = scan.Float64(data, %[2]s)
-if err != nil { return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, err) }
+		fmt.Fprintf(b, `%[1]s, %[2]s, err = ggen.Float64(data, %[2]s)
+if err != nil { return result, %[2]s, ggen.NewParseErr(%[3]s, %[2]s, err) }
 `, ref, posVar, field)
 	case KindStruct:
 		if isGenerated(f.GoType) {
@@ -5086,7 +5060,7 @@ if err != nil { return result, %[2]s, decode.NewParseErr(%[3]s, %[2]s, err) }
 	case KindAny:
 		renderAny(b, f, ref, posVar)
 	default:
-		fmt.Fprintf(b, `k, err := scan.SkipValue(data, %[1]s)
+		fmt.Fprintf(b, `k, err := ggen.SkipValue(data, %[1]s)
 %[2]s%[1]s = k
 `, posVar, bytesErrCheck(fieldLit(f), posVar))
 	}
@@ -5122,14 +5096,14 @@ func peelSliceField(f FieldInfo) FieldInfo {
 		}
 	}
 	inner := FieldInfo{
-		GoType:      innerGoType,
-		GoName:      f.GoName,   // cap-const names keep the field attribution
-		Kind:        f.ElemKind, // the layer one level down
-		ArrayLen:    f.ElemArrayLen,
-		ElemPointer: innerPointer,
-		ElemType:    innerElem,
-		ElemKind:    innerKind,
-		JSONName:    f.JSONName + "[]",
+		GoType:           innerGoType,
+		GoName:           f.GoName,   // cap-const names keep the field attribution
+		Kind:             f.ElemKind, // the layer one level down
+		ArrayLen:         f.ElemArrayLen,
+		ElemPointer:      innerPointer,
+		ElemType:         innerElem,
+		ElemKind:         innerKind,
+		JSONName:         f.JSONName + "[]",
 		MultiErr:         f.MultiErr,
 		NoValidate:       f.NoValidate,
 		AllowDups:        f.AllowDups,
@@ -5240,7 +5214,7 @@ func emitByteSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth i
 			b.WriteString("} else {\n")
 		}
 	}
-	fmt.Fprintf(b, "if %[1]s >= len(data) || data[%[1]s] != '[' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrBadArray) }\n", kvar, fieldLit(f))
+	fmt.Fprintf(b, "if %[1]s >= len(data) || data[%[1]s] != '[' { return result, %[1]s, ggen.NewParseErr(%[2]s, %[1]s, ggen.ErrBadArray) }\n", kvar, fieldLit(f))
 	fmt.Fprintf(b, "%s++\n", kvar)
 	inlineSkipWS(b, kvar)
 	slabVar := fmt.Sprintf("slab%d", depth)
@@ -5357,7 +5331,7 @@ if e := bytes.IndexByte(data[%[2]s:], ']'); e >= 0 { %[4]s = bytes.Count(data[%[
 		target = fmt.Sprintf("%s[len(%s)-1]", dst, dst)
 	}
 	field := fieldLit(f)
-	errCheck := fmt.Sprintf("if err != nil { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, err) }\n", kvar, field)
+	errCheck := fmt.Sprintf("if err != nil { return result, %[1]s, ggen.NewParseErr(%[2]s, %[1]s, err) }\n", kvar, field)
 	if mptr {
 		// Elem rules ride inside the cascade; no slab/post-decode here. Slice
 		// slots are pre-grown nil (TargetNil); ARRAY slots are overwritten
@@ -5383,7 +5357,7 @@ if e := bytes.IndexByte(data[%[2]s:], ']'); e >= 0 { %[4]s = bytes.Count(data[%[
 		case KindString:
 			inlineScanString(b, kvar, target, kvar, field, f.Copy, !f.AllowInvalidUTF8)
 		case KindBool:
-			fmt.Fprintf(b, "%s, %s, err = scan.Bool(data, %s)\n", target, kvar, kvar)
+			fmt.Fprintf(b, "%s, %s, err = ggen.Bool(data, %s)\n", target, kvar, kvar)
 			b.WriteString(errCheck)
 		case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
 			castFn := ""
@@ -5399,14 +5373,14 @@ if e := bytes.IndexByte(data[%[2]s:], ']'); e >= 0 { %[4]s = bytes.Count(data[%[
 			inlineScanUint64(b, kvar, target, castFn, field)
 		case KindFloat32, KindFloat64:
 			if f.ElemKind == KindFloat64 {
-				fmt.Fprintf(b, "%s, %s, err = scan.Float64(data, %s)\n", target, kvar, kvar)
+				fmt.Fprintf(b, "%s, %s, err = ggen.Float64(data, %s)\n", target, kvar, kvar)
 				b.WriteString(errCheck)
 			} else {
 				b.WriteString("var fv float64\n")
-				fmt.Fprintf(b, "fv, %s, err = scan.Float64(data, %s)\n", kvar, kvar)
+				fmt.Fprintf(b, "fv, %s, err = ggen.Float64(data, %s)\n", kvar, kvar)
 				b.WriteString(errCheck)
 				b.WriteString(narrowFloatGuard("fv", "float32",
-					fmt.Sprintf("return result, %s, decode.NewParseErr(%s, %s, scan.ErrNumberOverflow)", kvar, field, kvar)))
+					fmt.Sprintf("return result, %s, ggen.NewParseErr(%s, %s, ggen.ErrNumberOverflow)", kvar, field, kvar)))
 				fmt.Fprintf(b, "%s = float32(fv)\n", target)
 			}
 		case KindStruct:
@@ -5489,7 +5463,7 @@ if e := bytes.IndexByte(data[%[2]s:], ']'); e >= 0 { %[4]s = bytes.Count(data[%[
 	b.WriteString("continue }\n")
 	b.WriteString("break\n")
 	b.WriteString("}\n}\n") // close for{} and the non-empty guard
-	fmt.Fprintf(b, "if %[1]s >= len(data) || data[%[1]s] != ']' { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, scan.ErrBadArray) }\n", kvar, fieldLit(f))
+	fmt.Fprintf(b, "if %[1]s >= len(data) || data[%[1]s] != ']' { return result, %[1]s, ggen.NewParseErr(%[2]s, %[1]s, ggen.ErrBadArray) }\n", kvar, fieldLit(f))
 	if isArray {
 		fmt.Fprintf(b, "if %s != %d { return result, i, %s }\n",
 			ivar, arrayN,
@@ -5506,19 +5480,19 @@ if e := bytes.IndexByte(data[%[2]s:], ']'); e >= 0 { %[4]s = bytes.Count(data[%[
 }
 
 // renderStreamDecode emits the streaming counterpart of renderDecode, using
-// scan.Stream methods that pull more bytes on demand.
+// ggen.Stream methods that pull more bytes on demand.
 func renderStreamDecode(b *bytes.Buffer, s StructInfo) {
 	// Named-result return slot — see DecodeFrom above.
 	var body bytes.Buffer
 	if isCyclic(s.Name) {
-		fmt.Fprintf(&body, "func (recv %s) DecodeFromStream(s *scan.Stream) (%s, error) {\n\treturn recv.decodeFromStreamDepth(s, 0)\n}\n\n", s.Name, s.Name)
-		fmt.Fprintf(&body, "func (recv %s) decodeFromStreamDepth(s *scan.Stream, _depth int) (result %s, err error) {\n", s.Name, s.Name)
+		fmt.Fprintf(&body, "func (recv %s) DecodeFromStream(s *ggen.Stream) (%s, error) {\n\treturn recv.decodeFromStreamDepth(s, 0)\n}\n\n", s.Name, s.Name)
+		fmt.Fprintf(&body, "func (recv %s) decodeFromStreamDepth(s *ggen.Stream, _depth int) (result %s, err error) {\n", s.Name, s.Name)
 	} else {
-		fmt.Fprintf(&body, "func (recv %s) DecodeFromStream(s *scan.Stream) (result %s, err error) {\n", s.Name, s.Name)
+		fmt.Fprintf(&body, "func (recv %s) DecodeFromStream(s *ggen.Stream) (result %s, err error) {\n", s.Name, s.Name)
 	}
 	body.WriteString("result = recv\n")
 	if isCyclic(s.Name) {
-		body.WriteString("if _depth > scan.MaxDepth {\n\treturn result, scan.ErrMaxDepth\n}\n")
+		body.WriteString("if _depth > 10000 { // runtime maxDepth\n\treturn result, ggen.ErrMaxDepth\n}\n")
 		if s.IsAlias {
 			renderAliasStreamDecode(&body, s)
 		} else {
@@ -5571,7 +5545,7 @@ func tierStreamStringCalls(body string, s StructInfo) string {
 func renderStreamDecodeStruct(b *bytes.Buffer, s StructInfo) {
 	emitReceiverReset(b, s)
 	if s.MultiErr {
-		b.WriteString("var errs validation.Errors\n")
+		b.WriteString("var errs ggen.Errors\n")
 	}
 	if useSeenBitmask(s) {
 		b.WriteString(seenDecl(s))
@@ -5596,12 +5570,12 @@ func renderStreamDecodeStruct(b *bytes.Buffer, s StructInfo) {
 	// same truncation: at the key position `{` wants a name, past a value it
 	// wants ',' or '}'. Transient reader errors still propagate raw.
 	rmore := func(sentinel string) string {
-		return fmt.Sprintf(`if s.Pos >= len(s.Bytes()) { if err = s.ReadMore(s.Pos); err != nil { return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, %s)) }; s.Pos = 0 }
+		return fmt.Sprintf(`if s.Pos >= len(s.Bytes()) { if err = s.ReadMore(s.Pos); err != nil { return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, %s)) }; s.Pos = 0 }
 `, sentinel)
 	}
-	rmoreKey := rmore("scan.ErrExpectString")
-	rmoreSep := rmore("scan.ErrBadObject")
-	badObj := `return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)`
+	rmoreKey := rmore("ggen.ErrExpectString")
+	rmoreSep := rmore("ggen.ErrBadObject")
+	badObj := `return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)`
 	fmt.Fprintf(b, `err = s.ObjectOpen()
 %[1]serr = s.SkipSpace()
 %[1]s%[5]sif s.Bytes()[s.Pos] == '}' {
@@ -5651,7 +5625,7 @@ func renderStreamDispatch(s StructInfo) string {
 		}
 		if s.MultiErr {
 			fmt.Fprintf(b, `if %[1]s {
-	errs = append(errs, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{%[2]q}})
+	errs = append(errs, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{%[2]q}})
 	err = s.SkipValue()
 	%[5]s} else {
 	%[3]s%[4]s
@@ -5659,7 +5633,7 @@ func renderStreamDispatch(s StructInfo) string {
 `, seen, f.JSONName, set, parse, chk)
 			return
 		}
-		fmt.Fprintf(b, `if %s { return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{%q}} }
+		fmt.Fprintf(b, `if %s { return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{%q}} }
 %s%s`, seen, f.JSONName, set, parse)
 	}
 
@@ -5686,10 +5660,10 @@ func renderStreamDispatch(s StructInfo) string {
 func renderStreamMap(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	field := fieldLit(f)
 	chk := streamErrCheck(field)
-	rm := streamReadMore(field, "0", false, "scan.ErrBadObject")
-	rmKi := strings.Replace(streamReadMore(field, "0", false, "scan.ErrBadLiteral"), "if s.Pos >=", "if s.Pos+ki >=", 1)
-	badLit := fmt.Sprintf("return result, decode.NewParseErr(%s, s.Offset(), scan.ErrBadLiteral)", field)
-	badObj := fmt.Sprintf("return result, decode.NewParseErr(%s, s.Offset(), scan.ErrBadObject)", field)
+	rm := streamReadMore(field, "0", false, "ggen.ErrBadObject")
+	rmKi := strings.Replace(streamReadMore(field, "0", false, "ggen.ErrBadLiteral"), "if s.Pos >=", "if s.Pos+ki >=", 1)
+	badLit := fmt.Sprintf("return result, ggen.NewParseErr(%s, s.Offset(), ggen.ErrBadLiteral)", field)
+	badObj := fmt.Sprintf("return result, ggen.NewParseErr(%s, s.Offset(), ggen.ErrBadObject)", field)
 	makeExpr := fmt.Sprintf("make(%s)", f.GoType)
 	if cap := mapPreallocCap(f); cap > 0 {
 		makeExpr = fmt.Sprintf("make(%s, %d)", f.GoType, cap)
@@ -5768,7 +5742,7 @@ func renderStreamMap(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 			fmt.Fprintf(b, `%s, err = s.Int64()
 %s`, mapTarget, chk)
 		} else {
-			g := narrowIntGuard("iv", f.ElemType, fmt.Sprintf("return result, decode.NewParseErr(%s, s.Offset(), scan.ErrNumberOverflow)", field))
+			g := narrowIntGuard("iv", f.ElemType, fmt.Sprintf("return result, ggen.NewParseErr(%s, s.Offset(), ggen.ErrNumberOverflow)", field))
 			fmt.Fprintf(b, `var iv int64
 iv, err = s.Int64()
 %[3]s%[4]s%[1]s = %[2]s(iv)
@@ -5779,7 +5753,7 @@ iv, err = s.Int64()
 			fmt.Fprintf(b, `%s, err = s.Uint64()
 %s`, mapTarget, chk)
 		} else {
-			g := narrowIntGuard("uv", f.ElemType, fmt.Sprintf("return result, decode.NewParseErr(%s, s.Offset(), scan.ErrNumberOverflow)", field))
+			g := narrowIntGuard("uv", f.ElemType, fmt.Sprintf("return result, ggen.NewParseErr(%s, s.Offset(), ggen.ErrNumberOverflow)", field))
 			fmt.Fprintf(b, `var uv uint64
 uv, err = s.Uint64()
 %[3]s%[4]s%[1]s = %[2]s(uv)
@@ -5794,7 +5768,7 @@ uv, err = s.Uint64()
 fv, err = s.Float64()
 %[2]s%[3]s%[1]s = float32(fv)
 `, mapTarget, chk,
-				narrowFloatGuard("fv", "float32", fmt.Sprintf("return result, decode.NewParseErr(%s, s.Offset(), scan.ErrNumberOverflow)", field)))
+				narrowFloatGuard("fv", "float32", fmt.Sprintf("return result, ggen.NewParseErr(%s, s.Offset(), ggen.ErrNumberOverflow)", field)))
 		}
 	case KindStruct:
 		if isGenerated(f.ElemType) {
@@ -5837,13 +5811,13 @@ mv, err = mv.`+streamDecodeCallFor(f.ElemType)+`
 // streamErrCheck returns the `if err != nil { return ... }` tail for a
 // stream-side scan call, with the field literal embedded (no post-pass wrap).
 func streamErrCheck(field string) string {
-	return fmt.Sprintf("if err != nil { return result, decode.NewParseErr(%s, s.Offset(), err) }\n", field)
+	return fmt.Sprintf("if err != nil { return result, ggen.NewParseErr(%s, s.Offset(), err) }\n", field)
 }
 
 // bytesErrCheck is the bytes-path equivalent of streamErrCheck, with the
 // 3-tuple `return result, pos, err` shape.
 func bytesErrCheck(field, posVar string) string {
-	return fmt.Sprintf("if err != nil { return result, %[1]s, decode.NewParseErr(%[2]s, %[1]s, err) }\n", posVar, field)
+	return fmt.Sprintf("if err != nil { return result, %[1]s, ggen.NewParseErr(%[2]s, %[1]s, err) }\n", posVar, field)
 }
 
 // streamReadMore emits the "buffer exhausted? pull more" guard. keep controls
@@ -5851,7 +5825,7 @@ func bytesErrCheck(field, posVar string) string {
 // `s.Pos = 0` after a non-zero keep. sentinel, when non-empty, maps a DRAINED
 // refill to the grammar sentinel the bytes path reports for the same
 // truncation (round-6 #60, extended to every generated value-head refill);
-// transient reader errors still propagate raw via scan.NotEOF.
+// transient reader errors still propagate raw via ggen.NotEOF.
 func streamReadMore(field, keep string, resetPos bool, sentinel string) string {
 	reset := ""
 	if resetPos {
@@ -5859,9 +5833,9 @@ func streamReadMore(field, keep string, resetPos bool, sentinel string) string {
 	}
 	errExpr := "err"
 	if sentinel != "" {
-		errExpr = "scan.NotEOF(err, " + sentinel + ")"
+		errExpr = "ggen.NotEOF(err, " + sentinel + ")"
 	}
-	return fmt.Sprintf("if s.Pos >= len(s.Bytes()) { if err = s.ReadMore(%s); err != nil { return result, decode.NewParseErr(%s, s.Offset(), %s) }%s }\n", keep, field, errExpr, reset)
+	return fmt.Sprintf("if s.Pos >= len(s.Bytes()) { if err = s.ReadMore(%s); err != nil { return result, ggen.NewParseErr(%s, s.Offset(), %s) }%s }\n", keep, field, errExpr, reset)
 }
 
 // truncSentinel maps a value kind to the grammar sentinel the BYTES path
@@ -5871,18 +5845,18 @@ func truncSentinel(k TypeKind) string {
 	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64,
 		KindUint, KindUint8, KindUint16, KindUint32, KindUint64,
 		KindFloat32, KindFloat64, KindBigInt:
-		return "scan.ErrBadNumber"
+		return "ggen.ErrBadNumber"
 	case KindBool:
-		return "scan.ErrBadBool"
+		return "ggen.ErrBadBool"
 	case KindString, KindBytes, KindTime, KindDuration, KindNetIP,
 		KindNetipAddr, KindNetipPrefix, KindURL, KindBigFloat, KindBigRat:
-		return "scan.ErrExpectString"
+		return "ggen.ErrExpectString"
 	case KindMap, KindStruct:
-		return "scan.ErrBadObject"
+		return "ggen.ErrBadObject"
 	case KindSlice, KindArray:
-		return "scan.ErrBadArray"
+		return "ggen.ErrBadArray"
 	}
-	return "scan.ErrUnexpectedEnd"
+	return "ggen.ErrUnexpectedEnd"
 }
 
 // nestedDecodeErrCheck emits the `if err != nil { … }` tail after a nested
@@ -5924,13 +5898,13 @@ func calleeDrains(t string) bool {
 // callee is the callee's type name ("" when unknown), used to gate the
 // multierr drain — see calleeDrains.
 func nestedDecodeErrCheck(field, callee string, multierr, bytesPath bool, nVar string) string {
-	wrap := fmt.Sprintf("decode.NewParseErr(%s, s.Offset(), err)", field)
+	wrap := fmt.Sprintf("ggen.NewParseErr(%s, s.Offset(), err)", field)
 	ret := fmt.Sprintf("return result, %s", wrap)
 	drain := fmt.Sprintf("errs.Append(%s, verr)", field)
 	if bytesPath {
-		wrap = fmt.Sprintf("decode.NewParseErrShift(%s, i, %s, err)", field, nVar)
+		wrap = fmt.Sprintf("ggen.NewParseErrShift(%s, i, %s, err)", field, nVar)
 		ret = fmt.Sprintf("return result, i, %s", wrap)
-		drain = fmt.Sprintf("errs.Append(%s, validation.ShiftPos(verr, i-%s))", field, nVar)
+		drain = fmt.Sprintf("errs.Append(%s, ggen.ShiftPos(verr, i-%s))", field, nVar)
 	}
 	// Draining is only sound when the callee finished the value; otherwise
 	// its error is a hard stop for this decoder too.
@@ -5938,7 +5912,7 @@ func nestedDecodeErrCheck(field, callee string, multierr, bytesPath bool, nVar s
 		return fmt.Sprintf("if err != nil { %s }\n", ret)
 	}
 	return fmt.Sprintf(`if err != nil {
-	if verr, ok := err.(validation.Error); ok {
+	if verr, ok := err.(ggen.Error); ok {
 		%[1]s
 	} else {
 		%[2]s
@@ -5955,12 +5929,12 @@ func renderStreamBytes(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 		return
 	}
 	field := fieldLit(f)
-	rm := streamReadMore(field, "0", false, "scan.ErrExpectString")
-	rmKi := strings.Replace(streamReadMore(field, "0", false, "scan.ErrBadLiteral"), "if s.Pos >=", "if s.Pos+ki >=", 1)
+	rm := streamReadMore(field, "0", false, "ggen.ErrExpectString")
+	rmKi := strings.Replace(streamReadMore(field, "0", false, "ggen.ErrBadLiteral"), "if s.Pos >=", "if s.Pos+ki >=", 1)
 	// `null` → nil out the field (see renderBytes).
 	fmt.Fprintf(b, `%[3]sif s.Bytes()[s.Pos] == 'n' {
 	for ki := 1; ki < 4; ki++ {
-		%[4]sif s.Bytes()[s.Pos+ki] != "null"[ki] { return result, decode.NewParseErr(%[2]s, s.Offset(), scan.ErrBadLiteral) }
+		%[4]sif s.Bytes()[s.Pos+ki] != "null"[ki] { return result, ggen.NewParseErr(%[2]s, s.Offset(), ggen.ErrBadLiteral) }
 	}
 	s.Pos += 4
 	%[1]s = nil
@@ -5979,8 +5953,8 @@ func renderStreamBytesValue(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	_ = posVar // stream-path uses s.Pos directly
 	field := fieldLit(f)
 	chk := streamErrCheck(field)
-	rm := streamReadMore(field, "0", false, "scan.ErrBadArray")
-	badArr := fmt.Sprintf("return result, decode.NewParseErr(%s, s.Offset(), scan.ErrBadArray)", field)
+	rm := streamReadMore(field, "0", false, "ggen.ErrBadArray")
+	badArr := fmt.Sprintf("return result, ggen.NewParseErr(%s, s.Offset(), ggen.ErrBadArray)", field)
 	if f.Format == "array" {
 		// `u` not `v`: a pointer-leaf caller declares `var v []byte` in the
 		// same scope.
@@ -5989,7 +5963,7 @@ func renderStreamBytesValue(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 %[2]s%[4]sfor s.Bytes()[s.Pos] != ']' {
 	var u uint64
 	u, err = s.Uint64()
-	%[2]sif u > 255 { return result, decode.NewParseErr(%[6]s, s.Offset(), scan.ErrNumberOverflow) }
+	%[2]sif u > 255 { return result, ggen.NewParseErr(%[6]s, s.Offset(), ggen.ErrNumberOverflow) }
 	%[1]s = append(%[1]s, byte(u))
 	err = s.SkipSpace()
 	%[2]s%[4]sif s.Bytes()[s.Pos] == ',' { s.Pos++; err = s.SkipSpace(); %[2]s%[5]scontinue }
@@ -6128,7 +6102,7 @@ func renderStreamNetIP(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	fmt.Fprintf(b, `var sv string
 sv, err = s.StringView(`+vArg(f)+`)
 %[2]s%[1]s = net.ParseIP(sv)
-if %[1]s == nil { return result, decode.NewParseErr(%[3]s, s.Offset(), &net.ParseError{Type: "IP address", Text: strings.Clone(sv)}) }
+if %[1]s == nil { return result, ggen.NewParseErr(%[3]s, s.Offset(), &net.ParseError{Type: "IP address", Text: strings.Clone(sv)}) }
 `, ref, chk, field)
 }
 
@@ -6159,7 +6133,7 @@ sv, err = s.StringView(`+vArg(f)+`)
 func renderStreamRawJSON(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	_ = posVar
 	chk := streamErrCheck(fieldLit(f))
-	check := "err = scan.CheckUTF8(span)\n%[2]s"
+	check := "err = ggen.CheckUTF8(span)\n%[2]s"
 	if f.AllowInvalidUTF8 {
 		check = ""
 	}
@@ -6184,7 +6158,7 @@ func renderStreamBigInt(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	chk := streamErrCheck(field)
 	fmt.Fprintf(b, `span, err := s.CaptureValue()
 %[2]sif _, ok := (&%[1]s).SetString(unsafe.String(unsafe.SliceData(span), len(span)), 10); !ok {
-	return result, decode.NewParseErr(%[3]s, s.Offset(), scan.ErrBadNumber)
+	return result, ggen.NewParseErr(%[3]s, s.Offset(), ggen.ErrBadNumber)
 }
 `, ref, chk, field)
 }
@@ -6197,7 +6171,7 @@ func renderStreamBigFloat(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	fmt.Fprintf(b, `var sv string
 sv, err = s.StringView(`+vArg(f)+`)
 %[2]sif _, _, err := (&%[1]s).Parse(sv, 10); err != nil {
-	return result, decode.NewParseErr(%[3]s, s.Offset(), err)
+	return result, ggen.NewParseErr(%[3]s, s.Offset(), err)
 }
 `, ref, chk, field)
 }
@@ -6210,7 +6184,7 @@ func renderStreamBigRat(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	fmt.Fprintf(b, `var sv string
 sv, err = s.StringView(`+vArg(f)+`)
 %[2]sif _, ok := (&%[1]s).SetString(sv); !ok {
-	return result, decode.NewParseErr(%[3]s, s.Offset(), scan.ErrBadNumber)
+	return result, ggen.NewParseErr(%[3]s, s.Offset(), ggen.ErrBadNumber)
 }
 `, ref, chk, field)
 }
@@ -6222,7 +6196,7 @@ func renderStreamSQLNull(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 		inner := sqlNullInnerField(f)
 		field := fieldLit(f)
 		rm := streamReadMore(field, "0", false, truncSentinel(effectiveKind(inner.GoType, inner.Kind)))
-		rmKi := strings.Replace(streamReadMore(field, "0", false, "scan.ErrBadLiteral"), "if s.Pos >=", "if s.Pos+ki >=", 1)
+		rmKi := strings.Replace(streamReadMore(field, "0", false, "ggen.ErrBadLiteral"), "if s.Pos >=", "if s.Pos+ki >=", 1)
 		dec := renderStreamField(inner, "nv", posVar)
 		body, valExpr := dec, "nv"
 		if rest, expr, ok := foldTailAssign(body, "nv"); ok {
@@ -6232,7 +6206,7 @@ func renderStreamSQLNull(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 		}
 		fmt.Fprintf(b, `%[5]sif s.Bytes()[s.Pos] == 'n' {
 	for ki := 1; ki < 4; ki++ {
-		%[7]sif s.Bytes()[s.Pos+ki] != "null"[ki] { return result, decode.NewParseErr(%[6]s, s.Offset(), scan.ErrBadLiteral) }
+		%[7]sif s.Bytes()[s.Pos+ki] != "null"[ki] { return result, ggen.NewParseErr(%[6]s, s.Offset(), ggen.ErrBadLiteral) }
 	}
 	%[1]s = sql.%[2]s{}
 	s.Pos += 4
@@ -6293,10 +6267,10 @@ nv, err = s.%[2]s(%[4]s)
 		valExpr = "nv"
 	}
 	rm := streamReadMore(field, "0", false, truncSentinel(spec.Inner))
-	rmKi := strings.Replace(streamReadMore(field, "0", false, "scan.ErrBadLiteral"), "if s.Pos >=", "if s.Pos+ki >=", 1)
+	rmKi := strings.Replace(streamReadMore(field, "0", false, "ggen.ErrBadLiteral"), "if s.Pos >=", "if s.Pos+ki >=", 1)
 	fmt.Fprintf(b, `%[6]sif s.Bytes()[s.Pos] == 'n' {
 	for ki := 1; ki < 4; ki++ {
-		%[8]sif s.Bytes()[s.Pos+ki] != "null"[ki] { return result, decode.NewParseErr(%[7]s, s.Offset(), scan.ErrBadLiteral) }
+		%[8]sif s.Bytes()[s.Pos+ki] != "null"[ki] { return result, ggen.NewParseErr(%[7]s, s.Offset(), ggen.ErrBadLiteral) }
 	}
 	%[1]s = sql.%[2]s{}
 	s.Pos += 4
@@ -6352,7 +6326,7 @@ _iv, err = _iv.`+streamDecodeCallFor(inline.ElemType)+`
 		}
 		return prelude + fmt.Sprintf(`span, err := s.CaptureValue()
 %[3]svar _iv %[1]s
-if err = json.Unmarshal(span, &_iv); err != nil { return result, decode.NewParseErr(ownKey, s.Offset(), err) }
+if err = json.Unmarshal(span, &_iv); err != nil { return result, ggen.NewParseErr(ownKey, s.Offset(), err) }
 result.%[2]s[ownKey] = _iv
 `, inline.ElemType, inline.GoName, chk)
 	}
@@ -6364,12 +6338,12 @@ result.%[2]s[ownKey] = _iv
 	}
 	if s.MultiErr {
 		chk := streamErrCheck("strings.Clone(key)")
-		return fmt.Sprintf(`errs = append(errs, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}})
+		return fmt.Sprintf(`errs = append(errs, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}})
 err = s.ConsumeColon()
 %[1]serr = s.SkipValue()
 %[1]s`, chk)
 	}
-	return "return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}\n"
+	return "return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}\n"
 }
 
 func renderStreamStringTag(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
@@ -6385,7 +6359,7 @@ func renderStreamStringTag(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 		fmt.Fprintf(b, `switch sv {
 case "true": %[1]s = true
 case "false": %[1]s = false
-default: return result, decode.NewParseErr(%[2]s, s.Offset(), scan.ErrBadBool)
+default: return result, ggen.NewParseErr(%[2]s, s.Offset(), ggen.ErrBadBool)
 }
 `, ref, field)
 	case KindFloat32, KindFloat64:
@@ -6393,7 +6367,7 @@ default: return result, decode.NewParseErr(%[2]s, s.Offset(), scan.ErrBadBool)
 		b.WriteString(chk)
 		if f.Kind == KindFloat32 {
 			b.WriteString(narrowFloatGuard("f", "float32",
-				fmt.Sprintf("return result, decode.NewParseErr(%s, s.Offset(), scan.ErrNumberOverflow)", field)))
+				fmt.Sprintf("return result, ggen.NewParseErr(%s, s.Offset(), ggen.ErrNumberOverflow)", field)))
 			fmt.Fprintf(b, "%s = float32(f)\n", ref)
 		} else {
 			fmt.Fprintf(b, "%s = f\n", ref)
@@ -6405,7 +6379,7 @@ default: return result, decode.NewParseErr(%[2]s, s.Offset(), scan.ErrBadBool)
 			fmt.Fprintf(b, "%s = u\n", ref)
 		} else {
 			b.WriteString(narrowIntGuard("u", kindNarrowName(f.Kind),
-				fmt.Sprintf("return result, decode.NewParseErr(%s, s.Offset(), scan.ErrNumberOverflow)", field)))
+				fmt.Sprintf("return result, ggen.NewParseErr(%s, s.Offset(), ggen.ErrNumberOverflow)", field)))
 			fmt.Fprintf(b, "%s = %s(u)\n", ref, f.GoType)
 		}
 	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
@@ -6415,7 +6389,7 @@ default: return result, decode.NewParseErr(%[2]s, s.Offset(), scan.ErrBadBool)
 			fmt.Fprintf(b, "%s = n\n", ref)
 		} else {
 			b.WriteString(narrowIntGuard("n", kindNarrowName(f.Kind),
-				fmt.Sprintf("return result, decode.NewParseErr(%s, s.Offset(), scan.ErrNumberOverflow)", field)))
+				fmt.Sprintf("return result, ggen.NewParseErr(%s, s.Offset(), ggen.ErrNumberOverflow)", field)))
 			fmt.Fprintf(b, "%s = %s(n)\n", ref, f.GoType)
 		}
 	}
@@ -6494,7 +6468,7 @@ func renderStreamField(f FieldInfo, ref, posVar string) string {
 		builtinV, customV := partitionCustomValidation(f.Validation)
 		builtinM, customM := partitionCustomMods(f.Mods)
 		rm := streamReadMore(field, "0", false, truncSentinel(effectiveKind(f.PointeeType, f.Kind)))
-		rmKi := strings.Replace(streamReadMore(field, "0", false, "scan.ErrBadLiteral"), "if s.Pos >=", "if s.Pos+ki >=", 1)
+		rmKi := strings.Replace(streamReadMore(field, "0", false, "ggen.ErrBadLiteral"), "if s.Pos >=", "if s.Pos+ki >=", 1)
 		// Decode-into-receiver, any depth — see renderField.
 		depth, leafType := pointerDepth(f.GoType)
 		leaf := f
@@ -6516,7 +6490,7 @@ func renderStreamField(f FieldInfo, ref, posVar string) string {
 		flat := nullBreakOK(f)
 		fmt.Fprintf(b, `%[2]sif s.Bytes()[s.Pos] == 'n' {
 	for ki := 1; ki < 4; ki++ {
-		%[3]sif s.Bytes()[s.Pos+ki] != "null"[ki] { return result, decode.NewParseErr(%[4]s, s.Offset(), scan.ErrBadLiteral) }
+		%[3]sif s.Bytes()[s.Pos+ki] != "null"[ki] { return result, ggen.NewParseErr(%[4]s, s.Offset(), ggen.ErrBadLiteral) }
 	}
 	s.Pos += 4
 	%[1]s = nil
@@ -6531,8 +6505,8 @@ func renderStreamField(f FieldInfo, ref, posVar string) string {
 			emitPointerSeed(b, ref, depth, leaf.Kind)
 		}
 		b.WriteString(renderStreamField(leaf, "v", posVar))
-		b.WriteString(narrowIntGuard("v", narrowCast, fmt.Sprintf("return result, decode.NewParseErr(%s, s.Offset(), scan.ErrNumberOverflow)", field)))
-		b.WriteString(narrowFloatGuard("v", narrowCast, fmt.Sprintf("return result, decode.NewParseErr(%s, s.Offset(), scan.ErrNumberOverflow)", field)))
+		b.WriteString(narrowIntGuard("v", narrowCast, fmt.Sprintf("return result, ggen.NewParseErr(%s, s.Offset(), ggen.ErrNumberOverflow)", field)))
+		b.WriteString(narrowFloatGuard("v", narrowCast, fmt.Sprintf("return result, ggen.NewParseErr(%s, s.Offset(), ggen.ErrNumberOverflow)", field)))
 		if f.TargetNil {
 			// Target is a known-nil `var x *T` — straight new-chain assign.
 			fmt.Fprintf(b, "%s = %s\n", ref, newChain(valExpr, depth))
@@ -6561,7 +6535,7 @@ func renderStreamField(f FieldInfo, ref, posVar string) string {
 	}
 	widenedScan := func(wideType, wideVar, method, castTo string) {
 		guard := ""
-		errRet := fmt.Sprintf("return result, decode.NewParseErr(%s, s.Offset(), scan.ErrNumberOverflow)", field)
+		errRet := fmt.Sprintf("return result, ggen.NewParseErr(%s, s.Offset(), ggen.ErrNumberOverflow)", field)
 		if method == "Int64" || method == "Uint64" {
 			guard = narrowIntGuard(wideVar, castTo, errRet)
 		}
@@ -6665,15 +6639,15 @@ func emitStreamSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth
 	slabVar := fmt.Sprintf("slab%d", depth)
 	field := fieldLit(f)
 	chk := streamErrCheck(field)
-	rm := streamReadMore(field, "0", false, "scan.ErrBadArray")
-	rmKi := strings.Replace(streamReadMore(field, "0", false, "scan.ErrBadLiteral"), "if s.Pos >=", "if s.Pos+ki >=", 1)
+	rm := streamReadMore(field, "0", false, "ggen.ErrBadArray")
+	rmKi := strings.Replace(streamReadMore(field, "0", false, "ggen.ErrBadLiteral"), "if s.Pos >=", "if s.Pos+ki >=", 1)
 	// At dispatch level flat-break; a NullDone nested slot skips the peek.
 	flat := !isArray && nullBreakOK(f)
 	if !isArray && !f.NullDone {
 		fmt.Fprintf(b, `err = s.SkipSpace()
 %[2]s%[4]sif s.Bytes()[s.Pos] == 'n' {
 	for ki := 1; ki < 4; ki++ {
-		%[5]sif s.Bytes()[s.Pos+ki] != "null"[ki] { return result, decode.NewParseErr(%[3]s, s.Offset(), scan.ErrBadLiteral) }
+		%[5]sif s.Bytes()[s.Pos+ki] != "null"[ki] { return result, ggen.NewParseErr(%[3]s, s.Offset(), ggen.ErrBadLiteral) }
 	}
 	s.Pos += 4
 	%[1]s = nil
@@ -6729,7 +6703,7 @@ func emitStreamSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth
 		}
 		fmt.Fprintf(b, `%[4]sif s.Bytes()[s.Pos] == 'n' {
 	for ki := 1; ki < 4; ki++ {
-		%[5]sif s.Bytes()[s.Pos+ki] != "null"[ki] { return result, decode.NewParseErr(%[3]s, s.Offset(), scan.ErrBadLiteral) }
+		%[5]sif s.Bytes()[s.Pos+ki] != "null"[ki] { return result, ggen.NewParseErr(%[3]s, s.Offset(), ggen.ErrBadLiteral) }
 	}
 	s.Pos += 4
 	%[1]s	err = s.SkipSpace()
@@ -6796,7 +6770,7 @@ func emitStreamSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth
 				fmt.Fprintf(b, `%s, err = s.Int64()
 %s`, target, chk)
 			} else {
-				g := narrowIntGuard("iv", f.ElemType, fmt.Sprintf("return result, decode.NewParseErr(%s, s.Offset(), scan.ErrNumberOverflow)", field))
+				g := narrowIntGuard("iv", f.ElemType, fmt.Sprintf("return result, ggen.NewParseErr(%s, s.Offset(), ggen.ErrNumberOverflow)", field))
 				fmt.Fprintf(b, `var iv int64
 iv, err = s.Int64()
 %[3]s%[4]s%[1]s = %[2]s(iv)
@@ -6807,7 +6781,7 @@ iv, err = s.Int64()
 				fmt.Fprintf(b, `%s, err = s.Uint64()
 %s`, target, chk)
 			} else {
-				g := narrowIntGuard("uv", f.ElemType, fmt.Sprintf("return result, decode.NewParseErr(%s, s.Offset(), scan.ErrNumberOverflow)", field))
+				g := narrowIntGuard("uv", f.ElemType, fmt.Sprintf("return result, ggen.NewParseErr(%s, s.Offset(), ggen.ErrNumberOverflow)", field))
 				fmt.Fprintf(b, `var uv uint64
 uv, err = s.Uint64()
 %[3]s%[4]s%[1]s = %[2]s(uv)
@@ -6822,7 +6796,7 @@ uv, err = s.Uint64()
 fv, err = s.Float64()
 %[2]s%[3]s%[1]s = float32(fv)
 `, target, chk,
-					narrowFloatGuard("fv", "float32", fmt.Sprintf("return result, decode.NewParseErr(%s, s.Offset(), scan.ErrNumberOverflow)", field)))
+					narrowFloatGuard("fv", "float32", fmt.Sprintf("return result, ggen.NewParseErr(%s, s.Offset(), ggen.ErrNumberOverflow)", field)))
 			}
 		case KindStruct:
 			if directStruct {
@@ -6840,7 +6814,7 @@ fv, err = s.Float64()
 				// nested in an else (mirrors the []*T nil-elem fast path).
 				fmt.Fprintf(b, `%[2]sif s.Bytes()[s.Pos] == 'n' {
 	for ki := 1; ki < 4; ki++ {
-		%[3]sif s.Bytes()[s.Pos+ki] != "null"[ki] { return result, decode.NewParseErr(%[1]s, s.Offset(), scan.ErrBadLiteral) }
+		%[3]sif s.Bytes()[s.Pos+ki] != "null"[ki] { return result, ggen.NewParseErr(%[1]s, s.Offset(), ggen.ErrBadLiteral) }
 	}
 	s.Pos += 4
 `, field, rm, rmKi)
@@ -6894,7 +6868,7 @@ break
 %[1]s%[3]sif s.Bytes()[s.Pos] == ',' { s.Pos++; err = s.SkipSpace(); %[1]s%[4]scontinue }
 break
 }
-if s.Bytes()[s.Pos] != ']' { return result, decode.NewParseErr(%[2]s, s.Offset(), scan.ErrBadArray) }
+if s.Bytes()[s.Pos] != ']' { return result, ggen.NewParseErr(%[2]s, s.Offset(), ggen.ErrBadArray) }
 `, chk, field, rm, streamNoCloseAfterComma(field, ']'))
 	if isArray {
 		fmt.Fprintf(b, "if %s != %d { return result, %s }\n",

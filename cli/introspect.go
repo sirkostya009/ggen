@@ -22,7 +22,7 @@ type FieldInterfaces struct {
 	JSONUnmarshaler bool // *T has UnmarshalJSON([]byte) error
 	JSONMarshaler   bool // T or *T has MarshalJSON() ([]byte, error)
 	ByteDecoder     bool // T has DecodeFrom(data []byte) (T, int, error)
-	StreamDecoder   bool // T has DecodeFromStream(s *scan.Stream) (T, error)
+	StreamDecoder   bool // T has DecodeFromStream(s *ggen.Stream) (T, error)
 	AppendJSON      bool // T has AppendJSON(dst []byte) ([]byte, error)
 	JSONSize        bool // T has JSONSize() int — call the real upper bound vs a flat guess for foreign types
 }
@@ -238,8 +238,8 @@ func matchByteDecoder(sig *types.Signature, recv types.Type) bool {
 	return isError(results.At(2).Type())
 }
 
-// matchStreamDecoder reports whether sig is `func(s *scan.Stream) (T, error)`.
-// We have no handle on scan.Stream's type, so match only the shape (one
+// matchStreamDecoder reports whether sig is `func(s *ggen.Stream) (T, error)`.
+// We have no handle on ggen.Stream's type, so match only the shape (one
 // pointer param + (T, error)).
 func matchStreamDecoder(sig *types.Signature, recv types.Type) bool {
 	params := sig.Params()

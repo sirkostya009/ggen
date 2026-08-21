@@ -98,7 +98,7 @@ func TestCopy_AliasVsCopy(t *testing.T) {
 // TestCopy_NestedDecouples runs the decouple check over a deep tree, covering
 // every retained-string site at depth: field strings, slice/map string
 // elements, map keys, json.RawMessage spans, any-embedded strings + object
-// keys (scan.AnyCopy), and pointer-slice element structs. A content
+// keys (ggen.AnyCopy), and pointer-slice element structs. A content
 // fingerprint taken before and after scribbling the source must be identical.
 func TestCopy_NestedDecouples(t *testing.T) {
 	const js = `{
@@ -219,7 +219,7 @@ func collectDocStrings(d *CopyDoc, out []string) []string {
 	return out
 }
 
-// collectAnyStrings walks a decoded `any` tree (scan.AnyCopy output shapes:
+// collectAnyStrings walks a decoded `any` tree (ggen.AnyCopy output shapes:
 // string / []any / map[string]any / number / bool / nil) and appends the
 // content of every string and object key.
 func collectAnyStrings(v any, out []string) []string {

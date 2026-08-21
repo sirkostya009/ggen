@@ -18,7 +18,7 @@ func renderAliasDecode(b *bytes.Buffer, s StructInfo) {
 		renderAliasContainerDecode(b, s, false)
 		return
 	}
-	const wrap = `if err != nil { return result, i, decode.NewParseErr("", i, err) }`
+	const wrap = `if err != nil { return result, i, ggen.NewParseErr("", i, err) }`
 	// Leading whitespace is legal before any top-level value; container and
 	// struct aliases already skip it via ArrayOpen/ObjectOpen.
 	inlineSkipWS(b, "i")
@@ -28,20 +28,20 @@ func renderAliasDecode(b *bytes.Buffer, s StructInfo) {
 		// results already own their bytes) — same shape as struct fields.
 		detach := ""
 		if s.Copy {
-			detach = "v = scan.Detach(v, data)\n"
+			detach = "v = ggen.Detach(v, data)\n"
 		}
 		fmt.Fprintf(b, "var v string\nv, i, err = "+scanStringFn+"(data, i, "+vArgS(s)+")\n%s\n%sresult = %s(v)\n", wrap, detach, s.Name)
 	case KindBool:
-		fmt.Fprintf(b, "var v bool\nv, i, err = scan.Bool(data, i)\n%s\nresult = %s(v)\n", wrap, s.Name)
+		fmt.Fprintf(b, "var v bool\nv, i, err = ggen.Bool(data, i)\n%s\nresult = %s(v)\n", wrap, s.Name)
 	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
-		guard := narrowIntGuard("v", s.AliasUnderlying, `return result, i, decode.NewParseErr("", i, scan.ErrNumberOverflow)`)
-		fmt.Fprintf(b, "var v int64\nv, i, err = scan.Int64(data, i)\n%s\n%sresult = %s(v)\n", wrap, guard, s.Name)
+		guard := narrowIntGuard("v", s.AliasUnderlying, `return result, i, ggen.NewParseErr("", i, ggen.ErrNumberOverflow)`)
+		fmt.Fprintf(b, "var v int64\nv, i, err = ggen.Int64(data, i)\n%s\n%sresult = %s(v)\n", wrap, guard, s.Name)
 	case KindUint, KindUint8, KindUint16, KindUint32, KindUint64:
-		guard := narrowIntGuard("v", s.AliasUnderlying, `return result, i, decode.NewParseErr("", i, scan.ErrNumberOverflow)`)
-		fmt.Fprintf(b, "var v uint64\nv, i, err = scan.Uint64(data, i)\n%s\n%sresult = %s(v)\n", wrap, guard, s.Name)
+		guard := narrowIntGuard("v", s.AliasUnderlying, `return result, i, ggen.NewParseErr("", i, ggen.ErrNumberOverflow)`)
+		fmt.Fprintf(b, "var v uint64\nv, i, err = ggen.Uint64(data, i)\n%s\n%sresult = %s(v)\n", wrap, guard, s.Name)
 	case KindFloat32, KindFloat64:
-		guard := narrowFloatGuard("v", s.AliasUnderlying, `return result, i, decode.NewParseErr("", i, scan.ErrNumberOverflow)`)
-		fmt.Fprintf(b, "var v float64\nv, i, err = scan.Float64(data, i)\n%s\n%sresult = %s(v)\n", wrap, guard, s.Name)
+		guard := narrowFloatGuard("v", s.AliasUnderlying, `return result, i, ggen.NewParseErr("", i, ggen.ErrNumberOverflow)`)
+		fmt.Fprintf(b, "var v float64\nv, i, err = ggen.Float64(data, i)\n%s\n%sresult = %s(v)\n", wrap, guard, s.Name)
 	}
 	b.WriteString("return result, i, nil\n")
 }
@@ -57,7 +57,7 @@ func renderAliasStreamDecode(b *bytes.Buffer, s StructInfo) {
 		renderAliasContainerDecode(b, s, true)
 		return
 	}
-	const wrap = `if err != nil { return result, decode.NewParseErr("", s.Offset(), err) }`
+	const wrap = `if err != nil { return result, ggen.NewParseErr("", s.Offset(), err) }`
 	b.WriteString("err = s.SkipSpace()\n" + wrap + "\n")
 	switch s.AliasKind {
 	case KindString:
@@ -65,13 +65,13 @@ func renderAliasStreamDecode(b *bytes.Buffer, s StructInfo) {
 	case KindBool:
 		fmt.Fprintf(b, "var v bool\nv, err = s.Bool()\n%s\nresult = %s(v)\n", wrap, s.Name)
 	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
-		guard := narrowIntGuard("v", s.AliasUnderlying, `return result, decode.NewParseErr("", s.Offset(), scan.ErrNumberOverflow)`)
+		guard := narrowIntGuard("v", s.AliasUnderlying, `return result, ggen.NewParseErr("", s.Offset(), ggen.ErrNumberOverflow)`)
 		fmt.Fprintf(b, "var v int64\nv, err = s.Int64()\n%s\n%sresult = %s(v)\n", wrap, guard, s.Name)
 	case KindUint, KindUint8, KindUint16, KindUint32, KindUint64:
-		guard := narrowIntGuard("v", s.AliasUnderlying, `return result, decode.NewParseErr("", s.Offset(), scan.ErrNumberOverflow)`)
+		guard := narrowIntGuard("v", s.AliasUnderlying, `return result, ggen.NewParseErr("", s.Offset(), ggen.ErrNumberOverflow)`)
 		fmt.Fprintf(b, "var v uint64\nv, err = s.Uint64()\n%s\n%sresult = %s(v)\n", wrap, guard, s.Name)
 	case KindFloat32, KindFloat64:
-		guard := narrowFloatGuard("v", s.AliasUnderlying, `return result, decode.NewParseErr("", s.Offset(), scan.ErrNumberOverflow)`)
+		guard := narrowFloatGuard("v", s.AliasUnderlying, `return result, ggen.NewParseErr("", s.Offset(), ggen.ErrNumberOverflow)`)
 		fmt.Fprintf(b, "var v float64\nv, err = s.Float64()\n%s\n%sresult = %s(v)\n", wrap, guard, s.Name)
 	}
 	b.WriteString("return result, nil\n")
@@ -140,18 +140,18 @@ func renderAliasAppendJSON(b *bytes.Buffer, s StructInfo) {
 	case KindUint, KindUint8, KindUint16, KindUint32, KindUint64:
 		b.WriteString("return strconv.AppendUint(dst, uint64(s), 10), nil\n")
 	case KindFloat32:
-		// encode.AppendFloat: stdlib-parity format, errors on NaN/Inf instead
+		// ggen.AppendFloat: stdlib-parity format, errors on NaN/Inf instead
 		// of emitting invalid JSON — same routing as struct float fields.
-		b.WriteString("return encode.AppendFloat(dst, float64(s), 32)\n")
+		b.WriteString("return ggen.AppendFloat(dst, float64(s), 32)\n")
 	case KindFloat64:
-		b.WriteString("return encode.AppendFloat(dst, float64(s), 64)\n")
+		b.WriteString("return ggen.AppendFloat(dst, float64(s), 64)\n")
 	}
 }
 
 // renderAliasStructDecode emits DecodeFrom (or DecodeFromStream when stream)
 // for a struct alias, picking the cheapest delegation the underlying supports:
 // ggen-shaped DecodeFrom → JSONUnmarshaler (SkipValue + UnmarshalJSON) →
-// TextUnmarshaler (scan.String + UnmarshalText). Drives a fresh `u` of the
+// TextUnmarshaler (ggen.String + UnmarshalText). Drives a fresh `u` of the
 // underlying type, then casts back.
 func renderAliasStructDecode(b *bytes.Buffer, s StructInfo, stream bool) {
 	switch {
@@ -165,7 +165,7 @@ func renderAliasStructDecode(b *bytes.Buffer, s StructInfo, stream bool) {
 		fmt.Fprintf(b, `var u %[1]s
 v, _n, err := u.`+call+`
 i += _n
-if err != nil { return result, i, decode.NewParseErrShift("", i, _n, err) }
+if err != nil { return result, i, ggen.NewParseErrShift("", i, _n, err) }
 result = %[2]s(v)
 return result, i, nil
 `, s.AliasUnderlying, s.Name)
@@ -176,25 +176,25 @@ return result, i, nil
 		}
 		fmt.Fprintf(b, `var u %[1]s
 v, err := u.`+call+`
-if err != nil { return result, decode.NewParseErr("", s.Offset(), err) }
+if err != nil { return result, ggen.NewParseErr("", s.Offset(), err) }
 result = %[2]s(v)
 return result, nil
 `, s.AliasUnderlying, s.Name)
 	case s.AliasIface.JSONUnmarshaler:
 		if stream {
 			fmt.Fprintf(b, `span, err := s.CaptureValue()
-if err != nil { return result, decode.NewParseErr("", s.Offset(), err) }
+if err != nil { return result, ggen.NewParseErr("", s.Offset(), err) }
 var u %[1]s
-if err := u.UnmarshalJSON(span); err != nil { return result, decode.NewParseErr("", s.Offset(), err) }
+if err := u.UnmarshalJSON(span); err != nil { return result, ggen.NewParseErr("", s.Offset(), err) }
 result = %[2]s(u)
 return result, nil
 `, s.AliasUnderlying, s.Name)
 		} else {
 			fmt.Fprintf(b, `start := i
-k, err := scan.SkipValue(data, start)
-if err != nil { return result, i, decode.NewParseErr("", i, err) }
+k, err := ggen.SkipValue(data, start)
+if err != nil { return result, i, ggen.NewParseErr("", i, err) }
 var u %[1]s
-if err := u.UnmarshalJSON(data[start:k]); err != nil { return result, i, decode.NewParseErr("", i, err) }
+if err := u.UnmarshalJSON(data[start:k]); err != nil { return result, i, ggen.NewParseErr("", i, err) }
 result = %[2]s(u)
 return result, k, nil
 `, s.AliasUnderlying, s.Name)
@@ -202,17 +202,17 @@ return result, k, nil
 	case s.AliasIface.TextUnmarshaler:
 		if stream {
 			fmt.Fprintf(b, `ts, err := s.String(`+vArgS(s)+`)
-if err != nil { return result, decode.NewParseErr("", s.Offset(), err) }
+if err != nil { return result, ggen.NewParseErr("", s.Offset(), err) }
 var u %[1]s
-if err := u.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts))); err != nil { return result, decode.NewParseErr("", s.Offset(), err) }
+if err := u.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts))); err != nil { return result, ggen.NewParseErr("", s.Offset(), err) }
 result = %[2]s(u)
 return result, nil
 `, s.AliasUnderlying, s.Name)
 		} else {
 			fmt.Fprintf(b, `ts, tj, err := `+scanStringFn+`(data, i, `+vArgS(s)+`)
-if err != nil { return result, i, decode.NewParseErr("", i, err) }
+if err != nil { return result, i, ggen.NewParseErr("", i, err) }
 var u %[1]s
-if err := u.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts))); err != nil { return result, tj, decode.NewParseErr("", tj, err) }
+if err := u.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts))); err != nil { return result, tj, ggen.NewParseErr("", tj, err) }
 result = %[2]s(u)
 return result, tj, nil
 `, s.AliasUnderlying, s.Name)
@@ -239,7 +239,7 @@ func renderAliasStructAppendJSON(b *bytes.Buffer, s StructInfo) {
 		// Empty result errors (stdlib parity), like the cross-package arm.
 		fmt.Fprintf(b, `bs, err := %s(s).MarshalJSON()
 if err != nil { return dst, err }
-if len(bs) == 0 { return dst, encode.ErrEmptyMarshalJSON }
+if len(bs) == 0 { return dst, ggen.ErrEmptyMarshalJSON }
 return append(dst, bs...), nil
 `, s.AliasUnderlying)
 	case s.AliasIface.TextAppender:
@@ -255,7 +255,7 @@ return %s(dst, ts), nil
 t, err := u.MarshalText()
 if err != nil { return dst, err }
 dst = append(dst, '"')
-dst = %s(dst, encode.BytesToString(t))
+dst = %s(dst, ggen.BytesToString(t))
 return dst, nil
 `, s.AliasUnderlying, appendStrFn(s.HTMLEscape))
 	default:

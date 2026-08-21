@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sirkostya009/ggen/validation"
+	"github.com/sirkostya009/ggen"
 )
 
 // MultiErrStruct collects all validation failures rather than stopping first.
@@ -57,10 +57,10 @@ func TestAggregate_allErrors(t *testing.T) {
 			t.Errorf("aggregated error missing %q:\n%s", want, msg)
 		}
 	}
-	// validation.Errors implements Unwrap() []error — walk via errors.As.
-	var ves validation.Errors
+	// ggen.Errors implements Unwrap() []error — walk via errors.As.
+	var ves ggen.Errors
 	if !errors.As(err, &ves) {
-		t.Fatalf("expected validation.Errors, got %T: %v", err, err)
+		t.Fatalf("expected ggen.Errors, got %T: %v", err, err)
 	}
 	if len(ves) < 3 {
 		t.Errorf("expected >= 3 errors, got %d:\n%s", len(ves), msg)

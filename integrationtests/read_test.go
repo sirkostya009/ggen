@@ -7,9 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sirkostya009/ggen/decode"
-	"github.com/sirkostya009/ggen/validation"
-	"github.com/sirkostya009/ggen/scan"
+	"github.com/sirkostya009/ggen"
 )
 
 // IgnoreUnknownStruct: ignoreunknown silently skips extra JSON keys.
@@ -122,12 +120,12 @@ func TestRead_parseErrorTopLevel(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	var pe *decode.ParseError
+	var pe *ggen.ParseError
 	if !errors.As(err, &pe) {
-		t.Fatalf("err = %T %v, want *decode.ParseError", err, err)
+		t.Fatalf("err = %T %v, want *ggen.ParseError", err, err)
 	}
-	if !errors.Is(err, scan.ErrBadObject) {
-		t.Fatalf("errors.Is(err, scan.ErrBadObject) = false; got %v", err)
+	if !errors.Is(err, ggen.ErrBadObject) {
+		t.Fatalf("errors.Is(err, ggen.ErrBadObject) = false; got %v", err)
 	}
 	if len(pe.Path) != 0 {
 		t.Fatalf("Path = %v; want empty for top-level error", pe.Path)
@@ -141,9 +139,9 @@ func TestRead_parseErrorFieldName(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	var pe *decode.ParseError
+	var pe *ggen.ParseError
 	if !errors.As(err, &pe) {
-		t.Fatalf("err = %T, want *decode.ParseError", err)
+		t.Fatalf("err = %T, want *ggen.ParseError", err)
 	}
 	if strings.Join(pe.Path, ".") != "street" {
 		t.Fatalf("Path = %v; want [street]", pe.Path)
@@ -160,12 +158,10 @@ func TestRead_validationNotWrapped(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	var minlen *validation.MinLenError
-	if !errors.As(err, &minlen) {
-		t.Fatalf("err = %T %v, want *validation.MinLenError", err, err)
+	if _, ok := errors.AsType[*ggen.MinLenError](err); !ok {
+		t.Fatalf("err = %T %v, want *ggen.MinLenError", err, err)
 	}
-	var pe *decode.ParseError
-	if errors.As(err, &pe) {
+	if _, ok := errors.AsType[*ggen.ParseError](err); ok {
 		t.Fatalf("validation error wrapped in ParseError: %v", err)
 	}
 }

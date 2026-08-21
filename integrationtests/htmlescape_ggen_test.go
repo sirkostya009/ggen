@@ -6,10 +6,7 @@ import (
 	"strings"
 	"unsafe"
 
-	"github.com/sirkostya009/ggen/decode"
-	"github.com/sirkostya009/ggen/encode"
-	"github.com/sirkostya009/ggen/scan"
-	"github.com/sirkostya009/ggen/validation"
+	"github.com/sirkostya009/ggen"
 )
 
 func (recv HTMLRawStruct) DecodeFrom(data []byte) (result HTMLRawStruct, i int, err error) {
@@ -19,7 +16,7 @@ func (recv HTMLRawStruct) DecodeFrom(data []byte) (result HTMLRawStruct, i int, 
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
-		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 	}
 	i++
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -32,7 +29,7 @@ func (recv HTMLRawStruct) DecodeFrom(data []byte) (result HTMLRawStruct, i int, 
 	for {
 		var key string
 		if i >= len(data) || data[i] != '"' {
-			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrExpectString)
 		}
 		ke := i + 1
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
@@ -42,16 +39,16 @@ func (recv HTMLRawStruct) DecodeFrom(data []byte) (result HTMLRawStruct, i int, 
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i, true)
+			key, i, err = ggen.String(data, i, true)
 			if err != nil {
-				return result, i, decode.NewParseErr("", i, err)
+				return result, i, ggen.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 		}
 		i++
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -60,11 +57,11 @@ func (recv HTMLRawStruct) DecodeFrom(data []byte) (result HTMLRawStruct, i int, 
 		switch key {
 		case "note":
 			if seenNote {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"note"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"note"}}
 			}
 			seenNote = true
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("note", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("note", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -78,19 +75,19 @@ func (recv HTMLRawStruct) DecodeFrom(data []byte) (result HTMLRawStruct, i int, 
 				result.Note = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.Note, i, err = scan.String(data, i, true)
+				result.Note, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("note", i, err)
+					return result, i, ggen.NewParseErr("note", i, err)
 				}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 		}
 		if data[i] == ',' {
 			i++
@@ -103,24 +100,24 @@ func (recv HTMLRawStruct) DecodeFrom(data []byte) (result HTMLRawStruct, i int, 
 			i++
 			return result, i, nil
 		}
-		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 	}
 }
 
-func (recv HTMLRawStruct) DecodeFromStream(s *scan.Stream) (result HTMLRawStruct, err error) {
+func (recv HTMLRawStruct) DecodeFromStream(s *ggen.Stream) (result HTMLRawStruct, err error) {
 	result = recv
 	seenNote := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Offset(), err)
+		return result, ggen.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Offset(), err)
+		return result, ggen.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
+			return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -132,33 +129,33 @@ func (recv HTMLRawStruct) DecodeFromStream(s *scan.Stream) (result HTMLRawStruct
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Offset(), err)
+			return result, ggen.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "note":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("note", s.Offset(), err)
+				return result, ggen.NewParseErr("note", s.Offset(), err)
 			}
 			if seenNote {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"note"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"note"}}
 			}
 			seenNote = true
 			result.Note, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("note", s.Offset(), err)
+				return result, ggen.NewParseErr("note", s.Offset(), err)
 			}
 		default:
-			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Offset(), err)
+			return result, ggen.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+				return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -167,7 +164,7 @@ func (recv HTMLRawStruct) DecodeFromStream(s *scan.Stream) (result HTMLRawStruct
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Offset(), err)
+				return result, ggen.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -175,7 +172,7 @@ func (recv HTMLRawStruct) DecodeFromStream(s *scan.Stream) (result HTMLRawStruct
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
+		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
 	}
 }
 
@@ -189,7 +186,7 @@ func (s HTMLRawStruct) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"note\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.Note)
+	dst = ggen.AppendStringNoHTML(dst, s.Note)
 	return append(dst, '}'), nil
 }
 
@@ -200,7 +197,7 @@ func (recv HTMLEscapeStruct) DecodeFrom(data []byte) (result HTMLEscapeStruct, i
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
-		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 	}
 	i++
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -213,7 +210,7 @@ func (recv HTMLEscapeStruct) DecodeFrom(data []byte) (result HTMLEscapeStruct, i
 	for {
 		var key string
 		if i >= len(data) || data[i] != '"' {
-			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrExpectString)
 		}
 		ke := i + 1
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
@@ -223,16 +220,16 @@ func (recv HTMLEscapeStruct) DecodeFrom(data []byte) (result HTMLEscapeStruct, i
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i, true)
+			key, i, err = ggen.String(data, i, true)
 			if err != nil {
-				return result, i, decode.NewParseErr("", i, err)
+				return result, i, ggen.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 		}
 		i++
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -241,11 +238,11 @@ func (recv HTMLEscapeStruct) DecodeFrom(data []byte) (result HTMLEscapeStruct, i
 		switch key {
 		case "note":
 			if seenNote {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"note"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"note"}}
 			}
 			seenNote = true
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("note", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("note", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -259,19 +256,19 @@ func (recv HTMLEscapeStruct) DecodeFrom(data []byte) (result HTMLEscapeStruct, i
 				result.Note = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.Note, i, err = scan.String(data, i, true)
+				result.Note, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("note", i, err)
+					return result, i, ggen.NewParseErr("note", i, err)
 				}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 		}
 		if data[i] == ',' {
 			i++
@@ -284,24 +281,24 @@ func (recv HTMLEscapeStruct) DecodeFrom(data []byte) (result HTMLEscapeStruct, i
 			i++
 			return result, i, nil
 		}
-		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 	}
 }
 
-func (recv HTMLEscapeStruct) DecodeFromStream(s *scan.Stream) (result HTMLEscapeStruct, err error) {
+func (recv HTMLEscapeStruct) DecodeFromStream(s *ggen.Stream) (result HTMLEscapeStruct, err error) {
 	result = recv
 	seenNote := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Offset(), err)
+		return result, ggen.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Offset(), err)
+		return result, ggen.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
+			return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -313,33 +310,33 @@ func (recv HTMLEscapeStruct) DecodeFromStream(s *scan.Stream) (result HTMLEscape
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Offset(), err)
+			return result, ggen.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "note":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("note", s.Offset(), err)
+				return result, ggen.NewParseErr("note", s.Offset(), err)
 			}
 			if seenNote {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"note"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"note"}}
 			}
 			seenNote = true
 			result.Note, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("note", s.Offset(), err)
+				return result, ggen.NewParseErr("note", s.Offset(), err)
 			}
 		default:
-			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Offset(), err)
+			return result, ggen.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+				return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -348,7 +345,7 @@ func (recv HTMLEscapeStruct) DecodeFromStream(s *scan.Stream) (result HTMLEscape
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Offset(), err)
+				return result, ggen.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -356,7 +353,7 @@ func (recv HTMLEscapeStruct) DecodeFromStream(s *scan.Stream) (result HTMLEscape
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
+		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
 	}
 }
 
@@ -370,6 +367,6 @@ func (s HTMLEscapeStruct) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"note\":\""...)
-	dst = encode.AppendString(dst, s.Note)
+	dst = ggen.AppendString(dst, s.Note)
 	return append(dst, '}'), nil
 }

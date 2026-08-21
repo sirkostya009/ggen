@@ -9,12 +9,12 @@ import (
 	"testing"
 	"unsafe"
 
-	"github.com/sirkostya009/ggen/scan"
+	"github.com/sirkostya009/ggen"
 )
 
 // Decode-into-receiver tests. The receiver IS the merge source: scalars
 // persist across omitted keys, containers reset before refill, nested structs
-// recurse. Tests call (T).DecodeFrom directly (decode.Unmarshal starts fresh).
+// recurse. Tests call (T).DecodeFrom directly (ggen.Unmarshal starts fresh).
 
 func TestMerge_scalarFieldsPersistAcrossOmitted(t *testing.T) {
 	t.Parallel()
@@ -204,7 +204,7 @@ func TestMerge_nestedStructRecursesIntoExisting(t *testing.T) {
 func TestMerge_pointerFieldPersistsWhenOmitted(t *testing.T) {
 	t.Parallel()
 	keep := new("keep")
-	receiver := PointerStruct{PtrNameStruct: PtrNameStruct{Name: keep}, PtrCountStruct: PtrCountStruct{Count: new(7)}}
+	receiver := PointerStruct{Name: keep, Count: new(7)}
 	// "name" omitted → receiver pointer untouched.
 	got, _, err := receiver.DecodeFrom([]byte(`{"count":9,"enabled":true}`))
 	if err != nil {
@@ -221,7 +221,7 @@ func TestMerge_pointerFieldPersistsWhenOmitted(t *testing.T) {
 func TestMerge_pointerScalarReusesPointee(t *testing.T) {
 	t.Parallel()
 	orig := new(3)
-	receiver := PointerStruct{PtrCountStruct: PtrCountStruct{Count: orig}}
+	receiver := PointerStruct{Count: orig}
 	got, _, err := receiver.DecodeFrom([]byte(`{"count":9}`))
 	if err != nil {
 		t.Fatalf("decode: %v", err)
@@ -238,7 +238,7 @@ func TestMerge_pointerStructPointeeReused(t *testing.T) {
 	t.Parallel()
 	// Non-nil *Address pointee decoded in place — same pointer.
 	orig := &Address{Street: "Main 1", City: "Lviv", ZipCode: "79000"}
-	receiver := PointerStruct{PtrAddrStruct: PtrAddrStruct{Addr: orig}}
+	receiver := PointerStruct{Addr: orig}
 	got, _, err := receiver.DecodeFrom([]byte(`{"addr":{"street":"Main 2","city":"Kyiv","zipCode":"01001"}}`))
 	if err != nil {
 		t.Fatalf("decode: %v", err)
@@ -269,7 +269,7 @@ func TestMerge_pointerNilReceiverAllocates(t *testing.T) {
 func TestMerge_pointerNullDropsExistingPointee(t *testing.T) {
 	t.Parallel()
 	// JSON null nils the field even when the receiver carried a pointee.
-	receiver := PointerStruct{PtrNameStruct: PtrNameStruct{Name: new("x")}, PtrEnabledStruct: PtrEnabledStruct{Enabled: new(true)}}
+	receiver := PointerStruct{Name: new("x"), Enabled: new(true)}
 	got, _, err := receiver.DecodeFrom([]byte(`{"name":null,"enabled":null}`))
 	if err != nil {
 		t.Fatalf("decode: %v", err)
@@ -283,7 +283,7 @@ func TestMerge_multiLevelReusesWholeChain(t *testing.T) {
 	t.Parallel()
 	inner := new(3) // *int
 	outer := &inner // **int, both levels allocated
-	receiver := NPtrStruct{PtrPPStruct: PtrPPStruct{PP: outer}}
+	receiver := NPtrStruct{PP: outer}
 	got, _, err := receiver.DecodeFrom([]byte(`{"pp":9}`))
 	if err != nil {
 		t.Fatalf("decode: %v", err)
@@ -303,7 +303,7 @@ func TestMerge_multiLevelAllocatesFromFirstNil(t *testing.T) {
 	t.Parallel()
 	var inner *int  // nil *int
 	outer := &inner // **int, outer non-nil, inner nil
-	receiver := NPtrStruct{PtrPPStruct: PtrPPStruct{PP: outer}}
+	receiver := NPtrStruct{PP: outer}
 	got, _, err := receiver.DecodeFrom([]byte(`{"pp":9}`))
 	if err != nil {
 		t.Fatalf("decode: %v", err)
@@ -320,7 +320,7 @@ func TestMerge_multiLevelStructLeafReused(t *testing.T) {
 	t.Parallel()
 	leaf := &Address{Street: "Main 1", City: "Lviv", ZipCode: "79000"}
 	mid := &leaf // **Address, fully allocated
-	receiver := NPtrStruct{PtrAddr2Struct: PtrAddr2Struct{Addr: mid}}
+	receiver := NPtrStruct{Addr: mid}
 	got, _, err := receiver.DecodeFrom([]byte(`{"addr":{"street":"Main 2","city":"Kyiv","zipCode":"01001"}}`))
 	if err != nil {
 		t.Fatalf("decode: %v", err)
@@ -404,7 +404,7 @@ func TestMerge_ArraySlotsOverwrite(t *testing.T) {
 		t.Errorf("SI[0]: ggen %+v, jsonv2 %+v", got.SI[0], want.SI[0])
 	}
 
-	var st scan.Stream
+	var st ggen.Stream
 	st.Reset(bytes.NewReader(payload), make([]byte, 0, 8))
 	sg, err := carriedArrMerge().DecodeFromStream(&st)
 	if err != nil {

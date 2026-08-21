@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sirkostya009/ggen/encode"
+	"github.com/sirkostya009/ggen"
 )
 
 // MapStruct exercises map[string]V: primitive/struct values, inner mods.
@@ -46,7 +46,7 @@ func TestMap_primitiveRoundtrip(t *testing.T) {
 	in := MapStruct{
 		Counts: map[string]int{"a": 1, "b": 2, "c": 3},
 	}
-	out, _ := encode.MarshalString(in)
+	out, _ := ggen.MarshalString(in)
 	got, _, err := MapStruct{}.DecodeFrom([]byte(out))
 	if err != nil {
 		t.Fatalf("unmarshal: %v\n%s", err, out)
@@ -65,7 +65,7 @@ func TestMap_structValueRoundtrip(t *testing.T) {
 			"home": {Street: "Main 1", City: "Lviv", ZipCode: "79000"},
 		},
 	}
-	out, _ := encode.MarshalString(in)
+	out, _ := ggen.MarshalString(in)
 	got, _, err := MapStruct{}.DecodeFrom([]byte(out))
 	if err != nil {
 		t.Fatalf("unmarshal: %v\n%s", err, out)
@@ -160,10 +160,10 @@ func TestMap_diveValueValidation_pass(t *testing.T) {
 func TestEmbedded_promotedFields(t *testing.T) {
 	t.Parallel()
 	in := Derived{
-		Base: Base{ID: "abc", Meta: "info"},
+		ID: "abc", Meta: "info",
 		Name: "alice",
 	}
-	out, _ := encode.MarshalString(in)
+	out, _ := ggen.MarshalString(in)
 	for _, want := range []string{`"id":"abc"`, `"name":"alice"`, `"meta":"info"`} {
 		if !strings.Contains(out, want) {
 			t.Errorf("marshal missing %q in %q", want, out)

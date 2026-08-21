@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/sirkostya009/ggen/scan"
+	"github.com/sirkostya009/ggen"
 )
 
 // Seq must keep the Stream's buffer bounded across a long run of GENERATED
@@ -21,7 +21,7 @@ func TestSeqBufferStaysBounded(t *testing.T) {
 			sb.Write(complexPayload)
 			sb.WriteByte('\n')
 		}
-		var s scan.Stream
+		var s ggen.Stream
 		s.Reset(bytes.NewReader(sb.Bytes()), make([]byte, 0, bufCap))
 		n := 0
 		for v, err := range s.Seq[Node]() {
@@ -60,7 +60,7 @@ func TestArrayBufferStaysBounded(t *testing.T) {
 			sb.Write(complexPayload)
 		}
 		sb.WriteByte(']')
-		var s scan.Stream
+		var s ggen.Stream
 		s.Reset(bytes.NewReader(sb.Bytes()), make([]byte, 0, bufCap))
 		n := 0
 		for v, err := range s.Array[Node]() {

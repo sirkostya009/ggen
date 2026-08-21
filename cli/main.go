@@ -28,7 +28,7 @@ var (
 	// code. Under GOEXPERIMENT=simd it defaults to the fused AVX tier;
 	// -simd picks a wider tier (or off). The tier is fixed at generate time —
 	// generated code carries no runtime probing or branching.
-	scanStringFn = "scan.String"
+	scanStringFn = "ggen.String"
 	// simdSuffix is the tier suffix ("", "AVX", "AVX2", "AVX512") appended to
 	// the encode escape helpers (appendStrFn) — set alongside scanStringFn.
 	simdSuffix = ""
@@ -44,7 +44,7 @@ func resolveSIMD(simdFlag string) error {
 	case "off":
 	case "":
 		if exp {
-			scanStringFn = "scan.StringAVX"
+			scanStringFn = "ggen.StringAVX"
 			simdSuffix = "AVX"
 		}
 	case "avx", "avx2", "avx512":
@@ -52,7 +52,7 @@ func resolveSIMD(simdFlag string) error {
 			return fmt.Errorf("-simd=%s requires GOEXPERIMENT=simd (generated code imports simd/archsimd, which only exists under the experiment)", simdFlag)
 		}
 		simdSuffix = strings.ToUpper(simdFlag)
-		scanStringFn = "scan.String" + simdSuffix
+		scanStringFn = "ggen.String" + simdSuffix
 	default:
 		return fmt.Errorf("-simd=%s: unknown tier (off|avx|avx2|avx512)", simdFlag)
 	}

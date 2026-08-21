@@ -13,9 +13,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sirkostya009/ggen/decode"
-	"github.com/sirkostya009/ggen/scan"
-	"github.com/sirkostya009/ggen/validation"
+	"github.com/sirkostya009/ggen"
 )
 
 // chunkReader delivers payload max bytes per Read, stressing Stream.ReadMore's
@@ -76,7 +74,7 @@ func TestUnmarshalSlice_roundtrip(t *testing.T) {
 		{"street":"A","city":"X","zipCode":"00001"},
 		{"street":"B","city":"Y","zipCode":"00002"}
 	]`)
-	got, err := decode.UnmarshalSlice[Address](arr)
+	got, err := ggen.UnmarshalSlice[Address](arr)
 	if err != nil {
 		t.Fatalf("UnmarshalSlice: %v", err)
 	}
@@ -91,7 +89,7 @@ func TestUnmarshalSlice_roundtrip(t *testing.T) {
 func TestReadSlice_roundtrip(t *testing.T) {
 	t.Parallel()
 	arr := []byte(`[{"street":"A","city":"X","zipCode":"00001"}]`)
-	got, err := decode.ReadSlice[Address](bytes.NewReader(arr))
+	got, err := ggen.ReadSlice[Address](bytes.NewReader(arr))
 	if err != nil {
 		t.Fatalf("ReadSlice: %v", err)
 	}
@@ -102,7 +100,7 @@ func TestReadSlice_roundtrip(t *testing.T) {
 
 func TestUnmarshalStream_roundtrip(t *testing.T) {
 	t.Parallel()
-	var s scan.Stream
+	var s ggen.Stream
 	s.Reset(bytes.NewReader(complexPayload), make([]byte, 0, len(complexPayload)))
 	got, err := Node{}.DecodeFromStream(&s)
 	if err != nil {
@@ -122,7 +120,7 @@ func TestUnmarshalStream_roundtrip(t *testing.T) {
 func TestUnmarshalStream_chunked(t *testing.T) {
 	t.Parallel()
 	r := &chunkReader{data: complexPayload, max: 1}
-	var s scan.Stream
+	var s ggen.Stream
 	s.Reset(r, nil)
 	got, err := Node{}.DecodeFromStream(&s)
 	if err != nil {
@@ -139,7 +137,7 @@ func TestUnmarshalStream_chunked(t *testing.T) {
 func TestUnmarshalStream_tinyInitial(t *testing.T) {
 	t.Parallel()
 	// Hint smaller than payload forces a mid-parse grow; aliases must survive it.
-	var s scan.Stream
+	var s ggen.Stream
 	s.Reset(bytes.NewReader(complexPayload), make([]byte, 0, 32))
 	got, err := Node{}.DecodeFromStream(&s)
 	if err != nil {
@@ -168,7 +166,7 @@ func TestUnmarshalStream_SingleHugeString(t *testing.T) {
 	huge := strings.Repeat("x", size)
 	payload := []byte(`{"big":"` + huge + `"}`)
 
-	var s scan.Stream
+	var s ggen.Stream
 	s.Reset(bytes.NewReader(payload), make([]byte, 0, 64))
 	got, err := HugeStringStruct{}.DecodeFromStream(&s)
 	if err != nil {
@@ -188,7 +186,7 @@ func TestUnmarshalStream_MassiveWhitespace(t *testing.T) {
 	gap := strings.Repeat("\n \t", 100_000)
 	payload := []byte(`{` + gap + `"big":` + gap + `"hello"` + gap + `}`)
 
-	var s scan.Stream
+	var s ggen.Stream
 	s.Reset(bytes.NewReader(payload), make([]byte, 0, 64))
 	got, err := HugeStringStruct{}.DecodeFromStream(&s)
 	if err != nil {
@@ -221,7 +219,7 @@ func TestUnmarshalStream_ValuesSurviveCompaction(t *testing.T) {
 	in := []byte(`{"a":"AAAAAAAA","b":"BBBBBBBB","c":"CCCCCCCC","d":"DDDDDDDD",` +
 		`"e":"EEEEEEEE","f":"FFFFFFFF","g":"GGGGGGGG","h":"HHHHHHHH"}`)
 	r := &chunkReader{data: in, max: 1}
-	var s scan.Stream
+	var s ggen.Stream
 	s.Reset(r, make([]byte, 0, 16))
 	got, err := SequentialStringsStruct{}.DecodeFromStream(&s)
 	if err != nil {
@@ -247,7 +245,7 @@ func TestUnmarshalStream_RawJSONAcrossBoundary(t *testing.T) {
 	in := []byte(`{"raw1":` + bigInner + `,"raw2":null,"site":"http://x",` +
 		`"big":0,"bigF":"0","bigR":"0","id":"00000000-0000-0000-0000-000000000000",` +
 		`"gofrsId":"00000000-0000-0000-0000-000000000000"}`)
-	var s scan.Stream
+	var s ggen.Stream
 	s.Reset(bytes.NewReader(in), make([]byte, 0, 64))
 	got, err := RichTypes{}.DecodeFromStream(&s)
 	if err != nil {
@@ -265,7 +263,7 @@ func TestUnmarshalStream_InlineMapKeyClone(t *testing.T) {
 	in := []byte(`{"name":"alice","kAlpha":1,"kBravoo":2,"kCharlie":3,` +
 		`"kDelta11":4,"kEcho1234":5,"kFoxtrot1":6,"kGolf12345":7}`)
 	r := &chunkReader{data: in, max: 1}
-	var s scan.Stream
+	var s ggen.Stream
 	s.Reset(r, make([]byte, 0, 16))
 	got, err := InlineStruct{}.DecodeFromStream(&s)
 	if err != nil {
@@ -279,7 +277,7 @@ func TestUnmarshalStream_InlineMapKeyClone(t *testing.T) {
 }
 
 // UnknownErrorStruct: closed schema — the unknown key must be cloned before
-// going into validation.UnknownKeyError.
+// going into ggen.UnknownKeyError.
 //
 //ggen:generate
 type UnknownErrorStruct struct {
@@ -290,13 +288,13 @@ func TestUnmarshalStream_UnknownKeyErrorClone(t *testing.T) {
 	t.Parallel()
 	in := []byte(`{"name":"alice","SomeUnknownKeyHere":42}`)
 	r := &chunkReader{data: in, max: 4}
-	var s scan.Stream
+	var s ggen.Stream
 	s.Reset(r, make([]byte, 0, 8))
 	_, err := UnknownErrorStruct{}.DecodeFromStream(&s)
 	if err == nil {
 		t.Fatal("expected UnknownKeyError")
 	}
-	var ue *validation.UnknownKeyError
+	var ue *ggen.UnknownKeyError
 	if !errors.As(err, &ue) {
 		t.Fatalf("got %T (%v), want *UnknownKeyError", err, err)
 	}
@@ -317,7 +315,7 @@ func TestUnmarshalStream_TinyBufManyKeys(t *testing.T) {
 	in := []byte(`{` + strings.Join(parts, ",") + `}`)
 
 	r := &chunkReader{data: in, max: 1}
-	var s scan.Stream
+	var s ggen.Stream
 	s.Reset(r, make([]byte, 0, 1))
 	got, err := WideStruct{}.DecodeFromStream(&s)
 	if err != nil {
@@ -343,7 +341,7 @@ func TestUnmarshalStream_HintBufSmallerThanValue(t *testing.T) {
 		t.Run(strconv.Itoa(hint), func(t *testing.T) {
 			t.Parallel()
 			r := bytes.NewReader(complexPayload)
-			var s scan.Stream
+			var s ggen.Stream
 			s.Reset(r, make([]byte, 0, hint))
 			got, err := Node{}.DecodeFromStream(&s)
 			if err != nil {
@@ -360,7 +358,7 @@ func TestUnmarshalStream_HintBufSmallerThanValue(t *testing.T) {
 func TestUnmarshalStream_PartialReadAtBoundaries(t *testing.T) {
 	t.Parallel()
 	r := &burstReader{data: complexPayload, sizes: []int{3, 1, 7, 1, 13, 1, 50, 1}}
-	var s scan.Stream
+	var s ggen.Stream
 	s.Reset(r, make([]byte, 0, 16))
 	got, err := Node{}.DecodeFromStream(&s)
 	if err != nil {
@@ -419,7 +417,7 @@ func TestUnmarshalStream_BytesEqualsStream(t *testing.T) {
 		}
 		for _, ch := range chunks {
 			r := &chunkReader{data: seed, max: ch}
-			var s scan.Stream
+			var s ggen.Stream
 			s.Reset(r, make([]byte, 0, 8))
 			got, errS := Node{}.DecodeFromStream(&s)
 			if errS != nil {
@@ -443,7 +441,7 @@ func TestUnmarshalStream_AcceptedByBytes_AlsoAcceptedByStream(t *testing.T) {
 		}
 		for _, ch := range []int{1, 4, 16} {
 			r := &chunkReader{data: seed, max: ch}
-			var s scan.Stream
+			var s ggen.Stream
 			s.Reset(r, make([]byte, 0, 4))
 			got, errB := Node{}.DecodeFromStream(&s)
 			if errB != nil {
@@ -461,20 +459,20 @@ func TestUnmarshalStream_AcceptedByBytes_AlsoAcceptedByStream(t *testing.T) {
 // bytes path.
 func TestStream_parseErrorFieldName(t *testing.T) {
 	t.Parallel()
-	var s scan.Stream
+	var s ggen.Stream
 	s.Reset(bytes.NewReader([]byte(`{"street":123,"city":"C","zipCode":"12345"}`)), nil)
 	_, err := (Address{}).DecodeFromStream(&s)
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	var pe *decode.ParseError
+	var pe *ggen.ParseError
 	if !errors.As(err, &pe) {
-		t.Fatalf("err = %T, want *decode.ParseError", err)
+		t.Fatalf("err = %T, want *ggen.ParseError", err)
 	}
 	if strings.Join(pe.Path, ".") != "street" {
 		t.Fatalf("Path = %v; want [street]", pe.Path)
 	}
-	if !errors.Is(err, scan.ErrExpectString) {
+	if !errors.Is(err, ggen.ErrExpectString) {
 		t.Fatalf("errors.Is sentinel mismatch: %v", err)
 	}
 }
@@ -482,12 +480,12 @@ func TestStream_parseErrorFieldName(t *testing.T) {
 // decodeBothPaths runs payload through DecodeFrom and DecodeFromStream of T,
 // returning both errors.
 func decodeBothPaths[T interface {
-	decode.Decoder[T]
-	scan.StreamDecoder[T]
+	ggen.Decoder[T]
+	ggen.StreamDecoder[T]
 }](payload string) (bytesErr, streamErr error) {
 	var zb T
 	_, _, bytesErr = zb.DecodeFrom([]byte(payload))
-	_, streamErr = scan.NewStream(strings.NewReader(payload), nil).Value[T]()
+	_, streamErr = ggen.NewStream(strings.NewReader(payload), nil).Value[T]()
 	return bytesErr, streamErr
 }
 
@@ -549,7 +547,7 @@ func TestTruncatedAfterComma(t *testing.T) {
 }
 
 // ValidationPosStruct carries one minlen rule so a violation returns a concrete
-// *validation.MinLenError.
+// *ggen.MinLenError.
 //
 //ggen:generate
 type ValidationPosStruct struct {
@@ -567,7 +565,7 @@ func TestValidationError_Pos(t *testing.T) {
 	t.Parallel()
 	// Bytes path — Pos sits just past the closing quote of "yy".
 	_, _, bErr := ValidationPosStruct{}.DecodeFrom(posPayload)
-	var bMin *validation.MinLenError
+	var bMin *ggen.MinLenError
 	if !errors.As(bErr, &bMin) {
 		t.Fatalf("bytes: want *MinLenError, got %T: %v", bErr, bErr)
 	}
@@ -578,10 +576,10 @@ func TestValidationError_Pos(t *testing.T) {
 
 	// Stream path — 1-byte chunks + tiny buffer force compaction.
 	r := &chunkReader{data: posPayload, max: 1}
-	var s scan.Stream
+	var s ggen.Stream
 	s.Reset(r, make([]byte, 0, 16))
 	_, sErr := ValidationPosStruct{}.DecodeFromStream(&s)
-	var sMin *validation.MinLenError
+	var sMin *ggen.MinLenError
 	if !errors.As(sErr, &sMin) {
 		t.Fatalf("stream: want *MinLenError, got %T: %v", sErr, sErr)
 	}
@@ -648,16 +646,16 @@ func TestNarrowIntOverflow(t *testing.T) {
 			if (bErr != nil) != c.reject {
 				t.Errorf("bytes: reject=%v want %v (err=%v)", bErr != nil, c.reject, bErr)
 			}
-			if c.reject && bErr != nil && !errors.Is(bErr, scan.ErrNumberOverflow) {
+			if c.reject && bErr != nil && !errors.Is(bErr, ggen.ErrNumberOverflow) {
 				t.Errorf("bytes: err=%v, want ErrNumberOverflow", bErr)
 			}
-			var s scan.Stream
+			var s ggen.Stream
 			s.Reset(strings.NewReader(c.payload), make([]byte, 0, 8))
 			_, sErr := NarrowInts{}.DecodeFromStream(&s)
 			if (sErr != nil) != c.reject {
 				t.Errorf("stream: reject=%v want %v (err=%v)", sErr != nil, c.reject, sErr)
 			}
-			if c.reject && sErr != nil && !errors.Is(sErr, scan.ErrNumberOverflow) {
+			if c.reject && sErr != nil && !errors.Is(sErr, ggen.ErrNumberOverflow) {
 				t.Errorf("stream: err=%v, want ErrNumberOverflow", sErr)
 			}
 		})
@@ -665,13 +663,13 @@ func TestNarrowIntOverflow(t *testing.T) {
 }
 
 // TestInvalidUTF8Rejected pins the decode UTF-8 contract through GENERATED
-// code (inline window fast path, scan.String fall, escape arm, stream path):
+// code (inline window fast path, ggen.String fall, escape arm, stream path):
 // invalid UTF-8 / unpaired surrogates in string values reject with
-// scan.ErrInvalidUTF8, matching jsonv2 (encoding/json v1 instead replaces
+// ggen.ErrInvalidUTF8, matching jsonv2 (encoding/json v1 instead replaces
 // with U+FFFD — an intentional divergence from v1). Valid multi-byte UTF-8
 // decodes identically to jsonv2.
 func TestInvalidUTF8Rejected(t *testing.T) {
-	long := strings.Repeat("x", 40) // past the 32 B inline window → scan.String fall
+	long := strings.Repeat("x", 40) // past the 32 B inline window → ggen.String fall
 	cases := []struct {
 		name    string
 		payload string
@@ -697,20 +695,20 @@ func TestInvalidUTF8Rejected(t *testing.T) {
 			if (bErr != nil) != c.reject {
 				t.Errorf("bytes: reject=%v want %v (err=%v)", bErr != nil, c.reject, bErr)
 			}
-			if c.reject && bErr != nil && !errors.Is(bErr, scan.ErrInvalidUTF8) {
+			if c.reject && bErr != nil && !errors.Is(bErr, ggen.ErrInvalidUTF8) {
 				t.Errorf("bytes: err=%v, want ErrInvalidUTF8", bErr)
 			}
 			if !c.reject && got.Street != v2.Street {
 				t.Errorf("bytes: street %q != jsonv2 %q", got.Street, v2.Street)
 			}
 			for _, bufCap := range []int{8, 512} {
-				var s scan.Stream
+				var s ggen.Stream
 				s.Reset(&chunkReader{data: []byte(c.payload), max: 3}, make([]byte, 0, bufCap))
 				sGot, sErr := Address{}.DecodeFromStream(&s)
 				if (sErr != nil) != c.reject {
 					t.Errorf("stream cap=%d: reject=%v want %v (err=%v)", bufCap, sErr != nil, c.reject, sErr)
 				}
-				if c.reject && sErr != nil && !errors.Is(sErr, scan.ErrInvalidUTF8) {
+				if c.reject && sErr != nil && !errors.Is(sErr, ggen.ErrInvalidUTF8) {
 					t.Errorf("stream cap=%d: err=%v, want ErrInvalidUTF8", bufCap, sErr)
 				}
 				if !c.reject && sGot.Street != v2.Street {
@@ -722,7 +720,7 @@ func TestInvalidUTF8Rejected(t *testing.T) {
 }
 
 // TestRawCaptureInvalidUTF8: captured raw spans (json.RawMessage /
-// jsontext.Value) reject invalid UTF-8 BYTES with scan.ErrInvalidUTF8 (jsonv2
+// jsontext.Value) reject invalid UTF-8 BYTES with ggen.ErrInvalidUTF8 (jsonv2
 // rejects those too), bytes + stream. Residual divergence: unpaired \uXXXX
 // surrogate ESCAPES inside a raw span are ASCII text and pass (jsonv2
 // escape-parses raw strings and rejects) — see backlog.
@@ -748,16 +746,16 @@ func TestRawCaptureInvalidUTF8(t *testing.T) {
 			if (bErr != nil) != c.reject {
 				t.Errorf("bytes: reject=%v want %v (err=%v)", bErr != nil, c.reject, bErr)
 			}
-			if c.reject && bErr != nil && !errors.Is(bErr, scan.ErrInvalidUTF8) {
+			if c.reject && bErr != nil && !errors.Is(bErr, ggen.ErrInvalidUTF8) {
 				t.Errorf("bytes: err=%v, want ErrInvalidUTF8", bErr)
 			}
-			var s scan.Stream
+			var s ggen.Stream
 			s.Reset(&chunkReader{data: []byte(c.payload), max: 3}, make([]byte, 0, 8))
 			_, sErr := RichTypes{}.DecodeFromStream(&s)
 			if (sErr != nil) != c.reject {
 				t.Errorf("stream: reject=%v want %v (err=%v)", sErr != nil, c.reject, sErr)
 			}
-			if c.reject && sErr != nil && !errors.Is(sErr, scan.ErrInvalidUTF8) {
+			if c.reject && sErr != nil && !errors.Is(sErr, ggen.ErrInvalidUTF8) {
 				t.Errorf("stream: err=%v, want ErrInvalidUTF8", sErr)
 			}
 		})
@@ -765,7 +763,7 @@ func TestRawCaptureInvalidUTF8(t *testing.T) {
 }
 
 // TestMaxDepthNoCrash: deeply-nested payloads that formerly overflowed the
-// goroutine stack (fatal, unrecoverable) now return scan.ErrMaxDepth cleanly
+// goroutine stack (fatal, unrecoverable) now return ggen.ErrMaxDepth cleanly
 // through generated code — self-referential struct (Node.Children), any field,
 // ignoreunknown skip, and RawMessage capture, bytes + stream.
 func TestMaxDepthNoCrash(t *testing.T) {
@@ -787,20 +785,20 @@ func TestMaxDepthNoCrash(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if err := c.decode([]byte(c.payload)); !errors.Is(err, scan.ErrMaxDepth) {
+			if err := c.decode([]byte(c.payload)); !errors.Is(err, ggen.ErrMaxDepth) {
 				t.Errorf("bytes: want ErrMaxDepth, got %v", err)
 			}
 		})
 	}
 	// Stream path: recursive struct + skip, deep enough to exceed the cap.
 	rec := strings.Repeat(`{"children":[`, n) + strings.Repeat(`]}`, n)
-	var s scan.Stream
+	var s ggen.Stream
 	s.Reset(strings.NewReader(rec), make([]byte, 0, 4096))
-	if _, err := (Node{}).DecodeFromStream(&s); !errors.Is(err, scan.ErrMaxDepth) {
+	if _, err := (Node{}).DecodeFromStream(&s); !errors.Is(err, ggen.ErrMaxDepth) {
 		t.Errorf("stream recursive: want ErrMaxDepth, got %v", err)
 	}
 	s.Reset(strings.NewReader(`{"zz":`+arr+`}`), make([]byte, 0, 4096))
-	if _, err := (IgnoreUnknownStruct{}).DecodeFromStream(&s); !errors.Is(err, scan.ErrMaxDepth) {
+	if _, err := (IgnoreUnknownStruct{}).DecodeFromStream(&s); !errors.Is(err, ggen.ErrMaxDepth) {
 		t.Errorf("stream skip: want ErrMaxDepth, got %v", err)
 	}
 }
@@ -871,7 +869,7 @@ func TestNumberGrammarStrict(t *testing.T) {
 				t.Errorf("bytes: %+v != jsonv2 %+v", got, v2)
 			}
 			for _, bufCap := range []int{8, 512} {
-				var s scan.Stream
+				var s ggen.Stream
 				s.Reset(&chunkReader{data: []byte(c.payload), max: 3}, make([]byte, 0, bufCap))
 				sGot, sErr := NumGrammar{}.DecodeFromStream(&s)
 				if (sErr != nil) != c.reject {
@@ -910,12 +908,12 @@ func TestNarrowFloatOverflow(t *testing.T) {
 		`{"f":1e39}`, `{"f":-1e39}`, `{"fs":[1,1e39]}`, `{"fm":{"k":1e39}}`, `{"fp":1e39}`,
 	}
 	for _, in := range bad {
-		if _, _, err := (NarrowFloats{}).DecodeFrom([]byte(in)); !errors.Is(err, scan.ErrNumberOverflow) {
+		if _, _, err := (NarrowFloats{}).DecodeFrom([]byte(in)); !errors.Is(err, ggen.ErrNumberOverflow) {
 			t.Errorf("bytes %s: got %v, want ErrNumberOverflow", in, err)
 		}
-		var s scan.Stream
+		var s ggen.Stream
 		s.Reset(&chunkReader{data: []byte(in), max: 1}, nil)
-		if _, err := (NarrowFloats{}).DecodeFromStream(&s); !errors.Is(err, scan.ErrNumberOverflow) {
+		if _, err := (NarrowFloats{}).DecodeFromStream(&s); !errors.Is(err, ggen.ErrNumberOverflow) {
 			t.Errorf("stream %s: got %v, want ErrNumberOverflow", in, err)
 		}
 		var std NarrowFloats
@@ -932,13 +930,13 @@ func TestNarrowFloatOverflow(t *testing.T) {
 	}
 }
 
-// Round-5 pins: bytes-path slice structural errors wrap in *decode.ParseError
+// Round-5 pins: bytes-path slice structural errors wrap in *ggen.ParseError
 // (path + pos), and scan-primitive error positions surface end-to-end,
 // bytes/stream agreeing on the identical payload.
 
 func nodeStreamErr(t *testing.T, payload []byte) error {
 	t.Helper()
-	var s scan.Stream
+	var s ggen.Stream
 	s.Reset(bytes.NewReader(payload), make([]byte, 0, len(payload)))
 	_, err := Node{}.DecodeFromStream(&s)
 	return err
@@ -963,9 +961,9 @@ func TestParseError_SliceStructural(t *testing.T) {
 			if berr == nil {
 				t.Fatal("bytes: expected error")
 			}
-			var pe *decode.ParseError
+			var pe *ggen.ParseError
 			if !errors.As(berr, &pe) {
-				t.Fatalf("bytes: got %T %v, want *decode.ParseError", berr, berr)
+				t.Fatalf("bytes: got %T %v, want *ggen.ParseError", berr, berr)
 			}
 			if len(pe.Path) == 0 || pe.Path[0] != "tags" {
 				t.Errorf("bytes: Path = %v, want [tags ...]", pe.Path)
@@ -974,9 +972,9 @@ func TestParseError_SliceStructural(t *testing.T) {
 				t.Errorf("bytes: Pos = %d, want >= 8 (inside the value)", pe.Pos)
 			}
 			serr := nodeStreamErr(t, payload)
-			var spe *decode.ParseError
+			var spe *ggen.ParseError
 			if !errors.As(serr, &spe) {
-				t.Fatalf("stream: got %T %v, want *decode.ParseError", serr, serr)
+				t.Fatalf("stream: got %T %v, want *ggen.ParseError", serr, serr)
 			}
 			if len(spe.Path) == 0 || spe.Path[0] != "tags" {
 				t.Errorf("stream: Path = %v, want [tags ...]", spe.Path)
@@ -996,9 +994,9 @@ func TestParseError_VariantDispatch(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
 			_, _, err := LooseThing{}.DecodeFrom([]byte(c.payload))
-			var pe *decode.ParseError
+			var pe *ggen.ParseError
 			if !errors.As(err, &pe) {
-				t.Fatalf("got %T %v, want *decode.ParseError", err, err)
+				t.Fatalf("got %T %v, want *ggen.ParseError", err, err)
 			}
 			if len(pe.Path) == 0 || pe.Path[0] != "count" {
 				t.Errorf("Path = %v, want [count]", pe.Path)
@@ -1012,23 +1010,23 @@ func TestParseError_VariantDispatch(t *testing.T) {
 
 func TestParseError_ScanPrimitivePos(t *testing.T) {
 	t.Parallel()
-	// scan.String fails inside the value; runtime now returns the error
+	// ggen.String fails inside the value; runtime now returns the error
 	// position, which the emitted NewParseErr site stamps unmodified.
 	payload := []byte(`{"name":"ab` + "\x01" + `c"}`)
 	_, _, berr := Node{}.DecodeFrom(payload)
-	var bpe *decode.ParseError
+	var bpe *ggen.ParseError
 	if !errors.As(berr, &bpe) {
-		t.Fatalf("bytes: got %T %v, want *decode.ParseError", berr, berr)
+		t.Fatalf("bytes: got %T %v, want *ggen.ParseError", berr, berr)
 	}
 	if bpe.Pos < 8 {
 		t.Errorf("bytes: Pos = %d, want >= 8 (error inside the string)", bpe.Pos)
 	}
 	serr := nodeStreamErr(t, payload)
-	var spe *decode.ParseError
+	var spe *ggen.ParseError
 	if !errors.As(serr, &spe) {
-		t.Fatalf("stream: got %T %v, want *decode.ParseError", serr, serr)
+		t.Fatalf("stream: got %T %v, want *ggen.ParseError", serr, serr)
 	}
-	// Bytes stamps the string-content start (scan.String's error pos), the
+	// Bytes stamps the string-content start (ggen.String's error pos), the
 	// stream the value start — both real positions, never the old 0.
 	if spe.Pos < 8 {
 		t.Errorf("stream: Pos = %d, want >= 8 (at the value)", spe.Pos)
@@ -1044,7 +1042,7 @@ func TestParseError_StreamPosIsPayloadOffset(t *testing.T) {
 	t.Parallel()
 	var sb strings.Builder
 	sb.WriteString(`{"tags":[`)
-	for i := 0; i < 500; i++ {
+	for i := range 500 {
 		if i > 0 {
 			sb.WriteByte(',')
 		}
@@ -1055,20 +1053,20 @@ func TestParseError_StreamPosIsPayloadOffset(t *testing.T) {
 	wantAtLeast := bytes.Index(payload, []byte(`"id":true`))
 
 	_, _, berr := Node{}.DecodeFrom(payload)
-	var bpe *decode.ParseError
+	var bpe *ggen.ParseError
 	if !errors.As(berr, &bpe) {
-		t.Fatalf("bytes: got %T %v, want *decode.ParseError", berr, berr)
+		t.Fatalf("bytes: got %T %v, want *ggen.ParseError", berr, berr)
 	}
 	if bpe.Pos < wantAtLeast {
 		t.Errorf("bytes: Pos = %d, want >= %d", bpe.Pos, wantAtLeast)
 	}
 	for _, chunk := range []int{1, 7, 64, 512} {
-		var s scan.Stream
+		var s ggen.Stream
 		s.Reset(&chunkReader{data: payload, max: chunk}, make([]byte, 0, 64))
 		_, serr := Node{}.DecodeFromStream(&s)
-		var spe *decode.ParseError
+		var spe *ggen.ParseError
 		if !errors.As(serr, &spe) {
-			t.Fatalf("stream chunk=%d: got %T %v, want *decode.ParseError", chunk, serr, serr)
+			t.Fatalf("stream chunk=%d: got %T %v, want *ggen.ParseError", chunk, serr, serr)
 		}
 		if spe.Pos < wantAtLeast {
 			t.Errorf("stream chunk=%d: Pos = %d, want >= %d (payload offset, not buffer-relative)",
@@ -1078,7 +1076,7 @@ func TestParseError_StreamPosIsPayloadOffset(t *testing.T) {
 }
 
 // Round-9: generated value-head refills map a DRAINED reader to the same
-// grammar sentinel the bytes path reports for the truncation (scan.NotEOF in
+// grammar sentinel the bytes path reports for the truncation (ggen.NotEOF in
 // streamReadMore) — raw io.ErrUnexpectedEOF used to leak at null-peek/map/
 // slice/variant heads. Sweeps every prefix cut of a null-bearing payload.
 func TestTruncationSentinelParity(t *testing.T) {
@@ -1102,7 +1100,7 @@ func TestFormatArray_ByteOverflow(t *testing.T) {
 	t.Parallel()
 	bytesErr, streamErr := decodeBothPaths[NativeTypes](`{"byteArray":[300]}`)
 	for path, err := range map[string]error{"bytes": bytesErr, "stream": streamErr} {
-		if !errors.Is(err, scan.ErrNumberOverflow) {
+		if !errors.Is(err, ggen.ErrNumberOverflow) {
 			t.Errorf("%s: got %v, want ErrNumberOverflow", path, err)
 		}
 	}

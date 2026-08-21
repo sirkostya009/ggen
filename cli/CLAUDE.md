@@ -68,10 +68,10 @@ single-package mode. Processing is post-order over the matched import subgraph
 | `-pkg <name>`    | override package name in output                                                                                                                       |
 | `-marshal`       | emit `MarshalJSON` method                                                                                                                             |
 | `-unmarshal`     | emit `UnmarshalJSON` method                                                                                                                           |
-| `-multierr`      | accumulate validation failures into `validation.Errors`, returned at end of parse; parse errors still return immediately. The drain past a NESTED decode is gated on the callee being multierr too (`multiErrTypes` / `calleeDrains`): a single-error callee returns mid-value, so continuing would resume from a desynced cursor — the inner object's remaining keys used to surface as the PARENT's unknown keys |
-| `-allowdups`     | allow duplicate keys, first-wins (later skipped). Default: `validation.DuplicateKeyError`. NOTE the check is scoped to DECLARED keys (the per-field `seenX` flags) — dups inside skipped / `any` / raw / nested scopes are NOT detected, a decided divergence from jsonv2 (see backlog Tried Rejected) |
+| `-multierr`      | accumulate validation failures into `ggen.Errors`, returned at end of parse; parse errors still return immediately. The drain past a NESTED decode is gated on the callee being multierr too (`multiErrTypes` / `calleeDrains`): a single-error callee returns mid-value, so continuing would resume from a desynced cursor — the inner object's remaining keys used to surface as the PARENT's unknown keys |
+| `-allowdups`     | allow duplicate keys, first-wins (later skipped). Default: `ggen.DuplicateKeyError`. NOTE the check is scoped to DECLARED keys (the per-field `seenX` flags) — dups inside skipped / `any` / raw / nested scopes are NOT detected, a decided divergence from jsonv2 (see backlog Tried Rejected) |
 | `-novalidate`    | skip validation rules, required-field checks, mods                                                                                                    |
-| `-ignoreunknown` | silently skip unknown JSON keys. Default: `validation.UnknownKeyError`. Overridden when an inline map field is present                                |
+| `-ignoreunknown` | silently skip unknown JSON keys. Default: `ggen.UnknownKeyError`. Overridden when an inline map field is present                                |
 | `-nullzero`      | accept explicit JSON `null` on every non-pointer value field → Go zero. Default hard-errors (see null kind-gating). No-op on already-null-aware kinds |
 | `-nosortkeys`    | emit fields in Go declaration order. Default: alphabetical. Inline map fields stay last                                                               |
 | `-usenumber`     | decode JSON numbers into `any` fields as `json.Number` instead of `float64` (mirrors stdlib `UseNumber()`)                                            |
@@ -79,7 +79,7 @@ single-package mode. Processing is post-order over the matched import subgraph
 | `-allowinvalidutf8` | skip decode UTF-8 validation (opt #50) for every struct in the pass: string scans pass `validate=false` (raw bytes through, surrogates → U+FFFD), inline windows/classify revert to the pre-validation shapes, raw-span `CheckUTF8` not emitted. Decode-only |
 | `-copy`          | bytes-path `DecodeFrom` copies retained strings / map keys+values / slice elems / `json.RawMessage` / any-embedded strings out of `data` instead of aliasing it. Decouples decoded values from the input buffer (matches the stream path's lifetime). Decode-only; alloc-heavier |
 | `-dry`           | parse + validate annotated structs, surface every error, emit no file. Composes with `-v`. Rejects `-o`/`-pkg`                                        |
-| `-simd <tier>`   | `off`/`avx`/`avx2`/`avx512` — bytes-path string-scan tier (see opt #46). Resolved by `resolveSIMD` (main.go): `GOEXPERIMENT=simd` in ggen's OWN env auto-selects `avx`; `avx`/`avx2`/`avx512` error without the env var (emitted code imports `simd/archsimd`, which only exists under the experiment). Generate-time only — sets `scanStringFn` (`"scan.String"` → `"scan.StringAVX2"` etc); no per-struct annotation |
+| `-simd <tier>`   | `off`/`avx`/`avx2`/`avx512` — bytes-path string-scan tier (see opt #46). Resolved by `resolveSIMD` (main.go): `GOEXPERIMENT=simd` in ggen's OWN env auto-selects `avx`; `avx`/`avx2`/`avx512` error without the env var (emitted code imports `simd/archsimd`, which only exists under the experiment). Generate-time only — sets `scanStringFn` (`"ggen.String"` → `"ggen.StringAVX2"` etc); no per-struct annotation |
 
 ### Per-struct annotations
 
@@ -252,7 +252,7 @@ func (result T) DecodeFrom(data []byte) (T, int, error)
 // DecodeFromStream is a buffered io.Reader wrapper with an intermediate buffer.
 // Useful for slow streams or lower memory usage. Breaks zero-copying — all strings
 // and json.RawMessage are copied from payload.
-func (result T) DecodeFromStream(s *scan.Stream) (T, error)
+func (result T) DecodeFromStream(s *ggen.Stream) (T, error)
 // JSONSize precalculates size of JSON payload of T in bytes
 func (s T) JSONSize() int
 // AppendJSON appends a payload string to dst. Errors on invalid numbers (like NaN)
@@ -267,7 +267,7 @@ every scan primitive. To capture a raw span (RawMessage, json.Unmarshal fallback
 big.Int): `span, err := s.CaptureValue()` — grows the window to buffer the whole
 value, returns a buffer alias (copy it if retained; `json.Unmarshal`/`SetString`
 consume it in place). Replaced the old `Shift=false` + `s.Bytes()[start:s.Pos]`
-slice dance — see scan/CLAUDE.md.
+slice dance — see .claude/scan.md.
 
 **Decode-into-receiver semantics.** The receiver passed in IS the merge source.
 Scalar fields persist across JSON omission (stdlib-merge shape); container fields
@@ -334,7 +334,7 @@ Decode-only. Pinned in `integrationtests/nullzero_test.go` + `cli_test.go`.
 **Trailing commas are rejected (stdlib parity).** Every element-loop comma branch
 (slice/map/tuple/nested/pointer-elem/`[]byte` format:array, bytes + stream) emits
 a guard after the comma's WS skip: container close or EOF right after a comma →
-`scan.ErrBadArray`/`ErrBadObject`, wrapped in `decode.NewParseErr` with field +
+`ggen.ErrBadArray`/`ErrBadObject`, wrapped in `ggen.NewParseErr` with field +
 cursor on both paths (`emitNoCloseAfterComma` /
 `streamNoCloseAfterComma`). The EOF half also guards a stream-path index of
 `s.Bytes()[s.Pos]` on input truncated right after a comma (`SkipSpace` returns nil
@@ -359,7 +359,7 @@ Runtime entry points (call from user code):
 T{}.DecodeFrom(data)                       // (T, int, error)
 
 // stream path — Reset returns *Stream, so it chains into the generic methods
-s := scan.NewStream(r, buf)
+s := ggen.NewStream(r, buf)
 s.Value[T]()                               // (T, error); recycle s.Bytes()
 s.Slice[T]()                               // ([]T, error); cursor survives
 s.Value(prev)  s.Slice(prevSlice)          // decode INTO — reuses containers
@@ -368,19 +368,19 @@ s.Seq[T](prev...)                          // iter.Seq2[T, error]; NDJSON/concat
 T{}.DecodeFromStream(s)                    // the method Value wraps
 
 // bytes array walkers
-decode.UnmarshalSlice[T](data)             // ([]T, error)
-decode.ReadSlice[T](r)                     // ([]T, error)
+ggen.UnmarshalSlice[T](data)             // ([]T, error)
+ggen.ReadSlice[T](r)                     // ([]T, error)
 
-// encode package
-encode.Marshal(t)            encode.MarshalString(t)          encode.WriteTo(w, t)
-encode.MarshalSlice(items)   encode.MarshalSliceString(items) encode.WriteSliceTo(w, items)
-encode.AppendSlice(dst, items)
+// encode side
+ggen.Marshal(t)            ggen.MarshalString(t)          ggen.WriteTo(w, t)
+ggen.MarshalSlice(items)   ggen.MarshalSliceString(items) ggen.WriteSliceTo(w, items)
+ggen.AppendSlice(dst, items)
 ```
 
 Opt-in (`//ggen:generate marshal` / `unmarshal`):
 
 ```go
-func (s T) MarshalJSON() ([]byte, error)     // wraps encode.Marshal(s)
+func (s T) MarshalJSON() ([]byte, error)     // wraps ggen.Marshal(s)
 func (s *T) UnmarshalJSON(data []byte) error // inlines var zero T; zero.DecodeFrom(data)
 ```
 
@@ -394,9 +394,9 @@ regular struct codegen).
 
 Accepted underlying kinds:
 
-- **primitive** (`string`, `bool`, `int*`, `uint*`, `float*`): scan via `scan.X` /
+- **primitive** (`string`, `bool`, `int*`, `uint*`, `float*`): scan via `ggen.X` /
   `_s.X`, cast to alias. `htmlescape` flips the string-append helper. Float
-  marshal routes through `encode.AppendFloat` (stdlib-parity `'f'`/`'e'`
+  marshal routes through `ggen.AppendFloat` (stdlib-parity `'f'`/`'e'`
   selection, errors on NaN/Inf) — it used to be a bare
   `strconv.AppendFloat(…, 'g', -1, …)`, which silently emitted the literal
   text `NaN`/`Inf` (invalid JSON, nil error) and used `'g'` formatting that
@@ -463,9 +463,9 @@ via `types.RelativeTo(s.typesPkg)`.
   `base16`(`hex`)/`array` (JSON array of numbers). `null` ↔ `nil`: decode accepts
   `null` → nil, nil marshals as `null` (empty non-nil → `""`/`[]`); no
   opening-quote fold
-- `json.RawMessage` / `jsontext.Value` — opaque span via `scan.SkipValue`, aliased
+- `json.RawMessage` / `jsontext.Value` — opaque span via `ggen.SkipValue`, aliased
   into field. Raw passthrough on encode (`null` if empty/nil)
-- `net/url.URL` — JSON string, `url.Parse` / `encode.AppendURL`
+- `net/url.URL` — JSON string, `url.Parse` / `ggen.AppendURL`
 - `math/big.Int`/`big.Float`/`big.Rat` — `big.Int` a JSON number, `big.Float`/
   `big.Rat` JSON strings (`"3.14"`/`"3/2"`; wrapping prevents float64 precision
   loss, matches jsonv2). Encoded via in-place `Append` (zero alloc), parsed via
@@ -489,13 +489,13 @@ via `types.RelativeTo(s.typesPkg)`.
   inner. The AST-only loader (no go/types) keeps only built-in-primitive generic
   forms (`SQLNullSpec` + `isSupportedSQLNullInner` gate); custom inners there fall
   back to `encoding/json` on the whole value
-- `any` / `interface{}` — decode via `scan.Any` / `(*Stream).Any`, stdlib
+- `any` / `interface{}` — decode via `ggen.Any` / `(*Stream).Any`, stdlib
   defaults: `null→nil`, `bool`, `number→float64`, `string` (zero-copy alias),
-  `array→[]any`, `object→map[string]any`. With `usenumber`, `scan.AnyNumber`
-  (numbers → `json.Number`). Encode via `encode.AppendAny` (type-switch ordering —
-  see `encode/CLAUDE.md`)
+  `array→[]any`, `object→map[string]any`. With `usenumber`, `ggen.AnyNumber`
+  (numbers → `json.Number`). Encode via `ggen.AppendAny` (type-switch ordering —
+  see `.claude/encode.md`)
 - `[N]T` (fixed-length array) — JSON tuple with **strict count**: decode errors
-  with `validation.LenError{Want:N}` when count ≠ N. Combines/nests freely
+  with `ggen.LenError{Want:N}` when count ≠ N. Combines/nests freely
   (`[][N]T`, `[N][]T`, `[N][M]T`, …) via the same recursive emitter as `[][]T`.
   `[]byte` stays KindBytes (base64), and `[N]byte` folds onto the SAME base64
   path (`foldByteArray`, parse.go) with a strict decoded-length check —
@@ -567,11 +567,11 @@ Backlog and commit messages cite these by number — numbering is stable.
    ("sizeof(T) unbounded; start nil, grow"); it is now derived from the element
    width, which the compiler knows: as many elements as fit strictly under
    80 bytes (go1.27 fast-alloc), else within a 512-byte Green Tea span, else 1.
-   Spec + tests live in `scan.PreallocCap`; the emitted form is a
+   Spec + tests live in `prealloc.Cap` (`internal/prealloc`); the emitted form is a
    package-level `const ggenCap_<prefix>_<n>` holding the same ladder written
    branchlessly over `unsafe.Sizeof(*new(E))`.
    **It has to be a constant, not a call**: measured on the bench module, gc
-   inlines `scan.PreallocCap` only into small functions — 30 of 34 emitted
+   inlines `prealloc.Cap` only into small functions — 30 of 34 emitted
    sites kept a real `CALL`, because the enclosing generated `DecodeFrom` is
    thousands of nodes past the inliner budget. As a constant expression it
    folds in the frontend (`MOVL $2`), where the inliner never gets a vote.
@@ -603,8 +603,8 @@ Backlog and commit messages cite these by number — numbering is stable.
    `encoding/json`. Marshal mirror: `AppendJSON` → `MarshalJSON` → `AppendText` →
    `MarshalText` → `encoding/json`. No type info → plain `encoding/json` fallback.
 8. **Inline map catch-all.** Unknown keys absorbed into `map[string]V`. V
-   dispatches: `any` → `scan.Any`/`s.Any`; `string` → `scan.String`/`s.String`;
-   ggen struct → its `DecodeFrom`/`DecodeFromStream`; else `scan.SkipValue` +
+   dispatches: `any` → `ggen.Any`/`s.Any`; `string` → `ggen.String`/`s.String`;
+   ggen struct → its `DecodeFrom`/`DecodeFromStream`; else `ggen.SkipValue` +
    `json.Unmarshal` over the captured span.
 9. **Marshal output cap.** `JSONSize()` upper bound → single `make([]byte,0,cap)` +
    `AppendJSON`. 1 alloc per top-level Marshal.
@@ -626,29 +626,29 @@ err` (elided by the compiler).
 any`. Every error carries a `Pos int` (byte offset relative to the full
     payload — bytes cursor `i`, or `s.Offset()` on the stream path, NOT the raw
     `s.Pos` which the compacting window invalidates). Injected by `withPos`/
-    `posLit`. See `validation/CLAUDE.md`.
+    `posLit`. See `.claude/validation.md`.
 14. **Parse-error wrapping at every error return.** Codegen embeds the JSON field
     name directly as the first arg of every error return:
-    `return result, i, decode.NewParseErr("street", i, err)`. The field literal is
+    `return result, i, ggen.NewParseErr("street", i, err)`. The field literal is
     written at emit time (no post-pass / no `/*ggen-field*/` markers) — each
     `inlineScan*`/dispatch site interpolates the quoted JSON-path literal into its
     `NewParseErr` call. Zero runtime cost on the happy path.
-    `NewParseErr(segment, pos, err)` builds `*decode.ParseError{Path []string,
-Pos, Err}` for raw sentinels (a one-segment path), prepends the segment onto a `validation.Error`'s Path (value passes through, reachable via `errors.As`), and **chains** when err is already a `*ParseError` —
+    `NewParseErr(segment, pos, err)` builds `*ggen.ParseError{Path []string,
+Pos, Err}` for raw sentinels (a one-segment path), prepends the segment onto a `ggen.Error`'s Path (value passes through, reachable via `errors.As`), and **chains** when err is already a `*ParseError` —
     prepending the segment onto `pe.Path` (deeper `Pos` kept) so nested surfaces
     `Error()`-join to `addr.street`. Empty segment leaves the path untouched.
-    `errors.Is(err, scan.ErrBadString)` works via `Unwrap()`; `ParseError.Error()`
+    `errors.Is(err, ggen.ErrBadString)` works via `Unwrap()`; `ParseError.Error()`
     calls `e.Err.Error()` once so chained prints stay linear.
     **Bytes-path NESTED-decode sites use `NewParseErrShift(seg, i, _n, err)`**
     (2026-08): the callee ran on `data[i-_n:]` (the emit advances `i += _n`
     BEFORE the check), so its positional errors — chained `*ParseError`,
-    validation typed errors, `validation.Errors` — are rebased by the value
+    validation typed errors, `ggen.Errors` — are rebased by the value
     start via `AddPos` before wrapping, making every `Pos` a full-payload
     offset like the stream path's `s.Offset()`. The multierr drain rebases
-    with `validation.ShiftPos(verr, i-_n)`. All emitted from ONE helper
+    with `ggen.ShiftPos(verr, i-_n)`. All emitted from ONE helper
     (`nestedDecodeErrCheck(field, multierr, bytesPath, nVar)`; `nVar` = the
     consumed-count local, `_n`/`_in`) + the alias delegation wrap +
-    `decode.UnmarshalSlice`. Sentinel/foreign errors carry no `Pos` → the
+    `ggen.UnmarshalSlice`. Sentinel/foreign errors carry no `Pos` → the
     shift no-ops. Error path only; happy path unchanged.
 15. **Constant-folded `JSONSize()`.** Each field size splits into a compile-time
     constant (folded into `size := N`) and a runtime expression. Pure-primitive
@@ -660,7 +660,7 @@ Pos, Err}` for raw sentinels (a one-segment path), prepends the segment onto a `
 17. **First-element-then-rest slice loop.** First element emitted directly (no
     leading comma); iterate `slice[1:]` with comma-prepend — lifts the per-iter
     `if i > 0` out of the loop.
-18. **`bytes.IndexByte` string scan.** `scan.String`/`(*Stream).String`/`KeyView`/
+18. **`bytes.IndexByte` string scan.** `ggen.String`/`(*Stream).String`/`KeyView`/
     `skipString` locate the closing `"` via `bytes.IndexByte` (SIMD), then a
     second IndexByte (bounded to the closing quote) detects a preceding `\`.
     Truncated `\u…`/trailing `\` falls through to `stringSlow` → `ErrBadString`.
@@ -688,7 +688,7 @@ Pos, Err}` for raw sentinels (a one-segment path), prepends the segment onto a `
 24. **Stream key dispatch via `Stream.KeyView`.** Object-field keys read once,
     matched, discarded. `KeyView` aliases into `s.buf` on the happy path (alias
     survives buf growth — GC pins the old backing) vs the old per-key heap-string
-    allocation. Falls back to `stringSlow` for escapes. See `scan/CLAUDE.md`.
+    allocation. Falls back to `stringSlow` for escapes. See `.claude/scan.md`.
 25. **`peelSliceField` initializes `HintLen=-1`.** Nested-slice recursion used to
     inherit Go's zero `HintLen=0`, read by `preallocCap` as "opt-out" so every
     nested row started cap=0; `-1` ("unset") falls through to kind defaults.
@@ -713,7 +713,7 @@ Pos, Err}` for raw sentinels (a one-segment path), prepends the segment onto a `
     `posIn+1` inline; slow-path fallback reads from the unchanged `posIn`. `ke`
     lands in the caller's scope; only renderMap's value scan adds explicit braces.
 32. **Concrete-type fast paths in `AppendAny` for typed primitive slices/maps.**
-    See `encode/CLAUDE.md` for ordering. Outpaces stdjson v1 and jsonv2 on map
+    See `.claude/encode.md` for ordering. Outpaces stdjson v1 and jsonv2 on map
     shapes.
 33. **`AppendAny` concrete cases for `json.RawMessage`, `time.Time`,
     pointer-to-primitive.** These pre-empt the `json.Marshaler` branch /
@@ -763,7 +763,7 @@ recv` prologue. The named first result homes the value in the caller's return
     struct). Happy path copy-neutral; merge semantics unchanged. Struct + alias,
     both paths. `parseerr` post-pass unaffected (return text still `return result, …`).
 39. **Bounded unchecked digit-accumulation prefix (bytes path).** The inline
-    int/uint scanners (`inlineScanInt64Stmt`/`Uint64Stmt`) and runtime `scan.Int64`/
+    int/uint scanners (`inlineScanInt64Stmt`/`Uint64Stmt`) and runtime `ggen.Int64`/
     `Uint64` split the digit loop: the first ≤18 (int) / ≤19 (uint) digits
     accumulate with NO per-digit overflow check (`10^18-1 < MaxInt64 < |MinInt64|`,
     `10^19-1 < MaxUint64`). A 19th/20th digit resumes the original checked loop,
@@ -771,7 +771,7 @@ recv` prologue. The named first result homes the value in the caller's return
     Accept-set unchanged. Pinned by `TestInt64_OverflowBoundaryLattice` /
     `TestUint64_OverflowBoundaryLattice`. Stream keeps the checked loop (mid-number
     ReadMore refill complicates the window).
-40. **Whitespace-skip `<= ' '` exit gate.** `inlineSkipWS` and `scan.SkipSpace`
+40. **Whitespace-skip `<= ' '` exit gate.** `inlineSkipWS` and `ggen.SkipSpace`
     prepend `data[i] <= ' '` to the 4-way WS test. On compact JSON the dominant
     non-whitespace byte exits on one compare (gc lowers `<= ' '` to a single
     CMPB+JHI) instead of four. Boolean-identical accept set (control bytes < 0x20
@@ -786,7 +786,7 @@ recv` prologue. The named first result homes the value in the caller's return
     `TextUnmarshaler`. NOT `url.URL` (`url.Parse` slices its input), plain `string`
     fields, map keys, or map/slice string elems — those outlive the scan and keep
     the copying `Stream.String` (itself `StringView` + `strings.Clone`). See
-    scan/CLAUDE.md "Stream copies vs bytes-path aliases" / "`StringView`".
+    .claude/scan.md "Stream copies vs bytes-path aliases" / "`StringView`".
 42. **Exact-cap comma pre-count for flat numeric/bool SLICES (bytes path).**
     Numeric/bool elements carry no `,` or `]`, so `bytes.Count(data[k:k+e], ',')+1`
     over the value span yields the precise element count before any `make`
@@ -840,12 +840,12 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
     of falling through. Pinned by `TestWhitespace_Tolerance` + the bytes-vs-stream
     fuzzer. Stream not done.
 46. **SIMD string-scan tier (bytes path, opt-in via `-simd`).** When
-    `scanStringFn != "scan.String"`, `inlineScanStringVar` swaps its unbounded
+    `scanStringFn != "ggen.String"`, `inlineScanStringVar` swaps its unbounded
     scalar hot loop for an **inline fused vector classify** (no call): one
     `LoadUint8x{16,32}Slice` + Equal/Equal/Min-Equal → ToBits → TrailingZeros
     finds the first structural byte; a quote hit takes the inline alias/copy
     path, anything else (escape, ctrl, span ≥ lane) falls to the direct
-    `scan.StringAVX`/`AVX2`/`AVX512` call, which restarts at `posIn` — error
+    `ggen.StringAVX`/`AVX2`/`AVX512` call, which restarts at `posIn` — error
     identity byte-identical. Lane by tier: avx → 16 B, avx2/avx512 → 32 B
     inline (64 B inline never pays). Full-lane loads only — `Load*Part`
     is a real CALL, not an intrinsic — so a string starting within one lane
@@ -859,11 +859,11 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
     predictable scalar iterations, so `inlineScanStringWin` emits a bounded
     scalar window sized `maxKey+1` instead (unknown longer keys fall to the
     tier call). That flipped Tiny_Unmarshal from +15% to −8%. The 6 direct
-    `scan.String` emit sites (alias, map value, TextUnmarshaler feed, …) swap
+    `ggen.String` emit sites (alias, map value, TextUnmarshaler feed, …) swap
     the callee name. **Marshal side:** `appendStrFn` appends the same tier
     suffix (`simdSuffix`), routing every string-append site to
-    `encode.AppendString{,NoHTML}{AVX,AVX2,AVX512}` — length-gated fused
-    escape scans (see `encode/CLAUDE.md`). `-copy` detaches via
+    `ggen.AppendString{,NoHTML}{AVX,AVX2,AVX512}` — length-gated fused
+    escape scans (see `.claude/encode.md`). `-copy` detaches via
     `strings.Clone` around the tier call (escape-path strings are already
     owned — the double copy there is accepted `-copy` overhead). The tier is
     FIXED at generate time: no runtime CPU probing, no dispatch branch; wrong
@@ -874,20 +874,20 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
     prelude shape). **Stream side:** `tierStreamStringCalls` post-passes the
     rendered DecodeFromStream body (assignment-shaped rewrite, so encode
     bodies can't collide), swapping `= s.String()`/`StringView()`/`KeyView()`
-    to the per-tier Stream methods (`scan/simd_stream_amd64.go` — fused
+    to the per-tier Stream methods (`simd_stream_amd64.go` — fused
     locate per buffered window, refill loop unchanged). KeyView keeps the
     scalar prelude on all-short-key structs via the same `maxJSONNameLen ≤ 5`
     gate. Mega_Reader −5.2%, NoAlloc_Reader −7.7%, Small_Reader −20/−26% at
     avx512. **Skip side:** bytes decode bodies render through a scratch
-    buffer and a post-pass rewrites `scan.SkipValue(` → the tier skip tree
-    (`scan/simd_skip_amd64.go` — vector whitespace runs + fused skipString;
+    buffer and a post-pass rewrites `ggen.SkipValue(` → the tier skip tree
+    (`simd_skip_amd64.go` — vector whitespace runs + fused skipString;
     SkipHeavy compact −21.6% / pretty −29.9%, Mega −8.3%); `inlineSkipWS`
     consumes one WS byte inline (compact and single-space payloads stay
-    call-free) then hands 2+ runs to `scan.SkipSpace<tier>` (pretty
+    call-free) then hands 2+ runs to `ggen.SkipSpace<tier>` (pretty
     full-decode −3.3%; costs Tiny ~+1%, accepted). Stream decode bodies get
     the same swaps via `tierStreamStringCalls` (`= s.SkipValue()` /
     `= s.SkipSpace()` → per-tier Stream methods,
-    `scan/simd_skip_stream_amd64.go`): SkipHeavy ggen_stream compact −23.8% /
+    `simd_skip_stream_amd64.go`): SkipHeavy ggen_stream compact −23.8% /
     pretty −22.6%, Mega_Reader flat. **Tier choice:** avx512
     is the default recommendation (Small −23%, NoAlloc −4% vs avx2); avx2
     wins skip-heavy pretty payloads by ~6% (skip lives on short spans where
@@ -900,27 +900,27 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
     default (non-`-simd`) build, `inlineScanStringWin`'s scalar branch used to walk
     every string body one byte at a time (3 compares/byte). It now bounds the
     inline loop to `scalarStringWindow` bytes and hands any span that runs past it
-    (or hits an escape/ctrl byte) to `scan.String`, whose `bytes.IndexByte` locate
+    (or hits an escape/ctrl byte) to `ggen.String`, whose `bytes.IndexByte` locate
     is SIMD/AVX2 — so long strings (bios, URLs) ride the vectorized path while
     keys/short/medium values (the ≤32 B population that dominates real payloads)
-    stay inline. `scan.String` is the error-identity source of truth
+    stay inline. `ggen.String` is the error-identity source of truth
     (ErrUnterminated/ErrBadString); the bounded loop only fast-paths a clean
     quote-terminated span, so byte-parity holds (pinned by the bytes-vs-stream
     fuzzer + whitespace/escape tests). `-copy` detaches the handoff via
-    `scan.Detach` (opt #49) — clones only when it aliased. window < 0 = unbounded
+    `ggen.Detach` (opt #49) — clones only when it aliased. window < 0 = unbounded
     original loop, used ONLY for the **dispatch key** scan: keys are short and
     matched against known field names, so a window bound is pure per-key setup with
     no long span to hand off (it regressed tiny structs +8%). Interleaved A/B vs
     the unbounded scalar tier: Small_Unmarshal −50.9%, NoAlloc_Unmarshal −19.0%,
     Tiny/Mega/MapHeavy/ValidationHeavy flat. Window sizing matters: 16 regressed
-    Mega (medium strings paid a `scan.String` CALL per string); 32 keeps Mega's
+    Mega (medium strings paid a `ggen.String` CALL per string); 32 keeps Mega's
     ≤63 B strings inline. The SIMD tier is untouched (window ≥ 0 still routes to
     the inline vector classify).
 48. **Narrow-integer overflow guard (`narrowIntGuard`).** Fixed-width int fields
     smaller than 64-bit (`int8/16/32`, `uint8/16/32`) scan into a wide int64/uint64
     then cast. A bare cast silently TRUNCATES (`uint8` ← 300 = 44, nil error) —
     diverging from encoding/json v1 AND jsonv2, which both reject. Now every
-    narrow cast is preceded by an in-range check returning `scan.ErrNumberOverflow`
+    narrow cast is preceded by an in-range check returning `ggen.ErrNumberOverflow`
     (one predicted compare on the happy path, ~0 cost). Emitted at ALL narrow
     sites: struct field, map value, slice/array element, and pointer leaf (fast +
     slow), bytes + stream (`inlineScanInt64`/`Uint64`, `widenedScan`, the stream
@@ -961,18 +961,18 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
     *int(n)` — uncompilable. Stream now excludes `f.Pointer` from the
     string-tag branch too, so it falls into the pointer peel and re-enters
     the string-tag branch on the (non-pointer) leaf.
-49. **Single-copy `-copy` escape strings (both tiers, via `scan.Detach`).** In
+49. **Single-copy `-copy` escape strings (both tiers, via `ggen.Detach`).** In
     `-copy` mode a RETAINED escaped string used to double-allocate: the fall path
-    emitted `sv, i, err = scan.String(...)` (escape arm → `stringSlow` returns a
+    emitted `sv, i, err = ggen.String(...)` (escape arm → `stringSlow` returns a
     fresh owned scratch) then `dst = strings.Clone(sv)` — the clone is redundant,
-    `stringSlow` already owns the bytes. `scan.Detach(s, data)` (scan.go) clones
+    `stringSlow` already owns the bytes. `ggen.Detach(s, data)` (scan.go) clones
     IFF `s` aliases `data` (a `uintptr` pointer-range test; a `stringSlow` scratch
     is a distinct heap alloc → skipped, non-moving GC makes it sound) — so the
     copy fall calls the SAME aliasing tier func then `Detach`, dropping the clone
-    on escapes. **Tier-agnostic: reuses `scan.String`/`StringAVX*` directly, NO
+    on escapes. **Tier-agnostic: reuses `ggen.String`/`StringAVX*` directly, NO
     per-tier `StringCopyAVX*` variant.** Wired at the copy fall
     (`inlineScanStringWin`, both scalar + SIMD blocks), the inline-map string value
-    (`unknownKey`), and `scan.AnyCopy`/`AnyNumberCopy` (values + object keys).
+    (`unknownKey`), and `ggen.AnyCopy`/`AnyNumberCopy` (values + object keys).
     `EscapeHeavy/ggen_copy`: 8→4 allocs — identical to the aliasing `ggen` row at
     both scalar and avx512 (on escapes the -copy detach is FREE — stringSlow
     already owns). Same pass fixed a pre-existing SIMD gap: `StringAVX*`'s
@@ -982,21 +982,21 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
     `TestCopy_EscapedDecouples` (integ, every copy site), and
     `EscapeHeavy/ggen_copy`'s scribble guard.
 
-50. **Decode-side UTF-8 validation (jsonv2 parity, `scan.ErrInvalidUTF8`).**
+50. **Decode-side UTF-8 validation (jsonv2 parity, `ggen.ErrInvalidUTF8`).**
     Every string-PRODUCING decode path rejects malformed UTF-8 and unpaired
     `\uXXXX` surrogates (v1 would silently substitute U+FFFD; ggen sides with
-    jsonv2, which errors). Runtime mechanics live in scan/CLAUDE.md (fused
+    jsonv2, which errors). Runtime mechanics live in .claude/scan.md (fused
     high-bit accumulate → `utf8.Valid` only on non-ASCII spans). Codegen side:
     every inline string fast path must BAIL to the validating runtime func on
     non-ASCII — the scalar windows (value window, dispatch-key unbounded loop,
     SIMD near-EOF tail) add `data[ke] < 0x80` to the loop condition (high byte
-    exits → not '"' → `scan.String*` fall), and the inline vector classify
+    exits → not '"' → `ggen.String*` fall), and the inline vector classify
     folds ctrl AND ≥0x80 into ONE range term (`d := v.Sub(0x20); d.Max(0x60).
     Equal(d)` — `(v-0x20) >= 0x60 ⇔ v < 0x20 || v >= 0x80`), replacing the old
     Min-Equal ctrl term at the SAME op count, so ASCII fast paths pay ~zero
     (an unfused extra Max-Equal-Or term first measured DeepNested +13% at
     avx512; the fold brought it back to +2.8%). Captured raw spans
-    (`renderRawJSON`/`renderStreamRawJSON`) emit `scan.CheckUTF8(span)` after
+    (`renderRawJSON`/`renderStreamRawJSON`) emit `ggen.CheckUTF8(span)` after
     the capture — byte-level validation, jsonv2 parity (Mega, which carries
     RawMessage fields, absorbs it inside its ~+2% delta). Skipped spans
     (`ignoreunknown`) are DELIBERATELY grammar-checked only; unpaired
@@ -1011,7 +1011,7 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
     to the pre-#50 emitter. Permissive semantics = raw bytes pass through
     (NOT v1's U+FFFD substitution — that would cost a copy on the alias path);
     unpaired surrogate escapes DO substitute U+FFFD (stringSlow owns its
-    scratch anyway). `any` fields keep validating (scan.Any internals pin
+    scratch anyway). `any` fields keep validating (ggen.Any internals pin
     validate=true). Pinned by `TestAllowInvalidUTF8` (integ: every string
     shape + raw, bytes + stream, grammar-errors-still-reject, strict control). **Cost** — RE-MEASURED 2026-07 on a `performance`-profile box with a
     warmup pass and per-family **control rows** (jsonv2/sonic/easyjson, which
@@ -1034,7 +1034,7 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
       NoAlloc **+67.7% scalar / +38.7% avx512** (its payload is
       Ukrainian-localized Cyrillic), RuneGated **+54.4% scalar / +9.5% avx512**
       (single-row bench — it has NO control row at all). The SIMD tiers use the
-      vectorized `validUTF8x16` Lemire pass (scan/CLAUDE.md), which is why the
+      vectorized `validUTF8x16` Lemire pass (.claude/scan.md), which is why the
       avx512 penalties are far below the scalar ones. All still 2.7-5× ahead of
       jsonv2, which does the same validation.
     - **Not measurable on this box**: Small, Tiny, DeepNested, ValidationHeavy
@@ -1045,14 +1045,14 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
     jsonv2), and `FuzzPrimitivesCompat`'s reject-parity branch (the old
     fuzz blind spot that hid this bug — it SKIPPED invalid-UTF-8 strings).
 
-51. **Recursion depth cap (`scan.MaxDepth` = 10000, jsonv2 parity).** Every
+51. **Recursion depth cap (`the runtime maxDepth cap (10000)` = 10000, jsonv2 parity).** Every
     recursive decode path was unbounded → a few MB of `[[[[…` / `{"k":{"k":…`
     was a FATAL, unrecoverable goroutine stack overflow (not a `recover`-able
     panic — the process dies). Now capped:
     - **Runtime** (`scan.go`, `stream.go`, both SIMD skip files): `SkipValue`
       and the four `Any` families keep their public signatures but delegate to
       a `depth`-threaded core (`skipValue`/`anyValue`/`skipValueAVX*`/stream
-      mirrors); each container-OPEN checks `depth > MaxDepth` → `ErrMaxDepth`.
+      mirrors); each container-OPEN checks `depth > maxDepth` → `ErrMaxDepth`.
       One predictable compare per `[`/`{`, nothing on scalar values.
     - **Codegen**: only SELF-REFERENTIAL structs change shape. `computeCyclicTypes`
       (generate.go) scrapes type identifiers out of every field's
@@ -1060,7 +1060,7 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
       finds which generated types can reach themselves (over-approx — a false
       hit only costs an unneeded, still-correct shim). A cyclic struct T emits
       `DecodeFrom(data)` → `recv.decodeFromDepth(data, 0)` shim + a
-      `decodeFromDepth(data, _depth int)` core that guards `_depth > MaxDepth`;
+      `decodeFromDepth(data, _depth int)` core that guards `_depth > maxDepth`;
       nested calls into cyclic callees pass `_depth+1` (`decodeCallFor`/
       `streamDecodeCallFor`; alias delegation threads it too). ACYCLIC structs
       that reference a cyclic type get a folded `const _depth = 0` so the call
@@ -1113,7 +1113,7 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
     - `Int64`/`Uint64` (runtime) + BOTH inline codegen emitters
       (`inlineScanInt64Stmt`/`Uint64Stmt`) gained the leading-zero rule. The
       emitter half is REQUIRED, not optional — without it the generated inline
-      fast path would accept `01` while its own `scan.Int64` fall path rejects
+      fast path would accept `01` while its own `ggen.Int64` fall path rejects
       it, recreating the asymmetry one level down.
     - `Float64` enforces the grammar INLINE (duplicated from `skipNumber` on
       purpose — see below); `Number` and the stream `Float64`/`Number` validate
@@ -1137,7 +1137,7 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
     non-token characters are copied verbatim by `AppendFormat` — so a layout
     carrying `"` produced INVALID JSON and one carrying `\` a silent
     backspace escape. `renderAppendTime` routes custom layouts through
-    `encode.CloseJSONString{,HTML}` (the same escape-on-dirty closer the
+    `ggen.CloseJSONString{,HTML}` (the same escape-on-dirty closer the
     TextAppender sites use, keyed off a field-suffixed `_tf<Field>` mark), and
     `timeFormatSize` budgets +5 per escape-needing layout byte. Named
     constants keep the raw append. Pinned by
@@ -1177,10 +1177,10 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
 
 57. **Bytes-path slice/array structural errors wrap in `NewParseErr`.** The
     `[`-open and `]`-close guards in `emitByteSliceRead` and every
-    `emitNoCloseAfterComma` site returned BARE `scan.ErrBadArray`/`ErrBadObject`
-    (no path, no pos, `errors.As[*decode.ParseError]` failed) while the stream
+    `emitNoCloseAfterComma` site returned BARE `ggen.ErrBadArray`/`ErrBadObject`
+    (no path, no pos, `errors.As[*ggen.ParseError]` failed) while the stream
     twins and the map/bytes-value guards all wrapped. All bytes-path structural
-    guards now emit `decode.NewParseErr(field, cursor, sentinel)` — including
+    guards now emit `ggen.NewParseErr(field, cursor, sentinel)` — including
     the `pipe:` variant dispatch in `variants.go` (`renderVariantDispatch`'s
     head/`null`-arm/default sentinels, which had the `field` literal computed
     and then discarded via `_ = field`). Pinned by
@@ -1200,13 +1200,13 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
 
 59. **Stream error positions stamp `s.Offset()`, never the raw `s.Pos`.**
     ~165 emit sites per generated decoder interpolated the buffer-relative
-    `s.Pos` into `decode.NewParseErr`, while the validation-error sites in the
+    `s.Pos` into `ggen.NewParseErr`, while the validation-error sites in the
     SAME function already used `s.Offset()`. `Pos` only equals the payload
     offset until a compacting refill slides the window, so the reported
     position collapsed toward 0 and CHANGED WITH THE CHUNK SIZE (`{"i8":128}`
     → 9 on bytes, 0/0/2 on stream at 1/3/7-byte chunks). Round-4 fixed the
     identical class inside the stream slice walker (then
-    `decode.UnmarshalSliceStream`, now `(*scan.Stream).Slice`) but not the
+    `ggen.UnmarshalSliceStream`, now `(*ggen.Stream).Slice`) but not the
     emitters;
     round-5's pin used a 16-byte payload, where the window never slides and
     `Pos == Offset()` by accident. Pinned by
@@ -1218,7 +1218,7 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
     so truncation surfaced `io.ErrUnexpectedEOF` where the bytes path reported
     a grammar sentinel. The two guard positions now carry the sentinel the
     bytes path returns for the same truncation (`ErrExpectString` at a key,
-    `ErrBadObject` past a value) via the newly exported `scan.NotEOF`, so
+    `ErrBadObject` past a value) via the newly exported `ggen.NotEOF`, so
     transient reader errors still propagate raw. Sentinels AND positions now
     match bytes at every chunk size. One residual, deliberate: at the colon
     site the stream carries a field path and bytes does not — the check lives
@@ -1228,8 +1228,8 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
 
 61. **Foreign errors from converters and fallible mods wrap in `NewParseErr`.**
     An error-form `@Conv` / `@Mod` returned its own error bare — no path, no
-    offset, `errors.As[*decode.ParseError]` false — while the bool forms built
-    a typed `decode.ModError`. Both now wrap (the underlying error stays
+    offset, `errors.As[*ggen.ParseError]` false — while the bool forms built
+    a typed `ggen.ModError`. Both now wrap (the underlying error stays
     reachable through `errors.As`). Pinned by
     `TestVariant_converterErrorCarriesPathAndPos` +
     `TestFallibleMod_errorCarriesPathAndPos`.
@@ -1243,10 +1243,10 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
     arms (bytes + stream × base64/hex/array). Pinned by
     `TestBytes_emptyDecodesNonNil`.
 
-63. **The scalar inline key scan falls to `scan.String` on any non-quote.**
+63. **The scalar inline key scan falls to `ggen.String` on any non-quote.**
     Its early-bails reported the OPENING QUOTE's offset for
     unterminated/ctrl-byte strings while the SIMD tier always falls and reports
-    `scan.String`'s give-up position — the same struct built with and without
+    `ggen.String`'s give-up position — the same struct built with and without
     `-simd` disagreed on error position (274 of 4000 random mutations). The
     fall is the documented error-identity source of truth, so the error arms
     now route there; the happy path drops a compare rather than gaining one.
@@ -1297,7 +1297,7 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
       `type Tags []string` were silently ignored — copy-mode elements still
       ALIASED the input (silent corruption class), htmlescape emitted NoHTML
       appends. `aliasContainerField` (alias.go) stamps struct flags at all
-      render sites; the primitive string alias emits `scan.Detach` under
+      render sites; the primitive string alias emits `ggen.Detach` under
       `copy`.
     - **Converter variants made JSON `null` a hard error on null-aware
       kinds.** `variantCaseBytes`'s native arm never claimed `'n'`, so
@@ -1315,7 +1315,7 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
     - **Bool-form `ModError` wraps in `NewParseErr`** (all three emit sites —
       renderOneMod + both converter assigns), carrying the field path as
       mod_error.go always documented.
-    - **`format:unix` marshal routes through `encode.AppendUnixSeconds`**
+    - **`format:unix` marshal routes through `ggen.AppendUnixSeconds`**
       (exact seconds + fractional nanos from `Unix()`/`Nanosecond()`), not
       `float64(UnixNano())/1e9` — which silently emitted garbage outside the
       int64-nano range (~1678-2262) and lost sub-100ns precision. unix budget
@@ -1354,7 +1354,7 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
       deleted. The same identity-conversion misconception was fixed for real
       in `renderStreamNetIP`'s error literal (`strings.Clone`).
     - **Generated value-head refills leaked raw `io.ErrUnexpectedEOF`** —
-      `streamReadMore` gained a sentinel param (`scan.NotEOF`) and every
+      `streamReadMore` gained a sentinel param (`ggen.NotEOF`) and every
       site maps a drained refill to the bytes-path sentinel via
       `truncSentinel` (kind → ErrBadNumber/ErrExpectString/ErrBadObject/…);
       null-literal refills map to ErrBadLiteral (round-6 #60, extended from
@@ -1384,7 +1384,7 @@ nothing else did, so every VALIDATOR emitter saw KindStruct:
 - `oneof` emitted its allowed values as bare identifiers (`case low, medium:`) —
   `renderOneofCases` quoted only for `kind == KindString`.
 - rune / substring / charset rules passed the named value uncast into
-  `utf8.RuneCountInString`, `strings.HasPrefix`, `validation.IsURL`, and into the
+  `utf8.RuneCountInString`, `strings.HasPrefix`, `ggen.IsURL`, and into the
   string-typed `Value`/`Want` error fields.
 - `eq`/`neq` were `if KindString {…} else if isNumeric {…}` **with no else** —
   the rule emitted nothing at all. Clean build, zero enforcement.
@@ -1407,7 +1407,7 @@ The conversion is free — identical underlying type, so gc emits no instruction
 for it (asm-diffed: `utf8.RuneCountInString(string(p))` and the plain-string
 form compile to byte-identical bodies). The CALL was not free: delegating to the
 alias's `DecodeFrom` forfeits the inline window scan (opt #47) and pays a
-`scan.String` per field, and an UNANNOTATED named type had no methods to call at
+`ggen.String` per field, and an UNANNOTATED named type had no methods to call at
 all so it fell to `SkipValue` + `encoding/json`.
 
 Wired at every position, both paths plus encode and JSONSize: struct field
@@ -1484,7 +1484,7 @@ struct) is now zero on every axis.
   spells — a plain VALUE field never names its type, so importing
   unconditionally would trip "imported and not used".
 - **Slice/array elements had no cross-package rung at all**: the bytes path
-  emitted a bare `scan.SkipValue` (every element of a `[]foreign.T` silently
+  emitted a bare `ggen.SkipValue` (every element of a `[]foreign.T` silently
   decoded to its zero value) and the stream path emitted nothing. Both now run
   the same ladder as the field level via `elemAsField`; map values run it too,
   instead of always reflecting over the captured span.
@@ -1525,11 +1525,11 @@ any set change). A collision would redeclare a const, loud at compile time.
    stream path's lifetime. It changes only RETAINED-string sites:
    `inlineScanString`/`inlineScanStringVar` take a `cp bool` — when set the clean
    hot path emits `string(data[s:e])` instead of `unsafe.String(…)` and the
-   escape/long-span fall calls the tier func then `scan.Detach` (opt #49 — clones
+   escape/long-span fall calls the tier func then `ggen.Detach` (opt #49 — clones
    only when the result aliased `data`, so the owned escape scratch isn't
    re-cloned; both scalar + SIMD, no per-tier variant); `renderRawJSON` emits
    `append(ref[:0], data[…]…)` (reused backing) instead of the alias; `renderAny`
-   switches to `scan.AnyCopy`/`AnyNumberCopy` (detach every nested string + object
+   switches to `ggen.AnyCopy`/`AnyNumberCopy` (detach every nested string + object
    key via `Detach`, no double-copy); `unknownKey` clones the inline-map key +
    detaches its string value via `Detach` and `strings.Clone`s the
    `UnknownKeyError` path segment. TRANSIENT scans stay
@@ -1549,7 +1549,7 @@ any set change). A collision would redeclare a const, loud at compile time.
    type-checked against the working type, emitted as a direct call. No runtime
    registry, no `func(any) any` boxing, zero alloc. Cross-package via
    `@pkg.FuncName` through source-file imports; blank imports work. Validator
-   errors wrap as `validation.CustomError{Name, Value, Cause}` (or `PredicateError`
+   errors wrap as `ggen.CustomError{Name, Value, Cause}` (or `PredicateError`
    for the bool form); fallible-mod errors propagate as parse errors (`ModError`
    for the bool form).
 

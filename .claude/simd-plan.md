@@ -11,7 +11,7 @@ that flipped Tiny from +15% to flat); P4 landed length-gated (macro-flat,
 3.6–10× micro on ≥64 B strings — repo marshal benches carry no long strings).
 Headline scalar→avx512: NoAlloc −42%, Small −86%, Mega −8.4%, Tiny flat.
 Canonical numbers in bench/CLAUDE.md; design docs in cli/CLAUDE.md #46,
-scan/CLAUDE.md, encode/CLAUDE.md. Deviations from the plan as written:
+.claude/scan.md, .claude/encode.md. Deviations from the plan as written:
 P1 needed a bounded scalar tail for strings within one lane of payload end
 (near-end tier calls cost Tiny +26%), and the hoisted `_ggenQ/_ggenBS/_ggenSP`
 broadcasts were dropped in favor of per-site broadcasts (gc CSE confirmed
@@ -25,7 +25,7 @@ delegate gate is load-bearing.
 | --- | --- | --- |
 | object-KEY scan preludes (24B scalar loops) | ~80-90ms flat | biggest single item |
 | strconv ParseFloat (readFloat re-scan) | ~40ms cum | span is scanned TWICE today |
-| `scan.StringAVX512` + `classifyStructural` | ~40ms cum | already tiered |
+| `ggen.StringAVX512` + `classifyStructural` | ~40ms cum | already tiered |
 | integer digit loops | ~30ms flat | payload is 10-11-digit, NOT 19-20 |
 | SkipSpace + `switch key` + seen-bitmask | ~60ms flat | mostly already optimal |
 
@@ -45,7 +45,7 @@ before P4's marshal win.
 - **Win:** measured **−9.77% NoAlloc wall** (p=0.029, interleaved core-pinned,
   prototype baseline 2379→2147 ns); verifier projects 4-7% at the 1719 ns
   avx512 baseline — re-measure there before landing.
-- **Design:** runtime-only, `scan/scan.go`: (a) `exactPow10 [23]float64`
+- **Design:** runtime-only, `scan.go`: (a) `exactPow10 [23]float64`
   table; (b) `exactShort(s []byte) (float64, bool)` ~40 LOC — single pass over
   the already-located span, uint64 mantissa + frac count, accepts only
   `[-]digits[.digits]`, bails on e/E / second dot / mant≥2^52; (c) 3-line gate
@@ -60,7 +60,7 @@ before P4's marshal win.
 - **Evidence:** fuzz-verified bit-identical over 27.6M execs incl. error
   identity; Mega flat.
 
-### P3 — shipped-scanner instruction shaves (scan/simd_amd64.go) — SHIPPED
+### P3 — shipped-scanner instruction shaves (simd_amd64.go) — SHIPPED
 
 - **Win:** est. 1-3% NoAlloc; trivial diff; also cleans up P1's emitted shape.
 - **Findings (asm-verified):**
@@ -85,7 +85,7 @@ before P4's marshal win.
      `LoadUint8x{16,32}Slice` (**never `Load*SlicePart` inline — it is a real
      CALL, not an intrinsic**); fused Equal/Equal/Less classify → ToBits →
      TrailingZeros; quote hit → alias (or `string(...)` under -copy);
-     otherwise fall back to the existing `scan.StringAVX*` call (guard-fail,
+     otherwise fall back to the existing `ggen.StringAVX*` call (guard-fail,
      escape, ctrl, span > lane−1, near payload end). Error identity
      byte-identical — fallback rescans from posIn like today.
   2. `renderDecode`: hoist `_ggenQ/_ggenBS/_ggenSP` broadcasts once after the
@@ -108,7 +108,7 @@ before P4's marshal win.
 - **Win:** verifier measured the replaceable per-byte `[256]bool` walk at
   **14.5% of Mega_Marshal CPU** (AppendStringNoHTML = largest flat consumer);
   est. 5-9% marshal wall.
-- **Design:** new `encode/simd_amd64.go` (~180 LOC):
+- **Design:** new `simd_amd64.go` (~180 LOC):
   `AppendString{,NoHTML}{AVX,AVX2,AVX512}(dst, s)`, same caller contract.
   Fused needs-escape classify (Equal `"`/`\` + Less 0x20; htmlescape adds
   Equal `<`/`>`/`&` = 6 masks); on hit iterate set bits (`m &= m-1`), bulk

@@ -11,12 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sirkostya009/ggen/encode"
-	"github.com/sirkostya009/ggen/scan"
-	"github.com/sirkostya009/ggen/validation"
+	"github.com/sirkostya009/ggen"
+	"github.com/sirkostya009/ggen/internal/prealloc"
 	"unsafe"
-
-	"github.com/sirkostya009/ggen/decode"
 )
 
 // ExtraStruct exercises keys:/hint:/clamp/nested-dive.
@@ -101,9 +98,8 @@ func TestKeys_ValidationOnMapKey(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected minrunes violation on map key")
 	}
-	var ve *validation.MinRunesError
-	if !errors.As(err, &ve) {
-		t.Errorf("got %v, want *validation.MinRunesError", err)
+	if _, ok := errors.AsType[*ggen.MinRunesError](err); !ok {
+		t.Errorf("got %v, want *ggen.MinRunesError", err)
 	}
 }
 
@@ -172,7 +168,7 @@ func TestTripleNested(t *testing.T) {
 func TestNestedDive_Stream(t *testing.T) {
 	t.Parallel()
 	in := []byte(`{"nestedInts":[[1,2],[3,4,5]],"triple":[[["a"]]]}`)
-	var s scan.Stream
+	var s ggen.Stream
 	s.Reset(bytes.NewReader(in), make([]byte, 0, len(in)))
 	got, err := ExtraStruct{}.DecodeFromStream(&s)
 	if err != nil {
@@ -216,9 +212,8 @@ func TestTuple_StrictTooFew(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error on short tuple")
 	}
-	var ve *validation.LenError
-	if !errors.As(err, &ve) {
-		t.Errorf("got %v, want *validation.LenError", err)
+	if _, ok := errors.AsType[*ggen.LenError](err); !ok {
+		t.Errorf("got %v, want *ggen.LenError", err)
 	}
 }
 
@@ -230,9 +225,8 @@ func TestTuple_StrictTooMany(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error on over-long tuple")
 	}
-	var ve *validation.LenError
-	if !errors.As(err, &ve) {
-		t.Errorf("got %v, want *validation.LenError", err)
+	if _, ok := errors.AsType[*ggen.LenError](err); !ok {
+		t.Errorf("got %v, want *ggen.LenError", err)
 	}
 }
 
@@ -253,16 +247,16 @@ func TestTuple_NamedConstLen(t *testing.T) {
 		t.Errorf("Nested = %v", got.Nested)
 	}
 	// Strict count enforced with the RESOLVED length.
-	var ve *validation.LenError
+	var ve *ggen.LenError
 	_, _, errNamed := TupleStruct{}.DecodeFrom([]byte(`{"named":[7]}`))
 	if !errors.As(errNamed, &ve) {
-		t.Errorf("short named tuple: got %v, want *validation.LenError", errNamed)
+		t.Errorf("short named tuple: got %v, want *ggen.LenError", errNamed)
 	}
 	_, _, errNested := TupleStruct{}.DecodeFrom([]byte(`{"nested":[[1]]}`))
 	if !errors.As(errNested, &ve) {
-		t.Errorf("short nested tuple: got %v, want *validation.LenError", errNested)
+		t.Errorf("short nested tuple: got %v, want *ggen.LenError", errNested)
 	}
-	out, err := encode.Marshal(got)
+	out, err := ggen.Marshal(got)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -296,7 +290,7 @@ func TestTuple_MarshalRoundtrip(t *testing.T) {
 		Segments: [][2]int{{10, 20}, {30, 40}},
 		Pair:     [2][]string{{"x", "y", "z"}, {"q"}},
 	}
-	bs, _ := encode.Marshal(in)
+	bs, _ := ggen.Marshal(in)
 	back, _, err := TupleStruct{}.DecodeFrom(bs)
 	if err != nil {
 		t.Fatalf("unmarshal: %v\n%s", err, bs)
@@ -310,7 +304,7 @@ func TestTuple_MarshalRoundtrip(t *testing.T) {
 func TestTuple_Stream(t *testing.T) {
 	t.Parallel()
 	in := []byte(`{"point":[1.25,2.5],"rgb":[0,0,0],"segments":[[1,2]],"pair":[["a"],["b","c"]]}`)
-	var s scan.Stream
+	var s ggen.Stream
 	s.Reset(bytes.NewReader(in), make([]byte, 0, len(in)))
 	got, err := TupleStruct{}.DecodeFromStream(&s)
 	if err != nil {
@@ -334,7 +328,7 @@ func TestNestedMarshalRoundtrip(t *testing.T) {
 		NestedInts:   [][]int{{1, 2}, {3}},
 		Triple:       [][][]string{{{"a"}}, {{"b"}, {"c"}}},
 	}
-	bs, _ := encode.Marshal(in)
+	bs, _ := ggen.Marshal(in)
 	back, _, err := ExtraStruct{}.DecodeFrom(bs)
 	if err != nil {
 		t.Fatalf("unmarshal: %v\n%s", err, bs)
@@ -351,7 +345,7 @@ func TestNestedMarshalRoundtrip(t *testing.T) {
 
 // PreallocWidths pins the WIDTH-DRIVEN default capacity: with no hint the
 // generated make() uses a constant derived from the element size, and that
-// constant must agree with scan.PreallocCap (the runtime spec of the ladder,
+// constant must agree with prealloc.Cap (the runtime spec of the ladder,
 // which the emitted expression only mirrors — it cannot call it, because gc
 // declines to inline into a generated DecodeFrom).
 //
@@ -406,7 +400,7 @@ func TestPrealloc_WidthDrivenCaps(t *testing.T) {
 		{"ptrs", cap(got.Ptrs), unsafe.Sizeof(*new(*PreallocRow))},
 		{"nested", cap(got.Nested), unsafe.Sizeof(*new([]int))},
 	} {
-		if want := scan.PreallocCap(c.size); c.got != want {
+		if want := prealloc.Cap(c.size); c.got != want {
 			t.Errorf("%s: cap = %d, want %d (element %d bytes)", c.name, c.got, want, c.size)
 		}
 		if c.got*int(c.size) > 512 && c.got > 1 {
@@ -422,7 +416,7 @@ func TestPrealloc_WidthDrivenCaps(t *testing.T) {
 	if got, want := cap(got.MaxFits), 8; got != want {
 		t.Errorf("maxlen=8 that fits a span: cap = %d, want %d", got, want)
 	}
-	if got, want := cap(got.MaxTooBig), scan.PreallocCap(unsafe.Sizeof(*new(PreallocWide))); got != want {
+	if got, want := cap(got.MaxTooBig), prealloc.Cap(unsafe.Sizeof(*new(PreallocWide))); got != want {
 		t.Errorf("maxlen=8 that overshoots a span: cap = %d, want the width default %d", got, want)
 	}
 	// A numeric slice beats the width guess outright: scalar elements carry no
@@ -446,7 +440,7 @@ func TestPrealloc_WidthDrivenCaps(t *testing.T) {
 		}
 	}
 	// An element too wide for two in a span falls back to one, not zero.
-	if n := scan.PreallocCap(unsafe.Sizeof(*new(PreallocWide))); n != 1 {
+	if n := prealloc.Cap(unsafe.Sizeof(*new(PreallocWide))); n != 1 {
 		t.Errorf("a %d-byte element should prealloc 1, got %d", unsafe.Sizeof(*new(PreallocWide)), n)
 	}
 }
@@ -496,7 +490,7 @@ func TestElemKinds_DedicatedKindElements(t *testing.T) {
 		}
 	}
 	// Stream path decodes identically through 1-byte chunks.
-	var s scan.Stream
+	var s ggen.Stream
 	s.Reset(&chunkReader{data: in, max: 1}, nil)
 	sgot, err := ElemKinds{}.DecodeFromStream(&s)
 	if err != nil {
@@ -566,7 +560,7 @@ func TestMapVals_DedicatedKindValues(t *testing.T) {
 			t.Errorf("%s: got %v, want %v", name, pair[0], pair[1])
 		}
 	}
-	var s scan.Stream
+	var s ggen.Stream
 	s.Reset(&chunkReader{data: in, max: 1}, nil)
 	sgot, err := MapVals{}.DecodeFromStream(&s)
 	if err != nil {
@@ -602,9 +596,9 @@ func TestNestedValidationPath_Complete(t *testing.T) {
 	t.Parallel()
 	in := []byte(`{"addr":{"street":"s","city":"c","zipCode":"123"}}`)
 	_, _, err := PtrAddrStruct{}.DecodeFrom(in)
-	var le *validation.LenError
+	var le *ggen.LenError
 	if !errors.As(err, &le) {
-		t.Fatalf("got %v, want *validation.LenError", err)
+		t.Fatalf("got %v, want *ggen.LenError", err)
 	}
 	if len(le.Path) != 2 || le.Path[0] != "addr" || le.Path[1] != "zipCode" {
 		t.Errorf("Path = %v, want [addr zipCode]", le.Path)
@@ -615,12 +609,12 @@ func TestNestedValidationPath_Complete(t *testing.T) {
 	if want := bytes.Index(in, []byte(`"123"`)) + len(`"123"`); le.Pos != want {
 		t.Errorf("bytes Pos = %d, want %d (full-payload offset)", le.Pos, want)
 	}
-	var s scan.Stream
+	var s ggen.Stream
 	s.Reset(bytes.NewReader(in), make([]byte, 0, 8))
 	_, serr := PtrAddrStruct{}.DecodeFromStream(&s)
-	var sle *validation.LenError
+	var sle *ggen.LenError
 	if !errors.As(serr, &sle) {
-		t.Fatalf("stream: got %v, want *validation.LenError", serr)
+		t.Fatalf("stream: got %v, want *ggen.LenError", serr)
 	}
 	if sle.Pos != le.Pos {
 		t.Errorf("stream Pos = %d, bytes Pos = %d — paths must agree", sle.Pos, le.Pos)
@@ -631,9 +625,9 @@ func TestNestedValidationPath_Complete(t *testing.T) {
 	// rebased) position.
 	bad := []byte(`{"addr":{"street":"s","city":"c","zipCode":42}}`)
 	_, _, perr := PtrAddrStruct{}.DecodeFrom(bad)
-	var pe *decode.ParseError
+	var pe *ggen.ParseError
 	if !errors.As(perr, &pe) {
-		t.Fatalf("got %v, want *decode.ParseError", perr)
+		t.Fatalf("got %v, want *ggen.ParseError", perr)
 	}
 	if want := bytes.Index(bad, []byte(`42`)); pe.Pos != want {
 		t.Errorf("nested ParseError Pos = %d, want %d", pe.Pos, want)
@@ -652,7 +646,7 @@ type QuotedNames struct {
 func TestQuotedNames_roundtrip(t *testing.T) {
 	t.Parallel()
 	in := QuotedNames{Dash: "d", Comma: "c"}
-	out, err := encode.Marshal(in)
+	out, err := ggen.Marshal(in)
 	if err != nil {
 		t.Fatal(err)
 	}

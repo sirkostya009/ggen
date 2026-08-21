@@ -49,7 +49,7 @@ type ValidationRule struct {
 	FuncName  string
 
 	// BoolForm marks a `func(T) bool` validator (vs `func(T) error`); a false
-	// return emits validation.PredicateError. Msg is the optional inline
+	// return emits ggen.PredicateError. Msg is the optional inline
 	// message (`@Even:'must be even'`), bool-form only.
 	BoolForm bool
 	Msg      string
@@ -71,7 +71,7 @@ type ModRule struct {
 	Fallible  bool // returns a two-tuple (T, error) or (T, bool)
 
 	// BoolForm marks `func(T) (T, bool)` (vs the error form); a false return
-	// emits decode.ModError. Msg is the optional inline message, bool-form only.
+	// emits ggen.ModError. Msg is the optional inline message, bool-form only.
 	BoolForm bool
 	Msg      string
 }
@@ -170,7 +170,7 @@ type StructInfo struct {
 	MultiErr         bool   // collect validation errors instead of stopping on first
 	AllowDups        bool   // do NOT error on duplicate JSON keys (opt-out of default)
 	NoValidate       bool   // skip validation rules, required-field checks, and mods
-	IgnoreUnknown    bool   // skip unknown JSON keys silently (default: emit validation.Error{UnknownKey})
+	IgnoreUnknown    bool   // skip unknown JSON keys silently (default: emit ggen.Error{UnknownKey})
 	NullZero         bool   // accept explicit JSON null on every non-pointer value field (null → Go zero); per-field json:",nullzero" can opt a single field in
 	NoSort           bool   // opt out of codegen-time struct-field sort by JSON name
 	UseNumber        bool   // decode JSON numbers into `any` fields as json.Number instead of float64

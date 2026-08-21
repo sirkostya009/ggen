@@ -7,8 +7,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/sirkostya009/ggen/validation"
-	"github.com/sirkostya009/ggen/scan"
+	"github.com/sirkostya009/ggen"
 )
 
 // NullZeroTags pins per-field nullzero: null decodes to the zero value; strict
@@ -86,9 +85,8 @@ func TestNullZero_validation_runs_on_zero(t *testing.T) {
 	if err == nil {
 		t.Fatal("name null: expected minlen validation error, got nil")
 	}
-	var mle *validation.MinLenError
-	if !errors.As(err, &mle) {
-		t.Errorf("name null: got %T (%v), want *validation.MinLenError", err, err)
+	if _, ok := errors.AsType[*ggen.MinLenError](err); !ok {
+		t.Errorf("name null: got %T (%v), want *ggen.MinLenError", err, err)
 	}
 }
 
@@ -106,7 +104,7 @@ func TestNullZero_whole_annotation(t *testing.T) {
 func TestNullZero_tag_stream(t *testing.T) {
 	t.Parallel()
 	in := []byte(`{"nzStr":null,"nzInt":null,"nzFloat":null,"nzBool":null,"strict":"keep"}`)
-	var s scan.Stream
+	var s ggen.Stream
 	s.Reset(bytes.NewReader(in), make([]byte, 0, len(in)))
 	got, err := NullZeroTags{}.DecodeFromStream(&s)
 	if err != nil {
@@ -121,7 +119,7 @@ func TestNullZero_tag_stream(t *testing.T) {
 func TestNullZero_stream_strict_rejects(t *testing.T) {
 	t.Parallel()
 	in := []byte(`{"strict":null}`)
-	var s scan.Stream
+	var s ggen.Stream
 	s.Reset(bytes.NewReader(in), make([]byte, 0, len(in)))
 	if _, err := (NullZeroTags{}).DecodeFromStream(&s); err == nil {
 		t.Fatal("expected error on null into strict field (stream), got nil")

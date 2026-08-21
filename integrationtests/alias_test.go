@@ -14,10 +14,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sirkostya009/ggen/encode"
+	"github.com/sirkostya009/ggen"
 	"github.com/sirkostya009/ggen/integrationtests/thirdparty"
-	"github.com/sirkostya009/ggen/scan"
-	"github.com/sirkostya009/ggen/validation"
 )
 
 //ggen:generate
@@ -47,7 +45,7 @@ type AliasBool bool
 func TestAlias_String_Roundtrip(t *testing.T) {
 	t.Parallel()
 	in := AliasString("hello")
-	out, err := encode.Marshal(in)
+	out, err := ggen.Marshal(in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +64,7 @@ func TestAlias_String_Roundtrip(t *testing.T) {
 // Default mode emits <>& literally.
 func TestAlias_String_DefaultIsLiteral(t *testing.T) {
 	t.Parallel()
-	out, _ := encode.Marshal(AliasString(`<a href="x">tom & jerry</a>`))
+	out, _ := ggen.Marshal(AliasString(`<a href="x">tom & jerry</a>`))
 	for _, lit := range []string{"<", ">", "&"} {
 		if !strings.Contains(string(out), lit) {
 			t.Errorf("default mode escaped %q in alias output: %s", lit, out)
@@ -77,7 +75,7 @@ func TestAlias_String_DefaultIsLiteral(t *testing.T) {
 // htmlescape on a string alias emits \uXXXX escapes for <>&.
 func TestAlias_String_HtmlescapeOptIn(t *testing.T) {
 	t.Parallel()
-	out, _ := encode.Marshal(AliasHTML(`<a href="x">tom & jerry</a>`))
+	out, _ := ggen.Marshal(AliasHTML(`<a href="x">tom & jerry</a>`))
 	for _, lit := range []string{"<", ">", "&"} {
 		if strings.Contains(string(out), lit) {
 			t.Errorf("htmlescape alias leaked literal %q: %s", lit, out)
@@ -93,7 +91,7 @@ func TestAlias_String_HtmlescapeOptIn(t *testing.T) {
 func TestAlias_Int_Roundtrip(t *testing.T) {
 	t.Parallel()
 	in := AliasInt(-42)
-	out, err := encode.Marshal(in)
+	out, err := ggen.Marshal(in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,21 +118,21 @@ func TestAlias_NarrowInt_Overflow(t *testing.T) {
 		t.Errorf("in-range: got %d, %v", got, err)
 	}
 	for _, in := range []string{"300", "-300", "128"} {
-		if _, _, err := AliasInt8(0).DecodeFrom([]byte(in)); !errors.Is(err, scan.ErrNumberOverflow) {
+		if _, _, err := AliasInt8(0).DecodeFrom([]byte(in)); !errors.Is(err, ggen.ErrNumberOverflow) {
 			t.Errorf("int8 %s: got %v, want ErrNumberOverflow", in, err)
 		}
-		var s scan.Stream
+		var s ggen.Stream
 		s.Reset(strings.NewReader(in), nil)
-		if _, err := AliasInt8(0).DecodeFromStream(&s); !errors.Is(err, scan.ErrNumberOverflow) {
+		if _, err := AliasInt8(0).DecodeFromStream(&s); !errors.Is(err, ggen.ErrNumberOverflow) {
 			t.Errorf("int8 stream %s: got %v, want ErrNumberOverflow", in, err)
 		}
 	}
-	if _, _, err := AliasUint8(0).DecodeFrom([]byte("256")); !errors.Is(err, scan.ErrNumberOverflow) {
+	if _, _, err := AliasUint8(0).DecodeFrom([]byte("256")); !errors.Is(err, ggen.ErrNumberOverflow) {
 		t.Errorf("uint8 256: got %v, want ErrNumberOverflow", err)
 	}
-	var s scan.Stream
+	var s ggen.Stream
 	s.Reset(strings.NewReader("256"), nil)
-	if _, err := AliasUint8(0).DecodeFromStream(&s); !errors.Is(err, scan.ErrNumberOverflow) {
+	if _, err := AliasUint8(0).DecodeFromStream(&s); !errors.Is(err, ggen.ErrNumberOverflow) {
 		t.Errorf("uint8 stream 256: got %v, want ErrNumberOverflow", err)
 	}
 }
@@ -142,7 +140,7 @@ func TestAlias_NarrowInt_Overflow(t *testing.T) {
 func TestAlias_Uint64_Roundtrip(t *testing.T) {
 	t.Parallel()
 	in := AliasUint64(18446744073709551615) // max uint64
-	out, _ := encode.Marshal(in)
+	out, _ := ggen.Marshal(in)
 	got, _, err := AliasUint64(0).DecodeFrom(out)
 	if err != nil {
 		t.Fatal(err)
@@ -155,7 +153,7 @@ func TestAlias_Uint64_Roundtrip(t *testing.T) {
 func TestAlias_Float64_Roundtrip(t *testing.T) {
 	t.Parallel()
 	in := AliasFloat64(3.14159)
-	out, _ := encode.Marshal(in)
+	out, _ := ggen.Marshal(in)
 	got, _, err := AliasFloat64(0).DecodeFrom(out)
 	if err != nil {
 		t.Fatal(err)
@@ -168,7 +166,7 @@ func TestAlias_Float64_Roundtrip(t *testing.T) {
 func TestAlias_Bool_Roundtrip(t *testing.T) {
 	t.Parallel()
 	for _, in := range []AliasBool{true, false} {
-		out, _ := encode.Marshal(in)
+		out, _ := ggen.Marshal(in)
 		got, _, err := AliasBool(false).DecodeFrom(out)
 		if err != nil {
 			t.Fatalf("%v: %v", in, err)
@@ -226,7 +224,7 @@ type PlainAlias PlainInner
 func TestAlias_StructIntrospect_NoMethods(t *testing.T) {
 	t.Parallel()
 	in := PlainAlias{Title: "hello", Count: 42}
-	out, err := encode.Marshal(in)
+	out, err := ggen.Marshal(in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -272,7 +270,7 @@ type CrossPkgTaggedAlias thirdparty.Tagged
 func TestAlias_StructIntrospect_CrossPkg(t *testing.T) {
 	t.Parallel()
 	in := CrossPkgTaggedAlias(thirdparty.Tagged{Name: "alice", Tag: "admin"})
-	out, err := encode.Marshal(in)
+	out, err := ggen.Marshal(in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -292,7 +290,7 @@ func TestAlias_StructIntrospect_CrossPkg(t *testing.T) {
 func TestAlias_StructIntrospect_SamePkg(t *testing.T) {
 	t.Parallel()
 	in := SamePkgAlias(SamePkgInner{X: 42, Y: "hello"})
-	out, err := encode.Marshal(in)
+	out, err := ggen.Marshal(in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -333,7 +331,7 @@ type OpaqueAlias OpaqueWithMethods
 func TestAlias_StructDelegation_OpaqueFallback(t *testing.T) {
 	t.Parallel()
 	in := OpaqueAlias(OpaqueWithMethods{hidden: "secret"})
-	out, err := encode.Marshal(in)
+	out, err := ggen.Marshal(in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -360,7 +358,7 @@ type OpaqueParent struct {
 func TestAlias_StructDelegation_AsField(t *testing.T) {
 	t.Parallel()
 	in := OpaqueParent{Name: "bob", O: OpaqueAlias(OpaqueWithMethods{hidden: "secret"})}
-	out, err := encode.Marshal(in)
+	out, err := ggen.Marshal(in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -389,7 +387,7 @@ type AliasTuple [3]int
 func TestAlias_Slice_Roundtrip(t *testing.T) {
 	t.Parallel()
 	in := AliasTags{"go", "rust", "zig"}
-	out, err := encode.Marshal(in)
+	out, err := ggen.Marshal(in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -409,7 +407,7 @@ func TestAlias_Slice_Roundtrip(t *testing.T) {
 func TestAlias_Map_Roundtrip(t *testing.T) {
 	t.Parallel()
 	in := AliasLookup{"alpha": 1, "beta": 2}
-	out, err := encode.Marshal(in)
+	out, err := ggen.Marshal(in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -426,7 +424,7 @@ func TestAlias_Map_Roundtrip(t *testing.T) {
 func TestAlias_Array_Roundtrip(t *testing.T) {
 	t.Parallel()
 	in := AliasTuple{10, 20, 30}
-	out, err := encode.Marshal(in)
+	out, err := ggen.Marshal(in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -502,13 +500,12 @@ func TestAlias_Field_ValidationAndMods(t *testing.T) {
 
 	// minlen fires post-trim — `" a "` → `"a"` → length 1, below the limit.
 	_, _, err = AliasFieldExample{}.DecodeFrom([]byte(`{"body":" a ","count":5}`))
-	var minlen *validation.MinLenError
-	if !errors.As(err, &minlen) {
+	if _, ok := errors.AsType[*ggen.MinLenError](err); !ok {
 		t.Errorf("expected MinLenError post-trim, got %v", err)
 	}
 
 	// roundtrip — alias values marshal as their underlying primitives.
-	out, err := encode.Marshal(AliasFieldExample{Body: "hi", Count: 5})
+	out, err := ggen.Marshal(AliasFieldExample{Body: "hi", Count: 5})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -559,11 +556,11 @@ func TestNamedPrim_Rejects(t *testing.T) {
 		name, body string
 		target     any
 	}{
-		{"oneof", `{"pri":"nope","tag":"a-b","eq":"low","neq":"high","zero":null}`, new(*validation.OneOfError)},
-		{"eq", `{"pri":"low","tag":"a-b","eq":"other","neq":"high","zero":null}`, new(*validation.EqError)},
-		{"neq", `{"pri":"low","tag":"a-b","eq":"low","neq":"low","zero":null}`, new(*validation.NeqError)},
-		{"maxrunes", `{"pri":"low","tag":"aaaaaaaaa-","eq":"low","neq":"high","zero":null}`, new(*validation.MaxRunesError)},
-		{"contains", `{"pri":"low","tag":"abc","eq":"low","neq":"high","zero":null}`, new(*validation.ContainsError)},
+		{"oneof", `{"pri":"nope","tag":"a-b","eq":"low","neq":"high","zero":null}`, new(*ggen.OneOfError)},
+		{"eq", `{"pri":"low","tag":"a-b","eq":"other","neq":"high","zero":null}`, new(*ggen.EqError)},
+		{"neq", `{"pri":"low","tag":"a-b","eq":"low","neq":"low","zero":null}`, new(*ggen.NeqError)},
+		{"maxrunes", `{"pri":"low","tag":"aaaaaaaaa-","eq":"low","neq":"high","zero":null}`, new(*ggen.MaxRunesError)},
+		{"contains", `{"pri":"low","tag":"abc","eq":"low","neq":"high","zero":null}`, new(*ggen.ContainsError)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, _, err := NamedPrims{}.DecodeFrom([]byte(tc.body))
@@ -648,7 +645,7 @@ func TestNamedPrim_EveryPosition(t *testing.T) {
 		t.Errorf("round-trip mismatch: %+v", back)
 	}
 	// Stream path agrees.
-	var st scan.Stream
+	var st ggen.Stream
 	st.Reset(bytes.NewReader(in), make([]byte, 0, 8))
 	sv, err := NPPositions{}.DecodeFromStream(&st)
 	if err != nil {
@@ -721,7 +718,7 @@ type BitLookup map[string]InnerBit
 func TestAlias_DelegatingElementCompilesAndRoundtrips(t *testing.T) {
 	t.Parallel()
 	items := BitItems{{X: 1}, {X: 2}}
-	out, err := encode.Marshal(items)
+	out, err := ggen.Marshal(items)
 	if err != nil || string(out) != `[{"x":1},{"x":2}]` {
 		t.Fatalf("BitItems marshal: %s %v", out, err)
 	}
@@ -730,7 +727,7 @@ func TestAlias_DelegatingElementCompilesAndRoundtrips(t *testing.T) {
 		t.Fatalf("BitItems roundtrip: %v %v", back, err)
 	}
 	lk := BitLookup{"a": {X: 9}}
-	if out, err = encode.Marshal(lk); err != nil || string(out) != `{"a":{"x":9}}` {
+	if out, err = ggen.Marshal(lk); err != nil || string(out) != `{"a":{"x":9}}` {
 		t.Fatalf("BitLookup marshal: %s %v", out, err)
 	}
 }
@@ -748,7 +745,7 @@ type RuneCarrier struct {
 func TestAlias_RuneElements(t *testing.T) {
 	t.Parallel()
 	in := RuneCarrier{R: []rune("héllo"), C: '☃'}
-	out, err := encode.Marshal(in)
+	out, err := ggen.Marshal(in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -789,7 +786,7 @@ func TestAlias_leadingWhitespace(t *testing.T) {
 	if iv != 42 {
 		t.Errorf("AliasInt = %d, want 42", iv)
 	}
-	var st scan.Stream
+	var st ggen.Stream
 	st.Reset(bytes.NewReader([]byte("  \"y\"")), nil)
 	sv2, err := AliasString("").DecodeFromStream(&st)
 	if err != nil {

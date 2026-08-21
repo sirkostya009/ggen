@@ -1048,8 +1048,8 @@ type Validated struct {
 		if strings.Contains(body, "AppendStringNoHTML") {
 			t.Fatalf("expected AppendString (not -NoHTML) with -htmlescape, got:\n%s", body)
 		}
-		if !strings.Contains(body, "encode.AppendString(") {
-			t.Fatalf("expected encode.AppendString call, got:\n%s", body)
+		if !strings.Contains(body, "ggen.AppendString(") {
+			t.Fatalf("expected ggen.AppendString call, got:\n%s", body)
 		}
 	})
 
@@ -1470,7 +1470,7 @@ func Reject(s string) (string, error) {
 		if !strings.Contains(body, "if v, err := Reject(result.S); err != nil") {
 			t.Errorf("expected fallible mod with err-prop branch, got:\n%s", body)
 		}
-		if !strings.Contains(body, `return result, i, decode.NewParseErr("s", i, err)`) {
+		if !strings.Contains(body, `return result, i, ggen.NewParseErr("s", i, err)`) {
 			t.Errorf("expected parse-error return on fallible mod, got:\n%s", body)
 		}
 	})

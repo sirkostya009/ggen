@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sirkostya009/ggen/encode"
+	"github.com/sirkostya009/ggen"
 )
 
 // InlineStruct exercises the json:",inline" catch-all: unknown keys absorbed
@@ -81,7 +81,7 @@ func TestInline_marshalSpreads(t *testing.T) {
 		Name:  "alice",
 		Extra: map[string]any{"age": 30, "city": "Lviv"},
 	}
-	out, _ := encode.MarshalString(s)
+	out, _ := ggen.MarshalString(s)
 	for _, want := range []string{`"name":"alice"`, `"age":30`, `"city":"Lviv"`} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q in %q", want, out)
@@ -103,7 +103,7 @@ func TestInline_roundtrip(t *testing.T) {
 		Name:  "alice",
 		Extra: map[string]any{"age": float64(30), "city": "Lviv", "active": true},
 	}
-	out, _ := encode.Marshal(orig)
+	out, _ := ggen.Marshal(orig)
 	got, _, err := InlineStruct{}.DecodeFrom(out)
 	if err != nil {
 		t.Fatalf("unmarshal: %v\n%s", err, out)
@@ -124,7 +124,7 @@ func TestInline_roundtrip(t *testing.T) {
 func TestInline_marshalEmpty(t *testing.T) {
 	t.Parallel()
 	s := InlineStruct{Name: "alice"}
-	out, _ := encode.MarshalString(s)
+	out, _ := ggen.MarshalString(s)
 	if out != `{"name":"alice"}` {
 		t.Errorf("empty-extra marshal = %q", out)
 	}
@@ -134,7 +134,7 @@ func TestInline_marshalOnlyExtras(t *testing.T) {
 	t.Parallel()
 	// Empty fixed field + inline entries — comma logic must hold.
 	s := InlineStruct{Extra: map[string]any{"k": "v"}}
-	out, _ := encode.MarshalString(s)
+	out, _ := ggen.MarshalString(s)
 	if !strings.Contains(out, `"k":"v"`) {
 		t.Errorf("missing k:v in %q", out)
 	}
@@ -151,7 +151,7 @@ func TestInline_FixedFieldOrderStable(t *testing.T) {
 		Extra: map[string]any{"age": 30, "city": "Lviv", "active": true, "score": 9.5},
 	}
 	for i := range 20 {
-		out, _ := encode.Marshal(s)
+		out, _ := ggen.Marshal(s)
 		if !strings.Contains(string(out), `"name":"alice"`) {
 			t.Errorf("iter %d: missing name field: %s", i, out)
 		}
@@ -203,7 +203,7 @@ func TestInline_TypedString_MarshalSpreads(t *testing.T) {
 		Name:  "alice",
 		Extra: map[string]string{"city": "Lviv", "role": "admin"},
 	}
-	out, _ := encode.MarshalString(s)
+	out, _ := ggen.MarshalString(s)
 	for _, want := range []string{`"name":"alice"`, `"city":"Lviv"`, `"role":"admin"`} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q in %q", want, out)
@@ -220,7 +220,7 @@ func TestInline_TypedString_Roundtrip(t *testing.T) {
 		Name:  "alice",
 		Extra: map[string]string{"city": "Lviv", "role": "admin", "lang": "uk"},
 	}
-	out, _ := encode.Marshal(orig)
+	out, _ := ggen.Marshal(orig)
 	got, _, err := InlineStringsStruct{}.DecodeFrom(out)
 	if err != nil {
 		t.Fatalf("decode: %v\n%s", err, out)
@@ -275,7 +275,7 @@ func TestInline_TypedStruct_Roundtrip(t *testing.T) {
 			"sib": {Name: "bob"},
 		},
 	}
-	out, _ := encode.Marshal(orig)
+	out, _ := ggen.Marshal(orig)
 	got, _, err := InlineStructsStruct{}.DecodeFrom(out)
 	if err != nil {
 		t.Fatalf("decode: %v\n%s", err, out)
@@ -302,7 +302,7 @@ func TestInline_TypedStruct_Roundtrip(t *testing.T) {
 // Empty-Extra marshal: typed inline emits only the fixed fields.
 func TestInline_TypedString_MarshalEmpty(t *testing.T) {
 	t.Parallel()
-	out, _ := encode.MarshalString(InlineStringsStruct{Name: "alice"})
+	out, _ := ggen.MarshalString(InlineStringsStruct{Name: "alice"})
 	if out != `{"name":"alice"}` {
 		t.Errorf("empty-extra marshal = %q", out)
 	}
@@ -310,7 +310,7 @@ func TestInline_TypedString_MarshalEmpty(t *testing.T) {
 
 func TestInline_TypedStruct_MarshalEmpty(t *testing.T) {
 	t.Parallel()
-	out, _ := encode.MarshalString(InlineStructsStruct{Name: "root"})
+	out, _ := ggen.MarshalString(InlineStructsStruct{Name: "root"})
 	if out != `{"name":"root"}` {
 		t.Errorf("empty-extra marshal = %q", out)
 	}
@@ -321,7 +321,7 @@ func TestInline_TypedStruct_MarshalEmpty(t *testing.T) {
 // (corrupt JSON). Field-level raw emit and AppendAny already null empties.
 func TestInline_EmptyRawMessageMarshalsNull(t *testing.T) {
 	t.Parallel()
-	out, err := encode.Marshal(InlineRawStruct{
+	out, err := ggen.Marshal(InlineRawStruct{
 		Name:  "x",
 		Extra: map[string]json.RawMessage{"a": nil, "b": {}, "c": json.RawMessage(`{"n":1}`)},
 	})

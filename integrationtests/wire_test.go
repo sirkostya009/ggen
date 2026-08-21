@@ -10,8 +10,8 @@ import (
 	"bytes"
 	"encoding/base32"
 	"encoding/base64"
-	"encoding/json"
 	"encoding/hex"
+	"encoding/json"
 	"encoding/json/jsontext"
 	jsonv2 "encoding/json/v2"
 	"math"
@@ -21,7 +21,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sirkostya009/ggen/encode"
+	"github.com/sirkostya009/ggen"
 )
 
 // objectKeys parses a JSON object into a map of top-level key → raw value.
@@ -57,7 +57,7 @@ func mustPresent(t *testing.T, data []byte, keys ...string) {
 // Nil omitempty pointer fields must not appear.
 func TestOmit_NilPointerKeyAbsent(t *testing.T) {
 	t.Parallel()
-	out, _ := encode.Marshal(PointerStruct{PtrNameStruct: PtrNameStruct{Name: new("x")}, PtrEnabledStruct: PtrEnabledStruct{Enabled: new(false)}})
+	out, _ := ggen.Marshal(PointerStruct{Name: new("x"), Enabled: new(false)})
 	// name/enabled are not omitempty — must be present.
 	mustPresent(t, out, "name", "enabled")
 	mustAbsent(t, out, "count", "ratio", "addr", "when")
@@ -66,14 +66,14 @@ func TestOmit_NilPointerKeyAbsent(t *testing.T) {
 func TestOmit_PresentPointerKeyEmitted(t *testing.T) {
 	t.Parallel()
 	count := 7
-	out, _ := encode.Marshal(PointerStruct{PtrNameStruct: PtrNameStruct{Name: new("")}, PtrEnabledStruct: PtrEnabledStruct{Enabled: new(false)}, PtrCountStruct: PtrCountStruct{Count: &count}})
+	out, _ := ggen.Marshal(PointerStruct{Name: new(""), Enabled: new(false), Count: &count})
 	mustPresent(t, out, "count")
 }
 
 // omitzero on Score=0 drops the key.
 func TestOmit_ZeroNumberKeyAbsent(t *testing.T) {
 	t.Parallel()
-	out, _ := encode.Marshal(OmitStruct{Name: "x", Score: 0, StrCount: 1})
+	out, _ := ggen.Marshal(OmitStruct{Name: "x", Score: 0, StrCount: 1})
 	mustAbsent(t, out, "score")
 	mustPresent(t, out, "name", "count")
 }
@@ -81,14 +81,14 @@ func TestOmit_ZeroNumberKeyAbsent(t *testing.T) {
 // omitempty drops empty string and nil slice.
 func TestOmit_EmptyContainersAbsent(t *testing.T) {
 	t.Parallel()
-	out, _ := encode.Marshal(OmitStruct{Name: "x", StrCount: 1})
+	out, _ := ggen.Marshal(OmitStruct{Name: "x", StrCount: 1})
 	mustAbsent(t, out, "bio", "tags")
 }
 
 // The `,string` tag wraps the number as a JSON string, not a bare number.
 func TestStringTag_QuotedNumber(t *testing.T) {
 	t.Parallel()
-	out, _ := encode.Marshal(OmitStruct{Name: "x", StrCount: 42})
+	out, _ := ggen.Marshal(OmitStruct{Name: "x", StrCount: 42})
 	got := objectKeys(t, out)
 	v, ok := got["count"]
 	if !ok {
@@ -104,7 +104,7 @@ func TestStringTag_QuotedNumber(t *testing.T) {
 func TestFormat_HexParseable(t *testing.T) {
 	t.Parallel()
 	want := []byte{0xde, 0xad, 0xbe, 0xef, 0x00, 0x7f}
-	out, _ := encode.Marshal(NativeTypes{HexBlob: want})
+	out, _ := ggen.Marshal(NativeTypes{HexBlob: want})
 	got := objectKeys(t, out)
 	v, ok := got["hexBlob"]
 	if !ok {
@@ -127,7 +127,7 @@ func TestFormat_HexParseable(t *testing.T) {
 func TestFormat_Base64Parseable(t *testing.T) {
 	t.Parallel()
 	want := []byte("hello world")
-	out, _ := encode.Marshal(NativeTypes{Blob: want})
+	out, _ := ggen.Marshal(NativeTypes{Blob: want})
 	got := objectKeys(t, out)
 	v, ok := got["blob"]
 	if !ok {
@@ -156,7 +156,7 @@ type base32Wrap struct {
 func TestFormat_Base32Parseable(t *testing.T) {
 	t.Parallel()
 	want := []byte{1, 2, 3, 4, 5, 6, 7, 8}
-	out, _ := encode.Marshal(base32Wrap{B: want})
+	out, _ := ggen.Marshal(base32Wrap{B: want})
 	got := objectKeys(t, out)
 	v := got["b"]
 	var s string
@@ -174,7 +174,7 @@ func TestFormat_Base32Parseable(t *testing.T) {
 func TestFormat_BytesArray(t *testing.T) {
 	t.Parallel()
 	want := []byte{10, 20, 30, 40}
-	out, _ := encode.Marshal(NativeTypes{ByteArray: want})
+	out, _ := ggen.Marshal(NativeTypes{ByteArray: want})
 	got := objectKeys(t, out)
 	raw := got["byteArray"]
 	if len(raw) == 0 || raw[0] != '[' {
@@ -198,7 +198,7 @@ func TestFormat_BytesArray(t *testing.T) {
 func TestFormat_TimeUnixIsNumber(t *testing.T) {
 	t.Parallel()
 	when := time.Unix(1700000000, 0).UTC()
-	out, _ := encode.Marshal(NativeTypes{UnixAt: when})
+	out, _ := ggen.Marshal(NativeTypes{UnixAt: when})
 	got := objectKeys(t, out)
 	v := got["unixAt"]
 	if len(v) == 0 || v[0] == '"' {
@@ -217,7 +217,7 @@ func TestFormat_TimeUnixIsNumber(t *testing.T) {
 func TestFormat_TimeRFC3339Parseable(t *testing.T) {
 	t.Parallel()
 	when := time.Unix(1700000000, 0).UTC()
-	out, _ := encode.Marshal(NativeTypes{IssuedAt: when})
+	out, _ := ggen.Marshal(NativeTypes{IssuedAt: when})
 	got := objectKeys(t, out)
 	var s string
 	_ = jsonv2.Unmarshal([]byte(got["issuedAt"]), &s)
@@ -233,7 +233,7 @@ func TestFormat_TimeRFC3339Parseable(t *testing.T) {
 // `format:sec` emits a number (seconds).
 func TestFormat_DurationSecIsNumber(t *testing.T) {
 	t.Parallel()
-	out, _ := encode.Marshal(NativeTypes{SecDur: 90 * time.Second})
+	out, _ := ggen.Marshal(NativeTypes{SecDur: 90 * time.Second})
 	got := objectKeys(t, out)
 	v := got["secDur"]
 	if len(v) == 0 || v[0] == '"' {
@@ -245,7 +245,7 @@ func TestFormat_DurationSecIsNumber(t *testing.T) {
 func TestFormat_DurationUnitsParseable(t *testing.T) {
 	t.Parallel()
 	d := time.Hour + 30*time.Minute
-	out, _ := encode.Marshal(NativeTypes{UnitDur: d})
+	out, _ := ggen.Marshal(NativeTypes{UnitDur: d})
 	got := objectKeys(t, out)
 	var s string
 	_ = jsonv2.Unmarshal([]byte(got["unitDur"]), &s)
@@ -262,7 +262,7 @@ func TestFormat_DurationUnitsParseable(t *testing.T) {
 // bare digits, every other layout emits a quoted string time.Parse reads back.
 func TestFormat_AllTimeLayouts(t *testing.T) {
 	t.Parallel()
-	out, _ := encode.Marshal(timeFormatsAll())
+	out, _ := ggen.Marshal(timeFormatsAll())
 	got := objectKeys(t, out)
 
 	// Numeric formats are unquoted; `unix` may carry a fractional decimal.
@@ -305,7 +305,7 @@ func TestFormat_NetIPParseable(t *testing.T) {
 	t.Parallel()
 	addr, _ := netip.ParseAddr("192.0.2.7")
 	prefix, _ := netip.ParsePrefix("10.0.0.0/24")
-	out, _ := encode.Marshal(NativeTypes{
+	out, _ := ggen.Marshal(NativeTypes{
 		LegacyIP: net.ParseIP("192.0.2.1"),
 		Addr:     addr,
 		Cidr:     prefix,
@@ -331,7 +331,7 @@ func TestFormat_NetIPParseable(t *testing.T) {
 // Nil slice → `null`, empty non-nil → `[]`.
 func TestNilSlice_MarshalsAsNull(t *testing.T) {
 	t.Parallel()
-	out, err := encode.Marshal(Node{ID: 1, Name: "n"})
+	out, err := ggen.Marshal(Node{ID: 1, Name: "n"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -342,7 +342,7 @@ func TestNilSlice_MarshalsAsNull(t *testing.T) {
 		}
 	}
 	// Non-nil empty stays as [].
-	out2, err := encode.Marshal(Node{ID: 1, Name: "n", Tags: []string{}, Children: []Node{}})
+	out2, err := ggen.Marshal(Node{ID: 1, Name: "n", Tags: []string{}, Children: []Node{}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -357,7 +357,7 @@ func TestNilSlice_MarshalsAsNull(t *testing.T) {
 // Nil map → `null`, empty non-nil → `{}`.
 func TestNilMap_MarshalsAsNull(t *testing.T) {
 	t.Parallel()
-	out, err := encode.Marshal(Node{ID: 1, Name: "n"})
+	out, err := ggen.Marshal(Node{ID: 1, Name: "n"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -365,7 +365,7 @@ func TestNilMap_MarshalsAsNull(t *testing.T) {
 	if string(got["props"]) != "null" {
 		t.Errorf("nil map → %s, want null", got["props"])
 	}
-	out2, err := encode.Marshal(Node{ID: 1, Name: "n", Props: map[string]string{}})
+	out2, err := ggen.Marshal(Node{ID: 1, Name: "n", Props: map[string]string{}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -467,14 +467,14 @@ func TestNullDecode_LeavesContainerNil(t *testing.T) {
 // omitempty drops nil slices/maps entirely (their wire form is `null`).
 func TestOmitEmpty_NilSliceMap_KeyAbsent(t *testing.T) {
 	t.Parallel()
-	out, _ := encode.Marshal(OmitStruct{Name: "x", StrCount: 1})
+	out, _ := ggen.Marshal(OmitStruct{Name: "x", StrCount: 1})
 	mustAbsent(t, out, "tags", "labels")
 }
 
 // omitempty drops empty (len==0) non-nil slices/maps too.
 func TestOmitEmpty_EmptyContainer_KeyAbsent(t *testing.T) {
 	t.Parallel()
-	out, _ := encode.Marshal(OmitStruct{
+	out, _ := ggen.Marshal(OmitStruct{
 		Name: "x", StrCount: 1,
 		Tags:   []string{},
 		Labels: map[string]string{},
@@ -485,7 +485,7 @@ func TestOmitEmpty_EmptyContainer_KeyAbsent(t *testing.T) {
 // omitzero drops nil (Go zero) but keeps empty non-nil — unlike omitempty.
 func TestOmitZero_NilContainer_KeyAbsent(t *testing.T) {
 	t.Parallel()
-	out, _ := encode.Marshal(OmitStruct{Name: "x", StrCount: 1})
+	out, _ := ggen.Marshal(OmitStruct{Name: "x", StrCount: 1})
 	mustAbsent(t, out, "extra", "meta")
 }
 
@@ -493,7 +493,7 @@ func TestOmitZero_NilContainer_KeyAbsent(t *testing.T) {
 // values → emit `[]` / `{}`.
 func TestOmitZero_EmptyContainer_KeyEmitted(t *testing.T) {
 	t.Parallel()
-	out, _ := encode.Marshal(OmitStruct{
+	out, _ := ggen.Marshal(OmitStruct{
 		Name: "x", StrCount: 1,
 		Extra: []string{},
 		Meta:  map[string]string{},
@@ -514,11 +514,11 @@ func TestPtrSlice_RoundTrip(t *testing.T) {
 	a := Address{Street: "S1", City: "C1", ZipCode: "11111"}
 	b := Address{Street: "S2", City: "C2", ZipCode: "22222"}
 	in := PtrSliceStruct{
-		PtrSliceItemsStruct: PtrSliceItemsStruct{Items: []*Address{&a, &b}},
-		PtrSliceTupleStruct: PtrSliceTupleStruct{Tuple: [3]*Address{&a, nil, &b}},
-		PtrSliceNodesStruct: PtrSliceNodesStruct{Nodes: []*Node{{ID: 1, Name: "x"}, nil, {ID: 2, Name: "y"}}},
+		Items: []*Address{&a, &b},
+		Tuple: [3]*Address{&a, nil, &b},
+		Nodes: []*Node{{ID: 1, Name: "x"}, nil, {ID: 2, Name: "y"}},
 	}
-	out, err := encode.Marshal(in)
+	out, err := ggen.Marshal(in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -550,7 +550,7 @@ func TestPtrSlice_RoundTrip(t *testing.T) {
 // decode of `null` produces a nil slice.
 func TestPtrSlice_NilSlice_AsNull(t *testing.T) {
 	t.Parallel()
-	out, err := encode.Marshal(PtrSliceStruct{})
+	out, err := ggen.Marshal(PtrSliceStruct{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -608,7 +608,7 @@ func TestWideStruct_BitmaskSeenFlags(t *testing.T) {
 		F31: "31", F32: "32", F33: "33", F34: "34", F35: "35",
 		F36: "36", F37: "37", F38: "38", F39: "39", F40: "40",
 	}
-	out, err := encode.Marshal(in)
+	out, err := ggen.Marshal(in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -688,7 +688,7 @@ func TestFormat_CustomLayoutEscapes(t *testing.T) {
 	t.Parallel()
 	when := time.Date(2026, 8, 9, 1, 2, 3, 0, time.UTC)
 	in := TimeEscapingLayout{Quote: when, Slash: when}
-	out, err := encode.Marshal(in)
+	out, err := ggen.Marshal(in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -741,12 +741,12 @@ func timeFormatsAll() TimeFormatsStruct {
 	when := time.Date(9999, 12, 31, 23, 59, 59, 999999999, noName)
 	return TimeFormatsStruct{
 		TimeFormatsStdCompat: timeFormatsStdCompat(when),
-		TimeLayout:           TimeLayout{Layout: when},
-		TimeStamp:            TimeStamp{Stamp: when},
-		TimeStampMilli:       TimeStampMilli{StampMilli: when},
-		TimeStampMicro:       TimeStampMicro{StampMicro: when},
-		TimeStampNano:        TimeStampNano{StampNano: when},
-		TimeCustomTiny:       TimeCustomTiny{CustomTiny: when},
+		Layout:               when,
+		Stamp:                when,
+		StampMilli:           when,
+		StampMicro:           when,
+		StampNano:            when,
+		CustomTiny:           when,
 	}
 }
 
@@ -767,7 +767,7 @@ type BoundaryStruct struct {
 func TestBoundary_FloatNaN_marshal(t *testing.T) {
 	t.Parallel()
 	in := BoundaryStruct{F: math.NaN()}
-	out, err := encode.Marshal(in)
+	out, err := ggen.Marshal(in)
 	if err == nil {
 		if bytes.Contains(out, []byte("NaN")) {
 			t.Errorf("NaN leaked to wire as bare literal: %s", out)
@@ -779,7 +779,7 @@ func TestBoundary_FloatInf_marshal(t *testing.T) {
 	t.Parallel()
 	for _, v := range []float64{math.Inf(1), math.Inf(-1)} {
 		in := BoundaryStruct{F: v}
-		out, err := encode.Marshal(in)
+		out, err := ggen.Marshal(in)
 		if err == nil {
 			if bytes.Contains(out, []byte("Inf")) || bytes.Contains(out, []byte("inf")) {
 				t.Errorf("Inf leaked to wire as bare literal: %s", out)
@@ -821,7 +821,7 @@ func TestBoundary_EveryEscapeAtOnce(t *testing.T) {
 	t.Parallel()
 	str := "\b\f\n\r\t\"\\"
 	in := BoundaryStruct{Str: str}
-	out, err := encode.Marshal(in)
+	out, err := ggen.Marshal(in)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}

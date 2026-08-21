@@ -10,7 +10,7 @@ import (
 
 // SkipEnvelope drives BenchmarkSkipHeavy_Unmarshal: one matched field, the
 // rest of the payload (a Mega-sized blob) is skipped via ignoreunknown —
-// isolates scan.SkipValue over compact vs pretty-printed (whitespace-rich)
+// isolates ggen.SkipValue over compact vs pretty-printed (whitespace-rich)
 // input.
 //
 //ggen:generate ignoreunknown

@@ -69,12 +69,12 @@ pregenerated code.
 
 ## install
 
-Install the CLI and pull in the runtime subpackages your generated code will
+Install the CLI and pull in the runtime package your generated code will
 import:
 
 ```sh
 go install github.com/sirkostya009/ggen/cli@latest # CLI binary
-go get github.com/sirkostya009/ggen                # runtime subpackages
+go get github.com/sirkostya009/ggen                # runtime package
 ```
 
 ## usage
@@ -131,7 +131,7 @@ For every annotated struct `T`:
 
 ```go
 func (T) DecodeFrom(data []byte) (T, int, error)      // returns bytes consumed
-func (T) DecodeFromStream(s *scan.Stream) (T, error)  // Stream owns cursor via s.Pos
+func (T) DecodeFromStream(s *ggen.Stream) (T, error)  // Stream owns cursor via s.Pos
 func (T) JSONSize() int
 func (T) AppendJSON(dst []byte) ([]byte, error)
 ```
@@ -155,7 +155,7 @@ buf := make([]byte, 0, u.JSONSize())
 buf, err = u.AppendJSON(buf)
 
 // wrap an io.Reader in a stream with a preallocated intermediate buf
-s := scan.NewStream(r, buf)
+s := ggen.NewStream(r, buf)
 // lazily decode from stream
 u, err = u.DecodeFromStream(s)
 // once finished you can reuse buf for another stream
@@ -174,27 +174,23 @@ Like stdlib, ggen has merge semantics, but deliberately different ones:
 | empty wire value → container field        | empty, non-nil       | empty, non-nil       | `[]`, `{}`, and an empty `[]byte` string all decode to an allocated empty value, so re-marshalling gives the empty form back, not `null` |
 | `null` → non-pointer scalar or struct     | parse error          | Go zero value        | use a pointer, a per-field `nullzero` decode variant, or `-nullzero` for all value fields |
 
-### runtime packages
+### runtime package
 
-Beyond the byte-scan and append primitives, the `encode` / `decode` packages
-expose a small set of helpers for the patterns you'd actually use:
+Beyond the byte-scan and append primitives, the `ggen` runtime package
+exposes a small set of helpers for the patterns you'd actually use:
 
 ```go
-import (
-	"github.com/sirkostya009/ggen/decode"
-	"github.com/sirkostya009/ggen/encode"
-	"github.com/sirkostya009/ggen/scan"
-)
+import "github.com/sirkostya009/ggen"
 
 // single value
-out, err := encode.Marshal(u)
+out, err := ggen.Marshal(u)
 
 // JSON array of T → []T
-users, err := decode.UnmarshalSlice[User](payload)
-out, err := encode.MarshalSlice(users)
+users, err := ggen.UnmarshalSlice[User](payload)
+out, err := ggen.MarshalSlice(users)
 
 // streaming — a memory efficient way to read from io.Reader
-s := scan.NewStream(req.Body, buf[:0])
+s := ggen.NewStream(req.Body, buf[:0])
 u, err := s.Value[User]()     // one value
 users, err := s.Slice[User]() // JSON array of T
 
@@ -204,7 +200,7 @@ u, err = s.Value(u)
 users, err = s.Slice(users)
 
 // iterate a big array without gathering it no slice allocations
-for item, err := range scan.NewStream(r, buf[:0]).Array[Item]() {
+for item, err := range ggen.NewStream(r, buf[:0]).Array[Item]() {
 	if err != nil {
 		break
 	}
@@ -213,7 +209,7 @@ for item, err := range scan.NewStream(r, buf[:0]).Array[Item]() {
 
 // iterate a never-ending stream (NDJSON, whitspace-concatenated values, a socket).
 // cleanly stops when the stream ends. Any errors including validation surface and stop it.
-for ev, err := range scan.NewStream(conn, buf[:0]).Seq[Event]() {
+for ev, err := range ggen.NewStream(conn, buf[:0]).Seq[Event]() {
 	if err != nil {
 		break
 	}
@@ -234,15 +230,15 @@ unmarshal multierr`.
 | `-pkg <name>`       | —                  | override the package name in the generated file                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `-marshal`          | `marshal`          | also emit a `MarshalJSON` hook so the type satisfies `encoding/json.Marshaler`                                                                                                                                                                                                                                                                                                                                                                                       |
 | `-unmarshal`        | `unmarshal`        | also emit an `UnmarshalJSON` hook for `encoding/json.Unmarshaler`                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `-multierr`         | `multierr`         | accumulate every validation failure into `validation.Errors` instead of returning on the first one                                                                                                                                                                                                                                                                                                                                                                   |
-| `-allowdups`        | `allowdups`        | accept duplicate JSON keys with first-wins semantics — the first occurrence is parsed, later ones are skipped via `scan.SkipValue` without being decoded (default: error on the second hit)                                                                                                                                                                                                                                                                          |
+| `-multierr`         | `multierr`         | accumulate every validation failure into `ggen.Errors` instead of returning on the first one                                                                                                                                                                                                                                                                                                                                                                   |
+| `-allowdups`        | `allowdups`        | accept duplicate JSON keys with first-wins semantics — the first occurrence is parsed, later ones are skipped via `ggen.SkipValue` without being decoded (default: error on the second hit)                                                                                                                                                                                                                                                                          |
 | `-novalidate`       | `novalidate`       | drop validation, required-field checks, and mods entirely — fastest decode path                                                                                                                                                                                                                                                                                                                                                                                      |
 | `-ignoreunknown`    | `ignoreunknown`    | silently drop unknown JSON keys (default: error). overridden by an inline catch-all map field                                                                                                                                                                                                                                                                                                                                                                        |
 | `-nullzero`         | `nullzero`         | accept an explicit JSON `null` on every non-pointer value field, decoding it to the Go zero value (default: error). a per-field `nullzero` decode variant in `pipe:` opts in a single field                                                                                                                                                                                                                                                                          |
 | `-nosortkeys`       | `nosortkeys`       | emit struct fields in declaration order (default: alphabetical by JSON name, compresses better)                                                                                                                                                                                                                                                                                                                                                                      |
 | `-usenumber`        | `usenumber`        | decode numbers in `any` fields as `json.Number` instead of `float64`                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `-htmlescape`       | `htmlescape`       | escape `<`, `>`, `&` to `\uXXXX` for safe embedding in HTML (default: literal, matches `encoding/json` v2 — v2 dropped HTML escaping as a default)                                                                                                                                                                                                                                                                                                                   |
-| `-allowinvalidutf8` | `allowinvalidutf8` | skip decode-side UTF-8 validation for this struct: invalid bytes flow into string fields / keys / raw spans untouched, unpaired `\uXXXX` surrogates decode to U+FFFD (default: reject with `scan.ErrInvalidUTF8`, jsonv2 parity). Grammar checks unaffected. Decode-only                                                                                                                                                                                             |
+| `-allowinvalidutf8` | `allowinvalidutf8` | skip decode-side UTF-8 validation for this struct: invalid bytes flow into string fields / keys / raw spans untouched, unpaired `\uXXXX` surrogates decode to U+FFFD (default: reject with `ggen.ErrInvalidUTF8`, jsonv2 parity). Grammar checks unaffected. Decode-only                                                                                                                                                                                             |
 | `-copy`             | `copy`             | copy decoded strings and `json.RawMessage` (and strings inside `any` fields) out of the input buffer instead of aliasing it, so you may reuse or mutate the input after `DecodeFrom` returns (default: zero-copy aliasing — faster, but the input must stay alive and unmodified for as long as the decoded values are used). Decode-only; allocates more                                                                                                            |
 | `-dry`              | —                  | parse and validate every annotated struct, surface every error, emit no file. Useful in CI/pre-commit to fail fast on broken tags or annotations. Rejects `-o` / `-pkg`                                                                                                                                                                                                                                                                                              |
 | `-simd <tier>`      | —                  | SIMD tier for string scans and marshal escape scans: `off`, `avx`, `avx2`, `avx512`. Running ggen under `GOEXPERIMENT=simd` auto-selects `avx`; `avx2`/`avx512` are explicit opt-ins (and require the env var). The tier is baked into the generated code — no runtime CPU probing or branching — so generated code `GOEXPERIMENT=simd` to build and a CPU with that instruction set to run. You can get from 1% to 90% performance improvement depending on payload |
@@ -427,7 +423,7 @@ WIDTH second:
 ### inspecting errors
 
 ```go
-var minlen *validation.MinLenError
+var minlen *ggen.MinLenError
 if errors.As(err, &minlen) {
 	// minlen.Path  — root-relative path segments, e.g. ["addr", "zip"]
 	// minlen.Limit, minlen.Got
@@ -435,23 +431,23 @@ if errors.As(err, &minlen) {
 }
 ```
 
-> [!NOTE] In `-multierr` mode the generated code returns `validation.Errors`, a
-> `validation.Error` slice instead of stopping at first failure.
+> [!NOTE] In `-multierr` mode the generated code returns `ggen.Errors`, a
+> `ggen.Error` slice instead of stopping at first failure.
 
 Low-level parse failures such as malformed JSON or unexpected JSON value come back
-wrapped in `*decode.ParseError` that also carries some parsing metadata:
+wrapped in `*ggen.ParseError` that also carries some parsing metadata:
 
 ```go
-var pe *decode.ParseError
+var pe *ggen.ParseError
 if errors.As(err, &pe) {
 	// pe.Path  — root-relative path segments, e.g. ["addr", "street"]
 	// pe.Pos   — byte offset
-	// pe.Err   — underlying sentinel (scan.ErrBadString, scan.ErrBadObject, …)
+	// pe.Err   — underlying sentinel (ggen.ErrBadString, ggen.ErrBadObject, …)
 }
 
 // The wrap is transparent to errors.Is — the underlying scan sentinel
 // is still reachable:
-if errors.Is(err, scan.ErrBadString) { ... }
+if errors.Is(err, ggen.ErrBadString) { ... }
 ```
 
 ## supported kinds
@@ -460,7 +456,7 @@ if errors.Is(err, scan.ErrBadString) { ... }
 | --------- | ---------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------ |
 | primitive | `string`, `bool`, `int*`, `uint*`, `float*`                      | scalar | `*T` for any of these — `null` ↔ `nil`; multi-level `**T`/… also supported                 |
 | slice     | `[]T`                                                            | array  | nil → `null`; `[]*T` decodes into a single contiguous `[]T` slab. `[]**T`/… also supported |
-| array     | `[N]T`                                                           | tuple  | strict element count — mismatch → `validation.LenError`; `[N]*T` uses a fixed `[N]T` slab  |
+| array     | `[N]T`                                                           | tuple  | strict element count — mismatch → `ggen.LenError`; `[N]*T` uses a fixed `[N]T` slab  |
 | array     | `[N]byte`                                                        | base64 string | jsonv2 parity (v1 emits a number array); strict decoded length. `format:array` for the v1 shape |
 | map       | `map[string]V`                                                   | object | string keys only. `map[string]*V` / `**V` / … values decode natively, `null` ↔ `nil`       |
 | struct    | named / embedded                                                 | object | embedded fields are promoted, same as `encoding/json`                                      |
@@ -601,12 +597,12 @@ type CreateUser struct {
 }
 
 var bufPool = sync.Pool{New: func() any {
-	return scan.NewStream(nil, make([]byte, 0, 512))
+	return ggen.NewStream(nil, make([]byte, 0, 512))
 }}
 
-func parseRequest[T decode.Decoder[T]](r *http.Request) (T, error) {
+func parseRequest[T ggen.Decoder[T]](r *http.Request) (T, error) {
 	var zero T
-	s := bufPool.Get().(*scan.Stream)
+	s := bufPool.Get().(*ggen.Stream)
 	// grow the buf to match incoming content length (if available)
 	b := slices.Grow(s.Bytes()[0:], min(max(int(r.ContentLength), 0), 10<<20))
 	// limit actual reader

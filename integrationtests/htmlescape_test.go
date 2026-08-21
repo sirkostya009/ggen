@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sirkostya009/ggen/encode"
+	"github.com/sirkostya009/ggen"
 )
 
 //ggen:generate
@@ -25,7 +25,7 @@ type HTMLEscapeStruct struct {
 func TestHTMLEscape_DefaultLiteral(t *testing.T) {
 	t.Parallel()
 	const in = `<a href="x">tom & jerry</a>`
-	out, err := encode.Marshal(HTMLRawStruct{Note: in})
+	out, err := ggen.Marshal(HTMLRawStruct{Note: in})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,7 +45,7 @@ func TestHTMLEscape_DefaultLiteral(t *testing.T) {
 func TestHTMLEscape_OptIn(t *testing.T) {
 	t.Parallel()
 	const in = `<a href="x">tom & jerry</a>`
-	out, err := encode.Marshal(HTMLEscapeStruct{Note: in})
+	out, err := ggen.Marshal(HTMLEscapeStruct{Note: in})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -4,14 +4,13 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/sirkostya009/ggen/decode"
-	"github.com/sirkostya009/ggen/encode"
+	"github.com/sirkostya009/ggen"
 )
 
 // Generated marshal output decodes back to the original.
 func TestMarshalRoundtrip(t *testing.T) {
 	t.Parallel()
-	out, _ := encode.Marshal(complexValue)
+	out, _ := ggen.Marshal(complexValue)
 	got, _, err := Node{}.DecodeFrom(out)
 	if err != nil {
 		t.Fatalf("parse: %v\n%s", err, out)
@@ -37,8 +36,8 @@ func TestSliceRoundtrip(t *testing.T) {
 		{Street: "Side 2", City: "Odesa", ZipCode: "65000"},
 		{Street: "Back 3", City: "Kyiv", ZipCode: "01000"},
 	}
-	out, _ := encode.MarshalSlice(addrs)
-	got, err := decode.UnmarshalSlice[Address](out)
+	out, _ := ggen.MarshalSlice(addrs)
+	got, err := ggen.UnmarshalSlice[Address](out)
 	if err != nil {
 		t.Fatalf("parse: %v\n%s", err, out)
 	}
@@ -52,16 +51,16 @@ func TestSliceRoundtrip(t *testing.T) {
 	}
 
 	// String + Reader variants.
-	s, _ := encode.MarshalSliceString(addrs)
+	s, _ := ggen.MarshalSliceString(addrs)
 	if s[0] != '[' || s[len(s)-1] != ']' {
 		t.Errorf("bad slice string: %q", s)
 	}
 
 	var buf bytes.Buffer
-	if err := encode.WriteSliceTo(&buf, addrs); err != nil {
+	if err := ggen.WriteSliceTo(&buf, addrs); err != nil {
 		t.Fatal(err)
 	}
-	got2, err := decode.UnmarshalSlice[Address](buf.Bytes())
+	got2, err := ggen.UnmarshalSlice[Address](buf.Bytes())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +72,7 @@ func TestSliceRoundtrip(t *testing.T) {
 func TestWrite(t *testing.T) {
 	t.Parallel()
 	var buf bytes.Buffer
-	if err := encode.WriteTo(&buf, complexValue); err != nil {
+	if err := ggen.WriteTo(&buf, complexValue); err != nil {
 		t.Fatal(err)
 	}
 	got, _, err := Node{}.DecodeFrom(buf.Bytes())

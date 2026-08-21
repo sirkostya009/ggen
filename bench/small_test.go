@@ -11,8 +11,7 @@ import (
 	"testing"
 
 	"github.com/bytedance/sonic"
-	"github.com/sirkostya009/ggen/encode"
-	"github.com/sirkostya009/ggen/scan"
+	"github.com/sirkostya009/ggen"
 )
 
 // BenchmarkSmall_Unmarshal — bytes-path decode of ValidPayload into a
@@ -76,7 +75,7 @@ func BenchmarkSmall_Reader(b *testing.B) {
 		}},
 		{"ggen_stream_512", 512, func(s *readerState) error {
 			s.r.Reset(ValidPayload)
-			var _st scan.Stream
+			var _st ggen.Stream
 			_st.Reset(&s.r, make([]byte, 0, 512))
 			_, err := Validated{}.DecodeFromStream(&_st)
 			return err
@@ -84,7 +83,7 @@ func BenchmarkSmall_Reader(b *testing.B) {
 		{"ggen_stream_full", len(ValidPayload), func(s *readerState) error {
 			s.r.Reset(ValidPayload)
 			var err error
-			var _st scan.Stream
+			var _st ggen.Stream
 			_st.Reset(&s.r, s.buf[:0])
 			_, err = Validated{}.DecodeFromStream(&_st)
 			s.buf = _st.Bytes()
@@ -158,7 +157,7 @@ func BenchmarkTiny_Marshal(b *testing.B) {
 		{"sonic", func() ([]byte, error) { return sonic.Marshal(TinyValue) }},
 		{"sonic_fast", func() ([]byte, error) { return sonic.ConfigFastest.Marshal(TinyValue) }},
 		{"easyjson", func() ([]byte, error) { return EasyTinyValue.MarshalJSON() }},
-		{"ggen", func() ([]byte, error) { return encode.Marshal(TinyValue) }},
+		{"ggen", func() ([]byte, error) { return ggen.Marshal(TinyValue) }},
 	}
 	for _, c := range codecs {
 		b.Run(c.name, func(b *testing.B) {
@@ -224,8 +223,8 @@ func BenchmarkHTMLEscape_MarshalParity(b *testing.B) {
 		name string
 		fn   func() ([]byte, error)
 	}{
-		{"ggen_noescape", func() ([]byte, error) { return encode.Marshal(HTMLPlainValue) }},
-		{"ggen_htmlescape", func() ([]byte, error) { return encode.Marshal(HTMLEscapeValue) }},
+		{"ggen_noescape", func() ([]byte, error) { return ggen.Marshal(HTMLPlainValue) }},
+		{"ggen_htmlescape", func() ([]byte, error) { return ggen.Marshal(HTMLEscapeValue) }},
 		{"jsonv2", func() ([]byte, error) { return jsonv2.Marshal(HTMLPlainValue) }},
 		{"sonic", func() ([]byte, error) { return sonic.Marshal(HTMLPlainValue) }},
 		{"easyjson", func() ([]byte, error) { return EasyHTMLPlainValue.MarshalJSON() }},

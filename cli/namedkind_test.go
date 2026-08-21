@@ -56,11 +56,11 @@ func TestNamedPrimitive_RulesResolveUnderlying(t *testing.T) {
 			{V: ValidationRule{Name: "eq", Value: "low"}},
 			{V: ValidationRule{Name: "neq", Value: "high"}},
 		}, strSeed)
-		if !strings.Contains(s, "validation.EqError") || !strings.Contains(s, "validation.NeqError") {
+		if !strings.Contains(s, "ggen.EqError") || !strings.Contains(s, "ggen.NeqError") {
 			t.Errorf("eq/neq on a named string emitted no check:\n%s", s)
 		}
 		n := gen("Cnt", KindStruct, []Step{{V: ValidationRule{Name: "eq", Value: "3"}}}, intSeed)
-		if !strings.Contains(n, "validation.EqError") {
+		if !strings.Contains(n, "ggen.EqError") {
 			t.Errorf("eq on a named int emitted no check:\n%s", n)
 		}
 	})
@@ -74,7 +74,7 @@ func TestNamedPrimitive_RulesResolveUnderlying(t *testing.T) {
 		for _, want := range []string{
 			"utf8.RuneCountInString(string(result.S))",
 			"strings.Contains(string(result.S)",
-			"validation.IsURL(string(result.S))",
+			"ggen.IsURL(string(result.S))",
 		} {
 			if !strings.Contains(s, want) {
 				t.Errorf("missing cast %q:\n%s", want, s)

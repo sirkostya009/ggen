@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sirkostya009/ggen/encode"
+	"github.com/sirkostya009/ggen"
 	"github.com/sirkostya009/ggen/integrationtests/thirdparty"
 	"github.com/sirkostya009/ggen/integrationtests/thirdparty2"
 )
@@ -46,7 +46,7 @@ func TestFallback_roundtrip(t *testing.T) {
 		ID:    "abc",
 		Extra: thirdparty.External{Key: "k", Value: 42},
 	}
-	out, _ := encode.MarshalString(in)
+	out, _ := ggen.MarshalString(in)
 	if !strings.Contains(out, `"extra":{"key":"k","value":42}`) {
 		t.Errorf("marshal output missing expected shape: %s", out)
 	}
@@ -67,7 +67,7 @@ func TestFastFallback_roundtrip(t *testing.T) {
 		ID:    "abc",
 		Extra: thirdparty2.External2{Key: "k", Value: 42},
 	}
-	out, _ := encode.MarshalString(in)
+	out, _ := ggen.MarshalString(in)
 	got, _, err := FastFallbackStruct{}.DecodeFrom([]byte(out))
 	if err != nil {
 		t.Fatalf("unmarshal: %v\n%s", err, out)
@@ -97,7 +97,7 @@ func TestFastFallback_validationFromGeneratedDecoder(t *testing.T) {
 func TestTextFallback_roundtrip(t *testing.T) {
 	t.Parallel()
 	in := TextFallbackStruct{ID: "x", Tag: thirdparty.Tagged{Name: "alice", Tag: "admin"}}
-	out, _ := encode.MarshalString(in)
+	out, _ := ggen.MarshalString(in)
 	if !strings.Contains(out, `"tag":"alice#admin"`) {
 		t.Fatalf("expected text-encoded form, got: %s", out)
 	}
@@ -224,7 +224,7 @@ func TestTextAppender_OutputEscaped(t *testing.T) {
 	if got.T.V != `a"b\c` {
 		t.Fatalf("V = %q", got.T.V)
 	}
-	out, err := encode.Marshal(got)
+	out, err := ggen.Marshal(got)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -236,7 +236,7 @@ func TestTextAppender_OutputEscaped(t *testing.T) {
 	}
 	// Clean text stays byte-identical to the raw fast path.
 	clean := TextAppenderStruct{T: thirdparty.QuotedText{V: "plain"}}
-	out, _ = encode.Marshal(clean)
+	out, _ = ggen.Marshal(clean)
 	if string(out) != `{"t":"plain"}` {
 		t.Errorf("clean = %s", out)
 	}

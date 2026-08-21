@@ -56,7 +56,7 @@ The numbers below are for science only.
   Ukrainian-localized Cyrillic, so this row also carries the decode UTF-8
   validation walk — opt #50. Control-checked sweep (2026-07): **+67.7% scalar
   / +38.7% avx512** vs pre-validation; the avx512 figure is low because the
-  vector validator (`validUTF8x16`, scan/CLAUDE.md) replaces the scalar
+  vector validator (`validUTF8x16`, .claude/scan.md) replaces the scalar
   `utf8.Valid` second pass. Still 2.7-5× ahead of jsonv2, which validates too.
   NOTE this family's control rows drift 3.6-6% on the current box, so treat the
   precision as soft — the effect is far larger than the drift, so the direction
@@ -89,7 +89,7 @@ The numbers below are for science only.
   by design, so those two rows — NOT this one — carry the decode UTF-8
   validation cost, opt #50; Mega/Small/Tiny values are asciiLetters.) Its correctness guard (ggen bytes + stream == jsonv2) found a
   real stream bug: surrogate pairs straddling a refill boundary corrupted (😀 →
-  ��, see scan/CLAUDE.md). **sonic caveat:** unlike the skip tier, decode must
+  ��, see .claude/scan.md). **sonic caveat:** unlike the skip tier, decode must
   produce the unescaped value, but sonic's escape handling still differs
   (ConfigFastest is lax) — read the sonic rows as context, not a like-for-like
   race; jsonv2 is the honest baseline.
@@ -245,7 +245,7 @@ shaves −2.9% NoAlloc; inline vector scan −22% NoAlloc / −8.8% Mega / −8%
 Tiny.
 
 **Stream tier** (fused per-window locate in `Stream.String*`/`StringView*`/
-`KeyView*`, see scan/CLAUDE.md) — interleaved n=10 at avx512 vs the bytes-only
+`KeyView*`, see .claude/scan.md) — interleaved n=10 at avx512 vs the bytes-only
 tier build: Mega_Reader/ggen_stream −5.2%, NoAlloc_Reader/ggen_stream −7.7%,
 Small_Reader/ggen_stream_512 −19.8%, _full −26.5%. The remaining stream gap
 vs bytes is string-copy mallocs + ReadMore, not scan work.
@@ -271,7 +271,7 @@ fresh 4 KiB buffer, the blob streams through refill + compaction) —
 interleaved n=10 at avx512, tier + compacting refills vs scalar grow-only:
 compact −32.6% (8.92 → 6.01 ms), pretty −25.6% (13.81 → 10.27 ms), B/op
 8.4 MB → 127 KB (grow-only refills doubled the buffer every mid-number
-window edge — see scan/CLAUDE.md), allocs 12 → 6; Mega_Reader flat
+window edge — see .claude/scan.md), allocs 12 → 6; Mega_Reader flat
 (string-copy mallocs dominate). The pretty stream row also flushed out a
 scalar `(*Stream).skipObject` bug — no WS skip after the key-separator
 comma — fixed + pinned by `TestStreamSkipValue_MatchesBytes`.
@@ -289,7 +289,7 @@ avx512 by default, avx2 for skip-dominated workloads.
   ggen_copy −9.5%; Tiny_Unmarshal, Mega_Unmarshal, MapHeavy, ValidationHeavy all
   flat (Mega ggen p=0.065, ggen_copy p=0.093 — not significant). Closes most of
   the scalar↔avx512 gap for users who can't enable `GOEXPERIMENT=simd`.
-- **SkipSpace* inlinable shell (scan/CLAUDE.md).** avx512 SkipHeavy/compact/ggen
+- **SkipSpace* inlinable shell (.claude/scan.md).** avx512 SkipHeavy/compact/ggen
   −9.7% (compact is whitespace-free, so this is pure call-overhead removal);
   B/op + allocs unchanged.
 - **Stream `Float64`/`Number` compacting refill + `exactShort`.** Throughput

@@ -16,7 +16,7 @@ import (
 
 	gofrs "github.com/gofrs/uuid/v5"
 	"github.com/google/uuid"
-	"github.com/sirkostya009/ggen/encode"
+	"github.com/sirkostya009/ggen"
 )
 
 // RichTypes mixes every rich kind. ID and GofrsID cover both major UUID
@@ -55,7 +55,7 @@ func TestRich_Roundtrip(t *testing.T) {
 		ID:      id,
 		GofrsID: gofrsID,
 	}
-	out, _ := encode.Marshal(in)
+	out, _ := ggen.Marshal(in)
 	got, _, err := RichTypes{}.DecodeFrom(out)
 	if err != nil {
 		t.Fatalf("unmarshal: %v\n%s", err, out)
@@ -172,7 +172,7 @@ func TestRich_RoundtripDeepEqual(t *testing.T) {
 	id := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
 	site, _ := url.Parse("https://x.test")
 	in := RichTypes{Site: *site, ID: id}
-	out, _ := encode.Marshal(in)
+	out, _ := ggen.Marshal(in)
 	got, _, err := RichTypes{}.DecodeFrom(out)
 	if err != nil {
 		t.Fatalf("unmarshal: %v\n%s", err, out)

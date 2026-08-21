@@ -1,35 +1,34 @@
 # ggen — zero-copy, zero-reflection JSON codegen for Go
 
 Code generator. Parses annotated Go structs, emits methods on them. Hand-rolls a
-byte scan over the caller's `[]byte` or `*scan.Stream`; the bytes path aliases
+byte scan over the caller's `[]byte` or `*ggen.Stream`; the bytes path aliases
 input via `unsafe.String` — no copy, no tokens, no AST.
 
 This file is the **project map + repo-wide conventions**. The CLI / codegen
 surface and the _why_ behind generated-code shape live in `cli/CLAUDE.md`;
-runtime internals, benchmarks, and integration-test conventions live in each
-package's own CLAUDE.md (see Repo layout). This is NOT the user-facing doc — that
-is `README.md` / `SKILL.md`.
+runtime internals live in the `.claude/{decode,encode,scan,validation}.md`
+area docs, benchmarks and integration-test conventions in those modules'
+CLAUDE.md. This is NOT the user-facing doc — that is `README.md` / `SKILL.md`.
 
 ## Repo layout
 
 ```
 schema/
 ├── go.work             ← workspace tying all four modules together
+├── *.go                ← runtime library, single root package ggen (github.com/sirkostya009/ggen)
+│                         area docs: .claude/{decode,encode,scan,validation}.md
 ├── cli/                → see cli/CLAUDE.md            ← CLI module / generator (github.com/sirkostya009/ggen/cli, package main)
-├── decode/             → see decode/CLAUDE.md           ┐
-├── validation/         → see validation/CLAUDE.md       │ runtime library
-├── encode/             → see encode/CLAUDE.md           │ (root module
-├── scan/               → see scan/CLAUDE.md             ┘  github.com/sirkostya009/ggen)
 ├── integrationtests/   → see integrationtests/CLAUDE.md  (own Go module)
 ├── bench/              → see bench/CLAUDE.md             (own Go module)
 └── .claude/backlog.md  ← ideas worth pursuing, tried-and-rejected, maybe-someday
 ```
 
-Four modules under one `go.work`: root (`github.com/sirkostya009/ggen` — runtime
-library `decode`/`encode`/`scan`/`validation` only, no external deps), `cli/` (the generator,
-depends on `golang.org/x/tools`), `bench/`, `integrationtests/`. The CLI doesn't
-import the runtime packages — it emits their import paths as string literals into
-generated code.
+Three modules under one `go.work` plus the root: root (`github.com/sirkostya009/ggen`
+— the whole runtime as one package `ggen`, no external deps; decode/encode/scan/
+validation survive only as file-name and area-doc groupings), `cli/` (the
+generator, depends on `golang.org/x/tools`), `bench/`, `integrationtests/`. The
+CLI doesn't import the runtime package — it emits its import path as a string
+literal into generated code, qualifying every runtime call as `ggen.`.
 
 ## Conventions
 
@@ -49,7 +48,7 @@ discoverable, avoids cross-session collisions, and matches the test harness path
 
 ```sh
 go build -o ggen ./cli
-./ggen ./decode/... ./encode/... ./scan/...
+./ggen ./...
 easyjson bench/mega.go bench/small.go bench/simple.go
 go generate work
 ```
@@ -77,7 +76,7 @@ Everything else routes to exactly one doc:
 
 - benchmark numbers → `bench/CLAUDE.md`
 - test-suite layout → `integrationtests/CLAUDE.md`
-- per-package runtime details → the matching package CLAUDE.md
+- runtime details → the matching area doc in `.claude/{decode,encode,scan,validation}.md`
 - backlog / tried-and-rejected → `.claude/backlog.md`
 
 This root file = project map + repo-wide conventions only.

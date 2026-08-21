@@ -49,10 +49,10 @@ shaves routinely vanish in wall clock.
   caller-owned dst); (c) explicit `AppendAnySized(dst, v, hint)`. Pick when a
   real workload pins slice marshal as a hotspot — map wins dominate today.
 
-- **Single-copy `-copy` escape strings — SHIPPED (both tiers, via `scan.Detach`).**
-  Was: escaped retained strings under `-copy` double-allocated (`scan.String`/
+- **Single-copy `-copy` escape strings — SHIPPED (both tiers, via `ggen.Detach`).**
+  Was: escaped retained strings under `-copy` double-allocated (`ggen.String`/
   `StringAVX*` escape arm → `stringSlow` owned scratch, then a redundant
-  `strings.Clone`). Fixed with `scan.Detach(s, data)` — a tier-agnostic helper
+  `strings.Clone`). Fixed with `ggen.Detach(s, data)` — a tier-agnostic helper
   that clones IFF `s` aliases `data` (a pointer-range test; the `stringSlow`
   escape result is a distinct heap alloc → skipped, non-moving GC makes the test
   sound). Copy-mode codegen (scalar + SIMD fall) reuses the SAME aliasing tier
@@ -120,7 +120,7 @@ surface pinned by `Decoder[T]`).
 
 - **Raw-span surrogate-escape validation (residual jsonv2 divergence).**
   Decode-side UTF-8 validation SHIPPED for every string-producing path AND
-  captured raw spans (`scan.CheckUTF8` at RawMessage/jsontext.Value sites —
+  captured raw spans (`ggen.CheckUTF8` at RawMessage/jsontext.Value sites —
   cli/CLAUDE.md opt #50). Two DECIDED exceptions (2026-07): skipped spans
   (`ignoreunknown`/`SkipValue`) stay grammar-checked only — intentional, keeps
   the skip tiers on the plain non-accumulating kernels; and unpaired `\uXXXX`
@@ -131,7 +131,7 @@ surface pinned by `Decoder[T]`).
   consumer feeds captured raw spans back into a strict v2 decoder.
 
 - **Vectorized UTF-8 validation — SHIPPED for the SIMD tiers (2026-07).**
-  `validUTF8x16` (scan/simd_utf8_amd64.go, Lemire/simdjson nibble-LUT
+  `validUTF8x16` (simd_utf8_amd64.go, Lemire/simdjson nibble-LUT
   algorithm on 16-byte lanes, AVX1-safe) replaces the scalar `utf8.Valid`
   second pass in `classifyStructural` + the stream cores: ~6.5× on the
   validation component (4 KB Cyrillic 3456→~530 ns). Control-checked re-measure
@@ -216,6 +216,28 @@ surface pinned by `Decoder[T]`).
 
 ## Open design questions
 
+- **Shrink the exported runtime API (2026-08, post single-package merge).** Most
+  of the root package's exported surface is emit ABI, not human API: the scan
+  primitives (`Any*`, `Bool`/`Int64`/`Uint64`/`Float64`/`Number`/`String`/
+  `Null`/`Expect`/`SkipSpace`/`SkipValue`/`ArrayOpen`/`ObjectOpen`), the SIMD
+  tiers (`StringAVX*`, `SkipSpaceAVX*`, `SkipValueAVX*`, `AppendString*AVX*`),
+  encode plumbing (`CloseJSONString*`, `BytesToString`, `AppendFloat`,
+  `AppendUnixSeconds`, `AppendNetipAddr*`, `AppendURL*`), and glue
+  (`NotEOF`, `Detach`, `CheckUTF8`, `SignedNeg`, `Uint64Limit`,
+  `NewParseErr*`, `ShiftPos`). Exported only because generated code calls
+  them; `internal/` cannot host any of it — generated files live in USER
+  packages outside the `sirkostya009/ggen/` path prefix, so internal
+  visibility excludes exactly the caller that matters (same reason the
+  maxDepth guard is emitted as a literal). The human-facing core is small:
+  `Marshal*`/`Unmarshal*`/`Read*`/`Write*`/`Append{Any,Slice,String}*`,
+  `Stream` + its methods + `Value`/`Slice`/`Array`/`Seq`, the interfaces
+  (`Decoder`/`StreamDecoder`/`Marshaler`), and the error types + sentinels.
+  Options if it ever itches: doc-comment tiering ("generated-code ABI, do
+  not call") + a curated go-doc example set; a `ggen/abi` subpackage the
+  emitter qualifies (public but clearly named, halves the root's go doc);
+  or accept it — codegen runtimes (easyjson/gogoproto) all carry this. No
+  action until a consumer confuses the two surfaces.
+
 - **Go 1.27 stable `encoding/json/v2` dropped features the experiment had —
   4 parity gaps, 10 failing tests, UNDECIDED (2026-08).** The 1.27 bump removed
   `goexperiment.jsonv2` (v2 + jsontext are stable, no flag). But the STABLE
@@ -248,11 +270,11 @@ surface pinned by `Decoder[T]`).
   small, real breaking changes if followed. Whatever lands must propagate to
   the three surface docs (README / SKILL.md / cli/CLAUDE.md).
 
-- **`scan.NotEOF` leaks the drained-vs-transient mapping into generated code
+- **`ggen.NotEOF` leaks the drained-vs-transient mapping into generated code
   (2026-08).** Round-6 fix #60 needed the generated stream dispatch loop to map
   a drained refill to the bytes-path grammar sentinel, so `notEOF` was exported
   and now appears at ~378 generated call sites
-  (`scan.NotEOF(err, scan.ErrExpectString)`). It works and it is honest — the
+  (`ggen.NotEOF(err, ggen.ErrExpectString)`). It works and it is honest — the
   emitted code genuinely does what the runtime primitives do — but it publishes
   an error-mapping helper that is really an internal policy, and every generated
   file now carries the idiom. Alternatives not taken: a `Stream` method doing
@@ -294,7 +316,7 @@ surface pinned by `Decoder[T]`).
   `ignoreunknown`, etc. Worth doing only if a consumer actually asks; the
   headline number to chase is SkipHeavy, not the UTF-8 rows.
 
-- **MaxDepth boundary offset vs jsonv2 (documented divergence, 2026-08).**
+- **maxDepth boundary offset vs jsonv2 (documented divergence, 2026-08).**
   The depth cap counts only containers inside the any/skip/raw subtree —
   acyclic generated-struct levels enclosing it are uncounted (`const _depth =
   0`), so at the EXACT 10000 boundary ggen accepts a document jsonv2 rejects
@@ -328,7 +350,7 @@ surface pinned by `Decoder[T]`).
 
 - **Clean up validation error path-completion plumbing.** The 2026-08 path
   fixes left structural-assertion smell: `PrependPath` is an exported method on
-  every error type but NOT in the `Error` interface, so `decode.NewParseErr`,
+  every error type but NOT in the `Error` interface, so `ggen.NewParseErr`,
   `Errors.Append`, and `Errors.PrependPath` each assert
   `interface{ PrependPath(string) }` inline. (2026-08: `AddPos` joined as a
   second such method — 29 more one-liners + `interface{ AddPos(int) }`
@@ -340,7 +362,7 @@ surface pinned by `Decoder[T]`).
   kills the 20 copy-pasted one-liners. Fold into the CustomError-shape revisit
   below if both happen at once.
 
-- **Revisit `validation.CustomError` shape.** Today `{Field, Name string, Cause
+- **Revisit `ggen.CustomError` shape.** Today `{Field, Name string, Cause
   error}` + `Unwrap()`. Rough edges: `Name` doubles as rule identifier and
   user-facing label (split into `Rule` + `Name`); no `Value any` field like the
   other typed errors (can't expose what the validator rejected); `Cause` is a bare
@@ -593,14 +615,14 @@ surface pinned by `Decoder[T]`).
 
 - **Pointer-receiver decode cores ([23] Layer 2) — vetoed.** Replace value-receiver
   decode struct-copy traffic with `(*T).decodeFrom` cores + value-receiver shims.
-  The public surface is pinned by `decode.Decoder[T]` (`DecodeFrom(data) (T, int,
+  The public surface is pinned by `ggen.Decoder[T]` (`DecodeFrom(data) (T, int,
   error)`) and `T{}.DecodeFrom(data)` ergonomics — a bare `*T` receiver breaks the
   generic walkers. The copies it removes are cold-path stack writes
   (store-buffer-absorbed); likely measures flat while carrying large churn. Only
   `DeepNested` might show it. Prototype + asm-confirm + interleaved A/B BEFORE the
   codegen rewrite.
 
-- **Direct-write `encode.AppendInt/AppendUint` replacing strconv.** Implemented
+- **Direct-write `ggen.AppendInt/AppendUint` replacing strconv.** Implemented
   (digit count via `bits.Len64`+pow10, backward two-digit fill, parity-fuzzed).
   Wins on small ints but PAR on large — not worth ~15 emit sites + a custom
   formatter for a small-int-only win. strconv keeps base-10 paths.
@@ -611,7 +633,7 @@ surface pinned by `Decoder[T]`).
   appends are pipeline-hidden under escape-scan/memmove. Wire bytes identical, so
   not worth it for cleanliness either. Follow-on to opt #20; don't redo.
 
-- **KindBytes inline string scan → `scan.String` call.** Regressed Mega — another
+- **KindBytes inline string scan → `ggen.String` call.** Regressed Mega — another
   confirmation that replacing inline scan code with runtime calls loses regalloc/
   BCE context (generalizes the "removing decode inliners" rejection below).
 
@@ -627,9 +649,9 @@ surface pinned by `Decoder[T]`).
   span gate in `Float64`) — the gate structurally excludes 17-digit floats
   (shortest form ≥ 18 chars), so the regression class never enters; −7.6%
   NoAlloc. Same "the gate is the point" precedent as the SWAR scan. See
-  scan/CLAUDE.md.
+  .claude/scan.md.
 
-- **`inlineNullPeek` → uint32 compare.** Mechanism real (`scan.Null` ships it) but
+- **`inlineNullPeek` → uint32 compare.** Mechanism real (`ggen.Null` ships it) but
   the peeks are ~0.07% of decode; never a perf bet. Idiom cleanup at best.
 
 - **Flat-CPU-share ⇒ wall-clock extrapolation (methodology).** Flat CPU share in a
@@ -663,7 +685,7 @@ surface pinned by `Decoder[T]`).
   bounds-check branches mispredict.
 
 - **Removing all decode-side inliners** (inlineSkipWS/ScanInt64/ScanUint64/
-  ScanString) for plain `scan.X(...)` calls. Per-call overhead is noise, but macro
+  ScanString) for plain `ggen.X(...)` calls. Per-call overhead is noise, but macro
   Unmarshal regressed ~15-20% — inlining matters for register allocation across
   adjacent ops, ICache, and compound BCE the compiler only does with the body in
   scope. Don't trust per-call micro-benches for hot-loop inlining.
@@ -673,7 +695,7 @@ surface pinned by `Decoder[T]`).
   dominates Stream throughput, so the normalized win was noise. Don't retry without
   tackling Ensure overhead.
 
-- **Inlining `scan.Bool` / `scan.Float64`.** Call frame fully amortized by body
+- **Inlining `ggen.Bool` / `ggen.Float64`.** Call frame fully amortized by body
   work for primitives at this size; call version slightly faster. No win.
 
 - **`Ensure(p *int, n int)` + `Anchor`/`Unanchor` for bounded streaming.** Original
@@ -717,7 +739,7 @@ surface pinned by `Decoder[T]`).
 - **Lazy streaming iteration over an unending reader (iter.Seq).** User idea
   2026-08: parse values lazily off a never-ending stream (stdin, socket,
   NDJSON log tail) and yield them as they complete — shape sketch:
-  `decode.Iter[T](r io.Reader, buf []byte) iter.Seq2[T, error]` (Go 1.23
+  `ggen.Iter[T](r io.Reader, buf []byte) iter.Seq2[T, error]` (Go 1.23
   range-over-func; a channel variant forces a goroutine + handoff cost and
   loses backpressure/cancellation ergonomics — Seq pulls on demand, caller
   breaks to stop). Two input shapes worth covering: elements of one huge
@@ -738,15 +760,15 @@ surface pinned by `Decoder[T]`).
   change.) Shelved unless a target schema makes the win concrete.
 
 - **Streaming `io.Reader` over marshalled output (state-machine codegen).**
-  Per-struct `AsReader()` returning resumable state + `encode.Reader[T](v)`
+  Per-struct `AsReader()` returning resumable state + `ggen.Reader[T](v)`
   exposing `io.Reader`. Suspends mid-marshal so peak memory = the caller's `p
   []byte` instead of `JSONSize()`. Only matters when a single payload is too big to
   materialize — `JSONSize()` fits comfortably in RAM for everything we care about.
   Shelved unless multi-GB request bodies show up; `bytes.NewReader(Marshal(v))` is
   a one-liner users can write.
 
-- **SIMD phase 3 (phases 1+2 SHIPPED — see cli/CLAUDE.md #46, scan/CLAUDE.md,
-  encode/CLAUDE.md, `.claude/simd-plan.md`, bench numbers in bench/CLAUDE.md).**
+- **SIMD phase 3 (phases 1+2 SHIPPED — see cli/CLAUDE.md #46, .claude/scan.md,
+  .claude/encode.md, `.claude/simd-plan.md`, bench numbers in bench/CLAUDE.md).**
   Phase 2 (2026-07) landed: exact-short float fast path (scalar, −7.6%
   NoAlloc), scanner instruction shaves (Min/Equal unsigned-compare trick,
   scalar-register mask OR at 512-bit, −2.9%), inline vector string/key
@@ -765,7 +787,7 @@ surface pinned by `Decoder[T]`).
      survives the inline hot-loop context.
   4. **stream path** — SHIPPED 2026-07: per-window fused locate
      (`structuralIndexAVX*` + per-tier `stringView*` cores in
-     `scan/simd_stream_amd64.go`); Mega_Reader −5.2%, Small_Reader −20/−26%.
+     `simd_stream_amd64.go`); Mega_Reader −5.2%, Small_Reader −20/−26%.
      Stream SKIP tier also shipped (`simd_skip_stream_amd64.go`) together
      with skip-tree compacting refills (grow-only ReadMore(0) doubled the
      buffer at every mid-number window edge): SkipHeavy ggen_stream compact

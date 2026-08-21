@@ -8,10 +8,7 @@ import (
 	"strings"
 	"unsafe"
 
-	"github.com/sirkostya009/ggen/decode"
-	"github.com/sirkostya009/ggen/encode"
-	"github.com/sirkostya009/ggen/scan"
-	"github.com/sirkostya009/ggen/validation"
+	"github.com/sirkostya009/ggen"
 )
 
 // Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
@@ -29,7 +26,7 @@ func (recv Address) DecodeFrom(data []byte) (result Address, i int, err error) {
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
-		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 	}
 	i++
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -38,20 +35,20 @@ func (recv Address) DecodeFrom(data []byte) (result Address, i int, err error) {
 	if i < len(data) && data[i] == '}' {
 		i++
 		if !seenCity {
-			return result, i, &validation.RequiredError{Pos: i, Path: []string{"city"}}
+			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"city"}}
 		}
 		if !seenStreet {
-			return result, i, &validation.RequiredError{Pos: i, Path: []string{"street"}}
+			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"street"}}
 		}
 		if !seenZipCode {
-			return result, i, &validation.RequiredError{Pos: i, Path: []string{"zipCode"}}
+			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"zipCode"}}
 		}
 		return result, i, nil
 	}
 	for {
 		var key string
 		if i >= len(data) || data[i] != '"' {
-			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrExpectString)
 		}
 		ke := i + 1
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
@@ -61,16 +58,16 @@ func (recv Address) DecodeFrom(data []byte) (result Address, i int, err error) {
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i, true)
+			key, i, err = ggen.String(data, i, true)
 			if err != nil {
-				return result, i, decode.NewParseErr("", i, err)
+				return result, i, ggen.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 		}
 		i++
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -79,11 +76,11 @@ func (recv Address) DecodeFrom(data []byte) (result Address, i int, err error) {
 		switch key {
 		case "city":
 			if seenCity {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"city"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"city"}}
 			}
 			seenCity = true
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("city", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("city", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -97,21 +94,21 @@ func (recv Address) DecodeFrom(data []byte) (result Address, i int, err error) {
 				result.City = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.City, i, err = scan.String(data, i, true)
+				result.City, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("city", i, err)
+					return result, i, ggen.NewParseErr("city", i, err)
 				}
 			}
 			if len(result.City) == 0 {
-				return result, i, &validation.NotEmptyError{Pos: i, Path: []string{"city"}}
+				return result, i, &ggen.NotEmptyError{Pos: i, Path: []string{"city"}}
 			}
 		case "street":
 			if seenStreet {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"street"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"street"}}
 			}
 			seenStreet = true
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("street", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("street", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -125,24 +122,24 @@ func (recv Address) DecodeFrom(data []byte) (result Address, i int, err error) {
 				result.Street = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.Street, i, err = scan.String(data, i, true)
+				result.Street, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("street", i, err)
+					return result, i, ggen.NewParseErr("street", i, err)
 				}
 			}
 			if len(result.Street) < 1 {
-				return result, i, &validation.MinLenError{Pos: i, Path: []string{"street"}, Limit: 1, Got: len(result.Street)}
+				return result, i, &ggen.MinLenError{Pos: i, Path: []string{"street"}, Limit: 1, Got: len(result.Street)}
 			}
 			if len(result.Street) > 200 {
-				return result, i, &validation.MaxLenError{Pos: i, Path: []string{"street"}, Limit: 200, Got: len(result.Street)}
+				return result, i, &ggen.MaxLenError{Pos: i, Path: []string{"street"}, Limit: 200, Got: len(result.Street)}
 			}
 		case "zipCode":
 			if seenZipCode {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"zipCode"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"zipCode"}}
 			}
 			seenZipCode = true
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("zipCode", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("zipCode", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -156,22 +153,22 @@ func (recv Address) DecodeFrom(data []byte) (result Address, i int, err error) {
 				result.ZipCode = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.ZipCode, i, err = scan.String(data, i, true)
+				result.ZipCode, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("zipCode", i, err)
+					return result, i, ggen.NewParseErr("zipCode", i, err)
 				}
 			}
 			if len(result.ZipCode) != 5 {
-				return result, i, &validation.LenError{Pos: i, Path: []string{"zipCode"}, Want: 5, Got: len(result.ZipCode)}
+				return result, i, &ggen.LenError{Pos: i, Path: []string{"zipCode"}, Want: 5, Got: len(result.ZipCode)}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 		}
 		if data[i] == ',' {
 			i++
@@ -183,49 +180,49 @@ func (recv Address) DecodeFrom(data []byte) (result Address, i int, err error) {
 		if data[i] == '}' {
 			i++
 			if !seenCity {
-				return result, i, &validation.RequiredError{Pos: i, Path: []string{"city"}}
+				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"city"}}
 			}
 			if !seenStreet {
-				return result, i, &validation.RequiredError{Pos: i, Path: []string{"street"}}
+				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"street"}}
 			}
 			if !seenZipCode {
-				return result, i, &validation.RequiredError{Pos: i, Path: []string{"zipCode"}}
+				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"zipCode"}}
 			}
 			return result, i, nil
 		}
-		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 	}
 }
 
-func (recv Address) DecodeFromStream(s *scan.Stream) (result Address, err error) {
+func (recv Address) DecodeFromStream(s *ggen.Stream) (result Address, err error) {
 	result = recv
 	seenCity := false
 	seenStreet := false
 	seenZipCode := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Offset(), err)
+		return result, ggen.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Offset(), err)
+		return result, ggen.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
+			return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
 		}
 		s.Pos = 0
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
 		if !seenCity {
-			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"city"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"city"}}
 		}
 		if !seenStreet {
-			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"street"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"street"}}
 		}
 		if !seenZipCode {
-			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"zipCode"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"zipCode"}}
 		}
 		return result, nil
 	}
@@ -233,71 +230,71 @@ func (recv Address) DecodeFromStream(s *scan.Stream) (result Address, err error)
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Offset(), err)
+			return result, ggen.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "city":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("city", s.Offset(), err)
+				return result, ggen.NewParseErr("city", s.Offset(), err)
 			}
 			if seenCity {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"city"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"city"}}
 			}
 			seenCity = true
 			result.City, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("city", s.Offset(), err)
+				return result, ggen.NewParseErr("city", s.Offset(), err)
 			}
 			if len(result.City) == 0 {
-				return result, &validation.NotEmptyError{Pos: s.Offset(), Path: []string{"city"}}
+				return result, &ggen.NotEmptyError{Pos: s.Offset(), Path: []string{"city"}}
 			}
 		case "street":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("street", s.Offset(), err)
+				return result, ggen.NewParseErr("street", s.Offset(), err)
 			}
 			if seenStreet {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"street"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"street"}}
 			}
 			seenStreet = true
 			result.Street, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("street", s.Offset(), err)
+				return result, ggen.NewParseErr("street", s.Offset(), err)
 			}
 			if len(result.Street) < 1 {
-				return result, &validation.MinLenError{Pos: s.Offset(), Path: []string{"street"}, Limit: 1, Got: len(result.Street)}
+				return result, &ggen.MinLenError{Pos: s.Offset(), Path: []string{"street"}, Limit: 1, Got: len(result.Street)}
 			}
 			if len(result.Street) > 200 {
-				return result, &validation.MaxLenError{Pos: s.Offset(), Path: []string{"street"}, Limit: 200, Got: len(result.Street)}
+				return result, &ggen.MaxLenError{Pos: s.Offset(), Path: []string{"street"}, Limit: 200, Got: len(result.Street)}
 			}
 		case "zipCode":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("zipCode", s.Offset(), err)
+				return result, ggen.NewParseErr("zipCode", s.Offset(), err)
 			}
 			if seenZipCode {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"zipCode"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"zipCode"}}
 			}
 			seenZipCode = true
 			result.ZipCode, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("zipCode", s.Offset(), err)
+				return result, ggen.NewParseErr("zipCode", s.Offset(), err)
 			}
 			if len(result.ZipCode) != 5 {
-				return result, &validation.LenError{Pos: s.Offset(), Path: []string{"zipCode"}, Want: 5, Got: len(result.ZipCode)}
+				return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"zipCode"}, Want: 5, Got: len(result.ZipCode)}
 			}
 		default:
-			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Offset(), err)
+			return result, ggen.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+				return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -306,24 +303,24 @@ func (recv Address) DecodeFromStream(s *scan.Stream) (result Address, err error)
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Offset(), err)
+				return result, ggen.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
 		if c == '}' {
 			s.Pos++
 			if !seenCity {
-				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"city"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"city"}}
 			}
 			if !seenStreet {
-				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"street"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"street"}}
 			}
 			if !seenZipCode {
-				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"zipCode"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"zipCode"}}
 			}
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
+		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
 	}
 }
 
@@ -339,11 +336,11 @@ func (s Address) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"city\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.City)
+	dst = ggen.AppendStringNoHTML(dst, s.City)
 	dst = append(dst, ",\"street\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.Street)
+	dst = ggen.AppendStringNoHTML(dst, s.Street)
 	dst = append(dst, ",\"zipCode\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.ZipCode)
+	dst = ggen.AppendStringNoHTML(dst, s.ZipCode)
 	return append(dst, '}'), nil
 }
 
@@ -353,8 +350,8 @@ func (recv Node) DecodeFrom(data []byte) (Node, int, error) {
 
 func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, err error) {
 	result = recv
-	if _depth > scan.MaxDepth {
-		return result, 0, scan.ErrMaxDepth
+	if _depth > 10000 { // runtime maxDepth
+		return result, 0, ggen.ErrMaxDepth
 	}
 	if result.Children != nil {
 		result.Children = result.Children[:0]
@@ -376,7 +373,7 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
-		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 	}
 	i++
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -389,7 +386,7 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 	for {
 		var key string
 		if i >= len(data) || data[i] != '"' {
-			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrExpectString)
 		}
 		ke := i + 1
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
@@ -399,16 +396,16 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i, true)
+			key, i, err = ggen.String(data, i, true)
 			if err != nil {
-				return result, i, decode.NewParseErr("", i, err)
+				return result, i, ggen.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 		}
 		i++
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -417,16 +414,16 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 		switch key {
 		case "active":
 			if seenActive {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"active"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"active"}}
 			}
 			seenActive = true
-			result.Active, i, err = scan.Bool(data, i)
+			result.Active, i, err = ggen.Bool(data, i)
 			if err != nil {
-				return result, i, decode.NewParseErr("active", i, err)
+				return result, i, ggen.NewParseErr("active", i, err)
 			}
 		case "children":
 			if seenChildren {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"children"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"children"}}
 			}
 			seenChildren = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -435,7 +432,7 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 				break
 			}
 			if i >= len(data) || data[i] != '[' {
-				return result, i, decode.NewParseErr("children", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("children", i, ggen.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -457,7 +454,7 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 					result.Children[len(result.Children)-1], _n, err = result.Children[len(result.Children)-1].decodeFromDepth(data[i:], _depth+1)
 					i += _n
 					if err != nil {
-						return result, i, decode.NewParseErrShift("children", i, _n, err)
+						return result, i, ggen.NewParseErrShift("children", i, _n, err)
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -468,7 +465,7 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, decode.NewParseErr("children", i, scan.ErrBadArray)
+							return result, i, ggen.NewParseErr("children", i, ggen.ErrBadArray)
 						}
 						continue
 					}
@@ -476,12 +473,12 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, decode.NewParseErr("children", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("children", i, ggen.ErrBadArray)
 			}
 			i++
 		case "id":
 			if seenID {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"id"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"id"}}
 			}
 			seenID = true
 			neg := false
@@ -490,14 +487,14 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 				i++
 			}
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
-				return result, i, decode.NewParseErr("id", i, scan.ErrBadNumber)
+				return result, i, ggen.NewParseErr("id", i, ggen.ErrBadNumber)
 			}
 			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
-				return result, i, decode.NewParseErr("id", i, scan.ErrBadNumber)
+				return result, i, ggen.NewParseErr("id", i, ggen.ErrBadNumber)
 			}
 			limit := uint64(math.MaxInt64)
 			if neg {
-				limit = scan.SignedNeg
+				limit = ggen.SignedNeg
 			}
 			var u uint64
 			de := i + 18
@@ -511,7 +508,7 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 			for i < len(data) && data[i] >= '0' && data[i] <= '9' {
 				d := uint64(data[i] - '0')
 				if u > limit/10 || (u == limit/10 && d > limit%10) {
-					return result, i, decode.NewParseErr("id", i, scan.ErrNumberOverflow)
+					return result, i, ggen.NewParseErr("id", i, ggen.ErrNumberOverflow)
 				}
 				u = u*10 + d
 				i++
@@ -519,12 +516,12 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 			if i < len(data) {
 				c := data[i]
 				if c == '.' || c == 'e' || c == 'E' {
-					return result, i, decode.NewParseErr("id", i, scan.ErrBadNumber)
+					return result, i, ggen.NewParseErr("id", i, ggen.ErrBadNumber)
 				}
 			}
 			var n int64
 			if neg {
-				if u == scan.SignedNeg {
+				if u == ggen.SignedNeg {
 					n = math.MinInt64
 				} else {
 					n = -int64(u)
@@ -535,11 +532,11 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 			result.ID = n
 		case "name":
 			if seenName {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"name"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"name"}}
 			}
 			seenName = true
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("name", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("name", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -553,14 +550,14 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 				result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.Name, i, err = scan.String(data, i, true)
+				result.Name, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("name", i, err)
+					return result, i, ggen.NewParseErr("name", i, err)
 				}
 			}
 		case "props":
 			if seenProps {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"props"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"props"}}
 			}
 			seenProps = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -569,7 +566,7 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 				break
 			}
 			if i >= len(data) || data[i] != '{' {
-				return result, i, decode.NewParseErr("props", i, scan.ErrBadObject)
+				return result, i, ggen.NewParseErr("props", i, ggen.ErrBadObject)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -588,7 +585,7 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 				for {
 					var mk string
 					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("props", i, scan.ErrExpectString)
+						return result, i, ggen.NewParseErr("props", i, ggen.ErrExpectString)
 					}
 					ke := i + 1
 					kew := ke + 32
@@ -602,23 +599,23 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 						mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 						i = ke + 1
 					} else {
-						mk, i, err = scan.String(data, i, true)
+						mk, i, err = ggen.String(data, i, true)
 						if err != nil {
-							return result, i, decode.NewParseErr("props", i, err)
+							return result, i, ggen.NewParseErr("props", i, err)
 						}
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
 					if i >= len(data) || data[i] != ':' {
-						return result, i, decode.NewParseErr("props", i, scan.ErrBadObject)
+						return result, i, ggen.NewParseErr("props", i, ggen.ErrBadObject)
 					}
 					i++
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
 					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("props", i, scan.ErrExpectString)
+						return result, i, ggen.NewParseErr("props", i, ggen.ErrExpectString)
 					}
 					ve := i + 1
 					vew := ve + 32
@@ -632,9 +629,9 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 						result.Props[mk] = unsafe.String(unsafe.SliceData(data[i+1:]), ve-i-1)
 						i = ve + 1
 					} else {
-						result.Props[mk], i, err = scan.String(data, i, true)
+						result.Props[mk], i, err = ggen.String(data, i, true)
 						if err != nil {
-							return result, i, decode.NewParseErr("props", i, err)
+							return result, i, ggen.NewParseErr("props", i, err)
 						}
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -646,7 +643,7 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 							i++
 						}
 						if i >= len(data) || data[i] == '}' {
-							return result, i, decode.NewParseErr("props", i, scan.ErrBadObject)
+							return result, i, ggen.NewParseErr("props", i, ggen.ErrBadObject)
 						}
 						continue
 					}
@@ -654,21 +651,21 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 				}
 			}
 			if i >= len(data) || data[i] != '}' {
-				return result, i, decode.NewParseErr("props", i, scan.ErrBadObject)
+				return result, i, ggen.NewParseErr("props", i, ggen.ErrBadObject)
 			}
 			i++
 		case "score":
 			if seenScore {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"score"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"score"}}
 			}
 			seenScore = true
-			result.Score, i, err = scan.Float64(data, i)
+			result.Score, i, err = ggen.Float64(data, i)
 			if err != nil {
-				return result, i, decode.NewParseErr("score", i, err)
+				return result, i, ggen.NewParseErr("score", i, err)
 			}
 		case "tags":
 			if seenTags {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"tags"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"tags"}}
 			}
 			seenTags = true
 			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
@@ -677,7 +674,7 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 				break
 			}
 			if i >= len(data) || data[i] != '[' {
-				return result, i, decode.NewParseErr("tags", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("tags", i, ggen.ErrBadArray)
 			}
 			i++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -696,7 +693,7 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 				for {
 					result.Tags = append(result.Tags, "")
 					if i >= len(data) || data[i] != '"' {
-						return result, i, decode.NewParseErr("tags", i, scan.ErrExpectString)
+						return result, i, ggen.NewParseErr("tags", i, ggen.ErrExpectString)
 					}
 					ke := i + 1
 					kew := ke + 32
@@ -710,9 +707,9 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 						result.Tags[len(result.Tags)-1] = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 						i = ke + 1
 					} else {
-						result.Tags[len(result.Tags)-1], i, err = scan.String(data, i, true)
+						result.Tags[len(result.Tags)-1], i, err = ggen.String(data, i, true)
 						if err != nil {
-							return result, i, decode.NewParseErr("tags", i, err)
+							return result, i, ggen.NewParseErr("tags", i, err)
 						}
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -724,7 +721,7 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 							i++
 						}
 						if i >= len(data) || data[i] == ']' {
-							return result, i, decode.NewParseErr("tags", i, scan.ErrBadArray)
+							return result, i, ggen.NewParseErr("tags", i, ggen.ErrBadArray)
 						}
 						continue
 					}
@@ -732,17 +729,17 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 				}
 			}
 			if i >= len(data) || data[i] != ']' {
-				return result, i, decode.NewParseErr("tags", i, scan.ErrBadArray)
+				return result, i, ggen.NewParseErr("tags", i, ggen.ErrBadArray)
 			}
 			i++
 		default:
-			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 		}
 		if data[i] == ',' {
 			i++
@@ -755,18 +752,18 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 			i++
 			return result, i, nil
 		}
-		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 	}
 }
 
-func (recv Node) DecodeFromStream(s *scan.Stream) (Node, error) {
+func (recv Node) DecodeFromStream(s *ggen.Stream) (Node, error) {
 	return recv.decodeFromStreamDepth(s, 0)
 }
 
-func (recv Node) decodeFromStreamDepth(s *scan.Stream, _depth int) (result Node, err error) {
+func (recv Node) decodeFromStreamDepth(s *ggen.Stream, _depth int) (result Node, err error) {
 	result = recv
-	if _depth > scan.MaxDepth {
-		return result, scan.ErrMaxDepth
+	if _depth > 10000 { // runtime maxDepth
+		return result, ggen.ErrMaxDepth
 	}
 	if result.Children != nil {
 		result.Children = result.Children[:0]
@@ -786,15 +783,15 @@ func (recv Node) decodeFromStreamDepth(s *scan.Stream, _depth int) (result Node,
 	seenTags := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Offset(), err)
+		return result, ggen.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Offset(), err)
+		return result, ggen.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
+			return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -806,49 +803,49 @@ func (recv Node) decodeFromStreamDepth(s *scan.Stream, _depth int) (result Node,
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Offset(), err)
+			return result, ggen.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "active":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("active", s.Offset(), err)
+				return result, ggen.NewParseErr("active", s.Offset(), err)
 			}
 			if seenActive {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"active"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"active"}}
 			}
 			seenActive = true
 			result.Active, err = s.Bool()
 			if err != nil {
-				return result, decode.NewParseErr("active", s.Offset(), err)
+				return result, ggen.NewParseErr("active", s.Offset(), err)
 			}
 		case "children":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("children", s.Offset(), err)
+				return result, ggen.NewParseErr("children", s.Offset(), err)
 			}
 			if seenChildren {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"children"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"children"}}
 			}
 			seenChildren = true
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("children", s.Offset(), err)
+				return result, ggen.NewParseErr("children", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("children", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+					return result, ggen.NewParseErr("children", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("children", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
+							return result, ggen.NewParseErr("children", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("children", s.Offset(), scan.ErrBadLiteral)
+						return result, ggen.NewParseErr("children", s.Offset(), ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -857,15 +854,15 @@ func (recv Node) decodeFromStreamDepth(s *scan.Stream, _depth int) (result Node,
 			}
 			err = s.ArrayOpen()
 			if err != nil {
-				return result, decode.NewParseErr("children", s.Offset(), err)
+				return result, ggen.NewParseErr("children", s.Offset(), err)
 			}
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("children", s.Offset(), err)
+				return result, ggen.NewParseErr("children", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("children", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+					return result, ggen.NewParseErr("children", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
 			if s.Bytes()[s.Pos] == ']' {
@@ -881,87 +878,87 @@ func (recv Node) decodeFromStreamDepth(s *scan.Stream, _depth int) (result Node,
 				result.Children = append(result.Children, Node{})
 				result.Children[len(result.Children)-1], err = result.Children[len(result.Children)-1].decodeFromStreamDepth(s, _depth+1)
 				if err != nil {
-					return result, decode.NewParseErr("children", s.Offset(), err)
+					return result, ggen.NewParseErr("children", s.Offset(), err)
 				}
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("children", s.Offset(), err)
+					return result, ggen.NewParseErr("children", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("children", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+						return result, ggen.NewParseErr("children", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
 					s.Pos++
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("children", s.Offset(), err)
+						return result, ggen.NewParseErr("children", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-						return result, decode.NewParseErr("children", s.Offset(), scan.ErrBadArray)
+						return result, ggen.NewParseErr("children", s.Offset(), ggen.ErrBadArray)
 					}
 					continue
 				}
 				break
 			}
 			if s.Bytes()[s.Pos] != ']' {
-				return result, decode.NewParseErr("children", s.Offset(), scan.ErrBadArray)
+				return result, ggen.NewParseErr("children", s.Offset(), ggen.ErrBadArray)
 			}
 			s.Pos++
 		case "id":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("id", s.Offset(), err)
+				return result, ggen.NewParseErr("id", s.Offset(), err)
 			}
 			if seenID {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"id"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"id"}}
 			}
 			seenID = true
 			result.ID, err = s.Int64()
 			if err != nil {
-				return result, decode.NewParseErr("id", s.Offset(), err)
+				return result, ggen.NewParseErr("id", s.Offset(), err)
 			}
 		case "name":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("name", s.Offset(), err)
+				return result, ggen.NewParseErr("name", s.Offset(), err)
 			}
 			if seenName {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"name"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"name"}}
 			}
 			seenName = true
 			result.Name, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("name", s.Offset(), err)
+				return result, ggen.NewParseErr("name", s.Offset(), err)
 			}
 		case "props":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("props", s.Offset(), err)
+				return result, ggen.NewParseErr("props", s.Offset(), err)
 			}
 			if seenProps {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"props"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"props"}}
 			}
 			seenProps = true
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("props", s.Offset(), err)
+				return result, ggen.NewParseErr("props", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("props", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+					return result, ggen.NewParseErr("props", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("props", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
+							return result, ggen.NewParseErr("props", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("props", s.Offset(), scan.ErrBadLiteral)
+						return result, ggen.NewParseErr("props", s.Offset(), ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -970,15 +967,15 @@ func (recv Node) decodeFromStreamDepth(s *scan.Stream, _depth int) (result Node,
 			}
 			err = s.ObjectOpen()
 			if err != nil {
-				return result, decode.NewParseErr("props", s.Offset(), err)
+				return result, ggen.NewParseErr("props", s.Offset(), err)
 			}
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("props", s.Offset(), err)
+				return result, ggen.NewParseErr("props", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("props", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+					return result, ggen.NewParseErr("props", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 				}
 			}
 			if s.Bytes()[s.Pos] == '}' {
@@ -994,95 +991,95 @@ func (recv Node) decodeFromStreamDepth(s *scan.Stream, _depth int) (result Node,
 				var mk string
 				mk, err = s.String(true)
 				if err != nil {
-					return result, decode.NewParseErr("props", s.Offset(), err)
+					return result, ggen.NewParseErr("props", s.Offset(), err)
 				}
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("props", s.Offset(), err)
+					return result, ggen.NewParseErr("props", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("props", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+						return result, ggen.NewParseErr("props", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 					}
 				}
 				if s.Bytes()[s.Pos] != ':' {
-					return result, decode.NewParseErr("props", s.Offset(), scan.ErrBadObject)
+					return result, ggen.NewParseErr("props", s.Offset(), ggen.ErrBadObject)
 				}
 				s.Pos++
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("props", s.Offset(), err)
+					return result, ggen.NewParseErr("props", s.Offset(), err)
 				}
 				result.Props[mk], err = s.String(true)
 				if err != nil {
-					return result, decode.NewParseErr("props", s.Offset(), err)
+					return result, ggen.NewParseErr("props", s.Offset(), err)
 				}
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("props", s.Offset(), err)
+					return result, ggen.NewParseErr("props", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("props", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+						return result, ggen.NewParseErr("props", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
 					s.Pos++
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("props", s.Offset(), err)
+						return result, ggen.NewParseErr("props", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == '}' {
-						return result, decode.NewParseErr("props", s.Offset(), scan.ErrBadObject)
+						return result, ggen.NewParseErr("props", s.Offset(), ggen.ErrBadObject)
 					}
 					continue
 				}
 				break
 			}
 			if s.Bytes()[s.Pos] != '}' {
-				return result, decode.NewParseErr("props", s.Offset(), scan.ErrBadObject)
+				return result, ggen.NewParseErr("props", s.Offset(), ggen.ErrBadObject)
 			}
 			s.Pos++
 		case "score":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("score", s.Offset(), err)
+				return result, ggen.NewParseErr("score", s.Offset(), err)
 			}
 			if seenScore {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"score"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"score"}}
 			}
 			seenScore = true
 			result.Score, err = s.Float64()
 			if err != nil {
-				return result, decode.NewParseErr("score", s.Offset(), err)
+				return result, ggen.NewParseErr("score", s.Offset(), err)
 			}
 		case "tags":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("tags", s.Offset(), err)
+				return result, ggen.NewParseErr("tags", s.Offset(), err)
 			}
 			if seenTags {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"tags"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"tags"}}
 			}
 			seenTags = true
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("tags", s.Offset(), err)
+				return result, ggen.NewParseErr("tags", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("tags", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+					return result, ggen.NewParseErr("tags", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, decode.NewParseErr("tags", s.Offset(), scan.NotEOF(err, scan.ErrBadLiteral))
+							return result, ggen.NewParseErr("tags", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, decode.NewParseErr("tags", s.Offset(), scan.ErrBadLiteral)
+						return result, ggen.NewParseErr("tags", s.Offset(), ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -1091,15 +1088,15 @@ func (recv Node) decodeFromStreamDepth(s *scan.Stream, _depth int) (result Node,
 			}
 			err = s.ArrayOpen()
 			if err != nil {
-				return result, decode.NewParseErr("tags", s.Offset(), err)
+				return result, ggen.NewParseErr("tags", s.Offset(), err)
 			}
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("tags", s.Offset(), err)
+				return result, ggen.NewParseErr("tags", s.Offset(), err)
 			}
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, decode.NewParseErr("tags", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+					return result, ggen.NewParseErr("tags", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
 			if s.Bytes()[s.Pos] == ']' {
@@ -1115,45 +1112,45 @@ func (recv Node) decodeFromStreamDepth(s *scan.Stream, _depth int) (result Node,
 				result.Tags = append(result.Tags, "")
 				result.Tags[len(result.Tags)-1], err = s.String(true)
 				if err != nil {
-					return result, decode.NewParseErr("tags", s.Offset(), err)
+					return result, ggen.NewParseErr("tags", s.Offset(), err)
 				}
 				err = s.SkipSpace()
 				if err != nil {
-					return result, decode.NewParseErr("tags", s.Offset(), err)
+					return result, ggen.NewParseErr("tags", s.Offset(), err)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
-						return result, decode.NewParseErr("tags", s.Offset(), scan.NotEOF(err, scan.ErrBadArray))
+						return result, ggen.NewParseErr("tags", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 					}
 				}
 				if s.Bytes()[s.Pos] == ',' {
 					s.Pos++
 					err = s.SkipSpace()
 					if err != nil {
-						return result, decode.NewParseErr("tags", s.Offset(), err)
+						return result, ggen.NewParseErr("tags", s.Offset(), err)
 					}
 					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
-						return result, decode.NewParseErr("tags", s.Offset(), scan.ErrBadArray)
+						return result, ggen.NewParseErr("tags", s.Offset(), ggen.ErrBadArray)
 					}
 					continue
 				}
 				break
 			}
 			if s.Bytes()[s.Pos] != ']' {
-				return result, decode.NewParseErr("tags", s.Offset(), scan.ErrBadArray)
+				return result, ggen.NewParseErr("tags", s.Offset(), ggen.ErrBadArray)
 			}
 			s.Pos++
 		default:
-			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Offset(), err)
+			return result, ggen.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+				return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -1162,7 +1159,7 @@ func (recv Node) decodeFromStreamDepth(s *scan.Stream, _depth int) (result Node,
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Offset(), err)
+				return result, ggen.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -1170,7 +1167,7 @@ func (recv Node) decodeFromStreamDepth(s *scan.Stream, _depth int) (result Node,
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
+		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
 	}
 }
 
@@ -1224,7 +1221,7 @@ func (s Node) AppendJSON(dst []byte) ([]byte, error) {
 	dst = append(dst, ",\"id\":"...)
 	dst = strconv.AppendInt(dst, s.ID, 10)
 	dst = append(dst, ",\"name\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.Name)
+	dst = ggen.AppendStringNoHTML(dst, s.Name)
 	dst = append(dst, ",\"props\":"...)
 	if s.Props == nil {
 		dst = append(dst, "null"...)
@@ -1238,14 +1235,14 @@ func (s Node) AppendJSON(dst []byte) ([]byte, error) {
 			} else {
 				dst = append(dst, ",\""...)
 			}
-			dst = encode.AppendStringNoHTML(dst, k)
+			dst = ggen.AppendStringNoHTML(dst, k)
 			dst = append(dst, ":\""...)
-			dst = encode.AppendStringNoHTML(dst, v)
+			dst = ggen.AppendStringNoHTML(dst, v)
 		}
 		dst = append(dst, '}')
 	}
 	dst = append(dst, ",\"score\":"...)
-	if dst, err = encode.AppendFloat(dst, s.Score, 64); err != nil {
+	if dst, err = ggen.AppendFloat(dst, s.Score, 64); err != nil {
 		return dst, err
 	}
 	dst = append(dst, ",\"tags\":"...)
@@ -1255,10 +1252,10 @@ func (s Node) AppendJSON(dst []byte) ([]byte, error) {
 		dst = append(dst, '[')
 		if len(s.Tags) > 0 {
 			dst = append(dst, '"')
-			dst = encode.AppendStringNoHTML(dst, s.Tags[0])
+			dst = ggen.AppendStringNoHTML(dst, s.Tags[0])
 			for _, v0 := range s.Tags[1:] {
 				dst = append(dst, ",\""...)
-				dst = encode.AppendStringNoHTML(dst, v0)
+				dst = ggen.AppendStringNoHTML(dst, v0)
 			}
 		}
 		dst = append(dst, ']')
@@ -1273,7 +1270,7 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
-		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 	}
 	i++
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -1282,131 +1279,131 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 	if i < len(data) && data[i] == '}' {
 		i++
 		if seen&(1<<0) == 0 {
-			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f1"}}
+			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f1"}}
 		}
 		if seen&(1<<1) == 0 {
-			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f10"}}
+			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f10"}}
 		}
 		if seen&(1<<2) == 0 {
-			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f11"}}
+			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f11"}}
 		}
 		if seen&(1<<3) == 0 {
-			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f12"}}
+			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f12"}}
 		}
 		if seen&(1<<4) == 0 {
-			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f13"}}
+			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f13"}}
 		}
 		if seen&(1<<5) == 0 {
-			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f14"}}
+			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f14"}}
 		}
 		if seen&(1<<6) == 0 {
-			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f15"}}
+			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f15"}}
 		}
 		if seen&(1<<7) == 0 {
-			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f16"}}
+			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f16"}}
 		}
 		if seen&(1<<8) == 0 {
-			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f17"}}
+			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f17"}}
 		}
 		if seen&(1<<9) == 0 {
-			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f18"}}
+			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f18"}}
 		}
 		if seen&(1<<10) == 0 {
-			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f19"}}
+			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f19"}}
 		}
 		if seen&(1<<11) == 0 {
-			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f2"}}
+			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f2"}}
 		}
 		if seen&(1<<12) == 0 {
-			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f20"}}
+			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f20"}}
 		}
 		if seen&(1<<13) == 0 {
-			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f21"}}
+			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f21"}}
 		}
 		if seen&(1<<14) == 0 {
-			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f22"}}
+			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f22"}}
 		}
 		if seen&(1<<15) == 0 {
-			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f23"}}
+			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f23"}}
 		}
 		if seen&(1<<16) == 0 {
-			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f24"}}
+			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f24"}}
 		}
 		if seen&(1<<17) == 0 {
-			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f25"}}
+			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f25"}}
 		}
 		if seen&(1<<18) == 0 {
-			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f26"}}
+			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f26"}}
 		}
 		if seen&(1<<19) == 0 {
-			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f27"}}
+			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f27"}}
 		}
 		if seen&(1<<20) == 0 {
-			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f28"}}
+			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f28"}}
 		}
 		if seen&(1<<21) == 0 {
-			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f29"}}
+			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f29"}}
 		}
 		if seen&(1<<22) == 0 {
-			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f3"}}
+			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f3"}}
 		}
 		if seen&(1<<23) == 0 {
-			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f30"}}
+			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f30"}}
 		}
 		if seen&(1<<24) == 0 {
-			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f31"}}
+			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f31"}}
 		}
 		if seen&(1<<25) == 0 {
-			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f32"}}
+			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f32"}}
 		}
 		if seen&(1<<26) == 0 {
-			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f33"}}
+			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f33"}}
 		}
 		if seen&(1<<27) == 0 {
-			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f34"}}
+			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f34"}}
 		}
 		if seen&(1<<28) == 0 {
-			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f35"}}
+			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f35"}}
 		}
 		if seen&(1<<29) == 0 {
-			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f36"}}
+			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f36"}}
 		}
 		if seen&(1<<30) == 0 {
-			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f37"}}
+			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f37"}}
 		}
 		if seen&(1<<31) == 0 {
-			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f38"}}
+			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f38"}}
 		}
 		if seen&(1<<32) == 0 {
-			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f39"}}
+			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f39"}}
 		}
 		if seen&(1<<33) == 0 {
-			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f4"}}
+			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f4"}}
 		}
 		if seen&(1<<34) == 0 {
-			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f40"}}
+			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f40"}}
 		}
 		if seen&(1<<35) == 0 {
-			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f5"}}
+			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f5"}}
 		}
 		if seen&(1<<36) == 0 {
-			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f6"}}
+			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f6"}}
 		}
 		if seen&(1<<37) == 0 {
-			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f7"}}
+			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f7"}}
 		}
 		if seen&(1<<38) == 0 {
-			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f8"}}
+			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f8"}}
 		}
 		if seen&(1<<39) == 0 {
-			return result, i, &validation.RequiredError{Pos: i, Path: []string{"f9"}}
+			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f9"}}
 		}
 		return result, i, nil
 	}
 	for {
 		var key string
 		if i >= len(data) || data[i] != '"' {
-			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrExpectString)
 		}
 		ke := i + 1
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
@@ -1416,16 +1413,16 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i, true)
+			key, i, err = ggen.String(data, i, true)
 			if err != nil {
-				return result, i, decode.NewParseErr("", i, err)
+				return result, i, ggen.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 		}
 		i++
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -1434,11 +1431,11 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 		switch key {
 		case "f1":
 			if seen&(1<<0) != 0 {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f1"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"f1"}}
 			}
 			seen |= 1 << 0
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("f1", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("f1", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -1452,18 +1449,18 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 				result.F1 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F1, i, err = scan.String(data, i, true)
+				result.F1, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("f1", i, err)
+					return result, i, ggen.NewParseErr("f1", i, err)
 				}
 			}
 		case "f10":
 			if seen&(1<<1) != 0 {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f10"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"f10"}}
 			}
 			seen |= 1 << 1
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("f10", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("f10", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -1477,18 +1474,18 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 				result.F10 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F10, i, err = scan.String(data, i, true)
+				result.F10, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("f10", i, err)
+					return result, i, ggen.NewParseErr("f10", i, err)
 				}
 			}
 		case "f11":
 			if seen&(1<<2) != 0 {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f11"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"f11"}}
 			}
 			seen |= 1 << 2
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("f11", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("f11", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -1502,18 +1499,18 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 				result.F11 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F11, i, err = scan.String(data, i, true)
+				result.F11, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("f11", i, err)
+					return result, i, ggen.NewParseErr("f11", i, err)
 				}
 			}
 		case "f12":
 			if seen&(1<<3) != 0 {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f12"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"f12"}}
 			}
 			seen |= 1 << 3
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("f12", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("f12", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -1527,18 +1524,18 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 				result.F12 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F12, i, err = scan.String(data, i, true)
+				result.F12, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("f12", i, err)
+					return result, i, ggen.NewParseErr("f12", i, err)
 				}
 			}
 		case "f13":
 			if seen&(1<<4) != 0 {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f13"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"f13"}}
 			}
 			seen |= 1 << 4
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("f13", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("f13", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -1552,18 +1549,18 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 				result.F13 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F13, i, err = scan.String(data, i, true)
+				result.F13, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("f13", i, err)
+					return result, i, ggen.NewParseErr("f13", i, err)
 				}
 			}
 		case "f14":
 			if seen&(1<<5) != 0 {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f14"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"f14"}}
 			}
 			seen |= 1 << 5
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("f14", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("f14", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -1577,18 +1574,18 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 				result.F14 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F14, i, err = scan.String(data, i, true)
+				result.F14, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("f14", i, err)
+					return result, i, ggen.NewParseErr("f14", i, err)
 				}
 			}
 		case "f15":
 			if seen&(1<<6) != 0 {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f15"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"f15"}}
 			}
 			seen |= 1 << 6
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("f15", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("f15", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -1602,18 +1599,18 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 				result.F15 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F15, i, err = scan.String(data, i, true)
+				result.F15, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("f15", i, err)
+					return result, i, ggen.NewParseErr("f15", i, err)
 				}
 			}
 		case "f16":
 			if seen&(1<<7) != 0 {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f16"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"f16"}}
 			}
 			seen |= 1 << 7
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("f16", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("f16", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -1627,18 +1624,18 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 				result.F16 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F16, i, err = scan.String(data, i, true)
+				result.F16, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("f16", i, err)
+					return result, i, ggen.NewParseErr("f16", i, err)
 				}
 			}
 		case "f17":
 			if seen&(1<<8) != 0 {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f17"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"f17"}}
 			}
 			seen |= 1 << 8
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("f17", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("f17", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -1652,18 +1649,18 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 				result.F17 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F17, i, err = scan.String(data, i, true)
+				result.F17, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("f17", i, err)
+					return result, i, ggen.NewParseErr("f17", i, err)
 				}
 			}
 		case "f18":
 			if seen&(1<<9) != 0 {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f18"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"f18"}}
 			}
 			seen |= 1 << 9
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("f18", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("f18", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -1677,18 +1674,18 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 				result.F18 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F18, i, err = scan.String(data, i, true)
+				result.F18, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("f18", i, err)
+					return result, i, ggen.NewParseErr("f18", i, err)
 				}
 			}
 		case "f19":
 			if seen&(1<<10) != 0 {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f19"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"f19"}}
 			}
 			seen |= 1 << 10
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("f19", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("f19", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -1702,18 +1699,18 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 				result.F19 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F19, i, err = scan.String(data, i, true)
+				result.F19, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("f19", i, err)
+					return result, i, ggen.NewParseErr("f19", i, err)
 				}
 			}
 		case "f2":
 			if seen&(1<<11) != 0 {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f2"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"f2"}}
 			}
 			seen |= 1 << 11
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("f2", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("f2", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -1727,18 +1724,18 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 				result.F2 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F2, i, err = scan.String(data, i, true)
+				result.F2, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("f2", i, err)
+					return result, i, ggen.NewParseErr("f2", i, err)
 				}
 			}
 		case "f20":
 			if seen&(1<<12) != 0 {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f20"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"f20"}}
 			}
 			seen |= 1 << 12
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("f20", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("f20", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -1752,18 +1749,18 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 				result.F20 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F20, i, err = scan.String(data, i, true)
+				result.F20, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("f20", i, err)
+					return result, i, ggen.NewParseErr("f20", i, err)
 				}
 			}
 		case "f21":
 			if seen&(1<<13) != 0 {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f21"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"f21"}}
 			}
 			seen |= 1 << 13
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("f21", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("f21", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -1777,18 +1774,18 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 				result.F21 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F21, i, err = scan.String(data, i, true)
+				result.F21, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("f21", i, err)
+					return result, i, ggen.NewParseErr("f21", i, err)
 				}
 			}
 		case "f22":
 			if seen&(1<<14) != 0 {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f22"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"f22"}}
 			}
 			seen |= 1 << 14
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("f22", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("f22", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -1802,18 +1799,18 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 				result.F22 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F22, i, err = scan.String(data, i, true)
+				result.F22, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("f22", i, err)
+					return result, i, ggen.NewParseErr("f22", i, err)
 				}
 			}
 		case "f23":
 			if seen&(1<<15) != 0 {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f23"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"f23"}}
 			}
 			seen |= 1 << 15
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("f23", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("f23", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -1827,18 +1824,18 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 				result.F23 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F23, i, err = scan.String(data, i, true)
+				result.F23, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("f23", i, err)
+					return result, i, ggen.NewParseErr("f23", i, err)
 				}
 			}
 		case "f24":
 			if seen&(1<<16) != 0 {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f24"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"f24"}}
 			}
 			seen |= 1 << 16
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("f24", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("f24", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -1852,18 +1849,18 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 				result.F24 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F24, i, err = scan.String(data, i, true)
+				result.F24, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("f24", i, err)
+					return result, i, ggen.NewParseErr("f24", i, err)
 				}
 			}
 		case "f25":
 			if seen&(1<<17) != 0 {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f25"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"f25"}}
 			}
 			seen |= 1 << 17
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("f25", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("f25", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -1877,18 +1874,18 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 				result.F25 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F25, i, err = scan.String(data, i, true)
+				result.F25, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("f25", i, err)
+					return result, i, ggen.NewParseErr("f25", i, err)
 				}
 			}
 		case "f26":
 			if seen&(1<<18) != 0 {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f26"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"f26"}}
 			}
 			seen |= 1 << 18
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("f26", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("f26", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -1902,18 +1899,18 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 				result.F26 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F26, i, err = scan.String(data, i, true)
+				result.F26, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("f26", i, err)
+					return result, i, ggen.NewParseErr("f26", i, err)
 				}
 			}
 		case "f27":
 			if seen&(1<<19) != 0 {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f27"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"f27"}}
 			}
 			seen |= 1 << 19
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("f27", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("f27", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -1927,18 +1924,18 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 				result.F27 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F27, i, err = scan.String(data, i, true)
+				result.F27, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("f27", i, err)
+					return result, i, ggen.NewParseErr("f27", i, err)
 				}
 			}
 		case "f28":
 			if seen&(1<<20) != 0 {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f28"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"f28"}}
 			}
 			seen |= 1 << 20
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("f28", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("f28", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -1952,18 +1949,18 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 				result.F28 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F28, i, err = scan.String(data, i, true)
+				result.F28, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("f28", i, err)
+					return result, i, ggen.NewParseErr("f28", i, err)
 				}
 			}
 		case "f29":
 			if seen&(1<<21) != 0 {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f29"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"f29"}}
 			}
 			seen |= 1 << 21
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("f29", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("f29", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -1977,18 +1974,18 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 				result.F29 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F29, i, err = scan.String(data, i, true)
+				result.F29, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("f29", i, err)
+					return result, i, ggen.NewParseErr("f29", i, err)
 				}
 			}
 		case "f3":
 			if seen&(1<<22) != 0 {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f3"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"f3"}}
 			}
 			seen |= 1 << 22
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("f3", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("f3", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -2002,18 +1999,18 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 				result.F3 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F3, i, err = scan.String(data, i, true)
+				result.F3, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("f3", i, err)
+					return result, i, ggen.NewParseErr("f3", i, err)
 				}
 			}
 		case "f30":
 			if seen&(1<<23) != 0 {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f30"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"f30"}}
 			}
 			seen |= 1 << 23
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("f30", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("f30", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -2027,18 +2024,18 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 				result.F30 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F30, i, err = scan.String(data, i, true)
+				result.F30, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("f30", i, err)
+					return result, i, ggen.NewParseErr("f30", i, err)
 				}
 			}
 		case "f31":
 			if seen&(1<<24) != 0 {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f31"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"f31"}}
 			}
 			seen |= 1 << 24
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("f31", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("f31", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -2052,18 +2049,18 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 				result.F31 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F31, i, err = scan.String(data, i, true)
+				result.F31, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("f31", i, err)
+					return result, i, ggen.NewParseErr("f31", i, err)
 				}
 			}
 		case "f32":
 			if seen&(1<<25) != 0 {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f32"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"f32"}}
 			}
 			seen |= 1 << 25
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("f32", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("f32", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -2077,18 +2074,18 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 				result.F32 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F32, i, err = scan.String(data, i, true)
+				result.F32, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("f32", i, err)
+					return result, i, ggen.NewParseErr("f32", i, err)
 				}
 			}
 		case "f33":
 			if seen&(1<<26) != 0 {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f33"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"f33"}}
 			}
 			seen |= 1 << 26
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("f33", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("f33", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -2102,18 +2099,18 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 				result.F33 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F33, i, err = scan.String(data, i, true)
+				result.F33, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("f33", i, err)
+					return result, i, ggen.NewParseErr("f33", i, err)
 				}
 			}
 		case "f34":
 			if seen&(1<<27) != 0 {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f34"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"f34"}}
 			}
 			seen |= 1 << 27
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("f34", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("f34", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -2127,18 +2124,18 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 				result.F34 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F34, i, err = scan.String(data, i, true)
+				result.F34, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("f34", i, err)
+					return result, i, ggen.NewParseErr("f34", i, err)
 				}
 			}
 		case "f35":
 			if seen&(1<<28) != 0 {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f35"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"f35"}}
 			}
 			seen |= 1 << 28
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("f35", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("f35", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -2152,18 +2149,18 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 				result.F35 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F35, i, err = scan.String(data, i, true)
+				result.F35, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("f35", i, err)
+					return result, i, ggen.NewParseErr("f35", i, err)
 				}
 			}
 		case "f36":
 			if seen&(1<<29) != 0 {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f36"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"f36"}}
 			}
 			seen |= 1 << 29
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("f36", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("f36", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -2177,18 +2174,18 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 				result.F36 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F36, i, err = scan.String(data, i, true)
+				result.F36, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("f36", i, err)
+					return result, i, ggen.NewParseErr("f36", i, err)
 				}
 			}
 		case "f37":
 			if seen&(1<<30) != 0 {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f37"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"f37"}}
 			}
 			seen |= 1 << 30
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("f37", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("f37", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -2202,18 +2199,18 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 				result.F37 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F37, i, err = scan.String(data, i, true)
+				result.F37, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("f37", i, err)
+					return result, i, ggen.NewParseErr("f37", i, err)
 				}
 			}
 		case "f38":
 			if seen&(1<<31) != 0 {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f38"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"f38"}}
 			}
 			seen |= 1 << 31
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("f38", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("f38", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -2227,18 +2224,18 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 				result.F38 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F38, i, err = scan.String(data, i, true)
+				result.F38, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("f38", i, err)
+					return result, i, ggen.NewParseErr("f38", i, err)
 				}
 			}
 		case "f39":
 			if seen&(1<<32) != 0 {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f39"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"f39"}}
 			}
 			seen |= 1 << 32
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("f39", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("f39", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -2252,18 +2249,18 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 				result.F39 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F39, i, err = scan.String(data, i, true)
+				result.F39, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("f39", i, err)
+					return result, i, ggen.NewParseErr("f39", i, err)
 				}
 			}
 		case "f4":
 			if seen&(1<<33) != 0 {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f4"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"f4"}}
 			}
 			seen |= 1 << 33
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("f4", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("f4", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -2277,18 +2274,18 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 				result.F4 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F4, i, err = scan.String(data, i, true)
+				result.F4, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("f4", i, err)
+					return result, i, ggen.NewParseErr("f4", i, err)
 				}
 			}
 		case "f40":
 			if seen&(1<<34) != 0 {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f40"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"f40"}}
 			}
 			seen |= 1 << 34
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("f40", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("f40", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -2302,18 +2299,18 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 				result.F40 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F40, i, err = scan.String(data, i, true)
+				result.F40, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("f40", i, err)
+					return result, i, ggen.NewParseErr("f40", i, err)
 				}
 			}
 		case "f5":
 			if seen&(1<<35) != 0 {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f5"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"f5"}}
 			}
 			seen |= 1 << 35
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("f5", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("f5", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -2327,18 +2324,18 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 				result.F5 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F5, i, err = scan.String(data, i, true)
+				result.F5, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("f5", i, err)
+					return result, i, ggen.NewParseErr("f5", i, err)
 				}
 			}
 		case "f6":
 			if seen&(1<<36) != 0 {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f6"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"f6"}}
 			}
 			seen |= 1 << 36
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("f6", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("f6", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -2352,18 +2349,18 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 				result.F6 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F6, i, err = scan.String(data, i, true)
+				result.F6, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("f6", i, err)
+					return result, i, ggen.NewParseErr("f6", i, err)
 				}
 			}
 		case "f7":
 			if seen&(1<<37) != 0 {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f7"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"f7"}}
 			}
 			seen |= 1 << 37
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("f7", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("f7", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -2377,18 +2374,18 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 				result.F7 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F7, i, err = scan.String(data, i, true)
+				result.F7, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("f7", i, err)
+					return result, i, ggen.NewParseErr("f7", i, err)
 				}
 			}
 		case "f8":
 			if seen&(1<<38) != 0 {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f8"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"f8"}}
 			}
 			seen |= 1 << 38
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("f8", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("f8", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -2402,18 +2399,18 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 				result.F8 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F8, i, err = scan.String(data, i, true)
+				result.F8, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("f8", i, err)
+					return result, i, ggen.NewParseErr("f8", i, err)
 				}
 			}
 		case "f9":
 			if seen&(1<<39) != 0 {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"f9"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"f9"}}
 			}
 			seen |= 1 << 39
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("f9", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("f9", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -2427,19 +2424,19 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 				result.F9 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				result.F9, i, err = scan.String(data, i, true)
+				result.F9, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("f9", i, err)
+					return result, i, ggen.NewParseErr("f9", i, err)
 				}
 			}
 		default:
-			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 		}
 		if data[i] == ',' {
 			i++
@@ -2451,269 +2448,269 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 		if data[i] == '}' {
 			i++
 			if seen&(1<<0) == 0 {
-				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f1"}}
+				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f1"}}
 			}
 			if seen&(1<<1) == 0 {
-				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f10"}}
+				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f10"}}
 			}
 			if seen&(1<<2) == 0 {
-				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f11"}}
+				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f11"}}
 			}
 			if seen&(1<<3) == 0 {
-				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f12"}}
+				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f12"}}
 			}
 			if seen&(1<<4) == 0 {
-				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f13"}}
+				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f13"}}
 			}
 			if seen&(1<<5) == 0 {
-				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f14"}}
+				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f14"}}
 			}
 			if seen&(1<<6) == 0 {
-				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f15"}}
+				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f15"}}
 			}
 			if seen&(1<<7) == 0 {
-				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f16"}}
+				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f16"}}
 			}
 			if seen&(1<<8) == 0 {
-				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f17"}}
+				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f17"}}
 			}
 			if seen&(1<<9) == 0 {
-				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f18"}}
+				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f18"}}
 			}
 			if seen&(1<<10) == 0 {
-				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f19"}}
+				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f19"}}
 			}
 			if seen&(1<<11) == 0 {
-				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f2"}}
+				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f2"}}
 			}
 			if seen&(1<<12) == 0 {
-				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f20"}}
+				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f20"}}
 			}
 			if seen&(1<<13) == 0 {
-				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f21"}}
+				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f21"}}
 			}
 			if seen&(1<<14) == 0 {
-				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f22"}}
+				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f22"}}
 			}
 			if seen&(1<<15) == 0 {
-				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f23"}}
+				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f23"}}
 			}
 			if seen&(1<<16) == 0 {
-				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f24"}}
+				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f24"}}
 			}
 			if seen&(1<<17) == 0 {
-				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f25"}}
+				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f25"}}
 			}
 			if seen&(1<<18) == 0 {
-				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f26"}}
+				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f26"}}
 			}
 			if seen&(1<<19) == 0 {
-				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f27"}}
+				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f27"}}
 			}
 			if seen&(1<<20) == 0 {
-				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f28"}}
+				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f28"}}
 			}
 			if seen&(1<<21) == 0 {
-				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f29"}}
+				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f29"}}
 			}
 			if seen&(1<<22) == 0 {
-				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f3"}}
+				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f3"}}
 			}
 			if seen&(1<<23) == 0 {
-				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f30"}}
+				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f30"}}
 			}
 			if seen&(1<<24) == 0 {
-				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f31"}}
+				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f31"}}
 			}
 			if seen&(1<<25) == 0 {
-				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f32"}}
+				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f32"}}
 			}
 			if seen&(1<<26) == 0 {
-				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f33"}}
+				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f33"}}
 			}
 			if seen&(1<<27) == 0 {
-				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f34"}}
+				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f34"}}
 			}
 			if seen&(1<<28) == 0 {
-				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f35"}}
+				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f35"}}
 			}
 			if seen&(1<<29) == 0 {
-				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f36"}}
+				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f36"}}
 			}
 			if seen&(1<<30) == 0 {
-				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f37"}}
+				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f37"}}
 			}
 			if seen&(1<<31) == 0 {
-				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f38"}}
+				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f38"}}
 			}
 			if seen&(1<<32) == 0 {
-				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f39"}}
+				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f39"}}
 			}
 			if seen&(1<<33) == 0 {
-				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f4"}}
+				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f4"}}
 			}
 			if seen&(1<<34) == 0 {
-				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f40"}}
+				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f40"}}
 			}
 			if seen&(1<<35) == 0 {
-				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f5"}}
+				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f5"}}
 			}
 			if seen&(1<<36) == 0 {
-				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f6"}}
+				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f6"}}
 			}
 			if seen&(1<<37) == 0 {
-				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f7"}}
+				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f7"}}
 			}
 			if seen&(1<<38) == 0 {
-				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f8"}}
+				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f8"}}
 			}
 			if seen&(1<<39) == 0 {
-				return result, i, &validation.RequiredError{Pos: i, Path: []string{"f9"}}
+				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f9"}}
 			}
 			return result, i, nil
 		}
-		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 	}
 }
 
-func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err error) {
+func (recv WideStruct) DecodeFromStream(s *ggen.Stream) (result WideStruct, err error) {
 	result = recv
 	var seen uint64
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Offset(), err)
+		return result, ggen.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Offset(), err)
+		return result, ggen.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
+			return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
 		}
 		s.Pos = 0
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
 		if seen&(1<<0) == 0 {
-			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f1"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f1"}}
 		}
 		if seen&(1<<1) == 0 {
-			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f10"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f10"}}
 		}
 		if seen&(1<<2) == 0 {
-			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f11"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f11"}}
 		}
 		if seen&(1<<3) == 0 {
-			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f12"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f12"}}
 		}
 		if seen&(1<<4) == 0 {
-			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f13"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f13"}}
 		}
 		if seen&(1<<5) == 0 {
-			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f14"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f14"}}
 		}
 		if seen&(1<<6) == 0 {
-			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f15"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f15"}}
 		}
 		if seen&(1<<7) == 0 {
-			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f16"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f16"}}
 		}
 		if seen&(1<<8) == 0 {
-			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f17"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f17"}}
 		}
 		if seen&(1<<9) == 0 {
-			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f18"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f18"}}
 		}
 		if seen&(1<<10) == 0 {
-			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f19"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f19"}}
 		}
 		if seen&(1<<11) == 0 {
-			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f2"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f2"}}
 		}
 		if seen&(1<<12) == 0 {
-			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f20"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f20"}}
 		}
 		if seen&(1<<13) == 0 {
-			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f21"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f21"}}
 		}
 		if seen&(1<<14) == 0 {
-			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f22"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f22"}}
 		}
 		if seen&(1<<15) == 0 {
-			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f23"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f23"}}
 		}
 		if seen&(1<<16) == 0 {
-			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f24"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f24"}}
 		}
 		if seen&(1<<17) == 0 {
-			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f25"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f25"}}
 		}
 		if seen&(1<<18) == 0 {
-			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f26"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f26"}}
 		}
 		if seen&(1<<19) == 0 {
-			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f27"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f27"}}
 		}
 		if seen&(1<<20) == 0 {
-			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f28"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f28"}}
 		}
 		if seen&(1<<21) == 0 {
-			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f29"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f29"}}
 		}
 		if seen&(1<<22) == 0 {
-			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f3"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f3"}}
 		}
 		if seen&(1<<23) == 0 {
-			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f30"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f30"}}
 		}
 		if seen&(1<<24) == 0 {
-			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f31"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f31"}}
 		}
 		if seen&(1<<25) == 0 {
-			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f32"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f32"}}
 		}
 		if seen&(1<<26) == 0 {
-			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f33"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f33"}}
 		}
 		if seen&(1<<27) == 0 {
-			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f34"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f34"}}
 		}
 		if seen&(1<<28) == 0 {
-			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f35"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f35"}}
 		}
 		if seen&(1<<29) == 0 {
-			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f36"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f36"}}
 		}
 		if seen&(1<<30) == 0 {
-			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f37"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f37"}}
 		}
 		if seen&(1<<31) == 0 {
-			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f38"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f38"}}
 		}
 		if seen&(1<<32) == 0 {
-			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f39"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f39"}}
 		}
 		if seen&(1<<33) == 0 {
-			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f4"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f4"}}
 		}
 		if seen&(1<<34) == 0 {
-			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f40"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f40"}}
 		}
 		if seen&(1<<35) == 0 {
-			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f5"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f5"}}
 		}
 		if seen&(1<<36) == 0 {
-			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f6"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f6"}}
 		}
 		if seen&(1<<37) == 0 {
-			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f7"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f7"}}
 		}
 		if seen&(1<<38) == 0 {
-			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f8"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f8"}}
 		}
 		if seen&(1<<39) == 0 {
-			return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f9"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f9"}}
 		}
 		return result, nil
 	}
@@ -2721,540 +2718,540 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Offset(), err)
+			return result, ggen.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "f1":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("f1", s.Offset(), err)
+				return result, ggen.NewParseErr("f1", s.Offset(), err)
 			}
 			if seen&(1<<0) != 0 {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f1"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f1"}}
 			}
 			seen |= 1 << 0
 			result.F1, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("f1", s.Offset(), err)
+				return result, ggen.NewParseErr("f1", s.Offset(), err)
 			}
 		case "f10":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("f10", s.Offset(), err)
+				return result, ggen.NewParseErr("f10", s.Offset(), err)
 			}
 			if seen&(1<<1) != 0 {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f10"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f10"}}
 			}
 			seen |= 1 << 1
 			result.F10, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("f10", s.Offset(), err)
+				return result, ggen.NewParseErr("f10", s.Offset(), err)
 			}
 		case "f11":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("f11", s.Offset(), err)
+				return result, ggen.NewParseErr("f11", s.Offset(), err)
 			}
 			if seen&(1<<2) != 0 {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f11"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f11"}}
 			}
 			seen |= 1 << 2
 			result.F11, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("f11", s.Offset(), err)
+				return result, ggen.NewParseErr("f11", s.Offset(), err)
 			}
 		case "f12":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("f12", s.Offset(), err)
+				return result, ggen.NewParseErr("f12", s.Offset(), err)
 			}
 			if seen&(1<<3) != 0 {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f12"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f12"}}
 			}
 			seen |= 1 << 3
 			result.F12, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("f12", s.Offset(), err)
+				return result, ggen.NewParseErr("f12", s.Offset(), err)
 			}
 		case "f13":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("f13", s.Offset(), err)
+				return result, ggen.NewParseErr("f13", s.Offset(), err)
 			}
 			if seen&(1<<4) != 0 {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f13"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f13"}}
 			}
 			seen |= 1 << 4
 			result.F13, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("f13", s.Offset(), err)
+				return result, ggen.NewParseErr("f13", s.Offset(), err)
 			}
 		case "f14":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("f14", s.Offset(), err)
+				return result, ggen.NewParseErr("f14", s.Offset(), err)
 			}
 			if seen&(1<<5) != 0 {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f14"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f14"}}
 			}
 			seen |= 1 << 5
 			result.F14, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("f14", s.Offset(), err)
+				return result, ggen.NewParseErr("f14", s.Offset(), err)
 			}
 		case "f15":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("f15", s.Offset(), err)
+				return result, ggen.NewParseErr("f15", s.Offset(), err)
 			}
 			if seen&(1<<6) != 0 {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f15"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f15"}}
 			}
 			seen |= 1 << 6
 			result.F15, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("f15", s.Offset(), err)
+				return result, ggen.NewParseErr("f15", s.Offset(), err)
 			}
 		case "f16":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("f16", s.Offset(), err)
+				return result, ggen.NewParseErr("f16", s.Offset(), err)
 			}
 			if seen&(1<<7) != 0 {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f16"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f16"}}
 			}
 			seen |= 1 << 7
 			result.F16, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("f16", s.Offset(), err)
+				return result, ggen.NewParseErr("f16", s.Offset(), err)
 			}
 		case "f17":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("f17", s.Offset(), err)
+				return result, ggen.NewParseErr("f17", s.Offset(), err)
 			}
 			if seen&(1<<8) != 0 {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f17"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f17"}}
 			}
 			seen |= 1 << 8
 			result.F17, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("f17", s.Offset(), err)
+				return result, ggen.NewParseErr("f17", s.Offset(), err)
 			}
 		case "f18":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("f18", s.Offset(), err)
+				return result, ggen.NewParseErr("f18", s.Offset(), err)
 			}
 			if seen&(1<<9) != 0 {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f18"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f18"}}
 			}
 			seen |= 1 << 9
 			result.F18, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("f18", s.Offset(), err)
+				return result, ggen.NewParseErr("f18", s.Offset(), err)
 			}
 		case "f19":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("f19", s.Offset(), err)
+				return result, ggen.NewParseErr("f19", s.Offset(), err)
 			}
 			if seen&(1<<10) != 0 {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f19"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f19"}}
 			}
 			seen |= 1 << 10
 			result.F19, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("f19", s.Offset(), err)
+				return result, ggen.NewParseErr("f19", s.Offset(), err)
 			}
 		case "f2":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("f2", s.Offset(), err)
+				return result, ggen.NewParseErr("f2", s.Offset(), err)
 			}
 			if seen&(1<<11) != 0 {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f2"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f2"}}
 			}
 			seen |= 1 << 11
 			result.F2, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("f2", s.Offset(), err)
+				return result, ggen.NewParseErr("f2", s.Offset(), err)
 			}
 		case "f20":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("f20", s.Offset(), err)
+				return result, ggen.NewParseErr("f20", s.Offset(), err)
 			}
 			if seen&(1<<12) != 0 {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f20"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f20"}}
 			}
 			seen |= 1 << 12
 			result.F20, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("f20", s.Offset(), err)
+				return result, ggen.NewParseErr("f20", s.Offset(), err)
 			}
 		case "f21":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("f21", s.Offset(), err)
+				return result, ggen.NewParseErr("f21", s.Offset(), err)
 			}
 			if seen&(1<<13) != 0 {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f21"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f21"}}
 			}
 			seen |= 1 << 13
 			result.F21, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("f21", s.Offset(), err)
+				return result, ggen.NewParseErr("f21", s.Offset(), err)
 			}
 		case "f22":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("f22", s.Offset(), err)
+				return result, ggen.NewParseErr("f22", s.Offset(), err)
 			}
 			if seen&(1<<14) != 0 {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f22"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f22"}}
 			}
 			seen |= 1 << 14
 			result.F22, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("f22", s.Offset(), err)
+				return result, ggen.NewParseErr("f22", s.Offset(), err)
 			}
 		case "f23":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("f23", s.Offset(), err)
+				return result, ggen.NewParseErr("f23", s.Offset(), err)
 			}
 			if seen&(1<<15) != 0 {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f23"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f23"}}
 			}
 			seen |= 1 << 15
 			result.F23, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("f23", s.Offset(), err)
+				return result, ggen.NewParseErr("f23", s.Offset(), err)
 			}
 		case "f24":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("f24", s.Offset(), err)
+				return result, ggen.NewParseErr("f24", s.Offset(), err)
 			}
 			if seen&(1<<16) != 0 {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f24"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f24"}}
 			}
 			seen |= 1 << 16
 			result.F24, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("f24", s.Offset(), err)
+				return result, ggen.NewParseErr("f24", s.Offset(), err)
 			}
 		case "f25":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("f25", s.Offset(), err)
+				return result, ggen.NewParseErr("f25", s.Offset(), err)
 			}
 			if seen&(1<<17) != 0 {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f25"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f25"}}
 			}
 			seen |= 1 << 17
 			result.F25, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("f25", s.Offset(), err)
+				return result, ggen.NewParseErr("f25", s.Offset(), err)
 			}
 		case "f26":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("f26", s.Offset(), err)
+				return result, ggen.NewParseErr("f26", s.Offset(), err)
 			}
 			if seen&(1<<18) != 0 {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f26"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f26"}}
 			}
 			seen |= 1 << 18
 			result.F26, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("f26", s.Offset(), err)
+				return result, ggen.NewParseErr("f26", s.Offset(), err)
 			}
 		case "f27":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("f27", s.Offset(), err)
+				return result, ggen.NewParseErr("f27", s.Offset(), err)
 			}
 			if seen&(1<<19) != 0 {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f27"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f27"}}
 			}
 			seen |= 1 << 19
 			result.F27, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("f27", s.Offset(), err)
+				return result, ggen.NewParseErr("f27", s.Offset(), err)
 			}
 		case "f28":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("f28", s.Offset(), err)
+				return result, ggen.NewParseErr("f28", s.Offset(), err)
 			}
 			if seen&(1<<20) != 0 {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f28"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f28"}}
 			}
 			seen |= 1 << 20
 			result.F28, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("f28", s.Offset(), err)
+				return result, ggen.NewParseErr("f28", s.Offset(), err)
 			}
 		case "f29":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("f29", s.Offset(), err)
+				return result, ggen.NewParseErr("f29", s.Offset(), err)
 			}
 			if seen&(1<<21) != 0 {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f29"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f29"}}
 			}
 			seen |= 1 << 21
 			result.F29, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("f29", s.Offset(), err)
+				return result, ggen.NewParseErr("f29", s.Offset(), err)
 			}
 		case "f3":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("f3", s.Offset(), err)
+				return result, ggen.NewParseErr("f3", s.Offset(), err)
 			}
 			if seen&(1<<22) != 0 {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f3"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f3"}}
 			}
 			seen |= 1 << 22
 			result.F3, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("f3", s.Offset(), err)
+				return result, ggen.NewParseErr("f3", s.Offset(), err)
 			}
 		case "f30":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("f30", s.Offset(), err)
+				return result, ggen.NewParseErr("f30", s.Offset(), err)
 			}
 			if seen&(1<<23) != 0 {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f30"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f30"}}
 			}
 			seen |= 1 << 23
 			result.F30, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("f30", s.Offset(), err)
+				return result, ggen.NewParseErr("f30", s.Offset(), err)
 			}
 		case "f31":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("f31", s.Offset(), err)
+				return result, ggen.NewParseErr("f31", s.Offset(), err)
 			}
 			if seen&(1<<24) != 0 {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f31"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f31"}}
 			}
 			seen |= 1 << 24
 			result.F31, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("f31", s.Offset(), err)
+				return result, ggen.NewParseErr("f31", s.Offset(), err)
 			}
 		case "f32":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("f32", s.Offset(), err)
+				return result, ggen.NewParseErr("f32", s.Offset(), err)
 			}
 			if seen&(1<<25) != 0 {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f32"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f32"}}
 			}
 			seen |= 1 << 25
 			result.F32, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("f32", s.Offset(), err)
+				return result, ggen.NewParseErr("f32", s.Offset(), err)
 			}
 		case "f33":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("f33", s.Offset(), err)
+				return result, ggen.NewParseErr("f33", s.Offset(), err)
 			}
 			if seen&(1<<26) != 0 {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f33"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f33"}}
 			}
 			seen |= 1 << 26
 			result.F33, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("f33", s.Offset(), err)
+				return result, ggen.NewParseErr("f33", s.Offset(), err)
 			}
 		case "f34":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("f34", s.Offset(), err)
+				return result, ggen.NewParseErr("f34", s.Offset(), err)
 			}
 			if seen&(1<<27) != 0 {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f34"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f34"}}
 			}
 			seen |= 1 << 27
 			result.F34, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("f34", s.Offset(), err)
+				return result, ggen.NewParseErr("f34", s.Offset(), err)
 			}
 		case "f35":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("f35", s.Offset(), err)
+				return result, ggen.NewParseErr("f35", s.Offset(), err)
 			}
 			if seen&(1<<28) != 0 {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f35"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f35"}}
 			}
 			seen |= 1 << 28
 			result.F35, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("f35", s.Offset(), err)
+				return result, ggen.NewParseErr("f35", s.Offset(), err)
 			}
 		case "f36":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("f36", s.Offset(), err)
+				return result, ggen.NewParseErr("f36", s.Offset(), err)
 			}
 			if seen&(1<<29) != 0 {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f36"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f36"}}
 			}
 			seen |= 1 << 29
 			result.F36, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("f36", s.Offset(), err)
+				return result, ggen.NewParseErr("f36", s.Offset(), err)
 			}
 		case "f37":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("f37", s.Offset(), err)
+				return result, ggen.NewParseErr("f37", s.Offset(), err)
 			}
 			if seen&(1<<30) != 0 {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f37"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f37"}}
 			}
 			seen |= 1 << 30
 			result.F37, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("f37", s.Offset(), err)
+				return result, ggen.NewParseErr("f37", s.Offset(), err)
 			}
 		case "f38":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("f38", s.Offset(), err)
+				return result, ggen.NewParseErr("f38", s.Offset(), err)
 			}
 			if seen&(1<<31) != 0 {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f38"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f38"}}
 			}
 			seen |= 1 << 31
 			result.F38, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("f38", s.Offset(), err)
+				return result, ggen.NewParseErr("f38", s.Offset(), err)
 			}
 		case "f39":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("f39", s.Offset(), err)
+				return result, ggen.NewParseErr("f39", s.Offset(), err)
 			}
 			if seen&(1<<32) != 0 {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f39"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f39"}}
 			}
 			seen |= 1 << 32
 			result.F39, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("f39", s.Offset(), err)
+				return result, ggen.NewParseErr("f39", s.Offset(), err)
 			}
 		case "f4":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("f4", s.Offset(), err)
+				return result, ggen.NewParseErr("f4", s.Offset(), err)
 			}
 			if seen&(1<<33) != 0 {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f4"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f4"}}
 			}
 			seen |= 1 << 33
 			result.F4, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("f4", s.Offset(), err)
+				return result, ggen.NewParseErr("f4", s.Offset(), err)
 			}
 		case "f40":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("f40", s.Offset(), err)
+				return result, ggen.NewParseErr("f40", s.Offset(), err)
 			}
 			if seen&(1<<34) != 0 {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f40"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f40"}}
 			}
 			seen |= 1 << 34
 			result.F40, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("f40", s.Offset(), err)
+				return result, ggen.NewParseErr("f40", s.Offset(), err)
 			}
 		case "f5":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("f5", s.Offset(), err)
+				return result, ggen.NewParseErr("f5", s.Offset(), err)
 			}
 			if seen&(1<<35) != 0 {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f5"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f5"}}
 			}
 			seen |= 1 << 35
 			result.F5, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("f5", s.Offset(), err)
+				return result, ggen.NewParseErr("f5", s.Offset(), err)
 			}
 		case "f6":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("f6", s.Offset(), err)
+				return result, ggen.NewParseErr("f6", s.Offset(), err)
 			}
 			if seen&(1<<36) != 0 {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f6"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f6"}}
 			}
 			seen |= 1 << 36
 			result.F6, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("f6", s.Offset(), err)
+				return result, ggen.NewParseErr("f6", s.Offset(), err)
 			}
 		case "f7":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("f7", s.Offset(), err)
+				return result, ggen.NewParseErr("f7", s.Offset(), err)
 			}
 			if seen&(1<<37) != 0 {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f7"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f7"}}
 			}
 			seen |= 1 << 37
 			result.F7, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("f7", s.Offset(), err)
+				return result, ggen.NewParseErr("f7", s.Offset(), err)
 			}
 		case "f8":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("f8", s.Offset(), err)
+				return result, ggen.NewParseErr("f8", s.Offset(), err)
 			}
 			if seen&(1<<38) != 0 {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f8"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f8"}}
 			}
 			seen |= 1 << 38
 			result.F8, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("f8", s.Offset(), err)
+				return result, ggen.NewParseErr("f8", s.Offset(), err)
 			}
 		case "f9":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("f9", s.Offset(), err)
+				return result, ggen.NewParseErr("f9", s.Offset(), err)
 			}
 			if seen&(1<<39) != 0 {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f9"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f9"}}
 			}
 			seen |= 1 << 39
 			result.F9, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("f9", s.Offset(), err)
+				return result, ggen.NewParseErr("f9", s.Offset(), err)
 			}
 		default:
-			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Offset(), err)
+			return result, ggen.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+				return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -3263,135 +3260,135 @@ func (recv WideStruct) DecodeFromStream(s *scan.Stream) (result WideStruct, err 
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Offset(), err)
+				return result, ggen.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
 		if c == '}' {
 			s.Pos++
 			if seen&(1<<0) == 0 {
-				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f1"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f1"}}
 			}
 			if seen&(1<<1) == 0 {
-				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f10"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f10"}}
 			}
 			if seen&(1<<2) == 0 {
-				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f11"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f11"}}
 			}
 			if seen&(1<<3) == 0 {
-				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f12"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f12"}}
 			}
 			if seen&(1<<4) == 0 {
-				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f13"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f13"}}
 			}
 			if seen&(1<<5) == 0 {
-				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f14"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f14"}}
 			}
 			if seen&(1<<6) == 0 {
-				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f15"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f15"}}
 			}
 			if seen&(1<<7) == 0 {
-				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f16"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f16"}}
 			}
 			if seen&(1<<8) == 0 {
-				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f17"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f17"}}
 			}
 			if seen&(1<<9) == 0 {
-				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f18"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f18"}}
 			}
 			if seen&(1<<10) == 0 {
-				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f19"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f19"}}
 			}
 			if seen&(1<<11) == 0 {
-				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f2"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f2"}}
 			}
 			if seen&(1<<12) == 0 {
-				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f20"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f20"}}
 			}
 			if seen&(1<<13) == 0 {
-				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f21"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f21"}}
 			}
 			if seen&(1<<14) == 0 {
-				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f22"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f22"}}
 			}
 			if seen&(1<<15) == 0 {
-				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f23"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f23"}}
 			}
 			if seen&(1<<16) == 0 {
-				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f24"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f24"}}
 			}
 			if seen&(1<<17) == 0 {
-				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f25"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f25"}}
 			}
 			if seen&(1<<18) == 0 {
-				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f26"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f26"}}
 			}
 			if seen&(1<<19) == 0 {
-				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f27"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f27"}}
 			}
 			if seen&(1<<20) == 0 {
-				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f28"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f28"}}
 			}
 			if seen&(1<<21) == 0 {
-				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f29"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f29"}}
 			}
 			if seen&(1<<22) == 0 {
-				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f3"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f3"}}
 			}
 			if seen&(1<<23) == 0 {
-				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f30"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f30"}}
 			}
 			if seen&(1<<24) == 0 {
-				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f31"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f31"}}
 			}
 			if seen&(1<<25) == 0 {
-				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f32"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f32"}}
 			}
 			if seen&(1<<26) == 0 {
-				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f33"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f33"}}
 			}
 			if seen&(1<<27) == 0 {
-				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f34"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f34"}}
 			}
 			if seen&(1<<28) == 0 {
-				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f35"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f35"}}
 			}
 			if seen&(1<<29) == 0 {
-				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f36"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f36"}}
 			}
 			if seen&(1<<30) == 0 {
-				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f37"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f37"}}
 			}
 			if seen&(1<<31) == 0 {
-				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f38"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f38"}}
 			}
 			if seen&(1<<32) == 0 {
-				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f39"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f39"}}
 			}
 			if seen&(1<<33) == 0 {
-				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f4"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f4"}}
 			}
 			if seen&(1<<34) == 0 {
-				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f40"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f40"}}
 			}
 			if seen&(1<<35) == 0 {
-				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f5"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f5"}}
 			}
 			if seen&(1<<36) == 0 {
-				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f6"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f6"}}
 			}
 			if seen&(1<<37) == 0 {
-				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f7"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f7"}}
 			}
 			if seen&(1<<38) == 0 {
-				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f8"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f8"}}
 			}
 			if seen&(1<<39) == 0 {
-				return result, &validation.RequiredError{Pos: s.Offset(), Path: []string{"f9"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f9"}}
 			}
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
+		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
 	}
 }
 
@@ -3444,84 +3441,84 @@ func (s WideStruct) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"f1\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.F1)
+	dst = ggen.AppendStringNoHTML(dst, s.F1)
 	dst = append(dst, ",\"f10\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.F10)
+	dst = ggen.AppendStringNoHTML(dst, s.F10)
 	dst = append(dst, ",\"f11\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.F11)
+	dst = ggen.AppendStringNoHTML(dst, s.F11)
 	dst = append(dst, ",\"f12\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.F12)
+	dst = ggen.AppendStringNoHTML(dst, s.F12)
 	dst = append(dst, ",\"f13\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.F13)
+	dst = ggen.AppendStringNoHTML(dst, s.F13)
 	dst = append(dst, ",\"f14\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.F14)
+	dst = ggen.AppendStringNoHTML(dst, s.F14)
 	dst = append(dst, ",\"f15\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.F15)
+	dst = ggen.AppendStringNoHTML(dst, s.F15)
 	dst = append(dst, ",\"f16\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.F16)
+	dst = ggen.AppendStringNoHTML(dst, s.F16)
 	dst = append(dst, ",\"f17\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.F17)
+	dst = ggen.AppendStringNoHTML(dst, s.F17)
 	dst = append(dst, ",\"f18\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.F18)
+	dst = ggen.AppendStringNoHTML(dst, s.F18)
 	dst = append(dst, ",\"f19\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.F19)
+	dst = ggen.AppendStringNoHTML(dst, s.F19)
 	dst = append(dst, ",\"f2\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.F2)
+	dst = ggen.AppendStringNoHTML(dst, s.F2)
 	dst = append(dst, ",\"f20\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.F20)
+	dst = ggen.AppendStringNoHTML(dst, s.F20)
 	dst = append(dst, ",\"f21\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.F21)
+	dst = ggen.AppendStringNoHTML(dst, s.F21)
 	dst = append(dst, ",\"f22\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.F22)
+	dst = ggen.AppendStringNoHTML(dst, s.F22)
 	dst = append(dst, ",\"f23\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.F23)
+	dst = ggen.AppendStringNoHTML(dst, s.F23)
 	dst = append(dst, ",\"f24\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.F24)
+	dst = ggen.AppendStringNoHTML(dst, s.F24)
 	dst = append(dst, ",\"f25\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.F25)
+	dst = ggen.AppendStringNoHTML(dst, s.F25)
 	dst = append(dst, ",\"f26\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.F26)
+	dst = ggen.AppendStringNoHTML(dst, s.F26)
 	dst = append(dst, ",\"f27\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.F27)
+	dst = ggen.AppendStringNoHTML(dst, s.F27)
 	dst = append(dst, ",\"f28\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.F28)
+	dst = ggen.AppendStringNoHTML(dst, s.F28)
 	dst = append(dst, ",\"f29\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.F29)
+	dst = ggen.AppendStringNoHTML(dst, s.F29)
 	dst = append(dst, ",\"f3\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.F3)
+	dst = ggen.AppendStringNoHTML(dst, s.F3)
 	dst = append(dst, ",\"f30\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.F30)
+	dst = ggen.AppendStringNoHTML(dst, s.F30)
 	dst = append(dst, ",\"f31\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.F31)
+	dst = ggen.AppendStringNoHTML(dst, s.F31)
 	dst = append(dst, ",\"f32\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.F32)
+	dst = ggen.AppendStringNoHTML(dst, s.F32)
 	dst = append(dst, ",\"f33\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.F33)
+	dst = ggen.AppendStringNoHTML(dst, s.F33)
 	dst = append(dst, ",\"f34\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.F34)
+	dst = ggen.AppendStringNoHTML(dst, s.F34)
 	dst = append(dst, ",\"f35\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.F35)
+	dst = ggen.AppendStringNoHTML(dst, s.F35)
 	dst = append(dst, ",\"f36\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.F36)
+	dst = ggen.AppendStringNoHTML(dst, s.F36)
 	dst = append(dst, ",\"f37\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.F37)
+	dst = ggen.AppendStringNoHTML(dst, s.F37)
 	dst = append(dst, ",\"f38\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.F38)
+	dst = ggen.AppendStringNoHTML(dst, s.F38)
 	dst = append(dst, ",\"f39\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.F39)
+	dst = ggen.AppendStringNoHTML(dst, s.F39)
 	dst = append(dst, ",\"f4\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.F4)
+	dst = ggen.AppendStringNoHTML(dst, s.F4)
 	dst = append(dst, ",\"f40\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.F40)
+	dst = ggen.AppendStringNoHTML(dst, s.F40)
 	dst = append(dst, ",\"f5\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.F5)
+	dst = ggen.AppendStringNoHTML(dst, s.F5)
 	dst = append(dst, ",\"f6\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.F6)
+	dst = ggen.AppendStringNoHTML(dst, s.F6)
 	dst = append(dst, ",\"f7\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.F7)
+	dst = ggen.AppendStringNoHTML(dst, s.F7)
 	dst = append(dst, ",\"f8\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.F8)
+	dst = ggen.AppendStringNoHTML(dst, s.F8)
 	dst = append(dst, ",\"f9\":\""...)
-	dst = encode.AppendStringNoHTML(dst, s.F9)
+	dst = ggen.AppendStringNoHTML(dst, s.F9)
 	return append(dst, '}'), nil
 }

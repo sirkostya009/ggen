@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/bytedance/sonic"
-	"github.com/sirkostya009/ggen/scan"
+	"github.com/sirkostya009/ggen"
 )
 
 // BenchmarkEscapeHeavy_Unmarshal decodes EscapeDoc from escape-dense strings
@@ -33,7 +33,7 @@ func BenchmarkEscapeHeavy_Unmarshal(b *testing.B) {
 	if g, _, err := (EscapeDoc{}).DecodeFrom(EscapeHeavyPayload); err != nil || g != want {
 		b.Fatalf("ggen bytes escape decode wrong: err=%v equal=%v", err, g == want)
 	}
-	var vs scan.Stream
+	var vs ggen.Stream
 	vs.Reset(bytes.NewReader(EscapeHeavyPayload), make([]byte, 0, 512))
 	if g, err := (EscapeDoc{}).DecodeFromStream(&vs); err != nil || g != want {
 		b.Fatalf("ggen stream escape decode wrong: err=%v equal=%v", err, g == want)
@@ -62,7 +62,7 @@ func BenchmarkEscapeHeavy_Unmarshal(b *testing.B) {
 		{"ggen", func(p []byte) error { _, _, err := EscapeDoc{}.DecodeFrom(p); return err }},
 		{"ggen_copy", func(p []byte) error { _, _, err := CopyEscapeDoc{}.DecodeFrom(p); return err }},
 		{"ggen_stream", func(p []byte) error {
-			var s scan.Stream
+			var s ggen.Stream
 			s.Reset(bytes.NewReader(p), make([]byte, 0, 512))
 			_, err := EscapeDoc{}.DecodeFromStream(&s)
 			return err
@@ -95,7 +95,7 @@ func BenchmarkEscapeSparse_Unmarshal(b *testing.B) {
 	if g, _, err := (EscapeDoc{}).DecodeFrom(EscapeSparsePayload); err != nil || g != want {
 		b.Fatalf("ggen bytes escape decode wrong: err=%v equal=%v", err, g == want)
 	}
-	var vs scan.Stream
+	var vs ggen.Stream
 	vs.Reset(bytes.NewReader(EscapeSparsePayload), make([]byte, 0, 512))
 	if g, err := (EscapeDoc{}).DecodeFromStream(&vs); err != nil || g != want {
 		b.Fatalf("ggen stream escape decode wrong: err=%v equal=%v", err, g == want)
@@ -111,7 +111,7 @@ func BenchmarkEscapeSparse_Unmarshal(b *testing.B) {
 		{"ggen", func(p []byte) error { _, _, err := EscapeDoc{}.DecodeFrom(p); return err }},
 		{"ggen_copy", func(p []byte) error { _, _, err := CopyEscapeDoc{}.DecodeFrom(p); return err }},
 		{"ggen_stream", func(p []byte) error {
-			var s scan.Stream
+			var s ggen.Stream
 			s.Reset(bytes.NewReader(p), make([]byte, 0, 512))
 			_, err := EscapeDoc{}.DecodeFromStream(&s)
 			return err

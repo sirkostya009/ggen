@@ -13,9 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sirkostya009/ggen/encode"
-	"github.com/sirkostya009/ggen/scan"
-	"github.com/sirkostya009/ggen/validation"
+	"github.com/sirkostya009/ggen"
 )
 
 // NativeTypes exercises the format tag with native types: time.Time,
@@ -55,7 +53,7 @@ func TestNativeTypes_roundtrip(t *testing.T) {
 		Cidr:      netip.MustParsePrefix("10.0.0.0/8"),
 	}
 
-	out, _ := encode.Marshal(in)
+	out, _ := ggen.Marshal(in)
 	t.Logf("marshaled: %s", out)
 
 	got, _, err := NativeTypes{}.DecodeFrom(out)
@@ -107,7 +105,7 @@ func TestNativeTypes_format(t *testing.T) {
 		HexBlob:   []byte{0xab, 0xcd},
 		ByteArray: []byte{7, 8, 9},
 	}
-	bs, _ := encode.Marshal(in)
+	bs, _ := ggen.Marshal(in)
 	out := string(bs)
 	// unix → number
 	if !strings.Contains(out, `"unixAt":1700000000`) {
@@ -141,7 +139,7 @@ type BareDuration struct {
 func TestDuration_BareIsQuotedUnits(t *testing.T) {
 	t.Parallel()
 	in := BareDuration{D: time.Hour + 30*time.Minute}
-	bs, err := encode.Marshal(in)
+	bs, err := ggen.Marshal(in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,7 +170,7 @@ func TestNetipAddr_ZoneEscaped(t *testing.T) {
 	if got.Addr.Zone() != `q"z` {
 		t.Fatalf("zone = %q", got.Addr.Zone())
 	}
-	out, err := encode.Marshal(got)
+	out, err := ggen.Marshal(got)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -184,7 +182,7 @@ func TestNetipAddr_ZoneEscaped(t *testing.T) {
 	}
 	// Zone-free addrs keep the raw fast path byte-identical.
 	got2, _, _ := NativeTypes{}.DecodeFrom([]byte(`{"addr":"2001:db8::1"}`))
-	out2, _ := encode.Marshal(got2)
+	out2, _ := ggen.Marshal(got2)
 	if !strings.Contains(string(out2), `"addr":"2001:db8::1"`) {
 		t.Errorf("zone-free addr changed: %s", out2)
 	}
@@ -212,7 +210,7 @@ func TestBytes_emptyDecodesNonNil(t *testing.T) {
 			t.Errorf("%s: len = %d, want 0", c.name, len(c.v))
 		}
 	}
-	out, err := encode.MarshalString(got)
+	out, err := ggen.MarshalString(got)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
@@ -222,7 +220,7 @@ func TestBytes_emptyDecodesNonNil(t *testing.T) {
 		}
 	}
 
-	var st scan.Stream
+	var st ggen.Stream
 	st.Reset(bytes.NewReader(payload), nil)
 	sgot, err := NativeTypes{}.DecodeFromStream(&st)
 	if err != nil {
@@ -246,7 +244,7 @@ func TestBytes_nullRoundtrip(t *testing.T) {
 		t.Errorf("null should decode to nil: blob=%v hex=%v arr=%v", got.Blob, got.HexBlob, got.ByteArray)
 	}
 
-	out, err := encode.MarshalString(NativeTypes{})
+	out, err := ggen.MarshalString(NativeTypes{})
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
@@ -256,7 +254,7 @@ func TestBytes_nullRoundtrip(t *testing.T) {
 		}
 	}
 
-	out, err = encode.MarshalString(NativeTypes{Blob: []byte{}, HexBlob: []byte{}, ByteArray: []byte{}})
+	out, err = ggen.MarshalString(NativeTypes{Blob: []byte{}, HexBlob: []byte{}, ByteArray: []byte{}})
 	if err != nil {
 		t.Fatalf("marshal empty: %v", err)
 	}
@@ -282,7 +280,7 @@ type ByteArrays struct {
 func TestByteArray_Base64StrictLen(t *testing.T) {
 	t.Parallel()
 	in := ByteArrays{B: [4]byte{1, 2, 3, 255}, Hex: [3]byte{0xde, 0xad, 0xbe}, Arr: [4]byte{9, 8, 7, 6}}
-	out, err := encode.Marshal(in)
+	out, err := ggen.Marshal(in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -304,7 +302,7 @@ func TestByteArray_Base64StrictLen(t *testing.T) {
 	if err != nil || back != in {
 		t.Fatalf("roundtrip: %+v %v", back, err)
 	}
-	var st scan.Stream
+	var st ggen.Stream
 	st.Reset(bytes.NewReader(out), make([]byte, 0, 4))
 	sb, err := ByteArrays{}.DecodeFromStream(&st)
 	if err != nil || sb != in {
@@ -313,11 +311,11 @@ func TestByteArray_Base64StrictLen(t *testing.T) {
 
 	// Strict length, both directions, both paths.
 	for _, bad := range []string{`{"b":"AQID"}`, `{"b":"AQIDBAU="}`} {
-		var le *validation.LenError
+		var le *ggen.LenError
 		if _, _, err := (ByteArrays{}).DecodeFrom([]byte(bad)); !errors.As(err, &le) {
 			t.Errorf("%s bytes: want LenError, got %v", bad, err)
 		}
-		var s2 scan.Stream
+		var s2 ggen.Stream
 		s2.Reset(bytes.NewReader([]byte(bad)), make([]byte, 0, 4))
 		if _, err := (ByteArrays{}).DecodeFromStream(&s2); !errors.As(err, &le) {
 			t.Errorf("%s stream: want LenError, got %v", bad, err)

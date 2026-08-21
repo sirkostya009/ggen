@@ -7,10 +7,7 @@ import (
 	"strings"
 	"unsafe"
 
-	"github.com/sirkostya009/ggen/decode"
-	"github.com/sirkostya009/ggen/encode"
-	"github.com/sirkostya009/ggen/scan"
-	"github.com/sirkostya009/ggen/validation"
+	"github.com/sirkostya009/ggen"
 )
 
 func (recv RichTypes) DecodeFrom(data []byte) (result RichTypes, i int, err error) {
@@ -27,7 +24,7 @@ func (recv RichTypes) DecodeFrom(data []byte) (result RichTypes, i int, err erro
 		i++
 	}
 	if i >= len(data) || data[i] != '{' {
-		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 	}
 	i++
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -40,7 +37,7 @@ func (recv RichTypes) DecodeFrom(data []byte) (result RichTypes, i int, err erro
 	for {
 		var key string
 		if i >= len(data) || data[i] != '"' {
-			return result, i, decode.NewParseErr("", i, scan.ErrExpectString)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrExpectString)
 		}
 		ke := i + 1
 		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
@@ -50,16 +47,16 @@ func (recv RichTypes) DecodeFrom(data []byte) (result RichTypes, i int, err erro
 			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 			i = ke + 1
 		} else {
-			key, i, err = scan.String(data, i, true)
+			key, i, err = ggen.String(data, i, true)
 			if err != nil {
-				return result, i, decode.NewParseErr("", i, err)
+				return result, i, ggen.NewParseErr("", i, err)
 			}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) || data[i] != ':' {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 		}
 		i++
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -68,25 +65,25 @@ func (recv RichTypes) DecodeFrom(data []byte) (result RichTypes, i int, err erro
 		switch key {
 		case "big":
 			if seenBig {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"big"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"big"}}
 			}
 			seenBig = true
 			start := i
-			i, err = scan.SkipValue(data, start)
+			i, err = ggen.SkipValue(data, start)
 			if err != nil {
-				return result, i, decode.NewParseErr("big", i, err)
+				return result, i, ggen.NewParseErr("big", i, err)
 			}
 			if _, ok := (&result.Big).SetString(unsafe.String(unsafe.SliceData(data[start:]), i-start), 10); !ok {
-				return result, i, decode.NewParseErr("big", i, scan.ErrBadNumber)
+				return result, i, ggen.NewParseErr("big", i, ggen.ErrBadNumber)
 			}
 		case "bigF":
 			if seenBigF {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"bigF"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"bigF"}}
 			}
 			seenBigF = true
 			var s string
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("bigF", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("bigF", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -100,22 +97,22 @@ func (recv RichTypes) DecodeFrom(data []byte) (result RichTypes, i int, err erro
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				s, i, err = scan.String(data, i, true)
+				s, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("bigF", i, err)
+					return result, i, ggen.NewParseErr("bigF", i, err)
 				}
 			}
 			if _, _, err := (&result.BigF).Parse(s, 10); err != nil {
-				return result, i, decode.NewParseErr("bigF", i, err)
+				return result, i, ggen.NewParseErr("bigF", i, err)
 			}
 		case "bigR":
 			if seenBigR {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"bigR"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"bigR"}}
 			}
 			seenBigR = true
 			var s string
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("bigR", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("bigR", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -129,80 +126,80 @@ func (recv RichTypes) DecodeFrom(data []byte) (result RichTypes, i int, err erro
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				s, i, err = scan.String(data, i, true)
+				s, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("bigR", i, err)
+					return result, i, ggen.NewParseErr("bigR", i, err)
 				}
 			}
 			if _, ok := (&result.BigR).SetString(s); !ok {
-				return result, i, decode.NewParseErr("bigR", i, scan.ErrBadNumber)
+				return result, i, ggen.NewParseErr("bigR", i, ggen.ErrBadNumber)
 			}
 		case "gofrsId":
 			if seenGofrsID {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"gofrsId"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"gofrsId"}}
 			}
 			seenGofrsID = true
 			var ts string
-			ts, i, err = scan.String(data, i, true)
+			ts, i, err = ggen.String(data, i, true)
 			if err != nil {
-				return result, i, decode.NewParseErr("gofrsId", i, err)
+				return result, i, ggen.NewParseErr("gofrsId", i, err)
 			}
 			err = result.GofrsID.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts)))
 			if err != nil {
-				return result, i, decode.NewParseErr("gofrsId", i, err)
+				return result, i, ggen.NewParseErr("gofrsId", i, err)
 			}
 		case "id":
 			if seenID {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"id"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"id"}}
 			}
 			seenID = true
 			var ts string
-			ts, i, err = scan.String(data, i, true)
+			ts, i, err = ggen.String(data, i, true)
 			if err != nil {
-				return result, i, decode.NewParseErr("id", i, err)
+				return result, i, ggen.NewParseErr("id", i, err)
 			}
 			err = result.ID.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts)))
 			if err != nil {
-				return result, i, decode.NewParseErr("id", i, err)
+				return result, i, ggen.NewParseErr("id", i, err)
 			}
 		case "raw1":
 			if seenRaw1 {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"raw1"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"raw1"}}
 			}
 			seenRaw1 = true
 			start := i
-			i, err = scan.SkipValue(data, start)
+			i, err = ggen.SkipValue(data, start)
 			if err != nil {
-				return result, i, decode.NewParseErr("raw1", i, err)
+				return result, i, ggen.NewParseErr("raw1", i, err)
 			}
-			err = scan.CheckUTF8(data[start:i])
+			err = ggen.CheckUTF8(data[start:i])
 			if err != nil {
-				return result, i, decode.NewParseErr("raw1", i, err)
+				return result, i, ggen.NewParseErr("raw1", i, err)
 			}
 			result.Raw1 = data[start:i]
 		case "raw2":
 			if seenRaw2 {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"raw2"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"raw2"}}
 			}
 			seenRaw2 = true
 			start := i
-			i, err = scan.SkipValue(data, start)
+			i, err = ggen.SkipValue(data, start)
 			if err != nil {
-				return result, i, decode.NewParseErr("raw2", i, err)
+				return result, i, ggen.NewParseErr("raw2", i, err)
 			}
-			err = scan.CheckUTF8(data[start:i])
+			err = ggen.CheckUTF8(data[start:i])
 			if err != nil {
-				return result, i, decode.NewParseErr("raw2", i, err)
+				return result, i, ggen.NewParseErr("raw2", i, err)
 			}
 			result.Raw2 = data[start:i]
 		case "site":
 			if seenSite {
-				return result, i, &validation.DuplicateKeyError{Pos: i, Path: []string{"site"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"site"}}
 			}
 			seenSite = true
 			var s string
 			if i >= len(data) || data[i] != '"' {
-				return result, i, decode.NewParseErr("site", i, scan.ErrExpectString)
+				return result, i, ggen.NewParseErr("site", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
 			kew := ke + 32
@@ -216,25 +213,25 @@ func (recv RichTypes) DecodeFrom(data []byte) (result RichTypes, i int, err erro
 				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				s, i, err = scan.String(data, i, true)
+				s, i, err = ggen.String(data, i, true)
 				if err != nil {
-					return result, i, decode.NewParseErr("site", i, err)
+					return result, i, ggen.NewParseErr("site", i, err)
 				}
 			}
 			var u *url.URL
 			u, err = url.Parse(s)
 			if err != nil {
-				return result, i, decode.NewParseErr("site", i, err)
+				return result, i, ggen.NewParseErr("site", i, err)
 			}
 			result.Site = *u
 		default:
-			return result, i, &validation.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
 		}
 		if i >= len(data) {
-			return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 		}
 		if data[i] == ',' {
 			i++
@@ -247,11 +244,11 @@ func (recv RichTypes) DecodeFrom(data []byte) (result RichTypes, i int, err erro
 			i++
 			return result, i, nil
 		}
-		return result, i, decode.NewParseErr("", i, scan.ErrBadObject)
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 	}
 }
 
-func (recv RichTypes) DecodeFromStream(s *scan.Stream) (result RichTypes, err error) {
+func (recv RichTypes) DecodeFromStream(s *ggen.Stream) (result RichTypes, err error) {
 	result = recv
 	seenBig := false
 	seenBigF := false
@@ -263,15 +260,15 @@ func (recv RichTypes) DecodeFromStream(s *scan.Stream) (result RichTypes, err er
 	seenSite := false
 	err = s.ObjectOpen()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Offset(), err)
+		return result, ggen.NewParseErr("", s.Offset(), err)
 	}
 	err = s.SkipSpace()
 	if err != nil {
-		return result, decode.NewParseErr("", s.Offset(), err)
+		return result, ggen.NewParseErr("", s.Offset(), err)
 	}
 	if s.Pos >= len(s.Bytes()) {
 		if err = s.ReadMore(s.Pos); err != nil {
-			return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrExpectString))
+			return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
 		}
 		s.Pos = 0
 	}
@@ -283,161 +280,161 @@ func (recv RichTypes) DecodeFromStream(s *scan.Stream) (result RichTypes, err er
 		var key string
 		key, err = s.KeyView(true)
 		if err != nil {
-			return result, decode.NewParseErr("", s.Offset(), err)
+			return result, ggen.NewParseErr("", s.Offset(), err)
 		}
 		switch key {
 		case "big":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("big", s.Offset(), err)
+				return result, ggen.NewParseErr("big", s.Offset(), err)
 			}
 			if seenBig {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"big"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"big"}}
 			}
 			seenBig = true
 			span, err := s.CaptureValue()
 			if err != nil {
-				return result, decode.NewParseErr("big", s.Offset(), err)
+				return result, ggen.NewParseErr("big", s.Offset(), err)
 			}
 			if _, ok := (&result.Big).SetString(unsafe.String(unsafe.SliceData(span), len(span)), 10); !ok {
-				return result, decode.NewParseErr("big", s.Offset(), scan.ErrBadNumber)
+				return result, ggen.NewParseErr("big", s.Offset(), ggen.ErrBadNumber)
 			}
 		case "bigF":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("bigF", s.Offset(), err)
+				return result, ggen.NewParseErr("bigF", s.Offset(), err)
 			}
 			if seenBigF {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"bigF"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"bigF"}}
 			}
 			seenBigF = true
 			var sv string
 			sv, err = s.StringView(true)
 			if err != nil {
-				return result, decode.NewParseErr("bigF", s.Offset(), err)
+				return result, ggen.NewParseErr("bigF", s.Offset(), err)
 			}
 			if _, _, err := (&result.BigF).Parse(sv, 10); err != nil {
-				return result, decode.NewParseErr("bigF", s.Offset(), err)
+				return result, ggen.NewParseErr("bigF", s.Offset(), err)
 			}
 		case "bigR":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("bigR", s.Offset(), err)
+				return result, ggen.NewParseErr("bigR", s.Offset(), err)
 			}
 			if seenBigR {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"bigR"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"bigR"}}
 			}
 			seenBigR = true
 			var sv string
 			sv, err = s.StringView(true)
 			if err != nil {
-				return result, decode.NewParseErr("bigR", s.Offset(), err)
+				return result, ggen.NewParseErr("bigR", s.Offset(), err)
 			}
 			if _, ok := (&result.BigR).SetString(sv); !ok {
-				return result, decode.NewParseErr("bigR", s.Offset(), scan.ErrBadNumber)
+				return result, ggen.NewParseErr("bigR", s.Offset(), ggen.ErrBadNumber)
 			}
 		case "gofrsId":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("gofrsId", s.Offset(), err)
+				return result, ggen.NewParseErr("gofrsId", s.Offset(), err)
 			}
 			if seenGofrsID {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"gofrsId"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"gofrsId"}}
 			}
 			seenGofrsID = true
 			var ts string
 			ts, err = s.StringView(true)
 			if err != nil {
-				return result, decode.NewParseErr("gofrsId", s.Offset(), err)
+				return result, ggen.NewParseErr("gofrsId", s.Offset(), err)
 			}
 			err = result.GofrsID.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts)))
 			if err != nil {
-				return result, decode.NewParseErr("gofrsId", s.Offset(), err)
+				return result, ggen.NewParseErr("gofrsId", s.Offset(), err)
 			}
 		case "id":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("id", s.Offset(), err)
+				return result, ggen.NewParseErr("id", s.Offset(), err)
 			}
 			if seenID {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"id"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"id"}}
 			}
 			seenID = true
 			var ts string
 			ts, err = s.StringView(true)
 			if err != nil {
-				return result, decode.NewParseErr("id", s.Offset(), err)
+				return result, ggen.NewParseErr("id", s.Offset(), err)
 			}
 			err = result.ID.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts)))
 			if err != nil {
-				return result, decode.NewParseErr("id", s.Offset(), err)
+				return result, ggen.NewParseErr("id", s.Offset(), err)
 			}
 		case "raw1":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("raw1", s.Offset(), err)
+				return result, ggen.NewParseErr("raw1", s.Offset(), err)
 			}
 			if seenRaw1 {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"raw1"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"raw1"}}
 			}
 			seenRaw1 = true
 			span, err := s.CaptureValue()
 			if err != nil {
-				return result, decode.NewParseErr("raw1", s.Offset(), err)
+				return result, ggen.NewParseErr("raw1", s.Offset(), err)
 			}
-			err = scan.CheckUTF8(span)
+			err = ggen.CheckUTF8(span)
 			if err != nil {
-				return result, decode.NewParseErr("raw1", s.Offset(), err)
+				return result, ggen.NewParseErr("raw1", s.Offset(), err)
 			}
 			result.Raw1 = append(make([]byte, 0, len(span)), span...)
 		case "raw2":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("raw2", s.Offset(), err)
+				return result, ggen.NewParseErr("raw2", s.Offset(), err)
 			}
 			if seenRaw2 {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"raw2"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"raw2"}}
 			}
 			seenRaw2 = true
 			span, err := s.CaptureValue()
 			if err != nil {
-				return result, decode.NewParseErr("raw2", s.Offset(), err)
+				return result, ggen.NewParseErr("raw2", s.Offset(), err)
 			}
-			err = scan.CheckUTF8(span)
+			err = ggen.CheckUTF8(span)
 			if err != nil {
-				return result, decode.NewParseErr("raw2", s.Offset(), err)
+				return result, ggen.NewParseErr("raw2", s.Offset(), err)
 			}
 			result.Raw2 = append(make([]byte, 0, len(span)), span...)
 		case "site":
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, decode.NewParseErr("site", s.Offset(), err)
+				return result, ggen.NewParseErr("site", s.Offset(), err)
 			}
 			if seenSite {
-				return result, &validation.DuplicateKeyError{Pos: s.Offset(), Path: []string{"site"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"site"}}
 			}
 			seenSite = true
 			var sv string
 			sv, err = s.String(true)
 			if err != nil {
-				return result, decode.NewParseErr("site", s.Offset(), err)
+				return result, ggen.NewParseErr("site", s.Offset(), err)
 			}
 			u, err := url.Parse(sv)
 			if err != nil {
-				return result, decode.NewParseErr("site", s.Offset(), err)
+				return result, ggen.NewParseErr("site", s.Offset(), err)
 			}
 			result.Site = *u
 		default:
-			return result, &validation.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
 
 		err = s.SkipSpace()
 		if err != nil {
-			return result, decode.NewParseErr("", s.Offset(), err)
+			return result, ggen.NewParseErr("", s.Offset(), err)
 		}
 		if s.Pos >= len(s.Bytes()) {
 			if err = s.ReadMore(s.Pos); err != nil {
-				return result, decode.NewParseErr("", s.Offset(), scan.NotEOF(err, scan.ErrBadObject))
+				return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
 			}
 			s.Pos = 0
 		}
@@ -446,7 +443,7 @@ func (recv RichTypes) DecodeFromStream(s *scan.Stream) (result RichTypes, err er
 			s.Pos++
 			err = s.SkipSpace()
 			if err != nil {
-				return result, decode.NewParseErr("", s.Offset(), err)
+				return result, ggen.NewParseErr("", s.Offset(), err)
 			}
 			continue
 		}
@@ -454,7 +451,7 @@ func (recv RichTypes) DecodeFromStream(s *scan.Stream) (result RichTypes, err er
 			s.Pos++
 			return result, nil
 		}
-		return result, decode.NewParseErr("", s.Offset(), scan.ErrBadObject)
+		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
 	}
 }
 
@@ -499,7 +496,7 @@ func (s RichTypes) AppendJSON(dst []byte) ([]byte, error) {
 		return dst, err
 	}
 	dst = append(dst, '"')
-	dst = encode.AppendStringNoHTML(dst, encode.BytesToString(bGofrsID))
+	dst = ggen.AppendStringNoHTML(dst, ggen.BytesToString(bGofrsID))
 	dst = append(dst, ",\"id\":"...)
 	var bID []byte
 	bID, err = s.ID.MarshalText()
@@ -507,7 +504,7 @@ func (s RichTypes) AppendJSON(dst []byte) ([]byte, error) {
 		return dst, err
 	}
 	dst = append(dst, '"')
-	dst = encode.AppendStringNoHTML(dst, encode.BytesToString(bID))
+	dst = ggen.AppendStringNoHTML(dst, ggen.BytesToString(bID))
 	dst = append(dst, ",\"raw1\":"...)
 	if len(s.Raw1) == 0 {
 		dst = append(dst, "null"...)
@@ -521,6 +518,6 @@ func (s RichTypes) AppendJSON(dst []byte) ([]byte, error) {
 		dst = append(dst, s.Raw2...)
 	}
 	dst = append(dst, ",\"site\":\""...)
-	dst = encode.AppendURL(dst, s.Site)
+	dst = ggen.AppendURL(dst, s.Site)
 	return append(dst, '}'), nil
 }

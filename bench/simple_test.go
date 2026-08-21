@@ -8,7 +8,7 @@ import (
 
 	"github.com/bytedance/sonic"
 	"github.com/mailru/easyjson"
-	"github.com/sirkostya009/ggen/scan"
+	"github.com/sirkostya009/ggen"
 )
 
 // BenchmarkNoAlloc_Unmarshal — bytes-path decode of a wide, flat,
@@ -77,7 +77,7 @@ func BenchmarkNoAlloc_Reader(b *testing.B) {
 		// would settle at payload size and degenerate into the bytes path.
 		{"ggen_stream", func(s *readerState) error {
 			s.r.Reset(AccountPayload)
-			var st scan.Stream
+			var st ggen.Stream
 			st.Reset(&s.r, make([]byte, 0, 512))
 			_, err := Account{}.DecodeFromStream(&st)
 			return err

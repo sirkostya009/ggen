@@ -13,8 +13,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/sirkostya009/ggen/decode"
-	"github.com/sirkostya009/ggen/encode"
+	"github.com/sirkostya009/ggen"
 )
 
 // Each sql.NullX flavor as its own single-field struct so per-type JSONSize
@@ -140,8 +139,8 @@ var sqlWhen = time.Unix(1700000000, 0).UTC()
 //
 // presentVal is the raw JSON value text for the set field; T is inferred from present.
 func runSQLNullPerType[T interface {
-	encode.Marshaler
-	decode.Decoder[T]
+	ggen.Marshaler
+	ggen.Decoder[T]
 }](t *testing.T, name, key, presentVal string, present T) {
 	t.Helper()
 	nullWire := `{"` + key + `":null}`
@@ -153,7 +152,7 @@ func runSQLNullPerType[T interface {
 		if err != nil {
 			t.Fatalf("decode %s: %v", in, err)
 		}
-		out, err := encode.MarshalString(got)
+		out, err := ggen.MarshalString(got)
 		if err != nil {
 			t.Fatalf("remarshal: %v", err)
 		}
@@ -163,7 +162,7 @@ func runSQLNullPerType[T interface {
 	}
 	t.Run(name+"/marshal_null", func(t *testing.T) {
 		t.Parallel()
-		out, err := encode.MarshalString(zero)
+		out, err := ggen.MarshalString(zero)
 		if err != nil {
 			t.Fatalf("marshal zero: %v", err)
 		}
@@ -173,7 +172,7 @@ func runSQLNullPerType[T interface {
 	})
 	t.Run(name+"/marshal_present", func(t *testing.T) {
 		t.Parallel()
-		out, err := encode.MarshalString(present)
+		out, err := ggen.MarshalString(present)
 		if err != nil {
 			t.Fatalf("marshal present: %v", err)
 		}
@@ -241,14 +240,14 @@ func TestSQLNull_PerType(t *testing.T) {
 func TestSQLNull_Composite(t *testing.T) {
 	t.Parallel()
 	full := SQLNullStruct{
-		SQLNullStringStruct:  SQLNullStringStruct{S: sql.NullString{String: "hello", Valid: true}},
-		SQLNullInt64Struct:   SQLNullInt64Struct{I: sql.NullInt64{Int64: 42, Valid: true}},
-		SQLNullInt32Struct:   SQLNullInt32Struct{I32: sql.NullInt32{Int32: 33, Valid: true}},
-		SQLNullInt16Struct:   SQLNullInt16Struct{I16: sql.NullInt16{Int16: 7, Valid: true}},
-		SQLNullByteStruct:    SQLNullByteStruct{B: sql.NullByte{Byte: 255, Valid: true}},
-		SQLNullBoolStruct:    SQLNullBoolStruct{BL: sql.NullBool{Bool: true, Valid: true}},
-		SQLNullFloat64Struct: SQLNullFloat64Struct{F: sql.NullFloat64{Float64: 3.14, Valid: true}},
-		SQLNullTimeStruct:    SQLNullTimeStruct{T: sql.NullTime{Time: sqlWhen, Valid: true}},
+		S:   sql.NullString{String: "hello", Valid: true},
+		I:   sql.NullInt64{Int64: 42, Valid: true},
+		I32: sql.NullInt32{Int32: 33, Valid: true},
+		I16: sql.NullInt16{Int16: 7, Valid: true},
+		B:   sql.NullByte{Byte: 255, Valid: true},
+		BL:  sql.NullBool{Bool: true, Valid: true},
+		F:   sql.NullFloat64{Float64: 3.14, Valid: true},
+		T:   sql.NullTime{Time: sqlWhen, Valid: true},
 	}
 
 	// assertFullSQLNull checks every field against full. NullTime compares via
@@ -307,7 +306,7 @@ func TestSQLNull_Composite(t *testing.T) {
 
 	t.Run("marshal_all_null", func(t *testing.T) {
 		t.Parallel()
-		out, err := encode.MarshalString(SQLNullStruct{})
+		out, err := ggen.MarshalString(SQLNullStruct{})
 		if err != nil {
 			t.Fatalf("marshal: %v", err)
 		}
@@ -321,7 +320,7 @@ func TestSQLNull_Composite(t *testing.T) {
 
 	t.Run("marshal_all_present", func(t *testing.T) {
 		t.Parallel()
-		out, err := encode.MarshalString(full)
+		out, err := ggen.MarshalString(full)
 		if err != nil {
 			t.Fatalf("marshal: %v", err)
 		}
@@ -337,7 +336,7 @@ func TestSQLNull_Composite(t *testing.T) {
 
 	t.Run("roundtrip_all_present", func(t *testing.T) {
 		t.Parallel()
-		bs, _ := encode.Marshal(full)
+		bs, _ := ggen.Marshal(full)
 		got, _, err := SQLNullStruct{}.DecodeFrom(bs)
 		if err != nil {
 			t.Fatalf("unmarshal: %v\n%s", err, bs)

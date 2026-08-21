@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/bytedance/sonic"
-	"github.com/sirkostya009/ggen/scan"
+	"github.com/sirkostya009/ggen"
 )
 
 // BenchmarkSkipHeavy_Unmarshal — decode of SkipEnvelope (one matched field)
@@ -32,7 +32,7 @@ func BenchmarkSkipHeavy_Unmarshal(b *testing.B) {
 		// Stream path: fresh 4 KiB buffer per decode so the skipped blob
 		// genuinely streams through refill + compaction.
 		{"ggen_stream", func(p []byte) error {
-			var st scan.Stream
+			var st ggen.Stream
 			st.Reset(bytes.NewReader(p), make([]byte, 0, 4096))
 			_, err := SkipEnvelope{}.DecodeFromStream(&st)
 			return err

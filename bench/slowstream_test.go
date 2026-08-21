@@ -10,7 +10,7 @@ import (
 
 	"github.com/bytedance/sonic"
 	"github.com/mailru/easyjson"
-	"github.com/sirkostya009/ggen/scan"
+	"github.com/sirkostya009/ggen"
 )
 
 // slowPayload — a few-dozen-KiB Node tree, separate from MegaPayload so the
@@ -118,7 +118,7 @@ func BenchmarkSlowStream_Valid(b *testing.B) {
 		{"ggen_stream", func(s *slowState) error {
 			s.r.reset()
 			var err error
-			var _st scan.Stream
+			var _st ggen.Stream
 			_st.Reset(s.r, s.buf[:0])
 			_, err = Node{}.DecodeFromStream(&_st)
 			s.buf = _st.Bytes()
@@ -166,7 +166,7 @@ func BenchmarkSlowStream_Invalid(b *testing.B) {
 		{"ggen_stream", func(s *slowState) error {
 			s.r.reset()
 			var err error
-			var _st scan.Stream
+			var _st ggen.Stream
 			_st.Reset(s.r, s.buf[:0])
 			_, err = Validated{}.DecodeFromStream(&_st)
 			s.buf = _st.Bytes()

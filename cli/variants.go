@@ -184,14 +184,14 @@ func convCall(v Variant) string {
 func renderVariantDispatch(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	field := fieldLit(f)
 	inlineSkipWS(b, posVar)
-	fmt.Fprintf(b, "if %s >= len(data) {\nreturn result, %s, decode.NewParseErr(%s, %s, scan.ErrUnexpectedEnd)\n}\n", posVar, posVar, field, posVar)
+	fmt.Fprintf(b, "if %s >= len(data) {\nreturn result, %s, ggen.NewParseErr(%s, %s, ggen.ErrUnexpectedEnd)\n}\n", posVar, posVar, field, posVar)
 	fmt.Fprintf(b, "switch data[%s] {\n", posVar)
 	for idx, v := range f.Variants {
 		labels := strings.Join(variantCaseBytes(f, v), ", ")
 		fmt.Fprintf(b, "case %s:\n", labels)
 		switch v.Kind {
 		case VariantNullZero:
-			fmt.Fprintf(b, "if %s+4 > len(data) || data[%s+1] != 'u' || data[%s+2] != 'l' || data[%s+3] != 'l' {\nreturn result, %s, decode.NewParseErr(%s, %s, scan.ErrBadLiteral)\n}\n%s += 4\n%s = %s\n",
+			fmt.Fprintf(b, "if %s+4 > len(data) || data[%s+1] != 'u' || data[%s+2] != 'l' || data[%s+3] != 'l' {\nreturn result, %s, ggen.NewParseErr(%s, %s, ggen.ErrBadLiteral)\n}\n%s += 4\n%s = %s\n",
 				posVar, posVar, posVar, posVar, posVar, field, posVar, posVar, ref, zeroLit(f.GoType, f.Kind))
 		case VariantNative:
 			renderField(b, nativeVariantField(f), ref, posVar)
@@ -202,7 +202,7 @@ func renderVariantDispatch(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 			emitConvAssign(b, v, field, ref, tmp, posVar)
 		}
 	}
-	fmt.Fprintf(b, "default:\nreturn result, %s, decode.NewParseErr(%s, %s, scan.ErrBadValue)\n}\n", posVar, field, posVar)
+	fmt.Fprintf(b, "default:\nreturn result, %s, ggen.NewParseErr(%s, %s, ggen.ErrBadValue)\n}\n", posVar, field, posVar)
 }
 
 // renderVariantDispatchStream is the stream-path counterpart.
@@ -210,15 +210,15 @@ func renderVariantDispatchStream(f FieldInfo, ref, posVar string) string {
 	b := getSmall()
 	defer putSmall(b)
 	field := fieldLit(f)
-	b.WriteString(streamReadMore(field, "0", false, "scan.ErrUnexpectedEnd"))
+	b.WriteString(streamReadMore(field, "0", false, "ggen.ErrUnexpectedEnd"))
 	b.WriteString("switch s.Bytes()[s.Pos] {\n")
 	for idx, v := range f.Variants {
 		labels := strings.Join(variantCaseBytes(f, v), ", ")
 		fmt.Fprintf(b, "case %s:\n", labels)
 		switch v.Kind {
 		case VariantNullZero:
-			rmKi := strings.Replace(streamReadMore(field, "0", false, "scan.ErrBadLiteral"), "if s.Pos >=", "if s.Pos+ki >=", 1)
-			fmt.Fprintf(b, "for ki := 1; ki < 4; ki++ {\n%sif s.Bytes()[s.Pos+ki] != \"null\"[ki] {\nreturn result, decode.NewParseErr(%s, s.Offset(), scan.ErrBadLiteral)\n}\n}\ns.Pos += 4\n%s = %s\n",
+			rmKi := strings.Replace(streamReadMore(field, "0", false, "ggen.ErrBadLiteral"), "if s.Pos >=", "if s.Pos+ki >=", 1)
+			fmt.Fprintf(b, "for ki := 1; ki < 4; ki++ {\n%sif s.Bytes()[s.Pos+ki] != \"null\"[ki] {\nreturn result, ggen.NewParseErr(%s, s.Offset(), ggen.ErrBadLiteral)\n}\n}\ns.Pos += 4\n%s = %s\n",
 				rmKi, field, ref, zeroLit(f.GoType, f.Kind))
 		case VariantNative:
 			b.WriteString(renderStreamField(nativeVariantField(f), ref, posVar))
@@ -229,7 +229,7 @@ func renderVariantDispatchStream(f FieldInfo, ref, posVar string) string {
 			emitConvAssignStream(b, v, field, ref, tmp)
 		}
 	}
-	fmt.Fprintf(b, "default:\nreturn result, decode.NewParseErr(%s, s.Offset(), scan.ErrBadValue)\n}\n", field)
+	fmt.Fprintf(b, "default:\nreturn result, ggen.NewParseErr(%s, s.Offset(), ggen.ErrBadValue)\n}\n", field)
 	return b.String()
 }
 
@@ -243,14 +243,14 @@ func emitConvAssign(b *bytes.Buffer, v Variant, field, ref, tmp, posVar string) 
 	if v.BoolForm {
 		// ModError is a parse error — wrap so it carries the field path like
 		// every other decode failure (mod_error.go doc).
-		modErr := fmt.Sprintf("decode.NewParseErr(%s, %s, &decode.ModError{%sName: %q, Msg: %q, Value: %s})", field, posVar, posLit(posVar), v.FuncName, v.Msg, tmp)
+		modErr := fmt.Sprintf("ggen.NewParseErr(%s, %s, &ggen.ModError{%sName: %q, Msg: %q, Value: %s})", field, posVar, posLit(posVar), v.FuncName, v.Msg, tmp)
 		fmt.Fprintf(b, "if cv, ok := %s(%s); !ok {\nreturn result, %s, %s\n} else {\n%s = cv\n}\n", call, tmp, posVar, modErr, ref)
 		return
 	}
 	// A converter's own error is foreign — wrap it so it carries the field
 	// path and offset every other decode failure does (errors.As still
 	// reaches the converter's error through the ParseError).
-	fmt.Fprintf(b, "if cv, err := %s(%s); err != nil {\nreturn result, %s, decode.NewParseErr(%s, %s, err)\n} else {\n%s = cv\n}\n", call, tmp, posVar, field, posVar, ref)
+	fmt.Fprintf(b, "if cv, err := %s(%s); err != nil {\nreturn result, %s, ggen.NewParseErr(%s, %s, err)\n} else {\n%s = cv\n}\n", call, tmp, posVar, field, posVar, ref)
 }
 
 // emitConvAssignStream is the stream-path counterpart (2-tuple returns).
@@ -261,9 +261,9 @@ func emitConvAssignStream(b *bytes.Buffer, v Variant, field, ref, tmp string) {
 		return
 	}
 	if v.BoolForm {
-		modErr := fmt.Sprintf("decode.NewParseErr(%s, s.Offset(), &decode.ModError{Pos: s.Offset(), Name: %q, Msg: %q, Value: %s})", field, v.FuncName, v.Msg, tmp)
+		modErr := fmt.Sprintf("ggen.NewParseErr(%s, s.Offset(), &ggen.ModError{Pos: s.Offset(), Name: %q, Msg: %q, Value: %s})", field, v.FuncName, v.Msg, tmp)
 		fmt.Fprintf(b, "if cv, ok := %s(%s); !ok {\nreturn result, %s\n} else {\n%s = cv\n}\n", call, tmp, modErr, ref)
 		return
 	}
-	fmt.Fprintf(b, "if cv, err := %s(%s); err != nil {\nreturn result, decode.NewParseErr(%s, s.Offset(), err)\n} else {\n%s = cv\n}\n", call, tmp, field, ref)
+	fmt.Fprintf(b, "if cv, err := %s(%s); err != nil {\nreturn result, ggen.NewParseErr(%s, s.Offset(), err)\n} else {\n%s = cv\n}\n", call, tmp, field, ref)
 }

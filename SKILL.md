@@ -5,7 +5,7 @@ description: Drive ggen CLI. Generate zero-copy, zero-reflection JSON encode/dec
 
 # ggen — JSON codegen for Go
 
-ggen parse annotated Go structs. Emit `DecodeFrom`, `DecodeFromStream`, `JSONSize`, `AppendJSON`. Generated code = hand-rolled byte scan. No reflection, no token layer. Bytes path (`DecodeFrom` over caller `[]byte`) strings alias input via `unsafe.String` — zero-copy. Stream path (`DecodeFromStream` over `*scan.Stream`) copy strings out of intermediate buffer so buffer compact safely. See _Stream is not zero-copy_ below.
+ggen parse annotated Go structs. Emit `DecodeFrom`, `DecodeFromStream`, `JSONSize`, `AppendJSON`. Generated code = hand-rolled byte scan. No reflection, no token layer. Bytes path (`DecodeFrom` over caller `[]byte`) strings alias input via `unsafe.String` — zero-copy. Stream path (`DecodeFromStream` over `*ggen.Stream`) copy strings out of intermediate buffer so buffer compact safely. See _Stream is not zero-copy_ below.
 
 Module: `github.com/sirkostya009/ggen`. Binary: `ggen`. Go ≥ 1.27.
 
@@ -25,7 +25,7 @@ Skip ggen when:
 
 ```sh
 go install github.com/sirkostya009/ggen/cli@latest # CLI binary
-go get github.com/sirkostya009/ggen                 # runtime subpackages
+go get github.com/sirkostya009/ggen                 # runtime package
 ```
 
 ## Invocation
@@ -82,7 +82,7 @@ Most flags have matching annotation token (no leading dash). Annotations space-s
 | `-pkg <name>`       | —                  | override the package name in the generated file                                                                                                                                                                                                                               |
 | `-marshal`          | `marshal`          | also emit `MarshalJSON` so the type satisfies `encoding/json.Marshaler`                                                                                                                                                                                                       |
 | `-unmarshal`        | `unmarshal`        | also emit `UnmarshalJSON` for `encoding/json.Unmarshaler`                                                                                                                                                                                                                     |
-| `-multierr`         | `multierr`         | accumulate every validation failure into `validation.Errors` (slice) instead of returning on the first                                                                                                                                                                        |
+| `-multierr`         | `multierr`         | accumulate every validation failure into `ggen.Errors` (slice) instead of returning on the first                                                                                                                                                                        |
 | `-allowdups`        | `allowdups`        | accept duplicate JSON keys, first-wins (default: error on second occurrence)                                                                                                                                                                                                  |
 | `-novalidate`       | `novalidate`       | drop validation, required-field checks, and mods                                                                                                                                                                                                                              |
 | `-ignoreunknown`    | `ignoreunknown`    | silently drop unknown JSON keys (default: error). Overridden when an inline catch-all map is present                                                                                                                                                                          |
@@ -234,29 +234,29 @@ negative is a generate-time error.
 #### Inspecting errors
 
 ```go
-var e *validation.MinLenError
+var e *ggen.MinLenError
 if errors.As(err, &e) {
 	// e.Path, e.Limit, e.Got
 	// e.Pos — failure byte offset, relative to the full payload
 }
 ```
 
-In `multierr` mode generated code return `validation.Errors` (`[]validation.Error`). Implement `Unwrap() []error`.
+In `multierr` mode generated code return `ggen.Errors` (`[]ggen.Error`). Implement `Unwrap() []error`.
 
-Parse failures (malformed JSON, wrong primitive type) wrap in `*decode.ParseError` carrying `Path` (root-relative segments, `[]string{"addr","street"}`), `Pos` (byte offset), `Err` (underlying `scan.ErrX` sentinel). `errors.Is(err, scan.ErrBadString)` keeps working through the wrap. Validation errors NOT wrapped — typed pointers stay reachable. `ParseError.Error()` renders `parse error at <a.b.c> (pos <n>): <cause>`.
+Parse failures (malformed JSON, wrong primitive type) wrap in `*ggen.ParseError` carrying `Path` (root-relative segments, `[]string{"addr","street"}`), `Pos` (byte offset), `Err` (underlying `ggen.ErrX` sentinel). `errors.Is(err, ggen.ErrBadString)` keeps working through the wrap. Validation errors NOT wrapped — typed pointers stay reachable. `ParseError.Error()` renders `parse error at <a.b.c> (pos <n>): <cause>`.
 
 ## Supported field kinds
 
 - Named types over a primitive (`type Priority string`, any alias depth) — scanned as the underlying + converted, at every position; the annotation is only needed for the METHODS or for per-type `htmlescape`/`copy` behaviour.
 - Primitives: `string`, `bool`, `int*`, `uint*`, `float*`, plus `*T` for any (`null` ↔ `nil`).
   Nested ptrs `**T`/`***T`/... also native: `null` → nil outer, otherwise value parse first and missing levels alloc'd.
-- `[]T`, `map[string]V` (string keys only), `[N]T` (strict element count — mismatch → `validation.LenError`).
+- `[]T`, `map[string]V` (string keys only), `[N]T` (strict element count — mismatch → `ggen.LenError`).
 - `[]*T` / `[N]*T` of structs — single slab backing, ~log(N) allocs vs N. Multi-level elements (`[]**T`, `[N]**T`) and pointer map values (`map[string]*V`, `**V`, …) decode natively through the same null/alloc cascade as scalar pointer fields.
 - Nested struct (same package: direct call; cross-package: see below).
 - Embedded struct — fields promoted to parent JSON object.
 - `any` / `interface{}` — full stdlib-compatible decode shape, plus `usenumber` for `json.Number` numbers.
 - `rune` (int32) / `byte` (uint8) decode as numbers, like their underlying kinds.
-- `[N]byte` — base64 string with a STRICT decoded length (jsonv2 parity; `encoding/json` v1 instead emits a number array and rejects the string). Honors the same `format:` set as `[]byte`; `format:array` opts into the v1 number-array shape. Wrong decoded length → `validation.LenError`.
+- `[N]byte` — base64 string with a STRICT decoded length (jsonv2 parity; `encoding/json` v1 instead emits a number array and rejects the string). Honors the same `format:` set as `[]byte`; `format:array` opts into the v1 number-array shape. Wrong decoded length → `ggen.LenError`.
 - `[]byte` — `format:base64` (default), `base64url`, `base32`, `base32hex`, `base16`/`hex`, `array`. `null` ↔ `nil` (nil marshals as `null`, empty non-nil as `""`/`[]`).
 - `time.Time` — `format:RFC3339Nano` (default), `RFC3339`, `unix`, `unixmilli`, `unixmicro`, `unixnano`, other `time.X` constants, or custom layout `format:'2006-01-02'`.
 - `time.Duration` — `format:units` (default, `"1h30m"`), `sec`, `milli`, `micro`, `nano`.
@@ -294,7 +294,7 @@ Aliases of channels, interfaces, functions rejected at generate time.
 
 ```go
 func (result T) DecodeFrom(data []byte) (T, int, error)
-func (result T) DecodeFromStream(s *scan.Stream) (T, error)
+func (result T) DecodeFromStream(s *ggen.Stream) (T, error)
 func (s T) JSONSize() int
 func (s T) AppendJSON(dst []byte) ([]byte, error)
 ```
@@ -308,7 +308,7 @@ func (s *T) UnmarshalJSON(data []byte) error
 
 ### Stream is not zero-copy
 
-`DecodeFromStream` take `*scan.Stream` wrapping `io.Reader` behind user-provided `[]byte` buffer. Buffer sit between reader and parser — chunks land there via `Read`, parser scan out of it, compaction recycle space mid-decode so buffer stays bounded to roughly `max(chunk_size, single_value_size)` across long streams.
+`DecodeFromStream` take `*ggen.Stream` wrapping `io.Reader` behind user-provided `[]byte` buffer. Buffer sit between reader and parser — chunks land there via `Read`, parser scan out of it, compaction recycle space mid-decode so buffer stays bounded to roughly `max(chunk_size, single_value_size)` across long streams.
 
 Strings, `json.Number`, `json.RawMessage` values **copied** out of buffer, not aliased — buffer not grown unless must, aliases won't stick. Trade-off: ~2–3× more allocs than bytes path. Stream instead capable of recycling user-provided buf for extremely large payloads.
 
@@ -324,37 +324,33 @@ NOT 100% compatible with stdlib — ggen diverges in three ways: ALL containers 
 u, _, err := existing.DecodeFrom(payload)
 ```
 
-Generic helper funcs in `decode` package no merge semantics.
+Generic helper funcs (`Unmarshal*`) no merge semantics.
 
 Call from user code:
 
 ```go
-import (
-	"github.com/sirkostya009/ggen/decode"
-	"github.com/sirkostya009/ggen/encode"
-	"github.com/sirkostya009/ggen/scan"
-)
+import "github.com/sirkostya009/ggen"
 
 // single value — call the generated method directly with a zero-value receiver
 u, _, err := User{}.DecodeFrom(payload)
-out, err := encode.Marshal(u)
+out, err := ggen.Marshal(u)
 // primitive aliases (`type UserID uint64`): use a typed zero
 // id, _, err := UserID(0).DecodeFrom(payload)
 
 // slices (loop helpers — saves caller from reimplementing the array walk)
-users, err := decode.UnmarshalSlice[User](payload)
-out, err = encode.MarshalSlice(users)
-out, err = encode.AppendSlice(out[:0], users) // can use just AppendSlice to reuse buffers
+users, err := ggen.UnmarshalSlice[User](payload)
+out, err = ggen.MarshalSlice(users)
+out, err = ggen.AppendSlice(out[:0], users) // can use just AppendSlice to reuse buffers
 
-// streaming single value — caller owns the scan.Stream
-s := scan.NewStream(req.Body, nil)  // or pre-sized buf, e.g. make([]byte, 0, hint)
+// streaming single value — caller owns the ggen.Stream
+s := ggen.NewStream(req.Body, nil)  // or pre-sized buf, e.g. make([]byte, 0, hint)
 u, err = User{}.DecodeFromStream(s)
 // s.Bytes() is now recyclable
-// (use `var s scan.Stream; s.Reset(...)` to stack-allocate)
+// (use `var s ggen.Stream; s.Reset(...)` to stack-allocate)
 
 // streaming — Reset returns *Stream so it chains into the generic methods;
 // neither rejects trailing data, so reading continues after.
-s = scan.NewStream(req.Body, buf[:0])
+s = ggen.NewStream(req.Body, buf[:0])
 u, err = s.Value[User]()      // one value
 users, err = s.Slice[User]()  // JSON array of T
 
@@ -367,12 +363,12 @@ users, err = s.Slice(users)
 
 // lazy array iteration — Slice gathers []T, Array yields elements and keeps
 // nothing. Cursor lands past the `]`, so the Stream reads on afterwards.
-for item, err := range scan.NewStream(r, buf[:0]).Array[Item]() { ... }
+for item, err := range ggen.NewStream(r, buf[:0]).Array[Item]() { ... }
 
 // unbounded iteration (NDJSON / concatenated values / socket). Reuses ONE
 // value per run (optional seed warms it) → 0 allocs/element, but a yielded
 // value is valid only until the next pull. Copy what you retain.
-for ev, err := range scan.NewStream(conn, buf[:0]).Seq[Event]() { ... }
+for ev, err := range ggen.NewStream(conn, buf[:0]).Seq[Event]() { ... }
 ```
 
 ## Regen workflow
@@ -406,9 +402,9 @@ Build tag propagation: struct in file behind `//go:build foo` land in `<dir>_foo
 5. **Build under right `GOEXPERIMENT`.** Files behind an experiment tag (e.g. `goexperiment.simd`) invisible without `GOEXPERIMENT=simd ggen ./...`. `encoding/json/v2` needs none — stable since Go 1.27.
 6. **Test files first-class inputs.** Annotated structs in `_test.go` files route to `_ggen_test.go` so methods don't bundle into library build.
 7. **`hint:` only safe prealloc hint.** Don't expect `maxlen` to size container — it doesn't (intentional, retained-heap reasons). Use `hint:"N"` when know typical size.
-8. **Decode rejects invalid UTF-8; encode doesn't validate.** Decode: malformed UTF-8 bytes or unpaired `\uXXXX` surrogates in string values/keys → `scan.ErrInvalidUTF8` (jsonv2 parity; v1 instead silently replace with U+FFFD). ASCII strings pay nothing. Captured raw spans (`json.RawMessage`/`jsontext.Value`) byte-validated too. Exceptions: skipped content (`ignoreunknown`) grammar-checked only; unpaired surrogate ESCAPE inside raw span pass (ASCII text there; jsonv2 reject). Opt out per struct: `allowinvalidutf8`. Encode: invalid bytes in struct strings emitted raw onto wire (v1 replace, v2 replace+error) — validate at boundary if populating structs from untrusted bytes.
+8. **Decode rejects invalid UTF-8; encode doesn't validate.** Decode: malformed UTF-8 bytes or unpaired `\uXXXX` surrogates in string values/keys → `ggen.ErrInvalidUTF8` (jsonv2 parity; v1 instead silently replace with U+FFFD). ASCII strings pay nothing. Captured raw spans (`json.RawMessage`/`jsontext.Value`) byte-validated too. Exceptions: skipped content (`ignoreunknown`) grammar-checked only; unpaired surrogate ESCAPE inside raw span pass (ASCII text there; jsonv2 reject). Opt out per struct: `allowinvalidutf8`. Encode: invalid bytes in struct strings emitted raw onto wire (v1 replace, v2 replace+error) — validate at boundary if populating structs from untrusted bytes.
 9. **Dup-key detection covers DECLARED keys only.** `DuplicateKeyError` fires for repeated keys ggen actually decodes into fields. Dups inside skipped content (`ignoreunknown`), `any` values (map last-wins), RawMessage spans, and nested sub-objects pass silently — jsonv2 rejects those too. Intentional: the contract is "fields ggen DECODES are unambiguous", and a dup in a discarded span can't change the result. `-allowdups` opts out of the declared-key check.
-10. **Container nesting capped at `scan.MaxDepth` (10000, jsonv2 parity).** Deeper nesting → `scan.ErrMaxDepth`, NOT a stack-overflow crash. Applies to every recursive path (nested containers, `any`, `ignoreunknown` skip, RawMessage, self-referential structs), bytes + stream. Untrusted deeply-nested input is safe.
+10. **Container nesting capped at `the runtime maxDepth cap (10000)` (10000, jsonv2 parity).** Deeper nesting → `ggen.ErrMaxDepth`, NOT a stack-overflow crash. Applies to every recursive path (nested containers, `any`, `ignoreunknown` skip, RawMessage, self-referential structs), bytes + stream. Untrusted deeply-nested input is safe.
 
 ## Common user intents → flags
 

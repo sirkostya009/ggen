@@ -24,7 +24,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/sirkostya009/ggen/encode"
+	"github.com/sirkostya009/ggen"
 )
 
 // --- Pointer-to-exotic types -----------------------------------------------
@@ -46,7 +46,7 @@ type PtrExoticStruct struct {
 
 func TestPtrExotic_AllNil_marshalsAsNull(t *testing.T) {
 	t.Parallel()
-	out, err := encode.Marshal(PtrExoticStruct{})
+	out, err := ggen.Marshal(PtrExoticStruct{})
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
@@ -60,7 +60,7 @@ func TestPtrExotic_AllNil_marshalsAsNull(t *testing.T) {
 
 func TestPtrExotic_AllNilRoundtrip(t *testing.T) {
 	t.Parallel()
-	out, _ := encode.Marshal(PtrExoticStruct{})
+	out, _ := ggen.Marshal(PtrExoticStruct{})
 	got, _, err := PtrExoticStruct{}.DecodeFrom(out)
 	if err != nil {
 		t.Fatalf("unmarshal: %v\nwire: %s", err, out)
@@ -87,7 +87,7 @@ func TestPtrExotic_AllPopulated_roundtrip(t *testing.T) {
 		Big: bigI, Flt: bigF, Rat: bigR, UID: &id, Raw: &raw,
 		Dur: &dur, Adr: &addr, Pfx: &pfx, Url: u,
 	}
-	out, err := encode.Marshal(in)
+	out, err := ggen.Marshal(in)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
@@ -173,7 +173,7 @@ func TestSliceExotic_roundtrip(t *testing.T) {
 		UIDs:  []uuid.UUID{id, uuid.Nil},
 		Blobs: [][]byte{[]byte("hello"), []byte("world")},
 	}
-	out, err := encode.Marshal(in)
+	out, err := ggen.Marshal(in)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
@@ -251,7 +251,7 @@ func TestMapExotic_roundtrip(t *testing.T) {
 		RawMap:  map[string]json.RawMessage{"r": json.RawMessage(`{"v":1}`)},
 		AddrMap: map[string]*Address{"home": addr},
 	}
-	out, err := encode.Marshal(in)
+	out, err := ggen.Marshal(in)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
@@ -324,7 +324,7 @@ func TestTupleExotic_roundtrip(t *testing.T) {
 		BigPair:    [2]big.Int{*bigA, *bigB},
 		PtrStrPair: [2]*string{&a, nil},
 	}
-	out, err := encode.Marshal(in)
+	out, err := ggen.Marshal(in)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
@@ -389,7 +389,7 @@ type PtrContainerStruct struct {
 
 func TestPtrContainer_NilEmitsNull(t *testing.T) {
 	t.Parallel()
-	out, err := encode.Marshal(PtrContainerStruct{})
+	out, err := ggen.Marshal(PtrContainerStruct{})
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
@@ -412,7 +412,7 @@ func TestPtrContainer_PopulatedRoundtrip(t *testing.T) {
 	in := PtrContainerStruct{
 		OptInts: &ints, OptMap: &m, OptStrs: &strs,
 	}
-	out, _ := encode.Marshal(in)
+	out, _ := ggen.Marshal(in)
 	got, _, err := PtrContainerStruct{}.DecodeFrom(out)
 	if err != nil {
 		t.Fatalf("unmarshal: %v\nwire: %s", err, out)
@@ -441,7 +441,7 @@ func TestPtrStringTag_roundtrip(t *testing.T) {
 	t.Parallel()
 	pi := 42
 	in := PtrStringTagStruct{PtrI: &pi}
-	out, err := encode.MarshalString(in)
+	out, err := ggen.MarshalString(in)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}

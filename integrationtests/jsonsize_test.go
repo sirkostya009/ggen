@@ -16,7 +16,7 @@ import (
 
 	gofrs "github.com/gofrs/uuid/v5"
 	"github.com/google/uuid"
-	"github.com/sirkostya009/ggen/encode"
+	"github.com/sirkostya009/ggen"
 	"github.com/sirkostya009/ggen/integrationtests/thirdparty2"
 )
 
@@ -27,7 +27,7 @@ type URLStruct struct {
 	Site url.URL `json:"site"`
 }
 
-// JSONSize is an upper bound: encode.Marshal preallocates exactly that many
+// JSONSize is an upper bound: ggen.Marshal preallocates exactly that many
 // bytes and AppendJSON must never grow the buffer. The bound covers realistic
 // worst-case input (long ASCII, short-escapes, html chars, max-width numbers,
 // deep nesting); sub-0x20 control chars (\uXXXX, 6×) are deliberately not
@@ -506,8 +506,8 @@ func TestJSONSize_SQLNullPerType_NoRealloc(t *testing.T) {
 	when := time.Unix(1700000000, 0).UTC()
 	cases := []struct {
 		name      string
-		nullCase  encode.Marshaler
-		validCase encode.Marshaler
+		nullCase  ggen.Marshaler
+		validCase ggen.Marshaler
 	}{
 		{
 			"NullString",
@@ -592,7 +592,7 @@ func TestJSONSize_SQLNullPerType_NoRealloc(t *testing.T) {
 			SQLNullGenUUIDStruct{ID: sql.Null[uuid.UUID]{V: uuid.New(), Valid: true}},
 		},
 	}
-	check := func(t *testing.T, v encode.Marshaler) {
+	check := func(t *testing.T, v ggen.Marshaler) {
 		t.Helper()
 		size := v.JSONSize()
 		got, err := v.AppendJSON(make([]byte, 0, size))
@@ -624,9 +624,9 @@ func TestJSONSize_PtrSliceStruct_NoRealloc(t *testing.T) {
 	a := Address{Street: "Main 1", City: "Lviv", ZipCode: "79000"}
 	b := Address{Street: strings.Repeat("x", 200), City: strings.Repeat("y", 200), ZipCode: "00000"}
 	in := PtrSliceStruct{
-		PtrSliceItemsStruct: PtrSliceItemsStruct{Items: []*Address{&a, nil, &b}},
-		PtrSliceTupleStruct: PtrSliceTupleStruct{Tuple: [3]*Address{&a, nil, &b}},
-		PtrSliceNodesStruct: PtrSliceNodesStruct{Nodes: []*Node{{ID: 1, Name: strings.Repeat("z", 100)}, nil}},
+		Items: []*Address{&a, nil, &b},
+		Tuple: [3]*Address{&a, nil, &b},
+		Nodes: []*Node{{ID: 1, Name: strings.Repeat("z", 100)}, nil},
 	}
 	size := in.JSONSize()
 	got, err := in.AppendJSON(make([]byte, 0, size))
@@ -648,7 +648,7 @@ func TestJSONSize_PtrSlicePerShape_NoRealloc(t *testing.T) {
 	b := Address{Street: strings.Repeat("x", 200), City: strings.Repeat("y", 200), ZipCode: "00000"}
 	cases := []struct {
 		name string
-		v    encode.Marshaler
+		v    ggen.Marshaler
 	}{
 		{"Items_mixed", PtrSliceItemsStruct{Items: []*Address{&a, nil, &b}}},
 		{"Items_nil", PtrSliceItemsStruct{}},
@@ -683,7 +683,7 @@ func TestJSONSize_PtrFieldPerKind_NoRealloc(t *testing.T) {
 	worst := strings.Repeat(`"\`+"\n\t", 16)
 	cases := []struct {
 		name string
-		v    encode.Marshaler
+		v    ggen.Marshaler
 	}{
 		{"string/nil", PtrNameStruct{}},
 		{"string/set", PtrNameStruct{Name: new(worst)}},
@@ -723,7 +723,7 @@ func TestJSONSize_NPtrPerDepth_NoRealloc(t *testing.T) {
 	worst := strings.Repeat(`"\`+"\n\t", 16)
 	cases := []struct {
 		name string
-		v    encode.Marshaler
+		v    ggen.Marshaler
 	}{
 		{"pp/nil", PtrPPStruct{}},
 		{"pp/full", PtrPPStruct{PP: new(new(-1 << 62))}},
