@@ -351,7 +351,7 @@ func TestNestedMarshalRoundtrip(t *testing.T) {
 
 // PreallocWidths pins the WIDTH-DRIVEN default capacity: with no hint the
 // generated make() uses a constant derived from the element size, and that
-// constant must agree with decode.PreallocCap (the runtime spec of the ladder,
+// constant must agree with scan.PreallocCap (the runtime spec of the ladder,
 // which the emitted expression only mirrors — it cannot call it, because gc
 // declines to inline into a generated DecodeFrom).
 //
@@ -406,7 +406,7 @@ func TestPrealloc_WidthDrivenCaps(t *testing.T) {
 		{"ptrs", cap(got.Ptrs), unsafe.Sizeof(*new(*PreallocRow))},
 		{"nested", cap(got.Nested), unsafe.Sizeof(*new([]int))},
 	} {
-		if want := decode.PreallocCap(c.size); c.got != want {
+		if want := scan.PreallocCap(c.size); c.got != want {
 			t.Errorf("%s: cap = %d, want %d (element %d bytes)", c.name, c.got, want, c.size)
 		}
 		if c.got*int(c.size) > 512 && c.got > 1 {
@@ -422,7 +422,7 @@ func TestPrealloc_WidthDrivenCaps(t *testing.T) {
 	if got, want := cap(got.MaxFits), 8; got != want {
 		t.Errorf("maxlen=8 that fits a span: cap = %d, want %d", got, want)
 	}
-	if got, want := cap(got.MaxTooBig), decode.PreallocCap(unsafe.Sizeof(*new(PreallocWide))); got != want {
+	if got, want := cap(got.MaxTooBig), scan.PreallocCap(unsafe.Sizeof(*new(PreallocWide))); got != want {
 		t.Errorf("maxlen=8 that overshoots a span: cap = %d, want the width default %d", got, want)
 	}
 	// A numeric slice beats the width guess outright: scalar elements carry no
@@ -446,7 +446,7 @@ func TestPrealloc_WidthDrivenCaps(t *testing.T) {
 		}
 	}
 	// An element too wide for two in a span falls back to one, not zero.
-	if n := decode.PreallocCap(unsafe.Sizeof(*new(PreallocWide))); n != 1 {
+	if n := scan.PreallocCap(unsafe.Sizeof(*new(PreallocWide))); n != 1 {
 		t.Errorf("a %d-byte element should prealloc 1, got %d", unsafe.Sizeof(*new(PreallocWide)), n)
 	}
 }

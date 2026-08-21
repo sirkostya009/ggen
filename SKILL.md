@@ -352,8 +352,27 @@ u, err = User{}.DecodeFromStream(s)
 // s.Bytes() is now recyclable
 // (use `var s scan.Stream; s.Reset(...)` to stack-allocate)
 
-// streaming array
-users, buf, err := decode.UnmarshalSliceStream[User](req.Body, buf[:0])
+// streaming — Reset returns *Stream so it chains into the generic methods;
+// neither rejects trailing data, so reading continues after.
+s = scan.NewStream(req.Body, buf[:0])
+u, err = s.Value[User]()      // one value
+users, err = s.Slice[User]()  // JSON array of T
+
+// buffer reuse — pass a previous value/slice as rcv. Generated decoders seed
+// from the receiver and reset containers keeping cap, so maps+slices recycle.
+// Slice reuses EACH ELEMENT's containers too, not just the outer array.
+// Steady state = 0 allocs. NOTE: a key the payload omits keeps rcv's old value.
+u, err = s.Value(u)
+users, err = s.Slice(users)
+
+// lazy array iteration — Slice gathers []T, Array yields elements and keeps
+// nothing. Cursor lands past the `]`, so the Stream reads on afterwards.
+for item, err := range scan.NewStream(r, buf[:0]).Array[Item]() { ... }
+
+// unbounded iteration (NDJSON / concatenated values / socket). Reuses ONE
+// value per run (optional seed warms it) → 0 allocs/element, but a yielded
+// value is valid only until the next pull. Copy what you retain.
+for ev, err := range scan.NewStream(conn, buf[:0]).Seq[Event]() { ... }
 ```
 
 ## Regen workflow

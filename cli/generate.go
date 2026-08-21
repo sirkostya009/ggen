@@ -2709,8 +2709,8 @@ func mapPreallocCap(f FieldInfo) int {
 // (hintlen/len/minlen) apply to both and still outrank everything.
 //
 // With no hint the cap comes from the ELEMENT WIDTH rather than its kind:
-// `decode.PreallocCap(unsafe.Sizeof(*new(E)))`, which folds to a literal at
-// compile time (verified in asm — `MOVL $4`). See decode.PreallocCap for the
+// `scan.PreallocCap(unsafe.Sizeof(*new(E)))`, which folds to a literal at
+// compile time (verified in asm — `MOVL $4`). See scan.PreallocCap for the
 // ladder; the short version is "as many elements as fit under 80 bytes, else
 // under 512, else 1". That replaced a flat 4 for primitives and, more
 // importantly, a cap of ZERO for struct elements — those used to walk the
@@ -2724,7 +2724,7 @@ func preallocCap(f FieldInfo) (slice, slab string) {
 		return strconv.Itoa(n), strconv.Itoa(n)
 	}
 	// Default cap comes from the ELEMENT WIDTH, not the element kind:
-	// `decode.PreallocCap(unsafe.Sizeof(*new(T)))`. Both operands are
+	// `scan.PreallocCap(unsafe.Sizeof(*new(T)))`. Both operands are
 	// compile-time constants, so gc folds the call and its branches to a
 	// literal — the emitted code carries `make([]T, 0, 4)`, not a call.
 	// `*new(T)` (rather than `T{}`) spells a zero value of ANY type, and
@@ -2761,13 +2761,13 @@ func preallocCap(f FieldInfo) (slice, slab string) {
 // capForSize returns the name of a package-level constant holding the
 // width-driven default capacity for elemType, registering it on first use.
 //
-// It has to be a CONSTANT EXPRESSION, not a call to decode.PreallocCap:
+// It has to be a CONSTANT EXPRESSION, not a call to scan.PreallocCap:
 // measured on the bench module, gc inlines that helper only into small
 // functions — 30 of 34 emitted sites kept a real `CALL` because the enclosing
 // generated DecodeFrom is far past the inliner's budget. A constant folds in
 // the frontend, where the inliner never gets a vote.
 //
-// The expression is decode.PreallocCap's ladder written branchlessly, with
+// The expression is scan.PreallocCap's ladder written branchlessly, with
 // `sel` as the 0/1 selector for "at least 2 elements fit under 80 bytes":
 //
 //	S   = max(sizeof(E), 1)          // 1 keeps a zero-width element from dividing by zero
@@ -2826,11 +2826,11 @@ func capForSize(scope, elemType string) string {
 	return name
 }
 
-// fastAllocMax mirrors decode.PreallocCap — the emitted constants have to spell
+// fastAllocMax mirrors scan.PreallocCap — the emitted constants have to spell
 // the same ladder the runtime helper documents and tests.
 // fastAllocMax is go1.27's size-specialized-malloc cutoff; inert on go1.26.
 // INCLUSIVE — verified against master: the tables are [specializedMallocMax+1]
-// and both gates admit exactly 80 (see decode.PreallocCap). So the tier divides
+// and both gates admit exactly 80 (see scan.PreallocCap). So the tier divides
 // by 80, not 79; the earlier 79 dropped one element for every width dividing 80
 // and pushed a 40-byte element into the span tier (12 elements) where 2 fit the
 // fast one exactly.
@@ -2840,7 +2840,7 @@ const fastAllocMax = 80
 // computes it for ITS target rather than inheriting this host's: the value is
 // `goarch.PtrSize * goarch.PtrBits` = 8 × PtrSize² (512 on 64-bit, 128 on
 // 32-bit). Hardcoding 512 would over-budget a 32-bit target by 4×. See
-// decode.PreallocCap for what staying under it actually buys — the headline is
+// scan.PreallocCap for what staying under it actually buys — the headline is
 // "no malloc header", not the GC.
 const spanBudgetExpr = "(8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))"
 

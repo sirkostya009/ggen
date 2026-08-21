@@ -129,10 +129,6 @@ func (stubElem) DecodeFrom(data []byte) (stubElem, int, error) {
 	return stubElem{}, 0, scan.ErrBadObject
 }
 
-func (stubElem) DecodeFromStream(s *scan.Stream) (stubElem, error) {
-	return stubElem{}, nil
-}
-
 func TestUnmarshalSlice_WrapsBracketError(t *testing.T) {
 	t.Parallel()
 	_, err := UnmarshalSlice[stubElem]([]byte(`not-an-array`))

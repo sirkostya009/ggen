@@ -358,15 +358,18 @@ Runtime entry points (call from user code):
 // bytes path — single value
 T{}.DecodeFrom(data)                       // (T, int, error)
 
-// stream path — single value
-var s scan.Stream
-s.Reset(r, buf)
-T{}.DecodeFromStream(&s)                   // (T, error); recycle s.Bytes()
+// stream path — Reset returns *Stream, so it chains into the generic methods
+s := scan.NewStream(r, buf)
+s.Value[T]()                               // (T, error); recycle s.Bytes()
+s.Slice[T]()                               // ([]T, error); cursor survives
+s.Value(prev)  s.Slice(prevSlice)          // decode INTO — reuses containers
+s.Seq[T](prev...)                          // iter.Seq2[T, error]; NDJSON/concat,
+                                           // reuses one value per run
+T{}.DecodeFromStream(s)                    // the method Value wraps
 
-// array walkers
+// bytes array walkers
 decode.UnmarshalSlice[T](data)             // ([]T, error)
 decode.ReadSlice[T](r)                     // ([]T, error)
-decode.UnmarshalSliceStream[T](r, buf)     // ([]T, []byte, error)
 
 // encode package
 encode.Marshal(t)            encode.MarshalString(t)          encode.WriteTo(w, t)
@@ -564,11 +567,11 @@ Backlog and commit messages cite these by number — numbering is stable.
    ("sizeof(T) unbounded; start nil, grow"); it is now derived from the element
    width, which the compiler knows: as many elements as fit strictly under
    80 bytes (go1.27 fast-alloc), else within a 512-byte Green Tea span, else 1.
-   Spec + tests live in `decode.PreallocCap`; the emitted form is a
+   Spec + tests live in `scan.PreallocCap`; the emitted form is a
    package-level `const ggenCap_<prefix>_<n>` holding the same ladder written
    branchlessly over `unsafe.Sizeof(*new(E))`.
    **It has to be a constant, not a call**: measured on the bench module, gc
-   inlines `decode.PreallocCap` only into small functions — 30 of 34 emitted
+   inlines `scan.PreallocCap` only into small functions — 30 of 34 emitted
    sites kept a real `CALL`, because the enclosing generated `DecodeFrom` is
    thousands of nodes past the inliner budget. As a constant expression it
    folds in the frontend (`MOVL $2`), where the inliner never gets a vote.
@@ -1202,7 +1205,9 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
     offset until a compacting refill slides the window, so the reported
     position collapsed toward 0 and CHANGED WITH THE CHUNK SIZE (`{"i8":128}`
     → 9 on bytes, 0/0/2 on stream at 1/3/7-byte chunks). Round-4 fixed the
-    identical class inside `decode.UnmarshalSliceStream` but not the emitters;
+    identical class inside the stream slice walker (then
+    `decode.UnmarshalSliceStream`, now `(*scan.Stream).Slice`) but not the
+    emitters;
     round-5's pin used a 16-byte payload, where the window never slides and
     `Pos == Offset()` by accident. Pinned by
     `TestParseError_StreamPosIsPayloadOffset` (9.5 KB payload × chunk sizes ×

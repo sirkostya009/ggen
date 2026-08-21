@@ -193,8 +193,32 @@ out, err := encode.Marshal(u)
 users, err := decode.UnmarshalSlice[User](payload)
 out, err := encode.MarshalSlice(users)
 
-// streaming array
-users, buf, err := decode.UnmarshalSliceStream[User](req.Body, buf[:0])
+// streaming — a memory efficient way to read from io.Reader
+s := scan.NewStream(req.Body, buf[:0])
+u, err := s.Value[User]()     // one value
+users, err := s.Slice[User]() // JSON array of T
+
+// decode INTO a previous value to reuse its maps/slices — the slice version
+// also recycles each element's own containers, not just the outer array
+u, err = s.Value(u)
+users, err = s.Slice(users)
+
+// iterate a big array without gathering it no slice allocations
+for item, err := range scan.NewStream(r, buf[:0]).Array[Item]() {
+	if err != nil {
+		break
+	}
+	handle(item)
+}
+
+// iterate a never-ending stream (NDJSON, whitspace-concatenated values, a socket).
+// cleanly stops when the stream ends. Any errors including validation surface and stop it.
+for ev, err := range scan.NewStream(conn, buf[:0]).Seq[Event]() {
+	if err != nil {
+		break
+	}
+	handle(ev)
+}
 ```
 
 ### flags and annotations

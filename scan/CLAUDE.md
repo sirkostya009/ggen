@@ -262,11 +262,100 @@ s.CaptureValue()` (returns a buffer alias — copy if retained). The old
 `start := s.Pos; s.SkipValue(); s.Bytes()[start:s.Pos]` slice dance is DEAD:
 the skip tree compacts unconditionally now, which invalidates `start`.
 
-**Stack-allocatable, no pool.** `var s scan.Stream; s.Reset(r, buf)`. Caller owns
+**Stack-allocatable, no pool.** `var s scan.Stream; s.Reset(r, buf)`. `Reset`
+returns `*Stream`, so it chains into the Stream-taking decode helpers
+(`scan.NewStream(r, buf).Value[T]()`). Caller owns
 `buf` lifecycle; `scan.NewStream(r, buf)` is a heap-allocating shorthand. Old
 `Acquire`/`Release` `sync.Pool` removed — it bundled implicit buffer-lifetime
 assumptions and caused silent corruption when callers reused buf across decodes
 (see backlog).
+
+### Generic Stream methods (`scan/generic.go`)
+
+Go 1.27 allows METHODS to declare type parameters, so the stream decode entry
+points sit on the Stream itself rather than as package functions:
+
+```go
+type StreamDecoder[T any] interface{ DecodeFromStream(s *Stream) (T, error) }
+
+func (s *Stream) Value[T StreamDecoder[T]](rcv ...T) (T, error)
+func (s *Stream) Slice[T StreamDecoder[T]](rcv ...[]T) ([]T, error)
+func (s *Stream) Array[T StreamDecoder[T]](rcv ...T) iter.Seq2[T, error]
+func (s *Stream) Seq[T StreamDecoder[T]](rcv ...T) iter.Seq2[T, error]
+```
+
+`Reset` returns `*Stream` so the whole thing is one expression:
+`scan.NewStream(r, buf).Slice[User]()`. `NewStream` is the shorthand to reach
+for; `Reset` on an existing Stream chains identically when recycling one, but
+note its receiver must be addressable (`(&Stream{})` / `new(Stream)`, never
+`Stream{}` — `Reset` has a pointer receiver).
+
+`StreamDecoder` is declared HERE, not in `decode`, because the methods constrain
+on it and `scan` cannot import `decode` (decode imports scan). `decode.Decoder`
+is the bytes-only counterpart; generated structs satisfy both.
+
+Both methods leave the cursor just past what they read, so the caller keeps
+reading — consecutive top-level values, or whatever follows an array. The caller
+owns the Stream throughout.
+
+`Slice` mirrors the bytes walker's contracts — non-nil empty slice for `[]`,
+`PreallocCap` sizing (`scan/prealloc.go`, one spec shared with the bytes
+walker), and
+the post-comma `SkipSpace` that scalar/alias element decoders rely on. It does
+NOT reject trailing data (probing would block a live reader) and its
+bracket/comma errors are bare `scan` sentinels rather than `*ParseError` —
+`NewParseErr` lives in decode, out of reach. Element errors arrive already
+wrapped from the generated decoder; only the `[N]` index segment is absent.
+Pinned by `TestStreamMethods` (`scan/generic_test.go`, over minimal
+hand-written `StreamDecoder` types).
+
+**`rcv` buffer reuse.** Both `Value` and `Slice` take an optional receiver to
+decode INTO. It works because generated decoders open with `result = recv` and
+reset containers keeping capacity (`clear(m)`, `sl = sl[:0]`) — so handing back
+a previously decoded value recycles its maps and slices. `Slice` is NOT a blind
+append: it truncates the outer slice to keep the backing array AND decodes
+element i into `rcv[0][i]`, so each element's own containers are reused too.
+Element `i` is read BEFORE the `append` that overwrites that slot, which is safe
+only because `result` and `prev` share a backing array — do not reorder. Steady
+state is measured at ZERO allocations per decode (`TestStreamBufferReuse`, which
+also pins that a no-rcv call stays independent). Caveat worth repeating to
+users: a field the payload OMITS keeps the rcv's old value, since only present
+keys are written.
+
+**`Array` — one array, lazily.** Same grammar and element decoding as `Slice`,
+but it yields through `iter.Seq2` instead of accumulating, so a million-element
+array costs one element of memory. The range ends when the closing bracket is
+consumed and the cursor is left past it, so the Stream reads on; a malformed
+array yields one error and stops. Breaking out early leaves the cursor INSIDE
+the array — the end position is unknowable without walking it — so an abandoned
+Stream is only good for closing. It carries the same one-value reuse and
+full-window compaction as `Seq`, which is what keeps a long array through a
+small buffer bounded and allocation-free. Pinned by `TestStreamArray`
+(Slice agreement, empty array, read-on-after, malformed, non-array, 5000
+elements through a 64 B buffer), `TestStreamArrayNoAlloc`, and
+`TestArrayBufferStaysBounded` (integrationtests — generated elements, where the
+emitted refills are grow-only and the compaction is what holds the bound).
+
+Pick `Slice` when the result is the point (you want the `[]T`), `Array` when the
+elements are consumed and discarded.
+
+**`Seq` — unbounded iteration.** `iter.Seq2[T, error]` over consecutive
+top-level values (concatenated JSON / NDJSON), running as long as the reader
+produces. A drained reader AT A VALUE BOUNDARY ends the range cleanly with no
+error yielded; anything else yields one error and stops. It never reads past a
+completed value before delivering it — the refill for the next value happens on
+the next pull — so a quiet socket cannot stall an element that already arrived
+(the same liveness rule as `CaptureValue`). Breaking out of the range leaves the
+Stream positioned, so another method can continue from there. It REUSES ONE
+VALUE for the whole run — declared before the loop, seeded from `rcv` when
+given, and reassigned to each decoded element so the next decode recycles its
+containers; a long stream settles at zero allocations per element. The cost is
+aliasing: a yielded value is valid only until the next pull, so consumers must
+copy anything they retain past the loop body (strings are owned, only
+maps/slices alias). The value lives inside the returned closure, so ranging the
+same Seq twice starts fresh each time. Pinned by `TestStreamSeq` (multi-value,
+blank input, one-error-then-stop, break-then-continue, rcv container reuse, and
+a zero-alloc steady-state drain).
 
 **Absolute offset — `Offset()`/`consumed`.** `Pos` is **buffer-relative** — resets
 toward 0 as a compacting `ReadMore` (keep > 0) slides the window. Unexported

@@ -411,6 +411,44 @@ surface pinned by `Decoder[T]`).
   result. `-allowdups` already covers the half that DOES matter. Don't
   reintroduce without a concrete consumer that needs wire-level dup rejection.
 
+- **UNCONDITIONAL per-value buffer compaction in `(*Stream).Seq` — REJECTED;
+  the `len == cap` gate SHIPPED (2026-08).** Dropping consumed values before
+  each decode is genuinely needed: generated container decoders refill
+  grow-only (`ReadMore(0)`, 8 sites in `bench/small_ggen.go`, 75 in
+  `mega_ggen.go`), and ReadMore doubles whenever `len == cap`, so a 422 B
+  `Node` through a 1 KiB buffer ratcheted it to 4 KiB over 200 values. But
+  compacting on EVERY value memmoves the unread remainder each element:
+  20000 tiny values measured **2.9x at 4 KB (240 -> 686 us), 25x at 64 KB
+  (235 us -> 5.95 ms), 25x at 512 KB**, plus +4% on the realistic Node stream
+  at 64 KB. Shipped gate is `s.Pos > 0 && len(s.buf) == cap(s.buf)` — exactly
+  ReadMore's own grow condition, so it fires only when the next refill would
+  double. Cost with the gate is ~2-3% on the tiny micro and noise on Node.
+  An extra `s.Pos*4 >= len(s.buf)` amortization term was tried: reproducibly
+  worth only ~1.5pp on the tiny micro (1.7% vs 3.2% overhead) and nothing on
+  Node, so it was dropped as not paying for the added concept.
+  Gate fire rate, instrumented over 200 Node values: eager readers
+  (`bytes.Reader`/file — ReadMore fills `buf[len:cap]` in one Read) hit
+  `len == cap` at 200/200 value starts on a 64 B buffer, 150/200 at 1 KiB,
+  59/200 at 8 KiB; CHUNKED readers (1/7/64 B) never reach cap, fire 0 times,
+  and show no growth — the gate is firing exactly when growth is possible.
+  Note the self-limiting shape: small buffers fire often but memmove little,
+  large buffers memmove a lot but fire rarely.
+  TWO METHODOLOGY FAILURES here, both mine, both worth remembering:
+  (1) the first pass concluded "buys nothing" because it probed with a
+  hand-written decoder calling `(*Stream).Slice` — which COMPACTS — so it
+  never exercised the grow-only EMITTED refills that are the entire problem.
+  Probe generated decoders, not runtime helpers, for stream buffer growth.
+  (2) the first cost numbers (43x for unconditional, 1.55x for the
+  `len == cap` gate) were taken under the power-saver profile with in-process
+  `go test -bench` and no discarded warmup. Re-measured per the house rules
+  (performance profile, prebuilt `go test -c` binaries, warmup discarded, one
+  pinned pass each) the unconditional cost is 25x and the gated cost is 2-3% —
+  the 1.55x was pure artifact and nearly cost a correct optimisation. The
+  backlog already says in-process `-bench` runs are not comparable on micros;
+  it applies here too.
+  Pinned by `TestSeqBufferStaysBounded` (integrationtests, verified to fail
+  without the compaction).
+
 - **`VPERMB` whitespace classify in `skipSpaceAVX512Slow` (opt audit #10).**
   Replaced the avx512 4×Broadcast+4×Equal+4×ToBits+3×OR classify with one VPERMB
   LUT lookup (`wsClassLUT.Permute(v).Equal(v)`, `wsClassLUT[c&0x3F]==c` iff c is

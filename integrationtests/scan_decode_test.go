@@ -481,13 +481,13 @@ func TestStream_parseErrorFieldName(t *testing.T) {
 
 // decodeBothPaths runs payload through DecodeFrom and DecodeFromStream of T,
 // returning both errors.
-func decodeBothPaths[T decode.Decoder[T]](payload string) (bytesErr, streamErr error) {
+func decodeBothPaths[T interface {
+	decode.Decoder[T]
+	scan.StreamDecoder[T]
+}](payload string) (bytesErr, streamErr error) {
 	var zb T
 	_, _, bytesErr = zb.DecodeFrom([]byte(payload))
-	var zs T
-	var s scan.Stream
-	s.Reset(strings.NewReader(payload), nil)
-	_, streamErr = zs.DecodeFromStream(&s)
+	_, streamErr = scan.NewStream(strings.NewReader(payload), nil).Value[T]()
 	return bytesErr, streamErr
 }
 

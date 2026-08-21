@@ -45,17 +45,21 @@ func (s *Stream) Offset() int { return s.consumed + s.Pos }
 // backing slice (see Reset for buf semantics). Use Reset directly to
 // recycle an existing Stream without the heap alloc.
 func NewStream(r io.Reader, buf []byte) *Stream {
-	s := &Stream{}
-	s.Reset(r, buf)
-	return s
+	return (&Stream{}).Reset(r, buf)
 }
 
 // Reset binds the Stream to r with buf as the initial backing slice.
 // buf is truncated to length 0 — its capacity is retained for parse
 // working area. Pass nil to start with no backing (ReadMore allocates
 // on first pull); pass a pre-sized slice to avoid growth allocs.
-func (s *Stream) Reset(r io.Reader, buf []byte) {
+//
+// Returns s so a freshly declared Stream can be built and handed to a
+// decode helper in one expression:
+//
+//	v, err := s.Reset(r, buf).Value[T]()
+func (s *Stream) Reset(r io.Reader, buf []byte) *Stream {
 	*s = Stream{buf: buf[:0], r: r}
+	return s
 }
 
 // Bytes returns the current backing buffer. Mutating the slice
