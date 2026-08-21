@@ -306,7 +306,7 @@ NOT reject trailing data (probing would block a live reader) and its
 bracket/comma errors are bare `scan` sentinels rather than `*ParseError` —
 `NewParseErr` lives in decode, out of reach. Element errors arrive already
 wrapped from the generated decoder; only the `[N]` index segment is absent.
-Pinned by `TestStreamMethods` (`generic_test.go`, over minimal
+Pinned by `TestStreamMethods` (`stream_test.go`, over minimal
 hand-written `StreamDecoder` types).
 
 **`rcv` buffer reuse.** Both `Value` and `Slice` take an optional receiver to
@@ -736,4 +736,10 @@ compacting `ReadMore` memmoves on the same backing.
 - `any_test.go` — `Any`/`AnyNumber` stdlib parity, `AnyCopy`/`AnyNumberCopy`
   parity + input-decouple checks, + `BenchmarkAny_Shapes`.
 - `string_test.go`, `number_test.go`, `stream_test.go` — primitive
-  correctness + edge cases.
+  correctness + edge cases; string_test also carries the `stringSlow`
+  reference differential and the SWAR control-byte probes, number_test the
+  skip-number grammar and float-form benches, stream_test the bytes-vs-stream
+  truncation parity.
+- `decode_test.go` — walkers, parse-error shapes, min-alloc pins, depth cap.
+- `simd_test.go`, `simd_skip_test.go`, `simd_utf8_test.go` — per-tier parity
+  and benches, one file per kernel family (goexperiment.simd).

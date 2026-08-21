@@ -249,6 +249,8 @@ pointer-to-primitive precedes `case reflect.Pointer` (else the fallback boxes vi
 
 ## Tests
 
-- `appendany_test.go` — `AppendAny` correctness + `BenchmarkAppendAny` /
-  `_Presized`. Next to the impl for unexported-symbol access.
-- `url_test.go` — net/url.URL encode helpers.
+- `any_test.go` — `AppendAny` correctness + `BenchmarkAppendAny` /
+  `_Presized`, alongside the scan-side `Any` walker tests.
+- `encode_test.go` — append helpers: strings, floats, unix time, net/url.URL,
+  netip.Addr, nil-pointer handling.
+- `encode_simd_test.go` — escape-scan tier parity + benches (goexperiment.simd).
