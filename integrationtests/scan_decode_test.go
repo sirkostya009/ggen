@@ -1094,6 +1094,59 @@ func TestTruncationSentinelParity(t *testing.T) {
 	}
 }
 
+// Stream scan primitives rebase s.Pos onto the value head on every error
+// return, so a compacting refill can no longer leave a stale cursor behind.
+// The user-visible contract that buys: the reported payload offset and the
+// sentinel are the SAME at every chunk size. Integer overflow used to report
+// 236/239/218 at chunk 1/7/64 for one payload.
+func TestParseError_StreamPosChunkInvariant(t *testing.T) {
+	t.Parallel()
+	pad := `{"tags":["` + strings.Repeat("a", 200) + `"],`
+	cases := map[string]string{
+		"ctrl_in_string":   `{"name":"` + strings.Repeat("a", 200) + "\x01" + `x"}`,
+		"int_bad_digit":    pad + `"id":12x3}`,
+		"int_leading_zero": pad + `"id":0123}`,
+		"int_overflow":     pad + `"id":99999999999999999999}`,
+		"float_bad":        pad + `"score":1.2.3}`,
+		"float_trail_dot":  pad + `"score":1.}`,
+		"bad_key":          pad + `5:1}`,
+		"unterminated_str": pad + `"name":"abc`,
+		"bad_literal":      pad + `"id":tru}`,
+	}
+	for name, payload := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			_, _, bytesErr := Node{}.DecodeFrom([]byte(payload))
+			var bpe *ggen.ParseError
+			if !errors.As(bytesErr, &bpe) {
+				t.Fatalf("bytes: got %T %v, want *ggen.ParseError", bytesErr, bytesErr)
+			}
+			wantPos, firstChunk := -1, 0
+			for _, chunk := range []int{1, 7, 64, 512, 4096} {
+				var s ggen.Stream
+				s.Reset(&chunkReader{data: []byte(payload), max: chunk}, make([]byte, 0, 64))
+				_, streamErr := Node{}.DecodeFromStream(&s)
+				var spe *ggen.ParseError
+				if !errors.As(streamErr, &spe) {
+					t.Fatalf("stream chunk=%d: got %T %v, want *ggen.ParseError", chunk, streamErr, streamErr)
+				}
+				if !errors.Is(streamErr, bpe.Err) {
+					t.Errorf("stream chunk=%d: sentinel %v, bytes says %v", chunk, spe.Err, bpe.Err)
+				}
+				if spe.Pos < 0 || spe.Pos > len(payload) {
+					t.Errorf("stream chunk=%d: Pos = %d, outside payload [0,%d]", chunk, spe.Pos, len(payload))
+				}
+				if wantPos < 0 {
+					wantPos, firstChunk = spe.Pos, chunk
+				} else if spe.Pos != wantPos {
+					t.Errorf("stream chunk=%d: Pos = %d, chunk=%d reported %d (must not vary with chunk size)",
+						chunk, spe.Pos, firstChunk, wantPos)
+				}
+			}
+		})
+	}
+}
+
 // Round-9: `format:array` byte elements reject >255 with ErrNumberOverflow
 // (encoding/json v1 and jsonv2 both reject) instead of silently wrapping.
 func TestFormatArray_ByteOverflow(t *testing.T) {

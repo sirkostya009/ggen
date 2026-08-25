@@ -450,6 +450,19 @@ if errors.As(err, &pe) {
 if errors.Is(err, ggen.ErrBadString) { ... }
 ```
 
+Nesting is capped at 10000 levels in both directions, so deeply nested input is
+safe to decode from an untrusted source and a self-referential value is safe to
+marshal — both return `ggen.ErrMaxDepth` rather than overflowing the stack and
+killing the process:
+
+```go
+if errors.Is(err, ggen.ErrMaxDepth) { ... }
+```
+
+On the encode side the cap is what makes marshaling reject a CYCLIC `any` value —
+a slice, map, or pointer that reaches itself. Anything ggen can decode it can
+re-encode.
+
 ## supported kinds
 
 | category  | go types                                                         | wire   | notes                                                                                      |

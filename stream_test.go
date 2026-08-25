@@ -727,7 +727,17 @@ func TestStreamSkipValue_MatchesBytes(t *testing.T) {
 		`{"a":{"x":true,"y":[1,2]},"b":"s","c":null}`,
 		`[{"a":1,"b":2},{"c":3}]`,
 	}
-	var cases [][]byte
+	// Non-string object keys: the stream loop used to relabel the key
+	// skipString's ErrExpectString only when the window was drained, so a
+	// buffered non-quote key reported ErrExpectString where bytes reports
+	// ErrBadObject.
+	cases := [][]byte{
+		[]byte(`{5:1}`),
+		[]byte(`{"a":1,5:2}`),
+		[]byte(`{true:1}`),
+		[]byte(`[{"a":1},{5:2}]`),
+		[]byte(`{ 5:1}`),
+	}
 	for _, s := range seeds {
 		cases = append(cases, []byte(s))
 		var v any
@@ -751,7 +761,7 @@ func TestStreamSkipValue_MatchesBytes(t *testing.T) {
 			var s Stream
 			s.Reset(iotest.OneByteReader(bytes.NewReader(in)), make([]byte, 0, chunk))
 			gotErr := s.SkipValue()
-			if (wantErr == nil) != (gotErr == nil) {
+			if gotErr != wantErr {
 				t.Fatalf("stream(%q, chunk=%d) err=%v, bytes err=%v", in, chunk, gotErr, wantErr)
 			}
 			if wantErr == nil && s.Offset() != wantPos {
@@ -1344,5 +1354,213 @@ func TestBytesStreamTruncationErrorParity(t *testing.T) {
 	s.Reset(&sizedChunkReader{data: nil, n: 1}, nil)
 	if got := s.ConsumeColon(); got != ErrBadObject {
 		t.Errorf("ConsumeColon(drained): got %v, want %v", got, ErrBadObject)
+	}
+}
+
+// TestStreamNumberLosslessRetry pins the number scanners' post-compaction
+// cursor. Every mid-number refill keeps from the VALUE HEAD, so a transient
+// reader error can return with Pos back on the intact span and the documented
+// lossless retry re-scans it. Refilling from the cursor instead threw the span
+// away: Int64 lost its '-' (silently flipping the sign) and the digit loops
+// lost the digits already folded into the accumulator, while Float64/Number
+// left a pre-compaction Pos that inflated Offset() by the discarded prefix.
+func TestStreamNumberLosslessRetry(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name  string
+		seq   []any
+		cap   int
+		pos   int
+		retry func(*Stream) (string, error)
+		want  string
+		off   int
+	}{
+		{"Int64 sign", []any{"[1,-", errFlaky, "123]"}, 4, 3,
+			func(s *Stream) (string, error) {
+				v, err := s.Int64()
+				return strconv.FormatInt(v, 10), err
+			}, "-123", 3},
+		{"Uint64 digits", []any{"[9,12", errFlaky, "345]"}, 5, 3,
+			func(s *Stream) (string, error) {
+				v, err := s.Uint64()
+				return strconv.FormatUint(v, 10), err
+			}, "12345", 3},
+		{"Float64 digits", []any{"[0,22", errFlaky, "23]"}, 5, 3,
+			func(s *Stream) (string, error) {
+				v, err := s.Float64()
+				return strconv.FormatFloat(v, 'f', -1, 64), err
+			}, "2223", 3},
+		{"Number digits", []any{"[0,22", errFlaky, "23]"}, 5, 3,
+			func(s *Stream) (string, error) {
+				v, err := s.Number()
+				return string(v), err
+			}, "2223", 3},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			var s Stream
+			s.Reset(&flakyReader{seq: tc.seq}, make([]byte, 0, tc.cap))
+			if err := s.ReadMore(0); err != nil {
+				t.Fatal(err)
+			}
+			s.Pos = tc.pos
+			if _, err := tc.retry(&s); !errors.Is(err, errFlaky) {
+				t.Fatalf("got %v, want the transient reader error", err)
+			}
+			if s.Pos > len(s.Bytes()) {
+				t.Errorf("Pos %d past len(buf) %d", s.Pos, len(s.Bytes()))
+			}
+			if got := s.Offset(); got != tc.off {
+				t.Errorf("Offset = %d, want %d (the value head)", got, tc.off)
+			}
+			got, err := tc.retry(&s)
+			if err != nil {
+				t.Fatalf("retry: %v", err)
+			}
+			if got != tc.want {
+				t.Errorf("retry = %s, want %s", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestStreamString_ErrorPos pins the string scanners' error POSITION across a
+// compacting refill: Pos is buffer-relative, so an error return that skips the
+// rebase leaves the pre-compaction cursor — generated stream decoders stamp it
+// straight into ParseError.Pos, where it reads as inflated by the discarded
+// prefix and can even exceed the document length.
+func TestStreamString_ErrorPos(t *testing.T) {
+	t.Parallel()
+	// A leading string is consumed first so the scanner under test starts at a
+	// non-zero Pos — the offset the stale cursor inflates.
+	const prefix = `"pre"`
+	in := prefix + `"` + strings.Repeat("a", 100) + "\x01\""
+	for _, tc := range []struct {
+		name string
+		run  func(*Stream) error
+		// spanStart: the scanner reports the span start like bytes String
+		// (skipString discards the span head, so it reports its cursor).
+		spanStart bool
+	}{
+		{"String", func(s *Stream) error { _, err := s.String(true); return err }, true},
+		{"StringView", func(s *Stream) error { _, err := s.StringView(true); return err }, true},
+		{"KeyView", func(s *Stream) error { _, err := s.KeyView(true); return err }, true},
+		{"skipString", (*Stream).skipString, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			for _, chunk := range []int{1, 7, 64} {
+				var s Stream
+				s.Reset(strings.NewReader(in), make([]byte, 0, chunk))
+				if err := s.skipString(); err != nil {
+					t.Fatalf("chunk=%d: prefix: %v", chunk, err)
+				}
+				if err := tc.run(&s); err != ErrBadString {
+					t.Fatalf("chunk=%d: err %v, want ErrBadString", chunk, err)
+				}
+				if s.Pos > len(s.Bytes()) {
+					t.Errorf("chunk=%d: Pos %d past len(buf) %d", chunk, s.Pos, len(s.Bytes()))
+				}
+				if got := s.Offset(); got > len(in) {
+					t.Errorf("chunk=%d: Offset %d past document length %d", chunk, got, len(in))
+				}
+				if got := s.Offset(); tc.spanStart && got != len(prefix)+1 {
+					t.Errorf("chunk=%d: Offset %d, want %d (the span start)", chunk, got, len(prefix)+1)
+				}
+			}
+		})
+	}
+}
+
+// TestStreamStringSlow_ErrorPos is the escape-path sibling: stringSlow copies
+// into an owned scratch and compacts s.buf from its cursor on every refill.
+func TestStreamStringSlow_ErrorPos(t *testing.T) {
+	t.Parallel()
+	in := `"\n` + strings.Repeat("a", 100) + "\x01\""
+	for _, chunk := range []int{1, 7, 64} {
+		var s Stream
+		s.Reset(strings.NewReader(in), make([]byte, 0, chunk))
+		if _, err := s.String(true); err != ErrBadString {
+			t.Fatalf("chunk=%d: err %v, want ErrBadString", chunk, err)
+		}
+		if s.Pos > len(s.Bytes()) {
+			t.Errorf("chunk=%d: Pos %d past len(buf) %d", chunk, s.Pos, len(s.Bytes()))
+		}
+		if got := s.Offset(); got != len(in)-2 {
+			t.Errorf("chunk=%d: Offset %d, want %d (the control byte)", chunk, got, len(in)-2)
+		}
+	}
+}
+
+// TestStreamSkipNumber_StopsAfterReaderError: refillSkip records a real reader
+// error and returns false, but the fraction/exponent/sign gates read false as
+// merely "no more bytes" — each called refillSkip AGAIN, issuing fresh blocking
+// Reads before the error was ever consulted. On a reader that stops producing
+// after the hiccup, SkipValue wedged in Read and no deadline could cancel it.
+func TestStreamSkipNumber_StopsAfterReaderError(t *testing.T) {
+	t.Parallel()
+	block := make(chan struct{})
+	defer close(block)
+	done := make(chan error, 1)
+	go func() {
+		var s Stream
+		s.Reset(&errThenBlockReader{data: "123", err: errFlaky, block: block}, make([]byte, 0, 3))
+		done <- s.SkipValue()
+	}()
+	select {
+	case err := <-done:
+		if !errors.Is(err, errFlaky) {
+			t.Errorf("got %v, want the reader error", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Error("SkipValue kept reading after a recorded reader error")
+	}
+}
+
+// errThenBlockReader delivers its payload, then fails once, then blocks — a
+// reader whose error must end the scan instead of triggering another Read.
+type errThenBlockReader struct {
+	data  string
+	err   error
+	stage int
+	block chan struct{}
+}
+
+func (r *errThenBlockReader) Read(p []byte) (int, error) {
+	switch r.stage {
+	case 0:
+		r.stage++
+		return copy(p, r.data), nil
+	case 1:
+		r.stage++
+		return 0, r.err
+	}
+	<-r.block
+	return 0, io.EOF
+}
+
+// TestStreamCaptureValue_MaxDepthDoesNotHang: the finality test was purely
+// positional (end < len(buf)), but skipArray/skipObject return ErrMaxDepth with
+// the cursor on the last consumed bracket — a bracket run ending at the window
+// edge looked like truncation, so the depth cap's own DoS hardening wedged the
+// goroutine in Read. No arriving byte can un-exceed the cap.
+func TestStreamCaptureValue_MaxDepthDoesNotHang(t *testing.T) {
+	t.Parallel()
+	block := make(chan struct{})
+	defer close(block)
+	done := make(chan error, 1)
+	go func() {
+		var s Stream
+		s.Reset(&liveReader{data: bytes.Repeat([]byte("["), maxDepth+1), block: block}, make([]byte, 0, 64))
+		_, err := s.CaptureValue()
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if err != ErrMaxDepth {
+			t.Errorf("got %v, want ErrMaxDepth", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Error("CaptureValue hung on a depth-capped value")
 	}
 }

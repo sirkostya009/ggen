@@ -42,7 +42,10 @@ unknown-key literals):
   site rebases them by the value start (`ggen.NewParseErrShift`, or
   `ggen.ShiftPos` in the multierr drain) — every error type carries
   `AddPos(d int)` (sibling of `PrependPath`, `Errors` loops its leaves) to
-  make that mechanical. Pinned by `TestNestedValidationPath_Complete` +
+  make that mechanical. `*ParseError.AddPos` also cascades into its wrapped
+  cause, since a fallible mod's `ModError` is born pre-wrapped and would
+  otherwise keep a sub-slice-relative `Pos`
+  (`TestParseErrAddPosCascadesToModError`). Pinned by `TestNestedValidationPath_Complete` +
   `TestNestedMultierr_drainsInnerValidationErrors` (bytes == stream).
 - **Stream path** — `ggen.Stream.Offset()` (= `consumed + Pos`), NOT the raw
   buffer-relative `s.Pos`: the stream buffer compacts as it slides, so only

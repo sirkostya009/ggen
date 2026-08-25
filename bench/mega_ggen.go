@@ -1921,7 +1921,7 @@ func (recv Node) decodeFromStreamDepth(s *ggen.Stream, _depth int) (result Node,
 			if err != nil {
 				return result, ggen.NewParseErr("raw", s.Offset(), err)
 			}
-			result.Raw = append(make([]byte, 0, len(span)), span...)
+			result.Raw = append(result.Raw[:0], span...)
 		case "refs":
 			err = s.ConsumeColon()
 			if err != nil {
@@ -4321,7 +4321,7 @@ func (recv CopyNode) decodeFromStreamDepth(s *ggen.Stream, _depth int) (result C
 			if err != nil {
 				return result, ggen.NewParseErr("raw", s.Offset(), err)
 			}
-			result.Raw = append(make([]byte, 0, len(span)), span...)
+			result.Raw = append(result.Raw[:0], span...)
 		case "refs":
 			err = s.ConsumeColon()
 			if err != nil {

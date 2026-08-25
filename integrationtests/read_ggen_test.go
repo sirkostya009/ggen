@@ -149,13 +149,14 @@ func (recv IgnoreUnknownStruct) DecodeFromStream(s *ggen.Stream) (result IgnoreU
 				return result, ggen.NewParseErr("name", s.Offset(), err)
 			}
 		default:
+			ownKey := strings.Clone(key)
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, ggen.NewParseErr(strings.Clone(key), s.Offset(), err)
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
 			err = s.SkipValue()
 			if err != nil {
-				return result, ggen.NewParseErr(strings.Clone(key), s.Offset(), err)
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
 		}
 

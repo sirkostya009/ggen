@@ -1429,3 +1429,72 @@ func TestAppendAny_RecursiveEmbedNoOverflow(t *testing.T) {
 		t.Errorf("got %s, want {\"X\":1}", got)
 	}
 }
+
+// Value-level cycles used to recurse until the process died with a fatal
+// stack overflow.
+func TestAppendAny_CyclicValue(t *testing.T) {
+	s := make([]any, 1)
+	s[0] = s
+	if _, err := AppendAny(nil, s); !errors.Is(err, ErrMaxDepth) {
+		t.Errorf("slice cycle: want ErrMaxDepth, got %v", err)
+	}
+
+	m := map[string]any{}
+	m["m"] = m
+	if _, err := AppendAny(nil, m); !errors.Is(err, ErrMaxDepth) {
+		t.Errorf("map cycle: want ErrMaxDepth, got %v", err)
+	}
+
+	type node struct {
+		Next *node
+	}
+	n := &node{}
+	n.Next = n
+	if _, err := AppendAny(nil, n); !errors.Is(err, ErrMaxDepth) {
+		t.Errorf("pointer cycle: want ErrMaxDepth, got %v", err)
+	}
+}
+
+func TestAppendAny_DepthCap(t *testing.T) {
+	var under any = 1
+	for range maxDepth - 1 {
+		under = []any{under}
+	}
+	if _, err := AppendAny(nil, under); err != nil {
+		t.Errorf("under cap: %v", err)
+	}
+	over := []any{under}
+	for range 2 {
+		over = []any{over}
+	}
+	if _, err := AppendAny(nil, over); !errors.Is(err, ErrMaxDepth) {
+		t.Errorf("over cap: want ErrMaxDepth, got %v", err)
+	}
+}
+
+// The encode cap counts recursion levels (containers, pointer/interface
+// derefs) while the decode cap counts containers, so the two could disagree
+// at the boundary and leave a value ggen accepts but cannot re-emit. Anything
+// that decodes must re-encode.
+func TestAppendAny_DepthCapMatchesDecode(t *testing.T) {
+	shapes := map[string]func(int) []byte{
+		"array":  func(n int) []byte { return []byte(strings.Repeat("[", n) + strings.Repeat("]", n)) },
+		"object": func(n int) []byte { return []byte(strings.Repeat(`{"k":`, n) + "1" + strings.Repeat("}", n)) },
+	}
+	for name, mk := range shapes {
+		t.Run(name, func(t *testing.T) {
+			for _, n := range []int{maxDepth - 1, maxDepth} {
+				v, _, err := Any(mk(n), 0)
+				if err != nil {
+					t.Fatalf("depth %d: decode rejected below the cap: %v", n, err)
+				}
+				if _, err := AppendAny(nil, v); err != nil {
+					t.Errorf("depth %d: decodes but does not re-encode: %v", n, err)
+				}
+			}
+			if _, _, err := Any(mk(maxDepth+1), 0); !errors.Is(err, ErrMaxDepth) {
+				t.Errorf("depth %d: want ErrMaxDepth, got %v", maxDepth+1, err)
+			}
+		})
+	}
+}

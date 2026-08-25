@@ -331,9 +331,27 @@ func (s *structSet) resolveFiltered(wanted []string, allowExpand func(string) bo
 			}
 			continue
 		}
-		if _, ok := s.aliases[name]; ok {
+		if ts, ok := s.aliases[name]; ok {
 			gen[name] = struct{}{}
 			generated = append(generated, name)
+			// A container/pointer alias reaches structs too — without this an
+			// element type referenced ONLY through `type L []Inner` never got
+			// generated methods and fell to the reflective json.Unmarshal
+			// fallback (silently lenient semantics).
+			switch ts.Type.(type) {
+			case *ast.ArrayType, *ast.MapType, *ast.StarExpr:
+				ref := referencedStructName(ts.Type, s.structs)
+				if ref == "" {
+					continue
+				}
+				if _, seen := gen[ref]; seen {
+					continue
+				}
+				if allowExpand != nil && !allowExpand(ref) {
+					continue
+				}
+				queue = append(queue, ref)
+			}
 			continue
 		}
 		return nil, fmt.Errorf("type %s not found", name)
@@ -755,6 +773,13 @@ func (s *structSet) extractAliasFromTypes(name string, t types.Type, rhs ast.Exp
 		f := s.aliasContainerField(tt.Elem(), int(tt.Len()))
 		f.Kind = KindArray
 		f.ArrayLen = int(tt.Len())
+		// [N]byte folds onto the base64 path exactly as it does at field
+		// position. An alias carries no struct tag, so there is no
+		// `format:array` opt-out here.
+		foldByteArray(&f)
+		if f.Kind == KindBytes {
+			info.AliasKind = KindBytes
+		}
 		info.AliasField = f
 		return info, nil
 	}
@@ -765,16 +790,56 @@ func (s *structSet) extractAliasFromTypes(name string, t types.Type, rhs ast.Exp
 // aliasContainerField builds a partial FieldInfo for a container alias's
 // element type. The caller sets ArrayLen for arrays.
 func (s *structSet) aliasContainerField(elem types.Type, _ int) FieldInfo {
-	qualifier := types.RelativeTo(s.typesPkg)
 	fi := FieldInfo{}
 	if pe, ok := elem.(*types.Pointer); ok {
 		fi.ElemPointer = true
 		elem = pe.Elem()
 	}
-	fi.ElemType = types.TypeString(elem, qualifier)
+	fi.ElemType = types.TypeString(elem, s.pkgQualifier())
 	fi.ElemKind = resolveKind(fi.ElemType)
-	fi.Iface = inspectType(elem, s.stdIfaces)
+	fi.ElemIface = inspectType(elem, s.stdIfaces)
+	fi.TypeImports = s.foreignImports(elem)
 	return fi
+}
+
+// pkgQualifier spells a foreign type by package NAME, the way source syntax
+// (and FieldInfo.GoType, built from the AST) does. types.RelativeTo elides only
+// the current package and spells every other one by full import path, which
+// does not parse where the generator pastes it into emitted code.
+func (s *structSet) pkgQualifier() types.Qualifier {
+	return func(p *types.Package) string {
+		if p == s.typesPkg {
+			return ""
+		}
+		return p.Name()
+	}
+}
+
+// elemIface probes the container element / map value of t for interface impls,
+// so slice/array/map elements run the same emit ladder as the field level.
+func (s *structSet) elemIface(t types.Type) FieldInterfaces {
+	for {
+		p, ok := t.(*types.Pointer)
+		if !ok {
+			break
+		}
+		t = p.Elem()
+	}
+	var elem types.Type
+	switch u := t.Underlying().(type) {
+	case *types.Slice:
+		elem = u.Elem()
+	case *types.Array:
+		elem = u.Elem()
+	case *types.Map:
+		elem = u.Elem()
+	default:
+		return FieldInterfaces{}
+	}
+	if pe, ok := elem.(*types.Pointer); ok {
+		elem = pe.Elem()
+	}
+	return inspectType(elem, s.stdIfaces)
 }
 
 // elemKindIsBytes reports whether the Go type literal is the byte type — so
@@ -823,7 +888,7 @@ func isSupportedAliasPrimitive(k TypeKind) bool {
 // alias fields where no *ast.Field is available.
 func (s *structSet) extractFieldFromTypes(structName string, field *types.Var, tag string) (FieldInfo, error) {
 	fi := FieldInfo{GoName: field.Name(), StructName: structName}
-	qualifier := types.RelativeTo(s.typesPkg)
+	qualifier := s.pkgQualifier()
 	fi.GoType = types.TypeString(field.Type(), qualifier)
 	fi.NotComparable = !types.Comparable(field.Type())
 
@@ -1071,6 +1136,7 @@ func (s *structSet) extractStructSeen(name string, st *ast.StructType, seen map[
 						fieldType = tv.Type
 						fi.NotComparable = !types.Comparable(fieldType)
 						fi.Iface = inspectType(fieldType, s.stdIfaces)
+						fi.ElemIface = s.elemIface(fieldType)
 						fi.TypeImports = s.foreignImports(fieldType)
 						fi.NamedPrims = s.namedPrims(fieldType)
 						// Named primitives resolve only now — re-run the
@@ -1726,12 +1792,7 @@ func (s *structSet) collectNamedPrims(t types.Type, out map[string]TypeKind, see
 			// has to match FieldInfo.GoType, which the AST extractor builds
 			// from the type EXPRESSION. types.RelativeTo only elides the
 			// current package and spells every other one by full path.
-			name := types.TypeString(t, func(p *types.Package) string {
-				if p == s.typesPkg {
-					return ""
-				}
-				return p.Name()
-			})
+			name := types.TypeString(t, s.pkgQualifier())
 			// Types the generator gives a wire shape of their own (time.Duration
 			// is a named int64, …) are NOT plain named primitives: resolveKind
 			// hands them a dedicated kind and their own emitters. Only

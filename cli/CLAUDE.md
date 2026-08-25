@@ -403,7 +403,9 @@ Accepted underlying kinds:
   selection, errors on NaN/Inf) — it used to be a bare
   `strconv.AppendFloat(…, 'g', -1, …)`, which silently emitted the literal
   text `NaN`/`Inf` (invalid JSON, nil error) and used `'g'` formatting that
-  diverges from every other float site in generated code (`1e6` vs `1000000`)
+  diverges from every other float site in generated code (`1e6` vs `1000000`).
+  `JSONSize` budgets the shared `sizeFloat` (25 — the widest `'f'` form), so
+  `ggen.Marshal`'s exact presize still lands in one alloc
 - **struct** (`type LocalUUID uuid.UUID`): methods don't propagate from the RHS,
   so probing uses `inspectType` on the RHS named type. Three-step ladder:
     1. _ggen-method delegation_ — if underlying has AppendJSON+DecodeFrom: cast →
@@ -425,7 +427,11 @@ Accepted underlying kinds:
 - **slice / map / array** (`type Tags []string`, `type Lookup map[string]int`,
   `type Tuple [3]int`): synthetic FieldInfo handed to field-level emitters with
   `result` (decode) / `s` (encode) as ref. All field-level features carry over.
-- **`[]byte` alias**: collapses to KindBytes, base64 path.
+- **`[]byte` / `[N]byte` alias**: collapses to KindBytes, base64 path — the
+  byte-array fold (`foldByteArray`) runs at alias position too, so
+  `type Digest [4]byte` carries the same wire shape and strict decoded-length
+  check as a `[4]byte` FIELD. An alias has no struct tag, so `format:array`
+  cannot opt back into the v1 number-array form there.
 
 Rejected: channel, interface, function — no sensible JSON shape.
 
@@ -495,7 +501,12 @@ via `types.RelativeTo(s.typesPkg)`.
 - `any` / `interface{}` — decode via `ggen.Any` / `(*Stream).Any`, stdlib
   defaults: `null→nil`, `bool`, `number→float64`, `string` (zero-copy alias),
   `array→[]any`, `object→map[string]any`. With `usenumber`, `ggen.AnyNumber`
-  (numbers → `json.Number`). Encode via `ggen.AppendAny` (type-switch ordering —
+  (numbers → `json.Number`). `AppendAny`/`AppendAnyHTML` are depth-capped like
+  the decode side and return `ggen.ErrMaxDepth` past the cap, so a cyclic or
+  over-deep `any` value is an error instead of a fatal stack overflow; the
+  encode counter bumps per RECURSION level (containers, pointer/interface
+  derefs, struct fields), which is what makes a pointer cycle terminate.
+  Encode via `ggen.AppendAny` (type-switch ordering —
   see `.claude/encode.md`)
 - `[N]T` (fixed-length array) — JSON tuple with **strict count**: decode errors
   with `ggen.LenError{Want:N}` when count ≠ N. Combines/nests freely
@@ -1048,7 +1059,7 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
     jsonv2), and `FuzzPrimitivesCompat`'s reject-parity branch (the old
     fuzz blind spot that hid this bug — it SKIPPED invalid-UTF-8 strings).
 
-51. **Recursion depth cap (`the runtime maxDepth cap (10000)` = 10000, jsonv2 parity).** Every
+51. **Recursion depth cap (`maxDepth` = 10000, jsonv2 parity).** Every
     recursive decode path was unbounded → a few MB of `[[[[…` / `{"k":{"k":…`
     was a FATAL, unrecoverable goroutine stack overflow (not a `recover`-able
     panic — the process dies). Now capped:
@@ -1271,11 +1282,14 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
     The field silently vanished from the wire. Arm deleted. Pinned by
     `TestOmitEmpty_bigTypesNeverOmitted`.
 
-66. **Primitive alias decoders skip leading whitespace.**
-    `AliasString("").DecodeFrom([]byte(" \"x\""))` failed `ErrExpectString`
-    while container and struct aliases accepted the same input (their
-    `ArrayOpen`/`ObjectOpen` skip space). Whitespace is legal before any
-    top-level value. Pinned by `TestAlias_leadingWhitespace`.
+66. **Every alias decoder skips leading whitespace.** Whitespace is legal
+    before any top-level value. Slice/map/array aliases get it free from
+    `ArrayOpen`/`ObjectOpen`, and the struct ladder's ByteDecoder /
+    JSONUnmarshaler rungs from the delegated `DecodeFrom` / `SkipValue`; the
+    three shapes that scan at the cursor — primitives, the `[]byte` alias's
+    stream arm, and the struct ladder's TextUnmarshaler rung (both paths) —
+    emit the skip explicitly. Pinned by `TestAlias_leadingWhitespace` +
+    `TestAlias_leadingWhitespaceBytesAndText`.
 
 67. **Synthesized FieldInfos carry the parent's flags + hint levels (round 7).**
     Three drop classes in the synthetic-field constructors: (a)
@@ -1370,6 +1384,94 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
     Pinned by `TestParseFile_round9` (cli) and
     `TestTruncationSentinelParity` / `TestStringTag_StreamStringDetached` /
     `TestFormatArray_ByteOverflow` (integrationtests).
+
+70. **Round-10 fixes (aliasing under `-copy`, alias imports, stream key
+    lifetime).**
+    - **`url.URL` fields ignored `-copy`** — `renderURL` hardcoded the
+      aliasing scan, and `url.Parse` SLICES Scheme/Host/Path/RawQuery/Fragment
+      out of its argument, so a copy-mode struct still pointed at the caller's
+      buffer (the stream path already used the copying `s.String` for exactly
+      this reason). The scan now takes `f.Copy`. Pinned by
+      `TestCopy_URLDecouples`.
+    - **Container-alias stdlib imports were never collected** — `collectImports`
+      walked only `s.Fields`, which a container alias leaves empty (its shape
+      lives in `s.AliasField`), so a `[]byte` alias emitted
+      `base64.StdEncoding.AppendEncode` into a file with no `encoding/base64`
+      import. `collectFieldImports` now runs over `AliasField` for
+      bytes/slice/array/map aliases.
+    - **`streamUnknownKey` cloned the KeyView alias too late** — the
+      ignoreunknown and multierr branches evaluated `strings.Clone(key)` inside
+      the error checks, i.e. AFTER `ConsumeColon`/`SkipValue` had compacted the
+      buffer out from under the alias, so a returned `*ParseError` carried
+      shifted bytes as its path. Both clone into `ownKey` first, like the
+      inline-map branch. Pinned by
+      `TestIgnoreUnknown_streamErrorKeepsKeyName`.
+
+71. **Round-11 parse-layer fixes (element resolution).**
+    - **`ElemIface` is populated by the primary struct parse path.** Only the
+      struct-alias introspection path (`extractFieldFromTypes`) ever set it,
+      so `elemAsField` handed the element ladder an empty probe and every
+      slice/array/map element of a foreign ggen type fell to the bottom
+      `encoding/json` rung while the SAME type at FIELD position took its
+      `DecodeFrom` — ggen wire at one position, v1 wire at the other.
+      `extractStructSeen` now probes the element / map value / pointee via
+      `s.elemIface`. (`aliasContainerField` stored its element probe in
+      `Iface`, the field slot, and is fixed to `ElemIface` too.)
+    - **Foreign element types are spelled by package NAME.**
+      `aliasContainerField` and `extractFieldFromTypes` used
+      `types.RelativeTo`, which elides only the current package and spells
+      every other one by full import path — `example.com/x/sub.Foreign` does
+      not parse. Both take `structSet.pkgQualifier` now, the qualifier
+      `collectNamedPrims` already used.
+    - **A struct reached only through a container alias is queued for
+      generation.** `resolveFiltered`'s alias branch never walked the alias's
+      underlying type, so `type L []Inner` left `Inner` method-less and its
+      elements decoded through the reflective fallback — which silently
+      accepts unknown keys, case-insensitive names and dups. Slice/array/map/
+      pointer underlyings now run `referencedStructName`.
+    Pinned by `TestForeignElementCodegen` /
+    `TestForeignGgenElementDecodesDirectly` (cli) and
+    `TestAlias_elementStructGetsGenerated` (integ).
+
+72. **Round-12 integration fixes (the halves round 11 left open).** Round 11
+    fixed element RESOLUTION in the parse layer; three consumers of that data
+    were still missing, so the resolved information went nowhere.
+    - **A container alias's foreign element imports are collected.**
+      `aliasContainerField` populates `AliasField.TypeImports`, but
+      `collectImports`' alias branch harvested only the stdlib helpers
+      (`collectFieldImports`), never the foreign packages — so
+      `//ggen:generate type AliasThings []sub.Foreign` emitted a file naming
+      `sub.Foreign` with no `sub` import and did not compile. The alias branch
+      now drains `TypeImports` the way the `Fields` loop does.
+    - **Slice/array elements and map values marshal through the cross-package
+      ladder.** The encode arms tested only `isGenerated(f.ElemType)` (this
+      pass) with no foreign rung, so a foreign ggen element DECODED via
+      `DecodeFrom` (round 11) but MARSHALED via `json.Marshal` — the wire
+      asymmetry round 11 set out to kill, surviving on the encode side.
+      `emitSliceElement` and `renderAppendMap` now call
+      `renderCrossPkgStructAppend(sliceElemField(f), vref)`, the same ladder
+      the field level uses. The slice arm braces it: the temp-declaring rungs
+      emit once for the first element and once inside the loop.
+    - **`[N]byte` aliases fold onto the base64 path.** The `*types.Array` alias
+      arm never ran `foldByteArray`, so `type Digest [4]byte` emitted a JSON
+      number array while a `[4]byte` FIELD emitted base64 — one Go type, two
+      wire shapes by position (and contradicting what README/SKILL already
+      documented). The arm folds and flips `AliasKind` to KindBytes;
+      `renderAliasContainerDecode`'s receiver reset is gated on
+      `AliasField.ArrayLen == 0`, since a folded byte ARRAY has no nil state
+      and cannot be resliced.
+    Pinned by `TestAlias_byteArrayIsBase64` (integ) and the round-11 cli tests,
+    which now also cover the encode side.
+
+73. **Stream raw-span decode reuses the receiver's backing.**
+    `renderStreamRawJSON` emitted `append(make([]byte, 0, len(span)), span...)`,
+    a fresh allocation on every decode, while the bytes-path `-copy` twin
+    already reused the carried backing. It now emits
+    `append(ref[:0], span...)` — a nil receiver still allocates through
+    `append`, and both shapes detach from `s.buf` equally, so the wire and the
+    lifetime are unchanged. Steady-state re-decode into a reused receiver
+    (`Seq`/`Value(prev)`) drops from 1 alloc per raw field per value to 0.
+    Pinned by `TestRawJSON_StreamReusesReceiverBacking` (integ, `RawOnly`).
 
 ## Named types, cross-package types (defects fixed 2026-07)
 

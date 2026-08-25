@@ -187,6 +187,32 @@ surface pinned by `Decoder[T]`).
   the `rawHi` gate already skips that walk) — the −5.9% above is a separate win,
   not a revert of that cost.
 
+- **`checkSpan` re-walks the ASCII prefix through `utf8.Valid` (UNMEASURED, HELD).**
+  `checkSpan` accumulates a high-bit flag and then validates from offset 0, so a
+  long mostly-ASCII span with non-ASCII in the tail pays the SWAR walk plus a
+  second full-length pass through `utf8.Valid`'s ASCII skip. The sibling
+  `CheckUTF8` already does the cheaper thing and documents why it is sound: start
+  at the first high-bit word, since the byte before it is ASCII, i.e. a rune
+  boundary. Fix is to track that word in the existing loop. HELD, not landed:
+  wall-clock only, and the box is firmware-capped at 3 GHz (`cpuinfo_max_freq`),
+  where the house-rule A/B is invalid. Land only from an uncapped box.
+
+- **`appendReflectValue` re-derives `PkgPath()` per element (UNMEASURED, HELD).**
+  The named-vs-unnamed guard runs on every call, and the reflect slice/map loops
+  call it once per element while the element type is loop-invariant (they already
+  hoist `elemKind`). Two dynamic method calls plus a string compare per element to
+  re-answer a constant question. Same hold reason as above.
+
+- **`appendStruct` per-field boxing — NOT A DEFECT, measured (2026-08).**
+  An audit flagged `appendAny(dst, fv.Interface(), ...)` as one heap allocation
+  per struct field, to be routed through `appendReflectValue`'s kind fast path.
+  The premise is false on current Go: the boxed value does not escape (`appendAny`
+  only reads it), so escape analysis stack-allocates it. Probed both shapes with
+  `AllocsPerRun` over a 9-field struct, with the entry box hoisted out of the
+  measured closure and with values chosen to defeat the runtime's small-int cache:
+  **0 allocs either way**. The routing change was written and reverted. Don't
+  re-propose without an in-situ measurement showing a real difference.
+
 ## Tooling / coverage
 
 - **Improve fuzz coverage.** Current surface (`integrationtests/fuzz_test.go`):

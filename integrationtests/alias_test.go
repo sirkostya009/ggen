@@ -796,3 +796,131 @@ func TestAlias_leadingWhitespace(t *testing.T) {
 		t.Errorf("AliasString stream = %q, want %q", sv2, "y")
 	}
 }
+
+// An opaque struct (no exported fields) with Text methods takes the alias
+// ladder's Text rung, which scans the string itself.
+type textOnly struct{ v string }
+
+func (t textOnly) MarshalText() ([]byte, error)  { return []byte(t.v), nil }
+func (t *textOnly) UnmarshalText(b []byte) error { t.v = string(b); return nil }
+
+//ggen:generate
+type LocalText textOnly
+
+//ggen:generate
+type AliasBlob []byte
+
+func TestAlias_leadingWhitespaceBytesAndText(t *testing.T) {
+	t.Parallel()
+	bv, _, err := AliasBlob(nil).DecodeFrom([]byte(" \t\"aGk=\""))
+	if err != nil || string(bv) != "hi" {
+		t.Fatalf("AliasBlob bytes: %q %v", bv, err)
+	}
+	var st ggen.Stream
+	st.Reset(bytes.NewReader([]byte("  \"aGk=\"")), nil)
+	if bv, err = AliasBlob(nil).DecodeFromStream(&st); err != nil || string(bv) != "hi" {
+		t.Fatalf("AliasBlob stream: %q %v", bv, err)
+	}
+	st.Reset(bytes.NewReader([]byte("  null")), nil)
+	if bv, err = AliasBlob(nil).DecodeFromStream(&st); err != nil || bv != nil {
+		t.Fatalf("AliasBlob stream null: %q %v", bv, err)
+	}
+
+	tv, _, err := LocalText{}.DecodeFrom([]byte(" \t\"x\""))
+	if err != nil || tv.v != "x" {
+		t.Fatalf("LocalText bytes: %+v %v", tv, err)
+	}
+	st.Reset(bytes.NewReader([]byte("  \"y\"")), nil)
+	if tv, err = (LocalText{}).DecodeFromStream(&st); err != nil || tv.v != "y" {
+		t.Fatalf("LocalText stream: %+v %v", tv, err)
+	}
+}
+
+//ggen:generate
+type AliasDigest [4]byte
+
+// A [N]byte ALIAS folds onto the base64 path exactly as [N]byte does at field
+// position — it used to emit a JSON array of numbers, so the same Go type had
+// two wire shapes depending on where it appeared. An alias carries no struct
+// tag, so there is no format:array opt-out.
+func TestAlias_byteArrayIsBase64(t *testing.T) {
+	t.Parallel()
+	want := AliasDigest{1, 2, 3, 4}
+	out, err := ggen.Marshal(want)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(out) != `"AQIDBA=="` {
+		t.Fatalf("alias wire = %s, want %q", out, `"AQIDBA=="`)
+	}
+	// The same [4]byte at field position (ByteArrays.B, no format: override).
+	field, err := ggen.Marshal(ByteArrays{B: [4]byte{1, 2, 3, 4}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(field, []byte(`"AQIDBA=="`)) {
+		t.Errorf("field wire %s disagrees with alias wire %s", field, out)
+	}
+
+	got, _, err := AliasDigest{}.DecodeFrom(out)
+	if err != nil || got != want {
+		t.Fatalf("bytes decode = %v %v, want %v", got, err, want)
+	}
+	if _, _, err := (AliasDigest{}).DecodeFrom([]byte(" \t" + string(out))); err != nil {
+		t.Errorf("leading whitespace rejected: %v", err)
+	}
+	if _, _, err := (AliasDigest{}).DecodeFrom([]byte(`"AAA="`)); err == nil {
+		t.Error("wrong decoded length accepted, want an error")
+	}
+	var st ggen.Stream
+	st.Reset(bytes.NewReader(out), nil)
+	sgot, err := AliasDigest{}.DecodeFromStream(&st)
+	if err != nil || sgot != want {
+		t.Fatalf("stream decode = %v %v, want %v", sgot, err, want)
+	}
+}
+
+// ggen.Marshal presizes from JSONSize exactly, so an undersized float budget
+// costs a second alloc on the widest 'f'-form value.
+func TestAlias_floatSizeIsSingleAlloc(t *testing.T) {
+	v := AliasFloat64(-1.2345678901234567e-06)
+	out, err := ggen.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out) != 25 {
+		t.Fatalf("len = %d, want 25 (%s)", len(out), out)
+	}
+	if n := testing.AllocsPerRun(50, func() { _, _ = ggen.Marshal(v) }); n != 1 {
+		t.Errorf("allocs = %v, want 1", n)
+	}
+}
+
+// A struct reached ONLY through a container alias must be generated too: the
+// alias BFS used to stop at the alias, so the element decoded through the
+// reflective encoding/json fallback, which silently accepts unknown keys.
+
+//ggen:generate
+type SoloList []SoloInner
+
+type SoloInner struct {
+	A int `json:"a"`
+}
+
+func TestAlias_elementStructGetsGenerated(t *testing.T) {
+	t.Parallel()
+	got, _, err := SoloList{}.DecodeFrom([]byte(`[{"a":1}]`))
+	if err != nil || len(got) != 1 || got[0].A != 1 {
+		t.Fatalf("decode: %+v %v", got, err)
+	}
+	_, _, err = SoloList{}.DecodeFrom([]byte(`[{"a":1,"x":2}]`))
+	var uke *ggen.UnknownKeyError
+	if !errors.As(err, &uke) {
+		t.Fatalf("unknown key: want UnknownKeyError, got %v", err)
+	}
+	var st ggen.Stream
+	st.Reset(bytes.NewReader([]byte(`[{"a":1,"x":2}]`)), nil)
+	if _, err = (SoloList{}).DecodeFromStream(&st); !errors.As(err, &uke) {
+		t.Fatalf("unknown key (stream): want UnknownKeyError, got %v", err)
+	}
+}

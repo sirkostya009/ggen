@@ -756,14 +756,11 @@ func (recv CrossPkgShapes) DecodeFrom(data []byte) (result CrossPkgShapes, i int
 						return result, i, &ggen.LenError{Pos: i, Path: []string{"arr"}, Want: 2, Got: idx0}
 					}
 					result.Arr[idx0] = thirdparty2.External2{}
-					start := i
-					i, err = ggen.SkipValue(data, start)
+					var _n int
+					result.Arr[idx0], _n, err = result.Arr[idx0].DecodeFrom(data[i:])
+					i += _n
 					if err != nil {
-						return result, i, ggen.NewParseErr("arr", i, err)
-					}
-					err = json.Unmarshal(data[start:i], &result.Arr[idx0])
-					if err != nil {
-						return result, i, ggen.NewParseErr("arr", i, err)
+						return result, i, ggen.NewParseErrShift("arr", i, _n, err)
 					}
 					idx0++
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -849,14 +846,11 @@ func (recv CrossPkgShapes) DecodeFrom(data []byte) (result CrossPkgShapes, i int
 						i++
 					}
 					var mv thirdparty2.External2
-					start := i
-					i, err = ggen.SkipValue(data, start)
+					var _n int
+					mv, _n, err = mv.DecodeFrom(data[i:])
+					i += _n
 					if err != nil {
-						return result, i, ggen.NewParseErr("dict", i, err)
-					}
-					err = json.Unmarshal(data[start:i], &mv)
-					if err != nil {
-						return result, i, ggen.NewParseErr("dict", i, err)
+						return result, i, ggen.NewParseErrShift("dict", i, _n, err)
 					}
 					result.Dict[mk] = mv
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -908,14 +902,11 @@ func (recv CrossPkgShapes) DecodeFrom(data []byte) (result CrossPkgShapes, i int
 			if i < len(data) && data[i] != ']' {
 				for {
 					result.Many = append(result.Many, thirdparty2.External2{})
-					start := i
-					i, err = ggen.SkipValue(data, start)
+					var _n int
+					result.Many[len(result.Many)-1], _n, err = result.Many[len(result.Many)-1].DecodeFrom(data[i:])
+					i += _n
 					if err != nil {
-						return result, i, ggen.NewParseErr("many", i, err)
-					}
-					err = json.Unmarshal(data[start:i], &result.Many[len(result.Many)-1])
-					if err != nil {
-						return result, i, ggen.NewParseErr("many", i, err)
+						return result, i, ggen.NewParseErrShift("many", i, _n, err)
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -1049,14 +1040,11 @@ func (recv CrossPkgShapes) DecodeFrom(data []byte) (result CrossPkgShapes, i int
 						break
 					}
 					slab0 = append(slab0, thirdparty2.External2{})
-					start := i
-					i, err = ggen.SkipValue(data, start)
+					var _n int
+					slab0[len(slab0)-1], _n, err = slab0[len(slab0)-1].DecodeFrom(data[i:])
+					i += _n
 					if err != nil {
-						return result, i, ggen.NewParseErr("slab", i, err)
-					}
-					err = json.Unmarshal(data[start:i], &slab0[len(slab0)-1])
-					if err != nil {
-						return result, i, ggen.NewParseErr("slab", i, err)
+						return result, i, ggen.NewParseErrShift("slab", i, _n, err)
 					}
 					result.Slab = append(result.Slab, &slab0[len(slab0)-1])
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -1174,11 +1162,7 @@ func (recv CrossPkgShapes) DecodeFromStream(s *ggen.Stream) (result CrossPkgShap
 					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"arr"}, Want: 2, Got: idx0}
 				}
 				result.Arr[idx0] = thirdparty2.External2{}
-				span, err := s.CaptureValue()
-				if err != nil {
-					return result, ggen.NewParseErr("arr", s.Offset(), err)
-				}
-				err = json.Unmarshal(span, &result.Arr[idx0])
+				result.Arr[idx0], err = result.Arr[idx0].DecodeFromStream(s)
 				if err != nil {
 					return result, ggen.NewParseErr("arr", s.Offset(), err)
 				}
@@ -1291,11 +1275,7 @@ func (recv CrossPkgShapes) DecodeFromStream(s *ggen.Stream) (result CrossPkgShap
 					return result, ggen.NewParseErr("dict", s.Offset(), err)
 				}
 				var mv thirdparty2.External2
-				span, err := s.CaptureValue()
-				if err != nil {
-					return result, ggen.NewParseErr("dict", s.Offset(), err)
-				}
-				err = json.Unmarshal(span, &mv)
+				mv, err = mv.DecodeFromStream(s)
 				if err != nil {
 					return result, ggen.NewParseErr("dict", s.Offset(), err)
 				}
@@ -1383,11 +1363,7 @@ func (recv CrossPkgShapes) DecodeFromStream(s *ggen.Stream) (result CrossPkgShap
 			}
 			for s.Bytes()[s.Pos] != ']' {
 				result.Many = append(result.Many, thirdparty2.External2{})
-				span, err := s.CaptureValue()
-				if err != nil {
-					return result, ggen.NewParseErr("many", s.Offset(), err)
-				}
-				err = json.Unmarshal(span, &result.Many[len(result.Many)-1])
+				result.Many[len(result.Many)-1], err = result.Many[len(result.Many)-1].DecodeFromStream(s)
 				if err != nil {
 					return result, ggen.NewParseErr("many", s.Offset(), err)
 				}
@@ -1615,11 +1591,7 @@ func (recv CrossPkgShapes) DecodeFromStream(s *ggen.Stream) (result CrossPkgShap
 					break
 				}
 				slab0 = append(slab0, thirdparty2.External2{})
-				span, err := s.CaptureValue()
-				if err != nil {
-					return result, ggen.NewParseErr("slab", s.Offset(), err)
-				}
-				err = json.Unmarshal(span, &slab0[len(slab0)-1])
+				slab0[len(slab0)-1], err = slab0[len(slab0)-1].DecodeFromStream(s)
 				if err != nil {
 					return result, ggen.NewParseErr("slab", s.Offset(), err)
 				}
@@ -1686,15 +1658,20 @@ func (s CrossPkgShapes) JSONSize() int {
 	if n := len(s.Arr); n > 0 {
 		size += n - 1
 	}
-	size += len(s.Arr) * 128
-	size += len(s.Dict) * 132
-	for k := range s.Dict {
+	for i0 := range s.Arr {
+		size += s.Arr[i0].JSONSize()
+	}
+	size += len(s.Dict) * 4
+	for k, v := range s.Dict {
 		size += len(k) * 2
+		size += v.JSONSize()
 	}
 	if n := len(s.Many); n > 0 {
 		size += n - 1
 	}
-	size += len(s.Many) * 128
+	for i0 := range s.Many {
+		size += s.Many[i0].JSONSize()
+	}
 	size += s.One.JSONSize()
 	if s.PPtr == nil {
 		size += 4
@@ -1715,7 +1692,7 @@ func (s CrossPkgShapes) JSONSize() int {
 		if s.Slab[i0] == nil {
 			size += 4
 		} else {
-			size += 128
+			size += (*s.Slab[i0]).JSONSize()
 		}
 	}
 	return size
@@ -1727,20 +1704,16 @@ func (s CrossPkgShapes) AppendJSON(dst []byte) ([]byte, error) {
 	dst = append(dst, "{\"arr\":["...)
 	if len(s.Arr) > 0 {
 		{
-			bs, err := json.Marshal(s.Arr[0])
-			if err != nil {
+			if dst, err = s.Arr[0].AppendJSON(dst); err != nil {
 				return dst, err
 			}
-			dst = append(dst, bs...)
 		}
 		for _, v0 := range s.Arr[1:] {
 			dst = append(dst, ',')
 			{
-				bs, err := json.Marshal(v0)
-				if err != nil {
+				if dst, err = v0.AppendJSON(dst); err != nil {
 					return dst, err
 				}
-				dst = append(dst, bs...)
 			}
 		}
 	}
@@ -1759,11 +1732,9 @@ func (s CrossPkgShapes) AppendJSON(dst []byte) ([]byte, error) {
 			}
 			dst = ggen.AppendStringNoHTML(dst, k)
 			dst = append(dst, ':')
-			bs, err := json.Marshal(v)
-			if err != nil {
+			if dst, err = v.AppendJSON(dst); err != nil {
 				return dst, err
 			}
-			dst = append(dst, bs...)
 		}
 		dst = append(dst, '}')
 	}
@@ -1774,20 +1745,16 @@ func (s CrossPkgShapes) AppendJSON(dst []byte) ([]byte, error) {
 		dst = append(dst, '[')
 		if len(s.Many) > 0 {
 			{
-				bs, err := json.Marshal(s.Many[0])
-				if err != nil {
+				if dst, err = s.Many[0].AppendJSON(dst); err != nil {
 					return dst, err
 				}
-				dst = append(dst, bs...)
 			}
 			for _, v0 := range s.Many[1:] {
 				dst = append(dst, ',')
 				{
-					bs, err := json.Marshal(v0)
-					if err != nil {
+					if dst, err = v0.AppendJSON(dst); err != nil {
 						return dst, err
 					}
-					dst = append(dst, bs...)
 				}
 			}
 		}
@@ -1825,11 +1792,9 @@ func (s CrossPkgShapes) AppendJSON(dst []byte) ([]byte, error) {
 				dst = append(dst, "null"...)
 			} else {
 				{
-					bs, err := json.Marshal((*s.Slab[0]))
-					if err != nil {
+					if dst, err = (*s.Slab[0]).AppendJSON(dst); err != nil {
 						return dst, err
 					}
-					dst = append(dst, bs...)
 				}
 			}
 			for _, v0 := range s.Slab[1:] {
@@ -1838,11 +1803,9 @@ func (s CrossPkgShapes) AppendJSON(dst []byte) ([]byte, error) {
 					dst = append(dst, "null"...)
 				} else {
 					{
-						bs, err := json.Marshal((*v0))
-						if err != nil {
+						if dst, err = (*v0).AppendJSON(dst); err != nil {
 							return dst, err
 						}
-						dst = append(dst, bs...)
 					}
 				}
 			}

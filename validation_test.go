@@ -1,6 +1,9 @@
 package ggen
 
-import "testing"
+import (
+	"errors"
+	"testing"
+)
 
 // A fail-fast leaf nested under a multierr parent gets the outer segment —
 // Append used to prepend only for nested Errors aggregates, contradicting
@@ -50,5 +53,24 @@ func TestErrorsError_EmptyMessageLeaf(t *testing.T) {
 	es := Errors{Errors{}}
 	if got := es.Error(); got != "" {
 		t.Errorf("got %q", got)
+	}
+}
+
+// A nested fallible mod's ModError is born pre-wrapped in a *ParseError, so
+// the outer rebase has to cascade into the cause.
+func TestParseErrAddPosCascadesToModError(t *testing.T) {
+	inner := NewParseErr("f", 5, &ModError{Name: "clamp", Pos: 5})
+	outer := NewParseErrShift("b", 105, 5, inner)
+
+	var pe *ParseError
+	if !errors.As(outer, &pe) || pe.Pos != 105 {
+		t.Fatalf("outer Pos = %v, want 105", pe)
+	}
+	var me *ModError
+	if !errors.As(outer, &me) {
+		t.Fatal("no ModError")
+	}
+	if me.Pos != 105 {
+		t.Errorf("ModError.Pos = %d, want 105", me.Pos)
 	}
 }

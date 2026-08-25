@@ -19,8 +19,7 @@ func renderAliasDecode(b *bytes.Buffer, s StructInfo) {
 		return
 	}
 	const wrap = `if err != nil { return result, i, ggen.NewParseErr("", i, err) }`
-	// Leading whitespace is legal before any top-level value; container and
-	// struct aliases already skip it via ArrayOpen/ObjectOpen.
+	// Leading whitespace is legal before any top-level value.
 	inlineSkipWS(b, "i")
 	switch s.AliasKind {
 	case KindString:
@@ -90,7 +89,7 @@ func renderAliasSize(s StructInfo) string {
 	case KindUint, KindUint8, KindUint16, KindUint32, KindUint64:
 		return "return 20\n" // 18446744073709551615
 	case KindFloat32, KindFloat64:
-		return "return 24\n" // strconv.AppendFloat 'g' max
+		return fmt.Sprintf("return %d\n", sizeFloat)
 	case KindBytes:
 		// `[]byte` base64 expansion is ~4/3 + padding + quotes
 		return "return len(s)*4/3 + 8\n"
@@ -200,7 +199,10 @@ return result, k, nil
 `, s.AliasUnderlying, s.Name)
 		}
 	case s.AliasIface.TextUnmarshaler:
+		// The ByteDecoder/JSONUnmarshaler rungs skip leading whitespace inside
+		// the delegated DecodeFrom / SkipValue; the string scans here don't.
 		if stream {
+			b.WriteString(`if err := s.SkipSpace(); err != nil { return result, ggen.NewParseErr("", s.Offset(), err) }` + "\n")
 			fmt.Fprintf(b, `ts, err := s.String(`+vArgS(s)+`)
 if err != nil { return result, ggen.NewParseErr("", s.Offset(), err) }
 var u %[1]s
@@ -209,6 +211,7 @@ result = %[2]s(u)
 return result, nil
 `, s.AliasUnderlying, s.Name)
 		} else {
+			inlineSkipWS(b, "i")
 			fmt.Fprintf(b, `ts, tj, err := `+scanStringFn+`(data, i, `+vArgS(s)+`)
 if err != nil { return result, i, ggen.NewParseErr("", i, err) }
 var u %[1]s
@@ -289,7 +292,10 @@ func renderAliasContainerDecode(b *bytes.Buffer, s StructInfo, stream bool) {
 	// carried-in data. KindArray has no nil state (every slot overwritten).
 	switch s.AliasKind {
 	case KindSlice, KindBytes:
-		b.WriteString("if result != nil { result = result[:0] }\n")
+		// A folded [N]byte is still an array — no nil state, not resliceable.
+		if s.AliasField.ArrayLen == 0 {
+			b.WriteString("if result != nil { result = result[:0] }\n")
+		}
 	case KindMap:
 		b.WriteString("if result != nil { clear(result) }\n")
 	}
@@ -329,6 +335,9 @@ func renderAliasContainerDecode(b *bytes.Buffer, s StructInfo, stream bool) {
 		}
 	case KindBytes:
 		if stream {
+			// The other stream kinds reach their first byte through
+			// ArrayOpen/ObjectOpen; renderStreamBytes indexes s.Pos directly.
+			b.WriteString(`if err := s.SkipSpace(); err != nil { return result, ggen.NewParseErr("", s.Offset(), err) }` + "\n")
 			renderStreamBytes(b, f, "result", posVar)
 		} else {
 			renderBytes(b, f, "result", posVar)

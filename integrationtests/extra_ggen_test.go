@@ -7494,7 +7494,7 @@ func (recv ElemKinds) DecodeFromStream(s *ggen.Stream) (result ElemKinds, err er
 				if err != nil {
 					return result, ggen.NewParseErr("raws[]", s.Offset(), err)
 				}
-				result.Raws[len(result.Raws)-1] = append(make([]byte, 0, len(span)), span...)
+				result.Raws[len(result.Raws)-1] = append(result.Raws[len(result.Raws)-1][:0], span...)
 				err = s.SkipSpace()
 				if err != nil {
 					return result, ggen.NewParseErr("raws", s.Offset(), err)
@@ -9327,7 +9327,7 @@ func (recv MapVals) DecodeFromStream(s *ggen.Stream) (result MapVals, err error)
 					if err != nil {
 						return result, ggen.NewParseErr("raws.value", s.Offset(), err)
 					}
-					mv = append(make([]byte, 0, len(span)), span...)
+					mv = append(mv[:0], span...)
 					result.Raws[mk] = mv
 				}
 				err = s.SkipSpace()

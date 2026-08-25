@@ -156,6 +156,9 @@ func (s *Stream) skipSpaceSlowAVX512() error {
 func (s *Stream) skipStringStreamTail(start, bs int) (int, int, error) {
 	if bs+1 >= len(s.buf) {
 		if err := s.ReadMore(bs); err != nil {
+			// ReadMore compacted from bs — rebase or Offset() runs past the
+			// end of the document.
+			s.Pos = 0
 			return 0, 0, NotEOF(err, ErrBadString)
 		}
 		start = 0
@@ -167,16 +170,19 @@ func (s *Stream) skipStringStreamTail(start, bs int) (int, int, error) {
 	case 'u':
 		for bs+6 > len(s.buf) {
 			if err := s.ReadMore(bs); err != nil {
+				s.Pos = 0
 				return 0, 0, NotEOF(err, ErrBadString)
 			}
 			start = 0
 			bs = 0
 		}
 		if _, ok := parseHex4(s.buf[bs+2 : bs+6]); !ok {
+			s.Pos = bs
 			return 0, 0, ErrBadString
 		}
 		return bs + 6, start, nil
 	default:
+		s.Pos = bs
 		return 0, 0, ErrBadString
 	}
 }
@@ -185,12 +191,15 @@ func (s *Stream) skipStringStreamTail(start, bs int) (int, int, error) {
 func (s *Stream) skipStringAVX() error {
 	i := s.Pos
 	if i >= len(s.buf) {
-		if err := s.ReadMore(i); err != nil {
+		err := s.ReadMore(i)
+		i = 0
+		if err != nil {
+			s.Pos = i
 			return NotEOF(err, ErrExpectString)
 		}
-		i = 0
 	}
 	if s.buf[i] != '"' {
+		s.Pos = i
 		return ErrExpectString
 	}
 	start := i + 1
@@ -204,6 +213,7 @@ func (s *Stream) skipStringAVX() error {
 			j = 0
 			start = 0
 			if err != nil {
+				s.Pos = j
 				return NotEOF(err, ErrUnterminated)
 			}
 			continue
@@ -219,6 +229,7 @@ func (s *Stream) skipStringAVX() error {
 			}
 			j, start = nj, nstart
 		default:
+			s.Pos = j
 			return ErrBadString
 		}
 	}
@@ -228,12 +239,15 @@ func (s *Stream) skipStringAVX() error {
 func (s *Stream) skipStringAVX2() error {
 	i := s.Pos
 	if i >= len(s.buf) {
-		if err := s.ReadMore(i); err != nil {
+		err := s.ReadMore(i)
+		i = 0
+		if err != nil {
+			s.Pos = i
 			return NotEOF(err, ErrExpectString)
 		}
-		i = 0
 	}
 	if s.buf[i] != '"' {
+		s.Pos = i
 		return ErrExpectString
 	}
 	start := i + 1
@@ -247,6 +261,7 @@ func (s *Stream) skipStringAVX2() error {
 			j = 0
 			start = 0
 			if err != nil {
+				s.Pos = j
 				return NotEOF(err, ErrUnterminated)
 			}
 			continue
@@ -262,6 +277,7 @@ func (s *Stream) skipStringAVX2() error {
 			}
 			j, start = nj, nstart
 		default:
+			s.Pos = j
 			return ErrBadString
 		}
 	}
@@ -271,12 +287,15 @@ func (s *Stream) skipStringAVX2() error {
 func (s *Stream) skipStringAVX512() error {
 	i := s.Pos
 	if i >= len(s.buf) {
-		if err := s.ReadMore(i); err != nil {
+		err := s.ReadMore(i)
+		i = 0
+		if err != nil {
+			s.Pos = i
 			return NotEOF(err, ErrExpectString)
 		}
-		i = 0
 	}
 	if s.buf[i] != '"' {
+		s.Pos = i
 		return ErrExpectString
 	}
 	start := i + 1
@@ -290,6 +309,7 @@ func (s *Stream) skipStringAVX512() error {
 			j = 0
 			start = 0
 			if err != nil {
+				s.Pos = j
 				return NotEOF(err, ErrUnterminated)
 			}
 			continue
@@ -305,6 +325,7 @@ func (s *Stream) skipStringAVX512() error {
 			}
 			j, start = nj, nstart
 		default:
+			s.Pos = j
 			return ErrBadString
 		}
 	}
@@ -426,9 +447,9 @@ func (s *Stream) skipObjectAVX(depth int) error {
 	}
 	for {
 		if err := s.skipStringAVX(); err != nil {
-			// Drained at a key start (only reachable after a comma — the
-			// head guaranteed a byte): the bytes loop reports ErrBadObject.
-			if err == ErrExpectString && s.Pos >= len(s.buf) {
+			// skipString reports ErrExpectString only at the key head; the
+			// bytes loop reports ErrBadObject there — see Stream.skipObject.
+			if err == ErrExpectString {
 				return ErrBadObject
 			}
 			return err
@@ -569,9 +590,9 @@ func (s *Stream) skipObjectAVX2(depth int) error {
 	}
 	for {
 		if err := s.skipStringAVX2(); err != nil {
-			// Drained at a key start (only reachable after a comma — the
-			// head guaranteed a byte): the bytes loop reports ErrBadObject.
-			if err == ErrExpectString && s.Pos >= len(s.buf) {
+			// skipString reports ErrExpectString only at the key head; the
+			// bytes loop reports ErrBadObject there — see Stream.skipObject.
+			if err == ErrExpectString {
 				return ErrBadObject
 			}
 			return err
@@ -676,7 +697,8 @@ func (s *Stream) CaptureValueAVX() ([]byte, error) {
 		// Stream.CaptureValue; without this a live reader that delivered a
 		// complete malformed value blocks in Read forever. The tier skip
 		// preserves its give-up position (scalar-identical by parity test).
-		if err != nil && end < len(s.buf) {
+		// ErrMaxDepth is final wherever it lands.
+		if err != nil && (end < len(s.buf) || err == ErrMaxDepth) {
 			s.Pos = start
 			return nil, err
 		}
@@ -714,7 +736,8 @@ func (s *Stream) CaptureValueAVX2() ([]byte, error) {
 		// Stream.CaptureValue; without this a live reader that delivered a
 		// complete malformed value blocks in Read forever. The tier skip
 		// preserves its give-up position (scalar-identical by parity test).
-		if err != nil && end < len(s.buf) {
+		// ErrMaxDepth is final wherever it lands.
+		if err != nil && (end < len(s.buf) || err == ErrMaxDepth) {
 			s.Pos = start
 			return nil, err
 		}
@@ -752,7 +775,8 @@ func (s *Stream) CaptureValueAVX512() ([]byte, error) {
 		// Stream.CaptureValue; without this a live reader that delivered a
 		// complete malformed value blocks in Read forever. The tier skip
 		// preserves its give-up position (scalar-identical by parity test).
-		if err != nil && end < len(s.buf) {
+		// ErrMaxDepth is final wherever it lands.
+		if err != nil && (end < len(s.buf) || err == ErrMaxDepth) {
 			s.Pos = start
 			return nil, err
 		}
@@ -829,9 +853,9 @@ func (s *Stream) skipObjectAVX512(depth int) error {
 	}
 	for {
 		if err := s.skipStringAVX512(); err != nil {
-			// Drained at a key start (only reachable after a comma — the
-			// head guaranteed a byte): the bytes loop reports ErrBadObject.
-			if err == ErrExpectString && s.Pos >= len(s.buf) {
+			// skipString reports ErrExpectString only at the key head; the
+			// bytes loop reports ErrBadObject there — see Stream.skipObject.
+			if err == ErrExpectString {
 				return ErrBadObject
 			}
 			return err

@@ -17,21 +17,27 @@ import (
 // `json:"name,omitempty,omitzero,string,inline"` tags; anonymous embedded
 // fields are promoted at parent level. Strings escape without HTML-safety
 // (<, >, & literal); AppendAnyHTML is the HTML-safe variant.
+//
+// Nesting past maxDepth returns ErrMaxDepth, which is also what a cyclic
+// value hits.
 func AppendAny(dst []byte, v any) ([]byte, error) {
-	return appendAny(dst, v, AppendStringNoHTML)
+	return appendAny(dst, v, AppendStringNoHTML, 0)
 }
 
 // AppendAnyHTML is AppendAny with HTML-safe string escaping (<, >, & →
 // \uXXXX).
 func AppendAnyHTML(dst []byte, v any) ([]byte, error) {
-	return appendAny(dst, v, AppendString)
+	return appendAny(dst, v, AppendString, 0)
 }
 
 // escapeFn (AppendString or AppendStringNoHTML) is threaded through the
 // whole any-walk so nested strings and map keys escape consistently.
 type escapeFn = func([]byte, string) []byte
 
-func appendAny(dst []byte, v any, esc escapeFn) ([]byte, error) {
+func appendAny(dst []byte, v any, esc escapeFn, depth int) ([]byte, error) {
+	if depth > maxDepth {
+		return dst, ErrMaxDepth
+	}
 	switch x := v.(type) {
 	case nil:
 		return append(dst, 'n', 'u', 'l', 'l'), nil
@@ -79,7 +85,7 @@ func appendAny(dst []byte, v any, esc escapeFn) ([]byte, error) {
 				dst = append(dst, ',')
 			}
 			var err error
-			dst, err = appendAny(dst, e, esc)
+			dst, err = appendAny(dst, e, esc, depth+1)
 			if err != nil {
 				return dst, err
 			}
@@ -158,7 +164,7 @@ func appendAny(dst []byte, v any, esc escapeFn) ([]byte, error) {
 			dst = esc(dst, k)
 			dst = append(dst, ':')
 			var err error
-			dst, err = appendAny(dst, val, esc)
+			dst, err = appendAny(dst, val, esc, depth+1)
 			if err != nil {
 				return dst, err
 			}
@@ -337,7 +343,7 @@ func appendAny(dst []byte, v any, esc escapeFn) ([]byte, error) {
 		if rv.IsNil() {
 			return append(dst, 'n', 'u', 'l', 'l'), nil
 		}
-		return appendAny(dst, rv.Elem().Interface(), esc)
+		return appendAny(dst, rv.Elem().Interface(), esc, depth+1)
 	// Named primitives (`type MyEnum int`, …) land here — the type switch
 	// matches only predeclared types exactly.
 	case reflect.Bool:
@@ -354,7 +360,7 @@ func appendAny(dst []byte, v any, esc escapeFn) ([]byte, error) {
 	case reflect.Float64:
 		return AppendFloat(dst, rv.Float(), 64)
 	case reflect.Struct:
-		return appendStruct(dst, rv, esc)
+		return appendStruct(dst, rv, esc, depth)
 	case reflect.Slice, reflect.Array:
 		// uint8-elem slices/arrays marshal as base64 (e.g. `type Bytes []byte`).
 		if rv.Type().Elem().Kind() == reflect.Uint8 {
@@ -377,7 +383,7 @@ func appendAny(dst []byte, v any, esc escapeFn) ([]byte, error) {
 				dst = append(dst, ',')
 			}
 			var err error
-			dst, err = appendReflectValue(dst, rv.Index(i), elemKind, esc)
+			dst, err = appendReflectValue(dst, rv.Index(i), elemKind, esc, depth+1)
 			if err != nil {
 				return dst, err
 			}
@@ -406,7 +412,7 @@ func appendAny(dst []byte, v any, esc escapeFn) ([]byte, error) {
 			dst = esc(dst, kv.String())
 			dst = append(dst, ':')
 			var err error
-			dst, err = appendReflectValue(dst, vv, elemKind, esc)
+			dst, err = appendReflectValue(dst, vv, elemKind, esc, depth+1)
 			if err != nil {
 				return dst, err
 			}
@@ -564,9 +570,9 @@ func appendPtrUint[V uint | uint8 | uint16 | uint32 | uint64](dst []byte, p *V) 
 // their marshalers (json.Number's unquoted case, a MarshalJSON/AppendText on
 // `type Level int`) live in the type switch, and the kind fast path was
 // silently bypassing them.
-func appendReflectValue(dst []byte, rv reflect.Value, kind reflect.Kind, esc escapeFn) ([]byte, error) {
+func appendReflectValue(dst []byte, rv reflect.Value, kind reflect.Kind, esc escapeFn, depth int) ([]byte, error) {
 	if t := rv.Type(); t.PkgPath() != "" {
-		return appendAny(dst, rv.Interface(), esc)
+		return appendAny(dst, rv.Interface(), esc, depth)
 	}
 	switch kind {
 	case reflect.String:
@@ -583,7 +589,7 @@ func appendReflectValue(dst []byte, rv reflect.Value, kind reflect.Kind, esc esc
 	case reflect.Float64:
 		return AppendFloat(dst, rv.Float(), 64)
 	}
-	return appendAny(dst, rv.Interface(), esc)
+	return appendAny(dst, rv.Interface(), esc, depth)
 }
 
 // fieldInfo describes one JSON-visible field of a struct type.
@@ -775,7 +781,7 @@ func isJSONEmpty(v reflect.Value) bool {
 	return false
 }
 
-func appendStruct(dst []byte, rv reflect.Value, esc escapeFn) ([]byte, error) {
+func appendStruct(dst []byte, rv reflect.Value, esc escapeFn, depth int) ([]byte, error) {
 	info := cachedStructInfo(rv.Type())
 	dst = append(dst, '{')
 	first := true
@@ -808,7 +814,7 @@ func appendStruct(dst []byte, rv reflect.Value, esc escapeFn) ([]byte, error) {
 				dst = esc(dst, iter.Key().String())
 				dst = append(dst, ':')
 				var err error
-				dst, err = appendAny(dst, iter.Value().Interface(), esc)
+				dst, err = appendAny(dst, iter.Value().Interface(), esc, depth+1)
 				if err != nil {
 					return dst, err
 				}
@@ -828,7 +834,7 @@ func appendStruct(dst []byte, rv reflect.Value, esc escapeFn) ([]byte, error) {
 			dst = append(dst, '"')
 		}
 		var err error
-		dst, err = appendAny(dst, fv.Interface(), esc)
+		dst, err = appendAny(dst, fv.Interface(), esc, depth+1)
 		if err != nil {
 			return dst, err
 		}

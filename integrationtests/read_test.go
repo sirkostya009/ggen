@@ -165,3 +165,24 @@ func TestRead_validationNotWrapped(t *testing.T) {
 		t.Fatalf("validation error wrapped in ParseError: %v", err)
 	}
 }
+
+// The unknown-key branch must clone the KeyView alias BEFORE ConsumeColon /
+// SkipValue: both compact the stream buffer, shifting the bytes the alias
+// points at, so a lazily-cloned key lands in the error path as garbage.
+func TestIgnoreUnknown_streamErrorKeepsKeyName(t *testing.T) {
+	t.Parallel()
+	payload := `{"unknownkeyname":[` + strings.Repeat("1,", 400) + `@]}`
+	var s ggen.Stream
+	s.Reset(&chunkReader{data: []byte(payload), max: 1}, make([]byte, 0, 32))
+	if _, err := (IgnoreUnknownStruct{}).DecodeFromStream(&s); err == nil {
+		t.Fatal("want parse error")
+	} else {
+		var pe *ggen.ParseError
+		if !errors.As(err, &pe) {
+			t.Fatalf("err = %T %v", err, err)
+		}
+		if len(pe.Path) != 1 || pe.Path[0] != "unknownkeyname" {
+			t.Errorf("Path = %q, want [unknownkeyname]", pe.Path)
+		}
+	}
+}

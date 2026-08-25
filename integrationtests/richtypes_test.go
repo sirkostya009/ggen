@@ -6,6 +6,7 @@ package integrationtests
 // url.URL, math/big, and google/uuid.
 
 import (
+	"bytes"
 	"encoding/json"
 	"encoding/json/jsontext"
 	"math/big"
@@ -182,5 +183,35 @@ func TestRich_RoundtripDeepEqual(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got.Site, in.Site) {
 		t.Errorf("Site mismatch:\n got:  %#v\n want: %#v", got.Site, in.Site)
+	}
+}
+
+// RawOnly isolates the raw-span field so the stream decode's allocations are
+// attributable to it alone.
+//
+//ggen:generate
+type RawOnly struct {
+	Raw json.RawMessage `json:"raw"`
+}
+
+// A reused receiver's raw backing is refilled, not reallocated, so a steady
+// stream of same-shaped values settles at zero allocations per decode.
+func TestRawJSON_StreamReusesReceiverBacking(t *testing.T) {
+	payload := []byte(`{"raw":{"nested":[1,2,3],"s":"abcdefghij"}}` + "\n")
+	var s ggen.Stream
+	buf := make([]byte, 0, 256)
+	rd := bytes.NewReader(payload)
+	prev := RawOnly{}
+	n := testing.AllocsPerRun(200, func() {
+		rd.Reset(payload)
+		s.Reset(rd, buf)
+		v, err := prev.DecodeFromStream(&s)
+		if err != nil {
+			t.Fatal(err)
+		}
+		prev = v
+	})
+	if n != 0 {
+		t.Errorf("steady-state stream decode: %v allocs/op, want 0", n)
 	}
 }

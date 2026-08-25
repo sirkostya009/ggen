@@ -355,14 +355,15 @@ func (recv MultiErrStruct) DecodeFromStream(s *ggen.Stream) (result MultiErrStru
 
 			}
 		default:
-			errs = append(errs, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}})
+			ownKey := strings.Clone(key)
+			errs = append(errs, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}})
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, ggen.NewParseErr(strings.Clone(key), s.Offset(), err)
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
 			err = s.SkipValue()
 			if err != nil {
-				return result, ggen.NewParseErr(strings.Clone(key), s.Offset(), err)
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
 		}
 

@@ -45,6 +45,41 @@ func TestSeqBufferStaysBounded(t *testing.T) {
 	}
 }
 
+// Slice gathers every element, but the Stream's window must stay bounded the
+// same way Seq's and Array's do — consumed bytes are dropped once it is full.
+func TestSliceBufferStaysBounded(t *testing.T) {
+	t.Parallel()
+	for _, bufCap := range []int{64, 256, 1024} {
+		var sb bytes.Buffer
+		sb.WriteByte('[')
+		for i := range 200 {
+			if i > 0 {
+				sb.WriteByte(',')
+			}
+			sb.Write(complexPayload)
+		}
+		sb.WriteByte(']')
+		var s ggen.Stream
+		s.Reset(bytes.NewReader(sb.Bytes()), make([]byte, 0, bufCap))
+		got, err := s.Slice[Node]()
+		if err != nil {
+			t.Fatalf("bufCap=%d: %v", bufCap, err)
+		}
+		if len(got) != 200 {
+			t.Errorf("bufCap=%d: gathered %d elements, want 200", bufCap, len(got))
+		}
+		for i, v := range got {
+			if v.ID != 42 || len(v.Children) != 2 {
+				t.Fatalf("bufCap=%d elem %d decoded wrong: %+v", bufCap, i, v)
+			}
+		}
+		if want := max(bufCap, 2*len(complexPayload)); cap(s.Bytes()) > want {
+			t.Errorf("bufCap=%d: buffer ratcheted to %d, want <= %d (element is %d B)",
+				bufCap, cap(s.Bytes()), want, len(complexPayload))
+		}
+	}
+}
+
 // Array must hold the same bound as Seq over a long array of GENERATED
 // container-bearing elements: yielded elements are dropped once the window is
 // full, so the grow-only emitted refills cannot ratchet it.

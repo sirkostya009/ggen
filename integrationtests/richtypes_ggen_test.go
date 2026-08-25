@@ -386,7 +386,7 @@ func (recv RichTypes) DecodeFromStream(s *ggen.Stream) (result RichTypes, err er
 			if err != nil {
 				return result, ggen.NewParseErr("raw1", s.Offset(), err)
 			}
-			result.Raw1 = append(make([]byte, 0, len(span)), span...)
+			result.Raw1 = append(result.Raw1[:0], span...)
 		case "raw2":
 			err = s.ConsumeColon()
 			if err != nil {
@@ -404,7 +404,7 @@ func (recv RichTypes) DecodeFromStream(s *ggen.Stream) (result RichTypes, err er
 			if err != nil {
 				return result, ggen.NewParseErr("raw2", s.Offset(), err)
 			}
-			result.Raw2 = append(make([]byte, 0, len(span)), span...)
+			result.Raw2 = append(result.Raw2[:0], span...)
 		case "site":
 			err = s.ConsumeColon()
 			if err != nil {
@@ -519,5 +519,189 @@ func (s RichTypes) AppendJSON(dst []byte) ([]byte, error) {
 	}
 	dst = append(dst, ",\"site\":\""...)
 	dst = ggen.AppendURL(dst, s.Site)
+	return append(dst, '}'), nil
+}
+
+func (recv RawOnly) DecodeFrom(data []byte) (result RawOnly, i int, err error) {
+	result = recv
+	seenRaw := false
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+	}
+	i++
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		i++
+		return result, i, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrExpectString)
+		}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+			ke++
+		}
+		if ke < len(data) && data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = ggen.String(data, i, true)
+			if err != nil {
+				return result, i, ggen.NewParseErr("", i, err)
+			}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+		}
+		i++
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch key {
+		case "raw":
+			if seenRaw {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"raw"}}
+			}
+			seenRaw = true
+			start := i
+			i, err = ggen.SkipValue(data, start)
+			if err != nil {
+				return result, i, ggen.NewParseErr("raw", i, err)
+			}
+			err = ggen.CheckUTF8(data[start:i])
+			if err != nil {
+				return result, i, ggen.NewParseErr("raw", i, err)
+			}
+			result.Raw = data[start:i]
+		default:
+			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			i++
+			return result, i, nil
+		}
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+	}
+}
+
+func (recv RawOnly) DecodeFromStream(s *ggen.Stream) (result RawOnly, err error) {
+	result = recv
+	seenRaw := false
+	err = s.ObjectOpen()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView(true)
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		switch key {
+		case "raw":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("raw", s.Offset(), err)
+			}
+			if seenRaw {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"raw"}}
+			}
+			seenRaw = true
+			span, err := s.CaptureValue()
+			if err != nil {
+				return result, ggen.NewParseErr("raw", s.Offset(), err)
+			}
+			err = ggen.CheckUTF8(span)
+			if err != nil {
+				return result, ggen.NewParseErr("raw", s.Offset(), err)
+			}
+			result.Raw = append(result.Raw[:0], span...)
+		default:
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+		}
+
+		err = s.SkipSpace()
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), err)
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			return result, nil
+		}
+		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
+	}
+}
+
+func (s RawOnly) JSONSize() int {
+	size := 8
+	if n := len(s.Raw); n > 0 {
+		size += n
+	} else {
+		size += 4
+	}
+	return size
+}
+
+func (s RawOnly) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"raw\":"...)
+	if len(s.Raw) == 0 {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, s.Raw...)
+	}
 	return append(dst, '}'), nil
 }

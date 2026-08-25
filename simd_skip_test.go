@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestSkipValueSIMD_Parity pins the tier skip trees against scalar SkipValue:
@@ -203,6 +204,78 @@ func TestStreamCaptureValueSIMD_LiveReader(t *testing.T) {
 				}
 				if string(got) != want {
 					t.Fatalf("%q: got %q", want, got)
+				}
+			}
+		})
+	}
+}
+
+// Tier twin of TestStreamCaptureValue_MaxDepthDoesNotHang — the purely
+// positional finality test was copied into every tier wrapper, so a bracket run
+// ending at the window edge wedged the goroutine in Read.
+func TestStreamCaptureValueSIMD_MaxDepthDoesNotHang(t *testing.T) {
+	t.Parallel()
+	for _, tier := range []struct {
+		name string
+		fn   func(*Stream) ([]byte, error)
+	}{
+		{"AVX", (*Stream).CaptureValueAVX},
+		{"AVX2", (*Stream).CaptureValueAVX2},
+		{"AVX512", (*Stream).CaptureValueAVX512},
+	} {
+		t.Run(tier.name, func(t *testing.T) {
+			t.Parallel()
+			block := make(chan struct{})
+			defer close(block)
+			done := make(chan error, 1)
+			go func() {
+				var s Stream
+				s.Reset(&liveReader{data: bytes.Repeat([]byte("["), maxDepth+1), block: block}, make([]byte, 0, 64))
+				_, err := tier.fn(&s)
+				done <- err
+			}()
+			select {
+			case err := <-done:
+				if err != ErrMaxDepth {
+					t.Errorf("got %v, want ErrMaxDepth", err)
+				}
+			case <-time.After(5 * time.Second):
+				t.Error("hung on a depth-capped value")
+			}
+		})
+	}
+}
+
+// Tier twin of TestStreamString_ErrorPos's skipString row: a refill site that
+// skips the post-compaction rebase leaves Pos past the end of the window.
+func TestStreamSkipStringSIMD_ErrorPos(t *testing.T) {
+	t.Parallel()
+	const prefix = `"pre"`
+	in := prefix + `"` + strings.Repeat("a", 100) + "\x01\""
+	for _, tier := range []struct {
+		name string
+		fn   func(*Stream) error
+	}{
+		{"AVX", (*Stream).skipStringAVX},
+		{"AVX2", (*Stream).skipStringAVX2},
+		{"AVX512", (*Stream).skipStringAVX512},
+	} {
+		t.Run(tier.name, func(t *testing.T) {
+			t.Parallel()
+			for _, chunk := range []int{1, 7, 64} {
+				var s Stream
+				s.Reset(strings.NewReader(in), make([]byte, 0, chunk))
+				if err := tier.fn(&s); err != nil {
+					t.Fatalf("chunk=%d: prefix: %v", chunk, err)
+				}
+				if err := tier.fn(&s); err != ErrBadString {
+					t.Fatalf("chunk=%d: err %v, want ErrBadString", chunk, err)
+				}
+				if s.Pos > len(s.Bytes()) {
+					t.Errorf("chunk=%d: Pos %d past len(buf) %d", chunk, s.Pos, len(s.Bytes()))
+				}
+				if got := s.Offset(); got > len(in) {
+					t.Errorf("chunk=%d: Offset %d past document length %d", chunk, got, len(in))
 				}
 			}
 		})

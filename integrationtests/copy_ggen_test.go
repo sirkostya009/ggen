@@ -3,6 +3,8 @@
 package integrationtests
 
 import (
+	"net"
+	"net/url"
 	"strings"
 	"unsafe"
 
@@ -759,7 +761,7 @@ func (recv CopyDoc) decodeFromStreamDepth(s *ggen.Stream, _depth int) (result Co
 			if err != nil {
 				return result, ggen.NewParseErr("raw", s.Offset(), err)
 			}
-			result.Raw = append(make([]byte, 0, len(span)), span...)
+			result.Raw = append(result.Raw[:0], span...)
 		case "refs":
 			err = s.ConsumeColon()
 			if err != nil {
@@ -1504,4 +1506,402 @@ func (s AliasDoc) AppendJSON(dst []byte) ([]byte, error) {
 	dst = append(dst, "{\"name\":\""...)
 	dst = ggen.AppendStringNoHTML(dst, s.Name)
 	return append(dst, '}'), nil
+}
+
+func (recv CopyURLDoc) DecodeFrom(data []byte) (result CopyURLDoc, i int, err error) {
+	result = recv
+	seenU := false
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+	}
+	i++
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		i++
+		return result, i, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrExpectString)
+		}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+			ke++
+		}
+		if ke < len(data) && data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = ggen.String(data, i, true)
+			if err != nil {
+				return result, i, ggen.NewParseErr("", i, err)
+			}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+		}
+		i++
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch key {
+		case "u":
+			if seenU {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"u"}}
+			}
+			seenU = true
+			var s string
+			if i >= len(data) || data[i] != '"' {
+				return result, i, ggen.NewParseErr("u", i, ggen.ErrExpectString)
+			}
+			ke := i + 1
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+				ke++
+			}
+			if ke < len(data) && data[ke] == '"' {
+				s = string(data[i+1 : ke])
+				i = ke + 1
+			} else {
+				s, i, err = ggen.String(data, i, true)
+				if err != nil {
+					return result, i, ggen.NewParseErr("u", i, err)
+				}
+				s = ggen.Detach(s, data)
+			}
+			var u *url.URL
+			u, err = url.Parse(s)
+			if err != nil {
+				return result, i, ggen.NewParseErr("u", i, err)
+			}
+			result.U = *u
+		default:
+			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{strings.Clone(key)}}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			i++
+			return result, i, nil
+		}
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+	}
+}
+
+func (recv CopyURLDoc) DecodeFromStream(s *ggen.Stream) (result CopyURLDoc, err error) {
+	result = recv
+	seenU := false
+	err = s.ObjectOpen()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView(true)
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		switch key {
+		case "u":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("u", s.Offset(), err)
+			}
+			if seenU {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"u"}}
+			}
+			seenU = true
+			var sv string
+			sv, err = s.String(true)
+			if err != nil {
+				return result, ggen.NewParseErr("u", s.Offset(), err)
+			}
+			u, err := url.Parse(sv)
+			if err != nil {
+				return result, ggen.NewParseErr("u", s.Offset(), err)
+			}
+			result.U = *u
+		default:
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+		}
+
+		err = s.SkipSpace()
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), err)
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			return result, nil
+		}
+		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
+	}
+}
+
+func (s CopyURLDoc) JSONSize() int {
+	size := 14
+	size += len(s.U.Scheme) + len(s.U.Host)*3 + len(s.U.Path)*3 + len(s.U.RawQuery)*2 + len(s.U.Fragment)*3 + len(s.U.Opaque)*2
+	if s.U.User != nil {
+		pw, _ := s.U.User.Password()
+		size += (len(s.U.User.Username())+len(pw))*3 + 2
+	}
+	return size
+}
+
+func (s CopyURLDoc) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"u\":\""...)
+	dst = ggen.AppendURL(dst, s.U)
+	return append(dst, '}'), nil
+}
+
+func (recv CopyIPDoc) DecodeFrom(data []byte) (result CopyIPDoc, i int, err error) {
+	result = recv
+	seenIP := false
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+	}
+	i++
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		i++
+		return result, i, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrExpectString)
+		}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+			ke++
+		}
+		if ke < len(data) && data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = ggen.String(data, i, true)
+			if err != nil {
+				return result, i, ggen.NewParseErr("", i, err)
+			}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+		}
+		i++
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch key {
+		case "ip":
+			if seenIP {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"ip"}}
+			}
+			seenIP = true
+			var s string
+			if i >= len(data) || data[i] != '"' {
+				return result, i, ggen.NewParseErr("ip", i, ggen.ErrExpectString)
+			}
+			ke := i + 1
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+				ke++
+			}
+			if ke < len(data) && data[ke] == '"' {
+				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				s, i, err = ggen.String(data, i, true)
+				if err != nil {
+					return result, i, ggen.NewParseErr("ip", i, err)
+				}
+			}
+			result.IP = net.ParseIP(s)
+			if result.IP == nil {
+				return result, i, ggen.NewParseErr("ip", i, &net.ParseError{Type: "IP address", Text: ggen.Detach(s, data)})
+			}
+		default:
+			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{strings.Clone(key)}}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			i++
+			return result, i, nil
+		}
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+	}
+}
+
+func (recv CopyIPDoc) DecodeFromStream(s *ggen.Stream) (result CopyIPDoc, err error) {
+	result = recv
+	seenIP := false
+	err = s.ObjectOpen()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView(true)
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		switch key {
+		case "ip":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("ip", s.Offset(), err)
+			}
+			if seenIP {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"ip"}}
+			}
+			seenIP = true
+			var sv string
+			sv, err = s.StringView(true)
+			if err != nil {
+				return result, ggen.NewParseErr("ip", s.Offset(), err)
+			}
+			result.IP = net.ParseIP(sv)
+			if result.IP == nil {
+				return result, ggen.NewParseErr("ip", s.Offset(), &net.ParseError{Type: "IP address", Text: strings.Clone(sv)})
+			}
+		default:
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+		}
+
+		err = s.SkipSpace()
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), err)
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			return result, nil
+		}
+		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
+	}
+}
+
+func (s CopyIPDoc) JSONSize() int {
+	size := 9
+	if s.IP.To4() != nil {
+		size += 15
+	} else if len(s.IP) != 0 {
+		size += 39
+	} else {
+		size += 2
+	}
+	return size
+}
+
+func (s CopyIPDoc) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"ip\":\""...)
+	if dst, err = s.IP.AppendText(dst); err != nil {
+		return dst, err
+	}
+	return append(dst, "\"}"...), nil
 }

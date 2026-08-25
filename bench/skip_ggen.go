@@ -180,13 +180,14 @@ func (recv SkipEnvelope) DecodeFromStream(s *ggen.Stream) (result SkipEnvelope, 
 				return result, ggen.NewParseErr("id", s.Offset(), err)
 			}
 		default:
+			ownKey := strings.Clone(key)
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, ggen.NewParseErr(strings.Clone(key), s.Offset(), err)
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
 			err = s.SkipValue()
 			if err != nil {
-				return result, ggen.NewParseErr(strings.Clone(key), s.Offset(), err)
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
 		}
 

@@ -1027,12 +1027,14 @@ type Validated struct {
 	t.Run("HtmlescapeFlag_OptsIntoEscapeAppender", func(t *testing.T) {
 		t.Parallel()
 		// Default emits AppendStringNoHTML (literal `<`/`>`/`&`); -htmlescape
-		// switches to the escaping AppendString.
+		// switches to the escaping AppendString. -simd=off pins the tier so the
+		// assertions hold under an ambient GOEXPERIMENT=simd, which would
+		// otherwise auto-select the AVX-suffixed appenders.
 		dir := t.TempDir()
 		writeFixture(t, filepath.Join(dir, "msg.go"), minimalStruct)
 
 		// Default → no-html appender.
-		if out, err := runCLI(t, bin, dir, "msg.go"); err != nil {
+		if out, err := runCLI(t, bin, dir, "-simd=off", "msg.go"); err != nil {
 			t.Fatalf("ggen default: %v\n%s", err, out)
 		}
 		body := mustReadOutput(t, filepath.Join(dir, "msg_ggen.go"))
@@ -1041,7 +1043,7 @@ type Validated struct {
 		}
 
 		// -htmlescape → escaping appender (and not the no-html one).
-		if out, err := runCLI(t, bin, dir, "-htmlescape", "msg.go"); err != nil {
+		if out, err := runCLI(t, bin, dir, "-htmlescape", "-simd=off", "msg.go"); err != nil {
 			t.Fatalf("ggen -htmlescape: %v\n%s", err, out)
 		}
 		body = mustReadOutput(t, filepath.Join(dir, "msg_ggen.go"))
@@ -2087,4 +2089,95 @@ type Msg struct {
 			})
 		}
 	})
+}
+
+// TestForeignElementCodegen pins the parse-layer element resolution: a foreign
+// element type must be spelled by package NAME, an element type reached only
+// through a container alias must be generated, and a foreign ggen element must
+// decode through its own DecodeFrom at every container position.
+func TestForeignElementCodegen(t *testing.T) {
+	t.Parallel()
+	bin := buildCLI(t)
+	base := t.TempDir()
+	writeFixture(t, filepath.Join(base, "go.mod"), "module elemtest\n\ngo 1.26\n")
+	writeFixture(t, filepath.Join(base, "ext", "ext.go"), `package ext
+
+type Plain struct {
+	A int `+"`"+`json:"a"`+"`"+`
+}
+`)
+	writeFixture(t, filepath.Join(base, "consumer", "msg.go"), `package consumer
+
+import "elemtest/ext"
+
+//ggen:generate
+type AliasThings []ext.Plain
+
+//ggen:generate
+type SoloList []SoloInner
+
+type SoloInner struct {
+	A int `+"`"+`json:"a"`+"`"+`
+}
+`)
+	if out, err := runCLI(t, bin, base, "./consumer"); err != nil {
+		t.Fatalf("ggen ./consumer: %v\n%s", err, out)
+	}
+	body := mustReadOutput(t, filepath.Join(base, "consumer", "consumer_ggen.go"))
+	if strings.Contains(body, "elemtest/ext.Plain") {
+		t.Errorf("foreign alias element spelled by import path (does not parse):\n%s", body)
+	}
+	if !strings.Contains(body, "ext.Plain{}") {
+		t.Errorf("expected ext.Plain element, got:\n%s", body)
+	}
+	if !strings.Contains(body, "func (recv SoloInner) DecodeFrom(") {
+		t.Errorf("alias-only element struct not generated:\n%s", body)
+	}
+}
+
+// A foreign ggen-generated element type runs the same ladder as the field
+// level — its DecodeFrom, not the reflective fallback.
+func TestForeignGgenElementDecodesDirectly(t *testing.T) {
+	t.Parallel()
+	bin := buildCLI(t)
+	base := t.TempDir()
+	writeFixture(t, filepath.Join(base, "go.mod"), "module ladtest\n\ngo 1.26\n")
+	writeFixture(t, filepath.Join(base, "ext", "ext.go"), `package ext
+
+//ggen:generate
+type Shaped struct {
+	A int `+"`"+`json:"a"`+"`"+`
+}
+`)
+	if out, err := runCLI(t, bin, base, "./ext"); err != nil {
+		t.Fatalf("ggen ./ext: %v\n%s", err, out)
+	}
+	writeFixture(t, filepath.Join(base, "consumer", "msg.go"), `package consumer
+
+import "ladtest/ext"
+
+//ggen:generate
+type Holder struct {
+	One  ext.Shaped            `+"`"+`json:"one"`+"`"+`
+	Many []ext.Shaped          `+"`"+`json:"many"`+"`"+`
+	Dict map[string]ext.Shaped `+"`"+`json:"dict"`+"`"+`
+	Arr  [2]ext.Shaped         `+"`"+`json:"arr"`+"`"+`
+}
+`)
+	if out, err := runCLI(t, bin, base, "./consumer"); err != nil {
+		t.Fatalf("ggen ./consumer: %v\n%s", err, out)
+	}
+	body := mustReadOutput(t, filepath.Join(base, "consumer", "consumer_ggen.go"))
+	if strings.Contains(body, "json.Unmarshal(data[") {
+		t.Errorf("bytes element decode fell to the reflective fallback:\n%s", body)
+	}
+	for _, want := range []string{
+		"result.Many[len(result.Many)-1].DecodeFrom(data[i:])",
+		"mv.DecodeFrom(data[i:])",
+		"result.Arr[idx0].DecodeFrom(data[i:])",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("missing %s in:\n%s", want, body)
+		}
+	}
 }

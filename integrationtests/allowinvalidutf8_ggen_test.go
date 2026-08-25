@@ -506,7 +506,7 @@ func (recv PermissiveDoc) DecodeFromStream(s *ggen.Stream) (result PermissiveDoc
 			if err != nil {
 				return result, ggen.NewParseErr("raw", s.Offset(), err)
 			}
-			result.Raw = append(make([]byte, 0, len(span)), span...)
+			result.Raw = append(result.Raw[:0], span...)
 		case "tags":
 			err = s.ConsumeColon()
 			if err != nil {

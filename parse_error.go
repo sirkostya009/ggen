@@ -43,8 +43,14 @@ func (e *ParseError) Error() string {
 func (e *ParseError) Unwrap() error { return e.Err }
 
 // AddPos rebases the error's byte offset by d (bytes-path nested-decode
-// rebase — see NewParseErrShift).
-func (e *ParseError) AddPos(d int) { e.Pos += d }
+// rebase — see NewParseErrShift). The wrapped cause is rebased too when it
+// carries its own position (a nested fallible mod's ModError).
+func (e *ParseError) AddPos(d int) {
+	e.Pos += d
+	if ap, ok := e.Err.(interface{ AddPos(int) }); ok {
+		ap.AddPos(d)
+	}
+}
 
 // NewParseErrShift is NewParseErr for the bytes path's nested-decode sites.
 // The callee ran on data[pos-n:] (n = bytes it consumed before stopping), so

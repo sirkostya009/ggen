@@ -351,10 +351,19 @@ func collectImports(structs []StructInfo, bodies [][]byte) ([]string, []string) 
 		if s.IsAlias && s.AliasKind == KindStruct {
 			add(s.AliasUnderlyingImport)
 		}
-		// streamUnknownKey emits strings.Clone(key) in every mode except
-		// pure -ignoreunknown.
-		if !s.IsAlias && (s.InlineField().Inline || !s.IgnoreUnknown) {
+		// streamUnknownKey clones the KeyView alias in every mode.
+		if !s.IsAlias {
 			add("strings")
+		}
+		// A container alias keeps its shape in AliasField, not Fields.
+		if s.IsAlias {
+			switch s.AliasKind {
+			case KindBytes, KindSlice, KindArray, KindMap:
+				collectFieldImports(s.AliasField, add, &anyString, &anyValidation, &anyBytes, &anyRequired)
+				for _, ti := range s.AliasField.TypeImports {
+					foreign[ti.Name] = ti.Path
+				}
+			}
 		}
 		for _, f := range s.Fields {
 			collectFieldImports(f, add, &anyString, &anyValidation, &anyBytes, &anyRequired)
@@ -2557,12 +2566,11 @@ func emitSliceElement(b *bytes.Buffer, f FieldInfo, vref string, depth int) {
 		if isGenerated(f.ElemType) {
 			fmt.Fprintf(b, "if dst, err = %s.AppendJSON(dst); err != nil { return dst, err }\n", vref)
 		} else {
-			fmt.Fprintf(b, `{
-	bs, err := json.Marshal(%s)
-	if err != nil { return dst, err }
-	dst = append(dst, bs...)
-}
-`, vref)
+			// Same ladder as the field level (AppendJSON → MarshalJSON →
+			// AppendText → MarshalText → encoding/json), so a foreign ggen
+			// element marshals the way it decodes. Braced: the temp-declaring
+			// arms emit once for the first element and once in the loop.
+			fmt.Fprintf(b, "{\n%s}\n", renderCrossPkgStructAppend(sliceElemField(f), vref))
 		}
 	case KindSlice, KindArray:
 		emitAppendSlice(b, peelSliceField(f), vref, depth+1)
@@ -2625,11 +2633,9 @@ dst = append(dst, ':')
 		if isGenerated(f.ElemType) {
 			b.WriteString("if dst, err = v.AppendJSON(dst); err != nil { return dst, err }\n")
 		} else {
-			// Loop-scoped — no wrapper needed.
-			b.WriteString(`bs, err := json.Marshal(v)
-if err != nil { return dst, err }
-dst = append(dst, bs...)
-`)
+			// Loop-scoped — no wrapper needed. Same ladder as the field level,
+			// so a foreign ggen value marshals the way it decodes.
+			b.WriteString(renderCrossPkgStructAppend(sliceElemField(f), vref))
 		}
 	case KindAny:
 		fmt.Fprintf(b, "if dst, err = %s(dst, v); err != nil { return dst, err }\n", appendAnyFn(f.HTMLEscape))
@@ -3939,9 +3945,16 @@ func renderNetIP(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	field := fieldLit(f)
 	b.WriteString("var s string\n")
 	inlineScanString(b, posVar, "s", posVar, field, false, !f.AllowInvalidUTF8)
+	// net.ParseIP copies into a fresh IP, so the scan feed stays aliasing; the
+	// error literal RETAINS the string, so under -copy it detaches (the stream
+	// mirror clones for the same reason).
+	text := "s"
+	if f.Copy {
+		text = "ggen.Detach(s, data)"
+	}
 	fmt.Fprintf(b, `%[1]s = net.ParseIP(s)
-if %[1]s == nil { return result, %[2]s, ggen.NewParseErr(%[3]s, %[2]s, &net.ParseError{Type: "IP address", Text: s}) }
-`, ref, posVar, field)
+if %[1]s == nil { return result, %[2]s, ggen.NewParseErr(%[3]s, %[2]s, &net.ParseError{Type: "IP address", Text: %[4]s}) }
+`, ref, posVar, field, text)
 }
 
 func renderNetipAddr(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
@@ -4184,11 +4197,13 @@ func renderRawJSON(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 }
 
 // renderURL parses a JSON string via url.Parse. The dereference is
-// safe because Parse returns a non-nil *URL on success.
+// safe because Parse returns a non-nil *URL on success. The scan honours
+// f.Copy: url.Parse SLICES its input into Host/Path/RawQuery/Fragment, so an
+// aliasing scan would leave the stored URL pointing at the caller's buffer.
 func renderURL(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	field := fieldLit(f)
 	b.WriteString("var s string\n")
-	inlineScanString(b, posVar, "s", posVar, field, false, !f.AllowInvalidUTF8)
+	inlineScanString(b, posVar, "s", posVar, field, f.Copy, !f.AllowInvalidUTF8)
 	fmt.Fprintf(b, `var u *url.URL
 u, err = url.Parse(s)
 if err != nil { return result, %[2]s, ggen.NewParseErr(%[3]s, %[2]s, err) }
@@ -6129,7 +6144,8 @@ sv, err = s.StringView(`+vArg(f)+`)
 }
 
 // renderStreamRawJSON copies the captured span into the field (CaptureValue
-// returns a buffer alias, so the append detaches it).
+// returns a buffer alias, so the append detaches it). The receiver's backing is
+// reused when it has the room, matching the bytes path's copy shape.
 func renderStreamRawJSON(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	_ = posVar
 	chk := streamErrCheck(fieldLit(f))
@@ -6138,7 +6154,7 @@ func renderStreamRawJSON(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 		check = ""
 	}
 	fmt.Fprintf(b, `span, err := s.CaptureValue()
-%[2]s`+check+`%[1]s = append(make([]byte, 0, len(span)), span...)
+%[2]s`+check+`%[1]s = append(%[1]s[:0], span...)
 `, ref, chk)
 }
 
@@ -6331,14 +6347,16 @@ result.%[2]s[ownKey] = _iv
 `, inline.ElemType, inline.GoName, chk)
 	}
 	if s.IgnoreUnknown {
-		chk := streamErrCheck("strings.Clone(key)")
-		return fmt.Sprintf(`err = s.ConsumeColon()
+		chk := streamErrCheck("ownKey")
+		return fmt.Sprintf(`ownKey := strings.Clone(key)
+err = s.ConsumeColon()
 %[1]serr = s.SkipValue()
 %[1]s`, chk)
 	}
 	if s.MultiErr {
-		chk := streamErrCheck("strings.Clone(key)")
-		return fmt.Sprintf(`errs = append(errs, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}})
+		chk := streamErrCheck("ownKey")
+		return fmt.Sprintf(`ownKey := strings.Clone(key)
+errs = append(errs, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}})
 err = s.ConsumeColon()
 %[1]serr = s.SkipValue()
 %[1]s`, chk)

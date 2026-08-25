@@ -5416,7 +5416,7 @@ func (recv richSubset) DecodeFromStream(s *ggen.Stream) (result richSubset, err 
 			if err != nil {
 				return result, ggen.NewParseErr("raw1", s.Offset(), err)
 			}
-			result.Raw1 = append(make([]byte, 0, len(span)), span...)
+			result.Raw1 = append(result.Raw1[:0], span...)
 		case "raw2":
 			err = s.ConsumeColon()
 			if err != nil {
@@ -5434,7 +5434,7 @@ func (recv richSubset) DecodeFromStream(s *ggen.Stream) (result richSubset, err 
 			if err != nil {
 				return result, ggen.NewParseErr("raw2", s.Offset(), err)
 			}
-			result.Raw2 = append(make([]byte, 0, len(span)), span...)
+			result.Raw2 = append(result.Raw2[:0], span...)
 		default:
 			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}

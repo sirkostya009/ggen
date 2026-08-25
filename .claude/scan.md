@@ -339,6 +339,12 @@ emitted refills are grow-only and the compaction is what holds the bound).
 Pick `Slice` when the result is the point (you want the `[]T`), `Array` when the
 elements are consumed and discarded.
 
+`Slice` carries the same `len == cap` compaction gate as the two lazy walkers.
+It accumulates every element, but the WINDOW still has to drop what it has
+consumed: the emitted container refills are grow-only, so without the gate a
+long array of container-bearing elements ratchets the buffer (422 B elements
+through a 1 KiB buffer reached 4 KiB). Pinned by `TestSliceBufferStaysBounded`.
+
 **`Seq` — unbounded iteration.** `iter.Seq2[T, error]` over consecutive
 top-level values (concatenated JSON / NDJSON), running as long as the reader
 produces. A drained reader AT A VALUE BOUNDARY ends the range cleanly with no
@@ -404,6 +410,10 @@ otherwise, and every refill site now distinguishes the two:
   decoder returns `s.Int64()` directly), a bogus grammar error one frame up.
   They now propagate anything that is not `io.ErrUnexpectedEOF`; `skipNumber`
   threads the error out of `refillSkip` and prefers it over `ErrBadNumber`.
+  `refillSkip` also returns false immediately once that error is recorded, so
+  the fraction/exponent/sign gates cannot issue fresh blocking `Read`s behind
+  a reader that already failed — every sibling value scanner returns at once,
+  and a `SkipValue` that kept reading defeated deadline-based cancellation.
 - The string/key/bool/literal/skip refill arms returned a GRAMMAR sentinel
   (`ErrUnterminated`/`ErrBadString`/`ErrBadBool`/`ErrBadLiteral`/`ErrBadArray`/
   `ErrBadObject`) for a reader hiccup, destroying error identity. All 15 route
@@ -429,8 +439,10 @@ entry (`ErrUnexpectedEnd`, was `ErrBadArray`), `stringView`/`KeyView` head
 `-` arm too), `Bool` (`ErrBadBool`), `ConsumeColon` (`ErrBadObject`),
 `skipString` scalar + all three SIMD tiers (`ErrExpectString`). All still
 route through `notEOF`, so transient reader errors propagate raw.
-`skipObject`'s after-comma key position reports `ErrBadObject` via an
-ERROR-PATH relabel (drained `ErrExpectString` from the key `skipString`),
+`skipObject` reports `ErrBadObject` at ANY key position via an ERROR-PATH
+relabel of the key `skipString`'s `ErrExpectString` — sound because
+`skipString` returns that sentinel only at the key head (drained window or a
+non-quote byte), both of which the bytes twin rejects as `ErrBadObject` —
 not a per-key bound check — the pre-check shape it replaced added a compare
 to the hot skip loop in all four tiers for an error-identity-only gain. Pinned by `TestBytesStreamTruncationErrorParity` — a bytes-vs-
 stream error-identity battery over truncated inputs at chunk sizes 1/3/64,
@@ -450,7 +462,19 @@ leaves the rest to the caller. Pinned by
 (current cursor, or value-start `start` for spans outlasting the loop) so the
 buffer stays bounded ~`max(chunk_size, value_size)`; each updates locals after
 compaction (`i = 0`, or `j -= start; start = 0` for the string/number body) then
-writes final `s.Pos`. `Float64`/`Number` USED to refill mid-number with grow-only
+writes final `s.Pos`. **Every ERROR return past a compaction rebases `s.Pos`
+too** — it is buffer-relative, so a pre-compaction cursor reads as inflated by
+the discarded prefix and can exceed `len(buf)`; generated stream decoders stamp
+it straight into `ParseError.Pos`. The rebased positions mirror the bytes-path
+error-position contract: the number scanners and the string content errors
+(`ErrBadString`/`ErrInvalidUTF8`) report the value/span start, `ErrUnterminated`
+reports the end of what arrived, `skipString` reports its scan cursor. All four
+number scanners keep from the VALUE HEAD (`ReadMore(start)`, spans are bounded
+at ~20 bytes), which is also what makes ReadMore's "a transient error that loses
+no bytes resumes losslessly" contract hold for them: a retry re-scans the intact
+span instead of a `-` or the digits already folded into the accumulator having
+been discarded. Pinned by `TestStreamNumberLosslessRetry`,
+`TestStreamString_ErrorPos`, `TestStreamStringSlow_ErrorPos`. `Float64`/`Number` USED to refill mid-number with grow-only
 `ReadMore(0)`; since readers fill the whole window, every mid-number window edge
 landed with `len == cap` and DOUBLED the buffer (a 64 B buffer ballooned to 1 MB
 on a 50k-short-float stream). They now compact from `start` + rebase `i` like
@@ -482,8 +506,9 @@ since it could continue `1234`. A skip ERROR is classified rather than
 assumed truncated: `SkipValue` preserves the position where it gave up (SIMD
 tiers scalar-identical by parity test), and a failure at a byte
 STRICTLY INSIDE the window is final — no byte that has not arrived can repair a
-malformation sitting before bytes already held. Only an off-the-end failure
-keeps reading. Without this a live (never-EOF) reader that had delivered a
+malformation sitting before bytes already held. `ErrMaxDepth` is final wherever
+it lands (the bracket run may end exactly at the window edge, but no arriving
+byte can un-exceed the cap). Only an off-the-end failure keeps reading. Without this a live (never-EOF) reader that had delivered a
 complete but malformed value blocked in `Read` FOREVER; pinned by
 `TestStreamCaptureValue_LiveMalformedDoesNotHang` plus a truncated-value
 control that must still wait. The FIRST refill compacts the consumed prefix (`ReadMore(start)`,
@@ -648,7 +673,9 @@ stream decoders swap `= s.SkipValue()` / `= s.SkipSpace()` / `= s.CaptureValue()
 to a tier (`tierStreamStringCalls`). Measured at avx512: SkipHeavy ggen_stream
 compact −32.6%, pretty −25.6%; Mega_Reader flat (copy mallocs dominate).
 Pinned by `TestStreamSkipValueSIMD_Parity` (chunked readers ×
-truncations at every byte).
+truncations at every byte), plus `TestStreamSkipStringSIMD_ErrorPos` and
+`TestStreamCaptureValueSIMD_MaxDepthDoesNotHang` for the error-position
+rebase and the `ErrMaxDepth` finality the tiers mirror from the scalar tree.
 
 **Correctness fixes (found+fixed 2026-08, audit round 4) — the tiers now
 actually match the scalar contracts this section already documented:**

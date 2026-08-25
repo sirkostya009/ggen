@@ -172,6 +172,16 @@ keys escape consistently. `AppendAny` defaults to NoHTML (jsonv2 parity),
 `AppendAnyHTML` is the v1 variant; codegen picks via `appendAnyFn(f.HTMLEscape)`.
 Pinned by `TestAppendAny_NoHTMLEscapeDefault`.
 
+### Depth cap
+
+`appendAny` also threads a `depth int` alongside `esc`, bumped at every
+recursive arm (`[]any`, `map[string]any`, the reflect pointer/interface deref,
+reflect slice/map elements, struct fields) and checked against the decode
+side's `maxDepth`; past it the walk returns `ErrMaxDepth`. That is what a
+VALUE-level cycle (`s[0] = s`, a self-referential map, `n.Next = n`) hits —
+`collectFields` only breaks TYPE-level embed cycles. Pinned by
+`TestAppendAny_CyclicValue` / `TestAppendAny_DepthCap`.
+
 ### Switch ordering rules (don't break)
 
 Case order is load-bearing — concrete cases MUST precede the interface dispatches

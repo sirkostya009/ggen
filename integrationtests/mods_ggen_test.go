@@ -845,14 +845,15 @@ func (recv FallibleModMultierrStruct) DecodeFromStream(s *ggen.Stream) (result F
 
 			}
 		default:
-			errs = append(errs, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}})
+			ownKey := strings.Clone(key)
+			errs = append(errs, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}})
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, ggen.NewParseErr(strings.Clone(key), s.Offset(), err)
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
 			err = s.SkipValue()
 			if err != nil {
-				return result, ggen.NewParseErr(strings.Clone(key), s.Offset(), err)
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
 		}
 
@@ -1505,14 +1506,15 @@ func (recv NestedMultierrStruct) DecodeFromStream(s *ggen.Stream) (result Nested
 
 			}
 		default:
-			errs = append(errs, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}})
+			ownKey := strings.Clone(key)
+			errs = append(errs, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}})
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, ggen.NewParseErr(strings.Clone(key), s.Offset(), err)
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
 			err = s.SkipValue()
 			if err != nil {
-				return result, ggen.NewParseErr(strings.Clone(key), s.Offset(), err)
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
 		}
 
@@ -2492,14 +2494,15 @@ func (recv DrainInnerME) DecodeFromStream(s *ggen.Stream) (result DrainInnerME, 
 
 			}
 		default:
-			errs = append(errs, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}})
+			ownKey := strings.Clone(key)
+			errs = append(errs, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}})
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, ggen.NewParseErr(strings.Clone(key), s.Offset(), err)
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
 			err = s.SkipValue()
 			if err != nil {
-				return result, ggen.NewParseErr(strings.Clone(key), s.Offset(), err)
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
 		}
 
@@ -2889,14 +2892,15 @@ func (recv DrainOuter) DecodeFromStream(s *ggen.Stream) (result DrainOuter, err 
 
 			}
 		default:
-			errs = append(errs, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}})
+			ownKey := strings.Clone(key)
+			errs = append(errs, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}})
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, ggen.NewParseErr(strings.Clone(key), s.Offset(), err)
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
 			err = s.SkipValue()
 			if err != nil {
-				return result, ggen.NewParseErr(strings.Clone(key), s.Offset(), err)
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
 		}
 

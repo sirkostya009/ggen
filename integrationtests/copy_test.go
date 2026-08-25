@@ -10,6 +10,9 @@ package integrationtests
 
 import (
 	"encoding/json"
+	"errors"
+	"net"
+	"net/url"
 	"slices"
 	"sort"
 	"strings"
@@ -237,4 +240,59 @@ func collectAnyStrings(v any, out []string) []string {
 		}
 	}
 	return out
+}
+
+//ggen:generate copy
+type CopyURLDoc struct {
+	U url.URL `json:"u"`
+}
+
+// url.Parse slices Scheme/Host/Path/RawQuery/Fragment out of its argument, so
+// an aliasing scan under -copy would leave every one of them pointing at the
+// caller's buffer.
+func TestCopy_URLDecouples(t *testing.T) {
+	src := []byte(`{"u":"https://example.com/pathpart?q=1234#frag"}`)
+	d, _, err := CopyURLDoc{}.DecodeFrom(src)
+	if err != nil {
+		t.Fatalf("CopyURLDoc decode: %v", err)
+	}
+	want := d.U.String()
+	for i := range src {
+		src[i] = 'Z'
+	}
+	if got := d.U.String(); got != want {
+		t.Errorf("after scribble: %q, want %q", got, want)
+	}
+	if d.U.Host != "example.com" || d.U.Path != "/pathpart" || d.U.RawQuery != "q=1234" || d.U.Fragment != "frag" {
+		t.Errorf("after scribble: %+v", d.U)
+	}
+}
+
+//ggen:generate copy
+type CopyIPDoc struct {
+	IP net.IP `json:"ip"`
+}
+
+// net.ParseIP copies into a fresh IP, so the VALUE was never at risk — but the
+// failure literal retains the scanned text, and under -copy that must not
+// alias the input either. The stream path already cloned it.
+func TestCopy_NetIPErrorTextDecouples(t *testing.T) {
+	src := []byte(`{"ip":"not-an-ip-at-all"}`)
+	_, _, err := CopyIPDoc{}.DecodeFrom(src)
+	var pe *net.ParseError
+	if !errors.As(err, &pe) {
+		t.Fatalf("got %T %v, want *net.ParseError", err, err)
+	}
+	// Compare against a LITERAL, never against a string read out of pe before
+	// the scribble — that header shares the bytes, so both sides would change.
+	const want = "not-an-ip-at-all"
+	if pe.Text != want {
+		t.Fatalf("Text = %q, want %q", pe.Text, want)
+	}
+	for i := range src {
+		src[i] = 'Z'
+	}
+	if pe.Text != want {
+		t.Errorf("after scribble: Text = %q, want %q", pe.Text, want)
+	}
 }
