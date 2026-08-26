@@ -410,48 +410,34 @@ surface pinned by `Decoder[T]`).
 - **`nullzero` follow-up.** Extend the per-field `nullzero` decode variant to
   top-level alias types (needs a non-dispatch null branch in the alias renderers).
 
-- **Is decode-into-receiver a MERGE or a BUFFER DONATION? (user idea 2026-08).**
-  Three linked asks — reuse the buffers of map values already present while still
-  dropping keys the payload omitted, the same for slice elements, and zero ALL
-  receiver fields at entry rather than only the containers. They are one question
-  wearing three hats, because today's contract is a hybrid: `emitReceiverReset`
-  (generate.go) truncates slices and `clear()`s maps, while scalars persist.
-    - **Slices are the easy half.** Dropping what wasn't present is free — the
-      final len IS the payload count, so stale elements sit past it. Only the
-      pre-grow needs changing: `append(dst, T{})` (opt #27) overwrites a recycled
-      backing slot with a zero value, discarding that element's inner buffers;
-      growing the length without zeroing when within cap would hand the element
-      decoder its own previous buffers back.
-    - **Maps have no free lunch.** With no length ordering, deleting absent keys
-      needs to know which keys were present: either a per-decode seen-set (an
-      alloc on a path that is allocation-free today) or building into a fresh map
-      (which forfeits the `clear()` bucket reuse). Two coherent shapes: (a)
-      `old := m; m = make(map[K]V, len(old))` seeding each value from `old[mk]` —
-      one map alloc per decode, but every V's internal containers are reused and
-      absent keys vanish naturally; wins when V is heavy, loses when V is
-      scalar-ish. (b) allocate the seen-set ONLY when the map is non-empty at
-      entry, so a fresh decode pays nothing and the cost lands exactly on the
-      reuse case that benefits.
-    - **The trap.** Seeding from the carried value (`mv := m[mk]`, or a
-      non-zeroing slice reslice) buys buffer reuse in one lookup but ALSO makes it
-      a keyed/positional MERGE: a payload entry that omits a field inherits the
-      old one's value. That is a decided-no — `[N]T` slots are blanked precisely
-      because `[2]Inner` kept fields the payload omitted while `[]Inner` decoded
-      fresh, and jsonv2 zeroes (pinned by `TestMerge_ArraySlotsOverwrite`).
-    - **Which is why the third ask is load-bearing.** Reuse-the-buffer and
-      fresh-value conflict only while "reset a value" means "replace with `T{}`".
-      If it meant "zero the scalars, truncate the containers, keep the capacity" —
-      a generated per-type reset recursing into fields — seeding slice slots and
-      map values becomes safe and the other two answer themselves.
-    - **Cost.** Scalars-persist-on-omit is currently documented as one of the
-      places ggen MATCHES stdlib merge, pinned by `TestStdCompatMerge_Parity`;
-      zeroing them trades that parity away and redefines what `Value(prev)` /
-      `Seq(prev)` mean for callers relying on merge. Also price the residency
-      footgun: retaining element buffers past the new len keeps memory for
-      elements no longer logically present — the same trap that killed
-      `maxlen`-as-prealloc-hint. UNMEASURED and workload-dependent (the win scales
-      with how heavy the element/value type is); the slice half is at least
-      testable deterministically via allocs/op, per the house rule.
+- **Map values still discard their buffers on decode (2026-08).** Slice and
+  array elements now grow into the carried slot, so an element keeps its inner
+  backings, and omitted keys are zeroed at the end of the object (opt #74). Map
+  VALUES got neither: `renderMap` decodes each entry into a fresh `var mv V`,
+  so a `map[string]Heavy` throws away every value's slices and maps on each
+  decode, and the map itself is `clear()`ed at entry rather than reconciled.
+  The blocker is real, not an oversight: a slice can drop what the payload
+  omitted for free (the final len IS the payload count), while a map has no
+  such ordering — deleting absent keys means knowing which keys were present.
+  Two coherent shapes:
+    - `old := m; m = make(map[K]V, len(old))`, seeding each value from
+      `old[mk]`. One map alloc per decode, but every V's containers are reused
+      and absent keys vanish with the old map. Wins when V is heavy, loses when
+      V is scalar-ish (where the `clear()` bucket reuse is the better trade).
+    - Allocate a seen-set ONLY when the map is non-empty at entry, so a fresh
+      decode pays nothing and the cost lands exactly on the reuse case that
+      benefits.
+  Note the seeding trap that shaped opt #74: `mv := m[mk]` buys buffer reuse in
+  one lookup but ALSO makes it a keyed merge, where an entry that omits a field
+  inherits the old value. That is only safe because a generated decoder now
+  fully resets its receiver — so a ggen-generated struct value is fine, while a
+  value decoded through `encoding/json` / `UnmarshalJSON` / `UnmarshalText`
+  must still get a zeroed slot (the same gate the element reuse uses).
+  UNMEASURED and workload-dependent; deterministically testable via allocs/op
+  and backing identity, the way `TestMerge_sliceElementAllocationsReused` and
+  `TestMerge_leanRedecodeLeavesNoStaleData` pin the slice half. Also price the
+  residency footgun before landing: retained value buffers keep memory for
+  entries no longer present — the trap that killed `maxlen`-as-prealloc-hint.
 
 - **Consolidate the per-field behaviour knobs into one concept.** Today a field's
   shape is steered by four unrelated mechanisms with four different syntaxes and
