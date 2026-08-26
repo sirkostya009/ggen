@@ -13,14 +13,16 @@ type JSONOptions struct {
 	OmitZero  bool   // omit during marshal if Go zero value
 	String    bool   // wrap primitive as a JSON string on marshal, unwrap on unmarshal
 	Format    string // jsonv2 format flag (e.g., RFC3339, unix, hex, base64)
-	Inline    bool   // catch-all: map absorbs unknown keys, entries splice into parent object
+	Embed     bool   // embedded fallback: map absorbs unknown keys, entries splice into parent object
 }
 
 // parseJSONTag follows jsonv2's tag grammar: options split on commas OUTSIDE
 // single-quoted regions (`format:'Jan 2, 2006'`, name `'a,b'`), `\'` is a
 // literal quote, an empty option (trailing comma, `,,`) is malformed, and a
 // bare `-` name with options is rejected — quote it (`'-'`) for a field
-// literally named "-". Unknown option words pass silently (jsonv2 parity).
+// literally named "-". Unknown option words pass silently (jsonv2 parity), the
+// one exception being `inline`, which is rejected so a tag written for the
+// older spelling cannot silently decode as an ordinary named field.
 func parseJSONTag(tag string) (name string, opts JSONOptions, ignored bool, err error) {
 	if tag == "" {
 		return "", JSONOptions{}, false, nil
@@ -53,8 +55,20 @@ func parseJSONTag(tag string) (name string, opts JSONOptions, ignored bool, err 
 			opts.OmitZero = true
 		case "string":
 			opts.String = true
+		case "embed":
+			opts.Embed = true
 		case "inline":
-			opts.Inline = true
+			return "", JSONOptions{}, false, fmt.Errorf("json tag %q: `inline` is not a tag option — the catch-all map is `json:\",embed\"` (jsonv2 spells it `embed`)", tag)
+		}
+	}
+	// jsonv2: an embedded fallback carries no name and no other option, since
+	// its entries splice into the parent rather than sitting under a key.
+	if opts.Embed {
+		switch {
+		case name != "":
+			return "", JSONOptions{}, false, fmt.Errorf("json tag %q: `embed` cannot carry a JSON name — its entries splice into the parent object", tag)
+		case opts.OmitEmpty || opts.OmitZero || opts.String || opts.Format != "":
+			return "", JSONOptions{}, false, fmt.Errorf("json tag %q: `embed` cannot be combined with another option", tag)
 		}
 	}
 	return name, opts, false, nil

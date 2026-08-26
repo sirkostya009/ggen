@@ -71,9 +71,9 @@ single-package mode. Processing is post-order over the matched import subgraph
 | `-multierr`      | accumulate validation failures into `ggen.Errors`, returned at end of parse; parse errors still return immediately. The drain past a NESTED decode is gated on the callee being multierr too (`multiErrTypes` / `calleeDrains`): a single-error callee returns mid-value, so continuing would resume from a desynced cursor — the inner object's remaining keys used to surface as the PARENT's unknown keys |
 | `-allowdups`     | allow duplicate keys, first-wins (later skipped). Default: `ggen.DuplicateKeyError`. NOTE the check is scoped to DECLARED keys (the per-field `seenX` flags) — dups inside skipped / `any` / raw / nested scopes are NOT detected, a decided divergence from jsonv2 (see backlog Tried Rejected) |
 | `-novalidate`    | skip validation rules, required-field checks, mods                                                                                                    |
-| `-ignoreunknown` | silently skip unknown JSON keys. Default: `ggen.UnknownKeyError`. Overridden when an inline map field is present                                |
+| `-ignoreunknown` | silently skip unknown JSON keys. Default: `ggen.UnknownKeyError`. Overridden when an embedded fallback map field is present                                |
 | `-nullzero`      | accept explicit JSON `null` on every non-pointer value field → Go zero. Default hard-errors (see null kind-gating). No-op on already-null-aware kinds |
-| `-nosortkeys`    | emit fields in Go declaration order. Default: alphabetical. Inline map fields stay last                                                               |
+| `-nosortkeys`    | emit fields in Go declaration order. Default: alphabetical. Embedded fallback map fields stay last                                                               |
 | `-usenumber`     | decode JSON numbers into `any` fields as `json.Number` instead of `float64` (mirrors stdlib `UseNumber()`)                                            |
 | `-htmlescape`    | opt INTO HTML-safe escaping (`<`, `>`, `&` → `\uXXXX`) on marshal. Default = literal                                                                  |
 | `-allowinvalidutf8` | skip decode UTF-8 validation (opt #50) for every struct in the pass: string scans pass `validate=false` (raw bytes through, surrogates → U+FFFD), inline windows/classify revert to the pre-validation shapes, raw-span `CheckUTF8` not emitted. Decode-only |
@@ -104,7 +104,7 @@ Field config is partitioned by role across three tags: `json:` (wire shape),
 - `json:"-"` — field explicitly ignored. `-` with options is a parse ERROR
   (jsonv2 parity — v1 read it as a field named `-`; use `json:"'-'"` for
   that). Empty options (`a,`, `a,,x`) also error; unknown option words pass
-- `json:",inline"` — catch-all map for unknown keys. Type must be `map[string]V`
+- `json:",embed"` — catch-all map for unknown keys. Type must be `map[string]V`
   (string-keyed); V may be `any`, a primitive, a ggen-annotated struct, or any
   other type (typed elems use the elem's fast path when available, else
   `encoding/json.Unmarshal` over the captured span). Overrides `ignoreunknown`.
@@ -625,7 +625,7 @@ Backlog and commit messages cite these by number — numbering is stable.
    call. Decode order: `DecodeFrom` → `UnmarshalJSON` → `UnmarshalText` →
    `encoding/json`. Marshal mirror: `AppendJSON` → `MarshalJSON` → `AppendText` →
    `MarshalText` → `encoding/json`. No type info → plain `encoding/json` fallback.
-8. **Inline map catch-all.** Unknown keys absorbed into `map[string]V`. V
+8. **Embedded fallback map.** Unknown keys absorbed into `map[string]V`. V
    dispatches: `any` → `ggen.Any`/`s.Any`; `string` → `ggen.String`/`s.String`;
    ggen struct → its `DecodeFrom`/`DecodeFromStream`; else `ggen.SkipValue` +
    `json.Unmarshal` over the captured span.
@@ -766,7 +766,7 @@ Pos, Err}` for raw sentinels (a one-segment path), prepends the segment onto a `
 36. **Brace-less value emitters.** Decode value emitters write locals straight into
     the caller's scope — no `{ … }` wrapper per value (slice/array/map, time/
     duration/netip/url/big\*/raw/sqlnull/any/string-tag/struct/bytes, cross-pkg
-    fallbacks, inline catch-all). Sound because every call site owns its scope.
+    fallbacks, embedded fallback). Sound because every call site owns its scope.
     Stream emitters renamed `var v` temps (`sv`/`f`/`u`) so a pointer-leaf caller
     can declare `var v <leaf>` in the same scope; colliding locals get unique
     names (renderMap value scan `ve`, map-marshal first-entry flag
@@ -994,7 +994,7 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
     copy fall calls the SAME aliasing tier func then `Detach`, dropping the clone
     on escapes. **Tier-agnostic: reuses `ggen.String`/`StringAVX*` directly, NO
     per-tier `StringCopyAVX*` variant.** Wired at the copy fall
-    (`inlineScanStringWin`, both scalar + SIMD blocks), the inline-map string value
+    (`inlineScanStringWin`, both scalar + SIMD blocks), the embedded-fallback string value
     (`unknownKey`), and `ggen.AnyCopy`/`AnyNumberCopy` (values + object keys).
     `EscapeHeavy/ggen_copy`: 8→4 allocs — identical to the aliasing `ggen` row at
     both scalar and avx512 (on escapes the -copy detach is FREE — stringSlow
@@ -1413,7 +1413,7 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
       the error checks, i.e. AFTER `ConsumeColon`/`SkipValue` had compacted the
       buffer out from under the alias, so a returned `*ParseError` carried
       shifted bytes as its path. Both clone into `ownKey` first, like the
-      inline-map branch. Pinned by
+      embedded-fallback branch. Pinned by
       `TestIgnoreUnknown_streamErrorKeepsKeyName`.
 
 71. **Round-11 parse-layer fixes (element resolution).**
@@ -1644,12 +1644,12 @@ any set change). A collision would redeclare a const, loud at compile time.
    re-cloned; both scalar + SIMD, no per-tier variant); `renderRawJSON` emits
    `append(ref[:0], data[…]…)` (reused backing) instead of the alias; `renderAny`
    switches to `ggen.AnyCopy`/`AnyNumberCopy` (detach every nested string + object
-   key via `Detach`, no double-copy); `unknownKey` clones the inline-map key +
+   key via `Detach`, no double-copy); `unknownKey` clones the embedded-fallback key +
    detaches its string value via `Detach` and `strings.Clone`s the
    `UnknownKeyError` path segment. TRANSIENT scans stay
    aliasing (`cp=false`): the dispatch key (matched + discarded) and the
    parse-feeds for time/url/netip/big\*/`[]byte` (the conversion owns its
-   output). Per-struct granularity ⇒ an inline-map / nested-struct VALUE only
+   output). Per-struct granularity ⇒ an embedded-fallback / nested-struct VALUE only
    copies if that value's own struct also has `copy` (the whole-pass `-copy`
    flag covers every struct, so no gap there). Wire-identical to non-copy;
    alloc-heavier (one alloc per retained string, like the stream path).
@@ -1698,3 +1698,18 @@ benchmarks under `bench/`.
     (not in the current pass) stays on the blanking shape too. Primitive
     elements are fully overwritten by their scan and were left alone. Pinned by
     `TestMerge_sliceElementAllocationsReused` + `TestMerge_ArraySlotsOverwrite`.
+
+75. **The catch-all map is `json:",embed"`.** Go 1.27's stable
+    `encoding/json/v2` spells the tag option `embed`, not `inline`, so ggen
+    follows it: an embedded fallback (jsonv2's term for a `map[~string]T` whose
+    entries stand in for every object member the parent does not declare) is
+    now written `json:",embed"`. The older `inline` spelling is a generate-time
+    ERROR carrying the new one — jsonv2 lets unknown option words pass, which
+    here would silently demote the catch-all to an ordinary field named after
+    the Go field, exactly the silent-miscompile class the no-silent-no-op
+    convention exists to prevent. Matching jsonv2, `embed` also rejects a JSON
+    name (`json:"extra,embed"`) and any companion option, since its entries
+    splice into the parent rather than sitting under a key. This closes the
+    `,inline`/`,embed` row of the 1.27 parity gaps: `TestStdCompat_EmbedStruct`
+    now agrees with jsonv2 byte-for-byte, where before jsonv2 nested the map
+    under `"Extra"` while ggen flattened it.

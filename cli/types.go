@@ -117,7 +117,7 @@ type FieldInfo struct {
 	NullZero         bool   // decode: accept an explicit JSON null on this (non-pointer) value field, setting it to its Go zero value instead of erroring. No-op on already-null-aware kinds (pointer/slice/map/[]byte/sql.Null*/raw/any)
 	String           bool   // marshal/unmarshal the field as a JSON-quoted string
 	Format           string // jsonv2 format flag ("RFC3339", "unix", "hex", ...)
-	Inline           bool   // catch-all map: absorbs unknown JSON keys on decode, splices entries on encode
+	Embed            bool   // embedded fallback map: absorbs unknown JSON keys on decode, splices entries on encode
 	MultiErr         bool   // propagated from parent struct: use errs collection
 	AllowDups        bool   // propagated from parent struct: skip duplicate-key guard
 	NoValidate       bool   // propagated from parent struct: skip validation + mods
@@ -306,21 +306,21 @@ func (f FieldInfo) HasRule(name string) (string, bool) {
 	return "", false
 }
 
-// HasInline reports whether any field on s is a catch-all inline map.
-func (s StructInfo) HasInline() bool {
+// HasEmbed reports whether any field on s is a catch-all embedded map.
+func (s StructInfo) HasEmbed() bool {
 	for _, f := range s.Fields {
-		if f.Inline {
+		if f.Embed {
 			return true
 		}
 	}
 	return false
 }
 
-// InlineField returns the first inline field on s, or an empty FieldInfo if
+// EmbedField returns the first embedded fallback field on s, or an empty FieldInfo if
 // none. Called from the template — keep it value-returning.
-func (s StructInfo) InlineField() FieldInfo {
+func (s StructInfo) EmbedField() FieldInfo {
 	for _, f := range s.Fields {
-		if f.Inline {
+		if f.Embed {
 			return f
 		}
 	}

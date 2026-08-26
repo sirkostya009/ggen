@@ -423,9 +423,9 @@ func TestStdCompat_ExtraStruct(t *testing.T) {
 	})
 }
 
-func TestStdCompat_InlineStruct(t *testing.T) {
+func TestStdCompat_EmbedStruct(t *testing.T) {
 	t.Parallel()
-	crossCompat(t, InlineStruct{
+	crossCompat(t, EmbedStruct{
 		Name:  "alice",
 		Extra: map[string]any{"age": float64(30), "city": "Lviv", "active": true},
 	})

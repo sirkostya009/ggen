@@ -85,7 +85,7 @@ Most flags have matching annotation token (no leading dash). Annotations space-s
 | `-multierr`         | `multierr`         | accumulate every validation failure into `ggen.Errors` (slice) instead of returning on the first                                                                                                                                                                        |
 | `-allowdups`        | `allowdups`        | accept duplicate JSON keys, first-wins (default: error on second occurrence)                                                                                                                                                                                                  |
 | `-novalidate`       | `novalidate`       | drop validation, required-field checks, and mods                                                                                                                                                                                                                              |
-| `-ignoreunknown`    | `ignoreunknown`    | silently drop unknown JSON keys (default: error). Overridden when an inline catch-all map is present                                                                                                                                                                          |
+| `-ignoreunknown`    | `ignoreunknown`    | silently drop unknown JSON keys (default: error). Overridden when an embedded fallback map is present                                                                                                                                                                          |
 | `-nullzero`         | `nullzero`         | accept explicit JSON `null` on every non-pointer value field, decoding it to the Go zero (default: error). A per-field `nullzero` decode variant in `pipe:` opts in one field                                                                                                 |
 | `-nosortkeys`       | `nosortkeys`       | emit struct fields in declaration order (default: alphabetical, compresses better)                                                                                                                                                                                            |
 | `-usenumber`        | `usenumber`        | decode JSON numbers in `any` fields as `json.Number` instead of `float64`                                                                                                                                                                                                     |
@@ -123,7 +123,7 @@ type Order struct { /* ... */ }
 
 ### `json:"..."` — same as stdlib, plus
 
-- `json:",inline"` — field = catch-all map for unknown keys. Type must be a string-keyed map (`map[string]V`); V may be `any`, a primitive, a ggen-annotated struct, or any other type (typed elems dispatch through the elem's fast path or `encoding/json.Unmarshal` over the captured span). Overrides `-ignoreunknown`.
+- `json:",embed"` — field = catch-all map for unknown keys. Type must be a string-keyed map (`map[string]V`); V may be `any`, a primitive, a ggen-annotated struct, or any other type (typed elems dispatch through the elem's fast path or `encoding/json.Unmarshal` over the captured span). Overrides `-ignoreunknown`.
 - `json:"name,omitempty"` — skip on marshal when JSON-empty. `big.Int`/`Float`/`Rat` are never skipped: a zero one encodes as `0`/`"0"`, which is not JSON-empty.
 - `json:"name,omitzero"` — skip on marshal when Go-zero.
 - `json:"name,string"` — wrap numeric as JSON string (unwrap on decode).
@@ -412,7 +412,7 @@ Build tag propagation: struct in file behind `//go:build foo` land in `<dir>_foo
 | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | "still want `json.Marshal(u)` to work"                      | `-marshal` (and/or `-unmarshal`)                                                                      |
 | "collect all errors, not just the first"                    | `-multierr`                                                                                           |
-| "skip unknown keys silently"                                | `-ignoreunknown` or a `json:",inline"` catch-all map                                                  |
+| "skip unknown keys silently"                                | `-ignoreunknown` or a `json:",embed"` catch-all map                                                  |
 | "accept `null` on a scalar instead of erroring"             | a `nullzero` decode variant in `pipe:` per field, or `-nullzero` / `//ggen:generate nullzero` for all |
 | "fastest possible decode, I trust the input"                | `-novalidate` (+ `-allowinvalidutf8` if input may carry non-UTF-8 strings)                            |
 | "payload has broken UTF-8 / lone surrogates, decode anyway" | `-allowinvalidutf8` or `//ggen:generate allowinvalidutf8` per struct                                  |

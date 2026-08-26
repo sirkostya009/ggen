@@ -265,7 +265,7 @@ func TestUnmarshalStream_InlineMapKeyClone(t *testing.T) {
 	r := &chunkReader{data: in, max: 1}
 	var s ggen.Stream
 	s.Reset(r, make([]byte, 0, 16))
-	got, err := InlineStruct{}.DecodeFromStream(&s)
+	got, err := EmbedStruct{}.DecodeFromStream(&s)
 	if err != nil {
 		t.Fatalf("UnmarshalStream: %v", err)
 	}

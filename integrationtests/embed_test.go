@@ -10,37 +10,37 @@ import (
 	"github.com/sirkostya009/ggen"
 )
 
-// InlineStruct exercises the json:",inline" catch-all: unknown keys absorbed
+// EmbedStruct exercises the json:",embed" fallback: unknown keys absorbed
 // into Extra, spliced back out at the object level on marshal.
 //
 //ggen:generate
-type InlineStruct struct {
+type EmbedStruct struct {
 	Name  string         `json:"name"`
-	Extra map[string]any `json:",inline"`
+	Extra map[string]any `json:",embed"`
 }
 
 //ggen:generate
-type InlineStringsStruct struct {
+type EmbedStringsStruct struct {
 	Name  string            `json:"name"`
-	Extra map[string]string `json:",inline"`
+	Extra map[string]string `json:",embed"`
 }
 
 //ggen:generate
-type InlineStructsStruct struct {
-	Name  string                  `json:"name"`
-	Extra map[string]InlineStruct `json:",inline"`
+type EmbedStructsStruct struct {
+	Name  string                 `json:"name"`
+	Extra map[string]EmbedStruct `json:",embed"`
 }
 
 //ggen:generate
-type InlineRawStruct struct {
+type EmbedRawStruct struct {
 	Name  string                     `json:"name"`
-	Extra map[string]json.RawMessage `json:",inline"`
+	Extra map[string]json.RawMessage `json:",embed"`
 }
 
-func TestInline_decodeAbsorbsUnknown(t *testing.T) {
+func TestEmbed_decodeAbsorbsUnknown(t *testing.T) {
 	t.Parallel()
 	in := []byte(`{"name":"alice","age":30,"city":"Lviv","tags":["a","b"]}`)
-	got, _, err := InlineStruct{}.DecodeFrom(in)
+	got, _, err := EmbedStruct{}.DecodeFrom(in)
 	if err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -63,10 +63,10 @@ func TestInline_decodeAbsorbsUnknown(t *testing.T) {
 	}
 }
 
-func TestInline_emptyDecode(t *testing.T) {
+func TestEmbed_emptyDecode(t *testing.T) {
 	t.Parallel()
 	// No unknown keys → Extra stays nil.
-	got, _, err := InlineStruct{}.DecodeFrom([]byte(`{"name":"bob"}`))
+	got, _, err := EmbedStruct{}.DecodeFrom([]byte(`{"name":"bob"}`))
 	if err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -75,9 +75,9 @@ func TestInline_emptyDecode(t *testing.T) {
 	}
 }
 
-func TestInline_marshalSpreads(t *testing.T) {
+func TestEmbed_marshalSpreads(t *testing.T) {
 	t.Parallel()
-	s := InlineStruct{
+	s := EmbedStruct{
 		Name:  "alice",
 		Extra: map[string]any{"age": 30, "city": "Lviv"},
 	}
@@ -97,14 +97,14 @@ func TestInline_marshalSpreads(t *testing.T) {
 	}
 }
 
-func TestInline_roundtrip(t *testing.T) {
+func TestEmbed_roundtrip(t *testing.T) {
 	t.Parallel()
-	orig := InlineStruct{
+	orig := EmbedStruct{
 		Name:  "alice",
 		Extra: map[string]any{"age": float64(30), "city": "Lviv", "active": true},
 	}
 	out, _ := ggen.Marshal(orig)
-	got, _, err := InlineStruct{}.DecodeFrom(out)
+	got, _, err := EmbedStruct{}.DecodeFrom(out)
 	if err != nil {
 		t.Fatalf("unmarshal: %v\n%s", err, out)
 	}
@@ -121,19 +121,19 @@ func TestInline_roundtrip(t *testing.T) {
 	}
 }
 
-func TestInline_marshalEmpty(t *testing.T) {
+func TestEmbed_marshalEmpty(t *testing.T) {
 	t.Parallel()
-	s := InlineStruct{Name: "alice"}
+	s := EmbedStruct{Name: "alice"}
 	out, _ := ggen.MarshalString(s)
 	if out != `{"name":"alice"}` {
 		t.Errorf("empty-extra marshal = %q", out)
 	}
 }
 
-func TestInline_marshalOnlyExtras(t *testing.T) {
+func TestEmbed_marshalOnlyExtras(t *testing.T) {
 	t.Parallel()
 	// Empty fixed field + inline entries — comma logic must hold.
-	s := InlineStruct{Extra: map[string]any{"k": "v"}}
+	s := EmbedStruct{Extra: map[string]any{"k": "v"}}
 	out, _ := ggen.MarshalString(s)
 	if !strings.Contains(out, `"k":"v"`) {
 		t.Errorf("missing k:v in %q", out)
@@ -144,9 +144,9 @@ func TestInline_marshalOnlyExtras(t *testing.T) {
 }
 
 // The fixed field appears in every marshal regardless of map iteration order.
-func TestInline_FixedFieldOrderStable(t *testing.T) {
+func TestEmbed_FixedFieldOrderStable(t *testing.T) {
 	t.Parallel()
-	s := InlineStruct{
+	s := EmbedStruct{
 		Name:  "alice",
 		Extra: map[string]any{"age": 30, "city": "Lviv", "active": true, "score": 9.5},
 	}
@@ -159,10 +159,10 @@ func TestInline_FixedFieldOrderStable(t *testing.T) {
 }
 
 // Typed inline catch-all: map[string]string (no any boxing).
-func TestInline_TypedString_Decode(t *testing.T) {
+func TestEmbed_TypedString_Decode(t *testing.T) {
 	t.Parallel()
 	in := []byte(`{"name":"alice","city":"Lviv","role":"admin"}`)
-	got, _, err := InlineStringsStruct{}.DecodeFrom(in)
+	got, _, err := EmbedStringsStruct{}.DecodeFrom(in)
 	if err != nil {
 		t.Fatalf("decode: %v", err)
 	}
@@ -177,9 +177,9 @@ func TestInline_TypedString_Decode(t *testing.T) {
 	}
 }
 
-func TestInline_TypedString_EmptyExtra(t *testing.T) {
+func TestEmbed_TypedString_EmptyExtra(t *testing.T) {
 	t.Parallel()
-	got, _, err := InlineStringsStruct{}.DecodeFrom([]byte(`{"name":"bob"}`))
+	got, _, err := EmbedStringsStruct{}.DecodeFrom([]byte(`{"name":"bob"}`))
 	if err != nil {
 		t.Fatalf("decode: %v", err)
 	}
@@ -189,17 +189,17 @@ func TestInline_TypedString_EmptyExtra(t *testing.T) {
 }
 
 // Non-string value into a string-typed inline must error.
-func TestInline_TypedString_RejectsNonString(t *testing.T) {
+func TestEmbed_TypedString_RejectsNonString(t *testing.T) {
 	t.Parallel()
-	_, _, err := InlineStringsStruct{}.DecodeFrom([]byte(`{"name":"alice","age":30}`))
+	_, _, err := EmbedStringsStruct{}.DecodeFrom([]byte(`{"name":"alice","age":30}`))
 	if err == nil {
 		t.Fatal("expected error decoding number into string-typed inline")
 	}
 }
 
-func TestInline_TypedString_MarshalSpreads(t *testing.T) {
+func TestEmbed_TypedString_MarshalSpreads(t *testing.T) {
 	t.Parallel()
-	s := InlineStringsStruct{
+	s := EmbedStringsStruct{
 		Name:  "alice",
 		Extra: map[string]string{"city": "Lviv", "role": "admin"},
 	}
@@ -214,14 +214,14 @@ func TestInline_TypedString_MarshalSpreads(t *testing.T) {
 	}
 }
 
-func TestInline_TypedString_Roundtrip(t *testing.T) {
+func TestEmbed_TypedString_Roundtrip(t *testing.T) {
 	t.Parallel()
-	orig := InlineStringsStruct{
+	orig := EmbedStringsStruct{
 		Name:  "alice",
 		Extra: map[string]string{"city": "Lviv", "role": "admin", "lang": "uk"},
 	}
 	out, _ := ggen.Marshal(orig)
-	got, _, err := InlineStringsStruct{}.DecodeFrom(out)
+	got, _, err := EmbedStringsStruct{}.DecodeFrom(out)
 	if err != nil {
 		t.Fatalf("decode: %v\n%s", err, out)
 	}
@@ -238,12 +238,12 @@ func TestInline_TypedString_Roundtrip(t *testing.T) {
 	}
 }
 
-// Typed inline catch-all: map[string]InlineStruct, decoded via the elem
+// Typed inline catch-all: map[string]EmbedStruct, decoded via the elem
 // type's DecodeFrom (not json.Unmarshal fallback).
-func TestInline_TypedStruct_Decode(t *testing.T) {
+func TestEmbed_TypedStruct_Decode(t *testing.T) {
 	t.Parallel()
 	in := []byte(`{"name":"root","kid":{"name":"alice","age":30},"sib":{"name":"bob"}}`)
-	got, _, err := InlineStructsStruct{}.DecodeFrom(in)
+	got, _, err := EmbedStructsStruct{}.DecodeFrom(in)
 	if err != nil {
 		t.Fatalf("decode: %v", err)
 	}
@@ -257,7 +257,7 @@ func TestInline_TypedStruct_Decode(t *testing.T) {
 	if kid.Name != "alice" {
 		t.Errorf("kid.Name = %q", kid.Name)
 	}
-	// Inner InlineStruct has its own catch-all — age:30 lands there.
+	// Inner EmbedStruct has its own catch-all — age:30 lands there.
 	if age, _ := kid.Extra["age"].(float64); age != 30 {
 		t.Errorf("kid.Extra[age] = %v", kid.Extra["age"])
 	}
@@ -266,17 +266,17 @@ func TestInline_TypedStruct_Decode(t *testing.T) {
 	}
 }
 
-func TestInline_TypedStruct_Roundtrip(t *testing.T) {
+func TestEmbed_TypedStruct_Roundtrip(t *testing.T) {
 	t.Parallel()
-	orig := InlineStructsStruct{
+	orig := EmbedStructsStruct{
 		Name: "root",
-		Extra: map[string]InlineStruct{
+		Extra: map[string]EmbedStruct{
 			"kid": {Name: "alice", Extra: map[string]any{"age": float64(30)}},
 			"sib": {Name: "bob"},
 		},
 	}
 	out, _ := ggen.Marshal(orig)
-	got, _, err := InlineStructsStruct{}.DecodeFrom(out)
+	got, _, err := EmbedStructsStruct{}.DecodeFrom(out)
 	if err != nil {
 		t.Fatalf("decode: %v\n%s", err, out)
 	}
@@ -300,17 +300,17 @@ func TestInline_TypedStruct_Roundtrip(t *testing.T) {
 }
 
 // Empty-Extra marshal: typed inline emits only the fixed fields.
-func TestInline_TypedString_MarshalEmpty(t *testing.T) {
+func TestEmbed_TypedString_MarshalEmpty(t *testing.T) {
 	t.Parallel()
-	out, _ := ggen.MarshalString(InlineStringsStruct{Name: "alice"})
+	out, _ := ggen.MarshalString(EmbedStringsStruct{Name: "alice"})
 	if out != `{"name":"alice"}` {
 		t.Errorf("empty-extra marshal = %q", out)
 	}
 }
 
-func TestInline_TypedStruct_MarshalEmpty(t *testing.T) {
+func TestEmbed_TypedStruct_MarshalEmpty(t *testing.T) {
 	t.Parallel()
-	out, _ := ggen.MarshalString(InlineStructsStruct{Name: "root"})
+	out, _ := ggen.MarshalString(EmbedStructsStruct{Name: "root"})
 	if out != `{"name":"root"}` {
 		t.Errorf("empty-extra marshal = %q", out)
 	}
@@ -319,9 +319,9 @@ func TestInline_TypedStruct_MarshalEmpty(t *testing.T) {
 // An EMPTY RawMessage entry in the inline map must marshal as null — the
 // raw passthrough used to append zero bytes, emitting `"k":` with no value
 // (corrupt JSON). Field-level raw emit and AppendAny already null empties.
-func TestInline_EmptyRawMessageMarshalsNull(t *testing.T) {
+func TestEmbed_EmptyRawMessageMarshalsNull(t *testing.T) {
 	t.Parallel()
-	out, err := ggen.Marshal(InlineRawStruct{
+	out, err := ggen.Marshal(EmbedRawStruct{
 		Name:  "x",
 		Extra: map[string]json.RawMessage{"a": nil, "b": {}, "c": json.RawMessage(`{"n":1}`)},
 	})
@@ -339,7 +339,7 @@ func TestInline_EmptyRawMessageMarshalsNull(t *testing.T) {
 		t.Errorf("non-empty raw entry mangled: %s", m["c"])
 	}
 	// Round-trip: decode absorbs unknown keys back into the raw map.
-	back, _, err := InlineRawStruct{}.DecodeFrom(out)
+	back, _, err := EmbedRawStruct{}.DecodeFrom(out)
 	if err != nil || string(back.Extra["c"]) != `{"n":1}` {
 		t.Fatalf("decode: %+v %v", back, err)
 	}

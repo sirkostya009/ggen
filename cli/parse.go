@@ -910,7 +910,7 @@ func (s *structSet) extractFieldFromTypes(structName string, field *types.Var, t
 	fi.OmitZero = opts.OmitZero
 	fi.String = opts.String
 	fi.Format = opts.Format
-	fi.Inline = opts.Inline
+	fi.Embed = opts.Embed
 
 	if err := applyPipeTags(&fi, rt, fi.GoName); err != nil {
 		return fi, err
@@ -976,9 +976,9 @@ func (s *structSet) extractFieldFromTypes(structName string, field *types.Var, t
 	}
 	foldByteArray(&fi)
 
-	if fi.Inline {
+	if fi.Embed {
 		if fi.Kind != KindMap {
-			return fi, fmt.Errorf("json:\",inline\" requires a map[string]T field, got %s", fi.GoType)
+			return fi, fmt.Errorf("json:\",embed\" requires a map[string]T field, got %s", fi.GoType)
 		}
 	}
 
@@ -1348,7 +1348,7 @@ func extractField(structName, goName string, field *ast.Field) (FieldInfo, error
 		fi.OmitZero = opts.OmitZero
 		fi.String = opts.String
 		fi.Format = opts.Format
-		fi.Inline = opts.Inline
+		fi.Embed = opts.Embed
 		if err := applyPipeTags(&fi, tag, goName); err != nil {
 			return fi, err
 		}
@@ -1393,9 +1393,9 @@ func extractField(structName, goName string, field *ast.Field) (FieldInfo, error
 		fi.ElemKind = resolveKind(fi.ElemType)
 	}
 
-	if fi.Inline {
+	if fi.Embed {
 		if fi.Kind != KindMap {
-			return fi, fmt.Errorf("json:\",inline\" requires a map[string]T field, got %s", goType)
+			return fi, fmt.Errorf("json:\",embed\" requires a map[string]T field, got %s", goType)
 		}
 	}
 

@@ -27,6 +27,14 @@ func TestParseJSONTag(t *testing.T) {
 		{"'a,b'", "a,b", JSONOptions{}, false, false},
 		{`'it\'s',omitempty`, "it's", JSONOptions{OmitEmpty: true}, false, false},
 		{"'-'", "-", JSONOptions{}, false, false},
+		// The embedded fallback carries no name and no companion option, and
+		// the older `inline` spelling is rejected rather than read as a name.
+		{",embed", "", JSONOptions{Embed: true}, false, false},
+		{",inline", "", JSONOptions{}, false, true},
+		{"extra,inline", "", JSONOptions{}, false, true},
+		{"extra,embed", "", JSONOptions{}, false, true},
+		{",embed,omitempty", "", JSONOptions{}, false, true},
+		{",embed,string", "", JSONOptions{}, false, true},
 		// jsonv2 malformed forms: `-` with options, empty options.
 		{"-,", "", JSONOptions{}, false, true},
 		{"-,omitempty", "", JSONOptions{}, false, true},

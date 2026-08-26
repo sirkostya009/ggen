@@ -171,16 +171,16 @@ func generateTo(w io.Writer, pkg, scope string, structs []StructInfo) error {
 		cyclicTypes = computeCyclicTypes(structs)
 	}
 	// Sort fields alphabetically by JSON name (opt out with nosortkeys).
-	// Inline fields stay at the end so comma emission stays tidy.
+	// Embedded fallback fields stay at the end so comma emission stays tidy.
 	for i := range structs {
 		if structs[i].NoSort {
 			continue
 		}
 		slices.SortStableFunc(structs[i].Fields, func(a, b FieldInfo) int {
 			switch {
-			case a.Inline && !b.Inline:
+			case a.Embed && !b.Embed:
 				return 1
-			case !a.Inline && b.Inline:
+			case !a.Embed && b.Embed:
 				return -1
 			}
 			if a.JSONName < b.JSONName {
@@ -1283,7 +1283,7 @@ func renderOneofCases(kind TypeKind, raw string) string {
 // fieldIsConditional reports whether the field's marshal emission depends on
 // a runtime check (omitempty/omitzero).
 func fieldIsConditional(f FieldInfo) bool {
-	if f.Inline {
+	if f.Embed {
 		return true
 	}
 	if !f.OmitEmpty && !f.OmitZero {
@@ -1556,7 +1556,7 @@ func renderAppendJSONBody(b *bytes.Buffer, s StructInfo) {
 	b.WriteString("dst = append(dst, '{')\nstart := len(dst)\n")
 	for _, f := range s.Fields {
 		ref := "s." + f.GoName
-		if f.Inline {
+		if f.Embed {
 			valEmit := inlineValueEmit(f)
 			fmt.Fprintf(b, `for k, v := range %[1]s {
 if len(dst) > start { dst = append(dst, ',') }
@@ -1599,7 +1599,7 @@ dst = append(dst, ':')
 	b.WriteString("return append(dst, '}'), nil")
 }
 
-// inlineValueEmit returns the inline-catch-all marshal code for one map
+// inlineValueEmit returns the embedded-fallback marshal code for one map
 // entry's value (loop var `v`). Specializes a few elem kinds to skip the
 // `any` boxing; everything else goes through AppendAny.
 func inlineValueEmit(f FieldInfo) string {
@@ -1996,8 +1996,8 @@ func renderSize(b *bytes.Buffer, s StructInfo) {
 	named := 0
 	var runtime bytes.Buffer
 	for _, f := range s.Fields {
-		if f.Inline {
-			// Inline catch-all: name/colon/comma budgeted per-entry in sizeMapContrib.
+		if f.Embed {
+			// Embedded fallback: name/colon/comma budgeted per-entry in sizeMapContrib.
 			ref := "s." + f.GoName
 			_, code := sizeContrib(f, ref)
 			runtime.WriteString(code)
@@ -3148,11 +3148,11 @@ func inlineScanString(b *bytes.Buffer, posIn, dst, posOut, field string, cp bool
 }
 
 // maxJSONNameLen returns the longest declared JSON key name on s (0 when no
-// named fields — inline catch-alls carry arbitrary keys and are excluded).
+// named fields — embedded fallbacks carry arbitrary keys and are excluded).
 func maxJSONNameLen(s StructInfo) int {
 	n := 0
 	for _, f := range s.Fields {
-		if f.Inline {
+		if f.Embed {
 			continue
 		}
 		n = max(n, len(f.JSONName))
@@ -3389,7 +3389,7 @@ func fieldZeroLit(s StructInfo, f FieldInfo) string {
 // appeared. Containers are excluded: they are already emptied by
 // emitReceiverReset and keep their capacity for reuse.
 func needsOmittedZero(f FieldInfo) bool {
-	if f.Inline || !needsSeen(f) {
+	if f.Embed || !needsSeen(f) {
 		return false
 	}
 	if f.Pointer {
@@ -3488,7 +3488,7 @@ func renderDecodeBody(b *bytes.Buffer, s StructInfo) {
 		b.WriteString(seenDecl(s))
 	} else {
 		for _, f := range s.Fields {
-			if f.Inline {
+			if f.Embed {
 				continue
 			}
 			if needsSeen(f) {
@@ -3506,7 +3506,7 @@ i++
 	renderPostLoop(b, s)
 	b.WriteString("return result, i, nil\n}\nfor {\nvar key string\n")
 	// The dispatch key is transient (matched + discarded). Copy-mode retention
-	// is handled where the key is stored: inline catch-all map + UnknownKeyError.
+	// is handled where the key is stored: embedded fallback map + UnknownKeyError.
 	// SIMD tier, all-short-keys struct: the vector classify's dependency chain
 	// (~load+3 compares+movemask+tzcnt) loses to a ≤5-iteration predictable
 	// scalar loop, so key scans get a bounded scalar window sized to the
@@ -3563,7 +3563,7 @@ func renderPostLoopShape(b *bytes.Buffer, s StructInfo, stream bool) {
 	}
 	if !s.NoValidate {
 		for _, f := range s.Fields {
-			if !f.IsRequired() || f.Inline {
+			if !f.IsRequired() || f.Embed {
 				continue
 			}
 			errExpr := withPos(requiredErr(f.JSONName), posVar)
@@ -3588,7 +3588,7 @@ func renderDispatch(b *bytes.Buffer, s StructInfo) {
 	// logs DuplicateKeyError and skips, default errors immediately.
 	emitField := func(b *bytes.Buffer, f FieldInfo) {
 		f.AtDispatch = true
-		if f.Inline || !needsSeen(f) {
+		if f.Embed || !needsSeen(f) {
 			renderField(b, f, "result."+f.GoName, "i")
 			return
 		}
@@ -3621,7 +3621,7 @@ func renderDispatch(b *bytes.Buffer, s StructInfo) {
 
 	b.WriteString("switch key {\n")
 	for _, f := range s.Fields {
-		if f.Inline {
+		if f.Embed {
 			continue
 		}
 		fmt.Fprintf(b, "case %q:\n", f.JSONName)
@@ -4072,7 +4072,7 @@ func sliceElemField(f FieldInfo) FieldInfo {
 	ef.AtDispatch = false
 	ef.NullZero = false
 	ef.String = false
-	ef.Inline = false
+	ef.Embed = false
 	ef.OmitEmpty, ef.OmitZero = false, false
 	ef.Validation, ef.Mods, ef.Pipe = nil, nil, nil
 	ef.ElemValidation, ef.ElemMods = nil, nil
@@ -4450,10 +4450,10 @@ func renderAny(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 }
 
 // needsSeen reports whether a seen<Field> flag is required for f (always
-// except inline catch-all maps). Used for dup-key guard / first-wins skip /
+// except embedded fallback maps). Used for dup-key guard / first-wins skip /
 // required-field post-loop check.
 func needsSeen(f FieldInfo) bool {
-	return !f.Inline
+	return !f.Embed
 }
 
 // seenBitmaskThreshold is the field count above which codegen swaps per-field
@@ -4467,7 +4467,7 @@ func useSeenBitmask(s StructInfo) bool {
 		return false
 	}
 	for _, f := range s.Fields {
-		if !f.Inline && needsSeen(f) {
+		if !f.Embed && needsSeen(f) {
 			return true
 		}
 	}
@@ -4475,7 +4475,7 @@ func useSeenBitmask(s StructInfo) bool {
 }
 
 // seenBitIndex assigns a stable bit index to f from its position in s.Fields.
-// Inline fields still occupy an index (simpler addressing).
+// Embedded fallback fields still occupy an index (simpler addressing).
 func seenBitIndex(s StructInfo, f FieldInfo) int {
 	for i, ff := range s.Fields {
 		if ff.GoName == f.GoName {
@@ -4541,7 +4541,7 @@ func seenSet(s StructInfo, f FieldInfo) string {
 }
 
 // unknownKey emits the default branch of the key switch, in precedence order:
-// inline catch-all map → absorb; s.IgnoreUnknown → SkipValue; else
+// embedded fallback map → absorb; s.IgnoreUnknown → SkipValue; else
 // UnknownKeyError. The bytes-path `key` aliases data and stays valid for the
 // whole function, so by default it embeds directly into the stored map key /
 // ggen.NewParseErr (no clone). Under -copy every retained `key` is cloned
@@ -4553,10 +4553,10 @@ func unknownKey(s StructInfo, posVar string) string {
 		keyExpr = "strings.Clone(key)"
 	}
 	chk := bytesErrCheck(keyExpr, posVar)
-	if inline := s.InlineField(); inline.Inline {
+	if embedded := s.EmbedField(); embedded.Embed {
 		initMap := fmt.Sprintf("if result.%s == nil { result.%s = make(%s) }\n",
-			inline.GoName, inline.GoName, inline.GoType)
-		switch inline.ElemKind {
+			embedded.GoName, embedded.GoName, embedded.GoType)
+		switch embedded.ElemKind {
 		case KindAny:
 			anyFn := "ggen.Any"
 			if s.UseNumber {
@@ -4566,27 +4566,27 @@ func unknownKey(s StructInfo, posVar string) string {
 				anyFn += "Copy"
 			}
 			return initMap + fmt.Sprintf(`result.%[1]s[%[5]s], %[2]s, err = %[3]s(data, %[2]s)
-%[4]s`, inline.GoName, posVar, anyFn, chk, keyExpr)
+%[4]s`, embedded.GoName, posVar, anyFn, chk, keyExpr)
 		case KindString:
 			if s.Copy {
 				// tier func + ggen.Detach: reuse the tier locate, clone the value
 				// only when it aliases data (an owned stringSlow escape result
 				// skips the clone — no double-copy). Key stays cloned (keyExpr).
 				return initMap + fmt.Sprintf(`var _sv string
-_sv, %[1]s, err = `+scanStringFn+`(data, %[1]s, `+vArg(inline)+`)
+_sv, %[1]s, err = `+scanStringFn+`(data, %[1]s, `+vArg(embedded)+`)
 %[3]sresult.%[2]s[%[4]s] = ggen.Detach(_sv, data)
-`, posVar, inline.GoName, chk, keyExpr)
+`, posVar, embedded.GoName, chk, keyExpr)
 			}
-			return initMap + fmt.Sprintf(`result.%[2]s[key], %[1]s, err = `+scanStringFn+`(data, %[1]s, `+vArg(inline)+`)
-%[3]s`, posVar, inline.GoName, chk)
+			return initMap + fmt.Sprintf(`result.%[2]s[key], %[1]s, err = `+scanStringFn+`(data, %[1]s, `+vArg(embedded)+`)
+%[3]s`, posVar, embedded.GoName, chk)
 		case KindStruct:
-			if isGenerated(inline.ElemType) {
+			if isGenerated(embedded.ElemType) {
 				return initMap + fmt.Sprintf(`var _iv %[1]s
 var _in int
-_iv, _in, err = _iv.`+decodeCallFor(inline.ElemType)+`
+_iv, _in, err = _iv.`+decodeCallFor(embedded.ElemType)+`
 %[2]s += _in
 %[4]sresult.%[3]s[%[5]s] = _iv
-`, inline.ElemType, posVar, inline.GoName, nestedDecodeErrCheck(keyExpr, inline.ElemType, s.MultiErr, true, "_in"), keyExpr)
+`, embedded.ElemType, posVar, embedded.GoName, nestedDecodeErrCheck(keyExpr, embedded.ElemType, s.MultiErr, true, "_in"), keyExpr)
 			}
 		}
 		return initMap + fmt.Sprintf(`_vstart := %[1]s
@@ -4594,7 +4594,7 @@ _iv, _in, err = _iv.`+decodeCallFor(inline.ElemType)+`
 %[4]svar _iv %[2]s
 if err = json.Unmarshal(data[_vstart:%[1]s], &_iv); err != nil { return result, %[1]s, ggen.NewParseErr(%[5]s, %[1]s, err) }
 result.%[3]s[%[5]s] = _iv
-`, posVar, inline.ElemType, inline.GoName, chk, keyExpr)
+`, posVar, embedded.ElemType, embedded.GoName, chk, keyExpr)
 	}
 	if s.IgnoreUnknown {
 		return fmt.Sprintf(`%[1]s, err = ggen.SkipValue(data, %[1]s)
@@ -5635,7 +5635,7 @@ func renderStreamDecodeStruct(b *bytes.Buffer, s StructInfo) {
 		b.WriteString(seenDecl(s))
 	} else {
 		for _, f := range s.Fields {
-			if f.Inline {
+			if f.Embed {
 				continue
 			}
 			if needsSeen(f) {
@@ -5692,7 +5692,7 @@ func renderStreamDispatch(s StructInfo) string {
 		field := fieldLit(f)
 		chk := streamErrCheck(field)
 		fmt.Fprintf(b, "err = s.ConsumeColon()\n%s", chk)
-		if f.Inline || !needsSeen(f) {
+		if f.Embed || !needsSeen(f) {
 			b.WriteString(parse)
 			return
 		}
@@ -5725,7 +5725,7 @@ func renderStreamDispatch(s StructInfo) string {
 	defer putSmall(b)
 	b.WriteString("switch key {\n")
 	for _, f := range s.Fields {
-		if f.Inline {
+		if f.Embed {
 			continue
 		}
 		f.AtDispatch = true
@@ -6384,36 +6384,36 @@ func renderStreamAny(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 // The immediate-return branch reads the alias directly (function exits first).
 func streamUnknownKey(s StructInfo, posVar string) string {
 	_ = posVar
-	if inline := s.InlineField(); inline.Inline {
+	if embedded := s.EmbedField(); embedded.Embed {
 		chk := streamErrCheck("ownKey")
 		prelude := fmt.Sprintf(`ownKey := strings.Clone(key)
 err = s.ConsumeColon()
 %[3]sif result.%[1]s == nil { result.%[1]s = make(%[2]s) }
-`, inline.GoName, inline.GoType, chk)
-		switch inline.ElemKind {
+`, embedded.GoName, embedded.GoType, chk)
+		switch embedded.ElemKind {
 		case KindAny:
 			anyFn := "s.Any"
 			if s.UseNumber {
 				anyFn = "s.AnyNumber"
 			}
 			return prelude + fmt.Sprintf(`result.%[1]s[ownKey], err = %[2]s()
-%[3]s`, inline.GoName, anyFn, chk)
+%[3]s`, embedded.GoName, anyFn, chk)
 		case KindString:
-			return prelude + fmt.Sprintf(`result.%[1]s[ownKey], err = s.String(`+vArg(inline)+`)
-%[2]s`, inline.GoName, chk)
+			return prelude + fmt.Sprintf(`result.%[1]s[ownKey], err = s.String(`+vArg(embedded)+`)
+%[2]s`, embedded.GoName, chk)
 		case KindStruct:
-			if isGenerated(inline.ElemType) {
+			if isGenerated(embedded.ElemType) {
 				return prelude + fmt.Sprintf(`var _iv %[1]s
-_iv, err = _iv.`+streamDecodeCallFor(inline.ElemType)+`
+_iv, err = _iv.`+streamDecodeCallFor(embedded.ElemType)+`
 %[3]sresult.%[2]s[ownKey] = _iv
-`, inline.ElemType, inline.GoName, nestedDecodeErrCheck("ownKey", inline.ElemType, s.MultiErr, false, ""))
+`, embedded.ElemType, embedded.GoName, nestedDecodeErrCheck("ownKey", embedded.ElemType, s.MultiErr, false, ""))
 			}
 		}
 		return prelude + fmt.Sprintf(`span, err := s.CaptureValue()
 %[3]svar _iv %[1]s
 if err = json.Unmarshal(span, &_iv); err != nil { return result, ggen.NewParseErr(ownKey, s.Offset(), err) }
 result.%[2]s[ownKey] = _iv
-`, inline.ElemType, inline.GoName, chk)
+`, embedded.ElemType, embedded.GoName, chk)
 	}
 	if s.IgnoreUnknown {
 		chk := streamErrCheck("ownKey")

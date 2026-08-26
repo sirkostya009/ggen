@@ -237,7 +237,7 @@ unmarshal multierr`.
 | `-multierr`         | `multierr`         | accumulate every validation failure into `ggen.Errors` instead of returning on the first one                                                                                                                                                                                                                                                                                                                                                                   |
 | `-allowdups`        | `allowdups`        | accept duplicate JSON keys with first-wins semantics — the first occurrence is parsed, later ones are skipped via `ggen.SkipValue` without being decoded (default: error on the second hit)                                                                                                                                                                                                                                                                          |
 | `-novalidate`       | `novalidate`       | drop validation, required-field checks, and mods entirely — fastest decode path                                                                                                                                                                                                                                                                                                                                                                                      |
-| `-ignoreunknown`    | `ignoreunknown`    | silently drop unknown JSON keys (default: error). overridden by an inline catch-all map field                                                                                                                                                                                                                                                                                                                                                                        |
+| `-ignoreunknown`    | `ignoreunknown`    | silently drop unknown JSON keys (default: error). overridden by an embedded fallback map field                                                                                                                                                                                                                                                                                                                                                                        |
 | `-nullzero`         | `nullzero`         | accept an explicit JSON `null` on every non-pointer value field, decoding it to the Go zero value (default: error). a per-field `nullzero` decode variant in `pipe:` opts in a single field                                                                                                                                                                                                                                                                          |
 | `-nosortkeys`       | `nosortkeys`       | emit struct fields in declaration order (default: alphabetical by JSON name, compresses better)                                                                                                                                                                                                                                                                                                                                                                      |
 | `-usenumber`        | `usenumber`        | decode numbers in `any` fields as `json.Number` instead of `float64`                                                                                                                                                                                                                                                                                                                                                                                                 |
@@ -256,7 +256,7 @@ rule: only exported fields are encoded and decoded. Unexported fields are
 skipped silently (no decode wiring, never appear in marshal output) — same as
 `encoding/json`. Extras worth knowing:
 
-- `json:",inline"` — the field becomes a catch-all map for unknown keys. The Go
+- `json:",embed"` — the field becomes a catch-all map for unknown keys. The Go
   type must be a string-keyed map (`map[string]V`); V can be `any`, a primitive,
   a ggen-annotated struct, or any other concrete type. Typed values are decoded
   directly through the elem's fast path when one exists (string scan, generated
@@ -659,7 +659,7 @@ type Item struct {
 //ggen:generate
 type Event struct {
 	Type string         `json:"type"`
-	Data map[string]any `json:",inline"` // absorbs every unknown key
+	Data map[string]any `json:",embed"` // absorbs every unknown key
 }
 ```
 

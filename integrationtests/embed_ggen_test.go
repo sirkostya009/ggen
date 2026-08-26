@@ -10,7 +10,7 @@ import (
 	"github.com/sirkostya009/ggen"
 )
 
-func (recv InlineStruct) DecodeFrom(data []byte) (result InlineStruct, i int, err error) {
+func (recv EmbedStruct) DecodeFrom(data []byte) (result EmbedStruct, i int, err error) {
 	result = recv
 	if result.Extra != nil {
 		clear(result.Extra)
@@ -120,7 +120,7 @@ func (recv InlineStruct) DecodeFrom(data []byte) (result InlineStruct, i int, er
 	}
 }
 
-func (recv InlineStruct) DecodeFromStream(s *ggen.Stream) (result InlineStruct, err error) {
+func (recv EmbedStruct) DecodeFromStream(s *ggen.Stream) (result EmbedStruct, err error) {
 	result = recv
 	if result.Extra != nil {
 		clear(result.Extra)
@@ -212,7 +212,7 @@ func (recv InlineStruct) DecodeFromStream(s *ggen.Stream) (result InlineStruct, 
 	}
 }
 
-func (s InlineStruct) JSONSize() int {
+func (s EmbedStruct) JSONSize() int {
 	size := 11
 	size += len(s.Name) * 2
 	size += len(s.Extra) * 68
@@ -222,7 +222,7 @@ func (s InlineStruct) JSONSize() int {
 	return size
 }
 
-func (s InlineStruct) AppendJSON(dst []byte) ([]byte, error) {
+func (s EmbedStruct) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, '{')
@@ -246,7 +246,7 @@ func (s InlineStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv InlineStringsStruct) DecodeFrom(data []byte) (result InlineStringsStruct, i int, err error) {
+func (recv EmbedStringsStruct) DecodeFrom(data []byte) (result EmbedStringsStruct, i int, err error) {
 	result = recv
 	if result.Extra != nil {
 		clear(result.Extra)
@@ -356,7 +356,7 @@ func (recv InlineStringsStruct) DecodeFrom(data []byte) (result InlineStringsStr
 	}
 }
 
-func (recv InlineStringsStruct) DecodeFromStream(s *ggen.Stream) (result InlineStringsStruct, err error) {
+func (recv EmbedStringsStruct) DecodeFromStream(s *ggen.Stream) (result EmbedStringsStruct, err error) {
 	result = recv
 	if result.Extra != nil {
 		clear(result.Extra)
@@ -448,7 +448,7 @@ func (recv InlineStringsStruct) DecodeFromStream(s *ggen.Stream) (result InlineS
 	}
 }
 
-func (s InlineStringsStruct) JSONSize() int {
+func (s EmbedStringsStruct) JSONSize() int {
 	size := 11
 	size += len(s.Name) * 2
 	size += len(s.Extra) * 4
@@ -460,7 +460,7 @@ func (s InlineStringsStruct) JSONSize() int {
 	return size
 }
 
-func (s InlineStringsStruct) AppendJSON(dst []byte) ([]byte, error) {
+func (s EmbedStringsStruct) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, '{')
@@ -482,7 +482,7 @@ func (s InlineStringsStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv InlineStructsStruct) DecodeFrom(data []byte) (result InlineStructsStruct, i int, err error) {
+func (recv EmbedStructsStruct) DecodeFrom(data []byte) (result EmbedStructsStruct, i int, err error) {
 	result = recv
 	if result.Extra != nil {
 		clear(result.Extra)
@@ -561,9 +561,9 @@ func (recv InlineStructsStruct) DecodeFrom(data []byte) (result InlineStructsStr
 			}
 		default:
 			if result.Extra == nil {
-				result.Extra = make(map[string]InlineStruct)
+				result.Extra = make(map[string]EmbedStruct)
 			}
-			var _iv InlineStruct
+			var _iv EmbedStruct
 			var _in int
 			_iv, _in, err = _iv.DecodeFrom(data[i:])
 			i += _in
@@ -596,7 +596,7 @@ func (recv InlineStructsStruct) DecodeFrom(data []byte) (result InlineStructsStr
 	}
 }
 
-func (recv InlineStructsStruct) DecodeFromStream(s *ggen.Stream) (result InlineStructsStruct, err error) {
+func (recv EmbedStructsStruct) DecodeFromStream(s *ggen.Stream) (result EmbedStructsStruct, err error) {
 	result = recv
 	if result.Extra != nil {
 		clear(result.Extra)
@@ -650,9 +650,9 @@ func (recv InlineStructsStruct) DecodeFromStream(s *ggen.Stream) (result InlineS
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
 			if result.Extra == nil {
-				result.Extra = make(map[string]InlineStruct)
+				result.Extra = make(map[string]EmbedStruct)
 			}
-			var _iv InlineStruct
+			var _iv EmbedStruct
 			_iv, err = _iv.DecodeFromStream(s)
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
@@ -690,7 +690,7 @@ func (recv InlineStructsStruct) DecodeFromStream(s *ggen.Stream) (result InlineS
 	}
 }
 
-func (s InlineStructsStruct) JSONSize() int {
+func (s EmbedStructsStruct) JSONSize() int {
 	size := 11
 	size += len(s.Name) * 2
 	size += len(s.Extra) * 4
@@ -701,7 +701,7 @@ func (s InlineStructsStruct) JSONSize() int {
 	return size
 }
 
-func (s InlineStructsStruct) AppendJSON(dst []byte) ([]byte, error) {
+func (s EmbedStructsStruct) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, '{')
@@ -725,7 +725,7 @@ func (s InlineStructsStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
-func (recv InlineRawStruct) DecodeFrom(data []byte) (result InlineRawStruct, i int, err error) {
+func (recv EmbedRawStruct) DecodeFrom(data []byte) (result EmbedRawStruct, i int, err error) {
 	result = recv
 	if result.Extra != nil {
 		clear(result.Extra)
@@ -841,7 +841,7 @@ func (recv InlineRawStruct) DecodeFrom(data []byte) (result InlineRawStruct, i i
 	}
 }
 
-func (recv InlineRawStruct) DecodeFromStream(s *ggen.Stream) (result InlineRawStruct, err error) {
+func (recv EmbedRawStruct) DecodeFromStream(s *ggen.Stream) (result EmbedRawStruct, err error) {
 	result = recv
 	if result.Extra != nil {
 		clear(result.Extra)
@@ -938,7 +938,7 @@ func (recv InlineRawStruct) DecodeFromStream(s *ggen.Stream) (result InlineRawSt
 	}
 }
 
-func (s InlineRawStruct) JSONSize() int {
+func (s EmbedRawStruct) JSONSize() int {
 	size := 11
 	size += len(s.Name) * 2
 	size += len(s.Extra) * 4
@@ -953,7 +953,7 @@ func (s InlineRawStruct) JSONSize() int {
 	return size
 }
 
-func (s InlineRawStruct) AppendJSON(dst []byte) ([]byte, error) {
+func (s EmbedRawStruct) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, '{')

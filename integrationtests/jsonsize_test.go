@@ -411,7 +411,7 @@ func TestJSONSize_HTMLEscapeStruct_NoRealloc(t *testing.T) {
 // The bound must cover the fixed field AND every spliced inline map entry.
 func TestJSONSize_InlineStruct_NoRealloc(t *testing.T) {
 	t.Parallel()
-	in := InlineStruct{
+	in := EmbedStruct{
 		Name: strings.Repeat("n", 30),
 		Extra: map[string]any{
 			"long":   strings.Repeat("v", 80),

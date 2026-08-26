@@ -265,9 +265,9 @@ surface pinned by `Decoder[T]`).
   action until a consumer confuses the two surfaces.
 
 - **Go 1.27 stable `encoding/json/v2` dropped features the experiment had —
-  4 parity gaps, 10 failing tests, UNDECIDED (2026-08).** The 1.27 bump removed
+  3 parity gaps, 9 failing tests, UNDECIDED (2026-08).** The 1.27 bump removed
   `goexperiment.jsonv2` (v2 + jsontext are stable, no flag). But the STABLE
-  release is not the package the experiment shipped: it cut or tightened four
+  release is not the package the experiment shipped: it cut or tightened several
   things ggen still implements, so the ggen↔jsonv2 parity tests fail with the
   ORACLE moved, not ggen broken. ggen's own features all still work.
 
@@ -276,7 +276,6 @@ surface pinned by `Decoder[T]`).
   | `format:` (time layouts, base64/base32/hex, nonfinite, emitnull/emitempty) | REMOVED, unreachable | fully supported | `TestStdCompat_NativeTypes`, `_TimeFormatsStdCompat`, `_PointerStruct`, `TestStdCompatMerge_Parity` (2 subtests) |
   | `,string` on bool / plain string | ERRORS (`invalid use of 'string' tag option`) | bool bare, string single-encoded | `TestStdCompat_StringTagStruct`, `TestAppendAny_Struct_StringOpt`, `TestAppendAny_NumberStringTag` |
   | Quoted names `json:"'a,b'"` | REJECTS (malformed tag, `'` invalid at option start) | supported | `TestKeyEscape_QuoteParityWithJSONv2`, `TestQuotedNames_roundtrip` |
-  | `,inline` / `,unknown` | renamed `,embed` (flattens identically) | flattens on `inline` | `TestStdCompat_InlineStruct` |
 
   `format:` is the consequential one. Cut for the initial release per
   https://go.dev/issue/79071, pending typed struct tags
@@ -291,9 +290,9 @@ surface pinned by `Decoder[T]`).
 
   Each row decides independently: keep ggen's behaviour + pin a documented
   divergence (and stop the test consulting jsonv2 for that shape), or follow
-  the stdlib. `,inline` → `,embed` is the cheap one — `,embed` flattens exactly
-  like ggen's `inline`, so it is a rename. `,string` and quoted names are
-  small, real breaking changes if followed. Whatever lands must propagate to
+  the stdlib. The catch-all-map row went the stdlib way — ggen spells it
+  `json:",embed"` now (opt #75), which closed that gap. `,string` and quoted
+  names are small, real breaking changes if followed. Whatever lands must propagate to
   the three surface docs (README / SKILL.md / cli/CLAUDE.md).
 
 - **`ggen.NotEOF` leaks the drained-vs-transient mapping into generated code
