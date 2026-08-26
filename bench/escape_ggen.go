@@ -27,6 +27,18 @@ func (recv EscapeDoc) DecodeFrom(data []byte) (result EscapeDoc, i int, err erro
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenA {
+			result.A = ""
+		}
+		if !seenB {
+			result.B = ""
+		}
+		if !seenC {
+			result.C = ""
+		}
+		if !seenD {
+			result.D = ""
+		}
 		return result, i, nil
 	}
 	for {
@@ -176,6 +188,18 @@ func (recv EscapeDoc) DecodeFrom(data []byte) (result EscapeDoc, i int, err erro
 		}
 		if data[i] == '}' {
 			i++
+			if !seenA {
+				result.A = ""
+			}
+			if !seenB {
+				result.B = ""
+			}
+			if !seenC {
+				result.C = ""
+			}
+			if !seenD {
+				result.D = ""
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -204,6 +228,18 @@ func (recv EscapeDoc) DecodeFromStream(s *ggen.Stream) (result EscapeDoc, err er
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenA {
+			result.A = ""
+		}
+		if !seenB {
+			result.B = ""
+		}
+		if !seenC {
+			result.C = ""
+		}
+		if !seenD {
+			result.D = ""
+		}
 		return result, nil
 	}
 	for {
@@ -290,6 +326,18 @@ func (recv EscapeDoc) DecodeFromStream(s *ggen.Stream) (result EscapeDoc, err er
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenA {
+				result.A = ""
+			}
+			if !seenB {
+				result.B = ""
+			}
+			if !seenC {
+				result.C = ""
+			}
+			if !seenD {
+				result.D = ""
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -337,6 +385,18 @@ func (recv CopyEscapeDoc) DecodeFrom(data []byte) (result CopyEscapeDoc, i int, 
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenA {
+			result.A = ""
+		}
+		if !seenB {
+			result.B = ""
+		}
+		if !seenC {
+			result.C = ""
+		}
+		if !seenD {
+			result.D = ""
+		}
 		return result, i, nil
 	}
 	for {
@@ -490,6 +550,18 @@ func (recv CopyEscapeDoc) DecodeFrom(data []byte) (result CopyEscapeDoc, i int, 
 		}
 		if data[i] == '}' {
 			i++
+			if !seenA {
+				result.A = ""
+			}
+			if !seenB {
+				result.B = ""
+			}
+			if !seenC {
+				result.C = ""
+			}
+			if !seenD {
+				result.D = ""
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -518,6 +590,18 @@ func (recv CopyEscapeDoc) DecodeFromStream(s *ggen.Stream) (result CopyEscapeDoc
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenA {
+			result.A = ""
+		}
+		if !seenB {
+			result.B = ""
+		}
+		if !seenC {
+			result.C = ""
+		}
+		if !seenD {
+			result.D = ""
+		}
 		return result, nil
 	}
 	for {
@@ -604,6 +688,18 @@ func (recv CopyEscapeDoc) DecodeFromStream(s *ggen.Stream) (result CopyEscapeDoc
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenA {
+				result.A = ""
+			}
+			if !seenB {
+				result.B = ""
+			}
+			if !seenC {
+				result.C = ""
+			}
+			if !seenD {
+				result.D = ""
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)

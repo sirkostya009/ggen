@@ -26,6 +26,9 @@ func (recv SkipEnvelope) DecodeFrom(data []byte) (result SkipEnvelope, i int, er
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenID {
+			result.ID = 0
+		}
 		return result, i, nil
 	}
 	for {
@@ -132,6 +135,9 @@ func (recv SkipEnvelope) DecodeFrom(data []byte) (result SkipEnvelope, i int, er
 		}
 		if data[i] == '}' {
 			i++
+			if !seenID {
+				result.ID = 0
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -157,6 +163,9 @@ func (recv SkipEnvelope) DecodeFromStream(s *ggen.Stream) (result SkipEnvelope, 
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenID {
+			result.ID = 0
+		}
 		return result, nil
 	}
 	for {
@@ -212,6 +221,9 @@ func (recv SkipEnvelope) DecodeFromStream(s *ggen.Stream) (result SkipEnvelope, 
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenID {
+				result.ID = 0
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)

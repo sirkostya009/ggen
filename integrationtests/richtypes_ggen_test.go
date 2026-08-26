@@ -32,6 +32,30 @@ func (recv RichTypes) DecodeFrom(data []byte) (result RichTypes, i int, err erro
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenBig {
+			result.Big = (RichTypes{}).Big
+		}
+		if !seenBigF {
+			result.BigF = (RichTypes{}).BigF
+		}
+		if !seenBigR {
+			result.BigR = (RichTypes{}).BigR
+		}
+		if !seenGofrsID {
+			result.GofrsID = (RichTypes{}).GofrsID
+		}
+		if !seenID {
+			result.ID = (RichTypes{}).ID
+		}
+		if !seenRaw1 {
+			result.Raw1 = nil
+		}
+		if !seenRaw2 {
+			result.Raw2 = nil
+		}
+		if !seenSite {
+			result.Site = (RichTypes{}).Site
+		}
 		return result, i, nil
 	}
 	for {
@@ -242,6 +266,30 @@ func (recv RichTypes) DecodeFrom(data []byte) (result RichTypes, i int, err erro
 		}
 		if data[i] == '}' {
 			i++
+			if !seenBig {
+				result.Big = (RichTypes{}).Big
+			}
+			if !seenBigF {
+				result.BigF = (RichTypes{}).BigF
+			}
+			if !seenBigR {
+				result.BigR = (RichTypes{}).BigR
+			}
+			if !seenGofrsID {
+				result.GofrsID = (RichTypes{}).GofrsID
+			}
+			if !seenID {
+				result.ID = (RichTypes{}).ID
+			}
+			if !seenRaw1 {
+				result.Raw1 = nil
+			}
+			if !seenRaw2 {
+				result.Raw2 = nil
+			}
+			if !seenSite {
+				result.Site = (RichTypes{}).Site
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -274,6 +322,30 @@ func (recv RichTypes) DecodeFromStream(s *ggen.Stream) (result RichTypes, err er
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenBig {
+			result.Big = (RichTypes{}).Big
+		}
+		if !seenBigF {
+			result.BigF = (RichTypes{}).BigF
+		}
+		if !seenBigR {
+			result.BigR = (RichTypes{}).BigR
+		}
+		if !seenGofrsID {
+			result.GofrsID = (RichTypes{}).GofrsID
+		}
+		if !seenID {
+			result.ID = (RichTypes{}).ID
+		}
+		if !seenRaw1 {
+			result.Raw1 = nil
+		}
+		if !seenRaw2 {
+			result.Raw2 = nil
+		}
+		if !seenSite {
+			result.Site = (RichTypes{}).Site
+		}
 		return result, nil
 	}
 	for {
@@ -449,6 +521,30 @@ func (recv RichTypes) DecodeFromStream(s *ggen.Stream) (result RichTypes, err er
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenBig {
+				result.Big = (RichTypes{}).Big
+			}
+			if !seenBigF {
+				result.BigF = (RichTypes{}).BigF
+			}
+			if !seenBigR {
+				result.BigR = (RichTypes{}).BigR
+			}
+			if !seenGofrsID {
+				result.GofrsID = (RichTypes{}).GofrsID
+			}
+			if !seenID {
+				result.ID = (RichTypes{}).ID
+			}
+			if !seenRaw1 {
+				result.Raw1 = nil
+			}
+			if !seenRaw2 {
+				result.Raw2 = nil
+			}
+			if !seenSite {
+				result.Site = (RichTypes{}).Site
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -537,6 +633,9 @@ func (recv RawOnly) DecodeFrom(data []byte) (result RawOnly, i int, err error) {
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenRaw {
+			result.Raw = nil
+		}
 		return result, i, nil
 	}
 	for {
@@ -601,6 +700,9 @@ func (recv RawOnly) DecodeFrom(data []byte) (result RawOnly, i int, err error) {
 		}
 		if data[i] == '}' {
 			i++
+			if !seenRaw {
+				result.Raw = nil
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -626,6 +728,9 @@ func (recv RawOnly) DecodeFromStream(s *ggen.Stream) (result RawOnly, err error)
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenRaw {
+			result.Raw = nil
+		}
 		return result, nil
 	}
 	for {
@@ -678,6 +783,9 @@ func (recv RawOnly) DecodeFromStream(s *ggen.Stream) (result RawOnly, err error)
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenRaw {
+				result.Raw = nil
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)

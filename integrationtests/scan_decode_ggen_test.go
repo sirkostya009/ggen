@@ -34,6 +34,9 @@ func (recv HugeStringStruct) DecodeFrom(data []byte) (result HugeStringStruct, i
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenBig {
+			result.Big = ""
+		}
 		return result, i, nil
 	}
 	for {
@@ -108,6 +111,9 @@ func (recv HugeStringStruct) DecodeFrom(data []byte) (result HugeStringStruct, i
 		}
 		if data[i] == '}' {
 			i++
+			if !seenBig {
+				result.Big = ""
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -133,6 +139,9 @@ func (recv HugeStringStruct) DecodeFromStream(s *ggen.Stream) (result HugeString
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenBig {
+			result.Big = ""
+		}
 		return result, nil
 	}
 	for {
@@ -180,6 +189,9 @@ func (recv HugeStringStruct) DecodeFromStream(s *ggen.Stream) (result HugeString
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenBig {
+				result.Big = ""
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -222,6 +234,30 @@ func (recv SequentialStringsStruct) DecodeFrom(data []byte) (result SequentialSt
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenA {
+			result.A = ""
+		}
+		if !seenB {
+			result.B = ""
+		}
+		if !seenC {
+			result.C = ""
+		}
+		if !seenD {
+			result.D = ""
+		}
+		if !seenE {
+			result.E = ""
+		}
+		if !seenF {
+			result.F = ""
+		}
+		if !seenG {
+			result.G = ""
+		}
+		if !seenH {
+			result.H = ""
+		}
 		return result, i, nil
 	}
 	for {
@@ -471,6 +507,30 @@ func (recv SequentialStringsStruct) DecodeFrom(data []byte) (result SequentialSt
 		}
 		if data[i] == '}' {
 			i++
+			if !seenA {
+				result.A = ""
+			}
+			if !seenB {
+				result.B = ""
+			}
+			if !seenC {
+				result.C = ""
+			}
+			if !seenD {
+				result.D = ""
+			}
+			if !seenE {
+				result.E = ""
+			}
+			if !seenF {
+				result.F = ""
+			}
+			if !seenG {
+				result.G = ""
+			}
+			if !seenH {
+				result.H = ""
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -503,6 +563,30 @@ func (recv SequentialStringsStruct) DecodeFromStream(s *ggen.Stream) (result Seq
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenA {
+			result.A = ""
+		}
+		if !seenB {
+			result.B = ""
+		}
+		if !seenC {
+			result.C = ""
+		}
+		if !seenD {
+			result.D = ""
+		}
+		if !seenE {
+			result.E = ""
+		}
+		if !seenF {
+			result.F = ""
+		}
+		if !seenG {
+			result.G = ""
+		}
+		if !seenH {
+			result.H = ""
+		}
 		return result, nil
 	}
 	for {
@@ -641,6 +725,30 @@ func (recv SequentialStringsStruct) DecodeFromStream(s *ggen.Stream) (result Seq
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenA {
+				result.A = ""
+			}
+			if !seenB {
+				result.B = ""
+			}
+			if !seenC {
+				result.C = ""
+			}
+			if !seenD {
+				result.D = ""
+			}
+			if !seenE {
+				result.E = ""
+			}
+			if !seenF {
+				result.F = ""
+			}
+			if !seenG {
+				result.G = ""
+			}
+			if !seenH {
+				result.H = ""
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -697,6 +805,9 @@ func (recv UnknownErrorStruct) DecodeFrom(data []byte) (result UnknownErrorStruc
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenName {
+			result.Name = ""
+		}
 		return result, i, nil
 	}
 	for {
@@ -771,6 +882,9 @@ func (recv UnknownErrorStruct) DecodeFrom(data []byte) (result UnknownErrorStruc
 		}
 		if data[i] == '}' {
 			i++
+			if !seenName {
+				result.Name = ""
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -796,6 +910,9 @@ func (recv UnknownErrorStruct) DecodeFromStream(s *ggen.Stream) (result UnknownE
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenName {
+			result.Name = ""
+		}
 		return result, nil
 	}
 	for {
@@ -843,6 +960,9 @@ func (recv UnknownErrorStruct) DecodeFromStream(s *ggen.Stream) (result UnknownE
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenName {
+				result.Name = ""
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -879,6 +999,12 @@ func (recv ValidationPosStruct) DecodeFrom(data []byte) (result ValidationPosStr
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenA {
+			result.A = ""
+		}
+		if !seenB {
+			result.B = ""
+		}
 		return result, i, nil
 	}
 	for {
@@ -981,6 +1107,12 @@ func (recv ValidationPosStruct) DecodeFrom(data []byte) (result ValidationPosStr
 		}
 		if data[i] == '}' {
 			i++
+			if !seenA {
+				result.A = ""
+			}
+			if !seenB {
+				result.B = ""
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -1007,6 +1139,12 @@ func (recv ValidationPosStruct) DecodeFromStream(s *ggen.Stream) (result Validat
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenA {
+			result.A = ""
+		}
+		if !seenB {
+			result.B = ""
+		}
 		return result, nil
 	}
 	for {
@@ -1070,6 +1208,12 @@ func (recv ValidationPosStruct) DecodeFromStream(s *ggen.Stream) (result Validat
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenA {
+				result.A = ""
+			}
+			if !seenB {
+				result.B = ""
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -1122,6 +1266,27 @@ func (recv NarrowInts) DecodeFrom(data []byte) (result NarrowInts, i int, err er
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenI16 {
+			result.I16 = 0
+		}
+		if !seenI32 {
+			result.I32 = 0
+		}
+		if !seenI8 {
+			result.I8 = 0
+		}
+		if !seenPtrU {
+			result.PtrU = nil
+		}
+		if !seenU16 {
+			result.U16 = 0
+		}
+		if !seenU32 {
+			result.U32 = 0
+		}
+		if !seenU8 {
+			result.U8 = 0
+		}
 		return result, i, nil
 	}
 	for {
@@ -1720,6 +1885,27 @@ func (recv NarrowInts) DecodeFrom(data []byte) (result NarrowInts, i int, err er
 		}
 		if data[i] == '}' {
 			i++
+			if !seenI16 {
+				result.I16 = 0
+			}
+			if !seenI32 {
+				result.I32 = 0
+			}
+			if !seenI8 {
+				result.I8 = 0
+			}
+			if !seenPtrU {
+				result.PtrU = nil
+			}
+			if !seenU16 {
+				result.U16 = 0
+			}
+			if !seenU32 {
+				result.U32 = 0
+			}
+			if !seenU8 {
+				result.U8 = 0
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -1759,6 +1945,27 @@ func (recv NarrowInts) DecodeFromStream(s *ggen.Stream) (result NarrowInts, err 
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenI16 {
+			result.I16 = 0
+		}
+		if !seenI32 {
+			result.I32 = 0
+		}
+		if !seenI8 {
+			result.I8 = 0
+		}
+		if !seenPtrU {
+			result.PtrU = nil
+		}
+		if !seenU16 {
+			result.U16 = 0
+		}
+		if !seenU32 {
+			result.U32 = 0
+		}
+		if !seenU8 {
+			result.U8 = 0
+		}
 		return result, nil
 	}
 	for {
@@ -2148,6 +2355,27 @@ func (recv NarrowInts) DecodeFromStream(s *ggen.Stream) (result NarrowInts, err 
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenI16 {
+				result.I16 = 0
+			}
+			if !seenI32 {
+				result.I32 = 0
+			}
+			if !seenI8 {
+				result.I8 = 0
+			}
+			if !seenPtrU {
+				result.PtrU = nil
+			}
+			if !seenU16 {
+				result.U16 = 0
+			}
+			if !seenU32 {
+				result.U32 = 0
+			}
+			if !seenU8 {
+				result.U8 = 0
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -2244,6 +2472,9 @@ func (recv AnyHolder) DecodeFrom(data []byte) (result AnyHolder, i int, err erro
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenData {
+			result.Data = nil
+		}
 		return result, i, nil
 	}
 	for {
@@ -2302,6 +2533,9 @@ func (recv AnyHolder) DecodeFrom(data []byte) (result AnyHolder, i int, err erro
 		}
 		if data[i] == '}' {
 			i++
+			if !seenData {
+				result.Data = nil
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -2327,6 +2561,9 @@ func (recv AnyHolder) DecodeFromStream(s *ggen.Stream) (result AnyHolder, err er
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenData {
+			result.Data = nil
+		}
 		return result, nil
 	}
 	for {
@@ -2374,6 +2611,9 @@ func (recv AnyHolder) DecodeFromStream(s *ggen.Stream) (result AnyHolder, err er
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenData {
+				result.Data = nil
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -2410,6 +2650,9 @@ func (recv RawHolder) DecodeFrom(data []byte) (result RawHolder, i int, err erro
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenRaw {
+			result.Raw = nil
+		}
 		return result, i, nil
 	}
 	for {
@@ -2474,6 +2717,9 @@ func (recv RawHolder) DecodeFrom(data []byte) (result RawHolder, i int, err erro
 		}
 		if data[i] == '}' {
 			i++
+			if !seenRaw {
+				result.Raw = nil
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -2499,6 +2745,9 @@ func (recv RawHolder) DecodeFromStream(s *ggen.Stream) (result RawHolder, err er
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenRaw {
+			result.Raw = nil
+		}
 		return result, nil
 	}
 	for {
@@ -2551,6 +2800,9 @@ func (recv RawHolder) DecodeFromStream(s *ggen.Stream) (result RawHolder, err er
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenRaw {
+				result.Raw = nil
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -2597,6 +2849,18 @@ func (recv NumGrammar) DecodeFrom(data []byte) (result NumGrammar, i int, err er
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenF {
+			result.F = 0
+		}
+		if !seenI {
+			result.I = 0
+		}
+		if !seenN {
+			result.N = (NumGrammar{}).N
+		}
+		if !seenU {
+			result.U = 0
+		}
 		return result, i, nil
 	}
 	for {
@@ -2758,6 +3022,18 @@ func (recv NumGrammar) DecodeFrom(data []byte) (result NumGrammar, i int, err er
 		}
 		if data[i] == '}' {
 			i++
+			if !seenF {
+				result.F = 0
+			}
+			if !seenI {
+				result.I = 0
+			}
+			if !seenN {
+				result.N = (NumGrammar{}).N
+			}
+			if !seenU {
+				result.U = 0
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -2786,6 +3062,18 @@ func (recv NumGrammar) DecodeFromStream(s *ggen.Stream) (result NumGrammar, err 
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenF {
+			result.F = 0
+		}
+		if !seenI {
+			result.I = 0
+		}
+		if !seenN {
+			result.N = (NumGrammar{}).N
+		}
+		if !seenU {
+			result.U = 0
+		}
 		return result, nil
 	}
 	for {
@@ -2880,6 +3168,18 @@ func (recv NumGrammar) DecodeFromStream(s *ggen.Stream) (result NumGrammar, err 
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenF {
+				result.F = 0
+			}
+			if !seenI {
+				result.I = 0
+			}
+			if !seenN {
+				result.N = (NumGrammar{}).N
+			}
+			if !seenU {
+				result.U = 0
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -2936,6 +3236,12 @@ func (recv NarrowFloats) DecodeFrom(data []byte) (result NarrowFloats, i int, er
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenF {
+			result.F = 0
+		}
+		if !seenFp {
+			result.Fp = nil
+		}
 		return result, i, nil
 	}
 	for {
@@ -3172,6 +3478,12 @@ func (recv NarrowFloats) DecodeFrom(data []byte) (result NarrowFloats, i int, er
 		}
 		if data[i] == '}' {
 			i++
+			if !seenF {
+				result.F = 0
+			}
+			if !seenFp {
+				result.Fp = nil
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -3206,6 +3518,12 @@ func (recv NarrowFloats) DecodeFromStream(s *ggen.Stream) (result NarrowFloats, 
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenF {
+			result.F = 0
+		}
+		if !seenFp {
+			result.Fp = nil
+		}
 		return result, nil
 	}
 	for {
@@ -3505,6 +3823,12 @@ func (recv NarrowFloats) DecodeFromStream(s *ggen.Stream) (result NarrowFloats, 
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenF {
+				result.F = 0
+			}
+			if !seenFp {
+				result.Fp = nil
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)

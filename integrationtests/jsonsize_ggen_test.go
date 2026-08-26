@@ -25,6 +25,9 @@ func (recv URLStruct) DecodeFrom(data []byte) (result URLStruct, i int, err erro
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenSite {
+			result.Site = (URLStruct{}).Site
+		}
 		return result, i, nil
 	}
 	for {
@@ -106,6 +109,9 @@ func (recv URLStruct) DecodeFrom(data []byte) (result URLStruct, i int, err erro
 		}
 		if data[i] == '}' {
 			i++
+			if !seenSite {
+				result.Site = (URLStruct{}).Site
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -131,6 +137,9 @@ func (recv URLStruct) DecodeFromStream(s *ggen.Stream) (result URLStruct, err er
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenSite {
+			result.Site = (URLStruct{}).Site
+		}
 		return result, nil
 	}
 	for {
@@ -184,6 +193,9 @@ func (recv URLStruct) DecodeFromStream(s *ggen.Stream) (result URLStruct, err er
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenSite {
+				result.Site = (URLStruct{}).Site
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)

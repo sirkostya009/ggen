@@ -27,6 +27,12 @@ func (recv HookedStruct) DecodeFrom(data []byte) (result HookedStruct, i int, er
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenN {
+			result.N = 0
+		}
+		if !seenName {
+			result.Name = ""
+		}
 		if !seenName {
 			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"name"}}
 		}
@@ -170,6 +176,12 @@ func (recv HookedStruct) DecodeFrom(data []byte) (result HookedStruct, i int, er
 		}
 		if data[i] == '}' {
 			i++
+			if !seenN {
+				result.N = 0
+			}
+			if !seenName {
+				result.Name = ""
+			}
 			if !seenName {
 				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"name"}}
 			}
@@ -199,6 +211,12 @@ func (recv HookedStruct) DecodeFromStream(s *ggen.Stream) (result HookedStruct, 
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenN {
+			result.N = 0
+		}
+		if !seenName {
+			result.Name = ""
+		}
 		if !seenName {
 			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"name"}}
 		}
@@ -276,6 +294,12 @@ func (recv HookedStruct) DecodeFromStream(s *ggen.Stream) (result HookedStruct, 
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenN {
+				result.N = 0
+			}
+			if !seenName {
+				result.Name = ""
+			}
 			if !seenName {
 				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"name"}}
 			}

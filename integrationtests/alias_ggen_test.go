@@ -351,6 +351,12 @@ func (recv PlainAlias) DecodeFrom(data []byte) (result PlainAlias, i int, err er
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenCount {
+			result.Count = 0
+		}
+		if !seenTitle {
+			result.Title = ""
+		}
 		return result, i, nil
 	}
 	for {
@@ -479,6 +485,12 @@ func (recv PlainAlias) DecodeFrom(data []byte) (result PlainAlias, i int, err er
 		}
 		if data[i] == '}' {
 			i++
+			if !seenCount {
+				result.Count = 0
+			}
+			if !seenTitle {
+				result.Title = ""
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -505,6 +517,12 @@ func (recv PlainAlias) DecodeFromStream(s *ggen.Stream) (result PlainAlias, err 
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenCount {
+			result.Count = 0
+		}
+		if !seenTitle {
+			result.Title = ""
+		}
 		return result, nil
 	}
 	for {
@@ -567,6 +585,12 @@ func (recv PlainAlias) DecodeFromStream(s *ggen.Stream) (result PlainAlias, err 
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenCount {
+				result.Count = 0
+			}
+			if !seenTitle {
+				result.Title = ""
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -605,6 +629,12 @@ func (recv SamePkgAlias) DecodeFrom(data []byte) (result SamePkgAlias, i int, er
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenX {
+			result.X = 0
+		}
+		if !seenY {
+			result.Y = ""
+		}
 		return result, i, nil
 	}
 	for {
@@ -733,6 +763,12 @@ func (recv SamePkgAlias) DecodeFrom(data []byte) (result SamePkgAlias, i int, er
 		}
 		if data[i] == '}' {
 			i++
+			if !seenX {
+				result.X = 0
+			}
+			if !seenY {
+				result.Y = ""
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -759,6 +795,12 @@ func (recv SamePkgAlias) DecodeFromStream(s *ggen.Stream) (result SamePkgAlias, 
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenX {
+			result.X = 0
+		}
+		if !seenY {
+			result.Y = ""
+		}
 		return result, nil
 	}
 	for {
@@ -821,6 +863,12 @@ func (recv SamePkgAlias) DecodeFromStream(s *ggen.Stream) (result SamePkgAlias, 
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenX {
+				result.X = 0
+			}
+			if !seenY {
+				result.Y = ""
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -859,6 +907,12 @@ func (recv CrossPkgTaggedAlias) DecodeFrom(data []byte) (result CrossPkgTaggedAl
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenName {
+			result.Name = ""
+		}
+		if !seenTag {
+			result.Tag = ""
+		}
 		return result, i, nil
 	}
 	for {
@@ -958,6 +1012,12 @@ func (recv CrossPkgTaggedAlias) DecodeFrom(data []byte) (result CrossPkgTaggedAl
 		}
 		if data[i] == '}' {
 			i++
+			if !seenName {
+				result.Name = ""
+			}
+			if !seenTag {
+				result.Tag = ""
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -984,6 +1044,12 @@ func (recv CrossPkgTaggedAlias) DecodeFromStream(s *ggen.Stream) (result CrossPk
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenName {
+			result.Name = ""
+		}
+		if !seenTag {
+			result.Tag = ""
+		}
 		return result, nil
 	}
 	for {
@@ -1044,6 +1110,12 @@ func (recv CrossPkgTaggedAlias) DecodeFromStream(s *ggen.Stream) (result CrossPk
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenName {
+				result.Name = ""
+			}
+			if !seenTag {
+				result.Tag = ""
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -1127,6 +1199,12 @@ func (recv OpaqueParent) DecodeFrom(data []byte) (result OpaqueParent, i int, er
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenName {
+			result.Name = ""
+		}
+		if !seenO {
+			result.O = OpaqueAlias{}
+		}
 		return result, i, nil
 	}
 	for {
@@ -1212,6 +1290,12 @@ func (recv OpaqueParent) DecodeFrom(data []byte) (result OpaqueParent, i int, er
 		}
 		if data[i] == '}' {
 			i++
+			if !seenName {
+				result.Name = ""
+			}
+			if !seenO {
+				result.O = OpaqueAlias{}
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -1238,6 +1322,12 @@ func (recv OpaqueParent) DecodeFromStream(s *ggen.Stream) (result OpaqueParent, 
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenName {
+			result.Name = ""
+		}
+		if !seenO {
+			result.O = OpaqueAlias{}
+		}
 		return result, nil
 	}
 	for {
@@ -1298,6 +1388,12 @@ func (recv OpaqueParent) DecodeFromStream(s *ggen.Stream) (result OpaqueParent, 
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenName {
+				result.Name = ""
+			}
+			if !seenO {
+				result.O = OpaqueAlias{}
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -1980,6 +2076,12 @@ func (recv AliasFieldExample) DecodeFrom(data []byte) (result AliasFieldExample,
 	if i < len(data) && data[i] == '}' {
 		i++
 		if !seenBody {
+			result.Body = AliasString("")
+		}
+		if !seenCount {
+			result.Count = AliasInt(0)
+		}
+		if !seenBody {
 			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"body"}}
 		}
 		return result, i, nil
@@ -2133,6 +2235,12 @@ func (recv AliasFieldExample) DecodeFrom(data []byte) (result AliasFieldExample,
 		if data[i] == '}' {
 			i++
 			if !seenBody {
+				result.Body = AliasString("")
+			}
+			if !seenCount {
+				result.Count = AliasInt(0)
+			}
+			if !seenBody {
 				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"body"}}
 			}
 			return result, i, nil
@@ -2161,6 +2269,12 @@ func (recv AliasFieldExample) DecodeFromStream(s *ggen.Stream) (result AliasFiel
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenBody {
+			result.Body = AliasString("")
+		}
+		if !seenCount {
+			result.Count = AliasInt(0)
+		}
 		if !seenBody {
 			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"body"}}
 		}
@@ -2249,6 +2363,12 @@ func (recv AliasFieldExample) DecodeFromStream(s *ggen.Stream) (result AliasFiel
 		if c == '}' {
 			s.Pos++
 			if !seenBody {
+				result.Body = AliasString("")
+			}
+			if !seenCount {
+				result.Count = AliasInt(0)
+			}
+			if !seenBody {
 				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"body"}}
 			}
 			return result, nil
@@ -2331,6 +2451,21 @@ func (recv NamedPrims) DecodeFrom(data []byte) (result NamedPrims, i int, err er
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenEq {
+			result.Eq = NPPriority("")
+		}
+		if !seenNeq {
+			result.Neq = NPPriority("")
+		}
+		if !seenPri {
+			result.Pri = NPPriority("")
+		}
+		if !seenTag {
+			result.Tag = NPTag("")
+		}
+		if !seenZero {
+			result.Zero = NPPriority("")
+		}
 		return result, i, nil
 	}
 	for {
@@ -2543,6 +2678,21 @@ func (recv NamedPrims) DecodeFrom(data []byte) (result NamedPrims, i int, err er
 		}
 		if data[i] == '}' {
 			i++
+			if !seenEq {
+				result.Eq = NPPriority("")
+			}
+			if !seenNeq {
+				result.Neq = NPPriority("")
+			}
+			if !seenPri {
+				result.Pri = NPPriority("")
+			}
+			if !seenTag {
+				result.Tag = NPTag("")
+			}
+			if !seenZero {
+				result.Zero = NPPriority("")
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -2572,6 +2722,21 @@ func (recv NamedPrims) DecodeFromStream(s *ggen.Stream) (result NamedPrims, err 
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenEq {
+			result.Eq = NPPriority("")
+		}
+		if !seenNeq {
+			result.Neq = NPPriority("")
+		}
+		if !seenPri {
+			result.Pri = NPPriority("")
+		}
+		if !seenTag {
+			result.Tag = NPTag("")
+		}
+		if !seenZero {
+			result.Zero = NPPriority("")
+		}
 		return result, nil
 	}
 	for {
@@ -2724,6 +2889,21 @@ func (recv NamedPrims) DecodeFromStream(s *ggen.Stream) (result NamedPrims, err 
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenEq {
+				result.Eq = NPPriority("")
+			}
+			if !seenNeq {
+				result.Neq = NPPriority("")
+			}
+			if !seenPri {
+				result.Pri = NPPriority("")
+			}
+			if !seenTag {
+				result.Tag = NPTag("")
+			}
+			if !seenZero {
+				result.Zero = NPPriority("")
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -2862,6 +3042,24 @@ func (recv NPPositions) DecodeFrom(data []byte) (result NPPositions, i int, err 
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenA {
+			result.A = [2]NPPlain{}
+		}
+		if !seenCnt {
+			result.Cnt = NPCount(0)
+		}
+		if !seenE {
+			result.E = NPEscaped("")
+		}
+		if !seenP {
+			result.P = nil
+		}
+		if !seenU {
+			result.U = NPUnannotated("")
+		}
+		if !seenV {
+			result.V = NPPlain("")
+		}
 		return result, i, nil
 	}
 	for {
@@ -2911,7 +3109,6 @@ func (recv NPPositions) DecodeFrom(data []byte) (result NPPositions, i int, err 
 					if idx0 >= 2 {
 						return result, i, &ggen.LenError{Pos: i, Path: []string{"a"}, Want: 2, Got: idx0}
 					}
-					result.A[idx0] = NPPlain("")
 					var _ne0 string
 					if i >= len(data) || data[i] != '"' {
 						return result, i, ggen.NewParseErr("a", i, ggen.ErrExpectString)
@@ -3193,7 +3390,11 @@ func (recv NPPositions) DecodeFrom(data []byte) (result NPPositions, i int, err 
 			}
 			if i < len(data) && data[i] != ']' {
 				for {
-					result.S = append(result.S, NPPlain(""))
+					if len(result.S) < cap(result.S) {
+						result.S = result.S[:len(result.S)+1]
+					} else {
+						result.S = append(result.S, NPPlain(""))
+					}
 					var _ne0 string
 					if i >= len(data) || data[i] != '"' {
 						return result, i, ggen.NewParseErr("s", i, ggen.ErrExpectString)
@@ -3308,6 +3509,24 @@ func (recv NPPositions) DecodeFrom(data []byte) (result NPPositions, i int, err 
 		}
 		if data[i] == '}' {
 			i++
+			if !seenA {
+				result.A = [2]NPPlain{}
+			}
+			if !seenCnt {
+				result.Cnt = NPCount(0)
+			}
+			if !seenE {
+				result.E = NPEscaped("")
+			}
+			if !seenP {
+				result.P = nil
+			}
+			if !seenU {
+				result.U = NPUnannotated("")
+			}
+			if !seenV {
+				result.V = NPPlain("")
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -3346,6 +3565,24 @@ func (recv NPPositions) DecodeFromStream(s *ggen.Stream) (result NPPositions, er
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenA {
+			result.A = [2]NPPlain{}
+		}
+		if !seenCnt {
+			result.Cnt = NPCount(0)
+		}
+		if !seenE {
+			result.E = NPEscaped("")
+		}
+		if !seenP {
+			result.P = nil
+		}
+		if !seenU {
+			result.U = NPUnannotated("")
+		}
+		if !seenV {
+			result.V = NPPlain("")
+		}
 		return result, nil
 	}
 	for {
@@ -3382,7 +3619,6 @@ func (recv NPPositions) DecodeFromStream(s *ggen.Stream) (result NPPositions, er
 				if idx0 >= 2 {
 					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"a"}, Want: 2, Got: idx0}
 				}
-				result.A[idx0] = NPPlain("")
 				var _ne0 string
 				_ne0, err = s.String(true)
 				if err != nil {
@@ -3657,7 +3893,11 @@ func (recv NPPositions) DecodeFromStream(s *ggen.Stream) (result NPPositions, er
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {
-				result.S = append(result.S, NPPlain(""))
+				if len(result.S) < cap(result.S) {
+					result.S = result.S[:len(result.S)+1]
+				} else {
+					result.S = append(result.S, NPPlain(""))
+				}
 				var _ne0 string
 				_ne0, err = s.String(true)
 				if err != nil {
@@ -3745,6 +3985,24 @@ func (recv NPPositions) DecodeFromStream(s *ggen.Stream) (result NPPositions, er
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenA {
+				result.A = [2]NPPlain{}
+			}
+			if !seenCnt {
+				result.Cnt = NPCount(0)
+			}
+			if !seenE {
+				result.E = NPEscaped("")
+			}
+			if !seenP {
+				result.P = nil
+			}
+			if !seenU {
+				result.U = NPUnannotated("")
+			}
+			if !seenV {
+				result.V = NPPlain("")
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -3901,6 +4159,9 @@ func (recv NPJSONNumber) DecodeFrom(data []byte) (result NPJSONNumber, i int, er
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenN {
+			result.N = (NPJSONNumber{}).N
+		}
 		return result, i, nil
 	}
 	for {
@@ -3964,6 +4225,9 @@ func (recv NPJSONNumber) DecodeFrom(data []byte) (result NPJSONNumber, i int, er
 		}
 		if data[i] == '}' {
 			i++
+			if !seenN {
+				result.N = (NPJSONNumber{}).N
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -3989,6 +4253,9 @@ func (recv NPJSONNumber) DecodeFromStream(s *ggen.Stream) (result NPJSONNumber, 
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenN {
+			result.N = (NPJSONNumber{}).N
+		}
 		return result, nil
 	}
 	for {
@@ -4040,6 +4307,9 @@ func (recv NPJSONNumber) DecodeFromStream(s *ggen.Stream) (result NPJSONNumber, 
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenN {
+				result.N = (NPJSONNumber{}).N
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -4079,6 +4349,9 @@ func (recv InnerBit) DecodeFrom(data []byte) (result InnerBit, i int, err error)
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenX {
+			result.X = 0
+		}
 		return result, i, nil
 	}
 	for {
@@ -4182,6 +4455,9 @@ func (recv InnerBit) DecodeFrom(data []byte) (result InnerBit, i int, err error)
 		}
 		if data[i] == '}' {
 			i++
+			if !seenX {
+				result.X = 0
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -4207,6 +4483,9 @@ func (recv InnerBit) DecodeFromStream(s *ggen.Stream) (result InnerBit, err erro
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenX {
+			result.X = 0
+		}
 		return result, nil
 	}
 	for {
@@ -4256,6 +4535,9 @@ func (recv InnerBit) DecodeFromStream(s *ggen.Stream) (result InnerBit, err erro
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenX {
+				result.X = 0
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -4300,7 +4582,11 @@ func (recv BitItems) DecodeFrom(data []byte) (result BitItems, i int, err error)
 	}
 	if i < len(data) && data[i] != ']' {
 		for {
-			result = append(result, InnerBit{})
+			if len(result) < cap(result) {
+				result = result[:len(result)+1]
+			} else {
+				result = append(result, InnerBit{})
+			}
 			var _n int
 			result[len(result)-1], _n, err = result[len(result)-1].DecodeFrom(data[i:])
 			i += _n
@@ -4381,7 +4667,11 @@ func (recv BitItems) DecodeFromStream(s *ggen.Stream) (result BitItems, err erro
 			}
 		}
 		for s.Bytes()[s.Pos] != ']' {
-			result = append(result, InnerBit{})
+			if len(result) < cap(result) {
+				result = result[:len(result)+1]
+			} else {
+				result = append(result, InnerBit{})
+			}
 			result[len(result)-1], err = result[len(result)-1].DecodeFromStream(s)
 			if err != nil {
 				return result, ggen.NewParseErr("", s.Offset(), err)
@@ -4707,6 +4997,9 @@ func (recv RuneCarrier) DecodeFrom(data []byte) (result RuneCarrier, i int, err 
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenC {
+			result.C = rune(0)
+		}
 		return result, i, nil
 	}
 	for {
@@ -4912,6 +5205,9 @@ func (recv RuneCarrier) DecodeFrom(data []byte) (result RuneCarrier, i int, err 
 		}
 		if data[i] == '}' {
 			i++
+			if !seenC {
+				result.C = rune(0)
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -4941,6 +5237,9 @@ func (recv RuneCarrier) DecodeFromStream(s *ggen.Stream) (result RuneCarrier, er
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenC {
+			result.C = rune(0)
+		}
 		return result, nil
 	}
 	for {
@@ -5079,6 +5378,9 @@ func (recv RuneCarrier) DecodeFromStream(s *ggen.Stream) (result RuneCarrier, er
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenC {
+				result.C = rune(0)
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -5375,7 +5677,11 @@ func (recv SoloList) DecodeFrom(data []byte) (result SoloList, i int, err error)
 	}
 	if i < len(data) && data[i] != ']' {
 		for {
-			result = append(result, SoloInner{})
+			if len(result) < cap(result) {
+				result = result[:len(result)+1]
+			} else {
+				result = append(result, SoloInner{})
+			}
 			var _n int
 			result[len(result)-1], _n, err = result[len(result)-1].DecodeFrom(data[i:])
 			i += _n
@@ -5456,7 +5762,11 @@ func (recv SoloList) DecodeFromStream(s *ggen.Stream) (result SoloList, err erro
 			}
 		}
 		for s.Bytes()[s.Pos] != ']' {
-			result = append(result, SoloInner{})
+			if len(result) < cap(result) {
+				result = result[:len(result)+1]
+			} else {
+				result = append(result, SoloInner{})
+			}
 			result[len(result)-1], err = result[len(result)-1].DecodeFromStream(s)
 			if err != nil {
 				return result, ggen.NewParseErr("", s.Offset(), err)
@@ -5540,6 +5850,9 @@ func (recv SoloInner) DecodeFrom(data []byte) (result SoloInner, i int, err erro
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenA {
+			result.A = 0
+		}
 		return result, i, nil
 	}
 	for {
@@ -5643,6 +5956,9 @@ func (recv SoloInner) DecodeFrom(data []byte) (result SoloInner, i int, err erro
 		}
 		if data[i] == '}' {
 			i++
+			if !seenA {
+				result.A = 0
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -5668,6 +5984,9 @@ func (recv SoloInner) DecodeFromStream(s *ggen.Stream) (result SoloInner, err er
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenA {
+			result.A = 0
+		}
 		return result, nil
 	}
 	for {
@@ -5717,6 +6036,9 @@ func (recv SoloInner) DecodeFromStream(s *ggen.Stream) (result SoloInner, err er
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenA {
+				result.A = 0
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)

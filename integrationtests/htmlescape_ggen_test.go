@@ -24,6 +24,9 @@ func (recv HTMLRawStruct) DecodeFrom(data []byte) (result HTMLRawStruct, i int, 
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenNote {
+			result.Note = ""
+		}
 		return result, i, nil
 	}
 	for {
@@ -98,6 +101,9 @@ func (recv HTMLRawStruct) DecodeFrom(data []byte) (result HTMLRawStruct, i int, 
 		}
 		if data[i] == '}' {
 			i++
+			if !seenNote {
+				result.Note = ""
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -123,6 +129,9 @@ func (recv HTMLRawStruct) DecodeFromStream(s *ggen.Stream) (result HTMLRawStruct
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenNote {
+			result.Note = ""
+		}
 		return result, nil
 	}
 	for {
@@ -170,6 +179,9 @@ func (recv HTMLRawStruct) DecodeFromStream(s *ggen.Stream) (result HTMLRawStruct
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenNote {
+				result.Note = ""
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -205,6 +217,9 @@ func (recv HTMLEscapeStruct) DecodeFrom(data []byte) (result HTMLEscapeStruct, i
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenNote {
+			result.Note = ""
+		}
 		return result, i, nil
 	}
 	for {
@@ -279,6 +294,9 @@ func (recv HTMLEscapeStruct) DecodeFrom(data []byte) (result HTMLEscapeStruct, i
 		}
 		if data[i] == '}' {
 			i++
+			if !seenNote {
+				result.Note = ""
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -304,6 +322,9 @@ func (recv HTMLEscapeStruct) DecodeFromStream(s *ggen.Stream) (result HTMLEscape
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenNote {
+			result.Note = ""
+		}
 		return result, nil
 	}
 	for {
@@ -351,6 +372,9 @@ func (recv HTMLEscapeStruct) DecodeFromStream(s *ggen.Stream) (result HTMLEscape
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenNote {
+				result.Note = ""
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)

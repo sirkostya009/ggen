@@ -37,6 +37,15 @@ func (recv PermissiveDoc) DecodeFrom(data []byte) (result PermissiveDoc, i int, 
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenLong {
+			result.Long = ""
+		}
+		if !seenName {
+			result.Name = ""
+		}
+		if !seenRaw {
+			result.Raw = nil
+		}
 		return result, i, nil
 	}
 	for {
@@ -315,6 +324,15 @@ func (recv PermissiveDoc) DecodeFrom(data []byte) (result PermissiveDoc, i int, 
 		}
 		if data[i] == '}' {
 			i++
+			if !seenLong {
+				result.Long = ""
+			}
+			if !seenName {
+				result.Name = ""
+			}
+			if !seenRaw {
+				result.Raw = nil
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -350,6 +368,15 @@ func (recv PermissiveDoc) DecodeFromStream(s *ggen.Stream) (result PermissiveDoc
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenLong {
+			result.Long = ""
+		}
+		if !seenName {
+			result.Name = ""
+		}
+		if !seenRaw {
+			result.Raw = nil
+		}
 		return result, nil
 	}
 	for {
@@ -619,6 +646,15 @@ func (recv PermissiveDoc) DecodeFromStream(s *ggen.Stream) (result PermissiveDoc
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenLong {
+				result.Long = ""
+			}
+			if !seenName {
+				result.Name = ""
+			}
+			if !seenRaw {
+				result.Raw = nil
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)

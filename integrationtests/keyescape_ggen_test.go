@@ -26,6 +26,9 @@ func (recv KeyEscQuote) DecodeFrom(data []byte) (result KeyEscQuote, i int, err 
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenA {
+			result.A = 0
+		}
 		return result, i, nil
 	}
 	for {
@@ -129,6 +132,9 @@ func (recv KeyEscQuote) DecodeFrom(data []byte) (result KeyEscQuote, i int, err 
 		}
 		if data[i] == '}' {
 			i++
+			if !seenA {
+				result.A = 0
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -154,6 +160,9 @@ func (recv KeyEscQuote) DecodeFromStream(s *ggen.Stream) (result KeyEscQuote, er
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenA {
+			result.A = 0
+		}
 		return result, nil
 	}
 	for {
@@ -203,6 +212,9 @@ func (recv KeyEscQuote) DecodeFromStream(s *ggen.Stream) (result KeyEscQuote, er
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenA {
+				result.A = 0
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -237,6 +249,9 @@ func (recv KeyEscBackslash) DecodeFrom(data []byte) (result KeyEscBackslash, i i
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenA {
+			result.A = 0
+		}
 		return result, i, nil
 	}
 	for {
@@ -340,6 +355,9 @@ func (recv KeyEscBackslash) DecodeFrom(data []byte) (result KeyEscBackslash, i i
 		}
 		if data[i] == '}' {
 			i++
+			if !seenA {
+				result.A = 0
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -365,6 +383,9 @@ func (recv KeyEscBackslash) DecodeFromStream(s *ggen.Stream) (result KeyEscBacks
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenA {
+			result.A = 0
+		}
 		return result, nil
 	}
 	for {
@@ -414,6 +435,9 @@ func (recv KeyEscBackslash) DecodeFromStream(s *ggen.Stream) (result KeyEscBacks
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenA {
+				result.A = 0
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -448,6 +472,9 @@ func (recv KeyEscHTML) DecodeFrom(data []byte) (result KeyEscHTML, i int, err er
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenA {
+			result.A = 0
+		}
 		return result, i, nil
 	}
 	for {
@@ -551,6 +578,9 @@ func (recv KeyEscHTML) DecodeFrom(data []byte) (result KeyEscHTML, i int, err er
 		}
 		if data[i] == '}' {
 			i++
+			if !seenA {
+				result.A = 0
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -576,6 +606,9 @@ func (recv KeyEscHTML) DecodeFromStream(s *ggen.Stream) (result KeyEscHTML, err 
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenA {
+			result.A = 0
+		}
 		return result, nil
 	}
 	for {
@@ -625,6 +658,9 @@ func (recv KeyEscHTML) DecodeFromStream(s *ggen.Stream) (result KeyEscHTML, err 
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenA {
+				result.A = 0
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)

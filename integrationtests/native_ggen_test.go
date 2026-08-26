@@ -49,6 +49,30 @@ func (recv NativeTypes) DecodeFrom(data []byte) (result NativeTypes, i int, err 
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenAddr {
+			result.Addr = (NativeTypes{}).Addr
+		}
+		if !seenCidr {
+			result.Cidr = (NativeTypes{}).Cidr
+		}
+		if !seenCreatedAt {
+			result.CreatedAt = (NativeTypes{}).CreatedAt
+		}
+		if !seenIssuedAt {
+			result.IssuedAt = (NativeTypes{}).IssuedAt
+		}
+		if !seenLegacyIP {
+			result.LegacyIP = nil
+		}
+		if !seenSecDur {
+			result.SecDur = 0
+		}
+		if !seenUnitDur {
+			result.UnitDur = 0
+		}
+		if !seenUnixAt {
+			result.UnixAt = (NativeTypes{}).UnixAt
+		}
 		return result, i, nil
 	}
 	for {
@@ -436,6 +460,30 @@ func (recv NativeTypes) DecodeFrom(data []byte) (result NativeTypes, i int, err 
 		}
 		if data[i] == '}' {
 			i++
+			if !seenAddr {
+				result.Addr = (NativeTypes{}).Addr
+			}
+			if !seenCidr {
+				result.Cidr = (NativeTypes{}).Cidr
+			}
+			if !seenCreatedAt {
+				result.CreatedAt = (NativeTypes{}).CreatedAt
+			}
+			if !seenIssuedAt {
+				result.IssuedAt = (NativeTypes{}).IssuedAt
+			}
+			if !seenLegacyIP {
+				result.LegacyIP = nil
+			}
+			if !seenSecDur {
+				result.SecDur = 0
+			}
+			if !seenUnitDur {
+				result.UnitDur = 0
+			}
+			if !seenUnixAt {
+				result.UnixAt = (NativeTypes{}).UnixAt
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -480,6 +528,30 @@ func (recv NativeTypes) DecodeFromStream(s *ggen.Stream) (result NativeTypes, er
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenAddr {
+			result.Addr = (NativeTypes{}).Addr
+		}
+		if !seenCidr {
+			result.Cidr = (NativeTypes{}).Cidr
+		}
+		if !seenCreatedAt {
+			result.CreatedAt = (NativeTypes{}).CreatedAt
+		}
+		if !seenIssuedAt {
+			result.IssuedAt = (NativeTypes{}).IssuedAt
+		}
+		if !seenLegacyIP {
+			result.LegacyIP = nil
+		}
+		if !seenSecDur {
+			result.SecDur = 0
+		}
+		if !seenUnitDur {
+			result.UnitDur = 0
+		}
+		if !seenUnixAt {
+			result.UnixAt = (NativeTypes{}).UnixAt
+		}
 		return result, nil
 	}
 	for {
@@ -824,6 +896,30 @@ func (recv NativeTypes) DecodeFromStream(s *ggen.Stream) (result NativeTypes, er
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenAddr {
+				result.Addr = (NativeTypes{}).Addr
+			}
+			if !seenCidr {
+				result.Cidr = (NativeTypes{}).Cidr
+			}
+			if !seenCreatedAt {
+				result.CreatedAt = (NativeTypes{}).CreatedAt
+			}
+			if !seenIssuedAt {
+				result.IssuedAt = (NativeTypes{}).IssuedAt
+			}
+			if !seenLegacyIP {
+				result.LegacyIP = nil
+			}
+			if !seenSecDur {
+				result.SecDur = 0
+			}
+			if !seenUnitDur {
+				result.UnitDur = 0
+			}
+			if !seenUnixAt {
+				result.UnixAt = (NativeTypes{}).UnixAt
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -930,6 +1026,9 @@ func (recv BareDuration) DecodeFrom(data []byte) (result BareDuration, i int, er
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenD {
+			result.D = 0
+		}
 		return result, i, nil
 	}
 	for {
@@ -1009,6 +1108,9 @@ func (recv BareDuration) DecodeFrom(data []byte) (result BareDuration, i int, er
 		}
 		if data[i] == '}' {
 			i++
+			if !seenD {
+				result.D = 0
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -1034,6 +1136,9 @@ func (recv BareDuration) DecodeFromStream(s *ggen.Stream) (result BareDuration, 
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenD {
+			result.D = 0
+		}
 		return result, nil
 	}
 	for {
@@ -1086,6 +1191,9 @@ func (recv BareDuration) DecodeFromStream(s *ggen.Stream) (result BareDuration, 
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenD {
+				result.D = 0
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -1122,6 +1230,15 @@ func (recv ByteArrays) DecodeFrom(data []byte) (result ByteArrays, i int, err er
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenArr {
+			result.Arr = [4]byte{}
+		}
+		if !seenB {
+			result.B = [4]byte{}
+		}
+		if !seenHex {
+			result.Hex = [3]byte{}
+		}
 		return result, i, nil
 	}
 	for {
@@ -1315,6 +1432,15 @@ func (recv ByteArrays) DecodeFrom(data []byte) (result ByteArrays, i int, err er
 		}
 		if data[i] == '}' {
 			i++
+			if !seenArr {
+				result.Arr = [4]byte{}
+			}
+			if !seenB {
+				result.B = [4]byte{}
+			}
+			if !seenHex {
+				result.Hex = [3]byte{}
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -1342,6 +1468,15 @@ func (recv ByteArrays) DecodeFromStream(s *ggen.Stream) (result ByteArrays, err 
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenArr {
+			result.Arr = [4]byte{}
+		}
+		if !seenB {
+			result.B = [4]byte{}
+		}
+		if !seenHex {
+			result.Hex = [3]byte{}
+		}
 		return result, nil
 	}
 	for {
@@ -1487,6 +1622,15 @@ func (recv ByteArrays) DecodeFromStream(s *ggen.Stream) (result ByteArrays, err 
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenArr {
+				result.Arr = [4]byte{}
+			}
+			if !seenB {
+				result.B = [4]byte{}
+			}
+			if !seenHex {
+				result.Hex = [3]byte{}
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)

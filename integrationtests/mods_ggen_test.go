@@ -37,6 +37,12 @@ func (recv ModStruct) DecodeFrom(data []byte) (result ModStruct, i int, err erro
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenEmail {
+			result.Email = ""
+		}
+		if !seenSKU {
+			result.SKU = ""
+		}
 		return result, i, nil
 	}
 	for {
@@ -210,6 +216,12 @@ func (recv ModStruct) DecodeFrom(data []byte) (result ModStruct, i int, err erro
 		}
 		if data[i] == '}' {
 			i++
+			if !seenEmail {
+				result.Email = ""
+			}
+			if !seenSKU {
+				result.SKU = ""
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -240,6 +252,12 @@ func (recv ModStruct) DecodeFromStream(s *ggen.Stream) (result ModStruct, err er
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenEmail {
+			result.Email = ""
+		}
+		if !seenSKU {
+			result.SKU = ""
+		}
 		return result, nil
 	}
 	for {
@@ -392,6 +410,12 @@ func (recv ModStruct) DecodeFromStream(s *ggen.Stream) (result ModStruct, err er
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenEmail {
+				result.Email = ""
+			}
+			if !seenSKU {
+				result.SKU = ""
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -451,6 +475,9 @@ func (recv FallibleModStruct) DecodeFrom(data []byte) (result FallibleModStruct,
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenEmail {
+			result.Email = ""
+		}
 		if !seenEmail {
 			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"email"}}
 		}
@@ -540,6 +567,9 @@ func (recv FallibleModStruct) DecodeFrom(data []byte) (result FallibleModStruct,
 		if data[i] == '}' {
 			i++
 			if !seenEmail {
+				result.Email = ""
+			}
+			if !seenEmail {
 				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"email"}}
 			}
 			return result, i, nil
@@ -567,6 +597,9 @@ func (recv FallibleModStruct) DecodeFromStream(s *ggen.Stream) (result FallibleM
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenEmail {
+			result.Email = ""
+		}
 		if !seenEmail {
 			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"email"}}
 		}
@@ -629,6 +662,9 @@ func (recv FallibleModStruct) DecodeFromStream(s *ggen.Stream) (result FallibleM
 		if c == '}' {
 			s.Pos++
 			if !seenEmail {
+				result.Email = ""
+			}
+			if !seenEmail {
 				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"email"}}
 			}
 			return result, nil
@@ -667,6 +703,9 @@ func (recv FallibleModMultierrStruct) DecodeFrom(data []byte) (result FallibleMo
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenEmail {
+			result.Email = ""
+		}
 		if !seenEmail {
 			errs = append(errs, &ggen.RequiredError{Pos: i, Path: []string{"email"}})
 		}
@@ -768,6 +807,9 @@ func (recv FallibleModMultierrStruct) DecodeFrom(data []byte) (result FallibleMo
 		if data[i] == '}' {
 			i++
 			if !seenEmail {
+				result.Email = ""
+			}
+			if !seenEmail {
 				errs = append(errs, &ggen.RequiredError{Pos: i, Path: []string{"email"}})
 			}
 			if len(errs) > 0 {
@@ -799,6 +841,9 @@ func (recv FallibleModMultierrStruct) DecodeFromStream(s *ggen.Stream) (result F
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenEmail {
+			result.Email = ""
+		}
 		if !seenEmail {
 			errs = append(errs, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"email"}})
 		}
@@ -879,6 +924,9 @@ func (recv FallibleModMultierrStruct) DecodeFromStream(s *ggen.Stream) (result F
 		if c == '}' {
 			s.Pos++
 			if !seenEmail {
+				result.Email = ""
+			}
+			if !seenEmail {
 				errs = append(errs, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"email"}})
 			}
 			if len(errs) > 0 {
@@ -921,6 +969,15 @@ func (recv CrossPkgModStruct) DecodeFrom(data []byte) (result CrossPkgModStruct,
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenCode {
+			result.Code = ""
+		}
+		if !seenNonEmpty {
+			result.NonEmpty = ""
+		}
+		if !seenTag {
+			result.Tag = ""
+		}
 		return result, i, nil
 	}
 	for {
@@ -1054,6 +1111,15 @@ func (recv CrossPkgModStruct) DecodeFrom(data []byte) (result CrossPkgModStruct,
 		}
 		if data[i] == '}' {
 			i++
+			if !seenCode {
+				result.Code = ""
+			}
+			if !seenNonEmpty {
+				result.NonEmpty = ""
+			}
+			if !seenTag {
+				result.Tag = ""
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -1081,6 +1147,15 @@ func (recv CrossPkgModStruct) DecodeFromStream(s *ggen.Stream) (result CrossPkgM
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenCode {
+			result.Code = ""
+		}
+		if !seenNonEmpty {
+			result.NonEmpty = ""
+		}
+		if !seenTag {
+			result.Tag = ""
+		}
 		return result, nil
 	}
 	for {
@@ -1163,6 +1238,15 @@ func (recv CrossPkgModStruct) DecodeFromStream(s *ggen.Stream) (result CrossPkgM
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenCode {
+				result.Code = ""
+			}
+			if !seenNonEmpty {
+				result.NonEmpty = ""
+			}
+			if !seenTag {
+				result.Tag = ""
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -1207,6 +1291,15 @@ func (recv NestedMultierrStruct) DecodeFrom(data []byte) (result NestedMultierrS
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenCode {
+			result.Code = 0
+		}
+		if !seenInner {
+			result.Inner = FallibleModMultierrStruct{}
+		}
+		if !seenName {
+			result.Name = ""
+		}
 		if !seenName {
 			errs = append(errs, &ggen.RequiredError{Pos: i, Path: []string{"name"}})
 		}
@@ -1384,6 +1477,15 @@ func (recv NestedMultierrStruct) DecodeFrom(data []byte) (result NestedMultierrS
 		}
 		if data[i] == '}' {
 			i++
+			if !seenCode {
+				result.Code = 0
+			}
+			if !seenInner {
+				result.Inner = FallibleModMultierrStruct{}
+			}
+			if !seenName {
+				result.Name = ""
+			}
 			if !seenName {
 				errs = append(errs, &ggen.RequiredError{Pos: i, Path: []string{"name"}})
 			}
@@ -1418,6 +1520,15 @@ func (recv NestedMultierrStruct) DecodeFromStream(s *ggen.Stream) (result Nested
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenCode {
+			result.Code = 0
+		}
+		if !seenInner {
+			result.Inner = FallibleModMultierrStruct{}
+		}
+		if !seenName {
+			result.Name = ""
+		}
 		if !seenName {
 			errs = append(errs, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"name"}})
 		}
@@ -1539,6 +1650,15 @@ func (recv NestedMultierrStruct) DecodeFromStream(s *ggen.Stream) (result Nested
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenCode {
+				result.Code = 0
+			}
+			if !seenInner {
+				result.Inner = FallibleModMultierrStruct{}
+			}
+			if !seenName {
+				result.Name = ""
+			}
 			if !seenName {
 				errs = append(errs, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"name"}})
 			}
@@ -1588,6 +1708,12 @@ func (recv QuotedParts) DecodeFrom(data []byte) (result QuotedParts, i int, err 
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenCity {
+			result.City = ""
+		}
+		if !seenNote {
+			result.Note = ""
+		}
 		return result, i, nil
 	}
 	for {
@@ -1693,6 +1819,12 @@ func (recv QuotedParts) DecodeFrom(data []byte) (result QuotedParts, i int, err 
 		}
 		if data[i] == '}' {
 			i++
+			if !seenCity {
+				result.City = ""
+			}
+			if !seenNote {
+				result.Note = ""
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -1719,6 +1851,12 @@ func (recv QuotedParts) DecodeFromStream(s *ggen.Stream) (result QuotedParts, er
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenCity {
+			result.City = ""
+		}
+		if !seenNote {
+			result.Note = ""
+		}
 		return result, nil
 	}
 	for {
@@ -1785,6 +1923,12 @@ func (recv QuotedParts) DecodeFromStream(s *ggen.Stream) (result QuotedParts, er
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenCity {
+				result.City = ""
+			}
+			if !seenNote {
+				result.Note = ""
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -1824,6 +1968,12 @@ func (recv CaseRules) DecodeFrom(data []byte) (result CaseRules, i int, err erro
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenCode {
+			result.Code = ""
+		}
+		if !seenSlug {
+			result.Slug = ""
+		}
 		return result, i, nil
 	}
 	for {
@@ -1929,6 +2079,12 @@ func (recv CaseRules) DecodeFrom(data []byte) (result CaseRules, i int, err erro
 		}
 		if data[i] == '}' {
 			i++
+			if !seenCode {
+				result.Code = ""
+			}
+			if !seenSlug {
+				result.Slug = ""
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -1955,6 +2111,12 @@ func (recv CaseRules) DecodeFromStream(s *ggen.Stream) (result CaseRules, err er
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenCode {
+			result.Code = ""
+		}
+		if !seenSlug {
+			result.Slug = ""
+		}
 		return result, nil
 	}
 	for {
@@ -2021,6 +2183,12 @@ func (recv CaseRules) DecodeFromStream(s *ggen.Stream) (result CaseRules, err er
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenCode {
+				result.Code = ""
+			}
+			if !seenSlug {
+				result.Slug = ""
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -2060,6 +2228,12 @@ func (recv DrainInner) DecodeFrom(data []byte) (result DrainInner, i int, err er
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenA {
+			result.A = ""
+		}
+		if !seenB {
+			result.B = ""
+		}
 		return result, i, nil
 	}
 	for {
@@ -2162,6 +2336,12 @@ func (recv DrainInner) DecodeFrom(data []byte) (result DrainInner, i int, err er
 		}
 		if data[i] == '}' {
 			i++
+			if !seenA {
+				result.A = ""
+			}
+			if !seenB {
+				result.B = ""
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -2188,6 +2368,12 @@ func (recv DrainInner) DecodeFromStream(s *ggen.Stream) (result DrainInner, err 
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenA {
+			result.A = ""
+		}
+		if !seenB {
+			result.B = ""
+		}
 		return result, nil
 	}
 	for {
@@ -2251,6 +2437,12 @@ func (recv DrainInner) DecodeFromStream(s *ggen.Stream) (result DrainInner, err 
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenA {
+				result.A = ""
+			}
+			if !seenB {
+				result.B = ""
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -2291,6 +2483,12 @@ func (recv DrainInnerME) DecodeFrom(data []byte) (result DrainInnerME, i int, er
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenA {
+			result.A = ""
+		}
+		if !seenB {
+			result.B = ""
+		}
 		if len(errs) > 0 {
 			return result, i, errs
 		}
@@ -2410,6 +2608,12 @@ func (recv DrainInnerME) DecodeFrom(data []byte) (result DrainInnerME, i int, er
 		}
 		if data[i] == '}' {
 			i++
+			if !seenA {
+				result.A = ""
+			}
+			if !seenB {
+				result.B = ""
+			}
 			if len(errs) > 0 {
 				return result, i, errs
 			}
@@ -2440,6 +2644,12 @@ func (recv DrainInnerME) DecodeFromStream(s *ggen.Stream) (result DrainInnerME, 
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenA {
+			result.A = ""
+		}
+		if !seenB {
+			result.B = ""
+		}
 		if len(errs) > 0 {
 			return result, errs
 		}
@@ -2527,6 +2737,12 @@ func (recv DrainInnerME) DecodeFromStream(s *ggen.Stream) (result DrainInnerME, 
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenA {
+				result.A = ""
+			}
+			if !seenB {
+				result.B = ""
+			}
 			if len(errs) > 0 {
 				return result, errs
 			}
@@ -2572,6 +2788,18 @@ func (recv DrainOuter) DecodeFrom(data []byte) (result DrainOuter, i int, err er
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenI {
+			result.I = DrainInner{}
+		}
+		if !seenIME {
+			result.IME = DrainInnerME{}
+		}
+		if !seenName {
+			result.Name = ""
+		}
+		if !seenTail {
+			result.Tail = 0
+		}
 		if len(errs) > 0 {
 			return result, i, errs
 		}
@@ -2759,6 +2987,18 @@ func (recv DrainOuter) DecodeFrom(data []byte) (result DrainOuter, i int, err er
 		}
 		if data[i] == '}' {
 			i++
+			if !seenI {
+				result.I = DrainInner{}
+			}
+			if !seenIME {
+				result.IME = DrainInnerME{}
+			}
+			if !seenName {
+				result.Name = ""
+			}
+			if !seenTail {
+				result.Tail = 0
+			}
 			if len(errs) > 0 {
 				return result, i, errs
 			}
@@ -2791,6 +3031,18 @@ func (recv DrainOuter) DecodeFromStream(s *ggen.Stream) (result DrainOuter, err 
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenI {
+			result.I = DrainInner{}
+		}
+		if !seenIME {
+			result.IME = DrainInnerME{}
+		}
+		if !seenName {
+			result.Name = ""
+		}
+		if !seenTail {
+			result.Tail = 0
+		}
 		if len(errs) > 0 {
 			return result, errs
 		}
@@ -2925,6 +3177,18 @@ func (recv DrainOuter) DecodeFromStream(s *ggen.Stream) (result DrainOuter, err 
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenI {
+				result.I = DrainInner{}
+			}
+			if !seenIME {
+				result.IME = DrainInnerME{}
+			}
+			if !seenName {
+				result.Name = ""
+			}
+			if !seenTail {
+				result.Tail = 0
+			}
 			if len(errs) > 0 {
 				return result, errs
 			}

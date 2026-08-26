@@ -36,6 +36,12 @@ func (recv FallbackStruct) DecodeFrom(data []byte) (result FallbackStruct, i int
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenExtra {
+			result.Extra = (FallbackStruct{}).Extra
+		}
+		if !seenID {
+			result.ID = ""
+		}
 		return result, i, nil
 	}
 	for {
@@ -124,6 +130,12 @@ func (recv FallbackStruct) DecodeFrom(data []byte) (result FallbackStruct, i int
 		}
 		if data[i] == '}' {
 			i++
+			if !seenExtra {
+				result.Extra = (FallbackStruct{}).Extra
+			}
+			if !seenID {
+				result.ID = ""
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -150,6 +162,12 @@ func (recv FallbackStruct) DecodeFromStream(s *ggen.Stream) (result FallbackStru
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenExtra {
+			result.Extra = (FallbackStruct{}).Extra
+		}
+		if !seenID {
+			result.ID = ""
+		}
 		return result, nil
 	}
 	for {
@@ -214,6 +232,12 @@ func (recv FallbackStruct) DecodeFromStream(s *ggen.Stream) (result FallbackStru
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenExtra {
+				result.Extra = (FallbackStruct{}).Extra
+			}
+			if !seenID {
+				result.ID = ""
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -257,6 +281,12 @@ func (recv FastFallbackStruct) DecodeFrom(data []byte) (result FastFallbackStruc
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenExtra {
+			result.Extra = (FastFallbackStruct{}).Extra
+		}
+		if !seenID {
+			result.ID = ""
+		}
 		return result, i, nil
 	}
 	for {
@@ -342,6 +372,12 @@ func (recv FastFallbackStruct) DecodeFrom(data []byte) (result FastFallbackStruc
 		}
 		if data[i] == '}' {
 			i++
+			if !seenExtra {
+				result.Extra = (FastFallbackStruct{}).Extra
+			}
+			if !seenID {
+				result.ID = ""
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -368,6 +404,12 @@ func (recv FastFallbackStruct) DecodeFromStream(s *ggen.Stream) (result FastFall
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenExtra {
+			result.Extra = (FastFallbackStruct{}).Extra
+		}
+		if !seenID {
+			result.ID = ""
+		}
 		return result, nil
 	}
 	for {
@@ -428,6 +470,12 @@ func (recv FastFallbackStruct) DecodeFromStream(s *ggen.Stream) (result FastFall
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenExtra {
+				result.Extra = (FastFallbackStruct{}).Extra
+			}
+			if !seenID {
+				result.ID = ""
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -469,6 +517,12 @@ func (recv TextFallbackStruct) DecodeFrom(data []byte) (result TextFallbackStruc
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenID {
+			result.ID = ""
+		}
+		if !seenTag {
+			result.Tag = (TextFallbackStruct{}).Tag
+		}
 		return result, i, nil
 	}
 	for {
@@ -557,6 +611,12 @@ func (recv TextFallbackStruct) DecodeFrom(data []byte) (result TextFallbackStruc
 		}
 		if data[i] == '}' {
 			i++
+			if !seenID {
+				result.ID = ""
+			}
+			if !seenTag {
+				result.Tag = (TextFallbackStruct{}).Tag
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -583,6 +643,12 @@ func (recv TextFallbackStruct) DecodeFromStream(s *ggen.Stream) (result TextFall
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenID {
+			result.ID = ""
+		}
+		if !seenTag {
+			result.Tag = (TextFallbackStruct{}).Tag
+		}
 		return result, nil
 	}
 	for {
@@ -648,6 +714,12 @@ func (recv TextFallbackStruct) DecodeFromStream(s *ggen.Stream) (result TextFall
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenID {
+				result.ID = ""
+			}
+			if !seenTag {
+				result.Tag = (TextFallbackStruct{}).Tag
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -706,6 +778,18 @@ func (recv CrossPkgShapes) DecodeFrom(data []byte) (result CrossPkgShapes, i int
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenArr {
+			result.Arr = (CrossPkgShapes{}).Arr
+		}
+		if !seenOne {
+			result.One = (CrossPkgShapes{}).One
+		}
+		if !seenPPtr {
+			result.PPtr = nil
+		}
+		if !seenPtr {
+			result.Ptr = nil
+		}
 		return result, i, nil
 	}
 	for {
@@ -1085,6 +1169,18 @@ func (recv CrossPkgShapes) DecodeFrom(data []byte) (result CrossPkgShapes, i int
 		}
 		if data[i] == '}' {
 			i++
+			if !seenArr {
+				result.Arr = (CrossPkgShapes{}).Arr
+			}
+			if !seenOne {
+				result.One = (CrossPkgShapes{}).One
+			}
+			if !seenPPtr {
+				result.PPtr = nil
+			}
+			if !seenPtr {
+				result.Ptr = nil
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -1125,6 +1221,18 @@ func (recv CrossPkgShapes) DecodeFromStream(s *ggen.Stream) (result CrossPkgShap
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenArr {
+			result.Arr = (CrossPkgShapes{}).Arr
+		}
+		if !seenOne {
+			result.One = (CrossPkgShapes{}).One
+		}
+		if !seenPPtr {
+			result.PPtr = nil
+		}
+		if !seenPtr {
+			result.Ptr = nil
+		}
 		return result, nil
 	}
 	for {
@@ -1647,6 +1755,18 @@ func (recv CrossPkgShapes) DecodeFromStream(s *ggen.Stream) (result CrossPkgShap
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenArr {
+				result.Arr = (CrossPkgShapes{}).Arr
+			}
+			if !seenOne {
+				result.One = (CrossPkgShapes{}).One
+			}
+			if !seenPPtr {
+				result.PPtr = nil
+			}
+			if !seenPtr {
+				result.Ptr = nil
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -1830,6 +1950,9 @@ func (recv TextAppenderStruct) DecodeFrom(data []byte) (result TextAppenderStruc
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenT {
+			result.T = (TextAppenderStruct{}).T
+		}
 		return result, i, nil
 	}
 	for {
@@ -1893,6 +2016,9 @@ func (recv TextAppenderStruct) DecodeFrom(data []byte) (result TextAppenderStruc
 		}
 		if data[i] == '}' {
 			i++
+			if !seenT {
+				result.T = (TextAppenderStruct{}).T
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -1918,6 +2044,9 @@ func (recv TextAppenderStruct) DecodeFromStream(s *ggen.Stream) (result TextAppe
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenT {
+			result.T = (TextAppenderStruct{}).T
+		}
 		return result, nil
 	}
 	for {
@@ -1970,6 +2099,9 @@ func (recv TextAppenderStruct) DecodeFromStream(s *ggen.Stream) (result TextAppe
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenT {
+				result.T = (TextAppenderStruct{}).T
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)

@@ -268,6 +268,9 @@ func (recv TimeLayout) DecodeFrom(data []byte) (result TimeLayout, i int, err er
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenLayout {
+			result.Layout = (TimeLayout{}).Layout
+		}
 		return result, i, nil
 	}
 	for {
@@ -347,6 +350,9 @@ func (recv TimeLayout) DecodeFrom(data []byte) (result TimeLayout, i int, err er
 		}
 		if data[i] == '}' {
 			i++
+			if !seenLayout {
+				result.Layout = (TimeLayout{}).Layout
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -372,6 +378,9 @@ func (recv TimeLayout) DecodeFromStream(s *ggen.Stream) (result TimeLayout, err 
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenLayout {
+			result.Layout = (TimeLayout{}).Layout
+		}
 		return result, nil
 	}
 	for {
@@ -424,6 +433,9 @@ func (recv TimeLayout) DecodeFromStream(s *ggen.Stream) (result TimeLayout, err 
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenLayout {
+				result.Layout = (TimeLayout{}).Layout
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -458,6 +470,9 @@ func (recv TimeStamp) DecodeFrom(data []byte) (result TimeStamp, i int, err erro
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenStamp {
+			result.Stamp = (TimeStamp{}).Stamp
+		}
 		return result, i, nil
 	}
 	for {
@@ -537,6 +552,9 @@ func (recv TimeStamp) DecodeFrom(data []byte) (result TimeStamp, i int, err erro
 		}
 		if data[i] == '}' {
 			i++
+			if !seenStamp {
+				result.Stamp = (TimeStamp{}).Stamp
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -562,6 +580,9 @@ func (recv TimeStamp) DecodeFromStream(s *ggen.Stream) (result TimeStamp, err er
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenStamp {
+			result.Stamp = (TimeStamp{}).Stamp
+		}
 		return result, nil
 	}
 	for {
@@ -614,6 +635,9 @@ func (recv TimeStamp) DecodeFromStream(s *ggen.Stream) (result TimeStamp, err er
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenStamp {
+				result.Stamp = (TimeStamp{}).Stamp
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -648,6 +672,9 @@ func (recv TimeStampMilli) DecodeFrom(data []byte) (result TimeStampMilli, i int
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenStampMilli {
+			result.StampMilli = (TimeStampMilli{}).StampMilli
+		}
 		return result, i, nil
 	}
 	for {
@@ -727,6 +754,9 @@ func (recv TimeStampMilli) DecodeFrom(data []byte) (result TimeStampMilli, i int
 		}
 		if data[i] == '}' {
 			i++
+			if !seenStampMilli {
+				result.StampMilli = (TimeStampMilli{}).StampMilli
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -752,6 +782,9 @@ func (recv TimeStampMilli) DecodeFromStream(s *ggen.Stream) (result TimeStampMil
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenStampMilli {
+			result.StampMilli = (TimeStampMilli{}).StampMilli
+		}
 		return result, nil
 	}
 	for {
@@ -804,6 +837,9 @@ func (recv TimeStampMilli) DecodeFromStream(s *ggen.Stream) (result TimeStampMil
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenStampMilli {
+				result.StampMilli = (TimeStampMilli{}).StampMilli
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -838,6 +874,9 @@ func (recv TimeStampMicro) DecodeFrom(data []byte) (result TimeStampMicro, i int
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenStampMicro {
+			result.StampMicro = (TimeStampMicro{}).StampMicro
+		}
 		return result, i, nil
 	}
 	for {
@@ -917,6 +956,9 @@ func (recv TimeStampMicro) DecodeFrom(data []byte) (result TimeStampMicro, i int
 		}
 		if data[i] == '}' {
 			i++
+			if !seenStampMicro {
+				result.StampMicro = (TimeStampMicro{}).StampMicro
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -942,6 +984,9 @@ func (recv TimeStampMicro) DecodeFromStream(s *ggen.Stream) (result TimeStampMic
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenStampMicro {
+			result.StampMicro = (TimeStampMicro{}).StampMicro
+		}
 		return result, nil
 	}
 	for {
@@ -994,6 +1039,9 @@ func (recv TimeStampMicro) DecodeFromStream(s *ggen.Stream) (result TimeStampMic
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenStampMicro {
+				result.StampMicro = (TimeStampMicro{}).StampMicro
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -1028,6 +1076,9 @@ func (recv TimeStampNano) DecodeFrom(data []byte) (result TimeStampNano, i int, 
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenStampNano {
+			result.StampNano = (TimeStampNano{}).StampNano
+		}
 		return result, i, nil
 	}
 	for {
@@ -1107,6 +1158,9 @@ func (recv TimeStampNano) DecodeFrom(data []byte) (result TimeStampNano, i int, 
 		}
 		if data[i] == '}' {
 			i++
+			if !seenStampNano {
+				result.StampNano = (TimeStampNano{}).StampNano
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -1132,6 +1186,9 @@ func (recv TimeStampNano) DecodeFromStream(s *ggen.Stream) (result TimeStampNano
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenStampNano {
+			result.StampNano = (TimeStampNano{}).StampNano
+		}
 		return result, nil
 	}
 	for {
@@ -1184,6 +1241,9 @@ func (recv TimeStampNano) DecodeFromStream(s *ggen.Stream) (result TimeStampNano
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenStampNano {
+				result.StampNano = (TimeStampNano{}).StampNano
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -1218,6 +1278,9 @@ func (recv TimeCustomTiny) DecodeFrom(data []byte) (result TimeCustomTiny, i int
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenCustomTiny {
+			result.CustomTiny = (TimeCustomTiny{}).CustomTiny
+		}
 		return result, i, nil
 	}
 	for {
@@ -1297,6 +1360,9 @@ func (recv TimeCustomTiny) DecodeFrom(data []byte) (result TimeCustomTiny, i int
 		}
 		if data[i] == '}' {
 			i++
+			if !seenCustomTiny {
+				result.CustomTiny = (TimeCustomTiny{}).CustomTiny
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -1322,6 +1388,9 @@ func (recv TimeCustomTiny) DecodeFromStream(s *ggen.Stream) (result TimeCustomTi
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenCustomTiny {
+			result.CustomTiny = (TimeCustomTiny{}).CustomTiny
+		}
 		return result, nil
 	}
 	for {
@@ -1374,6 +1443,9 @@ func (recv TimeCustomTiny) DecodeFromStream(s *ggen.Stream) (result TimeCustomTi
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenCustomTiny {
+				result.CustomTiny = (TimeCustomTiny{}).CustomTiny
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -1411,6 +1483,12 @@ func (recv TimeEscapingLayout) DecodeFrom(data []byte) (result TimeEscapingLayou
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenQuote {
+			result.Quote = (TimeEscapingLayout{}).Quote
+		}
+		if !seenSlash {
+			result.Slash = (TimeEscapingLayout{}).Slash
+		}
 		return result, i, nil
 	}
 	for {
@@ -1520,6 +1598,12 @@ func (recv TimeEscapingLayout) DecodeFrom(data []byte) (result TimeEscapingLayou
 		}
 		if data[i] == '}' {
 			i++
+			if !seenQuote {
+				result.Quote = (TimeEscapingLayout{}).Quote
+			}
+			if !seenSlash {
+				result.Slash = (TimeEscapingLayout{}).Slash
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -1546,6 +1630,12 @@ func (recv TimeEscapingLayout) DecodeFromStream(s *ggen.Stream) (result TimeEsca
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenQuote {
+			result.Quote = (TimeEscapingLayout{}).Quote
+		}
+		if !seenSlash {
+			result.Slash = (TimeEscapingLayout{}).Slash
+		}
 		return result, nil
 	}
 	for {
@@ -1616,6 +1706,12 @@ func (recv TimeEscapingLayout) DecodeFromStream(s *ggen.Stream) (result TimeEsca
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenQuote {
+				result.Quote = (TimeEscapingLayout{}).Quote
+			}
+			if !seenSlash {
+				result.Slash = (TimeEscapingLayout{}).Slash
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -1682,6 +1778,87 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenANSIC {
+			result.ANSIC = (TimeFormatsStruct{}).ANSIC
+		}
+		if !seenCustomComma {
+			result.CustomComma = (TimeFormatsStruct{}).CustomComma
+		}
+		if !seenCustomLong {
+			result.CustomLong = (TimeFormatsStruct{}).CustomLong
+		}
+		if !seenCustomTiny {
+			result.CustomTiny = (TimeFormatsStruct{}).CustomTiny
+		}
+		if !seenDateOnly {
+			result.DateOnly = (TimeFormatsStruct{}).DateOnly
+		}
+		if !seenDateTime {
+			result.DateTime = (TimeFormatsStruct{}).DateTime
+		}
+		if !seenDefault {
+			result.Default = (TimeFormatsStruct{}).Default
+		}
+		if !seenKitchen {
+			result.Kitchen = (TimeFormatsStruct{}).Kitchen
+		}
+		if !seenLayout {
+			result.Layout = (TimeFormatsStruct{}).Layout
+		}
+		if !seenRFC1123 {
+			result.RFC1123 = (TimeFormatsStruct{}).RFC1123
+		}
+		if !seenRFC1123Z {
+			result.RFC1123Z = (TimeFormatsStruct{}).RFC1123Z
+		}
+		if !seenRFC3339 {
+			result.RFC3339 = (TimeFormatsStruct{}).RFC3339
+		}
+		if !seenRFC3339Nano {
+			result.RFC3339Nano = (TimeFormatsStruct{}).RFC3339Nano
+		}
+		if !seenRFC822 {
+			result.RFC822 = (TimeFormatsStruct{}).RFC822
+		}
+		if !seenRFC822Z {
+			result.RFC822Z = (TimeFormatsStruct{}).RFC822Z
+		}
+		if !seenRFC850 {
+			result.RFC850 = (TimeFormatsStruct{}).RFC850
+		}
+		if !seenRubyDate {
+			result.RubyDate = (TimeFormatsStruct{}).RubyDate
+		}
+		if !seenStamp {
+			result.Stamp = (TimeFormatsStruct{}).Stamp
+		}
+		if !seenStampMicro {
+			result.StampMicro = (TimeFormatsStruct{}).StampMicro
+		}
+		if !seenStampMilli {
+			result.StampMilli = (TimeFormatsStruct{}).StampMilli
+		}
+		if !seenStampNano {
+			result.StampNano = (TimeFormatsStruct{}).StampNano
+		}
+		if !seenTimeOnly {
+			result.TimeOnly = (TimeFormatsStruct{}).TimeOnly
+		}
+		if !seenUnix {
+			result.Unix = (TimeFormatsStruct{}).Unix
+		}
+		if !seenUnixDate {
+			result.UnixDate = (TimeFormatsStruct{}).UnixDate
+		}
+		if !seenUnixMicro {
+			result.UnixMicro = (TimeFormatsStruct{}).UnixMicro
+		}
+		if !seenUnixMilli {
+			result.UnixMilli = (TimeFormatsStruct{}).UnixMilli
+		}
+		if !seenUnixNano {
+			result.UnixNano = (TimeFormatsStruct{}).UnixNano
+		}
 		return result, i, nil
 	}
 	for {
@@ -2467,6 +2644,87 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 		}
 		if data[i] == '}' {
 			i++
+			if !seenANSIC {
+				result.ANSIC = (TimeFormatsStruct{}).ANSIC
+			}
+			if !seenCustomComma {
+				result.CustomComma = (TimeFormatsStruct{}).CustomComma
+			}
+			if !seenCustomLong {
+				result.CustomLong = (TimeFormatsStruct{}).CustomLong
+			}
+			if !seenCustomTiny {
+				result.CustomTiny = (TimeFormatsStruct{}).CustomTiny
+			}
+			if !seenDateOnly {
+				result.DateOnly = (TimeFormatsStruct{}).DateOnly
+			}
+			if !seenDateTime {
+				result.DateTime = (TimeFormatsStruct{}).DateTime
+			}
+			if !seenDefault {
+				result.Default = (TimeFormatsStruct{}).Default
+			}
+			if !seenKitchen {
+				result.Kitchen = (TimeFormatsStruct{}).Kitchen
+			}
+			if !seenLayout {
+				result.Layout = (TimeFormatsStruct{}).Layout
+			}
+			if !seenRFC1123 {
+				result.RFC1123 = (TimeFormatsStruct{}).RFC1123
+			}
+			if !seenRFC1123Z {
+				result.RFC1123Z = (TimeFormatsStruct{}).RFC1123Z
+			}
+			if !seenRFC3339 {
+				result.RFC3339 = (TimeFormatsStruct{}).RFC3339
+			}
+			if !seenRFC3339Nano {
+				result.RFC3339Nano = (TimeFormatsStruct{}).RFC3339Nano
+			}
+			if !seenRFC822 {
+				result.RFC822 = (TimeFormatsStruct{}).RFC822
+			}
+			if !seenRFC822Z {
+				result.RFC822Z = (TimeFormatsStruct{}).RFC822Z
+			}
+			if !seenRFC850 {
+				result.RFC850 = (TimeFormatsStruct{}).RFC850
+			}
+			if !seenRubyDate {
+				result.RubyDate = (TimeFormatsStruct{}).RubyDate
+			}
+			if !seenStamp {
+				result.Stamp = (TimeFormatsStruct{}).Stamp
+			}
+			if !seenStampMicro {
+				result.StampMicro = (TimeFormatsStruct{}).StampMicro
+			}
+			if !seenStampMilli {
+				result.StampMilli = (TimeFormatsStruct{}).StampMilli
+			}
+			if !seenStampNano {
+				result.StampNano = (TimeFormatsStruct{}).StampNano
+			}
+			if !seenTimeOnly {
+				result.TimeOnly = (TimeFormatsStruct{}).TimeOnly
+			}
+			if !seenUnix {
+				result.Unix = (TimeFormatsStruct{}).Unix
+			}
+			if !seenUnixDate {
+				result.UnixDate = (TimeFormatsStruct{}).UnixDate
+			}
+			if !seenUnixMicro {
+				result.UnixMicro = (TimeFormatsStruct{}).UnixMicro
+			}
+			if !seenUnixMilli {
+				result.UnixMilli = (TimeFormatsStruct{}).UnixMilli
+			}
+			if !seenUnixNano {
+				result.UnixNano = (TimeFormatsStruct{}).UnixNano
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -2518,6 +2776,87 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *ggen.Stream) (result TimeForma
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenANSIC {
+			result.ANSIC = (TimeFormatsStruct{}).ANSIC
+		}
+		if !seenCustomComma {
+			result.CustomComma = (TimeFormatsStruct{}).CustomComma
+		}
+		if !seenCustomLong {
+			result.CustomLong = (TimeFormatsStruct{}).CustomLong
+		}
+		if !seenCustomTiny {
+			result.CustomTiny = (TimeFormatsStruct{}).CustomTiny
+		}
+		if !seenDateOnly {
+			result.DateOnly = (TimeFormatsStruct{}).DateOnly
+		}
+		if !seenDateTime {
+			result.DateTime = (TimeFormatsStruct{}).DateTime
+		}
+		if !seenDefault {
+			result.Default = (TimeFormatsStruct{}).Default
+		}
+		if !seenKitchen {
+			result.Kitchen = (TimeFormatsStruct{}).Kitchen
+		}
+		if !seenLayout {
+			result.Layout = (TimeFormatsStruct{}).Layout
+		}
+		if !seenRFC1123 {
+			result.RFC1123 = (TimeFormatsStruct{}).RFC1123
+		}
+		if !seenRFC1123Z {
+			result.RFC1123Z = (TimeFormatsStruct{}).RFC1123Z
+		}
+		if !seenRFC3339 {
+			result.RFC3339 = (TimeFormatsStruct{}).RFC3339
+		}
+		if !seenRFC3339Nano {
+			result.RFC3339Nano = (TimeFormatsStruct{}).RFC3339Nano
+		}
+		if !seenRFC822 {
+			result.RFC822 = (TimeFormatsStruct{}).RFC822
+		}
+		if !seenRFC822Z {
+			result.RFC822Z = (TimeFormatsStruct{}).RFC822Z
+		}
+		if !seenRFC850 {
+			result.RFC850 = (TimeFormatsStruct{}).RFC850
+		}
+		if !seenRubyDate {
+			result.RubyDate = (TimeFormatsStruct{}).RubyDate
+		}
+		if !seenStamp {
+			result.Stamp = (TimeFormatsStruct{}).Stamp
+		}
+		if !seenStampMicro {
+			result.StampMicro = (TimeFormatsStruct{}).StampMicro
+		}
+		if !seenStampMilli {
+			result.StampMilli = (TimeFormatsStruct{}).StampMilli
+		}
+		if !seenStampNano {
+			result.StampNano = (TimeFormatsStruct{}).StampNano
+		}
+		if !seenTimeOnly {
+			result.TimeOnly = (TimeFormatsStruct{}).TimeOnly
+		}
+		if !seenUnix {
+			result.Unix = (TimeFormatsStruct{}).Unix
+		}
+		if !seenUnixDate {
+			result.UnixDate = (TimeFormatsStruct{}).UnixDate
+		}
+		if !seenUnixMicro {
+			result.UnixMicro = (TimeFormatsStruct{}).UnixMicro
+		}
+		if !seenUnixMilli {
+			result.UnixMilli = (TimeFormatsStruct{}).UnixMilli
+		}
+		if !seenUnixNano {
+			result.UnixNano = (TimeFormatsStruct{}).UnixNano
+		}
 		return result, nil
 	}
 	for {
@@ -3029,6 +3368,87 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *ggen.Stream) (result TimeForma
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenANSIC {
+				result.ANSIC = (TimeFormatsStruct{}).ANSIC
+			}
+			if !seenCustomComma {
+				result.CustomComma = (TimeFormatsStruct{}).CustomComma
+			}
+			if !seenCustomLong {
+				result.CustomLong = (TimeFormatsStruct{}).CustomLong
+			}
+			if !seenCustomTiny {
+				result.CustomTiny = (TimeFormatsStruct{}).CustomTiny
+			}
+			if !seenDateOnly {
+				result.DateOnly = (TimeFormatsStruct{}).DateOnly
+			}
+			if !seenDateTime {
+				result.DateTime = (TimeFormatsStruct{}).DateTime
+			}
+			if !seenDefault {
+				result.Default = (TimeFormatsStruct{}).Default
+			}
+			if !seenKitchen {
+				result.Kitchen = (TimeFormatsStruct{}).Kitchen
+			}
+			if !seenLayout {
+				result.Layout = (TimeFormatsStruct{}).Layout
+			}
+			if !seenRFC1123 {
+				result.RFC1123 = (TimeFormatsStruct{}).RFC1123
+			}
+			if !seenRFC1123Z {
+				result.RFC1123Z = (TimeFormatsStruct{}).RFC1123Z
+			}
+			if !seenRFC3339 {
+				result.RFC3339 = (TimeFormatsStruct{}).RFC3339
+			}
+			if !seenRFC3339Nano {
+				result.RFC3339Nano = (TimeFormatsStruct{}).RFC3339Nano
+			}
+			if !seenRFC822 {
+				result.RFC822 = (TimeFormatsStruct{}).RFC822
+			}
+			if !seenRFC822Z {
+				result.RFC822Z = (TimeFormatsStruct{}).RFC822Z
+			}
+			if !seenRFC850 {
+				result.RFC850 = (TimeFormatsStruct{}).RFC850
+			}
+			if !seenRubyDate {
+				result.RubyDate = (TimeFormatsStruct{}).RubyDate
+			}
+			if !seenStamp {
+				result.Stamp = (TimeFormatsStruct{}).Stamp
+			}
+			if !seenStampMicro {
+				result.StampMicro = (TimeFormatsStruct{}).StampMicro
+			}
+			if !seenStampMilli {
+				result.StampMilli = (TimeFormatsStruct{}).StampMilli
+			}
+			if !seenStampNano {
+				result.StampNano = (TimeFormatsStruct{}).StampNano
+			}
+			if !seenTimeOnly {
+				result.TimeOnly = (TimeFormatsStruct{}).TimeOnly
+			}
+			if !seenUnix {
+				result.Unix = (TimeFormatsStruct{}).Unix
+			}
+			if !seenUnixDate {
+				result.UnixDate = (TimeFormatsStruct{}).UnixDate
+			}
+			if !seenUnixMicro {
+				result.UnixMicro = (TimeFormatsStruct{}).UnixMicro
+			}
+			if !seenUnixMilli {
+				result.UnixMilli = (TimeFormatsStruct{}).UnixMilli
+			}
+			if !seenUnixNano {
+				result.UnixNano = (TimeFormatsStruct{}).UnixNano
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -3123,6 +3543,15 @@ func (recv BoundaryStruct) DecodeFrom(data []byte) (result BoundaryStruct, i int
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenF {
+			result.F = 0
+		}
+		if !seenI {
+			result.I = 0
+		}
+		if !seenStr {
+			result.Str = ""
+		}
 		return result, i, nil
 	}
 	for {
@@ -3260,6 +3689,15 @@ func (recv BoundaryStruct) DecodeFrom(data []byte) (result BoundaryStruct, i int
 		}
 		if data[i] == '}' {
 			i++
+			if !seenF {
+				result.F = 0
+			}
+			if !seenI {
+				result.I = 0
+			}
+			if !seenStr {
+				result.Str = ""
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -3287,6 +3725,15 @@ func (recv BoundaryStruct) DecodeFromStream(s *ggen.Stream) (result BoundaryStru
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenF {
+			result.F = 0
+		}
+		if !seenI {
+			result.I = 0
+		}
+		if !seenStr {
+			result.Str = ""
+		}
 		return result, nil
 	}
 	for {
@@ -3360,6 +3807,15 @@ func (recv BoundaryStruct) DecodeFromStream(s *ggen.Stream) (result BoundaryStru
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenF {
+				result.F = 0
+			}
+			if !seenI {
+				result.I = 0
+			}
+			if !seenStr {
+				result.Str = ""
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)

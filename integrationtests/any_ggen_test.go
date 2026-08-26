@@ -25,6 +25,12 @@ func (recv AnyStruct) DecodeFrom(data []byte) (result AnyStruct, i int, err erro
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenBody {
+			result.Body = nil
+		}
+		if !seenName {
+			result.Name = ""
+		}
 		return result, i, nil
 	}
 	for {
@@ -108,6 +114,12 @@ func (recv AnyStruct) DecodeFrom(data []byte) (result AnyStruct, i int, err erro
 		}
 		if data[i] == '}' {
 			i++
+			if !seenBody {
+				result.Body = nil
+			}
+			if !seenName {
+				result.Name = ""
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -134,6 +146,12 @@ func (recv AnyStruct) DecodeFromStream(s *ggen.Stream) (result AnyStruct, err er
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenBody {
+			result.Body = nil
+		}
+		if !seenName {
+			result.Name = ""
+		}
 		return result, nil
 	}
 	for {
@@ -194,6 +212,12 @@ func (recv AnyStruct) DecodeFromStream(s *ggen.Stream) (result AnyStruct, err er
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenBody {
+				result.Body = nil
+			}
+			if !seenName {
+				result.Name = ""
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -234,6 +258,12 @@ func (recv AnyNumberStruct) DecodeFrom(data []byte) (result AnyNumberStruct, i i
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenBody {
+			result.Body = nil
+		}
+		if !seenName {
+			result.Name = ""
+		}
 		return result, i, nil
 	}
 	for {
@@ -317,6 +347,12 @@ func (recv AnyNumberStruct) DecodeFrom(data []byte) (result AnyNumberStruct, i i
 		}
 		if data[i] == '}' {
 			i++
+			if !seenBody {
+				result.Body = nil
+			}
+			if !seenName {
+				result.Name = ""
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -343,6 +379,12 @@ func (recv AnyNumberStruct) DecodeFromStream(s *ggen.Stream) (result AnyNumberSt
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenBody {
+			result.Body = nil
+		}
+		if !seenName {
+			result.Name = ""
+		}
 		return result, nil
 	}
 	for {
@@ -403,6 +445,12 @@ func (recv AnyNumberStruct) DecodeFromStream(s *ggen.Stream) (result AnyNumberSt
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenBody {
+				result.Body = nil
+			}
+			if !seenName {
+				result.Name = ""
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)

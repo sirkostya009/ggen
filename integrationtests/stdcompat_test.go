@@ -614,16 +614,11 @@ func crossCompatMerge[T ggenCompat[T]](t *testing.T, name string, mk func() T, p
 }
 
 // ggen's decode-into-receiver merge agrees with jsonv2 everywhere they should
-// match: scalar persistence, slice replace, null → nil, nested-struct merge,
-// `*T`/`**T` reuse, exact-length array overwrite, empty `[]` on a non-nil
+// match: slice replace, null → nil, nested-struct merge, `*T`/`**T` reuse for
+// a PRESENT key, exact-length array overwrite, empty `[]` on a non-nil
 // receiver. Divergences live in TestStdCompatMerge_IntentionalDivergences.
 func TestStdCompatMerge_Parity(t *testing.T) {
 	t.Parallel()
-
-	// Omitted scalar keeps receiver value; present overwrites.
-	crossCompatMerge(t, "scalar_persist",
-		func() Node { return Node{ID: 1, Name: "keep", Score: 2.5, Active: true} },
-		`{"id":99}`)
 
 	// Non-nil slice is replaced (reset+refill), not appended.
 	crossCompatMerge(t, "slice_replace",
@@ -648,8 +643,8 @@ func TestStdCompatMerge_Parity(t *testing.T) {
 		func() Node { return Node{Children: []Node{{ID: 7, Name: "cached"}}} },
 		`{"children":[{"score":1.5}]}`)
 
-	// Pointer `*T`: omitted keeps pointee, present replaces, null drops.
-	crossCompatMerge(t, "ptr_scalar_persist",
+	// Pointer `*T`: a present key decodes into the carried pointee, null drops.
+	crossCompatMerge(t, "ptr_scalar_present",
 		func() PointerStruct {
 			return PointerStruct{Name: new("keep"), Count: new(1)}
 		},
@@ -721,7 +716,47 @@ func TestStdCompatMerge_IntentionalDivergences(t *testing.T) {
 		}
 	})
 
-	// 3. Explicit null on a non-pointer scalar: stdlib zeroes it; ggen hard-
+	// 3. Omitted key on a value/pointer field: stdlib leaves the receiver's
+	//    value in place; ggen zeroes it, so a decode-into-receiver result is
+	//    what a fresh decode would give (only allocations are recycled).
+	t.Run("omitted_scalar_zero_vs_retain", func(t *testing.T) {
+		t.Parallel()
+		const payload = `{"id":99}`
+		std := Node{ID: 1, Name: "keep", Score: 2.5, Active: true}
+		if err := jsonv2.Unmarshal([]byte(payload), &std); err != nil {
+			t.Fatalf("jsonv2: %v", err)
+		}
+		if std.Name != "keep" || std.Score != 2.5 || !std.Active {
+			t.Errorf("stdlib expected to retain omitted scalars, got %+v", std)
+		}
+		g, _, err := (Node{ID: 1, Name: "keep", Score: 2.5, Active: true}).DecodeFrom([]byte(payload))
+		if err != nil {
+			t.Fatalf("ggen: %v", err)
+		}
+		if g.ID != 99 || g.Name != "" || g.Score != 0 || g.Active {
+			t.Errorf("ggen expected to zero omitted scalars, got %+v", g)
+		}
+
+		const ptrPayload = `{"count":9}`
+		pstd := PointerStruct{Name: new("keep"), Count: new(1)}
+		if err := jsonv2.Unmarshal([]byte(ptrPayload), &pstd); err != nil {
+			// jsonv2 rejects PointerStruct's `format` tag since Go 1.27; the
+			// pointer half of the contract is pinned in merge_test.go.
+			t.Skipf("jsonv2 cannot merge PointerStruct: %v", err)
+		}
+		if pstd.Name == nil {
+			t.Errorf("stdlib expected to retain the omitted pointer")
+		}
+		pg, _, err := (PointerStruct{Name: new("keep"), Count: new(1)}).DecodeFrom([]byte(ptrPayload))
+		if err != nil {
+			t.Fatalf("ggen: %v", err)
+		}
+		if pg.Name != nil {
+			t.Errorf("ggen expected to nil the omitted pointer, got %q", *pg.Name)
+		}
+	})
+
+	// 4. Explicit null on a non-pointer scalar: stdlib zeroes it; ggen hard-
 	//    errors (only pointer/slice/map/[]byte accept null — use a pointer).
 	t.Run("scalar_null_error_vs_zero", func(t *testing.T) {
 		t.Parallel()

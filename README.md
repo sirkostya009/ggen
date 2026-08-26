@@ -163,13 +163,17 @@ u, err = u.DecodeFromStream(s)
 
 #### merge semantics
 
-Like stdlib, ggen has merge semantics, but deliberately different ones:
+Decoding into a value you already have gives you what a fresh decode would give
+— every field the payload omits comes back zeroed. What the receiver buys you is
+recycled memory: slice and map backings, and the allocations inside the elements
+of a slice of structs, are reused instead of freshly allocated.
 
 | case                                      | ggen                 | stdlib               | notes                                                                                     |
 | ----------------------------------------- | -------------------- | -------------------- | ----------------------------------------------------------------------------------------- |
 | non-nil slice / map / pointer field       | reused               | reused               | reuse reaches nested slices — `[][]T` at any depth reuses the inner rows' arrays          |
 | pointer to a container (`*[]T`, `**map[string]T`, …) | pointee reset, capacity kept | pointee kept as-is | reset reaches through every pointer level, so a reused receiver replaces rather than appends |
 | key omitted from payload, container field | reset, capacity kept | container kept as-is | a blank payload gives a blank slate                                                       |
+| key omitted from payload, any other field | Go zero (`nil` for a pointer) | value kept as-is | the result matches a fresh decode of the same payload                                     |
 | `null` → slice / map / pointer            | nil'd                | nil'd                | —                                                                                         |
 | empty wire value → container field        | empty, non-nil       | empty, non-nil       | `[]`, `{}`, and an empty `[]byte` string all decode to an allocated empty value, so re-marshalling gives the empty form back, not `null` |
 | `null` → non-pointer scalar or struct     | parse error          | Go zero value        | use a pointer, a per-field `nullzero` decode variant, or `-nullzero` for all value fields |
@@ -291,8 +295,7 @@ Num   int      `json:"age"   pipe:"required gte=10 clamp=10|100"`
 "may be absent" marker. They are position-independent
 but prefer writing them first by convention. Presence is separate from the
 value: a `required` field whose value is `null` still errors unless you also
-accept `null`. An absent key leaves the field untouched — zero value or cleared
-merge target.
+accept `null`. An absent key leaves the field at its zero value.
 
 #### multiple JSON shapes
 

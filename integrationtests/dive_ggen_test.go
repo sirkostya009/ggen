@@ -46,6 +46,12 @@ func (recv DiveStruct) DecodeFrom(data []byte) (result DiveStruct, i int, err er
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenCount {
+			result.Count = 0
+		}
+		if !seenTitle {
+			result.Title = ""
+		}
 		return result, i, nil
 	}
 	for {
@@ -384,6 +390,12 @@ func (recv DiveStruct) DecodeFrom(data []byte) (result DiveStruct, i int, err er
 		}
 		if data[i] == '}' {
 			i++
+			if !seenCount {
+				result.Count = 0
+			}
+			if !seenTitle {
+				result.Title = ""
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -418,6 +430,12 @@ func (recv DiveStruct) DecodeFromStream(s *ggen.Stream) (result DiveStruct, err 
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenCount {
+			result.Count = 0
+		}
+		if !seenTitle {
+			result.Title = ""
+		}
 		return result, nil
 	}
 	for {
@@ -695,6 +713,12 @@ func (recv DiveStruct) DecodeFromStream(s *ggen.Stream) (result DiveStruct, err 
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenCount {
+				result.Count = 0
+			}
+			if !seenTitle {
+				result.Title = ""
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -787,6 +811,9 @@ func (recv CustomDiveStruct) DecodeFrom(data []byte) (result CustomDiveStruct, i
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenPtr {
+			result.Ptr = nil
+		}
 		return result, i, nil
 	}
 	for {
@@ -1304,6 +1331,9 @@ func (recv CustomDiveStruct) DecodeFrom(data []byte) (result CustomDiveStruct, i
 		}
 		if data[i] == '}' {
 			i++
+			if !seenPtr {
+				result.Ptr = nil
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -1345,6 +1375,9 @@ func (recv CustomDiveStruct) DecodeFromStream(s *ggen.Stream) (result CustomDive
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenPtr {
+			result.Ptr = nil
+		}
 		return result, nil
 	}
 	for {
@@ -1823,6 +1856,9 @@ func (recv CustomDiveStruct) DecodeFromStream(s *ggen.Stream) (result CustomDive
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenPtr {
+				result.Ptr = nil
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)

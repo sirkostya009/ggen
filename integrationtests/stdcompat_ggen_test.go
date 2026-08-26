@@ -27,6 +27,9 @@ func (recv TimeCustomComma) DecodeFrom(data []byte) (result TimeCustomComma, i i
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenCustomComma {
+			result.CustomComma = (TimeCustomComma{}).CustomComma
+		}
 		return result, i, nil
 	}
 	for {
@@ -106,6 +109,9 @@ func (recv TimeCustomComma) DecodeFrom(data []byte) (result TimeCustomComma, i i
 		}
 		if data[i] == '}' {
 			i++
+			if !seenCustomComma {
+				result.CustomComma = (TimeCustomComma{}).CustomComma
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -131,6 +137,9 @@ func (recv TimeCustomComma) DecodeFromStream(s *ggen.Stream) (result TimeCustomC
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenCustomComma {
+			result.CustomComma = (TimeCustomComma{}).CustomComma
+		}
 		return result, nil
 	}
 	for {
@@ -183,6 +192,9 @@ func (recv TimeCustomComma) DecodeFromStream(s *ggen.Stream) (result TimeCustomC
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenCustomComma {
+				result.CustomComma = (TimeCustomComma{}).CustomComma
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -219,6 +231,9 @@ func (recv TimeCustomLong) DecodeFrom(data []byte) (result TimeCustomLong, i int
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenCustomLong {
+			result.CustomLong = (TimeCustomLong{}).CustomLong
+		}
 		return result, i, nil
 	}
 	for {
@@ -298,6 +313,9 @@ func (recv TimeCustomLong) DecodeFrom(data []byte) (result TimeCustomLong, i int
 		}
 		if data[i] == '}' {
 			i++
+			if !seenCustomLong {
+				result.CustomLong = (TimeCustomLong{}).CustomLong
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -323,6 +341,9 @@ func (recv TimeCustomLong) DecodeFromStream(s *ggen.Stream) (result TimeCustomLo
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenCustomLong {
+			result.CustomLong = (TimeCustomLong{}).CustomLong
+		}
 		return result, nil
 	}
 	for {
@@ -375,6 +396,9 @@ func (recv TimeCustomLong) DecodeFromStream(s *ggen.Stream) (result TimeCustomLo
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenCustomLong {
+				result.CustomLong = (TimeCustomLong{}).CustomLong
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -411,6 +435,9 @@ func (recv TimeDefault) DecodeFrom(data []byte) (result TimeDefault, i int, err 
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenDefault {
+			result.Default = (TimeDefault{}).Default
+		}
 		return result, i, nil
 	}
 	for {
@@ -490,6 +517,9 @@ func (recv TimeDefault) DecodeFrom(data []byte) (result TimeDefault, i int, err 
 		}
 		if data[i] == '}' {
 			i++
+			if !seenDefault {
+				result.Default = (TimeDefault{}).Default
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -515,6 +545,9 @@ func (recv TimeDefault) DecodeFromStream(s *ggen.Stream) (result TimeDefault, er
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenDefault {
+			result.Default = (TimeDefault{}).Default
+		}
 		return result, nil
 	}
 	for {
@@ -567,6 +600,9 @@ func (recv TimeDefault) DecodeFromStream(s *ggen.Stream) (result TimeDefault, er
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenDefault {
+				result.Default = (TimeDefault{}).Default
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -601,6 +637,9 @@ func (recv TimeUnix) DecodeFrom(data []byte) (result TimeUnix, i int, err error)
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenUnix {
+			result.Unix = (TimeUnix{}).Unix
+		}
 		return result, i, nil
 	}
 	for {
@@ -663,6 +702,9 @@ func (recv TimeUnix) DecodeFrom(data []byte) (result TimeUnix, i int, err error)
 		}
 		if data[i] == '}' {
 			i++
+			if !seenUnix {
+				result.Unix = (TimeUnix{}).Unix
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -688,6 +730,9 @@ func (recv TimeUnix) DecodeFromStream(s *ggen.Stream) (result TimeUnix, err erro
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenUnix {
+			result.Unix = (TimeUnix{}).Unix
+		}
 		return result, nil
 	}
 	for {
@@ -740,6 +785,9 @@ func (recv TimeUnix) DecodeFromStream(s *ggen.Stream) (result TimeUnix, err erro
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenUnix {
+				result.Unix = (TimeUnix{}).Unix
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -774,6 +822,9 @@ func (recv TimeUnixMilli) DecodeFrom(data []byte) (result TimeUnixMilli, i int, 
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenUnixMilli {
+			result.UnixMilli = (TimeUnixMilli{}).UnixMilli
+		}
 		return result, i, nil
 	}
 	for {
@@ -834,6 +885,9 @@ func (recv TimeUnixMilli) DecodeFrom(data []byte) (result TimeUnixMilli, i int, 
 		}
 		if data[i] == '}' {
 			i++
+			if !seenUnixMilli {
+				result.UnixMilli = (TimeUnixMilli{}).UnixMilli
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -859,6 +913,9 @@ func (recv TimeUnixMilli) DecodeFromStream(s *ggen.Stream) (result TimeUnixMilli
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenUnixMilli {
+			result.UnixMilli = (TimeUnixMilli{}).UnixMilli
+		}
 		return result, nil
 	}
 	for {
@@ -908,6 +965,9 @@ func (recv TimeUnixMilli) DecodeFromStream(s *ggen.Stream) (result TimeUnixMilli
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenUnixMilli {
+				result.UnixMilli = (TimeUnixMilli{}).UnixMilli
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -942,6 +1002,9 @@ func (recv TimeUnixMicro) DecodeFrom(data []byte) (result TimeUnixMicro, i int, 
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenUnixMicro {
+			result.UnixMicro = (TimeUnixMicro{}).UnixMicro
+		}
 		return result, i, nil
 	}
 	for {
@@ -1002,6 +1065,9 @@ func (recv TimeUnixMicro) DecodeFrom(data []byte) (result TimeUnixMicro, i int, 
 		}
 		if data[i] == '}' {
 			i++
+			if !seenUnixMicro {
+				result.UnixMicro = (TimeUnixMicro{}).UnixMicro
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -1027,6 +1093,9 @@ func (recv TimeUnixMicro) DecodeFromStream(s *ggen.Stream) (result TimeUnixMicro
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenUnixMicro {
+			result.UnixMicro = (TimeUnixMicro{}).UnixMicro
+		}
 		return result, nil
 	}
 	for {
@@ -1076,6 +1145,9 @@ func (recv TimeUnixMicro) DecodeFromStream(s *ggen.Stream) (result TimeUnixMicro
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenUnixMicro {
+				result.UnixMicro = (TimeUnixMicro{}).UnixMicro
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -1110,6 +1182,9 @@ func (recv TimeUnixNano) DecodeFrom(data []byte) (result TimeUnixNano, i int, er
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenUnixNano {
+			result.UnixNano = (TimeUnixNano{}).UnixNano
+		}
 		return result, i, nil
 	}
 	for {
@@ -1170,6 +1245,9 @@ func (recv TimeUnixNano) DecodeFrom(data []byte) (result TimeUnixNano, i int, er
 		}
 		if data[i] == '}' {
 			i++
+			if !seenUnixNano {
+				result.UnixNano = (TimeUnixNano{}).UnixNano
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -1195,6 +1273,9 @@ func (recv TimeUnixNano) DecodeFromStream(s *ggen.Stream) (result TimeUnixNano, 
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenUnixNano {
+			result.UnixNano = (TimeUnixNano{}).UnixNano
+		}
 		return result, nil
 	}
 	for {
@@ -1244,6 +1325,9 @@ func (recv TimeUnixNano) DecodeFromStream(s *ggen.Stream) (result TimeUnixNano, 
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenUnixNano {
+				result.UnixNano = (TimeUnixNano{}).UnixNano
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -1278,6 +1362,9 @@ func (recv TimeANSIC) DecodeFrom(data []byte) (result TimeANSIC, i int, err erro
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenANSIC {
+			result.ANSIC = (TimeANSIC{}).ANSIC
+		}
 		return result, i, nil
 	}
 	for {
@@ -1357,6 +1444,9 @@ func (recv TimeANSIC) DecodeFrom(data []byte) (result TimeANSIC, i int, err erro
 		}
 		if data[i] == '}' {
 			i++
+			if !seenANSIC {
+				result.ANSIC = (TimeANSIC{}).ANSIC
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -1382,6 +1472,9 @@ func (recv TimeANSIC) DecodeFromStream(s *ggen.Stream) (result TimeANSIC, err er
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenANSIC {
+			result.ANSIC = (TimeANSIC{}).ANSIC
+		}
 		return result, nil
 	}
 	for {
@@ -1434,6 +1527,9 @@ func (recv TimeANSIC) DecodeFromStream(s *ggen.Stream) (result TimeANSIC, err er
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenANSIC {
+				result.ANSIC = (TimeANSIC{}).ANSIC
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -1468,6 +1564,9 @@ func (recv TimeUnixDate) DecodeFrom(data []byte) (result TimeUnixDate, i int, er
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenUnixDate {
+			result.UnixDate = (TimeUnixDate{}).UnixDate
+		}
 		return result, i, nil
 	}
 	for {
@@ -1547,6 +1646,9 @@ func (recv TimeUnixDate) DecodeFrom(data []byte) (result TimeUnixDate, i int, er
 		}
 		if data[i] == '}' {
 			i++
+			if !seenUnixDate {
+				result.UnixDate = (TimeUnixDate{}).UnixDate
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -1572,6 +1674,9 @@ func (recv TimeUnixDate) DecodeFromStream(s *ggen.Stream) (result TimeUnixDate, 
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenUnixDate {
+			result.UnixDate = (TimeUnixDate{}).UnixDate
+		}
 		return result, nil
 	}
 	for {
@@ -1624,6 +1729,9 @@ func (recv TimeUnixDate) DecodeFromStream(s *ggen.Stream) (result TimeUnixDate, 
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenUnixDate {
+				result.UnixDate = (TimeUnixDate{}).UnixDate
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -1658,6 +1766,9 @@ func (recv TimeRubyDate) DecodeFrom(data []byte) (result TimeRubyDate, i int, er
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenRubyDate {
+			result.RubyDate = (TimeRubyDate{}).RubyDate
+		}
 		return result, i, nil
 	}
 	for {
@@ -1737,6 +1848,9 @@ func (recv TimeRubyDate) DecodeFrom(data []byte) (result TimeRubyDate, i int, er
 		}
 		if data[i] == '}' {
 			i++
+			if !seenRubyDate {
+				result.RubyDate = (TimeRubyDate{}).RubyDate
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -1762,6 +1876,9 @@ func (recv TimeRubyDate) DecodeFromStream(s *ggen.Stream) (result TimeRubyDate, 
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenRubyDate {
+			result.RubyDate = (TimeRubyDate{}).RubyDate
+		}
 		return result, nil
 	}
 	for {
@@ -1814,6 +1931,9 @@ func (recv TimeRubyDate) DecodeFromStream(s *ggen.Stream) (result TimeRubyDate, 
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenRubyDate {
+				result.RubyDate = (TimeRubyDate{}).RubyDate
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -1848,6 +1968,9 @@ func (recv TimeRFC822) DecodeFrom(data []byte) (result TimeRFC822, i int, err er
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenRFC822 {
+			result.RFC822 = (TimeRFC822{}).RFC822
+		}
 		return result, i, nil
 	}
 	for {
@@ -1927,6 +2050,9 @@ func (recv TimeRFC822) DecodeFrom(data []byte) (result TimeRFC822, i int, err er
 		}
 		if data[i] == '}' {
 			i++
+			if !seenRFC822 {
+				result.RFC822 = (TimeRFC822{}).RFC822
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -1952,6 +2078,9 @@ func (recv TimeRFC822) DecodeFromStream(s *ggen.Stream) (result TimeRFC822, err 
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenRFC822 {
+			result.RFC822 = (TimeRFC822{}).RFC822
+		}
 		return result, nil
 	}
 	for {
@@ -2004,6 +2133,9 @@ func (recv TimeRFC822) DecodeFromStream(s *ggen.Stream) (result TimeRFC822, err 
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenRFC822 {
+				result.RFC822 = (TimeRFC822{}).RFC822
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -2038,6 +2170,9 @@ func (recv TimeRFC822Z) DecodeFrom(data []byte) (result TimeRFC822Z, i int, err 
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenRFC822Z {
+			result.RFC822Z = (TimeRFC822Z{}).RFC822Z
+		}
 		return result, i, nil
 	}
 	for {
@@ -2117,6 +2252,9 @@ func (recv TimeRFC822Z) DecodeFrom(data []byte) (result TimeRFC822Z, i int, err 
 		}
 		if data[i] == '}' {
 			i++
+			if !seenRFC822Z {
+				result.RFC822Z = (TimeRFC822Z{}).RFC822Z
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -2142,6 +2280,9 @@ func (recv TimeRFC822Z) DecodeFromStream(s *ggen.Stream) (result TimeRFC822Z, er
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenRFC822Z {
+			result.RFC822Z = (TimeRFC822Z{}).RFC822Z
+		}
 		return result, nil
 	}
 	for {
@@ -2194,6 +2335,9 @@ func (recv TimeRFC822Z) DecodeFromStream(s *ggen.Stream) (result TimeRFC822Z, er
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenRFC822Z {
+				result.RFC822Z = (TimeRFC822Z{}).RFC822Z
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -2228,6 +2372,9 @@ func (recv TimeRFC850) DecodeFrom(data []byte) (result TimeRFC850, i int, err er
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenRFC850 {
+			result.RFC850 = (TimeRFC850{}).RFC850
+		}
 		return result, i, nil
 	}
 	for {
@@ -2307,6 +2454,9 @@ func (recv TimeRFC850) DecodeFrom(data []byte) (result TimeRFC850, i int, err er
 		}
 		if data[i] == '}' {
 			i++
+			if !seenRFC850 {
+				result.RFC850 = (TimeRFC850{}).RFC850
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -2332,6 +2482,9 @@ func (recv TimeRFC850) DecodeFromStream(s *ggen.Stream) (result TimeRFC850, err 
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenRFC850 {
+			result.RFC850 = (TimeRFC850{}).RFC850
+		}
 		return result, nil
 	}
 	for {
@@ -2384,6 +2537,9 @@ func (recv TimeRFC850) DecodeFromStream(s *ggen.Stream) (result TimeRFC850, err 
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenRFC850 {
+				result.RFC850 = (TimeRFC850{}).RFC850
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -2418,6 +2574,9 @@ func (recv TimeRFC1123) DecodeFrom(data []byte) (result TimeRFC1123, i int, err 
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenRFC1123 {
+			result.RFC1123 = (TimeRFC1123{}).RFC1123
+		}
 		return result, i, nil
 	}
 	for {
@@ -2497,6 +2656,9 @@ func (recv TimeRFC1123) DecodeFrom(data []byte) (result TimeRFC1123, i int, err 
 		}
 		if data[i] == '}' {
 			i++
+			if !seenRFC1123 {
+				result.RFC1123 = (TimeRFC1123{}).RFC1123
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -2522,6 +2684,9 @@ func (recv TimeRFC1123) DecodeFromStream(s *ggen.Stream) (result TimeRFC1123, er
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenRFC1123 {
+			result.RFC1123 = (TimeRFC1123{}).RFC1123
+		}
 		return result, nil
 	}
 	for {
@@ -2574,6 +2739,9 @@ func (recv TimeRFC1123) DecodeFromStream(s *ggen.Stream) (result TimeRFC1123, er
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenRFC1123 {
+				result.RFC1123 = (TimeRFC1123{}).RFC1123
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -2608,6 +2776,9 @@ func (recv TimeRFC1123Z) DecodeFrom(data []byte) (result TimeRFC1123Z, i int, er
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenRFC1123Z {
+			result.RFC1123Z = (TimeRFC1123Z{}).RFC1123Z
+		}
 		return result, i, nil
 	}
 	for {
@@ -2687,6 +2858,9 @@ func (recv TimeRFC1123Z) DecodeFrom(data []byte) (result TimeRFC1123Z, i int, er
 		}
 		if data[i] == '}' {
 			i++
+			if !seenRFC1123Z {
+				result.RFC1123Z = (TimeRFC1123Z{}).RFC1123Z
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -2712,6 +2886,9 @@ func (recv TimeRFC1123Z) DecodeFromStream(s *ggen.Stream) (result TimeRFC1123Z, 
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenRFC1123Z {
+			result.RFC1123Z = (TimeRFC1123Z{}).RFC1123Z
+		}
 		return result, nil
 	}
 	for {
@@ -2764,6 +2941,9 @@ func (recv TimeRFC1123Z) DecodeFromStream(s *ggen.Stream) (result TimeRFC1123Z, 
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenRFC1123Z {
+				result.RFC1123Z = (TimeRFC1123Z{}).RFC1123Z
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -2798,6 +2978,9 @@ func (recv TimeRFC3339) DecodeFrom(data []byte) (result TimeRFC3339, i int, err 
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenRFC3339 {
+			result.RFC3339 = (TimeRFC3339{}).RFC3339
+		}
 		return result, i, nil
 	}
 	for {
@@ -2877,6 +3060,9 @@ func (recv TimeRFC3339) DecodeFrom(data []byte) (result TimeRFC3339, i int, err 
 		}
 		if data[i] == '}' {
 			i++
+			if !seenRFC3339 {
+				result.RFC3339 = (TimeRFC3339{}).RFC3339
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -2902,6 +3088,9 @@ func (recv TimeRFC3339) DecodeFromStream(s *ggen.Stream) (result TimeRFC3339, er
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenRFC3339 {
+			result.RFC3339 = (TimeRFC3339{}).RFC3339
+		}
 		return result, nil
 	}
 	for {
@@ -2954,6 +3143,9 @@ func (recv TimeRFC3339) DecodeFromStream(s *ggen.Stream) (result TimeRFC3339, er
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenRFC3339 {
+				result.RFC3339 = (TimeRFC3339{}).RFC3339
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -2988,6 +3180,9 @@ func (recv TimeRFC3339Nano) DecodeFrom(data []byte) (result TimeRFC3339Nano, i i
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenRFC3339Nano {
+			result.RFC3339Nano = (TimeRFC3339Nano{}).RFC3339Nano
+		}
 		return result, i, nil
 	}
 	for {
@@ -3067,6 +3262,9 @@ func (recv TimeRFC3339Nano) DecodeFrom(data []byte) (result TimeRFC3339Nano, i i
 		}
 		if data[i] == '}' {
 			i++
+			if !seenRFC3339Nano {
+				result.RFC3339Nano = (TimeRFC3339Nano{}).RFC3339Nano
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -3092,6 +3290,9 @@ func (recv TimeRFC3339Nano) DecodeFromStream(s *ggen.Stream) (result TimeRFC3339
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenRFC3339Nano {
+			result.RFC3339Nano = (TimeRFC3339Nano{}).RFC3339Nano
+		}
 		return result, nil
 	}
 	for {
@@ -3144,6 +3345,9 @@ func (recv TimeRFC3339Nano) DecodeFromStream(s *ggen.Stream) (result TimeRFC3339
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenRFC3339Nano {
+				result.RFC3339Nano = (TimeRFC3339Nano{}).RFC3339Nano
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -3178,6 +3382,9 @@ func (recv TimeKitchen) DecodeFrom(data []byte) (result TimeKitchen, i int, err 
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenKitchen {
+			result.Kitchen = (TimeKitchen{}).Kitchen
+		}
 		return result, i, nil
 	}
 	for {
@@ -3257,6 +3464,9 @@ func (recv TimeKitchen) DecodeFrom(data []byte) (result TimeKitchen, i int, err 
 		}
 		if data[i] == '}' {
 			i++
+			if !seenKitchen {
+				result.Kitchen = (TimeKitchen{}).Kitchen
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -3282,6 +3492,9 @@ func (recv TimeKitchen) DecodeFromStream(s *ggen.Stream) (result TimeKitchen, er
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenKitchen {
+			result.Kitchen = (TimeKitchen{}).Kitchen
+		}
 		return result, nil
 	}
 	for {
@@ -3334,6 +3547,9 @@ func (recv TimeKitchen) DecodeFromStream(s *ggen.Stream) (result TimeKitchen, er
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenKitchen {
+				result.Kitchen = (TimeKitchen{}).Kitchen
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -3368,6 +3584,9 @@ func (recv TimeDateTime) DecodeFrom(data []byte) (result TimeDateTime, i int, er
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenDateTime {
+			result.DateTime = (TimeDateTime{}).DateTime
+		}
 		return result, i, nil
 	}
 	for {
@@ -3447,6 +3666,9 @@ func (recv TimeDateTime) DecodeFrom(data []byte) (result TimeDateTime, i int, er
 		}
 		if data[i] == '}' {
 			i++
+			if !seenDateTime {
+				result.DateTime = (TimeDateTime{}).DateTime
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -3472,6 +3694,9 @@ func (recv TimeDateTime) DecodeFromStream(s *ggen.Stream) (result TimeDateTime, 
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenDateTime {
+			result.DateTime = (TimeDateTime{}).DateTime
+		}
 		return result, nil
 	}
 	for {
@@ -3524,6 +3749,9 @@ func (recv TimeDateTime) DecodeFromStream(s *ggen.Stream) (result TimeDateTime, 
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenDateTime {
+				result.DateTime = (TimeDateTime{}).DateTime
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -3558,6 +3786,9 @@ func (recv TimeDateOnly) DecodeFrom(data []byte) (result TimeDateOnly, i int, er
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenDateOnly {
+			result.DateOnly = (TimeDateOnly{}).DateOnly
+		}
 		return result, i, nil
 	}
 	for {
@@ -3637,6 +3868,9 @@ func (recv TimeDateOnly) DecodeFrom(data []byte) (result TimeDateOnly, i int, er
 		}
 		if data[i] == '}' {
 			i++
+			if !seenDateOnly {
+				result.DateOnly = (TimeDateOnly{}).DateOnly
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -3662,6 +3896,9 @@ func (recv TimeDateOnly) DecodeFromStream(s *ggen.Stream) (result TimeDateOnly, 
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenDateOnly {
+			result.DateOnly = (TimeDateOnly{}).DateOnly
+		}
 		return result, nil
 	}
 	for {
@@ -3714,6 +3951,9 @@ func (recv TimeDateOnly) DecodeFromStream(s *ggen.Stream) (result TimeDateOnly, 
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenDateOnly {
+				result.DateOnly = (TimeDateOnly{}).DateOnly
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -3748,6 +3988,9 @@ func (recv TimeTimeOnly) DecodeFrom(data []byte) (result TimeTimeOnly, i int, er
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenTimeOnly {
+			result.TimeOnly = (TimeTimeOnly{}).TimeOnly
+		}
 		return result, i, nil
 	}
 	for {
@@ -3827,6 +4070,9 @@ func (recv TimeTimeOnly) DecodeFrom(data []byte) (result TimeTimeOnly, i int, er
 		}
 		if data[i] == '}' {
 			i++
+			if !seenTimeOnly {
+				result.TimeOnly = (TimeTimeOnly{}).TimeOnly
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -3852,6 +4098,9 @@ func (recv TimeTimeOnly) DecodeFromStream(s *ggen.Stream) (result TimeTimeOnly, 
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenTimeOnly {
+			result.TimeOnly = (TimeTimeOnly{}).TimeOnly
+		}
 		return result, nil
 	}
 	for {
@@ -3904,6 +4153,9 @@ func (recv TimeTimeOnly) DecodeFromStream(s *ggen.Stream) (result TimeTimeOnly, 
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenTimeOnly {
+				result.TimeOnly = (TimeTimeOnly{}).TimeOnly
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -3958,6 +4210,69 @@ func (recv TimeFormatsStdCompat) DecodeFrom(data []byte) (result TimeFormatsStdC
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenANSIC {
+			result.ANSIC = (TimeFormatsStdCompat{}).ANSIC
+		}
+		if !seenCustomComma {
+			result.CustomComma = (TimeFormatsStdCompat{}).CustomComma
+		}
+		if !seenCustomLong {
+			result.CustomLong = (TimeFormatsStdCompat{}).CustomLong
+		}
+		if !seenDateOnly {
+			result.DateOnly = (TimeFormatsStdCompat{}).DateOnly
+		}
+		if !seenDateTime {
+			result.DateTime = (TimeFormatsStdCompat{}).DateTime
+		}
+		if !seenDefault {
+			result.Default = (TimeFormatsStdCompat{}).Default
+		}
+		if !seenKitchen {
+			result.Kitchen = (TimeFormatsStdCompat{}).Kitchen
+		}
+		if !seenRFC1123 {
+			result.RFC1123 = (TimeFormatsStdCompat{}).RFC1123
+		}
+		if !seenRFC1123Z {
+			result.RFC1123Z = (TimeFormatsStdCompat{}).RFC1123Z
+		}
+		if !seenRFC3339 {
+			result.RFC3339 = (TimeFormatsStdCompat{}).RFC3339
+		}
+		if !seenRFC3339Nano {
+			result.RFC3339Nano = (TimeFormatsStdCompat{}).RFC3339Nano
+		}
+		if !seenRFC822 {
+			result.RFC822 = (TimeFormatsStdCompat{}).RFC822
+		}
+		if !seenRFC822Z {
+			result.RFC822Z = (TimeFormatsStdCompat{}).RFC822Z
+		}
+		if !seenRFC850 {
+			result.RFC850 = (TimeFormatsStdCompat{}).RFC850
+		}
+		if !seenRubyDate {
+			result.RubyDate = (TimeFormatsStdCompat{}).RubyDate
+		}
+		if !seenTimeOnly {
+			result.TimeOnly = (TimeFormatsStdCompat{}).TimeOnly
+		}
+		if !seenUnix {
+			result.Unix = (TimeFormatsStdCompat{}).Unix
+		}
+		if !seenUnixDate {
+			result.UnixDate = (TimeFormatsStdCompat{}).UnixDate
+		}
+		if !seenUnixMicro {
+			result.UnixMicro = (TimeFormatsStdCompat{}).UnixMicro
+		}
+		if !seenUnixMilli {
+			result.UnixMilli = (TimeFormatsStdCompat{}).UnixMilli
+		}
+		if !seenUnixNano {
+			result.UnixNano = (TimeFormatsStdCompat{}).UnixNano
+		}
 		return result, i, nil
 	}
 	for {
@@ -4563,6 +4878,69 @@ func (recv TimeFormatsStdCompat) DecodeFrom(data []byte) (result TimeFormatsStdC
 		}
 		if data[i] == '}' {
 			i++
+			if !seenANSIC {
+				result.ANSIC = (TimeFormatsStdCompat{}).ANSIC
+			}
+			if !seenCustomComma {
+				result.CustomComma = (TimeFormatsStdCompat{}).CustomComma
+			}
+			if !seenCustomLong {
+				result.CustomLong = (TimeFormatsStdCompat{}).CustomLong
+			}
+			if !seenDateOnly {
+				result.DateOnly = (TimeFormatsStdCompat{}).DateOnly
+			}
+			if !seenDateTime {
+				result.DateTime = (TimeFormatsStdCompat{}).DateTime
+			}
+			if !seenDefault {
+				result.Default = (TimeFormatsStdCompat{}).Default
+			}
+			if !seenKitchen {
+				result.Kitchen = (TimeFormatsStdCompat{}).Kitchen
+			}
+			if !seenRFC1123 {
+				result.RFC1123 = (TimeFormatsStdCompat{}).RFC1123
+			}
+			if !seenRFC1123Z {
+				result.RFC1123Z = (TimeFormatsStdCompat{}).RFC1123Z
+			}
+			if !seenRFC3339 {
+				result.RFC3339 = (TimeFormatsStdCompat{}).RFC3339
+			}
+			if !seenRFC3339Nano {
+				result.RFC3339Nano = (TimeFormatsStdCompat{}).RFC3339Nano
+			}
+			if !seenRFC822 {
+				result.RFC822 = (TimeFormatsStdCompat{}).RFC822
+			}
+			if !seenRFC822Z {
+				result.RFC822Z = (TimeFormatsStdCompat{}).RFC822Z
+			}
+			if !seenRFC850 {
+				result.RFC850 = (TimeFormatsStdCompat{}).RFC850
+			}
+			if !seenRubyDate {
+				result.RubyDate = (TimeFormatsStdCompat{}).RubyDate
+			}
+			if !seenTimeOnly {
+				result.TimeOnly = (TimeFormatsStdCompat{}).TimeOnly
+			}
+			if !seenUnix {
+				result.Unix = (TimeFormatsStdCompat{}).Unix
+			}
+			if !seenUnixDate {
+				result.UnixDate = (TimeFormatsStdCompat{}).UnixDate
+			}
+			if !seenUnixMicro {
+				result.UnixMicro = (TimeFormatsStdCompat{}).UnixMicro
+			}
+			if !seenUnixMilli {
+				result.UnixMilli = (TimeFormatsStdCompat{}).UnixMilli
+			}
+			if !seenUnixNano {
+				result.UnixNano = (TimeFormatsStdCompat{}).UnixNano
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -4608,6 +4986,69 @@ func (recv TimeFormatsStdCompat) DecodeFromStream(s *ggen.Stream) (result TimeFo
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenANSIC {
+			result.ANSIC = (TimeFormatsStdCompat{}).ANSIC
+		}
+		if !seenCustomComma {
+			result.CustomComma = (TimeFormatsStdCompat{}).CustomComma
+		}
+		if !seenCustomLong {
+			result.CustomLong = (TimeFormatsStdCompat{}).CustomLong
+		}
+		if !seenDateOnly {
+			result.DateOnly = (TimeFormatsStdCompat{}).DateOnly
+		}
+		if !seenDateTime {
+			result.DateTime = (TimeFormatsStdCompat{}).DateTime
+		}
+		if !seenDefault {
+			result.Default = (TimeFormatsStdCompat{}).Default
+		}
+		if !seenKitchen {
+			result.Kitchen = (TimeFormatsStdCompat{}).Kitchen
+		}
+		if !seenRFC1123 {
+			result.RFC1123 = (TimeFormatsStdCompat{}).RFC1123
+		}
+		if !seenRFC1123Z {
+			result.RFC1123Z = (TimeFormatsStdCompat{}).RFC1123Z
+		}
+		if !seenRFC3339 {
+			result.RFC3339 = (TimeFormatsStdCompat{}).RFC3339
+		}
+		if !seenRFC3339Nano {
+			result.RFC3339Nano = (TimeFormatsStdCompat{}).RFC3339Nano
+		}
+		if !seenRFC822 {
+			result.RFC822 = (TimeFormatsStdCompat{}).RFC822
+		}
+		if !seenRFC822Z {
+			result.RFC822Z = (TimeFormatsStdCompat{}).RFC822Z
+		}
+		if !seenRFC850 {
+			result.RFC850 = (TimeFormatsStdCompat{}).RFC850
+		}
+		if !seenRubyDate {
+			result.RubyDate = (TimeFormatsStdCompat{}).RubyDate
+		}
+		if !seenTimeOnly {
+			result.TimeOnly = (TimeFormatsStdCompat{}).TimeOnly
+		}
+		if !seenUnix {
+			result.Unix = (TimeFormatsStdCompat{}).Unix
+		}
+		if !seenUnixDate {
+			result.UnixDate = (TimeFormatsStdCompat{}).UnixDate
+		}
+		if !seenUnixMicro {
+			result.UnixMicro = (TimeFormatsStdCompat{}).UnixMicro
+		}
+		if !seenUnixMilli {
+			result.UnixMilli = (TimeFormatsStdCompat{}).UnixMilli
+		}
+		if !seenUnixNano {
+			result.UnixNano = (TimeFormatsStdCompat{}).UnixNano
+		}
 		return result, nil
 	}
 	for {
@@ -5011,6 +5452,69 @@ func (recv TimeFormatsStdCompat) DecodeFromStream(s *ggen.Stream) (result TimeFo
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenANSIC {
+				result.ANSIC = (TimeFormatsStdCompat{}).ANSIC
+			}
+			if !seenCustomComma {
+				result.CustomComma = (TimeFormatsStdCompat{}).CustomComma
+			}
+			if !seenCustomLong {
+				result.CustomLong = (TimeFormatsStdCompat{}).CustomLong
+			}
+			if !seenDateOnly {
+				result.DateOnly = (TimeFormatsStdCompat{}).DateOnly
+			}
+			if !seenDateTime {
+				result.DateTime = (TimeFormatsStdCompat{}).DateTime
+			}
+			if !seenDefault {
+				result.Default = (TimeFormatsStdCompat{}).Default
+			}
+			if !seenKitchen {
+				result.Kitchen = (TimeFormatsStdCompat{}).Kitchen
+			}
+			if !seenRFC1123 {
+				result.RFC1123 = (TimeFormatsStdCompat{}).RFC1123
+			}
+			if !seenRFC1123Z {
+				result.RFC1123Z = (TimeFormatsStdCompat{}).RFC1123Z
+			}
+			if !seenRFC3339 {
+				result.RFC3339 = (TimeFormatsStdCompat{}).RFC3339
+			}
+			if !seenRFC3339Nano {
+				result.RFC3339Nano = (TimeFormatsStdCompat{}).RFC3339Nano
+			}
+			if !seenRFC822 {
+				result.RFC822 = (TimeFormatsStdCompat{}).RFC822
+			}
+			if !seenRFC822Z {
+				result.RFC822Z = (TimeFormatsStdCompat{}).RFC822Z
+			}
+			if !seenRFC850 {
+				result.RFC850 = (TimeFormatsStdCompat{}).RFC850
+			}
+			if !seenRubyDate {
+				result.RubyDate = (TimeFormatsStdCompat{}).RubyDate
+			}
+			if !seenTimeOnly {
+				result.TimeOnly = (TimeFormatsStdCompat{}).TimeOnly
+			}
+			if !seenUnix {
+				result.Unix = (TimeFormatsStdCompat{}).Unix
+			}
+			if !seenUnixDate {
+				result.UnixDate = (TimeFormatsStdCompat{}).UnixDate
+			}
+			if !seenUnixMicro {
+				result.UnixMicro = (TimeFormatsStdCompat{}).UnixMicro
+			}
+			if !seenUnixMilli {
+				result.UnixMilli = (TimeFormatsStdCompat{}).UnixMilli
+			}
+			if !seenUnixNano {
+				result.UnixNano = (TimeFormatsStdCompat{}).UnixNano
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -5095,6 +5599,27 @@ func (recv richSubset) DecodeFrom(data []byte) (result richSubset, i int, err er
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenBig {
+			result.Big = (richSubset{}).Big
+		}
+		if !seenBigF {
+			result.BigF = (richSubset{}).BigF
+		}
+		if !seenBigR {
+			result.BigR = (richSubset{}).BigR
+		}
+		if !seenGofrsID {
+			result.GofrsID = (richSubset{}).GofrsID
+		}
+		if !seenID {
+			result.ID = (richSubset{}).ID
+		}
+		if !seenRaw1 {
+			result.Raw1 = nil
+		}
+		if !seenRaw2 {
+			result.Raw2 = nil
+		}
 		return result, i, nil
 	}
 	for {
@@ -5273,6 +5798,27 @@ func (recv richSubset) DecodeFrom(data []byte) (result richSubset, i int, err er
 		}
 		if data[i] == '}' {
 			i++
+			if !seenBig {
+				result.Big = (richSubset{}).Big
+			}
+			if !seenBigF {
+				result.BigF = (richSubset{}).BigF
+			}
+			if !seenBigR {
+				result.BigR = (richSubset{}).BigR
+			}
+			if !seenGofrsID {
+				result.GofrsID = (richSubset{}).GofrsID
+			}
+			if !seenID {
+				result.ID = (richSubset{}).ID
+			}
+			if !seenRaw1 {
+				result.Raw1 = nil
+			}
+			if !seenRaw2 {
+				result.Raw2 = nil
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -5304,6 +5850,27 @@ func (recv richSubset) DecodeFromStream(s *ggen.Stream) (result richSubset, err 
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenBig {
+			result.Big = (richSubset{}).Big
+		}
+		if !seenBigF {
+			result.BigF = (richSubset{}).BigF
+		}
+		if !seenBigR {
+			result.BigR = (richSubset{}).BigR
+		}
+		if !seenGofrsID {
+			result.GofrsID = (richSubset{}).GofrsID
+		}
+		if !seenID {
+			result.ID = (richSubset{}).ID
+		}
+		if !seenRaw1 {
+			result.Raw1 = nil
+		}
+		if !seenRaw2 {
+			result.Raw2 = nil
+		}
 		return result, nil
 	}
 	for {
@@ -5460,6 +6027,27 @@ func (recv richSubset) DecodeFromStream(s *ggen.Stream) (result richSubset, err 
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenBig {
+				result.Big = (richSubset{}).Big
+			}
+			if !seenBigF {
+				result.BigF = (richSubset{}).BigF
+			}
+			if !seenBigR {
+				result.BigR = (richSubset{}).BigR
+			}
+			if !seenGofrsID {
+				result.GofrsID = (richSubset{}).GofrsID
+			}
+			if !seenID {
+				result.ID = (richSubset{}).ID
+			}
+			if !seenRaw1 {
+				result.Raw1 = nil
+			}
+			if !seenRaw2 {
+				result.Raw2 = nil
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -5541,6 +6129,9 @@ func (recv F64Wire) DecodeFrom(data []byte) (result F64Wire, i int, err error) {
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenV {
+			result.V = 0
+		}
 		return result, i, nil
 	}
 	for {
@@ -5599,6 +6190,9 @@ func (recv F64Wire) DecodeFrom(data []byte) (result F64Wire, i int, err error) {
 		}
 		if data[i] == '}' {
 			i++
+			if !seenV {
+				result.V = 0
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -5624,6 +6218,9 @@ func (recv F64Wire) DecodeFromStream(s *ggen.Stream) (result F64Wire, err error)
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenV {
+			result.V = 0
+		}
 		return result, nil
 	}
 	for {
@@ -5671,6 +6268,9 @@ func (recv F64Wire) DecodeFromStream(s *ggen.Stream) (result F64Wire, err error)
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenV {
+				result.V = 0
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -5707,6 +6307,9 @@ func (recv F32Wire) DecodeFrom(data []byte) (result F32Wire, i int, err error) {
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenV {
+			result.V = 0
+		}
 		return result, i, nil
 	}
 	for {
@@ -5770,6 +6373,9 @@ func (recv F32Wire) DecodeFrom(data []byte) (result F32Wire, i int, err error) {
 		}
 		if data[i] == '}' {
 			i++
+			if !seenV {
+				result.V = 0
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -5795,6 +6401,9 @@ func (recv F32Wire) DecodeFromStream(s *ggen.Stream) (result F32Wire, err error)
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenV {
+			result.V = 0
+		}
 		return result, nil
 	}
 	for {
@@ -5847,6 +6456,9 @@ func (recv F32Wire) DecodeFromStream(s *ggen.Stream) (result F32Wire, err error)
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenV {
+				result.V = 0
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -5883,6 +6495,9 @@ func (recv AnyWire) DecodeFrom(data []byte) (result AnyWire, i int, err error) {
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenV {
+			result.V = nil
+		}
 		return result, i, nil
 	}
 	for {
@@ -5941,6 +6556,9 @@ func (recv AnyWire) DecodeFrom(data []byte) (result AnyWire, i int, err error) {
 		}
 		if data[i] == '}' {
 			i++
+			if !seenV {
+				result.V = nil
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -5966,6 +6584,9 @@ func (recv AnyWire) DecodeFromStream(s *ggen.Stream) (result AnyWire, err error)
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenV {
+			result.V = nil
+		}
 		return result, nil
 	}
 	for {
@@ -6013,6 +6634,9 @@ func (recv AnyWire) DecodeFromStream(s *ggen.Stream) (result AnyWire, err error)
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenV {
+				result.V = nil
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)

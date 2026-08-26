@@ -51,6 +51,18 @@ func (recv OmitStruct) DecodeFrom(data []byte) (result OmitStruct, i int, err er
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenBio {
+			result.Bio = ""
+		}
+		if !seenStrCount {
+			result.StrCount = 0
+		}
+		if !seenName {
+			result.Name = ""
+		}
+		if !seenScore {
+			result.Score = 0
+		}
 		return result, i, nil
 	}
 	for {
@@ -526,6 +538,18 @@ func (recv OmitStruct) DecodeFrom(data []byte) (result OmitStruct, i int, err er
 		}
 		if data[i] == '}' {
 			i++
+			if !seenBio {
+				result.Bio = ""
+			}
+			if !seenStrCount {
+				result.StrCount = 0
+			}
+			if !seenName {
+				result.Name = ""
+			}
+			if !seenScore {
+				result.Score = 0
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -570,6 +594,18 @@ func (recv OmitStruct) DecodeFromStream(s *ggen.Stream) (result OmitStruct, err 
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenBio {
+			result.Bio = ""
+		}
+		if !seenStrCount {
+			result.StrCount = 0
+		}
+		if !seenName {
+			result.Name = ""
+		}
+		if !seenScore {
+			result.Score = 0
+		}
 		return result, nil
 	}
 	for {
@@ -1052,6 +1088,18 @@ func (recv OmitStruct) DecodeFromStream(s *ggen.Stream) (result OmitStruct, err 
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenBio {
+				result.Bio = ""
+			}
+			if !seenStrCount {
+				result.StrCount = 0
+			}
+			if !seenName {
+				result.Name = ""
+			}
+			if !seenScore {
+				result.Score = 0
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -1255,6 +1303,39 @@ func (recv StringTagStruct) DecodeFrom(data []byte) (result StringTagStruct, i i
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenB {
+			result.B = false
+		}
+		if !seenF32 {
+			result.F32 = 0
+		}
+		if !seenF64 {
+			result.F64 = 0
+		}
+		if !seenI16 {
+			result.I16 = 0
+		}
+		if !seenI32 {
+			result.I32 = 0
+		}
+		if !seenI64 {
+			result.I64 = 0
+		}
+		if !seenI8 {
+			result.I8 = 0
+		}
+		if !seenU16 {
+			result.U16 = 0
+		}
+		if !seenU32 {
+			result.U32 = 0
+		}
+		if !seenU64 {
+			result.U64 = 0
+		}
+		if !seenU8 {
+			result.U8 = 0
+		}
 		return result, i, nil
 	}
 	for {
@@ -1644,6 +1725,39 @@ func (recv StringTagStruct) DecodeFrom(data []byte) (result StringTagStruct, i i
 		}
 		if data[i] == '}' {
 			i++
+			if !seenB {
+				result.B = false
+			}
+			if !seenF32 {
+				result.F32 = 0
+			}
+			if !seenF64 {
+				result.F64 = 0
+			}
+			if !seenI16 {
+				result.I16 = 0
+			}
+			if !seenI32 {
+				result.I32 = 0
+			}
+			if !seenI64 {
+				result.I64 = 0
+			}
+			if !seenI8 {
+				result.I8 = 0
+			}
+			if !seenU16 {
+				result.U16 = 0
+			}
+			if !seenU32 {
+				result.U32 = 0
+			}
+			if !seenU64 {
+				result.U64 = 0
+			}
+			if !seenU8 {
+				result.U8 = 0
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -1679,6 +1793,39 @@ func (recv StringTagStruct) DecodeFromStream(s *ggen.Stream) (result StringTagSt
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenB {
+			result.B = false
+		}
+		if !seenF32 {
+			result.F32 = 0
+		}
+		if !seenF64 {
+			result.F64 = 0
+		}
+		if !seenI16 {
+			result.I16 = 0
+		}
+		if !seenI32 {
+			result.I32 = 0
+		}
+		if !seenI64 {
+			result.I64 = 0
+		}
+		if !seenI8 {
+			result.I8 = 0
+		}
+		if !seenU16 {
+			result.U16 = 0
+		}
+		if !seenU32 {
+			result.U32 = 0
+		}
+		if !seenU64 {
+			result.U64 = 0
+		}
+		if !seenU8 {
+			result.U8 = 0
+		}
 		return result, nil
 	}
 	for {
@@ -1937,6 +2084,39 @@ func (recv StringTagStruct) DecodeFromStream(s *ggen.Stream) (result StringTagSt
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenB {
+				result.B = false
+			}
+			if !seenF32 {
+				result.F32 = 0
+			}
+			if !seenF64 {
+				result.F64 = 0
+			}
+			if !seenI16 {
+				result.I16 = 0
+			}
+			if !seenI32 {
+				result.I32 = 0
+			}
+			if !seenI64 {
+				result.I64 = 0
+			}
+			if !seenI8 {
+				result.I8 = 0
+			}
+			if !seenU16 {
+				result.U16 = 0
+			}
+			if !seenU32 {
+				result.U32 = 0
+			}
+			if !seenU64 {
+				result.U64 = 0
+			}
+			if !seenU8 {
+				result.U8 = 0
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -1997,6 +2177,15 @@ func (recv BigOmit) DecodeFrom(data []byte) (result BigOmit, i int, err error) {
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenF {
+			result.F = (BigOmit{}).F
+		}
+		if !seenI {
+			result.I = (BigOmit{}).I
+		}
+		if !seenR {
+			result.R = (BigOmit{}).R
+		}
 		return result, i, nil
 	}
 	for {
@@ -2117,6 +2306,15 @@ func (recv BigOmit) DecodeFrom(data []byte) (result BigOmit, i int, err error) {
 		}
 		if data[i] == '}' {
 			i++
+			if !seenF {
+				result.F = (BigOmit{}).F
+			}
+			if !seenI {
+				result.I = (BigOmit{}).I
+			}
+			if !seenR {
+				result.R = (BigOmit{}).R
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -2144,6 +2342,15 @@ func (recv BigOmit) DecodeFromStream(s *ggen.Stream) (result BigOmit, err error)
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenF {
+			result.F = (BigOmit{}).F
+		}
+		if !seenI {
+			result.I = (BigOmit{}).I
+		}
+		if !seenR {
+			result.R = (BigOmit{}).R
+		}
 		return result, nil
 	}
 	for {
@@ -2228,6 +2435,15 @@ func (recv BigOmit) DecodeFromStream(s *ggen.Stream) (result BigOmit, err error)
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenF {
+				result.F = (BigOmit{}).F
+			}
+			if !seenI {
+				result.I = (BigOmit{}).I
+			}
+			if !seenR {
+				result.R = (BigOmit{}).R
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)

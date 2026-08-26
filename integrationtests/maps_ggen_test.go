@@ -1869,6 +1869,15 @@ func (recv Derived) DecodeFrom(data []byte) (result Derived, i int, err error) {
 	if i < len(data) && data[i] == '}' {
 		i++
 		if !seenID {
+			result.ID = ""
+		}
+		if !seenMeta {
+			result.Meta = ""
+		}
+		if !seenName {
+			result.Name = ""
+		}
+		if !seenID {
 			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"id"}}
 		}
 		if !seenName {
@@ -2002,6 +2011,15 @@ func (recv Derived) DecodeFrom(data []byte) (result Derived, i int, err error) {
 		if data[i] == '}' {
 			i++
 			if !seenID {
+				result.ID = ""
+			}
+			if !seenMeta {
+				result.Meta = ""
+			}
+			if !seenName {
+				result.Name = ""
+			}
+			if !seenID {
 				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"id"}}
 			}
 			if !seenName {
@@ -2034,6 +2052,15 @@ func (recv Derived) DecodeFromStream(s *ggen.Stream) (result Derived, err error)
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenID {
+			result.ID = ""
+		}
+		if !seenMeta {
+			result.Meta = ""
+		}
+		if !seenName {
+			result.Name = ""
+		}
 		if !seenID {
 			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"id"}}
 		}
@@ -2116,6 +2143,15 @@ func (recv Derived) DecodeFromStream(s *ggen.Stream) (result Derived, err error)
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenID {
+				result.ID = ""
+			}
+			if !seenMeta {
+				result.Meta = ""
+			}
+			if !seenName {
+				result.Name = ""
+			}
 			if !seenID {
 				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"id"}}
 			}

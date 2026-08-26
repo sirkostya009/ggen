@@ -28,6 +28,9 @@ func (recv InlineStruct) DecodeFrom(data []byte) (result InlineStruct, i int, er
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenName {
+			result.Name = ""
+		}
 		return result, i, nil
 	}
 	for {
@@ -108,6 +111,9 @@ func (recv InlineStruct) DecodeFrom(data []byte) (result InlineStruct, i int, er
 		}
 		if data[i] == '}' {
 			i++
+			if !seenName {
+				result.Name = ""
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -136,6 +142,9 @@ func (recv InlineStruct) DecodeFromStream(s *ggen.Stream) (result InlineStruct, 
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenName {
+			result.Name = ""
+		}
 		return result, nil
 	}
 	for {
@@ -194,6 +203,9 @@ func (recv InlineStruct) DecodeFromStream(s *ggen.Stream) (result InlineStruct, 
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenName {
+				result.Name = ""
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -252,6 +264,9 @@ func (recv InlineStringsStruct) DecodeFrom(data []byte) (result InlineStringsStr
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenName {
+			result.Name = ""
+		}
 		return result, i, nil
 	}
 	for {
@@ -332,6 +347,9 @@ func (recv InlineStringsStruct) DecodeFrom(data []byte) (result InlineStringsStr
 		}
 		if data[i] == '}' {
 			i++
+			if !seenName {
+				result.Name = ""
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -360,6 +378,9 @@ func (recv InlineStringsStruct) DecodeFromStream(s *ggen.Stream) (result InlineS
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenName {
+			result.Name = ""
+		}
 		return result, nil
 	}
 	for {
@@ -418,6 +439,9 @@ func (recv InlineStringsStruct) DecodeFromStream(s *ggen.Stream) (result InlineS
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenName {
+				result.Name = ""
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -476,6 +500,9 @@ func (recv InlineStructsStruct) DecodeFrom(data []byte) (result InlineStructsStr
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenName {
+			result.Name = ""
+		}
 		return result, i, nil
 	}
 	for {
@@ -560,6 +587,9 @@ func (recv InlineStructsStruct) DecodeFrom(data []byte) (result InlineStructsStr
 		}
 		if data[i] == '}' {
 			i++
+			if !seenName {
+				result.Name = ""
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -588,6 +618,9 @@ func (recv InlineStructsStruct) DecodeFromStream(s *ggen.Stream) (result InlineS
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenName {
+			result.Name = ""
+		}
 		return result, nil
 	}
 	for {
@@ -648,6 +681,9 @@ func (recv InlineStructsStruct) DecodeFromStream(s *ggen.Stream) (result InlineS
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenName {
+				result.Name = ""
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -707,6 +743,9 @@ func (recv InlineRawStruct) DecodeFrom(data []byte) (result InlineRawStruct, i i
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenName {
+			result.Name = ""
+		}
 		return result, i, nil
 	}
 	for {
@@ -793,6 +832,9 @@ func (recv InlineRawStruct) DecodeFrom(data []byte) (result InlineRawStruct, i i
 		}
 		if data[i] == '}' {
 			i++
+			if !seenName {
+				result.Name = ""
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -821,6 +863,9 @@ func (recv InlineRawStruct) DecodeFromStream(s *ggen.Stream) (result InlineRawSt
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenName {
+			result.Name = ""
+		}
 		return result, nil
 	}
 	for {
@@ -884,6 +929,9 @@ func (recv InlineRawStruct) DecodeFromStream(s *ggen.Stream) (result InlineRawSt
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenName {
+				result.Name = ""
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)

@@ -24,6 +24,9 @@ func (recv IgnoreUnknownStruct) DecodeFrom(data []byte) (result IgnoreUnknownStr
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenName {
+			result.Name = ""
+		}
 		return result, i, nil
 	}
 	for {
@@ -101,6 +104,9 @@ func (recv IgnoreUnknownStruct) DecodeFrom(data []byte) (result IgnoreUnknownStr
 		}
 		if data[i] == '}' {
 			i++
+			if !seenName {
+				result.Name = ""
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -126,6 +132,9 @@ func (recv IgnoreUnknownStruct) DecodeFromStream(s *ggen.Stream) (result IgnoreU
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenName {
+			result.Name = ""
+		}
 		return result, nil
 	}
 	for {
@@ -181,6 +190,9 @@ func (recv IgnoreUnknownStruct) DecodeFromStream(s *ggen.Stream) (result IgnoreU
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenName {
+				result.Name = ""
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)

@@ -130,6 +130,9 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenClampedScore {
+			result.ClampedScore = 0
+		}
 		return result, i, nil
 	}
 	for {
@@ -851,6 +854,9 @@ func (recv ExtraStruct) DecodeFrom(data []byte) (result ExtraStruct, i int, err 
 		}
 		if data[i] == '}' {
 			i++
+			if !seenClampedScore {
+				result.ClampedScore = 0
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -892,6 +898,9 @@ func (recv ExtraStruct) DecodeFromStream(s *ggen.Stream) (result ExtraStruct, er
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenClampedScore {
+			result.ClampedScore = 0
+		}
 		return result, nil
 	}
 	for {
@@ -1663,6 +1672,9 @@ func (recv ExtraStruct) DecodeFromStream(s *ggen.Stream) (result ExtraStruct, er
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenClampedScore {
+				result.ClampedScore = 0
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -1908,6 +1920,18 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenNamed {
+			result.Named = [2]int{}
+		}
+		if !seenPair {
+			result.Pair = [2][]string{}
+		}
+		if !seenPoint {
+			result.Point = [2]float64{}
+		}
+		if !seenRGB {
+			result.RGB = [3]int{}
+		}
 		return result, i, nil
 	}
 	for {
@@ -2596,6 +2620,18 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 		}
 		if data[i] == '}' {
 			i++
+			if !seenNamed {
+				result.Named = [2]int{}
+			}
+			if !seenPair {
+				result.Pair = [2][]string{}
+			}
+			if !seenPoint {
+				result.Point = [2]float64{}
+			}
+			if !seenRGB {
+				result.RGB = [3]int{}
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -2632,6 +2668,18 @@ func (recv TupleStruct) DecodeFromStream(s *ggen.Stream) (result TupleStruct, er
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenNamed {
+			result.Named = [2]int{}
+		}
+		if !seenPair {
+			result.Pair = [2][]string{}
+		}
+		if !seenPoint {
+			result.Point = [2]float64{}
+		}
+		if !seenRGB {
+			result.RGB = [3]int{}
+		}
 		return result, nil
 	}
 	for {
@@ -3300,6 +3348,18 @@ func (recv TupleStruct) DecodeFromStream(s *ggen.Stream) (result TupleStruct, er
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenNamed {
+				result.Named = [2]int{}
+			}
+			if !seenPair {
+				result.Pair = [2][]string{}
+			}
+			if !seenPoint {
+				result.Point = [2]float64{}
+			}
+			if !seenRGB {
+				result.RGB = [3]int{}
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -3598,7 +3658,11 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 			}
 			if i < len(data) && data[i] != ']' {
 				for {
-					result.Hinted = append(result.Hinted, PreallocWide{})
+					if len(result.Hinted) < cap(result.Hinted) {
+						result.Hinted = result.Hinted[:len(result.Hinted)+1]
+					} else {
+						result.Hinted = append(result.Hinted, PreallocWide{})
+					}
 					var _n int
 					result.Hinted[len(result.Hinted)-1], _n, err = result.Hinted[len(result.Hinted)-1].DecodeFrom(data[i:])
 					i += _n
@@ -3754,7 +3818,11 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 				}
 				if i < len(data) && data[i] != ']' {
 					for {
-						result.Lened = append(result.Lened, PreallocWide{})
+						if len(result.Lened) < cap(result.Lened) {
+							result.Lened = result.Lened[:len(result.Lened)+1]
+						} else {
+							result.Lened = append(result.Lened, PreallocWide{})
+						}
 						var _n int
 						result.Lened[len(result.Lened)-1], _n, err = result.Lened[len(result.Lened)-1].DecodeFrom(data[i:])
 						i += _n
@@ -3812,7 +3880,11 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 				}
 				if i < len(data) && data[i] != ']' {
 					for {
-						result.MaxFits = append(result.MaxFits, PreallocRow{})
+						if len(result.MaxFits) < cap(result.MaxFits) {
+							result.MaxFits = result.MaxFits[:len(result.MaxFits)+1]
+						} else {
+							result.MaxFits = append(result.MaxFits, PreallocRow{})
+						}
 						var _n int
 						result.MaxFits[len(result.MaxFits)-1], _n, err = result.MaxFits[len(result.MaxFits)-1].DecodeFrom(data[i:])
 						i += _n
@@ -3870,7 +3942,11 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 				}
 				if i < len(data) && data[i] != ']' {
 					for {
-						result.MaxTooBig = append(result.MaxTooBig, PreallocWide{})
+						if len(result.MaxTooBig) < cap(result.MaxTooBig) {
+							result.MaxTooBig = result.MaxTooBig[:len(result.MaxTooBig)+1]
+						} else {
+							result.MaxTooBig = append(result.MaxTooBig, PreallocWide{})
+						}
 						var _n int
 						result.MaxTooBig[len(result.MaxTooBig)-1], _n, err = result.MaxTooBig[len(result.MaxTooBig)-1].DecodeFrom(data[i:])
 						i += _n
@@ -3928,7 +4004,11 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 				}
 				if i < len(data) && data[i] != ']' {
 					for {
-						result.Minned = append(result.Minned, PreallocWide{})
+						if len(result.Minned) < cap(result.Minned) {
+							result.Minned = result.Minned[:len(result.Minned)+1]
+						} else {
+							result.Minned = append(result.Minned, PreallocWide{})
+						}
 						var _n int
 						result.Minned[len(result.Minned)-1], _n, err = result.Minned[len(result.Minned)-1].DecodeFrom(data[i:])
 						i += _n
@@ -4175,7 +4255,11 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 						}
 						break
 					}
-					slab0 = append(slab0, PreallocRow{})
+					if len(slab0) < cap(slab0) {
+						slab0 = slab0[:len(slab0)+1]
+					} else {
+						slab0 = append(slab0, PreallocRow{})
+					}
 					var _n int
 					slab0[len(slab0)-1], _n, err = slab0[len(slab0)-1].DecodeFrom(data[i:])
 					i += _n
@@ -4231,7 +4315,11 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 			}
 			if i < len(data) && data[i] != ']' {
 				for {
-					result.Rows = append(result.Rows, PreallocRow{})
+					if len(result.Rows) < cap(result.Rows) {
+						result.Rows = result.Rows[:len(result.Rows)+1]
+					} else {
+						result.Rows = append(result.Rows, PreallocRow{})
+					}
 					var _n int
 					result.Rows[len(result.Rows)-1], _n, err = result.Rows[len(result.Rows)-1].DecodeFrom(data[i:])
 					i += _n
@@ -4355,7 +4443,11 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 			}
 			if i < len(data) && data[i] != ']' {
 				for {
-					result.Wide = append(result.Wide, PreallocWide{})
+					if len(result.Wide) < cap(result.Wide) {
+						result.Wide = result.Wide[:len(result.Wide)+1]
+					} else {
+						result.Wide = append(result.Wide, PreallocWide{})
+					}
 					var _n int
 					result.Wide[len(result.Wide)-1], _n, err = result.Wide[len(result.Wide)-1].DecodeFrom(data[i:])
 					i += _n
@@ -4533,7 +4625,11 @@ func (recv PreallocWidths) DecodeFromStream(s *ggen.Stream) (result PreallocWidt
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {
-				result.Hinted = append(result.Hinted, PreallocWide{})
+				if len(result.Hinted) < cap(result.Hinted) {
+					result.Hinted = result.Hinted[:len(result.Hinted)+1]
+				} else {
+					result.Hinted = append(result.Hinted, PreallocWide{})
+				}
 				result.Hinted[len(result.Hinted)-1], err = result.Hinted[len(result.Hinted)-1].DecodeFromStream(s)
 				if err != nil {
 					return result, ggen.NewParseErr("hinted", s.Offset(), err)
@@ -4708,7 +4804,11 @@ func (recv PreallocWidths) DecodeFromStream(s *ggen.Stream) (result PreallocWidt
 					}
 				}
 				for s.Bytes()[s.Pos] != ']' {
-					result.Lened = append(result.Lened, PreallocWide{})
+					if len(result.Lened) < cap(result.Lened) {
+						result.Lened = result.Lened[:len(result.Lened)+1]
+					} else {
+						result.Lened = append(result.Lened, PreallocWide{})
+					}
 					result.Lened[len(result.Lened)-1], err = result.Lened[len(result.Lened)-1].DecodeFromStream(s)
 					if err != nil {
 						return result, ggen.NewParseErr("lened", s.Offset(), err)
@@ -4798,7 +4898,11 @@ func (recv PreallocWidths) DecodeFromStream(s *ggen.Stream) (result PreallocWidt
 					}
 				}
 				for s.Bytes()[s.Pos] != ']' {
-					result.MaxFits = append(result.MaxFits, PreallocRow{})
+					if len(result.MaxFits) < cap(result.MaxFits) {
+						result.MaxFits = result.MaxFits[:len(result.MaxFits)+1]
+					} else {
+						result.MaxFits = append(result.MaxFits, PreallocRow{})
+					}
 					result.MaxFits[len(result.MaxFits)-1], err = result.MaxFits[len(result.MaxFits)-1].DecodeFromStream(s)
 					if err != nil {
 						return result, ggen.NewParseErr("maxFits", s.Offset(), err)
@@ -4888,7 +4992,11 @@ func (recv PreallocWidths) DecodeFromStream(s *ggen.Stream) (result PreallocWidt
 					}
 				}
 				for s.Bytes()[s.Pos] != ']' {
-					result.MaxTooBig = append(result.MaxTooBig, PreallocWide{})
+					if len(result.MaxTooBig) < cap(result.MaxTooBig) {
+						result.MaxTooBig = result.MaxTooBig[:len(result.MaxTooBig)+1]
+					} else {
+						result.MaxTooBig = append(result.MaxTooBig, PreallocWide{})
+					}
 					result.MaxTooBig[len(result.MaxTooBig)-1], err = result.MaxTooBig[len(result.MaxTooBig)-1].DecodeFromStream(s)
 					if err != nil {
 						return result, ggen.NewParseErr("maxTooBig", s.Offset(), err)
@@ -4978,7 +5086,11 @@ func (recv PreallocWidths) DecodeFromStream(s *ggen.Stream) (result PreallocWidt
 					}
 				}
 				for s.Bytes()[s.Pos] != ']' {
-					result.Minned = append(result.Minned, PreallocWide{})
+					if len(result.Minned) < cap(result.Minned) {
+						result.Minned = result.Minned[:len(result.Minned)+1]
+					} else {
+						result.Minned = append(result.Minned, PreallocWide{})
+					}
 					result.Minned[len(result.Minned)-1], err = result.Minned[len(result.Minned)-1].DecodeFromStream(s)
 					if err != nil {
 						return result, ggen.NewParseErr("minned", s.Offset(), err)
@@ -5299,7 +5411,11 @@ func (recv PreallocWidths) DecodeFromStream(s *ggen.Stream) (result PreallocWidt
 					}
 					break
 				}
-				slab0 = append(slab0, PreallocRow{})
+				if len(slab0) < cap(slab0) {
+					slab0 = slab0[:len(slab0)+1]
+				} else {
+					slab0 = append(slab0, PreallocRow{})
+				}
 				slab0[len(slab0)-1], err = slab0[len(slab0)-1].DecodeFromStream(s)
 				if err != nil {
 					return result, ggen.NewParseErr("ptrs", s.Offset(), err)
@@ -5387,7 +5503,11 @@ func (recv PreallocWidths) DecodeFromStream(s *ggen.Stream) (result PreallocWidt
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {
-				result.Rows = append(result.Rows, PreallocRow{})
+				if len(result.Rows) < cap(result.Rows) {
+					result.Rows = result.Rows[:len(result.Rows)+1]
+				} else {
+					result.Rows = append(result.Rows, PreallocRow{})
+				}
 				result.Rows[len(result.Rows)-1], err = result.Rows[len(result.Rows)-1].DecodeFromStream(s)
 				if err != nil {
 					return result, ggen.NewParseErr("rows", s.Offset(), err)
@@ -5561,7 +5681,11 @@ func (recv PreallocWidths) DecodeFromStream(s *ggen.Stream) (result PreallocWidt
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {
-				result.Wide = append(result.Wide, PreallocWide{})
+				if len(result.Wide) < cap(result.Wide) {
+					result.Wide = result.Wide[:len(result.Wide)+1]
+				} else {
+					result.Wide = append(result.Wide, PreallocWide{})
+				}
 				result.Wide[len(result.Wide)-1], err = result.Wide[len(result.Wide)-1].DecodeFromStream(s)
 				if err != nil {
 					return result, ggen.NewParseErr("wide", s.Offset(), err)
@@ -5940,6 +6064,9 @@ func (recv PreallocRow) DecodeFrom(data []byte) (result PreallocRow, i int, err 
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenC {
+			result.C = ""
+		}
 		return result, i, nil
 	}
 	for {
@@ -6014,6 +6141,9 @@ func (recv PreallocRow) DecodeFrom(data []byte) (result PreallocRow, i int, err 
 		}
 		if data[i] == '}' {
 			i++
+			if !seenC {
+				result.C = ""
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -6039,6 +6169,9 @@ func (recv PreallocRow) DecodeFromStream(s *ggen.Stream) (result PreallocRow, er
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenC {
+			result.C = ""
+		}
 		return result, nil
 	}
 	for {
@@ -6086,6 +6219,9 @@ func (recv PreallocRow) DecodeFromStream(s *ggen.Stream) (result PreallocRow, er
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenC {
+				result.C = ""
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -6121,6 +6257,9 @@ func (recv PreallocWide) DecodeFrom(data []byte) (result PreallocWide, i int, er
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenC {
+			result.C = ""
+		}
 		return result, i, nil
 	}
 	for {
@@ -6195,6 +6334,9 @@ func (recv PreallocWide) DecodeFrom(data []byte) (result PreallocWide, i int, er
 		}
 		if data[i] == '}' {
 			i++
+			if !seenC {
+				result.C = ""
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -6220,6 +6362,9 @@ func (recv PreallocWide) DecodeFromStream(s *ggen.Stream) (result PreallocWide, 
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenC {
+			result.C = ""
+		}
 		return result, nil
 	}
 	for {
@@ -6267,6 +6412,9 @@ func (recv PreallocWide) DecodeFromStream(s *ggen.Stream) (result PreallocWide, 
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenC {
+				result.C = ""
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -9706,6 +9854,12 @@ func (recv QuotedNames) DecodeFrom(data []byte) (result QuotedNames, i int, err 
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenDash {
+			result.Dash = ""
+		}
+		if !seenComma {
+			result.Comma = ""
+		}
 		return result, i, nil
 	}
 	for {
@@ -9805,6 +9959,12 @@ func (recv QuotedNames) DecodeFrom(data []byte) (result QuotedNames, i int, err 
 		}
 		if data[i] == '}' {
 			i++
+			if !seenDash {
+				result.Dash = ""
+			}
+			if !seenComma {
+				result.Comma = ""
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -9831,6 +9991,12 @@ func (recv QuotedNames) DecodeFromStream(s *ggen.Stream) (result QuotedNames, er
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenDash {
+			result.Dash = ""
+		}
+		if !seenComma {
+			result.Comma = ""
+		}
 		return result, nil
 	}
 	for {
@@ -9891,6 +10057,12 @@ func (recv QuotedNames) DecodeFromStream(s *ggen.Stream) (result QuotedNames, er
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenDash {
+				result.Dash = ""
+			}
+			if !seenComma {
+				result.Comma = ""
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)

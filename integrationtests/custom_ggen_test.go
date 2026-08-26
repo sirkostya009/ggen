@@ -34,6 +34,15 @@ func (recv MultiErrStruct) DecodeFrom(data []byte) (result MultiErrStruct, i int
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenAge {
+			result.Age = 0
+		}
+		if !seenName {
+			result.Name = ""
+		}
+		if !seenRole {
+			result.Role = ""
+		}
 		if !seenName {
 			errs = append(errs, &ggen.RequiredError{Pos: i, Path: []string{"name"}})
 		}
@@ -229,6 +238,15 @@ func (recv MultiErrStruct) DecodeFrom(data []byte) (result MultiErrStruct, i int
 		}
 		if data[i] == '}' {
 			i++
+			if !seenAge {
+				result.Age = 0
+			}
+			if !seenName {
+				result.Name = ""
+			}
+			if !seenRole {
+				result.Role = ""
+			}
 			if !seenName {
 				errs = append(errs, &ggen.RequiredError{Pos: i, Path: []string{"name"}})
 			}
@@ -263,6 +281,15 @@ func (recv MultiErrStruct) DecodeFromStream(s *ggen.Stream) (result MultiErrStru
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenAge {
+			result.Age = 0
+		}
+		if !seenName {
+			result.Name = ""
+		}
+		if !seenRole {
+			result.Role = ""
+		}
 		if !seenName {
 			errs = append(errs, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"name"}})
 		}
@@ -388,6 +415,15 @@ func (recv MultiErrStruct) DecodeFromStream(s *ggen.Stream) (result MultiErrStru
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenAge {
+				result.Age = 0
+			}
+			if !seenName {
+				result.Name = ""
+			}
+			if !seenRole {
+				result.Role = ""
+			}
 			if !seenName {
 				errs = append(errs, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"name"}})
 			}

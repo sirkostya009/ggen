@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -86,6 +87,12 @@ type Msg struct {
 	Text string ` + "`" + `json:"text"` + "`" + `
 }
 `
+
+// nullZeroBranch matches the null→zero assignment: a consumed `null` literal
+// followed by the zero assignment. The bare assignment also appears in the
+// end-of-decode pass that zeroes omitted fields, so the peek is what tells the
+// two apart.
+var nullZeroBranch = regexp.MustCompile(`(?:i \+= 4|s\.Pos \+= 4)\n\s*result\.Text = ""`)
 
 func TestCLI(t *testing.T) {
 	t.Parallel()
@@ -1086,7 +1093,7 @@ type Validated struct {
 			t.Fatalf("ggen default: %v\n%s", err, out)
 		}
 		body := mustReadOutput(t, filepath.Join(dir, "msg_ggen.go"))
-		if strings.Contains(body, `result.Text = ""`) {
+		if nullZeroBranch.MatchString(body) {
 			t.Fatalf("did not expect a null→zero branch by default, got:\n%s", body)
 		}
 		// -nullzero: an explicit null sets the field to its zero value.
@@ -1094,7 +1101,7 @@ type Validated struct {
 			t.Fatalf("ggen -nullzero: %v\n%s", err, out)
 		}
 		body = mustReadOutput(t, filepath.Join(dir, "msg_ggen.go"))
-		if !strings.Contains(body, `result.Text = ""`) {
+		if !nullZeroBranch.MatchString(body) {
 			t.Fatalf("expected null→zero branch with -nullzero, got:\n%s", body)
 		}
 		// The per-struct //ggen:generate nullzero annotation has the same effect.
@@ -1110,7 +1117,7 @@ type Msg struct {
 			t.Fatalf("ggen annotation: %v\n%s", err, out)
 		}
 		body = mustReadOutput(t, filepath.Join(andir, "msg_ggen.go"))
-		if !strings.Contains(body, `result.Text = ""`) {
+		if !nullZeroBranch.MatchString(body) {
 			t.Fatalf("expected null→zero branch from //ggen:generate nullzero, got:\n%s", body)
 		}
 	})

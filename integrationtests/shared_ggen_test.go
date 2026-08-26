@@ -35,6 +35,15 @@ func (recv Address) DecodeFrom(data []byte) (result Address, i int, err error) {
 	if i < len(data) && data[i] == '}' {
 		i++
 		if !seenCity {
+			result.City = ""
+		}
+		if !seenStreet {
+			result.Street = ""
+		}
+		if !seenZipCode {
+			result.ZipCode = ""
+		}
+		if !seenCity {
 			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"city"}}
 		}
 		if !seenStreet {
@@ -180,6 +189,15 @@ func (recv Address) DecodeFrom(data []byte) (result Address, i int, err error) {
 		if data[i] == '}' {
 			i++
 			if !seenCity {
+				result.City = ""
+			}
+			if !seenStreet {
+				result.Street = ""
+			}
+			if !seenZipCode {
+				result.ZipCode = ""
+			}
+			if !seenCity {
 				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"city"}}
 			}
 			if !seenStreet {
@@ -215,6 +233,15 @@ func (recv Address) DecodeFromStream(s *ggen.Stream) (result Address, err error)
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenCity {
+			result.City = ""
+		}
+		if !seenStreet {
+			result.Street = ""
+		}
+		if !seenZipCode {
+			result.ZipCode = ""
+		}
 		if !seenCity {
 			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"city"}}
 		}
@@ -310,6 +337,15 @@ func (recv Address) DecodeFromStream(s *ggen.Stream) (result Address, err error)
 		if c == '}' {
 			s.Pos++
 			if !seenCity {
+				result.City = ""
+			}
+			if !seenStreet {
+				result.Street = ""
+			}
+			if !seenZipCode {
+				result.ZipCode = ""
+			}
+			if !seenCity {
 				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"city"}}
 			}
 			if !seenStreet {
@@ -381,6 +417,18 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenActive {
+			result.Active = false
+		}
+		if !seenID {
+			result.ID = 0
+		}
+		if !seenName {
+			result.Name = ""
+		}
+		if !seenScore {
+			result.Score = 0
+		}
 		return result, i, nil
 	}
 	for {
@@ -449,7 +497,11 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 			}
 			if i < len(data) && data[i] != ']' {
 				for {
-					result.Children = append(result.Children, Node{})
+					if len(result.Children) < cap(result.Children) {
+						result.Children = result.Children[:len(result.Children)+1]
+					} else {
+						result.Children = append(result.Children, Node{})
+					}
 					var _n int
 					result.Children[len(result.Children)-1], _n, err = result.Children[len(result.Children)-1].decodeFromDepth(data[i:], _depth+1)
 					i += _n
@@ -750,6 +802,18 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 		}
 		if data[i] == '}' {
 			i++
+			if !seenActive {
+				result.Active = false
+			}
+			if !seenID {
+				result.ID = 0
+			}
+			if !seenName {
+				result.Name = ""
+			}
+			if !seenScore {
+				result.Score = 0
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -797,6 +861,18 @@ func (recv Node) decodeFromStreamDepth(s *ggen.Stream, _depth int) (result Node,
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenActive {
+			result.Active = false
+		}
+		if !seenID {
+			result.ID = 0
+		}
+		if !seenName {
+			result.Name = ""
+		}
+		if !seenScore {
+			result.Score = 0
+		}
 		return result, nil
 	}
 	for {
@@ -875,7 +951,11 @@ func (recv Node) decodeFromStreamDepth(s *ggen.Stream, _depth int) (result Node,
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {
-				result.Children = append(result.Children, Node{})
+				if len(result.Children) < cap(result.Children) {
+					result.Children = result.Children[:len(result.Children)+1]
+				} else {
+					result.Children = append(result.Children, Node{})
+				}
 				result.Children[len(result.Children)-1], err = result.Children[len(result.Children)-1].decodeFromStreamDepth(s, _depth+1)
 				if err != nil {
 					return result, ggen.NewParseErr("children", s.Offset(), err)
@@ -1165,6 +1245,18 @@ func (recv Node) decodeFromStreamDepth(s *ggen.Stream, _depth int) (result Node,
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenActive {
+				result.Active = false
+			}
+			if !seenID {
+				result.ID = 0
+			}
+			if !seenName {
+				result.Name = ""
+			}
+			if !seenScore {
+				result.Score = 0
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -1278,6 +1370,126 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if seen&(1<<0) == 0 {
+			result.F1 = ""
+		}
+		if seen&(1<<1) == 0 {
+			result.F10 = ""
+		}
+		if seen&(1<<2) == 0 {
+			result.F11 = ""
+		}
+		if seen&(1<<3) == 0 {
+			result.F12 = ""
+		}
+		if seen&(1<<4) == 0 {
+			result.F13 = ""
+		}
+		if seen&(1<<5) == 0 {
+			result.F14 = ""
+		}
+		if seen&(1<<6) == 0 {
+			result.F15 = ""
+		}
+		if seen&(1<<7) == 0 {
+			result.F16 = ""
+		}
+		if seen&(1<<8) == 0 {
+			result.F17 = ""
+		}
+		if seen&(1<<9) == 0 {
+			result.F18 = ""
+		}
+		if seen&(1<<10) == 0 {
+			result.F19 = ""
+		}
+		if seen&(1<<11) == 0 {
+			result.F2 = ""
+		}
+		if seen&(1<<12) == 0 {
+			result.F20 = ""
+		}
+		if seen&(1<<13) == 0 {
+			result.F21 = ""
+		}
+		if seen&(1<<14) == 0 {
+			result.F22 = ""
+		}
+		if seen&(1<<15) == 0 {
+			result.F23 = ""
+		}
+		if seen&(1<<16) == 0 {
+			result.F24 = ""
+		}
+		if seen&(1<<17) == 0 {
+			result.F25 = ""
+		}
+		if seen&(1<<18) == 0 {
+			result.F26 = ""
+		}
+		if seen&(1<<19) == 0 {
+			result.F27 = ""
+		}
+		if seen&(1<<20) == 0 {
+			result.F28 = ""
+		}
+		if seen&(1<<21) == 0 {
+			result.F29 = ""
+		}
+		if seen&(1<<22) == 0 {
+			result.F3 = ""
+		}
+		if seen&(1<<23) == 0 {
+			result.F30 = ""
+		}
+		if seen&(1<<24) == 0 {
+			result.F31 = ""
+		}
+		if seen&(1<<25) == 0 {
+			result.F32 = ""
+		}
+		if seen&(1<<26) == 0 {
+			result.F33 = ""
+		}
+		if seen&(1<<27) == 0 {
+			result.F34 = ""
+		}
+		if seen&(1<<28) == 0 {
+			result.F35 = ""
+		}
+		if seen&(1<<29) == 0 {
+			result.F36 = ""
+		}
+		if seen&(1<<30) == 0 {
+			result.F37 = ""
+		}
+		if seen&(1<<31) == 0 {
+			result.F38 = ""
+		}
+		if seen&(1<<32) == 0 {
+			result.F39 = ""
+		}
+		if seen&(1<<33) == 0 {
+			result.F4 = ""
+		}
+		if seen&(1<<34) == 0 {
+			result.F40 = ""
+		}
+		if seen&(1<<35) == 0 {
+			result.F5 = ""
+		}
+		if seen&(1<<36) == 0 {
+			result.F6 = ""
+		}
+		if seen&(1<<37) == 0 {
+			result.F7 = ""
+		}
+		if seen&(1<<38) == 0 {
+			result.F8 = ""
+		}
+		if seen&(1<<39) == 0 {
+			result.F9 = ""
+		}
 		if seen&(1<<0) == 0 {
 			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f1"}}
 		}
@@ -2448,6 +2660,126 @@ func (recv WideStruct) DecodeFrom(data []byte) (result WideStruct, i int, err er
 		if data[i] == '}' {
 			i++
 			if seen&(1<<0) == 0 {
+				result.F1 = ""
+			}
+			if seen&(1<<1) == 0 {
+				result.F10 = ""
+			}
+			if seen&(1<<2) == 0 {
+				result.F11 = ""
+			}
+			if seen&(1<<3) == 0 {
+				result.F12 = ""
+			}
+			if seen&(1<<4) == 0 {
+				result.F13 = ""
+			}
+			if seen&(1<<5) == 0 {
+				result.F14 = ""
+			}
+			if seen&(1<<6) == 0 {
+				result.F15 = ""
+			}
+			if seen&(1<<7) == 0 {
+				result.F16 = ""
+			}
+			if seen&(1<<8) == 0 {
+				result.F17 = ""
+			}
+			if seen&(1<<9) == 0 {
+				result.F18 = ""
+			}
+			if seen&(1<<10) == 0 {
+				result.F19 = ""
+			}
+			if seen&(1<<11) == 0 {
+				result.F2 = ""
+			}
+			if seen&(1<<12) == 0 {
+				result.F20 = ""
+			}
+			if seen&(1<<13) == 0 {
+				result.F21 = ""
+			}
+			if seen&(1<<14) == 0 {
+				result.F22 = ""
+			}
+			if seen&(1<<15) == 0 {
+				result.F23 = ""
+			}
+			if seen&(1<<16) == 0 {
+				result.F24 = ""
+			}
+			if seen&(1<<17) == 0 {
+				result.F25 = ""
+			}
+			if seen&(1<<18) == 0 {
+				result.F26 = ""
+			}
+			if seen&(1<<19) == 0 {
+				result.F27 = ""
+			}
+			if seen&(1<<20) == 0 {
+				result.F28 = ""
+			}
+			if seen&(1<<21) == 0 {
+				result.F29 = ""
+			}
+			if seen&(1<<22) == 0 {
+				result.F3 = ""
+			}
+			if seen&(1<<23) == 0 {
+				result.F30 = ""
+			}
+			if seen&(1<<24) == 0 {
+				result.F31 = ""
+			}
+			if seen&(1<<25) == 0 {
+				result.F32 = ""
+			}
+			if seen&(1<<26) == 0 {
+				result.F33 = ""
+			}
+			if seen&(1<<27) == 0 {
+				result.F34 = ""
+			}
+			if seen&(1<<28) == 0 {
+				result.F35 = ""
+			}
+			if seen&(1<<29) == 0 {
+				result.F36 = ""
+			}
+			if seen&(1<<30) == 0 {
+				result.F37 = ""
+			}
+			if seen&(1<<31) == 0 {
+				result.F38 = ""
+			}
+			if seen&(1<<32) == 0 {
+				result.F39 = ""
+			}
+			if seen&(1<<33) == 0 {
+				result.F4 = ""
+			}
+			if seen&(1<<34) == 0 {
+				result.F40 = ""
+			}
+			if seen&(1<<35) == 0 {
+				result.F5 = ""
+			}
+			if seen&(1<<36) == 0 {
+				result.F6 = ""
+			}
+			if seen&(1<<37) == 0 {
+				result.F7 = ""
+			}
+			if seen&(1<<38) == 0 {
+				result.F8 = ""
+			}
+			if seen&(1<<39) == 0 {
+				result.F9 = ""
+			}
+			if seen&(1<<0) == 0 {
 				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"f1"}}
 			}
 			if seen&(1<<1) == 0 {
@@ -2592,6 +2924,126 @@ func (recv WideStruct) DecodeFromStream(s *ggen.Stream) (result WideStruct, err 
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if seen&(1<<0) == 0 {
+			result.F1 = ""
+		}
+		if seen&(1<<1) == 0 {
+			result.F10 = ""
+		}
+		if seen&(1<<2) == 0 {
+			result.F11 = ""
+		}
+		if seen&(1<<3) == 0 {
+			result.F12 = ""
+		}
+		if seen&(1<<4) == 0 {
+			result.F13 = ""
+		}
+		if seen&(1<<5) == 0 {
+			result.F14 = ""
+		}
+		if seen&(1<<6) == 0 {
+			result.F15 = ""
+		}
+		if seen&(1<<7) == 0 {
+			result.F16 = ""
+		}
+		if seen&(1<<8) == 0 {
+			result.F17 = ""
+		}
+		if seen&(1<<9) == 0 {
+			result.F18 = ""
+		}
+		if seen&(1<<10) == 0 {
+			result.F19 = ""
+		}
+		if seen&(1<<11) == 0 {
+			result.F2 = ""
+		}
+		if seen&(1<<12) == 0 {
+			result.F20 = ""
+		}
+		if seen&(1<<13) == 0 {
+			result.F21 = ""
+		}
+		if seen&(1<<14) == 0 {
+			result.F22 = ""
+		}
+		if seen&(1<<15) == 0 {
+			result.F23 = ""
+		}
+		if seen&(1<<16) == 0 {
+			result.F24 = ""
+		}
+		if seen&(1<<17) == 0 {
+			result.F25 = ""
+		}
+		if seen&(1<<18) == 0 {
+			result.F26 = ""
+		}
+		if seen&(1<<19) == 0 {
+			result.F27 = ""
+		}
+		if seen&(1<<20) == 0 {
+			result.F28 = ""
+		}
+		if seen&(1<<21) == 0 {
+			result.F29 = ""
+		}
+		if seen&(1<<22) == 0 {
+			result.F3 = ""
+		}
+		if seen&(1<<23) == 0 {
+			result.F30 = ""
+		}
+		if seen&(1<<24) == 0 {
+			result.F31 = ""
+		}
+		if seen&(1<<25) == 0 {
+			result.F32 = ""
+		}
+		if seen&(1<<26) == 0 {
+			result.F33 = ""
+		}
+		if seen&(1<<27) == 0 {
+			result.F34 = ""
+		}
+		if seen&(1<<28) == 0 {
+			result.F35 = ""
+		}
+		if seen&(1<<29) == 0 {
+			result.F36 = ""
+		}
+		if seen&(1<<30) == 0 {
+			result.F37 = ""
+		}
+		if seen&(1<<31) == 0 {
+			result.F38 = ""
+		}
+		if seen&(1<<32) == 0 {
+			result.F39 = ""
+		}
+		if seen&(1<<33) == 0 {
+			result.F4 = ""
+		}
+		if seen&(1<<34) == 0 {
+			result.F40 = ""
+		}
+		if seen&(1<<35) == 0 {
+			result.F5 = ""
+		}
+		if seen&(1<<36) == 0 {
+			result.F6 = ""
+		}
+		if seen&(1<<37) == 0 {
+			result.F7 = ""
+		}
+		if seen&(1<<38) == 0 {
+			result.F8 = ""
+		}
+		if seen&(1<<39) == 0 {
+			result.F9 = ""
+		}
 		if seen&(1<<0) == 0 {
 			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f1"}}
 		}
@@ -3266,6 +3718,126 @@ func (recv WideStruct) DecodeFromStream(s *ggen.Stream) (result WideStruct, err 
 		}
 		if c == '}' {
 			s.Pos++
+			if seen&(1<<0) == 0 {
+				result.F1 = ""
+			}
+			if seen&(1<<1) == 0 {
+				result.F10 = ""
+			}
+			if seen&(1<<2) == 0 {
+				result.F11 = ""
+			}
+			if seen&(1<<3) == 0 {
+				result.F12 = ""
+			}
+			if seen&(1<<4) == 0 {
+				result.F13 = ""
+			}
+			if seen&(1<<5) == 0 {
+				result.F14 = ""
+			}
+			if seen&(1<<6) == 0 {
+				result.F15 = ""
+			}
+			if seen&(1<<7) == 0 {
+				result.F16 = ""
+			}
+			if seen&(1<<8) == 0 {
+				result.F17 = ""
+			}
+			if seen&(1<<9) == 0 {
+				result.F18 = ""
+			}
+			if seen&(1<<10) == 0 {
+				result.F19 = ""
+			}
+			if seen&(1<<11) == 0 {
+				result.F2 = ""
+			}
+			if seen&(1<<12) == 0 {
+				result.F20 = ""
+			}
+			if seen&(1<<13) == 0 {
+				result.F21 = ""
+			}
+			if seen&(1<<14) == 0 {
+				result.F22 = ""
+			}
+			if seen&(1<<15) == 0 {
+				result.F23 = ""
+			}
+			if seen&(1<<16) == 0 {
+				result.F24 = ""
+			}
+			if seen&(1<<17) == 0 {
+				result.F25 = ""
+			}
+			if seen&(1<<18) == 0 {
+				result.F26 = ""
+			}
+			if seen&(1<<19) == 0 {
+				result.F27 = ""
+			}
+			if seen&(1<<20) == 0 {
+				result.F28 = ""
+			}
+			if seen&(1<<21) == 0 {
+				result.F29 = ""
+			}
+			if seen&(1<<22) == 0 {
+				result.F3 = ""
+			}
+			if seen&(1<<23) == 0 {
+				result.F30 = ""
+			}
+			if seen&(1<<24) == 0 {
+				result.F31 = ""
+			}
+			if seen&(1<<25) == 0 {
+				result.F32 = ""
+			}
+			if seen&(1<<26) == 0 {
+				result.F33 = ""
+			}
+			if seen&(1<<27) == 0 {
+				result.F34 = ""
+			}
+			if seen&(1<<28) == 0 {
+				result.F35 = ""
+			}
+			if seen&(1<<29) == 0 {
+				result.F36 = ""
+			}
+			if seen&(1<<30) == 0 {
+				result.F37 = ""
+			}
+			if seen&(1<<31) == 0 {
+				result.F38 = ""
+			}
+			if seen&(1<<32) == 0 {
+				result.F39 = ""
+			}
+			if seen&(1<<33) == 0 {
+				result.F4 = ""
+			}
+			if seen&(1<<34) == 0 {
+				result.F40 = ""
+			}
+			if seen&(1<<35) == 0 {
+				result.F5 = ""
+			}
+			if seen&(1<<36) == 0 {
+				result.F6 = ""
+			}
+			if seen&(1<<37) == 0 {
+				result.F7 = ""
+			}
+			if seen&(1<<38) == 0 {
+				result.F8 = ""
+			}
+			if seen&(1<<39) == 0 {
+				result.F9 = ""
+			}
 			if seen&(1<<0) == 0 {
 				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"f1"}}
 			}

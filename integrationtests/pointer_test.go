@@ -405,8 +405,8 @@ func TestPtrContainer_ResetOnReuse(t *testing.T) {
 	}
 }
 
-// A key omitted from the payload still clears the container — same contract as
-// the non-pointer fields (a blank payload gives a blank slate, capacity kept).
+// An omitted key leaves the field as a fresh decode would: a pointer to a
+// container comes back nil, not a cleared pointee.
 func TestPtrContainer_OmittedKeyClears(t *testing.T) {
 	v, _, err := PtrContainers{}.DecodeFrom([]byte(`{"one":[1,2,3],"m1":{"a":1}}`))
 	if err != nil {
@@ -416,10 +416,10 @@ func TestPtrContainer_OmittedKeyClears(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(*v.One) != 0 {
+	if v.One != nil {
 		t.Errorf("omitted *[]T not cleared: %v", *v.One)
 	}
-	if len(*v.M1) != 0 {
+	if v.M1 != nil {
 		t.Errorf("omitted *map not cleared: %v", *v.M1)
 	}
 }

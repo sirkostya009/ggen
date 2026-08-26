@@ -106,6 +106,12 @@ func (recv Addr) DecodeFrom(data []byte) (result Addr, i int, err error) {
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenCity {
+			result.City = ""
+		}
+		if !seenStreet {
+			result.Street = ""
+		}
 		return result, i, nil
 	}
 	for {
@@ -205,6 +211,12 @@ func (recv Addr) DecodeFrom(data []byte) (result Addr, i int, err error) {
 		}
 		if data[i] == '}' {
 			i++
+			if !seenCity {
+				result.City = ""
+			}
+			if !seenStreet {
+				result.Street = ""
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -231,6 +243,12 @@ func (recv Addr) DecodeFromStream(s *ggen.Stream) (result Addr, err error) {
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenCity {
+			result.City = ""
+		}
+		if !seenStreet {
+			result.Street = ""
+		}
 		return result, nil
 	}
 	for {
@@ -291,6 +309,12 @@ func (recv Addr) DecodeFromStream(s *ggen.Stream) (result Addr, err error) {
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenCity {
+				result.City = ""
+			}
+			if !seenStreet {
+				result.Street = ""
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -368,6 +392,33 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenActive {
+			result.Active = false
+		}
+		if !seenCoords {
+			result.Coords = [2]float64{}
+		}
+		if !seenCreatedAt {
+			result.CreatedAt = (Node{}).CreatedAt
+		}
+		if !seenExtra {
+			result.Extra = nil
+		}
+		if !seenID {
+			result.ID = 0
+		}
+		if !seenName {
+			result.Name = ""
+		}
+		if !seenParent {
+			result.Parent = nil
+		}
+		if !seenRaw {
+			result.Raw = nil
+		}
+		if !seenScore {
+			result.Score = 0
+		}
 		if !seenID {
 			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"id"}}
 		}
@@ -482,7 +533,11 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 				}
 				if i < len(data) && data[i] != ']' {
 					for {
-						result.Children = append(result.Children, Node{})
+						if len(result.Children) < cap(result.Children) {
+							result.Children = result.Children[:len(result.Children)+1]
+						} else {
+							result.Children = append(result.Children, Node{})
+						}
 						var _n int
 						result.Children[len(result.Children)-1], _n, err = result.Children[len(result.Children)-1].decodeFromDepth(data[i:], _depth+1)
 						i += _n
@@ -1052,7 +1107,11 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 							}
 							break
 						}
-						slab0 = append(slab0, Addr{})
+						if len(slab0) < cap(slab0) {
+							slab0 = slab0[:len(slab0)+1]
+						} else {
+							slab0 = append(slab0, Addr{})
+						}
 						var _n int
 						slab0[len(slab0)-1], _n, err = slab0[len(slab0)-1].DecodeFrom(data[i:])
 						i += _n
@@ -1195,6 +1254,33 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 		}
 		if data[i] == '}' {
 			i++
+			if !seenActive {
+				result.Active = false
+			}
+			if !seenCoords {
+				result.Coords = [2]float64{}
+			}
+			if !seenCreatedAt {
+				result.CreatedAt = (Node{}).CreatedAt
+			}
+			if !seenExtra {
+				result.Extra = nil
+			}
+			if !seenID {
+				result.ID = 0
+			}
+			if !seenName {
+				result.Name = ""
+			}
+			if !seenParent {
+				result.Parent = nil
+			}
+			if !seenRaw {
+				result.Raw = nil
+			}
+			if !seenScore {
+				result.Score = 0
+			}
 			if !seenID {
 				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"id"}}
 			}
@@ -1265,6 +1351,33 @@ func (recv Node) decodeFromStreamDepth(s *ggen.Stream, _depth int) (result Node,
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenActive {
+			result.Active = false
+		}
+		if !seenCoords {
+			result.Coords = [2]float64{}
+		}
+		if !seenCreatedAt {
+			result.CreatedAt = (Node{}).CreatedAt
+		}
+		if !seenExtra {
+			result.Extra = nil
+		}
+		if !seenID {
+			result.ID = 0
+		}
+		if !seenName {
+			result.Name = ""
+		}
+		if !seenParent {
+			result.Parent = nil
+		}
+		if !seenRaw {
+			result.Raw = nil
+		}
+		if !seenScore {
+			result.Score = 0
+		}
 		if !seenID {
 			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"id"}}
 		}
@@ -1392,7 +1505,11 @@ func (recv Node) decodeFromStreamDepth(s *ggen.Stream, _depth int) (result Node,
 					}
 				}
 				for s.Bytes()[s.Pos] != ']' {
-					result.Children = append(result.Children, Node{})
+					if len(result.Children) < cap(result.Children) {
+						result.Children = result.Children[:len(result.Children)+1]
+					} else {
+						result.Children = append(result.Children, Node{})
+					}
 					result.Children[len(result.Children)-1], err = result.Children[len(result.Children)-1].decodeFromStreamDepth(s, _depth+1)
 					if err != nil {
 						return result, ggen.NewParseErr("children", s.Offset(), err)
@@ -2019,7 +2136,11 @@ func (recv Node) decodeFromStreamDepth(s *ggen.Stream, _depth int) (result Node,
 						}
 						break
 					}
-					slab0 = append(slab0, Addr{})
+					if len(slab0) < cap(slab0) {
+						slab0 = slab0[:len(slab0)+1]
+					} else {
+						slab0 = append(slab0, Addr{})
+					}
 					slab0[len(slab0)-1], err = slab0[len(slab0)-1].DecodeFromStream(s)
 					if err != nil {
 						return result, ggen.NewParseErr("refs", s.Offset(), err)
@@ -2195,6 +2316,33 @@ func (recv Node) decodeFromStreamDepth(s *ggen.Stream, _depth int) (result Node,
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenActive {
+				result.Active = false
+			}
+			if !seenCoords {
+				result.Coords = [2]float64{}
+			}
+			if !seenCreatedAt {
+				result.CreatedAt = (Node{}).CreatedAt
+			}
+			if !seenExtra {
+				result.Extra = nil
+			}
+			if !seenID {
+				result.ID = 0
+			}
+			if !seenName {
+				result.Name = ""
+			}
+			if !seenParent {
+				result.Parent = nil
+			}
+			if !seenRaw {
+				result.Raw = nil
+			}
+			if !seenScore {
+				result.Score = 0
+			}
 			if !seenID {
 				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"id"}}
 			}
@@ -2500,6 +2648,12 @@ func (recv CopyAddr) DecodeFrom(data []byte) (result CopyAddr, i int, err error)
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenCity {
+			result.City = ""
+		}
+		if !seenStreet {
+			result.Street = ""
+		}
 		return result, i, nil
 	}
 	for {
@@ -2601,6 +2755,12 @@ func (recv CopyAddr) DecodeFrom(data []byte) (result CopyAddr, i int, err error)
 		}
 		if data[i] == '}' {
 			i++
+			if !seenCity {
+				result.City = ""
+			}
+			if !seenStreet {
+				result.Street = ""
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -2627,6 +2787,12 @@ func (recv CopyAddr) DecodeFromStream(s *ggen.Stream) (result CopyAddr, err erro
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenCity {
+			result.City = ""
+		}
+		if !seenStreet {
+			result.Street = ""
+		}
 		return result, nil
 	}
 	for {
@@ -2687,6 +2853,12 @@ func (recv CopyAddr) DecodeFromStream(s *ggen.Stream) (result CopyAddr, err erro
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenCity {
+				result.City = ""
+			}
+			if !seenStreet {
+				result.Street = ""
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -2764,6 +2936,33 @@ func (recv CopyNode) decodeFromDepth(data []byte, _depth int) (result CopyNode, 
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenActive {
+			result.Active = false
+		}
+		if !seenCoords {
+			result.Coords = [2]float64{}
+		}
+		if !seenCreatedAt {
+			result.CreatedAt = (CopyNode{}).CreatedAt
+		}
+		if !seenExtra {
+			result.Extra = nil
+		}
+		if !seenID {
+			result.ID = 0
+		}
+		if !seenName {
+			result.Name = ""
+		}
+		if !seenParent {
+			result.Parent = nil
+		}
+		if !seenRaw {
+			result.Raw = nil
+		}
+		if !seenScore {
+			result.Score = 0
+		}
 		if !seenID {
 			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"id"}}
 		}
@@ -2878,7 +3077,11 @@ func (recv CopyNode) decodeFromDepth(data []byte, _depth int) (result CopyNode, 
 				}
 				if i < len(data) && data[i] != ']' {
 					for {
-						result.Children = append(result.Children, CopyNode{})
+						if len(result.Children) < cap(result.Children) {
+							result.Children = result.Children[:len(result.Children)+1]
+						} else {
+							result.Children = append(result.Children, CopyNode{})
+						}
 						var _n int
 						result.Children[len(result.Children)-1], _n, err = result.Children[len(result.Children)-1].decodeFromDepth(data[i:], _depth+1)
 						i += _n
@@ -3451,7 +3654,11 @@ func (recv CopyNode) decodeFromDepth(data []byte, _depth int) (result CopyNode, 
 							}
 							break
 						}
-						slab0 = append(slab0, CopyAddr{})
+						if len(slab0) < cap(slab0) {
+							slab0 = slab0[:len(slab0)+1]
+						} else {
+							slab0 = append(slab0, CopyAddr{})
+						}
 						var _n int
 						slab0[len(slab0)-1], _n, err = slab0[len(slab0)-1].DecodeFrom(data[i:])
 						i += _n
@@ -3595,6 +3802,33 @@ func (recv CopyNode) decodeFromDepth(data []byte, _depth int) (result CopyNode, 
 		}
 		if data[i] == '}' {
 			i++
+			if !seenActive {
+				result.Active = false
+			}
+			if !seenCoords {
+				result.Coords = [2]float64{}
+			}
+			if !seenCreatedAt {
+				result.CreatedAt = (CopyNode{}).CreatedAt
+			}
+			if !seenExtra {
+				result.Extra = nil
+			}
+			if !seenID {
+				result.ID = 0
+			}
+			if !seenName {
+				result.Name = ""
+			}
+			if !seenParent {
+				result.Parent = nil
+			}
+			if !seenRaw {
+				result.Raw = nil
+			}
+			if !seenScore {
+				result.Score = 0
+			}
 			if !seenID {
 				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"id"}}
 			}
@@ -3665,6 +3899,33 @@ func (recv CopyNode) decodeFromStreamDepth(s *ggen.Stream, _depth int) (result C
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenActive {
+			result.Active = false
+		}
+		if !seenCoords {
+			result.Coords = [2]float64{}
+		}
+		if !seenCreatedAt {
+			result.CreatedAt = (CopyNode{}).CreatedAt
+		}
+		if !seenExtra {
+			result.Extra = nil
+		}
+		if !seenID {
+			result.ID = 0
+		}
+		if !seenName {
+			result.Name = ""
+		}
+		if !seenParent {
+			result.Parent = nil
+		}
+		if !seenRaw {
+			result.Raw = nil
+		}
+		if !seenScore {
+			result.Score = 0
+		}
 		if !seenID {
 			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"id"}}
 		}
@@ -3792,7 +4053,11 @@ func (recv CopyNode) decodeFromStreamDepth(s *ggen.Stream, _depth int) (result C
 					}
 				}
 				for s.Bytes()[s.Pos] != ']' {
-					result.Children = append(result.Children, CopyNode{})
+					if len(result.Children) < cap(result.Children) {
+						result.Children = result.Children[:len(result.Children)+1]
+					} else {
+						result.Children = append(result.Children, CopyNode{})
+					}
 					result.Children[len(result.Children)-1], err = result.Children[len(result.Children)-1].decodeFromStreamDepth(s, _depth+1)
 					if err != nil {
 						return result, ggen.NewParseErr("children", s.Offset(), err)
@@ -4419,7 +4684,11 @@ func (recv CopyNode) decodeFromStreamDepth(s *ggen.Stream, _depth int) (result C
 						}
 						break
 					}
-					slab0 = append(slab0, CopyAddr{})
+					if len(slab0) < cap(slab0) {
+						slab0 = slab0[:len(slab0)+1]
+					} else {
+						slab0 = append(slab0, CopyAddr{})
+					}
 					slab0[len(slab0)-1], err = slab0[len(slab0)-1].DecodeFromStream(s)
 					if err != nil {
 						return result, ggen.NewParseErr("refs", s.Offset(), err)
@@ -4595,6 +4864,33 @@ func (recv CopyNode) decodeFromStreamDepth(s *ggen.Stream, _depth int) (result C
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenActive {
+				result.Active = false
+			}
+			if !seenCoords {
+				result.Coords = [2]float64{}
+			}
+			if !seenCreatedAt {
+				result.CreatedAt = (CopyNode{}).CreatedAt
+			}
+			if !seenExtra {
+				result.Extra = nil
+			}
+			if !seenID {
+				result.ID = 0
+			}
+			if !seenName {
+				result.Name = ""
+			}
+			if !seenParent {
+				result.Parent = nil
+			}
+			if !seenRaw {
+				result.Raw = nil
+			}
+			if !seenScore {
+				result.Score = 0
+			}
 			if !seenID {
 				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"id"}}
 			}

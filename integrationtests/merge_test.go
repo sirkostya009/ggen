@@ -12,21 +12,20 @@ import (
 	"github.com/sirkostya009/ggen"
 )
 
-// Decode-into-receiver tests. The receiver IS the merge source: scalars
-// persist across omitted keys, containers reset before refill, nested structs
-// recurse. Tests call (T).DecodeFrom directly (ggen.Unmarshal starts fresh).
+// Decode-into-receiver tests. The result is what a fresh decode would give —
+// every field the payload omits comes back zeroed — while container capacity
+// and element allocations are recycled out of the receiver. Tests call
+// (T).DecodeFrom directly (ggen.Unmarshal starts fresh).
 
-func TestMerge_scalarFieldsPersistAcrossOmitted(t *testing.T) {
+func TestMerge_omittedScalarsZeroed(t *testing.T) {
 	t.Parallel()
-	// Payload sets only Street; receiver's other fields persist.
-	receiver := Address{Street: "old street", City: "OldCity", ZipCode: "12345"}
-	got, _, err := receiver.DecodeFrom([]byte(`{"street":"new street","city":"NewCity","zipCode":"54321"}`))
+	receiver := Node{ID: 7, Name: "old", Score: 1.5, Active: true}
+	got, _, err := receiver.DecodeFrom([]byte(`{"name":"new"}`))
 	if err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	want := Address{Street: "new street", City: "NewCity", ZipCode: "54321"}
-	if got != want {
-		t.Errorf("got %+v want %+v", got, want)
+	if got.Name != "new" || got.ID != 0 || got.Score != 0 || got.Active {
+		t.Errorf("omitted scalars not zeroed: %+v", got)
 	}
 }
 
@@ -186,8 +185,8 @@ func TestMerge_nestedStructRecursesIntoExisting(t *testing.T) {
 	if len(got.Children) != 1 {
 		t.Fatalf("len(children)=%d want 1", len(got.Children))
 	}
-	// The parent slice resets and pre-grows each slot with a zero Node, so
-	// the carried Name="cached" does NOT survive.
+	// The element decodes as a fresh Node — "name" is absent from the payload,
+	// so the carried Name="cached" does NOT survive.
 	if got.Children[0].Name != "" {
 		t.Errorf("Name=%q — slice elem merged against receiver, expected fresh zero", got.Children[0].Name)
 	}
@@ -197,21 +196,20 @@ func TestMerge_nestedStructRecursesIntoExisting(t *testing.T) {
 }
 
 // Pointer-field merge (PointerStruct *T, NPtrStruct **T/…, both in
-// pointer_test.go): non-nil pointees reused in place, omitted fields kept,
-// null nils, multi-level chains reuse their non-nil prefix, and a parse
-// failure leaves the receiver untouched.
+// pointer_test.go): a PRESENT key decodes into the carried pointee in place
+// (chains reuse their non-nil prefix), an omitted key nils the field, null
+// nils it too, and a parse failure leaves the receiver untouched.
 
-func TestMerge_pointerFieldPersistsWhenOmitted(t *testing.T) {
+func TestMerge_pointerFieldClearedWhenOmitted(t *testing.T) {
 	t.Parallel()
-	keep := new("keep")
-	receiver := PointerStruct{Name: keep, Count: new(7)}
-	// "name" omitted → receiver pointer untouched.
+	receiver := PointerStruct{Name: new("keep"), Count: new(7)}
+	// "name" omitted → nil, as a fresh decode would give.
 	got, _, err := receiver.DecodeFrom([]byte(`{"count":9,"enabled":true}`))
 	if err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if got.Name != keep || *got.Name != "keep" {
-		t.Errorf("omitted Name pointer not preserved: %v", got.Name)
+	if got.Name != nil {
+		t.Errorf("omitted Name pointer not cleared: %v", *got.Name)
 	}
 	if got.Count == nil || *got.Count != 9 {
 		t.Errorf("Count=%v want 9", got.Count)
@@ -346,11 +344,9 @@ func TestMerge_pointerParseFailureLeavesReceiverUntouched(t *testing.T) {
 	}
 }
 
-// Array slots are OVERWRITTEN, never merged: `[2]Inner` used to keep the
-// receiver's carried field values for keys the payload omitted, while the
-// `[]Inner` and `[2]*Inner` forms decoded fresh — three shapes, three
-// answers. jsonv2 zeroes; the documented contract says "every slot
-// overwritten". Pinned on both paths.
+// Array slots decode fresh, never merged — the element decoder zeroes what
+// the payload omits, so `[2]Inner`, `[]Inner`, `[2]*Inner` and `[2]**Inner`
+// all agree with jsonv2. Pinned on both paths.
 //
 //ggen:generate
 type ArrMerge struct {
@@ -414,5 +410,151 @@ func TestMerge_ArraySlotsOverwrite(t *testing.T) {
 		if sg.AI[i] != got.AI[i] || **sg.AM[i] != **got.AM[i] {
 			t.Errorf("stream[%d] diverges: AI %+v vs %+v", i, sg.AI[i], got.AI[i])
 		}
+	}
+}
+
+// A generated struct element is handed the carried slot instead of a blanked
+// one, so its inner allocations (here the element's own []string) are reused
+// across decodes while the decoded value still comes out fresh.
+func TestMerge_sliceElementAllocationsReused(t *testing.T) {
+	t.Parallel()
+	payload := []byte(`{"children":[{"name":"a","tags":["t1","t2"]},{"name":"b","tags":["t3"]}]}`)
+	first, _, err := Node{}.DecodeFrom(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outer := unsafe.SliceData(first.Children)
+	row0 := unsafe.SliceData(first.Children[0].Tags)
+	row1 := unsafe.SliceData(first.Children[1].Tags)
+
+	got, _, err := first.DecodeFrom(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if unsafe.SliceData(got.Children) != outer {
+		t.Error("children backing reallocated")
+	}
+	if unsafe.SliceData(got.Children[0].Tags) != row0 {
+		t.Error("element 0 tags backing reallocated — carried element was blanked")
+	}
+	if unsafe.SliceData(got.Children[1].Tags) != row1 {
+		t.Error("element 1 tags backing reallocated — carried element was blanked")
+	}
+	if got.Children[0].Name != "a" || !reflect.DeepEqual(got.Children[1].Tags, []string{"t3"}) {
+		t.Errorf("values wrong: %+v", got.Children)
+	}
+}
+
+// Every field kind the payload omits comes back zeroed; only the container
+// keeps its (emptied) backing.
+//
+//ggen:generate
+type OmitZeroed struct {
+	S    string      `json:"s"`
+	N    int         `json:"n"`
+	In   MergeInner  `json:"in"`
+	P    *MergeInner `json:"p"`
+	A    [2]int      `json:"a"`
+	Tags []string    `json:"tags"`
+}
+
+func TestMerge_omittedKeysZeroEveryKind(t *testing.T) {
+	t.Parallel()
+	full := []byte(`{"s":"x","n":7,"in":{"x":1,"y":"y"},"p":{"x":2},"a":[3,4],"tags":["a","b"]}`)
+	check := func(t *testing.T, got OmitZeroed) {
+		t.Helper()
+		if got.S != "keep" {
+			t.Errorf("S=%q want keep", got.S)
+		}
+		if got.N != 0 {
+			t.Errorf("N=%d want 0", got.N)
+		}
+		if got.In != (MergeInner{}) {
+			t.Errorf("In=%+v want zero", got.In)
+		}
+		if got.P != nil {
+			t.Errorf("P=%+v want nil", *got.P)
+		}
+		if got.A != [2]int{} {
+			t.Errorf("A=%v want zero", got.A)
+		}
+		if got.Tags == nil || len(got.Tags) != 0 {
+			t.Errorf("Tags=%v want empty non-nil (capacity kept)", got.Tags)
+		}
+	}
+
+	first, _, err := OmitZeroed{}.DecodeFrom(full)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _, err := first.DecodeFrom([]byte(`{"s":"keep"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	check(t, got)
+
+	var st ggen.Stream
+	st.Reset(bytes.NewReader([]byte(`{"s":"keep"}`)), make([]byte, 0, 8))
+	sg, err := first.DecodeFromStream(&st)
+	if err != nil {
+		t.Fatal(err)
+	}
+	check(t, sg)
+}
+
+// The hard case for element reuse: a LEANER second payload. Recycled element
+// allocations must carry no data forward — the element's own reset is what
+// makes reusing its slot safe — while the backings themselves are still reused.
+func TestMerge_leanRedecodeLeavesNoStaleData(t *testing.T) {
+	t.Parallel()
+	fat := []byte(`{"id":42,"name":"hello","active":true,"props":{"k":"v"},` +
+		`"children":[{"id":7,"name":"kid","tags":["a","b"],"children":[{"id":9,"name":"deep"}]}]}`)
+	lean := []byte(`{"children":[{"id":1}]}`)
+
+	first, _, err := Node{}.DecodeFrom(fat)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outer := unsafe.SliceData(first.Children)
+	tags := unsafe.SliceData(first.Children[0].Tags)
+
+	got, _, err := first.DecodeFrom(lean)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ID != 0 || got.Name != "" || got.Active || len(got.Props) != 0 {
+		t.Errorf("top-level stale: ID=%d Name=%q Active=%v Props=%v",
+			got.ID, got.Name, got.Active, got.Props)
+	}
+	if len(got.Children) != 1 {
+		t.Fatalf("children len %d, want 1", len(got.Children))
+	}
+	if c := got.Children[0]; c.ID != 1 || c.Name != "" || len(c.Tags) != 0 || len(c.Children) != 0 {
+		t.Errorf("element stale: %+v", c)
+	}
+	if unsafe.SliceData(got.Children) != outer {
+		t.Error("children backing reallocated")
+	}
+	if c := got.Children[0]; cap(c.Tags) == 0 || unsafe.SliceData(c.Tags[:cap(c.Tags)]) != tags {
+		t.Error("element tags backing reallocated — carried element was blanked")
+	}
+
+	// Same through the stream path, at a chunk size that forces refills.
+	var s ggen.Stream
+	s.Reset(bytes.NewReader(fat), make([]byte, 0, 8))
+	sv, err := Node{}.DecodeFromStream(&s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Reset(bytes.NewReader(lean), make([]byte, 0, 8))
+	sv, err = sv.DecodeFromStream(&s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sv.ID != 0 || sv.Name != "" || sv.Active {
+		t.Errorf("stream top-level stale: %+v", sv)
+	}
+	if len(sv.Children) != 1 || sv.Children[0].ID != 1 || len(sv.Children[0].Tags) != 0 {
+		t.Errorf("stream element stale: %+v", sv.Children)
 	}
 }

@@ -3350,6 +3350,75 @@ func emitReceiverReset(b *bytes.Buffer, s StructInfo) {
 	}
 }
 
+// emitElemGrow pre-grows dst by one slot for in-place element decode. A
+// generated struct element resets itself on decode, so a within-cap grow hands
+// it the carried element and its inner allocations get reused; every other
+// element kind is pre-grown with a zero value.
+func emitElemGrow(b *bytes.Buffer, dst string, f FieldInfo, directStruct bool) {
+	if directStruct {
+		fmt.Fprintf(b, "if len(%[1]s) < cap(%[1]s) { %[1]s = %[1]s[:len(%[1]s)+1] } else { %[1]s = append(%[1]s, %[2]s) }\n",
+			dst, zeroLit(f.ElemType, f.ElemKind))
+		return
+	}
+	fmt.Fprintf(b, "%s = append(%s, %s)\n", dst, dst, zeroLit(f.ElemType, f.ElemKind))
+}
+
+// fieldZeroLit is the zero-value expression for a whole FIELD. zeroLit is
+// elem-oriented and maps every slice-backed kind to nil, which a `[N]byte`
+// field cannot use.
+//
+// A type spelled with a package qualifier is written as the zero struct's own
+// field (`(T{}).X`) instead: the qualifier may not be imported by the
+// generated file (a value field otherwise only ever writes `result.X`), and a
+// foreign named primitive or interface takes no composite literal anyway.
+func fieldZeroLit(s StructInfo, f FieldInfo) string {
+	if f.Pointer {
+		return "nil"
+	}
+	lit := zeroLit(f.GoType, f.Kind)
+	if f.Kind == KindBytes && byteArrayLen(f) > 0 {
+		lit = f.GoType + "{}"
+	}
+	if strings.Contains(lit, ".") {
+		return "(" + s.Name + "{})." + f.GoName
+	}
+	return lit
+}
+
+// needsOmittedZero reports whether f must be zeroed when its key never
+// appeared. Containers are excluded: they are already emptied by
+// emitReceiverReset and keep their capacity for reuse.
+func needsOmittedZero(f FieldInfo) bool {
+	if f.Inline || !needsSeen(f) {
+		return false
+	}
+	if f.Pointer {
+		return true
+	}
+	switch f.Kind {
+	case KindSlice, KindMap:
+		return false
+	case KindBytes:
+		// `[]byte` is a container; `[N]byte` is a value with no entry reset.
+		return byteArrayLen(f) > 0
+	}
+	return true
+}
+
+// emitOmittedZero zeroes every field the payload did not set, at the end of a
+// successful decode. Decode-into-receiver yields what a fresh decode would
+// give — only container capacity and element allocations are recycled.
+// Pointers are cleared HERE rather than at entry so a PRESENT key can still
+// reuse the carried pointee chain.
+func emitOmittedZero(b *bytes.Buffer, s StructInfo) {
+	for _, f := range s.Fields {
+		if !needsOmittedZero(f) {
+			continue
+		}
+		fmt.Fprintf(b, "if %s { result.%s = %s }\n", seenNotAccess(s, f), f.GoName, fieldZeroLit(s, f))
+	}
+}
+
 // renderDecode emits the body of DecodeFrom: a loop reading each JSON key,
 // dispatching to per-field scan code, handling ',' / '}'. Zero-copy and
 // zero-alloc on the happy path; whitespace skipping inlined at each hot site.
@@ -3483,6 +3552,7 @@ func renderStreamPostLoop(b *bytes.Buffer, s StructInfo) {
 }
 
 func renderPostLoopShape(b *bytes.Buffer, s StructInfo, stream bool) {
+	emitOmittedZero(b, s)
 	retShape := "return result, i, %s"
 	errsShape := "if len(errs) > 0 { return result, i, errs }\n"
 	posVar := "i"
@@ -5323,18 +5393,17 @@ if e := bytes.IndexByte(data[%[2]s:], ']'); e >= 0 { %[4]s = bytes.Count(data[%[
 	case isArray && f.ElemPointer:
 		target = fmt.Sprintf("%s[%s]", slabVar, ivar)
 	case isArray:
-		// A MERGEABLE element (a struct decodes in place through its value
-		// receiver) would otherwise merge into whatever the receiver carried
-		// in that slot — `[2]Inner` kept the old `Y` while the slice form
-		// decoded fresh, and jsonv2 zeroes. The documented contract is
-		// "every slot overwritten", so blank it first.
-		if f.ElemKind == KindStruct && !f.ElemPointer {
+		// A generated struct element resets itself, so the carried slot is
+		// handed straight over and its inner allocations get reused. Any other
+		// mergeable element (encoding/json, UnmarshalJSON/UnmarshalText) merges
+		// into what it is given, so blank the slot first.
+		if f.ElemKind == KindStruct && !f.ElemPointer && !directStruct {
 			fmt.Fprintf(b, "%s[%s] = %s\n", dst, ivar, zeroLit(f.ElemType, f.ElemKind))
 		}
 		target = fmt.Sprintf("%s[%s]", dst, ivar)
 	case f.ElemPointer:
-		// Slab holds the pointee type; pre-grow with its zero value.
-		fmt.Fprintf(b, "%s = append(%s, %s)\n", slabVar, slabVar, zeroLit(f.ElemType, f.ElemKind))
+		// Slab holds the pointee type; pre-grow the tail slot.
+		emitElemGrow(b, slabVar, f, directStruct)
 		target = fmt.Sprintf("%s[len(%s)-1]", slabVar, slabVar)
 	case f.ElemKind == KindSlice:
 		// Slice element: reslice within cap so the carried inner header/backing
@@ -5342,7 +5411,7 @@ if e := bytes.IndexByte(data[%[2]s:], ']'); e >= 0 { %[4]s = bytes.Count(data[%[
 		fmt.Fprintf(b, "if len(%[1]s) < cap(%[1]s) { %[1]s = %[1]s[:len(%[1]s)+1] } else { %[1]s = append(%[1]s, nil) }\n", dst)
 		target = fmt.Sprintf("%s[len(%s)-1]", dst, dst)
 	default:
-		fmt.Fprintf(b, "%s = append(%s, %s)\n", dst, dst, zeroLit(f.ElemType, f.ElemKind))
+		emitElemGrow(b, dst, f, directStruct)
 		target = fmt.Sprintf("%s[len(%s)-1]", dst, dst)
 	}
 	field := fieldLit(f)
@@ -6742,19 +6811,19 @@ func emitStreamSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth
 		target = fmt.Sprintf("%s[%s]", slabVar, ivar)
 	case isArray:
 		// Blank a mergeable slot first — see emitByteSliceRead.
-		if f.ElemKind == KindStruct && !f.ElemPointer {
+		if f.ElemKind == KindStruct && !f.ElemPointer && !directStruct {
 			fmt.Fprintf(b, "%s[%s] = %s\n", dst, ivar, zeroLit(f.ElemType, f.ElemKind))
 		}
 		target = fmt.Sprintf("%s[%s]", dst, ivar)
 	case f.ElemPointer:
-		fmt.Fprintf(b, "%s = append(%s, %s)\n", slabVar, slabVar, zeroLit(f.ElemType, f.ElemKind))
+		emitElemGrow(b, slabVar, f, directStruct)
 		target = fmt.Sprintf("%s[len(%s)-1]", slabVar, slabVar)
 	case f.ElemKind == KindSlice:
 		// Reslice within cap to keep the carried header — see emitByteSliceRead.
 		fmt.Fprintf(b, "if len(%[1]s) < cap(%[1]s) { %[1]s = %[1]s[:len(%[1]s)+1] } else { %[1]s = append(%[1]s, nil) }\n", dst)
 		target = fmt.Sprintf("%s[len(%s)-1]", dst, dst)
 	default:
-		fmt.Fprintf(b, "%s = append(%s, %s)\n", dst, dst, zeroLit(f.ElemType, f.ElemKind))
+		emitElemGrow(b, dst, f, directStruct)
 		target = fmt.Sprintf("%s[len(%s)-1]", dst, dst)
 	}
 	if mptr {

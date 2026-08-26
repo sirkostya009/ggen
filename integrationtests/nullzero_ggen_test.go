@@ -34,6 +34,21 @@ func (recv NullZeroTags) DecodeFrom(data []byte) (result NullZeroTags, i int, er
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenNZBool {
+			result.NZBool = false
+		}
+		if !seenNZFloat {
+			result.NZFloat = 0
+		}
+		if !seenNZInt {
+			result.NZInt = 0
+		}
+		if !seenNZStr {
+			result.NZStr = ""
+		}
+		if !seenStrict {
+			result.Strict = ""
+		}
 		return result, i, nil
 	}
 	for {
@@ -225,6 +240,21 @@ func (recv NullZeroTags) DecodeFrom(data []byte) (result NullZeroTags, i int, er
 		}
 		if data[i] == '}' {
 			i++
+			if !seenNZBool {
+				result.NZBool = false
+			}
+			if !seenNZFloat {
+				result.NZFloat = 0
+			}
+			if !seenNZInt {
+				result.NZInt = 0
+			}
+			if !seenNZStr {
+				result.NZStr = ""
+			}
+			if !seenStrict {
+				result.Strict = ""
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -254,6 +284,21 @@ func (recv NullZeroTags) DecodeFromStream(s *ggen.Stream) (result NullZeroTags, 
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenNZBool {
+			result.NZBool = false
+		}
+		if !seenNZFloat {
+			result.NZFloat = 0
+		}
+		if !seenNZInt {
+			result.NZInt = 0
+		}
+		if !seenNZStr {
+			result.NZStr = ""
+		}
+		if !seenStrict {
+			result.Strict = ""
+		}
 		return result, nil
 	}
 	for {
@@ -435,6 +480,21 @@ func (recv NullZeroTags) DecodeFromStream(s *ggen.Stream) (result NullZeroTags, 
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenNZBool {
+				result.NZBool = false
+			}
+			if !seenNZFloat {
+				result.NZFloat = 0
+			}
+			if !seenNZInt {
+				result.NZInt = 0
+			}
+			if !seenNZStr {
+				result.NZStr = ""
+			}
+			if !seenStrict {
+				result.Strict = ""
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -482,6 +542,12 @@ func (recv NullZeroValidated) DecodeFrom(data []byte) (result NullZeroValidated,
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenCount {
+			result.Count = 0
+		}
+		if !seenName {
+			result.Name = ""
+		}
 		return result, i, nil
 	}
 	for {
@@ -626,6 +692,12 @@ func (recv NullZeroValidated) DecodeFrom(data []byte) (result NullZeroValidated,
 		}
 		if data[i] == '}' {
 			i++
+			if !seenCount {
+				result.Count = 0
+			}
+			if !seenName {
+				result.Name = ""
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -652,6 +724,12 @@ func (recv NullZeroValidated) DecodeFromStream(s *ggen.Stream) (result NullZeroV
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenCount {
+			result.Count = 0
+		}
+		if !seenName {
+			result.Name = ""
+		}
 		return result, nil
 	}
 	for {
@@ -760,6 +838,12 @@ func (recv NullZeroValidated) DecodeFromStream(s *ggen.Stream) (result NullZeroV
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenCount {
+				result.Count = 0
+			}
+			if !seenName {
+				result.Name = ""
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -802,6 +886,12 @@ func (recv NullZeroWhole) DecodeFrom(data []byte) (result NullZeroWhole, i int, 
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenA {
+			result.A = ""
+		}
+		if !seenB {
+			result.B = 0
+		}
 		return result, i, nil
 	}
 	for {
@@ -1042,6 +1132,12 @@ func (recv NullZeroWhole) DecodeFrom(data []byte) (result NullZeroWhole, i int, 
 		}
 		if data[i] == '}' {
 			i++
+			if !seenA {
+				result.A = ""
+			}
+			if !seenB {
+				result.B = 0
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -1072,6 +1168,12 @@ func (recv NullZeroWhole) DecodeFromStream(s *ggen.Stream) (result NullZeroWhole
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenA {
+			result.A = ""
+		}
+		if !seenB {
+			result.B = 0
+		}
 		return result, nil
 	}
 	for {
@@ -1263,6 +1365,12 @@ func (recv NullZeroWhole) DecodeFromStream(s *ggen.Stream) (result NullZeroWhole
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenA {
+				result.A = ""
+			}
+			if !seenB {
+				result.B = 0
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)

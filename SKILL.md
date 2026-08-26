@@ -316,9 +316,9 @@ Bytes-path (`DecodeFrom`) still zero-copy via `unsafe.String` into caller `data`
 
 ### Decode-into-receiver (merge)
 
-Decoders parse values into method non-pointer receiver. Non-nil slices/maps reuse capacity, values overwritten (through pointer levels too: `*[]T`/`**map[string]T` reset the pointee, never append into it) — nested slices too: re-decoding a `[][]T` (any depth) reuses the inner rows' backing arrays, not just the outer slice. Non-nil pointer fields reuse the pointee (struct pointees merge omitted fields; `null` nils the field). Niche, useful for reusing capacity of slice/map/pointer fields when same object reused for multiple (not necessarily _different_) payloads.
+Decoders parse values into method non-pointer receiver. The RESULT is what a fresh decode would give — every field the payload omits comes back zeroed (`nil` for a pointer, empty-but-allocated for a container) — and the receiver is there for its MEMORY. Non-nil slices/maps reuse capacity (through pointer levels too: `*[]T`/`**map[string]T` reset the pointee, never append into it), nested slices reuse the inner rows' backing arrays at any depth, a `[]Struct` reuses the allocations inside each carried element, and a present pointer key decodes into the carried pointee. Niche, useful when the same object is reused for multiple (not necessarily _different_) payloads.
 
-NOT 100% compatible with stdlib — ggen diverges in three ways: ALL containers are reset, regardless of presence (blank payload → blank slate, capacity kept), a PRESENT map key replaces the whole map (clear+refill; stdlib merges entries into it), and an explicit `null` on a non-pointer scalar/native field ERRORS (stdlib zeroes it — only pointer/slice/map/`[]byte`/`sql.Null*`/raw fields accept `null`). Scalars-persist-on-omit, slice-replace, null→nil for slice/map/pointer, nested-struct merge, and `*T`/`**T` reuse all match stdlib.
+NOT 100% compatible with stdlib — ggen diverges in three ways: an OMITTED key is zeroed/reset rather than left alone (blank payload → blank slate, capacity kept), a PRESENT map key replaces the whole map (clear+refill; stdlib merges entries into it), and an explicit `null` on a non-pointer scalar/native field ERRORS (stdlib zeroes it — only pointer/slice/map/`[]byte`/`sql.Null*`/raw fields accept `null`). Slice-replace, null→nil for slice/map/pointer, nested-struct merge, and `*T`/`**T` reuse on a present key all match stdlib.
 
 ```go
 u, _, err := existing.DecodeFrom(payload)
@@ -357,7 +357,7 @@ users, err = s.Slice[User]()  // JSON array of T
 // buffer reuse — pass a previous value/slice as rcv. Generated decoders seed
 // from the receiver and reset containers keeping cap, so maps+slices recycle.
 // Slice reuses EACH ELEMENT's containers too, not just the outer array.
-// Steady state = 0 allocs. NOTE: a key the payload omits keeps rcv's old value.
+// Steady state = 0 allocs. NOTE: a key the payload omits comes back zeroed.
 u, err = s.Value(u)
 users, err = s.Slice(users)
 

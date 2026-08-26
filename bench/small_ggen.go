@@ -43,6 +43,18 @@ func (recv Validated) DecodeFrom(data []byte) (result Validated, i int, err erro
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenAge {
+			result.Age = 0
+		}
+		if !seenBio {
+			result.Bio = ""
+		}
+		if !seenEmail {
+			result.Email = ""
+		}
+		if !seenName {
+			result.Name = ""
+		}
 		if !seenEmail {
 			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"email"}}
 		}
@@ -323,6 +335,18 @@ func (recv Validated) DecodeFrom(data []byte) (result Validated, i int, err erro
 		}
 		if data[i] == '}' {
 			i++
+			if !seenAge {
+				result.Age = 0
+			}
+			if !seenBio {
+				result.Bio = ""
+			}
+			if !seenEmail {
+				result.Email = ""
+			}
+			if !seenName {
+				result.Name = ""
+			}
 			if !seenEmail {
 				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"email"}}
 			}
@@ -361,6 +385,18 @@ func (recv Validated) DecodeFromStream(s *ggen.Stream) (result Validated, err er
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenAge {
+			result.Age = 0
+		}
+		if !seenBio {
+			result.Bio = ""
+		}
+		if !seenEmail {
+			result.Email = ""
+		}
+		if !seenName {
+			result.Name = ""
+		}
 		if !seenEmail {
 			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"email"}}
 		}
@@ -569,6 +605,18 @@ func (recv Validated) DecodeFromStream(s *ggen.Stream) (result Validated, err er
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenAge {
+				result.Age = 0
+			}
+			if !seenBio {
+				result.Bio = ""
+			}
+			if !seenEmail {
+				result.Email = ""
+			}
+			if !seenName {
+				result.Name = ""
+			}
 			if !seenEmail {
 				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"email"}}
 			}
@@ -646,6 +694,18 @@ func (recv CopyValidated) DecodeFrom(data []byte) (result CopyValidated, i int, 
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenAge {
+			result.Age = 0
+		}
+		if !seenBio {
+			result.Bio = ""
+		}
+		if !seenEmail {
+			result.Email = ""
+		}
+		if !seenName {
+			result.Name = ""
+		}
 		if !seenEmail {
 			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"email"}}
 		}
@@ -930,6 +990,18 @@ func (recv CopyValidated) DecodeFrom(data []byte) (result CopyValidated, i int, 
 		}
 		if data[i] == '}' {
 			i++
+			if !seenAge {
+				result.Age = 0
+			}
+			if !seenBio {
+				result.Bio = ""
+			}
+			if !seenEmail {
+				result.Email = ""
+			}
+			if !seenName {
+				result.Name = ""
+			}
 			if !seenEmail {
 				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"email"}}
 			}
@@ -968,6 +1040,18 @@ func (recv CopyValidated) DecodeFromStream(s *ggen.Stream) (result CopyValidated
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenAge {
+			result.Age = 0
+		}
+		if !seenBio {
+			result.Bio = ""
+		}
+		if !seenEmail {
+			result.Email = ""
+		}
+		if !seenName {
+			result.Name = ""
+		}
 		if !seenEmail {
 			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"email"}}
 		}
@@ -1176,6 +1260,18 @@ func (recv CopyValidated) DecodeFromStream(s *ggen.Stream) (result CopyValidated
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenAge {
+				result.Age = 0
+			}
+			if !seenBio {
+				result.Bio = ""
+			}
+			if !seenEmail {
+				result.Email = ""
+			}
+			if !seenName {
+				result.Name = ""
+			}
 			if !seenEmail {
 				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"email"}}
 			}
@@ -1252,6 +1348,27 @@ func (recv Claim) DecodeFrom(data []byte) (result Claim, i int, err error) {
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenAud {
+			result.Aud = ""
+		}
+		if !seenExp {
+			result.Exp = 0
+		}
+		if !seenIat {
+			result.Iat = 0
+		}
+		if !seenIss {
+			result.Iss = ""
+		}
+		if !seenJti {
+			result.Jti = ""
+		}
+		if !seenNbf {
+			result.Nbf = 0
+		}
+		if !seenSub {
+			result.Sub = ""
+		}
 		if !seenIss {
 			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"iss"}}
 		}
@@ -1575,6 +1692,27 @@ func (recv Claim) DecodeFrom(data []byte) (result Claim, i int, err error) {
 		}
 		if data[i] == '}' {
 			i++
+			if !seenAud {
+				result.Aud = ""
+			}
+			if !seenExp {
+				result.Exp = 0
+			}
+			if !seenIat {
+				result.Iat = 0
+			}
+			if !seenIss {
+				result.Iss = ""
+			}
+			if !seenJti {
+				result.Jti = ""
+			}
+			if !seenNbf {
+				result.Nbf = 0
+			}
+			if !seenSub {
+				result.Sub = ""
+			}
 			if !seenIss {
 				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"iss"}}
 			}
@@ -1612,6 +1750,27 @@ func (recv Claim) DecodeFromStream(s *ggen.Stream) (result Claim, err error) {
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenAud {
+			result.Aud = ""
+		}
+		if !seenExp {
+			result.Exp = 0
+		}
+		if !seenIat {
+			result.Iat = 0
+		}
+		if !seenIss {
+			result.Iss = ""
+		}
+		if !seenJti {
+			result.Jti = ""
+		}
+		if !seenNbf {
+			result.Nbf = 0
+		}
+		if !seenSub {
+			result.Sub = ""
+		}
 		if !seenIss {
 			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"iss"}}
 		}
@@ -1749,6 +1908,27 @@ func (recv Claim) DecodeFromStream(s *ggen.Stream) (result Claim, err error) {
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenAud {
+				result.Aud = ""
+			}
+			if !seenExp {
+				result.Exp = 0
+			}
+			if !seenIat {
+				result.Iat = 0
+			}
+			if !seenIss {
+				result.Iss = ""
+			}
+			if !seenJti {
+				result.Jti = ""
+			}
+			if !seenNbf {
+				result.Nbf = 0
+			}
+			if !seenSub {
+				result.Sub = ""
+			}
 			if !seenIss {
 				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"iss"}}
 			}
@@ -1839,6 +2019,27 @@ func (recv CopyClaim) DecodeFrom(data []byte) (result CopyClaim, i int, err erro
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenAud {
+			result.Aud = ""
+		}
+		if !seenExp {
+			result.Exp = 0
+		}
+		if !seenIat {
+			result.Iat = 0
+		}
+		if !seenIss {
+			result.Iss = ""
+		}
+		if !seenJti {
+			result.Jti = ""
+		}
+		if !seenNbf {
+			result.Nbf = 0
+		}
+		if !seenSub {
+			result.Sub = ""
+		}
 		if !seenIss {
 			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"iss"}}
 		}
@@ -2166,6 +2367,27 @@ func (recv CopyClaim) DecodeFrom(data []byte) (result CopyClaim, i int, err erro
 		}
 		if data[i] == '}' {
 			i++
+			if !seenAud {
+				result.Aud = ""
+			}
+			if !seenExp {
+				result.Exp = 0
+			}
+			if !seenIat {
+				result.Iat = 0
+			}
+			if !seenIss {
+				result.Iss = ""
+			}
+			if !seenJti {
+				result.Jti = ""
+			}
+			if !seenNbf {
+				result.Nbf = 0
+			}
+			if !seenSub {
+				result.Sub = ""
+			}
 			if !seenIss {
 				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"iss"}}
 			}
@@ -2203,6 +2425,27 @@ func (recv CopyClaim) DecodeFromStream(s *ggen.Stream) (result CopyClaim, err er
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenAud {
+			result.Aud = ""
+		}
+		if !seenExp {
+			result.Exp = 0
+		}
+		if !seenIat {
+			result.Iat = 0
+		}
+		if !seenIss {
+			result.Iss = ""
+		}
+		if !seenJti {
+			result.Jti = ""
+		}
+		if !seenNbf {
+			result.Nbf = 0
+		}
+		if !seenSub {
+			result.Sub = ""
+		}
 		if !seenIss {
 			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"iss"}}
 		}
@@ -2340,6 +2583,27 @@ func (recv CopyClaim) DecodeFromStream(s *ggen.Stream) (result CopyClaim, err er
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenAud {
+				result.Aud = ""
+			}
+			if !seenExp {
+				result.Exp = 0
+			}
+			if !seenIat {
+				result.Iat = 0
+			}
+			if !seenIss {
+				result.Iss = ""
+			}
+			if !seenJti {
+				result.Jti = ""
+			}
+			if !seenNbf {
+				result.Nbf = 0
+			}
+			if !seenSub {
+				result.Sub = ""
+			}
 			if !seenIss {
 				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"iss"}}
 			}
@@ -2433,6 +2697,36 @@ func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, i i
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenAge {
+			result.Age = 0
+		}
+		if !seenCountry {
+			result.Country = ""
+		}
+		if !seenEmail {
+			result.Email = ""
+		}
+		if !seenLang {
+			result.Lang = ""
+		}
+		if !seenName {
+			result.Name = ""
+		}
+		if !seenPhone {
+			result.Phone = ""
+		}
+		if !seenRole {
+			result.Role = ""
+		}
+		if !seenScore {
+			result.Score = 0
+		}
+		if !seenURL {
+			result.URL = ""
+		}
+		if !seenUsername {
+			result.Username = ""
+		}
 		if !seenEmail {
 			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"email"}}
 		}
@@ -2840,6 +3134,36 @@ func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, i i
 		}
 		if data[i] == '}' {
 			i++
+			if !seenAge {
+				result.Age = 0
+			}
+			if !seenCountry {
+				result.Country = ""
+			}
+			if !seenEmail {
+				result.Email = ""
+			}
+			if !seenLang {
+				result.Lang = ""
+			}
+			if !seenName {
+				result.Name = ""
+			}
+			if !seenPhone {
+				result.Phone = ""
+			}
+			if !seenRole {
+				result.Role = ""
+			}
+			if !seenScore {
+				result.Score = 0
+			}
+			if !seenURL {
+				result.URL = ""
+			}
+			if !seenUsername {
+				result.Username = ""
+			}
 			if !seenEmail {
 				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"email"}}
 			}
@@ -2883,6 +3207,36 @@ func (recv ValidationHeavy) DecodeFromStream(s *ggen.Stream) (result ValidationH
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenAge {
+			result.Age = 0
+		}
+		if !seenCountry {
+			result.Country = ""
+		}
+		if !seenEmail {
+			result.Email = ""
+		}
+		if !seenLang {
+			result.Lang = ""
+		}
+		if !seenName {
+			result.Name = ""
+		}
+		if !seenPhone {
+			result.Phone = ""
+		}
+		if !seenRole {
+			result.Role = ""
+		}
+		if !seenScore {
+			result.Score = 0
+		}
+		if !seenURL {
+			result.URL = ""
+		}
+		if !seenUsername {
+			result.Username = ""
+		}
 		if !seenEmail {
 			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"email"}}
 		}
@@ -3144,6 +3498,36 @@ func (recv ValidationHeavy) DecodeFromStream(s *ggen.Stream) (result ValidationH
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenAge {
+				result.Age = 0
+			}
+			if !seenCountry {
+				result.Country = ""
+			}
+			if !seenEmail {
+				result.Email = ""
+			}
+			if !seenLang {
+				result.Lang = ""
+			}
+			if !seenName {
+				result.Name = ""
+			}
+			if !seenPhone {
+				result.Phone = ""
+			}
+			if !seenRole {
+				result.Role = ""
+			}
+			if !seenScore {
+				result.Score = 0
+			}
+			if !seenURL {
+				result.URL = ""
+			}
+			if !seenUsername {
+				result.Username = ""
+			}
 			if !seenEmail {
 				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"email"}}
 			}
@@ -3224,6 +3608,36 @@ func (recv NoValidationHeavy) DecodeFrom(data []byte) (result NoValidationHeavy,
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenAge {
+			result.Age = 0
+		}
+		if !seenCountry {
+			result.Country = ""
+		}
+		if !seenEmail {
+			result.Email = ""
+		}
+		if !seenLang {
+			result.Lang = ""
+		}
+		if !seenName {
+			result.Name = ""
+		}
+		if !seenPhone {
+			result.Phone = ""
+		}
+		if !seenRole {
+			result.Role = ""
+		}
+		if !seenScore {
+			result.Score = 0
+		}
+		if !seenURL {
+			result.URL = ""
+		}
+		if !seenUsername {
+			result.Username = ""
+		}
 		return result, i, nil
 	}
 	for {
@@ -3536,6 +3950,36 @@ func (recv NoValidationHeavy) DecodeFrom(data []byte) (result NoValidationHeavy,
 		}
 		if data[i] == '}' {
 			i++
+			if !seenAge {
+				result.Age = 0
+			}
+			if !seenCountry {
+				result.Country = ""
+			}
+			if !seenEmail {
+				result.Email = ""
+			}
+			if !seenLang {
+				result.Lang = ""
+			}
+			if !seenName {
+				result.Name = ""
+			}
+			if !seenPhone {
+				result.Phone = ""
+			}
+			if !seenRole {
+				result.Role = ""
+			}
+			if !seenScore {
+				result.Score = 0
+			}
+			if !seenURL {
+				result.URL = ""
+			}
+			if !seenUsername {
+				result.Username = ""
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -3570,6 +4014,36 @@ func (recv NoValidationHeavy) DecodeFromStream(s *ggen.Stream) (result NoValidat
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenAge {
+			result.Age = 0
+		}
+		if !seenCountry {
+			result.Country = ""
+		}
+		if !seenEmail {
+			result.Email = ""
+		}
+		if !seenLang {
+			result.Lang = ""
+		}
+		if !seenName {
+			result.Name = ""
+		}
+		if !seenPhone {
+			result.Phone = ""
+		}
+		if !seenRole {
+			result.Role = ""
+		}
+		if !seenScore {
+			result.Score = 0
+		}
+		if !seenURL {
+			result.URL = ""
+		}
+		if !seenUsername {
+			result.Username = ""
+		}
 		return result, nil
 	}
 	for {
@@ -3736,6 +4210,36 @@ func (recv NoValidationHeavy) DecodeFromStream(s *ggen.Stream) (result NoValidat
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenAge {
+				result.Age = 0
+			}
+			if !seenCountry {
+				result.Country = ""
+			}
+			if !seenEmail {
+				result.Email = ""
+			}
+			if !seenLang {
+				result.Lang = ""
+			}
+			if !seenName {
+				result.Name = ""
+			}
+			if !seenPhone {
+				result.Phone = ""
+			}
+			if !seenRole {
+				result.Role = ""
+			}
+			if !seenScore {
+				result.Score = 0
+			}
+			if !seenURL {
+				result.URL = ""
+			}
+			if !seenUsername {
+				result.Username = ""
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -3799,6 +4303,12 @@ func (recv RuneGated) DecodeFrom(data []byte) (result RuneGated, i int, err erro
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenAsciiRunes {
+			result.AsciiRunes = ""
+		}
+		if !seenLongRunes {
+			result.LongRunes = ""
+		}
 		return result, i, nil
 	}
 	for {
@@ -3918,6 +4428,12 @@ func (recv RuneGated) DecodeFrom(data []byte) (result RuneGated, i int, err erro
 		}
 		if data[i] == '}' {
 			i++
+			if !seenAsciiRunes {
+				result.AsciiRunes = ""
+			}
+			if !seenLongRunes {
+				result.LongRunes = ""
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -3944,6 +4460,12 @@ func (recv RuneGated) DecodeFromStream(s *ggen.Stream) (result RuneGated, err er
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenAsciiRunes {
+			result.AsciiRunes = ""
+		}
+		if !seenLongRunes {
+			result.LongRunes = ""
+		}
 		return result, nil
 	}
 	for {
@@ -4024,6 +4546,12 @@ func (recv RuneGated) DecodeFromStream(s *ggen.Stream) (result RuneGated, err er
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenAsciiRunes {
+				result.AsciiRunes = ""
+			}
+			if !seenLongRunes {
+				result.LongRunes = ""
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -4062,6 +4590,9 @@ func (recv HTMLEscape) DecodeFrom(data []byte) (result HTMLEscape, i int, err er
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenNote {
+			result.Note = ""
+		}
 		return result, i, nil
 	}
 	for {
@@ -4136,6 +4667,9 @@ func (recv HTMLEscape) DecodeFrom(data []byte) (result HTMLEscape, i int, err er
 		}
 		if data[i] == '}' {
 			i++
+			if !seenNote {
+				result.Note = ""
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -4161,6 +4695,9 @@ func (recv HTMLEscape) DecodeFromStream(s *ggen.Stream) (result HTMLEscape, err 
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenNote {
+			result.Note = ""
+		}
 		return result, nil
 	}
 	for {
@@ -4208,6 +4745,9 @@ func (recv HTMLEscape) DecodeFromStream(s *ggen.Stream) (result HTMLEscape, err 
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenNote {
+				result.Note = ""
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -4243,6 +4783,9 @@ func (recv HTMLPlain) DecodeFrom(data []byte) (result HTMLPlain, i int, err erro
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenNote {
+			result.Note = ""
+		}
 		return result, i, nil
 	}
 	for {
@@ -4317,6 +4860,9 @@ func (recv HTMLPlain) DecodeFrom(data []byte) (result HTMLPlain, i int, err erro
 		}
 		if data[i] == '}' {
 			i++
+			if !seenNote {
+				result.Note = ""
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -4342,6 +4888,9 @@ func (recv HTMLPlain) DecodeFromStream(s *ggen.Stream) (result HTMLPlain, err er
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenNote {
+			result.Note = ""
+		}
 		return result, nil
 	}
 	for {
@@ -4389,6 +4938,9 @@ func (recv HTMLPlain) DecodeFromStream(s *ggen.Stream) (result HTMLPlain, err er
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenNote {
+				result.Note = ""
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)

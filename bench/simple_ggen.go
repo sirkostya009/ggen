@@ -26,6 +26,111 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if seen&(1<<0) == 0 {
+			result.Active = false
+		}
+		if seen&(1<<1) == 0 {
+			result.Address = PostalAddress{}
+		}
+		if seen&(1<<2) == 0 {
+			result.Age = 0
+		}
+		if seen&(1<<3) == 0 {
+			result.AvatarURL = ""
+		}
+		if seen&(1<<4) == 0 {
+			result.Balance = 0
+		}
+		if seen&(1<<5) == 0 {
+			result.BannerURL = ""
+		}
+		if seen&(1<<6) == 0 {
+			result.Bio = ""
+		}
+		if seen&(1<<7) == 0 {
+			result.Company = Company{}
+		}
+		if seen&(1<<8) == 0 {
+			result.CreatedAt = 0
+		}
+		if seen&(1<<9) == 0 {
+			result.Deleted = false
+		}
+		if seen&(1<<10) == 0 {
+			result.DisplayName = ""
+		}
+		if seen&(1<<11) == 0 {
+			result.Email = ""
+		}
+		if seen&(1<<12) == 0 {
+			result.FailedLogins = 0
+		}
+		if seen&(1<<13) == 0 {
+			result.FirstName = ""
+		}
+		if seen&(1<<14) == 0 {
+			result.FollowerCount = 0
+		}
+		if seen&(1<<15) == 0 {
+			result.FollowingCount = 0
+		}
+		if seen&(1<<16) == 0 {
+			result.ID = 0
+		}
+		if seen&(1<<17) == 0 {
+			result.LastLogin = 0
+		}
+		if seen&(1<<18) == 0 {
+			result.LastName = ""
+		}
+		if seen&(1<<19) == 0 {
+			result.Locale = ""
+		}
+		if seen&(1<<20) == 0 {
+			result.LoginCount = 0
+		}
+		if seen&(1<<21) == 0 {
+			result.MiddleName = ""
+		}
+		if seen&(1<<22) == 0 {
+			result.Phone = ""
+		}
+		if seen&(1<<23) == 0 {
+			result.PostCount = 0
+		}
+		if seen&(1<<24) == 0 {
+			result.Preferences = Preferences{}
+		}
+		if seen&(1<<25) == 0 {
+			result.Premium = false
+		}
+		if seen&(1<<26) == 0 {
+			result.Reputation = 0
+		}
+		if seen&(1<<27) == 0 {
+			result.StorageQuota = 0
+		}
+		if seen&(1<<28) == 0 {
+			result.StorageUsed = 0
+		}
+		if seen&(1<<29) == 0 {
+			result.Suspended = false
+		}
+		if seen&(1<<30) == 0 {
+			result.TrustScore = 0
+		}
+		if seen&(1<<31) == 0 {
+			result.TwoFactorEnabled = false
+		}
+		if seen&(1<<32) == 0 {
+			result.UpdatedAt = 0
+		}
+		if seen&(1<<33) == 0 {
+			result.Username = ""
+		}
+		if seen&(1<<34) == 0 {
+			result.Verified = false
+		}
 		return result, i, nil
 	}
 	for {
@@ -1093,6 +1198,111 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 		}
 		if data[i] == '}' {
 			i++
+			if seen&(1<<0) == 0 {
+				result.Active = false
+			}
+			if seen&(1<<1) == 0 {
+				result.Address = PostalAddress{}
+			}
+			if seen&(1<<2) == 0 {
+				result.Age = 0
+			}
+			if seen&(1<<3) == 0 {
+				result.AvatarURL = ""
+			}
+			if seen&(1<<4) == 0 {
+				result.Balance = 0
+			}
+			if seen&(1<<5) == 0 {
+				result.BannerURL = ""
+			}
+			if seen&(1<<6) == 0 {
+				result.Bio = ""
+			}
+			if seen&(1<<7) == 0 {
+				result.Company = Company{}
+			}
+			if seen&(1<<8) == 0 {
+				result.CreatedAt = 0
+			}
+			if seen&(1<<9) == 0 {
+				result.Deleted = false
+			}
+			if seen&(1<<10) == 0 {
+				result.DisplayName = ""
+			}
+			if seen&(1<<11) == 0 {
+				result.Email = ""
+			}
+			if seen&(1<<12) == 0 {
+				result.FailedLogins = 0
+			}
+			if seen&(1<<13) == 0 {
+				result.FirstName = ""
+			}
+			if seen&(1<<14) == 0 {
+				result.FollowerCount = 0
+			}
+			if seen&(1<<15) == 0 {
+				result.FollowingCount = 0
+			}
+			if seen&(1<<16) == 0 {
+				result.ID = 0
+			}
+			if seen&(1<<17) == 0 {
+				result.LastLogin = 0
+			}
+			if seen&(1<<18) == 0 {
+				result.LastName = ""
+			}
+			if seen&(1<<19) == 0 {
+				result.Locale = ""
+			}
+			if seen&(1<<20) == 0 {
+				result.LoginCount = 0
+			}
+			if seen&(1<<21) == 0 {
+				result.MiddleName = ""
+			}
+			if seen&(1<<22) == 0 {
+				result.Phone = ""
+			}
+			if seen&(1<<23) == 0 {
+				result.PostCount = 0
+			}
+			if seen&(1<<24) == 0 {
+				result.Preferences = Preferences{}
+			}
+			if seen&(1<<25) == 0 {
+				result.Premium = false
+			}
+			if seen&(1<<26) == 0 {
+				result.Reputation = 0
+			}
+			if seen&(1<<27) == 0 {
+				result.StorageQuota = 0
+			}
+			if seen&(1<<28) == 0 {
+				result.StorageUsed = 0
+			}
+			if seen&(1<<29) == 0 {
+				result.Suspended = false
+			}
+			if seen&(1<<30) == 0 {
+				result.TrustScore = 0
+			}
+			if seen&(1<<31) == 0 {
+				result.TwoFactorEnabled = false
+			}
+			if seen&(1<<32) == 0 {
+				result.UpdatedAt = 0
+			}
+			if seen&(1<<33) == 0 {
+				result.Username = ""
+			}
+			if seen&(1<<34) == 0 {
+				result.Verified = false
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -1118,6 +1328,111 @@ func (recv Account) DecodeFromStream(s *ggen.Stream) (result Account, err error)
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if seen&(1<<0) == 0 {
+			result.Active = false
+		}
+		if seen&(1<<1) == 0 {
+			result.Address = PostalAddress{}
+		}
+		if seen&(1<<2) == 0 {
+			result.Age = 0
+		}
+		if seen&(1<<3) == 0 {
+			result.AvatarURL = ""
+		}
+		if seen&(1<<4) == 0 {
+			result.Balance = 0
+		}
+		if seen&(1<<5) == 0 {
+			result.BannerURL = ""
+		}
+		if seen&(1<<6) == 0 {
+			result.Bio = ""
+		}
+		if seen&(1<<7) == 0 {
+			result.Company = Company{}
+		}
+		if seen&(1<<8) == 0 {
+			result.CreatedAt = 0
+		}
+		if seen&(1<<9) == 0 {
+			result.Deleted = false
+		}
+		if seen&(1<<10) == 0 {
+			result.DisplayName = ""
+		}
+		if seen&(1<<11) == 0 {
+			result.Email = ""
+		}
+		if seen&(1<<12) == 0 {
+			result.FailedLogins = 0
+		}
+		if seen&(1<<13) == 0 {
+			result.FirstName = ""
+		}
+		if seen&(1<<14) == 0 {
+			result.FollowerCount = 0
+		}
+		if seen&(1<<15) == 0 {
+			result.FollowingCount = 0
+		}
+		if seen&(1<<16) == 0 {
+			result.ID = 0
+		}
+		if seen&(1<<17) == 0 {
+			result.LastLogin = 0
+		}
+		if seen&(1<<18) == 0 {
+			result.LastName = ""
+		}
+		if seen&(1<<19) == 0 {
+			result.Locale = ""
+		}
+		if seen&(1<<20) == 0 {
+			result.LoginCount = 0
+		}
+		if seen&(1<<21) == 0 {
+			result.MiddleName = ""
+		}
+		if seen&(1<<22) == 0 {
+			result.Phone = ""
+		}
+		if seen&(1<<23) == 0 {
+			result.PostCount = 0
+		}
+		if seen&(1<<24) == 0 {
+			result.Preferences = Preferences{}
+		}
+		if seen&(1<<25) == 0 {
+			result.Premium = false
+		}
+		if seen&(1<<26) == 0 {
+			result.Reputation = 0
+		}
+		if seen&(1<<27) == 0 {
+			result.StorageQuota = 0
+		}
+		if seen&(1<<28) == 0 {
+			result.StorageUsed = 0
+		}
+		if seen&(1<<29) == 0 {
+			result.Suspended = false
+		}
+		if seen&(1<<30) == 0 {
+			result.TrustScore = 0
+		}
+		if seen&(1<<31) == 0 {
+			result.TwoFactorEnabled = false
+		}
+		if seen&(1<<32) == 0 {
+			result.UpdatedAt = 0
+		}
+		if seen&(1<<33) == 0 {
+			result.Username = ""
+		}
+		if seen&(1<<34) == 0 {
+			result.Verified = false
+		}
 		return result, nil
 	}
 	for {
@@ -1633,6 +1948,111 @@ func (recv Account) DecodeFromStream(s *ggen.Stream) (result Account, err error)
 		}
 		if c == '}' {
 			s.Pos++
+			if seen&(1<<0) == 0 {
+				result.Active = false
+			}
+			if seen&(1<<1) == 0 {
+				result.Address = PostalAddress{}
+			}
+			if seen&(1<<2) == 0 {
+				result.Age = 0
+			}
+			if seen&(1<<3) == 0 {
+				result.AvatarURL = ""
+			}
+			if seen&(1<<4) == 0 {
+				result.Balance = 0
+			}
+			if seen&(1<<5) == 0 {
+				result.BannerURL = ""
+			}
+			if seen&(1<<6) == 0 {
+				result.Bio = ""
+			}
+			if seen&(1<<7) == 0 {
+				result.Company = Company{}
+			}
+			if seen&(1<<8) == 0 {
+				result.CreatedAt = 0
+			}
+			if seen&(1<<9) == 0 {
+				result.Deleted = false
+			}
+			if seen&(1<<10) == 0 {
+				result.DisplayName = ""
+			}
+			if seen&(1<<11) == 0 {
+				result.Email = ""
+			}
+			if seen&(1<<12) == 0 {
+				result.FailedLogins = 0
+			}
+			if seen&(1<<13) == 0 {
+				result.FirstName = ""
+			}
+			if seen&(1<<14) == 0 {
+				result.FollowerCount = 0
+			}
+			if seen&(1<<15) == 0 {
+				result.FollowingCount = 0
+			}
+			if seen&(1<<16) == 0 {
+				result.ID = 0
+			}
+			if seen&(1<<17) == 0 {
+				result.LastLogin = 0
+			}
+			if seen&(1<<18) == 0 {
+				result.LastName = ""
+			}
+			if seen&(1<<19) == 0 {
+				result.Locale = ""
+			}
+			if seen&(1<<20) == 0 {
+				result.LoginCount = 0
+			}
+			if seen&(1<<21) == 0 {
+				result.MiddleName = ""
+			}
+			if seen&(1<<22) == 0 {
+				result.Phone = ""
+			}
+			if seen&(1<<23) == 0 {
+				result.PostCount = 0
+			}
+			if seen&(1<<24) == 0 {
+				result.Preferences = Preferences{}
+			}
+			if seen&(1<<25) == 0 {
+				result.Premium = false
+			}
+			if seen&(1<<26) == 0 {
+				result.Reputation = 0
+			}
+			if seen&(1<<27) == 0 {
+				result.StorageQuota = 0
+			}
+			if seen&(1<<28) == 0 {
+				result.StorageUsed = 0
+			}
+			if seen&(1<<29) == 0 {
+				result.Suspended = false
+			}
+			if seen&(1<<30) == 0 {
+				result.TrustScore = 0
+			}
+			if seen&(1<<31) == 0 {
+				result.TwoFactorEnabled = false
+			}
+			if seen&(1<<32) == 0 {
+				result.UpdatedAt = 0
+			}
+			if seen&(1<<33) == 0 {
+				result.Username = ""
+			}
+			if seen&(1<<34) == 0 {
+				result.Verified = false
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -1765,6 +2185,27 @@ func (recv PostalAddress) DecodeFrom(data []byte) (result PostalAddress, i int, 
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenCity {
+			result.City = ""
+		}
+		if !seenCountry {
+			result.Country = ""
+		}
+		if !seenGeo {
+			result.Geo = Geo{}
+		}
+		if !seenLine1 {
+			result.Line1 = ""
+		}
+		if !seenLine2 {
+			result.Line2 = ""
+		}
+		if !seenPostalCode {
+			result.PostalCode = ""
+		}
+		if !seenState {
+			result.State = ""
+		}
 		return result, i, nil
 	}
 	for {
@@ -1975,6 +2416,27 @@ func (recv PostalAddress) DecodeFrom(data []byte) (result PostalAddress, i int, 
 		}
 		if data[i] == '}' {
 			i++
+			if !seenCity {
+				result.City = ""
+			}
+			if !seenCountry {
+				result.Country = ""
+			}
+			if !seenGeo {
+				result.Geo = Geo{}
+			}
+			if !seenLine1 {
+				result.Line1 = ""
+			}
+			if !seenLine2 {
+				result.Line2 = ""
+			}
+			if !seenPostalCode {
+				result.PostalCode = ""
+			}
+			if !seenState {
+				result.State = ""
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -2006,6 +2468,27 @@ func (recv PostalAddress) DecodeFromStream(s *ggen.Stream) (result PostalAddress
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenCity {
+			result.City = ""
+		}
+		if !seenCountry {
+			result.Country = ""
+		}
+		if !seenGeo {
+			result.Geo = Geo{}
+		}
+		if !seenLine1 {
+			result.Line1 = ""
+		}
+		if !seenLine2 {
+			result.Line2 = ""
+		}
+		if !seenPostalCode {
+			result.PostalCode = ""
+		}
+		if !seenState {
+			result.State = ""
+		}
 		return result, nil
 	}
 	for {
@@ -2131,6 +2614,27 @@ func (recv PostalAddress) DecodeFromStream(s *ggen.Stream) (result PostalAddress
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenCity {
+				result.City = ""
+			}
+			if !seenCountry {
+				result.Country = ""
+			}
+			if !seenGeo {
+				result.Geo = Geo{}
+			}
+			if !seenLine1 {
+				result.Line1 = ""
+			}
+			if !seenLine2 {
+				result.Line2 = ""
+			}
+			if !seenPostalCode {
+				result.PostalCode = ""
+			}
+			if !seenState {
+				result.State = ""
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -2189,6 +2693,18 @@ func (recv Geo) DecodeFrom(data []byte) (result Geo, i int, err error) {
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenAccuracy {
+			result.Accuracy = 0
+		}
+		if !seenAltitude {
+			result.Altitude = 0
+		}
+		if !seenLat {
+			result.Lat = 0
+		}
+		if !seenLng {
+			result.Lng = 0
+		}
 		return result, i, nil
 	}
 	for {
@@ -2279,6 +2795,18 @@ func (recv Geo) DecodeFrom(data []byte) (result Geo, i int, err error) {
 		}
 		if data[i] == '}' {
 			i++
+			if !seenAccuracy {
+				result.Accuracy = 0
+			}
+			if !seenAltitude {
+				result.Altitude = 0
+			}
+			if !seenLat {
+				result.Lat = 0
+			}
+			if !seenLng {
+				result.Lng = 0
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -2307,6 +2835,18 @@ func (recv Geo) DecodeFromStream(s *ggen.Stream) (result Geo, err error) {
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenAccuracy {
+			result.Accuracy = 0
+		}
+		if !seenAltitude {
+			result.Altitude = 0
+		}
+		if !seenLat {
+			result.Lat = 0
+		}
+		if !seenLng {
+			result.Lng = 0
+		}
 		return result, nil
 	}
 	for {
@@ -2398,6 +2938,18 @@ func (recv Geo) DecodeFromStream(s *ggen.Stream) (result Geo, err error) {
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenAccuracy {
+				result.Accuracy = 0
+			}
+			if !seenAltitude {
+				result.Altitude = 0
+			}
+			if !seenLat {
+				result.Lat = 0
+			}
+			if !seenLng {
+				result.Lng = 0
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -2452,6 +3004,27 @@ func (recv Company) DecodeFrom(data []byte) (result Company, i int, err error) {
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenDepartment {
+			result.Department = ""
+		}
+		if !seenEmployeeID {
+			result.EmployeeID = ""
+		}
+		if !seenFounded {
+			result.Founded = 0
+		}
+		if !seenHeadcount {
+			result.Headcount = 0
+		}
+		if !seenIsPublic {
+			result.IsPublic = false
+		}
+		if !seenName {
+			result.Name = ""
+		}
+		if !seenTitle {
+			result.Title = ""
+		}
 		return result, i, nil
 	}
 	for {
@@ -2721,6 +3294,27 @@ func (recv Company) DecodeFrom(data []byte) (result Company, i int, err error) {
 		}
 		if data[i] == '}' {
 			i++
+			if !seenDepartment {
+				result.Department = ""
+			}
+			if !seenEmployeeID {
+				result.EmployeeID = ""
+			}
+			if !seenFounded {
+				result.Founded = 0
+			}
+			if !seenHeadcount {
+				result.Headcount = 0
+			}
+			if !seenIsPublic {
+				result.IsPublic = false
+			}
+			if !seenName {
+				result.Name = ""
+			}
+			if !seenTitle {
+				result.Title = ""
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -2752,6 +3346,27 @@ func (recv Company) DecodeFromStream(s *ggen.Stream) (result Company, err error)
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenDepartment {
+			result.Department = ""
+		}
+		if !seenEmployeeID {
+			result.EmployeeID = ""
+		}
+		if !seenFounded {
+			result.Founded = 0
+		}
+		if !seenHeadcount {
+			result.Headcount = 0
+		}
+		if !seenIsPublic {
+			result.IsPublic = false
+		}
+		if !seenName {
+			result.Name = ""
+		}
+		if !seenTitle {
+			result.Title = ""
+		}
 		return result, nil
 	}
 	for {
@@ -2884,6 +3499,27 @@ func (recv Company) DecodeFromStream(s *ggen.Stream) (result Company, err error)
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenDepartment {
+				result.Department = ""
+			}
+			if !seenEmployeeID {
+				result.EmployeeID = ""
+			}
+			if !seenFounded {
+				result.Founded = 0
+			}
+			if !seenHeadcount {
+				result.Headcount = 0
+			}
+			if !seenIsPublic {
+				result.IsPublic = false
+			}
+			if !seenName {
+				result.Name = ""
+			}
+			if !seenTitle {
+				result.Title = ""
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -2943,6 +3579,36 @@ func (recv Preferences) DecodeFrom(data []byte) (result Preferences, i int, err 
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenAutoSave {
+			result.AutoSave = false
+		}
+		if !seenBetaFeatures {
+			result.BetaFeatures = false
+		}
+		if !seenCurrency {
+			result.Currency = ""
+		}
+		if !seenEmailNotifications {
+			result.EmailNotifications = false
+		}
+		if !seenItemsPerPage {
+			result.ItemsPerPage = 0
+		}
+		if !seenLanguage {
+			result.Language = ""
+		}
+		if !seenPushNotifications {
+			result.PushNotifications = false
+		}
+		if !seenSMSNotifications {
+			result.SMSNotifications = false
+		}
+		if !seenTheme {
+			result.Theme = ""
+		}
+		if !seenTimezone {
+			result.Timezone = ""
+		}
 		return result, i, nil
 	}
 	for {
@@ -3175,6 +3841,36 @@ func (recv Preferences) DecodeFrom(data []byte) (result Preferences, i int, err 
 		}
 		if data[i] == '}' {
 			i++
+			if !seenAutoSave {
+				result.AutoSave = false
+			}
+			if !seenBetaFeatures {
+				result.BetaFeatures = false
+			}
+			if !seenCurrency {
+				result.Currency = ""
+			}
+			if !seenEmailNotifications {
+				result.EmailNotifications = false
+			}
+			if !seenItemsPerPage {
+				result.ItemsPerPage = 0
+			}
+			if !seenLanguage {
+				result.Language = ""
+			}
+			if !seenPushNotifications {
+				result.PushNotifications = false
+			}
+			if !seenSMSNotifications {
+				result.SMSNotifications = false
+			}
+			if !seenTheme {
+				result.Theme = ""
+			}
+			if !seenTimezone {
+				result.Timezone = ""
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -3209,6 +3905,36 @@ func (recv Preferences) DecodeFromStream(s *ggen.Stream) (result Preferences, er
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenAutoSave {
+			result.AutoSave = false
+		}
+		if !seenBetaFeatures {
+			result.BetaFeatures = false
+		}
+		if !seenCurrency {
+			result.Currency = ""
+		}
+		if !seenEmailNotifications {
+			result.EmailNotifications = false
+		}
+		if !seenItemsPerPage {
+			result.ItemsPerPage = 0
+		}
+		if !seenLanguage {
+			result.Language = ""
+		}
+		if !seenPushNotifications {
+			result.PushNotifications = false
+		}
+		if !seenSMSNotifications {
+			result.SMSNotifications = false
+		}
+		if !seenTheme {
+			result.Theme = ""
+		}
+		if !seenTimezone {
+			result.Timezone = ""
+		}
 		return result, nil
 	}
 	for {
@@ -3378,6 +4104,36 @@ func (recv Preferences) DecodeFromStream(s *ggen.Stream) (result Preferences, er
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenAutoSave {
+				result.AutoSave = false
+			}
+			if !seenBetaFeatures {
+				result.BetaFeatures = false
+			}
+			if !seenCurrency {
+				result.Currency = ""
+			}
+			if !seenEmailNotifications {
+				result.EmailNotifications = false
+			}
+			if !seenItemsPerPage {
+				result.ItemsPerPage = 0
+			}
+			if !seenLanguage {
+				result.Language = ""
+			}
+			if !seenPushNotifications {
+				result.PushNotifications = false
+			}
+			if !seenSMSNotifications {
+				result.SMSNotifications = false
+			}
+			if !seenTheme {
+				result.Theme = ""
+			}
+			if !seenTimezone {
+				result.Timezone = ""
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -3434,6 +4190,111 @@ func (recv CopyAccount) DecodeFrom(data []byte) (result CopyAccount, i int, err 
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if seen&(1<<0) == 0 {
+			result.Active = false
+		}
+		if seen&(1<<1) == 0 {
+			result.Address = CopyPostalAddress{}
+		}
+		if seen&(1<<2) == 0 {
+			result.Age = 0
+		}
+		if seen&(1<<3) == 0 {
+			result.AvatarURL = ""
+		}
+		if seen&(1<<4) == 0 {
+			result.Balance = 0
+		}
+		if seen&(1<<5) == 0 {
+			result.BannerURL = ""
+		}
+		if seen&(1<<6) == 0 {
+			result.Bio = ""
+		}
+		if seen&(1<<7) == 0 {
+			result.Company = CopyCompany{}
+		}
+		if seen&(1<<8) == 0 {
+			result.CreatedAt = 0
+		}
+		if seen&(1<<9) == 0 {
+			result.Deleted = false
+		}
+		if seen&(1<<10) == 0 {
+			result.DisplayName = ""
+		}
+		if seen&(1<<11) == 0 {
+			result.Email = ""
+		}
+		if seen&(1<<12) == 0 {
+			result.FailedLogins = 0
+		}
+		if seen&(1<<13) == 0 {
+			result.FirstName = ""
+		}
+		if seen&(1<<14) == 0 {
+			result.FollowerCount = 0
+		}
+		if seen&(1<<15) == 0 {
+			result.FollowingCount = 0
+		}
+		if seen&(1<<16) == 0 {
+			result.ID = 0
+		}
+		if seen&(1<<17) == 0 {
+			result.LastLogin = 0
+		}
+		if seen&(1<<18) == 0 {
+			result.LastName = ""
+		}
+		if seen&(1<<19) == 0 {
+			result.Locale = ""
+		}
+		if seen&(1<<20) == 0 {
+			result.LoginCount = 0
+		}
+		if seen&(1<<21) == 0 {
+			result.MiddleName = ""
+		}
+		if seen&(1<<22) == 0 {
+			result.Phone = ""
+		}
+		if seen&(1<<23) == 0 {
+			result.PostCount = 0
+		}
+		if seen&(1<<24) == 0 {
+			result.Preferences = CopyPreferences{}
+		}
+		if seen&(1<<25) == 0 {
+			result.Premium = false
+		}
+		if seen&(1<<26) == 0 {
+			result.Reputation = 0
+		}
+		if seen&(1<<27) == 0 {
+			result.StorageQuota = 0
+		}
+		if seen&(1<<28) == 0 {
+			result.StorageUsed = 0
+		}
+		if seen&(1<<29) == 0 {
+			result.Suspended = false
+		}
+		if seen&(1<<30) == 0 {
+			result.TrustScore = 0
+		}
+		if seen&(1<<31) == 0 {
+			result.TwoFactorEnabled = false
+		}
+		if seen&(1<<32) == 0 {
+			result.UpdatedAt = 0
+		}
+		if seen&(1<<33) == 0 {
+			result.Username = ""
+		}
+		if seen&(1<<34) == 0 {
+			result.Verified = false
+		}
 		return result, i, nil
 	}
 	for {
@@ -4512,6 +5373,111 @@ func (recv CopyAccount) DecodeFrom(data []byte) (result CopyAccount, i int, err 
 		}
 		if data[i] == '}' {
 			i++
+			if seen&(1<<0) == 0 {
+				result.Active = false
+			}
+			if seen&(1<<1) == 0 {
+				result.Address = CopyPostalAddress{}
+			}
+			if seen&(1<<2) == 0 {
+				result.Age = 0
+			}
+			if seen&(1<<3) == 0 {
+				result.AvatarURL = ""
+			}
+			if seen&(1<<4) == 0 {
+				result.Balance = 0
+			}
+			if seen&(1<<5) == 0 {
+				result.BannerURL = ""
+			}
+			if seen&(1<<6) == 0 {
+				result.Bio = ""
+			}
+			if seen&(1<<7) == 0 {
+				result.Company = CopyCompany{}
+			}
+			if seen&(1<<8) == 0 {
+				result.CreatedAt = 0
+			}
+			if seen&(1<<9) == 0 {
+				result.Deleted = false
+			}
+			if seen&(1<<10) == 0 {
+				result.DisplayName = ""
+			}
+			if seen&(1<<11) == 0 {
+				result.Email = ""
+			}
+			if seen&(1<<12) == 0 {
+				result.FailedLogins = 0
+			}
+			if seen&(1<<13) == 0 {
+				result.FirstName = ""
+			}
+			if seen&(1<<14) == 0 {
+				result.FollowerCount = 0
+			}
+			if seen&(1<<15) == 0 {
+				result.FollowingCount = 0
+			}
+			if seen&(1<<16) == 0 {
+				result.ID = 0
+			}
+			if seen&(1<<17) == 0 {
+				result.LastLogin = 0
+			}
+			if seen&(1<<18) == 0 {
+				result.LastName = ""
+			}
+			if seen&(1<<19) == 0 {
+				result.Locale = ""
+			}
+			if seen&(1<<20) == 0 {
+				result.LoginCount = 0
+			}
+			if seen&(1<<21) == 0 {
+				result.MiddleName = ""
+			}
+			if seen&(1<<22) == 0 {
+				result.Phone = ""
+			}
+			if seen&(1<<23) == 0 {
+				result.PostCount = 0
+			}
+			if seen&(1<<24) == 0 {
+				result.Preferences = CopyPreferences{}
+			}
+			if seen&(1<<25) == 0 {
+				result.Premium = false
+			}
+			if seen&(1<<26) == 0 {
+				result.Reputation = 0
+			}
+			if seen&(1<<27) == 0 {
+				result.StorageQuota = 0
+			}
+			if seen&(1<<28) == 0 {
+				result.StorageUsed = 0
+			}
+			if seen&(1<<29) == 0 {
+				result.Suspended = false
+			}
+			if seen&(1<<30) == 0 {
+				result.TrustScore = 0
+			}
+			if seen&(1<<31) == 0 {
+				result.TwoFactorEnabled = false
+			}
+			if seen&(1<<32) == 0 {
+				result.UpdatedAt = 0
+			}
+			if seen&(1<<33) == 0 {
+				result.Username = ""
+			}
+			if seen&(1<<34) == 0 {
+				result.Verified = false
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -4537,6 +5503,111 @@ func (recv CopyAccount) DecodeFromStream(s *ggen.Stream) (result CopyAccount, er
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if seen&(1<<0) == 0 {
+			result.Active = false
+		}
+		if seen&(1<<1) == 0 {
+			result.Address = CopyPostalAddress{}
+		}
+		if seen&(1<<2) == 0 {
+			result.Age = 0
+		}
+		if seen&(1<<3) == 0 {
+			result.AvatarURL = ""
+		}
+		if seen&(1<<4) == 0 {
+			result.Balance = 0
+		}
+		if seen&(1<<5) == 0 {
+			result.BannerURL = ""
+		}
+		if seen&(1<<6) == 0 {
+			result.Bio = ""
+		}
+		if seen&(1<<7) == 0 {
+			result.Company = CopyCompany{}
+		}
+		if seen&(1<<8) == 0 {
+			result.CreatedAt = 0
+		}
+		if seen&(1<<9) == 0 {
+			result.Deleted = false
+		}
+		if seen&(1<<10) == 0 {
+			result.DisplayName = ""
+		}
+		if seen&(1<<11) == 0 {
+			result.Email = ""
+		}
+		if seen&(1<<12) == 0 {
+			result.FailedLogins = 0
+		}
+		if seen&(1<<13) == 0 {
+			result.FirstName = ""
+		}
+		if seen&(1<<14) == 0 {
+			result.FollowerCount = 0
+		}
+		if seen&(1<<15) == 0 {
+			result.FollowingCount = 0
+		}
+		if seen&(1<<16) == 0 {
+			result.ID = 0
+		}
+		if seen&(1<<17) == 0 {
+			result.LastLogin = 0
+		}
+		if seen&(1<<18) == 0 {
+			result.LastName = ""
+		}
+		if seen&(1<<19) == 0 {
+			result.Locale = ""
+		}
+		if seen&(1<<20) == 0 {
+			result.LoginCount = 0
+		}
+		if seen&(1<<21) == 0 {
+			result.MiddleName = ""
+		}
+		if seen&(1<<22) == 0 {
+			result.Phone = ""
+		}
+		if seen&(1<<23) == 0 {
+			result.PostCount = 0
+		}
+		if seen&(1<<24) == 0 {
+			result.Preferences = CopyPreferences{}
+		}
+		if seen&(1<<25) == 0 {
+			result.Premium = false
+		}
+		if seen&(1<<26) == 0 {
+			result.Reputation = 0
+		}
+		if seen&(1<<27) == 0 {
+			result.StorageQuota = 0
+		}
+		if seen&(1<<28) == 0 {
+			result.StorageUsed = 0
+		}
+		if seen&(1<<29) == 0 {
+			result.Suspended = false
+		}
+		if seen&(1<<30) == 0 {
+			result.TrustScore = 0
+		}
+		if seen&(1<<31) == 0 {
+			result.TwoFactorEnabled = false
+		}
+		if seen&(1<<32) == 0 {
+			result.UpdatedAt = 0
+		}
+		if seen&(1<<33) == 0 {
+			result.Username = ""
+		}
+		if seen&(1<<34) == 0 {
+			result.Verified = false
+		}
 		return result, nil
 	}
 	for {
@@ -5052,6 +6123,111 @@ func (recv CopyAccount) DecodeFromStream(s *ggen.Stream) (result CopyAccount, er
 		}
 		if c == '}' {
 			s.Pos++
+			if seen&(1<<0) == 0 {
+				result.Active = false
+			}
+			if seen&(1<<1) == 0 {
+				result.Address = CopyPostalAddress{}
+			}
+			if seen&(1<<2) == 0 {
+				result.Age = 0
+			}
+			if seen&(1<<3) == 0 {
+				result.AvatarURL = ""
+			}
+			if seen&(1<<4) == 0 {
+				result.Balance = 0
+			}
+			if seen&(1<<5) == 0 {
+				result.BannerURL = ""
+			}
+			if seen&(1<<6) == 0 {
+				result.Bio = ""
+			}
+			if seen&(1<<7) == 0 {
+				result.Company = CopyCompany{}
+			}
+			if seen&(1<<8) == 0 {
+				result.CreatedAt = 0
+			}
+			if seen&(1<<9) == 0 {
+				result.Deleted = false
+			}
+			if seen&(1<<10) == 0 {
+				result.DisplayName = ""
+			}
+			if seen&(1<<11) == 0 {
+				result.Email = ""
+			}
+			if seen&(1<<12) == 0 {
+				result.FailedLogins = 0
+			}
+			if seen&(1<<13) == 0 {
+				result.FirstName = ""
+			}
+			if seen&(1<<14) == 0 {
+				result.FollowerCount = 0
+			}
+			if seen&(1<<15) == 0 {
+				result.FollowingCount = 0
+			}
+			if seen&(1<<16) == 0 {
+				result.ID = 0
+			}
+			if seen&(1<<17) == 0 {
+				result.LastLogin = 0
+			}
+			if seen&(1<<18) == 0 {
+				result.LastName = ""
+			}
+			if seen&(1<<19) == 0 {
+				result.Locale = ""
+			}
+			if seen&(1<<20) == 0 {
+				result.LoginCount = 0
+			}
+			if seen&(1<<21) == 0 {
+				result.MiddleName = ""
+			}
+			if seen&(1<<22) == 0 {
+				result.Phone = ""
+			}
+			if seen&(1<<23) == 0 {
+				result.PostCount = 0
+			}
+			if seen&(1<<24) == 0 {
+				result.Preferences = CopyPreferences{}
+			}
+			if seen&(1<<25) == 0 {
+				result.Premium = false
+			}
+			if seen&(1<<26) == 0 {
+				result.Reputation = 0
+			}
+			if seen&(1<<27) == 0 {
+				result.StorageQuota = 0
+			}
+			if seen&(1<<28) == 0 {
+				result.StorageUsed = 0
+			}
+			if seen&(1<<29) == 0 {
+				result.Suspended = false
+			}
+			if seen&(1<<30) == 0 {
+				result.TrustScore = 0
+			}
+			if seen&(1<<31) == 0 {
+				result.TwoFactorEnabled = false
+			}
+			if seen&(1<<32) == 0 {
+				result.UpdatedAt = 0
+			}
+			if seen&(1<<33) == 0 {
+				result.Username = ""
+			}
+			if seen&(1<<34) == 0 {
+				result.Verified = false
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -5184,6 +6360,27 @@ func (recv CopyPostalAddress) DecodeFrom(data []byte) (result CopyPostalAddress,
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenCity {
+			result.City = ""
+		}
+		if !seenCountry {
+			result.Country = ""
+		}
+		if !seenGeo {
+			result.Geo = Geo{}
+		}
+		if !seenLine1 {
+			result.Line1 = ""
+		}
+		if !seenLine2 {
+			result.Line2 = ""
+		}
+		if !seenPostalCode {
+			result.PostalCode = ""
+		}
+		if !seenState {
+			result.State = ""
+		}
 		return result, i, nil
 	}
 	for {
@@ -5400,6 +6597,27 @@ func (recv CopyPostalAddress) DecodeFrom(data []byte) (result CopyPostalAddress,
 		}
 		if data[i] == '}' {
 			i++
+			if !seenCity {
+				result.City = ""
+			}
+			if !seenCountry {
+				result.Country = ""
+			}
+			if !seenGeo {
+				result.Geo = Geo{}
+			}
+			if !seenLine1 {
+				result.Line1 = ""
+			}
+			if !seenLine2 {
+				result.Line2 = ""
+			}
+			if !seenPostalCode {
+				result.PostalCode = ""
+			}
+			if !seenState {
+				result.State = ""
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -5431,6 +6649,27 @@ func (recv CopyPostalAddress) DecodeFromStream(s *ggen.Stream) (result CopyPosta
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenCity {
+			result.City = ""
+		}
+		if !seenCountry {
+			result.Country = ""
+		}
+		if !seenGeo {
+			result.Geo = Geo{}
+		}
+		if !seenLine1 {
+			result.Line1 = ""
+		}
+		if !seenLine2 {
+			result.Line2 = ""
+		}
+		if !seenPostalCode {
+			result.PostalCode = ""
+		}
+		if !seenState {
+			result.State = ""
+		}
 		return result, nil
 	}
 	for {
@@ -5556,6 +6795,27 @@ func (recv CopyPostalAddress) DecodeFromStream(s *ggen.Stream) (result CopyPosta
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenCity {
+				result.City = ""
+			}
+			if !seenCountry {
+				result.Country = ""
+			}
+			if !seenGeo {
+				result.Geo = Geo{}
+			}
+			if !seenLine1 {
+				result.Line1 = ""
+			}
+			if !seenLine2 {
+				result.Line2 = ""
+			}
+			if !seenPostalCode {
+				result.PostalCode = ""
+			}
+			if !seenState {
+				result.State = ""
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -5617,6 +6877,27 @@ func (recv CopyCompany) DecodeFrom(data []byte) (result CopyCompany, i int, err 
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenDepartment {
+			result.Department = ""
+		}
+		if !seenEmployeeID {
+			result.EmployeeID = ""
+		}
+		if !seenFounded {
+			result.Founded = 0
+		}
+		if !seenHeadcount {
+			result.Headcount = 0
+		}
+		if !seenIsPublic {
+			result.IsPublic = false
+		}
+		if !seenName {
+			result.Name = ""
+		}
+		if !seenTitle {
+			result.Title = ""
+		}
 		return result, i, nil
 	}
 	for {
@@ -5890,6 +7171,27 @@ func (recv CopyCompany) DecodeFrom(data []byte) (result CopyCompany, i int, err 
 		}
 		if data[i] == '}' {
 			i++
+			if !seenDepartment {
+				result.Department = ""
+			}
+			if !seenEmployeeID {
+				result.EmployeeID = ""
+			}
+			if !seenFounded {
+				result.Founded = 0
+			}
+			if !seenHeadcount {
+				result.Headcount = 0
+			}
+			if !seenIsPublic {
+				result.IsPublic = false
+			}
+			if !seenName {
+				result.Name = ""
+			}
+			if !seenTitle {
+				result.Title = ""
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -5921,6 +7223,27 @@ func (recv CopyCompany) DecodeFromStream(s *ggen.Stream) (result CopyCompany, er
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenDepartment {
+			result.Department = ""
+		}
+		if !seenEmployeeID {
+			result.EmployeeID = ""
+		}
+		if !seenFounded {
+			result.Founded = 0
+		}
+		if !seenHeadcount {
+			result.Headcount = 0
+		}
+		if !seenIsPublic {
+			result.IsPublic = false
+		}
+		if !seenName {
+			result.Name = ""
+		}
+		if !seenTitle {
+			result.Title = ""
+		}
 		return result, nil
 	}
 	for {
@@ -6053,6 +7376,27 @@ func (recv CopyCompany) DecodeFromStream(s *ggen.Stream) (result CopyCompany, er
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenDepartment {
+				result.Department = ""
+			}
+			if !seenEmployeeID {
+				result.EmployeeID = ""
+			}
+			if !seenFounded {
+				result.Founded = 0
+			}
+			if !seenHeadcount {
+				result.Headcount = 0
+			}
+			if !seenIsPublic {
+				result.IsPublic = false
+			}
+			if !seenName {
+				result.Name = ""
+			}
+			if !seenTitle {
+				result.Title = ""
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -6112,6 +7456,36 @@ func (recv CopyPreferences) DecodeFrom(data []byte) (result CopyPreferences, i i
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenAutoSave {
+			result.AutoSave = false
+		}
+		if !seenBetaFeatures {
+			result.BetaFeatures = false
+		}
+		if !seenCurrency {
+			result.Currency = ""
+		}
+		if !seenEmailNotifications {
+			result.EmailNotifications = false
+		}
+		if !seenItemsPerPage {
+			result.ItemsPerPage = 0
+		}
+		if !seenLanguage {
+			result.Language = ""
+		}
+		if !seenPushNotifications {
+			result.PushNotifications = false
+		}
+		if !seenSMSNotifications {
+			result.SMSNotifications = false
+		}
+		if !seenTheme {
+			result.Theme = ""
+		}
+		if !seenTimezone {
+			result.Timezone = ""
+		}
 		return result, i, nil
 	}
 	for {
@@ -6348,6 +7722,36 @@ func (recv CopyPreferences) DecodeFrom(data []byte) (result CopyPreferences, i i
 		}
 		if data[i] == '}' {
 			i++
+			if !seenAutoSave {
+				result.AutoSave = false
+			}
+			if !seenBetaFeatures {
+				result.BetaFeatures = false
+			}
+			if !seenCurrency {
+				result.Currency = ""
+			}
+			if !seenEmailNotifications {
+				result.EmailNotifications = false
+			}
+			if !seenItemsPerPage {
+				result.ItemsPerPage = 0
+			}
+			if !seenLanguage {
+				result.Language = ""
+			}
+			if !seenPushNotifications {
+				result.PushNotifications = false
+			}
+			if !seenSMSNotifications {
+				result.SMSNotifications = false
+			}
+			if !seenTheme {
+				result.Theme = ""
+			}
+			if !seenTimezone {
+				result.Timezone = ""
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -6382,6 +7786,36 @@ func (recv CopyPreferences) DecodeFromStream(s *ggen.Stream) (result CopyPrefere
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenAutoSave {
+			result.AutoSave = false
+		}
+		if !seenBetaFeatures {
+			result.BetaFeatures = false
+		}
+		if !seenCurrency {
+			result.Currency = ""
+		}
+		if !seenEmailNotifications {
+			result.EmailNotifications = false
+		}
+		if !seenItemsPerPage {
+			result.ItemsPerPage = 0
+		}
+		if !seenLanguage {
+			result.Language = ""
+		}
+		if !seenPushNotifications {
+			result.PushNotifications = false
+		}
+		if !seenSMSNotifications {
+			result.SMSNotifications = false
+		}
+		if !seenTheme {
+			result.Theme = ""
+		}
+		if !seenTimezone {
+			result.Timezone = ""
+		}
 		return result, nil
 	}
 	for {
@@ -6551,6 +7985,36 @@ func (recv CopyPreferences) DecodeFromStream(s *ggen.Stream) (result CopyPrefere
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenAutoSave {
+				result.AutoSave = false
+			}
+			if !seenBetaFeatures {
+				result.BetaFeatures = false
+			}
+			if !seenCurrency {
+				result.Currency = ""
+			}
+			if !seenEmailNotifications {
+				result.EmailNotifications = false
+			}
+			if !seenItemsPerPage {
+				result.ItemsPerPage = 0
+			}
+			if !seenLanguage {
+				result.Language = ""
+			}
+			if !seenPushNotifications {
+				result.PushNotifications = false
+			}
+			if !seenSMSNotifications {
+				result.SMSNotifications = false
+			}
+			if !seenTheme {
+				result.Theme = ""
+			}
+			if !seenTimezone {
+				result.Timezone = ""
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)

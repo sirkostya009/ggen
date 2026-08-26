@@ -28,6 +28,12 @@ func (recv External2) DecodeFrom(data []byte) (result External2, i int, err erro
 	if i < len(data) && data[i] == '}' {
 		i++
 		if !seenKey {
+			result.Key = ""
+		}
+		if !seenValue {
+			result.Value = 0
+		}
+		if !seenKey {
 			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"key"}}
 		}
 		return result, i, nil
@@ -165,6 +171,12 @@ func (recv External2) DecodeFrom(data []byte) (result External2, i int, err erro
 		if data[i] == '}' {
 			i++
 			if !seenKey {
+				result.Key = ""
+			}
+			if !seenValue {
+				result.Value = 0
+			}
+			if !seenKey {
 				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"key"}}
 			}
 			return result, i, nil
@@ -193,6 +205,12 @@ func (recv External2) DecodeFromStream(s *ggen.Stream) (result External2, err er
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenKey {
+			result.Key = ""
+		}
+		if !seenValue {
+			result.Value = 0
+		}
 		if !seenKey {
 			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"key"}}
 		}
@@ -264,6 +282,12 @@ func (recv External2) DecodeFromStream(s *ggen.Stream) (result External2, err er
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenKey {
+				result.Key = ""
+			}
+			if !seenValue {
+				result.Value = 0
+			}
 			if !seenKey {
 				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"key"}}
 			}

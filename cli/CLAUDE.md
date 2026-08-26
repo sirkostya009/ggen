@@ -269,10 +269,16 @@ value, returns a buffer alias (copy it if retained; `json.Unmarshal`/`SetString`
 consume it in place). Replaced the old `Shift=false` + `s.Bytes()[start:s.Pos]`
 slice dance — see .claude/scan.md.
 
-**Decode-into-receiver semantics.** The receiver passed in IS the merge source.
-Scalar fields persist across JSON omission (stdlib-merge shape); container fields
-reset at the top of DecodeFrom so the decoder never appends over carried-in data
-(unconditional — blank payload → blank slate, capacity kept):
+**Decode-into-receiver semantics.** The receiver passed in is an ALLOCATION
+source, not a merge source: the decoded result is what a fresh decode would
+give, and only container capacity + element allocations are recycled out of it.
+Two passes carry that. `emitReceiverReset` resets containers at the top of
+DecodeFrom so the decoder never appends over carried-in data (unconditional —
+blank payload → blank slate, capacity kept); `emitOmittedZero`, emitted from
+`renderPostLoopShape` at every success return of both paths, zeroes every field
+whose key never appeared (`if !seenX { result.X = <zero> }`, reading the same
+seen flags the required-field checks use). Containers are NOT in the second
+pass — they were already emptied and keep their backing.
 
 - slices and `[]byte`: `if X != nil { X = X[:0] }` at entry (backing reused;
   `make(...)` only when nil). For slice-of-slice (`[][]T`, any depth) the inner
@@ -284,7 +290,9 @@ reset at the top of DecodeFrom so the decoder never appends over carried-in data
 - nested struct: `result.X, _, _ = result.X.DecodeFrom(...)` — value-receiver
   takes the existing value as merge source
 - pointer `*T` / `**T` / … (any depth): **parse-first** cascade. `null` →
-  `result.X = nil` (drops a carried-in chain, stdlib parity). Otherwise the leaf
+  `result.X = nil` (drops a carried-in chain, stdlib parity); an OMITTED key
+  nils it in the end-of-decode pass, deliberately at the END so a present key
+  still reuses the carried pointee chain. Otherwise the leaf
   is decoded into a stack temp FIRST — a parse failure returns before any
   mutation, so no chain is allocated for a value that never landed. On success an
   assign cascade reuses the non-nil prefix of the receiver's chain and allocates
@@ -293,13 +301,12 @@ reset at the top of DecodeFrom so the decoder never appends over carried-in data
   merges; primitive leaves skip the seed. Widened numeric leaves scan into a wide
   temp and cast at the assign site. The leaf decodes natively at every depth — NO
   encoding/json fallback. Same emit on bytes + stream paths
-- fixed arrays `[N]T`: every slot overwritten or strict-length-errors; no entry
-  reset. A MERGEABLE element is blanked before the element decode (`dst[i] =
-  T{}` for a struct elem; the multi-level pointer cascade builds a fresh chain
-  via `TargetNil`) — decoding a struct in place through its value receiver
-  otherwise MERGED the carried slot, so `[2]Inner` kept fields the payload
-  omitted while `[]Inner` and `[2]*Inner` decoded fresh. jsonv2 zeroes; pinned
-  by `TestMerge_ArraySlotsOverwrite`
+- fixed arrays `[N]T`: every slot decodes fresh or strict-length-errors; no
+  entry reset, and an omitted key zeroes the whole array in the end-of-decode
+  pass. A GENERATED struct element is handed the carried slot as-is (its own
+  decode resets it — opt #74); any other mergeable element is blanked first
+  (`dst[i] = T{}`; the multi-level pointer cascade builds a fresh chain via
+  `TargetNil`). Pinned by `TestMerge_ArraySlotsOverwrite`
 
 JSON `null` for slice/map sets `result.X = nil` (stdlib v1/v2 parity). JSON
 `[]`/`{}` on a non-nil receiver keeps the `[:0]`'d / cleared container; on a nil
@@ -340,13 +347,15 @@ cursor on both paths (`emitNoCloseAfterComma` /
 `s.Bytes()[s.Pos]` on input truncated right after a comma (`SkipSpace` returns nil
 at EOF with `Pos == len(buf)`). Pinned in `scan_decode_test.go`.
 
-**Decode-into-receiver vs stdlib merge — divergences.** NOT a drop-in: (1)
-container fields reset at decode entry, so an OMITTED slice/map key is emptied
-(stdlib retains it); (2) a present map key REPLACES (clear+refill) rather than
-merging entries (stdlib retains receiver-only keys); (3) scalar `null` errors
-(above). Scalars-persist-on-omit, slice-replace-on-present, null→nil for
-slice/map/pointer, nested-struct merge, and `*T`/`**T` reuse all MATCH stdlib —
-pinned in `TestStdCompatMerge_Parity`.
+**Decode-into-receiver vs stdlib merge — divergences.** NOT a drop-in: (1) a
+key the payload omits is zeroed — emptied for containers, `nil` for pointers,
+Go zero for everything else — where stdlib retains the receiver's value; (2) a
+present map key REPLACES (clear+refill) rather than merging entries (stdlib
+retains receiver-only keys); (3) scalar `null` errors (above).
+Slice-replace-on-present, null→nil for slice/map/pointer, nested-struct merge,
+and `*T`/`**T` reuse on a PRESENT key all MATCH stdlib — pinned in
+`TestStdCompatMerge_Parity`; the omitted-key divergences are pinned in
+`TestStdCompatMerge_IntentionalDivergences`.
 
 Call with a zero-value receiver for a fresh decode (`T{}.DecodeFrom(data)` for
 struct/slice/map/array; `var zero T; zero.DecodeFrom(data)` for primitive
@@ -1673,3 +1682,19 @@ benchmarks under `bench/`.
   `./...` walk + dir-skip, per-flag output effects.
 - `bench_test.go` — `BenchmarkGenerate`.
 - `log_test.go` — Logger level + sink behaviour.
+
+74. **Carried element allocations reused in slice/array decode.** A GENERATED
+    struct element's `DecodeFrom` fully resets the value it is handed (that is
+    what the end-of-decode zeroing pass above buys), so the element
+    slot no longer has to be blanked before decoding into it — the carried
+    element's own slices/maps stay reachable and get reused. Array slots skip
+    the `dst[i] = T{}` blanking; the `[]T` and `[]*T` slab pre-grows become
+    `if len(dst) < cap(dst) { dst = dst[:len(dst)+1] } else { dst = append(dst,
+    T{}) }`, so a within-cap grow hands back the carried element (`emitElemGrow`,
+    both paths). GATED on `directStruct` (`ElemKind == KindStruct &&
+    isGenerated`): an element decoded through the reflective `encoding/json`
+    fallback or an `UnmarshalJSON`/`UnmarshalText` rung MERGES into a non-zero
+    value, which would resurrect stale data, and a cross-package generated type
+    (not in the current pass) stays on the blanking shape too. Primitive
+    elements are fully overwritten by their scan and were left alone. Pinned by
+    `TestMerge_sliceElementAllocationsReused` + `TestMerge_ArraySlotsOverwrite`.

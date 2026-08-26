@@ -30,6 +30,9 @@ func (recv Money) DecodeFrom(data []byte) (result Money, i int, err error) {
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenAmount {
+			result.Amount = 0
+		}
 		return result, i, nil
 	}
 	for {
@@ -133,6 +136,9 @@ func (recv Money) DecodeFrom(data []byte) (result Money, i int, err error) {
 		}
 		if data[i] == '}' {
 			i++
+			if !seenAmount {
+				result.Amount = 0
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -158,6 +164,9 @@ func (recv Money) DecodeFromStream(s *ggen.Stream) (result Money, err error) {
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenAmount {
+			result.Amount = 0
+		}
 		return result, nil
 	}
 	for {
@@ -207,6 +216,9 @@ func (recv Money) DecodeFromStream(s *ggen.Stream) (result Money, err error) {
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenAmount {
+				result.Amount = 0
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -243,6 +255,15 @@ func (recv LooseThing) DecodeFrom(data []byte) (result LooseThing, i int, err er
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenCount {
+			result.Count = 0
+		}
+		if !seenOpt {
+			result.Opt = 0
+		}
+		if !seenPrice {
+			result.Price = 0
+		}
 		return result, i, nil
 	}
 	for {
@@ -559,6 +580,15 @@ func (recv LooseThing) DecodeFrom(data []byte) (result LooseThing, i int, err er
 		}
 		if data[i] == '}' {
 			i++
+			if !seenCount {
+				result.Count = 0
+			}
+			if !seenOpt {
+				result.Opt = 0
+			}
+			if !seenPrice {
+				result.Price = 0
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -586,6 +616,15 @@ func (recv LooseThing) DecodeFromStream(s *ggen.Stream) (result LooseThing, err 
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenCount {
+			result.Count = 0
+		}
+		if !seenOpt {
+			result.Opt = 0
+		}
+		if !seenPrice {
+			result.Price = 0
+		}
 		return result, nil
 	}
 	for {
@@ -740,6 +779,15 @@ func (recv LooseThing) DecodeFromStream(s *ggen.Stream) (result LooseThing, err 
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenCount {
+				result.Count = 0
+			}
+			if !seenOpt {
+				result.Opt = 0
+			}
+			if !seenPrice {
+				result.Price = 0
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -1142,6 +1190,12 @@ func (recv ConvNamed) DecodeFrom(data []byte) (result ConvNamed, i int, err erro
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenN {
+			result.N = nil
+		}
+		if !seenS {
+			result.S = Score(0)
+		}
 		return result, i, nil
 	}
 	for {
@@ -1390,6 +1444,12 @@ func (recv ConvNamed) DecodeFrom(data []byte) (result ConvNamed, i int, err erro
 		}
 		if data[i] == '}' {
 			i++
+			if !seenN {
+				result.N = nil
+			}
+			if !seenS {
+				result.S = Score(0)
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -1416,6 +1476,12 @@ func (recv ConvNamed) DecodeFromStream(s *ggen.Stream) (result ConvNamed, err er
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenN {
+			result.N = nil
+		}
+		if !seenS {
+			result.S = Score(0)
+		}
 		return result, nil
 	}
 	for {
@@ -1559,6 +1625,12 @@ func (recv ConvNamed) DecodeFromStream(s *ggen.Stream) (result ConvNamed, err er
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenN {
+				result.N = nil
+			}
+			if !seenS {
+				result.S = Score(0)
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)

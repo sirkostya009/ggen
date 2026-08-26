@@ -29,6 +29,9 @@ func (recv SQLNullStringStruct) DecodeFrom(data []byte) (result SQLNullStringStr
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenS {
+			result.S = (SQLNullStringStruct{}).S
+		}
 		return result, i, nil
 	}
 	for {
@@ -111,6 +114,9 @@ func (recv SQLNullStringStruct) DecodeFrom(data []byte) (result SQLNullStringStr
 		}
 		if data[i] == '}' {
 			i++
+			if !seenS {
+				result.S = (SQLNullStringStruct{}).S
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -136,6 +142,9 @@ func (recv SQLNullStringStruct) DecodeFromStream(s *ggen.Stream) (result SQLNull
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenS {
+			result.S = (SQLNullStringStruct{}).S
+		}
 		return result, nil
 	}
 	for {
@@ -206,6 +215,9 @@ func (recv SQLNullStringStruct) DecodeFromStream(s *ggen.Stream) (result SQLNull
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenS {
+				result.S = (SQLNullStringStruct{}).S
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -246,6 +258,9 @@ func (recv SQLNullInt64Struct) DecodeFrom(data []byte) (result SQLNullInt64Struc
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenI {
+			result.I = (SQLNullInt64Struct{}).I
+		}
 		return result, i, nil
 	}
 	for {
@@ -355,6 +370,9 @@ func (recv SQLNullInt64Struct) DecodeFrom(data []byte) (result SQLNullInt64Struc
 		}
 		if data[i] == '}' {
 			i++
+			if !seenI {
+				result.I = (SQLNullInt64Struct{}).I
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -380,6 +398,9 @@ func (recv SQLNullInt64Struct) DecodeFromStream(s *ggen.Stream) (result SQLNullI
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenI {
+			result.I = (SQLNullInt64Struct{}).I
+		}
 		return result, nil
 	}
 	for {
@@ -450,6 +471,9 @@ func (recv SQLNullInt64Struct) DecodeFromStream(s *ggen.Stream) (result SQLNullI
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenI {
+				result.I = (SQLNullInt64Struct{}).I
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -488,6 +512,9 @@ func (recv SQLNullInt32Struct) DecodeFrom(data []byte) (result SQLNullInt32Struc
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenI32 {
+			result.I32 = (SQLNullInt32Struct{}).I32
+		}
 		return result, i, nil
 	}
 	for {
@@ -600,6 +627,9 @@ func (recv SQLNullInt32Struct) DecodeFrom(data []byte) (result SQLNullInt32Struc
 		}
 		if data[i] == '}' {
 			i++
+			if !seenI32 {
+				result.I32 = (SQLNullInt32Struct{}).I32
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -625,6 +655,9 @@ func (recv SQLNullInt32Struct) DecodeFromStream(s *ggen.Stream) (result SQLNullI
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenI32 {
+			result.I32 = (SQLNullInt32Struct{}).I32
+		}
 		return result, nil
 	}
 	for {
@@ -695,6 +728,9 @@ func (recv SQLNullInt32Struct) DecodeFromStream(s *ggen.Stream) (result SQLNullI
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenI32 {
+				result.I32 = (SQLNullInt32Struct{}).I32
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -733,6 +769,9 @@ func (recv SQLNullInt16Struct) DecodeFrom(data []byte) (result SQLNullInt16Struc
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenI16 {
+			result.I16 = (SQLNullInt16Struct{}).I16
+		}
 		return result, i, nil
 	}
 	for {
@@ -845,6 +884,9 @@ func (recv SQLNullInt16Struct) DecodeFrom(data []byte) (result SQLNullInt16Struc
 		}
 		if data[i] == '}' {
 			i++
+			if !seenI16 {
+				result.I16 = (SQLNullInt16Struct{}).I16
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -870,6 +912,9 @@ func (recv SQLNullInt16Struct) DecodeFromStream(s *ggen.Stream) (result SQLNullI
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenI16 {
+			result.I16 = (SQLNullInt16Struct{}).I16
+		}
 		return result, nil
 	}
 	for {
@@ -940,6 +985,9 @@ func (recv SQLNullInt16Struct) DecodeFromStream(s *ggen.Stream) (result SQLNullI
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenI16 {
+				result.I16 = (SQLNullInt16Struct{}).I16
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -978,6 +1026,9 @@ func (recv SQLNullByteStruct) DecodeFrom(data []byte) (result SQLNullByteStruct,
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenB {
+			result.B = (SQLNullByteStruct{}).B
+		}
 		return result, i, nil
 	}
 	for {
@@ -1068,6 +1119,9 @@ func (recv SQLNullByteStruct) DecodeFrom(data []byte) (result SQLNullByteStruct,
 		}
 		if data[i] == '}' {
 			i++
+			if !seenB {
+				result.B = (SQLNullByteStruct{}).B
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -1093,6 +1147,9 @@ func (recv SQLNullByteStruct) DecodeFromStream(s *ggen.Stream) (result SQLNullBy
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenB {
+			result.B = (SQLNullByteStruct{}).B
+		}
 		return result, nil
 	}
 	for {
@@ -1163,6 +1220,9 @@ func (recv SQLNullByteStruct) DecodeFromStream(s *ggen.Stream) (result SQLNullBy
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenB {
+				result.B = (SQLNullByteStruct{}).B
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -1201,6 +1261,9 @@ func (recv SQLNullBoolStruct) DecodeFrom(data []byte) (result SQLNullBoolStruct,
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenBL {
+			result.BL = (SQLNullBoolStruct{}).BL
+		}
 		return result, i, nil
 	}
 	for {
@@ -1267,6 +1330,9 @@ func (recv SQLNullBoolStruct) DecodeFrom(data []byte) (result SQLNullBoolStruct,
 		}
 		if data[i] == '}' {
 			i++
+			if !seenBL {
+				result.BL = (SQLNullBoolStruct{}).BL
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -1292,6 +1358,9 @@ func (recv SQLNullBoolStruct) DecodeFromStream(s *ggen.Stream) (result SQLNullBo
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenBL {
+			result.BL = (SQLNullBoolStruct{}).BL
+		}
 		return result, nil
 	}
 	for {
@@ -1362,6 +1431,9 @@ func (recv SQLNullBoolStruct) DecodeFromStream(s *ggen.Stream) (result SQLNullBo
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenBL {
+				result.BL = (SQLNullBoolStruct{}).BL
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -1400,6 +1472,9 @@ func (recv SQLNullFloat64Struct) DecodeFrom(data []byte) (result SQLNullFloat64S
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenF {
+			result.F = (SQLNullFloat64Struct{}).F
+		}
 		return result, i, nil
 	}
 	for {
@@ -1466,6 +1541,9 @@ func (recv SQLNullFloat64Struct) DecodeFrom(data []byte) (result SQLNullFloat64S
 		}
 		if data[i] == '}' {
 			i++
+			if !seenF {
+				result.F = (SQLNullFloat64Struct{}).F
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -1491,6 +1569,9 @@ func (recv SQLNullFloat64Struct) DecodeFromStream(s *ggen.Stream) (result SQLNul
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenF {
+			result.F = (SQLNullFloat64Struct{}).F
+		}
 		return result, nil
 	}
 	for {
@@ -1561,6 +1642,9 @@ func (recv SQLNullFloat64Struct) DecodeFromStream(s *ggen.Stream) (result SQLNul
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenF {
+				result.F = (SQLNullFloat64Struct{}).F
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -1601,6 +1685,9 @@ func (recv SQLNullTimeStruct) DecodeFrom(data []byte) (result SQLNullTimeStruct,
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenT {
+			result.T = (SQLNullTimeStruct{}).T
+		}
 		return result, i, nil
 	}
 	for {
@@ -1688,6 +1775,9 @@ func (recv SQLNullTimeStruct) DecodeFrom(data []byte) (result SQLNullTimeStruct,
 		}
 		if data[i] == '}' {
 			i++
+			if !seenT {
+				result.T = (SQLNullTimeStruct{}).T
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -1713,6 +1803,9 @@ func (recv SQLNullTimeStruct) DecodeFromStream(s *ggen.Stream) (result SQLNullTi
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenT {
+			result.T = (SQLNullTimeStruct{}).T
+		}
 		return result, nil
 	}
 	for {
@@ -1788,6 +1881,9 @@ func (recv SQLNullTimeStruct) DecodeFromStream(s *ggen.Stream) (result SQLNullTi
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenT {
+				result.T = (SQLNullTimeStruct{}).T
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -1828,6 +1924,9 @@ func (recv SQLNullGenStringStruct) DecodeFrom(data []byte) (result SQLNullGenStr
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenS {
+			result.S = (SQLNullGenStringStruct{}).S
+		}
 		return result, i, nil
 	}
 	for {
@@ -1910,6 +2009,9 @@ func (recv SQLNullGenStringStruct) DecodeFrom(data []byte) (result SQLNullGenStr
 		}
 		if data[i] == '}' {
 			i++
+			if !seenS {
+				result.S = (SQLNullGenStringStruct{}).S
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -1935,6 +2037,9 @@ func (recv SQLNullGenStringStruct) DecodeFromStream(s *ggen.Stream) (result SQLN
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenS {
+			result.S = (SQLNullGenStringStruct{}).S
+		}
 		return result, nil
 	}
 	for {
@@ -2005,6 +2110,9 @@ func (recv SQLNullGenStringStruct) DecodeFromStream(s *ggen.Stream) (result SQLN
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenS {
+				result.S = (SQLNullGenStringStruct{}).S
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -2045,6 +2153,9 @@ func (recv SQLNullGenIntStruct) DecodeFrom(data []byte) (result SQLNullGenIntStr
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenI {
+			result.I = (SQLNullGenIntStruct{}).I
+		}
 		return result, i, nil
 	}
 	for {
@@ -2154,6 +2265,9 @@ func (recv SQLNullGenIntStruct) DecodeFrom(data []byte) (result SQLNullGenIntStr
 		}
 		if data[i] == '}' {
 			i++
+			if !seenI {
+				result.I = (SQLNullGenIntStruct{}).I
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -2179,6 +2293,9 @@ func (recv SQLNullGenIntStruct) DecodeFromStream(s *ggen.Stream) (result SQLNull
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenI {
+			result.I = (SQLNullGenIntStruct{}).I
+		}
 		return result, nil
 	}
 	for {
@@ -2249,6 +2366,9 @@ func (recv SQLNullGenIntStruct) DecodeFromStream(s *ggen.Stream) (result SQLNull
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenI {
+				result.I = (SQLNullGenIntStruct{}).I
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -2287,6 +2407,9 @@ func (recv SQLNullGenUint64Struct) DecodeFrom(data []byte) (result SQLNullGenUin
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenU {
+			result.U = (SQLNullGenUint64Struct{}).U
+		}
 		return result, i, nil
 	}
 	for {
@@ -2377,6 +2500,9 @@ func (recv SQLNullGenUint64Struct) DecodeFrom(data []byte) (result SQLNullGenUin
 		}
 		if data[i] == '}' {
 			i++
+			if !seenU {
+				result.U = (SQLNullGenUint64Struct{}).U
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -2402,6 +2528,9 @@ func (recv SQLNullGenUint64Struct) DecodeFromStream(s *ggen.Stream) (result SQLN
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenU {
+			result.U = (SQLNullGenUint64Struct{}).U
+		}
 		return result, nil
 	}
 	for {
@@ -2472,6 +2601,9 @@ func (recv SQLNullGenUint64Struct) DecodeFromStream(s *ggen.Stream) (result SQLN
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenU {
+				result.U = (SQLNullGenUint64Struct{}).U
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -2510,6 +2642,9 @@ func (recv SQLNullGenFloat32Struct) DecodeFrom(data []byte) (result SQLNullGenFl
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenF {
+			result.F = (SQLNullGenFloat32Struct{}).F
+		}
 		return result, i, nil
 	}
 	for {
@@ -2579,6 +2714,9 @@ func (recv SQLNullGenFloat32Struct) DecodeFrom(data []byte) (result SQLNullGenFl
 		}
 		if data[i] == '}' {
 			i++
+			if !seenF {
+				result.F = (SQLNullGenFloat32Struct{}).F
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -2604,6 +2742,9 @@ func (recv SQLNullGenFloat32Struct) DecodeFromStream(s *ggen.Stream) (result SQL
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenF {
+			result.F = (SQLNullGenFloat32Struct{}).F
+		}
 		return result, nil
 	}
 	for {
@@ -2677,6 +2818,9 @@ func (recv SQLNullGenFloat32Struct) DecodeFromStream(s *ggen.Stream) (result SQL
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenF {
+				result.F = (SQLNullGenFloat32Struct{}).F
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -2717,6 +2861,9 @@ func (recv SQLNullGenBoolStruct) DecodeFrom(data []byte) (result SQLNullGenBoolS
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenBL {
+			result.BL = (SQLNullGenBoolStruct{}).BL
+		}
 		return result, i, nil
 	}
 	for {
@@ -2783,6 +2930,9 @@ func (recv SQLNullGenBoolStruct) DecodeFrom(data []byte) (result SQLNullGenBoolS
 		}
 		if data[i] == '}' {
 			i++
+			if !seenBL {
+				result.BL = (SQLNullGenBoolStruct{}).BL
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -2808,6 +2958,9 @@ func (recv SQLNullGenBoolStruct) DecodeFromStream(s *ggen.Stream) (result SQLNul
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenBL {
+			result.BL = (SQLNullGenBoolStruct{}).BL
+		}
 		return result, nil
 	}
 	for {
@@ -2878,6 +3031,9 @@ func (recv SQLNullGenBoolStruct) DecodeFromStream(s *ggen.Stream) (result SQLNul
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenBL {
+				result.BL = (SQLNullGenBoolStruct{}).BL
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -2916,6 +3072,9 @@ func (recv SQLNullGenTimeStruct) DecodeFrom(data []byte) (result SQLNullGenTimeS
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenT {
+			result.T = (SQLNullGenTimeStruct{}).T
+		}
 		return result, i, nil
 	}
 	for {
@@ -3003,6 +3162,9 @@ func (recv SQLNullGenTimeStruct) DecodeFrom(data []byte) (result SQLNullGenTimeS
 		}
 		if data[i] == '}' {
 			i++
+			if !seenT {
+				result.T = (SQLNullGenTimeStruct{}).T
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -3028,6 +3190,9 @@ func (recv SQLNullGenTimeStruct) DecodeFromStream(s *ggen.Stream) (result SQLNul
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenT {
+			result.T = (SQLNullGenTimeStruct{}).T
+		}
 		return result, nil
 	}
 	for {
@@ -3103,6 +3268,9 @@ func (recv SQLNullGenTimeStruct) DecodeFromStream(s *ggen.Stream) (result SQLNul
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenT {
+				result.T = (SQLNullGenTimeStruct{}).T
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -3143,6 +3311,9 @@ func (recv SQLNullGenAccountStruct) DecodeFrom(data []byte) (result SQLNullGenAc
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenA {
+			result.A = (SQLNullGenAccountStruct{}).A
+		}
 		return result, i, nil
 	}
 	for {
@@ -3252,6 +3423,9 @@ func (recv SQLNullGenAccountStruct) DecodeFrom(data []byte) (result SQLNullGenAc
 		}
 		if data[i] == '}' {
 			i++
+			if !seenA {
+				result.A = (SQLNullGenAccountStruct{}).A
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -3277,6 +3451,9 @@ func (recv SQLNullGenAccountStruct) DecodeFromStream(s *ggen.Stream) (result SQL
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenA {
+			result.A = (SQLNullGenAccountStruct{}).A
+		}
 		return result, nil
 	}
 	for {
@@ -3347,6 +3524,9 @@ func (recv SQLNullGenAccountStruct) DecodeFromStream(s *ggen.Stream) (result SQL
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenA {
+				result.A = (SQLNullGenAccountStruct{}).A
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -3385,6 +3565,9 @@ func (recv SQLNullGenLabelStruct) DecodeFrom(data []byte) (result SQLNullGenLabe
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenL {
+			result.L = (SQLNullGenLabelStruct{}).L
+		}
 		return result, i, nil
 	}
 	for {
@@ -3467,6 +3650,9 @@ func (recv SQLNullGenLabelStruct) DecodeFrom(data []byte) (result SQLNullGenLabe
 		}
 		if data[i] == '}' {
 			i++
+			if !seenL {
+				result.L = (SQLNullGenLabelStruct{}).L
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -3492,6 +3678,9 @@ func (recv SQLNullGenLabelStruct) DecodeFromStream(s *ggen.Stream) (result SQLNu
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenL {
+			result.L = (SQLNullGenLabelStruct{}).L
+		}
 		return result, nil
 	}
 	for {
@@ -3562,6 +3751,9 @@ func (recv SQLNullGenLabelStruct) DecodeFromStream(s *ggen.Stream) (result SQLNu
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenL {
+				result.L = (SQLNullGenLabelStruct{}).L
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -3602,6 +3794,9 @@ func (recv SQLNullGenUUIDStruct) DecodeFrom(data []byte) (result SQLNullGenUUIDS
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenID {
+			result.ID = (SQLNullGenUUIDStruct{}).ID
+		}
 		return result, i, nil
 	}
 	for {
@@ -3673,6 +3868,9 @@ func (recv SQLNullGenUUIDStruct) DecodeFrom(data []byte) (result SQLNullGenUUIDS
 		}
 		if data[i] == '}' {
 			i++
+			if !seenID {
+				result.ID = (SQLNullGenUUIDStruct{}).ID
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -3698,6 +3896,9 @@ func (recv SQLNullGenUUIDStruct) DecodeFromStream(s *ggen.Stream) (result SQLNul
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenID {
+			result.ID = (SQLNullGenUUIDStruct{}).ID
+		}
 		return result, nil
 	}
 	for {
@@ -3773,6 +3974,9 @@ func (recv SQLNullGenUUIDStruct) DecodeFromStream(s *ggen.Stream) (result SQLNul
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenID {
+				result.ID = (SQLNullGenUUIDStruct{}).ID
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -3824,6 +4028,30 @@ func (recv SQLNullStruct) DecodeFrom(data []byte) (result SQLNullStruct, i int, 
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenB {
+			result.B = (SQLNullStruct{}).B
+		}
+		if !seenBL {
+			result.BL = (SQLNullStruct{}).BL
+		}
+		if !seenF {
+			result.F = (SQLNullStruct{}).F
+		}
+		if !seenI {
+			result.I = (SQLNullStruct{}).I
+		}
+		if !seenI16 {
+			result.I16 = (SQLNullStruct{}).I16
+		}
+		if !seenI32 {
+			result.I32 = (SQLNullStruct{}).I32
+		}
+		if !seenS {
+			result.S = (SQLNullStruct{}).S
+		}
+		if !seenT {
+			result.T = (SQLNullStruct{}).T
+		}
 		return result, i, nil
 	}
 	for {
@@ -4205,6 +4433,30 @@ func (recv SQLNullStruct) DecodeFrom(data []byte) (result SQLNullStruct, i int, 
 		}
 		if data[i] == '}' {
 			i++
+			if !seenB {
+				result.B = (SQLNullStruct{}).B
+			}
+			if !seenBL {
+				result.BL = (SQLNullStruct{}).BL
+			}
+			if !seenF {
+				result.F = (SQLNullStruct{}).F
+			}
+			if !seenI {
+				result.I = (SQLNullStruct{}).I
+			}
+			if !seenI16 {
+				result.I16 = (SQLNullStruct{}).I16
+			}
+			if !seenI32 {
+				result.I32 = (SQLNullStruct{}).I32
+			}
+			if !seenS {
+				result.S = (SQLNullStruct{}).S
+			}
+			if !seenT {
+				result.T = (SQLNullStruct{}).T
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -4237,6 +4489,30 @@ func (recv SQLNullStruct) DecodeFromStream(s *ggen.Stream) (result SQLNullStruct
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenB {
+			result.B = (SQLNullStruct{}).B
+		}
+		if !seenBL {
+			result.BL = (SQLNullStruct{}).BL
+		}
+		if !seenF {
+			result.F = (SQLNullStruct{}).F
+		}
+		if !seenI {
+			result.I = (SQLNullStruct{}).I
+		}
+		if !seenI16 {
+			result.I16 = (SQLNullStruct{}).I16
+		}
+		if !seenI32 {
+			result.I32 = (SQLNullStruct{}).I32
+		}
+		if !seenS {
+			result.S = (SQLNullStruct{}).S
+		}
+		if !seenT {
+			result.T = (SQLNullStruct{}).T
+		}
 		return result, nil
 	}
 	for {
@@ -4564,6 +4840,30 @@ func (recv SQLNullStruct) DecodeFromStream(s *ggen.Stream) (result SQLNullStruct
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenB {
+				result.B = (SQLNullStruct{}).B
+			}
+			if !seenBL {
+				result.BL = (SQLNullStruct{}).BL
+			}
+			if !seenF {
+				result.F = (SQLNullStruct{}).F
+			}
+			if !seenI {
+				result.I = (SQLNullStruct{}).I
+			}
+			if !seenI16 {
+				result.I16 = (SQLNullStruct{}).I16
+			}
+			if !seenI32 {
+				result.I32 = (SQLNullStruct{}).I32
+			}
+			if !seenS {
+				result.S = (SQLNullStruct{}).S
+			}
+			if !seenT {
+				result.T = (SQLNullStruct{}).T
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)

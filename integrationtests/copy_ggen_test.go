@@ -63,6 +63,15 @@ func (recv CopyDoc) decodeFromDepth(data []byte, _depth int) (result CopyDoc, i 
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenExtra {
+			result.Extra = nil
+		}
+		if !seenName {
+			result.Name = ""
+		}
+		if !seenRaw {
+			result.Raw = nil
+		}
 		return result, i, nil
 	}
 	for {
@@ -122,7 +131,11 @@ func (recv CopyDoc) decodeFromDepth(data []byte, _depth int) (result CopyDoc, i 
 			}
 			if i < len(data) && data[i] != ']' {
 				for {
-					result.Children = append(result.Children, CopyDoc{})
+					if len(result.Children) < cap(result.Children) {
+						result.Children = result.Children[:len(result.Children)+1]
+					} else {
+						result.Children = append(result.Children, CopyDoc{})
+					}
 					var _n int
 					result.Children[len(result.Children)-1], _n, err = result.Children[len(result.Children)-1].decodeFromDepth(data[i:], _depth+1)
 					i += _n
@@ -348,7 +361,11 @@ func (recv CopyDoc) decodeFromDepth(data []byte, _depth int) (result CopyDoc, i 
 						}
 						break
 					}
-					slab0 = append(slab0, CopyRef{})
+					if len(slab0) < cap(slab0) {
+						slab0 = slab0[:len(slab0)+1]
+					} else {
+						slab0 = append(slab0, CopyRef{})
+					}
 					var _n int
 					slab0[len(slab0)-1], _n, err = slab0[len(slab0)-1].DecodeFrom(data[i:])
 					i += _n
@@ -464,6 +481,15 @@ func (recv CopyDoc) decodeFromDepth(data []byte, _depth int) (result CopyDoc, i 
 		}
 		if data[i] == '}' {
 			i++
+			if !seenExtra {
+				result.Extra = nil
+			}
+			if !seenName {
+				result.Name = ""
+			}
+			if !seenRaw {
+				result.Raw = nil
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -514,6 +540,15 @@ func (recv CopyDoc) decodeFromStreamDepth(s *ggen.Stream, _depth int) (result Co
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenExtra {
+			result.Extra = nil
+		}
+		if !seenName {
+			result.Name = ""
+		}
+		if !seenRaw {
+			result.Raw = nil
+		}
 		return result, nil
 	}
 	for {
@@ -579,7 +614,11 @@ func (recv CopyDoc) decodeFromStreamDepth(s *ggen.Stream, _depth int) (result Co
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {
-				result.Children = append(result.Children, CopyDoc{})
+				if len(result.Children) < cap(result.Children) {
+					result.Children = result.Children[:len(result.Children)+1]
+				} else {
+					result.Children = append(result.Children, CopyDoc{})
+				}
 				result.Children[len(result.Children)-1], err = result.Children[len(result.Children)-1].decodeFromStreamDepth(s, _depth+1)
 				if err != nil {
 					return result, ggen.NewParseErr("children", s.Offset(), err)
@@ -860,7 +899,11 @@ func (recv CopyDoc) decodeFromStreamDepth(s *ggen.Stream, _depth int) (result Co
 					}
 					break
 				}
-				slab0 = append(slab0, CopyRef{})
+				if len(slab0) < cap(slab0) {
+					slab0 = slab0[:len(slab0)+1]
+				} else {
+					slab0 = append(slab0, CopyRef{})
+				}
 				slab0[len(slab0)-1], err = slab0[len(slab0)-1].DecodeFromStream(s)
 				if err != nil {
 					return result, ggen.NewParseErr("refs", s.Offset(), err)
@@ -1004,6 +1047,15 @@ func (recv CopyDoc) decodeFromStreamDepth(s *ggen.Stream, _depth int) (result Co
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenExtra {
+				result.Extra = nil
+			}
+			if !seenName {
+				result.Name = ""
+			}
+			if !seenRaw {
+				result.Raw = nil
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -1160,6 +1212,9 @@ func (recv CopyRef) DecodeFrom(data []byte) (result CopyRef, i int, err error) {
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenLabel {
+			result.Label = ""
+		}
 		return result, i, nil
 	}
 	for {
@@ -1235,6 +1290,9 @@ func (recv CopyRef) DecodeFrom(data []byte) (result CopyRef, i int, err error) {
 		}
 		if data[i] == '}' {
 			i++
+			if !seenLabel {
+				result.Label = ""
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -1260,6 +1318,9 @@ func (recv CopyRef) DecodeFromStream(s *ggen.Stream) (result CopyRef, err error)
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenLabel {
+			result.Label = ""
+		}
 		return result, nil
 	}
 	for {
@@ -1307,6 +1368,9 @@ func (recv CopyRef) DecodeFromStream(s *ggen.Stream) (result CopyRef, err error)
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenLabel {
+				result.Label = ""
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -1342,6 +1406,9 @@ func (recv AliasDoc) DecodeFrom(data []byte) (result AliasDoc, i int, err error)
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenName {
+			result.Name = ""
+		}
 		return result, i, nil
 	}
 	for {
@@ -1416,6 +1483,9 @@ func (recv AliasDoc) DecodeFrom(data []byte) (result AliasDoc, i int, err error)
 		}
 		if data[i] == '}' {
 			i++
+			if !seenName {
+				result.Name = ""
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -1441,6 +1511,9 @@ func (recv AliasDoc) DecodeFromStream(s *ggen.Stream) (result AliasDoc, err erro
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenName {
+			result.Name = ""
+		}
 		return result, nil
 	}
 	for {
@@ -1488,6 +1561,9 @@ func (recv AliasDoc) DecodeFromStream(s *ggen.Stream) (result AliasDoc, err erro
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenName {
+				result.Name = ""
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -1523,6 +1599,9 @@ func (recv CopyURLDoc) DecodeFrom(data []byte) (result CopyURLDoc, i int, err er
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenU {
+			result.U = (CopyURLDoc{}).U
+		}
 		return result, i, nil
 	}
 	for {
@@ -1605,6 +1684,9 @@ func (recv CopyURLDoc) DecodeFrom(data []byte) (result CopyURLDoc, i int, err er
 		}
 		if data[i] == '}' {
 			i++
+			if !seenU {
+				result.U = (CopyURLDoc{}).U
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -1630,6 +1712,9 @@ func (recv CopyURLDoc) DecodeFromStream(s *ggen.Stream) (result CopyURLDoc, err 
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenU {
+			result.U = (CopyURLDoc{}).U
+		}
 		return result, nil
 	}
 	for {
@@ -1683,6 +1768,9 @@ func (recv CopyURLDoc) DecodeFromStream(s *ggen.Stream) (result CopyURLDoc, err 
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenU {
+				result.U = (CopyURLDoc{}).U
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -1722,6 +1810,9 @@ func (recv CopyIPDoc) DecodeFrom(data []byte) (result CopyIPDoc, i int, err erro
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenIP {
+			result.IP = nil
+		}
 		return result, i, nil
 	}
 	for {
@@ -1801,6 +1892,9 @@ func (recv CopyIPDoc) DecodeFrom(data []byte) (result CopyIPDoc, i int, err erro
 		}
 		if data[i] == '}' {
 			i++
+			if !seenIP {
+				result.IP = nil
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -1826,6 +1920,9 @@ func (recv CopyIPDoc) DecodeFromStream(s *ggen.Stream) (result CopyIPDoc, err er
 	}
 	if s.Bytes()[s.Pos] == '}' {
 		s.Pos++
+		if !seenIP {
+			result.IP = nil
+		}
 		return result, nil
 	}
 	for {
@@ -1878,6 +1975,9 @@ func (recv CopyIPDoc) DecodeFromStream(s *ggen.Stream) (result CopyIPDoc, err er
 		}
 		if c == '}' {
 			s.Pos++
+			if !seenIP {
+				result.IP = nil
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
