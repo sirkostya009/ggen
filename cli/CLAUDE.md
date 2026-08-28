@@ -1738,6 +1738,17 @@ benchmarks under `bench/`.
       per-entry lookup against a nil map is a real `mapaccess` CALL, and
       without the hoist the common zero-value decode paid it on every entry:
       measured **+6.5…+9.6%** on fresh decode before the hoist, −1.1% after.
+    - **Each nesting level names its own `mk`/`mv`/`carried`/`reuse`**
+      (`mapNest` + `mapLocals`). A map VALUE that is itself a map re-enters
+      through `renderField`, and with shared names the inner level shadowed the
+      outer's, so `mapTarget` resolved to `mv[mk]` on the inner value —
+      `map[string]map[string]V` never compiled. The outermost level keeps the
+      bare names, so single-level output is unchanged.
+    - **An omitted key still has to empty the map.** The swap is what empties a
+      reusing map, and it only runs when the key is PRESENT, so
+      `emitOmittedZero` clears it when the seen flag says the payload never
+      named it. Without that, a carried map survived a payload that did not
+      mention it.
     - **The skip must track where the swap is actually emitted.** The
       `clear()` is suppressed in `emitReceiverReset` while `renderMap` emits
       the swap, so anything decoding a map OUTSIDE `renderMap` still needs its

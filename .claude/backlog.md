@@ -413,13 +413,6 @@ surface pinned by `Decoder[T]`).
   Bytes-path maps whose values own allocations now read the carried map and
   fill a new one (opt #76) — heavy values measured −57% wall clock, 92% less
   garbage, GC eliminated. Two gaps remain, both deliberate:
-    - **Nested maps do not compile at all (PRE-EXISTING, unrelated to #76).**
-      `map[string]map[string]V` emits colliding `mk`/`mv` locals for the inner
-      and outer levels, so the generated file fails to build ("cannot index mv
-      (variable of struct type …)"). Verified identical before and after #76 by
-      generating the same fixture with both emitters, so it is an old
-      accepted-annotation-emits-broken-code bug, not a regression. Fix is
-      depth-suffixed locals, the way the nested SLICE emitter already does it.
     - **The stream path does not swap.** `emitReceiverReset` keeps its
       `clear()` there, so stream decode still allocates every map value fresh.
       The swap needs the same shape plus a check that nothing holds a

@@ -8020,6 +8020,12 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenBlobs {
+			clear(result.Blobs)
+		}
+		if !seenInts {
+			clear(result.Ints)
+		}
 		return result, i, nil
 	}
 	for {
@@ -8758,6 +8764,12 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 		}
 		if data[i] == '}' {
 			i++
+			if !seenBlobs {
+				clear(result.Blobs)
+			}
+			if !seenInts {
+				clear(result.Ints)
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)

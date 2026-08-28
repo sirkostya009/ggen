@@ -74,6 +74,9 @@ func (recv CopyDoc) decodeFromDepth(data []byte, depth int) (result CopyDoc, i i
 		if !seenRaw {
 			result.Raw = nil
 		}
+		if !seenRawMap {
+			clear(result.RawMap)
+		}
 		return result, i, nil
 	}
 	for {
@@ -582,6 +585,9 @@ func (recv CopyDoc) decodeFromDepth(data []byte, depth int) (result CopyDoc, i i
 			}
 			if !seenRaw {
 				result.Raw = nil
+			}
+			if !seenRawMap {
+				clear(result.RawMap)
 			}
 			return result, i, nil
 		}

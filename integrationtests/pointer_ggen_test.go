@@ -5965,6 +5965,15 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 		if !seenAPP {
 			result.APP = [3]**int{}
 		}
+		if !seenMP {
+			clear(result.MP)
+		}
+		if !seenMPA {
+			clear(result.MPA)
+		}
+		if !seenMPP {
+			clear(result.MPP)
+		}
 		return result, i, nil
 	}
 	for {
@@ -6782,6 +6791,15 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 			i++
 			if !seenAPP {
 				result.APP = [3]**int{}
+			}
+			if !seenMP {
+				clear(result.MP)
+			}
+			if !seenMPA {
+				clear(result.MPA)
+			}
+			if !seenMPP {
+				clear(result.MPP)
 			}
 			return result, i, nil
 		}

@@ -3504,8 +3504,16 @@ func needsOmittedZero(f FieldInfo) bool {
 // give — only container capacity and element allocations are recycled.
 // Pointers are cleared HERE rather than at entry so a PRESENT key can still
 // reuse the carried pointee chain.
-func emitOmittedZero(b *bytes.Buffer, s StructInfo) {
+func emitOmittedZero(b *bytes.Buffer, s StructInfo, bytesPath bool) {
 	for _, f := range s.Fields {
+		// A map the bytes decode SWAPS has no entry clear() — the swap is what
+		// empties it, and it only runs when the key is present. An omitted key
+		// therefore has to be emptied here, or the carried entries survive a
+		// payload that never mentioned them.
+		if bytesPath && !f.Pointer && f.Kind == KindMap && reusesMapValues(f) {
+			fmt.Fprintf(b, "if %s { clear(result.%s) }\n", seenNotAccess(s, f), f.GoName)
+			continue
+		}
 		if !needsOmittedZero(f) {
 			continue
 		}
@@ -3646,7 +3654,7 @@ func renderStreamPostLoop(b *bytes.Buffer, s StructInfo) {
 }
 
 func renderPostLoopShape(b *bytes.Buffer, s StructInfo, stream bool) {
-	emitOmittedZero(b, s)
+	emitOmittedZero(b, s, !stream)
 	retShape := "return result, i, %s"
 	errsShape := "if len(errs) > 0 { return result, i, errs }\n"
 	posVar := "i"
@@ -3749,7 +3757,28 @@ func keyValidateAndModStream(b *bytes.Buffer, f FieldInfo, keyRef string) {
 // cleared a non-nil map, so allocation only happens when ref is nil. Maps
 // can't expose interior pointers (`&m[k]` illegal), so struct elems decode
 // into a temp and assign.
+// mapNest tracks how deeply renderMap/renderStreamMap are nested so each level
+// names its own key/value locals. A map VALUE that is itself a map re-enters
+// through renderField, and without the suffix the inner level shadowed `mk`/`mv`
+// and its store resolved to `mv[mk]` on its own value — uncompilable output for
+// map[string]map[string]V.
+var mapNest int
+
+// mapLocals returns this nesting level's key, value, carried-map and reuse-flag
+// names. The outermost level keeps the bare names so the common single-level
+// output is unchanged.
+func mapLocals() (mk, mv, carried, reuse string) {
+	suffix := ""
+	if mapNest > 1 {
+		suffix = strconv.Itoa(mapNest - 1)
+	}
+	return "mk" + suffix, "mv" + suffix, "carried" + suffix, "reuse" + suffix
+}
+
 func renderMap(b *bytes.Buffer, f FieldInfo, ref, posVar string, topLevel bool) {
+	mapNest++
+	defer func() { mapNest-- }()
+	mkVar, mvVar, carriedVar, reuseVar := mapLocals()
 	field := fieldLit(f)
 	makeExpr := fmt.Sprintf("make(%s)", f.GoType)
 	if cap := mapPreallocCap(f); cap > 0 {
@@ -3783,17 +3812,17 @@ func renderMap(b *bytes.Buffer, f FieldInfo, ref, posVar string, topLevel bool) 
 		// becomes its decode target, and a key the payload omits is simply
 		// never carried across — no seen-set needed to drop it. The map is
 		// always freshly made here, so the nil guards below are unnecessary.
-		size := "len(carried)"
+		size := "len(" + carriedVar + ")"
 		if cap := mapPreallocCap(f); cap > 0 {
-			size = fmt.Sprintf("max(len(carried), %d)", cap)
+			size = fmt.Sprintf("max(len(%s), %d)", carriedVar, cap)
 		}
 		// `reuse` hoists the decision out of the entry loop: a fresh receiver
 		// carries no map, and a per-entry lookup against a nil one is a real
 		// runtime call, so the common zero-value decode must not pay it.
-		fmt.Fprintf(b, `	carried := %[1]s
-	reuse := len(carried) != 0
+		fmt.Fprintf(b, `	%[4]s := %[1]s
+	%[5]s := len(%[4]s) != 0
 	%[1]s = make(%[2]s, %[3]s)
-`, ref, f.GoType, size)
+`, ref, f.GoType, size, carriedVar, reuseVar)
 	} else {
 		fmt.Fprintf(b, `	if %[1]s < len(data) && data[%[1]s] == '}' {
 		if %[2]s == nil { %[2]s = %[3]s{} }
@@ -3804,17 +3833,17 @@ func renderMap(b *bytes.Buffer, f FieldInfo, ref, posVar string, topLevel bool) 
 	}
 	fmt.Fprintf(b, `	if %[1]s < len(data) && data[%[1]s] != '}' {
 	for {
-		var mk string
-`, posVar, ref, f.GoType, makeExpr)
-	inlineScanString(b, posVar, "mk", posVar, field, f.Copy, !f.AllowInvalidUTF8)
-	keyValidateAndMod(b, f, "mk")
+		var %[5]s string
+`, posVar, ref, f.GoType, makeExpr, mkVar)
+	inlineScanString(b, posVar, mkVar, posVar, field, f.Copy, !f.AllowInvalidUTF8)
+	keyValidateAndMod(b, f, mkVar)
 	inlineSkipWS(b, posVar)
 	fmt.Fprintf(b, `		if %[1]s >= len(data) || data[%[1]s] != ':' { return result, %[1]s, ggen.NewParseErr(%[2]s, %[1]s, ggen.ErrBadObject) }
 		%[1]s++
 `, posVar, field)
 	inlineSkipWS(b, posVar)
 
-	mapTarget := fmt.Sprintf("%s[mk]", ref)
+	mapTarget := fmt.Sprintf("%s[%s]", ref, mkVar)
 	if _, eDepth := elemPtrType(f); eDepth > 0 {
 		// Pointer value (any depth): the parse-first cascade decoded into the
 		// map slot. TargetNil keeps the emit assignment-only, so the
@@ -3825,9 +3854,9 @@ func renderMap(b *bytes.Buffer, f FieldInfo, ref, posVar string, topLevel bool) 
 			// so the cascade reuses that entry's pointer chain; a map index is
 			// not addressable, which is what TargetNil works around below.
 			et, _ := elemPtrType(f)
-			fmt.Fprintf(b, "{\nvar mv %s\nif reuse { mv = carried[mk] }\n", et)
-			renderField(b, pf, "mv", posVar)
-			fmt.Fprintf(b, "%s = mv\n}\n", mapTarget)
+			fmt.Fprintf(b, "{\nvar %[1]s %[2]s\nif %[3]s { %[1]s = %[4]s[%[5]s] }\n", mvVar, et, reuseVar, carriedVar, mkVar)
+			renderField(b, pf, mvVar, posVar)
+			fmt.Fprintf(b, "%s = %s\n}\n", mapTarget, mvVar)
 		} else {
 			pf.TargetNil = true
 			renderField(b, pf, mapTarget, posVar)
@@ -3900,22 +3929,22 @@ if err != nil { return result, %[1]s, ggen.NewParseErr(%[3]s, %[1]s, err) }
 			// (bytes consumed) advances posVar. When the carried map is being
 			// read, seed from IT rather than the map being filled, so repeated
 			// keys in one payload each decode fresh.
-			decl := "var mv " + f.ElemType + "\n"
+			decl := "var " + mvVar + " " + f.ElemType + "\n"
 			if reusesMapValues(f) {
-				decl += "if reuse { mv = carried[mk] }\n"
+				decl += "if " + reuseVar + " { " + mvVar + " = " + carriedVar + "[" + mkVar + "] }\n"
 			}
 			fmt.Fprintf(b, decl+`var consumed int
-mv, consumed, err = mv.`+decodeCallFor(f.ElemType)+`
+%[5]s, consumed, err = %[5]s.`+decodeCallFor(f.ElemType)+`
 %[2]s += consumed
-%[4]s%[3]s = mv
-`, f.ElemType, posVar, mapTarget, nestedDecodeErrCheck(fieldLit(f), calleeTypeOf(f), f.MultiErr, true, "consumed"))
+%[4]s%[3]s = %[5]s
+`, f.ElemType, posVar, mapTarget, nestedDecodeErrCheck(fieldLit(f), calleeTypeOf(f), f.MultiErr, true, "consumed"), mvVar)
 		} else {
 			// Cross-package value: run the ladder (its own DecodeFrom /
 			// UnmarshalJSON / UnmarshalText, encoding/json only as the last
 			// rung) instead of always reflecting over the captured span.
-			fmt.Fprintf(b, "var mv %s\n", f.ElemType)
-			b.WriteString(renderCrossPkgStructDecode(elemAsField(f), "mv", posVar))
-			fmt.Fprintf(b, "%s = mv\n", mapTarget)
+			fmt.Fprintf(b, "var %s %s\n", mvVar, f.ElemType)
+			b.WriteString(renderCrossPkgStructDecode(elemAsField(f), mvVar, posVar))
+			fmt.Fprintf(b, "%s = %s\n", mapTarget, mvVar)
 		}
 	default:
 		// Dedicated-kind value (time/any/bytes/raw/slice/…): decode into a
@@ -3932,17 +3961,17 @@ mv, consumed, err = mv.`+decodeCallFor(f.ElemType)+`
 		case reusesMapValues(f) && (f.ElemKind == KindSlice || f.ElemKind == KindBytes):
 			// []byte decodes with AppendDecode, so the seed must be emptied or
 			// the decoded bytes land after the carried ones.
-			fmt.Fprintf(b, "{\nvar mv %s\nif reuse { mv = carried[mk][:0] }\n", f.ElemType)
+			fmt.Fprintf(b, "{\nvar %[1]s %[2]s\nif %[3]s { %[1]s = %[4]s[%[5]s][:0] }\n", mvVar, f.ElemType, reuseVar, carriedVar, mkVar)
 		case reusesMapValues(f) && f.ElemKind == KindRawJSON:
 			// renderRawJSON appends over mv[:0] itself under -copy.
-			fmt.Fprintf(b, "{\nvar mv %s\nif reuse { mv = carried[mk] }\n", f.ElemType)
+			fmt.Fprintf(b, "{\nvar %[1]s %[2]s\nif %[3]s { %[1]s = %[4]s[%[5]s] }\n", mvVar, f.ElemType, reuseVar, carriedVar, mkVar)
 		case reusesMapValues(f) && f.ElemKind == KindMap:
-			fmt.Fprintf(b, "{\nvar mv %s\nif reuse { mv = carried[mk]; clear(mv) }\n", f.ElemType)
+			fmt.Fprintf(b, "{\nvar %[1]s %[2]s\nif %[3]s { %[1]s = %[4]s[%[5]s]; clear(%[1]s) }\n", mvVar, f.ElemType, reuseVar, carriedVar, mkVar)
 		default:
-			fmt.Fprintf(b, "{\nvar mv %s\n", f.ElemType)
+			fmt.Fprintf(b, "{\nvar %s %s\n", mvVar, f.ElemType)
 		}
-		renderField(b, vf, "mv", posVar)
-		fmt.Fprintf(b, "%s = mv\n}\n", mapTarget)
+		renderField(b, vf, mvVar, posVar)
+		fmt.Fprintf(b, "%s = %s\n}\n", mapTarget, mvVar)
 	}
 	if valCast != "" {
 		fmt.Fprintf(b, "%s = %s(%s)\n", valTarget, valCast, mapTarget)
@@ -5892,6 +5921,9 @@ func renderStreamDispatch(s StructInfo) string {
 // empty `{}` → non-nil empty, else fresh make(). Map keys must be detached
 // copies (the buffer can be overwritten on ReadMore), so we use s.String.
 func renderStreamMap(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+	mapNest++
+	defer func() { mapNest-- }()
+	mkVar, mvVar, _, _ := mapLocals()
 	field := fieldLit(f)
 	chk := streamErrCheck(field)
 	rm := streamReadMore(field, "0", false, "ggen.ErrBadObject")
@@ -5925,9 +5957,9 @@ func renderStreamMap(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 		if %[1]s == nil { %[1]s = %[3]s }
 	}
 	for s.Bytes()[s.Pos] != '}' {
-		var mk string
-		mk, err = s.String(`+vArg(f)+`)
-		%[4]s`, ref, f.GoType, makeExpr, chk, badLit, rm)
+		var %[7]s string
+		%[7]s, err = s.String(`+vArg(f)+`)
+		%[4]s`, ref, f.GoType, makeExpr, chk, badLit, rm, mkVar)
 	keyValidateAndModStream(b, f, "mk")
 	fmt.Fprintf(b, `		err = s.SkipSpace()
 		%[1]s%[3]sif s.Bytes()[s.Pos] != ':' { %[2]s }
@@ -5936,7 +5968,7 @@ func renderStreamMap(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 		%[1]s`, chk, badObj, rm)
 	_ = posVar
 
-	mapTarget := fmt.Sprintf("%s[mk]", ref)
+	mapTarget := fmt.Sprintf("%s[%s]", ref, mkVar)
 	if _, eDepth := elemPtrType(f); eDepth > 0 {
 		// Pointer value (any depth): same cascade as the bytes path, decoded
 		// into the map slot (TargetNil keeps the emit assignment-only).
@@ -6006,14 +6038,14 @@ fv, err = s.Float64()
 		}
 	case KindStruct:
 		if isGenerated(f.ElemType) {
-			fmt.Fprintf(b, `var mv %s
-mv, err = mv.`+streamDecodeCallFor(f.ElemType)+`
-%s%s = mv
-`, f.ElemType, nestedDecodeErrCheck(fieldLit(f), calleeTypeOf(f), f.MultiErr, false, ""), mapTarget)
+			fmt.Fprintf(b, `var %[4]s %[1]s
+%[4]s, err = %[4]s.`+streamDecodeCallFor(f.ElemType)+`
+%[2]s%[3]s = %[4]s
+`, f.ElemType, nestedDecodeErrCheck(fieldLit(f), calleeTypeOf(f), f.MultiErr, false, ""), mapTarget, mvVar)
 		} else {
-			fmt.Fprintf(b, "var mv %s\n", f.ElemType)
-			b.WriteString(renderCrossPkgStructStreamDecode(elemAsField(f), "mv", ""))
-			fmt.Fprintf(b, "%s = mv\n", mapTarget)
+			fmt.Fprintf(b, "var %s %s\n", mvVar, f.ElemType)
+			b.WriteString(renderCrossPkgStructStreamDecode(elemAsField(f), mvVar, ""))
+			fmt.Fprintf(b, "%s = %s\n", mapTarget, mvVar)
 		}
 	default:
 		// Dedicated-kind value — same field-level delegation as the bytes
@@ -6021,9 +6053,9 @@ mv, err = mv.`+streamDecodeCallFor(f.ElemType)+`
 		// for the same scope hygiene.
 		vf := sliceElemField(f)
 		vf.JSONName = f.JSONName + ".value"
-		fmt.Fprintf(b, "{\nvar mv %s\n", f.ElemType)
-		b.WriteString(renderStreamField(vf, "mv", "s.Pos"))
-		fmt.Fprintf(b, "%s = mv\n}\n", mapTarget)
+		fmt.Fprintf(b, "{\nvar %s %s\n", mvVar, f.ElemType)
+		b.WriteString(renderStreamField(vf, mvVar, "s.Pos"))
+		fmt.Fprintf(b, "%s = %s\n}\n", mapTarget, mvVar)
 	}
 	if valCast != "" {
 		fmt.Fprintf(b, "%s = %s(%s)\n", valTarget, valCast, mapTarget)

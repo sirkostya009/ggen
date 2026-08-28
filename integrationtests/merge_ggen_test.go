@@ -1962,6 +1962,12 @@ func (recv MapReuse) DecodeFrom(data []byte) (result MapReuse, i int, err error)
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenLists {
+			clear(result.Lists)
+		}
+		if !seenNodes {
+			clear(result.Nodes)
+		}
 		return result, i, nil
 	}
 	for {
@@ -2272,6 +2278,12 @@ func (recv MapReuse) DecodeFrom(data []byte) (result MapReuse, i int, err error)
 		}
 		if data[i] == '}' {
 			i++
+			if !seenLists {
+				clear(result.Lists)
+			}
+			if !seenNodes {
+				clear(result.Nodes)
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)

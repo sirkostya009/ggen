@@ -5205,6 +5205,12 @@ func (recv MapValues) DecodeFrom(data []byte) (result MapValues, i int, err erro
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenEntries {
+			clear(result.Entries)
+		}
+		if !seenLists {
+			clear(result.Lists)
+		}
 		return result, i, nil
 	}
 	for {
@@ -5515,6 +5521,12 @@ func (recv MapValues) DecodeFrom(data []byte) (result MapValues, i int, err erro
 		}
 		if data[i] == '}' {
 			i++
+			if !seenEntries {
+				clear(result.Entries)
+			}
+			if !seenLists {
+				clear(result.Lists)
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -6623,6 +6635,9 @@ func (recv MapValuesHeavy) DecodeFrom(data []byte) (result MapValuesHeavy, i int
 	}
 	if i < len(data) && data[i] == '}' {
 		i++
+		if !seenEntries {
+			clear(result.Entries)
+		}
 		return result, i, nil
 	}
 	for {
@@ -6756,6 +6771,9 @@ func (recv MapValuesHeavy) DecodeFrom(data []byte) (result MapValuesHeavy, i int
 		}
 		if data[i] == '}' {
 			i++
+			if !seenEntries {
+				clear(result.Entries)
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)

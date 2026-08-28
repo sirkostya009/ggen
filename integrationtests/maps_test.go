@@ -3,6 +3,8 @@ package integrationtests
 //go:generate ../ggen $GOFILE
 
 import (
+	"bytes"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -223,5 +225,63 @@ func TestMap_NamedPrimitiveValuesRoundTrip(t *testing.T) {
 	}
 	if got.B["t"] != true || got.I["i"] != -5 || got.U["u"] != 7 || got.F["f"] != 1.5 {
 		t.Errorf("round-trip = %+v", got)
+	}
+}
+
+// NestedMaps pins map-of-map decode: each nesting level names its own key and
+// value locals, which the inner level used to shadow — its store resolved to
+// the inner value indexing itself and the file did not compile.
+//
+//ggen:generate
+type NestedMaps struct {
+	Counts map[string]map[string]int     `json:"counts"`
+	Inners map[string]map[string]Address `json:"inners"`
+	Lists  map[string]map[string][]int   `json:"lists"`
+}
+
+func TestNestedMaps_roundtripAndReset(t *testing.T) {
+	t.Parallel()
+	in := NestedMaps{
+		Counts: map[string]map[string]int{"a": {"x": 1, "y": 2}},
+		Inners: map[string]map[string]Address{"b": {"z": {Street: "s", City: "c", ZipCode: "12345"}}},
+		Lists:  map[string]map[string][]int{"c": {"w": {1, 2, 3}}},
+	}
+	out, err := ggen.Marshal(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _, err := NestedMaps{}.DecodeFrom(out)
+	if err != nil {
+		t.Fatalf("decode %s: %v", out, err)
+	}
+	if !reflect.DeepEqual(got, in) {
+		t.Errorf("roundtrip mismatch\n got %+v\nwant %+v", got, in)
+	}
+
+	// A reused receiver drops inner keys the second payload omits.
+	lean, _, err := got.DecodeFrom([]byte(`{"counts":{"a":{"x":9}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(lean.Counts["a"]) != 1 || lean.Counts["a"]["x"] != 9 {
+		t.Errorf("stale inner entries survived: %v", lean.Counts)
+	}
+	if len(lean.Inners) != 0 || len(lean.Lists) != 0 {
+		t.Errorf("omitted outer maps not emptied: %v %v", lean.Inners, lean.Lists)
+	}
+}
+
+// The stream path decodes nested maps identically.
+func TestNestedMaps_stream(t *testing.T) {
+	t.Parallel()
+	payload := []byte(`{"counts":{"a":{"x":1,"y":2}},"lists":{"c":{"w":[1,2]}}}`)
+	var s ggen.Stream
+	s.Reset(bytes.NewReader(payload), make([]byte, 0, 16))
+	got, err := NestedMaps{}.DecodeFromStream(&s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Counts["a"]["y"] != 2 || !reflect.DeepEqual(got.Lists["c"]["w"], []int{1, 2}) {
+		t.Errorf("stream nested decode wrong: %+v", got)
 	}
 }
